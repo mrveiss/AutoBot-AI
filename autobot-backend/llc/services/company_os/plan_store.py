@@ -91,6 +91,8 @@ async def plan_key_taken(session: AsyncSession, company_id: uuid.UUID, plan_key:
     return count > 0
 
 
+#: Worked out from the status on every read and write, never stored: an older reader forbids unknown fields.
+_DERIVED_FIELDS = {"policy_enforcement", "policy_enforcement_tracking_issue"}
 _ENFORCEMENT_FROM = (WorkflowPlanStatus.APPROVED, WorkflowPlanStatus.CONVERTED)
 
 
@@ -152,7 +154,7 @@ async def save_plan(
             plan.conversion = None
     changed = _record_status(plan, evaluate_plan_gate(plan), actor)
     state_enforcement(plan)
-    row.document = plan.model_dump(mode="json")
+    row.document = plan.model_dump(mode="json", exclude=_DERIVED_FIELDS)
     row.status, row.name = plan.status.value, plan.name
     session.add(row)
     try:

@@ -36,7 +36,8 @@ class PlanEditService(LLCServiceBase):
         lanes, steps, edges = change(plan)
         plan_map.refuse_dropping_chosen_step(plan, steps)  # a 409 before the map rules can answer 422 for it
         plan_map.check_map(lanes, steps, edges)
-        await plan_map.check_roles(session, company_id, lanes)
+        # Only the lanes this edit added or changed: a role removed since from an untouched lane is not this edit's.
+        await plan_map.check_roles(session, company_id, [x for x in lanes if x not in plan.lanes])
         plan_map.apply_map(plan, lanes, steps, edges)
         return await plan_store.save_plan(session, row, plan, actor=actor)
 

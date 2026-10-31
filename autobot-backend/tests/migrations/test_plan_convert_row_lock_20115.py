@@ -10,7 +10,7 @@ tests run on SQLite, which has no row locks, so they cannot show it works. Here 
 * an edit that holds the lock makes a queued convert wait, then the convert sees the edit voided the approval
   and creates nothing;
 * a lock held while a convert and an edit queue behind it (the convert first, confirmed through
-  ``pg_stat_activity``): the convert wins, the edit is refused as the revision is converted;
+  ``pg_blocking_pids``): the convert wins, the edit is refused as the revision is converted;
 * the same for two converts: exactly one set of rows exists, and the second is refused;
 * two edits queued on one row both keep their change.
 
@@ -29,6 +29,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from tests.migrations.conftest import requires_postgres, run_alembic
+from tests.migrations.test_membership_lock_19985 import _backend_pid
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.migration_gate, requires_postgres]
 
@@ -226,21 +227,28 @@ async def _hold_lock(session, company) -> None:  # noqa: ANN001
     await locked_plan(session, company, PLAN, ACTOR)
 
 
-async def _count_lock_waiters(maker) -> int:  # noqa: ANN001
-    """Backends of this database waiting on a lock.
+async def _count_waiters_behind(maker, holder_pid: int) -> int:  # noqa: ANN001
+    """Backends queued, directly or through another waiter, behind the session *holder_pid*.
 
-    Counted by wait event, not by ``pg_blocking_pids`` of the holder: a second queued writer waits on the
-    first one, so the holder would show only one waiter.
+    Followed through ``pg_blocking_pids`` recursively: a second queued writer waits on the first one, so
+    the holder alone would show one waiter. Nothing outside that chain is counted.
     """
-    sql = "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'"
+    sql = """
+        WITH RECURSIVE queued(pid) AS (
+            SELECT pid FROM pg_stat_activity WHERE :holder = ANY(pg_blocking_pids(pid))
+            UNION
+            SELECT a.pid FROM pg_stat_activity a JOIN queued q ON q.pid = ANY(pg_blocking_pids(a.pid))
+        )
+        SELECT count(*) FROM queued
+    """
     async with maker() as monitor:
-        return (await monitor.execute(sa.text(sql))).scalar_one()
+        return (await monitor.execute(sa.text(sql), {"holder": holder_pid})).scalar_one()
 
 
-async def _wait_for_waiters(maker, count: int, task: asyncio.Task) -> None:  # noqa: ANN001
-    """Return once *count* backends wait on a lock; fail if *task* finished first (it did not wait)."""
+async def _wait_for_waiters(maker, holder_pid: int, count: int, task: asyncio.Task) -> None:  # noqa: ANN001
+    """Return once *count* backends are queued behind *holder_pid*; fail if *task* finished first."""
     deadline = asyncio.get_running_loop().time() + _DEADLINE_SECONDS
-    while await _count_lock_waiters(maker) < count:
+    while await _count_waiters_behind(maker, holder_pid) < count:
         assert not task.done(), "a racer finished without waiting on the session holding the row"
         assert asyncio.get_running_loop().time() < deadline, "the racer never waited on the holding session"
         await asyncio.sleep(_POLL_SECONDS)
@@ -255,9 +263,10 @@ async def _race(maker, company, hold, *racers) -> list:  # noqa: ANN001
     tasks: list = []
     async with maker() as a:
         await hold(a, company)
+        holder_pid = await _backend_pid(a)
         for racer in racers:
             tasks.append(asyncio.create_task(racer(maker, company)))
-            await _wait_for_waiters(maker, len(tasks), tasks[-1])
+            await _wait_for_waiters(maker, holder_pid, len(tasks), tasks[-1])
         await a.commit()
     return [await t for t in tasks]
 

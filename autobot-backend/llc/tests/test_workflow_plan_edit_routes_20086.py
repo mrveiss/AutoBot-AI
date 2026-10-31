@@ -16,6 +16,7 @@ import uuid
 import httpx
 import pytest
 from fastapi import FastAPI
+from sqlalchemy import delete
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from llc.api.company_os_plan_edit import router as edit_router
@@ -39,6 +40,7 @@ from llc.tests.test_company_os_plan_convert_19936 import (  # noqa: F401 -- fixt
     ctx,
     factory,
 )
+from user_management.models.role import Role
 from user_management.services import TenantContext
 
 pytestmark = pytest.mark.asyncio
@@ -326,3 +328,17 @@ async def test_control_replacing_the_whole_map_from_a_stale_view_loses_the_other
     body = {k: stale[k] for k in ("lanes", "steps", "edges")}
     assert (await admin.put(f"{PREFIX}/intake/map", json=body)).status_code == 200
     assert "s9" not in {s["key"] for s in (await _get(admin))["steps"]}  # the problem the new routes remove
+
+
+async def test_a_role_removed_from_an_untouched_lane_does_not_block_an_unrelated_edit(edit):
+    admin, role, factory = edit
+    async with factory() as s:
+        await s.execute(delete(Role).where(Role.id == role))
+        await s.commit()
+    assert (await admin.delete(f"{PREFIX}/intake/edges/s2/s3")).status_code == 200  # the lane is not this edit's
+    assert (await admin.post(f"{PREFIX}/intake/steps", json=ROUTES["add_step"][2])).status_code == 201
+    # contrast: touching that lane, or replacing the whole map, checks its role
+    assert (await admin.patch(f"{PREFIX}/intake/lanes/ops", json={"name": "Ops"})).status_code == 404
+    plan = await _get(admin)
+    body = {k: plan[k] for k in ("lanes", "steps", "edges")}
+    assert (await admin.put(f"{PREFIX}/intake/map", json=body)).status_code == 404

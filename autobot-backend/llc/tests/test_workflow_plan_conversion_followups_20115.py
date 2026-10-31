@@ -7,6 +7,7 @@
 # flake8: noqa: F811 -- imported pytest fixtures are redefined as test arguments
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -71,8 +72,17 @@ async def _convert_that_loses_its_outcomes(admin, monkeypatch) -> None:
     monkeypatch.setattr(store_mod, "save_plan", real)
 
 
-@pytest.mark.parametrize("decision", [ApprovalStatus.APPROVED, ApprovalStatus.REJECTED])
-async def test_a_retry_after_a_person_decided_files_nothing_again(ctx, monkeypatch, decision):
+_DECISIONS = [
+    (ApprovalStatus.APPROVED, "filed"),
+    (ApprovalStatus.REJECTED, "declined"),
+    (ApprovalStatus.REVISION_REQUESTED, "declined"),
+]
+
+
+@pytest.mark.parametrize("decision,outcome", _DECISIONS)
+async def test_a_retry_after_a_person_decided_files_nothing_again_and_records_what_happened(
+    ctx, monkeypatch, decision, outcome
+):
     admin, role, factory = ctx
     await _approved(admin, role)
     await _convert_that_loses_its_outcomes(admin, monkeypatch)
@@ -81,14 +91,58 @@ async def test_a_retry_after_a_person_decided_files_nothing_again(ctx, monkeypat
     async with factory() as s:  # a person decides both requests before anyone retries
         await s.execute(update(Approval).values(status=decision.value))
         await s.commit()
-    r = await admin.post(f"{PREFIX}/intake/convert/retry-ai-line-proposals")
+    url = f"{PREFIX}/intake/convert/retry-ai-line-proposals"
+    r = await admin.post(url)
     assert r.status_code == 200, r.text
     filed = r.json()["conversion"]["ai_line_proposals"]
     assert await _count(factory, Approval, None) == 2  # not four
-    assert {p["outcome"] for p in filed} == {"filed"} and all(p["approval_id"] for p in filed)
+    assert {p["outcome"] for p in filed} == {outcome} and all(p["approval_id"] for p in filed)
     async with factory() as s:
         ids = {str(i) for i in (await s.execute(select(Approval.id))).scalars()}
     assert {p["approval_id"] for p in filed} == ids
+    again = (await admin.post(url)).json()["conversion"]["ai_line_proposals"]
+    assert again == filed and await _count(factory, Approval, None) == 2  # a settled outcome is not revisited
+
+
+def _under_the_old_ref(monkeypatch):
+    """File through the real function, but under the reference a plan used before it carried a revision.
+
+    Returns the function that puts the real one back.
+    """
+    import llc.services.company_os.plan_convert_lines as lines_mod
+
+    real = lines_mod.propose_line_change
+
+    async def _old(**kw):
+        return await real(**{**kw, "plan_ref": "workflow-plan:intake", "legacy_plan_refs": ()})
+
+    monkeypatch.setattr(lines_mod, "propose_line_change", _old)
+    return lambda: monkeypatch.setattr(lines_mod, "propose_line_change", real)
+
+
+async def test_a_pending_request_filed_under_the_old_reference_is_not_filed_twice(ctx, monkeypatch):
+    admin, role, factory = ctx
+    await _approved(admin, role)
+    restore = _under_the_old_ref(monkeypatch)
+    await _convert_that_loses_its_outcomes(admin, monkeypatch)
+    restore()  # the retry runs the real code, under the new reference
+    r = await admin.post(f"{PREFIX}/intake/convert/retry-ai-line-proposals")
+    assert r.status_code == 200, r.text
+    assert await _count(factory, Approval, None) == 2
+    assert {p["outcome"] for p in r.json()["conversion"]["ai_line_proposals"]} == {"filed"}
+
+
+async def test_control_a_decided_request_under_the_old_reference_does_not_match(ctx, monkeypatch):
+    admin, role, factory = ctx
+    await _approved(admin, role)
+    restore = _under_the_old_ref(monkeypatch)
+    await _convert_that_loses_its_outcomes(admin, monkeypatch)
+    restore()
+    async with factory() as s:
+        await s.execute(update(Approval).values(status=ApprovalStatus.APPROVED.value))
+        await s.commit()
+    assert (await admin.post(f"{PREFIX}/intake/convert/retry-ai-line-proposals")).status_code == 200
+    assert await _count(factory, Approval, None) == 4  # only a pending one is carried over
 
 
 async def test_control_a_withdrawn_request_is_over_and_a_retry_may_file_a_new_one(ctx, monkeypatch):
@@ -145,3 +199,30 @@ async def test_a_plan_stored_before_the_field_existed_still_states_it(ctx):
         row.document = {k: v for k, v in row.document.items() if not k.startswith("policy_enforcement")}
         await s.commit()
     assert _stated((await admin.get(f"{PREFIX}/intake")).json()) == ("not_enforced", TURN_ON_TRACKING_ISSUE)
+
+
+# ------------------------------------------------------------------ the approval type round trip, and what is stored
+
+
+def test_the_approval_type_round_trips_as_the_plain_string():
+    body = {"key": "g", "approval_type": "workflow_gate", "sub_step_keys": ["p1"]}
+    policy = PlanApprovalPolicy.model_validate(body)
+    assert policy.approval_type is ApprovalType.WORKFLOW_GATE
+    assert PlanApprovalPolicy.model_validate_json(json.dumps(body)) == policy
+    assert policy.model_dump(mode="json")["approval_type"] == "workflow_gate"
+    assert json.loads(policy.model_dump_json())["approval_type"] == "workflow_gate"
+    assert PlanApprovalPolicy.model_validate(policy.model_dump(mode="json")) == policy
+
+
+async def test_a_stored_plan_with_a_policy_reads_back_and_the_derived_fields_are_not_stored(ctx):
+    admin, role, factory = ctx
+    await _approved(admin, role)
+    async with factory() as s:
+        row = (await s.execute(select(CompanyOsWorkflowPlan))).scalar_one()
+        stored = row.document
+        assert stored["approval_policies"][0]["approval_type"] == "workflow_gate"
+        assert "policy_enforcement" not in stored and "policy_enforcement_tracking_issue" not in stored
+        assert store_mod.read_plan(row).approval_policies[0].approval_type is ApprovalType.WORKFLOW_GATE
+    served = (await admin.get(f"{PREFIX}/intake")).json()
+    assert served["policy_enforcement"] == "not_enforced"  # in the response all the same
+    assert served["approval_policies"][0]["approval_type"] == "workflow_gate"

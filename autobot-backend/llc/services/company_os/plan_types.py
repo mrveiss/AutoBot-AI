@@ -335,6 +335,8 @@ class EdgeCaseTreatment(_Doc):
 class ProposalOutcome(str, Enum):
     UNFILED = "unfiled"
     FILED = "filed"
+    #: The request exists and a person turned it down or sent it back: the line did not change (#20115).
+    DECLINED = "declined"
     FAILED = "failed"
 
 

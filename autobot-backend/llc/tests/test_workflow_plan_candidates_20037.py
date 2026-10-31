@@ -120,3 +120,17 @@ async def test_another_company_gets_404_and_a_missing_plan_is_404(ctx):
     assert (
         await mine.get(f"{PREFIX}/nope/one-number/candidates", params={"return_kind": "hours_back"})
     ).status_code == 404
+
+
+async def test_a_step_measured_at_zero_is_listed_apart_not_ranked_last(ctx):
+    _, role, factory = ctx
+    admin = await _plan(factory, role)
+    for step, metric in (
+        ("s1", _metric(0, 2, "hours")),
+        ("s2", _metric(3, 0, "hours")),
+        ("s3", _metric(1, 1, "hours")),
+    ):
+        assert (await admin.put(f"{PREFIX}/intake/steps/{step}/metric", json=metric)).status_code == 200
+    body = await _ranked(admin)
+    assert [c["step_key"] for c in body["candidates"]] == ["s3"]
+    assert body["unmeasured"] == ["s1", "s2"]

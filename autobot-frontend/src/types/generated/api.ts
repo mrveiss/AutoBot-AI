@@ -54556,6 +54556,169 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/company-os/workflow-plans/{plan_key}/lanes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Lane */
+        post: operations["add_lane_api_llc_company_os_workflow_plans__plan_key__lanes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/lanes/{lane_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Lane */
+        delete: operations["delete_lane_api_llc_company_os_workflow_plans__plan_key__lanes__lane_key__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Lane */
+        patch: operations["patch_lane_api_llc_company_os_workflow_plans__plan_key__lanes__lane_key__patch"];
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/steps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Step */
+        post: operations["add_step_api_llc_company_os_workflow_plans__plan_key__steps_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/steps/{step_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Step
+         * @description The step and every edge that touches it. The One Number's step is refused (409): change the One Number first.
+         */
+        delete: operations["delete_step_api_llc_company_os_workflow_plans__plan_key__steps__step_key__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Step */
+        patch: operations["patch_step_api_llc_company_os_workflow_plans__plan_key__steps__step_key__patch"];
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/edges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Edge */
+        post: operations["add_edge_api_llc_company_os_workflow_plans__plan_key__edges_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/edges/{from_step}/{to_step}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Edge */
+        delete: operations["delete_edge_api_llc_company_os_workflow_plans__plan_key__edges__from_step___to_step__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Edge */
+        patch: operations["patch_edge_api_llc_company_os_workflow_plans__plan_key__edges__from_step___to_step__patch"];
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/steps/{step_key}/edge-cases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Edge Case */
+        post: operations["add_edge_case_api_llc_company_os_workflow_plans__plan_key__steps__step_key__edge_cases_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/edge-cases/{edge_case_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Edge Case */
+        delete: operations["delete_edge_case_api_llc_company_os_workflow_plans__plan_key__edge_cases__edge_case_key__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Edge Case */
+        patch: operations["patch_edge_case_api_llc_company_os_workflow_plans__plan_key__edge_cases__edge_case_key__patch"];
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/one-number/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get One Number Candidates
+         * @description Steps ranked by frequency x duration for the owner's ``return_kind`` (FR-3.1). Reads only: sets no One Number.
+         */
+        get: operations["get_one_number_candidates_api_llc_company_os_workflow_plans__plan_key__one_number_candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/company-os/roles/{role_id}/skills": {
         parameters: {
             query?: never;
@@ -63201,6 +63364,38 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** CandidateItem */
+        CandidateItem: {
+            /** Rank */
+            rank: number;
+            /** Step Key */
+            step_key: string;
+            /** Label */
+            label: string;
+            /** Lane Key */
+            lane_key: string;
+            /** Frequency Per Week */
+            frequency_per_week: number;
+            /** Duration Hours */
+            duration_hours: number;
+            /** Score */
+            score: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CandidatesResponse
+         * @description Measured steps by ``frequency x duration`` (hours per week); ``unmeasured`` steps are not ranked (FR-3.1).
+         */
+        CandidatesResponse: {
+            return_kind: components["schemas"]["ReturnKind"];
+            /** Candidates */
+            candidates: components["schemas"]["CandidateItem"][];
+            /** Unmeasured */
+            unmeasured: string[];
+        } & {
+            [key: string]: unknown;
+        };
         /** CanvasExportRequest */
         CanvasExportRequest: {
             /** Format */
@@ -66329,6 +66524,9 @@ export interface components {
             /** Approved By */
             approved_by?: string | null;
             conversion?: components["schemas"]["PlanConversion"] | null;
+            policy_enforcement?: components["schemas"]["PolicyEnforcement"] | null;
+            /** Policy Enforcement Tracking Issue */
+            policy_enforcement_tracking_issue?: number | null;
         } & {
             [key: string]: unknown;
         };
@@ -74475,6 +74673,18 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** EdgeCasePatch */
+        EdgeCasePatch: {
+            /** Description */
+            description?: string | null;
+            classification?: components["schemas"]["Label"] | null;
+            /** Handling */
+            handling?: string | null;
+            /** Sub Step Key */
+            sub_step_key?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** EdgeCaseTreatment */
         EdgeCaseTreatment: {
             /** Edge Case Key */
@@ -74488,6 +74698,13 @@ export interface components {
          * @enum {string}
          */
         EdgeCaseTreatmentKind: "branch" | "handled_in_step" | "documentation";
+        /** EdgePatch */
+        EdgePatch: {
+            /** Condition */
+            condition?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * EditFileRequest
          * @description Request model for editing files.
@@ -83714,6 +83931,19 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * LanePatch
+         * @description Only what is sent changes; the key is the lane's identity and never changes.
+         */
+        LanePatch: {
+            /** Name */
+            name?: string | null;
+            holder_kind?: components["schemas"]["HolderKind"] | null;
+            /** Role Id */
+            role_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * LatestMessagesResponse
          * @description Response for GET /latest.
          */
@@ -90777,8 +91007,12 @@ export interface components {
         PlanApprovalPolicy: {
             /** Key */
             key: string;
-            /** @default workflow_gate */
-            approval_type: components["schemas"]["PlanApprovalType"];
+            /**
+             * Approval Type
+             * @default workflow_gate
+             * @constant
+             */
+            approval_type: "workflow_gate";
             /** Sub Step Keys */
             sub_step_keys?: string[];
             /** @default hold */
@@ -90820,12 +91054,6 @@ export interface components {
          * @enum {string}
          */
         PlanApprovalTimeout: "hold" | "remind" | "escalate";
-        /**
-         * PlanApprovalType
-         * @description The one kind of approval a plan may ask for: it waits in Approvals (FR-6.2).
-         * @enum {string}
-         */
-        PlanApprovalType: "workflow_gate";
         /**
          * PlanConversion
          * @description What crosses from the planner to Company OS (section 7A.2).
@@ -91312,6 +91540,12 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * PolicyEnforcement
+         * @description Whether the approval policies of a plan are enforced. Nothing executes workflows yet (#16763).
+         * @enum {string}
+         */
+        PolicyEnforcement: "not_enforced";
         /**
          * PopulateManPagesResponse
          * @description Response for POST /populate_man_pages.
@@ -92398,7 +92632,7 @@ export interface components {
          * ProposalOutcome
          * @enum {string}
          */
-        ProposalOutcome: "unfiled" | "filed" | "failed";
+        ProposalOutcome: "unfiled" | "filed" | "declined" | "failed";
         /** ProposeLineChange */
         ProposeLineChange: {
             /**
@@ -100114,6 +100348,19 @@ export interface components {
              * @default false
              */
             verified: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /** StepPatch */
+        StepPatch: {
+            /** Label */
+            label?: string | null;
+            /** Lane Key */
+            lane_key?: string | null;
+            /** Process Key */
+            process_key?: string | null;
+            /** Note */
+            note?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -183343,6 +183590,454 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_lane_api_llc_company_os_workflow_plans__plan_key__lanes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Lane"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_lane_api_llc_company_os_workflow_plans__plan_key__lanes__lane_key__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+                lane_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_lane_api_llc_company_os_workflow_plans__plan_key__lanes__lane_key__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+                lane_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LanePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_step_api_llc_company_os_workflow_plans__plan_key__steps_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Step"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_step_api_llc_company_os_workflow_plans__plan_key__steps__step_key__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+                step_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_step_api_llc_company_os_workflow_plans__plan_key__steps__step_key__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+                step_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StepPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_edge_api_llc_company_os_workflow_plans__plan_key__edges_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Edge"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_edge_api_llc_company_os_workflow_plans__plan_key__edges__from_step___to_step__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+                from_step: string;
+                to_step: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_edge_api_llc_company_os_workflow_plans__plan_key__edges__from_step___to_step__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+                from_step: string;
+                to_step: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EdgePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_edge_case_api_llc_company_os_workflow_plans__plan_key__steps__step_key__edge_cases_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+                step_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EdgeCaseBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_edge_case_api_llc_company_os_workflow_plans__plan_key__edge_cases__edge_case_key__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+                edge_case_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_edge_case_api_llc_company_os_workflow_plans__plan_key__edge_cases__edge_case_key__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+                edge_case_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EdgeCasePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_one_number_candidates_api_llc_company_os_workflow_plans__plan_key__one_number_candidates_get: {
+        parameters: {
+            query: {
+                return_kind: components["schemas"]["ReturnKind"];
+            };
+            header?: never;
+            path: {
+                plan_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidatesResponse"];
                 };
             };
             /** @description Validation Error */

@@ -11,7 +11,8 @@ The score of a measured step is ``frequency x duration``: how often it happens p
 from landing to done, in hours. The requirement names the owner's return kind as a second input but gives it no
 weight, so the formula takes the simplest reading: every return kind weighs a step the same, and the kind is
 carried in the result so the screen shows what the ranking was asked for. A weight per kind is a one-line change
-here once the owner states one. A step with no metric has no score; it is listed apart, never ranked.
+here once the owner states one. A step with no metric, or a zero frequency or duration, has no real score:
+it is listed apart, never ranked.
 """
 
 from __future__ import annotations
@@ -48,7 +49,7 @@ def rank_candidates(plan: CompanyWorkflowPlan, return_kind: ReturnKind) -> OneNu
     metrics: Dict[str, Tuple[float, float]] = {
         m.step_key: (m.frequency.value, m.duration.value * _HOURS[m.duration.unit]) for m in plan.step_metrics
     }
-    measured = [s for s in plan.steps if s.key in metrics]
+    measured = [s for s in plan.steps if s.key in metrics and metrics[s.key][0] * metrics[s.key][1] > 0]
     ordered = sorted(measured, key=lambda s: (-metrics[s.key][0] * metrics[s.key][1], s.position, s.key))
     ranked = [
         OneNumberCandidate(
@@ -56,4 +57,4 @@ def rank_candidates(plan: CompanyWorkflowPlan, return_kind: ReturnKind) -> OneNu
         )
         for i, s in enumerate(ordered, start=1)
     ]
-    return OneNumberRanking(return_kind, ranked, [s.key for s in plan.steps if s.key not in metrics])
+    return OneNumberRanking(return_kind, ranked, [s.key for s in plan.steps if s not in measured])
