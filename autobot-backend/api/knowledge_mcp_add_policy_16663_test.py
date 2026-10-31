@@ -68,7 +68,21 @@ async def test_a_non_admin_cannot_file_a_fact_into_another_org_group_or_share():
         "shared_with": ["someone"],
         "owner_id": "someone-else",
     }
-    response, kb = await _add(sent, "user")
+    from knowledge.write_scope import guard_caller_metadata
+
+    seen: list = []
+
+    async def _store(**document):  # the KB's own guard (#19517), applied under the scope the route entered
+        seen.append(guard_caller_metadata(document["metadata"]))
+        return "doc-1"
+
+    from api import knowledge_mcp as mod
+
+    kb = MagicMock()
+    kb.add_document = AsyncMock(side_effect=_store)
+    request = SimpleNamespace(content="c", metadata=sent, source="mcp")
+    with patch.object(mod, "get_knowledge_base", MagicMock(return_value=kb)):
+        response = await mod.mcp_add_to_knowledge_base(request, current_user={"user_id": "u1", "role": "user"})
 
     assert response["success"] is True
-    assert kb.add_document.await_args.kwargs["metadata"] == {"title": "t"}
+    assert seen == [{"title": "t", "owner_id": "u1", "source": "mcp"}]
