@@ -14,7 +14,6 @@ For agents at or over 100%: calls BudgetService hard stop (idempotent).
 """
 
 import json
-import logging
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -22,6 +21,7 @@ from decimal import Decimal
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from models.agent_org import AgentOrgNode
 from user_management.database import get_async_session_factory
@@ -31,7 +31,7 @@ from ..models.budget import LLCAgentBudget
 from ..services.budget import BudgetService
 from .base import PollLoopScheduler
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _SOFT_THRESHOLD = Decimal("0.80")
 _HARD_THRESHOLD = Decimal("1.00")
