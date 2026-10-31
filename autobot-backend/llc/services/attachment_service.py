@@ -362,23 +362,26 @@ class AttachmentService:
         )
         # The removal is recorded in this transaction (#19756); the unlink happens after it commits.
         root = _resolve_storage_root()
-        entry_id = outbox.enqueue_removal(session, row, outbox.storage_root_id(root)).id
+        staged = files.staging_path(root, str(row.id))
+        has_staged = await asyncio.to_thread(staged.exists)  # its publish failed or has not run
+        entries = outbox.enqueue_removal(session, row, outbox.storage_root_id(root), staged if has_staged else None)
+        entry_ids = [entry.id for entry in entries]
         await session.delete(row)
         await session.commit()
-        await self._drain_after_delete(session, root, entry_id)
+        await self._drain_after_delete(session, root, entry_ids)
 
     @staticmethod
-    async def _drain_after_delete(session: AsyncSession, root: Path, entry_id: uuid.UUID) -> None:
+    async def _drain_after_delete(session: AsyncSession, root: Path, entry_ids: list[uuid.UUID]) -> None:
         """Best-effort unlink right after the delete committed.
 
         The row delete is already durable, so a failure here must not turn the request into a 500:
         it is logged and the entry stays in the outbox for the sweep.
         """
         try:
-            await outbox.drain_removals(session, root, outbox.storage_root_id(root), only_id=entry_id)
+            await outbox.drain_removals(session, root, outbox.storage_root_id(root), only_ids=entry_ids)
         except Exception:
             logger.exception(
-                "#19756: immediate file removal for outbox entry %s failed; the sweep will retry", entry_id
+                "#19756: immediate file removal for outbox entries %s failed; the sweep will retry", entry_ids
             )
             await session.rollback()
 

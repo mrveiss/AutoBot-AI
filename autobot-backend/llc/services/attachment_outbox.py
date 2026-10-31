@@ -38,7 +38,7 @@ from autobot_shared.security.path_validator import validate_path
 from autobot_shared.time_utils import now_utc
 from llc.models.attachment import LLCWorkItemAttachment
 from llc.models.attachment_deletion import LLCAttachmentFileDeletion as Entry
-from llc.services.attachment_files import staging_dir
+from llc.services.attachment_files import staging_dir, staging_path
 from llc.storage_root import (
     LLC_ATTACHMENT_REMOVAL_MAX_ATTEMPTS,
     LLC_ATTACHMENT_REMOVAL_RETRY_SECONDS,
@@ -58,33 +58,45 @@ def storage_root_id(root: Path) -> str:
     return hashlib.sha256(f"{socket.gethostname()}\0{root.resolve()}".encode()).hexdigest()[:32]
 
 
-def removal_target(root: Path, storage_path: str) -> Path:
-    """The file an outbox entry may remove: inside the root, and neither the root nor staging."""
+def removal_target(root: Path, storage_path: str, attachment_id: uuid.UUID) -> Path:
+    """The file an outbox entry may remove: inside the root, and neither the root nor staging.
+
+    One exception, and it is exact: the staged file of the entry's OWN attachment
+    (``.staging/<attachment_id>.part``). A caller who deletes an attachment whose publish failed
+    asked for those bytes to go too. Nothing else under staging -- another id, the quarantine
+    directory -- is reachable.
+    """
     resolved_root = root.resolve()
     target = validate_path(storage_path, allowed_roots=(str(resolved_root),))
+    if target == staging_path(root, str(attachment_id)):
+        return target
     if target == resolved_root or target.is_relative_to(staging_dir(root)):
         raise ValueError(f"outbox path is not an attachment file: {target}")
     return target
 
 
-def enqueue_removal(session: AsyncSession, row: LLCWorkItemAttachment, root_id: str) -> Entry:
-    """Record the owed removal in the caller's transaction; it commits or rolls back with the row delete."""
-    entry = Entry(
-        id=uuid.uuid4(),
-        attachment_id=row.id,
-        company_id=row.company_id,
-        storage_path=row.storage_path,
-        root_id=root_id,
-    )
-    session.add(entry)
-    return entry
+def enqueue_removal(
+    session: AsyncSession, row: LLCWorkItemAttachment, root_id: str, staged: Optional[Path] = None
+) -> list[Entry]:
+    """Record the owed removals in the caller's transaction; they commit or roll back with the row delete.
+
+    *staged* is the attachment's staged file when one exists (its publish failed, or has not run):
+    the delete covers those bytes too.
+    """
+    paths = [row.storage_path] + ([str(staged)] if staged is not None else [])
+    entries = [
+        Entry(id=uuid.uuid4(), attachment_id=row.id, company_id=row.company_id, storage_path=path, root_id=root_id)
+        for path in paths
+    ]
+    session.add_all(entries)
+    return entries
 
 
-def claim_statement(root_id: str, only_id: Optional[uuid.UUID] = None) -> sa.Select:
+def claim_statement(root_id: str, only_ids: Optional[list[uuid.UUID]] = None) -> sa.Select:
     """Entries this node may drain now, oldest attempt first, locked against a concurrent drain."""
     query = sa.select(Entry).where(Entry.root_id == root_id, Entry.stuck_at.is_(None))
-    if only_id is not None:
-        query = query.where(Entry.id == only_id)
+    if only_ids is not None:
+        query = query.where(Entry.id.in_(only_ids))
     else:
         retry_before = now_utc() - timedelta(seconds=LLC_ATTACHMENT_REMOVAL_RETRY_SECONDS)
         query = query.where(sa.or_(Entry.last_attempt_at.is_(None), Entry.last_attempt_at <= retry_before))
@@ -95,13 +107,13 @@ def claim_statement(root_id: str, only_id: Optional[uuid.UUID] = None) -> sa.Sel
     )
 
 
-def _unlink(root: Path, storage_path: str) -> None:
+def _unlink(root: Path, storage_path: str, attachment_id: uuid.UUID) -> None:
     """Remove the file; a file already gone under a present directory counts as removed.
 
     A missing root or parent directory is a failure, not success: an unmounted volume looks the
     same as "nothing there", and clearing the entry would leave the real file with no retry.
     """
-    target = removal_target(root, storage_path)
+    target = removal_target(root, storage_path, attachment_id)
     if not root.is_dir():
         raise FileNotFoundError(f"storage root is not present: {root}")
     if not target.parent.is_dir():
@@ -123,7 +135,7 @@ async def _attempt(session: AsyncSession, root: Path, entry: Entry) -> bool:
     entry.attempts = (entry.attempts or 0) + 1
     entry.last_attempt_at = now_utc()
     try:
-        await asyncio.to_thread(_unlink, root, entry.storage_path)
+        await asyncio.to_thread(_unlink, root, entry.storage_path, entry.attachment_id)
     except (OSError, ValueError) as exc:
         _record_failure(entry, exc)
         return False
@@ -131,13 +143,15 @@ async def _attempt(session: AsyncSession, root: Path, entry: Entry) -> bool:
     return True
 
 
-async def drain_removals(session: AsyncSession, root: Path, root_id: str, only_id: Optional[uuid.UUID] = None) -> int:
+async def drain_removals(
+    session: AsyncSession, root: Path, root_id: str, only_ids: Optional[list[uuid.UUID]] = None
+) -> int:
     """Claim and drain this node's entries; returns how many files are now gone.
 
     A cleared entry is deleted; a failed one keeps its error and, after enough failures, is marked
     stuck. Entries another worker holds are not seen (SKIP LOCKED), so a lost race returns 0.
     """
-    entries = list((await session.execute(claim_statement(root_id, only_id))).scalars().all())
+    entries = list((await session.execute(claim_statement(root_id, only_ids))).scalars().all())
     cleared = 0
     for entry in entries:
         cleared += await _attempt(session, root, entry)
