@@ -220,6 +220,9 @@ def test_only_the_role_installs_the_nodejs_package() -> None:
         ({"apt": {"name": "{{ item }}"}, "loop": ["nginx", "nodejs"]}, True),
         ({"apt": {"name": "{{ item }}"}, "loop": ["nginx"]}, False),
         ({"apt": {"name": "nodejs=22.1.0-1nodesource1"}}, True),
+        ({"apt": "name=\"{{ wanted | default('node js') }}\" state=absent"}, False),
+        ({"apt": "name={{ 'nodejs' if x else 'y z' }} state=present"}, False),
+        ({"vars": {"apt": {"name": "nodejs"}}}, False),
     ],
 )
 def test_a_distro_install_is_flagged(task: dict, flagged: bool) -> None:
@@ -290,6 +293,17 @@ def test_no_literal_node_version_in_workflows_ansible_or_installers() -> None:
 )
 def test_each_literal_shape_is_flagged(text: str) -> None:
     assert literals(text, "x")
+
+
+@pytest.mark.parametrize(
+    ("text", "flagged"),
+    [
+        ("url: https://deb.nodesource.com/setup_22.x\n", True),
+        ("# url: https://deb.nodesource.com/setup_22.x\n", False),
+    ],
+)
+def test_a_commented_nodesource_url_is_not_an_install(text: str, flagged: bool) -> None:
+    assert bool(_NODESOURCE_INSTALL.search(without_comment_lines(text))) is flagged
 
 
 def test_the_derived_forms_are_not_flagged() -> None:
