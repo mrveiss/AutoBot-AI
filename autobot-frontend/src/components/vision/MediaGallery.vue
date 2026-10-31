@@ -15,10 +15,10 @@
             <option value="screen">{{ t('vision.mediaGallery.screenCaptures') }}</option>
           </select>
         </div>
-        <button @click="clearAll" class="btn-clear-all" :disabled="items.length === 0">
+        <BaseButton variant="error" size="sm" @click="clearAll" :disabled="items.length === 0">
           <Icon name="trash" />
           {{ t('vision.mediaGallery.clearAll') }}
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -131,27 +131,27 @@
                 </div>
               </div>
 
-              <button @click="showRawJson = !showRawJson" class="btn-toggle">
+              <BaseButton variant="ghost" size="sm" @click="showRawJson = !showRawJson">
                 <Icon :name="showRawJson ? 'chevron-up' : 'chevron-down'" />
                 {{ showRawJson ? t('vision.mediaGallery.hideFullResults') : t('vision.mediaGallery.showFullResults') }}
-              </button>
+              </BaseButton>
               <pre v-if="showRawJson" class="json-display">{{ JSON.stringify(selectedItem.analysisResult, null, 2) }}</pre>
             </div>
           </div>
         </div>
         <div class="modal-actions">
-          <button @click="$emit('re-analyze', selectedItem); selectedItem = null" class="btn-primary">
+          <BaseButton size="sm" @click="$emit('re-analyze', selectedItem); selectedItem = null">
             <Icon name="redo" />
             {{ t('vision.mediaGallery.reAnalyze') }}
-          </button>
-          <button @click="downloadItem(selectedItem)" class="btn-secondary">
+          </BaseButton>
+          <BaseButton variant="secondary" size="sm" @click="downloadItem(selectedItem)">
             <Icon name="download" />
             {{ t('vision.mediaGallery.download') }}
-          </button>
-          <button @click="deleteItem(selectedItem.id); selectedItem = null" class="btn-danger">
+          </BaseButton>
+          <BaseButton variant="error" size="sm" @click="deleteItem(selectedItem.id); selectedItem = null">
             <Icon name="trash" />
             {{ t('vision.mediaGallery.deleteItem') }}
-          </button>
+          </BaseButton>
         </div>
       </div>
     </div>
@@ -165,8 +165,8 @@
         <h4>{{ t('vision.mediaGallery.clearAllConfirmTitle') }}</h4>
         <p>{{ t('vision.mediaGallery.clearAllConfirmMsg', { count: items.length }) }}</p>
         <div class="confirm-actions">
-          <button @click="cancelClearAll" class="btn-cancel">{{ t('vision.mediaGallery.cancelBtn') }}</button>
-          <button @click="confirmClearAll" class="btn-confirm">{{ t('vision.mediaGallery.clearAllConfirm') }}</button>
+          <BaseButton variant="secondary" size="sm" @click="cancelClearAll">{{ t('vision.mediaGallery.cancelBtn') }}</BaseButton>
+          <BaseButton variant="error" size="sm" @click="confirmClearAll">{{ t('vision.mediaGallery.clearAllConfirm') }}</BaseButton>
         </div>
       </div>
     </div>
@@ -174,6 +174,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onUnmounted } from 'vue';
@@ -346,31 +347,6 @@ onUnmounted(() => {
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
   color: var(--text-primary);
-}
-
-.btn-clear-all {
-  padding: var(--spacing-2) var(--spacing-4);
-  background: var(--color-error-bg);
-  color: var(--color-error);
-  border: 1px solid var(--color-error);
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  transition: all var(--duration-200);
-}
-
-.btn-clear-all:hover:not(:disabled) {
-  background: var(--color-error-solid);
-  color: white;
-}
-
-.btn-clear-all:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 /* Gallery Grid */
@@ -663,22 +639,6 @@ onUnmounted(() => {
   color: var(--text-primary);
 }
 
-.btn-toggle {
-  padding: var(--spacing-2) var(--spacing-3);
-  background: none;
-  border: none;
-  color: var(--text-tertiary);
-  font-size: var(--text-sm);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-}
-
-.btn-toggle:hover {
-  color: var(--text-secondary);
-}
-
 .json-display {
   margin-top: var(--spacing-3);
   padding: var(--spacing-3);
@@ -697,61 +657,8 @@ onUnmounted(() => {
   border-top: 1px solid var(--border-default);
 }
 
-.btn-primary {
+.modal-actions :deep(.aui-btn--primary) {
   flex: 1;
-  padding: var(--spacing-2-5) var(--spacing-4);
-  background: var(--color-primary);
-  color: var(--text-on-primary);
-  border: none;
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-2);
-}
-
-.btn-primary:hover {
-  background: var(--color-primary-hover);
-}
-
-.btn-secondary {
-  padding: var(--spacing-2-5) var(--spacing-4);
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-}
-
-.btn-secondary:hover {
-  background: var(--bg-hover);
-}
-
-.btn-danger {
-  padding: var(--spacing-2-5) var(--spacing-4);
-  background: var(--color-error-bg);
-  color: var(--color-error);
-  border: 1px solid var(--color-error);
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-}
-
-.btn-danger:hover {
-  background: var(--color-error-solid);
-  color: white;
 }
 
 /* Confirmation Modal */
@@ -809,35 +716,8 @@ onUnmounted(() => {
   gap: var(--spacing-3);
 }
 
-.btn-cancel {
+.confirm-actions :deep(.aui-btn) {
   flex: 1;
-  padding: var(--spacing-2-5) var(--spacing-4);
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
 }
 
-.btn-cancel:hover {
-  background: var(--bg-hover);
-}
-
-.btn-confirm {
-  flex: 1;
-  padding: var(--spacing-2-5) var(--spacing-4);
-  background: var(--color-error-solid);
-  color: white;
-  border: none;
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.btn-confirm:hover {
-  background: var(--color-error-dark);
-}
 </style>
