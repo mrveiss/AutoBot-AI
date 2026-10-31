@@ -9538,6 +9538,11 @@
       "subtitle": "Vocabulario de permisos detallado y paquetes de ámbitos para claves de API",
       "comingSoonTitle": "Disponible en una versión posterior",
       "comingSoonMessage": "Los ámbitos de permisos detallados —un vocabulario de permisos, paquetes de ámbitos y la aplicación de ámbitos en claves de API— no están disponibles en esta versión. Esta página le permitirá definirlos y asignarlos una vez que estén disponibles."
+    },
+    "layout": {
+      "title": "Administración",
+      "subtitle": "Herramientas de back-office para administradores",
+      "ariaLabel": "Sección de administración"
     }
   },
   "components": {

@@ -236,10 +236,23 @@ describe('header icon cluster (#18240)', () => {
 })
 
 describe('adminMenuItems coverage (#16933)', () => {
-  /** Top-level routes under /admin/ that carry hideInNav: true. */
+  /**
+   * /admin/* routes that carry hideInNav: true, with their full path. The
+   * pre-existing ones are children of the /admin parent (#19833), so the parent's
+   * children are flattened to `/admin/<child>`; routes still top-level count too.
+   */
   function hiddenAdminRoutes(): RouteRecordRaw[] {
-    return topLevelRoutes().filter(
-      (r) => typeof r.path === 'string' && r.path.startsWith('/admin/') && isHiddenByMeta(r),
+    const flat = routes.flatMap((r) =>
+      r.path === '/admin' && r.children
+        ? r.children.map((c) => ({ ...c, path: `/admin/${c.path}` }) as RouteRecordRaw)
+        : [r],
+    )
+    return flat.filter(
+      (r) =>
+        !isRedirectOrCatchAll(r) &&
+        typeof r.path === 'string' &&
+        r.path.startsWith('/admin/') &&
+        isHiddenByMeta(r),
     )
   }
 
