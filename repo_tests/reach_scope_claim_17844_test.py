@@ -385,6 +385,7 @@ _DECLARED_SCOPES = {
     "frontend-http-transports": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "frontend-local-formatter-scan": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "frontend-local-date-formatter-scan": ("autobot-frontend/src", "autobot-slm-frontend/src"),
+    "frontend-hand-built-relative-time-scan": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "frontend-hand-rolled-spinner-scan": ("autobot-frontend/src", "autobot-slm-frontend/src", "autobot-plugins"),
     "search-mode-copies": ("autobot-backend",),
     "redaction-placeholder-literals": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
