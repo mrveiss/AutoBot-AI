@@ -372,6 +372,31 @@ def unmodelled_status_blocks(themes: List[ThemeSpec] = THEMES, files: List[Path]
     return found
 
 
+def _check_hover_pair(theme, decls, on_tok, on_hex, fill_tok, fill_hex, required, lines, failures) -> None:
+    """Measure the on-status text against ``<fill>-hover`` when a theme declares one (#19953).
+
+    A hover fill must keep the same AA ratio as the resting fill, and must differ from it
+    (a hover token equal to the resting fill is the no-feedback defect it exists to fix).
+    """
+    hover_tok = f"{fill_tok}-hover"
+    if hover_tok not in decls:
+        return
+    hover_hex = resolve_colour(hover_tok, decls)
+    if hover_hex is None:
+        lines.append(f"  FAIL   n/a    {on_tok} on {hover_tok}")
+        failures.append(f"{theme.name}: cannot evaluate {on_tok} on {hover_tok}")
+        return
+    ratio = contrast_ratio(on_hex, hover_hex)
+    ok = ratio >= required and hover_hex != fill_hex
+    lines.append(
+        f"  {'ok  ' if ok else 'FAIL'} {ratio:5.2f}:1 (need {required})  {on_tok} {on_hex} on {hover_tok} {hover_hex}"
+    )
+    if ratio < required:
+        failures.append(f"{theme.name}: {on_tok} on {hover_tok} = {ratio:.2f}:1 < {required}")
+    if hover_hex == fill_hex:
+        failures.append(f"{theme.name}: {hover_tok} equals {fill_tok} ({fill_hex}); hover gives no feedback")
+
+
 def check_status_themes(themes: List[ThemeSpec] = THEMES, required: float = AA_NORMAL) -> Tuple[List[str], List[str]]:
     """Return ``(report_lines, failure_lines)`` for every theme's on-status pairs."""
     lines: List[str] = []
@@ -398,6 +423,7 @@ def check_status_themes(themes: List[ThemeSpec] = THEMES, required: float = AA_N
             )
             if not ok:
                 failures.append(f"{theme.name}: {on_tok} on {fill_tok} = {ratio:.2f}:1 < {required}")
+            _check_hover_pair(theme, decls, on_tok, on_hex, fill_tok, fill_hex, required, lines, failures)
     return lines, failures
 
 
