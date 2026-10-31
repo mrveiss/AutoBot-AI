@@ -28,11 +28,14 @@ from user_management.services import TenantContext
 
 from ..models.enums import ApprovalStatus, ApprovalType
 from ..services.approval import (
+    ApprovalHookError,
     ApprovalNotFoundError,
     ApprovalRequiredError,
     ApprovalService,
     ApprovalStateError,
 )
+from ..services.approval_hooks import validate_payload
+from ..services.authz import NotAuthorisedError, require_company_admin_unless_platform
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/approvals", tags=["llc-approvals"])
@@ -95,6 +98,7 @@ async def request_approval(
 ) -> ApprovalResponse:
     """Create a pending approval gate record."""
     assert_company_access(ctx, body.company_id)
+    _refuse_unrequestable(body)
     if is_server_only_action(body.payload.get("action")):
         # #18430: this route lets the caller write both the payload and the requester; a four-eyes rule would be moot.
         raise HTTPException(status_code=403, detail="this action can be proposed only by the server")
@@ -105,6 +109,7 @@ async def request_approval(
             gate_type=body.type,
             payload=body.payload,
             requested_by=body.requested_by_agent_id,
+            actor_user_id=ctx.user_id,  # the verified caller, not the claimed requester
         )
     await svc.publish_requested(approval)
     return _to_response(approval)
@@ -164,6 +169,11 @@ async def decide_approval(
     # (the route's tests mock the session, which hid it): a company-scoped approval could not be decided.
     # Commit the transaction that is open instead.
     try:
+        # Board only: owner/admin of THIS company (or a platform admin), never the requesting agent --
+        # an agent credential is already refused by require_interactive_human above.
+        await require_company_admin_unless_platform(
+            session, authorized.company_id, ctx.user_id, platform_admin=ctx.is_platform_admin
+        )
         approval = await svc.decide(
             session,
             approval_id=aid,
@@ -171,6 +181,16 @@ async def decide_approval(
             decided_by=decided_by,
         )
         await session.commit()
+    except NotAuthorisedError as exc:
+        await session.rollback()
+        logger.warning("Refused approval decision on %s: %s", aid, exc)
+        raise HTTPException(status_code=403, detail="Only a company owner or admin may decide an approval")
+    except ApprovalHookError as exc:
+        await session.rollback()
+        logger.warning("Approval %s left pending: its action could not be applied: %s", aid, exc)
+        raise HTTPException(
+            status_code=409, detail="The approved action could not be applied; the approval is still pending"
+        )
     except ApprovalNotFoundError as exc:
         await session.rollback()
         logger.error("Exception in API handler: %s", exc, exc_info=True)
@@ -182,6 +202,7 @@ async def decide_approval(
         await session.rollback()
         raise
 
+    await svc.finish_decision(approval)  # GH#8214: what an approved hire / budget override needs after the commit
     await svc.publish_decided(approval, body.decision)
     await svc.log_decision_to_kb(approval)  # GH#8243: index to decisions KB
     if body.decision == ApprovalStatus.APPROVED:
@@ -196,6 +217,17 @@ async def decide_approval(
 # ------------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------------
+
+
+def _refuse_unrequestable(body: ApprovalRequest) -> None:
+    """422 unless this route may create *body*, whose payload is executed when approved (GH#8214)."""
+    if body.type == ApprovalType.HIRE:
+        # A hire is requested only by the hire route, which fixes the agent id and validates the adapter.
+        raise HTTPException(status_code=422, detail="A hire approval is requested through the agent-hires route")
+    try:
+        validate_payload(body.type, body.payload)
+    except ApprovalHookError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 def _verified_decider(ctx: TenantContext, body: ApprovalDecision) -> uuid.UUID:

@@ -14,9 +14,9 @@ from __future__ import annotations
 
 import json
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,9 +25,16 @@ from api.user_management.dependencies import get_current_user, require_org_conte
 from autobot_shared.env_utils import env_str
 from autobot_shared.logging_manager import get_logger
 from llc.adapters import adapter_unavailable_reason, registered_adapter_types
-from llc.deps import assert_company_access
-from llc.scheduler.schedule_entry import schedule_heartbeat
-from llc.services.budget import BudgetService
+from llc.deps import assert_company_access, service_dep
+from llc.services.agent_hire_service import (
+    AgentHirePending,
+    HirePayload,
+    company_requires_hire_approval,
+    insert_hired_agent,
+    request_hire_approval,
+    schedule_hired_agent,
+)
+from llc.services.approval import ApprovalService
 from llc.services.model_tiers import get_model_tier_service
 from user_management.database import get_async_session
 from user_management.services import TenantContext
@@ -35,6 +42,7 @@ from user_management.services import TenantContext
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["llc-agent-hires"])
+_approval_service = service_dep(ApprovalService)
 
 # ---------------------------------------------------------------------------
 # Model tier constants (GH#8486)
@@ -484,87 +492,79 @@ def _render_agents_md(body: AgentHireRequest, company_id: uuid.UUID, is_haiku: b
     return agents_md
 
 
+def _hire_payload(company_id: uuid.UUID, body: AgentHireRequest, resolved_model: str) -> HirePayload:
+    """The agent as it will exist: ids fixed now, so the request and the approved hire are the same agent."""
+    agent_id = str(uuid.uuid4())
+    adapter_cfg: Dict[str, Any] = dict(body.adapter_config or {})
+    adapter_cfg["model"] = resolved_model
+    return HirePayload(
+        agent_id=agent_id,
+        agent_name=body.agent_name,
+        org_role=body.org_role,
+        title=body.title,
+        capabilities=body.capabilities,
+        reports_to=body.reports_to,
+        heartbeat_cron=body.heartbeat_cron,
+        heartbeat_enabled=body.heartbeat_enabled,
+        adapter_type=body.adapter_type or "claude_code",
+        adapter_config=adapter_cfg,
+        model=resolved_model,
+        instructions_file_path=f"/etc/llc/agents/{company_id}/{agent_id}/AGENTS.md",
+    )
+
+
+def _hire_response(company_id: uuid.UUID, body: AgentHireRequest, hire: HirePayload) -> AgentHireResponse:
+    """The 201 answer for a hire that is live now; logs it."""
+    logger.info(
+        "Hired agent %s (name=%r model=%r company=%s reports_to=%s)",
+        hire.agent_id,
+        hire.agent_name,
+        hire.model,
+        company_id,
+        hire.reports_to,
+    )
+    return AgentHireResponse(
+        agent_id=hire.agent_id,
+        agent_name=hire.agent_name,
+        model=hire.model,
+        org_role=hire.org_role,
+        company_id=str(company_id),
+        reports_to=hire.reports_to,
+        instructions_file_path=hire.instructions_file_path,
+        agents_md=_render_agents_md(body, company_id, hire.model == HAIKU_MODEL),
+    )
+
+
 @router.post(
     "/companies/{company_id}/agent-hires",
-    response_model=AgentHireResponse,
+    response_model=Union[AgentHireResponse, AgentHirePending],
     status_code=status.HTTP_201_CREATED,
     summary="Hire a new agent (Sonnet or Haiku tier) for a company (GH#8486)",
 )
 async def hire_agent(
     company_id: uuid.UUID,
     body: AgentHireRequest,
+    response: Response,
     session: AsyncSession = Depends(get_async_session),
+    svc: ApprovalService = Depends(_approval_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
-) -> AgentHireResponse:
-    """Hire a new LLC agent with explicit model selection and AGENTS.md generation."""
+) -> Union[AgentHireResponse, AgentHirePending]:
+    """Hire a new LLC agent with explicit model selection and AGENTS.md generation.
+
+    A company with ``require_approval_for_hires`` answers 202 with a pending approval instead:
+    the agent is created only when the board approves it (GH#8214).
+    """
     assert_company_access(ctx, str(company_id))
     resolved_model = _validate_hire(body)
-    is_haiku = resolved_model == HAIKU_MODEL
-    agent_id = str(uuid.uuid4())
+    hire = _hire_payload(company_id, body, resolved_model)
+    if await company_requires_hire_approval(session, company_id):
+        response.status_code = status.HTTP_202_ACCEPTED
+        return await request_hire_approval(session, svc, company_id, hire, ctx.user_id)
 
-    adapter_cfg: Dict[str, Any] = dict(body.adapter_config or {})
-    adapter_cfg["model"] = resolved_model
-
-    agents_md = _render_agents_md(body, company_id, is_haiku)
-
-    instructions_file_path = f"/etc/llc/agents/{company_id}/{agent_id}/AGENTS.md"
-
-    await session.execute(
-        text("""
-            INSERT INTO agent_org_nodes
-                (id, agent_id, name, org_role, title, capabilities,
-                 company_id, reports_to, heartbeat_cron, heartbeat_enabled,
-                 adapter_type, adapter_config, model, instructions_file_path)
-            VALUES
-                (:id, :agent_id, :name, :org_role, :title, :capabilities,
-                 :company_id, :reports_to, :heartbeat_cron, :heartbeat_enabled,
-                 :adapter_type, CAST(:adapter_config AS jsonb), :model, :instructions_file_path)
-        """),
-        {
-            "id": str(uuid.uuid4()),
-            "agent_id": agent_id,
-            "name": body.agent_name,
-            "org_role": body.org_role,
-            "title": body.title,
-            "capabilities": body.capabilities,
-            "company_id": str(company_id),
-            "reports_to": body.reports_to,
-            "heartbeat_cron": body.heartbeat_cron,
-            "heartbeat_enabled": body.heartbeat_enabled,
-            "adapter_type": body.adapter_type or "claude_code",
-            "adapter_config": json.dumps(adapter_cfg),
-            "model": resolved_model,
-            "instructions_file_path": instructions_file_path,
-        },
-    )
-
-    # Auto-provision a budget row for the newly hired agent (GH#9901).
-    # Idempotent: skips silently if a row already exists (e.g. re-hired agent).
-    budget_svc = BudgetService()
-    await budget_svc.provision_budget(session, agent_id, str(company_id))
-
+    await insert_hired_agent(session, company_id, hire)
     await session.commit()
     # #15907: a hire that opts into the heartbeat wakes without waiting for a restart.
-    if body.heartbeat_enabled and body.heartbeat_cron:
-        await schedule_heartbeat(agent_id, body.heartbeat_cron)
+    await schedule_hired_agent(hire)
 
-    logger.info(
-        "Hired agent %s (name=%r model=%r company=%s reports_to=%s)",
-        agent_id,
-        body.agent_name,
-        resolved_model,
-        company_id,
-        body.reports_to,
-    )
-
-    return AgentHireResponse(
-        agent_id=agent_id,
-        agent_name=body.agent_name,
-        model=resolved_model,
-        org_role=body.org_role,
-        company_id=str(company_id),
-        reports_to=body.reports_to,
-        instructions_file_path=instructions_file_path,
-        agents_md=agents_md,
-    )
+    return _hire_response(company_id, body, hire)

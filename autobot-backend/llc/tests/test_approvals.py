@@ -39,7 +39,7 @@ def _make_approval(
     *,
     id: uuid.UUID | None = None,
     company_id: uuid.UUID | None = None,
-    gate_type: ApprovalType = ApprovalType.HIRE,
+    gate_type: ApprovalType = ApprovalType.STRATEGY,  # HIRE/BUDGET_OVERRIDE/SPRINT_CLOSE run a hook on approval (#8214)
     status: ApprovalStatus = ApprovalStatus.PENDING,
     requested_by: uuid.UUID | None = None,
     payload: Dict[str, Any] | None = None,
@@ -74,6 +74,13 @@ def _make_session_stub(scalar_result: Any = None) -> MagicMock:
     session.flush = AsyncMock()
     session.add = MagicMock()
     return session
+
+
+@pytest.fixture(autouse=True)
+def _no_activity_rows():
+    """These tests run against a mock session; the activity rows are asserted in test_approval_enforcement_8214.py."""
+    with patch("llc.services.approval.record_approval_event", new=AsyncMock()):
+        yield
 
 
 # ---------------------------------------------------------------------------
