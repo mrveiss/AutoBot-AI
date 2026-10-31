@@ -95,14 +95,37 @@ def base_text(root: Path, rel: str, sha: str | None = None) -> str | None:
     raise BaseUnavailable(f"cannot read {rel} at the base {sha[:10]}: {out.stderr.strip()}")
 
 
+class _ModuleConstants(ast.NodeTransformer):
+    """Replaces a name with the module-level string constant it was assigned, so ``{KEY: 1}`` reads."""
+
+    def __init__(self, tree: ast.Module) -> None:
+        self.values = {
+            target.id: node.value.value
+            for node in tree.body
+            if isinstance(node, ast.Assign)
+            and isinstance(node.value, ast.Constant)
+            and isinstance(node.value.value, str)
+            for target in node.targets
+            if isinstance(target, ast.Name)
+        }
+
+    def visit_Name(self, node: ast.Name) -> ast.AST:
+        return ast.Constant(self.values[node.id]) if node.id in self.values else node
+
+
 def literal_in(source: str, name: str) -> object:
-    """The literal assigned to module-level *name* in *source* (``NAME = {...}`` or annotated)."""
-    for node in ast.parse(source).body:
+    """The literal assigned to module-level *name* in *source* (``NAME = {...}`` or annotated).
+
+    A table may key its entries by a module-level string constant (``PINS = {NAMED: 24}``).
+    """
+    tree = ast.parse(source)
+    constants = _ModuleConstants(tree)
+    for node in tree.body:
         targets = (
             node.targets if isinstance(node, ast.Assign) else [node.target] if isinstance(node, ast.AnnAssign) else []
         )
         if any(isinstance(t, ast.Name) and t.id == name for t in targets) and node.value is not None:
-            return ast.literal_eval(node.value)
+            return ast.literal_eval(constants.visit(node.value))
     raise BaseUnavailable(f"no literal {name} = ... in the base source")
 
 
