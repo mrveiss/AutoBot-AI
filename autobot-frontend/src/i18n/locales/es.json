@@ -8091,6 +8091,15 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "No se pudo activar la ventana de mantenimiento",
+      "completeWindowFailed": "No se pudo completar la ventana de mantenimiento",
+      "deleteWindowFailed": "No se pudo eliminar la ventana de mantenimiento",
+      "drainNodeFailed": "No se pudo drenar el nodo. Inténtalo de nuevo.",
+      "resumeNodeFailed": "No se pudo reanudar el nodo. Inténtalo de nuevo.",
+      "saveKeysFailed": "No se pudieron guardar las claves de API. Consulta la consola para más detalles.",
+      "addNodeFailed": "No se pudo añadir el nodo"
     }
   },
   "mobile": {
