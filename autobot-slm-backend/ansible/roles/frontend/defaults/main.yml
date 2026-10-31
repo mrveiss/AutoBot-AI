@@ -21,7 +21,8 @@ frontend_build_production: false
 nodejs_version: "{{ node_major }}"
 
 # Server settings
-frontend_port: 443
+# nginx HTTPS port (the served URL). frontend_port (vars/main.yml) is the Vite dev port only (#19326).
+frontend_tls_port: 443
 nginx_http_port: 80
 
 # Backend connection (user backend on main machine)
