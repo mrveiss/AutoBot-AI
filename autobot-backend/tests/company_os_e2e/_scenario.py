@@ -5,10 +5,11 @@
 """The scenario's HTTP client, shared state and step bookkeeping (#19253).
 
 A failing step raises StepFailure, whose message names the step and the M2.x issue it maps to
-(the issue's third acceptance criterion). Steps whose fix is an open PR are marked xfail in the
-test file, with that PR in the reason, so the run goes green only when the fix lands AND the
-step passes: a non-strict xfail that starts passing is reported XPASS and is the signal to
-remove the marker.
+(the issue's third acceptance criterion). A known open defect is recorded with pytest.xfail(reason)
+at the ONE assertion that encodes it, after the step's preconditions (the control agent was
+dispatched, the budget reads exhausted, ...) have been asserted for real, so a dead scheduler or a
+broken setup is a red failure and never reads as the open bug. When the fix lands the assertion
+passes, the xfail call is never reached, and the reason's "remove" instruction is moot.
 """
 
 from __future__ import annotations
@@ -46,7 +47,8 @@ STEPS: dict[str, tuple[str, str]] = {
         "M2.7 controls (#14189, #14164; pause 500s on the activity-log write, #20150)",
     ),
     "7b": ("a paused agent is not dispatched until resumed", "M2.6 dispatch gate (#19240, PR #19958)"),
-    "8": ("a hire waits for its approval", "M2.7 board approval gates (#8214)"),
+    "8": ("a hire approval can be filed and decided", "M2.7 board approval gates (#8214)"),
+    "8b": ("a hire waits for its approval", "M2.7 board approval gates (#8214)"),
     "9": ("the activity log holds every step with actor_type", "M2.8 audit (#20101, PR #20107)"),
 }
 
@@ -115,6 +117,11 @@ class Scenario:
         lines = Path(self.stack.stub_log).read_text(encoding="utf-8").splitlines()
         rows = [json.loads(line) for line in lines if line.strip()]
         return [r for r in rows if agent_id is None or r["agent_id"] == agent_id]
+
+    def server_log_has(self, *needles: str) -> bool:
+        """Whether the server log holds every needle: how a test tells a known cause from a new one."""
+        text = Path(self.stack.server_log).read_text(encoding="utf-8", errors="replace")
+        return all(n in text for n in needles)
 
     def runs(self, agent_id: str) -> list[dict[str, Any]]:
         return self.api.call("GET", f"/agents/{agent_id}/runs")

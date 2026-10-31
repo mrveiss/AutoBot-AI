@@ -14,11 +14,13 @@
 # core-loop test with no Postgres, no Redis and mounted routers: that one proves the loop's
 # services, this one proves the milestone. Neither replaces the other.
 #
-# A step whose fix is an open PR is a non-strict xfail naming that PR, so this job is green
-# while the PR is open and reports XPASS once it lands: remove the marker then. The step
-# names and the M2.x issue each maps to are in tests/company_os_e2e/scenario.py (STEPS).
+# A known open defect is recorded with pytest.xfail(reason) at the single assertion that encodes
+# it, after the step's preconditions were asserted for real, so this job is green while the issue
+# is open and a broken setup is still red. The step names and the M2.x issue each maps to are in tests/company_os_e2e/_scenario.py (STEPS).
 #
 # Not a required context. The scenario waits on real cron boundaries (about ten minutes).
+# Migrations are not in the path filter: migration-gate.yml owns that surface; the nightly run
+# covers the combination.
 
 name: Company OS Workflow E2E
 
@@ -29,7 +31,10 @@ on:
       - 'autobot-backend/llc/**'
       - 'autobot-backend/api/llc/**'
       - 'autobot-backend/models/agent_org.py'
-      - 'autobot-backend/migrations/**'
+      - 'autobot-backend/initialization/lifespan*.py'
+      - 'autobot-backend/app_factory.py'
+      - 'autobot-backend/auth_middleware.py'
+      - 'autobot-backend/api/user_management/**'
       - 'autobot-backend/tests/company_os_e2e/**'
       - '.github/workflows/company-os-workflow-e2e.yml'
   pull_request:
@@ -38,6 +43,10 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [ release, main ]
     paths: *paths
+  # Nightly, so a regression the path filter cannot see (a shared module, a dependency bump) still
+  # shows up. GitHub registers `schedule` from the default branch only.
+  schedule:
+    - cron: "30 2 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -46,6 +55,7 @@ concurrency:
 
 permissions:
   contents: read
+  packages: read  # pull the ghcr CI image mirror (#18160)
 
 jobs:
   company-os-workflow:
