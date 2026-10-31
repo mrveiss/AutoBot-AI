@@ -48,7 +48,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/charts/BaseChart.vue": 602,
     "autobot-frontend/src/components/charts/FunctionCallGraph.vue": 2153,  # #19906: 2165 -> 2153
     "autobot-frontend/src/components/charts/ImportTreeChart.vue": 1353,  # #19906: 1365 -> 1353
-    "autobot-frontend/src/components/chat/ChatInput.vue": 1672,
+    "autobot-frontend/src/components/chat/ChatInput.vue": 1631,  # #20133: 1672 -> 1631
     "autobot-frontend/src/components/chat/ChatInterface.vue": 1521,
     "autobot-frontend/src/components/chat/ChatMessages.vue": 2118,  # #18849: 2119 -> 2118
     "autobot-frontend/src/components/chat/ChatSidebar.vue": 807,  # #18849: 808 -> 807
@@ -122,7 +122,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/composables/useVoiceOutput.ts": 1089,
     "autobot-frontend/src/composables/useWorkflowBuilder.ts": 1293,
     "autobot-frontend/src/config/__tests__/ssot-config.spec.ts": 653,
-    "autobot-frontend/src/config/ssot-config.ts": 834,
+    "autobot-frontend/src/config/ssot-config.ts": 829,
     "autobot-frontend/src/models/controllers/ChatController.ts": 1156,
     "autobot-frontend/src/models/controllers/KnowledgeController.ts": 645,
     "autobot-frontend/src/models/repositories/ChatRepository.ts": 674,
@@ -162,7 +162,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/llc/RoutinesView.vue": 688,
     "autobot-frontend/src/views/llc/SprintBoardView.vue": 664,
     # #14780: 1046 -> 1013 (kit BaseDrawer); #18750: 994 (comments tab returns)
-    "autobot-frontend/src/views/llc/WorkItemDetail.vue": 993,
+    "autobot-frontend/src/views/llc/WorkItemDetail.vue": 948,  # #20068: 994 -> 949
     "autobot-infrastructure/shared/ide-extensions/vscode-autobot/src/extension.ts": 741,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/background-monitor.ts": 713,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/index.ts": 957,

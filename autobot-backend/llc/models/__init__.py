@@ -21,6 +21,7 @@ from .company import (
 )
 from .company_ceo import LLCCompanyCEO
 from .company_os import LLCProcess, LLCRoleSkill, LLCWorkflowNode, LLCWorkflowTransition
+from .company_os_cost import CompanyOsCostEvent
 from .company_os_plan import CompanyOsWorkflowPlan
 from .company_tool import LLCCompanyTool
 from .contact import LLCContact
@@ -114,6 +115,7 @@ __all__ = [
     "LLCRoleCredential",
     "LLCRoleTool",
     "LLCCompanyCEO",
+    "CompanyOsCostEvent",
     "CompanyOsWorkflowPlan",
     "LLCProcess",
     "LLCRoleSkill",

@@ -110,7 +110,8 @@
       "medium": "Médio",
       "high": "Alto",
       "critical": "Crítico"
-    }
+    },
+    "logsLoadFailed": "Falha ao carregar os registos: {error}"
   },
   "chat": {
     "sendMessage": "Envie uma mensagem...",
@@ -262,6 +263,13 @@
     },
     "input": {
       "retryUpload": "Tentar enviar novamente",
+      "uploadError": {
+        "http": "Falha no envio (estado {status})",
+        "invalidResponse": "O servidor enviou uma resposta ilegível",
+        "network": "Erro de rede durante o envio",
+        "cancelled": "Envio cancelado",
+        "unknown": "Falha no envio"
+      },
       "filesAttached": "Arquivos {count} anexados",
       "clearAll": "Limpar tudo",
       "removeFile": "Remover arquivo",
@@ -525,6 +533,7 @@
         "pending": "Pendente",
         "running": "Correndo",
         "streaming": "A transmitir",
+        "waiting_explanation": "Aguardando explicação",
         "explaining": "Explicando",
         "completed": "Concluído",
         "failed": "Fracassado"
@@ -8091,6 +8100,15 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "Falha ao ativar a janela de manutenção",
+      "completeWindowFailed": "Falha ao concluir a janela de manutenção",
+      "deleteWindowFailed": "Falha ao excluir a janela de manutenção",
+      "drainNodeFailed": "Falha ao drenar o nó. Tente novamente.",
+      "resumeNodeFailed": "Falha ao retomar o nó. Tente novamente.",
+      "saveKeysFailed": "Falha ao salvar as chaves de API. Consulte o console para mais detalhes.",
+      "addNodeFailed": "Falha ao adicionar o nó"
     }
   },
   "mobile": {

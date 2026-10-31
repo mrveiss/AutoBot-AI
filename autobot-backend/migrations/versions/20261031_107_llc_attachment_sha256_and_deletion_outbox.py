@@ -5,7 +5,7 @@
 """Attachment content hash and file-deletion outbox (#19756).
 
 Revision ID: 20261031_107
-Revises: 20261030_105
+Revises: 20261031_106
 Create Date: 2026-10-31 00:00:01.000000
 
 ``NO DATA LOSS``: one nullable column and one new table; no row is rewritten and nothing is
@@ -15,8 +15,6 @@ backfilled (a backfill would read every stored file). Rows uploaded earlier keep
 Downgrade drops the ``sha256`` column (the hashes are derived from the stored files, so they
 can be recomputed) and the outbox table, and refuses to drop the table while it holds entries.
 
-Chain note: ``20261031_106`` (company OS cost events) also revises ``20261030_105``. Whichever
-of the two merges second re-points its ``down_revision`` at the other.
 """
 
 from typing import Sequence, Union
@@ -28,7 +26,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from migrations.guards import has_column, has_table
 
 revision: str = "20261031_107"
-down_revision: Union[str, None] = "20261030_105"
+down_revision: Union[str, None] = "20261031_106"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
