@@ -229,6 +229,7 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import Icon from '@/components/ui/Icon.vue'
 import type { SessionStatus } from '@/types/browser'
 import { createLogger } from '@/utils/debugUtils'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('BrowserSessionManager')
 
@@ -382,14 +383,7 @@ export default {
       }
     }
 
-    const formatDate = (dateStr: string): string => {
-      return new Intl.DateTimeFormat('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      }).format(new Date(dateStr))
-    }
+    const formatDate = createDateFormatter({ locale: 'en-US', intl: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } })
 
     const formatTimeAgo = (dateStr: string): string => {
       const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
