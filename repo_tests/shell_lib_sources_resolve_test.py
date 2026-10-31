@@ -391,7 +391,7 @@ def test_every_lib_source_resolves_to_a_real_file() -> None:
     # 72, not 73: the one lib source site #15127 retired with
     # sync-grafana-dashboards.sh; 70, not 71: #14873 retired utilities/sync-all-vms.sh,
     # whose sites resolve to one checked entry. Non-vacuity floor, not a census.
-    assert checked >= 70, (
+    assert checked >= 69, (  # 70 -> 69: #18557 moved a source into _native_common.sh (measured)
         f"only resolved {checked} source sites — the expander has regressed and "
         "this test would pass having checked almost nothing"
     )
@@ -428,7 +428,7 @@ def test_a_missing_lib_is_never_swallowed() -> None:
     """The `|| true` shape that made #14041 invisible may not come back (#14172)."""
     offenders, checked = _shape_offenders()
     # 72, not 73: see the site-count note in test_the_sweep_actually_reached_the_tree (#15127).
-    assert checked >= 71, f"only checked {checked} sites — this would pass vacuously"
+    assert checked >= 70, f"only checked {checked} sites — this would pass vacuously"
     assert not offenders, (
         "a lib bootstrap whose failure is discarded turns a deployment error "
         "into a wrong-value-at-runtime. The final attempt in the chain must keep "
@@ -496,7 +496,7 @@ def test_the_non_blocking_category_is_earned_and_bounded() -> None:
     """
     decisive = [s for s in _SITES if s.is_last]
     # 72, not 73: see the site-count note in test_the_sweep_actually_reached_the_tree (#15127).
-    assert len(decisive) >= 71, f"only {len(decisive)} decisive sites — vacuous"
+    assert len(decisive) >= 70, f"only {len(decisive)} decisive sites — vacuous"
 
     non_blocking = [s for s in decisive if _classify(s) == "non-blocking"]
     assert non_blocking, (
