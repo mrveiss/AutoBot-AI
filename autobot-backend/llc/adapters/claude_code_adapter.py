@@ -42,6 +42,12 @@ from autobot_shared.ssot_config import config as _ssot_config
 
 from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
+from .claude_result_failure import (
+    is_auth_failure_output,
+    is_failed_result_event,
+    is_turn_limit_result,
+    resolve_result_event,
+)
 from .subprocess_base import DEFAULT_OUTPUT_DIR as _DEFAULT_OUTPUT_DIR
 from .subprocess_base import SIGTERM_GRACE_SECONDS as _SIGTERM_GRACE_SECONDS
 from .subprocess_base import SubprocessLifecycleAdapter, placeholder_run_id
@@ -51,10 +57,7 @@ from .subprocess_base import resolve_stall_deadline as _resolve_stall_deadline
 from .subprocess_base import resolve_timeout as _resolve_timeout
 from .subprocess_support import (
     extract_usage,
-    final_result_event,
     inject_agent_credentials,
-    is_auth_failure_output,
-    is_failed_result_event,
     is_rate_limit_output,
     read_output_tail,
     serialize_invoke_context,
@@ -71,6 +74,7 @@ _SESSION_KEY = "llc:agent:{agent_id}:claude_session"
 # run record and the log, so they never carry CLI output, tokens or transcript text.
 AUTH_FAILED_REASON = "claude CLI authentication failed - re-authenticate the agent's Claude login"
 ERROR_RESULT_REASON = "claude CLI reported an error result"
+TURN_LIMIT_REASON = "claude CLI stopped at its turn limit"
 
 # Re-exported for the import contract (subscription adapter + tests rely on these).
 __all__ = [
@@ -381,7 +385,7 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
             return base
 
         tail = read_output_tail(output_file)
-        result_event = final_result_event(tail)
+        result_event, event_text = resolve_result_event(output_file, tail)
 
         # Clean success: skip keyword scan entirely to avoid false-positive
         # reclassification of completed runs whose transcript mentions rate-limit
@@ -393,8 +397,8 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
 
         # #20202: an expired/revoked login fails every run the same way and no retry
         # helps. The CLI marks it with structured fields (not just message text).
-        if is_failed_result_event(result_event) and is_auth_failure_output(tail, result_event):
-            return self._failed_status(run_id, AUTH_FAILED_REASON)
+        if is_failed_result_event(result_event) and is_auth_failure_output(event_text, result_event):
+            return self._failed_status(run_id, AUTH_FAILED_REASON, result_event)
 
         # Either no result event (mid-stream kill) or an error/non-success result:
         # scan the stdout tail AND the stderr sidecar for rate-limit markers —
@@ -438,15 +442,22 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         # #20202: ``is_error`` marks a failed run even when ``subtype`` says
         # "success"; reading it as COMPLETED hid every error result.
         if is_failed_result_event(result_event):
-            return self._failed_status(run_id, ERROR_RESULT_REASON)
+            reason = TURN_LIMIT_REASON if is_turn_limit_result(result_event) else ERROR_RESULT_REASON
+            return self._failed_status(run_id, reason, result_event)
 
         return base
 
     @staticmethod
-    def _failed_status(run_id: str, reason: str) -> AdapterRunStatus:
-        """FAILED status with a fixed *reason*, logged at ERROR so operators see it."""
+    def _failed_status(run_id: str, reason: str, result_event: dict | None) -> AdapterRunStatus:
+        """FAILED status with a fixed *reason*, logged at ERROR so operators see it.
+
+        Tokens the failed run spent are kept: a turn-limit run bills real usage.
+        """
         logger.error("ClaudeCodeAdapter: run %s failed: %s", run_id, reason)
-        return AdapterRunStatus(status=LLCRunStatus.FAILED, exit_code=1, error=reason)
+        tokens_in, tokens_out = extract_usage(result_event)
+        return AdapterRunStatus(
+            status=LLCRunStatus.FAILED, exit_code=1, error=reason, tokens_in=tokens_in, tokens_out=tokens_out
+        )
 
     async def _post_cancel(self, agent_config: dict, run_id: str) -> None:
         """Clear the Redis resume session so the next run starts fresh (GH#9834)."""

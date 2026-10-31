@@ -18,10 +18,12 @@ import pytest
 from llc.adapters.claude_code_adapter import (
     AUTH_FAILED_REASON,
     ERROR_RESULT_REASON,
+    TURN_LIMIT_REASON,
     ClaudeCodeAdapter,
     _output_path,
     _state_path,
 )
+from llc.adapters.claude_code_subscription_adapter import ClaudeCodeSubscriptionAdapter
 from llc.models.enums import LLCRunStatus
 
 _AUTH_TEXT = "Failed to authenticate: OAuth session expired and could not be refreshed"
@@ -42,7 +44,7 @@ _RESULT_AUTH = {
 }
 
 
-async def _final_status(tmp_path, events: list[dict]):
+async def _final_status(tmp_path, events: list[dict], adapter=None):
     run_id = "4001/session-20202"
     output_file = _output_path(str(tmp_path), "agent-auth", run_id)
     with open(output_file, "w", encoding="utf-8") as fh:
@@ -62,7 +64,7 @@ async def _final_status(tmp_path, events: list[dict]):
         patch("os.kill", side_effect=ProcessLookupError()),
         patch("llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None),
     ):
-        return await ClaudeCodeAdapter().status(cfg, run_id)
+        return await (adapter or ClaudeCodeAdapter()).status(cfg, run_id)
 
 
 @pytest.mark.asyncio
@@ -94,10 +96,46 @@ async def test_is_error_with_success_subtype_is_failed_not_completed(tmp_path) -
 
 @pytest.mark.asyncio
 async def test_non_success_subtype_is_failed(tmp_path) -> None:
-    result = await _final_status(
-        tmp_path, [{"type": "result", "subtype": "error_max_turns", "is_error": False, "num_turns": 9}]
-    )
+    turns = {
+        "type": "result",
+        "subtype": "error_max_turns",
+        "is_error": False,
+        "num_turns": 9,
+        "usage": {"input_tokens": 7, "output_tokens": 5},
+    }
+    result = await _final_status(tmp_path, [turns])
+    assert (result.status, result.error) == (LLCRunStatus.FAILED, TURN_LIMIT_REASON)
+    assert (result.tokens_in, result.tokens_out) == (7, 5)
+
+
+@pytest.mark.asyncio
+async def test_oversized_result_line_is_not_read_as_completed(tmp_path) -> None:
+    big = dict(_RESULT_AUTH, result="x" * 9000)
+    result = await _final_status(tmp_path, [_ASSISTANT_AUTH, big])
+    assert (result.status, result.error) == (LLCRunStatus.FAILED, AUTH_FAILED_REASON)
+
+
+@pytest.mark.asyncio
+async def test_error_code_quoted_in_tool_output_is_not_an_auth_failure(tmp_path) -> None:
+    tool = {
+        "type": "user",
+        "message": {"content": [{"type": "tool_result", "content": '"error":"authentication_failed"'}]},
+    }
+    result = await _final_status(tmp_path, [tool, dict(_RESULT_AUTH, result="other")])
     assert (result.status, result.error) == (LLCRunStatus.FAILED, ERROR_RESULT_REASON)
+
+
+@pytest.mark.asyncio
+async def test_rate_limited_error_result_stays_rate_limited(tmp_path) -> None:
+    limited = dict(_RESULT_AUTH, result="rate_limit_error: too many requests")
+    result = await _final_status(tmp_path, [{"type": "error", "message": "rate_limit_error"}, limited])
+    assert result.status == LLCRunStatus.RATE_LIMITED
+
+
+@pytest.mark.asyncio
+async def test_auth_failure_through_subscription_adapter(tmp_path) -> None:
+    result = await _final_status(tmp_path, [_ASSISTANT_AUTH, _RESULT_AUTH], ClaudeCodeSubscriptionAdapter())
+    assert (result.status, result.error) == (LLCRunStatus.FAILED, AUTH_FAILED_REASON)
 
 
 @pytest.mark.asyncio

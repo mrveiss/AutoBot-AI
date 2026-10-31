@@ -136,43 +136,6 @@ def final_result_event(tail: str) -> dict | None:
     return None
 
 
-def is_failed_result_event(result_event: dict | None) -> bool:
-    """True for a final result event that reports failure (#20202).
-
-    The CLI sets ``subtype="success"`` even on an API error, so the subtype
-    alone proves nothing: ``is_error`` is the failure flag and a non-success
-    subtype (``error_max_turns``, ``error_during_execution``) is failure too.
-    """
-    if not isinstance(result_event, dict):
-        return False
-    return bool(result_event.get("is_error")) or result_event.get("subtype") != "success"
-
-
-_AUTH_FAILED_ERROR_CODE = "authentication_failed"
-_AUTH_FAILED_HTTP_STATUS = 401
-
-
-def is_auth_failure_output(tail: str, result_event: dict | None = None) -> bool:
-    """True when the CLI's own structured fields say authentication failed (#20202).
-
-    Reads fields, never message text: an assistant event carries
-    ``error == "authentication_failed"``, and a result event carries
-    ``api_error_status == 401`` when the API rejected the credential.
-    """
-    if isinstance(result_event, dict) and result_event.get("api_error_status") == _AUTH_FAILED_HTTP_STATUS:
-        return True
-    for line in tail.splitlines():
-        if _AUTH_FAILED_ERROR_CODE not in line:
-            continue
-        try:
-            obj = json.loads(line)
-        except (json.JSONDecodeError, ValueError):
-            continue
-        if isinstance(obj, dict) and obj.get("type") == "assistant" and obj.get("error") == _AUTH_FAILED_ERROR_CODE:
-            return True
-    return False
-
-
 def extract_usage(result_event: dict | None) -> tuple[int | None, int | None]:
     """Return ``(tokens_in, tokens_out)`` from a stream-json result event (GH#10220).
 
