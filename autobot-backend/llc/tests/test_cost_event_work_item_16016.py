@@ -126,7 +126,7 @@ async def test_the_event_row_carries_the_work_item(client, factory):  # noqa: AN
     resp = await _post(client, 1_000_000, item)
     assert resp.status_code == 200, resp.text
     (event,) = await _events(factory)
-    assert (event.work_item_id, event.company_id, event.agent_id) == (item, _COMPANY, _AGENT)
+    assert (event.work_item_id, str(event.company_id), event.agent_id) == (item, _COMPANY, _AGENT)
     assert (event.model, event.tokens_in, event.tokens_out) == (_MODEL, 1_000_000, 0)
     assert event.cost == Decimal("3") == await _spent(factory)
 
@@ -163,7 +163,7 @@ async def test_another_companys_item_is_refused_and_charges_nothing(client, fact
     assert await _spent(factory) == Decimal("0")
 
 
-@pytest.mark.parametrize("bad", [str(uuid.uuid4()), "not-a-uuid"])
+@pytest.mark.parametrize("bad", ["00000000-0000-4000-8000-000000000001", "not-a-uuid"])
 async def test_an_unknown_or_malformed_item_is_refused(client, factory, bad):  # noqa: ANN001
     resp = await _post(client, 1_000_000, bad)
     assert resp.status_code == 404
