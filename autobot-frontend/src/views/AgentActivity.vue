@@ -14,6 +14,7 @@ import { ref, onMounted } from 'vue'
 import { BaseAlert } from '@autobot/ui'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('AgentActivity')
 
@@ -85,14 +86,7 @@ function closeModal() {
   allEntries.value = []
 }
 
-function formatTimestamp(ts?: string): string {
-  if (!ts) return '—'
-  try {
-    return new Date(ts).toLocaleString()
-  } catch {
-    return ts
-  }
-}
+const formatTimestamp = createDateFormatter({ emptyText: '—' })
 
 onMounted(fetchSummary)
 </script>
