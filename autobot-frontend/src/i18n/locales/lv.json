@@ -784,6 +784,16 @@
       "browser": "Pārlūks",
       "novnc": "Attālā darbvirsma",
       "ariaLabel": "Tērzēšanas sadaļas"
+    },
+    "attachmentNotice": {
+      "unavailable": "Pievienotais fails šajā sarunā netika atrasts, tāpēc tas netika izmantots.",
+      "too_many": "Tika izmantoti tikai pirmie {limit} pievienotie faili; pārējie tika izlaisti.",
+      "image": "\"{filename}\" ir attēls, ko nevar nolasīt kā tekstu, tāpēc tas netika izmantots.",
+      "unsupported": "\"{filename}\" nav teksta fails, ko asistents var nolasīt, tāpēc tas netika izmantots.",
+      "unreadable": "Failu \"{filename}\" neizdevās nolasīt, tāpēc tas netika izmantots.",
+      "empty": "Failā \"{filename}\" nav nolasāma teksta, tāpēc tas netika izmantots.",
+      "truncated": "Fails \"{filename}\" ir garš, tāpēc tika izmantots tikai tā sākums.",
+      "over_budget": "Pievienotie faili sasniedza izmēra ierobežojumu, tāpēc \"{filename}\" netika izmantots."
     }
   },
   "settings": {

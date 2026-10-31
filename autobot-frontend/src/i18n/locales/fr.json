@@ -784,6 +784,16 @@
       "browser": "Navigateur",
       "novnc": "Bureau à distance",
       "ariaLabel": "Sections du chat"
+    },
+    "attachmentNotice": {
+      "unavailable": "Un fichier joint est introuvable dans cette conversation et n'a pas été utilisé.",
+      "too_many": "Seuls les {limit} premiers fichiers joints ont été utilisés ; les autres ont été ignorés.",
+      "image": "\"{filename}\" est une image et ne peut pas être lue comme du texte ; elle n'a pas été utilisée.",
+      "unsupported": "\"{filename}\" n'est pas un fichier texte que l'assistant peut lire ; il n'a pas été utilisé.",
+      "unreadable": "\"{filename}\" n'a pas pu être lu et n'a pas été utilisé.",
+      "empty": "\"{filename}\" ne contient aucun texte lisible et n'a pas été utilisé.",
+      "truncated": "\"{filename}\" est long ; seul son début a été utilisé.",
+      "over_budget": "Les fichiers joints ont atteint la limite de taille ; \"{filename}\" n'a pas été utilisé."
     }
   },
   "settings": {
