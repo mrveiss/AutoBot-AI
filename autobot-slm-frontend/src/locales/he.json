@@ -145,6 +145,8 @@
       "value0Reports": "{value0} reports"
     },
     "processMonitorTab": {
+      "durationSeconds": "s",
+      "durationMinutes": "m",
       "actions": "פעולות",
       "agentID": "Agent ID",
       "all": "All",
@@ -3355,7 +3357,7 @@
   },
   "skills": {
     "approvalsTab": {
-      "approve": "אשר",
+      "approve": "Approve",
       "monitored": "Monitored",
       "noPendingApprovals": "No pending approvals",
       "reject": "Reject",
@@ -3536,7 +3538,7 @@
         "colReason": "סיבה",
         "colPriority": "עדיפות",
         "operatorPlaceholder": "Operator name",
-        "approve": "אשר",
+        "approve": "Approve",
         "activeTitle": "הפעלות השתלטות פעילות",
         "noActive": "No active takeover sessions",
         "colOperator": "מפעיל",
@@ -3889,7 +3891,7 @@
     "empty": "No active shared links.",
     "loading": "Loading shared links…",
     "never": "Never",
-    "open": "פתיחה",
+    "open": "Open",
     "protected": "Protected",
     "refresh": "Refresh",
     "subtitle": "Read-only audit of who has shared what — every active public chat link, by user. Users manage their own shares in the app.",

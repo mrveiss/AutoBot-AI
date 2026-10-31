@@ -14,6 +14,7 @@ vi.mock('@/utils/authToken', async (importOriginal) => ({
 import {
   ConversationUploadError,
   describeUploadError,
+  ensureUploadSession,
   postConversationUpload,
 } from '@/utils/conversationFileUpload'
 
@@ -125,5 +126,35 @@ describe('describeUploadError (#20133)', () => {
     const typed = new ConversationUploadError('network')
     expect(describeUploadError(typed, t)).not.toContain(typed.message)
     expect(describeUploadError(new Error('boom'), t)).toBe('chat.input.uploadError.unknown|{}')
+  })
+})
+
+describe('ensureUploadSession (#20133)', () => {
+  it('uses the current session and creates nothing', async () => {
+    const create = vi.fn()
+    expect(await ensureUploadSession({ currentSessionId: 's-1' }, { createNewSession: create })).toBe('s-1')
+    expect(create).not.toHaveBeenCalled()
+  })
+
+  it('creates one session, never the id "default", when the chat has none', async () => {
+    const create = vi.fn().mockResolvedValue('new-1')
+    expect(await ensureUploadSession({ currentSessionId: null }, { createNewSession: create })).toBe('new-1')
+    expect(create).toHaveBeenCalledTimes(1)
+  })
+
+  it('shares one creation between files picked together, then allows a later one', async () => {
+    const create = vi.fn().mockResolvedValue('new-2')
+    const store = { currentSessionId: null }
+    const ids = await Promise.all([1, 2, 3].map(() => ensureUploadSession(store, { createNewSession: create })))
+    expect(ids).toEqual(['new-2', 'new-2', 'new-2'])
+    expect(create).toHaveBeenCalledTimes(1)
+    await ensureUploadSession(store, { createNewSession: create })
+    expect(create).toHaveBeenCalledTimes(2)
+  })
+
+  it('rejects, and creates again next time, when the backend create fails', async () => {
+    const create = vi.fn().mockRejectedValueOnce(new Error('down')).mockResolvedValueOnce('new-3')
+    await expect(ensureUploadSession({ currentSessionId: null }, { createNewSession: create })).rejects.toThrow('down')
+    expect(await ensureUploadSession({ currentSessionId: null }, { createNewSession: create })).toBe('new-3')
   })
 })
