@@ -50,7 +50,7 @@
         @click="handleScan"
         :disabled="!canScan || scanning"
       >
-        <span v-if="scanning" class="spinner-small"></span>
+        <BaseSpinner v-if="scanning" size="sm" />
         {{ scanning ? $t('analytics.findings.fileScan.scanning') : $t('analytics.findings.fileScan.scanFile') }}
       </button>
     </template>
@@ -60,7 +60,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseSpinner } from '@autobot/ui'
 
 const { t } = useI18n()
 
@@ -176,18 +176,5 @@ async function handleScan() {
 .btn-primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.spinner-small {
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 </style>
