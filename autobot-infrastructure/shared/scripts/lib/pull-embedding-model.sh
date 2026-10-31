@@ -9,10 +9,14 @@
 # Sourced by install-bare-metal.sh, which provides log_warn and log_error.
 _ANSIBLE_DIR="$(dirname "${BASH_SOURCE[0]}")/../../../../autobot-slm-backend/ansible"
 
+# The one home of the embedding role's model. No fallback: a second name here is the defect.
+embedding_model_name() {
+    grep -oP '^ollama_embedding_model:\s*"\K[^"]+' "${_ANSIBLE_DIR}/roles/agent_config/defaults/main.yml"
+}
+
 pull_embedding_model() {
     local model verdicts
-    # The one home of the embedding role's model. No fallback: a second name here is the defect.
-    model="$(grep -oP '^ollama_embedding_model:\s*"\K[^"]+' "${_ANSIBLE_DIR}/roles/agent_config/defaults/main.yml")"
+    model="$(embedding_model_name)"
     [[ -n "${model}" ]] || { log_error "No ollama_embedding_model in agent_config's defaults"; exit 1; }
     ollama pull "${model}" || log_warn "Failed to pull embedding model"
     if ! verdicts="$(MODEL_CLI=ollama EMBEDDING_MODEL="${model}" COMPLETION_MODELS="" sh "${_ANSIBLE_DIR}/_shared/files/check_model_kinds.sh")"; then

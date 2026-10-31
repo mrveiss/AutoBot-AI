@@ -517,7 +517,7 @@ AUTOBOT_CHROMADB_PORT=${CHROMADB_PORT}
 # === LLM ===
 AUTOBOT_LLM_PROVIDER=ollama
 AUTOBOT_DEFAULT_LLM_MODEL=qwen3.5:9b
-AUTOBOT_EMBEDDING_MODEL=nomic-embed-text:latest
+AUTOBOT_EMBEDDING_MODEL=$(source "$(dirname "${BASH_SOURCE[0]}")/lib/pull-embedding-model.sh" && embedding_model_name)
 EOF
 
     chown "${AUTOBOT_USER}:${AUTOBOT_GROUP}" "${env_file}"
