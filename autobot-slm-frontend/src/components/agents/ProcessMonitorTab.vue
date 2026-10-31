@@ -29,7 +29,7 @@ import { useI18n } from 'vue-i18n'
 import { ref } from 'vue'
 import { getBackendUrl } from '@/config/ssot-config'
 import { useAuthStore } from '@/stores/auth'
-import { formatDuration } from '@/utils/formatHelpers'
+import { formatDuration, createDateFormatter } from '@/utils/formatHelpers'
 import {
   useAutobotApi,
   autobotApiErrorMessage,
@@ -203,10 +203,7 @@ function statusBadgeClass(status: string): string {
 
 const DURATION_OPTIONS = { style: 'msMinutesSeconds', nullText: '—' } as const
 
-function formatTime(iso: string | null): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString()
-}
+const formatTime = createDateFormatter({ emptyText: '—' })
 </script>
 
 <template>
