@@ -33,7 +33,7 @@ def upgrade() -> None:
     if has_table(TABLE):
         return
     op.create_table(
-        TABLE,
+        "company_os_cost_events",
         sa.Column("id", sa.Uuid(as_uuid=True), primary_key=True),
         sa.Column("company_id", sa.Uuid(as_uuid=True), nullable=False),
         sa.Column("agent_id", sa.String(255), nullable=False),
