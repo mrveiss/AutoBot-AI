@@ -102,7 +102,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/knowledge_connectors.py": 929,
     "autobot-backend/api/knowledge_maintenance.py": 1960,
     "autobot-backend/api/knowledge_mcp.py": 1441,
-    "autobot-backend/api/knowledge_population.py": 1425,
+    "autobot-backend/api/knowledge_population.py": 1238,
     "autobot-backend/api/knowledge_search.py": 809,  # #16665: analytics endpoints moved out
     "autobot-backend/api/knowledge_search_aggregator.py": 950,  # #16665: doc-search moved out
     "autobot-backend/api/knowledge_tags.py": 887,
@@ -237,7 +237,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llc/api/companies.py": 1671,
     "autobot-backend/llc/api/roles.py": 713,
     "autobot-backend/llc/api/sprints.py": 1223,
-    "autobot-backend/llc/api/work_items.py": 1392,  # #19582: comment wake moved into the service
+    "autobot-backend/llc/api/work_items.py": 1303,  # #19582: comment wake moved into the service
     "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 1023,  # #19582 (shared run finder)
     "autobot-backend/llc/services/template.py": 643,
     "autobot-backend/llc/services/work_item_service.py": 1086,  # #19582: approval-category check moved out
@@ -327,7 +327,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/graph_rag_service_test.py": 890,
     "autobot-backend/services/knowledge/autonomous_loop.py": 798,
     "autobot-backend/services/knowledge/code_indexer.py": 1176,
-    "autobot-backend/services/knowledge/doc_indexer.py": 1258,
+    "autobot-backend/services/knowledge/doc_indexer.py": 1247,
     "autobot-backend/services/knowledge/service.py": 849,  # train 48: #18935 merged onto #18945
     "autobot-backend/services/knowledge/test_autonomous_loop.py": 708,
     "autobot-backend/services/knowledge/test_doc_indexer.py": 1466,
