@@ -3,6 +3,7 @@
 """Tests for ``neutralize_frame_markers`` (#20062): variant spellings of the framing markers are defused."""
 
 import re
+import time
 
 import pytest
 
@@ -45,3 +46,27 @@ def test_ordinary_code_with_triple_angle_and_heredocs_keeps_its_shape():
         "x = a <<< b\n"
     )
     assert neutralize_frame_markers(code) == code
+
+
+def test_lookalikes_of_a_marker_are_rewritten_as_defence_in_depth():
+    assert neutralize_frame_markers("cat <<< END_OF_FILE") == "cat &lt;&lt;&lt; END_OF_FILE"
+    assert neutralize_frame_markers("x <<< end_time") == "x &lt;&lt;&lt; end_time"
+
+
+def test_invisible_characters_outside_a_marker_are_kept_byte_identical():
+    text = "a\u200b<<<\u200bx\ufeff end_ \u2060"
+    assert neutralize_frame_markers(text) == text
+
+
+def _elapsed(text):
+    start = time.perf_counter()
+    neutralize_frame_markers(text)
+    return time.perf_counter() - start
+
+
+def test_a_long_invisible_run_is_matched_in_linear_time():
+    small, large = "<<<" + "\u200b" * 50_000 + "x", "<<<" + "\u200b" * 200_000 + "x"
+    t_small = max(_elapsed(small), 1e-4)
+    t_large = _elapsed(large)
+    assert t_large < 2.0
+    assert t_large / t_small < 12  # 4x the input: linear is ~4x, quadratic ~16x
