@@ -47,6 +47,14 @@ class _FakeVault:
         self._check()
         del self.store[secret_id]
 
+    async def list(self, session, *, user_id, permissions):
+        row = dict(name="vault-key", type="api_key", owner_vault="system", version=1)
+        other = dict(name="mine", type="api_key", owner_vault=f"user:{_ADMIN_ID}", version=1)
+        sealed = b"SEALED-CIPHERTEXT"  # must never reach the response
+        return [SimpleNamespace(id=i, sealed_value=sealed, **row) for i in self.store] + [
+            SimpleNamespace(id=uuid.uuid4(), sealed_value=sealed, **other)
+        ]
+
 
 @pytest.fixture()
 def client_and_vault(monkeypatch):
@@ -59,6 +67,7 @@ def client_and_vault(monkeypatch):
         legacy = MagicMock()
         legacy.update_secret.return_value = None
         legacy.delete_secret.return_value = False
+        legacy.list_secrets.return_value = [{"id": "legacy-1", "name": "old"}]
         monkeypatch.setattr(secrets_module, "secrets_manager", legacy)
         monkeypatch.setattr(secrets_module, "audit_secret_op", AsyncMock())
         monkeypatch.setattr(secrets_module, "audit_record", MagicMock())
@@ -130,3 +139,46 @@ def test_an_unknown_id_is_still_a_404(client_and_vault):
 def test_every_write_handler_reaches_the_system_vault(handler, helper):
     """Guard: a write handler added or edited later cannot omit the vault destination (#17731)."""
     assert helper in inspect.getsource(handler)
+
+
+class TestListIncludesSystemVaultMetadata:
+    """GET / adds SYSTEM-vault metadata for admins only, never a value (#17099)."""
+
+    def test_an_admin_sees_system_metadata_and_no_value(self, client_and_vault, monkeypatch):
+        from services.secrets_principal_resolver import ADMIN_PERMISSION
+
+        client, _vault = client_and_vault()
+        monkeypatch.setattr(
+            secrets_system_vault,
+            "_principal",
+            AsyncMock(return_value=(uuid.UUID(_ADMIN_ID), {ADMIN_PERMISSION})),
+        )
+        body = client.get("/api/secrets/").json()
+        assert body["secrets"] == [{"id": "legacy-1", "name": "old"}]
+        vault = body["system_vault"]
+        assert vault["available"] is True
+        assert [s["id"] for s in vault["secrets"]] == [_SECRET_ID]  # the user-vault row is excluded
+        assert vault["secrets"][0]["name"] == "vault-key"
+        assert "SEALED" not in client.get("/api/secrets/").text
+        assert "old-value" not in client.get("/api/secrets/").text
+        assert not {"value", "sealed_value"} & set(vault["secrets"][0])
+
+    def test_a_non_admin_gets_exactly_the_legacy_response(self, client_and_vault):
+        client, _vault = client_and_vault()  # _principal grants no permissions
+        body = client.get("/api/secrets/").json()
+        assert "system_vault" not in body
+        assert body["secrets"] == [{"id": "legacy-1", "name": "old"}]
+
+    def test_an_unavailable_vault_is_reported_not_omitted(self, client_and_vault, monkeypatch):
+        from services.secrets_principal_resolver import ADMIN_PERMISSION
+
+        client, _vault = client_and_vault()
+        monkeypatch.setattr(
+            secrets_system_vault,
+            "_principal",
+            AsyncMock(return_value=(uuid.UUID(_ADMIN_ID), {ADMIN_PERMISSION})),
+        )
+        monkeypatch.setattr(secrets_system_vault, "_coordinator_or_none", lambda: None)
+        body = client.get("/api/secrets/").json()
+        assert body["system_vault"] == {"available": False, "secrets": []}
+        assert body["secrets"] == [{"id": "legacy-1", "name": "old"}]

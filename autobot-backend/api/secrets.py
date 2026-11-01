@@ -51,6 +51,7 @@ from api.secrets_ownership import stamp_owner
 from api.secrets_system_vault import create_system_vault_secret as _create_system_vault_secret
 from api.secrets_system_vault import (
     delete_system_vault_secret,
+    list_system_vault_secrets,
     rotate_system_vault_secret,
 )
 from auth_middleware import check_admin_permission, get_auth_middleware
@@ -746,14 +747,13 @@ async def list_secrets(
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         secrets = await asyncio.to_thread(secrets_manager.list_secrets, chat_id=chat_id, scope=scope)
         await audit_secret_op("LIST", None, http_request, count=len(secrets))
-        return JSONResponse(
-            status_code=200,
-            content={
-                "secrets": secrets,
-                "total_count": len(secrets),
-                "filters": {"chat_id": chat_id, "scope": scope},
-            },
-        )
+        content = {"secrets": secrets, "total_count": len(secrets), "filters": {"chat_id": chat_id, "scope": scope}}
+        # #17099: admin callers also get SYSTEM-vault metadata (never values).
+        _user = get_auth_middleware().get_user_from_request(http_request)
+        system_vault = await list_system_vault_secrets(str((_user or {}).get("user_id", "unknown")))
+        if system_vault is not None:
+            content["system_vault"] = system_vault
+        return JSONResponse(status_code=200, content=content)
     except Exception as e:
         # #19476: names the cause without a value (secrets_failure_log).
         logger.error("Failed to list secrets: %s", describe_failure(e))

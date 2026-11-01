@@ -143,3 +143,37 @@ async def delete_system_vault_secret(secret_id: str, owner_id: str) -> bool:
         await session.commit()
         return True
     return False  # pragma: no cover -- defensive, generator always yields
+
+
+def _listing(secret: Secret) -> Dict:
+    """Metadata only: no sealed value, DEK or plaintext ever leaves here."""
+    return {**_summary(secret), "scope": "system", "visibility": "system", "has_value": True}
+
+
+async def list_system_vault_secrets(owner_id: str) -> Dict | None:
+    """Metadata (never values) of the SYSTEM-vault secrets, for an admin caller.
+
+    Returns None for a non-admin, so their list response is unchanged. When the
+    vault is unconfigured or unreadable the result says so
+    (`available: False`) instead of silently omitting the vault part.
+    """
+    from llc.deps import get_session
+    from services.secrets_principal_resolver import ADMIN_PERMISSION
+
+    try:
+        user_id, permissions = await _principal(owner_id)
+    except ValueError:  # no UUID principal (unauthenticated/test identity): nothing vault-side to show
+        return None
+    if ADMIN_PERMISSION not in permissions:
+        return None
+    coordinator = _coordinator_or_none()
+    if coordinator is None:
+        return {"available": False, "secrets": []}
+    try:
+        async for session in get_session():
+            listed = await coordinator.list(session, user_id=user_id, permissions=permissions)
+            system = [_listing(s) for s in listed if VaultRef.parse(s.owner_vault) == _SYSTEM_VAULT]
+            return {"available": True, "secrets": system}
+    except Exception as exc:  # the legacy list must still return
+        logger.warning("System vault listing unavailable: %s", type(exc).__name__)
+    return {"available": False, "secrets": []}
