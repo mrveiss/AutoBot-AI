@@ -66,17 +66,6 @@ class ConversationFileRouteApi:
         finally:
             await connection.close()
 
-    async def session_has_file_rows(self, session_id: str) -> bool:
-        """Whether any file was ever associated with *session_id*. Raises when the store is unreadable (#20195)."""
-        connection = await self._get_async_db_connection()
-        try:
-            async with connection.execute(
-                "SELECT 1 FROM session_file_associations WHERE session_id = ? LIMIT 1", (session_id,)
-            ) as cursor:
-                return await cursor.fetchone() is not None
-        finally:
-            await connection.close()
-
     async def _release_session_file(self, connection, session_id: str, file_id: str) -> None:
         """Drop this session's link to the file; soft-delete the file only if no session still links it."""
         await connection.execute(

@@ -34,27 +34,18 @@ _CALL = {"name": "crm", "params": {"action": "read"}}
 _L1 = {"crm:read": AiLine.AUTONOMOUS}
 
 
-class _Redis:
-    def __init__(self, broken=False):
-        self.data, self.broken = {}, broken
-
-    async def get(self, key):
-        if self.broken:
-            raise ConnectionError("down")
-        return self.data.get(key)
-
-    async def set(self, key, value, **kwargs):
-        assert "ex" not in kwargs and "px" not in kwargs, "the record must not expire"
-        self.data[key] = value
-
-
 @pytest.fixture
-def world(monkeypatch):
-    redis = _Redis()
-    setting = {"value": None}
+def world(monkeypatch, tmp_path):
+    """A REAL conversation files store (temp SQLite); only the SLM setting is faked."""
+    from conversation_file_manager import ConversationFileManager
 
-    async def _get_redis(_self=None):
-        return redis
+    setting = {"value": None}
+    manager = ConversationFileManager(storage_dir=tmp_path / "storage", db_path=tmp_path / "files.db")
+    manager._initialize_schema()
+    monkeypatch.setattr(manager, "_get_redis_sessions", AsyncMock(side_effect=ConnectionError("down")))
+
+    async def _get():
+        return manager
 
     async def _fetch(key):
         assert key == approval_baseline.AUTO_APPROVE_ATTACHMENTS_SETTING_KEY
@@ -62,29 +53,9 @@ def world(monkeypatch):
             raise setting["value"]
         return setting["value"]
 
-    session = {"marked": False, "exists": True, "broken": False, "rows": False, "chats": set()}
-
-    async def _marked(sid):
-        if session["broken"]:
-            raise OSError("disk")
-        session["marked"] = sid in session["chats"]
-        return session["marked"]
-
-    async def _mark(sid):
-        if session["exists"]:
-            session["chats"].add(sid)
-            session["marked"] = True
-        return session["exists"]
-
-    async def _rows(_sid):
-        return session["rows"]
-
-    monkeypatch.setattr(attachment_floor._record, "_get_redis", _get_redis)
-    monkeypatch.setattr(attachment_floor, "_session_marked", _marked)
-    monkeypatch.setattr(attachment_floor, "_mark_session", _mark)
-    monkeypatch.setattr(attachment_floor, "_has_file_rows", _rows)
+    monkeypatch.setattr("conversation_file_manager.get_conversation_file_manager", _get)
     monkeypatch.setattr(approval_baseline, "fetch_slm_policy_json", _fetch)
-    return SimpleNamespace(redis=redis, setting=setting, session=session)
+    return SimpleNamespace(files=manager, setting=setting)
 
 
 def _ctx(context=None) -> LLMIterationContext:
@@ -137,54 +108,90 @@ def test_a_client_can_neither_set_nor_clear_the_record(world):
     assert _ctx(cleared).approve_every_call is True
 
 
-def test_the_record_does_not_expire_and_outlives_the_file(world):
-    asyncio.run(attachment_floor.mark_chat("chat-1"))  # _Redis.set rejects any expiry
-    # nothing about the file is consulted: a soft-deleted file leaves the record, so the chat still asks
-    assert _stamp({})[ATTACHMENT_CHAT_KEY] is True
+def test_deleting_the_file_through_the_real_route_path_still_asks(world):
+    """Mark, then delete the file exactly as the DELETE route does (removes the association): still asks."""
 
+    async def _scenario():
+        info = await world.files.add_file("chat-1", b"payload", "doc.txt", uploaded_by="alice")
+        await attachment_floor.mark_chat("chat-1")
+        assert await world.files.delete_file("chat-1", info["file_id"]) is True
+        assert await world.files.get_session_files("chat-1", include_deleted=True) == []  # no row is retained
 
-def test_an_evicted_redis_key_changes_nothing_once_the_session_record_holds_the_fact(world):
-    asyncio.run(attachment_floor.mark_chat("chat-1"))
-    assert world.session["marked"] is True  # written to the session record, not only to Redis
-    world.redis.data.clear()  # allkeys-lru evicted the key (or a flush / restore)
+    asyncio.run(_scenario())
     later = _stamp({})
     assert later[ATTACHMENT_CHAT_KEY] is True and _ctx(later).approve_every_call is True
     assert asyncio.run(_outcome(later)) == ("approval_required", 1)
 
 
-def test_key_absent_with_files_present_asks_including_a_soft_deleted_file(world):
-    world.session["rows"] = True  # an association row exists whether or not the file is soft-deleted
+def test_a_new_chat_marked_on_its_first_turn_needs_no_session_record_or_file_row(world):
+    asyncio.run(attachment_floor.mark_chat("brand-new-chat"))  # no session record, no association row exists
+    assert _stamp({}, session="brand-new-chat")[ATTACHMENT_CHAT_KEY] is True
+
+
+def _marked_at(world):
+    import sqlite3
+
+    with sqlite3.connect(world.files.db_path) as db:
+        return db.execute("SELECT first_marked_at FROM chat_attachment_marks WHERE session_id='chat-1'").fetchall()
+
+
+def test_marking_twice_keeps_the_first_marked_time(world):
+    asyncio.run(attachment_floor.mark_chat("chat-1"))
+    first = _marked_at(world)
+    assert len(first) == 1
+    asyncio.run(attachment_floor.mark_chat("chat-1"))
+    assert _marked_at(world) == first
+
+
+def test_a_store_without_the_table_gains_it_on_the_first_mark_or_read(world):
+    import sqlite3
+
+    def _remove_table():
+        with sqlite3.connect(world.files.db_path) as db:
+            db.execute("ALTER TABLE chat_attachment_marks RENAME TO retired_marks")  # as an older install: no table
+
+    _remove_table()
+    assert ATTACHMENT_CHAT_KEY not in _stamp({})  # a read creates it and finds no mark
+    with sqlite3.connect(world.files.db_path) as db:
+        db.execute("ALTER TABLE chat_attachment_marks RENAME TO retired_marks2")
+    asyncio.run(attachment_floor.mark_chat("chat-1"))
     assert _stamp({})[ATTACHMENT_CHAT_KEY] is True
 
 
-def test_a_turn_naming_only_an_unknown_id_marks_the_session_though_no_row_exists(world):
+def test_a_failed_durable_write_stops_the_turn_and_reads_no_file(world, monkeypatch):
+    from chat_workflow.attachment_context import apply_attachments
+
+    async def _boom(*_a, **_k):
+        raise OSError("disk full")
+
+    monkeypatch.setattr("chat_attachment_marks.write_mark", _boom)
+    resolve = AsyncMock()
+    with patch("chat_workflow.attachment_context._resolve_turn", resolve):
+        with pytest.raises(attachment_floor.AttachmentMarkError, match="could not be saved"):
+            asyncio.run(
+                apply_attachments(SimpleNamespace(session_id="chat-1"), {"attachments": ["f1"]}, {"prompt": "p"})
+            )
+    resolve.assert_not_awaited()  # nothing was read
+
+
+def test_a_turn_naming_only_an_unknown_id_marks_the_chat_though_no_row_exists(world):
     from chat_workflow.attachment_context import apply_attachments
 
     session = SimpleNamespace(session_id="chat-1")
     asyncio.run(apply_attachments(session, {"attachments": ["no-such-id"]}, {"prompt": "p"}))
-    world.redis.data.clear()
-    assert world.session["rows"] is False and _stamp({})[ATTACHMENT_CHAT_KEY] is True
-
-
-def test_a_redis_record_written_before_the_session_existed_is_copied_to_it_on_a_later_read(world):
-    world.session["exists"] = False
-    asyncio.run(attachment_floor.mark_chat("chat-1"))  # no session record yet: only Redis holds it
-    assert world.session["marked"] is False
-    world.session["exists"] = True
-    assert _stamp({})[ATTACHMENT_CHAT_KEY] is True and world.session["marked"] is True
-
-
-def test_an_unreadable_session_record_asks_with_the_redis_key_absent(world):
-    world.session["broken"] = True
     assert _stamp({})[ATTACHMENT_CHAT_KEY] is True
 
 
-def test_a_chat_with_no_key_no_flag_and_no_files_does_not_ask(world):
+def test_a_chat_that_never_used_an_attachment_does_not_ask_even_with_files_uploaded(world):
+    asyncio.run(world.files.add_file("chat-1", b"payload", "doc.txt", uploaded_by="alice"))
     assert ATTACHMENT_CHAT_KEY not in _stamp({}) and asyncio.run(_outcome(_stamp({}))) == (None, 0)
 
 
-def test_an_unreadable_record_asks(world):
-    world.redis.broken = True
+def test_an_unreadable_mark_asks(world, monkeypatch):
+    async def _boom(*_a, **_k):
+        raise OSError("disk")
+
+    monkeypatch.setattr("chat_attachment_marks.read_mark", _boom)
     assert _stamp({})[ATTACHMENT_CHAT_KEY] is True
 
 

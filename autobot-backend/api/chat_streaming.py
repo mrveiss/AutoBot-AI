@@ -46,10 +46,15 @@ async def attachments_allowed(chat_id: str, current_user: dict | None, request) 
 async def resume_attachment_verdict(manager, chat_id: str, current_user: dict | None, request) -> bool:
     """This resume request's STRICT verdict; a caller failing it cannot resume an attachment turn or chat (#20195).
 
-    The refusal is a 404, as for a foreign conversation, and nothing resumes. An unreadable checkpoint is refused
-    too. An ordinary turn keeps the default ownership posture the route already applied.
+    The refusal is a 404, as for a foreign conversation, and nothing resumes. An unreadable checkpoint or durable
+    mark is refused too. An ordinary turn keeps the default ownership posture the route already applied.
+
+    A chat with no recorded owner is a defect nobody claims (#20025): a global admin passes STRICT and can resume;
+    any other user sees the same 404 as for a foreign chat, so that turn waits for an admin rather than being
+    approvable by a user who cannot be shown to own it.
     """
     from chat_workflow.attachment_context import checkpoint_carries_floor
+    from chat_workflow.attachment_floor import chat_used_attachment
 
     if await attachments_allowed(chat_id, current_user, request):
         return True
@@ -58,6 +63,8 @@ async def resume_attachment_verdict(manager, chat_id: str, current_user: dict | 
     except Exception as exc:  # noqa: BLE001 -- cannot tell an ordinary turn from an attachment one: refuse
         logger.warning("Resume refused for chat %s...: checkpoint unreadable (%s)", chat_id[:8], type(exc).__name__)
         carries = True
+    # A checkpoint from before the chat was marked carries no stamp: the durable mark decides too (unreadable: True).
+    carries = carries or await chat_used_attachment(chat_id)
     if carries:
         raise HTTPException(status_code=404, detail="Chat session not found")
     return False

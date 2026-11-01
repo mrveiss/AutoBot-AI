@@ -433,6 +433,7 @@ class TestResumeChatGraphWiring:
             patch("api.chat._stream_graph_resume", return_value=iter(())),
             patch("api.chat_streaming.attachments_allowed", AsyncMock(return_value=False)),
             patch("chat_workflow.attachment_context.checkpoint_carries_floor", AsyncMock(return_value=False)),
+            patch("chat_workflow.attachment_floor.chat_used_attachment", AsyncMock(return_value=False)),
         ):
             response = await resume_chat_graph(
                 chat_id="chat-1",

@@ -7,11 +7,12 @@
 Model output derived from an attached file sits in the chat's history, and ends up in later prompts, so the turn
 that carried the file is not the only one holding untrusted text. The server records, per chat, that an
 attachment turn ran; every later turn is stamped ``ATTACHMENT_CHAT_KEY`` from that record, never from the client,
-and the stamp stays true after the file is soft-deleted (the record is about the chat's history, not the file).
+and the stamp stays true after the file is deleted (the record is about the chat's history, not the file).
 
-* The fact lives in the chat's session record (system of record ``chat_sessions``) and in an untimed Redis key,
-  a copy that ``allkeys-lru`` may evict. The chat counts as having used one if EITHER says so, or if it has any
-  file association row (a deleted file's too). A fact that cannot be READ counts as set: the turn asks.
+* The fact is one durable row per chat in the conversation files store (``chat_attachment_marks``, concept
+  ``chat_attachment_use``, see ``chat_attachment_marks``). It is written BEFORE the turn reads any file and is
+  independent of the session record and of file rows, so deleting the file changes nothing. A write that fails
+  stops the turn (``AttachmentMarkError``) and nothing is read; a mark that cannot be READ counts as set: ask.
 * The admin setting ``chat.auto_approve_attachment_turns`` (off by default, read from the SLM) is stamped as
   ``ATTACHMENT_AUTO_APPROVE_KEY`` and lifts the floor; an unreadable setting leaves it off, so the turn asks.
 * A client's own copy of either key is removed before the server writes its own.
@@ -23,78 +24,42 @@ from typing import Any, Dict
 
 from autobot_shared.ai_lines import ATTACHMENT_AUTO_APPROVE_KEY, ATTACHMENT_CHAT_KEY
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_mixin import AsyncRedisClientMixin
 
 logger = get_logger(__name__)
 
-_RECORD_KEY = "autobot:session:{session_id}:attachment_used"
-_SESSION_FLAG = "attachment_used"  # in the session record's metadata: the durable fact
+
+class AttachmentMarkError(RuntimeError):
+    """The chat's durable attachment mark could not be written, so the turn does not run (and reads no file)."""
 
 
-class _Record(AsyncRedisClientMixin):
-    _redis_database = "knowledge"
-
-
-_record = _Record()
-
-
-async def _session_marked(session_id: str) -> bool:
-    """Whether the chat's own session record says an attachment turn ran. A missing session reads False."""
-    from chat_history import ChatHistoryManager
-
-    session = await ChatHistoryManager().load_full_session(session_id)
-    return bool(((session or {}).get("metadata") or {}).get(_SESSION_FLAG))
-
-
-async def _mark_session(session_id: str) -> bool:
-    """Write the flag into the session record (the chat's system of record). False when there is no session yet."""
-    from chat_history import ChatHistoryManager
-
-    return bool(await ChatHistoryManager().update_session_metadata(session_id, {_SESSION_FLAG: True}))
-
-
-async def _has_file_rows(session_id: str) -> bool:
-    """Whether the chat has, or ever had, a file association row (a deleted file still counts). Raises if unreadable."""
+async def _manager():
     from conversation_file_manager import get_conversation_file_manager
 
-    return await (await get_conversation_file_manager()).session_has_file_rows(session_id)
+    return await get_conversation_file_manager()
 
 
 async def mark_chat(session_id: str) -> None:
-    """Record that an attachment turn ran in *session_id*, in the session record and in Redis.
+    """Record durably that an attachment turn ran in *session_id*; raises ``AttachmentMarkError`` if it cannot."""
+    from chat_attachment_marks import write_mark
 
-    The session record persists; the Redis key is a fast copy that ``allkeys-lru`` may evict. A Redis write
-    failure raises: the turn must not go on unmarked. A session with no record yet is marked on a later read.
-    """
-    redis = await _record._get_redis()
-    await redis.set(_RECORD_KEY.format(session_id=session_id), "1")  # no expiry: it is about the chat's history
     try:
-        if not await _mark_session(session_id):
-            logger.info("Chat %s... has no session record yet; the Redis record stands until it does", session_id[:8])
-    except Exception as exc:  # noqa: BLE001 -- the Redis record was written; the next read retries this write
-        logger.warning("Attachment flag not written to session %s...: %s", session_id[:8], type(exc).__name__)
-
-
-async def _used_by_durable_state(session_id: str) -> bool:
-    return await _session_marked(session_id) or await _has_file_rows(session_id)
+        await write_mark(await _manager(), session_id)
+    except Exception as exc:  # noqa: BLE001 -- no durable mark, no turn: it would run unmarked after any later loss
+        logger.error("Attachment mark not written for chat %s...: %s", session_id[:8], type(exc).__name__)
+        raise AttachmentMarkError(
+            "This message was not processed: the record that this chat used an attachment could not be saved. "
+            "Try again."
+        ) from exc
 
 
 async def chat_used_attachment(session_id: str) -> bool:
-    """Whether *session_id* ever ran an attachment turn: the Redis record OR the durable state (#20195).
+    """Whether *session_id* ever ran an attachment turn, from the durable mark. Unreadable is True: ask (#20195)."""
+    from chat_attachment_marks import read_mark
 
-    Durable state is the session record's flag or any file association row, deleted or not. A Redis key that was
-    evicted therefore changes nothing; a Redis hit with no session flag writes the flag. Anything unreadable is
-    True (fail toward asking).
-    """
     try:
-        redis = await _record._get_redis()
-        if await redis.get(_RECORD_KEY.format(session_id=session_id)) is not None:
-            if not await _session_marked(session_id):
-                await _mark_session(session_id)  # the session record exists now (or still not: Redis stands)
-            return True
-        return await _used_by_durable_state(session_id)
+        return await read_mark(await _manager(), session_id)
     except Exception as exc:  # noqa: BLE001 -- fail toward asking
-        logger.warning("Attachment record unreadable for chat %s...: %s", session_id[:8], type(exc).__name__)
+        logger.warning("Attachment mark unreadable for chat %s...: %s", session_id[:8], type(exc).__name__)
         return True
 
 

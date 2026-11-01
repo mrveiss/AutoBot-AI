@@ -90,6 +90,14 @@ CREATE TABLE IF NOT EXISTS file_cleanup_queue (
     CHECK (cleanup_reason IN ('session_ended', 'user_request', 'expired', 'space_limit'))
 );
 
+-- chat_attachment_marks: durable "an attachment turn ran in this chat" fact (#20195).
+-- Keyed by chat id alone: independent of the session record and of file rows, survives file deletion.
+-- Also created idempotently at use by chat_attachment_marks.py, so an install lacking it gains it safely.
+CREATE TABLE IF NOT EXISTS chat_attachment_marks (
+    session_id TEXT PRIMARY KEY,
+    first_marked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- ============================================================================
 -- INDEXES
 -- ============================================================================
