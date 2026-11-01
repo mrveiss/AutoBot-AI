@@ -125,7 +125,16 @@ async def switch_status() -> Dict[str, Any]:
             status[key] = int(status[key])
     status["failed_ids"] = json.loads(status.get("failed_ids", "[]"))
     status.setdefault("state", "idle")
-    if status["state"] in _ACTIVE and client is not None and await lock.holder() is None:
+    if status["state"] not in _ACTIVE or client is None:
+        return status
+    try:
+        holder = await lock.holder()
+    except ClaimUnavailable as exc:
+        # Neither stale nor known alive: the record is all there is to report (#19881).
+        logger.warning("embedding switch status: the claim registry is not available: %s", exc)
+        status["lock_unknown"] = True
+        return status
+    if holder is None:
         status["state"] = "stale"
         status["reason"] = "the build stopped heartbeating; its worker is presumed gone"
     return status
@@ -167,7 +176,10 @@ async def start_switch(kb, model: str, actor: str = "unknown") -> Dict[str, Any]
         _audit(actor, "switch_start", model, collection)
         fire_and_forget(run_switch(kb, run), name=f"embedding-switch:{model}")
     except BaseException:
-        await lock.release(owner)  # a start that failed must not block the next one
+        try:
+            await lock.release(owner)  # a start that failed must not block the next one
+        except Exception as exc:  # the claim expires by TTL; the start's own error is the one to raise (#19881)
+            logger.warning("embedding switch %s: could not release its claim: %s", owner, exc)
         raise
     return await switch_status()
 
