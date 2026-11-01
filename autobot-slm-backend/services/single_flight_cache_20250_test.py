@@ -179,3 +179,26 @@ async def test_a_reader_can_tell_no_answer_from_an_empty_answer() -> None:
         return []
 
     assert await SingleFlightCache(60, 30).get_or_unknown(empty, ["unused"]) == ([], False)
+
+
+@pytest.mark.asyncio
+async def test_a_stuck_refresh_reads_as_unknown_even_with_a_cached_value() -> None:
+    cache, refresh = SingleFlightCache(60, 0.01), _Refresh()
+    refresh.release.set()
+    assert await cache.get_or_unknown(refresh, []) == ("v1", False)
+    cache.invalidate()
+    assert await asyncio.wait_for(cache.get_or_unknown(_hangs, []), 2) == ("v1", True)
+
+
+@pytest.mark.asyncio
+async def test_two_forced_callers_on_one_refresh_start_one_more_not_two() -> None:
+    cache, refresh = SingleFlightCache(60, 30), _Refresh()
+    first = asyncio.create_task(cache.get(refresh))
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+    forced = [asyncio.create_task(cache.get(refresh, force=True)) for _ in range(2)]
+    await asyncio.sleep(0)
+    refresh.release.set()
+    await first
+    assert await asyncio.gather(*forced) == ["v2", "v2"]
+    assert refresh.calls == 2

@@ -33,6 +33,7 @@ class SingleFlightCache(Generic[T]):
         self._refresh_timeout = refresh_timeout
         self._generation = 0
         self._task: asyncio.Task | None = None
+        self._started_at = 0.0
         self._value: T | None = None
         self._has_value = False
         self._refreshed_at: float | None = None
@@ -61,6 +62,7 @@ class SingleFlightCache(Generic[T]):
         return bool(done)
 
     def _start(self, refresh: Callable[[], Awaitable[T]]) -> None:
+        self._started_at = time.monotonic()
         self._task = asyncio.create_task(self._refresh(refresh))
         # Nobody may be waiting when a refresh past the limit finally fails.
         self._task.add_done_callback(lambda task: task.cancelled() or task.exception())
@@ -85,16 +87,25 @@ class SingleFlightCache(Generic[T]):
         raise RefreshUnavailable(f"no result within {self._refresh_timeout}s")
 
     async def get_or_unknown(self, refresh: Callable[[], Awaitable[T]], empty: T) -> tuple[T, bool]:
-        """(the value, False), or (*empty*, True) when there is no answer: a reader must see which."""
+        """(the value, whether it can be trusted is unknown); (*empty*, True) when there is no answer.
+
+        A refresh running past its limit also reads as unknown: the last result it leaves in place would
+        otherwise look current indefinitely, as a stuck refresh is never replaced.
+        """
         try:
-            return await self.get(refresh), False
+            value = await self.get(refresh)
         except RefreshUnavailable:
             return empty, True
+        return value, self._stuck()
+
+    def _stuck(self) -> bool:
+        return self._running() and time.monotonic() - self._started_at > self._refresh_timeout
 
     async def _get_forced(self, refresh: Callable[[], Awaitable[T]]) -> T:
         if self._running() and not await self._finished_within_limit():
             raise RefreshUnavailable(f"a refresh is still running after {self._refresh_timeout}s")
-        self._start(refresh)
+        if not self._running():  # another forced caller woken by the same refresh may have started one
+            self._start(refresh)
         if await self._finished_within_limit():
             return self._task.result()
         raise RefreshUnavailable(f"no result within {self._refresh_timeout}s")
