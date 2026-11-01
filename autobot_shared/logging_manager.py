@@ -304,6 +304,10 @@ class LoggingManager:
     # Set when the logs directory cannot be created (#19628): loggers get console handlers only.
     _file_logging_disabled = False
     _loggers: Dict[str, logging.Logger] = {}
+    # One rotating handler per log file per process (#20139), keyed by absolute path. Handlers on one
+    # file that do not share a lock each see the file over the cap after another has renamed it, and
+    # rotate again: one rotation shifts the backups once per handler. Guarded by ``_lock``.
+    _file_handlers: Dict[str, logging.Handler] = {}
     # Set by set_level(): wins over the configured level for every logger, existing and future.
     _level_override: int | None = None
     # Re-entrant: get_logger() holds this lock while the lazy config-manager
@@ -421,7 +425,7 @@ class LoggingManager:
 
     @classmethod
     def _get_file_handler(cls, log_type: str) -> logging.Handler | None:
-        """Get the rotating file handler for *log_type*.
+        """Get the rotating file handler for *log_type*; loggers writing to one file share it (#20139).
 
         Every config value is validated first (#19288): a wrong-typed value -- a malformed config,
         or the MagicMock a config-mocking test harness returns -- falls back to its default with one
@@ -435,6 +439,9 @@ class LoggingManager:
         max_bytes = _config_non_negative_int("logging.rotation.max_bytes", _DEFAULT_MAX_BYTES)
         backup_count = _config_non_negative_int("logging.rotation.backup_count", _DEFAULT_BACKUP_COUNT)
 
+        key = os.path.abspath(log_file)
+        if key in cls._file_handlers:
+            return cls._file_handlers[key]
         try:
             Path(log_file).parent.mkdir(parents=True, exist_ok=True)
             handler = logging.handlers.RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count)
@@ -442,7 +449,7 @@ class LoggingManager:
             _warn_file_logging_off(Path(log_file), exc)
             return None
         handler.setFormatter(cls._get_formatter())
-
+        cls._file_handlers[key] = handler
         return handler
 
     @classmethod
