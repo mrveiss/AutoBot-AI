@@ -32,7 +32,7 @@ slm_credentials_file: slm-secrets.env
 # ==========================================================
 slm_backend_service: autobot-slm-backend
 slm_backend_host: 127.0.0.1
-slm_backend_port: 8000
+# slm_backend_port: not defined here -- inventory/group_vars/all.yml is the one authority (#19832)
 
 # #14299: every OTHER component role sets its own <component>_redis_host
 # default from the global `redis_host` var (roles/backend, npu-worker,

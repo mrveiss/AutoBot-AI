@@ -4,7 +4,7 @@
 
 The installer runs before the code is checked out, so it pins two values instead of reading
 them: the minimum Node.js (autobot-frontend/package.json engines.node) and the SLM backend port
-(the slm_manager role's slm_backend_port). These tests fail the moment either side moves alone.
+(slm_backend_port in the ansible inventory group_vars/all.yml). These tests fail the moment either side moves alone.
 It also cached the detected IP in /tmp, where any local user can create the file first, and
 reused it unvalidated; the cache is now root-only and reused only while the address is still
 assigned to an interface here.
@@ -38,7 +38,7 @@ def test_the_node_minimum_is_the_frontends_engines_floor() -> None:
 
 
 def test_the_backend_port_is_the_roles_slm_backend_port() -> None:
-    defaults = _ROOT / "autobot-slm-backend/ansible/roles/slm_manager/defaults/main.yml"
+    defaults = _ROOT / "autobot-slm-backend/ansible/inventory/group_vars/all.yml"  # #19832: the one authority
     port = yaml.safe_load(defaults.read_text(encoding="utf-8"))["slm_backend_port"]
     assert str(port) == _readonly("SLM_BACKEND_PORT")
     assert "127.0.0.1:8000" not in _INSTALL.read_text(encoding="utf-8"), "a literal backend port is back"

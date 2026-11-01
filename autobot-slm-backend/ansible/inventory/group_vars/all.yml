@@ -25,6 +25,16 @@ autobot_ssh_key_path: "/etc/autobot/ssh/autobot_key"
 ai_stack_port: 8080
 
 # ==========================================
+# SLM BACKEND PORT (#19832)
+# ==========================================
+# The ONE ansible literal for the SLM backend (uvicorn) port. roles/slm_manager, roles/common
+# (firewall_service_ports) and roles/frontend (/slm/api upstream) all reference
+# `slm_backend_port`; none restates it. Kept equal to install.sh SLM_BACKEND_PORT by
+# repo_tests/install_defaults_follow_their_source_19239_test.py. It lives in group_vars/all so it is
+# defined for every play that includes a role, with or without `common` having run.
+slm_backend_port: 8000
+
+# ==========================================
 # CHROMADB HEARTBEAT PATH (#19413)
 # ==========================================
 # chromadb_heartbeat_path lives in vars/chromadb_endpoints.yml, loaded by the plays that probe

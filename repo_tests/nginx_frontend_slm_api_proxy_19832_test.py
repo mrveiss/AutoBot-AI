@@ -88,9 +88,32 @@ def test_the_literal_host_and_port_are_not_in_the_template() -> None:
         assert not re.search(r"proxy_pass\s+\S*(\d+\.\d+\.\d+\.\d+|:\d+)", _block(text, loc))
 
 
+ANSIBLE = repo_root() / "autobot-slm-backend" / "ansible"
+GROUP_VARS_ALL = ANSIBLE / "inventory" / "group_vars" / "all.yml"
+
+
 def test_defaults_come_from_the_inventory_and_the_ssot_port() -> None:
     defaults = yaml.safe_load(DEFAULTS.read_text(encoding="utf-8"))
     assert "slm_host" in defaults["frontend_slm_backend_host"]
     assert "slm_backend_port" in defaults["frontend_slm_backend_port"]
-    assert "firewall_service_ports.slm_backend" in defaults["frontend_slm_backend_port"]
     assert not re.search(r"\d{4}", defaults["frontend_slm_backend_port"])
+
+
+def test_the_port_does_not_resolve_only_through_common() -> None:
+    """The role's variables must not depend on another role's defaults (#19832).
+
+    ``deploy.yml`` and others include ``frontend`` without ``common``, and role defaults
+    of an ``include_role``d role are not visible to later roles. A reference to
+    ``firewall_service_ports`` (roles/common) would be undefined at render time and fail
+    the whole frontend deploy. The one authority is ``inventory/group_vars/all.yml``.
+    """
+    role_text = DEFAULTS.read_text(encoding="utf-8") + TEMPLATE.read_text(encoding="utf-8")
+    assert "firewall_service_ports" not in role_text
+    all_vars = yaml.safe_load(GROUP_VARS_ALL.read_text(encoding="utf-8"))
+    assert isinstance(all_vars["slm_backend_port"], int)
+
+
+def test_slm_backend_port_has_exactly_one_literal_in_ansible() -> None:
+    for rel in ("roles/slm_manager/defaults/main.yml", "roles/common/defaults/main.yml"):
+        text = (ANSIBLE / rel).read_text(encoding="utf-8")
+        assert not re.search(r"^\s*slm_backend(_port)?:\s*\d+", text, re.M), rel
