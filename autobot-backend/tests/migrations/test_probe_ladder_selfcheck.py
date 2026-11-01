@@ -17,11 +17,12 @@ No database needed — pure static analysis.
 import ast
 from pathlib import Path
 
-import pytest
+# A plain submodule import, never importorskip (#20146): the backend conftest stubs a missing `alembic`
+# with a MagicMock, so only a submodule import fails when the package is absent, and a failure is a
+# collection error that turns the Migration Gate red instead of a skip that keeps it green.
+import alembic.script  # noqa: F401
 
-pytest.importorskip("alembic", reason="probe-ladder self-checks need alembic")
-
-from migrations.baseline import (  # noqa: E402 — after importorskip by design
+from migrations.baseline import (  # noqa: E402 — after the alembic import by design
     TIMESTAMPTZ_MARKERS,
     Artifacts,
     _script_directory,
