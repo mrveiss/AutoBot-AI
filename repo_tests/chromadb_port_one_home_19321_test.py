@@ -132,7 +132,7 @@ def _swept(root: Path) -> list[str]:
 SCAN = declare(
     "chromadb-port-one-home-scan",
     discover=_swept,
-    floor=6657,  # mid-window: population 6741, window (6582, 6732)
+    floor=6722,  # mid-window: population 6806, window (6647, 6797)
     growth=150,
     skips=9,  # tracked binaries (images, icons, executables) that do not decode as UTF-8
     what="tracked non-doc, non-test files swept for a named ChromaDB port definition",

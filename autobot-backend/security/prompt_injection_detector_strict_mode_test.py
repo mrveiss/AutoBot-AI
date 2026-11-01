@@ -166,7 +166,7 @@ REACH = declare(
     # value and nothing owns the sentence. The arithmetic for this pin lives in
     # the commit message, which cannot drift from the tree it describes. Re-derive
     # rather than trusting any figure written here or in the blocks above.
-    floor=3485,  # mid-window: population 3635, window (3335, 3635)
+    floor=3607,  # mid-window: population 3757, window (3457, 3757)
     growth=300,
     what="tracked backend python files (tests excluded)",
 )
