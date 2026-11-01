@@ -55,7 +55,7 @@ def _modules(root: Path) -> list[Path]:
 REACH = declare(
     "redaction-placeholder-literals",
     discover=_modules,
-    floor=3143,  # mid-window: population 3293, window (2993, 3293)
+    floor=3266,  # mid-window: population 3416, window (3116, 3416)
     growth=300,  # ~9%: ordinary growth between repins must not turn an unrelated PR red
     what="non-test Python modules",
     roots=_ROOTS,
