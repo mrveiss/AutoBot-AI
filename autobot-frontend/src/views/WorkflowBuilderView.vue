@@ -495,12 +495,16 @@
             </div>
 
             <!-- Pending Approval -->
-            <div v-if="pendingApproval" class="approval-panel">
-              <div class="approval-header">
-                <Icon name="clipboard-check" />
-                <h4>{{ $t('workflow.views.planAwaitingApproval') }}</h4>
-              </div>
-
+            <ApprovalEnvelope
+              v-if="pendingApproval"
+              class="approval-panel"
+              icon="clipboard-check"
+              :title="$t('workflow.views.planAwaitingApproval')"
+              :approve-label="$t('workflow.views.approveAndRun')"
+              :reject-label="$t('workflow.views.reject')"
+              @approve="handleApprovePlan"
+              @reject="handleRejectPlan"
+            >
               <div class="approval-summary">
                 <p>{{ pendingApproval.plan_summary }}</p>
                 <div class="approval-meta">
@@ -524,16 +528,7 @@
                   <code class="step-command">{{ step.command }}</code>
                 </div>
               </div>
-
-              <div class="approval-actions">
-                <BaseButton variant="success" size="sm" @click="handleApprovePlan">
-                  <Icon name="check" /> {{ $t('workflow.views.approveAndRun') }}
-                </BaseButton>
-                <BaseButton variant="error" size="sm" @click="handleRejectPlan">
-                  <Icon name="times" /> {{ $t('workflow.views.reject') }}
-                </BaseButton>
-              </div>
-            </div>
+            </ApprovalEnvelope>
           </div>
         </section>
 
@@ -705,6 +700,7 @@ import type { WorkflowTemplateSummary } from '@/types/workflowTemplates';
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import Icon, { type IconName } from '@/components/ui/Icon.vue';
+import ApprovalEnvelope from '@/components/approvals/ApprovalEnvelope.vue';
 import WorkflowCanvas from '@/components/workflow/WorkflowCanvas.vue';
 import WorkflowTemplateGallery from '@/components/workflow/WorkflowTemplateGallery.vue';
 import WorkflowRunner from '@/components/workflow/WorkflowRunner.vue';
@@ -1941,31 +1937,9 @@ watch(hasActiveWorkflows, (hasActive) => {
   justify-content: flex-end;
 }
 
-/* Approval Panel */
+/* Approval Panel: the frame is ApprovalEnvelope; only its place in the section stays here. */
 .approval-panel {
   margin-top: var(--spacing-6);
-  background: var(--bg-secondary);
-  border: 1px solid var(--color-warning);
-  border-radius: var(--radius-xl);
-  padding: var(--spacing-5);
-}
-
-.approval-header {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2-5);
-  margin-bottom: var(--spacing-4);
-}
-
-.approval-header svg {
-  width: var(--text-xl);
-  height: var(--text-xl);
-  color: var(--color-warning);
-}
-
-.approval-header h4 {
-  margin: var(--spacing-0);
-  color: var(--text-primary);
 }
 
 .approval-summary p {
@@ -2024,12 +1998,6 @@ watch(hasActiveWorkflows, (hasActive) => {
   font-size: var(--text-xs);
   color: var(--text-secondary);
   overflow-x: auto;
-}
-
-.approval-actions {
-  display: flex;
-  gap: var(--spacing-3);
-  justify-content: flex-end;
 }
 
 /* Agents Section */

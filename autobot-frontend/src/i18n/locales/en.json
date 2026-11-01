@@ -6739,7 +6739,19 @@
       "bellTitle": "Pending invitations"
     }
   },
+  "approvals": {
+    "envelope": {
+      "approve": "Approve",
+      "reject": "Reject"
+    }
+  },
   "research": {
+    "approval": {
+      "title": "Approval Required",
+      "baseline": "Baseline val_bpb:",
+      "result": "Result val_bpb:",
+      "improvement": "Improvement:"
+    },
     "captcha": {
       "detected": "CAPTCHA Detected",
       "message": "A CAPTCHA was detected during web research. Please solve it manually via VNC to continue.",

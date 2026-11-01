@@ -5,7 +5,11 @@
 
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { createI18n } from 'vue-i18n'
+import en from '@/i18n/locales/en.json'
 import ApprovalCard from '../ApprovalCard.vue'
+
+const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
 
 describe('ApprovalCard', () => {
   const defaultProps = {
@@ -21,7 +25,7 @@ describe('ApprovalCard', () => {
   }
 
   it('renders approval details', () => {
-    const wrapper = mount(ApprovalCard, { props: defaultProps })
+    const wrapper = mount(ApprovalCard, { props: defaultProps, global: { plugins: [i18n] } })
     expect(wrapper.text()).toContain('Approval Required')
     expect(wrapper.text()).toContain('5.0000')
     expect(wrapper.text()).toContain('4.5000')
@@ -29,16 +33,22 @@ describe('ApprovalCard', () => {
   })
 
   it('emits approve event on button click', async () => {
-    const wrapper = mount(ApprovalCard, { props: defaultProps })
+    const wrapper = mount(ApprovalCard, { props: defaultProps, global: { plugins: [i18n] } })
     await wrapper.find('button:first-of-type').trigger('click')
     expect(wrapper.emitted('approve')).toBeTruthy()
     expect(wrapper.emitted('approve')![0]).toEqual(['s1', 'e1'])
   })
 
   it('emits reject event on button click', async () => {
-    const wrapper = mount(ApprovalCard, { props: defaultProps })
+    const wrapper = mount(ApprovalCard, { props: defaultProps, global: { plugins: [i18n] } })
     const buttons = wrapper.findAll('button')
     await buttons[1].trigger('click')
-    expect(wrapper.emitted('reject')).toBeTruthy()
+    expect(wrapper.emitted('reject')![0]).toEqual(['s1', 'e1'])
+  })
+
+  it('disables both decisions after one is sent', async () => {
+    const wrapper = mount(ApprovalCard, { props: defaultProps, global: { plugins: [i18n] } })
+    await wrapper.findAll('button')[0].trigger('click')
+    wrapper.findAll('button').forEach((b) => expect(b.attributes('disabled')).toBeDefined())
   })
 })
