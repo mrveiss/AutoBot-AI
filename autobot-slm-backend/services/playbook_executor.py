@@ -33,6 +33,7 @@ from services.inventory_builder import (
     write_temp_extra_vars,
     write_temp_inventory,
 )
+from services.playbook_code_source_gate import refusal_without_code_source
 from services.playbook_output_stream import PIPE_LINE_LIMIT, iter_pipe_lines
 from services.process_group import KILL_GRACE_S, kill_process_group
 from services.provision_progress import TaskProgressTracker
@@ -1199,13 +1200,10 @@ class PlaybookExecutor:
                 True for the SLM self-update path (the run that restarts
                 autobot-slm-backend); ordinary per-role/per-node deploys leave
                 this False, since they don't kill their own process.
-            timeout_s: Wall-clock ceiling on the subprocess run (#14524). ``None``
-                (the default) is unbounded, matching the previous behaviour --
-                required for long deployment/provisioning runs. Pass a concrete
-                value only where a caller can safely bound the run (e.g. the
-                reconciler's remediation restart); mutually exclusive with
-                ``detach`` in practice, since a detached run is designed to
-                outlive this coroutine entirely.
+            timeout_s: Wall-clock ceiling on the subprocess run (#14524). ``None``, the default, is
+                unbounded, as long deployment runs require. Pass a value only where a caller can bound
+                the run (the reconciler's remediation restart); not with ``detach``, whose run
+                outlives this coroutine.
 
         Returns:
             Dict with keys: success (bool), output (str), returncode (int),
@@ -1214,7 +1212,9 @@ class PlaybookExecutor:
         validate_unit_extra_vars(extra_vars)  # #19005: ValueError before anything is spawned
         # #17150: re-detect before syncing, as _update_code_source derives its sync target from self.ansible_dir.
         self._refresh_ansible_dir()
-        refusal = self._code_source_sync_failure_result(playbook_name, detach, await self._update_code_source())
+        refusal = refusal_without_code_source(self, FALLBACK_ANSIBLE_DIR, playbook_name) or (
+            self._code_source_sync_failure_result(playbook_name, detach, await self._update_code_source())
+        )
         if refusal is not None:
             return refusal
 
@@ -1265,12 +1265,7 @@ class PlaybookExecutor:
 
         except Exception as e:
             logger.exception(f"Failed to execute playbook {playbook_name}: {e}")
-            return {
-                "success": False,
-                "output": f"Error: {str(e)}",
-                "returncode": -1,
-                "timed_out": False,
-            }
+            return {"success": False, "output": f"Error: {str(e)}", "returncode": -1, "timed_out": False}
         finally:
             # Clean up the per-run temp inventory and extra-vars files.
             #
