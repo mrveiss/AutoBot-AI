@@ -33,7 +33,10 @@ def _placement():
 
 
 def _roles(**by_role: str) -> list:
-    return [types.SimpleNamespace(role_name=role.replace("_", "-"), node_id=node) for role, node in by_role.items()]
+    return [
+        types.SimpleNamespace(role_name=role.replace("_", "-"), node_id=node, status="active")
+        for role, node in by_role.items()
+    ]
 
 
 def _build_infra_vars(node_roles: list, ips: dict, local_ips=None) -> dict:
@@ -77,6 +80,42 @@ def test_no_llm_role_sets_nothing_and_an_unknown_address_warns(caplog) -> None:
     placement.logger = types.SimpleNamespace(warning=lambda msg, *a: warned.append(msg % a))
     assert placement.llm_infra_vars(_roles(autobot_llm_cpu="gone"), _IPS) == {}
     assert warned and "gone" in warned[0]
+
+
+def _row(role: str, node: str, status: str = "active"):
+    return types.SimpleNamespace(role_name=role, node_id=node, status=status)
+
+
+_NODE_IPS = {"gpu": "10.0.0.1", "cpu": "10.0.0.2", "app": "10.0.0.3"}
+
+
+@pytest.mark.parametrize(
+    ("rows", "host"),
+    [
+        ([_row("autobot-llm-gpu", "gpu", "inactive"), _row("autobot-llm-cpu", "cpu")], "10.0.0.2"),
+        ([_row("autobot-llm-gpu", "gpu", "not_installed"), _row("autobot-llm-cpu", "cpu")], "10.0.0.2"),
+        ([_row("autobot-llm-gpu", "gpu"), _row("autobot-llm-cpu", "cpu")], "10.0.0.1"),
+        (
+            [_row("autobot-llm-gpu", "gpu", "not_installed"), _row("autobot-llm-cpu", "cpu", "not_installed")],
+            "10.0.0.1",
+        ),
+        ([_row("autobot-llm-gpu", "gpu", "not_installed")], "10.0.0.1"),
+    ],
+    ids=["inactive-gpu", "not-installed-gpu", "both-active", "first-run-gpu-first", "first-run-only-row"],
+)
+def test_an_active_llm_row_wins_and_the_others_stay_a_fallback(rows: list, host: str) -> None:
+    assert _placement().llm_infra_vars([*rows, _row("backend", "app")], _NODE_IPS)["backend_ollama_host"] == host
+
+
+@pytest.mark.parametrize("order", [("gpu", "app"), ("app", "gpu")], ids=["llm-first", "llm-last"])
+def test_loopback_is_not_chosen_when_another_backend_node_exists(order: tuple) -> None:
+    rows = [_row("autobot-llm-gpu", "gpu"), *(_row("backend", node) for node in order)]
+    assert _placement().llm_infra_vars(rows, _NODE_IPS)["backend_ollama_host"] == "10.0.0.1"
+
+
+def test_loopback_stays_when_every_backend_node_is_the_llm_node() -> None:
+    rows = [_row("autobot-llm-gpu", "gpu"), _row("backend", "gpu")]
+    assert _placement().llm_infra_vars(rows, _NODE_IPS)["backend_ollama_host"] == "127.0.0.1"
 
 
 def _full_backend_env(**variables) -> str:

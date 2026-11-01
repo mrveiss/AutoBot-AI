@@ -19,6 +19,8 @@ from sqlalchemy import DateTime, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
+from user_management.models.organization import Organization
+
 from .activity import LLCBase
 
 
@@ -33,7 +35,14 @@ class LLCAgentWikiEntry(LLCBase):
         server_default=sa.text("gen_random_uuid()"),
     )
     agent_id: Mapped[str] = mapped_column(String(256), nullable=False, index=True)
-    company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        # The Column object, not the name (see LLCActivityLog.company_id, #20150). Added NOT VALID by
+        # migration 20261101_108 so pre-existing orphan rows are kept (#20156, #17038).
+        sa.ForeignKey(Organization.__table__.c.id, ondelete="CASCADE", name="fk_llc_agent_wiki_entries_company_id"),
+        nullable=False,
+        index=True,
+    )
     namespace: Mapped[str] = mapped_column(
         String(128),
         nullable=False,
