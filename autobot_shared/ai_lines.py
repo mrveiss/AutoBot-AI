@@ -193,7 +193,7 @@ def resolve_line(
     * A stored line wins over the default. ``never`` is final.
     * Unset: a mutating action counts as line 2; an action that changes nothing is not managed
       (autonomous), because gating every read would hold the conversation itself.
-    * Baseline-sensitive categories (#18294) can never be line 1, whatever is stored.
+    * A baseline-sensitive category (#18294), when the caller supplies one, can never be line 1, whatever is stored.
     * A role policy that requires approval (#17463) can never be line 1 either.
     * An unreadable store fails closed: ``never``.
     * No verifiable scope (a malformed company, or no principal at all) refuses a mutating action: there is no scope

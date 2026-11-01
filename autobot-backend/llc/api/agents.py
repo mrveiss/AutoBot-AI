@@ -26,6 +26,7 @@ from user_management.database import get_async_session
 from user_management.services import TenantContext
 
 from ..org_role_authority import describe_role_bound
+from ..scheduler.dispatch_gate import AgentNotDispatchable
 from ..scheduler.heartbeat_scheduler import get_heartbeat_scheduler
 from ..services.agent_presence_queries import agent_org_nodes_with_latest_heartbeat
 
@@ -88,7 +89,11 @@ async def list_agents(
     ]
 
 
-@router.post("/{agent_id}/heartbeat/trigger", response_model=AgentHeartbeatTriggerResponse, status_code=202)
+@router.post(
+    "/{agent_id}/heartbeat/trigger",
+    response_model=AgentHeartbeatTriggerResponse,
+    status_code=202,
+)
 async def trigger_heartbeat(
     agent_id: str,
     session: AsyncSession = Depends(get_async_session),
@@ -104,6 +109,14 @@ async def trigger_heartbeat(
     sched = get_heartbeat_scheduler()
     try:
         run, agent_cfg = await sched.trigger_manual(session, agent_id)
+    except AgentNotDispatchable as exc:
+        # An agent outside this company stays a 404: the reason would confirm it exists.
+        if exc.company_id != ctx.org_id:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Agent {agent_id!r} not found or not configured",
+            )
+        raise HTTPException(status_code=409, detail=f"Cannot run: {exc.reason}")
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=404, detail="Internal server error")

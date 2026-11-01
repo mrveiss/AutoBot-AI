@@ -8999,6 +8999,12 @@
       "retry": "Spróbuj ponownie",
       "loading": "Wczytywanie planów...",
       "loadFailed": "Nie udało się wczytać planu.",
+      "stale": {
+        "plan": "Nie udało się odświeżyć tego planu, więc wyświetlane dane mogą być nieaktualne. {reason}",
+        "gate": "Nie udało się odświeżyć kontroli gotowości, więc lista brakujących elementów może być nieaktualna. {reason}",
+        "both": "Nie udało się odświeżyć ani planu, ani jego kontroli gotowości, więc wyświetlane dane mogą być nieaktualne. {reason}"
+      },
+      "rereadRetry": "Wczytaj plan ponownie",
       "saveFailed": "Nie udało się zapisać zmiany.",
       "createFailed": "Nie udało się utworzyć planu.",
       "emptyTitle": "Brak planów",
@@ -9142,6 +9148,8 @@
         "approveMessage": "Zatwierdzasz wyświetlony podgląd. Każda późniejsza zmiana planu unieważnia to zatwierdzenie.",
         "previewFailed": "Nie udało się utworzyć podglądu.",
         "approveFailed": "Nie udało się zatwierdzić planu.",
+        "approveBlocked": "Zatwierdzenie jest zablokowane, dopóki nie zostanie rozwiązane:",
+        "approveDetail": "Szczegóły z serwera: {detail}",
         "convertFailed": "Nie udało się utworzyć przepływów pracy.",
         "retryFailed": "Nie udało się ponowić propozycji linii AI."
       }

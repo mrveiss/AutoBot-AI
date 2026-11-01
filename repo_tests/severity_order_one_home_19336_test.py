@@ -53,7 +53,7 @@ def _modules(root: Path) -> list[Path]:
 REACH = declare(
     "severity-order-copies",
     discover=_modules,
-    floor=3299,  # mid-window: population 3449, window (3149, 3449)
+    floor=3303,  # mid-window: population 3453, window (3153, 3453)
     growth=300,  # ~9%: ordinary growth between repins must not turn an unrelated PR red
     what="non-test Python modules",
     roots=_ROOTS,
