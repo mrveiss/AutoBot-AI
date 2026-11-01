@@ -30,7 +30,11 @@ from autobot_shared.time_utils import now_utc
 from autobot_shared.user_management.models.audit import AuditResourceType, IdentityAuditAction
 from autobot_shared.user_management.models.team import Team, TeamMembership
 from autobot_shared.user_management.models.user import UserCore
-from autobot_shared.user_management.password_epoch import set_password_epoch
+from autobot_shared.user_management.password_epoch import (
+    DEACTIVATION_EPOCH_LEAD_SECONDS,
+    PasswordEpochMark,
+    set_password_epoch,
+)
 from autobot_shared.user_management.user_service_base import UserServiceBase
 from autobot_shared.user_management.user_service_errors import (
     InvalidCredentialsError,
@@ -86,21 +90,26 @@ class UserLifecycleMixin(UserServiceBase):
     async def _revoke_old_sessions(self, user_id: uuid.UUID, username: str, current_token: str | None) -> dict:
         """Revoke sessions opened with the old password; return the audit details."""
         invalidated_count = await self.invalidate_other_sessions(user_id, current_token)
-        epoch = await set_password_epoch(username)
+        epoch = await set_password_epoch(username, in_redis=self.epoch_in_redis)
         return {
             "method": "user_initiated",
             "sessions_revoked_from": epoch,
             "sessions_invalidated": invalidated_count,
         }
 
-    async def _revoke_tokens_of(self, username: str) -> dict:
-        """Void every token issued to *username* so far, through the password epoch (#20443).
+    def _revoke_tokens_after_commit(self, username: str) -> dict:
+        """Void every token issued to *username* so far, once this transaction commits (#20443).
 
-        A deactivated or deleted account's tokens would otherwise work until they expire:
-        the request gate reads the epoch, never the account's state. ``sessions_revoked_from``
-        is ``None`` when the store could not record it (logged by ``set_password_epoch``).
+        A deactivated or deleted account's tokens would otherwise work until they expire: the
+        request gate reads the epoch, never the account's state. Written after the commit, so a
+        rolled-back change revokes nothing and a login before the commit is still caught. The
+        epoch is read from the clock then, so the audit row can only say the write is queued:
+        whether the store recorded it is logged by ``set_password_epoch``, and a callback that
+        raises surfaces as ``PostCommitCallbackError`` after the commit.
         """
-        return {"sessions_revoked_from": await set_password_epoch(username)}
+        mark = PasswordEpochMark(username, DEACTIVATION_EPOCH_LEAD_SECONDS, self.epoch_in_redis)
+        run_after_commit(self.session, mark)
+        return {"sessions_revocation": "queued_after_commit"}
 
     async def _set_active(self, user_id: uuid.UUID, active: bool) -> bool:
         """Set ``is_active`` and audit it; raises ``UserNotFoundError``."""
@@ -110,7 +119,7 @@ class UserLifecycleMixin(UserServiceBase):
         await self.session.flush()
         action = IdentityAuditAction.USER_ACTIVATED if active else IdentityAuditAction.USER_DEACTIVATED
         # Reactivation revokes nothing: the tokens from before stay void, the user signs in again (#20443).
-        details = {} if active else await self._revoke_tokens_of(user.username)
+        details = {} if active else self._revoke_tokens_after_commit(user.username)
         await self._audit_log(action, AuditResourceType.USER, user_id, details)
         logger.info("%s user: %s", "Activated" if active else "Deactivated", user_id)
         return True
@@ -172,7 +181,7 @@ class UserLifecycleMixin(UserServiceBase):
             UserNotFoundError: the user does not exist.
         """
         user = await self._require_user(user_id)
-        details: dict[str, Any] = {"hard_delete": hard_delete, **await self._revoke_tokens_of(user.username)}
+        details: dict[str, Any] = {"hard_delete": hard_delete}
         if reassign_to is not None:
             details["reassign_to"] = str(reassign_to)
             details["reassign_counts"] = await self._reassign_before_delete(user_id, reassign_to, hard_delete)
@@ -184,6 +193,7 @@ class UserLifecycleMixin(UserServiceBase):
             user.deleted_at = now_utc()
             user.is_active = False
         await self.session.flush()
+        details.update(self._revoke_tokens_after_commit(user.username))  # after the reassign and the delete
 
         await self._audit_log(IdentityAuditAction.USER_DELETED, AuditResourceType.USER, user_id, details)
         logger.info("Deleted user: %s (hard=%s, reassign_to=%s)", user_id, hard_delete, reassign_to)

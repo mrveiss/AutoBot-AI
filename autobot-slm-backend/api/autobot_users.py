@@ -26,7 +26,8 @@ from user_management.schemas.user import (
     UserResponse,
     UserUpdate,
 )
-from user_management.services import TenantContext, UserService
+from user_management.services import TenantContext
+from user_management.services.user_service import AutobotDatabaseUserService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/autobot-users", tags=["autobot-users"])
@@ -41,7 +42,7 @@ async def create_autobot_user(
     """Create a new AutoBot application user."""
     logger.info("Creating AutoBot user: %s", user_data.username)
     context = TenantContext(is_platform_admin=True)
-    user_service = UserService(db, context)
+    user_service = AutobotDatabaseUserService(db, context)
 
     try:
         user = await user_service.create_user(
@@ -68,7 +69,7 @@ async def list_autobot_users(
     """List AutoBot application users with pagination and search."""
     logger.info("Listing AutoBot users (skip=%d, limit=%d, search=%s)", skip, limit, search)
     context = TenantContext(is_platform_admin=True)
-    user_service = UserService(db, context)
+    user_service = AutobotDatabaseUserService(db, context)
 
     users, total = await user_service.list_users(limit=limit, offset=skip, search=search)
     return UserListResponse(
@@ -87,7 +88,7 @@ async def get_autobot_user(
 ) -> UserResponse:
     """Get AutoBot user by ID."""
     context = TenantContext(is_platform_admin=True)
-    user_service = UserService(db, context)
+    user_service = AutobotDatabaseUserService(db, context)
 
     user = await user_service.get_user(user_id)
     if not user:
@@ -105,7 +106,7 @@ async def update_autobot_user(
     """Update AutoBot user."""
     logger.info("Updating AutoBot user: %s", user_id)
     context = TenantContext(is_platform_admin=True)
-    user_service = UserService(db, context)
+    user_service = AutobotDatabaseUserService(db, context)
 
     try:
         user = await user_service.update_user(
@@ -133,7 +134,7 @@ async def change_autobot_user_password(
     """Reset an AutoBot user's password (admin action — no current password required)."""
     logger.info("Admin password reset for AutoBot user: %s", user_id)
     context = TenantContext(is_platform_admin=True)
-    user_service = UserService(db, context)
+    user_service = AutobotDatabaseUserService(db, context)
 
     try:
         await user_service.change_password(
@@ -156,7 +157,7 @@ async def delete_autobot_user(
     """Delete AutoBot user."""
     logger.info("Deleting AutoBot user: %s", user_id)
     context = TenantContext(is_platform_admin=True)
-    user_service = UserService(db, context)
+    user_service = AutobotDatabaseUserService(db, context)
 
     try:
         await user_service.delete_user(user_id)

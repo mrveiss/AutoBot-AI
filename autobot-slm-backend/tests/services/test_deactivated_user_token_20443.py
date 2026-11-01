@@ -10,6 +10,7 @@ soft-deleted through the SLM's ``UserService`` lifecycle (the one SCIM ``PATCH a
 """
 
 import importlib
+import re
 import sys
 import time
 import uuid
@@ -19,6 +20,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.db_session import POST_COMMIT_CALLBACKS, _run_post_commit_callbacks
 from autobot_shared.user_management import password_epoch
 from autobot_shared.user_management.base_service import TenantContext
 
@@ -68,7 +70,9 @@ def _token(age_seconds: int = 60) -> str:
 
 
 def _service() -> _SlmUserService:
-    svc = _SlmUserService(MagicMock(flush=AsyncMock()), TenantContext(is_platform_admin=True))
+    session = MagicMock(flush=AsyncMock())
+    session.info = {POST_COMMIT_CALLBACKS: []}
+    svc = _SlmUserService(session, TenantContext(is_platform_admin=True))
     svc.get_user = AsyncMock(return_value=SimpleNamespace(username="alice", is_active=True, deleted_at=None))
     svc._audit_log = AsyncMock()
     return svc
@@ -82,7 +86,10 @@ async def test_a_live_users_token_decodes(epochs):
 @pytest.mark.asyncio
 async def test_a_scim_deactivated_users_token_is_refused(epochs):
     token = _token()
-    await _service().deactivate_user(uuid.uuid4())
+    service = _service()
+    await service.deactivate_user(uuid.uuid4())
+    assert (await auth_service.decode_token_async(token))["sub"] == "alice", "nothing is written before the commit"
+    await _run_post_commit_callbacks(service.session)
 
     assert await auth_service.decode_token_async(token) is None
 
@@ -90,7 +97,9 @@ async def test_a_scim_deactivated_users_token_is_refused(epochs):
 @pytest.mark.asyncio
 async def test_a_scim_deleted_users_token_is_refused(epochs):
     token = _token()
-    await _service().delete_user(uuid.uuid4(), hard_delete=False)
+    service = _service()
+    await service.delete_user(uuid.uuid4(), hard_delete=False)
+    await _run_post_commit_callbacks(service.session)
 
     assert await auth_service.decode_token_async(token) is None
 
@@ -99,7 +108,42 @@ async def test_a_scim_deleted_users_token_is_refused(epochs):
 async def test_reactivation_needs_a_new_token(epochs):
     old, service = _token(), _service()
     await service.deactivate_user(uuid.uuid4())
+    await _run_post_commit_callbacks(service.session)
     await service.activate_user(uuid.uuid4())
 
     assert await auth_service.decode_token_async(old) is None
     assert (await auth_service.decode_token_async(_token(age_seconds=-5)))["sub"] == "alice"
+
+
+class _AutobotDbService(_SlmUserService):
+    """What ``AutobotDatabaseUserService`` adds: its users' tokens are checked against Redis, not the SLM database."""
+
+    epoch_in_redis = True
+
+
+@pytest.mark.asyncio
+async def test_a_backend_database_users_marker_goes_to_redis_not_the_slm_store(epochs):
+    """The route that deletes an ``autobot_users`` user runs in the SLM, whose store is its own database (#20443)."""
+    redis = MagicMock(setex=AsyncMock(return_value=True))
+    session = MagicMock(flush=AsyncMock())
+    session.info = {POST_COMMIT_CALLBACKS: []}
+    service = _AutobotDbService(session, TenantContext(is_platform_admin=True))
+    service.get_user = AsyncMock(return_value=SimpleNamespace(username="alice", is_active=True, deleted_at=None))
+    service._audit_log = AsyncMock()
+
+    with patch("autobot_shared.user_management.password_epoch.get_async_redis_client", AsyncMock(return_value=redis)):
+        await service.delete_user(uuid.uuid4(), hard_delete=False)
+        await _run_post_commit_callbacks(session)
+
+    assert epochs == {}, "the SLM's own store must not receive it"
+    assert redis.setex.await_args.args[0] == f"{password_epoch.PASSWORD_EPOCH_PREFIX}alice"
+
+
+def test_the_autobot_users_routes_use_the_service_that_writes_to_redis():
+    """Read from source: this harness stubs the SLM's ``user_management`` package, so the class is not importable."""
+    root = Path(__file__).resolve().parents[2]
+    service = (root / "user_management" / "services" / "user_service.py").read_text(encoding="utf-8")
+    assert re.search(r"class AutobotDatabaseUserService\(UserService\):.*?epoch_in_redis = True", service, re.S)
+    routes = (root / "api" / "autobot_users.py").read_text(encoding="utf-8")
+    assert routes.count("AutobotDatabaseUserService(db, context)") == 6
+    assert " UserService(db, context)" not in routes

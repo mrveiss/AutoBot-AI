@@ -19,6 +19,7 @@ from fastapi import HTTPException, Request, status
 
 from autobot_shared.auth.revocation_unavailable import revocation_unavailable_error
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import parse_utc_iso
 from autobot_shared.user_management.password_epoch import (
     MalformedTokenClaims,
     RevocationCheckUnavailable,
@@ -28,6 +29,9 @@ from autobot_shared.user_management.password_epoch import (
 logger = get_logger(__name__)
 
 _BEARER_CHALLENGE = {"WWW-Authenticate": "Bearer"}
+
+#: Credentials the epoch can place in time: a JWT by its ``iat``, an ``X-Session-ID`` session by its creation (#20443).
+_EPOCH_GATED_METHODS = ("jwt", "session")
 
 
 async def reject_if_revoked_by_password_change(user_data: Dict) -> None:
@@ -93,6 +97,20 @@ async def resolve_human_user_via(middleware, request: Request) -> Dict | None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Device tokens not permitted on this endpoint. Use mobile-specific API.",
         )
-    if user_data.get("auth_method") == "jwt":  # #12924, #16411: a token minted before a password change is void
+    if user_data.get("auth_method") in _EPOCH_GATED_METHODS:  # #12924, #16411: minted before a password change: void
         await reject_if_revoked_by_password_change(user_data)
+    return user_data
+
+
+def with_session_issue_time(user_data: Dict, session: Dict) -> Dict | None:
+    """*user_data* with the session's creation time as ``iat``, so the password-epoch gate covers it (#20443).
+
+    A session whose creation time cannot be read cannot be placed against an epoch: None, refused.
+    """
+    try:
+        user_data["iat"] = int(parse_utc_iso(session["created_at"]).timestamp())
+    except (KeyError, TypeError, ValueError):
+        logger.warning("Session refused: its creation time is unreadable")
+        return None
+    user_data["sub"] = user_data.get("sub") or user_data.get("username")
     return user_data

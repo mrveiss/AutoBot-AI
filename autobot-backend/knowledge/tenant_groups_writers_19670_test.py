@@ -67,7 +67,7 @@ def redis_db():
         patch.object(membership_epoch, "get_async_redis_client", AsyncMock(return_value=db)),
         patch.object(membership_epoch, "MEMBERSHIP_EPOCH_BUMP_BACKOFF_SECONDS", 0.0),
         # #20443: a delete also revokes the tokens; that store is not this test's subject.
-        patch("autobot_shared.user_management.user_service_lifecycle.set_password_epoch", AsyncMock(return_value=1)),
+        patch("autobot_shared.user_management.password_epoch.set_password_epoch", AsyncMock(return_value=1)),
     ):
         yield db
 

@@ -18,3 +18,13 @@ class UserService(SharedUserService):
     """User service bound to the SLM's ``User``."""
 
     user_model = User
+
+
+class AutobotDatabaseUserService(UserService):
+    """User service over the ``autobot_users`` database, whose users sign in to the main backend (#20443).
+
+    The backend verifies those tokens against Redis, while this process keeps its own password
+    epochs in the SLM database (#18663): a revocation written there would never reach the backend.
+    """
+
+    epoch_in_redis = True

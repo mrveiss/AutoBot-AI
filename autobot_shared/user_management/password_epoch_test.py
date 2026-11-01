@@ -20,9 +20,13 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from redis.exceptions import RedisError
 
+from autobot_shared.user_management import password_epoch as password_epoch_module
 from autobot_shared.user_management.password_epoch import (
     PASSWORD_EPOCH_PREFIX,
+    PASSWORD_EPOCH_TTL_SECONDS,
+    REFRESH_GRACE_SECONDS,
     MalformedTokenClaims,
+    PasswordEpochMark,
     RevocationCheckUnavailable,
     get_password_epoch,
     is_token_revoked_by_password_change,
@@ -253,3 +257,41 @@ def test_encode_jwt_does_not_override_a_caller_supplied_iat():
     claims = pyjwt.decode(token, "s" * 32, algorithms=["HS256"])
 
     assert claims["iat"] == 4242
+
+
+@pytest.mark.asyncio
+async def test_the_marker_is_kept_past_the_last_moment_a_token_it_revokes_can_refresh():
+    """A token issued before the marker lives its lifetime and refreshes for the grace after: the TTL covers both."""
+    r = _redis()
+    with patch(_MOD, AsyncMock(return_value=r)):
+        await set_password_epoch("alice", now=1234)
+
+    ttl = r.setex.await_args.args[1]
+    assert ttl == PASSWORD_EPOCH_TTL_SECONDS
+    assert ttl > password_epoch_module.LOGIN_TOKEN_LIFETIME_SECONDS + REFRESH_GRACE_SECONDS
+
+
+@pytest.mark.asyncio
+async def test_in_redis_bypasses_a_process_that_routes_its_epochs_elsewhere():
+    """The SLM keeps its own epochs in its database; the backend's users' markers still have to reach Redis (#20443)."""
+    own = AsyncMock(return_value=7)
+    r = _redis()
+    password_epoch_module.use_epoch_store(get_epoch=AsyncMock(), set_epoch=own)
+    try:
+        with patch(_MOD, AsyncMock(return_value=r)):
+            assert await set_password_epoch("alice", now=5) == 7
+            assert await set_password_epoch("alice", now=5, in_redis=True) == 5
+    finally:
+        password_epoch_module.reset_epoch_store()
+
+    own.assert_awaited_once()
+    assert r.setex.await_args.args[2] == "5"
+
+
+@pytest.mark.asyncio
+async def test_a_mark_reads_the_clock_when_it_runs_and_leads_it_by_its_lead():
+    r = _redis()
+    with patch(_MOD, AsyncMock(return_value=r)), patch.object(password_epoch_module.time, "time", return_value=1000.9):
+        assert await PasswordEpochMark("alice", lead_seconds=1)() == 1001
+        assert await PasswordEpochMark("alice")() == 1000
+    assert PasswordEpochMark("alice", 1) == PasswordEpochMark("alice", 1), "equal marks queue once"
