@@ -225,6 +225,7 @@ server {
     # Same shape as the slm_manager vhost's /slm/api/ws/ (autobot-slm.conf.j2).
     location /slm/api/ws/ {
         proxy_pass {{ frontend_slm_backend_protocol }}://autobot_slm_backend/api/ws/;
+        client_max_body_size {{ frontend_slm_client_max_body_size }};
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -240,6 +241,7 @@ server {
     # ($connection_upgrade is "close" for plain HTTP, so REST is unaffected).
     location /slm/api/ {
         proxy_pass {{ frontend_slm_backend_protocol }}://autobot_slm_backend/api/;
+        client_max_body_size {{ frontend_slm_client_max_body_size }};
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;

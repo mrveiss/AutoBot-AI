@@ -41,9 +41,17 @@ frontend_backend_url: ""
 # #19832: SLM backend behind /slm/api (unified UI, epic #19829). The SLM backend can
 # run on this host or on its own machine; the host is the inventory's slm_host and the
 # port the SSOT slm_backend_port (inventory/group_vars/all.yml, the one authority). The SLM uvicorn speaks plain HTTP.
-frontend_slm_backend_host: "{{ slm_host | default('127.0.0.1') }}"
+# Co-located (slm_host is one of THIS node's addresses -- install.sh records the LAN address
+# there): the uvicorn binds loopback (slm_manager slm_backend_host), so use loopback. A separate
+# SLM node keeps slm_host; that path additionally needs the SLM reachable from here (open
+# decision, ADR-011 / #19832 review). Without facts or slm_host the answer is loopback too.
+frontend_slm_backend_host: >-
+  {{ '127.0.0.1' if (slm_host | default('127.0.0.1')) in (ansible_facts['all_ipv4_addresses'] | default([]))
+  else (slm_host | default('127.0.0.1')) }}
 frontend_slm_backend_port: "{{ slm_backend_port }}"
 frontend_slm_backend_protocol: http
+# Request-body cap on /slm/api/: the SLM vhost's own cap (agent event sync, #1090), one value.
+frontend_slm_client_max_body_size: "{{ slm_client_max_body_size }}"
 
 # Issue #1098: Backend upstream health tracking
 backend_max_fails: 3

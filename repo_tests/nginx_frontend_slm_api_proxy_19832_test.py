@@ -45,6 +45,7 @@ def _render(host: str, port: str) -> str:
         frontend_slm_backend_host=host,
         frontend_slm_backend_port=port,
         frontend_slm_backend_protocol="http",
+        frontend_slm_client_max_body_size="10m",
     )
 
 

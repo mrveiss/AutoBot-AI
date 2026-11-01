@@ -35,7 +35,6 @@ all:
     # slm_host: read from install-time secrets (set by install.sh), not hostvars
     #           which gets polluted by gathered facts on multi-interface hosts.
     slm_host: "{{ lookup('env', 'SLM_HOST') | default(lookup('pipe', 'grep -oP \"SLM_HOST=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null || echo 127.0.0.1'), true) }}"
-    slm_port: 8000
     backend_host: "{{ hostvars['autobot-host']['network_address'] }}"
     backend_port: 8001
     backend_protocol: "https"
@@ -60,8 +59,6 @@ all:
           services:
             - slm-backend
             - postgresql
-      vars:
-        slm_port: 8000
 
     frontend:
       hosts:

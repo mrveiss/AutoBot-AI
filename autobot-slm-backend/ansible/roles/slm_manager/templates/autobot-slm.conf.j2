@@ -62,7 +62,7 @@ server {
     include /etc/nginx/snippets/autobot-security-headers-strict.conf;
 
     # Issue #1090: Allow SLM agent event sync payloads (typically 1.5-2MB)
-    client_max_body_size 10m;
+    client_max_body_size {{ slm_client_max_body_size }};
 
     # Logging
     access_log {{ slm_log_dir }}/nginx-access.log;

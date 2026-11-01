@@ -34,6 +34,11 @@ ai_stack_port: 8080
 # defined for every play that includes a role, with or without `common` having run.
 slm_backend_port: 8000
 
+# Largest request body the SLM accepts at its edge: the slm_manager vhost's server-level cap and
+# the frontend site's /slm/api/ locations both read it, so a large SLM upload sees the same limit
+# on either origin (#19832).
+slm_client_max_body_size: 10m
+
 # ==========================================
 # CHROMADB HEARTBEAT PATH (#19413)
 # ==========================================
