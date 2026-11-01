@@ -50,9 +50,9 @@ from dependencies import provide_knowledge_base
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge.remote_read import admit_remote_read, remote_read_is_admin
 from knowledge.search_filters import (
-    extract_user_context_from_request,
     filter_for_caller,
-    filter_search_results_by_permission,
+    filter_for_user_id,
+    scoped_reader,
 )
 from services.ai_stack_client import AIStackError, get_ai_stack_client
 from type_defs.common import Metadata
@@ -146,14 +146,9 @@ async def rag_query(
                 query=request.query, top_k=request.max_results, filters=RESEARCH_QUARANTINE_FILTER
             )
             kb_results = kb_results if isinstance(kb_results, list) else []
-            user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
-            documents = await filter_search_results_by_permission(
-                kb_results,
-                user_id,
-                user_org_id,
-                user_group_ids,
-                ownership_manager=getattr(knowledge_base, "ownership_manager", None),
-            )
+            documents = await filter_for_user_id(kb_results, knowledge_base, scoped_reader(current_user))  # #19860
+        except HTTPException:  # 401 / 503 (audit unavailable) are answers, not a failed search (#19860)
+            raise
         except Exception as e:
             logger.warning("Knowledge base search failed: %s", e)
             documents = []
@@ -247,17 +242,12 @@ async def chat(
             # Issue #13009: exclude quarantined research facts (#12622).
             kb_context = await knowledge_base.search(query=request.message, top_k=5, filters=RESEARCH_QUARANTINE_FILTER)
             kb_context = kb_context if isinstance(kb_context, list) else []
-            user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
-            kb_context = await filter_search_results_by_permission(
-                kb_context,
-                user_id,
-                user_org_id,
-                user_group_ids,
-                ownership_manager=getattr(knowledge_base, "ownership_manager", None),
-            )
+            kb_context = await filter_for_user_id(kb_context, knowledge_base, scoped_reader(current_user))  # #19860
             if kb_context:
                 kb_summary = "\n".join([f"- {item.get('content', '')[:200]}..." for item in kb_context[:3]])
                 enhanced_context = f"{request.context or ''}\n\nRelevant knowledge:\n{kb_summary}"
+        except HTTPException:  # 401 / 503 (audit unavailable) are answers, not a failed search (#19860)
+            raise
         except Exception as e:
             logger.warning("Knowledge base context enhancement failed: %s", e)
 
