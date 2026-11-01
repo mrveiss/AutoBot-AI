@@ -113,15 +113,11 @@ async def _get_realtime_metrics() -> Dict[str, Any]:
 
 async def _get_code_analysis_status() -> Dict[str, Any]:
     """Get code analysis tool status (Issue #398: extracted)."""
-    code_analysis_exists = await asyncio.to_thread(analytics_controller.code_analysis_path.exists)
-    code_index_exists = await asyncio.to_thread(analytics_controller.code_index_path.exists)
+    tools_available = await analytics_controller.code_tools_available()
     return {
         "last_analysis": analytics_state.get("last_analysis_time"),
         "cache_available": bool(analytics_state.get("code_analysis_cache")),
-        "tools_available": {
-            "code_analysis_suite": code_analysis_exists,
-            "code_index_mcp": code_index_exists,
-        },
+        "tools_available": tools_available,
     }
 
 
@@ -808,15 +804,11 @@ async def get_analytics_status(current_user: Dict = Depends(get_current_user)):
     """Get comprehensive analytics system status (Issue #398: refactored)."""
     status = _build_analytics_status_base(analytics_controller.metrics_collector)
     # Issue #664: Parallelize independent async operations
-    code_analysis_exists, code_index_exists, redis_connectivity = await asyncio.gather(
-        asyncio.to_thread(analytics_controller.code_analysis_path.exists),
-        asyncio.to_thread(analytics_controller.code_index_path.exists),
+    code_analysis_tools, redis_connectivity = await asyncio.gather(
+        analytics_controller.code_tools_available(),
         _check_analytics_redis_connectivity(),
     )
-    status["integration_status"]["code_analysis_tools"] = {
-        "code_analysis_suite": code_analysis_exists,
-        "code_index_mcp": code_index_exists,
-    }
+    status["integration_status"]["code_analysis_tools"] = code_analysis_tools
     status["integration_status"]["redis_connectivity"] = redis_connectivity
     return status
 
