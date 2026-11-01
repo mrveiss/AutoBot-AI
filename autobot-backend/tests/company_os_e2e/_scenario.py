@@ -47,8 +47,8 @@ STEPS: dict[str, tuple[str, str]] = {
         "M2.7 controls (#14189, #14164, #20150)",
     ),
     "7b": ("a paused agent is not dispatched until resumed", "M2.6 dispatch gate (#19240, PR #19958)"),
-    "8": ("a hire approval can be filed and decided", "M2.7 board approval gates (#8214)"),
-    "8b": ("a hire waits for its approval", "M2.7 board approval gates (#8214)"),
+    "8": ("a hire waits for its approval", "M2.7 board approval gates (#8214)"),
+    "8b": ("an approved hire joins the roster", "M2.7 board approval gates (#8214)"),
     "9": ("the activity log holds every step with actor_type", "M2.8 audit (#20101, PR #20107)"),
 }
 
