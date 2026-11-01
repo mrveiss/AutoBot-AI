@@ -40,7 +40,7 @@ from api.user_management.dependencies import (
 )
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
-from autobot_shared.user_management.revocation_outcome import commit_or_503
+from autobot_shared.user_management.revocation_outcome import RENAME_REVOCATION_INCOMPLETE_MESSAGE, commit_or_503
 from autobot_shared.user_management.user_service_errors import DuplicateUserError, UserNotFoundError
 from user_management.schemas import (
     UserCreate,
@@ -264,8 +264,9 @@ async def update_user(
             avatar_url=user_data.avatar_url,
             preferences=user_data.preferences,
         )
-
-        return _user_to_response(user)
+        response = _user_to_response(user)
+        await commit_or_503(user_service.session, RENAME_REVOCATION_INCOMPLETE_MESSAGE)  # a failed revocation is told
+        return response
 
     except UserNotFoundError:
         raise HTTPException(

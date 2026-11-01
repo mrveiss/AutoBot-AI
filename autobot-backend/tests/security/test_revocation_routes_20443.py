@@ -29,7 +29,10 @@ from api.user_management.users import router as user_router
 from autobot_shared import membership_epoch
 from autobot_shared.auth.permissions import Role
 from autobot_shared.user_management import password_epoch
-from autobot_shared.user_management.revocation_outcome import REVOCATION_INCOMPLETE_MESSAGE
+from autobot_shared.user_management.revocation_outcome import (
+    RENAME_REVOCATION_INCOMPLETE_MESSAGE,
+    REVOCATION_INCOMPLETE_MESSAGE,
+)
 from testkit.fake_async_session import FakeAsyncSession, FakeResult
 
 ORG = uuid.uuid4()
@@ -233,3 +236,15 @@ async def test_the_other_callbacks_on_the_session_still_run_when_the_markers_fai
 
     assert response.status_code == 503
     assert bumped == [ORG], "the membership bump ran although the markers failed"
+
+
+@pytest.mark.asyncio
+async def test_a_rename_answers_503_saying_it_cannot_be_retried_when_the_marker_fails(world, store):
+    store.down = True
+    async with world.client as client:
+        response = await client.patch(f"/users/{world.user.id}", json={"username": "alice2"})
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == RENAME_REVOCATION_INCOMPLETE_MESSAGE
+    assert world.user.username == "alice2" and world.session.commits == 1
+    assert set(store.tries) == {"alice"}, "the marker is for the name the tokens carry"

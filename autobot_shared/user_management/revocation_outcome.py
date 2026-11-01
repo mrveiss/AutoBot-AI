@@ -12,8 +12,9 @@ learns of the failure while it can still answer.
 The change stays committed. The answer is 503 (not 500: nothing is broken in the request, the revocation
 store is unavailable) and says the change applied but existing sessions may not have been revoked. Repeating
 the request is safe and re-attempts the marker: deactivating an inactive account or organisation queues it
-again, and so does deleting one that was soft-deleted. A hard-deleted account cannot be retried, because
-its row and username are gone; its tokens stay live until they expire.
+again, and so does deleting one that was soft-deleted. A hard-deleted account or organisation cannot be
+retried, because its rows and usernames are gone, and neither can a rename, because the old name is no longer
+known; those tokens stay live until they expire, and the rename's answer says so.
 """
 
 from fastapi import HTTPException, status
@@ -26,6 +27,12 @@ from autobot_shared.user_management.password_epoch import PasswordEpochWriteErro
 REVOCATION_INCOMPLETE_MESSAGE = (
     "The change was applied, but existing sessions may not have been revoked. "
     "Repeat the request to retry the revocation."
+)
+
+#: A rename cannot be retried: repeating it changes nothing, so no marker for the old name is queued.
+RENAME_REVOCATION_INCOMPLETE_MESSAGE = (
+    "The change was applied, but sessions issued under the old username may not have been revoked. "
+    "They end when they expire."
 )
 
 
@@ -46,9 +53,9 @@ async def commit_reporting_revocation(session: AsyncSession) -> None:
         raise
 
 
-async def commit_or_503(session: AsyncSession) -> None:
+async def commit_or_503(session: AsyncSession, message: str = REVOCATION_INCOMPLETE_MESSAGE) -> None:
     """:func:`commit_reporting_revocation`, answering an incomplete revocation as HTTP 503."""
     try:
         await commit_reporting_revocation(session)
     except RevocationIncompleteError as exc:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail=REVOCATION_INCOMPLETE_MESSAGE) from exc
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail=message) from exc

@@ -126,6 +126,14 @@ async def _commit_scim(db: AsyncSession) -> None:
         ) from exc
 
 
+async def _commit_new_user(db: AsyncSession) -> None:
+    """Commit a create: a 503 here would send the IdP back to a 409, and a new account has no sessions to revoke."""
+    try:
+        await commit_reporting_revocation(db)
+    except RevocationIncompleteError:
+        logger.warning("Marker not recorded for a user created inactive; it has no sessions yet (#20443)")
+
+
 def _user_to_scim(user: User, base_url: str) -> dict:
     """Serialise a User ORM instance to a SCIM 2.0 User resource dict."""
     name_parts = user.full_name.split(" ", 1)  # #13957: the canonical rule
@@ -215,7 +223,7 @@ async def scim_create_user(request: Request, db: AsyncSession = Depends(_get_slm
         )
         if not fields["active"]:
             await user_svc.deactivate_user(user.id)
-        await _commit_scim(db)
+        await _commit_new_user(db)
     except DuplicateUserError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

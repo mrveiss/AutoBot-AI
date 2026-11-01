@@ -169,3 +169,22 @@ async def test_delete_answers_503_then_a_repeat_finds_the_soft_deleted_user(stor
 
     assert (await _call(transport, "DELETE", f"/scim/v2/Users/{user.id}")).status_code == 204
     assert "alice" in store.epochs
+
+
+@pytest.mark.asyncio
+async def test_a_user_created_inactive_answers_201_when_the_marker_fails(store, monkeypatch):
+    """A 503 would send the IdP back to a 409; a new account has no sessions to revoke."""
+    user = _user()
+    session, transport = _client(user, monkeypatch)
+
+    async def create_user(self, **_fields):
+        return user
+
+    monkeypatch.setattr(scim.UserService, "create_user", create_user)
+    store.down = True
+    body = {"userName": "alice", "active": False, "emails": [{"value": "a@x.io", "primary": True}]}
+    response = await _call(transport, "POST", "/scim/v2/Users", json=body)
+
+    assert response.status_code == 201 and user.is_active is False
+    assert session.commits >= 1, "the create stands"
+    assert store.tries == ["alice"] * password_epoch.MEMBERSHIP_EPOCH_BUMP_ATTEMPTS, "run once, not again at scope exit"
