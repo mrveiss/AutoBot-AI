@@ -590,11 +590,11 @@ async def test_cleanup_completed_also_removes_logs():
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def test_register_and_get_adapter():
+def test_register_and_get_adapter(monkeypatch):
+    monkeypatch.setattr("llc.adapters.base._registry", {})  # the registry is process-wide
     adapter = AutoBotAgentAdapter({"agent_class": _FAKE_AGENT_PATH})
     register_adapter("_test_fake", adapter)
-    retrieved = get_adapter("_test_fake")
-    assert retrieved is adapter
+    assert get_adapter("_test_fake") is adapter
 
 
 def test_get_adapter_unknown_raises():
