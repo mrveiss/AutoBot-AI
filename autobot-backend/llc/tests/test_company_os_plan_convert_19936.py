@@ -24,6 +24,7 @@ from api.user_management.dependencies import get_current_user, require_org_conte
 from llc.api.company_os import router as company_os_router
 from llc.api.company_os_plans import router as plans_router
 from llc.deps import get_session
+from llc.models.activity import LLCActivityLog
 from llc.models.ai_line import LLCAiLine
 from llc.models.company_os import LLCProcess, LLCRoleSkill, LLCWorkflowNode, LLCWorkflowTransition
 from llc.models.company_os_plan import CompanyOsWorkflowPlan
@@ -47,6 +48,7 @@ ADMIN_A, ADMIN_B, MEMBER_A = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
 PREFIX = "/api/llc/company-os/workflow-plans"
 PERSON = {"auth_method": "session", "username": "person"}
 _TABLES = [
+    LLCActivityLog.__table__,
     Role.__table__,
     LLCCompanyMembership.__table__,
     LLCRoleAssignment.__table__,

@@ -155,7 +155,7 @@ class LLCLabelService(LLCServiceBase):
 
         await session.flush()
 
-        if added and self.activity_log:
+        if added:
             from ..models.enums import ActivityEventType
 
             actor = resolve_actor(user_id=actor_user_id)
@@ -193,21 +193,20 @@ class LLCLabelService(LLCServiceBase):
         )
         await session.flush()
 
-        if self.activity_log:
-            from ..models.enums import ActivityEventType
+        from ..models.enums import ActivityEventType
 
-            actor = resolve_actor(user_id=actor_user_id)
-            await self.activity_log.record(
-                session,
-                company_id=str(work_item.company_id),
-                actor_type=actor.type,
-                actor_id=actor.id,
-                metadata=actor.metadata(),
-                event_type=ActivityEventType.WORK_ITEM_UPDATED,
-                entity_type="work_item",
-                entity_id=work_item_id,
-                after={"label_removed": label_id},
-            )
+        actor = resolve_actor(user_id=actor_user_id)
+        await self.activity_log.record(
+            session,
+            company_id=str(work_item.company_id),
+            actor_type=actor.type,
+            actor_id=actor.id,
+            metadata=actor.metadata(),
+            event_type=ActivityEventType.WORK_ITEM_UPDATED,
+            entity_type="work_item",
+            entity_id=work_item_id,
+            after={"label_removed": label_id},
+        )
 
     async def get_work_item_label_ids(
         self,

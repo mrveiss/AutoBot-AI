@@ -38,17 +38,16 @@ class MembershipService(LLCServiceBase):
         self, session: AsyncSession, company_id: str, actor_id: str, event: Any, entity_id: str, **change: Any
     ) -> None:
         """Audit one change, in the caller's transaction: a change that cannot be audited does not commit."""
-        if self.activity_log:
-            await self.activity_log.record(
-                session,
-                company_id=company_id,
-                actor_type=ActorType.USER,
-                actor_id=actor_id,
-                event_type=event,
-                entity_type="membership",
-                entity_id=entity_id,
-                **change,
-            )
+        await self.activity_log.record(
+            session,
+            company_id=company_id,
+            actor_type=ActorType.USER,
+            actor_id=actor_id,
+            event_type=event,
+            entity_type="membership",
+            entity_id=entity_id,
+            **change,
+        )
 
     async def add_member(
         self,

@@ -64,14 +64,12 @@ class ActivityRecordError(RuntimeError):
     """The audit write failed. Deliberately not a ``ValueError``: routes read that as the caller's error."""
 
 
-async def audit(log: Optional[Any], session: Any, **entry: Any) -> None:
-    """Write one activity record in the caller's transaction, if there is a log.
+async def audit(log: Any, session: Any, **entry: Any) -> None:
+    """Write one activity record in the caller's transaction.
 
     A failure propagates as :class:`ActivityRecordError` so the operation fails with it and the
     caller's transaction is rolled back, rather than surfacing as a not-found or bad-request.
     """
-    if not log:
-        return
     try:
         await log.record(session, **entry)
     except Exception as exc:

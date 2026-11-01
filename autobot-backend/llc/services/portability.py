@@ -26,6 +26,7 @@ from llc.services.portability_import import _PLACEHOLDER_RE, PortabilityImportMi
 from user_management.models.organization import Organization
 
 from .activity_log import LLCActivityLogService
+from .actor import resolve_actor
 from .base import LLCServiceBase
 
 logger = get_logger(__name__)
@@ -346,18 +347,24 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
         )
         self.session.add(artifact)
 
-        if self.activity_log:
-            event_type = (
-                ActivityEventType.COMPANY_EXPORT_TEMPLATE
-                if export_kind == "template"
-                else ActivityEventType.COMPANY_EXPORT_SNAPSHOT
-            )
-            await self.activity_log.append(
-                session=self.session,
-                company_id=company_id,
-                event_type=event_type,
-                after={"artifact_id": str(artifact_id), "storage_path": storage_path},
-            )
+        event_type = (
+            ActivityEventType.COMPANY_EXPORT_TEMPLATE
+            if export_kind == "template"
+            else ActivityEventType.COMPANY_EXPORT_SNAPSHOT
+        )
+        who = resolve_actor(user_id=actor)
+        await self.activity_log.record(
+            self.session,
+            company_id=str(company_id),
+            actor_type=who.type,
+            actor_id=who.id,
+            metadata=who.metadata(),
+            event_type=event_type,
+            entity_type="company",
+            entity_id=str(company_id),
+            # The artifact id and where it sits, never the exported payload.
+            after={"artifact_id": str(artifact_id), "storage_path": storage_path},
+        )
 
         return artifact_id
 

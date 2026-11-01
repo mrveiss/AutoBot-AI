@@ -434,7 +434,7 @@ class ReportingLineService(LLCServiceBase):
         self._require_placeable(subject, "subject")
         await require_company_admin(session, company_id, actor_user_id)
         removed = await self._clear(session, company_id, subject)
-        if removed and self.activity_log:
+        if removed:
             await self.activity_log.record(
                 session=session,
                 company_id=str(company_id),
@@ -442,7 +442,7 @@ class ReportingLineService(LLCServiceBase):
                 actor_id=str(actor_user_id),
                 event_type="reporting_line.cleared",
                 entity_type="llc_reporting_line",
-                entity_id=f"{subject.type}:{subject.id}",
+                entity_id=str(subject.id),
                 after={"subject": f"{subject.type}:{subject.id}"},
             )
         return removed
@@ -470,8 +470,6 @@ class ReportingLineService(LLCServiceBase):
         actor: Optional[uuid.UUID],
         after: dict,
     ) -> None:
-        if not self.activity_log:
-            return
         await self.activity_log.record(
             session=session,
             company_id=str(row.company_id),

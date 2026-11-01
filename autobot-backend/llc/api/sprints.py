@@ -942,6 +942,7 @@ async def close_sprint(
             sprint_id=sprint_id,
             approval_id=body.approval_id,
             decided_by=body.decided_by,
+            actor_user_id=str(_current_user.get("id") or _current_user.get("user_id") or "") or None,
         )
         await session.commit()
         await session.refresh(sprint)

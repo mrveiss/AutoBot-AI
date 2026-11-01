@@ -142,17 +142,16 @@ class WorkflowService(LLCServiceBase):
                 raise
             raise WorkflowConflictError(f"workflow {workflow_id!r} already exists for company {company_id}") from exc
 
-        if self.activity_log:
-            await self.activity_log.record(
-                session=session,
-                company_id=str(company_id),
-                actor_type=ActorType.USER if actor else ActorType.SYSTEM,
-                actor_id=actor,
-                event_type="workflow.created",
-                entity_type="workflow",
-                entity_id=workflow.workflow_id,
-                after={"workflow_id": workflow.workflow_id, "status": workflow.status},
-            )
+        await self.activity_log.record(
+            session=session,
+            company_id=str(company_id),
+            actor_type=ActorType.USER if actor else ActorType.SYSTEM,
+            actor_id=actor,
+            event_type="workflow.created",
+            entity_type="workflow",
+            entity_id=str(workflow.id),
+            after={"workflow_id": workflow.workflow_id, "status": workflow.status},
+        )
         return workflow
 
     async def get(
@@ -202,17 +201,16 @@ class WorkflowService(LLCServiceBase):
         workflow = await self.get(session, company_id, workflow_id)
         await session.refresh(workflow)
 
-        if self.activity_log:
-            await self.activity_log.record(
-                session=session,
-                company_id=str(company_id),
-                actor_type=ActorType.USER if actor else ActorType.SYSTEM,
-                actor_id=actor,
-                event_type="workflow.updated",
-                entity_type="workflow",
-                entity_id=workflow.workflow_id,
-                after={"status": status},
-            )
+        await self.activity_log.record(
+            session=session,
+            company_id=str(company_id),
+            actor_type=ActorType.USER if actor else ActorType.SYSTEM,
+            actor_id=actor,
+            event_type="workflow.updated",
+            entity_type="workflow",
+            entity_id=str(workflow.id),
+            after={"workflow_id": workflow.workflow_id, "status": status},
+        )
         return workflow
 
     async def delete(
@@ -227,12 +225,15 @@ class WorkflowService(LLCServiceBase):
 
         Mirrors ``ContactService.delete``'s bool return so the route can 404
         without a second lookup; the audit record is written only after
-        ``rowcount`` confirms a row actually matched this company.
+        the delete returns the row's id, confirming a row actually matched this company.
         """
-        result = await session.execute(sa_delete(Workflow).where(*_legacy_row(company_id, workflow_id)))
-        deleted = result.rowcount > 0
+        result = await session.execute(
+            sa_delete(Workflow).where(*_legacy_row(company_id, workflow_id)).returning(Workflow.id)
+        )
+        deleted_id = result.scalar_one_or_none()
+        deleted = deleted_id is not None
 
-        if deleted and self.activity_log:
+        if deleted:
             await self.activity_log.record(
                 session=session,
                 company_id=str(company_id),
@@ -240,8 +241,8 @@ class WorkflowService(LLCServiceBase):
                 actor_id=actor,
                 event_type="workflow.deleted",
                 entity_type="workflow",
-                entity_id=workflow_id,
-                after=None,
+                entity_id=str(deleted_id),
+                after={"workflow_id": workflow_id},
             )
         return deleted
 

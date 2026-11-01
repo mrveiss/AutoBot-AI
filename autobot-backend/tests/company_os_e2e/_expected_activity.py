@@ -37,12 +37,18 @@ EXPECTED: tuple[Expected, ...] = (
     Expected("2", "agent.hired", "user", "agent:ceo", AUDIT, "none"),
     Expected("2", "agent.hired", "user", "agent:a", AUDIT, "none"),
     Expected("2", "agent.hired", "user", "agent:b", AUDIT, "none"),
-    Expected("3", None, "user", "goal", AUDIT, "no goal event type exists"),
+    # "goal.created" is a bare string in GoalService.create (ActivityEventType has no goal member), hence action None.
+    Expected("3", None, "user", "goal", None, "goal_service.create (goal.created)"),
     Expected("3", None, "user", "project", AUDIT, "no project event type exists"),
     Expected("3", "work_item.created", "user", "epic", AUDIT, "none"),
     Expected("3", "work_item.created", "user", "task", AUDIT, "none"),
     Expected(
-        "4", "work_item.assigned", "user", "task", AUDIT, "work_item_service.claim_human only (a person claiming)"
+        "4",
+        "work_item.assigned",
+        "user",
+        "task",
+        AUDIT,
+        "none on this path (PATCH assignee records nothing; only claim_human, a person claiming, does)",
     ),
     Expected(
         "5", "heartbeat.started", "system", "agent:a", AUDIT, "none (liveness_monitor writes heartbeat.failed only)"

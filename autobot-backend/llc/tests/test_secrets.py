@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from llc.services.activity_log import LLCActivityLogService
 from llc.services.secret import SecretNotFound, SecretService
 
 # ---------------------------------------------------------------------------
@@ -32,7 +33,7 @@ def _make_secret_row(
     """Build a mock LLCSecret row with an encrypted value."""
     from llc.services.secret import _derive_fernet_key
 
-    SecretService()
+    SecretService(activity_log=AsyncMock(spec=LLCActivityLogService))
     fernet = _derive_fernet_key(_MASTER_KEY.encode(), company_id)
     ciphertext = fernet.encrypt(plaintext.encode())
 
@@ -70,7 +71,7 @@ async def test_set_creates_new_secret() -> None:
     session = _make_session(row=None)  # no existing secret
 
     with patch.dict(os.environ, {_ENV_KEY: _MASTER_KEY}):
-        svc = SecretService()
+        svc = SecretService(activity_log=AsyncMock(spec=LLCActivityLogService))
         await svc.set(session, _COMPANY_A, "api_key", "mysecretvalue", _ACTOR)
 
     session.add.assert_called_once()
@@ -83,7 +84,7 @@ async def test_set_updates_existing_secret_version() -> None:
     session = _make_session(row=existing)
 
     with patch.dict(os.environ, {_ENV_KEY: _MASTER_KEY}):
-        svc = SecretService()
+        svc = SecretService(activity_log=AsyncMock(spec=LLCActivityLogService))
         await svc.set(session, _COMPANY_A, "db_password", "newvalue", _ACTOR)
 
     assert existing.version == 2
@@ -97,7 +98,7 @@ async def test_set_reactivates_revoked_secret() -> None:
     session = _make_session(row=existing)
 
     with patch.dict(os.environ, {_ENV_KEY: _MASTER_KEY}):
-        svc = SecretService()
+        svc = SecretService(activity_log=AsyncMock(spec=LLCActivityLogService))
         await svc.set(session, _COMPANY_A, "db_password", "newvalue", _ACTOR)
 
     assert existing.version == 1  # reset to 0 + 1 = 1 for reactivated revoked
@@ -116,7 +117,7 @@ async def test_get_returns_decrypted_value() -> None:
     session = _make_session(row=row)
 
     with patch.dict(os.environ, {_ENV_KEY: _MASTER_KEY}):
-        svc = SecretService()
+        svc = SecretService(activity_log=AsyncMock(spec=LLCActivityLogService))
         result = await svc.get(session, _COMPANY_A, "db_password")
 
     assert result == plaintext
@@ -127,7 +128,7 @@ async def test_get_raises_not_found_for_missing_secret() -> None:
     session = _make_session(row=None)
 
     with patch.dict(os.environ, {_ENV_KEY: _MASTER_KEY}):
-        svc = SecretService()
+        svc = SecretService(activity_log=AsyncMock(spec=LLCActivityLogService))
         with pytest.raises(SecretNotFound) as exc_info:
             await svc.get(session, _COMPANY_A, "nonexistent")
 
@@ -158,7 +159,7 @@ async def test_get_cannot_decrypt_with_wrong_company_key() -> None:
     session = _make_session(row=row)
 
     with patch.dict(os.environ, {_ENV_KEY: _MASTER_KEY}):
-        svc = SecretService()
+        svc = SecretService(activity_log=AsyncMock(spec=LLCActivityLogService))
         with pytest.raises(InvalidToken):
             await svc.get(session, _COMPANY_B, "db_password")
 
@@ -174,7 +175,7 @@ async def test_revoke_sets_revoked_at() -> None:
     session = _make_session(row=row)
 
     with patch.dict(os.environ, {_ENV_KEY: _MASTER_KEY}):
-        svc = SecretService()
+        svc = SecretService(activity_log=AsyncMock(spec=LLCActivityLogService))
         await svc.revoke(session, _COMPANY_A, "db_password", _ACTOR)
 
     assert row.revoked_at is not None
@@ -186,7 +187,7 @@ async def test_revoke_raises_not_found_for_missing_secret() -> None:
     session = _make_session(row=None)
 
     with patch.dict(os.environ, {_ENV_KEY: _MASTER_KEY}):
-        svc = SecretService()
+        svc = SecretService(activity_log=AsyncMock(spec=LLCActivityLogService))
         with pytest.raises(SecretNotFound):
             await svc.revoke(session, _COMPANY_A, "nonexistent", _ACTOR)
 
@@ -205,7 +206,7 @@ async def test_list_returns_names_and_versions_only() -> None:
     session = _make_session(rows=rows)
 
     with patch.dict(os.environ, {_ENV_KEY: _MASTER_KEY}):
-        svc = SecretService()
+        svc = SecretService(activity_log=AsyncMock(spec=LLCActivityLogService))
         result = await svc.list(session, _COMPANY_A)
 
     assert len(result) == 2
@@ -221,7 +222,7 @@ async def test_list_excludes_values() -> None:
     session = _make_session(rows=rows)
 
     with patch.dict(os.environ, {_ENV_KEY: _MASTER_KEY}):
-        svc = SecretService()
+        svc = SecretService(activity_log=AsyncMock(spec=LLCActivityLogService))
         result = await svc.list(session, _COMPANY_A)
 
     assert all("value" not in entry for entry in result)
@@ -259,7 +260,7 @@ async def test_set_raises_on_missing_master_key() -> None:
     env = {k: v for k, v in os.environ.items() if k != _ENV_KEY}
 
     with patch.dict(os.environ, env, clear=True):
-        svc = SecretService()
+        svc = SecretService(activity_log=AsyncMock(spec=LLCActivityLogService))
         with pytest.raises(RuntimeError, match="LLC_SECRET_MASTER_KEY"):
             await svc.set(session, _COMPANY_A, "key", "val", _ACTOR)
 
@@ -289,7 +290,7 @@ async def test_get_returns_unified_value_when_dual_read_enabled() -> None:
             new=AsyncMock(return_value="unified-plaintext"),
         ) as unified,
     ):
-        svc = SecretService()
+        svc = SecretService(activity_log=AsyncMock(spec=LLCActivityLogService))
         result = await svc.get(session, _COMPANY_A, "db_password")
 
     assert result == "unified-plaintext"
@@ -310,7 +311,7 @@ async def test_get_falls_back_to_legacy_when_unified_read_misses() -> None:
             new=AsyncMock(return_value=None),  # not yet imported
         ),
     ):
-        svc = SecretService()
+        svc = SecretService(activity_log=AsyncMock(spec=LLCActivityLogService))
         result = await svc.get(session, _COMPANY_A, "db_password")
 
     assert result == plaintext
@@ -328,7 +329,7 @@ async def test_get_never_consults_unified_store_when_flag_disabled() -> None:
         patch.dict(os.environ, env, clear=True),
         patch("llc.services.secret.read_imported_llc_secret_in_session", new=AsyncMock()) as unified,
     ):
-        svc = SecretService()
+        svc = SecretService(activity_log=AsyncMock(spec=LLCActivityLogService))
         result = await svc.get(session, _COMPANY_A, "db_password")
 
     assert result == plaintext
@@ -345,7 +346,7 @@ async def test_get_revoked_secret_never_reaches_unified_store() -> None:
         patch.dict(os.environ, {_ENV_KEY: _MASTER_KEY, _ENV_UNIFIED_READ: "true"}),
         patch("llc.services.secret.read_imported_llc_secret_in_session", new=AsyncMock()) as unified,
     ):
-        svc = SecretService()
+        svc = SecretService(activity_log=AsyncMock(spec=LLCActivityLogService))
         with pytest.raises(SecretNotFound):
             await svc.get(session, _COMPANY_A, "revoked-key")
 
