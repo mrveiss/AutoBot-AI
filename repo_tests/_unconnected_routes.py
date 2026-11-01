@@ -15,6 +15,8 @@ WHAT A CALLER IS
 ----------------
 * a literal ``/api/...`` path, or ``${getApiBase()}/...``, in ``autobot-frontend/src`` or
   ``autobot-slm-frontend/src`` (what ``frontend_calls`` extracts; tests, mocks and comments out);
+* a relative path through a base-URL client (``slmApiClient.get('/api-keys')``), resolved with that
+  client's base by ``_unconnected_clients`` (which lists every client form it knows);
 * a literal ``/api/...`` path in any other production file (a Python client, a script, a shell
   health check, an Ansible template), outside the route's own file and off decorator lines;
 * a route under a *declared external* prefix: agent-facing or machine-facing paths the script's
@@ -34,6 +36,8 @@ WHAT THIS CANNOT SEE
   rule hid ``POST /chats/{chat_id}/resume`` (#20401) behind the unrelated ``/api/chats`` list
   call. A route reached only through a concatenated path is therefore reported; add the full
   path to the caller or baseline the route.
+* **A client it does not recognise** (a field, a parameter, a factory other than those listed in
+  ``_unconnected_clients``) or a path held in a variable: reported unconnected until the call names it.
 * **A call that is dead**: a frontend function that makes the call but nothing invokes.
 * **Method.** A caller of ``GET /x`` marks ``POST /x`` connected; paths are matched, not verbs.
 * Routes registered programmatically (``add_api_route``) have no decorator and are not seen.
@@ -46,6 +50,7 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+from repo_tests._unconnected_clients import client_calls
 from repo_tests._unconnected_common import Tree
 
 ROUTE_ROOTS = ("autobot-backend", "autobot-slm-backend")
@@ -173,10 +178,21 @@ class _CallerIndex:
         return self.by_key.get((len(parts), second), []) + self.by_key.get((len(parts), "{p}"), [])
 
 
+def _toggle_api(cand: str) -> str:
+    """*cand* with the ``/api`` mount prefix added, or removed when it is a whole leading segment.
+
+    ``/api-keys`` does not start with the ``/api`` prefix; a plain ``startswith`` treated it as if it
+    did and compared the route as ``-keys`` (#20512).
+    """
+    if cand == "/api" or cand.startswith("/api/"):
+        return cand[len("/api") :] or "/"
+    return "/api" + cand
+
+
 def _reached(mod: ModuleType, rel: str, cands: tuple[str, ...], index: _CallerIndex) -> bool:
     """Whether a caller outside *rel* matches a candidate path (the script's segment rule, no bare-base leniency)."""
     for cand in cands:
-        for v in {cand, "/api" + cand if not cand.startswith("/api") else cand[len("/api") :] or "/"}:
+        for v in {cand, _toggle_api(cand)}:
             if any(index.callers[c] - {rel} for c in index.near(v.strip("/").split("/")) if mod._segments_match(c, v)):
                 return True
     return False
@@ -189,6 +205,8 @@ def unconnected(tree: Tree, audit: Audit, sites: list | None = None) -> list[str
         for path, files in audit.frontend_calls(src).items():
             callers.setdefault(path, set()).update(files)
     for path, files in other_callers(tree, audit).items():
+        callers.setdefault(path, set()).update(files)
+    for path, files in client_calls(tree, FRONTENDS, audit.mod.norm_path, audit.mod.FE_EXCLUDE_PATTERNS).items():
         callers.setdefault(path, set()).update(files)
     index = _CallerIndex(callers)
     out: set[str] = set()
