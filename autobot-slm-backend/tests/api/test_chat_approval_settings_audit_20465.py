@@ -26,6 +26,8 @@ from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
+from testkit.fake_async_session import FakeAsyncSession  # noqa: E402
+
 _BACKEND = Path(__file__).resolve().parents[2]
 _RELAXED = "chat.relaxed_approval_categories"
 _AUTO = "chat.auto_approve_attachment_turns"
@@ -55,10 +57,11 @@ class _Select:
         return self
 
 
-class _Db:
+class _Db(FakeAsyncSession):
     """Settings rows plus a log of what happened, so order (audit before commit) is assertable."""
 
     def __init__(self, rows: dict[str, str]):
+        super().__init__()
         self.rows = {k: _Setting(k, v) for k, v in rows.items()}
         self.events: list[str] = []
 
@@ -66,7 +69,7 @@ class _Db:
         row = self.rows.get(statement.wanted)
         return SimpleNamespace(scalar_one_or_none=lambda: row)
 
-    def add(self, row):
+    def add(self, row, _warn=True):
         self.rows[row.key] = row
 
     async def delete(self, row):
