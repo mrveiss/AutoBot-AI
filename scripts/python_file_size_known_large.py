@@ -334,7 +334,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/llm_cost_tracker.py": 1166,  # #16230: MODEL_PRICING table removed
     "autobot-backend/services/llm_service.py": 1199,  # #16845: _track_usage delegated to llm_usage_recording
     "autobot-backend/services/load_balancer.py": 677,
-    "autobot-backend/services/nl_database_service.py": 775,
+    "autobot-backend/services/nl_database_service.py": 774,
     "autobot-backend/services/notification_service.py": 614,
     "autobot-backend/services/npu_worker_manager.py": 1419,
     "autobot-backend/services/rag_service.py": 1076,
