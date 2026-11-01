@@ -27,7 +27,7 @@ from user_management.schemas.user import (
     UserUpdate,
 )
 from user_management.services import TenantContext
-from user_management.services.user_service import AutobotDatabaseUserService
+from user_management.services.autobot_database_user_service import AutobotDatabaseUserService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/autobot-users", tags=["autobot-users"])
