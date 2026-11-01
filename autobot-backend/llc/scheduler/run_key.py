@@ -4,17 +4,17 @@
 # Author: mrveiss
 """The ephemeral LLC API key one heartbeat run holds, and the wait it must outlive."""
 
-import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from autobot_shared.env_utils import env_float
+from autobot_shared.logging_manager import get_logger
 from user_management.database import get_async_session_factory
 
 from ..services.api_key import ApiKeyService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 ADAPTER_MAX_WAIT_SECONDS = env_float("LLC_ADAPTER_MAX_WAIT_SECONDS", 7200.0)
 _RUN_KEY_TTL_MARGIN_SECONDS = 600.0
