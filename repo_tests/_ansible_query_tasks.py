@@ -141,20 +141,41 @@ def _strings(node: Any) -> Iterator[str]:
             yield from _strings(item)
 
 
+def _guards(text: str, name: str) -> bool:
+    """*text* tests whether *name* was skipped.
+
+    Under `--check` a skipped task still registers `{"skipped": true}`, so a bare `<name> is defined` is
+    TRUE and guards nothing (#19883). An attribute it lacks, like `<name>.rc`, is what reads undefined.
+    """
+    bare_skip = rf"\b{re.escape(name)}\s+is\s+(not\s+)?skipped\b"
+    attribute = rf"\b{re.escape(name)}\.(?!skipped\b)\w+\s+is\s+(not\s+)?defined\b"
+    skipped_attribute = rf"\b{re.escape(name)}\.skipped\s+is\s+not\s+defined\b"
+    return any(re.search(pattern, text) for pattern in (bare_skip, attribute, skipped_attribute))
+
+
+def _unguarded_read_in(text: str, name: str) -> bool:
+    """*text* reads an attribute of *name* with no `| default(...)` on that read and no guard in the text."""
+    if _guards(text, name):
+        return False
+    read = re.compile(rf"\b{re.escape(name)}((?:\.\w+|\[[^\]]*\])+)(\s*\|\s*default\b)?")
+    return any(match.group(2) is None for match in read.finditer(text))
+
+
 def reads_unguarded(task: dict, name: str) -> bool:
     """*task* reads registered *name* with nothing to survive it being skipped under `--check`.
 
-    Guarded: the task runs only outside check mode too, its text tests `<name> is [not] defined`, or the
-    read itself ends in `| default(...)`.
+    A guard in `when` covers the whole task, since the task then does not run; a guard in any other
+    field covers that string only, so it cannot hide a second read elsewhere in the task. A task
+    carrying the marker itself does not run under `--check` either.
     """
     if is_verify_after_install(task):
         return False
-    fields = {k: v for k, v in task.items() if k != "register"}
-    texts = list(_strings(fields))
-    if any(re.search(rf"\b{re.escape(name)}(\.\w+)*\s+is\s+(not\s+)?defined\b", text) for text in texts):
+    when = task.get("when")
+    when_text = " and ".join(str(c) for c in when) if isinstance(when, list) else str(when or "")
+    if _guards(when_text, name):
         return False
-    read = re.compile(rf"\b{re.escape(name)}\b((?:\.\w+|\[[^\]]*\])*)(\s*\|\s*default\b)?")
-    return any(match.group(2) is None for text in texts for match in read.finditer(text))
+    fields = {k: v for k, v in task.items() if k not in ("register", "when")}
+    return any(_unguarded_read_in(text, name) for text in [when_text, *_strings(fields)])
 
 
 def marked_verify_read_unguarded(text: str) -> list[str]:
