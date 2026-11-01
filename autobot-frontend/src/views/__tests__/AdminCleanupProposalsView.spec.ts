@@ -21,6 +21,9 @@ vi.mock('@autobot/ui', () => ({
     props: ['disabled'],
     template: '<button :disabled="disabled"><slot /></button>',
   },
+  BaseCard: { template: '<section><slot /></section>' },
+  BaseAlert: { props: ['message'], template: '<p>{{ message }}</p>' },
+  PageHeader: { template: '<header />' },
 }))
 vi.mock('@/stores/useLlcCompanyStore', () => ({ useLlcCompanyStore: () => ({ selectedCompanyId: '' }) }))
 
