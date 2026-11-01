@@ -20,6 +20,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from redis.exceptions import RedisError
 
+from autobot_shared.user_management import password_epoch as password_epoch_mod
 from autobot_shared.user_management.password_epoch import (
     PASSWORD_EPOCH_PREFIX,
     MalformedTokenClaims,
@@ -253,3 +254,20 @@ def test_encode_jwt_does_not_override_a_caller_supplied_iat():
     claims = pyjwt.decode(token, "s" * 32, algorithms=["HS256"])
 
     assert claims["iat"] == 4242
+
+
+@pytest.mark.asyncio
+async def test_in_redis_reads_redis_even_when_this_process_routes_its_epochs_elsewhere():
+    """The SLM verifies tokens of the backend's users, whose markers are in Redis, not its own table (#20446)."""
+    own = AsyncMock(return_value=5000)
+    password_epoch_mod.use_epoch_store(get_epoch=own, set_epoch=AsyncMock())
+    try:
+        with patch(_MOD, AsyncMock(return_value=_redis(get_value="1000"))):
+            assert await get_password_epoch("alice") == 5000
+            assert await get_password_epoch("alice", in_redis=True) == 1000
+            assert await is_token_revoked_by_password_change({"sub": "alice", "iat": 999}, in_redis=True) is True
+            assert await is_token_revoked_by_password_change({"sub": "alice", "iat": 999}) is True
+            assert await is_token_revoked_by_password_change({"sub": "alice", "iat": 1500}, in_redis=True) is False
+            assert await is_token_revoked_by_password_change({"sub": "alice", "iat": 1500}) is True
+    finally:
+        password_epoch_mod.reset_epoch_store()

@@ -136,11 +136,12 @@ def _stub_rs256_denylist(is_rs256_jti_revoked_mock: AsyncMock):
 
 @pytest.fixture(autouse=True)
 def _pin_deferred_import_stubs():
-    """Pin stubs for the deferred imports, and an empty revocation-marker store (#20446)."""
-    password_epoch.use_epoch_store(get_epoch=AsyncMock(return_value=None), set_epoch=AsyncMock())
-    with patch.dict(sys.modules, {"config": _config_stub, "services.oidc_token_cache": _oidc_cache_stub}):
+    """Pin the deferred-import stubs and an empty Redis for the user-revocation marker authority tokens read (#20446)."""
+    from fakeredis.aioredis import FakeRedis  # noqa: PLC0415
+
+    redis = patch.object(password_epoch, "get_async_redis_client", AsyncMock(return_value=FakeRedis()))
+    with patch.dict(sys.modules, {"config": _config_stub, "services.oidc_token_cache": _oidc_cache_stub}), redis:
         yield
-    password_epoch.reset_epoch_store()
 
 
 # ---------------------------------------------------------------------------

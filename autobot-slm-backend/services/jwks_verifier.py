@@ -222,11 +222,18 @@ async def _rs256_user_is_revoked(claims: Dict[str, Any], *, context: str) -> boo
     """True if *claims* predate the revocation marker of their user (#20446), failing CLOSED.
 
     The marker is written on a password change and on deactivating or deleting the user
-    (#20443); it is the same one the HS256 path checks. An unreadable ``iat`` is a bad
-    credential (denied); a store that cannot answer is the shared 503 (#18892).
+    (#20443). An authority token names a user of the backend's database, whose markers the
+    backend writes to Redis, so this reads Redis -- not the SLM's own table, which holds only
+    the SLM's users (who get HS256 tokens). A token with no username or no ``iat`` cannot be
+    placed against a marker and is refused; every token the authority mints carries both
+    (``create_jwt_token``). An unreadable ``iat`` is a bad credential (denied); a store that
+    cannot answer is the shared 503 (#18892).
     """
+    if not claims.get("username") or claims.get("iat") is None:
+        logger.warning("verify_authority_token: token has no username or iat (%s); rejecting", context)
+        return True
     try:
-        return await is_token_revoked_by_password_change(claims)
+        return await is_token_revoked_by_password_change(claims, in_redis=True)
     except MalformedTokenClaims:
         logger.warning("verify_authority_token: token iat is malformed (%s); rejecting", context)
         return True
