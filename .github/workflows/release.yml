@@ -105,7 +105,7 @@ jobs:
           COMMIT_COUNT: ${{ steps.range.outputs.commit_count }}
         run: |
           NEXT_VERSION="$(tr -d '[:space:]' <<<"$CLIFF_CONTENT")"
-          if [[ ! "$NEXT_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          if [[ ! "$NEXT_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(rc|beta)(\.?[0-9]+)*)?$ ]]; then
             echo "No version bump needed (git-cliff returned: '$NEXT_VERSION')"
             echo "release_needed=false" >> "$GITHUB_OUTPUT"
             exit 0
@@ -142,7 +142,7 @@ jobs:
           if [[ -n "$HIGHEST_TAG" ]] && \
              [[ "$(printf '%s\n%s\n' "$NEXT_VERSION" "$HIGHEST_TAG" | sort -V | tail -1)" == "$HIGHEST_TAG" ]]; then
             IFS=. read -r MAJ MIN PAT <<<"${HIGHEST_TAG#v}"
-            NEXT_VERSION="v${MAJ}.${MIN}.$((PAT + 1))"
+            NEXT_VERSION="v${MAJ}.${MIN}.$((${PAT%%-*} + 1))"  # #17878: the highest tag may carry -rc or -beta
             NOTES_RANGE="${HIGHEST_TAG}..HEAD"
             echo "Monotonic guard: git-cliff bump not above existing ${HIGHEST_TAG}; releasing ${NEXT_VERSION} (notes range ${NOTES_RANGE})"
           fi
@@ -291,6 +291,17 @@ jobs:
           # shellcheck disable=SC2016  # the backticks are literal Markdown code spans, not command substitution
           printf '\n\n---\nInstaller signing key (`cosign.pub`) SHA256: `%s`\n' "$(sha256sum cosign.pub | cut -d' ' -f1)" >> RELEASE_NOTES.md
 
+      - name: Decide whether this version is a prerelease
+        id: kind
+        if: steps.check.outputs.release_needed == 'true'
+        env:
+          VERSION: ${{ steps.check.outputs.version }}  # via env, never interpolated into the script
+        run: |
+          case "$VERSION" in
+            *-rc*|*-beta*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
       - name: Create GitHub Release
         if: steps.check.outputs.release_needed == 'true'
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64  # v3
@@ -298,16 +309,9 @@ jobs:
           tag_name: ${{ steps.check.outputs.version }}
           name: ${{ steps.check.outputs.version }}
           body_path: RELEASE_NOTES.md
-          # DELIBERATE, not an oversight: every release stays a prerelease
-          # until 1.0. The consequence is worth stating because it looks like a
-          # bug from the outside — GitHub's `releases/latest` excludes
-          # prereleases, so the "Latest release" badge pins to the newest
-          # *stable* tag (v0.2.0, 2026-03-26) no matter how many versions ship
-          # after it. Ten had shipped by 2026-08 without moving it.
-          #
-          # Do not flip this to make the badge move. At 1.0, drive it from the
-          # version instead — prerelease only for `-rc`/`-beta` suffixes.
-          prerelease: true
+          # #17878: maintainer decision 2026-10-31: a release goes out as a release, so anyone can use it.
+          # GitHub's `releases/latest` excludes prereleases, so a plain version becomes "Latest".
+          prerelease: ${{ steps.kind.outputs.prerelease }}
           generate_release_notes: false
           # #18666: the pinned installer, its checksum and its signature.
           # The signature exists only when the key is real (signkey); list it only then.

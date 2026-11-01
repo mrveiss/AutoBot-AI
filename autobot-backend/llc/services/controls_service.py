@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.redis_client import get_async_redis_client
 from models.agent_org import AgentOrgNode
 
-from ..models.enums import ActivityEventType, LLCAgentStatus
+from ..models.enums import UNDISPATCHABLE_AGENT_STATUSES, ActivityEventType, LLCAgentStatus
 from .activity_log import LLCActivityLogService
 from .company import CompanyNotFoundError
 
@@ -52,7 +52,7 @@ class AgentNotSchedulableError(Exception):
 
 #: Statuses no heartbeat may wake: the terminal pair ``llc/api/replay.py`` rejects,
 #: and the one migration 090 writes for a node that is not a company's CEO.
-NEVER_SCHEDULED_STATUSES = frozenset({LLCAgentStatus.INACTIVE.value, LLCAgentStatus.TERMINATED.value})
+NEVER_SCHEDULED_STATUSES = UNDISPATCHABLE_AGENT_STATUSES - {LLCAgentStatus.PAUSED.value}
 
 
 def _agent_in_company(company_id: str, agent_id: str) -> tuple:
