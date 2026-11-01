@@ -9134,6 +9134,7 @@
     },
     "board": {
       "loadFailed": "Could not load this board",
+      "moveFailed": "Could not move this task",
       "retry": "Retry",
       "loadingItem": "Loading work item…",
       "itemLoadFailed": "Could not load this work item"

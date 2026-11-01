@@ -76,6 +76,7 @@ from ..services.work_item_service import (
 )
 from ..services.work_product_service import WorkProductService
 from ._common import actor_id as verified_user_id
+from ._common import refused_transition
 from .activity import ActivityLogEntry, ActivityLogResponse
 from .github_webhooks import validate_github_pr_url
 from .work_item_comments import serialize_comment
@@ -418,7 +419,7 @@ async def create_work_item(
             assignee_agent_id=body.assignee_agent_id,
             assignee_user_id=body.assignee_user_id,
             created_by_agent_id=body.created_by_agent_id,
-            created_by_user_id=body.created_by_user_id,
+            created_by_user_id=str(verified_user_id(_current_user)),  # never the body: it decides who owns the task
             labels=body.labels,
             requires_approval_before=body.requires_approval_before,
         )
@@ -619,22 +620,15 @@ async def transition_work_item(
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
     try:
-        item = await _service().transition_status(session, work_item_id, body.status)
+        item = await _service().transition_status(
+            session, work_item_id, body.status, acting_user=verified_user_id(_current_user)
+        )
         await session.commit()
         if item.status == WorkItemStatus.DONE:
             await _kb_manager.archive_collection(KbCollectionManager.WORK_ITEM_PREFIX, item.id)
         return await _item_to_dict(item, session)
     except InvalidTransition as exc:
-        # #12740: the service already computed the exact, useful reason
-        # ("Cannot transition from X to Y. Allowed: [...]"). Replacing it with a
-        # generic 422 "Internal server error" threw that away, so the UI could
-        # not tell the user what went wrong or what IS allowed. The message is
-        # purely domain-level — statuses and permitted transitions, no internals
-        # — so it is safe to surface. 409 Conflict is the correct code: the
-        # request is well-formed (422 implies malformed), it conflicts with the
-        # item's current state.
-        logger.info("Rejected illegal work-item transition: %s", exc)
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise refused_transition(exc)
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=404, detail="Internal server error")

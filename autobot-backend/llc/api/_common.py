@@ -204,3 +204,13 @@ async def assert_item_in_company(item_id: str, company_id: str) -> uuid.UUID:
     if item is None or str(item.company_id) != str(company_id):
         raise HTTPException(status_code=404, detail="Work item not found")
     return parsed
+
+
+def refused_transition(exc: Exception) -> HTTPException:
+    """A refused status move as 409, with the service's reason (#12740).
+
+    The reason names only statuses and permitted moves, so it is safe to show, and the UI can tell
+    the user what went wrong. 409, not 422: the request is well-formed but conflicts with the item's state.
+    """
+    logger.info("Rejected illegal work-item transition: %s", exc)
+    return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))

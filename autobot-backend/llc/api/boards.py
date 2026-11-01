@@ -29,6 +29,8 @@ from user_management.services import TenantContext
 from ..exceptions import WipLimitExceeded
 from ..services.board import BoardService
 from ..services.work_item_service import InvalidTransition
+from ._common import actor_id as verified_user_id
+from ._common import refused_transition
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/boards", tags=["llc-boards"])
@@ -335,6 +337,7 @@ async def move_item(
             work_item_id=body.work_item_id,
             column_id=body.column_id,
             actor_id=body.actor_id,
+            acting_user=verified_user_id(_current_user),
         )
         await session.commit()
     except WipLimitExceeded as exc:
@@ -348,16 +351,7 @@ async def move_item(
             },
         )
     except InvalidTransition as exc:
-        # #12740: the service already computed the exact, useful reason
-        # ("Cannot transition from X to Y. Allowed: [...]"). Replacing it with a
-        # generic 422 "Internal server error" threw that away, so the UI could
-        # not tell the user what went wrong or what IS allowed. The message is
-        # purely domain-level — statuses and permitted transitions, no internals
-        # — so it is safe to surface. 409 Conflict is the correct code: the
-        # request is well-formed (422 implies malformed), it conflicts with the
-        # item's current state.
-        logger.info("Rejected illegal work-item transition: %s", exc)
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise refused_transition(exc)
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=404, detail="Internal server error")

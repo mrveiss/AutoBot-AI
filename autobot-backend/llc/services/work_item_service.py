@@ -60,6 +60,7 @@ from .work_item_actor_role import (  # noqa: F401 -- resolve_actor_role is re-ex
 from .work_item_approval_categories import validated_approval_categories as _validated_approval_categories
 from .work_item_completion_effects import release_workspace_for_task
 from .work_item_hierarchy import reparent, validate_create
+from .work_item_own_task import is_own_task, stamp_status
 from .work_item_relations import WorkItemRelationService
 
 logger = logging.getLogger(__name__)
@@ -764,8 +765,9 @@ class WorkItemService(LLCServiceBase):
         new_status: WorkItemStatus,
         company_id: Optional[str] = None,
         relation_svc: Optional[Any] = None,
+        acting_user: Optional[uuid.UUID] = None,
     ) -> LLCWorkItem:
-        """Transition a work item to a new status, enforcing the state machine."""
+        """Transition a work item, enforcing the state machine unless it is *acting_user*'s own task."""
         result = await session.execute(
             select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
         )
@@ -776,7 +778,8 @@ class WorkItemService(LLCServiceBase):
 
         current = WorkItemStatus(item.status)
         allowed = _ALLOWED_TRANSITIONS.get(current, set())
-        if new_status not in allowed:
+        own = is_own_task(item, acting_user)
+        if not own and new_status not in allowed:
             raise InvalidTransition(
                 f"Cannot transition from {current.value!r} to {new_status.value!r}. "
                 f"Allowed: {[s.value for s in allowed]}"
@@ -785,22 +788,13 @@ class WorkItemService(LLCServiceBase):
         # GH#8252: block BLOCKED→IN_PROGRESS while blockers remain. #15931 ungated
         # this (nothing outside its own tests passed `relation_svc`; see test_blocked_by_rule_fires_15931.py).
         # The blocked item is the source of its `blocked_by` rows; the blockers are their targets (#20187).
-        if current == WorkItemStatus.BLOCKED and new_status == WorkItemStatus.IN_PROGRESS:
+        if not own and current == WorkItemStatus.BLOCKED and new_status == WorkItemStatus.IN_PROGRESS:
             svc = relation_svc if relation_svc is not None else WorkItemRelationService()
             cid = str(item.company_id)  # the ITEM's, not the caller's (#15952)
             if await svc.has_unresolved_blockers(session, work_item_id, cid):
                 raise InvalidTransition("Cannot move to in_progress: item has unresolved blocked_by relations")
 
-        item.status = new_status
-        now = datetime.now(timezone.utc)
-        if new_status == WorkItemStatus.IN_PROGRESS and item.started_at is None:
-            item.started_at = now
-        elif new_status == WorkItemStatus.DONE:
-            item.completed_at = now
-            item.checkout_run_id = None
-            item.checkout_locked_at = None
-        elif new_status == WorkItemStatus.CANCELLED:
-            item.cancelled_at = now
+        stamp_status(item, new_status, datetime.now(timezone.utc), own=own)
         item.version += 1
         await session.flush()
 
