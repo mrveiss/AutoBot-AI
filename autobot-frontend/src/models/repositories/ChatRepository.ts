@@ -182,7 +182,7 @@ export class ChatRepository {
         // Include attachments if provided
         const opts = options as SendMessageOptions
         if (opts.attachments && opts.attachments.length > 0) {
-          metadata.attachments = opts.attachments
+          metadata.attachments = opts.attachments.filter((id) => typeof id === 'string') // server ids only (#20195)
         }
 
         // Merge any explicit metadata

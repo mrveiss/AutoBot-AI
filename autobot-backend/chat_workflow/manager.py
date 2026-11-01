@@ -40,7 +40,9 @@ from llm_shared.run_credentials import llm_principal_scope_for
 from services.tool_output_filter import cap_unmatched_output, get_tool_output_filter
 from slash_command_handler import get_slash_command_handler
 
+from .attachment_context import apply_attachments, attachment_notice_messages
 from .conversation import ConversationHandlerMixin
+from .lightweight_mode import decide_lightweight_mode
 from .llm_handler import LLMHandlerMixin, _emit_after_continuation, _emit_before_continuation
 from .models import (
     LLMIterationContext,
@@ -3414,41 +3416,14 @@ before summarizing.
             if context.get("model"):
                 session.metadata["model_override"] = str(context["model"])
 
-        # Issue MVA-1992: Determine if query qualifies for lightweight mode.
-        # Trivial tier (GH#9050, score < trivial_threshold) is the primary
-        # signal; simple tier (score < complexity_threshold) is used as a
-        # fallback when trivial tier is not configured.
-        lightweight_mode = False
-        try:
-            from llm_shared.tiered_routing.complexity_router import ComplexityRouter
-            from llm_shared.tiered_routing.tier_config import TierConfig
-
-            tier_config = TierConfig.from_config()
-            if tier_config.enabled:
-                router = ComplexityRouter(config=tier_config)
-                messages = [{"role": "user", "content": message}]
-                _, complexity_result = router.route(messages)
-                # Trivial tier is the canonical lightweight signal (GH#9050).
-                # Fall back to simple tier when trivial is not configured.
-                is_trivial = complexity_result.tier == "trivial"
-                is_simple_fallback = complexity_result.tier == "simple" and not getattr(
-                    tier_config.models, "trivial", ""
-                )
-                lightweight_mode = is_trivial or is_simple_fallback
-                if lightweight_mode:
-                    logger.info(
-                        "[MVA-1992] Lightweight mode enabled (tier=%s, score=%.1f)",
-                        complexity_result.tier,
-                        complexity_result.score,
-                    )
-        except Exception as e:
-            logger.warning("[MVA-1992] Complexity routing failed, defaulting to full mode: %s", e)
+        lightweight_mode = decide_lightweight_mode([{"role": "user", "content": message}])  # MVA-1992, GH#9050
 
         llm_params = await self._prepare_llm_request_params(
             session, message, use_knowledge=use_knowledge, language=language, lightweight_mode=lightweight_mode
         )
         # MVA-1993: Store lightweight_mode in params for response metadata
         llm_params["lightweight_mode_used"] = lightweight_mode
+        await apply_attachments(session, context, llm_params)  # #20195: attached files reach the prompt
 
         logger.info(
             "[ChatWorkflowManager] Initial prompt length: %d characters",
@@ -3539,6 +3514,8 @@ before summarizing.
             yield progress.to_workflow_message()
 
         llm_params = await self._prepare_llm_workflow_params(session, message, context)
+        for notice in attachment_notice_messages(llm_params):  # #20195: say why an attached file was not used
+            yield notice
 
         ctx = self._create_llm_iteration_context(
             llm_params, session_id, terminal_session_id, message, workflow_messages, context
@@ -3711,39 +3688,10 @@ before summarizing.
     async def _apply_session_role(
         self, session_id: str, context: Dict[str, Any] | None, auth_role: str | None = None, scope: dict | None = None
     ) -> Dict[str, Any] | None:
-        """Overlay the trusted per-session governance onto the chat context (GH#11186/#11202).
+        """Overlay the trusted per-session governance onto the chat context (GH#11186/#11202/#20195)."""
+        from chat_workflow.session_role import apply_session_governance
 
-        A server-set session role overrides any client-supplied ``agent_id`` so the
-        pinned agent's ``forbidden_work`` is enforced at the tool seam and cannot be
-        lifted by the caller. GH#11202: when the approval gate flag is on and the
-        session declares approval categories, they are overlaid as
-        ``requires_approval_before`` so the AI-line point (``_enforce_ai_line``, #18430) holds
-        matching tools BEFORE they execute — the correct pre-execution stage. The backend decides.
-        """
-        from chat_workflow.approval_baseline import with_baseline_categories
-        from chat_workflow.session_role import (
-            CHAT_APPROVAL_GATE_ENABLED,
-            SessionRoleService,
-            apply_auth_role,
-            apply_role,
-        )
-        from chat_workflow.session_work_item import SessionWorkItemService, apply_work_item
-
-        svc = SessionRoleService()
-        # #13821: the authenticated caller's RBAC role, from the endpoint's
-        # server-side identity. Applied unconditionally (it strips on a missing
-        # role) so a client-supplied auth_role can never reach the tool seam.
-        context = apply_auth_role(context, auth_role, scope)  # scope: #18430, the AI lines' verified principal
-        context = apply_role(context, await svc.get_role(session_id))
-        # #13704: same trust model for the work-item binding. A server-set value
-        # overrides any client-supplied work_item_id, and an unbound session has
-        # the client's value stripped — otherwise a caller could select whose
-        # goal chain L4 reads on their behalf (#13687).
-        context = apply_work_item(context, await SessionWorkItemService().get_work_item(session_id))
-        if CHAT_APPROVAL_GATE_ENABLED:
-            # #18294: all categories gated by default; only the SLM setting relaxes one.
-            context = await with_baseline_categories(context, await svc.get_approval_categories(session_id))
-        return context
+        return await apply_session_governance(session_id, context, auth_role, scope)
 
     async def process_message_stream(
         self,
@@ -3849,18 +3797,15 @@ before summarizing.
         self,
         session_id: str,
         decision: Dict[str, Any],
+        attachment_access: bool = False,
     ):
-        """Resume a paused graph after command approval interrupt.
-
-        Issue #1043: Called when the user approves or denies a command.
-        The graph resumes from its checkpointed state with the decision.
-        """
-        from langgraph.types import Command
-
+        """Resume a paused graph after command approval (#1043); the attachment verdict is replaced (#20195)."""
+        from .attachment_context import resume_command
         from .graph import get_compiled_graph
 
         graph = await get_compiled_graph(self)
-        async with aclosing(stream_graph_turn(self, graph, session_id, Command(resume=decision))) as turn:
+        resume = await resume_command(graph, session_id, decision, attachment_access)
+        async with aclosing(stream_graph_turn(self, graph, session_id, resume)) as turn:
             async for msg in turn:
                 yield msg
 

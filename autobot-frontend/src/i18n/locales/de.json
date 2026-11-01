@@ -784,6 +784,16 @@
       "browser": "Browser",
       "novnc": "Remotedesktop",
       "ariaLabel": "Chat-Bereiche"
+    },
+    "attachmentNotice": {
+      "unavailable": "Eine angehängte Datei wurde in dieser Unterhaltung nicht gefunden und wurde nicht verwendet.",
+      "too_many": "Nur die ersten {limit} angehängten Dateien wurden verwendet; die übrigen wurden weggelassen.",
+      "image": "\"{filename}\" ist ein Bild und kann nicht als Text gelesen werden, daher wurde es nicht verwendet.",
+      "unsupported": "\"{filename}\" ist keine Textdatei, die der Assistent lesen kann, daher wurde sie nicht verwendet.",
+      "unreadable": "\"{filename}\" konnte nicht gelesen werden und wurde nicht verwendet.",
+      "empty": "\"{filename}\" enthält keinen lesbaren Text und wurde nicht verwendet.",
+      "truncated": "\"{filename}\" ist lang, daher wurde nur der Anfang verwendet.",
+      "over_budget": "Die angehängten Dateien haben die Größenbeschränkung erreicht, daher wurde \"{filename}\" nicht verwendet."
     }
   },
   "settings": {

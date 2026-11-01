@@ -19,7 +19,7 @@ import json
 import os
 from typing import List, Optional
 
-from autobot_shared.ai_lines import VERIFIED_COMPANY_KEY, VERIFIED_USER_KEY
+from autobot_shared.ai_lines import VERIFIED_ATTACHMENT_ACCESS_KEY, VERIFIED_COMPANY_KEY, VERIFIED_USER_KEY
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
@@ -86,6 +86,10 @@ def apply_auth_role(context: "dict | None", role: Optional[str], scope: "dict | 
             merged[key] = str(value)
         else:
             merged.pop(key, None)
+    if (scope or {}).get("attachment_access") is True:  # #20195: the route's STRICT check, never the client's word
+        merged[VERIFIED_ATTACHMENT_ACCESS_KEY] = True
+    else:
+        merged.pop(VERIFIED_ATTACHMENT_ACCESS_KEY, None)
     if role:
         merged[AUTH_ROLE_CONTEXT_KEY] = role
     else:
@@ -206,3 +210,30 @@ class SessionRoleService(AsyncRedisClientMixin):
         """Remove the session's approval-category declaration."""
         redis = await self._get_redis()
         await redis.delete(_APPROVAL_KEY.format(session_id=session_id))
+
+
+async def apply_session_governance(
+    session_id: str, context: "dict | None", auth_role: Optional[str] = None, scope: "dict | None" = None
+) -> "dict | None":
+    """Overlay the trusted per-session governance onto the chat context (GH#11186/#11202/#20195).
+
+    A server-set session role overrides any client-supplied ``agent_id`` so the pinned agent's ``forbidden_work``
+    is enforced at the tool seam and cannot be lifted by the caller. When the approval gate flag is on, the
+    baseline and the session's approval categories are overlaid as ``requires_approval_before``. #20195: the
+    attachment floor (this chat used a file; an admin may waive it) is written from server state, never the client.
+    """
+    from chat_workflow.approval_baseline import with_baseline_categories
+    from chat_workflow.attachment_floor import stamp_attachment_floor
+    from chat_workflow.session_work_item import SessionWorkItemService, apply_work_item
+
+    svc = SessionRoleService()
+    # #13821: the authenticated caller's RBAC role, applied unconditionally (it strips a missing one).
+    context = apply_auth_role(context, auth_role, scope)  # scope: #18430, the AI lines' verified principal
+    context = apply_role(context, await svc.get_role(session_id))
+    # #13704: a server-set work-item binding overrides any client-supplied work_item_id (#13687).
+    context = apply_work_item(context, await SessionWorkItemService().get_work_item(session_id))
+    context = await stamp_attachment_floor(context, session_id)
+    if CHAT_APPROVAL_GATE_ENABLED:
+        # #18294: all categories gated by default; only the SLM setting relaxes one.
+        context = await with_baseline_categories(context, await svc.get_approval_categories(session_id))
+    return context

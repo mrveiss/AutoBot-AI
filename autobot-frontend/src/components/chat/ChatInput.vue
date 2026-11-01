@@ -544,6 +544,8 @@ const emojiPicker = ref<HTMLElement>()
 
 // State
 const attachedFiles = ref<File[]>([])
+const uploadedIds = new WeakMap<File, string>()  // File -> server file id (#20195)
+const serverFileIds = (files: File[]) => files.flatMap(f => uploadedIds.get(f) ?? [])
 const isInputFocused = ref(false)
 const isVoiceRecording = ref(false)
 const isSending = ref(false)
@@ -775,13 +777,7 @@ const sendMessage = async () => {
     } else {
       // Normal message flow (Issue #249)
       await controller.sendMessage(message, {
-        attachments: files.length > 0 ? files.map(f => ({
-          id: generateId(),
-          name: f.name,
-          type: f.type,
-          size: f.size,
-          data: f // In real implementation, would upload file first
-        })) : undefined,
+        attachments: serverFileIds(files),  // #20195: the server ids from the upload, never browser File objects
         use_knowledge: useKnowledge.value,  // Issue #249: RAG toggle
         // GH#8993: extended thinking parameters
         ...(thinkingEnabled.value ? { thinking_enabled: true, thinking_budget_tokens: thinkingBudget.value } : {}),
@@ -1087,6 +1083,7 @@ const uploadFile = async (upload: UploadItem, file: File): Promise<void> => {
     upload.status = 'Complete'
     upload.progress = 100
     upload.fileId = response.file_info?.file_id
+    if (upload.fileId) uploadedIds.set(file, upload.fileId)
     upload.uploadId = response.upload_id
     // Remove from progress after delay
     setTimeout(() => {

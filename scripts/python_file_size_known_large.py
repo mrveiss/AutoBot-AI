@@ -72,7 +72,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/batch_jobs.py": 916,
     "autobot-backend/api/browser_mcp.py": 1323,
     "autobot-backend/api/cache_management.py": 692,
-    "autobot-backend/api/chat.py": 2666,  # #18316: delete delegates to the canonical path
+    "autobot-backend/api/chat.py": 2647,  # #20195: 2666 -> 2647 (graph resume stream moved to chat_streaming)
     "autobot-backend/api/chat_sessions.py": 1859,  # #18293: legacy transcripts only ever proposed
     "autobot-backend/api/code_intelligence.py": 2145,
     "autobot-backend/api/code_search.py": 828,
@@ -85,7 +85,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 817,
     "autobot-backend/api/codebase_analytics/endpoints/report.py": 2262,
     "autobot-backend/api/codebase_analytics/endpoints/stats.py": 663,
-    "autobot-backend/api/conversation_files.py": 981,
+    "autobot-backend/api/conversation_files.py": 966,
     "autobot-backend/api/database_mcp.py": 1056,
     "autobot-backend/api/development_speedup.py": 611,
     "autobot-backend/api/enterprise_features.py": 700,
@@ -146,9 +146,9 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/chat_history/context_overflow.py": 845,
     "autobot-backend/chat_history/session.py": 923,
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
-    "autobot-backend/chat_workflow/graph.py": 1643,  # train 50: #18993 on main's 1652
+    "autobot-backend/chat_workflow/graph.py": 1555,  # #20195: 1643 -> 1551 (loop helpers split, hooks reused)
     "autobot-backend/chat_workflow/llm_handler.py": 1300,
-    "autobot-backend/chat_workflow/manager.py": 3885,  # #17273: graph turn lifecycle moved to turn_control
+    "autobot-backend/chat_workflow/manager.py": 3830,  # #20195: 3885 -> 3830 (lightweight-mode, governance split)
     "autobot-backend/chat_workflow/tool_handler.py": 3617,  # #19950 (MCP approval message moved out)
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
