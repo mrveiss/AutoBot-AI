@@ -3226,7 +3226,7 @@ async def _ansible_self_update(node_id: str, on_failure: Optional[Callable[[str]
     executor = get_playbook_executor()
     limit = ["localhost", *await _colocated_node_ids(node_id)]
     try:
-        result = await executor.execute_playbook(playbook_name="update-all-nodes.yml", limit=limit, detach=True)
+        result = await executor.execute_playbook("update-all-nodes.yml", limit=limit, detach=True, must_run=[node_id])
         if restart_cut_the_wait(result, node_id):  # #19139: the restarted process owns the plan now
             return
         failure = None if result["success"] else summarize_playbook_failure(result["output"])

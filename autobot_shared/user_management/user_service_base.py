@@ -43,6 +43,11 @@ class UserServiceBase(BaseService):
     #: Concrete ``User`` mapping for this backend; a subclass of ``UserCore``.
     user_model: ClassVar[type[UserCore]]
 
+    #: Whether the tokens of this service's users are verified against Redis even though this
+    #: process routes its own password epochs elsewhere: the SLM managing the backend's database
+    #: users (#20443). The marker is written where the tokens are checked, not where this process keeps its own.
+    epoch_in_redis: ClassVar[bool] = False
+
     def __init__(self, session: AsyncSession, context: TenantContext | None = None):
         """Initialize the service, failing fast if ``user_model`` is unbound.
 

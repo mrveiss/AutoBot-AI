@@ -45,12 +45,14 @@ at their own ``exp``; #12924's window closes as soon as they do.
 import asyncio
 import time
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 
 from redis.exceptions import RedisError
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.membership_epoch import MEMBERSHIP_EPOCH_BUMP_ATTEMPTS, MEMBERSHIP_EPOCH_BUMP_BACKOFF_SECONDS
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.ssot_constants import TTL_24_HOURS
+from autobot_shared.ssot_constants import TTL_1_HOUR, TTL_24_HOURS
 
 logger = get_logger(__name__)
 
@@ -59,10 +61,20 @@ logger = get_logger(__name__)
 #: it only because the constant name contains "PASSWORD".
 PASSWORD_EPOCH_PREFIX = "auth:pwd_epoch:"  # nosec B105
 
-#: How long an epoch marker is kept. It only has to outlive the longest-lived
-#: token that could predate it; after that every such token has expired on its
-#: own and the marker cannot change any decision.
-PASSWORD_EPOCH_TTL_SECONDS = TTL_24_HOURS
+#: Lifetime of a backend login token (``AuthenticationMiddleware.jwt_expiry_hours`` is derived from it).
+LOGIN_TOKEN_LIFETIME_SECONDS = TTL_24_HOURS
+
+#: How long past its ``exp`` ``/auth/refresh`` still accepts a token (``api/auth.py`` reads it).
+REFRESH_GRACE_SECONDS = TTL_1_HOUR
+
+#: Slack on top of the two above for clock skew between the node that wrote the marker and the one that reads it.
+EPOCH_MARGIN_SECONDS = TTL_1_HOUR
+
+#: How long an epoch marker is kept. It has to outlive the longest-lived token that could predate it,
+#: and a token is usable -- and refreshable into a new one -- until its ``exp`` plus the refresh grace
+#: (#20443). A marker that expired earlier would let that token mint a fresh one. Derived from the
+#: constants that govern those two, so the three cannot drift apart.
+PASSWORD_EPOCH_TTL_SECONDS = LOGIN_TOKEN_LIFETIME_SECONDS + REFRESH_GRACE_SECONDS + EPOCH_MARGIN_SECONDS
 
 
 #: What a store that cannot answer raises: the client's own errors plus the
@@ -86,6 +98,20 @@ class MalformedTokenClaims(ValueError):
     Retrying can never fix it, so callers answer 401 (invalid token) -- never the
     retryable 503 that :class:`RevocationCheckUnavailable` maps to.
     """
+
+
+#: Raises the stored epoch to ARGV[1] and never lowers it, refreshing the TTL either way (#20443).
+#: A plain SETEX let an earlier-dated write (a password change at T after a deactivation at T+1)
+#: lower the epoch and revive the tokens in between; the SLM table does the same with ``greatest``.
+#: An unreadable stored value is replaced, since it revokes nothing the new epoch does not.
+_RAISE_EPOCH_LUA = """
+local current = tonumber(redis.call('GET', KEYS[1]))
+if current == nil or tonumber(ARGV[1]) > current then
+    redis.call('SET', KEYS[1], ARGV[1])
+end
+redis.call('EXPIRE', KEYS[1], ARGV[2])
+return 1
+"""
 
 
 def _epoch_key(subject: str) -> str:
@@ -126,7 +152,7 @@ def reset_epoch_store() -> None:
     _store_override = None
 
 
-async def set_password_epoch(subject: str, *, now: int | None = None) -> int | None:
+async def set_password_epoch(subject: str, *, now: int | None = None, in_redis: bool = False) -> int | None:
     """Mark *subject*'s password as changed now, revoking older tokens.
 
     Returns the epoch written, or ``None`` if Redis was unavailable — in which
@@ -136,8 +162,11 @@ async def set_password_epoch(subject: str, *, now: int | None = None) -> int | N
     Args:
         subject: The token subject (``sub`` claim) whose sessions to revoke.
         now: Override for the epoch timestamp, for tests.
+        in_redis: Write to Redis even when this process routes epochs elsewhere (#20443). A
+            service that manages accounts whose tokens another process verifies against Redis
+            (the SLM managing the backend's users) must write where those tokens are checked.
     """
-    if _store_override is not None:
+    if _store_override is not None and not in_redis:
         return await _store_override[1](subject, now=now)
     epoch = int(time.time()) if now is None else now
 
@@ -151,7 +180,7 @@ async def set_password_epoch(subject: str, *, now: int | None = None) -> int | N
         return None
 
     try:
-        await redis.setex(_epoch_key(subject), PASSWORD_EPOCH_TTL_SECONDS, str(epoch))
+        await redis.eval(_RAISE_EPOCH_LUA, 1, _epoch_key(subject), str(epoch), str(PASSWORD_EPOCH_TTL_SECONDS))
     except Exception as exc:
         logger.error(
             "password epoch NOT recorded for subject=%s: %s — tokens issued "
@@ -165,14 +194,18 @@ async def set_password_epoch(subject: str, *, now: int | None = None) -> int | N
     return epoch
 
 
-async def get_password_epoch(subject: str) -> int | None:
+async def get_password_epoch(subject: str, *, in_redis: bool = False) -> int | None:
     """Return *subject*'s password-change epoch, or None if none is recorded.
+
+    ``in_redis`` reads Redis even when this process routes epochs elsewhere (#20446): a process
+    that verifies tokens of accounts another process manages must read where those accounts'
+    markers are written (the SLM checking the backend's users' tokens).
 
     Raises:
         RevocationCheckUnavailable: Redis could not answer (#16411), or the
             stored marker is not an integer (#16422).
     """
-    if _store_override is not None:
+    if _store_override is not None and not in_redis:
         return await _store_override[0](subject)
     redis = await _epoch_store()
     try:
@@ -189,8 +222,10 @@ async def get_password_epoch(subject: str) -> int | None:
         raise RevocationCheckUnavailable("epoch marker is not an integer") from exc
 
 
-async def is_token_revoked_by_password_change(claims: dict) -> bool:
+async def is_token_revoked_by_password_change(claims: dict, *, in_redis: bool = False) -> bool:
     """True if *claims* describe a token issued before its subject's password change.
+
+    ``in_redis`` is passed to :func:`get_password_epoch`.
 
     Returns ``False`` when the subject is unknown or the token carries no
     ``iat`` -- see the module docstring for why.
@@ -219,7 +254,7 @@ async def is_token_revoked_by_password_change(claims: dict) -> bool:
         # before any store lookup, and is a 401 (#18892), not a store outage.
         raise MalformedTokenClaims("token iat is not an integer") from exc
 
-    epoch = await get_password_epoch(str(subject))
+    epoch = await get_password_epoch(str(subject), in_redis=in_redis)
     if epoch is None:
         return False
 
@@ -229,3 +264,58 @@ async def is_token_revoked_by_password_change(claims: dict) -> bool:
         return True
 
     return False
+
+
+#: Seconds a deactivation epoch lies ahead of the clock, so a token minted in the second the
+#: account is deactivated (``iat >= epoch`` otherwise) is revoked too (#20443). Not used for a
+#: password change: that user signs straight back in, and the new token must pass.
+DEACTIVATION_EPOCH_LEAD_SECONDS = 1
+
+
+class PasswordEpochWriteError(RuntimeError):
+    """A revocation epoch could not be recorded after the change it revokes committed (#20443).
+
+    The deactivation or deletion is durable, so the caller must learn that the account's earlier
+    tokens were not revoked: raised from a post-commit callback it surfaces as ``PostCommitCallbackError``.
+    """
+
+
+async def record_password_epoch(subject: str, *, lead_seconds: int = 0, in_redis: bool = False) -> int:
+    """Record the epoch, retrying a bounded number of times with backoff; raise when it never lands (#20443).
+
+    The same tries and backoff as ``bump_membership_epoch``. The clock is read on every try, so a
+    late success still revokes a token minted while the store was down. Each failed try is logged
+    by ``set_password_epoch``; there is no outbox, so a final failure leaves the tokens live until
+    they expire and is reported to the caller.
+    """
+    delay = MEMBERSHIP_EPOCH_BUMP_BACKOFF_SECONDS
+    for attempt in range(1, MEMBERSHIP_EPOCH_BUMP_ATTEMPTS + 1):
+        try:
+            epoch = await set_password_epoch(subject, now=int(time.time()) + lead_seconds, in_redis=in_redis)
+        except Exception as exc:  # re-raised as PasswordEpochWriteError on the last try
+            logger.error("password epoch write for subject=%s raised (try %s): %s", subject, attempt, exc)
+            epoch = None
+        if epoch is not None:
+            return epoch
+        if attempt < MEMBERSHIP_EPOCH_BUMP_ATTEMPTS:
+            await asyncio.sleep(delay)
+            delay *= 2
+    raise PasswordEpochWriteError(f"password epoch not recorded for subject={subject}: earlier tokens stay valid")
+
+
+@dataclass(frozen=True)
+class PasswordEpochMark:
+    """A queueable post-commit epoch write; equal for one subject, so a transaction queues it once (#20443).
+
+    The epoch is read from the clock when it runs, after the commit: a login between the write
+    and the commit gets ``iat < epoch`` and is revoked with the rest, and a transaction that never
+    commits revokes nothing. A store that cannot record is retried, then raises
+    :class:`PasswordEpochWriteError`: the commit stands and the caller gets ``PostCommitCallbackError``.
+    """
+
+    subject: str
+    lead_seconds: int = 0
+    in_redis: bool = False
+
+    async def __call__(self) -> int:
+        return await record_password_epoch(self.subject, lead_seconds=self.lead_seconds, in_redis=self.in_redis)
