@@ -12,7 +12,7 @@ process restart.
 from __future__ import annotations
 
 import uuid
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -48,18 +48,25 @@ async def test_an_unusable_cron_reports_not_scheduled():
 
 
 async def _hire(heartbeat_enabled: bool) -> AsyncMock:
+    from fastapi import Response
+
     import llc.api.agent_hires as mod
+    from llc.services.approval import ApprovalService
 
     session = AsyncMock()
+    session.add = MagicMock()
     body = mod.AgentHireRequest(agent_name="Dev", heartbeat_enabled=heartbeat_enabled)
     ctx = TenantContext(org_id=None, user_id=uuid.uuid4(), is_platform_admin=True)
     with (
         patch.object(mod, "registered_adapter_types", return_value=["claude_code"]),
         patch.object(mod, "adapter_unavailable_reason", return_value=None),
-        patch.object(mod.BudgetService, "provision_budget", new=AsyncMock()),
-        patch.object(mod, "schedule_heartbeat", new=AsyncMock(return_value=True)) as schedule,
+        patch("llc.services.agent_hire_service.BudgetService.provision_budget", new=AsyncMock()),
+        patch.object(mod, "company_requires_hire_approval", new=AsyncMock(return_value=False)),
+        patch.object(schedule_entry, "schedule_heartbeat", new=AsyncMock(return_value=True)) as schedule,
     ):
-        resp = await mod.hire_agent(company_id=uuid.uuid4(), body=body, session=session, ctx=ctx)
+        resp = await mod.hire_agent(
+            company_id=uuid.uuid4(), body=body, response=Response(), session=session, svc=ApprovalService(), ctx=ctx
+        )
     session.commit.assert_awaited()
     schedule.agent_id = resp.agent_id
     return schedule

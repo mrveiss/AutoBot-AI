@@ -11,7 +11,6 @@ inspection to aid observability and debugging.
 
 import asyncio
 import importlib
-import json
 import sys
 from datetime import datetime, timezone
 
@@ -31,11 +30,11 @@ from api.schemas_system import (
     SystemReloadConfigResponse,
 )
 from api.system_cache_coordinator import router as _cache_coordinator_router
+from api.system_startup_state import company_os_scheduling, resolve_startup_error
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
-from autobot_shared.ssot_constants import STARTUP_ERROR_FILE
 from config.manager import get_config_manager
 from constants.model_constants import ModelConstants as ModelConsts
 
@@ -373,24 +372,9 @@ async def get_system_health(
             },
         }
 
-        # GH#8947: Surface startup errors for provisioning visibility.
-        # Only expose the exception type name — never the message, which may
-        # contain credentials (connection strings, Redis URLs, etc.).
-        startup_error = app_state.get("startup_error")
-        if startup_error:
-            # In-memory value may be "TypeName: message" — strip to type only.
-            startup_error = startup_error.split(":")[0].strip()
-        if not startup_error:
-            # Phase 1 failures kill the process before it can serve requests, so
-            # app_state is unreachable. Fall back to the disk file written by
-            # lifespan.py before re-raising.
-            try:
-                if await asyncio.to_thread(STARTUP_ERROR_FILE.exists):
-                    text = await asyncio.to_thread(STARTUP_ERROR_FILE.read_text, encoding="utf-8")
-                    data = json.loads(text)
-                    startup_error = data.get("error_type")
-            except Exception:
-                pass
+        # GH#8947: provisioning visibility; the type name only, see resolve_startup_error.
+        startup_error = await resolve_startup_error(app_state)
+        health_status["company_os_scheduling"] = company_os_scheduling()  # #20232: a field, never a status input
         if startup_error:
             health_status["startup_error"] = startup_error  # type name only
             health_status["status"] = "down"
