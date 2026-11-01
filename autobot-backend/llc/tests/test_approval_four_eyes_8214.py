@@ -11,16 +11,19 @@ import uuid
 from decimal import Decimal
 
 import pytest
+from sqlalchemy.dialects import postgresql
 
 from llc.models.budget import LLCAgentBudget
 from llc.models.enums import ApprovalStatus, ApprovalType
 from llc.services.approval import ApprovalHookError, ApprovalService
+from llc.services.authz import active_admin_ids
 from llc.tests.approval_enforcement_support_test import _edges  # noqa: F401 -- autouse fixture
 from llc.tests.approval_enforcement_support_test import activity  # noqa: F401 -- fixture
 from llc.tests.approval_enforcement_support_test import session_factory  # noqa: F401 -- fixture
 from llc.tests.approval_enforcement_support_test import _ORG, _board_app, _budget, _member, _post, _rows
 from models.agent_org import AgentOrgNode
 from models.approval import Approval
+from testkit.fake_async_session import FakeAsyncSession
 from user_management.models.user import User
 
 ASKER = uuid.UUID("22222222-2222-2222-2222-222222222222")
@@ -183,3 +186,12 @@ async def test_a_forged_requester_in_the_body_is_replaced_by_the_verified_caller
     with pytest.raises(ApprovalHookError, match="different owner or admin"):
         await _decide_as(session_factory, uuid.UUID(resp.json()["id"]), ApprovalStatus.APPROVED, ASKER)
     assert [a.status for a in await _rows(session_factory, Approval)] == [ApprovalStatus.PENDING.value]
+
+
+@pytest.mark.asyncio
+async def test_the_admin_read_locks_the_memberships_until_the_decision_commits() -> None:
+    """SQLite ignores row locks, so this reads the statement: a plain select let two decisions both pass."""
+    session = FakeAsyncSession(results=[[]])
+    await active_admin_ids(session, _ORG)
+    statement = str(session.statements[0].compile(dialect=postgresql.dialect()))
+    assert "FOR UPDATE OF llc_company_memberships" in statement

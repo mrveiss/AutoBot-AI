@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.approval_four_eyes import FourEyesError, four_eyes_self_approval, requester_id
 from user_management.models.user import User
 
 from ..models.enums import MembershipRole
@@ -150,31 +151,26 @@ async def require_company_admin_unless_platform(
     await require_company_admin(session, company_id, actor_user_id, for_update=for_update)
 
 
-class FourEyesError(ValueError):
-    """The decider may not approve what they asked for: another owner or admin must."""
-
-
 async def active_admin_ids(session: AsyncSession, company_id: uuid.UUID) -> set[uuid.UUID]:
-    """The company's current owners/admins, leaving out anyone deactivated or deleted, who cannot act."""
+    """The company's current owners/admins, leaving out anyone deactivated or deleted, who cannot act.
+
+    Locks those memberships until the decision commits, so a second admin cannot leave after this
+    check, and two concurrent decisions on one company take turns. A platform admin is not counted:
+    a company's sole owner or admin may self-approve even while a platform admin exists.
+    """
     gone = select(User.id).where(
         User.id == LLCCompanyMembership.user_id, or_(~User.is_active, User.deleted_at.isnot(None))
     )
     rows = await session.execute(
-        select(LLCCompanyMembership.user_id).where(
+        select(LLCCompanyMembership.user_id)
+        .where(
             LLCCompanyMembership.company_id == company_id,
             LLCCompanyMembership.role.in_(GRANTING_ROLES),
             ~gone.exists(),
         )
+        .with_for_update(of=LLCCompanyMembership)
     )
     return set(rows.scalars().all())
-
-
-def requester_user_id(approval: "Approval") -> Optional[uuid.UUID]:
-    """The person who asked, from ``requested_by_agent`` (a bare user id, or ``<kind>:<user id>``); else None."""
-    try:
-        return uuid.UUID(str(approval.requested_by_agent).rsplit(":", 1)[-1])
-    except ValueError:
-        return None
 
 
 async def require_four_eyes(
@@ -192,11 +188,10 @@ async def require_four_eyes(
     verified caller) cannot be the decider: with *unidentified_requester_ok* that passes unflagged,
     otherwise it is refused. Call it inside the decision's transaction so the count is the current one.
     """
-    requester = requester_user_id(approval)
+    requester = requester_id(approval.requested_by_agent)
     if decider is None or (requester is None and not unidentified_requester_ok):
         raise FourEyesError(f"{what} needs a verified decider and a requester that can be identified")
-    if requester is None or decider != requester:
+    if requester is None:
         return False
-    if await active_admin_ids(session, approval.company_id) != {decider}:
-        raise FourEyesError(f"{what} needs a different owner or admin than the one who asked for it")
-    return True
+    eligible = await active_admin_ids(session, approval.company_id)
+    return four_eyes_self_approval(decider, requester, eligible, what=what)
