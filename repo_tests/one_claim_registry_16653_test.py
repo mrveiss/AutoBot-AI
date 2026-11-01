@@ -158,6 +158,10 @@ _ALLOWED: dict[str, tuple[int, str]] = {
         1,
         "#12842 — process leadership, not work scope: which replica runs a loop, not who owns a path.",
     ),
+    "autobot_shared/user_management/password_epoch.py": (
+        1,
+        "#20443 — a revocation time that only ever rises. Not a claim: no owner, nothing acquired or released, every write succeeds.",
+    ),
 }
 
 #: A floor on FINDINGS, kept as a matcher check and no longer the only one. The
