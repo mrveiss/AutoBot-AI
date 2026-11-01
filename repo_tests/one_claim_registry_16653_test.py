@@ -158,6 +158,10 @@ _ALLOWED: dict[str, tuple[int, str]] = {
         1,
         "#12842 — process leadership, not work scope: which replica runs a loop, not who owns a path.",
     ),
+    "autobot_shared/user_management/password_epoch.py": (
+        1,
+        "#20443 — a revocation time that only ever rises. Not a claim: no owner, nothing acquired or released, every write succeeds.",
+    ),
 }
 
 #: A floor on FINDINGS, kept as a matcher check and no longer the only one. The
@@ -211,7 +215,7 @@ REACH = declare(
     # the bottom tenth of `growth`, because that is zero tolerance dressed as an allowance.
     # Re-measured by the mechanism itself, not carried across (#15928); the arithmetic is in
     # the commit message, which cannot drift from the tree it describes.
-    floor=3480,  # re-pinned mid-window (train 80 on main)
+    floor=3501,  # re-pinned mid-window (train 80 on main)
     what="Python modules swept for claim-or-lock primitives",
     growth=50,
     # Scope as data (#17844). Five trees, including `scripts/` and `pipeline-scripts/` that no
