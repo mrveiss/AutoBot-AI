@@ -42,6 +42,17 @@ slm_backend_host: 127.0.0.1
 # same default, for consistency with the rest of the fleet.
 slm_manager_redis_host: "{{ redis_host | default('127.0.0.1') }}"
 
+# #19832: the reverse proxies whose X-Forwarded-For the SLM backend may trust (login rate limit,
+# api/login_rate_limit.py -> get_client_ip). SLM_TRUSTED_PROXIES REPLACES the backend's built-in
+# list (config.py _get_trusted_proxies), so it carries loopback, this SLM node, its inventory
+# address, and every node in the inventory's `frontend` group. A frontend node that is not in
+# this list collapses all clients into one rate-limit bucket. Hosts that carry no address are
+# dropped; nothing here is a literal fleet address.
+slm_trusted_proxies: >-
+  {{ (['127.0.0.1', '::1', slm_host | default(''), ansible_host | default(''), frontend_host | default('')]
+      + (groups['frontend'] | default([]) | map('extract', hostvars, 'ansible_host') | select('defined') | list))
+     | reject('equalto', '') | unique | join(',') }}
+
 # ==========================================================
 # Local self-update admin socket (#15728)
 # ==========================================================

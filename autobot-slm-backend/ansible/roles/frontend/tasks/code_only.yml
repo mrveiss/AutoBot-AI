@@ -31,7 +31,20 @@
   become: true
   when:
     - not (slm_colocated_frontend | default(false) | bool)
-    - frontend_slm_backend_remote | bool
+    - frontend_slm_placement != 'local'
+  tags: ['frontend', 'nginx']
+
+# An ambiguous placement (no gathered facts, hostnames) is settled here and never fails the
+# update: the SLM is treated as remote only when the CA it would be verified against is present,
+# otherwise as the same machine (loopback uvicorn). Verification is never switched off.
+- name: "Frontend | Settle an ambiguous SLM placement from the fleet CA (#19832)"
+  ansible.builtin.set_fact:
+    frontend_slm_backend_remote: >-
+      {{ frontend_slm_placement == 'remote'
+         or (frontend_slm_placement == 'ambiguous' and (_frontend_slm_ca_stat.stat.exists | default(false) | bool)) }}
+  when:
+    - not (slm_colocated_frontend | default(false) | bool)
+    - frontend_slm_placement != 'local'
   tags: ['frontend', 'nginx']
 
 - name: "Frontend | Refuse to proxy to a remote SLM without its CA (#19832)"
@@ -43,7 +56,19 @@
       (distribute-tls-certs.yml); verification is never switched off to get past this.
   when:
     - not (slm_colocated_frontend | default(false) | bool)
-    - frontend_slm_backend_remote | bool
+    - frontend_slm_placement == 'remote'
+  tags: ['frontend', 'nginx']
+
+- name: "Frontend | Note that the SLM placement could not be determined (#19832)"
+  ansible.builtin.debug:
+    msg: >-
+      Cannot tell whether slm_host is this node (no gathered facts). Fleet CA present:
+      {{ _frontend_slm_ca_stat.stat.exists | default(false) }}; /slm/api is proxied
+      {{ 'over HTTPS to slm_host' if (frontend_slm_backend_remote | bool) else 'to the loopback SLM backend' }}.
+      Set slm_colocated_frontend or gather facts to make it certain.
+  when:
+    - not (slm_colocated_frontend | default(false) | bool)
+    - frontend_slm_placement == 'ambiguous'
   tags: ['frontend', 'nginx']
 
 - name: "Frontend | Configure nginx"

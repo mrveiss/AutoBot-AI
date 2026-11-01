@@ -36,6 +36,10 @@ _COLOCATED = {"host": "127.0.0.1", "port": "18000"}
 def _render(host: str, port: str) -> str:
     env = jinja2.Environment(trim_blocks=True, undefined=jinja2.StrictUndefined)
     env.filters["bool"] = bool
+    # main's nginx-frontend.conf.j2 inlines the upload cap via lookup(); the file content is not
+    # under test here.
+    env.globals["lookup"] = lambda kind, path: ""
+    env.globals["role_path"] = "/role"
     return env.from_string(TEMPLATE.read_text(encoding="utf-8")).render(
         ansible_host="backend.test.invalid",
         nginx_http_port=80,

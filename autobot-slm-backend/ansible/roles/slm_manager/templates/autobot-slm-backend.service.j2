@@ -48,6 +48,8 @@ Environment="SLM_BACKEND_SERVICE_USER={{ backend_user | default(slm_backend_user
 # explicitly, the same way slm-agent's own unit already does.
 Environment="REDIS_HOST={{ slm_manager_redis_host }}"
 Environment="AUTOBOT_REDIS_HOST={{ slm_manager_redis_host }}"
+# #19832: reverse proxies trusted for X-Forwarded-For (see slm_trusted_proxies in defaults).
+Environment="SLM_TRUSTED_PROXIES={{ slm_trusted_proxies }}"
 EnvironmentFile=-{{ postgresql_credentials_dir | default('/etc/autobot') }}/{{ postgresql_credentials_file | default('db-credentials.env') }}
 EnvironmentFile=-{{ slm_credentials_dir }}/{{ slm_credentials_file }}
 # #11668: bound uvicorn's SIGTERM shutdown (see autobot-backend.service.j2) so the

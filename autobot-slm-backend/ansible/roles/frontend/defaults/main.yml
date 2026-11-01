@@ -48,8 +48,35 @@ frontend_backend_url: ""
 #                   already open on the SLM. The certificate is verified against the fleet CA
 #                   (ca-cert.pem beside this node's own cert, distribute-tls-certs.yml).
 # The port numbers are the SSOT group_vars (slm_backend_port, slm_nginx_tls_port).
-frontend_slm_backend_remote: >-
-  {{ (slm_host | default('127.0.0.1')) not in (['127.0.0.1', '::1', 'localhost'] + (ansible_facts['all_ipv4_addresses'] | default([]))) }}
+#
+# Placement is decided WITHOUT depending on gathered facts: update-all-nodes.yml Play 2 runs
+# gather_facts:false, so ansible_facts is empty there. Three verdicts:
+#   local     -- slm_host is unset or one of this node's identities (loopback, ansible_host,
+#                inventory_hostname, and the gathered addresses/hostname when facts exist), or
+#                slm_colocated_frontend is true.
+#   remote    -- certain: slm_host is an IP literal and either facts are gathered and it is not one
+#                of this node's addresses, or ansible_host is also a non-loopback IP literal on a
+#                non-local connection and differs from it.
+#   ambiguous -- cannot tell (hostnames vs addresses, a loopback/local-connection ansible_host
+#                with no facts). tasks/code_only.yml settles it from the filesystem: remote only
+#                when the fleet CA is present, otherwise local; an ambiguous node never fails.
+frontend_slm_node_identities: >-
+  {{ ['127.0.0.1', '::1', 'localhost', ansible_host | default(''), inventory_hostname | default('')]
+     + (ansible_facts['all_ipv4_addresses'] | default([]))
+     + [ansible_facts['hostname'] | default(''), ansible_facts['fqdn'] | default('')] }}
+frontend_slm_host_is_ip: >-
+  {{ (slm_host | default('127.0.0.1')) is match('^([0-9]{1,3}[.]){3}[0-9]{1,3}$') or ':' in (slm_host | default('127.0.0.1')) }}
+frontend_slm_ansible_host_is_remote_ip: >-
+  {{ (ansible_host | default('')) is match('^([0-9]{1,3}[.]){3}[0-9]{1,3}$')
+     and not (ansible_host | default('')) is match('^127[.]')
+     and (ansible_connection | default('ssh')) not in ['local', 'localhost'] }}
+frontend_slm_placement: >-
+  {%- if (slm_colocated_frontend | default(false) | bool) or (slm_host | default('127.0.0.1')) in frontend_slm_node_identities -%}local
+  {%- elif not (frontend_slm_host_is_ip | bool) -%}ambiguous
+  {%- elif (ansible_facts['all_ipv4_addresses'] | default([])) | length > 0 -%}remote
+  {%- elif frontend_slm_ansible_host_is_remote_ip | bool -%}remote
+  {%- else -%}ambiguous{%- endif -%}
+frontend_slm_backend_remote: "{{ frontend_slm_placement == 'remote' }}"
 frontend_slm_backend_host: "{{ slm_host if (frontend_slm_backend_remote | bool) else '127.0.0.1' }}"
 frontend_slm_backend_port: "{{ slm_nginx_tls_port if (frontend_slm_backend_remote | bool) else slm_backend_port }}"
 frontend_slm_backend_protocol: "{{ 'https' if (frontend_slm_backend_remote | bool) else 'http' }}"

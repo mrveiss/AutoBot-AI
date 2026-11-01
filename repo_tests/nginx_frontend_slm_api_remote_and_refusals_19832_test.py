@@ -12,6 +12,8 @@ route is asserted as rendered config, not as a live 403.
 
 from __future__ import annotations
 
+import re
+
 import jinja2
 import pytest
 import yaml
@@ -29,6 +31,11 @@ _THIS_NODE = ["192.0.2.10", "10.0.0.1"]
 def _env() -> jinja2.Environment:
     env = jinja2.Environment(trim_blocks=True, undefined=jinja2.StrictUndefined)
     env.filters["bool"] = lambda v: v if isinstance(v, bool) else str(v).strip().lower() == "true"
+    env.tests["match"] = lambda v, pat: re.match(pat, str(v)) is not None
+    # main's nginx-frontend.conf.j2 inlines the upload cap via lookup(); the file content is not
+    # under test here.
+    env.globals["lookup"] = lambda kind, path: ""
+    env.globals["role_path"] = "/role"
     return env
 
 
@@ -37,13 +44,15 @@ def _resolve(slm_host: str | None) -> dict:
     env = _env()
     ctx: dict = {k: v for k, v in GROUP_VARS.items() if not (isinstance(v, str) and "{{" in v)}
     ctx["ansible_facts"] = {"all_ipv4_addresses": _THIS_NODE}
+    ctx["inventory_hostname"] = "node-a"
+    ctx["ansible_host"] = _THIS_NODE[0]
     ctx["autobot_tls_remote_cert_dir"] = "/etc/c"
     if slm_host is not None:
         ctx["slm_host"] = slm_host
     pending = {k: v for k, v in DEFAULTS.items() if k.startswith(("frontend_slm_", "frontend_tls_cert_dir"))}
     for _ in range(len(pending) + 1):
         for key, raw in list(pending.items()):
-            if not isinstance(raw, str) or "{{" not in raw:
+            if not isinstance(raw, str) or ("{{" not in raw and "{%" not in raw):
                 ctx[key] = raw
                 del pending[key]
                 continue
@@ -128,8 +137,6 @@ def test_open_health_and_metrics_routes_are_refused_on_the_main_origin() -> None
     assert "return 403;" in refusal
     header = out[out.index("location ~ ^/slm/api/(") : out.index("{", out.index("location ~ ^/slm/api/("))]
     pattern = header.split("location ~ ")[1].strip()
-    import re
-
     rx = re.compile(pattern)
     for path in REFUSED:
         assert rx.match(f"/slm/api/{path}"), path
