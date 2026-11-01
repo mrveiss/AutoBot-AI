@@ -83,7 +83,8 @@ class TestRowLevelFailureIsAbsorbed:
         service = reconciler.ReconcilerService()
         db = _make_db(
             execute_side_effect=[
-                IntegrityError("INSERT", None, Exception("dup key")),  # service "a"
+                IntegrityError("INSERT", None, Exception("dup key")),  # the batch fails (#20250)
+                IntegrityError("INSERT", None, Exception("dup key")),  # row by row: service "a"
                 _execute_result(row=None),  # service "b" -- not found, created
                 _execute_result(row=None),  # service "c" -- not found, created
                 _execute_result(),  # _remove_stale_services' own select
@@ -93,7 +94,7 @@ class TestRowLevelFailureIsAbsorbed:
         result = await service._sync_discovered_services(db, "node-1", [_svc("a"), _svc("b"), _svc("c")])
 
         assert result is False  # none of these are managed/churning
-        assert db.execute.await_count == 4  # 3 upserts + the stale-removal select
+        assert db.execute.await_count == 5  # the failed batch, 3 upserts, the stale-removal select
         assert db.add.call_count == 2  # b and c created; a's insert was rolled back, not retried
 
 
@@ -172,3 +173,49 @@ class TestNegativeControlProvingNoCascade:
             await service._upsert_service(db, "node-1", _svc("a"), now)
 
         assert db.execute.await_count == 1
+
+
+class TestAWholeBatchIsOneLookup:
+    """#20250: per-service round trips took a heartbeat past the agent's 10 s limit."""
+
+    @pytest.mark.asyncio
+    async def test_the_statements_do_not_grow_with_the_services(self):
+        service = reconciler.ReconcilerService()
+        db = _make_db(execute_side_effect=[_execute_result(), _execute_result()])
+
+        await service._sync_discovered_services(db, "node-1", [_svc(f"s{i}") for i in range(150)])
+
+        assert db.execute.await_count == 2  # the node's rows, and the stale-removal select
+        assert db.begin_nested.call_count == 2  # the batch, and the stale removal
+        assert db.add.call_count == 150
+
+    @pytest.mark.asyncio
+    async def test_a_name_reported_twice_in_one_batch_makes_one_row(self):
+        service = reconciler.ReconcilerService()
+        db = _make_db(execute_side_effect=[_execute_result(), _execute_result()])
+
+        await service._sync_discovered_services(db, "node-1", [_svc("a"), _svc("a")])
+
+        assert db.add.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_a_failure_at_the_batchs_flush_keeps_the_other_rows(self):
+        """A bad row surfaces when the savepoint is released, not at its own statement."""
+
+        class _FailsOnce(_FakeNestedTransaction):
+            failed = False
+
+            async def __aexit__(self, exc_type, exc, tb):
+                if exc_type is None and not _FailsOnce.failed:
+                    _FailsOnce.failed = True
+                    raise IntegrityError("UPDATE", None, Exception("bad row"))
+                return await super().__aexit__(exc_type, exc, tb)
+
+        service = reconciler.ReconcilerService()
+        db = _make_db(execute_side_effect=[_execute_result() for _ in range(4)])
+        db.begin_nested = MagicMock(return_value=_FailsOnce())
+
+        await service._sync_discovered_services(db, "node-1", [_svc("a"), _svc("b")])
+
+        assert db.execute.await_count == 4  # the batch, a, b, the stale-removal select
+        assert db.add.call_count == 4  # the batch's two, rolled back, then each row again
