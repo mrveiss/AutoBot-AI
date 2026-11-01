@@ -75,6 +75,26 @@ async def test_the_facts_given_do_not_keep_the_vectors(tmp_path: Path, small_bat
     assert all("embedding" not in fact for fact in doc["facts"])
 
 
+async def test_the_file_is_durable_before_its_name_and_the_name_after(tmp_path: Path, monkeypatch):
+    path, events = tmp_path / "b.jsongz", []
+    real_replace = backup_stream.os.replace
+    monkeypatch.setattr(backup_stream, "_fsync_path", lambda target: events.append(("fsync", target)))
+
+    def _replace(src, dst):
+        events.append(("replace", dst))
+        real_replace(src, dst)
+
+    monkeypatch.setattr(backup_stream.os, "replace", _replace)
+    await backup_stream.write_backup(_KB(), str(path), _doc(1), True)
+    assert events == [("fsync", f"{path}.partial"), ("replace", str(path)), ("fsync", str(tmp_path))]
+
+
+async def test_a_gzip_backup_has_its_trailer_at_its_final_name(tmp_path: Path):
+    path = tmp_path / "b.jsongz"
+    await backup_stream.write_backup(_KB(), str(path), _doc(1), True)
+    assert (await _KB()._read_backup_file(str(path)))["facts_count"] == 1  # a missing trailer raises EOFError
+
+
 async def test_no_embeddings_asks_the_store_nothing(tmp_path: Path):
     kb, path = _KB(), str(tmp_path / "b.json")
     await backup_stream.write_backup(kb, path, _doc(2, embeddings=False), False)

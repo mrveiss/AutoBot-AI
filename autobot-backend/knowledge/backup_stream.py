@@ -32,7 +32,24 @@ def _discard(out, partial: str) -> None:
         os.unlink(partial)
 
 
+def _fsync_path(path: str) -> None:
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _commit(out, partial: str, backup_file: str) -> None:
+    """Make the whole file durable before its final name can point at it, then the name itself."""
+    out.close()  # flushes, and for gzip writes the trailer
+    _fsync_path(partial)
+    os.replace(partial, backup_file)
+    _fsync_path(os.path.dirname(backup_file) or ".")
+
+
 def _document_head(backup_data: Dict[str, Any]) -> str:
+    """The document up to its facts; ``_build_backup_data`` always sets the header's fields, so it is never empty."""
     header = {key: value for key, value in backup_data.items() if key != "facts"}
     return json.dumps(header, ensure_ascii=False, indent=2)[:-2] + ',\n  "facts": ['
 
@@ -62,8 +79,7 @@ async def write_backup(kb, backup_file: str, backup_data: Dict[str, Any], compre
             text = await _batch_text(kb, facts[start : start + EXPORT_BATCH_SIZE], with_vectors, start == 0)
             await asyncio.to_thread(out.write, text)
         await asyncio.to_thread(out.write, "\n  ]\n}\n")
-        await asyncio.to_thread(out.close)
-        await asyncio.to_thread(os.replace, partial, backup_file)
+        await asyncio.to_thread(_commit, out, partial, backup_file)
     except BaseException:
         await asyncio.to_thread(_discard, out, partial)
         raise
