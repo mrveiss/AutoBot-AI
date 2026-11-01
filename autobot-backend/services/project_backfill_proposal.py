@@ -44,7 +44,8 @@ async def propose_project_backfill(*, company_id: uuid.UUID, requested_by: str, 
             description=(
                 f"{preview.get('missing', 0)} work item(s) have no project: {preview.get('from_ancestor', 0)} take "
                 f"an ancestor's project, {preview.get('to_default', 0)} go to the default project. "
-                "Nothing changes until approved."
+                f"{preview.get('foreign_ancestor_project_skipped', 0)} have an ancestor in another company's project, "
+                "which is never used. Nothing changes until approved."
             ),
             context=context,
             company_id=company_id,

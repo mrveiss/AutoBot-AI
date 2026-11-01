@@ -144,7 +144,7 @@ async def test_the_preview_counts_and_changes_nothing(factory):
     ids = await _seed(factory)
     body = _client(factory, OWNER).get(f"/api/llc/companies/{COMPANY}/project-backfill").json()
     assert body == {
-        "missing": 3, "from_ancestor": 2, "to_default": 1,
+        "missing": 3, "from_ancestor": 2, "to_default": 1, "foreign_ancestor_project_skipped": 0,
         "default_project_exists": False, "default_project_would_be_created": True,
     }  # fmt: skip
     for key in ("pbi", "task", "lone"):
@@ -243,3 +243,28 @@ async def test_a_plain_member_can_neither_preview_nor_request(factory):
     client = _client(factory, MEMBER)
     assert client.get(f"/api/llc/companies/{COMPANY}/project-backfill").status_code == 403
     assert _request(client).status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_a_project_from_another_company_is_never_taken_and_is_counted(factory):
+    """Bad old data: an epic of this company sits in a project of another company. Its children do not inherit it."""
+    foreign = uuid.uuid4()
+    async with factory() as session:
+        session.add(LLCProject(id=foreign, company_id=OTHER, name="Theirs"))
+        await session.commit()
+    bad_epic = await _item(factory, T.EPIC, project=foreign)
+    child = await _item(factory, T.PBI, parent=bad_epic)
+    good_epic = await _item(factory, T.EPIC, project=PROJECT)
+    fine = await _item(factory, T.PBI, parent=good_epic)
+    async with factory() as session:
+        before = await preview_project_backfill(session, COMPANY)
+    assert (before["missing"], before["from_ancestor"], before["to_default"]) == (2, 1, 1)
+    assert before["foreign_ancestor_project_skipped"] == 1
+    await _add_admin(factory)
+    approval_id = _request(_client(factory, OWNER)).json()["approval_id"]
+    _decide(_client(factory, ADMIN2), approval_id)
+    default = [p for p in await _projects(factory) if p.name == DEFAULT_PROJECT_NAME]
+    assert len(default) == 1
+    assert await _project_of(factory, child) == default[0].id  # not the other company's project
+    assert await _project_of(factory, fine) == PROJECT
+    assert await _project_of(factory, bad_epic) == foreign  # an item that already has a project is never rewritten

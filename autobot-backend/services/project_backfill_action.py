@@ -46,7 +46,8 @@ async def execute_project_backfill(approval: "Approval", session: "AsyncSession"
     note = " (self-approved)" if self_approval else ""
     body = (
         f"Project backfill: {counts['missing']} item(s) without a project; {counts['from_ancestor']} took an "
-        f"ancestor's project, {counts['to_default']} went to the default project{note}."
+        f"ancestor's project, {counts['to_default']} went to the default project{note}; "
+        f"{counts['foreign_ancestor_project_skipped']} had an ancestor in another company's project (not used)."
     )
     session.add(ApprovalComment(approval_id=approval.id, author="system", author_type="system", body=body))
     await session.commit()
