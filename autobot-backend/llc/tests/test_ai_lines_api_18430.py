@@ -28,6 +28,7 @@ from api.user_management.dependencies import get_current_user, require_org_conte
 from llc.api.ai_lines import router as ai_lines_router
 from llc.api.approvals import router as approvals_router
 from llc.deps import get_session
+from llc.models.activity import LLCActivityLog
 from llc.models.ai_line import LLCAiLine
 from llc.models.enums import MembershipRole
 from llc.models.membership import LLCCompanyMembership
@@ -48,6 +49,7 @@ AGENT_CREDENTIAL = {"auth_method": "run_jwt", "username": "run:abc"}
 async def factory():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")  # canonical: ignore py-adhoc-db-engine (test-local)
     tables = [
+        LLCActivityLog.__table__,  # #8214: every decision writes an activity row
         Approval.__table__,
         ApprovalComment.__table__,
         TaskApprovalLink.__table__,
@@ -208,10 +210,8 @@ async def test_a_rejected_proposal_changes_nothing(factory):
 @pytest.mark.asyncio
 async def test_a_plain_member_approving_does_not_move_the_line(factory):
     approval_id = _propose(_client(factory, user=MEMBER)).json()["approval_id"]
-    assert _decide(_client(factory, user=MEMBER), approval_id).status_code == 200  # the decision is recorded ...
-    assert await _rows(factory, LLCAiLine) == []  # ... the line is not, and the reason is on the approval
-    bodies = [c.body for c in await _rows(factory, ApprovalComment)]
-    assert any("did not complete" in b for b in bodies)
+    assert _decide(_client(factory, user=MEMBER), approval_id).status_code == 403  # #8214: decide is board-only
+    assert await _rows(factory, LLCAiLine) == []
 
 
 @pytest.mark.asyncio
