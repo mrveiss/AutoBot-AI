@@ -44,6 +44,8 @@ from fastapi import HTTPException, status
 
 from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError, _peek_alg, decode_jwt
 from autobot_shared.auth.permissions import is_admin_role
+from autobot_shared.auth.revocation_unavailable import revocation_unavailable_error
+from autobot_shared.user_management.password_epoch import MalformedTokenClaims, is_token_revoked_by_password_change
 
 try:  # redis-py exceptions do NOT inherit builtin ConnectionError/OSError
     from redis.exceptions import RedisError as _RedisError
@@ -216,6 +218,34 @@ async def _rs256_jti_is_revoked(jti: str, *, context: str) -> bool:
         ) from exc
 
 
+async def _rs256_user_is_revoked(claims: Dict[str, Any], *, context: str) -> bool:
+    """True if *claims* predate the revocation marker of their user (#20446), failing CLOSED.
+
+    The marker is written on a password change and on deactivating or deleting the user
+    (#20443). An authority token names a user of the backend's database, whose markers the
+    backend writes to Redis, so this reads Redis -- not the SLM's own table, which holds only
+    the SLM's users (who get HS256 tokens). A token with no username or no ``iat`` cannot be
+    placed against a marker and is refused; every token the authority mints carries both
+    (``create_jwt_token``). An unreadable ``iat`` is a bad credential (denied); a store that
+    cannot answer is the shared 503 (#18892).
+    """
+    if not claims.get("username") or claims.get("iat") is None:
+        logger.warning("verify_authority_token: token has no username or iat (%s); rejecting", context)
+        return True
+    try:
+        return await is_token_revoked_by_password_change(claims, in_redis=True)
+    except MalformedTokenClaims:
+        logger.warning("verify_authority_token: token iat is malformed (%s); rejecting", context)
+        return True
+    except _REVOCATION_CHECK_FAILURES as exc:
+        logger.error(
+            "verify_authority_token: user-revocation check failed (%s, %s); denying token",
+            context,
+            exc.__class__.__name__,
+        )
+        raise revocation_unavailable_error() from exc
+
+
 async def verify_authority_token(token: str) -> Optional[Dict[str, Any]]:
     """Verify an RS256 authority token via cached JWKS and return normalized claims.
 
@@ -265,6 +295,8 @@ async def verify_authority_token(token: str) -> Optional[Dict[str, Any]]:
         cached_jti = cached.get("jti")
         if cached_jti and await _rs256_jti_is_revoked(cached_jti, context="cache hit"):
             logger.warning("verify_authority_token: cached jti=%r is revoked — rejecting", cached_jti)
+            return None
+        if await _rs256_user_is_revoked(cached, context="cache hit"):
             return None
         logger.debug("verify_authority_token: cache hit (sub=%r)", cached.get("sub"))
         return cached
@@ -326,6 +358,8 @@ async def verify_authority_token(token: str) -> Optional[Dict[str, Any]]:
         return None
 
     claims = _normalize_claims(payload)
+    if await _rs256_user_is_revoked(claims, context="full verify"):
+        return None
 
     # D1 (#10158): populate OIDC token claim cache for subsequent requests
     await cache_claims(token, claims)
