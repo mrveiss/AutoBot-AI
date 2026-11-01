@@ -402,6 +402,8 @@ python:
   - '.github/actions/generated-types-autofix/action.yml'
   - '.github/actions/install-ci-requirements/action.yml'
   - '.github/workflows/dispatch-generated-types.yml'
+  # #16568: workflow_types_gate_16568_test.py reads the required gate workflow by concrete literal.
+  - '.github/workflows/verify-generated-types.yml'
   # #17173: `repo_tests/secrets_baseline_reason_entries.py`'s `SPECIFIC_REASONS`
   # table names files under this tree by concrete literal (baseline keys are
   # (filename, type, hashed_secret) triples) -- the same filter-gap shape as
