@@ -195,14 +195,18 @@ async def set_password_epoch(subject: str, *, now: int | None = None, in_redis: 
     return epoch
 
 
-async def get_password_epoch(subject: str) -> int | None:
+async def get_password_epoch(subject: str, *, in_redis: bool = False) -> int | None:
     """Return *subject*'s password-change epoch, or None if none is recorded.
+
+    ``in_redis`` reads Redis even when this process routes epochs elsewhere (#20446): a process
+    that verifies tokens of accounts another process manages must read where those accounts'
+    markers are written (the SLM checking the backend's users' tokens).
 
     Raises:
         RevocationCheckUnavailable: Redis could not answer (#16411), or the
             stored marker is not an integer (#16422).
     """
-    if _store_override is not None:
+    if _store_override is not None and not in_redis:
         return await _store_override[0](subject)
     redis = await _epoch_store()
     try:
@@ -219,8 +223,10 @@ async def get_password_epoch(subject: str) -> int | None:
         raise RevocationCheckUnavailable("epoch marker is not an integer") from exc
 
 
-async def is_token_revoked_by_password_change(claims: dict) -> bool:
+async def is_token_revoked_by_password_change(claims: dict, *, in_redis: bool = False) -> bool:
     """True if *claims* describe a token issued before its subject's password change.
+
+    ``in_redis`` is passed to :func:`get_password_epoch`.
 
     Returns ``False`` when the subject is unknown or the token carries no
     ``iat`` -- see the module docstring for why.
@@ -249,7 +255,7 @@ async def is_token_revoked_by_password_change(claims: dict) -> bool:
         # before any store lookup, and is a 401 (#18892), not a store outage.
         raise MalformedTokenClaims("token iat is not an integer") from exc
 
-    epoch = await get_password_epoch(str(subject))
+    epoch = await get_password_epoch(str(subject), in_redis=in_redis)
     if epoch is None:
         return False
 
