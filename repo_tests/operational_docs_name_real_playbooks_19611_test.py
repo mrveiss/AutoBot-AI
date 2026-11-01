@@ -18,7 +18,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
-from tools.lint._scan_helpers import tracked_paths
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ANSIBLE = "autobot-slm-backend/ansible"
 #: Globs declared to the enumeration helper (recorded in _glob_declared_uncovered.py); the
@@ -90,15 +90,20 @@ def _reference_count(text: str) -> int:
 
 
 def _operational_paths(root: Path) -> list[str]:
-    return [p for p in tracked_paths(root, *_SCOPE) if _in_scope(p)]
+    """Tracked operational files; ``[]`` on an empty tree (never raises)."""
+    try:
+        return [p for p in tracked_paths(root, *_SCOPE) if _in_scope(p)]
+    except EmptyEnumeration:
+        return []
 
 
 def _references(root: Path) -> list[str]:
     """One entry per playbook reference, not per file: a pattern that stopped matching finds none and passes."""
     found: list[str] = []
-    for path in [*_operational_paths(root), _ROLE_REGISTRY]:
+    paths = _operational_paths(root)
+    for path in [*paths, _ROLE_REGISTRY] if paths else []:
         text = (root / path).read_text(encoding="utf-8", errors="replace")
-        found += [f"{path}#{index}" for index in range(_reference_count(text))]
+        found += [path] * _reference_count(text)
     return found
 
 
@@ -110,18 +115,10 @@ REACH = declare(
     what="playbook references in operational files",
     roots=(
         ".claude",
-        ".github",
-        "autobot-backend",
-        "autobot-frontend",
         "autobot-infrastructure",
         "autobot-slm-backend",
-        "autobot-slm-frontend",
-        "docker",
         "docs",
-        "pipeline-scripts",
-        "repo_tests",
-        "scripts",
-        "tools",
+        "install.sh",
     ),
 )
 
