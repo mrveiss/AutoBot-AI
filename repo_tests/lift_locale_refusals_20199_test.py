@@ -33,7 +33,7 @@ def test_collect_refusals_groups_by_reason() -> None:
 
 
 def test_overview_is_settled_in_de_and_es() -> None:
-    """The main-app 'Overview' keys that disagreed now share one word."""
+    """The SLM 'Overview' keys that disagreed now share one word."""
     base = repo_root() / "autobot-slm-frontend" / "src" / "locales"
     for locale, word in (("de", "Übersicht"), ("es", "Resumen")):
         tree = json.loads((base / f"{locale}.json").read_text(encoding="utf-8"))
