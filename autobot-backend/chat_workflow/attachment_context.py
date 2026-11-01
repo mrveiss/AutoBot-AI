@@ -119,7 +119,7 @@ async def _read_text(manager, session_id: str, info: Dict[str, Any]) -> str:
     if code := await asyncio.to_thread(attachment_guards.refusal_code, Path(str(info.get("file_path") or "")), suffix):
         raise _Skip(code)
     try:
-        return await attachment_guards.bounded(_extract(parser, manager, session_id, info, suffix))
+        return await attachment_guards.within_extract_deadline(_extract(parser, manager, session_id, info, suffix))
     except RuntimeError as exc:  # the manager's words for "binary" or "not found"
         raise _Skip("unsupported" if "binary" in str(exc) else "unreadable") from exc
     except asyncio.TimeoutError as exc:

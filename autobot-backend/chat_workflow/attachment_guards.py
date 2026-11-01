@@ -13,7 +13,7 @@ memory and time. These checks run ahead of any reader and have no side effects:
   ``limits.ATTACHMENT_MAX_UNCOMPRESSED_BYTES``. ``zipfile`` stops reading a member at its declared size, so the
   index is the bound the extractors run under; a file that is not a readable archive is left to the extractor;
 * a timeout (``limits.ATTACHMENT_EXTRACT_TIMEOUT_SECONDS``) around the reader, applied by the caller via
-  ``bounded``. The extraction thread cannot be killed; the turn simply stops waiting for it.
+  ``within_extract_deadline``. The extraction thread cannot be killed; the turn simply stops waiting for it.
 
 Only sizes, codes and ids are ever logged.
 """
@@ -60,6 +60,6 @@ def refusal_code(path: Path, suffix: str) -> str | None:
     return None
 
 
-async def bounded(work: Awaitable[Any]) -> Any:
+async def within_extract_deadline(work: Awaitable[Any]) -> Any:
     """Await *work* for at most the configured extraction time; ``TimeoutError`` past it."""
     return await asyncio.wait_for(work, timeout=limits.ATTACHMENT_EXTRACT_TIMEOUT_SECONDS)
