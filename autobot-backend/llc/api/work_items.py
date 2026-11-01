@@ -81,7 +81,7 @@ from ._common import own_task_actor, refused_transition
 from ._handoff_identity import handing_off_agent, member_reviewer
 from .activity import ActivityLogEntry, ActivityLogResponse
 from .github_webhooks import validate_github_pr_url
-from .work_item_comments import serialize_comment
+from .work_item_comments import require_work_item_id, serialize_comment
 
 
 class HumanClaimRequest(BaseModel):
@@ -114,7 +114,7 @@ class CoworkerRequest(BaseModel):
 
 
 logger = get_logger(__name__)
-router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
+router = APIRouter(prefix="/work-items", tags=["llc-work-items"], dependencies=[Depends(require_work_item_id)])
 _get_product_service = lazy_singleton(WorkProductService)
 _get_handoff_service = lazy_singleton(HandoffService)
 _kb_manager = KbCollectionManager()
