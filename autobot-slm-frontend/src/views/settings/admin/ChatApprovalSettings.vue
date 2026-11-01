@@ -33,12 +33,15 @@ const autoSetting = useSlmJsonSetting<unknown>(AUTO_APPROVE_ATTACHMENT_KEY)
 const relaxed = ref<ApprovalCategory[]>([])
 const autoApprove = ref(false)
 const error = ref<string | null>(null)
+// Both stored values read; until then the controls stay disabled so a save cannot write defaults over them.
+const loaded = ref(false)
 
 async function load(): Promise<void> {
   error.value = null
   try {
     relaxed.value = parseRelaxedCategories(await relaxedSetting.load())
     autoApprove.value = parseAutoApprove(await autoSetting.load())
+    loaded.value = true
   } catch (e) {
     error.value = e instanceof Error ? e.message : t('settings.chatApprovalSettings.failedToLoad')
   }
@@ -49,6 +52,7 @@ function isRelaxed(category: ApprovalCategory): boolean {
 }
 
 function setRelaxed(category: ApprovalCategory, on: boolean): void {
+  relaxedSetting.saved.value = false
   const rest = relaxed.value.filter((c) => c !== category)
   relaxed.value = on ? APPROVAL_CATEGORIES.filter((c) => c === category || rest.includes(c)) : rest
 }
@@ -70,6 +74,11 @@ const saveAutoApprove = () =>
     autoSetting.save({ enabled: autoApprove.value }, 'Auto-approve tool calls in chats that used an attached file'),
   )
 
+function setAutoApprove(on: boolean): void {
+  autoSetting.saved.value = false
+  autoApprove.value = on
+}
+
 onMounted(load)
 </script>
 
@@ -90,10 +99,11 @@ onMounted(load)
 
       <ul class="space-y-3">
         <li v-for="category in APPROVAL_CATEGORIES" :key="category" class="flex items-center justify-between">
-          <span class="text-sm text-gray-900">{{ category }}</span>
+          <span class="text-sm text-gray-900">{{ $t(`settings.chatApprovalSettings.categories.${category}`) }}</span>
           <BaseSwitch
             :model-value="isRelaxed(category)"
-            :label="category"
+            :label="$t(`settings.chatApprovalSettings.categories.${category}`)"
+            :disabled="!loaded"
             :data-test="`relax-${category}`"
             @update:model-value="setRelaxed(category, $event)"
           />
@@ -101,7 +111,7 @@ onMounted(load)
       </ul>
 
       <div class="mt-8 pt-6 border-t border-gray-200 flex justify-end">
-        <BaseButton data-test="save-relaxed" :loading="relaxedSetting.saving.value" @click="saveRelaxed">
+        <BaseButton data-test="save-relaxed" :disabled="!loaded" :loading="relaxedSetting.saving.value" @click="saveRelaxed">
           {{ $t('settings.chatApprovalSettings.save') }}
         </BaseButton>
       </div>
@@ -127,14 +137,16 @@ onMounted(load)
       <div class="flex items-center justify-between">
         <span class="text-sm font-medium text-gray-900">{{ $t('settings.chatApprovalSettings.autoApproveLabel') }}</span>
         <BaseSwitch
-          v-model="autoApprove"
+          :model-value="autoApprove"
+          :disabled="!loaded"
+          @update:model-value="setAutoApprove"
           data-test="auto-approve-switch"
           :label="$t('settings.chatApprovalSettings.autoApproveLabel')"
         />
       </div>
 
       <div class="mt-8 pt-6 border-t border-gray-200 flex justify-end">
-        <BaseButton data-test="save-auto-approve" :loading="autoSetting.saving.value" @click="saveAutoApprove">
+        <BaseButton data-test="save-auto-approve" :disabled="!loaded" :loading="autoSetting.saving.value" @click="saveAutoApprove">
           {{ $t('settings.chatApprovalSettings.save') }}
         </BaseButton>
       </div>

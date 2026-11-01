@@ -3022,6 +3022,32 @@
       "failedToSaveSetting": "Failed to save setting",
       "failedToLoadSettings": "Failed to load settings"
     },
+    "chatApprovalSettings": {
+      "categories": {
+        "pushing commits": "Pushing commits",
+        "publishing": "Publishing",
+        "destructive operations": "Destructive operations",
+        "rotating credentials": "Rotating credentials",
+        "sending externally": "Sending externally",
+        "writing files": "Writing files",
+        "executing code": "Executing code",
+        "deploying infrastructure": "Deploying infrastructure",
+        "discarding local changes": "Discarding local changes",
+        "writing data": "Writing data",
+        "browser actions": "Browser actions",
+        "delegating work": "Delegating work"
+      },
+      "autoApproveHelp": "When on, tool calls in a chat turn that used an attached file run without asking for approval. Off by default.",
+      "autoApproveLabel": "Auto-approve tool calls in chats that used an attached file",
+      "autoApproveRisk": "Risk: text inside an attached file could steer tools without anyone being asked. Turn this on only if you trust every file your users can attach.",
+      "autoApproveTitle": "Auto-approve for attachment chats",
+      "failedToLoad": "Failed to load chat approval settings",
+      "failedToSave": "Failed to save chat approval settings",
+      "relaxedHelp": "Categories switched on here no longer ask for approval by default. Every other category keeps asking. Changes are recorded in the audit log.",
+      "relaxedTitle": "Relaxed approval categories",
+      "save": "Speichern",
+      "saved": "Saved."
+    },
     "disposalPolicySettings": {
       "controlsHowCompanyOSProjectsAre": "Controls how Company OS projects are disposed after archiving. Default: immediate, no approval.",
       "howManyDaysAnArchivedProject": "How many days an archived project waits before disposal. Set 0 for immediate.",
@@ -3257,6 +3283,7 @@
       "api": "API",
       "backend": "Backend",
       "disposalPolicy": "Disposal Policy",
+      "chatApproval": "Chat Approvals",
       "findingsPolicy": "Findings Policy",
       "users": "Benutzer",
       "cache": "Cache",

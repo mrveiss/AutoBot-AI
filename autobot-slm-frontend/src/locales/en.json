@@ -3023,6 +3023,20 @@
       "failedToLoadSettings": "Failed to load settings"
     },
     "chatApprovalSettings": {
+      "categories": {
+        "pushing commits": "Pushing commits",
+        "publishing": "Publishing",
+        "destructive operations": "Destructive operations",
+        "rotating credentials": "Rotating credentials",
+        "sending externally": "Sending externally",
+        "writing files": "Writing files",
+        "executing code": "Executing code",
+        "deploying infrastructure": "Deploying infrastructure",
+        "discarding local changes": "Discarding local changes",
+        "writing data": "Writing data",
+        "browser actions": "Browser actions",
+        "delegating work": "Delegating work"
+      },
       "autoApproveHelp": "When on, tool calls in a chat turn that used an attached file run without asking for approval. Off by default.",
       "autoApproveLabel": "Auto-approve tool calls in chats that used an attached file",
       "autoApproveRisk": "Risk: text inside an attached file could steer tools without anyone being asked. Turn this on only if you trust every file your users can attach.",
