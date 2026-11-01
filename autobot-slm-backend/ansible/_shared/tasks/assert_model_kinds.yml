@@ -6,8 +6,8 @@
 # #19736: every model pull checked the NAME only, never the KIND, so a chat model sat in the
 # embedding role and every embed call failed (#18834). After a pull, ask the model server what
 # each model can do ("ollama show" -> Capabilities) and fail the install when a model cannot do
-# the job its role needs. A model that is not installed is reported, not failed here: presence is
-# #19731's check; this one is about kind. A model server that cannot be reached at all fails here,
+# the job its role needs. A chat model that is not installed is reported, not failed: presence is
+# #19731's check. The embedding model must be there. A model server that cannot be reached at all fails here,
 # since otherwise every model would read ABSENT and the check would pass without asking anything.
 #
 # Caller sets:
@@ -30,13 +30,14 @@
 
 - name: "Models | Report models the server could not describe (#19736)"
   ansible.builtin.debug:
-    msg: "{{ _model_kind_probe.stdout_lines | select('match', '^(ABSENT|UNKNOWN) ') | list }}"
-  when: _model_kind_probe.stdout_lines | select('match', '^(ABSENT|UNKNOWN) ') | list | length > 0
+    msg: "{{ _model_kind_probe.stdout_lines | select('match', '^ABSENT ') | list }}"
+  when: _model_kind_probe.stdout_lines | select('match', '^ABSENT ') | list | length > 0
 
-- name: "Models | Fail when a model cannot do its role's job (#19736)"
+- name: "Models | Fail when a model cannot do its role's job (#19736, #19886)"
   ansible.builtin.fail:
     msg: >-
-      A model is the wrong kind for its role: {{ _model_kind_probe.stdout_lines | select('match', '^WRONG-KIND ')
-      | list | join('; ') }}. An embedding role needs a model with the "embedding" capability, a chat role
-      one with "completion" (#19736, #18834).
-  when: _model_kind_probe.stdout_lines | select('match', '^WRONG-KIND ') | list | length > 0
+      A model cannot be shown to do its role's job:
+      {{ _model_kind_probe.stdout_lines | select('match', '^(WRONG-KIND|MISSING-EMBEDDING|SHOW-FAILED|UNKNOWN) ') | list | join('; ') }}.
+      An embedding role needs an installed model with the "embedding" capability, a chat role one with
+      "completion" (#19736, #18834).
+  when: _model_kind_probe.stdout_lines | select('match', '^(WRONG-KIND|MISSING-EMBEDDING|SHOW-FAILED|UNKNOWN) ') | list | length > 0

@@ -44,8 +44,13 @@ def _tasks(rel: str) -> list[dict]:
 
 
 def _fake_ollama(bin_dir: Path, reachable: bool = True) -> Path:
-    head = ['[ "$1" = list ] && exit 0', '[ "$1" = show ] || exit 2'] if reachable else ["exit 1"]
-    lines = ["#!/bin/sh", *head, 'case "$2" in']
+    listing = "".join(f"{name}:latest  id  1 GB  now\\n" for name in [*_CAPS, "flaky"])
+    head = [
+        f"[ \"$1\" = list ] && {{ printf 'NAME  ID  SIZE  MODIFIED\\n{listing}'; exit 0; }}",
+        '[ "$1" = show ] || exit 2',
+    ]
+    head = head if reachable else ["exit 1"]
+    lines = ["#!/bin/sh", *head, 'case "$2" in', "  flaky) echo 'Error: connection reset' >&2; exit 1 ;;"]
     for model, caps in _CAPS.items():
         body = "printf '  Model\\n    arch x\\n\\n'"
         if caps:
@@ -96,6 +101,14 @@ def test_an_undescribed_model_is_reported_not_judged(tmp_path: Path, model: str,
     assert _probe(tmp_path, "", [model]) == [line]
 
 
+def test_a_listed_model_that_show_cannot_describe_says_why(tmp_path: Path) -> None:
+    assert _probe(tmp_path, "", ["flaky"]) == ["SHOW-FAILED flaky: Error: connection reset"]
+
+
+def test_an_absent_embedding_model_is_its_own_verdict(tmp_path: Path) -> None:
+    assert _probe(tmp_path, "ghost", []) == ["MISSING-EMBEDDING ghost"]
+
+
 def test_an_unreachable_model_server_fails_the_probe_instead_of_reading_absent(tmp_path: Path) -> None:
     out = _run(tmp_path, "embedder", ["chatty"], reachable=False)
     assert out.returncode != 0 and out.stdout.startswith("UNREACHABLE ")
@@ -115,7 +128,11 @@ def _fires(kind: str, lines: list[str]) -> bool:
         ("embedder", ["chatty"], False, False),
         ("chatty", [], True, False),
         ("", ["embedder"], True, False),
-        ("", ["ghost", "nocaps"], False, True),
+        ("", ["ghost"], False, True),
+        ("", ["nocaps"], True, False),
+        ("", ["flaky"], True, False),
+        ("ghost", [], True, False),
+        ("nocaps", [], True, False),
     ],
 )
 def test_the_install_fails_exactly_on_a_wrong_kind_verdict(
@@ -139,12 +156,71 @@ def _includes_check(node) -> list[dict]:
     return found
 
 
+_LLM_EMBEDDING = (
+    "{{ llm_embedding_model | default((lookup('file', role_path ~ '/../agent_config/defaults/main.yml')\n"
+    "   | from_yaml).ollama_embedding_model) }}"
+)
+#: Exactly what each site tells the check; a loose template would pass any variable.
+_BINDINGS = {
+    _SITES[0]: ("{{ ollama_embedding_model }}", "{{ ollama_models }}"),
+    _SITES[1]: ("{{ ollama_embedding_model }}", "{{ ollama_models }}"),
+    _SITES[2]: ("{{ ollama_embedding_model }}", "{{ ollama_models }}"),
+    _SITES[3]: (_LLM_EMBEDDING, "{{ _llm_models_to_pull }}"),
+}
+
+
+def _bound(include: dict) -> tuple:
+    return include["vars"]["model_kind_embedding"], include["vars"]["model_kind_completion"]
+
+
 @pytest.mark.parametrize("site", _SITES)
-def test_each_wired_pull_site_names_its_embedding_role(site: str) -> None:
+def test_each_pull_site_binds_exactly_its_models(site: str) -> None:
     includes = _includes_check(_tasks(site))
-    assert len(includes) == 1, f"{site} must run the kind check once after its pull"
-    assert includes[0]["vars"]["model_kind_embedding"].startswith("{{ ")
-    assert "model_kind_completion" in includes[0]["vars"]
+    assert len(includes) == 1, f"{site} must run the kind check once"
+    assert _bound(includes[0]) == _BINDINGS[site]
+
+
+def _walk(node):
+    """Tasks in file order, descending into plays and blocks."""
+    if isinstance(node, list):
+        for item in node:
+            yield from _walk(item)
+    elif isinstance(node, dict):
+        yield node
+        for key in ("pre_tasks", "tasks", "block", "rescue", "always", "post_tasks"):
+            yield from _walk(node.get(key))
+
+
+def _check_follows_a_pull(tasks: list) -> bool:
+    """False when the check runs before the pull: a model not pulled yet would read as absent."""
+    pulled = False
+    for task in _walk(tasks):
+        if _includes_check(
+            dict(task, block=None, tasks=None, pre_tasks=None, post_tasks=None, rescue=None, always=None)
+        ):
+            return pulled
+        pulled = pulled or "ollama pull" in str({k: task[k] for k in task if k not in _CHILDREN})
+    return False
+
+
+_CHILDREN = ("pre_tasks", "tasks", "block", "rescue", "always", "post_tasks")
+
+
+@pytest.mark.parametrize("site", _SITES)
+def test_each_pull_site_checks_after_its_pull(site: str) -> None:
+    assert _check_follows_a_pull(_tasks(site)), f"{site} checks before it pulls"
+
+
+def test_contrast_a_check_before_the_pull_is_caught() -> None:
+    pull = {"name": "pull", "command": "ollama pull x"}
+    check = {"ansible.builtin.include_tasks": "../_shared/tasks/assert_model_kinds.yml"}
+    assert _check_follows_a_pull([pull, check])
+    assert not _check_follows_a_pull([check, pull])
+
+
+def test_contrast_a_loose_binding_is_caught() -> None:
+    loose = {"vars": {"model_kind_embedding": "{{ some_other_var }}", "model_kind_completion": "{{ ollama_models }}"}}
+    assert _bound(loose) != _BINDINGS[_SITES[0]]
 
 
 def test_a_loop_reference_is_read_only_through_names_the_play_loads() -> None:

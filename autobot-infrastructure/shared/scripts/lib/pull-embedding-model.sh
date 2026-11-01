@@ -23,8 +23,8 @@ pull_embedding_model() {
     ollama pull "${model}" || log_warn "Failed to pull embedding model"
     if ! verdicts="$(MODEL_CLI=ollama EMBEDDING_MODEL="${model}" COMPLETION_MODELS="" sh "${_ANSIBLE_DIR}/_shared/files/check_model_kinds.sh")"; then
         log_warn "Could not check the kind of ${model}: ${verdicts}"
-    elif grep -q '^WRONG-KIND ' <<<"${verdicts}"; then
-        log_error "A model is the wrong kind for its role: ${verdicts}"
+    elif grep -qE '^(WRONG-KIND|SHOW-FAILED|UNKNOWN) ' <<<"${verdicts}"; then
+        log_error "A model cannot be shown to do its role's job: ${verdicts}"
         exit 1
     fi
 }
