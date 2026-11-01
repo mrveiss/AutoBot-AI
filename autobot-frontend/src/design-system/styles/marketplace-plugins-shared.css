@@ -106,7 +106,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--text-on-primary);
   flex-shrink: 0;
 }
 
@@ -161,7 +161,7 @@
 
 .action-install {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border-color: var(--color-primary);
 }
 

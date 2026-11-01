@@ -456,7 +456,7 @@ h5 .icon {
 .action-btn.primary {
   background: var(--color-primary);
   border: none;
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .action-btn.primary:hover {
