@@ -137,7 +137,7 @@ describe('ember does not repaint contrast or mono (#18223)', () => {
     expect(surfaceSelector).toContain('data-theme-variant="ember"')
   })
 
-  it.each(['contrast', 'mono'])('does not match under %s', (theme) => {
+  it.each(['contrast', 'contrast-dark', 'mono'])('does not match under %s', (theme) => {
     expect(matches(theme)).toBe(false)
   })
 
