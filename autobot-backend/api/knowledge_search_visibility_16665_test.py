@@ -80,7 +80,10 @@ async def test_search_lets_an_admin_read_another_users_private_fact():
     }
     kb = _make_kb({"results": [others_private], "total_results": 1})
 
-    with patch("api.knowledge_search.get_or_create_knowledge_base", new=AsyncMock(return_value=kb)):
+    with (
+        patch("api.knowledge_search.get_or_create_knowledge_base", new=AsyncMock(return_value=kb)),
+        patch("services.audit_logger.audit_log", new=AsyncMock(return_value=True)),
+    ):  # the admin read is audited and committed before it returns (#19860)
         result = await search(
             SearchRequest(query="test"), _make_request(), current_user=_current_user("u1", role="admin")
         )
