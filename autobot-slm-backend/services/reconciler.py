@@ -63,7 +63,7 @@ from services.service_remediation_tracker import (
     read_service_remediation,
     write_service_remediation,
 )
-from services.service_upsert import upsert_service
+from services.service_upsert import load_node_services, remove_stale_services, upsert_service
 from services.unit_names import discovered_unit_name_ok
 
 logger = logging.getLogger(__name__)
@@ -1956,60 +1956,57 @@ class ReconcilerService:
         see `_restart_churn_active` (#14465). DB work runs in its own
         SAVEPOINT (#17070) so a row-level failure can't poison the session.
         """
+        if not svc_data.get("name"):
+            return False
+
+        try:
+            async with db.begin_nested():
+                return await self._apply_service(db, node_id, svc_data, now)
+        except Exception as exc:
+            if is_connection_level_db_error(exc):
+                raise
+            logger.warning("service sync failed node=%s service=%s error=%s", node_id, svc_data["name"], exc)
+            return False
+
+    async def _apply_service(self, db, node_id, svc_data, now, known=None) -> bool:
+        """The upsert itself; the caller owns the savepoint. Returns whether it is churning."""
         service_name = svc_data.get("name")
         if not service_name:
             return False
+        status = svc_data.get("status", "unknown")
+        if status not in [s.value for s in SystemdState]:
+            status = SystemdState.UNKNOWN.value
+        error_msg = svc_data.get("error_message", "")  # #1019: error context for failed services
+        svc_extra = {"error_message": error_msg} if error_msg else {}
+        svc_extra.update(engine_degraded_fields(svc_data))
+        outcome = await upsert_service(  # unit-name guard + lookup + categorise live in the core
+            db,
+            node_id,
+            service_name,
+            update=lambda row: self._update_existing_service(row, svc_data, status, error_msg, now),
+            create=lambda category: self._create_new_service(
+                node_id, service_name, svc_data, status, svc_extra, now, category=category
+            ),
+            known=known,
+        )
+        return bool(outcome and outcome.update_result)
 
+    async def _upsert_services(self, db, node_id, services: list, now) -> bool:
+        """All of a node's services in one lookup and one savepoint; row by row only if that fails (#20250).
+
+        A savepoint and a lookup per service took a heartbeat past the agent's 10 s limit. The row-by-row
+        retry keeps #17070: one bad row costs that row, not the whole batch.
+        """
         try:
             async with db.begin_nested():
-                status = svc_data.get("status", "unknown")
-                if status not in [s.value for s in SystemdState]:
-                    status = SystemdState.UNKNOWN.value
-                error_msg = svc_data.get("error_message", "")  # #1019: error context for failed services
-                svc_extra = {"error_message": error_msg} if error_msg else {}
-                svc_extra.update(engine_degraded_fields(svc_data))
-                outcome = await upsert_service(  # unit-name guard + lookup + categorise live in the core (#19021)
-                    db,
-                    node_id,
-                    service_name,
-                    update=lambda row: self._update_existing_service(row, svc_data, status, error_msg, now),
-                    create=lambda category: self._create_new_service(
-                        node_id, service_name, svc_data, status, svc_extra, now, category=category
-                    ),
-                )
-                return bool(outcome and outcome.update_result)
+                known = await load_node_services(db, node_id)
+                churning = [await self._apply_service(db, node_id, s, now, known) for s in services]
+            return any(churning)
         except Exception as exc:
             if is_connection_level_db_error(exc):
                 raise
-            logger.warning("service sync failed node=%s service=%s error=%s", node_id, service_name, exc)
-            return False
-
-    async def _remove_stale_services(
-        self,
-        db: AsyncSession,
-        node_id: str,
-        discovered_services: list,
-    ) -> None:
-        """Delete stale services. Helper for _sync_discovered_services (#1088).
-        Same savepoint protection as `_upsert_service` (#17070)."""
-        discovered_names = {s.get("name") for s in discovered_services if s.get("name")}
-        if not discovered_names:
-            return
-
-        try:
-            async with db.begin_nested():
-                stale_result = await db.execute(
-                    select(Service).where(
-                        Service.node_id == node_id,
-                        Service.service_name.notin_(discovered_names),
-                    )
-                )
-                for stale_svc in stale_result.scalars().all():
-                    await db.delete(stale_svc)
-        except Exception as exc:
-            if is_connection_level_db_error(exc):
-                raise
-            logger.warning("stale service removal failed node=%s error=%s", node_id, exc)
+            logger.warning("service batch failed node=%s, retrying row by row: %s", node_id, type(exc).__name__)
+        return any([await self._upsert_service(db, node_id, s, now) for s in services])
 
     async def _sync_discovered_services(
         self,
@@ -2031,13 +2028,11 @@ class ReconcilerService:
         any_churning = False
         stage = "service sync"
         try:
-            for svc_data in discovered_services:
-                if await self._upsert_service(db, node_id, svc_data, now):
-                    any_churning = True
+            any_churning = await self._upsert_services(db, node_id, discovered_services, now)
 
             # Remove stale services no longer reported by the agent (#1018)
             stage = "stale service removal"
-            await self._remove_stale_services(db, node_id, discovered_services)
+            await remove_stale_services(db, node_id, discovered_services)
         except Exception as exc:
             if not is_connection_level_db_error(exc):
                 raise
