@@ -121,6 +121,7 @@ async def _insert_agent(session_factory, company_id: str) -> str:  # noqa: ANN00
 async def test_provision_own_company_returns_201(client_factory, session_factory) -> None:  # noqa: ANN001
     company_id = str(uuid.uuid4())
     agent_id = await _insert_agent(session_factory, company_id)
+    await _make_member(session_factory, company_id, "admin")
     client = await client_factory(company_id)
     resp = await client.post(f"/api/llc/budget/{agent_id}", json={})
     assert resp.status_code == 201, resp.text
@@ -139,6 +140,7 @@ async def test_provision_cross_tenant_returns_404(client_factory, session_factor
 async def test_get_budget_own_company_returns_200(client_factory, session_factory) -> None:  # noqa: ANN001
     company_id = str(uuid.uuid4())
     agent_id = await _insert_agent(session_factory, company_id)
+    await _make_member(session_factory, company_id, "admin")
     owner_client = await client_factory(company_id)
     prov = await owner_client.post(f"/api/llc/budget/{agent_id}", json={})
     assert prov.status_code == 201, prov.text
@@ -151,6 +153,7 @@ async def test_get_budget_own_company_returns_200(client_factory, session_factor
 async def test_get_budget_cross_tenant_returns_404(client_factory, session_factory) -> None:  # noqa: ANN001
     company_id = str(uuid.uuid4())
     agent_id = await _insert_agent(session_factory, company_id)
+    await _make_member(session_factory, company_id, "admin")
     owner_client = await client_factory(company_id)
     prov = await owner_client.post(f"/api/llc/budget/{agent_id}", json={})
     assert prov.status_code == 201, prov.text
@@ -164,6 +167,7 @@ async def test_get_budget_cross_tenant_returns_404(client_factory, session_facto
 async def test_update_limit_cross_tenant_returns_404(client_factory, session_factory) -> None:  # noqa: ANN001
     company_id = str(uuid.uuid4())
     agent_id = await _insert_agent(session_factory, company_id)
+    await _make_member(session_factory, company_id, "admin")
     owner_client = await client_factory(company_id)
     prov = await owner_client.post(f"/api/llc/budget/{agent_id}", json={})
     assert prov.status_code == 201, prov.text
@@ -190,7 +194,8 @@ async def test_update_limit_by_a_plain_member_is_refused(client_factory, session
     agent_id = await _insert_agent(session_factory, company_id)
     await _make_member(session_factory, company_id, "member")
     client = await client_factory(company_id)
-    assert (await client.post(f"/api/llc/budget/{agent_id}", json={})).status_code == 201
+    seed = await client_factory(company_id, is_platform_admin=True)
+    assert (await seed.post(f"/api/llc/budget/{agent_id}", json={})).status_code == 201
 
     resp = await client.patch(f"/api/llc/budget/{agent_id}/limit", json={"budget_limit": "999.00"})
     assert resp.status_code == 403, resp.text
@@ -203,7 +208,8 @@ async def test_update_limit_without_a_membership_is_refused(client_factory, sess
     company_id = str(uuid.uuid4())
     agent_id = await _insert_agent(session_factory, company_id)
     client = await client_factory(company_id)
-    assert (await client.post(f"/api/llc/budget/{agent_id}", json={})).status_code == 201
+    seed = await client_factory(company_id, is_platform_admin=True)
+    assert (await seed.post(f"/api/llc/budget/{agent_id}", json={})).status_code == 201
 
     resp = await client.patch(f"/api/llc/budget/{agent_id}/limit", json={"budget_limit": "5.00"})
     assert resp.status_code == 403, resp.text
@@ -255,6 +261,7 @@ async def test_update_limit_own_company_returns_200(client_factory, session_fact
 async def test_list_budgets_cross_tenant_returns_404(client_factory, session_factory) -> None:  # noqa: ANN001
     company_id = str(uuid.uuid4())
     agent_id = await _insert_agent(session_factory, company_id)
+    await _make_member(session_factory, company_id, "admin")
     owner_client = await client_factory(company_id)
     prov = await owner_client.post(f"/api/llc/budget/{agent_id}", json={})
     assert prov.status_code == 201, prov.text
@@ -268,6 +275,7 @@ async def test_list_budgets_cross_tenant_returns_404(client_factory, session_fac
 async def test_list_budgets_own_company_returns_200(client_factory, session_factory) -> None:  # noqa: ANN001
     company_id = str(uuid.uuid4())
     agent_id = await _insert_agent(session_factory, company_id)
+    await _make_member(session_factory, company_id, "admin")
     owner_client = await client_factory(company_id)
     prov = await owner_client.post(f"/api/llc/budget/{agent_id}", json={})
     assert prov.status_code == 201, prov.text
@@ -275,3 +283,55 @@ async def test_list_budgets_own_company_returns_200(client_factory, session_fact
     resp = await owner_client.get("/api/llc/budget", params={"company_id": company_id})
     assert resp.status_code == 200, resp.text
     assert len(resp.json()) == 1
+
+
+@pytest.mark.asyncio
+async def test_provision_by_a_plain_member_is_refused_and_creates_no_row(
+    client_factory, session_factory
+) -> None:  # noqa: ANN001
+    """The first row carries a caller-chosen limit, so it is the same admin act as changing one (#20422)."""
+    company_id = str(uuid.uuid4())
+    agent_id = await _insert_agent(session_factory, company_id)
+    await _make_member(session_factory, company_id, "member")
+    client = await client_factory(company_id)
+
+    resp = await client.post(f"/api/llc/budget/{agent_id}", json={"budget_limit": "999999.00"})
+    assert resp.status_code == 403, resp.text
+    assert (await client.get(f"/api/llc/budget/{agent_id}")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_provision_without_a_membership_is_refused(client_factory, session_factory) -> None:  # noqa: ANN001
+    company_id = str(uuid.uuid4())
+    agent_id = await _insert_agent(session_factory, company_id)
+    client = await client_factory(company_id)
+
+    resp = await client.post(f"/api/llc/budget/{agent_id}", json={})
+    assert resp.status_code == 403, resp.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role", ["owner", "admin"])
+async def test_provision_by_an_owner_or_admin_returns_201(
+    client_factory, session_factory, role: str
+) -> None:  # noqa: ANN001
+    company_id = str(uuid.uuid4())
+    agent_id = await _insert_agent(session_factory, company_id)
+    await _make_member(session_factory, company_id, role)
+    client = await client_factory(company_id)
+
+    resp = await client.post(f"/api/llc/budget/{agent_id}", json={"budget_limit": "7.00"})
+    assert resp.status_code == 201, resp.text
+    assert Decimal(resp.json()["budget_limit"]) == Decimal("7.00")
+
+
+@pytest.mark.asyncio
+async def test_provision_by_a_platform_admin_without_membership_returns_201(
+    client_factory, session_factory
+) -> None:  # noqa: ANN001
+    company_id = str(uuid.uuid4())
+    agent_id = await _insert_agent(session_factory, company_id)
+    client = await client_factory(company_id, is_platform_admin=True)
+
+    resp = await client.post(f"/api/llc/budget/{agent_id}", json={})
+    assert resp.status_code == 201, resp.text
