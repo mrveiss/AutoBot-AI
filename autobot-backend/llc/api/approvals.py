@@ -25,6 +25,7 @@ from llc.deps import assert_company_access, get_session, load_authorized, servic
 from models.approval import Approval
 from services.ai_line_change_action import ACTION as LINE_CHANGE_ACTION
 from services.approval_execution import is_server_only_action, run_post_approval_actions, set_verified_decider
+from services.project_backfill_action import ACTION as PROJECT_BACKFILL_ACTION
 from user_management.services import TenantContext
 
 from ..models.enums import ApprovalStatus, ApprovalType
@@ -229,10 +230,13 @@ async def decide_approval(
     await svc.log_decision_to_kb(approval)  # GH#8243: index to decisions KB
     if body.decision == ApprovalStatus.APPROVED:
         # #18430: this route decided an approval without ever running what it proposed. Same dispatcher as
-        # the generic route, but ONLY for the AI-line change: approvals here are self-created with arbitrary
-        # payloads, and running any registered action from one is the #17161 class.
+        # the generic route, but ONLY for the AI-line change and the project backfill (#18978: both server-only,
+        # both refuse a non-admin decider): approvals here are self-created with arbitrary payloads, and running
+        # any registered action from one is the #17161 class.
         set_verified_decider(approval, decided_by)  # the verified caller (ctx.user_id), see _verified_decider
-        await run_post_approval_actions(approval, session, only=frozenset({LINE_CHANGE_ACTION}))
+        await run_post_approval_actions(
+            approval, session, only=frozenset({LINE_CHANGE_ACTION, PROJECT_BACKFILL_ACTION})
+        )
     return _to_response(approval)
 
 

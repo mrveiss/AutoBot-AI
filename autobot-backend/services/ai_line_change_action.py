@@ -61,15 +61,19 @@ def _requester_id(approval: "Approval") -> uuid.UUID | None:
         return None
 
 
-async def _four_eyes(approval: "Approval", session: "AsyncSession", decider: uuid.UUID | None) -> bool:
-    """True when this is a flagged self-approval by the company's only owner/admin; raises when refused."""
+async def require_four_eyes(approval: "Approval", session: "AsyncSession", decider: uuid.UUID | None) -> bool:
+    """True when this is a flagged self-approval by the company's only owner/admin; raises when refused.
+
+    Shared by every approval-gated company action: the requester is the id after the last colon of
+    ``requested_by_agent`` (``<proposer>:<user id>``).
+    """
     requester = _requester_id(approval)
     if decider is None or requester is None:
-        raise ValueError("a line change needs a verified decider and a requester that can be identified")
+        raise ValueError("this change needs a verified decider and a requester that can be identified")
     if decider != requester:
         return False
     if await _admin_count(session, approval.company_id) >= 2:
-        raise ValueError("a line change needs a different owner or admin than the one who asked for it")
+        raise ValueError("this change needs a different owner or admin than the one who asked for it")
     return True
 
 
@@ -108,7 +112,7 @@ async def _scope_and_review(
     if approval.company_id is None:
         raise ValueError("not a company-scoped or personal request")
     await require_company_admin(session, approval.company_id, decider)
-    return LineScope(SCOPE_COMPANY, approval.company_id), await _four_eyes(approval, session, decider)
+    return LineScope(SCOPE_COMPANY, approval.company_id), await require_four_eyes(approval, session, decider)
 
 
 async def execute_line_change(approval: "Approval", session: "AsyncSession") -> None:
