@@ -579,7 +579,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
         ? async () => { await loadImportTreeData() }
         : () => loadCachedImportTree(),
     },
-    { id: 'callgraph', label: t('analytics.codebase.scans.callGraph'), run: loadCallGraphData },
+    ...(useFullScans ? [{ id: 'callgraph', label: t('analytics.codebase.scans.callGraph'), run: loadCallGraphData }] : []), // #20491: a miss walks the tree
   ]
 
   const runScans = async (
