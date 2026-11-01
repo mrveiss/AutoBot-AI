@@ -78,3 +78,20 @@ def test_owner_moves_other_than_review_to_done_stay_free() -> None:
     assert is_own_task(item, _ME, WorkItemStatus.IN_PROGRESS) is True
     blocked = _item(WorkItemStatus.BLOCKED, created_by=_ME, assignee=_ME, reviewer=_OTHER)
     assert is_own_task(blocked, _ME, WorkItemStatus.IN_PROGRESS) is True, "blocked with blockers stays free"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("acting_user", [_ME, _OTHER], ids=["owner", "another-person"])
+async def test_nobody_but_the_reviewer_finishes_a_task_in_review(acting_user) -> None:
+    item = _item(WorkItemStatus.IN_REVIEW, created_by=_ME, assignee=_ME)
+    item.reviewer_user_id = uuid.uuid4()
+    with pytest.raises(InvalidTransition):
+        await _move(item, WorkItemStatus.DONE, acting_user)
+    assert item.status == WorkItemStatus.IN_REVIEW
+
+
+@pytest.mark.asyncio
+async def test_the_reviewer_finishes_it() -> None:
+    item = _item(WorkItemStatus.IN_REVIEW, created_by=_OTHER)
+    item.reviewer_user_id = _ME
+    assert (await _move(item, WorkItemStatus.DONE, _ME)).status == WorkItemStatus.DONE

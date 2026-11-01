@@ -29,6 +29,19 @@ def _past_its_reviewer(item: LLCWorkItem, acting_user: uuid.UUID, new_status: Op
     )
 
 
+class InvalidTransition(Exception):
+    """Raised when a status transition is not permitted."""
+
+
+def refuse_past_reviewer(item: LLCWorkItem, acting_user: Optional[uuid.UUID], new_status: WorkItemStatus) -> None:
+    """A person can't finish a task waiting on someone else's review; that reviewer decides (#20508).
+
+    Applies to people only: *acting_user* is None for any other credential, which keeps its own rules.
+    """
+    if acting_user is not None and _past_its_reviewer(item, acting_user, new_status):
+        raise InvalidTransition("This task is waiting on its reviewer, who decides whether it is done")
+
+
 def is_own_task(
     item: LLCWorkItem, acting_user: Optional[uuid.UUID], new_status: Optional[WorkItemStatus] = None
 ) -> bool:

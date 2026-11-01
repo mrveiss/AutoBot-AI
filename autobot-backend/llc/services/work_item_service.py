@@ -60,7 +60,7 @@ from .work_item_actor_role import (  # noqa: F401 -- resolve_actor_role is re-ex
 from .work_item_approval_categories import validated_approval_categories as _validated_approval_categories
 from .work_item_completion_effects import release_workspace_for_task
 from .work_item_hierarchy import reparent, validate_create
-from .work_item_own_task import is_own_task, stamp_status
+from .work_item_own_task import InvalidTransition, is_own_task, refuse_past_reviewer, stamp_status
 from .work_item_relations import WorkItemRelationService
 
 logger = logging.getLogger(__name__)
@@ -97,10 +97,6 @@ _ALLOWED_TRANSITIONS: Dict[WorkItemStatus, set] = {
 
 class CheckoutConflict(Exception):
     """Raised when a work item is already checked out by a different agent."""
-
-
-class InvalidTransition(Exception):
-    """Raised when a status transition is not permitted."""
 
 
 class CoWorkingPermissionError(Exception):
@@ -778,6 +774,7 @@ class WorkItemService(LLCServiceBase):
 
         current = WorkItemStatus(item.status)
         allowed = _ALLOWED_TRANSITIONS.get(current, set())
+        refuse_past_reviewer(item, acting_user, new_status)
         own = is_own_task(item, acting_user, new_status)
         if not own and new_status not in allowed:
             raise InvalidTransition(
