@@ -397,6 +397,8 @@ python:
   # here, a change confined to this file -- the only change that could add
   # `install-git-hooks.sh` back in -- skips the guard.
   - '.github/workflows/auto-fix-generated-types.yml'
+  # #20564: `dependabot_close_stale_only_test.py` reads this workflow by concrete literal.
+  - '.github/workflows/dependabot-close-stale.yml'
   # #18500: the autofix steps moved into a composite action with a dispatch-only
   # caller; the guards above (and autofix_types_dispatch_18500_test.py) read both.
   - '.github/actions/generated-types-autofix/action.yml'
