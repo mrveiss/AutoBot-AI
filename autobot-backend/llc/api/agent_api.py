@@ -28,7 +28,7 @@ from pydantic import BaseModel
 from autobot_shared.logging_manager import get_logger
 from security.upload_filename_policy import require_safe_upload
 
-from ._common import agent_context, agent_node_uuid, assert_item_in_company
+from ._common import agent_context, agent_node_uuid, assert_item_in_company, parse_work_item_id
 from ._peer_search import fetch_peer_rows
 
 logger = get_logger(__name__)
@@ -97,7 +97,7 @@ class StatusUpdate(BaseModel):
 
 
 @router.post("/work-items/{item_id}/status")
-async def update_work_item_status(item_id: uuid.UUID, body: StatusUpdate, request: Request) -> Dict[str, Any]:
+async def update_work_item_status(item_id: str, body: StatusUpdate, request: Request) -> Dict[str, Any]:
     """Transition a work item, enforcing the state machine (#15859).
 
     This used to echo the requested status back with ``{"updated": True}``
@@ -108,6 +108,7 @@ async def update_work_item_status(item_id: uuid.UUID, body: StatusUpdate, reques
     ``company_id`` and this route is reached with an agent's context, so an
     item belonging to another company must 404 rather than transition.
     """
+    item_id = str(parse_work_item_id(item_id))
     from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
 
@@ -439,8 +440,9 @@ async def agent_upload_attachment(
 
 
 @router.get("/context/{item_id}")
-async def get_item_context(item_id: uuid.UUID, request: Request) -> Dict[str, Any]:
+async def get_item_context(item_id: str, request: Request) -> Dict[str, Any]:
     """Return agent context for a work item, including any human handoff KB notes (GH#8232)."""
+    item_id = str(parse_work_item_id(item_id))
     _, company_id = agent_context(request)  # GH#12148: authenticated agent context
     await assert_item_in_company(str(item_id), company_id)  # GH#12156: tenant scope
     from ..kb.work_item_kb import WorkItemKB
