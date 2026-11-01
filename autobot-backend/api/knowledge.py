@@ -110,7 +110,7 @@ from knowledge.schemas.stats import (
     KnowledgeMainCategoriesResponse,
     KnowledgeStatsBasic,
 )
-from knowledge.upload_limit import MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_MB
+from knowledge.upload_limit import MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_MB, reject_oversize_file, reject_oversize_request
 from knowledge.upload_pages import clean_upload_text
 from knowledge.upload_rejections import (
     UploadRejection,
@@ -1196,6 +1196,7 @@ async def upload_file_to_knowledge(
         autobot_kb_degradation_total.labels(endpoint="upload", reason="kb_uninit").inc()
         raise InternalError("Knowledge base not initialized")
 
+    reject_oversize_request(req.headers)
     form = await req.form()
     file = form.get("file")
     if not file or not hasattr(file, "read"):
@@ -1203,10 +1204,9 @@ async def upload_file_to_knowledge(
 
     filename = getattr(file, "filename", None) or ""
     require_safe_kb_name(filename)  # #19088: name and type gate BEFORE the body is read
+    reject_oversize_file(getattr(file, "size", None))
     file_content = await file.read()
-
-    # Validate file upload BEFORE processing (Issue #549 Code Review: Security)
-    _validate_file_upload(filename, len(file_content))
+    _validate_file_upload(filename, len(file_content))  # #549: BEFORE processing
 
     title = form.get("title", "") or filename
     category = form.get("category", "uploads")
