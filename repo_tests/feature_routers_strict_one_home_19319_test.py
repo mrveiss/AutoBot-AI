@@ -69,7 +69,7 @@ def _candidates(root: Path) -> list[str]:
 REACH = declare(
     "feature-routers-strict-one-home-19319",
     discover=_candidates,
-    floor=12848,  # mid-window: population 13048, window (12648, 13048)
+    floor=12843,  # mid-window: population 13043, window (12643, 13043)
     growth=400,
     what="all tracked files, repo-wide",
 )

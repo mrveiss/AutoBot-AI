@@ -164,3 +164,21 @@ def test_command_refuses_missing_credentials_and_bad_method() -> None:
 def test_command_does_not_leak_the_key_when_the_request_fails() -> None:
     code, out, err = _call(["GET", "/llc/agent/work-items/next"])
     assert code == 1 and _KEY not in out + err
+
+
+def test_a_missing_script_gets_no_grant(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr("llc.adapters.heartbeat_prompt._SCRIPT", str(tmp_path / "gone.py"))
+    assert agent_api_command() is None
+
+
+@pytest.mark.parametrize("target", ["sys.executable", "script"])
+def test_an_unsafe_path_gets_no_grant(monkeypatch, tmp_path, target) -> None:
+    unsafe = tmp_path / "has space"
+    unsafe.mkdir()
+    script = unsafe / "tool.py"
+    script.write_text("", encoding="utf-8")
+    if target == "script":
+        monkeypatch.setattr("llc.adapters.heartbeat_prompt._SCRIPT", str(script))
+    else:
+        monkeypatch.setattr("llc.adapters.heartbeat_prompt.sys.executable", "/opt/a b/python")
+    assert agent_api_command() is None

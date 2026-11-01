@@ -124,7 +124,7 @@ def is_runtime_dir(rel: Path) -> bool:
 REACH = declare(
     "redis-keys-runtime-18999-scan",
     discover=lambda root: _population(root),
-    floor=3577,  # mid-window: population 3727, window (3427, 3727)
+    floor=3576,  # mid-window: population 3726, window (3426, 3726)
     what="runtime python source",
     growth=300,
 )
