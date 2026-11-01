@@ -77,7 +77,7 @@ def _live_paths(root) -> list[str]:
 REACH = declare(
     "ceiling-table-sweep-19544",
     discover=_live_paths,
-    floor=7561,  # measured at 7588 tracked files, pinned mid-window (#15928)
+    floor=7684,  # measured at 7588 tracked files, pinned mid-window (#15928)
     growth=300,
     what="tracked Python files swept for a second path->ceiling table (#19544)",
 )
