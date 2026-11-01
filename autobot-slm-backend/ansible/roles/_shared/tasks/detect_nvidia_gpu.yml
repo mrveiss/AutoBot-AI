@@ -8,7 +8,7 @@
 - name: "GPU | Detect NVIDIA GPU via nvidia-smi (#19731)"
   ansible.builtin.shell:
     cmd: >-
-      PATH="$PATH:{{ nvidia_smi_extra_path | default('/usr/lib/wsl/lib') }}"
+      PATH="$PATH":{{ nvidia_smi_extra_path | default('/usr/lib/wsl/lib') | quote }}
       nvidia-smi --query-gpu=name --format=csv,noheader
   register: nvidia_smi_probe
   changed_when: false
