@@ -12,6 +12,7 @@ Covers:
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from types import ModuleType
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -137,12 +138,16 @@ class TestHireAgentNamedBindDict:
     """
 
     @pytest.mark.asyncio
-    async def test_hire_agent_insert_binds_match_named_params(self) -> None:
+    async def test_hire_agent_insert_is_an_orm_row_not_hand_written_sql(self) -> None:
+        """The hire insert is an ``AgentOrgNode`` row, so no ``:name::jsonb`` text SQL can recur (GH#12134, #8214)."""
         mod = _get_agent_hires_mod()
-        from sqlalchemy.dialects import postgresql
+        from fastapi import Response
+
+        from llc.services.approval import ApprovalService
+        from models.agent_org import AgentOrgNode
 
         session = AsyncMock()
-        session.execute = AsyncMock()
+        session.add = MagicMock()
         session.commit = AsyncMock()
 
         body = mod.AgentHireRequest(agent_name="ABR CEO", org_role="manager", title="Chief Executive")
@@ -150,26 +155,20 @@ class TestHireAgentNamedBindDict:
 
         with (
             patch.object(mod, "registered_adapter_types", return_value=["claude_code"]),
-            # #12681: hiring now also checks the adapter can actually run. This test
-            # is about SQL binds, and CI has no `claude` binary, so state that the
-            # adapter is available rather than letting the probe decide.
+            # #12681: hiring also checks the adapter can run; CI has no `claude` binary.
             patch.object(mod, "adapter_unavailable_reason", return_value=None),
-            patch.object(mod.BudgetService, "provision_budget", new=AsyncMock()),
+            patch("llc.services.agent_hire_service.BudgetService.provision_budget", new=AsyncMock()),
+            patch.object(mod, "company_requires_hire_approval", new=AsyncMock(return_value=False)),
         ):
             ctx = TenantContext(org_id=None, user_id=uuid.uuid4(), is_platform_admin=True)
-            await mod.hire_agent(company_id=company_id, body=body, session=session, ctx=ctx)
+            await mod.hire_agent(
+                company_id=company_id, body=body, response=Response(), session=session, svc=ApprovalService(), ctx=ctx
+            )
 
-        stmt, params = session.execute.call_args_list[0].args
-        assert isinstance(params, dict), "params must be a named-bind dict, not a positional tuple"
-
-        compiled = stmt.compile(dialect=postgresql.dialect(paramstyle="pyformat"))
-        required = set(compiled.params.keys())
-        assert required == set(params.keys()), (
-            f"SQL bind names {sorted(required)} must exactly match execute() "
-            f"params {sorted(params)} — a mismatch means a ':name::type' cast "
-            "left an unresolved literal ':' in the compiled SQL (GH#12134)."
-        )
-        assert ":" not in compiled.string.replace("%(", "").replace(")s", ""), compiled.string
+        node = session.add.call_args.args[0]
+        assert isinstance(node, AgentOrgNode)
+        assert node.adapter_config == {"model": mod.SONNET_MODEL}
+        assert node.company_id == company_id
 
     @pytest.mark.asyncio
     async def test_create_agent_hire_insert_binds_match_named_params(self) -> None:
@@ -345,7 +344,7 @@ class TestAgentsMissingInstructions:
     async def test_does_not_count_agents_with_existing_file(self, tmp_path) -> None:
         """Agents whose AGENTS.md exists on disk should NOT be counted."""
         real_file = tmp_path / "AGENTS.md"
-        real_file.write_text("# Test Agent\n")
+        await asyncio.to_thread(real_file.write_text, "# Test Agent\n", encoding="utf-8")
         mock_row = ("a3", str(real_file))
 
         async_ctx = AsyncMock()
