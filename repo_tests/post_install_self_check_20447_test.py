@@ -193,6 +193,15 @@ def test_a_session_left_behind_fails_the_probe(stack, tmp_path: Path) -> None:
     assert "deleted" in _failed(tmp_path)["chat"]["expected"]
 
 
+def test_a_failed_delete_does_not_hide_the_chat_failure(stack, tmp_path: Path) -> None:
+    base, replies, _ = stack
+    replies["/api/chat"] = (500, "boom")
+    replies["/api/chat/sessions/sess-1"] = (500, "stuck")
+    assert check.main(_env(base, tmp_path)) == 1
+    failed = _failed(tmp_path)["chat"]
+    assert "HTTP 200 from chat" in failed["expected"] and "boom" in failed["got"] and "stuck" in failed["got"]
+
+
 def test_a_probe_s_own_crash_still_reports(stack, tmp_path: Path) -> None:
     base, _, _ = stack
 

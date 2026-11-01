@@ -114,8 +114,13 @@ def probe_chat(base: str, token: str, _env: Mapping[str, str]) -> None:
         content = str((_json(status, body, "chat").get("data") or {}).get("content", "")).strip()
         if not content or content.startswith(CHAT_ERROR_REPLY):
             raise ProbeFailed("a real answer from chat", body[:300])
-    finally:
-        _delete_session(base, token, session_id)
+    except ProbeFailed as chat_failure:
+        try:
+            _delete_session(base, token, session_id)
+        except ProbeFailed as leftover:  # the chat failure is the finding; the leftover is added to it
+            chat_failure.got += f"; also: {leftover.got}"
+        raise
+    _delete_session(base, token, session_id)
 
 
 def _delete_session(base: str, token: str, session_id: str) -> None:
