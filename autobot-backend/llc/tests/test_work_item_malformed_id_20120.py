@@ -17,7 +17,10 @@ from user_management.services import TenantContext
 
 pytestmark = pytest.mark.asyncio
 
-USER, COMPANY = uuid.uuid4(), uuid.uuid4()
+# Fixed values: these reach the parametrized ids, which every xdist worker must collect identically.
+USER = uuid.UUID("00000000-0000-4000-8000-000000000001")
+COMPANY = uuid.UUID("00000000-0000-4000-8000-000000000002")
+OTHER = uuid.UUID("00000000-0000-4000-8000-000000000003")
 BAD = "not-a-uuid"
 
 
@@ -49,8 +52,8 @@ def _client() -> httpx.AsyncClient:
         ("DELETE", f"/api/llc/work-items/{BAD}", None),
         ("POST", f"/api/llc/work-items/{BAD}/claim", {}),
         ("GET", f"/api/llc/work-items/{BAD}/comments", None),
-        ("POST", f"/api/llc/work-items/{BAD}/relations", {"target_id": str(uuid.uuid4()), "relation_type": "blocks"}),
-        ("DELETE", f"/api/llc/work-items/{BAD}/relations/{uuid.uuid4()}", None),
+        ("POST", f"/api/llc/work-items/{BAD}/relations", {"target_id": str(OTHER), "relation_type": "blocks"}),
+        ("DELETE", f"/api/llc/work-items/{BAD}/relations/{OTHER}", None),
         ("POST", f"/api/llc/companies/{COMPANY}/labels/work-items/{BAD}/labels", {"label_ids": []}),
         ("GET", f"/api/llc/context/{BAD}", None),
         ("POST", f"/api/llc/agent/work-items/{BAD}/status", {"status": "in_progress"}),
