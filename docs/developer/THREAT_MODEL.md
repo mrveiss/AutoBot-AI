@@ -100,6 +100,7 @@ response, a log line, an issue, a PR comment — is already redacted.
   [`jwks_verifier.py`](../../autobot-slm-backend/services/jwks_verifier.py) `verify_authority_token` (:249) denies the token (401) at both call sites; the write side stays best-effort.
 - The shared password-epoch helper fails CLOSED in both services (#16411, #16422, owner decisions): a Redis error, or a non-integer stored
   marker or `iat`, raises `RevocationCheckUnavailable` (a `ConnectionError`), which the SLM denies as above and [`auth_revocation.py`](../../autobot-backend/auth_revocation.py) denies with 401; an `except` reading it as "not revoked" is a fail-open.
+- A device JWT is void once its owner's marker postdates its `iat`, or the owner is deleted (#20446): [`device_owner_revocation.py`](../../autobot-backend/services/device_owner_revocation.py) `reject_if_owner_revoked` resolves the `user_id` claim to a username and calls the shared gate; a store that cannot answer is the shared 503, which `_extract_user_from_device_jwt` lets through rather than turning into a 401. An SLM API key is refused when its owner is inactive or soft-deleted (`_get_user_for_api_key`, same issue); `APIKey.is_valid` judges only the key.
 
 ## 5. Remote desktop access
 
