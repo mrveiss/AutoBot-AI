@@ -37,6 +37,7 @@ from autobot_shared.user_management.password_epoch import (
     REFRESH_GRACE_SECONDS,
 )
 from autobot_shared.user_management.user_service import UserService
+from testkit.fake_async_session import FakeAsyncSession
 from tests.security._credential_harness import PLATFORM_SECRET, real_middleware
 
 
@@ -196,26 +197,11 @@ async def test_the_audit_row_says_the_revocation_is_queued_not_a_written_epoch(e
     assert "sessions_revoked_from" not in details
 
 
-class _FailingCommitSession:
-    """What ``async_session_scope`` opens: commit raises, as a deferred constraint can."""
-
-    def __init__(self):
-        self.info = {}
-        self.flush = AsyncMock()
-        self.commit = AsyncMock(side_effect=RuntimeError("deferred constraint"))
-        self.rollback = AsyncMock()
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *_exc):
-        return False
-
-
 @pytest.mark.asyncio
 @pytest.mark.parametrize("method", ["deactivate", "soft_delete"])
 async def test_a_failed_commit_leaves_no_marker_on_the_user(epochs, method):
-    session = _FailingCommitSession()
+    session = FakeAsyncSession(commit_error=RuntimeError("deferred constraint"))
+    session.info = {}  # the session scope keeps its after-commit callbacks here
     with pytest.raises(RuntimeError):
         async with async_session_scope(lambda: session) as scoped:
             service = _Bound(scoped, TenantContext())
