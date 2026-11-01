@@ -30,6 +30,14 @@ upstream autobot_backend {
     server {{ backend_host | default(ansible_host) }}:{{ backend_port | default(8443) }} max_fails={{ backend_max_fails | default(3) }} fail_timeout={{ backend_fail_timeout | default('30s') }};
 }
 
+# #19832: SLM backend upstream for the unified UI's /slm/api (epic #19829, ADR-011).
+# The SLM backend may run on this host or on its own machine; the address comes
+# from frontend_slm_backend_host / frontend_slm_backend_port (roles/frontend/defaults),
+# which follow the inventory's slm_host and the SSOT slm_backend_port.
+upstream autobot_slm_backend {
+    server {{ frontend_slm_backend_host }}:{{ frontend_slm_backend_port }} max_fails={{ backend_max_fails | default(3) }} fail_timeout={{ backend_fail_timeout | default('30s') }};
+}
+
 server {
     listen {{ nginx_http_port }} default_server;
     listen [::]:{{ nginx_http_port }} default_server;
@@ -209,6 +217,39 @@ server {
         proxy_send_timeout 300s;
         proxy_read_timeout 300s;
         proxy_ssl_verify off;
+        proxy_next_upstream error timeout http_502 http_504;
+        proxy_next_upstream_timeout 10s;
+    }
+
+    # #19832: SLM backend WebSocket -- must be BEFORE /slm/api/ to take priority.
+    # Same shape as the slm_manager vhost's /slm/api/ws/ (autobot-slm.conf.j2).
+    location /slm/api/ws/ {
+        proxy_pass {{ frontend_slm_backend_protocol }}://autobot_slm_backend/api/ws/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 86400;
+    }
+
+    # #19832: SLM backend API. The unified UI calls /slm/api on its own origin; the
+    # prefix is stripped to /api/ upstream. Upgrade headers follow the #13604 rule
+    # ($connection_upgrade is "close" for plain HTTP, so REST is unaffected).
+    location /slm/api/ {
+        proxy_pass {{ frontend_slm_backend_protocol }}://autobot_slm_backend/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
         proxy_next_upstream error timeout http_502 http_504;
         proxy_next_upstream_timeout 10s;
     }

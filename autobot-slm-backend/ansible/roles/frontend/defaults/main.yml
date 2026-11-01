@@ -38,6 +38,14 @@ nginx_http_port: 80
 # served from a different origin than the backend (and add it to CSP connect-src).
 frontend_backend_url: ""
 
+# #19832: SLM backend behind /slm/api (unified UI, epic #19829). The SLM backend can
+# run on this host or on its own machine; the host is the inventory's slm_host and the
+# port the SSOT slm_backend_port (roles/slm_manager) / firewall_service_ports.slm_backend
+# (roles/common) -- never a literal. The SLM uvicorn speaks plain HTTP.
+frontend_slm_backend_host: "{{ slm_host | default('127.0.0.1') }}"
+frontend_slm_backend_port: "{{ slm_backend_port | default(firewall_service_ports.slm_backend) }}"
+frontend_slm_backend_protocol: http
+
 # Issue #1098: Backend upstream health tracking
 backend_max_fails: 3
 backend_fail_timeout: "30s"
