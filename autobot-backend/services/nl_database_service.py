@@ -212,8 +212,6 @@ async def _run_external_query(db_url: str, sql: str) -> List[Dict[str, Any]]:
 
     if db_url.startswith("mysql"):
         # Parse mysql URL (mysql://user:pass@host:port/db)
-        pass
-
         import aiomysql
 
         conn = await aiomysql.connect(**_mysql_connect_args(db_url))
