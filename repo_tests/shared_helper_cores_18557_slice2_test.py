@@ -192,6 +192,15 @@ def test_terminal_handlers_delegates_risk_assessment():
 
 
 # --- Row 7: terminal_handlers chat and audit ----------------------------------------------------
+TERMINAL_DELEGATED = {
+    "add_message",
+    "aiofiles",
+    "audit_log",
+    "_output_buffer",
+    "_output_lock",
+    "strip_ansi_codes",
+    "validate_relative_path",
+}
 OLD_TERMINAL_COPY = (
     "async def f(self, text):\n"
     "    await self.chat_history_manager.add_message(text=text)\n"
@@ -208,21 +217,24 @@ DELEGATING_TERMINAL = (
 
 
 def private_terminal_work(source: str) -> set[str]:
-    """Chat, transcript and audit writes done directly rather than through the two delegates."""
+    """Names only the chat and audit delegates need: the handler reading one has a copy again."""
     found = set()
     for node in ast.walk(ast.parse(source)):
-        if isinstance(node, ast.Attribute) and node.attr == "add_message":
-            found.add("chat save")
-        if isinstance(node, ast.Attribute) and node.attr == "open":
-            if isinstance(node.value, ast.Name) and node.value.id == "aiofiles":
-                found.add("transcript write")
-        if isinstance(node, ast.Attribute) and node.attr == "audit_log":
-            found.add("audit log")
-    return found
+        if isinstance(node, ast.Attribute):
+            found.add(node.attr)
+            if node.attr == "audit_log" and not (isinstance(node.value, ast.Name) and node.value.id == "self"):
+                found.discard("audit_log")
+        elif isinstance(node, ast.Name):
+            found.add(node.id)
+        elif isinstance(node, ast.alias):
+            found.add(node.name)
+    return found & TERMINAL_DELEGATED
 
 
 def test_terminal_work_detector_flags_an_old_copy_and_passes_a_delegate():
-    assert private_terminal_work(OLD_TERMINAL_COPY) == {"chat save", "transcript write", "audit log"}
+    assert private_terminal_work(OLD_TERMINAL_COPY) == {"add_message", "aiofiles", "audit_log"}
+    assert private_terminal_work("from aiofiles import open\n") == {"aiofiles"}
+    assert private_terminal_work("self._output_buffer = ''\n") == {"_output_buffer"}
     assert private_terminal_work(DELEGATING_TERMINAL) == set()
 
 
