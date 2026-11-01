@@ -8,6 +8,7 @@ from urllib.parse import unquote, urlsplit
 
 import pytest
 
+from autobot_shared.db_url import assemble_postgres_url
 from autobot_shared.postgres_dsn import build_postgres_dsn
 
 
@@ -25,3 +26,9 @@ def test_a_user_with_url_characters_parses_back() -> None:
 
 def test_no_password_gives_no_separator() -> None:
     assert build_postgres_dsn("postgresql+asyncpg", "user", "", "h", 1, "d") == "postgresql+asyncpg://user@h:1/d"
+
+
+def test_the_shared_url_assembly_encodes_the_password() -> None:
+    url = assemble_postgres_url({"AUTOBOT_POSTGRES_HOST": "db.local", "AUTOBOT_POSTGRES_PASSWORD": "a@:/%b"})
+    parts = urlsplit(url)
+    assert unquote(parts.password) == "a@:/%b" and parts.hostname == "db.local"
