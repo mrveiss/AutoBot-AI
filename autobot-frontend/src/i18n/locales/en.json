@@ -8280,7 +8280,8 @@
       "degradedMessage": "Some backend services are slow or failing. Features may not work as expected.",
       "criticalTitle": "Backend unreachable",
       "criticalMessage": "AutoBot cannot reach its backend. Changes may not be saved until it is back."
-    }
+    },
+    "llcSettings": "Settings"
   },
   "llcCompanyStatus": {
     "showArchived": "Show archived",
@@ -10125,6 +10126,40 @@
     "errorSetRate": "Could not save the rate.",
     "errorClearRate": "Could not clear the rate.",
     "errorSetStepCost": "Could not save this step's cost inputs."
+  },
+  "llcSettings": {
+    "title": "Company settings",
+    "subtitle": "Settings that apply to the whole company.",
+    "noCompany": "Select a company to see its settings.",
+    "ceo": {
+      "title": "CEO",
+      "intro": "The company's CEO can be an agent or a person in this company.",
+      "loading": "Loading the CEO designation",
+      "loadFailed": "The CEO designation could not be loaded.",
+      "noneTitle": "No CEO designated",
+      "noneBody": "This company has no CEO yet. Choose an agent or a person below.",
+      "notSet": "Not set",
+      "goneTitle": "The CEO no longer exists",
+      "goneBody": "The designation points to {id}, which no longer exists in this company. Choose a new CEO below, or clear the designation.",
+      "goneBadge": "Holder gone",
+      "current": "Current CEO",
+      "nameUnavailable": "Name unavailable",
+      "kind": {
+        "agent": "Agent",
+        "user": "Person"
+      },
+      "change": "Change CEO",
+      "pick": "Choose an agent or a person",
+      "loadingPeople": "Loading agents and people",
+      "peopleFailed": "The company's agents and people could not be loaded, so nobody can be chosen right now. Reload the page to try again.",
+      "noCandidates": "This company has no agents or people to choose from.",
+      "hint": "Only agents and people in this company can be CEO.",
+      "set": "Make CEO",
+      "clear": "Clear designation",
+      "setDone": "{name} is now the CEO.",
+      "clearDone": "The CEO designation was cleared.",
+      "actionFailed": "The change was not made. The server gave no reason."
+    }
   },
   "transcriber": {
     "layout": {
