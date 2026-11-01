@@ -230,7 +230,7 @@ server {
         # transcriber/knowledge media uploads (audio/video — .mp4/.m4a/.wav etc.)
         # with 413. User-backend uploads need a generous cap; the app enforces its
         # own per-file limit. Scoped here so SLM agent paths keep the 10m default.
-        client_max_body_size 1g;
+        {{ lookup('file', role_path ~ '/../../_shared/files/upload-cap.conf') }}
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
         proxy_set_header Host $host;
