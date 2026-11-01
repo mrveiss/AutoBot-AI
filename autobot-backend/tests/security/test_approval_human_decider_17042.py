@@ -161,6 +161,8 @@ def harness(real_auth_middleware, monkeypatch):
     gates = MagicMock()
     for method in _GATE_ACTIONS.values():
         setattr(gates.return_value, method, AsyncMock(return_value=_gate_approval()))
+    # a visible row: ownership has its own tests (#18413); this file is about the human-decider check
+    gates.return_value.get_visible = AsyncMock(return_value=_gate_approval())
     logger = MagicMock()
     with (
         patch.object(llc_api.ApprovalService, "decide", new=decide),
