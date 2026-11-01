@@ -103,6 +103,7 @@ const links = computed<SidebarLink[]>(() => {
     { labelKey: 'nav.llcActivity', to: { path: `/llc/companies/${id}/activity` } },
     { labelKey: 'nav.llcPortability', to: { path: `/llc/companies/${id}/portability` } },
     { labelKey: 'nav.llcSecrets', to: { path: `/llc/companies/${id}/secrets` } },
+    { labelKey: 'nav.llcSettings', to: { path: `/llc/companies/${id}/settings` } },
   ]
 })
 
