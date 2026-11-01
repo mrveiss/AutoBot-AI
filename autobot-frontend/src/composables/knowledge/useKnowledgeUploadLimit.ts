@@ -6,18 +6,21 @@
  * refused in the browser.
  */
 import { ref } from 'vue'
+import type { components } from '@/types/generated/api'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useKnowledgeUploadLimit')
 
+type KnowledgeUploadLimit = components['schemas']['KnowledgeUploadLimitResponse']
+
 export function useKnowledgeUploadLimit() {
   const maxMb = ref<number | null>(null)
 
   async function loadLimit(): Promise<void> {
     try {
-      const data = await apiClient.get<{ max_mb: number }>(`${getApiBase()}/knowledge_base/upload/limit`)
+      const data: KnowledgeUploadLimit = await apiClient.get(`${getApiBase()}/knowledge_base/upload/limit`)
       maxMb.value = data.max_mb
     } catch (error) {
       logger.warn('Could not read the upload limit; the server still enforces it', error)
