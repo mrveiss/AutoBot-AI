@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import configparser
 import dataclasses
 import inspect
 import re
@@ -37,8 +38,18 @@ _ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_ROOT))
 
 
+def import_roots() -> list[str]:
+    """The ``pythonpath`` of pytest.ini, the one list of where the guards' modules live."""
+    ini = configparser.ConfigParser(interpolation=None)
+    ini.read(_ROOT / "pytest.ini", encoding="utf-8")
+    return ini["pytest"]["pythonpath"].split()
+
+
 def _declarations() -> tuple[list, dict[str, str]]:
     """(floor-based declarations, {module: import error}) after importing every guard."""
+    # The paths pytest gives these modules: without them 14 could not import, so every local check
+    # exited 2 and the pre-push gate could never record a pass (#20518).
+    sys.path[1:1] = [str(_ROOT / root) for root in import_roots()]
     from repo_tests import reach_declarations_test as meta  # noqa: PLC0415 - imports every guard
 
     failures = dict(getattr(meta, "IMPORT_FAILURES", {}))
@@ -111,6 +122,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--check", action="store_true", help="report stale floors; change nothing")
     args = parser.parse_args(argv)
+    from repo_tests.machine_slot import acquire  # noqa: PLC0415 - _ROOT is on the path only from here
+
+    acquire()
     declarations, failures = _declarations()
     if failures:
         print(
