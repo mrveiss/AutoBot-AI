@@ -142,7 +142,7 @@ async def test_a_backend_database_users_marker_goes_to_redis_not_the_slm_store(e
 def test_the_autobot_users_routes_use_the_service_that_writes_to_redis():
     """Read from source: this harness stubs the SLM's ``user_management`` package, so the class is not importable."""
     root = Path(__file__).resolve().parents[2]
-    service = (root / "user_management" / "services" / "user_service.py").read_text(encoding="utf-8")
+    service = (root / "user_management" / "services" / "autobot_database_user_service.py").read_text(encoding="utf-8")
     assert re.search(r"class AutobotDatabaseUserService\(UserService\):.*?epoch_in_redis = True", service, re.S)
     routes = (root / "api" / "autobot_users.py").read_text(encoding="utf-8")
     assert routes.count("AutobotDatabaseUserService(db, context)") == 6
