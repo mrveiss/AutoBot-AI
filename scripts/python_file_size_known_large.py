@@ -46,7 +46,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/agent.py": 1349,
     "autobot-backend/api/agent_config.py": 1371,
     "autobot-backend/api/agent_terminal.py": 773,
-    "autobot-backend/api/analytics.py": 1277,
+    "autobot-backend/api/analytics.py": 1269,
     "autobot-backend/api/analytics_architecture.py": 1260,
     "autobot-backend/api/analytics_bug_prediction.py": 1430,
     "autobot-backend/api/analytics_cfg.py": 1331,
@@ -412,7 +412,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/workflow_scheduler.py": 1070,
     "autobot-npu-worker/npu_worker_pool_test.py": 1010,
     "autobot-slm-backend/api/code_source.py": 701,
-    "autobot-slm-backend/api/code_sync.py": 5782,  # #19352, #19367 (was 5803)
+    "autobot-slm-backend/api/code_sync.py": 5780,  # #19352, #19367 (was 5803)
     "autobot-slm-backend/api/errors.py": 866,
     "autobot-slm-backend/api/infrastructure.py": 722,
     "autobot-slm-backend/api/monitoring.py": 1087,

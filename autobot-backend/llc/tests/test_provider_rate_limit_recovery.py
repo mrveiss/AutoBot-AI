@@ -120,8 +120,6 @@ async def test_handle_rate_limited_writes_status_and_requeues():
 
     with (
         patch("llc.scheduler.heartbeat_scheduler.get_async_session_factory", return_value=lambda: ctx_mgr),
-        # #19240: the gate fails closed without Redis; these tests are about what follows it.
-        patch("llc.scheduler.heartbeat_scheduler.dispatch_block_reason", AsyncMock(return_value=None)),
         patch("llc.scheduler.heartbeat_scheduler.get_async_redis_client", AsyncMock(return_value=redis)),
     ):
         await scheduler._handle_rate_limited(agent, _RUN_ID, retry_count=0, exc=exc)
@@ -155,8 +153,6 @@ async def test_handle_rate_limited_uses_provider_hint():
 
     with (
         patch("llc.scheduler.heartbeat_scheduler.get_async_session_factory", return_value=lambda: ctx_mgr),
-        # #19240: the gate fails closed without Redis; these tests are about what follows it.
-        patch("llc.scheduler.heartbeat_scheduler.dispatch_block_reason", AsyncMock(return_value=None)),
         patch("llc.scheduler.heartbeat_scheduler.get_async_redis_client", AsyncMock(return_value=redis)),
     ):
         await scheduler._handle_rate_limited(agent, _RUN_ID, retry_count=0, exc=exc)
@@ -184,8 +180,6 @@ async def test_handle_rate_limited_exponential_backoff():
     # retry_count=2 → delay = min(300 * 4, 14400) = 1200s
     with (
         patch("llc.scheduler.heartbeat_scheduler.get_async_session_factory", return_value=lambda: ctx_mgr),
-        # #19240: the gate fails closed without Redis; these tests are about what follows it.
-        patch("llc.scheduler.heartbeat_scheduler.dispatch_block_reason", AsyncMock(return_value=None)),
         patch("llc.scheduler.heartbeat_scheduler.get_async_redis_client", AsyncMock(return_value=redis)),
     ):
         await scheduler._handle_rate_limited(agent, _RUN_ID, retry_count=2, exc=exc)
@@ -216,8 +210,6 @@ async def test_handle_rate_limited_cap_at_max():
     assert 6 < _MAX_RATE_LIMIT_RETRIES
     with (
         patch("llc.scheduler.heartbeat_scheduler.get_async_session_factory", return_value=lambda: ctx_mgr),
-        # #19240: the gate fails closed without Redis; these tests are about what follows it.
-        patch("llc.scheduler.heartbeat_scheduler.dispatch_block_reason", AsyncMock(return_value=None)),
         patch("llc.scheduler.heartbeat_scheduler.get_async_redis_client", AsyncMock(return_value=redis)),
     ):
         await scheduler._handle_rate_limited(agent, _RUN_ID, retry_count=6, exc=exc)
@@ -242,8 +234,6 @@ async def test_handle_rate_limited_demotes_after_max_retries():
 
     with (
         patch("llc.scheduler.heartbeat_scheduler.get_async_session_factory", return_value=lambda: ctx_mgr),
-        # #19240: the gate fails closed without Redis; these tests are about what follows it.
-        patch("llc.scheduler.heartbeat_scheduler.dispatch_block_reason", AsyncMock(return_value=None)),
         patch("llc.scheduler.heartbeat_scheduler.get_async_redis_client", AsyncMock(return_value=redis)),
     ):
         await scheduler._handle_rate_limited(agent, _RUN_ID, retry_count=_MAX_RATE_LIMIT_RETRIES, exc=exc)
@@ -278,8 +268,6 @@ async def test_handle_rate_limited_does_not_overwrite_earlier_redis_score():
 
     with (
         patch("llc.scheduler.heartbeat_scheduler.get_async_session_factory", return_value=lambda: ctx_mgr),
-        # #19240: the gate fails closed without Redis; these tests are about what follows it.
-        patch("llc.scheduler.heartbeat_scheduler.dispatch_block_reason", AsyncMock(return_value=None)),
         patch("llc.scheduler.heartbeat_scheduler.get_async_redis_client", AsyncMock(return_value=redis)),
     ):
         await scheduler._handle_rate_limited(agent, _RUN_ID, retry_count=0, exc=exc)
@@ -371,6 +359,39 @@ async def test_handle_due_agent_creates_fresh_run_when_no_rate_limited():
         run_adapter_call = mock_run_adapter.call_args
         passed_context = run_adapter_call[0][2]
         assert passed_context == {}
+
+
+@pytest.mark.asyncio
+async def test_handle_due_agent_defers_a_blocked_agent_and_leaves_its_rate_limited_run():
+    """A blocked agent is deferred before its rate_limited run is looked up, resumed or touched."""
+    scheduler = LLCHeartbeatScheduler()
+    redis = _make_redis()
+    session_mock = AsyncMock()
+    ctx_mgr = MagicMock()
+    ctx_mgr.__aenter__ = AsyncMock(return_value=session_mock)
+    ctx_mgr.__aexit__ = AsyncMock(return_value=False)
+    mock_find_rl = AsyncMock(return_value=_make_run())
+    mock_create_run = AsyncMock()
+    mock_run_adapter = AsyncMock()
+    mock_reschedule = AsyncMock()
+
+    with (
+        patch.object(scheduler, "_get_agent_config", AsyncMock(return_value=_make_agent())),
+        patch.object(scheduler, "_find_rate_limited_run", mock_find_rl),
+        patch.object(scheduler, "_create_run", mock_create_run),
+        patch.object(scheduler, "_run_adapter", mock_run_adapter),
+        patch.object(scheduler, "_reschedule", mock_reschedule),
+        patch("llc.scheduler.heartbeat_scheduler.get_async_session_factory", return_value=lambda: ctx_mgr),
+        patch("llc.scheduler.heartbeat_scheduler.dispatch_block_reason", AsyncMock(return_value="paused")),
+    ):
+        await scheduler._handle_due_agent(_AGENT_ID, redis)
+
+    mock_reschedule.assert_awaited_once()
+    mock_find_rl.assert_not_called()
+    mock_create_run.assert_not_called()
+    mock_run_adapter.assert_not_called()
+    session_mock.execute.assert_not_called()
+    session_mock.commit.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
