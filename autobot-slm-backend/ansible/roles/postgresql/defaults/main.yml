@@ -132,3 +132,7 @@ postgresql_backup_retention_days: 14
 
 # Filename prefix for each dump (timestamp is appended).
 postgresql_backup_prefix: "postgresql-all"
+
+# #19812: the user and password as a connection URL holds them. urlencode leaves "/" alone, and a
+# raw "/" ends the credentials early.
+db_url_credentials: "{{ db_user | urlencode | replace('/', '%2F') }}:{{ db_password | urlencode | replace('/', '%2F') }}"

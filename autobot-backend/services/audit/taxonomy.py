@@ -127,6 +127,7 @@ class AuditAction(str, Enum):
     ORG_CREATE = "org.create"
     ORG_UPDATE = "org.update"
     ORG_DELETE = "org.delete"
+    ORG_SUBSCRIPTION_TIER_DROP = "org.subscription_tier.drop"
     ROLE_CREATE = "role.create"
     ROLE_UPDATE = "role.update"
     ROLE_DELETE = "role.delete"
