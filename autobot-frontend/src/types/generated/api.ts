@@ -50296,7 +50296,8 @@ export interface paths {
          *
          *     Returns 201 on creation, 409 if a row already exists.
          *     Returns 404 if the agent does not exist in agent_org_nodes, or belongs to
-         *     a different tenant (GH#12136).
+         *     a different tenant (GH#12136). Returns 403 unless the caller is a company
+         *     owner/admin or a platform admin (#20422).
          *     company_id is derived from agent_org_nodes — callers cannot scope rows
          *     to arbitrary companies.
          */
