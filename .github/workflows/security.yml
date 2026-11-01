@@ -52,7 +52,7 @@ name: Security Scanning
 
 on:
   push:
-    branches: [ release, dev, main ]
+    branches: [ release, main ]
   pull_request:
     # ready_for_review is REQUIRED here: the jobs below are gated on
     # draft == false, and marking a PR ready fires ONLY this event. Without
