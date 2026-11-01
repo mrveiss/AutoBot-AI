@@ -154,9 +154,9 @@ done
 ### Migration Path
 
 **If SLM server was manually configured:**
-Redeploy the `slm-monitoring` role from the SLM **Roles** page (**Redeploy**), never with a hand-run
-playbook against the SLM host. Code Sync does not do this: the updater re-renders Prometheus
-configuration but has no Grafana step.
+**No builtin action applies this to the SLM host today.** The Roles page's **Redeploy** for `slm-monitoring` does not reach
+it (#20484), and Code Sync re-renders Prometheus configuration but has no Grafana step. Do not hand-run a playbook against
+the SLM host to get around that; follow #20484.
 
 ```bash
 # Verify settings
