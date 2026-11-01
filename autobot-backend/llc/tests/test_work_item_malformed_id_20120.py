@@ -52,6 +52,9 @@ def _client() -> httpx.AsyncClient:
         ("POST", f"/api/llc/work-items/{BAD}/relations", {"target_id": str(uuid.uuid4()), "relation_type": "blocks"}),
         ("DELETE", f"/api/llc/work-items/{BAD}/relations/{uuid.uuid4()}", None),
         ("POST", f"/api/llc/companies/{COMPANY}/labels/work-items/{BAD}/labels", {"label_ids": []}),
+        ("GET", f"/api/llc/context/{BAD}", None),
+        ("POST", f"/api/llc/agent/work-items/{BAD}/status", {"status": "in_progress"}),
+        ("GET", f"/api/llc/agent/context/{BAD}", None),
     ],
 )
 async def test_malformed_work_item_id_is_404(method, path, body):
@@ -66,3 +69,15 @@ async def test_a_well_formed_id_is_not_short_circuited():
     async with _client() as c:
         with pytest.raises(_Boom):
             await c.get(f"/api/llc/work-items/{uuid.uuid4()}")
+
+
+async def test_a_malformed_id_is_404_before_auth_and_names_no_row():
+    """The guard runs before handler auth; the answer depends on the id's shape alone."""
+    app = FastAPI()
+    app.include_router(llc_router, prefix="/api")
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        malformed = await c.get(f"/api/llc/work-items/{BAD}")
+        well_formed = await c.get(f"/api/llc/work-items/{uuid.uuid4()}")
+    assert malformed.status_code == 404
+    assert well_formed.status_code != 404  # refused for missing credentials, not by the guard

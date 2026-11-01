@@ -17,7 +17,7 @@ USER/SYSTEM discriminator be whatever the caller typed (#13969 review M1).
 from __future__ import annotations
 
 import uuid
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import HTTPException, Request, status
 
@@ -165,21 +165,25 @@ def agent_context(request: Request) -> tuple[str, str]:
     return agent_id, company_id
 
 
+def parse_work_item_id(raw: Any) -> uuid.UUID:
+    """The id as a UUID; 404 when it cannot be one, since such an id names no work item (#20120)."""
+    try:
+        return uuid.UUID(str(raw))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Work item not found") from exc
+
+
 def require_work_item_id(request: Request) -> None:
     """Router dependency: 404 when the ``work_item_id`` path segment is not a UUID (#20120).
 
     ``WorkItemService`` parses the id with ``uuid.UUID`` and a malformed one is a
-    ``ValueError`` -> 500. An id that cannot be a UUID names no work item, so it is
-    a 404 here, once, for every route carrying the segment. Only the path segment
-    is parsed -- a ``ValueError`` from a handler's own logic is not caught.
+    ``ValueError`` -> 500. Only the path segment is parsed -- a ``ValueError`` from a
+    handler's own logic is not caught. This runs before each handler's auth, so an
+    unauthenticated caller with a malformed id gets 404 too; it says nothing about any row.
     """
     raw = request.path_params.get("work_item_id")
-    if raw is None:
-        return
-    try:
-        uuid.UUID(str(raw))
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Work item not found") from exc
+    if raw is not None:
+        parse_work_item_id(raw)
 
 
 async def assert_item_in_company(item_id: str, company_id: str) -> uuid.UUID:
