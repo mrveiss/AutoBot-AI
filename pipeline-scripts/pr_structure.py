@@ -5,7 +5,8 @@
 """A PR carries the milestone and phase label of the issue it serves (#20516).
 
 The rules are ``issue_structure``'s, so what counts as a goal milestone and a matching phase has one
-home. A merge train only carries PRs that have their own, and an outside contributor cannot set either.
+home. A merge train only carries PRs that have their own, an ``automation/`` head is opened by its own
+job with a personal token, and an outside contributor cannot set either.
 """
 
 from __future__ import annotations
@@ -18,19 +19,19 @@ from typing import Any, Dict, List, Optional, Sequence
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import issue_structure  # noqa: E402
+from branch_sync_core import EXCLUDED_PREFIXES  # noqa: E402
 
-TRAIN_PREFIX = "train-"
 #: Who can set a milestone and a label on this repository.
 MAINTAINER_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
 
 
 def excluded(head_ref: str, association: str, is_bot: bool) -> bool:
-    return head_ref.startswith(TRAIN_PREFIX) or is_bot or association not in MAINTAINER_ASSOCIATIONS
+    return head_ref.startswith(EXCLUDED_PREFIXES) or is_bot or association not in MAINTAINER_ASSOCIATIONS
 
 
 def problems(milestone: Optional[str], labels: Sequence[str]) -> List[str]:
     """What is missing or mismatched; empty when the PR has a goal milestone and its phase label."""
-    found = (issue_structure._milestone_item(milestone), issue_structure._phase_item(milestone, labels))
+    found = (issue_structure.milestone_item(milestone), issue_structure.phase_item(milestone, labels))
     return [item for item in found if item]
 
 

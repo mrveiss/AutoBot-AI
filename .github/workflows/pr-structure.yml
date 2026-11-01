@@ -23,6 +23,7 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             pipeline-scripts
+            autobot_shared
             .github/actions/upsert-pr-comment
 
       - name: Check the milestone and phase label
