@@ -61,7 +61,7 @@ def gate(monkeypatch, manager):
     monkeypatch.setattr(approval_execution, "audit_log", _audit)
     monkeypatch.setattr(conversation_file_cleanup_proposals, "_already_proposed", AsyncMock(return_value=set()))
     monkeypatch.setattr("conversation_file_manager.get_conversation_file_manager", AsyncMock(return_value=manager))
-    conversation_file_cleanup_action.register_cleanup_action()
+    conversation_file_cleanup_action.register_conversation_file_cleanup_action()
     return audited
 
 

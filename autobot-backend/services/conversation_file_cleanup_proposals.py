@@ -15,7 +15,7 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from autobot_shared.logging_manager import get_logger
-from services.conversation_file_cleanup_action import ACTION, register_cleanup_action
+from services.conversation_file_cleanup_action import ACTION, register_conversation_file_cleanup_action
 
 logger = get_logger(__name__)
 
@@ -23,7 +23,7 @@ REQUESTED_BY = "conversation-file-cleanup"
 
 # Registered at import, like api/legacy_transcript_disposal.py: the handler must be in
 # place before any approve() can reach a proposal this module raised.
-register_cleanup_action()
+register_conversation_file_cleanup_action()
 
 
 async def _already_proposed(db) -> set[str]:

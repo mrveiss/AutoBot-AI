@@ -61,9 +61,9 @@ async def execute_conversation_file_cleanup(approval: "Approval", session: "Asyn
     )
 
 
-def register_cleanup_action() -> None:
+def register_conversation_file_cleanup_action() -> None:
     """Idempotent. Server-only: the file id is the proposer's to name, never a caller's."""
     register_post_approval_action(ACTION, execute_conversation_file_cleanup, proposed_by=PROPOSED_BY, server_only=True)
 
 
-__all__ = ["ACTION", "PROPOSED_BY", "execute_conversation_file_cleanup", "register_cleanup_action"]
+__all__ = ["ACTION", "PROPOSED_BY", "execute_conversation_file_cleanup", "register_conversation_file_cleanup_action"]
