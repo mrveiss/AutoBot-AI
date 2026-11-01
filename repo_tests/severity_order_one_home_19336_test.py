@@ -45,15 +45,15 @@ PIN = {"not_an_order": 23}
 NOT_AN_ORDER = {
     "autobot-backend/api/analytics_debt.py": 1,  # an ROI impact score
     "autobot-backend/api/sandbox.py": 1,  # sandbox security levels
-    "autobot-backend/code_analysis/src/code_quality_dashboard.py": 7,  # priority weights and effort hours
-    "autobot-backend/code_analysis/src/patch_generator.py": 2,  # score weight and risk penalty
+    "autobot-backend/code_analysis/src/code_quality_dashboard.py": 7,  # weights added to a score (their size matters) and effort hours
+    "autobot-backend/code_analysis/src/patch_generator.py": 2,  # a weight added to a score (its size matters) and a risk penalty
     "autobot-backend/code_analysis/src/performance_analyzer.py": 1,  # debt score weights
     "autobot-backend/code_intelligence/shared/scoring.py": 3,  # issue counts in calibration examples
     "autobot-backend/llc/agent_tools.py": 1,  # a task priority enum
     "autobot-backend/llm_shared/providers/reasoning_effort.py": 3,  # LLM effort levels
     "autobot-backend/security/enterprise/security_policy_manager.py": 1,  # violation count thresholds
     "autobot-backend/services/confounder_control_analyzer.py": 2,  # complexity and priority bins
-    "autobot-backend/skills/builtin/code_review.py": 1,  # a skill config's report levels
+    "autobot-backend/skills/builtin/code_review.py": 1,  # choices for a config field; nothing compares by this list
 }
 
 
