@@ -94,7 +94,7 @@
   become: false
   ansible.builtin.command:
     cmd: git rev-parse HEAD
-    chdir: "{{ playbook_dir }}/../../.."
+    chdir: "{{ role_path }}/../../../.."
   register: git_commit_result
   changed_when: false
   # (#2872) Intentional: git may not be available on the Ansible controller

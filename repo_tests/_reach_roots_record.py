@@ -328,6 +328,7 @@ REACH_ROOTS = {
         "scripts",
         "tools",
     ),
+    "repo_tests/role_source_paths_depth_proof_20509_test.py": ("autobot-slm-backend/ansible/roles",),
     "repo_tests/root_resolver_single_source_18101_test.py": (
         "autobot-backend",
         "autobot-slm-backend",
