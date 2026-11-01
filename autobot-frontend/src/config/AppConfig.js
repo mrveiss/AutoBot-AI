@@ -7,7 +7,7 @@
  * Single source of truth for all frontend configuration needs.
  */
 
-import { HttpError } from '@autobot/ui';
+import { HttpError, getEnvPositiveInt } from '@autobot/ui';
 import ServiceDiscovery from './ServiceDiscovery.js';
 import { NetworkConstants } from '../constants/network.ts';
 import { createLogger } from '@/utils/debugUtils';
@@ -130,12 +130,12 @@ export class AppConfigService {
       api: {
         // Default timeout for standard API calls: the SSOT value (#17856 row 6)
         timeout: getApiTimeout(),
-        retryAttempts: parseInt(import.meta.env.VITE_API_RETRY_ATTEMPTS || '3'),
-        retryDelay: parseInt(import.meta.env.VITE_API_RETRY_DELAY || '1000'),
+        retryAttempts: getEnvPositiveInt(import.meta.env, 'VITE_API_RETRY_ATTEMPTS', 3),
+        retryDelay: getEnvPositiveInt(import.meta.env, 'VITE_API_RETRY_DELAY', 1000),
         cacheBustVersion: import.meta.env.VITE_APP_VERSION || Date.now().toString(),
         disableCache: import.meta.env.VITE_DISABLE_CACHE === 'true',
         // Backward compatibility alias (Issue #598: prefer using timeouts.knowledge)
-        knowledgeTimeout: parseInt(import.meta.env.VITE_KNOWLEDGE_TIMEOUT || '300000'),
+        knowledgeTimeout: getEnvPositiveInt(import.meta.env, 'VITE_KNOWLEDGE_TIMEOUT', 300000),
 
         // Operation-specific timeouts (Issue #598: centralized timeout management)
         // These are THE source of truth - all ApiClient implementations MUST use these
@@ -143,9 +143,9 @@ export class AppConfigService {
           // Standard API operations: the SSOT timeout (#17856 row 6)
           default: getApiTimeout(),
           // Knowledge base / vectorization operations (5 minutes)
-          knowledge: parseInt(import.meta.env.VITE_KNOWLEDGE_TIMEOUT || '300000'),
+          knowledge: getEnvPositiveInt(import.meta.env, 'VITE_KNOWLEDGE_TIMEOUT', 300000),
           // File upload operations (5 minutes)
-          upload: parseInt(import.meta.env.VITE_UPLOAD_TIMEOUT || '300000'),
+          upload: getEnvPositiveInt(import.meta.env, 'VITE_UPLOAD_TIMEOUT', 300000),
           // Health check operations (5 seconds)
           health: 5000,
           // Quick operations (5 seconds)
