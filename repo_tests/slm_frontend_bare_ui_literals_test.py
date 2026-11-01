@@ -120,7 +120,7 @@ def _components(root: Path | None = None) -> list[Path]:
 REACH = declare(
     "slm-frontend-components",
     discover=_components,
-    floor=103,
+    floor=113,  # mid-window: population 123, window (103, 123)
     what="Vue components under autobot-slm-frontend/src",
     growth=20,
 )
