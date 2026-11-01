@@ -1623,6 +1623,103 @@
           "capability_growth": "Capabilities"
         }
       }
+    },
+    "rum": {
+      "title": "Real user monitoring",
+      "subtitle": "What browsers have reported to the main backend: errors, performance and interaction events, and their sessions.",
+      "refresh": "Refresh",
+      "dismiss": "Dismiss",
+      "loading": "Reading real user monitoring...",
+      "errorTitle": "Real user monitoring could not be read",
+      "errorBody": "The real user monitoring status request failed.",
+      "detailFailedTitle": "The collected data could not be read",
+      "detailFailedBody": "The real user monitoring export request failed.",
+      "emptyOnTitle": "Collecting, nothing received yet",
+      "emptyOnBody": "Collection is on and the backend holds no events or sessions yet.",
+      "emptyOffTitle": "Collection is off and nothing is held",
+      "emptyOffBody": "The backend holds no events or sessions. Turn collection on to receive them.",
+      "yes": "Yes",
+      "no": "No",
+      "collection": {
+        "title": "Collection",
+        "switch": "Collect browser events",
+        "on": "On",
+        "off": "Off",
+        "memoryNote": "Events are held in the backend's memory, so a backend restart empties them. Turning collection off keeps what is already held until it is cleared.",
+        "enabledOk": "Collection is on.",
+        "disabledOk": "Collection is off.",
+        "enableFailed": "Collection could not be turned on.",
+        "disableFailed": "Collection could not be turned off."
+      },
+      "stat": {
+        "total_events": "Events held",
+        "total_sessions": "Sessions held",
+        "active_sessions": "Active sessions (last 30 minutes)",
+        "events_today": "Events today"
+      },
+      "settings": {
+        "title": "Collection settings",
+        "label": {
+          "enabled": "Enabled",
+          "error_tracking": "Error tracking",
+          "performance_monitoring": "Performance monitoring",
+          "interaction_tracking": "Interaction tracking",
+          "session_recording": "Session recording",
+          "sample_rate": "Sample rate (%)",
+          "max_events_per_session": "Max events per session",
+          "debug_mode": "Debug mode",
+          "log_to_backend": "Log to backend",
+          "log_level": "Log level"
+        }
+      },
+      "clear": {
+        "title": "Clear collected data",
+        "body": "Removes every event and session the backend holds. This cannot be undone.",
+        "button": "Clear collected data",
+        "confirmTitle": "Clear collected data?",
+        "confirmBody": "This permanently removes {events} events and {sessions} sessions. It cannot be undone.",
+        "confirm": "Clear",
+        "cancel": "Cancel",
+        "done": "Cleared {events} events and {sessions} sessions.",
+        "failed": "The collected data could not be cleared."
+      },
+      "types": {
+        "title": "Events by type",
+        "empty": "No events",
+        "col": {
+          "type": "Type",
+          "count": "Events"
+        }
+      },
+      "sessions": {
+        "title": "Sessions",
+        "empty": "No sessions",
+        "col": {
+          "id": "Session",
+          "url": "First page",
+          "agent": "Browser",
+          "events": "Events",
+          "started": "Started",
+          "last": "Last activity"
+        }
+      },
+      "events": {
+        "title": "Latest events",
+        "empty": "No events",
+        "shown": "Showing the latest {shown} of {total} events held.",
+        "col": {
+          "at": "Received",
+          "type": "Type",
+          "url": "Page",
+          "session": "Session"
+        }
+      },
+      "page": {
+        "previous": "Previous",
+        "next": "Next",
+        "label": "Latest events pages",
+        "summary": "Page {page} of {count}"
+      }
     }
   },
   "monitoringView": {
@@ -1641,7 +1738,8 @@
       "backendHealth": "Backend Health",
       "performance": "Performance",
       "agentLedger": "Agent ledger",
-      "validation": "Validation"
+      "validation": "Validation",
+      "rum": "Real user monitoring"
     }
   },
   "orchestration": {

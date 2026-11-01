@@ -5,7 +5,7 @@
 
 /**
  * MonitoringView tabs (#18391 AC2): labels come from the locale, and the
- * admin-only sections (Backend Health, Agent ledger, Validation) are not offered to a
+ * admin-only sections (Backend Health, Agent ledger, Validation, Real user monitoring) are not offered to a
  * user the router guard would turn away.
  */
 
@@ -44,9 +44,9 @@ async function tabLabels(isAdmin: boolean): Promise<string[]> {
 }
 
 describe('MonitoringView tabs', () => {
-  it('offers an admin every section, the agent ledger and validation included, labelled from the locale', async () => {
+  it('offers an admin every section, the agent ledger, validation and RUM included, labelled from the locale', async () => {
     expect(await tabLabels(true)).toEqual([
-      TABS.system, TABS.logs, TABS.dashboards, TABS.alerts, TABS.errors, TABS.backendHealth, TABS.performance, TABS.agentLedger, TABS.validation,
+      TABS.system, TABS.logs, TABS.dashboards, TABS.alerts, TABS.errors, TABS.backendHealth, TABS.performance, TABS.agentLedger, TABS.validation, TABS.rum,
     ])
   })
 
@@ -55,6 +55,7 @@ describe('MonitoringView tabs', () => {
     expect(labels).not.toContain(TABS.backendHealth)
     expect(labels).not.toContain(TABS.agentLedger)
     expect(labels).not.toContain(TABS.validation)
+    expect(labels).not.toContain(TABS.rum)
     expect(labels).toContain(TABS.performance)
   })
 })

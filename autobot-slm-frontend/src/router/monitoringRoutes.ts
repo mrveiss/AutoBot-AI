@@ -69,6 +69,13 @@ export const monitoringChildren: RouteRecordRaw[] = [
     component: () => import('@/views/monitoring/ValidationDashboard.vue'),
     meta: { title: 'Validation', parent: 'monitoring', admin: true }
   },
+  // #18277: what browsers reported to the main backend; /rum/export and every write are admin only
+  {
+    path: 'rum',
+    name: 'monitoring-rum',
+    component: () => import('@/views/monitoring/RumMonitor.vue'),
+    meta: { title: 'Real User Monitoring', parent: 'monitoring', admin: true }
+  },
   // Issue #752: Performance — moved from standalone /performance into monitoring
   // #19851: the performance sections are children of PerformanceView, which owns the
   // route's one performance poll; the overview reads it instead of polling again.
