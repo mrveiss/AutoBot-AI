@@ -179,6 +179,19 @@ def _guard_resubmit(approval, new_context: dict | None, current_user: dict) -> N
         )
 
 
+async def _require_visible(svc: ApprovalGateService, approval_id: uuid.UUID, current_user: dict) -> None:
+    """404 an approval the caller may not see, exactly as a missing one, before any write (#18413, #17161).
+
+    Same rule as the reads: an admin, the row's ``owner_user``, or a legacy unsourced unowned row. Nothing
+    is read into the response and nothing is written when it refuses.
+    """
+    visible = await svc.get_visible(
+        approval_id, viewer=current_user.get("username"), is_admin=is_admin_role(current_user.get("role"))
+    )
+    if visible is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Approval {approval_id} not found")
+
+
 # -- Endpoints ---------------------------------------------------------
 
 
@@ -324,6 +337,7 @@ async def approve(
     """Approve a pending approval gate (#1402); only a person may (#17042)."""
     require_interactive_human(current_user, "approval gate approve")
     svc = ApprovalGateService(session)
+    await _require_visible(svc, approval_id, current_user)
     username = current_user.get("username", "unknown")
     try:
         approval = await svc.approve(
@@ -359,6 +373,7 @@ async def reject(
     """Reject a pending approval gate (#1402); only a person may (#17042)."""
     require_interactive_human(current_user, "approval gate reject")
     svc = ApprovalGateService(session)
+    await _require_visible(svc, approval_id, current_user)
     username = current_user.get("username", "unknown")
     try:
         approval = await svc.reject(
@@ -393,6 +408,7 @@ async def request_revision(
     """Request revision on a pending approval gate (#1402); only a person may (#17042)."""
     require_interactive_human(current_user, "approval gate request_revision")
     svc = ApprovalGateService(session)
+    await _require_visible(svc, approval_id, current_user)
     username = current_user.get("username", "unknown")
     try:
         approval = await svc.request_revision(
@@ -426,6 +442,7 @@ async def resubmit(
 ):
     """Resubmit an approval after revision request (#1402)."""
     svc = ApprovalGateService(session)
+    await _require_visible(svc, approval_id, current_user)
     _guard_resubmit(await svc.get(approval_id), body.context, current_user)
     try:
         approval = await svc.resubmit(
@@ -459,6 +476,7 @@ async def add_comment(
 ):
     """Add a comment to an approval gate (#1402)."""
     svc = ApprovalGateService(session)
+    await _require_visible(svc, approval_id, current_user)
     username = current_user.get("username", "unknown")
     if body.author_type is not None:
         logger.warning(
@@ -506,6 +524,7 @@ async def link_task(
 ):
     """Link a task/issue to an approval gate (#1402)."""
     svc = ApprovalGateService(session)
+    await _require_visible(svc, approval_id, current_user)
     try:
         link = await svc.link_task(
             approval_id,
@@ -543,6 +562,7 @@ async def unlink_task(
 ):
     """Unlink a task from an approval gate (#1402)."""
     svc = ApprovalGateService(session)
+    await _require_visible(svc, approval_id, current_user)
     try:
         removed = await svc.unlink_task(approval_id, task_id)
     except ValueError:

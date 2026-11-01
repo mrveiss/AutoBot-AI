@@ -7,6 +7,7 @@
 import uuid
 from types import SimpleNamespace
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.dialects import postgresql
@@ -102,3 +103,92 @@ def test_the_clause_matches_the_viewers_rows_and_legacy_rows_only():
     assert ApprovalGateService.visibility("root", True) == ()
     no_viewer = str(ApprovalGateService.visibility(None, False)[0].compile(dialect=postgresql.dialect()))
     assert "owner_user = " not in no_viewer
+
+
+# -- Every write route applies the same rule (#18413, #17161) -------------------
+_HUMAN = {"auth_method": "session"}
+_W_ALICE, _W_BOB, _W_ADMIN = ({**u, **_HUMAN} for u in (_ALICE, _BOB, _ADMIN))
+_ROUTES = (
+    ("post", "approve", "approve", {"comment": "ok"}),
+    ("post", "reject", "reject", {"comment": "no"}),
+    ("post", "request-revision", "request_revision", {"comment": "fix"}),
+    ("post", "resubmit", "resubmit", {"description": "again"}),
+    ("post", "comments", "add_comment", {"body": "hi"}),
+    ("post", "tasks", "link_task", {"task_id": "1"}),
+    ("delete", "tasks/1", "unlink_task", None),
+)
+
+
+def _write_client(monkeypatch, row, user):
+    """Like ``_client`` plus every mutating service method recorded; returns (client, calls)."""
+    calls = []
+
+    def recorder(name, result):
+        async def call(self, *args, **kwargs):
+            calls.append(name)
+            return result
+
+        return call
+
+    link = SimpleNamespace(id=uuid.uuid4(), approval_id=uuid.uuid4(), task_id="1", task_type="github_issue")
+    comment = SimpleNamespace(
+        id=uuid.uuid4(), approval_id=uuid.uuid4(), author="x", author_type="human", body="hi", created_at=None
+    )
+    results = {"add_comment": comment, "link_task": link, "unlink_task": True}
+    for _, _, name, _ in _ROUTES:
+        monkeypatch.setattr(ApprovalGateService, name, recorder(name, results.get(name, row)))
+    return _client(monkeypatch, row, user), calls
+
+
+def _send(client, row, verb, suffix, body):
+    return client.request(verb, f"/approval-gates/{row.id}/{suffix}", json=body)
+
+
+@pytest.mark.parametrize("verb,suffix,method,body", _ROUTES)
+def test_another_users_write_is_the_identical_404_and_changes_nothing(monkeypatch, verb, suffix, method, body):
+    row = _row("alice")
+    client, calls = _write_client(monkeypatch, row, _W_BOB)
+    resp = _send(client, row, verb, suffix, body)
+    missing_client, _ = _write_client(monkeypatch, None, _W_BOB)
+    missing = _send(missing_client, row, verb, suffix, body)
+    assert (resp.status_code, resp.json()) == (404, missing.json()) and missing.status_code == 404
+    assert calls == [] and "secret" not in resp.text and "alice" not in resp.text
+
+
+@pytest.mark.parametrize("verb,suffix,method,body", _ROUTES)
+def test_the_owner_still_writes_their_own_approval(monkeypatch, verb, suffix, method, body):
+    row = _row("alice")
+    row.requested_by_agent = "alice"  # resubmit stays the requester's (#17349)
+    client, calls = _write_client(monkeypatch, row, _W_ALICE)
+    assert _send(client, row, verb, suffix, body).status_code in (200, 201, 204)
+    assert calls == [method]
+
+
+@pytest.mark.parametrize("verb,suffix,method,body", [r for r in _ROUTES if r[2] != "resubmit"])
+def test_an_admin_still_decides_anyones_approval(monkeypatch, verb, suffix, method, body):
+    row = _row("alice")
+    client, calls = _write_client(monkeypatch, row, _W_ADMIN)
+    assert _send(client, row, verb, suffix, body).status_code in (200, 201, 204)
+    assert calls == [method]
+
+
+def test_an_admin_is_not_the_requester_so_resubmit_keeps_its_own_403(monkeypatch):
+    row = _row("alice")
+    row.requested_by_agent = "alice"
+    client, calls = _write_client(monkeypatch, row, _W_ADMIN)
+    assert _send(client, row, "post", "resubmit", {"description": "x"}).status_code == 403
+    assert calls == []
+
+
+def test_a_legacy_unsourced_unowned_gate_is_still_decided_by_any_person(monkeypatch):
+    row = _row(None, source=None)
+    client, calls = _write_client(monkeypatch, row, _W_BOB)
+    assert _send(client, row, "post", "approve", {"comment": "ok"}).status_code == 200
+    assert calls == ["approve"]
+
+
+def test_an_agent_credential_is_still_refused_before_visibility(monkeypatch):
+    row = _row("alice")
+    client, calls = _write_client(monkeypatch, row, {**_ALICE, "auth_method": "run_token"})
+    assert _send(client, row, "post", "approve", {"comment": "ok"}).status_code == 403
+    assert calls == []
