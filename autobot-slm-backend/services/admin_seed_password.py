@@ -26,8 +26,13 @@ import os
 from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.password_weakness import check_guessable
 
 logger = get_logger(__name__)  # #19288: the stdlib exception is retired; admin_password_sync does the same
+
+
+class GuessableAdminPasswordError(RuntimeError):
+    """The configured password for a NEW admin is guessable (#16299). Names the reason, never the value."""
 
 
 class AdminPasswordFileError(RuntimeError):
@@ -46,12 +51,18 @@ def _read_password_file(path: str) -> str:
 
 
 def password_for_new_admin() -> str:
-    """Password to create the admin with: SLM_ADMIN_PASSWORD, else the _FILE secret, else "" (generate)."""
+    """Password to create the admin with: SLM_ADMIN_PASSWORD, else the _FILE secret, else "" (generate one).
+
+    A guessable one stops the first start, so no install begins with it (#16299). An existing admin is
+    never checked here: changing a live password is its owner's decision.
+    """
     password = os.getenv("SLM_ADMIN_PASSWORD", "")
-    if password:
-        return password
     path = os.getenv("SLM_ADMIN_PASSWORD_FILE", "")
-    return _read_password_file(path) if path else ""
+    chosen = password or (_read_password_file(path) if path else "")
+    reason = check_guessable(chosen) if chosen else None
+    if reason:
+        raise GuessableAdminPasswordError(f"The configured SLM admin password cannot be used: {reason}")
+    return chosen
 
 
 def password_for_existing_admin() -> str:
