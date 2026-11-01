@@ -113,7 +113,7 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "frontend-local-date-formatter-scan",
     discover=_population,
-    floor=879,  # re-pinned mid-window by scripts/repin_reach_floors.py (#19905)
+    floor=903,  # re-pinned mid-window by scripts/repin_reach_floors.py (#19905)
     growth=50,
     what="component, view and composable sources in both frontends",
     roots=_ROOTS,
