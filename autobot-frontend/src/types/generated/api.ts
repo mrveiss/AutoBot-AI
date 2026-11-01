@@ -78945,19 +78945,10 @@ export interface components {
         };
         /** HandoffToAgentRequest */
         HandoffToAgentRequest: {
-            /** User Id */
-            user_id: string;
-            /** Company Id */
-            company_id: string;
             /** Target Agent Id */
             target_agent_id: string;
             /** Human Notes */
             human_notes: string;
-            /**
-             * User Display
-             * @default
-             */
-            user_display: string;
             /** Attachments */
             attachments?: components["schemas"]["HandoffAttachmentRequest"][] | null;
         } & {
@@ -78965,12 +78956,8 @@ export interface components {
         };
         /** HandoffToHumanRequest */
         HandoffToHumanRequest: {
-            /** Agent Id */
-            agent_id: string;
             /** Reviewer User Id */
             reviewer_user_id: string;
-            /** Company Id */
-            company_id: string;
             /** Agent Notes */
             agent_notes?: string | null;
         } & {
@@ -94742,21 +94729,8 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** ReviewApproveRequest */
-        ReviewApproveRequest: {
-            /** Reviewer User Id */
-            reviewer_user_id: string;
-            /** Company Id */
-            company_id: string;
-        } & {
-            [key: string]: unknown;
-        };
         /** ReviewChangesRequest */
         ReviewChangesRequest: {
-            /** Reviewer User Id */
-            reviewer_user_id: string;
-            /** Company Id */
-            company_id: string;
             /** Change Request */
             change_request: string;
             /** Return To Agent Id */
@@ -179228,11 +179202,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReviewApproveRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

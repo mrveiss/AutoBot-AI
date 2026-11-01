@@ -162,7 +162,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/llc/RoutinesView.vue": 688,
     "autobot-frontend/src/views/llc/SprintBoardView.vue": 664,
     # #14780: 1046 -> 1013 (kit BaseDrawer); #18750: 994 (comments tab returns)
-    "autobot-frontend/src/views/llc/WorkItemDetail.vue": 948,  # #20068: 994 -> 949
+    "autobot-frontend/src/views/llc/WorkItemDetail.vue": 947,  # #20068: 994 -> 949
     "autobot-infrastructure/shared/ide-extensions/vscode-autobot/src/extension.ts": 741,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/background-monitor.ts": 713,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/index.ts": 957,

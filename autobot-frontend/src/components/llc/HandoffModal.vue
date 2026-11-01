@@ -51,7 +51,6 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
-import { useUserStore } from '@/stores/useUserStore'
 import { createLogger } from '@/utils/debugUtils'
 import { useCompanyPeople } from '@/composables/llc/useCompanyPeople'
 import { BaseModal } from '@autobot/ui'
@@ -61,14 +60,12 @@ const props = defineProps<{
   companyId: string
   direction: 'to_agent' | 'to_human'
   // The item's current agent assignee (PK) — required for to_human handoff.
-  agentAssigneeId?: string | null
 }>()
 
 const emit = defineEmits<{ close: []; done: [] }>()
 
 const { t } = useI18n()
 const api = useApiClient()
-const userStore = useUserStore()
 const logger = createLogger('HandoffModal')
 const people = useCompanyPeople(props.companyId)
 
@@ -90,17 +87,12 @@ async function submit(): Promise<void> {
   try {
     if (props.direction === 'to_agent') {
       await api.post(`/api/llc/work-items/${props.workItemId}/handoff/to-agent`, {
-        user_id: userStore.currentUser?.id ?? '',
-        company_id: props.companyId,
         target_agent_id: targetId.value,
         human_notes: notes.value,
-        user_display: userStore.currentUser?.displayName ?? '',
       })
     } else {
       await api.post(`/api/llc/work-items/${props.workItemId}/handoff/to-human`, {
-        agent_id: props.agentAssigneeId ?? '',
         reviewer_user_id: targetId.value,
-        company_id: props.companyId,
         agent_notes: notes.value || null,
       })
     }

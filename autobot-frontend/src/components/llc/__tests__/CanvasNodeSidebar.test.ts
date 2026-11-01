@@ -264,7 +264,6 @@ describe('handoff rail (#13940)', () => {
     expect(modal.exists()).toBe(true)
     expect(modal.props('direction')).toBe('to_human')
     expect(modal.props('workItemId')).toBe('wi-1')
-    expect(modal.props('agentAssigneeId')).toBe('pk-dev-1')
   })
 })
 

@@ -527,7 +527,6 @@ const formatTime = createDateFormatter({ emptyText: () => t('llc.orgChart.never'
       :work-item-id="handoffItem.id"
       :company-id="companyId"
       direction="to_human"
-      :agent-assignee-id="node.node_id"
       @close="handoffItem = null"
       @done="onHandoffDone"
     />

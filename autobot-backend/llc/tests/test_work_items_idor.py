@@ -75,7 +75,7 @@ def _make_idor_app(
 
     # Auth overrides.
     def _fake_user() -> dict:
-        return {"id": str(_FIXED_USER_ID), "user_id": str(_FIXED_USER_ID)}
+        return {"id": str(_FIXED_USER_ID), "user_id": str(_FIXED_USER_ID), "auth_method": "session"}
 
     def _fake_tenant() -> TenantContext:
         return TenantContext(

@@ -136,6 +136,7 @@ async def app(session_factory):  # noqa: ANN001, ANN201
         return {
             "id": str(_FIXED_USER_ID),
             "user_id": str(_FIXED_USER_ID),
+            "auth_method": "session",
             "username": "admin",
             "role": "admin",
             "is_platform_admin": True,
@@ -357,9 +358,7 @@ async def test_llc_core_loop_end_to_end(app, client, session_factory):  # noqa: 
     handoff_resp = await client.post(
         f"/api/llc/work-items/{work_item_id}/handoff/to-human",
         json={
-            "agent_id": agent_id,
             "reviewer_user_id": str(_FIXED_USER_ID),
-            "company_id": company_id,
             "agent_notes": "Work complete, ready for review.",
         },
     )
@@ -371,7 +370,6 @@ async def test_llc_core_loop_end_to_end(app, client, session_factory):  # noqa: 
     # 5c. human reviewer approves (PUBLIC) → DONE.
     approve_resp = await client.post(
         f"/api/llc/work-items/{work_item_id}/review/approve",
-        json={"reviewer_user_id": str(_FIXED_USER_ID), "company_id": company_id},
     )
     assert approve_resp.status_code == 200, approve_resp.text
     approved = approve_resp.json()
