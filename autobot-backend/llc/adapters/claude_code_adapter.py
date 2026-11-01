@@ -47,6 +47,7 @@ from .claude_result_failure import (
     is_failed_result_event,
     is_turn_limit_result,
     resolve_result_event,
+    run_billing,
 )
 from .heartbeat_prompt import agent_api_tool_pattern
 from .subprocess_base import DEFAULT_OUTPUT_DIR as _DEFAULT_OUTPUT_DIR
@@ -368,6 +369,16 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
             state["stderr_file"] = stderr_file  # GH#9992
         return state
 
+    async def status(self, agent_config: dict, run_id: str) -> AdapterRunStatus:
+        """Base status, plus how a finished run was billed (#20266)."""
+        result = await super().status(agent_config, run_id)
+        if not result.status.is_terminal() or (result.tokens_in is None and result.tokens_out is None):
+            return result
+        output_dir = agent_config.get("adapter_config", {}).get("output_dir", _DEFAULT_OUTPUT_DIR)
+        state = self._load_state(self._state_path(output_dir, run_id), output_dir)
+        output_file = state.get("output_file") if state else None
+        return replace(result, billing=run_billing(output_file)) if output_file else result
+
     async def _status(self, agent_config: dict, run_id: str) -> AdapterRunStatus:
         """Extend base status to detect provider rate-limiting on process exit (GH#9773).
 
@@ -429,9 +440,10 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         # stdout file (GH#9992).
         stderr_file: Optional[str] = state.get("stderr_file") if state else None
         stderr_tail = read_output_tail(stderr_file) if stderr_file else ""
-        # event_text is the wide re-read when an oversized result line needed one: a marker
-        # near the start of that line is outside the 4 KB tail.
-        if is_rate_limit_output(tail) or is_rate_limit_output(event_text) or is_rate_limit_output(stderr_tail):
+        # #20202: an oversized result line can start before the tail, so read its own text too.
+        # Only that field, not the wider read, whose tool output can mention rate limits in passing.
+        result_text = str(result_event.get("result") or "") if result_event else ""
+        if is_rate_limit_output(tail) or is_rate_limit_output(stderr_tail) or is_rate_limit_output(result_text):
             logger.warning(
                 "ClaudeCodeAdapter: rate-limit markers in output/stderr for run %s — signalling RATE_LIMITED",
                 run_id,

@@ -76,6 +76,7 @@ from .run_key import revoke_run_key as _revoke_run_key
 from .run_status import RunSuperseded, latest_run_in, mark_running
 from .run_workspace import acquire_run_workspace, release_run_workspace, release_workspace_best_effort
 from .schedule_members import agent_due_members, drop_unschedulable_member
+from .usage_billing import ingest_run_cost
 
 logger = get_logger(__name__)
 
@@ -934,21 +935,21 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
     if final_status == LLCRunStatus.QUOTA_EXHAUSTED:
         raise SubscriptionQuotaExhausted(agent_id, str(result.error or "subscription quota exhausted"))
 
-    # GH#9622: surface non-success terminal states so _run_adapter records the
-    # run as FAILED (and the liveness monitor can act) instead of COMPLETED.
-    if final_status != LLCRunStatus.COMPLETED:
-        raise AdapterRunFailed(agent.get("adapter_type") or "", str(external_run_id), final_status)
-
     # GH#10220: forward parsed token usage to the agent's budget. BudgetExhausted
     # is re-raised (GH#8215 hard-stop → run marked FAILED); other cost errors are
     # best-effort and never fail an otherwise-successful run.
     await _ingest_adapter_usage(agent, result)
 
+    # GH#9622: surface non-success terminal states so _run_adapter records the
+    # run as FAILED (and the liveness monitor can act) instead of COMPLETED.
+    if final_status != LLCRunStatus.COMPLETED:
+        raise AdapterRunFailed(agent.get("adapter_type") or "", str(external_run_id), final_status)
+
     return external_run_id
 
 
 async def _ingest_adapter_usage(agent: Dict[str, Any], result: AdapterRunStatus) -> None:
-    """Record a completed registry run's token usage against the agent budget."""
+    """Record a finished registry run's token usage: a failed run spent tokens too (#20202)."""
     if result.tokens_in is None and result.tokens_out is None:
         return  # adapter did not report usage (e.g. CLI without stream-json result)
     agent_id: str = agent["agent_id"]
@@ -957,9 +958,8 @@ async def _ingest_adapter_usage(agent: Dict[str, Any], result: AdapterRunStatus)
         factory = get_async_session_factory()
         async with factory() as session:
             company = str(agent.get("company_id") or "")
-            await BudgetService().ingest_cost_event(
-                session, agent_id, company, int(result.tokens_in or 0), int(result.tokens_out or 0), model
-            )
+            usage = (int(result.tokens_in or 0), int(result.tokens_out or 0))
+            await ingest_run_cost(BudgetService(), session, result, agent_id, company, usage, model)
             await session.commit()
     except BudgetExhausted:
         raise  # GH#8215 hard-stop — propagate so the run is recorded FAILED
