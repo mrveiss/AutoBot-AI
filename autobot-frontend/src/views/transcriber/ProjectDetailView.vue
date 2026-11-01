@@ -4,6 +4,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { formatDuration, createDateFormatter } from '@/utils/formatHelpers'
 import { useRoute, useRouter } from 'vue-router'
+import { getEnvPositiveInt } from '@autobot/ui'
 import UploadModal from '@/components/transcriber/UploadModal.vue'
 import ProcessingProgress from '@/components/transcriber/ProcessingProgress.vue'
 import {
@@ -20,9 +21,9 @@ const logger = createLogger('TranscriberProjectDetailView')
 const LIVE_PROGRESS_ENABLED = false
 
 // While live progress is off, a pending/processing recording is refreshed by polling its served GET.
-const POLL_MS_RAW = Number(import.meta.env.VITE_TRANSCRIBER_POLL_MS)
-// Empty or malformed values (0, NaN) would poll near-continuously: fall back, and never go under 1s.
-const RECORDING_POLL_MS = Number.isFinite(POLL_MS_RAW) && POLL_MS_RAW >= 1000 ? POLL_MS_RAW : 4000
+const POLL_MS_RAW = getEnvPositiveInt(import.meta.env, 'VITE_TRANSCRIBER_POLL_MS', 4000)
+// Empty, malformed or non-positive values fall back in the reader; under 1s would poll near-continuously, so fall back too.
+const RECORDING_POLL_MS = POLL_MS_RAW >= 1000 ? POLL_MS_RAW : 4000
 
 const route = useRoute()
 const router = useRouter()
