@@ -88,6 +88,15 @@ class UserLifecycleMixin(UserServiceBase):
             "sessions_invalidated": invalidated_count,
         }
 
+    async def _revoke_tokens_of(self, username: str) -> dict:
+        """Void every token issued to *username* so far, through the password epoch (#20443).
+
+        A deactivated or deleted account's tokens would otherwise work until they expire:
+        the request gate reads the epoch, never the account's state. ``sessions_revoked_from``
+        is ``None`` when the store could not record it (logged by ``set_password_epoch``).
+        """
+        return {"sessions_revoked_from": await set_password_epoch(username)}
+
     async def _set_active(self, user_id: uuid.UUID, active: bool) -> bool:
         """Set ``is_active`` and audit it; raises ``UserNotFoundError``."""
         user = await self._require_user(user_id)
@@ -95,7 +104,9 @@ class UserLifecycleMixin(UserServiceBase):
         user.updated_at = now_utc()
         await self.session.flush()
         action = IdentityAuditAction.USER_ACTIVATED if active else IdentityAuditAction.USER_DEACTIVATED
-        await self._audit_log(action, AuditResourceType.USER, user_id, {})
+        # Reactivation revokes nothing: the tokens from before stay void, the user signs in again (#20443).
+        details = {} if active else await self._revoke_tokens_of(user.username)
+        await self._audit_log(action, AuditResourceType.USER, user_id, details)
         logger.info("%s user: %s", "Activated" if active else "Deactivated", user_id)
         return True
 
@@ -139,7 +150,7 @@ class UserLifecycleMixin(UserServiceBase):
             UserNotFoundError: the user does not exist.
         """
         user = await self._require_user(user_id)
-        details: dict[str, Any] = {"hard_delete": hard_delete}
+        details: dict[str, Any] = {"hard_delete": hard_delete, **await self._revoke_tokens_of(user.username)}
         if reassign_to is not None:
             details["reassign_to"] = str(reassign_to)
             details["reassign_counts"] = await self._reassign_before_delete(user_id, reassign_to, hard_delete)
