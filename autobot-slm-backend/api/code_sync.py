@@ -16,6 +16,7 @@ import os
 import shutil
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -654,7 +655,10 @@ _SELF_UPDATE_WATCH_POLL_SECONDS = env_int_clamped("SLM_SELF_UPDATE_WATCH_POLL_SE
 # the job's total duration.
 _UPDATE_ALL_STALE_SECONDS = env_int_clamped("SLM_UPDATE_ALL_STALE_SECONDS", 1800, min_v=60)
 # #20250: one scan at a time; concurrent /status polls hashing with the GIL starved the event loop.
-_stale_components_cache = SingleFlightCache(_STALE_COMPONENTS_TTL_SECONDS, _STALE_SCAN_TIMEOUT_SECONDS, fallback=[])
+_stale_components_cache = SingleFlightCache(_STALE_COMPONENTS_TTL_SECONDS, _STALE_SCAN_TIMEOUT_SECONDS)
+_stale_scan_executor = ThreadPoolExecutor(
+    max_workers=1, thread_name_prefix="stale-scan"
+)  # a stuck scan starves only itself
 
 
 async def _compute_stale_components(force: bool = False) -> list[str]:
@@ -665,19 +669,12 @@ async def _compute_stale_components(force: bool = False) -> list[str]:
     matches latest, so /status must not read "up to date" while this is set.
     Only components actually deployed here (deployed dir present) are checked,
     and the result is cached for _STALE_COMPONENTS_TTL_SECONDS to bound cost on
-    the polled status path. Defensive: a failing component is logged and skipped,
-    never breaking the status response.
+    the polled status path. A failing component is logged and skipped, never breaking /status.
 
-    #12450: scans VISIBILITY_COMPONENTS (ALLOWED_COMPONENTS plus the
-    read-only extras — ai-stack, npu-worker, browser-worker, slm-agent,
-    plugins) so an operator gets a drift signal for every deployed component,
-    not just the 5 with a resolve path. Reporting here does NOT imply those
-    extras can be resolved — /drift/resolve[-async] still gate on the
-    narrower ALLOWED_COMPONENTS.
+    #12450: scans VISIBILITY_COMPONENTS, wider than the ALLOWED_COMPONENTS /drift/resolve can act on.
 
-    force=True bypasses the cache and re-scans immediately (#11512): callers
-    that just resynced a component need the FRESH drift state, not a stale
-    cached snapshot that could still list the component they just fixed.
+    force=True re-scans (#11512): a caller that just resynced needs the FRESH state. Raises
+    RefreshUnavailable when no answer came in time (#20250): unknown, never "none stale".
     """
     return await _stale_components_cache.get(_scan_stale_components, force=force)
 
@@ -693,7 +690,7 @@ async def _scan_stale_components() -> list[str]:
                 continue  # not deployed on this box — nothing to compare
             source_dir = get_default_source_dir(component)
             report = await loop.run_in_executor(
-                None,
+                _stale_scan_executor,
                 functools.partial(build_drift_report, source_dir, deployed_dir, component),
             )
             if report["drifted_files"]:
@@ -762,8 +759,8 @@ async def get_sync_status(
     Returns the latest version, local version, and count of outdated nodes.
     """
     # #11820: never read "up to date" while a co-located managed component is stale. #20250: first,
-    # so a slow scan holds no open transaction, which is what stacked heartbeats behind it.
-    stale_components = await _compute_stale_components()
+    # so a slow scan holds no open transaction; and a scan with no answer says so, never "none stale".
+    stale_components, stale_scan_unknown = await _stale_components_cache.get_or_unknown(_scan_stale_components, [])
     tracker = await _get_tracker_for_db(db)
 
     # Get latest version from settings
@@ -827,6 +824,7 @@ async def get_sync_status(
         outdated_nodes=outdated_nodes,
         total_nodes=total_nodes,
         stale_components=stale_components,
+        stale_scan_unknown=stale_scan_unknown,
         process_divergence=process_divergence,
         self_update_incomplete=verdict.degraded,
         self_update_detail=verdict.reason,
