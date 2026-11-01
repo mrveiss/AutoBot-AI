@@ -8987,6 +8987,12 @@
       "retry": "Tentar novamente",
       "loading": "Carregando planos...",
       "loadFailed": "Não foi possível carregar o plano.",
+      "stale": {
+        "plan": "Não foi possível atualizar este plano, por isso o que é exibido pode estar desatualizado. {reason}",
+        "gate": "Não foi possível atualizar as verificações de prontidão, por isso a lista do que falta pode estar desatualizada. {reason}",
+        "both": "Não foi possível atualizar nem o plano nem as suas verificações de prontidão, por isso o que é exibido pode estar desatualizado. {reason}"
+      },
+      "rereadRetry": "Recarregar o plano",
       "saveFailed": "Não foi possível salvar a alteração.",
       "createFailed": "Não foi possível criar o plano.",
       "emptyTitle": "Ainda não há planos",
@@ -9130,6 +9136,8 @@
         "approveMessage": "Aprova a pré-visualização apresentada. Qualquer edição posterior ao plano anula esta aprovação.",
         "previewFailed": "Não foi possível gerar a pré-visualização.",
         "approveFailed": "Não foi possível aprovar o plano.",
+        "approveBlocked": "A aprovação está bloqueada até que o seguinte seja resolvido:",
+        "approveDetail": "Detalhe do servidor: {detail}",
         "convertFailed": "Não foi possível criar os fluxos de trabalho.",
         "retryFailed": "Não foi possível repetir as propostas de linha de IA."
       }

@@ -8987,6 +8987,12 @@
       "retry": "Erneut versuchen",
       "loading": "Pläne werden geladen ...",
       "loadFailed": "Der Plan konnte nicht geladen werden.",
+      "stale": {
+        "plan": "Der Plan konnte nicht aktualisiert werden, die Anzeige ist möglicherweise veraltet. {reason}",
+        "gate": "Die Bereitschaftsprüfungen konnten nicht aktualisiert werden, die Liste der fehlenden Punkte ist möglicherweise veraltet. {reason}",
+        "both": "Weder der Plan noch seine Bereitschaftsprüfungen konnten aktualisiert werden, die Anzeige ist möglicherweise veraltet. {reason}"
+      },
+      "rereadRetry": "Plan neu laden",
       "saveFailed": "Die Änderung konnte nicht gespeichert werden.",
       "createFailed": "Der Plan konnte nicht erstellt werden.",
       "emptyTitle": "Noch keine Pläne",
@@ -9130,6 +9136,8 @@
         "approveMessage": "Sie geben die gezeigte Vorschau frei. Jede spätere Änderung am Plan hebt diese Freigabe auf.",
         "previewFailed": "Die Vorschau konnte nicht erstellt werden.",
         "approveFailed": "Der Plan konnte nicht freigegeben werden.",
+        "approveBlocked": "Die Freigabe ist blockiert, bis Folgendes erledigt ist:",
+        "approveDetail": "Serverdetail: {detail}",
         "convertFailed": "Die Workflows konnten nicht erstellt werden.",
         "retryFailed": "Die KI-Zeilenvorschläge konnten nicht wiederholt werden."
       }

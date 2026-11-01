@@ -103,7 +103,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/knowledge_maintenance.py": 1960,
     "autobot-backend/api/knowledge_mcp.py": 1440,
     "autobot-backend/api/knowledge_population.py": 1238,
-    "autobot-backend/api/knowledge_search.py": 809,  # #16665: analytics endpoints moved out
+    "autobot-backend/api/knowledge_search.py": 808,  # #16665: analytics endpoints moved out
     "autobot-backend/api/knowledge_search_aggregator.py": 950,  # #16665: doc-search moved out
     "autobot-backend/api/knowledge_tags.py": 887,
     "autobot-backend/api/knowledge_vectorization.py": 1690,
@@ -131,9 +131,9 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/secrets.py": 1172,  # #19476 one model_dump serialization (was 1178, #16444)
     "autobot-backend/api/security_assessment.py": 913,
     "autobot-backend/api/settings.py": 881,
-    "autobot-backend/api/system.py": 1011,
+    "autobot-backend/api/system.py": 995,
     "autobot-backend/api/terminal.py": 1294,
-    "autobot-backend/api/terminal_handlers.py": 1472,
+    "autobot-backend/api/terminal_handlers.py": 1225,
     "autobot-backend/api/validation_dashboard.py": 670,
     "autobot-backend/api/vnc_manager.py": 1651,
     "autobot-backend/api/vnc_mcp.py": 760,
@@ -149,7 +149,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/chat_workflow/graph.py": 1643,  # train 50: #18993 on main's 1652
     "autobot-backend/chat_workflow/llm_handler.py": 1300,
     "autobot-backend/chat_workflow/manager.py": 3885,  # #17273: graph turn lifecycle moved to turn_control
-    "autobot-backend/chat_workflow/tool_handler.py": 3697,  # #11542 dispatch merge + #14068 mirror
+    "autobot-backend/chat_workflow/tool_handler.py": 3617,  # #19950 (MCP approval message moved out)
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
     "autobot-backend/code_intelligence/analytics_infrastructure.py": 801,
@@ -213,7 +213,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/judges/security_risk_judge.py": 842,
     "autobot-backend/knowledge/adapters/okf_adapter.py": 770,
     "autobot-backend/knowledge/base.py": 683,
-    "autobot-backend/knowledge/bulk.py": 1963,
+    "autobot-backend/knowledge/bulk.py": 1941,
     "autobot-backend/knowledge/categories.py": 965,
     "autobot-backend/knowledge/collections.py": 728,
     "autobot-backend/knowledge/connectors/base.py": 663,
@@ -236,15 +236,14 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llc/adapters/tests/test_claude_code_adapter.py": 602,
     "autobot-backend/llc/api/companies.py": 1627,
     "autobot-backend/llc/api/roles.py": 713,
-    "autobot-backend/llc/api/sprints.py": 1223,
+    "autobot-backend/llc/api/sprints.py": 1220,
     "autobot-backend/llc/api/work_items.py": 1303,  # #19582: comment wake moved into the service
-    "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 1019,  # #19582 (shared run finder)
+    "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 994,  # #19240 (run key moved out)
     "autobot-backend/llc/services/template.py": 643,
     "autobot-backend/llc/services/work_item_service.py": 1023,  # #20102: completion effects moved out
     "autobot-backend/llc/tests/conftest.py": 832,
     "autobot-backend/llc/tests/test_autobot_agent_adapter.py": 663,
-    "autobot-backend/llc/tests/test_heartbeat_scheduler.py": 1042,
-    "autobot-backend/llc/tests/test_replay.py": 605,
+    "autobot-backend/llc/tests/test_heartbeat_scheduler.py": 1009,
     "autobot-backend/llc/tests/test_review_gate.py": 632,
     "autobot-backend/llc/tests/test_role_assignments.py": 728,
     "autobot-backend/llc/tests/test_work_items_idor.py": 602,
@@ -303,7 +302,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/security/threat_intelligence.py": 762,
     "autobot-backend/security_layer.py": 715,
     "autobot-backend/services/agent_analytics.py": 686,
-    "autobot-backend/services/agent_terminal/service.py": 945,
+    "autobot-backend/services/agent_terminal/service.py": 922,
     "autobot-backend/services/ai_stack_client.py": 764,
     "autobot-backend/services/analytics_service.py": 835,
     "autobot-backend/services/autoresearch/auto_research_agent.py": 1187,
@@ -330,7 +329,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/knowledge/doc_indexer.py": 1247,
     "autobot-backend/services/knowledge/service.py": 849,  # train 48: #18935 merged onto #18945
     "autobot-backend/services/knowledge/test_autonomous_loop.py": 708,
-    "autobot-backend/services/knowledge/test_doc_indexer.py": 1466,
+    "autobot-backend/services/knowledge/test_doc_indexer.py": 1462,
     "autobot-backend/services/knowledge/test_kb_synthesizer.py": 802,
     "autobot-backend/services/llm_cost_tracker.py": 1166,  # #16230: MODEL_PRICING table removed
     "autobot-backend/services/llm_service.py": 1199,  # #16845: _track_usage delegated to llm_usage_recording

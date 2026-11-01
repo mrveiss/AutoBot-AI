@@ -50197,6 +50197,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/companies/{company_id}/approvals/pending-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pending Count
+         * @description How many approvals await the board in this company (sidebar badge).
+         */
+        get: operations["pending_count_api_llc_companies__company_id__approvals_pending_count_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/approvals/{approval_id}/decide": {
         parameters: {
             query?: never;
@@ -50276,7 +50296,8 @@ export interface paths {
          *
          *     Returns 201 on creation, 409 if a row already exists.
          *     Returns 404 if the agent does not exist in agent_org_nodes, or belongs to
-         *     a different tenant (GH#12136).
+         *     a different tenant (GH#12136). Returns 403 unless the caller is a company
+         *     owner/admin or a platform admin (#20422).
          *     company_id is derived from agent_org_nodes — callers cannot scope rows
          *     to arbitrary companies.
          */
@@ -51195,6 +51216,9 @@ export interface paths {
         /**
          * Hire a new agent (Sonnet or Haiku tier) for a company (GH#8486)
          * @description Hire a new LLC agent with explicit model selection and AGENTS.md generation.
+         *
+         *     A company with ``require_approval_for_hires`` answers 202 with a pending approval instead:
+         *     the agent is created only when the board approves it (GH#8214).
          */
         post: operations["hire_agent_api_llc_companies__company_id__agent_hires_post"];
         delete?: never;
@@ -52111,13 +52135,11 @@ export interface paths {
         put?: never;
         /**
          * Close Sprint
-         * @description Manual sprint close trigger — board only, requires an APPROVED approval.
+         * @description Close a sprint whose SPRINT_CLOSE approval is APPROVED but not yet applied.
          *
-         *     Flow:
-         *       1. Caller must first request a SPRINT_CLOSE approval via ApprovalService
-         *          (or let the scheduler do it automatically).
-         *       2. Board approves the approval record.
-         *       3. This endpoint is called with the approval_id to execute the close.
+         *     Deciding the approval closes the sprint itself (#8214), so after a decision this answers 400
+         *     (the sprint no longer has that approval pending). It remains for an approval granted before
+         *     deciding applied the close.
          */
         post: operations["close_sprint_api_llc_sprints__sprint_id__close_post"];
         delete?: never;
@@ -56964,6 +56986,25 @@ export interface components {
             } | null;
             /** Company Id */
             company_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AgentHirePending
+         * @description Answer to a hire that needs board approval: the request exists, the agent does not (GH#8214).
+         */
+        AgentHirePending: {
+            /**
+             * Status
+             * @default pending_approval
+             */
+            status: string;
+            /** Approval Id */
+            approval_id: string;
+            /** Company Id */
+            company_id: string;
+            /** Agent Name */
+            agent_name: string;
         } & {
             [key: string]: unknown;
         };
@@ -90022,6 +90063,15 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** PendingCountResponse */
+        PendingCountResponse: {
+            /** Company Id */
+            company_id: string;
+            /** Pending */
+            pending: number;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * PendingInvitationResponse
          * @description One pending invitation, as returned by GET /invitations/mine (#16460).
@@ -99510,11 +99560,8 @@ export interface components {
              * Format: uuid
              */
             approval_id: string;
-            /**
-             * Decided By
-             * Format: uuid
-             */
-            decided_by: string;
+            /** Decided By */
+            decided_by?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -174093,6 +174140,37 @@ export interface operations {
             };
         };
     };
+    pending_count_api_llc_companies__company_id__approvals_pending_count_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PendingCountResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     decide_approval_api_llc_approvals__approval_id__decide_post: {
         parameters: {
             query?: never;
@@ -175787,7 +175865,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AgentHireResponse"];
+                    "application/json": components["schemas"]["AgentHireResponse"] | components["schemas"]["AgentHirePending"];
                 };
             };
             /** @description Validation Error */
