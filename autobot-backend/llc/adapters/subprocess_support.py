@@ -235,7 +235,7 @@ def _render_extra_scalars(context: dict) -> str:
     return "## Additional Context\n" + "\n".join(extras) if extras else ""
 
 
-def render_context_markdown(context: dict) -> str:
+def render_context_sections(context: dict) -> str:
     """Assemble the agent prompt from recognised context sections (GH#9622).
 
     Renders the heartbeat fat context (work item, goal ancestry, KB context,
@@ -257,8 +257,12 @@ def render_context_markdown(context: dict) -> str:
         f"API base URL: {api_base}" if api_base else "",
         _render_extra_scalars(context),
     ]
-    body = "\n\n".join(s for s in sections if s)
-    return body or "Heartbeat invocation: no additional context was provided."
+    return "\n\n".join(s for s in sections if s)
+
+
+def render_context_markdown(context: dict) -> str:
+    """:func:`render_context_sections`, or a fixed line when the context has none."""
+    return render_context_sections(context) or "Heartbeat invocation: no additional context was provided."
 
 
 def serialize_invoke_context(context: dict) -> str:
@@ -548,6 +552,7 @@ __all__ = [
     "read_output_tail",
     "final_result_event",
     "render_context_markdown",
+    "render_context_sections",
     "serialize_invoke_context",
     "inject_agent_credentials",
     "probe_pid",

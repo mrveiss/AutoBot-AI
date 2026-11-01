@@ -29,6 +29,7 @@ of raising "not found or not configured".
 from __future__ import annotations
 
 import uuid
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
@@ -94,9 +95,12 @@ async def test_hired_agent_can_be_manually_triggered(session_factory) -> None:  
     agent_id = await _hire_agent(session_factory)
 
     scheduler = LLCHeartbeatScheduler()
-    async with session_factory() as session:
-        run, agent_cfg = await scheduler.trigger_manual(session, agent_id)
-        await session.commit()
+    # #19240: the gate fails closed without Redis, so give it one with no pause flag set.
+    redis = AsyncMock(exists=AsyncMock(return_value=0))
+    with patch("llc.scheduler.dispatch_gate.get_async_redis_client", AsyncMock(return_value=redis)):
+        async with session_factory() as session:
+            run, agent_cfg = await scheduler.trigger_manual(session, agent_id)
+            await session.commit()
 
     assert agent_cfg["agent_id"] == agent_id
     assert not agent_cfg["heartbeat_enabled"]  # hire default, unchanged (GH#12210)
