@@ -92,10 +92,10 @@ def test_an_admin_reads_another_users_private_events_and_the_read_is_audited(pat
 
 
 @pytest.mark.parametrize("path", PATHS)
-def test_an_admin_read_whose_audit_cannot_be_written_returns_no_events(path):
+def test_an_admin_read_whose_audit_cannot_be_written_is_refused_with_503_and_returns_no_events(path):
     response = _get(ADMIN, path, AsyncMock(side_effect=RuntimeError("audit down")))
 
-    assert "alice-private-event" not in response.text and response.json()["total"] == 0
+    assert response.status_code == 503 and "alice-private-event" not in response.text  # not an empty 200 (#19860)
 
 
 @pytest.mark.parametrize("path", PATHS)

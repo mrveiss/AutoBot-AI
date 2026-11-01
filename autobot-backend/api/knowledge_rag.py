@@ -177,24 +177,26 @@ async def advanced_search(
     )
 
     # Perform advanced search; the service filters every leg for the caller (#16664)
+    principal = kb_principal(current_user)
     results, metrics = await rag_service.advanced_search(
         query=request.query,
         max_results=request.max_results,
         enable_reranking=request.enable_reranking,
         timeout=request.timeout,
-        principal=kb_principal(current_user),
+        principal=principal,
     )
 
     # Build response (Issue #620: uses helpers)
     results_dicts = _convert_results_to_dicts(results)
     user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
-    results_dicts = await filter_search_results_by_permission(
-        results_dicts,
-        user_id,
-        user_org_id,
-        user_group_ids,
-        ownership_manager=getattr(rag_service.kb_adapter.kb, "ownership_manager", None),
-    )
+    if not principal.is_superadmin:  # a root read was filtered AND audited by the service's root view (#19860)
+        results_dicts = await filter_search_results_by_permission(
+            results_dicts,
+            user_id,
+            user_org_id,
+            user_group_ids,
+            ownership_manager=getattr(rag_service.kb_adapter.kb, "ownership_manager", None),
+        )
     response = {
         "results": results_dicts,
         "total_results": len(results_dicts),
@@ -205,7 +207,7 @@ async def advanced_search(
 
     # Optionally include optimized context
     if request.return_context:
-        context, _ = await rag_service.get_optimized_context(query=request.query, principal=kb_principal(current_user))
+        context, _ = await rag_service.get_optimized_context(query=request.query, principal=principal)
         response["context"] = context
         response["context_length"] = len(context)
 

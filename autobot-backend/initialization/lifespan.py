@@ -1981,6 +1981,9 @@ async def initialize_background_services(app: FastAPI):
         )
         logger.info("=== PHASE 2: Background Services Initialization ===")
 
+        await _recover_agent_sessions(app)
+        await _init_heartbeat_scheduler(app)
+        await _init_llc_routine_scheduler(app)
         # Issue #876: Root cause fixed — metrics collector no longer calls backend
         # self-health endpoint (circular deadlock). Phase 2 re-enabled (#970).
         await _init_knowledge_base(app)
@@ -1994,9 +1997,6 @@ async def initialize_background_services(app: FastAPI):
         await start_background_workers(app)
         await _auto_index_documentation()
         await _init_log_forwarding()
-        await _recover_agent_sessions(app)
-        await _init_heartbeat_scheduler(app)
-        await _init_llc_routine_scheduler(app)
         await _init_skill_health_scheduler(app)
         await _init_skill_distillation_scheduler(app)
         await _init_liveness_monitor(app)
