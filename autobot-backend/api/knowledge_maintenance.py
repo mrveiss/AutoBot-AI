@@ -1740,7 +1740,7 @@ async def restore_backup(
     Issue #744: Requires admin authentication.
 
     Request body:
-    - backup_file: Path to backup file (required)
+    - backup_file: The backup's filename, from the backups list (required)
     - overwrite_existing: Overwrite existing facts (default: False)
     - skip_duplicates: Skip duplicate facts (default: True)
     - restore_embeddings: Restore vector embeddings (default: True)
@@ -1843,7 +1843,7 @@ async def delete_backup(
     Issue #744: Requires admin authentication.
 
     Request body:
-    - backup_file: Path to backup file to delete (required)
+    - backup_file: The filename of the backup to delete, from the backups list (required)
 
     Returns:
     - status: success or error

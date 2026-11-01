@@ -1461,28 +1461,17 @@ class BulkOperationsMixin:
         return str(project_root / "backups" / "knowledge")
 
     def _resolve_backup_path(self, backup_file: str) -> str | None:
-        """Resolve and contain *backup_file* to the default backup directory.
+        """The path of a backup named by its bare filename, inside the backup directory, or None.
 
-        Uses ``os.path.realpath`` to expand symlinks before comparing, so a
-        symlink inside the backup dir that points outside is correctly rejected.
-
-        Issue #9670: containment check — dotdot-stripping alone is insufficient
-        because the API accepts full filesystem paths; without this check any
-        readable path can be supplied.
-
-        Args:
-            backup_file: Raw path supplied by the API caller.
-
-        Returns:
-            The realpath-resolved path string when it is inside (or equal to)
-            the default backup directory; ``None`` otherwise.
+        Issue #19721: the name the list returns is what comes back, and it resolves against the backup
+        directory rather than the process's cwd. Issue #9670: anything else is refused, ``../`` and
+        absolute paths included, and ``realpath`` means a symlink pointing outside is refused too.
         """
+        if not backup_file or backup_file in (".", "..") or os.path.basename(backup_file) != backup_file:
+            return None
         allowed_root = os.path.realpath(self._get_backup_dir(None))
-        resolved = os.path.realpath(backup_file)
-        # Accept the root itself or any path strictly under it.
-        if resolved == allowed_root or resolved.startswith(allowed_root + os.sep):
-            return resolved
-        return None
+        resolved = os.path.realpath(os.path.join(allowed_root, backup_file))
+        return resolved if resolved.startswith(allowed_root + os.sep) else None
 
     def _generate_backup_path(self, backup_dir: str, compression: bool) -> tuple:
         """

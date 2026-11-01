@@ -20,6 +20,7 @@ are required.
 import os
 import tempfile
 
+from knowledge.bulk import BulkOperationsMixin
 from utils.path_validation import (
     contains_dotdot_traversal,
     contains_path_traversal,
@@ -27,28 +28,15 @@ from utils.path_validation import (
     is_safe_identifier,
 )
 
-# ---------------------------------------------------------------------------
-# Minimal stub for _resolve_backup_path — mirrors the production logic in
-# BulkOperationsMixin without requiring a full KnowledgeBase instance.
-# ---------------------------------------------------------------------------
 
-
-class _BackupPathStub:
-    """Minimal stub exposing _resolve_backup_path with a configurable root."""
+class _BackupPathStub(BulkOperationsMixin):
+    """The real resolver over a configurable root."""
 
     def __init__(self, backup_root: str) -> None:
         self._backup_root = backup_root
 
     def _get_backup_dir(self, backup_dir):  # noqa: D102
         return self._backup_root
-
-    def _resolve_backup_path(self, backup_file: str):
-        """Mirrors BulkOperationsMixin._resolve_backup_path exactly."""
-        allowed_root = os.path.realpath(self._get_backup_dir(None))
-        resolved = os.path.realpath(backup_file)
-        if resolved == allowed_root or resolved.startswith(allowed_root + os.sep):
-            return resolved
-        return None
 
 
 class TestContainsPathTraversal:
@@ -166,21 +154,27 @@ class TestResolveBackupPath:
     # accept: file inside the backup dir
     # ------------------------------------------------------------------
 
-    def test_file_inside_backups_dir_accepted(self):
+    def test_a_bare_filename_resolves_inside_the_backup_dir(self):
         with tempfile.TemporaryDirectory() as root:
             stub = _BackupPathStub(root)
-            target = os.path.join(root, "kb_backup_20260612.json")
-            result = stub._resolve_backup_path(target)
-            assert result == os.path.realpath(target)
+            result = stub._resolve_backup_path("kb_backup_20260612.json")
+            assert result == os.path.join(os.path.realpath(root), "kb_backup_20260612.json")
 
-    def test_nested_file_inside_backups_dir_accepted(self):
+    def test_an_absolute_path_is_refused_even_inside_the_backup_dir(self):
         with tempfile.TemporaryDirectory() as root:
-            subdir = os.path.join(root, "2026", "june")
-            os.makedirs(subdir, exist_ok=True)
             stub = _BackupPathStub(root)
-            target = os.path.join(subdir, "kb_backup_nested.json")
-            result = stub._resolve_backup_path(target)
-            assert result == os.path.realpath(target)
+            assert stub._resolve_backup_path(os.path.join(root, "kb_backup_20260612.json")) is None
+
+    def test_a_nested_or_traversing_name_is_refused(self):
+        with tempfile.TemporaryDirectory() as root:
+            stub = _BackupPathStub(root)
+            for name in ("2026/kb_backup.json", "../outside.json", "..", ".", ""):
+                assert stub._resolve_backup_path(name) is None, name
+
+    def test_a_symlink_pointing_outside_is_refused(self):
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as outside:
+            os.symlink(os.path.join(outside, "secret.json"), os.path.join(root, "link.json"))
+            assert _BackupPathStub(root)._resolve_backup_path("link.json") is None
 
     # ------------------------------------------------------------------
     # reject: absolute path outside the backup dir
