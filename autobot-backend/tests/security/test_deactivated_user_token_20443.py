@@ -217,7 +217,11 @@ async def test_a_failed_commit_leaves_no_marker_on_the_user(epochs, method):
 
 @pytest.mark.asyncio
 async def test_a_store_that_raises_after_the_commit_surfaces_and_the_audit_row_stays_queued(monkeypatch):
+    monkeypatch.setattr(password_epoch, "MEMBERSHIP_EPOCH_BUMP_BACKOFF_SECONDS", 0.0)
+    tries = []
+
     async def broken_set(_subject, *, now=None):
+        tries.append(now)
         raise ConnectionError("store down")
 
     password_epoch.use_epoch_store(get_epoch=AsyncMock(return_value=None), set_epoch=broken_set)
@@ -229,6 +233,28 @@ async def test_a_store_that_raises_after_the_commit_surfaces_and_the_audit_row_s
     finally:
         password_epoch.reset_epoch_store()
     assert service._audit_log.await_args.args[3] == {"sessions_revocation": "queued_after_commit"}
+    assert len(tries) == password_epoch.MEMBERSHIP_EPOCH_BUMP_ATTEMPTS
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["deactivate", "soft_delete"])
+async def test_a_store_that_cannot_record_is_reported_and_the_change_stays_committed(monkeypatch, method):
+    """A store that answers None (its own contract for a failed write) is not success: the caller is told."""
+    monkeypatch.setattr(password_epoch, "MEMBERSHIP_EPOCH_BUMP_BACKOFF_SECONDS", 0.0)
+    password_epoch.use_epoch_store(get_epoch=AsyncMock(return_value=None), set_epoch=AsyncMock(return_value=None))
+    try:
+        user = _user()
+        service = _service(user)
+        if method == "deactivate":
+            await service.deactivate_user(uuid.uuid4())
+        else:
+            await service.delete_user(uuid.uuid4(), hard_delete=False)
+        with pytest.raises(PostCommitCallbackError) as failed:
+            await _commit(service)
+    finally:
+        password_epoch.reset_epoch_store()
+    assert isinstance(failed.value.errors[0], password_epoch.PasswordEpochWriteError)
+    assert user.is_active is False, "the deactivation is not rolled back"
 
 
 @pytest.mark.asyncio
@@ -298,6 +324,25 @@ async def test_a_session_with_no_readable_creation_time_is_refused(real_auth_mid
 
     middleware, request = _session_request(real_auth_middleware, None)
     assert await resolve_human_user_via(middleware, request) is None
+
+
+@pytest.mark.asyncio
+async def test_polling_cannot_keep_a_session_alive_past_the_marker_that_voids_it(real_auth_middleware, epochs):
+    """get_session extends the TTL on every use, so a polled session outlives the marker: capped at a login's life."""
+    from auth_revocation import resolve_human_user_via  # noqa: PLC0415
+
+    # The deactivation's marker has expired (it lives 26h); the session is 27h old because it was polled.
+    middleware, request = _session_request(real_auth_middleware, _iso(PASSWORD_EPOCH_TTL_SECONDS + 3600))
+    assert epochs == {}
+    assert await resolve_human_user_via(middleware, request) is None
+
+
+@pytest.mark.asyncio
+async def test_a_session_inside_a_logins_lifetime_is_still_admitted(real_auth_middleware, epochs):
+    from auth_revocation import resolve_human_user_via  # noqa: PLC0415
+
+    middleware, request = _session_request(real_auth_middleware, _iso(LOGIN_TOKEN_LIFETIME_SECONDS - 600))
+    assert (await resolve_human_user_via(middleware, request))["username"] == "alice"
 
 
 # -- the marker outlives every token that could predate it ---------------------------------------

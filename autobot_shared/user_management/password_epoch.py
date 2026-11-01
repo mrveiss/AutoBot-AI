@@ -50,6 +50,7 @@ from dataclasses import dataclass
 from redis.exceptions import RedisError
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.membership_epoch import MEMBERSHIP_EPOCH_BUMP_ATTEMPTS, MEMBERSHIP_EPOCH_BUMP_BACKOFF_SECONDS
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_constants import TTL_1_HOUR, TTL_24_HOURS
 
@@ -97,6 +98,21 @@ class MalformedTokenClaims(ValueError):
     Retrying can never fix it, so callers answer 401 (invalid token) -- never the
     retryable 503 that :class:`RevocationCheckUnavailable` maps to.
     """
+
+
+#: Raises the stored epoch to ARGV[1] and never lowers it, refreshing the TTL either way (#20443).
+#: A plain SETEX let an earlier-dated write (a password change at T after a deactivation at T+1)
+#: lower the epoch and revive the tokens in between; the SLM table does the same with ``greatest``.
+#: An unreadable stored value is replaced, since it revokes nothing the new epoch does not.
+_RAISE_EPOCH_LUA = """
+local current = tonumber(redis.call('GET', KEYS[1]))
+if current == nil or tonumber(ARGV[1]) > current then
+    redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2])
+else
+    redis.call('EXPIRE', KEYS[1], ARGV[2])
+end
+return 1
+"""
 
 
 def _epoch_key(subject: str) -> str:
@@ -165,7 +181,7 @@ async def set_password_epoch(subject: str, *, now: int | None = None, in_redis: 
         return None
 
     try:
-        await redis.setex(_epoch_key(subject), PASSWORD_EPOCH_TTL_SECONDS, str(epoch))
+        await redis.eval(_RAISE_EPOCH_LUA, 1, _epoch_key(subject), str(epoch), str(PASSWORD_EPOCH_TTL_SECONDS))
     except Exception as exc:
         logger.error(
             "password epoch NOT recorded for subject=%s: %s — tokens issued "
@@ -251,19 +267,50 @@ async def is_token_revoked_by_password_change(claims: dict) -> bool:
 DEACTIVATION_EPOCH_LEAD_SECONDS = 1
 
 
+class PasswordEpochWriteError(RuntimeError):
+    """A revocation epoch could not be recorded after the change it revokes committed (#20443).
+
+    The deactivation or deletion is durable, so the caller must learn that the account's earlier
+    tokens were not revoked: raised from a post-commit callback it surfaces as ``PostCommitCallbackError``.
+    """
+
+
+async def record_password_epoch(subject: str, *, lead_seconds: int = 0, in_redis: bool = False) -> int:
+    """Record the epoch, retrying a bounded number of times with backoff; raise when it never lands (#20443).
+
+    The same tries and backoff as ``bump_membership_epoch``. The clock is read on every try, so a
+    late success still revokes a token minted while the store was down. Each failed try is logged
+    by ``set_password_epoch``; there is no outbox, so a final failure leaves the tokens live until
+    they expire and is reported to the caller.
+    """
+    delay = MEMBERSHIP_EPOCH_BUMP_BACKOFF_SECONDS
+    for attempt in range(1, MEMBERSHIP_EPOCH_BUMP_ATTEMPTS + 1):
+        try:
+            epoch = await set_password_epoch(subject, now=int(time.time()) + lead_seconds, in_redis=in_redis)
+        except Exception as exc:  # re-raised as PasswordEpochWriteError on the last try
+            logger.error("password epoch write for subject=%s raised (try %s): %s", subject, attempt, exc)
+            epoch = None
+        if epoch is not None:
+            return epoch
+        if attempt < MEMBERSHIP_EPOCH_BUMP_ATTEMPTS:
+            await asyncio.sleep(delay)
+            delay *= 2
+    raise PasswordEpochWriteError(f"password epoch not recorded for subject={subject}: earlier tokens stay valid")
+
+
 @dataclass(frozen=True)
 class PasswordEpochMark:
     """A queueable post-commit epoch write; equal for one subject, so a transaction queues it once (#20443).
 
     The epoch is read from the clock when it runs, after the commit: a login between the write
     and the commit gets ``iat < epoch`` and is revoked with the rest, and a transaction that never
-    commits revokes nothing. A store that cannot record is logged by ``set_password_epoch`` and
-    returns ``None``, as it does for a password change.
+    commits revokes nothing. A store that cannot record is retried, then raises
+    :class:`PasswordEpochWriteError`: the commit stands and the caller gets ``PostCommitCallbackError``.
     """
 
     subject: str
     lead_seconds: int = 0
     in_redis: bool = False
 
-    async def __call__(self) -> int | None:
-        return await set_password_epoch(self.subject, now=int(time.time()) + self.lead_seconds, in_redis=self.in_redis)
+    async def __call__(self) -> int:
+        return await record_password_epoch(self.subject, lead_seconds=self.lead_seconds, in_redis=self.in_redis)

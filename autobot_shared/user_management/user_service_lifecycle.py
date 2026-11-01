@@ -104,8 +104,9 @@ class UserLifecycleMixin(UserServiceBase):
         request gate reads the epoch, never the account's state. Written after the commit, so a
         rolled-back change revokes nothing and a login before the commit is still caught. The
         epoch is read from the clock then, so the audit row can only say the write is queued:
-        whether the store recorded it is logged by ``set_password_epoch``, and a callback that
-        raises surfaces as ``PostCommitCallbackError`` after the commit.
+        whether the store recorded it is retried by ``record_password_epoch``, and a write that
+        still fails raises ``PasswordEpochWriteError``, surfacing as ``PostCommitCallbackError``
+        after the commit.
         """
         mark = PasswordEpochMark(username, DEACTIVATION_EPOCH_LEAD_SECONDS, self.epoch_in_redis)
         run_after_commit(self.session, mark)

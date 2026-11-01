@@ -124,7 +124,7 @@ class _AutobotDbService(_SlmUserService):
 @pytest.mark.asyncio
 async def test_a_backend_database_users_marker_goes_to_redis_not_the_slm_store(epochs):
     """The route that deletes an ``autobot_users`` user runs in the SLM, whose store is its own database (#20443)."""
-    redis = MagicMock(setex=AsyncMock(return_value=True))
+    redis = MagicMock(eval=AsyncMock(return_value=1))
     session = MagicMock(flush=AsyncMock())
     session.info = {POST_COMMIT_CALLBACKS: []}
     service = _AutobotDbService(session, TenantContext(is_platform_admin=True))
@@ -136,7 +136,7 @@ async def test_a_backend_database_users_marker_goes_to_redis_not_the_slm_store(e
         await _run_post_commit_callbacks(session)
 
     assert epochs == {}, "the SLM's own store must not receive it"
-    assert redis.setex.await_args.args[0] == f"{password_epoch.PASSWORD_EPOCH_PREFIX}alice"
+    assert redis.eval.await_args.args[2] == f"{password_epoch.PASSWORD_EPOCH_PREFIX}alice"
 
 
 def test_the_autobot_users_routes_use_the_service_that_writes_to_redis():
