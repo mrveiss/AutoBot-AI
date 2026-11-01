@@ -360,6 +360,8 @@ async def test_a_blocked_trigger_is_409_for_the_owner_and_404_across_tenants():
     assert await _trigger(own, own) == 409
     assert await _trigger(other, own) == 404
     assert await _trigger(None, own) == 404
+    # Neither side known: nothing proves the caller owns it, so no reason is given (404, not 409).
+    assert await _trigger(None, None) == 404
 
 
 @pytest.mark.asyncio
