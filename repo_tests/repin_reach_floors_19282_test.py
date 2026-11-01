@@ -11,11 +11,10 @@ from __future__ import annotations
 
 import ast
 import importlib.util
-import subprocess
 
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import git, make_repo
 
 _SPEC = importlib.util.spec_from_file_location("repin_reach_floors", repo_root() / "scripts" / "repin_reach_floors.py")
 repin = importlib.util.module_from_spec(_SPEC)
@@ -169,25 +168,16 @@ def test_without_the_option_every_stale_floor_still_fails(monkeypatch, capsys) -
 
 
 def test_changed_files_reads_the_branchs_own_diff_from_real_git(monkeypatch, tmp_path) -> None:
-    def git(*args: str) -> None:
-        subprocess.run(
-            ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
-            cwd=tmp_path,
-            check=True,
-            capture_output=True,
-            env=scrubbed_git_env(),
-        )
-
-    git("init", "-q", "-b", "main")
+    make_repo(tmp_path, default_branch="main")
     (tmp_path / "a.txt").write_text("a", encoding="utf-8")
-    git("add", "."), git("commit", "-qm", "one")
-    git("switch", "-qc", "branch")
+    git(tmp_path, "add", "."), git(tmp_path, "commit", "-qm", "one")
+    git(tmp_path, "switch", "-qc", "branch")
     (tmp_path / "mine.txt").write_text("b", encoding="utf-8")
-    git("add", "."), git("commit", "-qm", "two")
-    git("switch", "-q", "main")
+    git(tmp_path, "add", "."), git(tmp_path, "commit", "-qm", "two")
+    git(tmp_path, "switch", "-q", "main")
     (tmp_path / "main_only.txt").write_text("c", encoding="utf-8")
-    git("add", "."), git("commit", "-qm", "three")
-    git("switch", "-q", "branch")
+    git(tmp_path, "add", "."), git(tmp_path, "commit", "-qm", "three")
+    git(tmp_path, "switch", "-q", "branch")
     monkeypatch.setattr(repin, "_ROOT", tmp_path)
     assert repin._changed_files("main") == {"mine.txt"}
     assert repin._changed_files("no-such-ref") is None
