@@ -41,17 +41,8 @@ export function useSecretsAuditApi() {
     const params = new URLSearchParams()
 
     if (options?.operationFilter && options.operationFilter !== 'all') {
-      const operationMap: Record<string, string> = {
-        'access': 'secret.access',
-        'inject': 'secret.inject',
-        'copy': 'secret.copy',
-        'reveal': 'secret.reveal',
-        'create': 'secret.create',
-        'read': 'secret.read',
-        'update': 'secret.update',
-        'delete': 'secret.delete'
-      }
-      const backendOp = operationMap[options.operationFilter] || options.operationFilter
+      // The backend writes `secret.<verb>` (api/secrets_audit.py SECRET_OPERATIONS)
+      const backendOp = `secret.${options.operationFilter}`
       params.append('operation', backendOp)
     }
 

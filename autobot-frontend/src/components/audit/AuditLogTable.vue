@@ -87,8 +87,8 @@
             @click="selectEntry(entry)"
           >
             <td class="col-timestamp">
-              <span class="timestamp-full mono-timestamp">{{ formatTimestamp(entry.timestamp) }}</span>
-              <span class="timestamp-relative">{{ formatRelativeTime(entry.timestamp) }}</span>
+              <span class="timestamp-full mono-timestamp">{{ formatDateTime(auditTimestampToDate(entry.timestamp)) }}</span>
+              <span class="timestamp-relative">{{ formatTimeAgo(auditTimestampToDate(entry.timestamp)) }}</span>
             </td>
             <td class="col-operation">
               <span class="operation-name">{{ formatOperationName(entry.operation) }}</span>
@@ -171,7 +171,7 @@
             </div>
             <div class="detail-item">
               <label>{{ $t('audit.logTable.timestamp') }}</label>
-              <span>{{ formatTimestamp(selectedEntry.timestamp) }}</span>
+              <span>{{ formatDateTime(auditTimestampToDate(selectedEntry.timestamp)) }}</span>
             </div>
             <div class="detail-item">
               <label>{{ $t('audit.logTable.operation') }}</label>
@@ -204,10 +204,6 @@
               <label>{{ $t('audit.logTable.ipAddress') }}</label>
               <span class="mono">{{ selectedEntry.ip_address || '-' }}</span>
             </div>
-            <div v-if="selectedEntry.error_message" class="detail-item detail-full">
-              <label>{{ $t('audit.logTable.errorMessage') }}</label>
-              <span class="error-message">{{ selectedEntry.error_message }}</span>
-            </div>
             <div v-if="hasDetails" class="detail-item detail-full">
               <label>{{ $t('audit.logTable.details') }}</label>
               <pre class="details-json">{{ formatDetails(selectedEntry.details) }}</pre>
@@ -231,7 +227,7 @@ import { BaseModal, BasePagination } from '@autobot/ui'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AuditEntry } from '@/types/audit'
-import { AUDIT_RESULT_CONFIG } from '@/types/audit'
+import { AUDIT_RESULT_CONFIG, auditTimestampToDate } from '@/types/audit'
 import { formatDateTime, formatTimeAgo } from '@/utils/formatHelpers'
 
 interface Props {
@@ -274,7 +270,7 @@ const sortedEntries = computed(() => {
   entries.sort((a, b) => {
     let comparison = 0
     if (sortField.value === 'timestamp') {
-      comparison = new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      comparison = a.timestamp - b.timestamp
     } else if (sortField.value === 'operation') {
       comparison = a.operation.localeCompare(b.operation)
     }
@@ -287,10 +283,6 @@ const hasDetails = computed(() => {
   if (!selectedEntry.value?.details) return false
   return Object.keys(selectedEntry.value.details).length > 0
 })
-
-const formatTimestamp = formatDateTime
-
-const formatRelativeTime = formatTimeAgo
 
 function formatOperationName(operation: string): string {
   return operation
@@ -673,15 +665,6 @@ th span {
   font-size: var(--text-xs);
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
-}
-
-.error-message {
-  color: var(--color-error);
-  background: var(--color-error-bg);
-  padding: var(--spacing-2);
-  border-radius: var(--radius-xs);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
 }
 
 .details-json {

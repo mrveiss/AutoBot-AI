@@ -6632,9 +6632,6 @@
       "title": "Registro de auditoría de secretos",
       "allActions": "Todas las acciones",
       "access": "Acceso",
-      "inject": "Inyectar",
-      "copy": "Copiar",
-      "reveal": "Revelar",
       "allUsers": "Todos los usuarios",
       "by": "por",
       "details": "Detalles",
@@ -6645,8 +6642,10 @@
       "hoursAgo": "hace {hours} h",
       "create": "Create",
       "delete": "Delete",
-      "read": "Read",
-      "update": "Update"
+      "update": "Update",
+      "list": "Listar",
+      "transfer": "Transferir",
+      "bulkDelete": "Eliminación masiva"
     },
     "vault": {
       "title": "Bóveda de secretos",
@@ -7689,7 +7688,6 @@
       "vmName": "Nombre de VM",
       "vmSource": "Origen de VM",
       "ipAddress": "Dirección IP",
-      "errorMessage": "Mensaje de error",
       "details": "Detalles",
       "loading": "Cargando registros de auditoría...",
       "viewDetails": "Ver detalles"

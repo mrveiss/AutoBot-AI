@@ -26,7 +26,7 @@ import type {
   AuditFilter,
   AuditResult
 } from '@/types/audit'
-import { DEFAULT_AUDIT_FILTER, getDateRangeForFilter } from '@/types/audit'
+import { DEFAULT_AUDIT_FILTER, auditTimestampToDate, getDateRangeForFilter } from '@/types/audit'
 import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useAuditApi')
@@ -368,16 +368,15 @@ export function useAuditState() {
   }
 
   function exportToCsv(): string {
-    const headers = ['Timestamp', 'Operation', 'Result', 'User ID', 'Session ID', 'VM Name', 'IP Address', 'Error Message']
+    const headers = ['Timestamp', 'Operation', 'Result', 'User ID', 'Session ID', 'VM Name', 'IP Address']
     const rows = entries.value.map((entry) => [
-      escapeCsvField(entry.timestamp),
+      escapeCsvField(auditTimestampToDate(entry.timestamp).toISOString()),
       escapeCsvField(entry.operation),
       escapeCsvField(entry.result),
       escapeCsvField(entry.user_id),
       escapeCsvField(entry.session_id),
       escapeCsvField(entry.vm_name),
-      escapeCsvField(entry.ip_address),
-      escapeCsvField(entry.error_message)
+      escapeCsvField(entry.ip_address)
     ])
     return [headers.join(','), ...rows.map((row) => row.join(','))].join('\n')
   }

@@ -43,7 +43,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/analytics/panels/CodebaseCrossLanguagePanel.vue": 640,
     "autobot-frontend/src/components/analytics/panels/CodebaseIntelligenceScoresPanel.vue": 1325,
     "autobot-frontend/src/components/analytics/panels/CodebaseOwnershipPanel.vue": 1035,
-    "autobot-frontend/src/components/audit/AuditLogTable.vue": 737,  # #14780 BasePagination: 758 -> 741
+    "autobot-frontend/src/components/audit/AuditLogTable.vue": 720,  # #14780: 758 -> 741; #20176: 725
     "autobot-frontend/src/components/browser/BrowserSessionManager.vue": 647,  # #18849: 654 -> 653
     "autobot-frontend/src/components/charts/BaseChart.vue": 602,
     "autobot-frontend/src/components/charts/FunctionCallGraph.vue": 2153,  # #19906: 2165 -> 2153

@@ -6632,9 +6632,6 @@
       "title": "Registo de auditoria de segredos",
       "allActions": "Todas as ações",
       "access": "Acesso",
-      "inject": "Injetar",
-      "copy": "Copiar",
-      "reveal": "Revelar",
       "allUsers": "Todos os utilizadores",
       "by": "por",
       "details": "Detalhes",
@@ -6645,8 +6642,10 @@
       "hoursAgo": "há {hours} h",
       "create": "Create",
       "delete": "Delete",
-      "read": "Read",
-      "update": "Update"
+      "update": "Update",
+      "list": "Listar",
+      "transfer": "Transferir",
+      "bulkDelete": "Exclusão em massa"
     },
     "vault": {
       "title": "Cofre de segredos",
@@ -7689,7 +7688,6 @@
       "vmName": "Nome da VM",
       "vmSource": "Origem da VM",
       "ipAddress": "Endereço IP",
-      "errorMessage": "Mensagem de erro",
       "details": "Detalhes",
       "loading": "A carregar registos de auditoria...",
       "viewDetails": "Ver detalhes"
