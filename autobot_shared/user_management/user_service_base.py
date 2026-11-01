@@ -105,18 +105,15 @@ class UserServiceBase(BaseService):
     # Lookups
     # -------------------------------------------------------------------------
 
-    def _user_with_roles(self) -> Any:
-        """SELECT of non-deleted users with their roles eagerly loaded."""
+    def _user_with_roles(self, include_deleted: bool = False) -> Any:
+        """SELECT of non-deleted users (all, with *include_deleted*) with their roles eagerly loaded."""
         user = self.user_model
-        return (
-            select(user)
-            .options(selectinload(user.user_roles).selectinload(UserRole.role))
-            .where(user.deleted_at.is_(None))
-        )
+        query = select(user).options(selectinload(user.user_roles).selectinload(UserRole.role))
+        return query if include_deleted else query.where(user.deleted_at.is_(None))
 
-    async def get_user(self, user_id: uuid.UUID) -> UserCore | None:
-        """Get a user by ID, tenant-filtered; None if absent or deleted."""
-        query = self._user_with_roles().where(self.user_model.id == user_id)
+    async def get_user(self, user_id: uuid.UUID, *, include_deleted: bool = False) -> UserCore | None:
+        """Get a user by ID, tenant-filtered; None if absent, or deleted unless *include_deleted* (#20443)."""
+        query = self._user_with_roles(include_deleted).where(self.user_model.id == user_id)
         query = self.apply_tenant_filter(query, self.user_model)
         result = await self.session.execute(query)
         return result.scalar_one_or_none()

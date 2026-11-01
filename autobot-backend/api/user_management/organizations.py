@@ -29,6 +29,7 @@ from api.user_management.dependencies import (
 )
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
+from autobot_shared.user_management.revocation_outcome import commit_or_503
 from user_management.services import OrganizationService
 from user_management.services.organization_service import (
     DuplicateOrganizationError,
@@ -209,6 +210,7 @@ async def delete_organization(
     """Delete organization."""
     try:
         await org_service.delete_organization(org_id, hard_delete=hard_delete)
+        await commit_or_503(org_service.session)  # a failed revocation is answered, not only logged (#20443)
         return OrganizationDeletedResponse(
             message=f"Organization {org_id} deleted successfully",
         )
@@ -242,6 +244,7 @@ async def deactivate_organization(
     """Deactivate organization."""
     try:
         await org_service.deactivate_organization(org_id)
+        await commit_or_503(org_service.session)  # a failed revocation is answered, not only logged (#20443)
         org = await org_service.get_organization(org_id)
         return _org_to_response(org)
 

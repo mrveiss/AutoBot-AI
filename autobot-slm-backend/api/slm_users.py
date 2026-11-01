@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.auth.permissions import Permission
+from autobot_shared.user_management.revocation_outcome import commit_or_503
 from autobot_shared.user_management.user_service_errors import UserNotFoundError
 from services.auth import require_permission
 from user_management.database import get_slm_db
@@ -163,3 +164,5 @@ async def delete_slm_user(
     except Exception as e:
         logger.error("Failed to delete SLM user: %s", e)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error") from e
+
+    await commit_or_503(db)  # a failed revocation is answered, not only logged (#20443)

@@ -159,22 +159,12 @@ class OrganizationService(BaseService):
         logger.info("Created organization: %s (id=%s, slug=%s)", name, org.id, slug)
         return org
 
-    async def get_organization(self, org_id: uuid.UUID) -> OrganizationCore | None:
-        """
-        Get organization by ID.
-
-        Args:
-            org_id: Organization UUID
-
-        Returns:
-            Organization instance or None
-        """
-        result = await self.session.execute(
-            select(self.organization_model)
-            .where(self.organization_model.id == org_id)
-            .where(self.organization_model.deleted_at.is_(None))
-        )
-        return result.scalar_one_or_none()
+    async def get_organization(self, org_id: uuid.UUID, *, include_deleted: bool = False) -> OrganizationCore | None:
+        """Get an organization by ID; None if absent, or soft-deleted unless *include_deleted* (#20443)."""
+        query = select(self.organization_model).where(self.organization_model.id == org_id)
+        if not include_deleted:
+            query = query.where(self.organization_model.deleted_at.is_(None))
+        return (await self.session.execute(query)).scalar_one_or_none()
 
     async def get_organization_by_slug(self, slug: str) -> OrganizationCore | None:
         """
@@ -323,6 +313,7 @@ class OrganizationService(BaseService):
         Delete an organization and, once it commits, void its members' earlier tokens (#20443).
 
         The members are read before a hard delete cascades them away. A member added later is not covered.
+        A soft delete repeated on a soft-deleted organisation queues the markers again (a retry, #20443).
 
         Args:
             org_id: Organization ID to delete
@@ -333,7 +324,7 @@ class OrganizationService(BaseService):
         """
         self._require_platform_admin()
 
-        org = await self.get_organization(org_id)
+        org = await self.get_organization(org_id, include_deleted=not hard_delete)
         if not org:
             raise OrganizationNotFoundError(f"Organization {org_id} not found")
 
@@ -342,7 +333,7 @@ class OrganizationService(BaseService):
             await self.session.delete(org)  # cascades the org's teams, users and memberships
             run_after_commit(self.session, MembershipEpochBump(org_id))  # #19670
         else:
-            org.deleted_at = now_utc()
+            org.deleted_at = org.deleted_at or now_utc()
             org.is_active = False
 
         await self.session.flush()
