@@ -30,6 +30,10 @@ const plan = ref<Plan | null>(null)
 const gate = ref<GateResponse | null>(null)
 const warnings = ref<string[]>([])
 const loadError = ref('')
+/** Set when a re-read failed: what is on screen may not be what the server holds. */
+const staleError = ref('')
+/** Which of the two reads failed: the plan, the gate, or both. */
+const staleKind = ref<'plan' | 'gate' | 'both'>('plan')
 const busy = ref(false)
 const step = ref<StepId>('map')
 const editable = computed(() => !!plan.value && isActiveStatus(plan.value.status))
@@ -54,7 +58,7 @@ async function run(call: () => Promise<Plan>) {
   busy.value = true
   try {
     plan.value = await call()
-    await refreshGate()
+    await reread(false)
   } catch (err: unknown) {
     showToast(describeApiError(err, t('llc.workflowPlanner.saveFailed')), 'error')
   } finally {
@@ -64,14 +68,35 @@ async function run(call: () => Promise<Plan>) {
 
 /** A convert-step action finished: take the plan it returned, or re-read both when it was refused. */
 async function onConverted(next?: Plan) {
-  try {
-    if (next) plan.value = next
-    else plan.value = await props.api.get(props.planKey)
-    await refreshGate()
-  } catch (err: unknown) {
-    showToast(describeApiError(err, t('llc.workflowPlanner.loadFailed')), 'error')
-  }
+  if (next) plan.value = next
+  await reread(!next)
 }
+
+/** Re-read gate (and plan when asked), each on its own so one failure never hides the other's result. */
+async function reread(withPlan: boolean) {
+  const reads = await Promise.allSettled([
+    withPlan ? props.api.get(props.planKey) : Promise.resolve(plan.value),
+    props.api.gate(props.planKey),
+  ])
+  const [planRead, gateRead] = reads
+  if (planRead.status === 'fulfilled' && planRead.value) plan.value = planRead.value
+  if (gateRead.status === 'fulfilled') gate.value = gateRead.value
+  markStale(planRead, gateRead)
+}
+
+/** A failed re-read marks the screen stale with a retry, naming what failed, never a silent toast. */
+function markStale(planRead: PromiseSettledResult<unknown>, gateRead: PromiseSettledResult<unknown>) {
+  const failed = [planRead, gateRead].find((r): r is PromiseRejectedResult => r.status === 'rejected')
+  if (!failed) {
+    staleError.value = ''
+    return
+  }
+  const both = planRead.status === 'rejected' && gateRead.status === 'rejected'
+  staleKind.value = both ? 'both' : planRead.status === 'rejected' ? 'plan' : 'gate'
+  staleError.value = describeApiError(failed.reason, t('llc.workflowPlanner.loadFailed'))
+}
+
+const retryReread = () => reread(true)
 
 const saveMap = (body: Parameters<WorkflowPlansApi['putMap']>[1]) =>
   run(async () => {
@@ -97,6 +122,12 @@ onMounted(load)
     </div>
 
     <template v-else>
+      <BaseAlert v-if="staleError" variant="warning" class="mb-3" :message="t(`llc.workflowPlanner.stale.${staleKind}`, { reason: staleError })" data-testid="plan-stale">
+        <template #actions>
+          <BaseButton size="sm" variant="outline" data-testid="plan-reread" @click="retryReread">{{ t('llc.workflowPlanner.rereadRetry') }}</BaseButton>
+        </template>
+      </BaseAlert>
+
       <ol class="mb-3 flex flex-wrap gap-2" :aria-label="t('llc.workflowPlanner.statusFlow')">
         <li v-for="s in STATUS_ORDER" :key="s">
           <BaseBadge :variant="s === plan.status ? 'primary' : 'neutral'" :tone="s === plan.status ? 'solid' : 'subtle'" size="sm" :label="t(`llc.workflowPlanner.status.${s}`)" :data-testid="`status-${s}`" />
@@ -111,7 +142,7 @@ onMounted(load)
         </BaseButton>
       </div>
 
-      <PlannerConvertStep v-if="step === 'convert'" :plan="plan" :gate="gate" :api="api" @changed="onConverted" />
+      <PlannerConvertStep v-if="step === 'convert'" :plan="plan" :gate="gate" :api="api" :stale="!!staleError" @changed="onConverted" />
 
       <fieldset v-else :disabled="!editable" class="border-0 p-0">
         <PlannerMapStep v-if="step === 'map'" :plan="plan" :busy="busy" :warnings="warnings" @map="saveMap" @wait-note="(k, n) => run(() => api.setWaitNote(planKey, k, n))" />
