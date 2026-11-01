@@ -63,6 +63,10 @@ python:
   - 'docker-compose.override.example.yml'
   - 'docker/mcp-bridges.yml'
   - 'docker/frontend/Dockerfile'
+  # #19868: proxy_upload_cap_one_home_19868_test.py reads it
+  - 'docker/nginx/nginx-common.conf'
+  - 'docker/nginx/nginx-locations.conf'
+  - 'docker/nginx/nginx-slm-locations.conf'
   - '.github/workflows/docker-smoke-test.yml'
   - '.github/workflows/co-located-smoke.yml'
   # #17500, #18729: compose_exposure_and_credentials_17500_test.py and docker_admin_seed_18729_test.py read the secrets generator.
