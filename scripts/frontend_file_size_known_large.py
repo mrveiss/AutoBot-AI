@@ -150,7 +150,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/SettingsView.vue": 739,
     "autobot-frontend/src/views/VisionAutomationView.vue": 848,
     "autobot-frontend/src/views/WorkflowBuilderView.vue": 2201,  # #13422: 2300 -> 2267 (kit RiskBadge)
-    "autobot-frontend/src/views/llc/BacklogView.vue": 823,
+    "autobot-frontend/src/views/llc/BacklogView.vue": 630,
     "autobot-frontend/src/views/llc/CompanyCreationWizard.vue": 909,
     "autobot-frontend/src/views/llc/CompanyPortabilityView.vue": 761,
     "autobot-frontend/src/views/llc/CostDashboard.vue": 1012,  # #20123: 1015 -> 1012 (mixed bucket lists each currency)

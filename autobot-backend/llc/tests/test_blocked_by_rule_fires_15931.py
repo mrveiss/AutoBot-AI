@@ -59,7 +59,13 @@ async def session(engine) -> AsyncIterator[AsyncSession]:  # noqa: ANN001
 async def _item(session: AsyncSession, company: str, *, status: WorkItemStatus, title: str):
     """Seed through the service, so the fixture cannot disagree with production."""
     svc = WorkItemService()
-    item = await svc.create(session, company_id=company, type=WorkItemType.TASK, title=title)
+    item = await svc.create(
+        session,
+        company_id=company,
+        type=WorkItemType.TASK,
+        title=title,
+        project_id=await harness.seed_project(session, company),
+    )
     item.status = status.value
     await session.commit()
     return item

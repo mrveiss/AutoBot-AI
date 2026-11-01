@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from llc.agent_tools import LLCToolError, _create_task
 from llc.models.enums import WorkItemType as T
+from llc.models.sprint import LLCProject
 from llc.models.work_item import LLCWorkItem
 from llc.scheduler.liveness_monitor import LivenessMonitor
 from llc.services.portability import PortabilityService
@@ -50,6 +51,7 @@ async def session() -> AsyncIterator[AsyncSession]:
         eng, expire_on_commit=False, class_=AsyncSession
     )
     async with factory() as s:
+        await _ensure_project(s, COMPANY, PROJECT)
         yield s
     await eng.dispose()
 
@@ -57,10 +59,19 @@ async def session() -> AsyncIterator[AsyncSession]:
 _DEFAULT = object()
 
 
-async def _make(session, kind, *, parent=None, project=_DEFAULT, company=COMPANY):
+async def _ensure_project(session, company, project) -> None:
+    """The project row a work item names must exist in its company (#18978)."""
+    if await session.get(LLCProject, uuid.UUID(project)) is None:
+        session.add(LLCProject(id=uuid.UUID(project), company_id=uuid.UUID(company), name="P"))
+        await session.flush()
+
+
+async def _make(session, kind, *, parent=None, project=_DEFAULT, company=COMPANY, ensure=True):
     """Create through the service. Unless told otherwise: inherit from a parent, else sit in PROJECT."""
     if project is _DEFAULT:
         project = None if parent else PROJECT
+    if project is not None and ensure:
+        await _ensure_project(session, company, project)
     return await WorkItemService().create(
         session,
         company_id=company,
@@ -168,7 +179,7 @@ async def test_items_without_a_project_are_counted_per_company(session):
 
 
 async def test_parent_from_another_company_is_refused(session):
-    foreign = await _make(session, T.EPIC, project=PROJECT, company=str(uuid.uuid4()))
+    foreign = await _make(session, T.EPIC, project=str(uuid.uuid4()), company=str(uuid.uuid4()))
     with pytest.raises(HierarchyViolation, match="not found in this company"):
         await _make(session, T.FEATURE, parent=foreign)
 
@@ -318,3 +329,25 @@ async def test_template_seed_with_no_project_to_land_in_is_reported_not_created(
         template, uuid.UUID(COMPANY), {}, created, skipped, warnings
     )
     assert created["work_items"] == [] and skipped["work_items"] == ["Seed"] and "no project" in warnings[0]
+
+
+async def test_another_companys_project_is_refused_as_not_found(session):
+    theirs = str(uuid.uuid4())
+    await _ensure_project(session, str(uuid.uuid4()), theirs)
+    with pytest.raises(HierarchyViolation, match=f"project {theirs} not found in this company"):
+        await _make(session, T.PBI, project=theirs, ensure=False)
+
+
+async def test_an_unknown_project_is_refused_with_the_same_message(session):
+    unknown = str(uuid.uuid4())
+    with pytest.raises(HierarchyViolation, match=f"project {unknown} not found in this company"):
+        await _make(session, T.TASK, project=unknown, ensure=False)
+
+
+async def test_a_parents_project_from_another_company_does_not_flow_to_the_child(session):
+    """Legacy bad data: the parent sits in a foreign company's project. The child is refused, not seeded with it."""
+    foreign = str(uuid.uuid4())
+    await _ensure_project(session, str(uuid.uuid4()), foreign)
+    bad_parent = await _legacy(session, T.PBI, project_id=foreign)
+    with pytest.raises(HierarchyViolation, match="not found in this company"):
+        await _make(session, T.TASK, parent=bad_parent)

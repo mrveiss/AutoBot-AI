@@ -32,6 +32,8 @@ from llc.services.work_item_service import (
     WorkItemService,
 )
 
+PROJECT_ID = uuid.uuid4()  # the project every work item must belong to (#18978)
+
 
 def _make_item(**kwargs) -> MagicMock:
     defaults = {
@@ -40,7 +42,7 @@ def _make_item(**kwargs) -> MagicMock:
         "identifier": "WI-200",
         "type": WorkItemType.TASK,
         "parent_id": None,
-        "project_id": None,
+        "project_id": PROJECT_ID,
         "title": "Co-working task",
         "status": WorkItemStatus.IN_PROGRESS,
         "priority": WorkItemPriority.MEDIUM,
@@ -384,6 +386,7 @@ class TestCoworkerSubtaskInvariant:
                 company_id=company_id,
                 type=WorkItemType.SUBTASK,
                 title="Subtask by co-worker",
+                project_id=str(PROJECT_ID),
                 parent_id=parent_id,
                 created_by_agent_id=co_worker_agent_id,
             )

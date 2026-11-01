@@ -8679,6 +8679,8 @@
       "project": "Project",
       "sprint": "Sprint",
       "selectProject": "Select a project…",
+      "fieldProject": "Project",
+      "noProjectsHint": "This company has no project yet. Create a project first; every work item belongs to one.",
       "selectSprint": "Select a sprint…",
       "loadingProjects": "Loading projects…",
       "loadingSprints": "Loading sprints…",

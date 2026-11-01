@@ -9,7 +9,7 @@
         <span class="item-count">{{ t('llc.backlog.itemCount', { count: filteredItems.length }) }}</span>
       </div>
       <div class="header-actions">
-        <button class="btn-primary" @click="showCreateForm = true">
+        <button class="btn-primary" @click="openCreateForm">
           <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
@@ -124,78 +124,15 @@
       </table>
     </div>
 
-    <!-- AC Suggester create form -->
-    <BaseModal
+    <BacklogCreateModal
       :model-value="showCreateForm"
-      :title="t('llc.backlog.createTitle')"
-      :close-label="t('ui.modal.closeDialog')"
-      :width="560"
+      :company-id="companyId"
+      :projects="projects"
+      :loading-projects="isLoadingProjects"
+      :default-project-id="projectFilterId"
       @close="showCreateForm = false"
-    >
-      <div class="modal-form-body">
-        <div class="form-field">
-          <label>{{ t('llc.backlog.fieldTitle') }}</label>
-          <input v-model="newItem.title" type="text" class="form-input" :placeholder="t('llc.backlog.titlePlaceholder')" />
-        </div>
-        <div class="form-row">
-          <div class="form-field">
-            <label>{{ t('llc.backlog.fieldType') }}</label>
-            <select v-model="newItem.type" class="form-select">
-              <option v-for="wt in WORK_ITEM_TYPES" :key="wt.value" :value="wt.value">{{ wt.label }}</option>
-            </select>
-          </div>
-          <div class="form-field">
-            <label>{{ t('llc.backlog.fieldPriority') }}</label>
-            <select v-model="newItem.priority" class="form-select">
-              <option v-for="p in PRIORITIES" :key="p.value" :value="p.value">{{ p.label }}</option>
-            </select>
-          </div>
-          <div class="form-field">
-            <label>{{ t('llc.backlog.fieldStoryPoints') }}</label>
-            <input v-model.number="newItem.story_points" type="number" class="form-input" min="0" />
-          </div>
-        </div>
-        <div class="form-field">
-          <label>{{ t('llc.backlog.fieldDescription') }}</label>
-          <textarea v-model="newItem.description" class="form-textarea" rows="4" />
-        </div>
-
-        <!-- AC Suggester -->
-        <div class="ac-suggester">
-          <div class="ac-header">
-            <label>{{ t('llc.backlog.acceptanceCriteria') }}</label>
-            <button
-              class="btn-suggest"
-              :disabled="!newItem.title || isSuggestingAC"
-              @click="suggestAC"
-            >
-              <span v-if="isSuggestingAC">{{ t('llc.backlog.suggesting') }}</span>
-              <span v-else>✨ {{ t('llc.backlog.suggestAcs') }}</span>
-            </button>
-          </div>
-          <div v-if="suggestedACs.length > 0" class="suggested-acs">
-            <label
-              v-for="(ac, i) in suggestedACs"
-              :key="i"
-              class="ac-item"
-            >
-              <input type="checkbox" v-model="ac.selected" />
-              {{ ac.text }}
-            </label>
-          </div>
-        </div>
-
-        <p v-if="createError" class="create-error" role="alert">{{ createError }}</p>
-
-      </div>
-
-      <template #actions>
-        <button class="btn-secondary" @click="showCreateForm = false">{{ t('common.cancel') }}</button>
-        <button class="btn-primary" :disabled="!newItem.title || isCreating" @click="createItem">
-          {{ isCreating ? t('llc.backlog.creating') : t('common.create') }}
-        </button>
-      </template>
-    </BaseModal>
+      @created="onItemCreated"
+    />
 
     <!-- Bulk sprint assign drawer -->
     <BaseModal
@@ -253,6 +190,7 @@ import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import WorkItemDetail from './WorkItemDetail.vue'
 import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
+import BacklogCreateModal from '@/components/llc/BacklogCreateModal.vue'
 import { BaseAvatar, BaseModal } from '@autobot/ui'
 
 const logger = createLogger('BacklogView')
@@ -262,25 +200,7 @@ const { t } = useI18n()
 
 const companyId = computed(() => route.params.companyId as string)
 
-const WORK_ITEM_TYPES = [
-  { value: 'epic', label: 'Epic' },
-  { value: 'feature', label: 'Feature' },
-  { value: 'pbi', label: 'PBI' },
-  { value: 'task', label: 'Task' },
-  { value: 'bug', label: 'Bug' },
-  { value: 'subtask', label: 'Subtask' },
-  { value: 'spike', label: 'Spike' },
-  { value: 'risk', label: 'Risk' },
-]
-
-const PRIORITIES = [
-  { value: 'critical', label: 'Critical' },
-  { value: 'high', label: 'High' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'low', label: 'Low' },
-]
-
-import type { WorkItem } from './workItemTypes'
+import { WORK_ITEM_TYPES, PRIORITIES, type WorkItem } from './workItemTypes'
 
 const items = ref<WorkItem[]>([])
 const isLoading = ref(false)
@@ -298,11 +218,6 @@ const filters = ref({ type: '', status: '', priority: '', search: '' })
 const projectFilterId = ref('')
 
 const showCreateForm = ref(false)
-const isCreating = ref(false)
-const createError = ref('')
-const newItem = ref({ title: '', type: 'pbi', priority: 'medium', story_points: null as number | null, description: '' })
-const isSuggestingAC = ref(false)
-const suggestedACs = ref<{ text: string; selected: boolean }[]>([])
 
 const showBulkAssign = ref(false)
 const isBulkAssigning = ref(false)
@@ -395,51 +310,14 @@ async function persistBacklogOrder(ordered: WorkItem[], previous: WorkItem[]): P
   }
 }
 
-// Request advisory acceptance criteria for the in-progress new item. Company
-// scope is derived from the org context server-side — never send company_id.
-// Backend: POST /api/llc/work-items/suggest-ac (#9861); empty list on LLM-down.
-async function suggestAC() {
-  if (!newItem.value.title) return
-  isSuggestingAC.value = true
-  try {
-    const res = await api.post<{ suggestions: string[] }>(`/api/llc/work-items/suggest-ac`, {
-      title: newItem.value.title,
-      description: newItem.value.description,
-    })
-    suggestedACs.value = (res.suggestions ?? []).map(text => ({ text, selected: true }))
-  } catch (err) {
-    logger.error('AC suggestion failed', err)
-    suggestedACs.value = []
-  } finally {
-    isSuggestingAC.value = false
-  }
+function openCreateForm() {
+  showCreateForm.value = true
+  if (projects.value.length === 0) loadProjects()
 }
 
-async function createItem() {
-  if (!newItem.value.title) return
-  isCreating.value = true
-  createError.value = ''
-  try {
-    const ac = suggestedACs.value.filter(a => a.selected).map(a => a.text)
-    const created = await api.post<WorkItem>(`/api/llc/work-items`, {
-      company_id: companyId.value,
-      ...newItem.value,
-      acceptance_criteria: ac,
-    })
-    items.value.unshift(created)
-    showCreateForm.value = false
-    newItem.value = { title: '', type: 'pbi', priority: 'medium', story_points: null, description: '' }
-    suggestedACs.value = []
-  } catch (err) {
-    // Surface the backend reason instead of a silent console-only log (#11411).
-    logger.error('Create work item failed', err)
-    const detail = err instanceof Error ? err.message : ''
-    createError.value = detail
-      ? t('llc.backlog.createErrorDetail', { detail })
-      : t('llc.backlog.createError')
-  } finally {
-    isCreating.value = false
-  }
+function onItemCreated(item: WorkItem) {
+  items.value.unshift(item)
+  showCreateForm.value = false
 }
 
 // Cascade picker for bulk sprint assignment: pick a Project, then a Sprint from
@@ -686,18 +564,7 @@ onMounted(() => {
   color: var(--text-secondary);
 }
 
-.form-row {
-  display: flex;
-  gap: 0.75rem;
-}
-
-.form-row .form-field {
-  flex: 1;
-}
-
-.form-input,
-.form-select,
-.form-textarea {
+.form-input {
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--border-default);
   border-radius: 0.375rem;
@@ -705,66 +572,6 @@ onMounted(() => {
   color: var(--text-primary);
   font-size: 0.875rem;
   width: 100%;
-}
-
-.form-textarea {
-  resize: vertical;
-}
-
-.ac-suggester {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.ac-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.ac-header label {
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-}
-
-.btn-suggest {
-  font-size: 0.8rem;
-  padding: 0.25rem 0.75rem;
-  border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
-  background: var(--bg-elevated);
-  cursor: pointer;
-}
-
-.btn-suggest:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.suggested-acs {
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-  padding: 0.5rem;
-  border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
-  background: var(--bg-elevated);
-}
-
-.ac-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-
-.create-error {
-  margin: 0 0 0.5rem;
-  font-size: 0.8125rem;
-  color: var(--color-danger);
 }
 
 .form-hint {

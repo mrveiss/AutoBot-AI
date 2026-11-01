@@ -66,7 +66,13 @@ def _client(maker, company: uuid.UUID = COMPANY_A) -> httpx.AsyncClient:
 
 async def _item(maker, company: uuid.UUID, title: str) -> str:
     async with maker() as s:
-        item = await WorkItemService().create(s, company_id=str(company), type=WorkItemType.TASK, title=title)
+        item = await WorkItemService().create(
+            s,
+            company_id=str(company),
+            type=WorkItemType.TASK,
+            title=title,
+            project_id=await harness.seed_project(s, company),
+        )
         await s.commit()
         return str(item.id)
 

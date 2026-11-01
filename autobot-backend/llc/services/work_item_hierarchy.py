@@ -18,6 +18,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.enums import WorkItemType
+from ..models.sprint import LLCProject
 from ..models.work_item import LLCWorkItem
 
 T = WorkItemType
@@ -79,6 +80,15 @@ async def _assert_no_cycle(session: AsyncSession, get: ItemGetter, item_id: Opti
         node = None if node.parent_id is None else await get(session, node.parent_id)
 
 
+async def _assert_project_in_company(session: AsyncSession, company_id: str, project_id: str) -> None:
+    """A project of another company reads the same as one that does not exist: not found."""
+    stmt = select(LLCProject.id).where(
+        LLCProject.id == uuid.UUID(str(project_id)), LLCProject.company_id == uuid.UUID(str(company_id))
+    )
+    if (await session.execute(stmt)).scalar_one_or_none() is None:
+        raise HierarchyViolation(f"project {project_id} not found in this company")
+
+
 def _resolve_project(
     item_type: WorkItemType, parent: Optional[LLCWorkItem], project_id: Optional[str], current: Optional[str] = None
 ):
@@ -122,7 +132,9 @@ async def validate_parent(
                 f"a {kind.value} cannot sit under a {_type_of(parent.type).value}; allowed: {allowed}"
             )
         await _assert_no_cycle(session, get, item_id, parent)
-    return _resolve_project(kind, parent, project_id, current_project), parent
+    resolved = _resolve_project(kind, parent, project_id, current_project)
+    await _assert_project_in_company(session, company_id, resolved)
+    return resolved, parent
 
 
 async def validate_create(
