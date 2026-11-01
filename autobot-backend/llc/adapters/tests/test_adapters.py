@@ -81,7 +81,7 @@ class TestProcessAdapter:
             patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=fake_proc),
             patch(_PSUTIL_PROCESS) as mock_psutil,
         ):
-            mock_psutil.return_value.create_time.return_value = 100.0
+            mock_psutil.return_value._ident = (0, 100.0)
             run_id = await adapter.invoke({"command": "echo hello"}, {"key": "value"})
 
         assert run_id == "12345:100.0"
@@ -210,7 +210,7 @@ class TestProcessAdapter:
             patch("asyncio.sleep", new_callable=AsyncMock),
             patch(_PSUTIL_PROCESS) as mock_psutil,
         ):
-            mock_psutil.return_value.create_time.return_value = 100.0
+            mock_psutil.return_value._ident = (0, 100.0)
             await adapter.cancel({}, "12345:100.0")
 
         assert any(s == signal.SIGTERM for _, s in killed)
