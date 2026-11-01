@@ -45,16 +45,23 @@ def test_each_fleet_upload_location_reads_the_home(template: str) -> None:
     assert not _location_cap_lines(template)
 
 
-def test_docker_includes_it_and_declares_no_cap_of_its_own() -> None:
+def _api_location() -> str:
+    text = _read("docker/nginx/nginx-locations.conf")
+    return re.search(r"location /api/ \{(.*?)\n\}", text, re.S).group(1)
+
+
+def test_docker_applies_it_at_the_upload_location_only() -> None:
+    assert "include /etc/nginx/upload-cap.conf;" in _api_location()
     common = _read("docker/nginx/nginx-common.conf")
-    assert "include /etc/nginx/upload-cap.conf;" in common
-    assert "client_max_body_size" not in common
+    assert "upload-cap.conf" not in common and re.search(r"^client_max_body_size 10m;$", common, re.M)
+    slm = _read("docker/nginx/nginx-slm-locations.conf")
+    assert "upload-cap.conf" not in slm and "client_max_body_size" not in slm
 
 
-def test_each_container_that_mounts_common_also_gets_the_cap() -> None:
+def test_each_container_serving_that_location_gets_the_cap() -> None:
     compose = yaml.safe_load(_read("docker-compose.yml"))
     mounting = [
-        s for s in compose["services"].values() if any("nginx-common.conf" in str(v) for v in s.get("volumes", []))
+        s for s in compose["services"].values() if any("nginx-locations.conf" in str(v) for v in s.get("volumes", []))
     ]
     assert mounting and all(_MOUNT in s["volumes"] for s in mounting)
     assert f"COPY {_HOME} /etc/nginx/upload-cap.conf" in _read("docker/frontend/Dockerfile")
