@@ -31,10 +31,10 @@ from ..models.enums import WorkItemRelationType
 from ..models.work_item import LLCWorkItemRelation
 from ..services.work_item_relations import RelationConflict, WorkItemRelationService
 from ..services.work_item_service import WorkItemService
-from ._common import actor_id
+from ._common import actor_id, require_work_item_id
 
 logger = get_logger(__name__)
-router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
+router = APIRouter(prefix="/work-items", tags=["llc-work-items"], dependencies=[Depends(require_work_item_id)])
 _get_relation_service = lazy_singleton(WorkItemRelationService)
 _service = service_dep(WorkItemService)
 
