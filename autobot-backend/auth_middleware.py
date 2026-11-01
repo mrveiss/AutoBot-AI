@@ -17,7 +17,7 @@ from typing import Dict, Tuple
 
 from fastapi import HTTPException, Request, status
 
-from auth_revocation import resolve_human_user_via, token_passes_revocation
+from auth_revocation import resolve_human_user_via, token_passes_revocation, with_session_issue_time
 from autobot_shared.auth.interactive_principal import LOGIN_TOKEN_TYPE, is_login_token, is_purpose_bound
 from autobot_shared.auth.internal_api_key import verify_internal_api_key
 from autobot_shared.auth.jwt_core import (
@@ -32,6 +32,7 @@ from autobot_shared.principal import resolve_principal_id  # noqa: F401  (re-exp
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.time_utils import parse_utc_iso
+from autobot_shared.user_management.password_epoch import LOGIN_TOKEN_LIFETIME_SECONDS
 from autobot_shared.websocket_subprotocol import resolve_ws_token
 from config.manager import get_config_manager
 from security_layer import SecurityLayer
@@ -49,7 +50,7 @@ class AuthenticationMiddleware:
         self.security_config = config.get("security_config", {})
         self.enable_auth = self.security_config.get("enable_auth", True)
         self.jwt_secret = self._get_jwt_secret()
-        self.jwt_expiry_hours = 24
+        self.jwt_expiry_hours = LOGIN_TOKEN_LIFETIME_SECONDS // 3600  # the epoch marker outlives it (#20443)
         self.session_timeout_minutes = self.security_config.get("session_timeout_minutes", 30)
         self.max_failed_attempts = self.security_config.get("max_failed_attempts", 3)
         self.lockout_duration_minutes = self.security_config.get("lockout_duration_minutes", 15)
@@ -623,9 +624,8 @@ class AuthenticationMiddleware:
         if not session or not session.get("user_data"):
             return None
 
-        user_data = session["user_data"].copy()
-        user_data["auth_method"] = "session"
-        return user_data
+        user_data = {**session["user_data"], "auth_method": "session"}
+        return with_session_issue_time(user_data, session)
 
     def _extract_user_from_dev_header(self, request: Request) -> Dict | None:
         """
@@ -706,18 +706,18 @@ class AuthenticationMiddleware:
             from services.device_jwt import validate_device_jwt
 
             claims = await validate_device_jwt(token)
+        except HTTPException:
+            raise  # #20446: the revocation store could not answer -- the shared 503, not a 401
         except Exception:
             return None
 
-        device_id = str(claims.get("device_id", ""))
-        user_id = str(claims.get("user_id", ""))
-        scope = str(claims.get("scope", "read"))
+        device_id, user_id = (str(claims.get(claim, "")) for claim in ("device_id", "user_id"))
         return {
             "username": f"device:{device_id}",
             "user_id": user_id,
             "role": "device",
             "device_id": device_id,
-            "scope": scope,
+            "scope": str(claims.get("scope", "read")),
             "auth_method": "device_jwt",
         }
 

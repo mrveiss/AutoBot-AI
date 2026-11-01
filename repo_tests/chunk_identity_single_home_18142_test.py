@@ -52,7 +52,7 @@ def _kept(rel: str) -> bool:
 REACH = declare(
     "chunk-identity-single-home-18142",
     discover=_candidates,
-    floor=3012,  # mid-window: population 3112, window (2912, 3112)
+    floor=3008,  # mid-window: population 3108, window (2908, 3108)
     growth=200,
     what="tracked non-test .py files",
     roots=("autobot-backend/", "autobot_shared/"),

@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.redis_client import get_async_redis_client
 from models.agent_org import AgentOrgNode
 
-from ..models.enums import ActivityEventType, LLCAgentStatus
+from ..models.enums import UNDISPATCHABLE_AGENT_STATUSES, ActivityEventType, LLCAgentStatus
 from .activity_log import LLCActivityLogService
 from .company import CompanyNotFoundError
 
@@ -52,7 +52,7 @@ class AgentNotSchedulableError(Exception):
 
 #: Statuses no heartbeat may wake: the terminal pair ``llc/api/replay.py`` rejects,
 #: and the one migration 090 writes for a node that is not a company's CEO.
-NEVER_SCHEDULED_STATUSES = frozenset({LLCAgentStatus.INACTIVE.value, LLCAgentStatus.TERMINATED.value})
+NEVER_SCHEDULED_STATUSES = UNDISPATCHABLE_AGENT_STATUSES - {LLCAgentStatus.PAUSED.value}
 
 
 def _agent_in_company(company_id: str, agent_id: str) -> tuple:
@@ -74,6 +74,7 @@ class ControlsService:
     All methods are synchronous from the caller's perspective: the state change
     is committed before the method returns. Redis flags are best-effort (failures
     are logged, not raised) because the DB state is authoritative.
+    A flag follows the activity write, so a failed write leaves no flag behind (#20150).
     """
 
     def __init__(self, activity_log: Optional[LLCActivityLogService] = None) -> None:
@@ -120,8 +121,6 @@ class ControlsService:
             },
         )
 
-        await self._set_redis_flag(_AGENT_PAUSED_KEY.format(agent_id=agent_id), "1")
-
         await self._activity_log.record(
             session=session,
             company_id=company_id,
@@ -133,6 +132,8 @@ class ControlsService:
             before={"status": before_status},
             after={"status": LLCAgentStatus.PAUSED.value, "pause_reason": reason},
         )
+
+        await self._set_redis_flag(_AGENT_PAUSED_KEY.format(agent_id=agent_id), "1")
 
         return {"agent_id": agent_id, "status": LLCAgentStatus.PAUSED.value, "pause_reason": reason}
 
@@ -169,8 +170,6 @@ class ControlsService:
             },
         )
 
-        await self._del_redis_flag(_AGENT_PAUSED_KEY.format(agent_id=agent_id))
-
         await self._activity_log.record(
             session=session,
             company_id=company_id,
@@ -182,6 +181,8 @@ class ControlsService:
             before={"status": before_status},
             after={"status": restore_status},
         )
+
+        await self._del_redis_flag(_AGENT_PAUSED_KEY.format(agent_id=agent_id))
 
         return {"agent_id": agent_id, "status": restore_status}
 
@@ -214,9 +215,6 @@ class ControlsService:
             },
         )
 
-        # Terminated agents also get the Redis pause flag so heartbeat skips them
-        await self._set_redis_flag(_AGENT_PAUSED_KEY.format(agent_id=agent_id), "terminated")
-
         await self._activity_log.record(
             session=session,
             company_id=company_id,
@@ -228,6 +226,9 @@ class ControlsService:
             before={"status": before_status},
             after={"status": LLCAgentStatus.TERMINATED.value, "reason": reason},
         )
+
+        # Terminated agents also get the Redis pause flag so heartbeat skips them
+        await self._set_redis_flag(_AGENT_PAUSED_KEY.format(agent_id=agent_id), "terminated")
 
         return {"agent_id": agent_id, "status": LLCAgentStatus.TERMINATED.value}
 
@@ -353,8 +354,6 @@ class ControlsService:
         """Set company-wide Redis pause flag — blocks all new heartbeat runs."""
         if await self._get_company_row(session, company_id) is None:
             raise CompanyNotFoundError(company_id)
-        await self._set_redis_flag(_COMPANY_PAUSED_KEY.format(company_id=company_id), reason or "1")
-
         await self._activity_log.record(
             session=session,
             company_id=company_id,
@@ -365,6 +364,8 @@ class ControlsService:
             entity_id=company_id,
             after={"reason": reason},
         )
+
+        await self._set_redis_flag(_COMPANY_PAUSED_KEY.format(company_id=company_id), reason or "1")
 
         return {"company_id": company_id, "paused": True}
 
@@ -377,8 +378,6 @@ class ControlsService:
         """Lift company-wide pause flag."""
         if await self._get_company_row(session, company_id) is None:
             raise CompanyNotFoundError(company_id)
-        await self._del_redis_flag(_COMPANY_PAUSED_KEY.format(company_id=company_id))
-
         await self._activity_log.record(
             session=session,
             company_id=company_id,
@@ -389,6 +388,8 @@ class ControlsService:
             entity_id=company_id,
             after={"paused": False},
         )
+
+        await self._del_redis_flag(_COMPANY_PAUSED_KEY.format(company_id=company_id))
 
         return {"company_id": company_id, "paused": False}
 

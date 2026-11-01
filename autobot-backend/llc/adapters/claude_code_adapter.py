@@ -35,13 +35,20 @@ import uuid
 from dataclasses import replace
 from typing import Optional
 
-from autobot_shared.cli_tool_flags import sanitize_tool_names
+from autobot_shared.cli_tool_flags import safe_model_arg, sanitize_tool_names
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config as _ssot_config
 
 from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
+from .claude_result_failure import (
+    is_auth_failure_output,
+    is_failed_result_event,
+    is_turn_limit_result,
+    resolve_result_event,
+)
+from .heartbeat_prompt import agent_api_tool_pattern
 from .subprocess_base import DEFAULT_OUTPUT_DIR as _DEFAULT_OUTPUT_DIR
 from .subprocess_base import SIGTERM_GRACE_SECONDS as _SIGTERM_GRACE_SECONDS
 from .subprocess_base import SubprocessLifecycleAdapter, placeholder_run_id
@@ -51,7 +58,6 @@ from .subprocess_base import resolve_stall_deadline as _resolve_stall_deadline
 from .subprocess_base import resolve_timeout as _resolve_timeout
 from .subprocess_support import (
     extract_usage,
-    final_result_event,
     inject_agent_credentials,
     is_rate_limit_output,
     read_output_tail,
@@ -64,6 +70,12 @@ logger = get_logger(__name__)
 
 _SESSION_TTL_SECONDS = 4 * 3600
 _SESSION_KEY = "llc:agent:{agent_id}:claude_session"
+
+# Fixed run-failure reasons (#20202). Short and constant on purpose: they reach the
+# run record and the log, so they never carry CLI output, tokens or transcript text.
+AUTH_FAILED_REASON = "claude CLI authentication failed - re-authenticate the agent's Claude login"
+ERROR_RESULT_REASON = "claude CLI reported an error result"
+TURN_LIMIT_REASON = "claude CLI stopped at its turn limit"
 
 # Re-exported for the import contract (subscription adapter + tests rely on these).
 __all__ = [
@@ -144,21 +156,39 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         return CLAUDE_CLI_NOT_FOUND_MESSAGE
 
     @staticmethod
-    def _tool_permission_args(cfg: dict) -> list[str]:
+    def _tool_permission_args(cfg: dict, extra_allowed: Optional[str] = None) -> list[str]:
         """Build --allowedTools/--disallowedTools argv from adapter config (GH#11186).
 
         ``disallowed_tools`` enforces a governed agent's forbidden tools on the
         external claude CLI. Both lists are sanitized (empty/flag-looking/
         delimiter-bearing names dropped) via the shared ``sanitize_tool_names``.
+        ``extra_allowed`` is the one command a heartbeat run is granted (#20247); it is
+        added to the agent's own ``allowed_tools`` and never overrides ``disallowed_tools``.
         """
         args: list[str] = []
-        allowed = sanitize_tool_names(cfg.get("allowed_tools"))
+        allowed = sanitize_tool_names([*(cfg.get("allowed_tools") or []), *([extra_allowed] if extra_allowed else [])])
         if allowed:
             args += ["--allowedTools", ",".join(allowed)]
         disallowed = sanitize_tool_names(cfg.get("disallowed_tools"))
         if disallowed:
             args += ["--disallowedTools", ",".join(disallowed)]
         return args
+
+    @staticmethod
+    def _model_args(cfg: dict) -> list[str]:
+        """``--model <name>`` for a safe configured model; nothing otherwise (#20268).
+
+        A value that is not a plain model name (leading ``-``, whitespace) would be parsed
+        as another flag, so it is refused and logged without its content.
+        """
+        configured = cfg.get("model")
+        if not configured:
+            return []
+        model = safe_model_arg(configured)
+        if model is None:
+            logger.warning("ClaudeCodeAdapter: configured model is not a safe model name - omitting --model")
+            return []
+        return ["--model", model]
 
     @staticmethod
     def _build_command(
@@ -168,13 +198,16 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         prompt: str,
         *,
         session_id: str,
+        agent_api_tool: Optional[str] = None,
     ) -> list[str]:
         """Build the claude CLI argv (GH#11186). Pure and unit-testable.
 
         Tool-permission flags (``--allowedTools``/``--disallowedTools``) apply on
         BOTH fresh and resumed invocations — they scope the current run, so a
         governed agent's forbidden tools stay enforced across ``--resume``.
-        ``--model``/``--max-turns`` are session-establishment options (fresh only).
+        ``--model`` applies on BOTH too: the CLI honours it with ``--resume`` (init event
+        reports the requested model, #20268), so a configured change takes effect on the
+        next run. ``--max-turns`` is a session-establishment option (fresh only).
         The prompt is passed positionally after ``--`` so a prompt starting with
         ``-`` can never be parsed as an option (matches the execution backend).
 
@@ -198,13 +231,11 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
             # Verified against Claude Code 2.1.220: --session-id is adopted
             # verbatim and --resume with that id replays the conversation.
             cmd += ["--session-id", session_id]
-            model = cfg.get("model")
-            if model:
-                cmd += ["--model", str(model)]
             max_turns = cfg.get("max_turns")
             if max_turns is not None:
                 cmd += ["--max-turns", str(max_turns)]
-        cmd += ClaudeCodeAdapter._tool_permission_args(cfg)
+        cmd += ClaudeCodeAdapter._model_args(cfg)
+        cmd += ClaudeCodeAdapter._tool_permission_args(cfg, agent_api_tool)
         cmd.append("--")
         cmd.append(prompt)
         return cmd
@@ -241,7 +272,10 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
             session_id = resume_session_id
             logger.info("ClaudeCodeAdapter: resuming session %s for agent %s", session_id, agent_id)
 
-        cmd = self._build_command(cli, resume_session_id, cfg, prompt, session_id=session_id)
+        cmd = self._build_command(
+            cli, resume_session_id, cfg, prompt, session_id=session_id, agent_api_tool=agent_api_tool_pattern(context)
+        )
+        logger.info("ClaudeCodeAdapter: agent %s model=%s", agent_id, cfg.get("model") or "<cli default>")
         env, workspace_dir = self._build_env(context)
 
         # GH#9992: redirect stderr to a sidecar file instead of an unread PIPE.
@@ -374,7 +408,7 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
             return base
 
         tail = read_output_tail(output_file)
-        result_event = final_result_event(tail)
+        result_event, event_text = resolve_result_event(output_file, tail)
 
         # Clean success: skip keyword scan entirely to avoid false-positive
         # reclassification of completed runs whose transcript mentions rate-limit
@@ -384,13 +418,20 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
             tokens_in, tokens_out = extract_usage(result_event)
             return replace(base, tokens_in=tokens_in, tokens_out=tokens_out)
 
+        # #20202: an expired/revoked login fails every run the same way and no retry
+        # helps. The CLI marks it with structured fields (not just message text).
+        if is_failed_result_event(result_event) and is_auth_failure_output(event_text, result_event):
+            return self._failed_status(run_id, AUTH_FAILED_REASON, result_event)
+
         # Either no result event (mid-stream kill) or an error/non-success result:
         # scan the stdout tail AND the stderr sidecar for rate-limit markers —
         # some CLI rate-limit errors only reach stderr, never the stream-json
         # stdout file (GH#9992).
         stderr_file: Optional[str] = state.get("stderr_file") if state else None
         stderr_tail = read_output_tail(stderr_file) if stderr_file else ""
-        if is_rate_limit_output(tail) or is_rate_limit_output(stderr_tail):
+        # event_text is the wide re-read when an oversized result line needed one: a marker
+        # near the start of that line is outside the 4 KB tail.
+        if is_rate_limit_output(tail) or is_rate_limit_output(event_text) or is_rate_limit_output(stderr_tail):
             logger.warning(
                 "ClaudeCodeAdapter: rate-limit markers in output/stderr for run %s — signalling RATE_LIMITED",
                 run_id,
@@ -423,7 +464,25 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
                 stderr_tail.strip()[-1000:],
             )
 
+        # #20202: ``is_error`` marks a failed run even when ``subtype`` says
+        # "success"; reading it as COMPLETED hid every error result.
+        if is_failed_result_event(result_event):
+            reason = TURN_LIMIT_REASON if is_turn_limit_result(result_event) else ERROR_RESULT_REASON
+            return self._failed_status(run_id, reason, result_event)
+
         return base
+
+    @staticmethod
+    def _failed_status(run_id: str, reason: str, result_event: dict | None) -> AdapterRunStatus:
+        """FAILED status with a fixed *reason*, logged at ERROR so operators see it.
+
+        Tokens the failed run spent are kept: a turn-limit run bills real usage.
+        """
+        logger.error("ClaudeCodeAdapter: run %s failed: %s", run_id, reason)
+        tokens_in, tokens_out = extract_usage(result_event)
+        return AdapterRunStatus(
+            status=LLCRunStatus.FAILED, exit_code=1, error=reason, tokens_in=tokens_in, tokens_out=tokens_out
+        )
 
     async def _post_cancel(self, agent_config: dict, run_id: str) -> None:
         """Clear the Redis resume session so the next run starts fresh (GH#9834)."""

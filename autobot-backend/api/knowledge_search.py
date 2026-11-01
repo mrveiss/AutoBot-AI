@@ -28,10 +28,10 @@ from fastapi import APIRouter, Depends, Request
 
 from api.schemas_knowledge import SearchRequest
 from auth_middleware import get_current_user
-from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import CategoryDefaults
+from knowledge.root_read import admin_read_audit
 from knowledge.schemas import KnowledgeSearchResponse
 from knowledge.search_filters import (
     extract_user_context_from_request,
@@ -629,20 +629,19 @@ async def search(request: SearchRequest, req: Request, current_user: Dict = Depe
     # #16665: every fact returned below is filtered to what this caller may
     # see; an explicit admin read (this is one) sees every fact.
     user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
-    is_admin = is_admin_role(current_user.get("role"))
+    async with admin_read_audit(current_user, user_id, "kb.search") as is_admin:  # audited on return (#19860)
+        # Path 1: Full RAG search with synthesis
+        if request.enable_rag and RAG_AVAILABLE:
+            return await _rag_search(request, kb_to_use, user_id, user_org_id, user_group_ids, is_admin)
 
-    # Path 1: Full RAG search with synthesis
-    if request.enable_rag and RAG_AVAILABLE:
-        return await _rag_search(request, kb_to_use, user_id, user_org_id, user_group_ids, is_admin)
+        # Path 2: Search with tags/filtering/advanced options
+        if request.tags or request.min_score > 0 or hasattr(kb_to_use, "search") or request.uses_advanced_features():
+            return await _aistack_search(request, kb_to_use, user_id, user_org_id, user_group_ids, is_admin)
 
-    # Path 2: Search with tags/filtering/advanced options
-    if request.tags or request.min_score > 0 or hasattr(kb_to_use, "search") or request.uses_advanced_features():
-        return await _aistack_search(request, kb_to_use, user_id, user_org_id, user_group_ids, is_admin)
-
-    # Path 3: Basic search (Issue #665: uses helper)
-    return await _execute_basic_search_with_reranking(
-        request, kb_to_use, query, user_id, user_org_id, user_group_ids, is_admin
-    )
+        # Path 3: Basic search (Issue #665: uses helper)
+        return await _execute_basic_search_with_reranking(
+            request, kb_to_use, query, user_id, user_org_id, user_group_ids, is_admin
+        )
 
 
 async def _aistack_search(

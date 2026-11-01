@@ -31,6 +31,7 @@ REACH_ROOTS = {
         "autobot-infrastructure",
         "autobot_shared",
     ),
+    "repo_tests/ci_requirements_one_install_20191_test.py": (".github/workflows",),
     "repo_tests/compat_module_needs_importer_18552_test.py": ("autobot-backend",),
     "repo_tests/compose_nodes_one_home_19323_test.py": (
         "autobot-infrastructure",
@@ -279,6 +280,13 @@ REACH_ROOTS = {
         "autobot-slm-backend",
     ),
     "repo_tests/one_sync_command_runner_18180_test.py": ("autobot-backend",),
+    "repo_tests/operational_docs_name_real_playbooks_19611_test.py": (
+        ".claude",
+        "autobot-infrastructure",
+        "autobot-slm-backend",
+        "docs",
+        "install.sh",
+    ),
     "repo_tests/opt_autobot_literal_ratchet_18880_test.py": ("autobot-slm-backend/ansible",),
     "repo_tests/optimization_taxonomies_13049_test.py": (
         "autobot-backend",
