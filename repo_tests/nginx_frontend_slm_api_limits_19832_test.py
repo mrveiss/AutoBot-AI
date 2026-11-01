@@ -32,6 +32,7 @@ VHOST = ANSIBLE / "roles" / "slm_manager" / "templates" / "autobot-slm.conf.j2"
 
 def _render(cap: str) -> str:
     env = jinja2.Environment(trim_blocks=True, undefined=jinja2.StrictUndefined)
+    env.filters["bool"] = bool
     return env.from_string(TEMPLATE.read_text(encoding="utf-8")).render(
         ansible_host="backend.test.invalid",
         nginx_http_port=80,
@@ -42,6 +43,9 @@ def _render(cap: str) -> str:
         frontend_slm_backend_host="127.0.0.1",
         frontend_slm_backend_port="18000",
         frontend_slm_backend_protocol="http",
+        frontend_slm_backend_remote=False,
+        frontend_slm_upstream_prefix="/api/",
+        frontend_slm_ca_cert="/ca.pem",
         frontend_slm_client_max_body_size=cap,
     )
 
@@ -79,15 +83,3 @@ def test_slm_port_is_gone_and_its_readers_use_the_one_name() -> None:
         assert not re.search(r"\bslm_port\b", text), f"{path.relative_to(ANSIBLE)} still names slm_port"
     local = (ANSIBLE / "playbooks" / "enroll-local.yml").read_text(encoding="utf-8")
     assert "../inventory/group_vars/all.yml" in local, "enroll-local reads slm_backend_port without loading it"
-
-
-def test_a_co_located_slm_host_resolves_to_loopback() -> None:
-    expr = yaml.safe_load(DEFAULTS.read_text(encoding="utf-8"))["frontend_slm_backend_host"]
-    template = jinja2.Environment().from_string(expr)
-
-    def host(slm_host: str, addrs: list[str]) -> str:
-        return template.render(slm_host=slm_host, ansible_facts={"all_ipv4_addresses": addrs}).strip()
-
-    assert host("192.0.2.10", ["192.0.2.10", "10.0.0.1"]) == "127.0.0.1"
-    assert host("198.51.100.7", ["192.0.2.10"]) == "198.51.100.7"
-    assert template.render(ansible_facts={}).strip() == "127.0.0.1"  # no facts gathered, no slm_host

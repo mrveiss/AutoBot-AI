@@ -34,6 +34,10 @@ ai_stack_port: 8080
 # defined for every play that includes a role, with or without `common` having run.
 slm_backend_port: 8000
 
+# The port the slm_manager nginx vhost serves the SLM UI and /slm/api on (autobot-slm.conf.j2
+# `listen`). A frontend on another node proxies /slm/api here over HTTPS (#19832).
+slm_nginx_tls_port: 443
+
 # Largest request body the SLM accepts at its edge: the slm_manager vhost's server-level cap and
 # the frontend site's /slm/api/ locations both read it, so a large SLM upload sees the same limit
 # on either origin (#19832).

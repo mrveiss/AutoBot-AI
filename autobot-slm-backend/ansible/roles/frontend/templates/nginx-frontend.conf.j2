@@ -224,8 +224,17 @@ server {
     # #19832: SLM backend WebSocket -- must be BEFORE /slm/api/ to take priority.
     # Same shape as the slm_manager vhost's /slm/api/ws/ (autobot-slm.conf.j2).
     location /slm/api/ws/ {
-        proxy_pass {{ frontend_slm_backend_protocol }}://autobot_slm_backend/api/ws/;
+        proxy_pass {{ frontend_slm_backend_protocol }}://autobot_slm_backend{{ frontend_slm_upstream_prefix }}ws/;
         client_max_body_size {{ frontend_slm_client_max_body_size }};
+{% if frontend_slm_backend_remote | bool %}
+        # Separate SLM node: verify its nginx against the fleet CA, never skip verification.
+        proxy_ssl_server_name on;
+        proxy_ssl_name {{ frontend_slm_backend_host }};
+        proxy_ssl_verify on;
+        proxy_ssl_verify_depth 2;
+        proxy_ssl_protocols TLSv1.2 TLSv1.3;
+        proxy_ssl_trusted_certificate {{ frontend_slm_ca_cert }};
+{% endif %}
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -236,15 +245,36 @@ server {
         proxy_read_timeout 86400;
     }
 
+    # #19832: the SLM's open health and metrics routes are not served on the main origin;
+    # monitoring uses the SLM's own address. A regex location outranks the plain /slm/api/
+    # prefix. /slm/api/health itself stays: the unified UI's reconnect probe and API
+    # settings page call it (autobot-slm-frontend useSlmWebSocket.ts, APISettings.vue).
+    # Only its sub-path (/health/database) is refused. /performance/metrics/prometheus stays
+    # too -- the fleet-metrics view reads it (useFleetMetrics.ts) -- see the PR for the gap.
+    location ~ ^/slm/api/(health/|ready/?$|live/?$|recovery/?$|metrics/prometheus/?$) {
+        return 403;
+    }
+
     # #19832: SLM backend API. The unified UI calls /slm/api on its own origin; the
     # prefix is stripped to /api/ upstream. Upgrade headers follow the #13604 rule
     # ($connection_upgrade is "close" for plain HTTP, so REST is unaffected).
     location /slm/api/ {
-        proxy_pass {{ frontend_slm_backend_protocol }}://autobot_slm_backend/api/;
+        proxy_pass {{ frontend_slm_backend_protocol }}://autobot_slm_backend{{ frontend_slm_upstream_prefix }};
         client_max_body_size {{ frontend_slm_client_max_body_size }};
+{% if frontend_slm_backend_remote | bool %}
+        # Separate SLM node: verify its nginx against the fleet CA, never skip verification.
+        proxy_ssl_server_name on;
+        proxy_ssl_name {{ frontend_slm_backend_host }};
+        proxy_ssl_verify on;
+        proxy_ssl_verify_depth 2;
+        proxy_ssl_protocols TLSv1.2 TLSv1.3;
+        proxy_ssl_trusted_certificate {{ frontend_slm_ca_cert }};
+{% endif %}
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
+        # Host stays the main origin's host on purpose: the SLM vhost answers any server_name
+        # and the SLM builds callback URLs from the host it was addressed as.
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

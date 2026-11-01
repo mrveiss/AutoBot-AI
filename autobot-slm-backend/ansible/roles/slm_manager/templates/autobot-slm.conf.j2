@@ -43,8 +43,8 @@ server {
 
 # HTTPS server
 server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
+    listen {{ slm_nginx_tls_port }} ssl http2;
+    listen [::]:{{ slm_nginx_tls_port }} ssl http2;
     server_name _;
 
     # SSL configuration

@@ -24,6 +24,28 @@
 # on every update and never touched sites-enabled. Same shape as the SLM
 # nginx_site.yml bug (#16979): render and enable now live in the same file.
 
+- name: "Frontend | Stat the fleet CA the /slm/api proxy verifies the SLM against (#19832)"
+  ansible.builtin.stat:
+    path: "{{ frontend_slm_ca_cert }}"
+  register: _frontend_slm_ca_stat
+  become: true
+  when:
+    - not (slm_colocated_frontend | default(false) | bool)
+    - frontend_slm_backend_remote | bool
+  tags: ['frontend', 'nginx']
+
+- name: "Frontend | Refuse to proxy to a remote SLM without its CA (#19832)"
+  ansible.builtin.assert:
+    that: _frontend_slm_ca_stat.stat.exists
+    fail_msg: >-
+      The SLM is on another node, so /slm/api is proxied over HTTPS with certificate
+      verification, and the fleet CA {{ frontend_slm_ca_cert }} is missing here. Distribute it
+      (distribute-tls-certs.yml); verification is never switched off to get past this.
+  when:
+    - not (slm_colocated_frontend | default(false) | bool)
+    - frontend_slm_backend_remote | bool
+  tags: ['frontend', 'nginx']
+
 - name: "Frontend | Configure nginx"
   ansible.builtin.template:
     src: nginx-frontend.conf.j2

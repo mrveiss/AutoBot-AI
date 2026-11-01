@@ -38,18 +38,24 @@ nginx_http_port: 80
 # served from a different origin than the backend (and add it to CSP connect-src).
 frontend_backend_url: ""
 
-# #19832: SLM backend behind /slm/api (unified UI, epic #19829). The SLM backend can
-# run on this host or on its own machine; the host is the inventory's slm_host and the
-# port the SSOT slm_backend_port (inventory/group_vars/all.yml, the one authority). The SLM uvicorn speaks plain HTTP.
-# Co-located (slm_host is one of THIS node's addresses -- install.sh records the LAN address
-# there): the uvicorn binds loopback (slm_manager slm_backend_host), so use loopback. A separate
-# SLM node keeps slm_host; that path additionally needs the SLM reachable from here (open
-# decision, ADR-011 / #19832 review). Without facts or slm_host the answer is loopback too.
-frontend_slm_backend_host: >-
-  {{ '127.0.0.1' if (slm_host | default('127.0.0.1')) in (ansible_facts['all_ipv4_addresses'] | default([]))
-  else (slm_host | default('127.0.0.1')) }}
-frontend_slm_backend_port: "{{ slm_backend_port }}"
-frontend_slm_backend_protocol: http
+# #19832: SLM backend behind /slm/api (unified UI, epic #19829, ADR-011).
+# Two shapes, chosen by whether slm_host (the inventory's SLM address; install.sh records the
+# machine's LAN address there) is one of THIS node's addresses:
+#   same machine -> plain HTTP to the loopback uvicorn (slm_manager binds slm_backend_host
+#                   127.0.0.1), /slm/api/x becomes /api/x;
+#   separate SLM -> HTTPS to the SLM's nginx vhost on slm_nginx_tls_port, keeping /slm/api/x
+#                   (that vhost already serves it). No uvicorn bind or firewall change: 443 is
+#                   already open on the SLM. The certificate is verified against the fleet CA
+#                   (ca-cert.pem beside this node's own cert, distribute-tls-certs.yml).
+# The port numbers are the SSOT group_vars (slm_backend_port, slm_nginx_tls_port).
+frontend_slm_backend_remote: >-
+  {{ (slm_host | default('127.0.0.1')) not in (['127.0.0.1', '::1', 'localhost'] + (ansible_facts['all_ipv4_addresses'] | default([]))) }}
+frontend_slm_backend_host: "{{ slm_host if (frontend_slm_backend_remote | bool) else '127.0.0.1' }}"
+frontend_slm_backend_port: "{{ slm_nginx_tls_port if (frontend_slm_backend_remote | bool) else slm_backend_port }}"
+frontend_slm_backend_protocol: "{{ 'https' if (frontend_slm_backend_remote | bool) else 'http' }}"
+# Upstream path prefix of /slm/api/: stripped to /api/ for uvicorn, kept for the SLM's nginx.
+frontend_slm_upstream_prefix: "{{ '/slm/api/' if (frontend_slm_backend_remote | bool) else '/api/' }}"
+frontend_slm_ca_cert: "{{ frontend_tls_cert_dir }}/ca-cert.pem"
 # Request-body cap on /slm/api/: the SLM vhost's own cap (agent event sync, #1090), one value.
 frontend_slm_client_max_body_size: "{{ slm_client_max_body_size }}"
 

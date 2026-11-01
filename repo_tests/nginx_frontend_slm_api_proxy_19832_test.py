@@ -35,6 +35,7 @@ _COLOCATED = {"host": "127.0.0.1", "port": "18000"}
 
 def _render(host: str, port: str) -> str:
     env = jinja2.Environment(trim_blocks=True, undefined=jinja2.StrictUndefined)
+    env.filters["bool"] = bool
     return env.from_string(TEMPLATE.read_text(encoding="utf-8")).render(
         ansible_host="backend.test.invalid",
         nginx_http_port=80,
@@ -45,6 +46,9 @@ def _render(host: str, port: str) -> str:
         frontend_slm_backend_host=host,
         frontend_slm_backend_port=port,
         frontend_slm_backend_protocol="http",
+        frontend_slm_backend_remote=False,
+        frontend_slm_upstream_prefix="/api/",
+        frontend_slm_ca_cert="/ca.pem",
         frontend_slm_client_max_body_size="10m",
     )
 

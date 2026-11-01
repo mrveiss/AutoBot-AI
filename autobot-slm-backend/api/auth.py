@@ -21,6 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from api.login_rate_limit import enforce_login_rate_limit
 from api.security import create_audit_log
 from autobot_shared.auth.jwt_core import _peek_alg, decode_jwt_no_verify_exp
 from autobot_shared.auth.permissions import Permission
@@ -92,6 +93,7 @@ async def login(
     Records audit log entry (Issue #998). Consolidated in Issue #1922.
     """
     client_ip = get_client_ip(http_request, trusted_proxies=settings.trusted_proxies)
+    await enforce_login_rate_limit(audit_db, client_ip, body.username)  # #19832: before any credential check
     context = TenantContext(is_platform_admin=True)
     user_service = UserService(db, context)
 
