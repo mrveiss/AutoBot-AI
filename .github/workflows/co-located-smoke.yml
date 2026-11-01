@@ -58,6 +58,7 @@ on:
       # #19527: the image build and disk guard it runs
       - '.github/actions/build-smoke-images/**'
       - '.github/actions/free-disk-space/**'
+      - '.github/actions/install-ci-requirements/**'
       - 'scripts/check_colocated_csp.py'
       - 'autobot-slm-backend/tests/api/test_collect_outdated_node_ids.py'
       - 'autobot-backend/transcriber/tests/test_multiuser_authz.py'
@@ -88,10 +89,11 @@ jobs:
             requirements*.txt
             autobot-backend/requirements*.txt
 
+      - name: Install CI requirements
+        uses: ./.github/actions/install-ci-requirements
+
       - name: Install test dependencies
         run: |
-          python -m pip install --upgrade pip setuptools wheel
-          python -m pip install -r requirements-ci.txt --prefer-binary || true
           # Hermetic essentials for both test files (no Postgres/Redis needed).
           python -m pip install aiosqlite aiofiles pytest pytest-asyncio httpx python-multipart --prefer-binary
 
