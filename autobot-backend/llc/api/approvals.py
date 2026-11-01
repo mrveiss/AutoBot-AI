@@ -111,7 +111,7 @@ async def request_approval(
                 company_id=body.company_id,
                 gate_type=body.type,
                 payload=body.payload,
-                requested_by=body.requested_by_agent_id,
+                requested_by=_recorded_requester(body, ctx),
                 actor_user_id=ctx.user_id,  # the verified caller, not the claimed requester
             )
     except ApprovalHookError as exc:
@@ -250,6 +250,18 @@ def _refuse_unrequestable(body: ApprovalRequest) -> None:
     if body.type == ApprovalType.HIRE:
         # A hire is requested only by the hire route, which fixes the agent id and validates the adapter.
         raise HTTPException(status_code=422, detail="A hire approval is requested through the agent-hires route")
+
+
+def _recorded_requester(body: ApprovalRequest, ctx: TenantContext) -> uuid.UUID:
+    """Who the approval records as having asked: the verified caller for a type the four-eyes rule covers (#8214).
+
+    The body's ``requested_by_agent_id`` is the caller's claim; letting it name someone else would let the one
+    who asked also approve with a second admin present. Other types keep the claim, and so does a caller with
+    no user id (an agent credential), which cannot decide an approval anyway.
+    """
+    if body.type == ApprovalType.BUDGET_OVERRIDE and ctx.user_id is not None:
+        return ctx.user_id
+    return body.requested_by_agent_id
 
 
 def _verified_decider(ctx: TenantContext, body: ApprovalDecision) -> uuid.UUID:

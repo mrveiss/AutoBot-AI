@@ -17,10 +17,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from autobot_shared.logging_manager import get_logger
-from llc.services.authz import require_company_admin
+from llc.services.authz import require_company_admin, require_four_eyes
 from llc.services.project_backfill import apply_project_backfill
 from models.approval import ApprovalComment, ApprovalStatus
-from services.ai_line_change_action import require_four_eyes
 from services.approval_execution import register_post_approval_action, verified_decider
 from services.audit_logger import audit_log
 
@@ -41,7 +40,7 @@ async def execute_project_backfill(approval: "Approval", session: "AsyncSession"
         raise ValueError("not an approved, company-scoped project backfill")
     decider = verified_decider(approval)  # the authenticated person's id, never parsed from a username
     await require_company_admin(session, approval.company_id, decider)
-    self_approval = await require_four_eyes(approval, session, decider)
+    self_approval = await require_four_eyes(approval, session, decider, what="a project backfill")
     counts = await apply_project_backfill(session, approval.company_id)
     note = " (self-approved)" if self_approval else ""
     body = (

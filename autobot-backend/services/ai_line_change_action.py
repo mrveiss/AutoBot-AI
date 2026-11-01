@@ -22,13 +22,10 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import func, select
-
 from autobot_shared.ai_lines import SCOPE_COMPANY, SCOPE_USER, LineScope, parse_line
 from autobot_shared.logging_manager import get_logger
-from llc.models.membership import LLCCompanyMembership
 from llc.services.ai_lines import normalise_key, record_approved_line
-from llc.services.authz import GRANTING_ROLES, require_company_admin
+from llc.services.authz import require_company_admin, require_four_eyes
 from models.approval import ApprovalComment, ApprovalStatus
 from services.approval_execution import register_post_approval_action, verified_decider
 from services.audit_logger import audit_log
@@ -42,39 +39,6 @@ logger = get_logger(__name__)
 
 ACTION = "ai_line.set_line"
 PROPOSED_BY = "services.ai_line_change_proposal"
-
-
-async def _admin_count(session: "AsyncSession", company_id: uuid.UUID) -> int:
-    rows = await session.execute(
-        select(func.count()).where(
-            LLCCompanyMembership.company_id == company_id, LLCCompanyMembership.role.in_(GRANTING_ROLES)
-        )
-    )
-    return int(rows.scalar_one())
-
-
-def _requester_id(approval: "Approval") -> uuid.UUID | None:
-    """The person who proposed the change, from ``requested_by_agent`` (``ai-line-change:<user id>``)."""
-    try:
-        return uuid.UUID(str(approval.requested_by_agent).rsplit(":", 1)[-1])
-    except ValueError:
-        return None
-
-
-async def require_four_eyes(approval: "Approval", session: "AsyncSession", decider: uuid.UUID | None) -> bool:
-    """True when this is a flagged self-approval by the company's only owner/admin; raises when refused.
-
-    Shared by every approval-gated company action: the requester is the id after the last colon of
-    ``requested_by_agent`` (``<proposer>:<user id>``).
-    """
-    requester = _requester_id(approval)
-    if decider is None or requester is None:
-        raise ValueError("this change needs a verified decider and a requester that can be identified")
-    if decider != requester:
-        return False
-    if await _admin_count(session, approval.company_id) >= 2:
-        raise ValueError("this change needs a different owner or admin than the one who asked for it")
-    return True
 
 
 async def _trail(
@@ -112,7 +76,9 @@ async def _scope_and_review(
     if approval.company_id is None:
         raise ValueError("not a company-scoped or personal request")
     await require_company_admin(session, approval.company_id, decider)
-    return LineScope(SCOPE_COMPANY, approval.company_id), await require_four_eyes(approval, session, decider)
+    return LineScope(SCOPE_COMPANY, approval.company_id), await require_four_eyes(
+        approval, session, decider, what="a line change"
+    )
 
 
 async def execute_line_change(approval: "Approval", session: "AsyncSession") -> None:

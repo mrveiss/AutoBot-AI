@@ -50,6 +50,7 @@ def _make_org(
         issue_counter=0,
         brand_color=None,
         require_approval_for_hires=False,
+        require_approval_for_budget_raises=False,
         pause_reason=None,
         paused_at=None,
     )

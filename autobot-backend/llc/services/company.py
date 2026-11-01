@@ -100,6 +100,7 @@ class CompanyService(CompanyMoveLockMixin, LLCServiceBase):
             budget_monthly_cents=data.budget_monthly_cents,
             brand_color=data.brand_color,
             require_approval_for_hires=data.require_approval_for_hires,
+            require_approval_for_budget_raises=data.require_approval_for_budget_raises,
             llc_status=data.llc_status.value,
         )
         self.session.add(org)
@@ -166,13 +167,19 @@ class CompanyService(CompanyMoveLockMixin, LLCServiceBase):
     async def _require_gate_admin(
         self, org: Organization, data: CompanyUpdate, actor_user_id: Optional[uuid.UUID], platform_admin: bool
     ) -> None:
-        """Changing ``require_approval_for_hires`` is the board's call, not any member's (#8214).
+        """Changing a ``require_approval_for_*`` gate is the board's call, not any member's (#8214).
 
         A member who could switch the gate off could then hire without approval. A value equal to the
         current one changes nothing, so a form that re-sends it does not make a member's edit a 403.
         """
-        wanted = data.require_approval_for_hires
-        if wanted is None or wanted == org.require_approval_for_hires:
+        changed = any(
+            wanted is not None and wanted != getattr(org, field)
+            for field, wanted in (
+                ("require_approval_for_hires", data.require_approval_for_hires),
+                ("require_approval_for_budget_raises", data.require_approval_for_budget_raises),
+            )
+        )
+        if not changed:
             return
         await require_company_admin_unless_platform(self.session, org.id, actor_user_id, platform_admin=platform_admin)
 

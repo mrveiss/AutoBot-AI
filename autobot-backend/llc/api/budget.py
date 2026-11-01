@@ -6,20 +6,29 @@
 
 import uuid
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, get_tenant_context, require_org_context
 from autobot_shared.logging_manager import get_logger
+from llc.config import DEFAULT_BUDGET_LIMIT
 from llc.deps import assert_company_access, load_authorized
 from llc.exceptions import BudgetExhausted, UnpricedModel
 from llc.models.budget import LLCAgentBudget
+from llc.services.approval import ApprovalService
 from llc.services.authz import NotAuthorisedError, require_company_admin_unless_platform
 from llc.services.budget import BudgetService
+from llc.services.budget_raise import (
+    BudgetRaisePending,
+    company_requires_budget_approval,
+    file_budget_raise,
+    override_payload,
+    raises_limit,
+)
 from models.agent_org import AgentOrgNode
 from user_management.database import get_async_session
 from user_management.services import TenantContext
@@ -145,24 +154,12 @@ def _company_uuid(company_id: str):
         return None
 
 
-@router.post("/{agent_id}", response_model=BudgetResponse, status_code=status.HTTP_201_CREATED)
-async def provision_budget(
-    agent_id: str,
-    body: ProvisionBudgetRequest,
-    session: AsyncSession = Depends(get_async_session),
-    _current_user: dict = Depends(get_current_user),
-    ctx: TenantContext = Depends(get_tenant_context),
-) -> BudgetResponse:
-    """Provision a default budget row for an agent (GH#9901).
+async def _agent_company_id(session: AsyncSession, agent_id: str) -> str:
+    """The company of *agent_id*, derived from agent_org_nodes in one query; 404 when there is no such agent.
 
-    Returns 201 on creation, 409 if a row already exists.
-    Returns 404 if the agent does not exist in agent_org_nodes, or belongs to
-    a different tenant (GH#12136). Returns 403 unless the caller is a company
-    owner/admin or a platform admin (#20422).
-    company_id is derived from agent_org_nodes — callers cannot scope rows
-    to arbitrary companies.
+    str(uuid.UUID(...)) canonicalises to the dashed lower-case form regardless of how the raw text() query
+    returns the UUID column across dialects (GH#12136 -- needed for the tenant-match comparison).
     """
-    # Validate agent exists and derive company_id in a single query.
     agent_row = await session.execute(
         text("SELECT company_id FROM agent_org_nodes WHERE agent_id = :agent_id LIMIT 1"),
         {"agent_id": agent_id},
@@ -170,22 +167,47 @@ async def provision_budget(
     agent_record = agent_row.fetchone()
     if agent_record is None:
         raise HTTPException(status_code=404, detail=f"Agent {agent_id!r} not found")
+    return str(uuid.UUID(str(agent_record[0])))
 
-    # str(uuid.UUID(...)) canonicalises to the dashed lower-case form regardless
-    # of how the raw text() query returns the UUID column across dialects
-    # (GH#12136 — needed for the tenant-match comparison below).
-    company_id = str(uuid.UUID(str(agent_record[0])))
+
+@router.post(
+    "/{agent_id}", response_model=Union[BudgetResponse, BudgetRaisePending], status_code=status.HTTP_201_CREATED
+)
+async def provision_budget(
+    agent_id: str,
+    body: ProvisionBudgetRequest,
+    response: Response,
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(get_tenant_context),
+) -> Union[BudgetResponse, BudgetRaisePending]:
+    """Provision a default budget row for an agent (GH#9901).
+
+    Returns 201 on creation, 409 if a row already exists. In a company with ``require_approval_for_budget_raises``
+    a first limit above the default is created at the default and the rest is filed as a pending override: 202.
+    Returns 404 if the agent does not exist in agent_org_nodes, or belongs to
+    a different tenant (GH#12136). Returns 403 unless the caller is a company
+    owner/admin or a platform admin (#20422).
+    company_id is derived from agent_org_nodes — callers cannot scope rows
+    to arbitrary companies.
+    """
+    company_id = await _agent_company_id(session, agent_id)
     assert_company_access(ctx, company_id)
     # The first row carries a limit the caller chose, so it is the same admin act as changing one (#20422).
     await _require_budget_admin(session, company_id, agent_id, ctx)
 
     svc = BudgetService()
-    row, created = await svc.provision_budget(session, agent_id, company_id, body.budget_limit)
+    over_default = body.budget_limit is not None and body.budget_limit > DEFAULT_BUDGET_LIMIT
+    gated = over_default and await company_requires_budget_approval(session, uuid.UUID(company_id))
+    row, created = await svc.provision_budget(session, agent_id, company_id, None if gated else body.budget_limit)
     if not created:
         raise HTTPException(
             status_code=409,
             detail=f"Budget row already exists for agent {agent_id}",
         )
+    if gated:
+        response.status_code = status.HTTP_202_ACCEPTED
+        return await _file_raise(session, row, {"budget_limit": body.budget_limit}, ctx)
 
     remaining, is_over, alert = _derive_status(row)
     return _build_response(row, remaining, is_over, alert)
@@ -306,15 +328,49 @@ async def _require_limit_admin(session: AsyncSession, row: LLCAgentBudget, ctx: 
     await _require_budget_admin(session, row.company_id, row.agent_id, ctx)
 
 
-@router.patch("/{agent_id}/limit", response_model=BudgetResponse)
+async def _file_raise(
+    session: AsyncSession, row: LLCAgentBudget, fields: Dict[str, Any], ctx: TenantContext
+) -> BudgetRaisePending:
+    """File *fields* as a pending BUDGET_OVERRIDE requested by the verified caller (#8214)."""
+    if ctx.user_id is None:  # the request must name a verified requester, never the string "None"
+        raise HTTPException(status_code=403, detail="The budget change cannot be attributed to a verified user")
+    return await file_budget_raise(session, ApprovalService(), row, override_payload(row.agent_id, fields), ctx.user_id)
+
+
+def _validate_limit_request(body: UpdateLimitRequest, row: LLCAgentBudget) -> None:
+    """400 unless the mode and the limits the request sets fit together (GH#8462, GH#8997).
+
+    GH#8462: Decimal is passed on as validated, never str()-coerced (that would store TEXT in the ORM).
+    GH#8997 "not both": token_limit while targeting dollars is rejected, and budget_limit while switching to
+    tokens. Asymmetry is deliberate: budget_limit on a row ALREADY in tokens mode is allowed -- it adjusts the
+    dollar fallback used when token_limit is unset (see watchdog/check_budget fallback semantics).
+    """
+    effective_mode = body.budget_mode if body.budget_mode is not None else str(row.budget_mode)
+    if body.budget_mode is not None and body.budget_mode not in ("dollars", "tokens"):
+        raise HTTPException(status_code=400, detail="budget_mode must be 'dollars' or 'tokens'")
+    if effective_mode == "dollars" and body.token_limit is not None:
+        raise HTTPException(status_code=400, detail="token_limit cannot be set when budget_mode is 'dollars'")
+    if effective_mode == "tokens" and body.budget_limit is not None and body.budget_mode == "tokens":
+        raise HTTPException(
+            status_code=400,
+            detail="budget_limit cannot be set when switching to budget_mode 'tokens'; set token_limit instead",
+        )
+
+
+@router.patch("/{agent_id}/limit", response_model=Union[BudgetResponse, BudgetRaisePending])
 async def update_limit(
     agent_id: str,
     body: UpdateLimitRequest,
+    response: Response,
     session: AsyncSession = Depends(get_async_session),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(get_tenant_context),
-) -> BudgetResponse:
-    """Update budget limits and mode (GH#8215, GH#8997)."""
+) -> Union[BudgetResponse, BudgetRaisePending]:
+    """Update budget limits and mode (GH#8215, GH#8997).
+
+    A company with ``require_approval_for_budget_raises`` answers 202 with a pending override instead when the
+    change raises the enforced limit; nothing changes until the board approves it (#8214).
+    """
     row = await load_authorized(
         session,
         LLCAgentBudget,
@@ -325,41 +381,15 @@ async def update_limit(
     )
     await _require_limit_admin(session, row, ctx)
 
-    # GH#8462: pass Decimal directly — Pydantic already validates it as Decimal,
-    # no str() conversion needed (which would silently coerce to TEXT in the ORM).
-    # GH#8997: support budget_mode and token_limit updates.
-    # Validate mode-appropriate fields (GH#8997 "not both"):
-    # - Setting token_limit while explicitly targeting dollars mode is rejected.
-    # - Setting budget_limit while explicitly targeting tokens mode is rejected.
-    effective_mode = body.budget_mode if body.budget_mode is not None else str(row.budget_mode)
-    if body.budget_mode is not None and body.budget_mode not in ("dollars", "tokens"):
-        raise HTTPException(status_code=400, detail="budget_mode must be 'dollars' or 'tokens'")
-    if effective_mode == "dollars" and body.token_limit is not None:
-        raise HTTPException(
-            status_code=400,
-            detail="token_limit cannot be set when budget_mode is 'dollars'",
-        )
-    # Asymmetry is deliberate: budget_limit on a row ALREADY in tokens mode is
-    # allowed — it adjusts the dollar fallback used when token_limit is unset
-    # (see watchdog/check_budget fallback semantics). Only the explicit switch
-    # to tokens mode rejects a simultaneous budget_limit.
-    if effective_mode == "tokens" and body.budget_limit is not None and body.budget_mode == "tokens":
-        raise HTTPException(
-            status_code=400,
-            detail="budget_limit cannot be set when switching to budget_mode 'tokens'; set token_limit instead",
-        )
-    values: dict = {}
-    if body.budget_mode is not None:
-        values["budget_mode"] = body.budget_mode
-    if body.budget_limit is not None:
-        values["budget_limit"] = body.budget_limit
-    if body.token_limit is not None:
-        values["token_limit"] = body.token_limit
-    if body.alert_threshold is not None:
-        values["alert_threshold"] = body.alert_threshold
-
+    _validate_limit_request(body, row)
+    values = {k: v for k, v in body.model_dump().items() if v is not None}
     if not values:
         raise HTTPException(status_code=400, detail="No fields to update")
+    if raises_limit(
+        row, body.budget_mode, body.budget_limit, body.token_limit
+    ) and await company_requires_budget_approval(session, uuid.UUID(str(row.company_id))):
+        response.status_code = status.HTTP_202_ACCEPTED
+        return await _file_raise(session, row, values, ctx)
 
     await session.execute(
         update(LLCAgentBudget)
