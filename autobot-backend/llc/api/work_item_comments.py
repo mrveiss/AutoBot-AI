@@ -26,6 +26,7 @@ from user_management.services import TenantContext
 
 from ..models.work_item import LLCWorkItemComment
 from ..services.work_item_service import WorkItemService
+from ._common import require_work_item_id
 
 logger = get_logger(__name__)
 
@@ -34,7 +35,7 @@ logger = get_logger(__name__)
 COMMENTS_PAGE_DEFAULT = env_int_clamped("LLC_COMMENTS_PAGE_DEFAULT", 100, min_v=1)
 COMMENTS_PAGE_MAX = env_int_clamped("LLC_COMMENTS_PAGE_MAX", 500, min_v=1)
 
-router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
+router = APIRouter(prefix="/work-items", tags=["llc-work-items"], dependencies=[Depends(require_work_item_id)])
 _service = service_dep(WorkItemService)
 
 
