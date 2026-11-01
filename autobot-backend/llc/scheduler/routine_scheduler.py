@@ -29,6 +29,7 @@ from typing import Any, Optional
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
+from .dispatch_gate import agent_ref_block_reason
 from .schedule_members import routine_due_members
 
 logger = get_logger(__name__)
@@ -140,17 +141,6 @@ class RoutineScheduler:
                 routine_id_str = member_str[len("routine:") :]
                 await self._dispatch_routine(routine_id_str)
 
-    async def _company_or_agent_paused(self, company_id: str, agent_id: Optional[str]) -> bool:
-        """Return True if a FR-GOV-05 pause flag is active for company or agent."""
-        redis = await get_async_redis_client()
-        if redis is None:
-            return False
-        if await redis.exists(f"llc:company:{company_id}:paused"):
-            return True
-        if agent_id and await redis.exists(f"llc:agent:{agent_id}:paused"):
-            return True
-        return False
-
     async def _dispatch_routine(self, routine_id_str: str) -> None:
         """Record a run and re-queue the routine at its next fire time."""
         try:
@@ -188,11 +178,9 @@ class RoutineScheduler:
                 # FR-GOV-05: skip if company or assignee agent is paused/terminated
                 company_id = str(routine.company_id) if hasattr(routine, "company_id") and routine.company_id else ""
                 agent_id = str(routine.assignee_agent_id) if routine.assignee_agent_id else None
-                if company_id and await self._company_or_agent_paused(company_id, agent_id):
-                    logger.info(
-                        "RoutineScheduler: skipping %s — company or agent is paused (FR-GOV-05)",
-                        routine_id_str,
-                    )
+                reason = await agent_ref_block_reason(session, agent_id, company_id)
+                if reason is not None:
+                    logger.info("RoutineScheduler: skipping %s — %s (FR-GOV-05)", routine_id_str, reason)
                     # Re-queue at next fire time so the routine resumes automatically when unpaused
                     next_ts_skip: float = croniter(routine.cron_schedule, datetime.now(tz=timezone.utc)).get_next(float)
                     redis = await get_async_redis_client()
