@@ -1522,6 +1522,107 @@
       "pendingFor": "{n} pending for {name}",
       "sentBy": "from {names}",
       "waitsForIdle": "{who} waits for {target} to go idle"
+    },
+    "validationDashboard": {
+      "title": "Validation dashboard",
+      "subtitle": "System validation status from the main backend: phases, metrics, alerts and recommendations.",
+      "refresh": "Refresh",
+      "generate": "Rebuild HTML dashboard",
+      "generateStarted": "The HTML dashboard is rebuilding in the background. This screen does not show it; the backend serves it on its own dashboard page.",
+      "generateFailed": "The dashboard rebuild did not start.",
+      "loading": "Reading the validation report...",
+      "unavailableTitle": "Validation reporting is not available",
+      "unavailableBody": "The backend answered that its validation report generator is not available. Check that the generator is installed on the backend, then refresh.",
+      "errorTitle": "The validation report could not be read",
+      "errorBody": "The validation report request failed.",
+      "emptyTitle": "No validation phases reported",
+      "emptyBody": "The backend answered, but its report lists no phases yet.",
+      "percent": "{value}%",
+      "yes": "Yes",
+      "no": "No",
+      "outOf": "{done} of {total}",
+      "seconds": "{n} s",
+      "days": "{n} days",
+      "health": {
+        "excellent": "Excellent",
+        "good": "Good",
+        "fair": "Fair",
+        "needs_attention": "Needs attention"
+      },
+      "overview": {
+        "title": "Overview",
+        "measures": "The headline figure measures:",
+        "readAt": "Read {time}"
+      },
+      "stat": {
+        "maturity": "Overall maturity",
+        "health": "System health",
+        "phases": "Phases complete",
+        "capabilities": "Active capabilities",
+        "averageCompletion": "Average completion",
+        "minCompletion": "Lowest completion",
+        "maxCompletion": "Highest completion",
+        "above50": "Phases at 50% or more",
+        "above90": "Phases at 90% or more",
+        "stage": "Development stage",
+        "validationScore": "Validation score",
+        "errorRate": "Error rate",
+        "recentChanges": "Recent changes",
+        "velocity": "Progression velocity",
+        "canProgress": "Can progress",
+        "blocked": "Blocked phases",
+        "refreshInterval": "Dashboard refresh interval",
+        "retention": "Data retention"
+      },
+      "phases": {
+        "title": "Phases",
+        "empty": "No phases reported",
+        "notScored": "Not scored",
+        "col": {
+          "phase": "Phase",
+          "status": "Status",
+          "completion": "Completion",
+          "requirements": "Requirements met",
+          "missing": "Missing",
+          "verifiedBy": "Verified by"
+        }
+      },
+      "alerts": {
+        "title": "Alerts ({n})",
+        "empty": "No alerts: the report raised none.",
+        "level": {
+          "critical": "Critical",
+          "warning": "Warning",
+          "info": "Info"
+        }
+      },
+      "recommendations": {
+        "title": "Recommendations ({n})",
+        "empty": "No recommendations: the report made none.",
+        "action": "Next step: {action}",
+        "urgency": {
+          "high": "High",
+          "medium": "Medium",
+          "low": "Low",
+          "info": "Info"
+        }
+      },
+      "trends": {
+        "title": "Trends",
+        "note": "The backend builds these series from a fixed placeholder formula, not from stored history, so they show shape only and are not measurements.",
+        "empty": "The backend sent no trend series",
+        "col": {
+          "series": "Series",
+          "points": "Points",
+          "first": "First",
+          "latest": "Latest"
+        },
+        "series": {
+          "maturity_trend": "Maturity",
+          "phase_completion_trend": "Completed phases",
+          "capability_growth": "Capabilities"
+        }
+      }
     }
   },
   "monitoringView": {
@@ -1539,7 +1640,8 @@
       "errors": "Errors",
       "backendHealth": "Backend Health",
       "performance": "Performance",
-      "agentLedger": "Agent ledger"
+      "agentLedger": "Agent ledger",
+      "validation": "Validation"
     }
   },
   "orchestration": {
