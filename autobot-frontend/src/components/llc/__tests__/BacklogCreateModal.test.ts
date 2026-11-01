@@ -12,6 +12,32 @@ const post = vi.fn()
 // The kit's modal chrome is not under test; a stand-in that renders its body and
 // actions slots keeps this test off the kit's other dependencies.
 vi.mock('@autobot/ui', () => ({
+  BaseInput: defineComponent({
+    inheritAttrs: false,
+    props: { modelValue: String, type: { type: String, default: 'text' }, label: String },
+    emits: ['update:modelValue'],
+    setup: (p, { emit, attrs }) => () =>
+      h('div', [
+        h('input', {
+          ...attrs,
+          type: p.type,
+          value: p.modelValue,
+          onInput: (e: Event) => emit('update:modelValue', (e.target as HTMLInputElement).value),
+        }),
+      ]),
+  }),
+  BaseFormField: defineComponent({
+    props: { label: String },
+    setup: (_p, { slots }) => () => h('div', [slots.default?.({ id: 'f' })]),
+  }),
+  BaseButton: defineComponent({
+    props: { disabled: Boolean },
+    setup: (p, { slots }) => () => h('button', { disabled: p.disabled }, slots.default?.()),
+  }),
+  BaseAlert: defineComponent({
+    props: { message: String },
+    setup: (p) => () => h('p', { role: 'alert' }, p.message),
+  }),
   BaseModal: defineComponent({
     props: { modelValue: Boolean, title: String },
     setup: (_p, { slots }) => () => h('div', [slots.default?.(), slots.actions?.()]),
