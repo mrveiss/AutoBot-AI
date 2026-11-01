@@ -67,7 +67,7 @@ from repo_tests._guard_reach_census import (  # noqa: E402
     _tracked_guards,
 )
 from repo_tests._paths import repo_root  # noqa: E402
-from repo_tests._ratchet_base import base_table  # noqa: E402
+from repo_tests._ratchet_base import added_entries, base_table  # noqa: E402
 
 #: WHAT THIS MODULE CHECKS, AND WHAT IT DOES NOT (#16154).
 #:
@@ -383,16 +383,12 @@ def test_the_grandfathered_list_has_not_gone_stale() -> None:
     ), "GRANDFATHERED entries that now have a floor -- remove them, the list only shrinks:\n  " + "\n  ".join(stale)
 
 
-def _grown(current: frozenset[str], base: frozenset[str]) -> list[str]:
-    return sorted(current - base)
-
-
 def test_the_grandfathered_list_never_grows_silently() -> None:
     """#16147 AC4: compared as a SET against the base commit, which refuses to judge if unreadable (#19704).
 
     A count would pass one entry swapped for another (RATCHET_BASELINES.md, rule 4).
     """
-    grown = _grown(GRANDFATHERED, base_table(repo_root(), (_THIS_FILE,), "GRANDFATHERED"))
+    grown = added_entries(GRANDFATHERED, base_table(repo_root(), (_THIS_FILE,), "GRANDFATHERED"))
     assert not grown, (
         "GRANDFATHERED gained entries against the base commit -- a new tree-scanning guard "
         "needs a floor, not an exemption:\n  " + "\n  ".join(grown)
@@ -401,7 +397,7 @@ def test_the_grandfathered_list_never_grows_silently() -> None:
 
 def test_the_growth_check_finds_an_added_entry() -> None:
     """Known positive (rule 6): the check must see an addition before its silence means anything."""
-    assert _grown(GRANDFATHERED | {"repo_tests/planted_unfloored_guard_test.py"}, GRANDFATHERED) == [
+    assert added_entries(GRANDFATHERED | {"repo_tests/planted_unfloored_guard_test.py"}, GRANDFATHERED) == [
         "repo_tests/planted_unfloored_guard_test.py"
     ]
 
@@ -521,7 +517,7 @@ def test_the_non_scanning_exemptions_still_match_the_enumerator() -> None:
 def test_the_exemption_list_only_shrinks() -> None:
     """Same #16147 AC4 shape as GRANDFATHERED: a SET against the base commit (#19704)."""
     base = base_table(repo_root(), (_CENSUS_FILE,), "_EXEMPT_NON_SCANNING")
-    grown = _grown(_EXEMPT_NON_SCANNING, base)
+    grown = added_entries(_EXEMPT_NON_SCANNING, base)
     assert not grown, (
         "_EXEMPT_NON_SCANNING gained entries against the base commit -- a member that matches "
         "the enumerator and scans nothing needs resolving by binding, not exempting on sight:\n  " + "\n  ".join(grown)
