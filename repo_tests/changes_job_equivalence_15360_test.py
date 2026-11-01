@@ -207,6 +207,7 @@ ALLOWED_ADDITIONS = {
             "autobot-slm-frontend/public/favicon.svg",
             # #18500: the autofix steps moved into a composite action with a dispatch-only caller; its guards read both.
             ".github/actions/generated-types-autofix/action.yml",
+            ".github/actions/install-ci-requirements/action.yml",  # #20191: the shared install step
             f"{WORKFLOWS}/dispatch-generated-types.yml",
             # #18555: env_file_family_18555_test.py reads every tracked env file.
             "**/.env*",

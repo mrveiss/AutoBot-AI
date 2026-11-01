@@ -6,7 +6,7 @@
 
 Provides:
 - ``ApprovalService.request_approval`` — create a pending approval record
-- ``ApprovalService.decide`` — approve or reject
+- ``ApprovalService.decide`` — approve or reject, applying the post-decision hook (``approval_hooks``)
 - ``ApprovalService.get_pending`` — list pending approvals for a company
 - ``ApprovalService.log_decision_to_kb`` — post-decision hook: indexes to decisions KB (GH#8243)
 - ``requires_approval`` — decorator that gates async methods behind a board approval
@@ -19,14 +19,21 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
 from models.approval import Approval
 
 from ..kb.decision_log import DecisionLogWriter
-from ..models.enums import ApprovalStatus, ApprovalType
+from ..models.enums import ActivityEventType, ApprovalStatus, ApprovalType
+from .approval_hooks import (
+    ApprovalHookError,
+    record_approval_event,
+    run_post_commit_hook,
+    run_post_decision_hook,
+    validate_payload,
+)
 from .base import LLCServiceBase
 from .wake_events import wake_for_decided_approval
 
@@ -34,6 +41,12 @@ logger = logging.getLogger(__name__)
 
 _EVENT_REQUESTED = "llc:approval_requested"
 _EVENT_DECIDED = "llc:approval_decided"
+
+
+_DECISION_EVENT = {
+    ApprovalStatus.APPROVED: ActivityEventType.APPROVAL_APPROVED,
+    ApprovalStatus.REJECTED: ActivityEventType.APPROVAL_REJECTED,
+}
 
 
 class ApprovalRequiredError(Exception):
@@ -63,6 +76,7 @@ class ApprovalService(LLCServiceBase):
         gate_type: ApprovalType,
         payload: Dict[str, Any],
         requested_by: uuid.UUID | str,
+        actor_user_id: Optional[uuid.UUID] = None,
     ) -> Approval:
         """Create a pending approval record and emit a Redis event.
 
@@ -77,11 +91,17 @@ class ApprovalService(LLCServiceBase):
                 for exactly that case -- a system sweep has no agent UUID, and minting
                 one to satisfy a type hint would put a fabricated identifier in an
                 audit record.
+            actor_user_id: The VERIFIED caller, recorded as the activity actor. ``requested_by``
+                is whatever the caller claimed and is never used as the actor. ``None`` records
+                the system as the actor.
 
         Returns:
             The newly created ``Approval`` row (status=PENDING), scoped to
             *company_id* -- the unified platform approval table (#17043).
         """
+        # A gate whose approval executes its payload must carry one that can be executed (#8214); every
+        # requester -- route, scheduler, chat tool -- is held to it here, not in one caller.
+        validate_payload(gate_type, payload)
         approval = Approval(
             title=f"{gate_type.value} approval",
             approval_type=gate_type.value,
@@ -92,6 +112,9 @@ class ApprovalService(LLCServiceBase):
         )
         session.add(approval)
         await session.flush()
+        await record_approval_event(
+            session, approval, ActivityEventType.APPROVAL_REQUESTED, actor_user_id=actor_user_id
+        )
         logger.info(
             "Approval requested: id=%s type=%s company=%s requested_by=%s",
             approval.id,
@@ -136,11 +159,21 @@ class ApprovalService(LLCServiceBase):
             ApprovalNotFoundError: approval_id does not exist.
             ApprovalStateError: approval is not in PENDING state, or decision
                 value is not APPROVED/REJECTED.
+            ApprovalHookError: the approved action cannot be applied (GH#8214); nothing is
+                recorded, and the caller must roll back.
         """
         if decision not in (ApprovalStatus.APPROVED, ApprovalStatus.REJECTED):
             raise ApprovalStateError(f"Decision must be APPROVED or REJECTED, got {decision.value!r}")
 
-        result = await session.execute(select(Approval).where(Approval.id == approval_id).with_for_update())
+        # ``populate_existing``: the route's tenant check already loaded this row into the session. Without it
+        # a decider that waited on the lock keeps that stale ``pending`` copy, so approve could overwrite a
+        # committed reject (and create the hire); with it the locked read replaces the copy with the current row.
+        result = await session.execute(
+            select(Approval)
+            .where(Approval.id == approval_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
         approval = result.scalar_one_or_none()
         if approval is None:
             raise ApprovalNotFoundError(f"Approval {approval_id} not found")
@@ -152,6 +185,16 @@ class ApprovalService(LLCServiceBase):
         approval.decided_by_user = str(decided_by)
         approval.decided_at = datetime.now(timezone.utc)
         await session.flush()
+        # Same transaction as the status change: a hook that raises leaves the approval pending.
+        applied = await run_post_decision_hook(session, approval, decision, decided_by)
+        await record_approval_event(
+            session,
+            approval,
+            _DECISION_EVENT[decision],
+            actor_user_id=decided_by,
+            before={"status": ApprovalStatus.PENDING.value},
+            after={"status": decision.value, "applied": applied},
+        )
         await wake_for_decided_approval(session, approval, decision.value)  # #19582: wake the requester
         logger.info(
             "Approval decided: id=%s decision=%s decided_by=%s",
@@ -160,6 +203,19 @@ class ApprovalService(LLCServiceBase):
             decided_by,
         )
         return approval
+
+    async def finish_decision(self, approval: "Approval") -> None:
+        """Run the half of the approved action that cannot be rolled back -- call AFTER the commit.
+
+        A failure here is logged, not raised: the decision is committed and cannot be undone, and
+        the database already holds the authority (the agent row, the new limit). A hire that failed to reach
+        the heartbeat schedule is put back by the schedule reconciler (#20117, merged in #20151), which re-adds
+        every enabled member missing from the schedule on its interval.
+        """
+        try:
+            await run_post_commit_hook(approval)
+        except Exception:
+            logger.exception("Post-commit step failed for approval %s (type=%s)", approval.id, approval.approval_type)
 
     async def publish_decided(self, approval: "Approval", decision: ApprovalStatus) -> None:
         """Publish approval_decided event — call AFTER the DB transaction commits."""
@@ -219,6 +275,15 @@ class ApprovalService(LLCServiceBase):
 
         result = await session.execute(stmt)
         return list(result.scalars().all())
+
+    async def count_pending(self, session: AsyncSession, company_id: uuid.UUID) -> int:
+        """Number of PENDING approvals in *company_id* (sidebar badge)."""
+        result = await session.execute(
+            select(func.count())
+            .select_from(Approval)
+            .where(Approval.company_id == company_id, Approval.status == ApprovalStatus.PENDING.value)
+        )
+        return int(result.scalar_one())
 
     @staticmethod
     async def _publish(channel: str, payload: Dict[str, Any]) -> None:
@@ -297,6 +362,7 @@ __all__ = [
     "ApprovalRequiredError",
     "ApprovalNotFoundError",
     "ApprovalStateError",
+    "ApprovalHookError",
     "requires_approval",
     "_EVENT_REQUESTED",
     "_EVENT_DECIDED",
