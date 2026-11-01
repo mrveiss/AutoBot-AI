@@ -167,6 +167,8 @@ def harness(real_auth_middleware, monkeypatch):
         patch.object(llc_api.ApprovalService, "publish_decided", new=AsyncMock()),
         patch.object(llc_api.ApprovalService, "log_decision_to_kb", new=AsyncMock()),
         patch.object(llc_api, "logger", new=logger),
+        # The real board check runs: this caller is an owner of the approval's company.
+        patch("llc.services.authz.membership_role", new=AsyncMock(return_value="owner")),
         patch.object(gates_api, "ApprovalGateService", new=gates),
     ):
         yield SimpleNamespace(
