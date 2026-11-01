@@ -13,6 +13,7 @@ Environment:
     SELF_CHECK_BASE_URL     where the backend answers, the way a browser reaches it
     SELF_CHECK_USERNAME     the dedicated self-check account
     SELF_CHECK_PASSWORD     its password; never printed or written to the report
+    SELF_CHECK_CA_FILE      a CA bundle, for an install serving its own certificate
     SELF_CHECK_COMMIT       the commit under test, for the report
     SELF_CHECK_REPORT       where the JSON report goes
     SELF_CHECK_MODEL_CLI, SELF_CHECK_EMBEDDING_MODEL, SELF_CHECK_COMPLETION_MODELS (newline-separated),
@@ -23,6 +24,7 @@ from __future__ import annotations
 
 import json
 import os
+import ssl
 import subprocess  # nosec B404  # runs the one model kind script, with a fixed argv
 import sys
 import time
@@ -35,7 +37,10 @@ from typing import Callable, Dict, List, Mapping, Optional, Tuple
 
 CHAT_PROMPT = "Reply with one short sentence."
 EMBEDDING_PROBE = "embedding_model"
+#: What ``api/chat.py`` answers with a 200 when the model call failed; a test pins it to the source.
+CHAT_ERROR_REPLY = "I encountered an error processing your message"
 REQUEST_TIMEOUT_S = 180
+KIND_SCRIPT_TIMEOUT_S = 300
 EMBEDDING_WAIT_S = 120
 EMBEDDING_POLL_S = 5
 FAILING_KINDS = ("WRONG-KIND", "MISSING-EMBEDDING", "SHOW-FAILED", "UNKNOWN", "UNREACHABLE")
@@ -57,15 +62,17 @@ class Result:
     got: str = ""
 
 
-def _request(url: str, payload: Optional[dict] = None, token: str = "") -> Tuple[int, str]:
+def _request(url: str, payload: Optional[dict] = None, token: str = "", method: str = "") -> Tuple[int, str]:
     """(status, body); a refused connection or a timeout is status 0, never an exception."""
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
     data = None if payload is None else json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(url, data=data, headers=headers)  # nosec B310  # a configured backend URL
+    req = urllib.request.Request(url, data=data, headers=headers, method=method or None)  # nosec B310
+    cafile = os.environ.get("SELF_CHECK_CA_FILE") or None
+    context = ssl.create_default_context(cafile=cafile) if url.startswith("https:") else None
     try:
-        with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT_S) as reply:  # nosec B310
+        with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT_S, context=context) as reply:  # nosec B310
             return reply.status, reply.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as exc:
         return exc.code, exc.read().decode("utf-8", "replace")
@@ -97,25 +104,35 @@ def login(base: str, username: str, password: str) -> str:
 
 
 def probe_chat(base: str, token: str, _env: Mapping[str, str]) -> None:
-    """The default chat model answers a fixed prompt, through the chat API."""
-    status, body = _request(f"{base}/api/chat", {"content": CHAT_PROMPT}, token)
-    data = _json(status, body, "chat").get("data") or {}
-    if not str(data.get("content", "")).strip():
-        raise ProbeFailed("a non-empty answer from chat", body[:300])
+    """The default chat model answers a fixed prompt, in a session of its own that is deleted afterwards."""
+    status, body = _request(f"{base}/api/chat/sessions", {"title": "self-check"}, token)
+    session_id = (_json(status, body, "session create").get("data") or {}).get("id")
+    if not session_id:
+        raise ProbeFailed("a session id", body[:300])
+    try:
+        status, body = _request(f"{base}/api/chat", {"content": CHAT_PROMPT, "session_id": session_id}, token)
+        content = str((_json(status, body, "chat").get("data") or {}).get("content", "")).strip()
+        if not content or content.startswith(CHAT_ERROR_REPLY):
+            raise ProbeFailed("a real answer from chat", body[:300])
+    finally:
+        _delete_session(base, token, session_id)
 
 
-def _component(components: List[dict], name: str) -> Optional[dict]:
-    return next((c for c in components if c.get("name") == name), None)
+def _delete_session(base: str, token: str, session_id: str) -> None:
+    status, body = _request(f"{base}/api/chat/sessions/{session_id}", None, token, method="DELETE")
+    if status != 200:
+        raise ProbeFailed("the self-check's chat session deleted", f"HTTP {status}: {body[:300]}")
 
 
-def probe_embeddings(base: str, token: str, _env: Mapping[str, str], sleep: Callable[[float], None] = time.sleep) -> None:
-    """The backend's own probe has embedded for real; its first result lands in the background."""
+def probe_embeddings(base: str, _token: str, _env: Mapping[str, str], sleep: Callable[[float], None] = time.sleep) -> None:
+    """The backend's own probe has embedded for real, read from the public health route, whose ``probes`` carry it."""
     deadline = time.monotonic() + EMBEDDING_WAIT_S
     while True:
-        status, body = _request(f"{base}/api/system/health/detailed", None, token)
-        component = _component(_json(status, body, "detailed health").get("components") or [], EMBEDDING_PROBE)
+        status, body = _request(f"{base}/api/system/health")
+        probes = _json(status, body, "health").get("probes") or []
+        component = next((p for p in probes if isinstance(p, dict) and p.get("name") == EMBEDDING_PROBE), None)
         if component is None:
-            raise ProbeFailed(f"a {EMBEDDING_PROBE} health component", "none in the reply")
+            raise ProbeFailed(f"a {EMBEDDING_PROBE} health probe", "none in the reply")
         if component.get("status") != "ok":
             raise ProbeFailed("the embedding model to embed", str(component.get("detail")))
         if (component.get("data") or {}).get("embedding_measured"):
@@ -137,7 +154,12 @@ def probe_model_kinds(_base: str, _token: str, env: Mapping[str, str]) -> None:
         "EMBEDDING_MODEL": embedding,
         "COMPLETION_MODELS": completion,
     }
-    done = subprocess.run(["sh", script], capture_output=True, text=True, check=False, env=child_env)  # nosec B603 B607
+    try:
+        done = subprocess.run(  # nosec B603 B607
+            ["sh", script], capture_output=True, text=True, check=False, env=child_env, timeout=KIND_SCRIPT_TIMEOUT_S
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise ProbeFailed("the kind script to finish", f"still running after {exc.timeout}s") from exc
     lines = done.stdout.splitlines()
     bad = [line for line in lines if line.startswith(FAILING_KINDS)]
     if bad or done.returncode != 0:
@@ -161,6 +183,8 @@ def run_probes(base: str, token: str, env: Mapping[str, str], probes: Optional[d
             results.append(Result(name, True))
         except ProbeFailed as exc:
             results.append(Result(name, False, exc.expected, exc.got))
+        except Exception as exc:  # a probe's own defect still gets a report, and fails that probe
+            results.append(Result(name, False, "the probe to finish", f"{type(exc).__name__}: {exc}"))
     return results
 
 

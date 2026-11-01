@@ -31,14 +31,22 @@ def _module():
 check = _module()
 
 
+def _health(probe: dict | None) -> tuple:
+    """The real route's shape: ``components`` maps a name to a status string, ``probes`` carries the detail."""
+    probes = [probe] if probe else []
+    return 200, {"status": "ok", "components": {"backend": "ok", "embedding_model": "ok"}, "probes": probes}
+
+
+_MEASURED = {"name": "embedding_model", "status": "ok", "data": {"embedding_measured": True}}
+
+
 def _healthy() -> dict:
     return {
         "/api/auth/login": (200, {"access_token": "tok"}),
-        "/api/chat": (200, {"data": {"content": "Hello.", "role": "assistant"}}),
-        "/api/system/health/detailed": (
-            200,
-            {"components": [{"name": "embedding_model", "status": "ok", "data": {"embedding_measured": True}}]},
-        ),
+        "/api/chat/sessions": (200, {"data": {"id": "sess-1"}}),
+        "/api/chat/sessions/sess-1": (200, {"data": {"session_id": "sess-1"}}),
+        "/api/chat": (200, {"data": {"content": "Hello.", "role": "assistant", "session_id": "sess-1"}}),
+        "/api/system/health": _health(_MEASURED),
     }
 
 
@@ -46,10 +54,12 @@ def _healthy() -> dict:
 def stack():
     replies = _healthy()
     seen: list[str] = []
+    calls: list[tuple] = []
 
     class Handler(BaseHTTPRequestHandler):
         def _answer(self) -> None:
             seen.append(self.headers.get("Authorization", ""))
+            calls.append((self.command, self.path))
             status, body = replies.get(self.path, (404, {}))
             raw = json.dumps(body).encode("utf-8") if not isinstance(body, str) else body.encode("utf-8")
             self.send_response(status)
@@ -60,13 +70,14 @@ def stack():
             self.rfile.read(int(self.headers.get("Content-Length", 0)))
             self._answer()
 
-        do_GET = _answer
+        do_GET = do_DELETE = _answer
 
         def log_message(self, *_args) -> None:
             pass
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
+    replies["calls"] = calls
     yield f"http://127.0.0.1:{server.server_port}", replies, seen
     server.shutdown()
 
@@ -125,7 +136,7 @@ def test_the_password_reaches_neither_output_nor_report(stack, tmp_path: Path, c
 
 @pytest.mark.parametrize(
     ("reply", "said"),
-    [((500, "boom"), "HTTP 500"), ((200, {"data": {"content": "  "}}), "non-empty"), ((200, "not json"), "JSON")],
+    [((500, "boom"), "HTTP 500"), ((200, {"data": {"content": "  "}}), "real answer"), ((200, "not json"), "JSON")],
     ids=["server-error", "empty-answer", "not-json"],
 )
 def test_a_planted_chat_fault_fails_the_chat_probe(stack, tmp_path: Path, reply, said: str) -> None:
@@ -137,26 +148,71 @@ def test_a_planted_chat_fault_fails_the_chat_probe(stack, tmp_path: Path, reply,
 
 
 @pytest.mark.parametrize(
-    "components",
-    [[], [{"name": "embedding_model", "status": "degraded", "detail": "could not embed", "data": {}}]],
-    ids=["no-component", "could-not-embed"],
+    "probe",
+    [None, {"name": "embedding_model", "status": "degraded", "detail": "could not embed", "data": {}}],
+    ids=["no-probe", "could-not-embed"],
 )
-def test_a_planted_embedding_fault_fails_the_embeddings_probe(stack, tmp_path: Path, components: list) -> None:
+def test_a_planted_embedding_fault_fails_the_embeddings_probe(stack, tmp_path: Path, probe) -> None:
     base, replies, _ = stack
-    replies["/api/system/health/detailed"] = (200, {"components": components})
+    replies["/api/system/health"] = _health(probe)
     assert check.main(_env(base, tmp_path)) == 1
     assert list(_failed(tmp_path)) == ["embeddings"]
 
 
 def test_an_embedding_never_measured_fails_rather_than_passing_unexamined(stack, tmp_path: Path, monkeypatch) -> None:
     base, replies, _ = stack
-    replies["/api/system/health/detailed"] = (
-        200,
-        {"components": [{"name": "embedding_model", "status": "ok", "data": {"embedding_measured": False}}]},
+    replies["/api/system/health"] = _health(
+        {"name": "embedding_model", "status": "ok", "data": {"embedding_measured": False}}
     )
     monkeypatch.setattr(check, "EMBEDDING_WAIT_S", 0)
     assert check.main(_env(base, tmp_path)) == 1
     assert "measured" in _failed(tmp_path)["embeddings"]["expected"]
+
+
+def test_the_chat_fallback_reply_is_not_an_answer(stack, tmp_path: Path) -> None:
+    base, replies, _ = stack
+    text = f"{check.CHAT_ERROR_REPLY}. Please try again."
+    replies["/api/chat"] = (200, {"data": {"content": text, "role": "assistant", "session_id": "sess-1"}})
+    assert check.main(_env(base, tmp_path)) == 1
+    assert list(_failed(tmp_path)) == ["chat"]
+
+
+@pytest.mark.parametrize("chat_ok", [True, False], ids=["after-an-answer", "after-a-failure"])
+def test_the_session_is_deleted_either_way(stack, tmp_path: Path, chat_ok: bool) -> None:
+    base, replies, _ = stack
+    if not chat_ok:
+        replies["/api/chat"] = (500, "boom")
+    check.main(_env(base, tmp_path))
+    assert ("DELETE", "/api/chat/sessions/sess-1") in replies["calls"]
+
+
+def test_a_session_left_behind_fails_the_probe(stack, tmp_path: Path) -> None:
+    base, replies, _ = stack
+    replies["/api/chat/sessions/sess-1"] = (500, "boom")
+    assert check.main(_env(base, tmp_path)) == 1
+    assert "deleted" in _failed(tmp_path)["chat"]["expected"]
+
+
+def test_a_probe_s_own_crash_still_reports(stack, tmp_path: Path) -> None:
+    base, _, _ = stack
+
+    def _crash(*_args) -> None:
+        raise AttributeError("a defect")
+
+    assert check.main(_env(base, tmp_path), probes={"chat": _crash}) == 1
+    assert "AttributeError" in _failed(tmp_path)["chat"]["got"]
+
+
+def test_the_shapes_this_reads_are_the_backend_s_own() -> None:
+    chat = (repo_root() / "autobot-backend/api/chat.py").read_text(encoding="utf-8")
+    assert f'"{check.CHAT_ERROR_REPLY}. Please try again."' in chat
+    system = (repo_root() / "autobot-backend/api/system.py").read_text(encoding="utf-8")
+    assert 'health_status["probes"] = [component.model_dump(' in system
+    assert '@router.api_route("/health", methods=["GET"]' in system
+    health = (repo_root() / "autobot-backend/api/embedding_model_health.py").read_text(encoding="utf-8")
+    assert '"embedding_measured"' in health
+    sessions = (repo_root() / "autobot-backend/api/chat_sessions.py").read_text(encoding="utf-8")
+    assert '@router.post("/chat/sessions"' in sessions and '@router.delete("/chat/sessions/{session_id}"' in sessions
 
 
 def test_a_chat_model_in_the_embedding_role_fails_the_kinds_probe(stack, tmp_path: Path) -> None:
