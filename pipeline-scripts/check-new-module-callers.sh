@@ -4,6 +4,12 @@
 # Closure-gate wiring check: verify new modules added in this PR have production callers.
 # Single source of truth referenced by /implement, /issue, /batch-implement skills.
 #
+# The required CI form of this check is the population gate
+# repo_tests/unconnected_code_gate_20512_test.py (#20512): same question and same production-file
+# filter, asked of the whole tree against a frozen baseline, with an import-resolving matcher in
+# place of the substring grep below, and extended to routes, queues and tables. This script stays
+# the closure-time, per-PR report.
+#
 # Usage:
 #   check-new-module-callers.sh [--base-branch REF] [--allow-deferral FILE]
 #

@@ -369,6 +369,12 @@ REACH_ROOTS = {
         "install.sh",
         "scripts",
     ),
+    "repo_tests/unconnected_code_gate_20512_test.py": (
+        "autobot-backend",
+        "autobot-infrastructure",
+        "autobot-slm-backend",
+        "autobot_shared",
+    ),
     "repo_tests/v_html_sanitiser_guard_19118_test.py": (
         "autobot-frontend/src",
         "autobot-slm-frontend/src",
