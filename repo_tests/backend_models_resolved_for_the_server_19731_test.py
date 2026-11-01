@@ -158,3 +158,18 @@ def test_the_updater_only_warns_on_a_missing_model() -> None:
     text = (repo_root() / _ANS / "playbooks/update-all-nodes.yml").read_text(encoding="utf-8")
     render = text[text.index("tasks_from: env_only") :]
     assert "backend_model_check_warn_only: true" in render[: render.index("backend_env_dest")]
+
+
+@pytest.mark.parametrize("playbook", ["deploy.yml", "playbooks/provision-fleet-roles.yml"])
+def test_a_play_that_pulls_after_the_backend_only_warns_at_the_backend(playbook: str) -> None:
+    """A model a later LLM role would pull must not stop the deploy before that role runs."""
+    docs = yaml.safe_load((repo_root() / "autobot-slm-backend/ansible" / playbook).read_text(encoding="utf-8"))
+    tasks = [t for play in docs for t in (play.get("tasks") or []) if isinstance(t, dict)]
+    names = [(t.get("ansible.builtin.include_role") or {}).get("name") for t in tasks]
+    assert "llm" in names[names.index("backend") :]
+    assert tasks[names.index("backend")]["vars"]["backend_model_check_warn_only"] is True
+
+
+def test_deploy_full_stays_strict_because_it_runs_no_llm_role() -> None:
+    text = (repo_root() / "autobot-slm-backend/ansible/playbooks/deploy-full.yml").read_text(encoding="utf-8")
+    assert "role: llm" not in text and "name: llm" not in text and "backend_model_check_warn_only" not in text
