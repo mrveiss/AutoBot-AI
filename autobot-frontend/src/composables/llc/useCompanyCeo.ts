@@ -100,7 +100,7 @@ export function useCompanyCeo(api: CeoApi, companyId: () => string) {
     isLoading.value = true
     loadFailed.value = false
     try {
-      const result = await api.get<CeoDesignation>(url(id))
+      const result: CeoDesignation = await api.get(url(id))
       if (mine === generation) designation.value = result
     } catch (err) {
       logger.error('Failed to load the CEO designation', err)
