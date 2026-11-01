@@ -40,6 +40,7 @@ from autobot_shared.logging_manager import get_logger
 from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
 from .claude_code_adapter import ClaudeCodeAdapter, _output_path, _resolve_claude_cli, _state_path
+from .heartbeat_prompt import agent_api_tool_pattern
 from .subprocess_base import placeholder_run_id
 from .subprocess_base import resolve_first_output_deadline as _resolve_first_output_deadline
 from .subprocess_base import resolve_stall_deadline as _resolve_stall_deadline
@@ -94,7 +95,9 @@ class ClaudeCodeSubscriptionAdapter(ClaudeCodeAdapter):
         # GH#11186: reuse the parent's governed command builder so this adapter
         # inherits --disallowedTools (fresh + resume), input sanitization, and the
         # `--` prompt terminator instead of the old inline build that lacked them.
-        cmd = self._build_command(cli, resume_session_id, cfg, prompt, session_id=session_id)
+        cmd = self._build_command(
+            cli, resume_session_id, cfg, prompt, session_id=session_id, agent_api_tool=agent_api_tool_pattern(context)
+        )
 
         workspace_dir: str | None = context.get("workspace_dir")
 
