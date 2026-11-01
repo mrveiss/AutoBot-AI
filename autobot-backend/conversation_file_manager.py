@@ -156,7 +156,8 @@ class ConversationFileManager(ConversationFileRouteApi):
 
         Args:
             session_id: Chat session identifier
-            hard_delete: If True, remove files from disk and database
+            hard_delete: Kept for callers; the files are soft-deleted and their bytes leave only
+                through an approved cleanup proposal (#20488)
 
         Returns:
             Dict with cleanup statistics
@@ -960,14 +961,6 @@ class ConversationFileManager(ConversationFileRouteApi):
         finally:
             await connection.close()
 
-    async def _hard_delete_file(self, connection, file_id: str, file_path: Path) -> None:
-        """Permanently delete a file (Issue #315 - extracted helper)."""
-        await connection.execute("DELETE FROM conversation_files WHERE file_id = ?", (file_id,))
-        # Issue #358 - avoid blocking
-        if await asyncio.to_thread(file_path.exists):
-            await asyncio.to_thread(file_path.unlink)
-            logger.info("Hard deleted file: %s", file_path)
-
     async def _soft_delete_file(self, connection, file_id: str) -> None:
         """Soft delete a file by marking as deleted (Issue #315 - extracted helper)."""
         await connection.execute(
@@ -1004,32 +997,19 @@ class ConversationFileManager(ConversationFileRouteApi):
         file_ids = [file_row["file_id"] for file_row in files]
 
         if hard_delete:
-            # For hard delete, we need to delete files from disk (can't batch filesystem ops)
-            # but we can batch the SQL delete
-            for file_row in files:
-                file_path = Path(file_row["file_path"])
-                if await asyncio.to_thread(file_path.exists):
-                    await asyncio.to_thread(file_path.unlink)
-                    logger.info("Hard deleted file: %s", file_path)
-
-            # Issue #397: Batch SQL delete using IN clause
-            placeholders = ",".join("?" * len(file_ids))
-            await connection.execute(
-                f"DELETE FROM conversation_files WHERE file_id IN ({placeholders})",  # nosec B608  # parameterized ?
-                file_ids,
-            )
-        else:
-            # Issue #397: Batch soft delete using IN clause instead of N+1 pattern
-            placeholders = ",".join("?" * len(file_ids))
-            await connection.execute(
-                f"""
-                UPDATE conversation_files
-                SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP
-                WHERE file_id IN ({placeholders})
-                """,  # nosec B608  # parameterized placeholders, not string interpolation
-                file_ids,
-            )
-            logger.info("Soft deleted %d files in batch", len(file_ids))
+            # Removing stored bytes needs a person's approval (#17038, #20488): a hard delete
+            # is a soft delete here, and the bytes leave only through the cleanup proposal gate.
+            logger.info("hard_delete requested for %d file(s): bytes await approval (#20488)", len(file_ids))
+        placeholders = ",".join("?" * len(file_ids))
+        await connection.execute(
+            f"""
+            UPDATE conversation_files
+            SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP
+            WHERE file_id IN ({placeholders})
+            """,  # nosec B608  # parameterized placeholders, not string interpolation
+            file_ids,
+        )
+        logger.info("Soft deleted %d files in batch", len(file_ids))
 
         return len(file_ids)
 
