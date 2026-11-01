@@ -157,7 +157,8 @@ async def provision_budget(
 
     Returns 201 on creation, 409 if a row already exists.
     Returns 404 if the agent does not exist in agent_org_nodes, or belongs to
-    a different tenant (GH#12136).
+    a different tenant (GH#12136). Returns 403 unless the caller is a company
+    owner/admin or a platform admin (#20422).
     company_id is derived from agent_org_nodes — callers cannot scope rows
     to arbitrary companies.
     """
@@ -175,6 +176,8 @@ async def provision_budget(
     # (GH#12136 — needed for the tenant-match comparison below).
     company_id = str(uuid.UUID(str(agent_record[0])))
     assert_company_access(ctx, company_id)
+    # The first row carries a limit the caller chose, so it is the same admin act as changing one (#20422).
+    await _require_budget_admin(session, company_id, agent_id, ctx)
 
     svc = BudgetService()
     row, created = await svc.provision_budget(session, agent_id, company_id, body.budget_limit)
@@ -283,19 +286,24 @@ async def ingest_cost(
     return IngestResponse(cost=cost)
 
 
+async def _require_budget_admin(session: AsyncSession, company_id: str, agent_id: str, ctx: TenantContext) -> None:
+    """Only a company owner/admin (or a platform admin) sets a budget limit; anyone else is a 403."""
+    try:
+        await require_company_admin_unless_platform(
+            session, uuid.UUID(str(company_id)), ctx.user_id, platform_admin=ctx.is_platform_admin
+        )
+    except NotAuthorisedError as exc:
+        logger.warning("Refused budget limit change for %s: %s", agent_id, exc)
+        raise HTTPException(status_code=403, detail="Only a company owner or admin may change a budget limit") from exc
+
+
 async def _require_limit_admin(session: AsyncSession, row: LLCAgentBudget, ctx: TenantContext) -> None:
-    """Only a company owner/admin (or a platform admin) sets a limit directly; anyone else is a 403.
+    """The limit writer of an existing row must be a company admin.
 
     This route writes the limit with no approval, so open to every member it bypassed the board's
     BUDGET_OVERRIDE gate (#8214). The approved-override path (``approval_hooks``) does not come through here.
     """
-    try:
-        await require_company_admin_unless_platform(
-            session, uuid.UUID(str(row.company_id)), ctx.user_id, platform_admin=ctx.is_platform_admin
-        )
-    except NotAuthorisedError as exc:
-        logger.warning("Refused budget limit change for %s: %s", row.agent_id, exc)
-        raise HTTPException(status_code=403, detail="Only a company owner or admin may change a budget limit") from exc
+    await _require_budget_admin(session, row.company_id, row.agent_id, ctx)
 
 
 @router.patch("/{agent_id}/limit", response_model=BudgetResponse)

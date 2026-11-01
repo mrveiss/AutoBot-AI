@@ -102,6 +102,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Shared nginx includes: http-block settings + SLM upstream, and the SLM routes
 COPY docker/nginx/nginx-common.conf /etc/nginx/nginx-common.conf
+COPY autobot-slm-backend/ansible/_shared/files/upload-cap.conf /etc/nginx/upload-cap.conf
 COPY docker/nginx/nginx-slm-locations.conf /etc/nginx/nginx-slm-locations.conf
 # TLS settings and the port-80 redirect server, shared by both TLS configs (#18593)
 COPY docker/nginx/nginx-tls.conf /etc/nginx/nginx-tls.conf
