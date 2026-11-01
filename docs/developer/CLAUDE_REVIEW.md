@@ -100,8 +100,8 @@ Check each before sending the PR# and head:
    `tools/lint/prepush_selection.py`, #18808), so a green pre-push covers item 4. A new
    symbol that reuses an existing name (#19205, #19215) is what the symbol-fork ratchet catches.
 
-5. **Local runs respect the shared machine (owner rule, 2026-10-23).** Targeted tests plus the
-   whole-tree set, each run under the `machine:heavy-run` lock with a hold of at most 20
+5. **Local runs respect the shared machine (owner rule, 2026-10-23).** Only the test you changed
+   (owner, 2026-11-02), run under the `machine:heavy-run` lock with a hold of at most 20
    minutes; never a full local `repo_tests` suite (CI is the full gate). Train pushes go first,
    and a hold whose reason says "train push waiting" is released at the next test boundary.
 

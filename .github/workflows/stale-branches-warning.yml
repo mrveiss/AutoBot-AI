@@ -9,9 +9,9 @@
 # repository has ever had -- #11703, #13603 and #4324 each closed with no
 # action because there was none to take. A detector with a ~100% false-positive
 # rate trains its readers to ignore the next report, including the one that is
-# right. Ancestry is no better here: this repository squash-merges, so
-# `git branch --merged` and `--is-ancestor` are false for every branch it has
-# ever merged.
+# right. Ancestry is no better here: trains land with merge commits now, but older
+# history holds squashes, so `git branch --merged` and `--is-ancestor` are false for
+# a branch merged that way.
 #
 # So each stale branch is put through `branch_landing_evidence` from
 # scripts/lib/branch-guards.sh, and only `unproven` branches are reported --
