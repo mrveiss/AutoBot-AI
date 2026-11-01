@@ -98,6 +98,9 @@ def _make_client(
     patch("llc.api.approvals.ApprovalService.publish_requested", new=AsyncMock()).start()
     patch("llc.api.approvals.ApprovalService.publish_decided", new=AsyncMock()).start()
     patch("llc.api.approvals.ApprovalService.log_decision_to_kb", new=AsyncMock()).start()
+    patch("llc.api.approvals.ApprovalService.finish_decision", new=AsyncMock()).start()
+    # Membership is exercised against a real database in test_approval_enforcement_8214.py.
+    patch("llc.api.approvals.require_company_admin_unless_platform", new=AsyncMock()).start()
 
     return TestClient(app)
 
@@ -178,7 +181,7 @@ class TestApprovalsIdor:
         client = _make_client(org)
         resp = client.post(
             "/api/llc/approvals",
-            json={"company_id": org, "type": "hire", "requested_by_agent_id": _AGENT_ID},
+            json={"company_id": org, "type": "strategy", "requested_by_agent_id": _AGENT_ID},
         )
         assert resp.status_code == 201
 
