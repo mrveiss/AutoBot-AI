@@ -191,6 +191,47 @@ def test_terminal_handlers_delegates_risk_assessment():
     assert "command_assessor" in referenced_names(source)
 
 
+# --- Row 7: terminal_handlers chat and audit ----------------------------------------------------
+OLD_TERMINAL_COPY = (
+    "async def f(self, text):\n"
+    "    await self.chat_history_manager.add_message(text=text)\n"
+    "    async with aiofiles.open(path, 'a') as f:\n"
+    "        await f.write(text)\n"
+    "    self.audit_log.append(text)\n"
+)
+DELEGATING_TERMINAL = (
+    "async def f(self, text):\n"
+    "    await self._chat.save_command_to_chat(text)\n"
+    "    await self._chat.write_to_transcript(text)\n"
+    "    self._audit.log_activity('x', {})\n"
+)
+
+
+def private_terminal_work(source: str) -> set[str]:
+    """Chat, transcript and audit writes done directly rather than through the two delegates."""
+    found = set()
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Attribute) and node.attr == "add_message":
+            found.add("chat save")
+        if isinstance(node, ast.Attribute) and node.attr == "open":
+            if isinstance(node.value, ast.Name) and node.value.id == "aiofiles":
+                found.add("transcript write")
+        if isinstance(node, ast.Attribute) and node.attr == "audit_log":
+            found.add("audit log")
+    return found
+
+
+def test_terminal_work_detector_flags_an_old_copy_and_passes_a_delegate():
+    assert private_terminal_work(OLD_TERMINAL_COPY) == {"chat save", "transcript write", "audit log"}
+    assert private_terminal_work(DELEGATING_TERMINAL) == set()
+
+
+def test_terminal_handlers_delegates_chat_transcript_and_audit():
+    source = _read("autobot-backend/api/terminal_handlers.py")
+    assert private_terminal_work(source) == set()
+    assert {"TerminalAuditLogger", "TerminalChatIntegrator"} <= referenced_names(source)
+
+
 # --- Row 9: deploy wrappers --------------------------------------------------------------------
 DEPLOY_CORE = {"log", "error_exit", "success", "check_prerequisites", "test_connectivity"}
 DEPLOY_SCRIPTS = [ANSIBLE + "deploy-hybrid.sh", ANSIBLE + "deploy-native.sh"]
