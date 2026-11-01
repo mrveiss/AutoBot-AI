@@ -87,6 +87,8 @@ async def _poll_once(fake: _FakeSortedSet, *, has_work: bool, agent=None, schedu
     with (
         patch(f"{_HBS}.get_async_redis_client", AsyncMock(return_value=fake)),
         patch(f"{_HBS}.get_async_session_factory", _session_factory()),
+        # #19240: the gate fails closed without Redis; these tests are about what follows it.
+        patch(f"{_HBS}.dispatch_block_reason", AsyncMock(return_value=None)),
         patch.object(scheduler, "_get_agent_config", AsyncMock(return_value=agent or _agent())),
         patch.object(scheduler, "_find_rate_limited_run", AsyncMock(return_value=None)),
         patch.object(scheduler, "_create_run", AsyncMock(return_value=MagicMock(id="run-1"))),
