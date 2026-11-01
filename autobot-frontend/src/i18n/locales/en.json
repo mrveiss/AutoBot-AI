@@ -8280,7 +8280,8 @@
       "degradedMessage": "Some backend services are slow or failing. Features may not work as expected.",
       "criticalTitle": "Backend unreachable",
       "criticalMessage": "AutoBot cannot reach its backend. Changes may not be saved until it is back."
-    }
+    },
+    "adminConversations": "Conversation Review"
   },
   "llcCompanyStatus": {
     "showArchived": "Show archived",
@@ -9786,6 +9787,36 @@
       "title": "Administration",
       "subtitle": "Back-office tools for administrators",
       "ariaLabel": "Administration section"
+    },
+    "conversations": {
+      "title": "Conversation Review",
+      "subtitle": "Review conversations in your organization. Access is decided by the server.",
+      "auditNotice": "Every transcript you open is recorded in the audit trail. You see only sessions that belong to your own organization.",
+      "openAudited": "Opening this transcript has been recorded in the audit trail.",
+      "colTitle": "Conversation",
+      "colMessages": "Messages",
+      "colUpdated": "Last updated",
+      "colId": "Session ID",
+      "untitled": "Untitled conversation",
+      "openTranscript": "Open transcript",
+      "transcript": "Transcript",
+      "loading": "Loading organization conversations",
+      "emptyTitle": "No conversations in your organization",
+      "emptyBody": "Sessions that belong to your organization appear here once they exist.",
+      "noOrgTitle": "Your account is not part of an organization",
+      "noOrgBody": "Organization review is not available because the server found no organization for your account.",
+      "refusedTitle": "The server refused this request",
+      "refusedBody": "Listing organization conversations needs an administrative role. Your role does not allow it.",
+      "failedTitle": "Could not load",
+      "failedBody": "The conversation list could not be loaded. Try again.",
+      "transcriptRefusedTitle": "The server refused access to this conversation",
+      "transcriptRefusedBody": "A transcript opens only for an administrator of the organization that owns the session.",
+      "transcriptMissing": "This conversation no longer exists.",
+      "transcriptFailedBody": "The transcript could not be loaded. Try again.",
+      "noMessagesTitle": "No messages",
+      "noMessagesBody": "This conversation has no messages on this page.",
+      "unknownSender": "Unknown sender",
+      "transcriptPages": "Transcript pages"
     }
   },
   "components": {

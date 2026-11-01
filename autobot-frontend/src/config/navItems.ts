@@ -183,6 +183,8 @@ export const adminMenuItems: NavItem[] = [
   { to: '/admin/mcp-servers', labelKey: 'nav.adminMcpServers', icon: 'M21.75 17.25v-.228a4.5 4.5 0 00-.12-1.03l-2.268-9.64a3.375 3.375 0 00-3.285-2.602H7.923a3.375 3.375 0 00-3.285 2.602l-2.268 9.64a4.5 4.5 0 00-.12 1.03v.228m19.5 0a3 3 0 01-3 3H5.25a3 3 0 01-3-3m19.5 0a3 3 0 00-3-3H5.25a3 3 0 00-3 3', iconViewBox: '0 0 24 24', iconStroke: true },
   // Issue #16825: permission scopes -- a "coming in a later release" panel, not a working
   // feature yet, unlike the two entries above.
+  // Issue #17832: org conversation review -- the server gates and audits; this entry is presentation only.
+  { to: '/admin/conversations', labelKey: 'nav.adminConversations', icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z', iconViewBox: '0 0 24 24', iconStroke: true },
   { to: '/admin/permission-scopes', labelKey: 'nav.adminPermissionScopes', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z', iconViewBox: '0 0 24 24', iconStroke: true },
 ];
 

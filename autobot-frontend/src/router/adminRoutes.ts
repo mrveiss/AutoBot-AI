@@ -96,6 +96,14 @@ export const adminChildren: RouteRecordRaw[] = [
     meta: adminMeta('MCP Servers'),
   },
   {
+    path: 'conversations', // Issue #17832: org-scoped conversation review (server-gated, audited)
+    name: 'admin-conversations',
+    component: () => import('@/views/AdminConversationsView.vue'),
+    meta: adminMeta('Conversation Review', {
+      description: 'Review conversations in your organization',
+    }),
+  },
+  {
     path: 'permission-scopes', // Issue #16825: "coming later" panel
     name: 'admin-permission-scopes',
     component: () => import('@/views/AdminPermissionScopesView.vue'),
