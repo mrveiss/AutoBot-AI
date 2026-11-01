@@ -72,7 +72,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/batch_jobs.py": 916,
     "autobot-backend/api/browser_mcp.py": 1323,
     "autobot-backend/api/cache_management.py": 692,
-    "autobot-backend/api/chat.py": 2666,  # #18316: delete delegates to the canonical path
+    "autobot-backend/api/chat.py": 2647,  # #20195: 2666 -> 2647 (graph resume stream moved to chat_streaming)
     "autobot-backend/api/chat_sessions.py": 1859,  # #18293: legacy transcripts only ever proposed
     "autobot-backend/api/code_intelligence.py": 2145,
     "autobot-backend/api/code_search.py": 828,
@@ -148,7 +148,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
     "autobot-backend/chat_workflow/graph.py": 1573,  # #20195: 1643 -> 1573 (loop-detection helpers split out)
     "autobot-backend/chat_workflow/llm_handler.py": 1300,
-    "autobot-backend/chat_workflow/manager.py": 3862,  # #20195: 3885 -> 3862 (lightweight-mode split out)
+    "autobot-backend/chat_workflow/manager.py": 3859,  # #20195: 3885 -> 3859 (lightweight-mode split out)
     "autobot-backend/chat_workflow/tool_handler.py": 3697,  # #11542 dispatch merge + #14068 mirror
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,

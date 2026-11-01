@@ -3826,18 +3826,15 @@ before summarizing.
         self,
         session_id: str,
         decision: Dict[str, Any],
+        attachment_access: bool = False,
     ):
-        """Resume a paused graph after command approval interrupt.
-
-        Issue #1043: Called when the user approves or denies a command.
-        The graph resumes from its checkpointed state with the decision.
-        """
-        from langgraph.types import Command
-
+        """Resume a paused graph after command approval (#1043); the attachment verdict is replaced (#20195)."""
+        from .attachment_context import resume_command
         from .graph import get_compiled_graph
 
         graph = await get_compiled_graph(self)
-        async with aclosing(stream_graph_turn(self, graph, session_id, Command(resume=decision))) as turn:
+        resume = await resume_command(graph, session_id, decision, attachment_access)
+        async with aclosing(stream_graph_turn(self, graph, session_id, resume)) as turn:
             async for msg in turn:
                 yield msg
 

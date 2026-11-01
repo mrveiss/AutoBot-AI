@@ -32,7 +32,14 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from api.chat_citations import retrieve_citations
-from api.chat_streaming import _stream_chat_workflow_messages, _stream_direct_response, attach_scope, principal_scope
+from api.chat_streaming import (
+    _stream_chat_workflow_messages,
+    _stream_direct_response,
+    _stream_graph_resume,
+    attach_scope,
+    attachments_allowed,
+    principal_scope,
+)
 from api.schemas_chat import (
     ChatCapabilitiesData,
     ChatData,
@@ -1545,33 +1552,6 @@ async def send_chat_message_by_id(
     )
 
 
-async def _stream_graph_resume(
-    chat_workflow_manager,
-    chat_id: str,
-    decision: dict,
-    request_id: str,
-):
-    """Stream graph resume after command approval interrupt (#1043)."""
-    try:
-        evt = {"type": "start", "session_id": chat_id, "request_id": request_id}
-        yield f"data: {json.dumps(evt)}\n\n"
-
-        async for msg in chat_workflow_manager.resume_graph(session_id=chat_id, decision=decision):
-            msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
-            yield f"data: {json.dumps(msg_data)}\n\n"
-
-        yield (f"data: {json.dumps({'type': 'end', 'request_id': request_id})}\n\n")
-
-    except Exception as e:
-        logger.error("[%s] Graph resume error: %s", request_id, e, exc_info=True)
-        evt = {
-            "type": "error",
-            "content": "An internal error occurred",
-            "request_id": request_id,
-        }
-        yield f"data: {json.dumps(evt)}\n\n"
-
-
 @router.post("/chats/{chat_id}/resume", response_model=None)  # StreamingResponse — no Pydantic schema
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1611,6 +1591,7 @@ async def resume_chat_graph(
             chat_id,
             decision,
             request_id,
+            await attachments_allowed(chat_id, current_user, request),  # #20195: STRICT, re-run on resume
         )
     )
 

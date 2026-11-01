@@ -45,7 +45,7 @@ from typing import Any, Dict, List
 from autobot_shared.ai_lines import ATTACHMENT_TURN_KEY, VERIFIED_ATTACHMENT_ACCESS_KEY, VERIFIED_USER_KEY
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.prompt_rules import frame_untrusted_block, neutralize_frame_markers, sanitize_injected
-from chat_workflow import attachment_guards, limits
+from chat_workflow import attachment_extract, attachment_guards, limits
 
 logger = get_logger(__name__)
 
@@ -100,26 +100,27 @@ def requested_ids(context: Dict[str, Any] | None) -> tuple[List[str], int]:
     return ids, len([x for x in raw if not (isinstance(x, str) and x.strip())])
 
 
-async def _extract(parser, manager, session_id: str, info: Dict[str, Any], suffix: str) -> str:
+async def _extract(manager, session_id: str, info: Dict[str, Any], suffix: str) -> str:
+    from utils.document_parser import DocumentParser
+
+    parser = DocumentParser()
     if suffix in parser.supported_formats:  # PDF / Office / OpenDocument: the canonical extractor
-        text, _meta = await parser.extract_text(Path(info["file_path"]), info.get("mime_type"))
+        # The bounded pool: a thread past its deadline keeps its slot, and a full pool refuses (ExtractorBusy).
+        path = Path(info["file_path"])
+        text, _meta = await parser.extract_text(
+            path, info.get("mime_type"), executor=attachment_extract.extract_executor()
+        )
         return text
     return (await manager.get_file_content(session_id, info["file_id"]))["content"]
 
 
-async def _read_text(manager, session_id: str, info: Dict[str, Any]) -> str:
-    mime = (info.get("mime_type") or "").lower()
-    if mime.startswith("image/"):
-        raise _Skip("image")
-    from utils.document_parser import DocumentParser
-
-    parser = DocumentParser()
-    suffix = Path(str(info.get("original_filename") or info.get("filename") or "")).suffix.lower()
-    # #20195: size and decompressed-size bounds BEFORE any reader opens the file, a timeout around the reader.
-    if code := await asyncio.to_thread(attachment_guards.refusal_code, Path(str(info.get("file_path") or "")), suffix):
-        raise _Skip(code)
+async def _extract_guarded(manager, session_id: str, info: Dict[str, Any], suffix: str) -> str:
+    """One extraction under the deadline; every way it can fail is a notice code, never the turn's failure."""
     try:
-        return await attachment_guards.within_extract_deadline(_extract(parser, manager, session_id, info, suffix))
+        return await attachment_guards.within_extract_deadline(_extract(manager, session_id, info, suffix))
+    except attachment_extract.ExtractorBusy as exc:
+        logger.warning("Attachment %s refused: every extraction slot is taken", info.get("file_id"))
+        raise _Skip("unreadable") from exc
     except RuntimeError as exc:  # the manager's words for "binary" or "not found"
         raise _Skip("unsupported" if "binary" in str(exc) else "unreadable") from exc
     except asyncio.TimeoutError as exc:
@@ -128,6 +129,30 @@ async def _read_text(manager, session_id: str, info: Dict[str, Any]) -> str:
     except Exception as exc:  # noqa: BLE001 -- an extractor failing is a notice, never the turn's failure
         logger.warning("Attachment %s unreadable: %s", info.get("file_id"), type(exc).__name__)
         raise _Skip("unreadable") from exc
+
+
+async def _read_text(manager, session_id: str, info: Dict[str, Any]) -> str:
+    if (info.get("mime_type") or "").lower().startswith("image/"):
+        raise _Skip("image")
+    path = Path(str(info.get("file_path") or ""))
+    suffix = Path(str(info.get("original_filename") or info.get("filename") or "")).suffix.lower()
+    # #20195: size and decompressed-size bounds BEFORE any reader opens the file (by content, not name).
+    try:
+        code = await asyncio.to_thread(attachment_guards.refusal_code, path)
+    except Exception as exc:  # noqa: BLE001 -- a crafted archive breaking the check is a notice
+        logger.warning(
+            "Attachment %s refused: its bounds could not be checked (%s)", info.get("file_id"), type(exc).__name__
+        )
+        raise _Skip("unreadable") from exc
+    if code:
+        raise _Skip(code)
+    # Read once per turn: later LLM iterations hit the in-process cache (never the checkpoint).
+    key = await asyncio.to_thread(attachment_extract.cache_key, session_id, str(info.get("file_id")), path)
+    if (text := attachment_extract.cached_text(key)) is not None:
+        return text
+    text = await _extract_guarded(manager, session_id, info, suffix)
+    attachment_extract.remember_text(key, text)
+    return text
 
 
 def _bound(text: str, remaining: int) -> tuple[str, bool]:
@@ -278,6 +303,29 @@ async def restore_block(manager, session_id: str, context: Dict[str, Any], model
     session = await manager.get_or_create_session(session_id)
     result = await _resolve_turn(session, context, {"prompt": prompt, "model": model})
     return result.block + prompt if result.block else prompt
+
+
+async def resume_context(graph, session_id: str, allowed: bool) -> Dict[str, Any]:
+    """The state update for a resumed turn: its checkpointed context with the attachment verdict REPLACED (#20195).
+
+    ``VERIFIED_ATTACHMENT_ACCESS_KEY`` was set by the turn that paused, for the person who sent it. Whoever
+    approves is another request with its own STRICT verdict (*allowed*); a False one strips the key, so
+    ``restore_block`` reads nothing for them. Stripping is also what an absent verdict means.
+    """
+    snapshot = await graph.aget_state({"configurable": {"thread_id": session_id}})
+    context = dict((getattr(snapshot, "values", None) or {}).get("context") or {})
+    if allowed:
+        context[VERIFIED_ATTACHMENT_ACCESS_KEY] = True
+    else:
+        context.pop(VERIFIED_ATTACHMENT_ACCESS_KEY, None)
+    return {"context": context}
+
+
+async def resume_command(graph, session_id: str, decision: Dict[str, Any], allowed: bool):
+    """The ``Command`` that resumes *session_id* with *decision* and the resumer's own attachment verdict (#20195)."""
+    from langgraph.types import Command
+
+    return Command(resume=decision, update=await resume_context(graph, session_id, allowed))
 
 
 async def attachment_prompt(manager, ctx) -> str:

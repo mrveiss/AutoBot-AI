@@ -8,6 +8,7 @@ Supports: PDF, DOC, DOCX, XLSX, PPT, PPTX, ODT, ODS, ODP, ODG
 """
 
 import asyncio
+from concurrent.futures import Executor
 from pathlib import Path
 from typing import Dict, Tuple
 
@@ -45,13 +46,17 @@ class DocumentParser:
             ".odg": "application/vnd.oasis.opendocument.graphics",
         }
 
-    async def extract_text(self, file_path: Path, mime_type: str | None = None) -> Tuple[str, Dict[str, any]]:
+    async def extract_text(
+        self, file_path: Path, mime_type: str | None = None, executor: Executor | None = None
+    ) -> Tuple[str, Dict[str, any]]:
         """
         Extract text from document
 
         Args:
             file_path: Path to document file
             mime_type: Optional MIME type (will be inferred from extension if not provided)
+            executor: Optional executor for the blocking parse (default: the loop's shared one). A caller that
+                needs a bound on concurrent parses (chat attachments, #20195) passes its own.
 
         Returns:
             Tuple of (extracted_text, metadata_dict)
@@ -71,7 +76,7 @@ class DocumentParser:
 
         # Run extraction in thread pool to avoid blocking
         text, metadata = await asyncio.get_running_loop().run_in_executor(
-            None, self._extract_text_sync, file_path, candidates
+            executor, self._extract_text_sync, file_path, candidates
         )
 
         return text, metadata

@@ -26,7 +26,7 @@ def principal_scope(current_user: dict | None) -> dict:
     return {"org_id": user.get("org_id"), "user_id": resolve_principal_id(user)}
 
 
-async def _attachments_allowed(chat_id: str, current_user: dict | None, request) -> bool:
+async def attachments_allowed(chat_id: str, current_user: dict | None, request) -> bool:
     """Whether the STRICT session posture passes: a global admin, or the recorded owner by username (#20195).
 
     The one validator (``security.session_posture.validate_strict``), not a copy: no shared-session grant, no org
@@ -46,7 +46,7 @@ async def _attachments_allowed(chat_id: str, current_user: dict | None, request)
 async def attach_scope(current_user: dict | None, chat_id: str, request, context: dict | None) -> dict:
     """``principal_scope`` plus ``attachment_access``: True only for a turn that names attachments and passes STRICT."""
     scope = principal_scope(current_user)
-    scope["attachment_access"] = bool((context or {}).get("attachments")) and await _attachments_allowed(
+    scope["attachment_access"] = bool((context or {}).get("attachments")) and await attachments_allowed(
         chat_id, current_user, request
     )
     return scope
@@ -119,3 +119,37 @@ async def _stream_direct_response(
             "request_id": request_id,
         }
         yield f"data: {json.dumps(error_data)}\n\n"
+
+
+async def _stream_graph_resume(
+    chat_workflow_manager,
+    chat_id: str,
+    decision: dict,
+    request_id: str,
+    attachment_access: bool = False,
+):
+    """Stream graph resume after command approval interrupt (#1043).
+
+    ``attachment_access`` is THIS request's STRICT session-posture verdict (#20195): it replaces the one the
+    interrupted turn checkpointed, so only an owner or admin who passes now gets file text in the resumed answer.
+    """
+    try:
+        evt = {"type": "start", "session_id": chat_id, "request_id": request_id}
+        yield f"data: {json.dumps(evt)}\n\n"
+
+        async for msg in chat_workflow_manager.resume_graph(
+            session_id=chat_id, decision=decision, attachment_access=attachment_access
+        ):
+            msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
+            yield f"data: {json.dumps(msg_data)}\n\n"
+
+        yield (f"data: {json.dumps({'type': 'end', 'request_id': request_id})}\n\n")
+
+    except Exception as e:
+        logger.error("[%s] Graph resume error: %s", request_id, e, exc_info=True)
+        evt = {
+            "type": "error",
+            "content": "An internal error occurred",
+            "request_id": request_id,
+        }
+        yield f"data: {json.dumps(evt)}\n\n"

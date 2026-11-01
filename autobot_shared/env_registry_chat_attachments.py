@@ -97,3 +97,46 @@ register_env_var(
         component="backend",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_ATTACHMENT_EXTRACT_WORKERS",
+        type=int,
+        default=2,
+        range=(1, None),
+        description=(
+            "Threads that may extract attached-file text at once (chat_workflow/limits.py, #20195). "
+            "A thread past its deadline keeps its slot until it finishes; with none free a file is "
+            "reported unreadable, never queued. Minimum 1."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_ATTACHMENT_TEXT_CACHE_SECONDS",
+        type=int,
+        default=300,
+        range=(1, None),
+        description=(
+            "Seconds extracted attachment text is kept in the backend process so one turn reads a file once "
+            "(chat_workflow/limits.py, #20195). Never stored in the graph checkpoint. Minimum 1."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_ATTACHMENT_TEXT_CACHE_MAX_ENTRIES",
+        type=int,
+        default=32,
+        range=(1, None),
+        description=(
+            "Files whose extracted text the in-process attachment cache holds at once "
+            "(chat_workflow/limits.py, #20195); the oldest goes first. Minimum 1."
+        ),
+        component="backend",
+    )
+)

@@ -51,3 +51,15 @@ ATTACHMENT_MAX_UNCOMPRESSED_BYTES: int = env_int(
 
 #: Seconds one attached file may take to yield its text (#20195); past it the file is reported unreadable.
 ATTACHMENT_EXTRACT_TIMEOUT_SECONDS: int = env_int("AUTOBOT_CHAT_ATTACHMENT_EXTRACT_TIMEOUT_SECONDS", default=30)
+
+#: Threads that may run attachment extraction at once (#20195). A thread cannot be killed, so one that outlives its
+#: deadline keeps its slot until it really finishes; with every slot taken a new file is refused with a notice
+#: instead of queued, so abandoned extractions can never pile up behind the turn.
+ATTACHMENT_EXTRACT_WORKERS: int = env_int("AUTOBOT_CHAT_ATTACHMENT_EXTRACT_WORKERS", default=2)
+
+#: Seconds an extracted file's text is kept in this process so the turn's LLM iterations read the file once (#20195).
+#: Never written to the graph checkpoint; the file is still looked up (and so access-checked) on every use.
+ATTACHMENT_TEXT_CACHE_SECONDS: int = env_int("AUTOBOT_CHAT_ATTACHMENT_TEXT_CACHE_SECONDS", default=300)
+
+#: Files whose extracted text the in-process cache holds at once (#20195); the oldest is dropped first.
+ATTACHMENT_TEXT_CACHE_MAX_ENTRIES: int = env_int("AUTOBOT_CHAT_ATTACHMENT_TEXT_CACHE_MAX_ENTRIES", default=32)
