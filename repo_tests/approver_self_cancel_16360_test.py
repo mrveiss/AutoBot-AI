@@ -139,22 +139,11 @@ def test_the_pre_fix_group_put_a_bot_run_in_the_approvers_group():
     assert not _BOT_ACTOR.search(_PRE_FIX_GROUP)
 
 
-@pytest.mark.parametrize(
-    "actor,own_group",
-    [
-        ("mrveiss", False),  # a human push: the PR's shared group, superseding as before
-        ("github-actions[bot]", True),  # the GITHUB_TOKEN fallback push (#16351)
-        ("autobot-push-app[bot]", True),  # AUTOBOT_PUSH_TOKEN as a GitHub App identity (#16363 review)
-        ("dependabot[bot]", False),  # never parked; its rebases keep superseding each other
-    ],
-)
-def test_the_group_separates_exactly_the_runs_a_parked_bot_push_caused(actor: str, own_group: bool):
-    group = _group(yaml.safe_load(AUTOFIX.read_text(encoding="utf-8")))
-    rendered, human = _render(group, actor), _render(group, "mrveiss")
-
-    assert (rendered != human) is own_group, f"{actor}: {rendered!r} vs human {human!r}"
-    if own_group:
-        assert rendered == f"{human}-regen-abc123"
+def test_auto_fix_has_no_group_left_to_cancel_its_approver():
+    """#20552: ci.yml calls it, so it declares no group; its token cannot push, so nothing parks (#15362)."""
+    doc = yaml.safe_load(AUTOFIX.read_text(encoding="utf-8"))
+    assert "concurrency" not in doc and not _cancels_its_group_on_pull_request(doc)
+    assert doc["permissions"] == {"contents": "read"}
 
 
 @pytest.mark.parametrize("path", _approver_workflows(), ids=lambda path: path.name)

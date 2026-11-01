@@ -51,7 +51,7 @@ def test_the_real_tree_passes(tmp_path: Path) -> None:
     # Presence, not absence-of-failure: a guard that scanned nothing is silent
     # in exactly the same way as a guard that scanned a clean tree.
     assert "inline path list(s) match their canonical set" in result.stdout
-    assert result.stdout.count("  OK     ") >= 6
+    assert result.stdout.count("  OK     ") >= 5
 
 
 def test_dropping_a_canonical_path_from_an_inline_copy_fails(tmp_path: Path) -> None:
@@ -64,7 +64,7 @@ def test_dropping_a_canonical_path_from_an_inline_copy_fails(tmp_path: Path) -> 
 
 
 def test_adding_to_the_canonical_set_reds_every_copy(tmp_path: Path) -> None:
-    """ "Adding a path in one place demonstrably affects all consumers": two triggers and one filter key."""
+    """ "Adding a path in one place demonstrably affects all consumers": one trigger and one filter key."""
     root = _sandbox(tmp_path)
     _edit(
         root / CANONICAL,
@@ -73,7 +73,7 @@ def test_adding_to_the_canonical_set_reds_every_copy(tmp_path: Path) -> None:
     )
     result = _run(root)
     assert result.returncode == 1, result.stdout
-    assert result.stdout.count("  FAIL   ") == 3, result.stdout
+    assert result.stdout.count("  FAIL   ") == 2, result.stdout
     assert "security_scope" in result.stdout
 
 
@@ -195,7 +195,7 @@ def test_an_undeclared_consumer_of_the_code_quality_filter_fails(tmp_path: Path)
     assert "is not declared in INLINE_CONSUMERS" in result.stdout
 
 
-@pytest.mark.parametrize("workflow", ["phase_validation.yml", "auto-fix-generated-types.yml"])
+@pytest.mark.parametrize("workflow", ["phase_validation.yml"])
 def test_every_declared_consumer_is_actually_reached(tmp_path: Path, workflow: str) -> None:
     """Each declared consumer must be one the guard really inspects.
 
