@@ -140,7 +140,7 @@ def test_both_callers_delegate_and_keep_no_query_or_guard_of_their_own():
     sources = _sources()
     callers = {
         "api/services.py": _find(sources["api/services.py"], "_upsert_service"),
-        "services/reconciler.py": _find(sources["services/reconciler.py"], "_upsert_service"),
+        "services/reconciler.py": _find(sources["services/reconciler.py"], "_apply_service"),
     }
     for rel, fn in callers.items():
         calls = _calls(fn)

@@ -23,13 +23,19 @@ def redacted(text: str) -> str:
     return redact_content(redact_text(text))
 
 
-def _bounded(text: str) -> str:
-    """Cut to the limit, keeping a transient marker past it: the retry decision reads this text."""
+def _bounded(messages: list[str]) -> str:
+    """Join within the limit: each message keeps a share, and a transient marker past it is carried.
+
+    The retry decision reads this text, so it is classified on the full text before anything is cut.
+    """
+    text = "; ".join(messages)
+    if len(text) <= GIT_FAILURE_DETAIL_CHARS:
+        return text
     marker = _TRANSIENT.search(text)
-    if marker is None or marker.end() <= GIT_FAILURE_DETAIL_CHARS:
-        return text[:GIT_FAILURE_DETAIL_CHARS]
-    found = marker.group(0)
-    return f"{text[: GIT_FAILURE_DETAIL_CHARS - len(found) - 5]} ... {found}"
+    found = f" ... {marker.group(0)}" if marker else ""
+    room = GIT_FAILURE_DETAIL_CHARS - len(found)
+    share = max((room - 2 * (len(messages) - 1)) // len(messages), 1)  # 2: the "; " between them
+    return "; ".join(message[:share] for message in messages)[:room] + found
 
 
 def failure_detail(stderr: bytes | None) -> str:
@@ -40,7 +46,7 @@ def failure_detail(stderr: bytes | None) -> str:
     """
     lines = [line.strip() for line in (stderr or b"").decode("utf-8", errors="replace").splitlines() if line.strip()]
     messages = [line for line in lines if _GIT_MESSAGE.match(line)] or lines
-    return _bounded(redacted("; ".join(messages)))
+    return _bounded([redacted(message) for message in messages])
 
 
 def is_transient(failure: str) -> bool:
