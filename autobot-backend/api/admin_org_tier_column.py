@@ -43,7 +43,7 @@ async def propose_org_tier_column_drop(
     session: AsyncSession = Depends(get_db_session),
 ) -> OrgTierColumnRequestResponse:
     """Propose the drop -- a request, not an execution. Refused when the column is already gone."""
-    requester = current_user.get("user_id")
+    requester = current_user.get("id") or current_user.get("user_id")  # as the approve route reads the decider
     if not requester:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "The proposal cannot be attributed to a verified user")
     if not await column_present(session):
