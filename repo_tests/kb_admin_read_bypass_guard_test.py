@@ -56,8 +56,10 @@ EXPLICIT_READ_APIS = frozenset(
         "autobot-backend/api/knowledge_search_aggregator.py",
     }
 )
-#: The helper that forwards its own ``is_admin`` parameter to ``check_access``.
-PASS_THROUGH = frozenset({"autobot-backend/knowledge/search_filters.py"})
+#: The helper that forwards its own ``is_admin`` parameter to ``check_access``, and the superadmin's root view
+#: (#19860, owner decision 2026-10-28: "superadmin is like a root user"), which is the one audited place that
+#: passes ``is_admin=True`` on a principal's behalf and is reached only through ``filter_for_principal``.
+PASS_THROUGH = frozenset({"autobot-backend/knowledge/search_filters.py", "autobot-backend/knowledge/root_read.py"})
 #: The canonical per-fact read entries (#18184). They derive ``is_admin`` from ``current_user``
 #: (or take it explicitly) and forward it to ``check_access``, so calling one is an admin-aware read.
 #: Accepted only while the helper's own body in :data:`HELPER_HOME` passes ``is_admin`` (asserted).
