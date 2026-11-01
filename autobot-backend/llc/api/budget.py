@@ -18,6 +18,7 @@ from autobot_shared.logging_manager import get_logger
 from llc.deps import assert_company_access, load_authorized
 from llc.exceptions import BudgetExhausted, UnpricedModel
 from llc.models.budget import LLCAgentBudget
+from llc.services.authz import NotAuthorisedError, require_company_admin_unless_platform
 from llc.services.budget import BudgetService
 from models.agent_org import AgentOrgNode
 from user_management.database import get_async_session
@@ -282,6 +283,21 @@ async def ingest_cost(
     return IngestResponse(cost=cost)
 
 
+async def _require_limit_admin(session: AsyncSession, row: LLCAgentBudget, ctx: TenantContext) -> None:
+    """Only a company owner/admin (or a platform admin) sets a limit directly; anyone else is a 403.
+
+    This route writes the limit with no approval, so open to every member it bypassed the board's
+    BUDGET_OVERRIDE gate (#8214). The approved-override path (``approval_hooks``) does not come through here.
+    """
+    try:
+        await require_company_admin_unless_platform(
+            session, uuid.UUID(str(row.company_id)), ctx.user_id, platform_admin=ctx.is_platform_admin
+        )
+    except NotAuthorisedError as exc:
+        logger.warning("Refused budget limit change for %s: %s", row.agent_id, exc)
+        raise HTTPException(status_code=403, detail="Only a company owner or admin may change a budget limit") from exc
+
+
 @router.patch("/{agent_id}/limit", response_model=BudgetResponse)
 async def update_limit(
     agent_id: str,
@@ -299,6 +315,7 @@ async def update_limit(
         id_attr="agent_id",
         not_found_detail=f"No budget row for agent {agent_id}",
     )
+    await _require_limit_admin(session, row, ctx)
 
     # GH#8462: pass Decimal directly — Pydantic already validates it as Decimal,
     # no str() conversion needed (which would silently coerce to TEXT in the ORM).

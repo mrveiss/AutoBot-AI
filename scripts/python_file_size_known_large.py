@@ -131,7 +131,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/secrets.py": 1172,  # #19476 one model_dump serialization (was 1178, #16444)
     "autobot-backend/api/security_assessment.py": 913,
     "autobot-backend/api/settings.py": 881,
-    "autobot-backend/api/system.py": 1011,
+    "autobot-backend/api/system.py": 995,
     "autobot-backend/api/terminal.py": 1294,
     "autobot-backend/api/terminal_handlers.py": 1472,
     "autobot-backend/api/validation_dashboard.py": 670,
@@ -236,7 +236,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llc/adapters/tests/test_claude_code_adapter.py": 602,
     "autobot-backend/llc/api/companies.py": 1627,
     "autobot-backend/llc/api/roles.py": 713,
-    "autobot-backend/llc/api/sprints.py": 1223,
+    "autobot-backend/llc/api/sprints.py": 1220,
     "autobot-backend/llc/api/work_items.py": 1303,  # #19582: comment wake moved into the service
     "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 994,  # #19240 (run key moved out)
     "autobot-backend/llc/services/template.py": 643,
@@ -329,7 +329,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/knowledge/doc_indexer.py": 1247,
     "autobot-backend/services/knowledge/service.py": 849,  # train 48: #18935 merged onto #18945
     "autobot-backend/services/knowledge/test_autonomous_loop.py": 708,
-    "autobot-backend/services/knowledge/test_doc_indexer.py": 1466,
+    "autobot-backend/services/knowledge/test_doc_indexer.py": 1462,
     "autobot-backend/services/knowledge/test_kb_synthesizer.py": 802,
     "autobot-backend/services/llm_cost_tracker.py": 1166,  # #16230: MODEL_PRICING table removed
     "autobot-backend/services/llm_service.py": 1199,  # #16845: _track_usage delegated to llm_usage_recording
