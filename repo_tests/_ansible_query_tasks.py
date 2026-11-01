@@ -114,3 +114,84 @@ def query_tasks(text: str) -> list[dict]:
     except yaml.YAMLError:
         return []
     return [t for doc in docs for t in iter_tasks(doc) if is_status_query(t)]
+
+
+_TASK_LISTS = ("block", "rescue", "always", "tasks", "pre_tasks", "post_tasks", "handlers", "roles")
+
+
+def _own_task_mappings(node: Any) -> Iterator[dict]:
+    """Every task-like mapping, each without the task lists nested in it, which are visited on their own."""
+    if isinstance(node, list):
+        for item in node:
+            yield from _own_task_mappings(item)
+    elif isinstance(node, dict):
+        yield {k: v for k, v in node.items() if k not in _TASK_LISTS}
+        for key in _TASK_LISTS:
+            yield from _own_task_mappings(node.get(key))
+
+
+def _strings(node: Any) -> Iterator[str]:
+    if isinstance(node, str):
+        yield node
+    elif isinstance(node, dict):
+        for value in node.values():
+            yield from _strings(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _strings(item)
+
+
+def _guards(text: str, name: str) -> bool:
+    """*text* tests whether *name* was skipped.
+
+    Under `--check` a skipped task still registers `{"skipped": true}`, so a bare `<name> is defined` is
+    TRUE and guards nothing (#19883). An attribute it lacks, like `<name>.rc`, is what reads undefined.
+    """
+    bare_skip = rf"\b{re.escape(name)}\s+is\s+(not\s+)?skipped\b"
+    attribute = rf"\b{re.escape(name)}\.(?!skipped\b)\w+\s+is\s+(not\s+)?defined\b"
+    skipped_attribute = rf"\b{re.escape(name)}\.skipped\s+is\s+not\s+defined\b"
+    return any(re.search(pattern, text) for pattern in (bare_skip, attribute, skipped_attribute))
+
+
+def _unguarded_read_in(text: str, name: str) -> bool:
+    """*text* reads an attribute of *name* with no `| default(...)` on that read and no guard in the text."""
+    if _guards(text, name):
+        return False
+    read = re.compile(rf"\b{re.escape(name)}((?:\.\w+|\[[^\]]*\])+)(\s*\|\s*default\b)?")
+    return any(match.group(2) is None for match in read.finditer(text))
+
+
+def reads_unguarded(task: dict, name: str) -> bool:
+    """*task* reads registered *name* with nothing to survive it being skipped under `--check`.
+
+    A guard in `when` covers the whole task, since the task then does not run; a guard in any other
+    field covers that string only, so it cannot hide a second read elsewhere in the task. A task
+    carrying the marker itself does not run under `--check` either.
+    """
+    if is_verify_after_install(task):
+        return False
+    when = task.get("when")
+    when_text = " and ".join(str(c) for c in when) if isinstance(when, list) else str(when or "")
+    if _guards(when_text, name):
+        return False
+    fields = {k: v for k, v in task.items() if k not in ("register", "when")}
+    return any(_unguarded_read_in(text, name) for text in [when_text, *_strings(fields)])
+
+
+def marked_verify_read_unguarded(text: str) -> list[str]:
+    """Names a marked verify-after-install registers that another task in *text* reads unguarded.
+
+    The marker is self-declared: under `--check` that query is skipped, so a reader sees no result (#19883).
+    """
+    try:
+        docs = list(yaml.safe_load_all(text))
+    except yaml.YAMLError:
+        return []
+    names = [
+        t["register"]
+        for doc in docs
+        for t in iter_tasks(doc)
+        if is_verify_after_install(t) and is_status_query(t) and "register" in t
+    ]
+    tasks = [t for doc in docs for t in _own_task_mappings(doc)]
+    return [name for name in names if any(t.get("register") != name and reads_unguarded(t, name) for t in tasks)]
