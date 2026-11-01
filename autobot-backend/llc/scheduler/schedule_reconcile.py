@@ -166,8 +166,13 @@ async def restore_lost_schedule_members(redis: Any) -> List[str]:
 
 
 async def reconcile_loop(interval: float = SCHEDULE_RECONCILE_INTERVAL_SECONDS) -> None:
-    """Reconcile every *interval* seconds until cancelled; one failed pass does not end the loop."""
+    """Reconcile every *interval* seconds until cancelled; one failed pass does not end the loop.
+
+    The first pass waits one interval: the loop starts while the schedulers are still seeding the
+    set, and a pass that beat them would log their own seeding as a restoration (#20232).
+    """
     while True:
+        await asyncio.sleep(interval)
         try:
             redis = await get_async_redis_client()
             if redis is None:
@@ -176,4 +181,3 @@ async def reconcile_loop(interval: float = SCHEDULE_RECONCILE_INTERVAL_SECONDS) 
                 await restore_lost_schedule_members(redis)
         except Exception:
             logger.exception("Schedule reconcile pass failed")
-        await asyncio.sleep(interval)
