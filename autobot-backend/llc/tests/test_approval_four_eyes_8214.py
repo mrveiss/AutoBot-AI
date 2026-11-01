@@ -21,6 +21,7 @@ from llc.tests.approval_enforcement_support_test import session_factory  # noqa:
 from llc.tests.approval_enforcement_support_test import _ORG, _board_app, _budget, _member, _post, _rows
 from models.agent_org import AgentOrgNode
 from models.approval import Approval
+from user_management.models.user import User
 
 ASKER = uuid.UUID("22222222-2222-2222-2222-222222222222")
 OTHER = uuid.UUID("33333333-3333-3333-3333-333333333333")
@@ -70,6 +71,12 @@ async def _applied(session_factory, gate) -> bool:  # noqa: ANN001
     return Decimal(str((await _rows(session_factory, LLCAgentBudget))[0].budget_limit)) == Decimal("50")
 
 
+async def _deactivated_user(session_factory, user_id) -> None:  # noqa: ANN001
+    async with session_factory() as session:
+        session.add(User(id=user_id, org_id=_ORG, email=f"{user_id}@e.test", username=str(user_id), is_active=False))
+        await session.commit()
+
+
 def _approved_rows(activity):  # noqa: ANN001, ANN202
     return [kw["after"] for event, kw in activity.rows if event == "approval.approved"]
 
@@ -107,6 +114,33 @@ async def test_the_only_admin_may_approve_their_own_request_and_it_is_flagged(
 ) -> None:
     await _budget(session_factory, "10")
     await _member(session_factory, ASKER, "admin")
+    aid = await _ask(session_factory, gate, payload, ASKER)
+    await _decide_as(session_factory, aid, ApprovalStatus.APPROVED, ASKER)
+    assert await _applied(session_factory, gate)
+    assert [a["self_approval"] for a in _approved_rows(activity)] == [True]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("gate", "payload"), _KINDS)
+async def test_an_outsider_cannot_approve_their_own_request_beside_one_real_admin(
+    session_factory, activity, gate, payload  # noqa: ANN001
+) -> None:
+    """A platform admin holds no membership, so they are not the company's single owner or admin."""
+    await _budget(session_factory, "10")
+    await _member(session_factory, OTHER, "owner")
+    aid = await _ask(session_factory, gate, payload, ASKER)
+    with pytest.raises(ApprovalHookError):
+        await _decide_as(session_factory, aid, ApprovalStatus.APPROVED, ASKER)
+    assert not await _applied(session_factory, gate)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("gate", "payload"), _KINDS)
+async def test_a_deactivated_admin_does_not_count_so_the_active_one_may_self_approve(
+    session_factory, activity, gate, payload  # noqa: ANN001
+) -> None:
+    await _two_admins(session_factory)
+    await _deactivated_user(session_factory, OTHER)
     aid = await _ask(session_factory, gate, payload, ASKER)
     await _decide_as(session_factory, aid, ApprovalStatus.APPROVED, ASKER)
     assert await _applied(session_factory, gate)
