@@ -21,6 +21,7 @@ from api.admin_event_logs import router as admin_event_logs_router  # Issue #446
 from api.admin_oauth_bundle_strip import router as admin_oauth_bundle_strip_router  # #13630
 from api.admin_orphan_repair import router as admin_orphan_repair_router  # #15779, #16927
 from api.admin_orphan_storage import router as admin_orphan_storage_router  # #17038, #17039
+from api.admin_ownerless_chat_sessions import router as admin_ownerless_chat_sessions_router  # #20030
 from api.admin_pricing import router as admin_pricing_router  # GH#6480
 from api.admin_retention_policies import router as admin_retention_policies_router  # MVA-3145, GH#8995
 from api.agent import router as agent_router
@@ -530,9 +531,15 @@ def _get_canvas_routers() -> list:
 
 
 def _get_credential_admin_routers() -> list:
-    """Admin routers that PROPOSE credential rewrites; execution needs human approval (#13630, #17038)."""
+    """Admin routers that PROPOSE rewriting stored data; execution needs human approval (#13630, #17038, #20030)."""
     return [
         (admin_oauth_bundle_strip_router, "", ["admin", "oauth-bundle-strip"], "admin_oauth_bundle_strip"),
+        (
+            admin_ownerless_chat_sessions_router,
+            "",
+            ["admin", "ownerless-chat-sessions"],
+            "admin_ownerless_chat_sessions",
+        ),
     ]
 
 
