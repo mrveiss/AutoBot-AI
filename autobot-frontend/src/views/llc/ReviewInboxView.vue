@@ -105,7 +105,7 @@ onMounted(load)
   margin-bottom: 1rem;
 }
 .inbox-title {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary, #111827);
   margin: 0;
@@ -142,7 +142,7 @@ onMounted(load)
   border-color: var(--color-accent, #c4651a);
 }
 .review-identifier {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-secondary, #6b7280);
 }

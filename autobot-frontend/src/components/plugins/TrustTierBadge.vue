@@ -48,7 +48,7 @@ const tooltipText = computed(() => {
   display: inline-block;
   padding: 0.25rem 0.5rem;
   border-radius: 0.25rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.025em;
