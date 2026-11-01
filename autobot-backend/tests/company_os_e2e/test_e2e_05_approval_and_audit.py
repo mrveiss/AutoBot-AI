@@ -27,38 +27,26 @@ def _roster_names(api) -> list[str]:
     return [a["name"] for a in api.call("GET", f"/agents?company_id={api.company_id}")]
 
 
-def test_step_8_approval_can_be_filed_and_decided(scenario):  # noqa: ANN001
+def test_step_8_hire_waits_for_an_approval(scenario):  # noqa: ANN001
     api = scenario.api
     scenario.require(2)
     with step(8):
-        approval = api.call(
-            "POST",
-            "/approvals",
-            json={
-                "company_id": api.company_id,
-                "type": "hire",
-                "requested_by_agent_id": scenario.agent("ceo")["node_id"],
-                "payload": {"agent_name": NEW_HIRE["agent_name"]},
-            },
-        )
-        assert approval["status"] == "pending", approval
+        api.call("PATCH", api.company(""), json={"require_approval_for_hires": True})  # precondition
+        filed = api.refuse("POST", api.company("/agent-hires"), json=NEW_HIRE)
+        assert filed.status_code == 202, f"a hire needing approval answered {filed.status_code}"
+        approval_id = filed.json()["approval_id"]
         pending = api.call("GET", f"/approvals?company_id={api.company_id}&type=hire")
-        assert approval["id"] in {p["id"] for p in pending}, "the filed approval is not in the pending list"
-        decided = api.call("POST", f"/approvals/{approval['id']}/decide", json={"decision": "approved"})
-        assert decided["status"] == "approved", decided
-        scenario.ids["approval"] = approval["id"]
+        assert approval_id in {p["id"] for p in pending}, "the filed approval is not in the pending list"
+        assert NEW_HIRE["agent_name"] not in _roster_names(api), "the hire is on the roster before approval"
+        scenario.ids["approval"] = approval_id
         scenario.done.add(8)
 
 
-def test_step_8_hire_happens_only_after_approval(scenario):  # noqa: ANN001
+def test_step_8_approved_hire_joins_the_roster(scenario):  # noqa: ANN001
     api = scenario.api
     scenario.require(2, 8)
     with step("8b"):
-        api.call("PATCH", api.company(""), json={"require_approval_for_hires": True})  # precondition
-        pending = api.refuse("POST", api.company("/agent-hires"), json=NEW_HIRE)
-        assert pending.status_code == 202, f"a hire needing approval answered {pending.status_code}"
-        assert NEW_HIRE["agent_name"] not in _roster_names(api), "the hire is on the roster before approval"
-        approval_id = pending.json()["approval_id"]
+        approval_id = scenario.need("approval", 8)
         decided = api.call("POST", f"/approvals/{approval_id}/decide", json={"decision": "approved"})
         assert decided["status"] == "approved", decided
         assert NEW_HIRE["agent_name"] in _roster_names(api), "the approved hire is not on the roster"

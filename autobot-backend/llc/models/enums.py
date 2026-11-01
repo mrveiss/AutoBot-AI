@@ -116,6 +116,12 @@ class LLCAgentStatus(str, Enum):
     TERMINATED = "terminated"
 
 
+#: An agent in one of these never starts a run; ``scheduler/dispatch_gate.py`` is the gate (#19240).
+UNDISPATCHABLE_AGENT_STATUSES = frozenset(
+    {LLCAgentStatus.PAUSED.value, LLCAgentStatus.INACTIVE.value, LLCAgentStatus.TERMINATED.value}
+)
+
+
 class SprintStatus(str, Enum):
     """Status of a sprint (GH#8219)."""
 

@@ -62,7 +62,7 @@ class _ActivityRecorder:
 @pytest.fixture
 def activity():  # noqa: ANN201
     recorder = _ActivityRecorder()
-    with patch("llc.services.approval_hooks._activity", recorder):
+    with patch("llc.services.approval_hooks._activity_log", recorder):
         yield recorder
 
 

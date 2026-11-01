@@ -40,6 +40,8 @@ def scope_key(principal: KbPrincipal, epoch: str) -> str:
     if principal is SYSTEM_SCOPE:
         return f"system|{epoch}"
     raw = f"{principal.user_id}|{principal.company_id or ''}|{','.join(sorted(principal.group_ids))}|{epoch}"
+    if principal.is_superadmin:  # a root read never shares a partition with a scoped one (#19860)
+        raw += "|root"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
 
 

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import uuid
 from typing import Any, Awaitable, Callable, Dict, List
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
@@ -63,7 +63,13 @@ async def factory():  # noqa: ANN201
 def dispatched():  # noqa: ANN201
     """Every ``dispatch_run`` call a commit fires, as ``(agent_cfg, run_id, context)``."""
     calls: List[tuple] = []
-    with patch.object(LLCHeartbeatScheduler, "dispatch_run", lambda self, a, r, c=None: calls.append((a, r, c))):
+    # The dispatch gate refuses when it cannot read pause flags (#19240), so it gets a Redis with none set.
+    redis = AsyncMock()
+    redis.exists = AsyncMock(return_value=0)
+    with (
+        patch.object(LLCHeartbeatScheduler, "dispatch_run", lambda self, a, r, c=None: calls.append((a, r, c))),
+        patch("llc.scheduler.dispatch_gate.get_async_redis_client", AsyncMock(return_value=redis)),
+    ):
         yield calls
 
 
