@@ -877,7 +877,7 @@ services:
       - monitoring
 
   autobot-grafana:
-    image: grafana/grafana:11.1.0
+    image: grafana/grafana:11.6.16
     container_name: autobot-grafana
     restart: unless-stopped
     ports:
