@@ -37,8 +37,8 @@ from api.chat_streaming import (
     _stream_direct_response,
     _stream_graph_resume,
     attach_scope,
-    attachments_allowed,
     principal_scope,
+    resume_attachment_verdict,
 )
 from api.schemas_chat import (
     ChatCapabilitiesData,
@@ -1591,7 +1591,7 @@ async def resume_chat_graph(
             chat_id,
             decision,
             request_id,
-            await attachments_allowed(chat_id, current_user, request),  # #20195: STRICT, re-run on resume
+            await resume_attachment_verdict(chat_workflow_manager, chat_id, current_user, request),  # #20195
         )
     )
 

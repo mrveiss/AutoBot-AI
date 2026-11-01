@@ -330,6 +330,21 @@ async def resume_context(graph, session_id: str, allowed: bool) -> Dict[str, Any
     return {"context": await attachment_floor.stamp_attachment_floor(context, session_id)}  # setting may have changed
 
 
+async def checkpoint_carries_floor(manager, session_id: str) -> bool:
+    """Whether the paused turn's checkpoint says this turn or this chat used an attachment (#20195).
+
+    Raises when the checkpoint cannot be read: the resume route refuses then, it never guesses "ordinary turn".
+    """
+    from autobot_shared.ai_lines import ATTACHMENT_CHAT_KEY
+
+    from .graph import get_compiled_graph
+
+    graph = await get_compiled_graph(manager)
+    snapshot = await graph.aget_state({"configurable": {"thread_id": session_id}})
+    context = (getattr(snapshot, "values", None) or {}).get("context") or {}
+    return context.get(ATTACHMENT_TURN_KEY) is True or context.get(ATTACHMENT_CHAT_KEY) is True
+
+
 async def resume_command(graph, session_id: str, decision: Dict[str, Any], allowed: bool):
     """The ``Command`` that resumes *session_id* with *decision* and the resumer's own attachment verdict (#20195)."""
     from langgraph.types import Command

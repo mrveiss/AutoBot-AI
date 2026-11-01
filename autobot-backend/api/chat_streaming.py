@@ -43,6 +43,26 @@ async def attachments_allowed(chat_id: str, current_user: dict | None, request) 
     return decision.get("reason") != "legacy_unowned"
 
 
+async def resume_attachment_verdict(manager, chat_id: str, current_user: dict | None, request) -> bool:
+    """This resume request's STRICT verdict; a caller failing it cannot resume an attachment turn or chat (#20195).
+
+    The refusal is a 404, as for a foreign conversation, and nothing resumes. An unreadable checkpoint is refused
+    too. An ordinary turn keeps the default ownership posture the route already applied.
+    """
+    from chat_workflow.attachment_context import checkpoint_carries_floor
+
+    if await attachments_allowed(chat_id, current_user, request):
+        return True
+    try:
+        carries = await checkpoint_carries_floor(manager, chat_id)
+    except Exception as exc:  # noqa: BLE001 -- cannot tell an ordinary turn from an attachment one: refuse
+        logger.warning("Resume refused for chat %s...: checkpoint unreadable (%s)", chat_id[:8], type(exc).__name__)
+        carries = True
+    if carries:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+    return False
+
+
 async def attach_scope(current_user: dict | None, chat_id: str, request, context: dict | None) -> dict:
     """``principal_scope`` plus ``attachment_access``: True only for a turn that names attachments and passes STRICT."""
     scope = principal_scope(current_user)

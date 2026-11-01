@@ -90,8 +90,9 @@ def test_the_resume_route_runs_the_strict_check_and_hands_the_verdict_to_the_gra
     for verdict in (False, True):
         with (
             patch("api.chat.get_chat_workflow_manager", AsyncMock(return_value=MagicMock())),
-            patch("api.chat.attachments_allowed", AsyncMock(return_value=verdict)) as strict,
+            patch("api.chat_streaming.attachments_allowed", AsyncMock(return_value=verdict)) as strict,
             patch("api.chat._stream_graph_resume", side_effect=_stream),
+            patch("chat_workflow.attachment_context.checkpoint_carries_floor", AsyncMock(return_value=False)),
         ):
             asyncio.run(
                 resume_chat_graph(
