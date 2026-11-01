@@ -77,28 +77,42 @@ def _last_recap(output: str) -> dict[str, tuple[int, int, int]]:
     return {m[1]: tuple(int(n) for n in m.groups()[1:]) for m in _RECAP_LINE_RE.finditer(tail)}
 
 
-def limit_run_failure(output: str, limit: list[str] | None) -> str | None:
-    """Why a limited run reached none of the hosts its limit names beyond localhost, or None (#19762).
+def _hosts_without_a_run(output: str, hosts: list[str] | None) -> list[str]:
+    """Those of ``hosts``, localhost aside, the LAST recap does not show with ok>=1."""
+    recap = _last_recap(output)
+    return [h for h in (hosts or ()) if h not in _LOCAL_HOSTS and recap.get(h, (0,))[0] < 1]
 
-    A multi-play playbook skips every play whose group the limit leaves out, which is normal; but
-    when ONLY localhost ran, every named host was skipped. Limit entries may be group names, so
-    this asks for any non-localhost recap host with ok>=1 rather than for each name -- with several
-    named hosts, one that ran satisfies it while another may have been skipped (the known limit).
+
+def limit_run_failure(output: str, limit: list[str] | None, must_run: list[str] | None = None) -> str | None:
+    """Why a limited run left a required host without a task run, or None (#19762, #19766).
+
+    A multi-play playbook skips every play whose group the limit leaves out, which is normal, so a
+    run proves only what the last recap shows. Every host in ``limit`` is required unless ``must_run``
+    narrows that: a caller's limit can hold rows no play targets, like self-update's co-located rows.
+    Every caller names hosts; a group name is never in a recap, so it would read as a host that did not run.
     """
-    named = [h for h in (limit or ()) if h not in _LOCAL_HOSTS]
-    if not named or any(c[0] >= 1 for h, c in _last_recap(output).items() if h not in _LOCAL_HOSTS):
-        return None
-    return f"no host named by the limit {named} ran a task (only localhost did)"
+    absent = _hosts_without_a_run(output, limit if must_run is None else must_run)
+    return f"hosts named by the limit ran no task: {absent}" if absent else None
 
 
-def with_limit_proof(result: dict, limit: list[str] | None) -> dict:
+def with_limit_proof(result: dict, limit: list[str] | None, must_run: list[str] | None = None) -> dict:
     """``result`` with an exit-0 run that ``limit_run_failure`` rejects turned into exit 1 (#19762).
 
     The reason LEADS the output as an ``ERROR!`` line: callers report the first fatal-looking line,
-    and an exit-0 run is full of debug ``msg:`` lines that would otherwise come first.
+    and an exit-0 run is full of debug ``msg:`` lines that would otherwise come first. Hosts the limit
+    names beyond ``must_run`` that did not run are reported at the end, and fail nothing.
     """
-    why = limit_run_failure(result["output"], limit) if result.get("returncode") == 0 else None
-    return {**result, "returncode": 1, "output": f"ERROR! {why}\n{result['output']}"} if why else result
+    if result.get("returncode") != 0:
+        return result
+    why = limit_run_failure(result["output"], limit, must_run)
+    if why:
+        return {**result, "returncode": 1, "output": f"ERROR! {why}\n{result['output']}"}
+    idle = _hosts_without_a_run(result["output"], limit) if must_run is not None else []
+    return (
+        {**result, "output": f"{result['output']}\nNOTE: the limit also named hosts that ran no task: {idle}"}
+        if idle
+        else result
+    )
 
 
 def ansible_run_failure(output: str, host: str | None, returncode: int | None) -> str | None:
