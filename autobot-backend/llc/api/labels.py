@@ -39,9 +39,11 @@ from ..services.label_service import (
     WorkItemNotFound,
     _label_to_dict,
 )
-from ._common import acting_user_id
+from ._common import acting_user_id, require_work_item_id
 
-router = APIRouter(prefix="/companies/{company_id}/labels", tags=["llc-labels"])
+router = APIRouter(
+    prefix="/companies/{company_id}/labels", tags=["llc-labels"], dependencies=[Depends(require_work_item_id)]
+)
 _service = service_dep(LLCLabelService)
 
 
