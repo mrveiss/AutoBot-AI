@@ -1,6 +1,6 @@
 # AutoBot TTS Worker
 
-Text-to-speech microservice using [Kani-TTS-2](https://huggingface.co/liquid-ai/kani-tts-2)
+Text-to-speech microservice using [Pocket TTS](https://huggingface.co/kyutai/pocket-tts)
 (400M params, Apache 2.0). Runs natively on the NPU VM (172.16.168.22) via systemd.
 
 ## Architecture
