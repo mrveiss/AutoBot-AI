@@ -21,9 +21,14 @@ here, merged as a union of what each side did, never a choice between them:
 import uuid
 from typing import Any
 
+from sqlalchemy import select
+
+from autobot_shared.db_session import run_after_commit
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.membership_epoch import MembershipEpochBump
 from autobot_shared.time_utils import now_utc
 from autobot_shared.user_management.models.audit import AuditResourceType, IdentityAuditAction
+from autobot_shared.user_management.models.team import Team, TeamMembership
 from autobot_shared.user_management.models.user import UserCore
 from autobot_shared.user_management.password_epoch import set_password_epoch
 from autobot_shared.user_management.user_service_base import UserServiceBase
@@ -124,6 +129,23 @@ class UserLifecycleMixin(UserServiceBase):
             logger.warning("delete_user: memory reassign failed (soft delete continues): %s", exc)
             return {}
 
+    async def _queue_membership_epoch_bumps(self, user: UserCore) -> None:
+        """Queue a post-commit membership-epoch bump for every organisation *user* holds a team in (#19670).
+
+        Called BEFORE a hard delete: the ``team_memberships`` rows cascade away with the user, so
+        the organisations are read while the rows still exist. The user's own organisation is
+        included because the cached memberships are keyed by it.
+        """
+        rows = await self.session.execute(
+            select(Team.org_id)
+            .join(TeamMembership, TeamMembership.team_id == Team.id)
+            .where(TeamMembership.user_id == user.id)
+            .distinct()
+        )
+        org_ids = {user.org_id, *rows.scalars().all()} - {None}
+        for org_id in sorted(org_ids, key=str):
+            run_after_commit(self.session, MembershipEpochBump(org_id))
+
     async def delete_user(
         self,
         user_id: uuid.UUID,
@@ -145,6 +167,7 @@ class UserLifecycleMixin(UserServiceBase):
             details["reassign_counts"] = await self._reassign_before_delete(user_id, reassign_to, hard_delete)
 
         if hard_delete:
+            await self._queue_membership_epoch_bumps(user)  # the cascade removes the rows this reads
             await self.session.delete(user)
         else:
             user.deleted_at = now_utc()
