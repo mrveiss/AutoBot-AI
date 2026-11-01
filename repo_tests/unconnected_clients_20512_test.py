@@ -91,3 +91,34 @@ def test_the_real_slm_api_key_calls_are_seen() -> None:
     # longer carries the route, and the gate fails a detected key that is not in it.
     baseline = (root / uc.BASELINE_REL).read_text(encoding="utf-8")
     assert "route:autobot-slm-backend/api/api_keys.py" not in baseline
+
+
+def test_a_call_whose_path_sits_on_the_next_line_is_seen(tmp_path: Path) -> None:
+    """``client.post<T>(`` with the path on the next line is how long calls are formatted (``rebootNode``)."""
+    body = _SLM_IMPORT + "slmApiClient.post<{ ok: boolean }>(\n  `/planted/orphan`\n)\n"
+    assert _KEY not in _fired(tmp_path, {**_PLANTED, f"{_SLM}/a.ts": body})
+
+
+_PARAM_ROUTE = {
+    "autobot-backend/api/planted_param.py": (
+        'from fastapi import APIRouter\nrouter = APIRouter(prefix="/planted")\n\n\n'
+        '@router.get("/{provider}/x")\nasync def h(provider: str):\n    return {}\n'
+    ),
+    "scripts/wire.py": "import api.planted_param\n",
+}
+_PARAM_KEY = "route:autobot-backend/api/planted_param.py:GET /{provider}/x"
+
+
+@pytest.mark.parametrize(
+    ("label", "caller", "connected"),
+    [
+        ("an unrelated /y/x call", {f"{_MAIN}/a.ts": "api.get('/api/y/x')\n"}, False),
+        ("an unrelated wildcard caller", {f"{_MAIN}/a.ts": "api.get(`/api/devices/${id}`)\n"}, False),
+        ("a caller naming the router's prefix", {f"{_MAIN}/a.ts": "api.get('/api/planted/acme/x')\n"}, True),
+    ],
+)
+def test_a_route_starting_with_a_parameter_is_reached_only_through_its_mounted_path(
+    tmp_path: Path, label: str, caller: dict[str, str], connected: bool
+) -> None:
+    """``/{provider}/x`` unmounted matches every two-segment call; only ``/planted/<value>/x`` is its caller (#20512)."""
+    assert (_PARAM_KEY not in _fired(tmp_path, {**_PARAM_ROUTE, **caller})) is connected, label

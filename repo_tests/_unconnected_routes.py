@@ -31,6 +31,8 @@ WHAT THIS CANNOT SEE
   (it errs toward "connected", never toward a false failure).
 * **A caller that builds its path at runtime** (``f"/api/{resource}/{id}"`` from a table) shows
   as a wildcard or not at all. A wildcard segment matches any single segment.
+* **A route whose mounted path starts with a parameter** (a router mounted at the root, ``/{id}/x``): no
+  caller can be told from an unrelated one, so it is reported unconnected until the call names it.
 * **A "bare base" call** (``'/api/x'`` plus a concatenated suffix) does NOT count the routes
   beneath it as called. ``audit_api_wiring.matches`` does, as its own comment concedes, and that
   rule hid ``POST /chats/{chat_id}/resume`` (#20401) behind the unrelated ``/api/chats`` list
@@ -189,9 +191,25 @@ def _toggle_api(cand: str) -> str:
     return "/api" + cand
 
 
+def _leads_with_parameter(cand: str) -> bool:
+    """Whether *cand*'s first segment (past a leading ``/api``) is a path parameter, as ``/{p}/x`` is.
+
+    The unmounted form of a route declared ``/{provider}/x`` is ``/{p}/x``; its wildcard first segment
+    matches ``/api/devices/x`` or any other two-segment call, so a route whose only caller is that
+    coincidence read as connected (#20512). Only the mounted forms, which name the router's own prefix,
+    can be reached; a router mounted at the root with a leading parameter reports unconnected.
+    """
+    segs = cand.strip("/").split("/")
+    if segs[0] == "api":
+        segs = segs[1:]
+    return bool(segs) and segs[0] == "{p}"
+
+
 def _reached(mod: ModuleType, rel: str, cands: tuple[str, ...], index: _CallerIndex) -> bool:
     """Whether a caller outside *rel* matches a candidate path (the script's segment rule, no bare-base leniency)."""
     for cand in cands:
+        if _leads_with_parameter(cand):
+            continue
         for v in {cand, _toggle_api(cand)}:
             if any(index.callers[c] - {rel} for c in index.near(v.strip("/").split("/")) if mod._segments_match(c, v)):
                 return True

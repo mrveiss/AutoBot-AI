@@ -145,6 +145,18 @@ queue:autobot-infrastructure/shared/scripts/utilities/npu_worker.py:npu_tasks_co
 queue:autobot-infrastructure/shared/scripts/utilities/npu_worker.py:npu_tasks_failed	#10603
 queue:autobot-infrastructure/shared/scripts/utilities/npu_worker.py:npu_tasks_processing	#10603
 queue:autobot-slm-backend/monitoring/business_intelligence_dashboard.py:autobot:bi_dashboard:history	#10603
+table:deployment_logs	#10603
+table:file_cleanup_queue	#20234
+table:host_health	#10603
+table:hosts	#10603
+table:migrations_applied	#10603
+table:service_dependencies	#10603
+table:ssh_keys	#10603
+table:system_events	#10603
+table:validation_results	#10603
+declared:get_api_key_user=autobot_shared/user_management/models/api_key.py	#10603
+declared:require_key_permission=autobot-slm-backend/services/api_key_routes.py	#10603
+declared:RoleCredentialService=autobot-backend/llc/api/roles.py,autobot-backend/llc/models/role_credential.py,autobot-backend/migrations/versions/20260820_080_llc_role_tools_and_credentials.py	#10603
 route:autobot-backend/api/a2a.py:DELETE /tasks/{task_id}	#10603
 route:autobot-backend/api/a2a.py:GET /agent-card/signed	#10603
 route:autobot-backend/api/a2a.py:GET /tasks/{task_id}	#10603
@@ -154,6 +166,8 @@ route:autobot-backend/api/a2a.py:POST /capabilities/verify	#10603
 route:autobot-backend/api/a2a_trust.py:GET /trust/{peer_id:path}	#10603
 route:autobot-backend/api/a2a_trust.py:GET /trust/{peer_id:path}/audit	#10603
 route:autobot-backend/api/a2a_trust.py:POST /trust/grant	#10603
+route:autobot-backend/api/adapters.py:GET /{adapter_type}/models	#10603
+route:autobot-backend/api/adapters.py:GET /{adapter_type}/test	#10603
 route:autobot-backend/api/adapters.py:POST /ollama/pull	#10603
 route:autobot-backend/api/admin_oauth_bundle_strip.py:POST /oauth-bundle-strip/requests	#10603
 route:autobot-backend/api/admin_org_tier_column.py:POST /org-tier-column/requests	#10603
@@ -161,6 +175,7 @@ route:autobot-backend/api/admin_orphan_storage.py:POST /orphan-storage/deletion-
 route:autobot-backend/api/admin_retention_policies.py:DELETE /retention-policies/{policy_type}	#10603
 route:autobot-backend/api/admin_retention_policies.py:GET /retention-policies/{policy_type}	#10603
 route:autobot-backend/api/agent_config.py:GET /status/overview	#10603
+route:autobot-backend/api/agent_diary.py:GET /{agent_name}/search	#10603
 route:autobot-backend/api/agent_ledger.py:GET /ledger/activity	#10603
 route:autobot-backend/api/agent_ledger.py:GET /ledger/claims	#10603
 route:autobot-backend/api/agent_ledger.py:GET /ledger/conflicts	#10603
@@ -169,9 +184,13 @@ route:autobot-backend/api/agent_ledger.py:GET /ledger/peer-messages	#10603
 route:autobot-backend/api/agent_ledger.py:GET /ledger/presence	#10603
 route:autobot-backend/api/agent_ledger.py:GET /ledger/waitlists	#10603
 route:autobot-backend/api/agent_ledger.py:POST /ledger/claims/yield-request	#10603
+route:autobot-backend/api/agent_org.py:GET /{agent_id}/chain	#10603
+route:autobot-backend/api/agent_org.py:GET /{agent_id}/delegations	#10603
 route:autobot-backend/api/agent_org.py:GET /{agent_id}/org/role-defaults	#10603
 route:autobot-backend/api/agent_org.py:PATCH /delegations/{delegation_id}/status	#10603
+route:autobot-backend/api/agent_org.py:PATCH /{agent_id}/org	#10603
 route:autobot-backend/api/agent_org.py:POST /delegations/{delegation_id}/escalate	#10603
+route:autobot-backend/api/agent_org.py:PUT /{agent_id}/org	#10603
 route:autobot-backend/api/agent_terminal.py:POST /sessions/{session_id}/interrupt	#10603
 route:autobot-backend/api/agent_terminal.py:POST /sessions/{session_id}/resume	#10603
 route:autobot-backend/api/agent_terminal.py:POST /tasks/{task_id}/answer	#10603
@@ -179,6 +198,12 @@ route:autobot-backend/api/agent_terminal_host_selection.py:GET /host-selection/{
 route:autobot-backend/api/agent_terminal_host_selection.py:POST /host-selection/request	#10603
 route:autobot-backend/api/agent_terminal_host_selection.py:POST /host-selection/{request_id}/cancel	#10603
 route:autobot-backend/api/agent_terminal_host_selection.py:POST /host-selection/{request_id}/select	#10603
+route:autobot-backend/api/agents_self_improvement.py:GET /{agent_id}/knowledge-export	#10603
+route:autobot-backend/api/agents_self_improvement.py:GET /{agent_id}/learned-strategies	#10603
+route:autobot-backend/api/agents_self_improvement.py:GET /{agent_id}/outcomes	#10603
+route:autobot-backend/api/agents_self_improvement.py:POST /{agent_id}/knowledge-import	#10603
+route:autobot-backend/api/agents_self_improvement.py:POST /{agent_id}/reset-learning	#10603
+route:autobot-backend/api/agents_self_improvement.py:POST /{agent_id}/rollback-strategy	#10603
 route:autobot-backend/api/ai_stack_integration.py:GET /knowledge/system	#10603
 route:autobot-backend/api/ai_stack_integration.py:POST /classification/classify	#10603
 route:autobot-backend/api/ai_stack_integration.py:POST /development/analyze-speedup	#10603
@@ -204,6 +229,7 @@ route:autobot-backend/api/analytics.py:POST /dashboard/overview/analyze	#10603
 route:autobot-backend/api/analytics.py:POST /events/track	#10603
 route:autobot-backend/api/analytics.py:WEBSOCKET /ws/analytics/live	#10603
 route:autobot-backend/api/analytics.py:WEBSOCKET /ws/realtime	#10603
+route:autobot-backend/api/analytics_agents.py:GET /{agent_id}/history	#10603
 route:autobot-backend/api/analytics_agents.py:POST /tasks/complete	#10603
 route:autobot-backend/api/analytics_agents.py:POST /tasks/start	#10603
 route:autobot-backend/api/analytics_behavior.py:GET /events/recent	#10603
@@ -247,7 +273,6 @@ route:autobot-backend/api/approval_gates.py:POST /approval-gates/{approval_id}/r
 route:autobot-backend/api/approval_gates.py:POST /approval-gates/{approval_id}/request-revision	#10603
 route:autobot-backend/api/approval_gates.py:POST /approval-gates/{approval_id}/resubmit	#10603
 route:autobot-backend/api/approval_gates.py:POST /approval-gates/{approval_id}/tasks	#10603
-route:autobot-backend/api/auth.py:GET /roles/{role}/permissions	#10603
 route:autobot-backend/api/autobot_mcp_router.py:POST /mcp/tool	#10603
 route:autobot-backend/api/bi_export_endpoints.py:DELETE /reports/saved/{report_id}	#10603
 route:autobot-backend/api/bi_export_endpoints.py:GET /reports/saved	#10603
@@ -279,6 +304,9 @@ route:autobot-backend/api/cache_management.py:GET /topic-cache/stats	#10603
 route:autobot-backend/api/cache_management.py:PUT /context-sufficiency/config	#10603
 route:autobot-backend/api/cache_management.py:PUT /semantic-cache/config	#10603
 route:autobot-backend/api/cache_management.py:PUT /topic-cache/config	#10603
+route:autobot-backend/api/canvas.py:PATCH /{canvas_id}/cells/{cell_id}	#10603
+route:autobot-backend/api/canvas.py:POST /{canvas_id}/cells	#10603
+route:autobot-backend/api/canvas.py:POST /{canvas_id}/export	#10603
 route:autobot-backend/api/chat.py:DELETE /chat/sessions/{session_id}/approval-categories	#10603
 route:autobot-backend/api/chat.py:DELETE /chat/sessions/{session_id}/role	#10603
 route:autobot-backend/api/chat.py:DELETE /chat/sessions/{session_id}/work-item	#10603
@@ -372,7 +400,6 @@ route:autobot-backend/api/codebase_analytics/endpoints/sources.py:POST /sources/
 route:autobot-backend/api/codebase_analytics/endpoints/sources.py:POST /sources/{source_id}/sync	#10603
 route:autobot-backend/api/codebase_analytics/endpoints/sources.py:PUT /sources/{source_id}	#10603
 route:autobot-backend/api/codebase_analytics/endpoints/stats.py:POST /embedding-stats/reset	#10603
-route:autobot-backend/api/config_revisions.py:POST /config-revisions/{entity_type}/{entity_id}/{revision_id}/rollback	#10603
 route:autobot-backend/api/conversation_export.py:GET /conversations/export-all	#10603
 route:autobot-backend/api/conversation_export.py:GET /conversations/{session_id}/export	#10603
 route:autobot-backend/api/conversation_export.py:POST /conversations/import	#10603
@@ -395,6 +422,7 @@ route:autobot-backend/api/database_mcp.py:POST /mcp/execute	#10603
 route:autobot-backend/api/database_mcp.py:POST /mcp/list_tables	#10603
 route:autobot-backend/api/database_mcp.py:POST /mcp/query	#10603
 route:autobot-backend/api/database_mcp.py:POST /mcp/statistics	#10603
+route:autobot-backend/api/dev_speedup_templates.py:GET /{{resource}}	#10603
 route:autobot-backend/api/documents.py:DELETE /documents/{doc_id}	#10603
 route:autobot-backend/api/documents.py:GET /documents/{doc_id}	#10603
 route:autobot-backend/api/documents.py:POST /documents/{doc_id}/refine	#10603
@@ -410,6 +438,12 @@ route:autobot-backend/api/enterprise_features.py:POST /features/bulk-enable	#106
 route:autobot-backend/api/enterprise_features.py:POST /features/enable	#10603
 route:autobot-backend/api/enterprise_features.py:POST /features/enable-all	#10603
 route:autobot-backend/api/enterprise_features.py:POST /performance/optimize	#10603
+route:autobot-backend/api/envelope_secrets.py:DELETE /{secret_id}/dependencies/{dependent_kind}/{dependent_id}	#10603
+route:autobot-backend/api/envelope_secrets.py:GET /{secret_id}/access	#10603
+route:autobot-backend/api/envelope_secrets.py:GET /{secret_id}/dependencies	#10603
+route:autobot-backend/api/envelope_secrets.py:POST /{secret_id}/dependencies	#10603
+route:autobot-backend/api/envelope_secrets.py:POST /{secret_id}/rewrap	#10603
+route:autobot-backend/api/envelope_secrets.py:POST /{secret_id}/share	#10603
 route:autobot-backend/api/error_resilience.py:POST /circuit-breakers/{service_name}/reset	#10603
 route:autobot-backend/api/error_resilience.py:POST /error-budgets/{component}/reset	#10603
 route:autobot-backend/api/execution_snapshots.py:DELETE /execution/snapshots/{snapshot_id}	#10603
@@ -444,6 +478,19 @@ route:autobot-backend/api/git_mcp.py:POST /mcp/resources/unsubscribe	#10603
 route:autobot-backend/api/git_mcp.py:POST /mcp/show	#10603
 route:autobot-backend/api/git_mcp.py:POST /mcp/status	#10603
 route:autobot-backend/api/graph_rag.py:GET /collections/{collection_id}/graph	#10603
+route:autobot-backend/api/heartbeat.py:GET /{agent_id}/config	#10603
+route:autobot-backend/api/heartbeat.py:GET /{agent_id}/runs	#10603
+route:autobot-backend/api/heartbeat.py:GET /{agent_id}/runs/{run_id}	#10603
+route:autobot-backend/api/heartbeat.py:GET /{agent_id}/wakeup	#10603
+route:autobot-backend/api/heartbeat.py:PATCH /{agent_id}/session	#10603
+route:autobot-backend/api/heartbeat.py:POST /{agent_id}/error	#10603
+route:autobot-backend/api/heartbeat.py:POST /{agent_id}/pause	#10603
+route:autobot-backend/api/heartbeat.py:POST /{agent_id}/recover	#10603
+route:autobot-backend/api/heartbeat.py:POST /{agent_id}/resume	#10603
+route:autobot-backend/api/heartbeat.py:POST /{agent_id}/terminate	#10603
+route:autobot-backend/api/heartbeat.py:POST /{agent_id}/trigger	#10603
+route:autobot-backend/api/heartbeat.py:POST /{agent_id}/wakeup	#10603
+route:autobot-backend/api/heartbeat.py:PUT /{agent_id}/config	#10603
 route:autobot-backend/api/http_client_mcp.py:GET /mcp/status	#10603
 route:autobot-backend/api/http_client_mcp.py:POST /mcp/delete	#10603
 route:autobot-backend/api/http_client_mcp.py:POST /mcp/get	#10603
@@ -451,7 +498,47 @@ route:autobot-backend/api/http_client_mcp.py:POST /mcp/head	#10603
 route:autobot-backend/api/http_client_mcp.py:POST /mcp/patch	#10603
 route:autobot-backend/api/http_client_mcp.py:POST /mcp/post	#10603
 route:autobot-backend/api/http_client_mcp.py:POST /mcp/put	#10603
+route:autobot-backend/api/integration_cicd.py:GET /{provider}/pipelines	#10603
+route:autobot-backend/api/integration_cicd.py:GET /{provider}/pipelines/{pipeline_id}/logs	#10603
+route:autobot-backend/api/integration_cicd.py:GET /{provider}/pipelines/{pipeline_id}/status	#10603
+route:autobot-backend/api/integration_cicd.py:POST /{provider}/pipelines/{pipeline_id}/trigger	#10603
+route:autobot-backend/api/integration_cloud.py:GET /{provider}/account	#10603
+route:autobot-backend/api/integration_cloud.py:GET /{provider}/resources	#10603
+route:autobot-backend/api/integration_cloud.py:GET /{provider}/storage	#10603
+route:autobot-backend/api/integration_communication.py:GET /{provider}/channels	#10603
+route:autobot-backend/api/integration_communication.py:GET /{provider}/channels/{channel_id}/history	#10603
+route:autobot-backend/api/integration_communication.py:POST /{provider}/messages	#10603
+route:autobot-backend/api/integration_communication.py:POST /{provider}/webhooks	#10603
 route:autobot-backend/api/integration_database.py:POST /mongodb/query-collection	#10603
+route:autobot-backend/api/integration_database.py:POST /{provider}/databases	#10603
+route:autobot-backend/api/integration_database.py:POST /{provider}/query	#10603
+route:autobot-backend/api/integration_database.py:POST /{provider}/tables	#10603
+route:autobot-backend/api/integration_github.py:GET /{owner}/{repo}	#10603
+route:autobot-backend/api/integration_github.py:GET /{owner}/{repo}/commits	#10603
+route:autobot-backend/api/integration_github.py:GET /{owner}/{repo}/commits/{ref}	#10603
+route:autobot-backend/api/integration_github.py:GET /{owner}/{repo}/contents/{path:path}	#10603
+route:autobot-backend/api/integration_github.py:GET /{owner}/{repo}/issues	#10603
+route:autobot-backend/api/integration_github.py:GET /{owner}/{repo}/issues/{issue_number}	#10603
+route:autobot-backend/api/integration_github.py:GET /{owner}/{repo}/pull-requests	#10603
+route:autobot-backend/api/integration_github.py:GET /{owner}/{repo}/pull-requests/{pull_number}	#10603
+route:autobot-backend/api/integration_github.py:GET /{owner}/{repo}/pull-requests/{pull_number}/comments	#10603
+route:autobot-backend/api/integration_github.py:GET /{owner}/{repo}/pull-requests/{pull_number}/diff	#10603
+route:autobot-backend/api/integration_github.py:GET /{owner}/{repo}/tree/{tree_sha}	#10603
+route:autobot-backend/api/integration_github.py:POST /{owner}/{repo}/pull-requests/{pull_number}/comments	#10603
+route:autobot-backend/api/integration_github.py:POST /{owner}/{repo}/pull-requests/{pull_number}/reviews	#10603
+route:autobot-backend/api/integration_monitoring.py:GET /{provider}/alerts	#10603
+route:autobot-backend/api/integration_monitoring.py:GET /{provider}/hosts	#10603
+route:autobot-backend/api/integration_monitoring.py:POST /{provider}/events	#10603
+route:autobot-backend/api/integration_monitoring.py:POST /{provider}/metrics	#10603
+route:autobot-backend/api/integration_project_management.py:GET /{provider}/issues	#10603
+route:autobot-backend/api/integration_project_management.py:GET /{provider}/projects	#10603
+route:autobot-backend/api/integration_project_management.py:GET /{provider}/search	#10603
+route:autobot-backend/api/integration_project_management.py:PATCH /{provider}/issues/{issue_id}	#10603
+route:autobot-backend/api/integration_project_management.py:POST /{provider}/issues	#10603
+route:autobot-backend/api/integration_version_control.py:GET /{provider}/repositories	#10603
+route:autobot-backend/api/integration_version_control.py:GET /{provider}/repositories/{repo_id}/branches	#10603
+route:autobot-backend/api/integration_version_control.py:GET /{provider}/repositories/{repo_id}/commits	#10603
+route:autobot-backend/api/integration_version_control.py:GET /{provider}/repositories/{repo_id}/pull-requests	#10603
 route:autobot-backend/api/knowledge.py:GET /docs/stats	#10603
 route:autobot-backend/api/knowledge.py:GET /docs/watcher/status	#10603
 route:autobot-backend/api/knowledge.py:GET /import/statistics	#10603
@@ -474,9 +561,6 @@ route:autobot-backend/api/knowledge_chroma.py:GET /collections/{name}	#10603
 route:autobot-backend/api/knowledge_claude_memory.py:GET /import_claude_memory/status/{task_id}	#10603
 route:autobot-backend/api/knowledge_cognition.py:GET /cognition-store/status	#10603
 route:autobot-backend/api/knowledge_cognition.py:POST /cognition-store/seed	#10603
-route:autobot-backend/api/knowledge_collaboration.py:DELETE /facts/{fact_id}/share/{entity_id}	#10603
-route:autobot-backend/api/knowledge_collaboration.py:GET /facts/{fact_id}/access	#10603
-route:autobot-backend/api/knowledge_collaboration.py:PUT /facts/{fact_id}/permissions	#10603
 route:autobot-backend/api/knowledge_collections.py:DELETE /collections/{collection_id}	#10603
 route:autobot-backend/api/knowledge_collections.py:DELETE /collections/{collection_id}/facts	#10603
 route:autobot-backend/api/knowledge_collections.py:GET /collections/{collection_id}	#10603
@@ -598,6 +682,7 @@ route:autobot-backend/api/long_running_operations.py:POST /knowledge-base/popula
 route:autobot-backend/api/long_running_operations.py:POST /migrate/existing	#10603
 route:autobot-backend/api/long_running_operations.py:POST /security/scan	#10603
 route:autobot-backend/api/long_running_operations.py:POST /testing/comprehensive	#10603
+route:autobot-backend/api/long_running_operations.py:WEBSOCKET /{operation_id}/progress	#10603
 route:autobot-backend/api/manual_mcp.py:POST /mcp/get_doc_index	#10603
 route:autobot-backend/api/manual_mcp.py:POST /mcp/lookup_man_page	#10603
 route:autobot-backend/api/manual_mcp.py:POST /mcp/search_man_pages	#10603
@@ -610,6 +695,7 @@ route:autobot-backend/api/mcp_token_admin.py:DELETE /tokens/{token_id}	#10603
 route:autobot-backend/api/memory.py:PATCH /entities/{entity_id}/invalidate	#10603
 route:autobot-backend/api/memory.py:PATCH /entities/{entity_id}/observations	#10603
 route:autobot-backend/api/memory.py:PATCH /relations/invalidate	#10603
+route:autobot-backend/api/mobile_devices.py:POST /{device_id}/revoke	#10603
 route:autobot-backend/api/monitoring.py:GET /alerts/alertmanager	#10603
 route:autobot-backend/api/monitoring.py:GET /claude-api/status	#10603
 route:autobot-backend/api/monitoring.py:GET /export/metrics	#10603
@@ -632,7 +718,6 @@ route:autobot-backend/api/personality.py:POST /profiles/{pid}/activate	#10603
 route:autobot-backend/api/personality.py:POST /profiles/{pid}/reset	#10603
 route:autobot-backend/api/phases.py:POST /validation/run	#10603
 route:autobot-backend/api/playwright.py:POST /automation/quick-test	#10603
-route:autobot-backend/api/process_management.py:GET /agents/{agent_id}/processes	#10603
 route:autobot-backend/api/process_management.py:WEBSOCKET /processes/{process_id}/stream	#10603
 route:autobot-backend/api/project_state.py:POST /phase/{phase_id}/activate	#10603
 route:autobot-backend/api/prompts.py:POST /cache/clear	#10603
@@ -650,6 +735,9 @@ route:autobot-backend/api/scheduler.py:GET /templates/schedule/{template_id}	#10
 route:autobot-backend/api/scheduler.py:GET /workflows/{workflow_id}	#10603
 route:autobot-backend/api/scheduler.py:POST /queue/control	#10603
 route:autobot-backend/api/scheduler.py:PUT /workflows/{workflow_id}/reschedule	#10603
+route:autobot-backend/api/scrape_templates.py:DELETE /{template_id}	#10603
+route:autobot-backend/api/scrape_templates.py:GET /{template_id}	#10603
+route:autobot-backend/api/scrape_templates.py:POST /{template_id}/run	#10603
 route:autobot-backend/api/search.py:GET /hardware/status	#10603
 route:autobot-backend/api/search.py:GET /performance/analytics	#10603
 route:autobot-backend/api/search.py:GET /test/connectivity	#10603
@@ -676,14 +764,22 @@ route:autobot-backend/api/settings.py:GET /updates/status	#10603
 route:autobot-backend/api/settings.py:GET /updates/status/{task_id}	#10603
 route:autobot-backend/api/settings.py:GET /updates/worker-status	#10603
 route:autobot-backend/api/settings.py:POST /updates/run	#10603
+route:autobot-backend/api/skills.py:GET /{name}/actions	#10603
+route:autobot-backend/api/skills.py:GET /{name}/health	#10603
+route:autobot-backend/api/skills.py:GET /{name}/metrics	#10603
+route:autobot-backend/api/skills.py:GET /{name}/suggestions	#10603
 route:autobot-backend/api/skills.py:POST /bundles/{bundle_id}/enable	#10603
 route:autobot-backend/api/skills.py:POST /catalog/{name}/install	#10603
-route:autobot-backend/api/skills_governance.py:POST /approvals/{approval_id}	#10603
-route:autobot-backend/api/skills_governance.py:POST /drafts/{skill_id}/promote	#10603
-route:autobot-backend/api/skills_governance.py:POST /drafts/{skill_id}/test	#10603
+route:autobot-backend/api/skills.py:POST /{name}/execute	#10603
+route:autobot-backend/api/skills.py:POST /{name}/feedback	#10603
 route:autobot-backend/api/skills_hub.py:DELETE /install/{skill_id}	#10603
+route:autobot-backend/api/skills_repos.py:GET /{repo_id}/browse	#10603
 route:autobot-backend/api/slm/deployments.py:GET 	#10603
+route:autobot-backend/api/slm/deployments.py:GET /{deployment_id}	#10603
 route:autobot-backend/api/slm/deployments.py:POST 	#10603
+route:autobot-backend/api/slm/deployments.py:POST /{deployment_id}/cancel	#10603
+route:autobot-backend/api/slm/deployments.py:POST /{deployment_id}/execute	#10603
+route:autobot-backend/api/slm/deployments.py:POST /{deployment_id}/rollback	#10603
 route:autobot-backend/api/state_tracking.py:GET /phase-history/{phase_name}	#10603
 route:autobot-backend/api/state_tracking.py:GET /trends/{metric}	#10603
 route:autobot-backend/api/structured_thinking_mcp.py:GET /sessions/{session_id}	#10603
@@ -713,11 +809,14 @@ route:autobot-backend/api/task_workspace_ws.py:POST /tasks/{task_id}/snapshot	#1
 route:autobot-backend/api/task_workspace_ws.py:WEBSOCKET /tasks/{task_id}/shell	#10603
 route:autobot-backend/api/telegram_bot.py:POST /telegram/webhook	#10603
 route:autobot-backend/api/terminal.py:WEBSOCKET /ws/ssh/{host_id}	#10603
+route:autobot-backend/api/themes.py:GET /{theme_id}/assets/{rel:path}	#10603
+route:autobot-backend/api/themes.py:GET /{theme_id}/theme.css	#10603
 route:autobot-backend/api/transcripts.py:POST /transcripts/{transcript_id}/kb-push	#10603
 route:autobot-backend/api/transcripts.py:WEBSOCKET /transcripts/{transcript_id}/analyze	#10603
 route:autobot-backend/api/triggers.py:DELETE /triggers/{trigger_id}	#10603
 route:autobot-backend/api/usage.py:GET /by-user/{user_id}	#10603
 route:autobot-backend/api/user_management/organizations.py:GET /slug/{slug}	#10603
+route:autobot-backend/api/user_provider_credentials.py:DELETE /{provider_name}	#10603
 route:autobot-backend/api/user_provider_credentials.py:GET 	#10603
 route:autobot-backend/api/user_provider_credentials.py:POST 	#10603
 route:autobot-backend/api/validation_dashboard.py:GET /dashboard/file	#10603
@@ -744,8 +843,12 @@ route:autobot-backend/api/vnc_mcp.py:POST /mcp/desktop_special_key	#10603
 route:autobot-backend/api/vnc_mcp.py:POST /mcp/get_browser_vnc_context	#10603
 route:autobot-backend/api/vnc_mcp.py:POST /mcp/observe_vnc_activity	#10603
 route:autobot-backend/api/vnc_mcp.py:POST /observations/{vnc_type}	#10603
+route:autobot-backend/api/vnc_proxy.py:GET /{vnc_type}/control/status	#10603
+route:autobot-backend/api/vnc_proxy.py:GET /{vnc_type}/status	#10603
+route:autobot-backend/api/vnc_proxy.py:GET /{vnc_type}/vnc.html	#10603
 route:autobot-backend/api/vnc_proxy.py:POST /{vnc_type}/control/acquire	#10603
 route:autobot-backend/api/vnc_proxy.py:POST /{vnc_type}/control/release	#10603
+route:autobot-backend/api/vnc_proxy.py:WEBSOCKET /{vnc_type}/websockify	#10603
 route:autobot-backend/api/voice_bundle_user.py:GET /users/{user_id}/bundle	#10603
 route:autobot-backend/api/voice_bundle_user.py:PUT /users/{user_id}/bundle	#10603
 route:autobot-backend/api/wake_word.py:DELETE /words/{wake_word}	#10603
@@ -765,6 +868,8 @@ route:autobot-backend/api/workflow_permissions.py:DELETE /workflows/{workflow_id
 route:autobot-backend/api/workflow_permissions.py:GET /workflows/{workflow_id}/audit	#10603
 route:autobot-backend/api/workflow_permissions.py:GET /workflows/{workflow_id}/permissions	#10603
 route:autobot-backend/api/workflow_permissions.py:PUT /workflows/{workflow_id}/permissions	#10603
+route:autobot-backend/api/workflow_secrets.py:DELETE /{name}	#10603
+route:autobot-backend/api/workflow_secrets.py:PUT /{name}	#10603
 route:autobot-backend/auth_rbac.py:GET /admin/users	#10603
 route:autobot-backend/auth_rbac.py:POST /analytics/export	#10603
 route:autobot-backend/code_analysis/src/api_consistency_analyzer.py:GET /admin/users	#10603
@@ -786,8 +891,10 @@ route:autobot-backend/llc/api/controls.py:POST /companies/{company_id}/controls/
 route:autobot-backend/llc/api/decisions.py:GET /companies/{company_id}/decisions/search	#10603
 route:autobot-backend/llc/api/labels.py:DELETE /work-items/{work_item_id}/labels/{label_id}	#10603
 route:autobot-backend/llc/api/labels.py:POST /work-items/{work_item_id}/labels	#10603
+route:autobot-backend/llc/api/reporting_lines.py:GET /{company_id}/{subject_type}/{subject_id}/reports	#10603
 route:autobot-backend/llc/api/review_gate_policies.py:DELETE /companies/{company_id}/review-gate-policies/{policy_id}	#10603
 route:autobot-backend/llc/api/review_gate_policies.py:PATCH /companies/{company_id}/review-gate-policies/{policy_id}	#10603
+route:autobot-backend/llc/api/runs.py:POST /{agent_id}/runs/{run_id}/cancel	#10603
 route:autobot-backend/llc/api/sprints.py:DELETE /portfolios/{portfolio_id}	#10603
 route:autobot-backend/llc/api/sprints.py:DELETE /programs/{program_id}	#10603
 route:autobot-backend/llc/api/sprints.py:GET /portfolios/{portfolio_id}	#10603
@@ -799,6 +906,8 @@ route:autobot-backend/llc/api/sprints.py:GET /sprints/{sprint_id}/summary	#10603
 route:autobot-backend/llc/api/sprints.py:PATCH /portfolios/{portfolio_id}	#10603
 route:autobot-backend/llc/api/sprints.py:PATCH /programs/{program_id}	#10603
 route:autobot-backend/llc/api/sprints.py:POST /sprints/{sprint_id}/close	#10603
+route:autobot-backend/llc/api/work_items.py:GET /{work_item_id}/attachments/{attachment_id}/download	#10603
+route:autobot-backend/llc/api/work_items.py:GET /{work_item_id}/attachments/{attachment_id}/text	#10603
 route:autobot-backend/llc/deps.py:GET /	#10603
 route:autobot-backend/llc/deps.py:POST /	#10603
 route:autobot-backend/plugin_manager.py:GET /plugins/{plugin_name}/env-status	#10603
@@ -841,33 +950,31 @@ route:autobot-backend/transcriber/routes/transcripts.py:POST /speakers/merge	#10
 route:autobot-backend/utils/response_builder.py:GET /items/{id}	#10603
 route:autobot-slm-backend/api/agent_ledger.py:GET /dev-loop/{issue}	#10603
 route:autobot-slm-backend/api/agent_ledger.py:POST /claims/yield-request	#10603
-route:autobot-slm-backend/api/code_sync.py:GET /drift/resolve/status/{job_id}	#10603
-route:autobot-slm-backend/api/code_sync.py:GET /fleet/jobs	#10603
-route:autobot-slm-backend/api/code_sync.py:GET /fleet/jobs/{job_id}	#10603
-route:autobot-slm-backend/api/code_sync.py:POST /fleet/sync	#10603
+route:autobot-slm-backend/api/blue_green.py:POST /{bg_deployment_id}/stop-monitoring	#10603
+route:autobot-slm-backend/api/capability_profile.py:GET /{node_id}/capability-profile	#10603
 route:autobot-slm-backend/api/code_sync.py:POST /nodes/{node_id}/mark-synced	#10603
-route:autobot-slm-backend/api/code_sync.py:POST /roles/{role_name}/sync	#10603
-route:autobot-slm-backend/api/code_sync.py:POST /schedules/{schedule_id}/run	#10603
 route:autobot-slm-backend/api/config.py:DELETE /defaults/{key}	#10603
 route:autobot-slm-backend/api/config.py:GET /defaults/{key}	#10603
 route:autobot-slm-backend/api/config.py:PUT /defaults/{key}	#10603
+route:autobot-slm-backend/api/discovery.py:GET /{service_name}/all	#10603
 route:autobot-slm-backend/api/full_tree_drift.py:GET /drift/full	#10603
-route:autobot-slm-backend/api/infrastructure.py:GET /executions/{execution_id}	#10603
 route:autobot-slm-backend/api/infrastructure.py:GET /playbooks/{playbook_id}	#10603
-route:autobot-slm-backend/api/infrastructure.py:POST /executions/{execution_id}/cancel	#10603
-route:autobot-slm-backend/api/nodes.py:GET /{node_id}/decommission/preflight	#10603
-route:autobot-slm-backend/api/orchestration.py:POST /services/{service_name}/migrate	#10603
-route:autobot-slm-backend/api/orchestration.py:POST /services/{service_name}/restart	#10603
-route:autobot-slm-backend/api/orchestration.py:POST /services/{service_name}/start	#10603
-route:autobot-slm-backend/api/orchestration.py:POST /services/{service_name}/stop	#10603
+route:autobot-slm-backend/api/node_post_sync.py:POST /{node_id}/sync	#10603
+route:autobot-slm-backend/api/nodes.py:DELETE /{node_id}/dependencies/{dep_name}	#10603
+route:autobot-slm-backend/api/nodes.py:GET /{node_id}/a2a-card	#10603
+route:autobot-slm-backend/api/nodes.py:GET /{node_id}/roles/preflight	#10603
+route:autobot-slm-backend/api/nodes.py:GET /{node_id}/service-order	#10603
+route:autobot-slm-backend/api/nodes.py:GET /{node_id}/update-policy	#10603
+route:autobot-slm-backend/api/nodes.py:POST /{node_id}/a2a-card/refresh	#10603
+route:autobot-slm-backend/api/nodes.py:POST /{node_id}/acknowledge-remediation	#10603
+route:autobot-slm-backend/api/nodes.py:POST /{node_id}/provision	#10603
 route:autobot-slm-backend/api/performance.py:DELETE /alerts/rules/{rule_id}	#10603
 route:autobot-slm-backend/api/performance.py:DELETE /slos/{slo_id}	#10603
 route:autobot-slm-backend/api/performance.py:GET /alerts/rules	#10603
 route:autobot-slm-backend/api/performance.py:GET /traces/{trace_id}	#10603
 route:autobot-slm-backend/api/performance.py:POST /alerts/rules	#10603
 route:autobot-slm-backend/api/performance.py:PUT /alerts/rules/{rule_id}	#10603
-route:autobot-slm-backend/api/roles.py:GET /node-actions/{node_id}	#10603
-route:autobot-slm-backend/api/roles.py:POST /node-actions/{node_id}/execute	#10603
+route:autobot-slm-backend/api/redis_service.py:POST /{action}	#10603
 route:autobot-slm-backend/api/scim.py:DELETE /Users/{user_id}	#10603
 route:autobot-slm-backend/api/scim.py:GET /Groups/{group_id}	#10603
 route:autobot-slm-backend/api/scim.py:GET /Users/{user_id}	#10603
@@ -881,31 +988,16 @@ route:autobot-slm-backend/api/security.py:GET /certificates/expiring	#10603
 route:autobot-slm-backend/api/security.py:GET /policies/{policy_id}	#10603
 route:autobot-slm-backend/api/security.py:PATCH /policies/{policy_id}	#10603
 route:autobot-slm-backend/api/security.py:POST /certificates/report	#10603
-route:autobot-slm-backend/api/services.py:POST /{node_id}/services/restart-all	#10603
+route:autobot-slm-backend/api/services.py:GET /{service_name}/conflicts	#10603
 route:autobot-slm-backend/api/services.py:POST /{node_id}/services/scan	#10603
 route:autobot-slm-backend/api/settings.py:GET /time/config	#10603
 route:autobot-slm-backend/api/settings.py:POST /time/sync	#10603
 route:autobot-slm-backend/api/settings.py:PUT /time/config	#10603
-route:autobot-slm-backend/api/sso.py:GET /provider-templates/{provider_type}	#10603
+route:autobot-slm-backend/api/sso.py:POST /{provider_id}/rotate-kek	#10603
+route:autobot-slm-backend/api/sso.py:POST /{provider_id}/rotate-value	#10603
 route:autobot-slm-backend/api/sso_auth.py:GET /saml/slo	#10603
 route:autobot-slm-backend/api/sso_auth.py:POST /saml/callback	#10603
 route:autobot-slm-backend/api/sso_auth.py:POST /saml/slo	#10603
-route:autobot-slm-backend/api/stateful.py:POST /replications/{replication_id}/promote	#10603
-route:autobot-slm-backend/api/stateful.py:POST /replications/{replication_id}/stop	#10603
-route:autobot-slm-backend/api/stateful.py:POST /replications/{replication_id}/verify-sync	#10603
 route:autobot-slm-backend/api/update_report.py:GET /update-all/report	#10603
 route:autobot-slm-backend/api/updates.py:GET /jobs/{job_id}	#10603
-route:autobot-slm-backend/api/updates.py:POST /jobs/{job_id}/cancel	#10603
 route:autobot-slm-backend/main.py:GET /	#10603
-table:deployment_logs	#10603
-table:file_cleanup_queue	#20234
-table:host_health	#10603
-table:hosts	#10603
-table:migrations_applied	#10603
-table:service_dependencies	#10603
-table:ssh_keys	#10603
-table:system_events	#10603
-table:validation_results	#10603
-declared:get_api_key_user=autobot_shared/user_management/models/api_key.py	#10603
-declared:require_key_permission=autobot-slm-backend/services/api_key_routes.py	#10603
-declared:RoleCredentialService=autobot-backend/llc/api/roles.py,autobot-backend/llc/models/role_credential.py,autobot-backend/migrations/versions/20260820_080_llc_role_tools_and_credentials.py	#10603

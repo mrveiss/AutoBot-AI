@@ -83,14 +83,17 @@ def _site_pattern(receivers: dict[str, str]) -> re.Pattern[str]:
 
 
 def _file_calls(rel: str, text: str) -> set[str]:
-    """Raw ``base + path`` strings the client calls in one file make."""
+    """Raw ``base + path`` strings the client calls in one file make.
+
+    Comment lines are blanked and the call is matched across the whole text, so a call whose path
+    sits on the line after ``client.post<T>(`` is seen (``_PATH`` already allows the newline).
+    """
     receivers = _receivers(rel, text)
     pattern, out = _site_pattern(receivers), set()
-    for line in text.splitlines():
-        if line.lstrip()[:2] in _COMMENT_PREFIXES or line.strip() == "*":
-            continue
-        out.update(receivers[m.group(1)] + m.group(2) for m in pattern.finditer(line) if m.group(2) != "/api")
-        if rel.startswith(_SLM_ROOT):
+    lines = ["" if (ln.lstrip()[:2] in _COMMENT_PREFIXES or ln.strip() == "*") else ln for ln in text.splitlines()]
+    out.update(receivers[m.group(1)] + m.group(2) for m in pattern.finditer("\n".join(lines)) if m.group(2) != "/api")
+    if rel.startswith(_SLM_ROOT):
+        for line in lines:
             out.update("/api" + suffix for suffix in _SLM_BASE_CALL.findall(line))
     return {c for c in out if not c.startswith("/api/api/")}
 
