@@ -20,9 +20,11 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
+from autobot_shared.env_utils import env_float, env_int
+
 HELD_ENV = "AUTOBOT_MACHINE_SLOT_HELD"
 #: Fewer tests than this in a run without xdist stay out of the queue: running the test you changed is cheap.
-BIG_RUN_TESTS = int(os.getenv("AUTOBOT_MACHINE_SLOT_BIG_RUN", "100"))
+BIG_RUN_TESTS = env_int("AUTOBOT_MACHINE_SLOT_BIG_RUN", 100)
 _NICENESS = 10
 _held: Optional[int] = None
 
@@ -31,7 +33,7 @@ def _slot_paths() -> list[Path]:
     runtime = os.getenv("XDG_RUNTIME_DIR") or tempfile.gettempdir()
     root = Path(os.getenv("AUTOBOT_MACHINE_SLOT_DIR") or Path(runtime) / "autobot-machine-slots")
     root.mkdir(parents=True, exist_ok=True)
-    return [root / f"slot-{i}" for i in range(1, int(os.getenv("AUTOBOT_MACHINE_SLOTS", "4")) + 1)]
+    return [root / f"slot-{i}" for i in range(1, env_int("AUTOBOT_MACHINE_SLOTS", 4) + 1)]
 
 
 def _try_take(path: Path) -> Optional[int]:
@@ -62,7 +64,7 @@ def acquire() -> None:
             if not told:
                 sys.stderr.write("Waiting for a machine slot (#20518)...\n")
                 told = True
-            time.sleep(float(os.getenv("AUTOBOT_MACHINE_SLOT_POLL", "5")))
+            time.sleep(env_float("AUTOBOT_MACHINE_SLOT_POLL", 5.0))
     os.environ[HELD_ENV] = "1"
     _lower_priority()
 
