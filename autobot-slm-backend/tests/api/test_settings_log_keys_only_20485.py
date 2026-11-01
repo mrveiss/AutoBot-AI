@@ -63,6 +63,8 @@ def settings_mod(monkeypatch):
     _module(monkeypatch, "autobot_shared.auth")
     perm = SimpleNamespace(ADMIN_CONFIG_READ="r", ADMIN_CONFIG_WRITE="w")
     _module(monkeypatch, "autobot_shared.auth.permissions", Permission=perm)
+    # PR #20536 adds `from api.security import create_audit_log`; stub it so this survives that merge.
+    _module(monkeypatch, "api.security", create_audit_log=AsyncMock())
     spec = importlib.util.spec_from_file_location("_settings_under_test_20485", _BACKEND / "api/settings.py")
     mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
     monkeypatch.setitem(sys.modules, spec.name, mod)
