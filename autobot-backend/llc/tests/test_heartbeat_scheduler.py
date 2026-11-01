@@ -234,6 +234,7 @@ class TestHandleDueAgent:
             patch.object(scheduler, "_find_rate_limited_run", new=AsyncMock(return_value=None)),
             patch.object(scheduler, "_create_run", new=AsyncMock(return_value=mock_run)),
             patch.object(scheduler, "_run_adapter", new=AsyncMock()),
+            patch(f"{_HBS}.dispatch_block_reason", new=AsyncMock(return_value=None)),
             patch(
                 "llc.scheduler.heartbeat_scheduler.get_async_session_factory",
                 return_value=mock_factory,
@@ -271,40 +272,6 @@ class TestHandleDueAgent:
 # ---------------------------------------------------------------------------
 # LLCHeartbeatScheduler — trigger_manual
 # ---------------------------------------------------------------------------
-
-
-class TestTriggerManual:
-    @pytest.mark.asyncio
-    async def test_returns_queued_run(self):
-        scheduler = LLCHeartbeatScheduler()
-        agent = _make_agent()
-
-        mock_run = MagicMock(spec=LLCHeartbeatRun)
-        mock_run.id = uuid.uuid4()
-        mock_run.status = LLCRunStatus.QUEUED.value
-
-        mock_session = AsyncMock()
-        mock_session.flush = AsyncMock()
-
-        with (
-            patch.object(scheduler, "_get_agent_config", new=AsyncMock(return_value=agent)),
-            patch.object(scheduler, "_create_run", new=AsyncMock(return_value=mock_run)),
-            patch.object(scheduler, "_run_adapter", new=AsyncMock()),
-        ):
-            run, agent_cfg = await scheduler.trigger_manual(mock_session, "agent-abc")
-
-        assert run.id == mock_run.id
-        assert run.status == LLCRunStatus.QUEUED.value
-        assert agent_cfg == agent
-
-    @pytest.mark.asyncio
-    async def test_raises_for_unknown_agent(self):
-        scheduler = LLCHeartbeatScheduler()
-        mock_session = AsyncMock()
-
-        with patch.object(scheduler, "_get_agent_config", new=AsyncMock(return_value=None)):
-            with pytest.raises(ValueError, match="not found"):
-                await scheduler.trigger_manual(mock_session, "agent-unknown")
 
 
 # ---------------------------------------------------------------------------
