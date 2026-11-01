@@ -36,49 +36,22 @@ from autobot_shared.logging_manager import get_logger
 from ..config import AGENT_API_BASE_URL, AGENT_API_KEY_PLACEHOLDER
 from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
+from .rate_limit_markers import _RL_KEYWORDS, is_rate_limit_output
 
 _logger = get_logger(__name__)
 
 # psutil.Process.create_time() computes an absolute epoch time from
 # psutil.boot_time() on Linux, which reads the ``btime`` line of /proc/stat.
+# ``btime`` is not constant on a WSL2 host: it steps down about once per
+# 10-60 s as the guest clock is corrected, so the absolute value of the SAME
+# live process changes between two reads (GH#20466). Identity is therefore
+# the start psutil itself compares in Process.__eq__ (``Process._ident``: the
+# monotonic jiffies since boot on Linux, which never changes).
 # Some sandboxed CI containers present a /proc/stat without that line, and
 # psutil raises a bare ``RuntimeError`` for it -- NOT a psutil.Error subclass
 # (see psutil._pslinux.boot_time), so it is never caught by ``except
 # psutil.Error`` alone. Every create_time() call site must catch both.
 _CREATE_TIME_ERRORS: tuple[type[BaseException], ...] = (psutil.Error, RuntimeError)
-
-# Keywords that identify a provider rate-limit or quota error in CLI output or
-# exception messages.  Shared by subprocess adapters (output-file scan) and
-# AutoBotAgentAdapter (exception message matching).  GH#9773.
-_RL_KEYWORDS: frozenset[str] = frozenset(
-    {
-        "rate_limit_error",
-        "rate limit",
-        "too many requests",
-        "quota",
-        "overloaded",
-        "capacity_error",
-        "429",
-        "529",
-    }
-)
-
-
-def is_rate_limit_output(text: str | None) -> bool:
-    """Return True if *text* contains a provider rate-limit signal.
-
-    Must only be applied to error text or failure-tail content — never to
-    healthy transcripts.  When C1's ``final_result_event`` gate is in place,
-    this function only sees tails where the final JSONL result event is absent
-    (process killed mid-stream) or has ``is_error`` true / a non-success
-    subtype, so false-positive reclassification of successful runs is
-    structurally impossible.
-    """
-    if not text:
-        return False
-    lower = text.lower()
-    return any(kw in lower for kw in _RL_KEYWORDS)
-
 
 # Maximum bytes read from the tail of a subprocess output file when scanning
 # for rate-limit markers.  Limits memory use for large output files; the
@@ -341,6 +314,11 @@ async def spawn_with_workspace_retry(
         return proc, None
 
 
+def _start_stamp(pid: int) -> float:
+    """The start of *pid* in psutil's own identity (``(pid, start)``); stable for the life of the process."""
+    return psutil.Process(pid)._ident[1]
+
+
 def spawn_create_time(pid: int) -> float | None:
     """The psutil-recorded start time for a just-spawned *pid* (PR#16284 review).
 
@@ -354,7 +332,7 @@ def spawn_create_time(pid: int) -> float | None:
     probe rather than crashing the invoke that just spawned this process.
     """
     try:
-        return psutil.Process(pid).create_time()
+        return _start_stamp(pid)
     except _CREATE_TIME_ERRORS as exc:
         _logger.warning("spawn_create_time: could not read create_time for PID %d: %s", pid, exc)
         return None
@@ -393,7 +371,7 @@ def probe_pid_identity(pid: int, expected_create_time: float | None) -> AdapterR
     if expected_create_time is None:
         return probe_pid(pid)
     try:
-        actual = psutil.Process(pid).create_time()
+        actual = _start_stamp(pid)
     except psutil.NoSuchProcess:
         return AdapterRunStatus(status=LLCRunStatus.COMPLETED)
     except _CREATE_TIME_ERRORS as exc:
@@ -487,7 +465,7 @@ def _identity_verified(pid: int, expected_create_time: float | None) -> bool:
     if expected_create_time is None:
         return False
     try:
-        return psutil.Process(pid).create_time() == expected_create_time
+        return _start_stamp(pid) == expected_create_time
     except _CREATE_TIME_ERRORS as exc:
         _logger.warning("_identity_verified: could not verify PID %d, refusing to signal: %s", pid, exc)
         return False
