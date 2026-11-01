@@ -103,8 +103,9 @@ async def test_a_denied_proposal_stays_denied(manager, db, gate):
     assert await _sweep(manager, db) == []
 
 
-async def test_a_failed_execution_is_proposed_again(manager, db, gate):
+async def test_a_failed_execution_is_proposed_again(manager, db, gate, monkeypatch):
     """Approved, but the removal was refused (the file is live): the bytes remain, so retry."""
+    monkeypatch.setenv("AUTOBOT_CONVERSATION_FILE_CLEANUP_COOLDOWN_SECONDS", "0")  # bounds: ..._bounds_20234_test.py
     stored = await _deleted_file(manager)
     (first,) = await _sweep(manager, db)
     await _sql(manager, "UPDATE conversation_files SET is_deleted = 0 WHERE file_id = ?", (stored["file_id"],))

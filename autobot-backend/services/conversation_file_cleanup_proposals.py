@@ -9,12 +9,18 @@ approval; a proposal nobody reviews stays pending in the Approvals inbox. A file
 pending, rejected or revision-requested proposal is not proposed again: a denial is a person's
 decision and stays one. An approved proposal whose removal failed, an expired one and a
 withdrawn one leave the queue row unprocessed (the queue, not the proposal, records that the
-bytes are gone), so the next sweep proposes that file again.
+bytes are gone), so the next sweep proposes that file again, until the removal has been refused
+``AUTOBOT_CONVERSATION_FILE_CLEANUP_MAX_ATTEMPTS`` times (``conversation_file_cleanup.py``).
+
+Two workers can both read "not proposed yet"; the partial unique index
+``uq_approvals_pending_file_cleanup`` (migration 20261101_109) lets exactly one insert win, and the
+loser's ``IntegrityError`` is read as "already proposed".
 """
 
 from __future__ import annotations
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from autobot_shared.logging_manager import get_logger
 from models.approval import ApprovalStatus
@@ -46,9 +52,26 @@ async def _already_proposed(db) -> set[str]:
     return {str(c["file_id"]) for c in contexts if c and c.get("action") == ACTION and c.get("file_id")}
 
 
+async def _propose_one(db, service, item: dict):
+    """Create the proposal, or ``None`` when another worker's pending one won the unique index."""
+    from models.approval import ApprovalType
+
+    try:
+        return await service.create_approval(
+            title=f"Remove deleted conversation file: {item['original_filename']}",
+            approval_type=ApprovalType.DESTRUCTIVE_ACTION.value,
+            description=f"The file was deleted from its conversation; its {item['file_size']} bytes are still on disk.",
+            requested_by_agent=REQUESTED_BY,
+            context={"action": ACTION, "file_id": item["file_id"], "session_id": item["session_id"]},
+        )
+    except IntegrityError:
+        await db.rollback()
+        logger.info("Cleanup proposal for file %s already pending (raised concurrently)", item["file_id"])
+        return None
+
+
 async def propose_cleanups_for(db, candidates: list[dict]) -> list[str]:
     """Create one PENDING proposal per candidate with no pending or denied proposal; returns the new ids."""
-    from models.approval import ApprovalType
     from services.approval_gate_service import ApprovalGateService
 
     seen = await _already_proposed(db)
@@ -57,14 +80,9 @@ async def propose_cleanups_for(db, candidates: list[dict]) -> list[str]:
     for item in candidates:
         if item["file_id"] in seen:
             continue
-        approval = await service.create_approval(
-            title=f"Remove deleted conversation file: {item['original_filename']}",
-            approval_type=ApprovalType.DESTRUCTIVE_ACTION.value,
-            description=f"The file was deleted from its conversation; its {item['file_size']} bytes are still on disk.",
-            requested_by_agent=REQUESTED_BY,
-            context={"action": ACTION, "file_id": item["file_id"], "session_id": item["session_id"]},
-        )
-        created.append(str(approval.id))
+        approval = await _propose_one(db, service, item)
+        if approval is not None:
+            created.append(str(approval.id))
     return created
 
 
