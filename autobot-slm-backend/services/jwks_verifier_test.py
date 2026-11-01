@@ -107,6 +107,7 @@ import importlib.util as _ilu  # noqa: E402
 # a MagicMock.  All tests use the module object directly (patch.object), so
 # no sys.modules registration is needed.
 from autobot_shared.auth.jwt_core import JWTDecodeError, encode_jwt  # noqa: E402
+from autobot_shared.user_management import password_epoch  # noqa: E402
 
 _jwks_spec = _ilu.spec_from_file_location("_jwks_verifier_under_test", _SLM_ROOT / "services" / "jwks_verifier.py")
 jwks_verifier = _ilu.module_from_spec(_jwks_spec)  # type: ignore[arg-type]
@@ -135,12 +136,11 @@ def _stub_rs256_denylist(is_rs256_jti_revoked_mock: AsyncMock):
 
 @pytest.fixture(autouse=True)
 def _pin_deferred_import_stubs():
-    """Pin stubs for the deferred (call-time) imports of the module under test."""
-    with patch.dict(
-        sys.modules,
-        {"config": _config_stub, "services.oidc_token_cache": _oidc_cache_stub},
-    ):
+    """Pin stubs for the deferred imports, and an empty revocation-marker store (#20446)."""
+    password_epoch.use_epoch_store(get_epoch=AsyncMock(return_value=None), set_epoch=AsyncMock())
+    with patch.dict(sys.modules, {"config": _config_stub, "services.oidc_token_cache": _oidc_cache_stub}):
         yield
+    password_epoch.reset_epoch_store()
 
 
 # ---------------------------------------------------------------------------
