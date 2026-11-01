@@ -23,6 +23,12 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "Workflow files are a subset of tracked YAML (#20191); compose, ansible and filter files grow "
         "at their own rate, so a share of all YAML would sink with nothing wrong.",
     ),
+    "windows-install-scripts-stage-constraints-19681": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "The Windows install scripts that call pip on the installed requirements: a small named set, "
+        "so a share of any file count means nothing.",
+    ),
     "chunk-identity-single-home-18142": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

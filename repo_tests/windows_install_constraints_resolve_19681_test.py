@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
 _ROOT = "autobot-npu-worker/resources/windows-npu-worker"
 _STAGE = "Set-InstalledConstraints"
@@ -23,6 +24,16 @@ def _pip_scripts(root: Path) -> list[Path]:
     return found
 
 
+REACH = declare(
+    "windows-install-scripts-stage-constraints-19681",
+    discover=_pip_scripts,
+    floor=1,
+    growth=2,
+    what="Windows install scripts that give pip the installed requirements",
+    roots=(_ROOT,),
+)
+
+
 def _stages_before_pip(text: str) -> bool:
     pip = text.index('-r (Join-Path $InstallPath "requirements.txt")')
     return f"{_STAGE} -InstallPath" in text[:pip] and "stage-constraints.ps1" in text[:pip]
@@ -34,7 +45,7 @@ def test_requirements_still_has_a_relative_include_so_this_guard_means_something
 
 
 def test_both_install_scripts_are_found() -> None:
-    assert {p.name for p in _pip_scripts(repo_root())} == {"install.ps1", "update.ps1"}
+    assert {p.name for p in REACH.examined(repo_root())} == {"install.ps1", "update.ps1"}
 
 
 @pytest.mark.parametrize("path", _pip_scripts(repo_root()), ids=lambda p: p.name)
