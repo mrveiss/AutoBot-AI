@@ -230,6 +230,14 @@ class AnalyticsController:
 
         return patterns
 
+    async def code_tools_available(self) -> Dict[str, bool]:
+        """Whether each code analysis tool is installed, checked off the event loop."""
+        code_analysis_exists, code_index_exists = await asyncio.gather(
+            asyncio.to_thread(self.code_analysis_path.exists),
+            asyncio.to_thread(self.code_index_path.exists),
+        )
+        return {"code_analysis_suite": code_analysis_exists, "code_index_mcp": code_index_exists}
+
     async def perform_code_analysis(self, request: CodeAnalysisRequest) -> Metadata:
         """Perform code analysis using integrated tools"""
         analysis_results = {
