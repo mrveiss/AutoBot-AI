@@ -6,7 +6,7 @@
 
 Event names are the ActivityEventType values in llc/models/enums.py. ``writer`` says whether any
 code writes that event on the path the step takes, found by reading llc/services (no writer means
-the log cannot hold it today, which is #20101's subject). ``owner`` is the open issue that explains
+the log cannot hold it today, which is #20417's subject). ``owner`` is the open issue that explains
 the row's absence; a row missing WITHOUT an owner is a new failure and fails the test red.
 
 An action of None means "some record about this entity by this actor": for a step whose event type
@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-AUDIT = "#20101"
+AUDIT = "#20417"
 
 
 @dataclass(frozen=True)

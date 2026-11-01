@@ -246,7 +246,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llc/tests/test_heartbeat_scheduler.py": 1042,
     "autobot-backend/llc/tests/test_replay.py": 605,
     "autobot-backend/llc/tests/test_review_gate.py": 632,
-    "autobot-backend/llc/tests/test_role_assignments.py": 729,
+    "autobot-backend/llc/tests/test_role_assignments.py": 728,
     "autobot-backend/llc/tests/test_work_items_idor.py": 602,
     "autobot-backend/llm_self_awareness.py": 708,
     "autobot-backend/llm_shared/optimization/attention_backend_test.py": 801,

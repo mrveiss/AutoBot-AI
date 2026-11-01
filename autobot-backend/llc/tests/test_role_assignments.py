@@ -29,7 +29,6 @@ import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from llc.models.activity import LLCActivityLog
 from llc.models.enums import MembershipRole, RoleHolderType
 from llc.models.membership import LLCCompanyMembership
 from llc.models.role_assignment import LLCRoleAssignment
@@ -48,7 +47,7 @@ async def session_factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     engine = create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
         "sqlite+aiosqlite:///:memory:"
     )
-    tables = [LLCActivityLog.__table__, Role.__table__, LLCRoleAssignment.__table__, LLCCompanyMembership.__table__]
+    tables = [m.__table__ for m in (harness.LLCActivityLog, Role, LLCRoleAssignment, LLCCompanyMembership)]
     for table in tables:
         harness._scrub_pg_server_defaults(table)
         harness._clientside_timestamps(table)
