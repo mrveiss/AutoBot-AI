@@ -498,16 +498,21 @@ def require_key_permission(permission: Permission) -> Callable:
 
 
 async def _get_user_for_api_key(db: AsyncSession, user_id):
-    """Get user by ID for API key authentication.
+    """The user a key belongs to, or None when there is none who may act (#20446).
 
-    Helper for get_api_key_user dependency (Issue #576 Phase 5).
+    A key outlives its owner's standing: ``APIKey.is_valid`` judges the KEY (active, unexpired,
+    unrevoked), never the person. An owner who is deactivated or soft-deleted gets no key
+    authority, the same as one who does not exist, so the caller refuses all three alike.
 
     Args:
         db: Database session
         user_id: User UUID
 
     Returns:
-        User instance or None
+        User instance, or None if absent, inactive or deleted
     """
     result = await db.execute(select(User).where(User.id == user_id))
-    return result.scalar_one_or_none()
+    user = result.scalar_one_or_none()
+    if user is None or not user.is_active or user.is_deleted:
+        return None
+    return user
