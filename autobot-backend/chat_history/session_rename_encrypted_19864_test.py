@@ -51,5 +51,5 @@ def _read(path: str) -> str:
 def test_ciphertext_without_a_key_says_so() -> None:
     mixin = SecurityMixin.__new__(SecurityMixin)
     mixin.encryption_enabled = False
-    with pytest.raises(ValueError, match="no encryption key"):
+    with pytest.raises(ValueError, match="line 1 column 1.*no key is set"):
         mixin._decrypt_data("gAAAAciphertext")
