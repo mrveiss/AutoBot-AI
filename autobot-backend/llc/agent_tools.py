@@ -139,22 +139,26 @@ def _enum_or_error(enum_cls, value, field: str):
 
 async def _create_task(session, company_id: str, user_id: str | None, params: Dict[str, Any]) -> Dict[str, Any]:
     from .models.enums import WorkItemPriority, WorkItemType
+    from .services.work_item_hierarchy import HierarchyViolation
     from .services.work_item_service import WorkItemService
 
     title = (params.get("title") or "").strip()
     if not title:
         raise LLCToolError("create_task requires a non-empty 'title'")
-    item = await WorkItemService().create(
-        session,
-        company_id=company_id,
-        type=_enum_or_error(WorkItemType, params.get("type", "task"), "type"),
-        title=title,
-        description=params.get("description"),
-        priority=_enum_or_error(WorkItemPriority, params.get("priority", "medium"), "priority"),
-        # #11501 review: audit actor comes from the authenticated session, never
-        # from LLM-supplied params.
-        created_by_user_id=user_id,
-    )
+    try:
+        item = await WorkItemService().create(
+            session,
+            company_id=company_id,
+            type=_enum_or_error(WorkItemType, params.get("type", "task"), "type"),
+            title=title,
+            description=params.get("description"),
+            priority=_enum_or_error(WorkItemPriority, params.get("priority", "medium"), "priority"),
+            # #11501 review: audit actor comes from the authenticated session, never
+            # from LLM-supplied params.
+            created_by_user_id=user_id,
+        )
+    except HierarchyViolation as exc:
+        raise LLCToolError(str(exc)) from None
     return {"entity_type": "work_item", "entity_id": str(item.id), "title": title}
 
 

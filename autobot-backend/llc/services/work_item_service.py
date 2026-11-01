@@ -52,9 +52,14 @@ from ..models.work_item import LLCWorkItem, LLCWorkItemComment
 from .actor import ActivityRecordError, audit, resolve_actor, resolve_actor_as
 from .base import LLCServiceBase
 from .wake_events import wake_for_comment, wake_for_item_changes
-from .work_item_actor_role import resolve_actor_role  # noqa: F401 -- re-exported for the API and tests
+from .work_item_actor_role import (  # noqa: F401 -- resolve_actor_role is re-exported for the API and tests
+    _COWORKING_ALLOWED_ROLES,
+    _coworking_state,
+    resolve_actor_role,
+)
 from .work_item_approval_categories import validated_approval_categories as _validated_approval_categories
 from .work_item_completion_effects import release_workspace_for_task
+from .work_item_hierarchy import reparent, validate_create
 from .work_item_relations import WorkItemRelationService
 
 logger = logging.getLogger(__name__)
@@ -99,19 +104,6 @@ class InvalidTransition(Exception):
 
 class CoWorkingPermissionError(Exception):
     """Raised when the caller lacks board or lead permission for co-working ops."""
-
-
-_COWORKING_ALLOWED_ROLES: frozenset = frozenset({"owner", "admin", "lead"})
-
-
-def _coworking_state(item: LLCWorkItem) -> dict:
-    """The co-worker fields of *item*, as the activity log's before/after snapshot."""
-    return {
-        "co_worker_type": item.co_worker_type,
-        "co_worker_agent_id": str(item.co_worker_agent_id) if item.co_worker_agent_id else None,
-        "co_worker_user_id": str(item.co_worker_user_id) if item.co_worker_user_id else None,
-        "co_working_enabled": item.co_working_enabled,
-    }
 
 
 async def _run_intent_similarity(work_intent: str, item_title: str, work_item_id: str) -> None:
@@ -218,12 +210,11 @@ class WorkItemService(LLCServiceBase):
         labels: Optional[List[str]] = None,
         requires_approval_before: Optional[List[str]] = None,
     ) -> LLCWorkItem:
+        project_id, parent = await validate_create(session, self.get, company_id, type, parent_id, project_id)
         # GH#6469: inherit goal_id from parent when not explicitly provided
         resolved_goal_id: Optional[uuid.UUID] = uuid.UUID(goal_id) if goal_id else None
-        if resolved_goal_id is None and parent_id is not None:
-            parent = await self.get(session, parent_id)
-            if parent is not None and parent.goal_id is not None:
-                resolved_goal_id = parent.goal_id
+        if resolved_goal_id is None and parent is not None and parent.goal_id is not None:
+            resolved_goal_id = parent.goal_id
 
         identifier = await self._next_identifier(session, company_id)
         # GH#13937: mirror update()'s single-assignee invariant — a creator
@@ -313,6 +304,8 @@ class WorkItemService(LLCServiceBase):
             "scheduled_start",
             "scheduled_end",
         }
+        if "parent_id" in fields:  # #18978: validate before any mutation of `item`
+            fields["parent_id"] = await reparent(session, self.get, item, fields["parent_id"])
         # GH#13937: validate before any mutation of `item` below — keeps update()
         # atomic. An invalid value must raise before the single-assignee
         # invariant below has a chance to clear the sibling id on the live,
@@ -335,6 +328,7 @@ class WorkItemService(LLCServiceBase):
         for key, val in fields.items():
             if key not in allowed:
                 raise ValueError(f"Field '{key}' is not updatable via WorkItemService.update()")
+        for key, val in fields.items():
             setattr(item, key, val)
         await wake_for_item_changes(session, item)  # #19582: before the flush clears the history
         await session.flush()

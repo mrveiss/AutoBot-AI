@@ -26,6 +26,8 @@ def _make_item(**kwargs) -> LLCWorkItem:
         "priority": WorkItemPriority.MEDIUM,
         "version": 1,
         "labels": [],
+        "parent_id": None,
+        "project_id": None,
         "checkout_run_id": None,
         "checkout_locked_at": None,
         "assignee_agent_id": None,
@@ -89,7 +91,7 @@ class TestCreate:
     async def test_create_sets_parent_id(self, service, mock_session):
         parent_id = str(uuid.uuid4())
         with patch.object(service, "_next_identifier", new=AsyncMock(return_value="PRJ-2")):
-            with patch.object(service, "get", new=AsyncMock(return_value=None)):
+            with patch.object(service, "get", new=AsyncMock(return_value=_make_item(id=uuid.UUID(parent_id)))):
                 item = await service.create(
                     mock_session,
                     company_id=str(uuid.uuid4()),
