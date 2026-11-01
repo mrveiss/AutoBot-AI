@@ -209,6 +209,7 @@ stage_abort() {
   exit 130
 }
 trap stage_abort INT TERM
+trap push_marker_clear EXIT
 stage_cache_dir() {
   local common
   common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 1
@@ -249,6 +250,35 @@ stage_cached() {
   ok "$1: unchanged since a recorded pass @ ${2:0:10}, skipped"
 }
 # Before a stage's subshell: STAGE_LOG is where it writes.
+# #20260: while the gate runs, a marker on the remote keeps the auto-sync off this branch, so the
+# push cannot lose to it at the very end. The expiry is the most the fast gate's two stages can take,
+# so a hook that dies holds nothing longer. Set by API, since a push here would run this hook again.
+# A marker that cannot be written only warns: the push is then as racy as it was before.
+PUSH_MARKERS=()
+push_marker_api() {
+  timeout 20 gh api "$@" >/dev/null 2>&1
+}
+push_marker_clear() {
+  local ref
+  for ref in ${PUSH_MARKERS[@]+"${PUSH_MARKERS[@]}"}; do
+    push_marker_api -X DELETE "repos/{owner}/{repo}/git/refs/${ref}" || warn "could not remove the marker ${ref}; it expires by itself"
+  done
+  PUSH_MARKERS=()
+}
+# $1 branch, $2 the sha the remote holds now. A new branch has no PR for the sync to touch.
+push_marker_set() {
+  [ "${AUTOBOT_PUSH_MARKER:-1}" = "1" ] && [ "$2" != "$ZERO" ] && command -v gh >/dev/null 2>&1 || return 0
+  local old ref="push-gate/$1/$(( $(date +%s) + MAX_BUDGET * 2 ))"
+  # A marker a dead hook left on this branch goes now; nothing else would remove it.
+  for old in $(timeout 20 git ls-remote origin "refs/push-gate/$1/*" 2>/dev/null | cut -f2); do
+    push_marker_api -X DELETE "repos/{owner}/{repo}/git/${old}" || true
+  done
+  if push_marker_api -X POST "repos/{owner}/{repo}/git/refs" -f "ref=refs/${ref}" -f "sha=$2"; then
+    PUSH_MARKERS+=("$ref")
+  else
+    warn "could not mark this push on the remote, so the auto-sync can still move the branch during the gate (#20260)"
+  fi
+}
 stage_begin() {
   STAGE_LOG=$(mktemp)
   STAGE_NAMES+=("$1"); STAGE_KEYS+=("$2"); STAGE_LOGS+=("$STAGE_LOG")
@@ -586,6 +616,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   # Phase 6 (#5143): pre-push duplicate check for issue branches
   # ------------------------------------------------------------------------
   branch_name="${local_ref#refs/heads/}"
+  push_marker_set "$branch_name" "$remote_sha"
   if [[ "$branch_name" =~ ^issue-([0-9]+)(-.*)?$ ]]; then
     issue_num="${BASH_REMATCH[1]}"
 
