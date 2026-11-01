@@ -31,7 +31,6 @@ def upgrade() -> None:
         sa.Column("slug", sa.String(100), unique=True, nullable=False, index=True),
         sa.Column("description", sa.Text, nullable=True),
         sa.Column("settings", postgresql.JSONB, nullable=False, server_default="{}"),
-        sa.Column("subscription_tier", sa.String(50), nullable=True, default="free"),
         sa.Column("max_users", sa.Integer, nullable=False, default=-1),
         sa.Column("is_active", sa.Boolean, nullable=False, default=True),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
