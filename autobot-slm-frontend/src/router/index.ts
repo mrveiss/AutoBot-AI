@@ -319,6 +319,13 @@ const router = createRouter({
           meta: { title: 'Disposal Policy', parent: 'settings' }
         },
         {
+          // #20465: chat approval settings (relaxed categories, attachment auto-approve), admin only
+          path: 'admin/chat-approval',
+          name: 'settings-admin-chat-approval',
+          component: () => import('@/views/settings/admin/ChatApprovalSettings.vue'),
+          meta: { title: 'Chat Approvals', parent: 'settings', admin: true }
+        },
+        {
           // Issue #11271 P3: Company OS findings policy (SLM operator panel)
           path: 'findings-policy',
           name: 'settings-findings-policy',

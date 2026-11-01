@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from api.security import create_audit_log
 from autobot_shared.auth.permissions import Permission
 from models.database import Node, Setting
 from models.schemas import SettingResponse, SettingUpdate
@@ -25,6 +26,12 @@ from services.playbook_executor import get_playbook_executor
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/settings", tags=["settings"])
+
+#: Settings whose every change leaves an audit row (#20465). They steer which chat tool calls
+#: ask for approval, so who changed them and from what to what must outlive the log line. The
+#: values are category names and a flag, never a secret; other keys are deliberately not audited
+#: here because the generic table also holds credential-adjacent values.
+AUDITED_SETTING_KEYS = frozenset({"chat.relaxed_approval_categories", "chat.auto_approve_attachment_turns"})
 
 DEFAULT_NTP_SERVERS = [
     "0.pool.ntp.org",
@@ -54,6 +61,31 @@ class TimeSyncResult(BaseModel):
     message: str
     node_count: int
     output: str | None = None
+
+
+async def _audit_setting_change(
+    db: AsyncSession, key: str, action: str, user: dict, old: str | None, new: str | None
+) -> None:
+    """Add the audit row for a change to an audited key to the caller's transaction (#20465).
+
+    Written before the caller commits: if the audit row cannot be written the change is not
+    stored either (fail closed), and the two land or roll back together.
+    """
+    if key not in AUDITED_SETTING_KEYS:
+        return
+    actor = str(user.get("sub", ""))
+    await create_audit_log(
+        db,
+        category="configuration",
+        action=action,
+        user_id=actor,
+        username=actor,
+        resource_type="setting",
+        resource_id=key,
+        description=f"Setting {key}: {action}",
+        success=True,
+        extra_data={"key": key, "old_value": old, "new_value": new},
+    )
 
 
 @router.get("/time/config", response_model=TimeConfig)
@@ -202,7 +234,7 @@ async def update_setting(
     key: str,
     setting_data: SettingUpdate,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_CONFIG_WRITE))],
+    user: Annotated[dict, Depends(require_permission(Permission.ADMIN_CONFIG_WRITE))],
 ) -> SettingResponse:
     """Update a setting (admin only)."""
     result = await db.execute(select(Setting).where(Setting.key == key))
@@ -214,10 +246,12 @@ async def update_setting(
             detail="Setting not found",
         )
 
+    old_value = setting.value
     setting.value = setting_data.value
     if setting_data.description is not None:
         setting.description = setting_data.description
 
+    await _audit_setting_change(db, key, "setting.update", user, old_value, setting_data.value)
     await db.commit()
     await db.refresh(setting)
 
@@ -230,7 +264,7 @@ async def create_setting(
     key: str,
     setting_data: SettingUpdate,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_CONFIG_WRITE))],
+    user: Annotated[dict, Depends(require_permission(Permission.ADMIN_CONFIG_WRITE))],
 ) -> SettingResponse:
     """Create a new setting (admin only)."""
     result = await db.execute(select(Setting).where(Setting.key == key))
@@ -246,6 +280,7 @@ async def create_setting(
         description=setting_data.description,
     )
     db.add(setting)
+    await _audit_setting_change(db, key, "setting.create", user, None, setting_data.value)
     await db.commit()
     await db.refresh(setting)
 
@@ -257,7 +292,7 @@ async def create_setting(
 async def delete_setting(
     key: str,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_CONFIG_WRITE))],
+    user: Annotated[dict, Depends(require_permission(Permission.ADMIN_CONFIG_WRITE))],
 ) -> None:
     """Delete a setting (admin only)."""
     protected_keys = {
@@ -287,6 +322,7 @@ async def delete_setting(
             detail="Setting not found",
         )
 
+    await _audit_setting_change(db, key, "setting.delete", user, setting.value, None)
     await db.delete(setting)
     await db.commit()
 
