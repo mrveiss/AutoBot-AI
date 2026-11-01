@@ -19,6 +19,7 @@ the human-decider check (#17042) stands between it and a recorded decision.
 
 import sys
 import uuid
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -151,7 +152,8 @@ def real_middleware(real_auth_middleware, *, enable_auth: bool):
     middleware.jwt_public_key = None
     middleware.failed_attempts = {}
     middleware.enable_auth = enable_auth
-    sessions = {SESSION_ID: {"user_data": dict(HUMAN)}}
+    # ``created_at`` is what the session store always writes; the password-epoch gate reads it (#20443).
+    sessions = {SESSION_ID: {"user_data": dict(HUMAN), "created_at": datetime.now(tz=timezone.utc).isoformat()}}
     middleware.get_session = sessions.get
     return middleware
 

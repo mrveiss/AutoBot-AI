@@ -32,7 +32,9 @@ from typing import ClassVar, List
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.db_session import run_after_commit
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.membership_epoch import MembershipEpochBump
 from autobot_shared.slug import url_slug
 from autobot_shared.time_utils import now_utc
 from autobot_shared.user_management.audit_rows import audit_row
@@ -329,7 +331,8 @@ class OrganizationService(BaseService):
             raise OrganizationNotFoundError(f"Organization {org_id} not found")
 
         if hard_delete:
-            await self.session.delete(org)
+            await self.session.delete(org)  # cascades the org's teams, users and memberships
+            run_after_commit(self.session, MembershipEpochBump(org_id))  # #19670
         else:
             org.deleted_at = now_utc()
             org.is_active = False
