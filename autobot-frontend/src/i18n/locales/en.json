@@ -9786,6 +9786,31 @@
       "title": "Administration",
       "subtitle": "Back-office tools for administrators",
       "ariaLabel": "Administration section"
+    },
+    "cleanup": {
+      "title": "Cleanup proposals",
+      "subtitle": "Propose cleanups for review. Nothing is removed until an administrator approves the proposal.",
+      "loading": "Checking this node...",
+      "statusUnavailable": "The status could not be loaded.",
+      "count": "Found: {count}.",
+      "propose": "Propose cleanup",
+      "proposed": "Proposal sent to the review queue. Nothing changes until it is approved.",
+      "openApprovals": "Open the approvals page",
+      "proposeFailed": "The proposal could not be created. It may be that there is nothing to remove.",
+      "envCopies": {
+        "title": "Old .env copies",
+        "description": "Copies of the backend secrets file left by earlier renders. The newest is kept, the rest are removed. Contents are never shown."
+      },
+      "infrastructureDir": {
+        "title": "Stale infrastructure directory",
+        "description": "The old autobot-infrastructure directory beside the install. A directory holding a git checkout is never proposed."
+      },
+      "tierColumn": {
+        "title": "Unused subscription tier column",
+        "description": "The organizations.subscription_tier column no longer used by AutoBot. Approving it deletes every stored value for good.",
+        "present": "The column is still in this database.",
+        "absent": "The column is not in this database."
+      }
     }
   },
   "components": {

@@ -17,6 +17,7 @@ import content_reach.health  # noqa: F401 — registers KnownProbes.CONTENT_REAC
 
 # Core router imports - these are required for basic functionality
 from api.adapters import router as adapters_router  # Issue #1403
+from api.admin_cleanup_proposals import router as admin_cleanup_proposals_router  # #20567
 from api.admin_event_logs import router as admin_event_logs_router  # Issue #4461
 from api.admin_oauth_bundle_strip import router as admin_oauth_bundle_strip_router  # #13630
 from api.admin_org_tier_column import router as admin_org_tier_column_router  # #19997
@@ -535,6 +536,7 @@ def _get_credential_admin_routers() -> list:
     return [
         (admin_oauth_bundle_strip_router, "", ["admin", "oauth-bundle-strip"], "admin_oauth_bundle_strip"),
         (admin_org_tier_column_router, "", ["admin", "org-tier-column"], "admin_org_tier_column"),
+        (admin_cleanup_proposals_router, "", ["admin", "cleanup-proposals"], "admin_cleanup_proposals"),
     ]
 
 

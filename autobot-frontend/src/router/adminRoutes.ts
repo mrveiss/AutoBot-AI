@@ -101,6 +101,12 @@ export const adminChildren: RouteRecordRaw[] = [
     component: () => import('@/views/AdminPermissionScopesView.vue'),
     meta: adminMeta('Permission Scopes'),
   },
+  {
+    path: 'cleanup-proposals', // Issue #20567: propose the decided install cleanups
+    name: 'admin-cleanup-proposals',
+    component: () => import('@/views/AdminCleanupProposalsView.vue'),
+    meta: adminMeta('Cleanup proposals'),
+  },
 ]
 
 export const adminRoutes: RouteRecordRaw[] = [
