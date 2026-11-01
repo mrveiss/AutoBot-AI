@@ -17,7 +17,12 @@
         </button>
       </div>
     </h3>
-    <div v-if="smells.length > 0" class="section-content">
+    <EmptyState
+      v-if="error"
+      icon="exclamation-triangle"
+      :message="$t('analytics.codebase.sectionLoadFailed', { error })"
+    />
+    <div v-else-if="smells.length > 0" class="section-content">
       <!-- Summary Cards by Severity -->
       <div class="summary-cards">
         <div class="summary-card total">
@@ -147,6 +152,8 @@ interface CodeHealthScore {
 interface Props {
   smells: CodeSmell[]
   codeHealthScore: CodeHealthScore | null
+  /** The smells are derived from the problems load; its failure is not "no smells". */
+  error?: string
 }
 
 const props = defineProps<Props>()
