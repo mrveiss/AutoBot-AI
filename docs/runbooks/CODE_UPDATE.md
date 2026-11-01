@@ -151,7 +151,7 @@ the other.
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | Nodes stay OUTDATED after an update | The update failed for that node | Read the failure in the Code Sync tab, fix it, run the update again |
-| Ansible `UNREACHABLE` | SSH key issue | Test: `ssh -i /home/autobot/.ssh/autobot_key autobot@<node-ip> echo ok` |
+| Ansible `UNREACHABLE` | SSH key issue | Test: `ssh -i /etc/autobot/ssh/autobot_key autobot@<node-ip> echo ok` |
 | Backend takes 6 min after restart | Normal startup (GPUSemanticChunker + ChromaDB) | Wait; check `/var/log/autobot/backend.log` |
 | Node shows wrong commit | Heartbeat overwrote mark-synced | Issue fixed in #918; check `code_version` in DB |
 | `/slm/` returns 403, all services green | Frontend build failed/incomplete (#15462) | Use `https://<slm-manager-ip>/slm/api/recovery` — see section above |
