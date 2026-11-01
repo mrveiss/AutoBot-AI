@@ -23,7 +23,7 @@ from pathlib import Path as PathLib
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query, Request
 
 from api.knowledge_lint_chunks import _fetch_all_chunks  # noqa: F401 -- stays importable from here (#16707)
-from api.quarantine_read_audit import audit_admin_quarantine_read, request_actor
+from api.quarantine_read_audit import audit_admin_quarantine_read, request_actor, request_person
 from api.schemas_knowledge import (
     BackupRequest,
     BulkCategoryUpdateRequest,
@@ -1775,7 +1775,7 @@ async def restore_backup(
         skip_duplicates=request.skip_duplicates,
         restore_embeddings=request.restore_embeddings,
         dry_run=request.dry_run,
-        audit_actor=await request_actor(req),
+        audit_actor=await (request_actor if request.dry_run else request_person)(req),
     )
 
     return result
@@ -1858,7 +1858,7 @@ async def delete_backup(
         )
 
     logger.info("Delete backup request: file=%s", request.backup_file)
-    result = await kb.delete_backup(backup_file=request.backup_file, audit_actor=await request_actor(req))
+    result = await kb.delete_backup(backup_file=request.backup_file, audit_actor=await request_person(req))
 
     return result
 

@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pydantic import ValidationError
@@ -84,6 +84,7 @@ def partial(tmp_path: Path) -> Path:
 
 async def test_a_file_being_written_cannot_be_deleted(kb: _KB, partial: Path) -> None:
     assert (await kb.delete_backup(partial.name))["status"] == "error"
+    assert partial.name in os.listdir(partial.parent)
 
 
 @pytest.mark.parametrize("name", [f"{_NAME}.partial", "../x.json", "a\\b.json", "/abs/x.json", "a\x00b.json"])
@@ -94,3 +95,47 @@ def test_the_request_refuses_anything_but_a_filename(name: str) -> None:
 
 def test_the_request_takes_a_filename() -> None:
     assert DeleteBackupRequest(backup_file=_NAME).backup_file == _NAME
+
+
+@pytest.mark.parametrize("user", [None, {"username": "ana"}])
+async def test_the_delete_route_names_the_person_and_refuses_the_service_key(user) -> None:
+    from fastapi import HTTPException
+
+    from api import knowledge_maintenance as routes
+
+    kb = MagicMock(delete_backup=AsyncMock(return_value={"status": "success"}))
+    body = DeleteBackupRequest(backup_file=_NAME)
+    with (
+        patch.object(routes, "get_or_create_knowledge_base", AsyncMock(return_value=kb)),
+        patch("api.quarantine_read_audit.resolve_human_user", AsyncMock(return_value=user)),
+    ):
+        if user is None:
+            with pytest.raises(HTTPException) as refused:
+                await routes.delete_backup(admin_check=True, request=body, req=MagicMock())
+            assert refused.value.status_code == 403
+            kb.delete_backup.assert_not_awaited()
+        else:
+            await routes.delete_backup(admin_check=True, request=body, req=MagicMock())
+            assert kb.delete_backup.await_args.kwargs["audit_actor"] == "ana"
+
+
+@pytest.mark.parametrize("dry_run, refused", [(True, False), (False, True)])
+async def test_the_service_key_can_only_validate_a_restore(dry_run: bool, refused: bool) -> None:
+    from fastapi import HTTPException
+
+    from api import knowledge_maintenance as routes
+    from api.schemas_knowledge import RestoreRequest
+
+    kb = MagicMock(restore_backup=AsyncMock(return_value={"status": "success"}))
+    body = RestoreRequest(backup_file=_NAME, dry_run=dry_run)
+    with (
+        patch.object(routes, "get_or_create_knowledge_base", AsyncMock(return_value=kb)),
+        patch("api.quarantine_read_audit.resolve_human_user", AsyncMock(return_value=None)),
+    ):
+        if refused:
+            with pytest.raises(HTTPException):
+                await routes.restore_backup(admin_check=True, request=body, req=MagicMock())
+            kb.restore_backup.assert_not_awaited()
+        else:
+            await routes.restore_backup(admin_check=True, request=body, req=MagicMock())
+            kb.restore_backup.assert_awaited_once()
