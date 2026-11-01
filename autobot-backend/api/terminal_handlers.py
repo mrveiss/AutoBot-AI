@@ -46,7 +46,12 @@ from services.terminal_completion_service import TerminalCompletionService
 from services.terminal_session_store import SessionConfigStore
 
 # Import extracted modules (Issue #290)
-from services.terminal_websocket import LOGGING_SECURITY_LEVELS, command_assessor
+from services.terminal_websocket import (
+    LOGGING_SECURITY_LEVELS,
+    TerminalAuditLogger,
+    TerminalChatIntegrator,
+    command_assessor,
+)
 
 # Issue #380: Module-level frozenset for terminal close event types
 _TERMINAL_CLOSE_EVENTS = frozenset({"eo", "close"})
@@ -62,80 +67,6 @@ _SIGNAL_MAP = {
 }
 
 logger = get_logger(__name__)
-
-
-async def _flush_cleanup_buffer(
-    chat_history_manager,
-    conversation_id: str,
-    output_buffer: str,
-) -> None:
-    """Flush remaining output buffer on cleanup (Issue #315: extracted).
-
-    Strips ANSI codes and saves clean content to chat history.
-    """
-    from utils.encoding_utils import strip_ansi_codes
-
-    if not output_buffer.strip():
-        return
-
-    clean_content = strip_ansi_codes(output_buffer).strip()
-    logger.info(
-        f"[CHAT INTEGRATION] Flushing remaining output buffer on cleanup: "
-        f"{len(output_buffer)} chars (clean: {len(clean_content)} chars)"
-    )
-    if not clean_content:
-        return
-
-    await chat_history_manager.add_message(
-        sender="terminal",
-        text=clean_content,
-        message_type="terminal_output",
-        session_id=conversation_id,
-    )
-    logger.info("[CHAT INTEGRATION] Buffer flushed successfully")
-
-
-async def _save_buffered_output_to_chat(
-    chat_history_manager,
-    conversation_id: str,
-    output_buffer: str,
-) -> tuple:
-    """Save buffered terminal output to chat if conditions met (Issue #315: extracted).
-
-    Returns:
-        Tuple of (should_reset_buffer, skip_reason or None)
-    """
-    from utils.encoding_utils import is_terminal_prompt, strip_ansi_codes
-
-    clean_content = strip_ansi_codes(output_buffer).strip()
-    is_prompt = is_terminal_prompt(clean_content)
-
-    # Check if content should be skipped
-    if not clean_content or is_prompt:
-        skip_reason = "terminal prompt" if is_prompt else "only ANSI codes"
-        logger.debug(
-            f"[CHAT INTEGRATION] Skipping save - buffer is {skip_reason} "
-            f"({len(output_buffer)} chars, clean: '{clean_content[:100]}')"
-        )
-        return True, skip_reason
-
-    # Save the clean content
-    try:
-        logger.info(
-            f"[CHAT INTEGRATION] Saving output to chat: "
-            f"{len(output_buffer)} chars (clean: {len(clean_content)} chars)"
-        )
-        await chat_history_manager.add_message(
-            sender="terminal",
-            text=clean_content,
-            message_type="terminal_output",
-            session_id=conversation_id,
-        )
-        logger.info("[CHAT INTEGRATION] Output saved successfully")
-        return True, None
-    except Exception as e:
-        logger.error("Failed to save output to chat: %s", e)
-        return False, None
 
 
 class TerminalWebSocket:
@@ -160,17 +91,12 @@ class TerminalWebSocket:
         self.enable_logging = security_level in LOGGING_SECURITY_LEVELS
         self.enable_workflow_control = True
         self.command_history = []
-        self.audit_log = []
         self.user_role = "user"  # Could be enhanced with actual auth
+        self._audit = TerminalAuditLogger(session_id, security_level, self.user_role)
         self.session_start_time = datetime.now(tz=timezone.utc)
         self.pty_process = None
         self.active = False
         self.terminal_adapter = None
-
-        # CRITICAL FIX: Output buffer for chat integration
-        self._output_buffer = ""
-        self._last_output_save_time = time.time()
-        self._output_lock = asyncio.Lock()  # Protect concurrent buffer access
 
         # Phase 3: Queue-based output delivery for better responsiveness
         import queue
@@ -188,6 +114,7 @@ class TerminalWebSocket:
         else:
             self.terminal_logger = None
             self.chat_history_manager = None
+        self._chat = TerminalChatIntegrator(conversation_id, self.chat_history_manager)
 
         # Tab completion service (Issue #3279)
         self._completion_service = TerminalCompletionService()
@@ -328,22 +255,6 @@ class TerminalWebSocket:
             logger.warning("PTY not available for session %s", self.session_id)
             await self.send_message({"type": "error", "content": "Terminal initialization failed"})
 
-    async def _cleanup_flush_buffer(self) -> None:
-        """Flush remaining output buffer to chat on cleanup. Issue #620."""
-        if not (self.chat_history_manager and self.conversation_id):
-            return
-
-        try:
-            async with self._output_lock:
-                await _flush_cleanup_buffer(
-                    self.chat_history_manager,
-                    self.conversation_id,
-                    self._output_buffer,
-                )
-                self._output_buffer = ""
-        except Exception as e:
-            logger.error("Failed to flush output buffer: %s", e)
-
     def _cleanup_signal_output_sender(self) -> None:
         """Signal output sender to stop. Issue #620."""
         if not hasattr(self, "output_queue"):
@@ -389,7 +300,7 @@ class TerminalWebSocket:
         """Clean up terminal resources."""
         self.active = False
 
-        await self._cleanup_flush_buffer()
+        await self._chat.flush_buffer()
         self._cleanup_signal_output_sender()
 
         # Cancel output reader task if running
@@ -586,14 +497,7 @@ class TerminalWebSocket:
 
             # Log all messages for security tracking
             if self.enable_logging:
-                self._log_command_activity(
-                    "message_received",
-                    {
-                        "type": message_type,
-                        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-                        "session_id": self.session_id,
-                    },
-                )
+                self._audit.log_message_received(message_type)
 
             # Issue #336: Dispatch table lookup replaces elif chain
             handlers = self._get_message_handlers()
@@ -617,37 +521,6 @@ class TerminalWebSocket:
     # Helper Methods for _handle_input_message (Issue #281)
     # =========================================================================
 
-    async def _write_to_transcript(self, text: str) -> None:
-        """Write input to transcript file (Issue #281: extracted)."""
-        if not (self.terminal_logger and self.conversation_id):
-            return
-
-        try:
-            import aiofiles
-
-            from autobot_shared.security.path_validator import validate_relative_path
-            from utils.encoding_utils import strip_ansi_codes
-
-            # Strip ANSI escape codes before writing to transcript
-            clean_text = strip_ansi_codes(text)
-            if not clean_text:
-                return
-
-            transcript_file = f"{self.conversation_id}_terminal_transcript.txt"
-            chats_base = PATH.DATA_DIR / "chats"
-            transcript_path = validate_relative_path(transcript_file, chats_base)
-            async with aiofiles.open(transcript_path, "a", encoding="utf-8") as f:
-                await f.write(clean_text)
-        except ValueError:
-            logger.error(
-                "Blocked path traversal attempt in transcript write for session %s",
-                self.conversation_id,
-            )
-        except OSError as e:
-            logger.error("Failed to write input to transcript (I/O error): %s", e)
-        except Exception as e:
-            logger.error("Failed to write input to transcript: %s", e)
-
     async def _log_command_to_terminal_logger(self, command: str, status: str) -> None:
         """Log command to TerminalLogger (Issue #281: extracted)."""
         if not (self.terminal_logger and self.conversation_id):
@@ -670,23 +543,6 @@ class TerminalWebSocket:
         except Exception as e:
             logger.error("Failed to log command to TerminalLogger: %s", e)
 
-    async def _save_command_to_chat(self, command: str) -> None:
-        """Save command as terminal message to chat (Issue #281: extracted)."""
-        if not (self.chat_history_manager and self.conversation_id):
-            return
-
-        try:
-            logger.info("[CHAT INTEGRATION] Saving command to chat: %s", command[:50])
-            await self.chat_history_manager.add_message(
-                sender="terminal",
-                text=f"$ {command}",
-                message_type="terminal_command",
-                session_id=self.conversation_id,
-            )
-            logger.info("[CHAT INTEGRATION] Command saved successfully")
-        except Exception as e:
-            logger.error("Failed to save command to chat: %s", e)
-
     async def _handle_complete_command(self, command: str, text: str) -> bool:
         """Handle a complete command with security assessment (Issue #281: extracted).
 
@@ -697,15 +553,7 @@ class TerminalWebSocket:
 
         # Log command for audit trail
         if self.enable_logging:
-            self._log_command_activity(
-                "command_input",
-                {
-                    "command": command,
-                    "risk_level": risk_level.value,
-                    "user_role": self.user_role,
-                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-                },
-            )
+            self._audit.log_command_input(command, risk_level.value)
 
         # Log to TerminalLogger for persistent storage
         logger.info(
@@ -715,7 +563,7 @@ class TerminalWebSocket:
         await self._log_command_to_terminal_logger(command, "executing")
 
         # Save command to chat
-        await self._save_command_to_chat(command)
+        await self._chat.save_command_to_chat(command)
 
         # Add to command history
         self.command_history.append(
@@ -766,7 +614,7 @@ class TerminalWebSocket:
         if not hasattr(self, "_command_buffer"):
             self._command_buffer = ""
 
-        await self._write_to_transcript(text)
+        await self._chat.write_to_transcript(text)
 
         # Check if command is complete (Enter pressed)
         if "\r" in text or "\n" in text:
@@ -944,14 +792,7 @@ class TerminalWebSocket:
 
         # Log workflow control action
         if self.enable_logging:
-            self._log_command_activity(
-                "workflow_control",
-                {
-                    "action": action,
-                    "workflow_id": workflow_id,
-                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-                },
-            )
+            self._audit.log_workflow_control(action, workflow_id)
 
         # Send confirmation
         await self.send_message(
@@ -974,14 +815,7 @@ class TerminalWebSocket:
                 self.pty_process.setwinsize(rows, cols)
 
             if self.enable_logging:
-                self._log_command_activity(
-                    "terminal_resize",
-                    {
-                        "rows": rows,
-                        "cols": cols,
-                        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-                    },
-                )
+                self._audit.log_resize(rows, cols)
 
         except Exception as e:
             logger.error("Error resizing terminal: %s", e)
@@ -1041,14 +875,7 @@ class TerminalWebSocket:
             success = await self._send_signal_to_pty(signal_name, sig)
 
             if self.enable_logging:
-                self._log_command_activity(
-                    "signal_sent",
-                    {
-                        "signal": signal_name,
-                        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-                        "success": success,
-                    },
-                )
+                self._audit.log_signal_sent(signal_name, success)
 
         except Exception as e:
             logger.error("Error sending signal: %s", e)
@@ -1061,20 +888,6 @@ class TerminalWebSocket:
     async def _should_block_command(self, command: str, risk_level: CommandRisk) -> bool:
         """Determine if command should be blocked based on security level"""
         return command_assessor.should_block_command(command, risk_level, self.security_level)
-
-    def _log_command_activity(self, activity_type: str, data: dict):
-        """Log command activity for security audit trail"""
-        log_entry = {
-            "activity_type": activity_type,
-            "session_id": self.session_id,
-            "user_role": self.user_role,
-            "security_level": self.security_level.value,
-            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            "data": data,
-        }
-
-        self.audit_log.append(log_entry)
-        logger.info("Terminal audit: %s", json.dumps(log_entry))
 
     def _build_output_message(self, content: str) -> dict:
         """Build standardized output message format (Issue #486: extracted)."""
@@ -1110,60 +923,6 @@ class TerminalWebSocket:
             await self.send_message(message)
             return True
 
-    async def _log_to_transcript(self, content: str) -> None:
-        """Log output to transcript file (Issue #486: extracted)."""
-        if not (self.terminal_logger and self.conversation_id and content):
-            return
-
-        import aiofiles
-
-        from autobot_shared.security.path_validator import validate_relative_path
-        from utils.encoding_utils import strip_ansi_codes
-
-        try:
-            # Strip ANSI escape codes before writing to transcript
-            clean_content = strip_ansi_codes(content)
-            if not clean_content:
-                return
-
-            transcript_file = f"{self.conversation_id}_terminal_transcript.txt"
-            chats_base = PATH.DATA_DIR / "chats"
-            transcript_path = validate_relative_path(transcript_file, chats_base)
-            async with aiofiles.open(transcript_path, "a", encoding="utf-8") as f:
-                await f.write(clean_content)
-        except ValueError:
-            logger.error(
-                "Blocked path traversal attempt in transcript log for session %s",
-                self.conversation_id,
-            )
-        except OSError as e:
-            logger.error("Failed to write terminal transcript (I/O error): %s", e)
-        except Exception as e:
-            logger.error("Failed to write terminal transcript: %s", e)
-
-    async def _save_to_chat_buffered(self, content: str) -> None:
-        """Save output to chat with buffering (Issue #486: extracted)."""
-        if not (self.chat_history_manager and self.conversation_id and content):
-            return
-
-        async with self._output_lock:
-            self._output_buffer += content
-            current_time = time.time()
-
-            should_save = (
-                len(self._output_buffer) > 500 or (current_time - self._last_output_save_time) > 2.0 or "\n" in content
-            )
-
-            if should_save and self._output_buffer.strip():
-                reset_buffer, _ = await _save_buffered_output_to_chat(
-                    self.chat_history_manager,
-                    self.conversation_id,
-                    self._output_buffer,
-                )
-                if reset_buffer:
-                    self._output_buffer = ""
-                    self._last_output_save_time = current_time
-
     async def send_output(self, content: str):
         """
         Enhanced output sending with standardized format (Issue #486: refactored).
@@ -1172,17 +931,11 @@ class TerminalWebSocket:
         """
         message = self._build_output_message(content)
         await self._queue_output_message(message)
-        await self._log_to_transcript(content)
-        await self._save_to_chat_buffered(content)
+        await self._chat.write_to_transcript(content)
+        await self._chat.buffer_output(content)
 
         if self.enable_logging and content.strip():
-            self._log_command_activity(
-                "command_output",
-                {
-                    "output_length": len(content),
-                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-                },
-            )
+            self._audit.log_command_output(len(content))
 
     def _get_next_message_from_queue(self):
         """

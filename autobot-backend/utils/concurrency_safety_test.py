@@ -47,17 +47,17 @@ class TestTerminalBufferRace:
 
         # #13284: passing conversation_id makes __init__ build a real
         # ChatHistoryManager, and every "Output i\n" contains a newline, so
-        # _save_to_chat_buffered persists on all 100 writes. That is real chat
+        # buffer_output persists on all 100 writes. That is real chat
         # persistence, not buffer-race verification, and it measured 51.22s on
         # CI — the second-largest entry in the suite. Stub the save the same way
         # test_buffer_lock_prevents_interleaving below already does; the buffer
         # still resets through the same _output_lock path, so the assertion
         # underneath is unchanged.
         terminal.chat_history_manager.add_message = AsyncMock()
-        # #13284: send_output also calls _log_to_transcript, which does a real
+        # #13284: send_output also calls write_to_transcript, which does a real
         # aiofiles append per write whenever conversation_id is set — 100 more
         # filesystem round-trips that have nothing to do with the buffer race.
-        terminal._log_to_transcript = AsyncMock()
+        terminal._chat.write_to_transcript = AsyncMock()
 
         # Simulate 100 concurrent output writes
         async def write_output(text: str):
@@ -68,7 +68,7 @@ class TestTerminalBufferRace:
 
         # Verify no corruption or data loss
         # Buffer should be empty after all saves complete
-        assert terminal._output_buffer == "" or len(terminal._output_buffer) < 500
+        assert terminal._chat._output_buffer == "" or len(terminal._chat._output_buffer) < 500
 
     @pytest.mark.asyncio
     async def test_buffer_lock_prevents_interleaving(self):
@@ -407,8 +407,8 @@ class TestPerformance:
         # Measure 1000 buffer operations
         start = time.time()
         for i in range(1000):
-            async with terminal._output_lock:
-                terminal._output_buffer += f"test {i}\n"
+            async with terminal._chat._output_lock:
+                terminal._chat._output_buffer += f"test {i}\n"
         elapsed = time.time() - start
 
         # Should be <2ms per operation (requirement from plan)
