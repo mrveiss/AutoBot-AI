@@ -169,7 +169,7 @@ These conflicts drive the default fleet layout:
 | **Node.js** | — |
 | **System packages** | `build-essential libssl-dev ffmpeg libsndfile1 libsndfile1-dev portaudio19-dev tesseract-ocr libtesseract-dev nginx` |
 | **External deps** | Redis :6379, PostgreSQL :5432, Ollama :11434, ChromaDB :8000 |
-| **Ansible playbook** | `deploy-backend.yml` |
+| **Ansible playbook** | `playbooks/deploy_role.yml` |
 | **Source path** | `autobot-backend/` |
 | **Post-sync** | `pip install -r requirements.txt && alembic upgrade head` |
 | **Key Python packages** | FastAPI, Uvicorn, Celery, SQLAlchemy, Alembic, OpenAI, Anthropic, ChromaDB client, sentence-transformers, torch, LangChain 0.3.x, LlamaIndex 0.10.x |
@@ -191,7 +191,7 @@ These conflicts drive the default fleet layout:
 | **Node.js** | — |
 | **System packages** | — (shared with `backend`) |
 | **External deps** | Redis :6379 (broker + result backend), PostgreSQL :5432 |
-| **Ansible playbook** | `deploy-backend.yml` (deployed alongside backend) |
+| **Ansible playbook** | `playbooks/deploy_role.yml` (deployed alongside backend) |
 | **Source path** | `autobot-backend/` (same source as backend) |
 | **Redis databases** | broker: db 1, result backend: db 2 |
 | **Notes** | Shares venv with `backend`. Can be separated to dedicated worker node if `.20` becomes overloaded. |
@@ -213,7 +213,7 @@ These conflicts drive the default fleet layout:
 | **Node.js** | 20.x |
 | **System packages** | `nodejs nginx build-essential curl gnupg ca-certificates` |
 | **External deps** | Backend API :8443 |
-| **Ansible playbook** | `deploy-frontend.yml` |
+| **Ansible playbook** | `playbooks/deploy_role.yml` |
 | **Source path** | `autobot-frontend/` |
 | **Build command** | `npm install && npm run build` |
 | **Notes** | dist/ may be root-owned after Ansible deploy — fix: `sudo chown -R autobot:autobot /opt/autobot/autobot-frontend/`. Never `npm run dev` on production nodes. |
@@ -425,7 +425,7 @@ These conflicts drive the default fleet layout:
 | **Node.js** | — |
 | **System packages** | `python3 python3-venv` |
 | **External deps** | — |
-| **Ansible playbook** | `deploy-shared.yml` |
+| **Ansible playbook** | `playbooks/deploy_role.yml` |
 | **Source path** | `autobot_shared/` |
 | **Post-sync** | `pip install -e .` |
 | **Notes** | Must be deployed before any other Python service. Provides `get_redis_client()`, `ssot_config`, and shared utilities. |
