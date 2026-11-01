@@ -335,7 +335,7 @@ class TestCancel:
                 patch("asyncio.sleep", new_callable=AsyncMock),
                 patch(_PSUTIL_PROCESS) as mock_psutil,
             ):
-                mock_psutil.return_value.create_time.return_value = 100.0
+                mock_psutil.return_value._ident = (0, 100.0)
                 await adapter.cancel(_agent_cfg(agent_id="a1", output_dir=td), run_id)
 
         assert any(s == sig_mod.SIGTERM for _, s in killed)
