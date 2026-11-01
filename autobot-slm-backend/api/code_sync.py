@@ -640,6 +640,7 @@ async def _get_tracker_for_db(db: AsyncSession):
 # Never hard-code a cache TTL — read it from the environment so a frequently
 # polled status endpoint doesn't re-checksum every deployed component per call.
 _STALE_COMPONENTS_TTL_SECONDS = env_int("SLM_STALE_COMPONENTS_TTL_SECONDS", 60)
+_STALE_SCAN_TIMEOUT_SECONDS = env_int("SLM_STALE_COMPONENTS_SCAN_TIMEOUT_SECONDS", 300)
 
 # #14683: how long update-all waits for a fired self-update play to report
 # completion -- generous, the play covers every deployed role on the box. The
@@ -653,7 +654,7 @@ _SELF_UPDATE_WATCH_POLL_SECONDS = env_int_clamped("SLM_SELF_UPDATE_WATCH_POLL_SE
 # the job's total duration.
 _UPDATE_ALL_STALE_SECONDS = env_int_clamped("SLM_UPDATE_ALL_STALE_SECONDS", 1800, min_v=60)
 # #20250: one scan at a time; concurrent /status polls hashing with the GIL starved the event loop.
-_stale_components_cache: SingleFlightCache[list[str]] = SingleFlightCache(_STALE_COMPONENTS_TTL_SECONDS)
+_stale_components_cache = SingleFlightCache(_STALE_COMPONENTS_TTL_SECONDS, _STALE_SCAN_TIMEOUT_SECONDS, fallback=[])
 
 
 async def _compute_stale_components(force: bool = False) -> list[str]:
@@ -760,6 +761,9 @@ async def get_sync_status(
 
     Returns the latest version, local version, and count of outdated nodes.
     """
+    # #11820: never read "up to date" while a co-located managed component is stale. #20250: first,
+    # so a slow scan holds no open transaction, which is what stacked heartbeats behind it.
+    stale_components = await _compute_stale_components()
     tracker = await _get_tracker_for_db(db)
 
     # Get latest version from settings
@@ -804,10 +808,6 @@ async def get_sync_status(
 
     # Check if local repo has updates
     has_update = local_version is not None and latest_version is not None and local_version != latest_version
-
-    # #11820: surface deployed-vs-source drift for co-located managed components
-    # so the endpoint never reads "up to date" while a managed component is stale.
-    stale_components = await _compute_stale_components()
 
     # #15323: surface whether each running service actually LOADED the code
     # now on disk — distinct from stale_components (source vs deployed files),

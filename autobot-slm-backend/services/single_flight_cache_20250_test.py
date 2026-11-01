@@ -38,7 +38,7 @@ class _Refresh:
 
 @pytest.mark.asyncio
 async def test_callers_before_any_result_share_one_refresh() -> None:
-    cache, refresh = SingleFlightCache(60), _Refresh()
+    cache, refresh = SingleFlightCache(60, 30, fallback=None), _Refresh()
     callers = [asyncio.create_task(cache.get(refresh)) for _ in range(5)]
     await asyncio.sleep(0)
     refresh.release.set()
@@ -48,7 +48,7 @@ async def test_callers_before_any_result_share_one_refresh() -> None:
 
 @pytest.mark.asyncio
 async def test_a_caller_during_a_refresh_gets_the_last_result_without_waiting() -> None:
-    cache, refresh = SingleFlightCache(60), _Refresh()
+    cache, refresh = SingleFlightCache(60, 30, fallback=None), _Refresh()
     refresh.release.set()
     await cache.get(refresh)
     cache.invalidate()
@@ -63,12 +63,12 @@ async def test_a_caller_during_a_refresh_gets_the_last_result_without_waiting() 
 
 @pytest.mark.asyncio
 async def test_a_fresh_value_is_not_refreshed_and_an_expired_one_is() -> None:
-    cache, refresh = SingleFlightCache(60), _Refresh()
+    cache, refresh = SingleFlightCache(60, 30, fallback=None), _Refresh()
     refresh.release.set()
     await cache.get(refresh)
     await cache.get(refresh)
     assert refresh.calls == 1
-    expired = SingleFlightCache(0)
+    expired = SingleFlightCache(0, 30, fallback=None)
     await expired.get(refresh)
     await expired.get(refresh)
     assert refresh.calls == 3
@@ -76,7 +76,7 @@ async def test_a_fresh_value_is_not_refreshed_and_an_expired_one_is() -> None:
 
 @pytest.mark.asyncio
 async def test_force_waits_its_turn_and_refreshes_again() -> None:
-    cache, refresh = SingleFlightCache(60), _Refresh()
+    cache, refresh = SingleFlightCache(60, 30, fallback=None), _Refresh()
     refresh.release.set()
     await cache.get(refresh)
     assert await cache.get(refresh, force=True) == "v2"
@@ -84,7 +84,7 @@ async def test_force_waits_its_turn_and_refreshes_again() -> None:
 
 @pytest.mark.asyncio
 async def test_a_failed_refresh_raises_and_the_next_caller_retries() -> None:
-    cache = SingleFlightCache(60)
+    cache = SingleFlightCache(60, 30, fallback=None)
 
     async def boom() -> str:
         raise OSError
@@ -94,3 +94,36 @@ async def test_a_failed_refresh_raises_and_the_next_caller_retries() -> None:
     refresh = _Refresh()
     refresh.release.set()
     assert await cache.get(refresh) == "v1"
+
+
+async def _hangs() -> str:
+    await asyncio.Event().wait()
+    return "never"
+
+
+@pytest.mark.asyncio
+async def test_a_hung_refresh_before_any_result_gives_the_fallback_and_frees_waiters() -> None:
+    cache = SingleFlightCache(60, 0.01, fallback="nothing yet")
+    results = await asyncio.wait_for(asyncio.gather(cache.get(_hangs), cache.get(_hangs)), 2)
+    assert results == ["nothing yet", "nothing yet"]
+
+
+@pytest.mark.asyncio
+async def test_a_hung_refresh_after_a_result_gives_that_result_and_the_next_caller_retries() -> None:
+    cache, refresh = SingleFlightCache(60, 0.01, fallback=None), _Refresh()
+    refresh.release.set()
+    assert await cache.get(refresh) == "v1"
+    cache.invalidate()
+    assert await asyncio.wait_for(cache.get(_hangs), 2) == "v1"
+    assert await cache.get(refresh) == "v2"
+
+
+@pytest.mark.asyncio
+async def test_an_invalidate_during_a_refresh_is_not_overwritten_by_its_result() -> None:
+    cache, refresh = SingleFlightCache(60, 30, fallback=None), _Refresh()
+    running = asyncio.create_task(cache.get(refresh))
+    await asyncio.sleep(0)
+    cache.invalidate()
+    refresh.release.set()
+    assert await running == "v1"
+    assert await cache.get(refresh) == "v2", "the result from before the invalidate must not read as fresh"

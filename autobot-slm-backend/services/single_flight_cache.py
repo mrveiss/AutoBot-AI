@@ -9,6 +9,10 @@ import time
 from collections.abc import Awaitable, Callable
 from typing import Generic, TypeVar
 
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
+
 T = TypeVar("T")
 
 
@@ -18,8 +22,11 @@ class SingleFlightCache(Generic[T]):
     A TTL alone does not bound the cost: until the first refresh finishes, every caller starts its own.
     """
 
-    def __init__(self, ttl_seconds: float) -> None:
+    def __init__(self, ttl_seconds: float, refresh_timeout: float, fallback: T) -> None:
         self._ttl = ttl_seconds
+        self._refresh_timeout = refresh_timeout
+        self._fallback = fallback
+        self._generation = 0
         self._lock = asyncio.Lock()
         self._value: T | None = None
         self._has_value = False
@@ -31,6 +38,7 @@ class SingleFlightCache(Generic[T]):
     def invalidate(self) -> None:
         """The next caller refreshes; callers during that refresh still get the last result."""
         self._refreshed_at = None
+        self._generation += 1
 
     async def get(self, refresh: Callable[[], Awaitable[T]], force: bool = False) -> T:
         """The cached value, refreshed if stale. ``force`` waits its turn and always refreshes."""
@@ -39,8 +47,14 @@ class SingleFlightCache(Generic[T]):
         async with self._lock:
             if not force and self._fresh():  # a refresh finished while this caller waited
                 return self._value
-            started = time.monotonic()
-            self._value = await refresh()
-            self._has_value = True
-            self._refreshed_at = started
-            return self._value
+            started, generation = time.monotonic(), self._generation
+            try:
+                value = await asyncio.wait_for(refresh(), self._refresh_timeout)
+            except TimeoutError:
+                # A hung refresh must not hold every waiter forever. Not marked fresh: the next caller retries.
+                logger.warning("refresh exceeded %ss; serving the last result", self._refresh_timeout)
+                return self._value if self._has_value else self._fallback
+            self._value, self._has_value = value, True
+            if generation == self._generation:  # invalidated meanwhile: this result may predate the change
+                self._refreshed_at = started
+            return value

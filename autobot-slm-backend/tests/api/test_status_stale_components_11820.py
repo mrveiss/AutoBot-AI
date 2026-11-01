@@ -57,7 +57,7 @@ def _real_cache_class():
 
 
 def _reset_cache(cs) -> None:
-    cs._stale_components_cache = _real_cache_class()(cs._STALE_COMPONENTS_TTL_SECONDS)
+    cs._stale_components_cache = _real_cache_class()(cs._STALE_COMPONENTS_TTL_SECONDS, 30, fallback=[])
 
 
 async def test_flags_only_drifted_deployed_components(monkeypatch, tmp_path):
