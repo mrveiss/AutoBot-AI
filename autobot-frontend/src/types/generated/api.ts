@@ -68351,6 +68351,11 @@ export interface components {
             verification_mode: string;
             /** Schedule Cron */
             schedule_cron?: string | null;
+            /**
+             * Sync Now
+             * @default true
+             */
+            sync_now?: boolean;
             /** Include Patterns */
             include_patterns?: string[];
             /** Exclude Patterns */

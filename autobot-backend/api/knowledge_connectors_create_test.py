@@ -18,7 +18,7 @@ import pytest
 # #13702: create_connector derives the credential owner from the authenticated
 # caller; a direct call must supply one or it 401s, same as a real request.
 _TEST_USER = {"user_id": "admin-1"}
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 
 import knowledge.connectors.gdrive  # noqa: F401 — register gdrive
 import knowledge.connectors.onedrive  # noqa: F401 — register onedrive
@@ -44,7 +44,7 @@ async def test_create_rejects_unknown_type():
     """An unregistered connector_type still 422s."""
     req = CreateConnectorRequest(connector_type="no_such_type", name="x")
     with pytest.raises(HTTPException) as exc:
-        await mod.create_connector(req, user=_TEST_USER)
+        await mod.create_connector(req, BackgroundTasks(), user=_TEST_USER)
     assert exc.value.status_code == 422
 
 
@@ -76,7 +76,7 @@ async def test_create_gdrive_with_oauth_secret_attaches_by_reference():
         patch.object(mod, "_save_connector", _fake_save),
         patch.object(mod, "_maybe_schedule", AsyncMock()),
     ):
-        result = await mod.create_connector(req, user=_TEST_USER)
+        result = await mod.create_connector(req, BackgroundTasks(), user=_TEST_USER)
 
     # secret attached by reference; credentials never re-stored.
     store.store.assert_not_called()
@@ -121,7 +121,7 @@ async def test_create_onedrive_with_oauth_secret_attaches_by_reference():
         patch.object(mod, "_save_connector", _fake_save),
         patch.object(mod, "_maybe_schedule", AsyncMock()),
     ):
-        result = await mod.create_connector(req, user=_TEST_USER)
+        result = await mod.create_connector(req, BackgroundTasks(), user=_TEST_USER)
 
     # secret attached by reference; credentials never re-stored.
     store.store.assert_not_called()
@@ -203,7 +203,7 @@ async def test_connector_owner_is_the_authenticated_caller(user_dict, expected_o
         patch.object(mod, "_save_connector", AsyncMock()),
         patch.object(mod, "_maybe_schedule", AsyncMock()),
     ):
-        await mod.create_connector(_oauth_create_request(), user=user_dict)
+        await mod.create_connector(_oauth_create_request(), BackgroundTasks(), user=user_dict)
 
     seen = store.get_access_token.await_args[0][1]
     assert seen == expected_owner, f"owner was {seen!r}, expected {expected_owner!r}"
@@ -225,5 +225,35 @@ async def test_connector_create_refuses_a_caller_with_no_identity():
         patch.object(mod, "_maybe_schedule", AsyncMock()),
     ):
         with pytest.raises(HTTPException) as exc:
-            await mod.create_connector(_oauth_create_request(), user={"role": "admin"})
+            await mod.create_connector(_oauth_create_request(), BackgroundTasks(), user={"role": "admin"})
     assert exc.value.status_code == 401
+
+
+async def _create_web_crawler(**fields) -> tuple[dict, BackgroundTasks]:
+    req = CreateConnectorRequest(
+        connector_type="web_crawler", name="Site", config={"start_urls": ["https://example.com"]}, **fields
+    )
+    healthy = MagicMock(test_connection=AsyncMock(return_value=True))
+    tasks = BackgroundTasks()
+    with (
+        patch.object(mod, "_load_or_create_instance", AsyncMock(return_value=healthy)),
+        patch.object(mod, "_save_connector", AsyncMock()),
+        patch.object(mod, "_maybe_schedule", AsyncMock()),
+    ):
+        return await mod.create_connector(req, tasks, user=_TEST_USER), tasks
+
+
+@pytest.mark.asyncio
+async def test_creating_a_connector_enqueues_one_full_sync():
+    """#19714: through the same path as the Sync button, and not incremental."""
+    result, tasks = await _create_web_crawler()
+    assert result["sync_started"] is True
+    assert [(t.func, t.args[1]) for t in tasks.tasks] == [(mod._run_sync_background, False)]
+    assert tasks.tasks[0].args[0] == result["connector_id"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fields", [{"sync_now": False}, {"enabled": False}], ids=["sync-now-off", "disabled"])
+async def test_contrast_nothing_is_enqueued(fields: dict):
+    result, tasks = await _create_web_crawler(**fields)
+    assert result["sync_started"] is False and tasks.tasks == []

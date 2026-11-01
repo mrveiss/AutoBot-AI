@@ -37,6 +37,7 @@ const showHistoryModal = ref(false)
 const historyConnectorId = ref<string | null>(null)
 const historyItems = ref<SyncResult[]>([])
 const historyLoading = ref(false)
+const historySyncActive = ref(false)
 
 // Card refs for resetting sync spinners
 const cardRefs = ref<Record<string, InstanceType<typeof ConnectorStatusCard>>>({})
@@ -119,7 +120,8 @@ async function handleDelete(id: string) {
   }
 }
 
-async function handleViewHistory(id: string) {
+async function handleViewHistory(id: string, syncActive = false) {
+  historySyncActive.value = syncActive
   historyConnectorId.value = id
   historyItems.value = []
   historyLoading.value = true
@@ -134,9 +136,11 @@ async function handleViewHistory(id: string) {
   }
 }
 
-function onConnectorSaved(_config: ConnectorConfig) {
+function onConnectorSaved(config: ConnectorConfig, syncStarted: boolean) {
   // Reload all connectors to get fresh statuses
   loadConnectors()
+  // #19714: a new connector's first sync is running; show its progress and result without a click.
+  if (syncStarted) handleViewHistory(config.connector_id, true)
 }
 
 async function refreshConnectorStatus(id: string) {
@@ -270,6 +274,7 @@ onMounted(() => {
       size="md"
     >
       <ConnectorHistoryPanel
+        :sync-active="historySyncActive"
         v-if="historyConnectorId"
         :connector-id="historyConnectorId"
         :sync-active="getStatus(historyConnectorId).last_sync_status === 'running'"
