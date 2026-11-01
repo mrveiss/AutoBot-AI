@@ -961,6 +961,18 @@ class ConversationFileManager(ConversationFileRouteApi):
         finally:
             await connection.close()
 
+    async def _hard_delete_file(self, connection, file_id: str, file_path: Path) -> None:
+        """Permanently delete a file (Issue #315 - extracted helper).
+
+        Not wired: nothing calls it. Removing stored bytes goes through the approval gate
+        (#17038), so ``hard_delete=True`` soft-deletes instead; see #20488.
+        """
+        await connection.execute("DELETE FROM conversation_files WHERE file_id = ?", (file_id,))
+        # Issue #358 - avoid blocking
+        if await asyncio.to_thread(file_path.exists):
+            await asyncio.to_thread(file_path.unlink)
+            logger.info("Hard deleted file: %s", file_path)
+
     async def _soft_delete_file(self, connection, file_id: str) -> None:
         """Soft delete a file by marking as deleted (Issue #315 - extracted helper)."""
         await connection.execute(
