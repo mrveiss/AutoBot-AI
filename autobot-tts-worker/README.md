@@ -34,7 +34,7 @@ ansible-playbook playbooks/deploy-full.yml --tags tts-worker
 |----------|---------|-------------|
 | `TTS_HOST` | `0.0.0.0` | Bind address |
 | `TTS_PORT` | `8083` | Listen port, rendered from `tts_port` in the tts-worker role, which is authoritative. 8082 is WSL2/Hyper-V reserved on the NPU host class (#3431, incident #3464). |
-| `TTS_MODEL_ID` | `liquid-ai/kani-tts-2` | HuggingFace model ID |
+| `TTS_MODEL_ID` | `kyutai/pocket-tts` | Names what the engine runs, for logs and health. Pocket TTS takes no model id, so this does not choose a model (#19734) |
 | `TTS_DEVICE` | `cpu` | Inference device (`cpu`, `cuda`, `mps`) |
 | `TTS_MODELS_DIR` | `/var/lib/autobot/models/tts` | Model cache directory |
 | `HF_TOKEN` | *(unset)* | HuggingFace auth token — required for gated models. Set via `vault_hf_token` in Ansible vault. |
