@@ -17,6 +17,7 @@ from dataclasses import dataclass
 
 from autobot_shared import postgres_identity as pg
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.postgres_dsn import build_postgres_dsn
 from autobot_shared.secret_redaction import redact_value
 
 logger = get_logger(__name__)
@@ -128,8 +129,7 @@ def _warn_once(key: str, message: str) -> None:
 
 def _build_url(host: str, port: str, database: str, user: str, password: str) -> str:
     """Build async PostgreSQL connection URL from components."""
-    credentials = f"{user}:{password}" if password else user
-    return f"postgresql+asyncpg://{credentials}@{host}:{port}/{database}"
+    return build_postgres_dsn("postgresql+asyncpg", user, password, host, port, database)
 
 
 @dataclass
