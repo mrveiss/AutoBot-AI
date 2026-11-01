@@ -73,9 +73,10 @@ _FALLBACK = {
 class _Skip(Exception):
     """A file that yields no text; ``code`` is the notice the user gets."""
 
-    def __init__(self, code: str):
+    def __init__(self, code: str, transient: bool = False):
         super().__init__(code)
         self.code = code
+        self.transient = transient  # True: may succeed on a retry (a full pool), so it is not remembered
 
 
 @dataclass
@@ -120,7 +121,7 @@ async def _extract_guarded(manager, session_id: str, info: Dict[str, Any], suffi
         return await attachment_guards.within_extract_deadline(_extract(manager, session_id, info, suffix))
     except attachment_extract.ExtractorBusy as exc:
         logger.warning("Attachment %s refused: every extraction slot is taken", info.get("file_id"))
-        raise _Skip("unreadable") from exc
+        raise _Skip("unreadable", transient=True) from exc
     except RuntimeError as exc:  # the manager's words for "binary" or "not found"
         raise _Skip("unsupported" if "binary" in str(exc) else "unreadable") from exc
     except asyncio.TimeoutError as exc:
@@ -150,7 +151,14 @@ async def _read_text(manager, session_id: str, info: Dict[str, Any]) -> str:
     key = await asyncio.to_thread(attachment_extract.cache_key, session_id, str(info.get("file_id")), path)
     if (text := attachment_extract.cached_text(key)) is not None:
         return text
-    text = await _extract_guarded(manager, session_id, info, suffix)
+    if (code := attachment_extract.cached_skip(key)) is not None:  # a file that failed is not retried every iteration
+        raise _Skip(code)
+    try:
+        text = await _extract_guarded(manager, session_id, info, suffix)
+    except _Skip as skip:
+        if not skip.transient:
+            attachment_extract.remember_skip(key, skip.code)
+        raise
     attachment_extract.remember_text(key, text)
     return text
 

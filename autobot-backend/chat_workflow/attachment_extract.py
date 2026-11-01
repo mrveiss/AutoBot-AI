@@ -102,6 +102,17 @@ def remember_text(key: tuple | None, text: str) -> None:
             _cache.popitem(last=False)
 
 
+def cached_skip(key: tuple | None) -> str | None:
+    """The notice code remembered for a file whose extraction failed (timeout, unreadable, binary), if fresh."""
+    return None if key is None else cached_text((*key, "skip"))
+
+
+def remember_skip(key: tuple | None, code: str) -> None:
+    """Keep the failure *code* for *key* for as long as a text would be kept, so a bad file is read once."""
+    if key is not None:
+        remember_text((*key, "skip"), code)
+
+
 def clear_text_cache() -> None:
     """Forget every remembered text (tests, and a deliberate flush)."""
     with _cache_lock:

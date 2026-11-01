@@ -225,6 +225,22 @@ def test_a_saturated_pool_gives_the_user_a_notice_and_the_turn_goes_on(world, mo
         pool.shutdown(wait=True)
 
 
+def test_a_file_whose_extraction_failed_is_not_retried_on_every_llm_iteration(world, monkeypatch):
+    calls = []
+
+    async def _timeout(coro):
+        coro.close()
+        calls.append(1)
+        raise asyncio.TimeoutError
+
+    monkeypatch.setattr(attachment_guards, "within_extract_deadline", _timeout)
+    file_id = _seed(world, _ALICE, "slow.pptx", b"PK-not-really", mime="application/octet-stream")
+    for _ in range(3):  # three LLM iterations of one turn
+        params, prompt = _turn(world, [file_id])
+        assert prompt == _BASE and _codes(params) == ["unreadable"]
+    assert len(calls) == 1  # the skip code was remembered; a busy pool (transient) is the one case not remembered
+
+
 def test_the_pool_is_sized_from_the_configured_limit(monkeypatch):
     monkeypatch.setattr(attachment_extract, "_executor", None)
     monkeypatch.setattr(limits, "ATTACHMENT_EXTRACT_WORKERS", 3)

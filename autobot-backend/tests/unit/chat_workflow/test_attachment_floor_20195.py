@@ -62,9 +62,29 @@ def world(monkeypatch):
             raise setting["value"]
         return setting["value"]
 
+    session = {"marked": False, "exists": True, "broken": False, "rows": False, "chats": set()}
+
+    async def _marked(sid):
+        if session["broken"]:
+            raise OSError("disk")
+        session["marked"] = sid in session["chats"]
+        return session["marked"]
+
+    async def _mark(sid):
+        if session["exists"]:
+            session["chats"].add(sid)
+            session["marked"] = True
+        return session["exists"]
+
+    async def _rows(_sid):
+        return session["rows"]
+
     monkeypatch.setattr(attachment_floor._record, "_get_redis", _get_redis)
+    monkeypatch.setattr(attachment_floor, "_session_marked", _marked)
+    monkeypatch.setattr(attachment_floor, "_mark_session", _mark)
+    monkeypatch.setattr(attachment_floor, "_has_file_rows", _rows)
     monkeypatch.setattr(approval_baseline, "fetch_slm_policy_json", _fetch)
-    return SimpleNamespace(redis=redis, setting=setting)
+    return SimpleNamespace(redis=redis, setting=setting, session=session)
 
 
 def _ctx(context=None) -> LLMIterationContext:
@@ -121,6 +141,46 @@ def test_the_record_does_not_expire_and_outlives_the_file(world):
     asyncio.run(attachment_floor.mark_chat("chat-1"))  # _Redis.set rejects any expiry
     # nothing about the file is consulted: a soft-deleted file leaves the record, so the chat still asks
     assert _stamp({})[ATTACHMENT_CHAT_KEY] is True
+
+
+def test_an_evicted_redis_key_changes_nothing_once_the_session_record_holds_the_fact(world):
+    asyncio.run(attachment_floor.mark_chat("chat-1"))
+    assert world.session["marked"] is True  # written to the session record, not only to Redis
+    world.redis.data.clear()  # allkeys-lru evicted the key (or a flush / restore)
+    later = _stamp({})
+    assert later[ATTACHMENT_CHAT_KEY] is True and _ctx(later).approve_every_call is True
+    assert asyncio.run(_outcome(later)) == ("approval_required", 1)
+
+
+def test_key_absent_with_files_present_asks_including_a_soft_deleted_file(world):
+    world.session["rows"] = True  # an association row exists whether or not the file is soft-deleted
+    assert _stamp({})[ATTACHMENT_CHAT_KEY] is True
+
+
+def test_a_turn_naming_only_an_unknown_id_marks_the_session_though_no_row_exists(world):
+    from chat_workflow.attachment_context import apply_attachments
+
+    session = SimpleNamespace(session_id="chat-1")
+    asyncio.run(apply_attachments(session, {"attachments": ["no-such-id"]}, {"prompt": "p"}))
+    world.redis.data.clear()
+    assert world.session["rows"] is False and _stamp({})[ATTACHMENT_CHAT_KEY] is True
+
+
+def test_a_redis_record_written_before_the_session_existed_is_copied_to_it_on_a_later_read(world):
+    world.session["exists"] = False
+    asyncio.run(attachment_floor.mark_chat("chat-1"))  # no session record yet: only Redis holds it
+    assert world.session["marked"] is False
+    world.session["exists"] = True
+    assert _stamp({})[ATTACHMENT_CHAT_KEY] is True and world.session["marked"] is True
+
+
+def test_an_unreadable_session_record_asks_with_the_redis_key_absent(world):
+    world.session["broken"] = True
+    assert _stamp({})[ATTACHMENT_CHAT_KEY] is True
+
+
+def test_a_chat_with_no_key_no_flag_and_no_files_does_not_ask(world):
+    assert ATTACHMENT_CHAT_KEY not in _stamp({}) and asyncio.run(_outcome(_stamp({}))) == (None, 0)
 
 
 def test_an_unreadable_record_asks(world):

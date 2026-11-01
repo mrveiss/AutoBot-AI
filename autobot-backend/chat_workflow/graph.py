@@ -243,7 +243,8 @@ async def prepare_llm(state: ChatState, config: RunnableConfig) -> dict:
     manager = config["configurable"]["manager"]
 
     session = await manager.get_or_create_session(state["session_id"])
-    llm_params = await manager._prepare_llm_workflow_params(session, state["user_message"], state.get("context", {}))
+    updated_context = dict(state.get("context", {}) or {})  # #20195: the seam stamps INTO this; the node returns it
+    llm_params = await manager._prepare_llm_workflow_params(session, state["user_message"], updated_context)
     stream_notices(llm_params, config["configurable"].get("stream_callback"))  # #20195: streamed, not persisted
     ctx = manager._create_llm_iteration_context(
         llm_params,
@@ -258,7 +259,6 @@ async def prepare_llm(state: ChatState, config: RunnableConfig) -> dict:
     # into ctx.context. Without this, the ctx built above — which DOES carry
     # the flag via _create_llm_iteration_context — is discarded, and the
     # response-metadata cost badge sees it only on the non-graph path.
-    updated_context = dict(state.get("context", {}) or {})
     updated_context["lightweight_mode_used"] = llm_params.get("lightweight_mode_used", False)
 
     return {

@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from redis.exceptions import ConnectionError as RedisConnectionError
 
-from autobot_shared.ai_lines import VERIFIED_ATTACHMENT_ACCESS_KEY, VERIFIED_USER_KEY
+from autobot_shared.ai_lines import ATTACHMENT_TURN_KEY, VERIFIED_ATTACHMENT_ACCESS_KEY, VERIFIED_USER_KEY
 from chat_workflow import attachment_context, limits
 from chat_workflow.manager import ChatWorkflowManager
 from conversation_file_manager import ConversationFileManager
@@ -65,6 +65,8 @@ def world(tmp_path, monkeypatch):
         return _FakeRedis()
 
     monkeypatch.setattr("chat_workflow.attachment_floor._record._get_redis", _redis)
+    monkeypatch.setattr("chat_workflow.attachment_floor._session_marked", AsyncMock(return_value=False))
+    monkeypatch.setattr("chat_workflow.attachment_floor._mark_session", AsyncMock(return_value=False))
 
     chat = ChatWorkflowManager.__new__(ChatWorkflowManager)
     chat._register_user_message_in_history = MagicMock()
@@ -269,6 +271,9 @@ def test_the_graph_node_streams_the_notice_and_the_attachment_reaches_its_prompt
     ctx = graph._build_llm_iteration_context({**state, **out})  # what generate_response builds from the checkpoint
     assert _FACT in asyncio.run(attachment_context.attachment_prompt(chat, ctx))  # re-resolved when the LLM is called
     assert [m["type"] for m in seen] == ["attachment_notice"] and seen[0]["metadata"]["code"] == "unavailable"
+    # #20195: the turn stamp reaches the context the node RETURNS (what the checkpoint and the tool seam read)
+    assert out["context"][ATTACHMENT_TURN_KEY] is True
+    assert state["context"].get(ATTACHMENT_TURN_KEY) is None  # the node does not rely on mutating its input
 
 
 def _small_window(monkeypatch, tokens: int):
