@@ -76,8 +76,8 @@ export function useCompanyTeams(api: TeamsApi, companyId: () => string) {
     // A reload keeps the table on screen; only the first load of a company shows the loading state.
     if (teams.value.length === 0) state.value = 'loading'
     const [teamsResult, membersResult] = await Promise.allSettled([
-      api.get<CompanyTeamsResponse>(`/api/llc/companies/${id}/teams`),
-      api.get<Member[]>(`/api/llc/companies/${id}/members`),
+      api.get(`/api/llc/companies/${id}/teams`) as Promise<CompanyTeamsResponse>,
+      api.get(`/api/llc/companies/${id}/members`) as Promise<Member[]>,
     ])
     if (!current()) return
     membersFailed.value = membersResult.status === 'rejected'
