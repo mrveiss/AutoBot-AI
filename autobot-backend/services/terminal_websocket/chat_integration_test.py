@@ -85,6 +85,14 @@ async def test_transcript_keeps_line_breaks_between_chunks(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_transcript_keeps_a_chunk_that_is_only_a_line_break(tmp_path):
+    chat = _integrator(tmp_path)
+    assert await chat.write_to_transcript("\n") is True
+    written = await asyncio.to_thread((tmp_path / "conv_terminal_transcript.txt").read_text, encoding="utf-8")
+    assert written == "\n"
+
+
+@pytest.mark.asyncio
 async def test_transcript_writes_nothing_for_a_chunk_of_only_escapes(tmp_path):
     chat = _integrator(tmp_path)
     assert await chat.write_to_transcript("\x1b[31m\x1b[0m") is False
