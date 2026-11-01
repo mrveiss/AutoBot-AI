@@ -137,7 +137,7 @@ def _scanned_files(root: Path) -> list[str]:
 FILES = declare(
     "frontend-url-served-by-scan",
     discover=_scanned_files,
-    floor=4352,  # mid-window: population 4402, window (4302, 4402)
+    floor=4394,  # mid-window: population 4444, window (4344, 4444)
     growth=100,
     what="production sources and env profiles",
     roots=(*_SCAN_ROOTS, ".env"),
