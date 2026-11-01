@@ -66,6 +66,8 @@ def redis_db():
     with (
         patch.object(membership_epoch, "get_async_redis_client", AsyncMock(return_value=db)),
         patch.object(membership_epoch, "MEMBERSHIP_EPOCH_BUMP_BACKOFF_SECONDS", 0.0),
+        # #20443: a delete also revokes the tokens; that store is not this test's subject.
+        patch("autobot_shared.user_management.user_service_lifecycle.set_password_epoch", AsyncMock(return_value=1)),
     ):
         yield db
 
@@ -82,7 +84,7 @@ def _session(table: dict, team_orgs=(ORG_1,)) -> MagicMock:
 
 async def _read(worker: TTLCache, table: dict) -> list[str]:
     """The removed user's KB group read on *worker*, over the live *table*."""
-    teams = AsyncMock(side_effect=lambda uid: [SimpleNamespace(id=t) for t in table.get("teams", [])])
+    teams = AsyncMock(side_effect=lambda uid: [SimpleNamespace(username="gone", id=t) for t in table.get("teams", [])])
     tenant = TenantContext(org_id=ORG_1, user_id=USER_U)
     with patch.object(tenant_groups, "_cache", worker), patch(_GET_USER_TEAMS, teams):
         return await tenant_groups.tenant_group_ids(tenant, MagicMock())
@@ -90,14 +92,14 @@ async def _read(worker: TTLCache, table: dict) -> list[str]:
 
 def _user_service(session) -> _UserSvc:
     svc = _UserSvc(session, TenantContext(org_id=ORG_1))
-    svc.get_user = AsyncMock(return_value=SimpleNamespace(id=USER_U, org_id=ORG_1))
+    svc.get_user = AsyncMock(return_value=SimpleNamespace(username="gone", id=USER_U, org_id=ORG_1))
     svc._audit_log = AsyncMock()
     return svc
 
 
 def _org_service(session) -> _OrgSvc:
     svc = _OrgSvc(session, TenantContext(org_id=ORG_1, is_platform_admin=True))
-    svc.get_organization = AsyncMock(return_value=SimpleNamespace(id=ORG_1, name="O"))
+    svc.get_organization = AsyncMock(return_value=SimpleNamespace(username="gone", id=ORG_1, name="O"))
     svc._audit_log = AsyncMock()
     return svc
 

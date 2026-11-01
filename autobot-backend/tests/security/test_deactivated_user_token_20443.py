@@ -57,13 +57,14 @@ def get_current_user(real_auth_middleware, monkeypatch):
 
 
 def _user(**state):
-    return SimpleNamespace(username="alice", is_active=True, deleted_at=None, **state)
+    return SimpleNamespace(id=uuid.uuid4(), username="alice", is_active=True, deleted_at=None, **state)
 
 
 def _service(user):
     svc = _Bound(MagicMock(flush=AsyncMock(), delete=AsyncMock()), TenantContext())
     svc.get_user = AsyncMock(return_value=user)
     svc._audit_log = AsyncMock()
+    svc._queue_membership_epoch_bumps = AsyncMock()  # #19670's subject, tested there
     return svc
 
 
