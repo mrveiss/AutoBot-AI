@@ -191,6 +191,61 @@ def test_terminal_handlers_delegates_risk_assessment():
     assert "command_assessor" in referenced_names(source)
 
 
+# --- Row 7: terminal_handlers chat and audit ----------------------------------------------------
+TERMINAL_DELEGATED = {
+    "add_message",
+    "aiofiles",
+    "audit_log",
+    "_output_buffer",
+    "_output_lock",
+    "strip_ansi_codes",
+    "validate_relative_path",
+}
+OLD_TERMINAL_COPY = (
+    "async def f(self, text):\n"
+    "    await self.chat_history_manager.add_message(text=text)\n"
+    "    async with aiofiles.open(path, 'a') as f:\n"
+    "        await f.write(text)\n"
+    "    self.audit_log.append(text)\n"
+)
+DELEGATING_TERMINAL = (
+    "async def f(self, text):\n"
+    "    await self._chat.save_command_to_chat(text)\n"
+    "    await self._chat.write_to_transcript(text)\n"
+    "    self._audit.log_activity('x', {})\n"
+)
+
+
+def private_terminal_work(source: str) -> set[str]:
+    """Names only the chat and audit delegates need: the handler reading one has a copy again."""
+    found = set()
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Attribute):
+            found.add(node.attr)
+            if node.attr == "audit_log" and not (isinstance(node.value, ast.Name) and node.value.id == "self"):
+                found.discard("audit_log")
+        elif isinstance(node, ast.Name):
+            found.add(node.id)
+        elif isinstance(node, ast.alias):
+            found.add(node.name)
+        elif isinstance(node, ast.ImportFrom):
+            found.add(node.module)
+    return found & TERMINAL_DELEGATED
+
+
+def test_terminal_work_detector_flags_an_old_copy_and_passes_a_delegate():
+    assert private_terminal_work(OLD_TERMINAL_COPY) == {"add_message", "aiofiles", "audit_log"}
+    assert private_terminal_work("from aiofiles import open\n") == {"aiofiles"}
+    assert private_terminal_work("self._output_buffer = ''\n") == {"_output_buffer"}
+    assert private_terminal_work(DELEGATING_TERMINAL) == set()
+
+
+def test_terminal_handlers_delegates_chat_transcript_and_audit():
+    source = _read("autobot-backend/api/terminal_handlers.py")
+    assert private_terminal_work(source) == set()
+    assert {"TerminalAuditLogger", "TerminalChatIntegrator"} <= referenced_names(source)
+
+
 # --- Row 9: deploy wrappers --------------------------------------------------------------------
 DEPLOY_CORE = {"log", "error_exit", "success", "check_prerequisites", "test_connectivity"}
 DEPLOY_SCRIPTS = [ANSIBLE + "deploy-hybrid.sh", ANSIBLE + "deploy-native.sh"]
