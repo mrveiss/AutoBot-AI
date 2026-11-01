@@ -30,6 +30,7 @@ from ..models.enums import ActivityEventType, WorkItemStatus, WorkItemType
 from ..models.heartbeat_run import LLCHeartbeatRun
 from ..models.work_item import LLCWorkItem
 from ..services.activity_log import LLCActivityLogService
+from ..services.work_item_hierarchy import parent_if_allowed
 from ..services.work_item_service import WorkItemService
 from .base import PollLoopScheduler
 from .dispatch_gate import agent_ref_block_reason
@@ -180,6 +181,15 @@ class LivenessMonitor(PollLoopScheduler):
         manager_agent_id = await self._resolve_manager(session, company_id, agent_id)
 
         svc = WorkItemService()
+        # #18978: a recovery Bug follows the stuck item's parent only where the hierarchy rules allow it
+        # (a stuck Subtask's parent is a Task); otherwise it stays unparented in the same project.
+        parent_id = await parent_if_allowed(
+            session,
+            svc.get,
+            company_id,
+            WorkItemType.BUG,
+            str(work_item.parent_id) if work_item and work_item.parent_id else None,
+        )
         await svc.create(
             session,
             company_id=company_id,
@@ -192,7 +202,8 @@ class LivenessMonitor(PollLoopScheduler):
                 f"Investigate and unblock manually."
             ),
             assignee_agent_id=manager_agent_id,
-            parent_id=str(work_item.parent_id) if work_item and work_item.parent_id else None,
+            parent_id=parent_id,
+            project_id=None if parent_id or not work_item or not work_item.project_id else str(work_item.project_id),
             goal_id=str(work_item.goal_id) if work_item and work_item.goal_id else None,
         )
 

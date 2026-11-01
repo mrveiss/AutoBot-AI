@@ -135,6 +135,19 @@ async def validate_create(
     )
 
 
+async def parent_if_allowed(
+    session: AsyncSession, get: ItemGetter, company_id: str, item_type, parent_id: Optional[str]
+) -> Optional[str]:
+    """*parent_id* when a new *item_type* may sit under it, else None (for system-made items)."""
+    if parent_id is None:
+        return None
+    try:
+        await validate_create(session, get, company_id, item_type, parent_id, None)
+    except HierarchyViolation:
+        return None
+    return parent_id
+
+
 async def move_subtree_to_project(session: AsyncSession, root_id: uuid.UUID, project_id: uuid.UUID) -> int:
     """Set ``project_id`` on every descendant of *root_id*; bounded and cycle-safe. Returns the row count."""
     seen = {root_id}

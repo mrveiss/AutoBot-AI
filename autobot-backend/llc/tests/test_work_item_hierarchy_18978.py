@@ -11,14 +11,18 @@ way legacy data got there. They must be refused as a *new* parent target but nev
 from __future__ import annotations
 
 import uuid
+from types import SimpleNamespace
 from typing import AsyncIterator
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from llc.models.enums import WorkItemType as T
 from llc.models.work_item import LLCWorkItem
+from llc.scheduler.liveness_monitor import LivenessMonitor
 from llc.services.work_item_hierarchy import (
     ALLOWED_PARENT_TYPES,
     HierarchyViolation,
@@ -186,3 +190,32 @@ async def test_the_read_only_report_names_invalid_rows_and_changes_nothing(sessi
     assert set(found) == {str(bad.id), str(no_project.id)}
     await session.refresh(bad)
     assert bad.parent_id == epic.id
+
+
+async def _recovery_bug(session, stuck):
+    """Run the liveness monitor's recovery path for *stuck* and return the Bug it created."""
+    monitor = LivenessMonitor(poll_interval=9999)
+    run = SimpleNamespace(id=uuid.uuid4())
+    with patch.object(LivenessMonitor, "_resolve_manager", new=AsyncMock(return_value=None)):
+        await monitor._create_recovery_item(session, run, stuck, COMPANY, str(uuid.uuid4()))
+    rows = (await session.execute(select(LLCWorkItem).where(LLCWorkItem.type == T.BUG))).scalars().all()
+    assert len(rows) == 1
+    return rows[0]
+
+
+async def test_recovery_bug_follows_a_stuck_task_to_its_pbi(session):
+    epic = await _make(session, T.EPIC, project=PROJECT)
+    pbi = await _make(session, T.PBI, parent=epic)
+    task = await _make(session, T.TASK, parent=pbi)
+    bug = await _recovery_bug(session, task)
+    assert bug.parent_id == pbi.id and str(bug.project_id) == PROJECT
+
+
+async def test_recovery_bug_for_a_stuck_subtask_is_not_refused_and_keeps_the_project(session):
+    """A Bug cannot sit under a Task, so the recovery item is unparented rather than lost."""
+    epic = await _make(session, T.EPIC, project=PROJECT)
+    pbi = await _make(session, T.PBI, parent=epic)
+    task = await _make(session, T.TASK, parent=pbi)
+    sub = await _make(session, T.SUBTASK, parent=task)
+    bug = await _recovery_bug(session, sub)
+    assert bug.parent_id is None and str(bug.project_id) == PROJECT
