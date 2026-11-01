@@ -33,6 +33,7 @@ from user_management.database import get_async_session_factory
 from ..models.enums import LLCAgentStatus, RoutineStatus
 from ..models.routine import LLCRoutine
 from ..services.controls_service import NEVER_SCHEDULED_STATUSES
+from .dispatch_gate import agent_pause_flag_key, company_pause_flag_key
 from .heartbeat_scheduler import _SCHEDULE_KEY, _next_fire
 from .schedule_members import ROUTINE_MEMBER_PREFIX
 
@@ -63,9 +64,9 @@ class _Wanted(NamedTuple):
 def _pause_keys(agent_id: Any, company_id: Any) -> Tuple[str, ...]:
     keys = []
     if agent_id:
-        keys.append(f"llc:agent:{agent_id}:paused")
+        keys.append(agent_pause_flag_key(agent_id))
     if company_id:
-        keys.append(f"llc:company:{company_id}:paused")
+        keys.append(company_pause_flag_key(company_id))
     return tuple(keys)
 
 
@@ -165,8 +166,13 @@ async def restore_lost_schedule_members(redis: Any) -> List[str]:
 
 
 async def reconcile_loop(interval: float = SCHEDULE_RECONCILE_INTERVAL_SECONDS) -> None:
-    """Reconcile every *interval* seconds until cancelled; one failed pass does not end the loop."""
+    """Reconcile every *interval* seconds until cancelled; one failed pass does not end the loop.
+
+    The first pass waits one interval: the loop starts while the schedulers are still seeding the
+    set, and a pass that beat them would log their own seeding as a restoration (#20232).
+    """
     while True:
+        await asyncio.sleep(interval)
         try:
             redis = await get_async_redis_client()
             if redis is None:
@@ -175,4 +181,3 @@ async def reconcile_loop(interval: float = SCHEDULE_RECONCILE_INTERVAL_SECONDS) 
                 await restore_lost_schedule_members(redis)
         except Exception:
             logger.exception("Schedule reconcile pass failed")
-        await asyncio.sleep(interval)
