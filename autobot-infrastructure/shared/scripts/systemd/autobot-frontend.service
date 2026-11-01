@@ -3,7 +3,7 @@
 # Author: mrveiss
 #
 # AutoBot Frontend Service (Vue/Vite Dev Server)
-# Deployed on: 172.16.168.21 (Frontend VM)
+# Dev-server unit. The backend address comes from the deployed env file, never from this file (#19828).
 # Port: 5173
 
 [Unit]
@@ -18,9 +18,8 @@ User=autobot
 Group=autobot
 WorkingDirectory=/home/autobot/autobot-vue
 Environment=NODE_ENV=development
-Environment=VITE_BACKEND_HOST=172.16.168.20
-Environment=VITE_BACKEND_PORT=8001
-ExecStart=/snap/bin/npm run dev -- --host 0.0.0.0 --port 5173
+EnvironmentFile=-/etc/autobot/autobot-frontend.env
+ExecStart=/snap/bin/npm run dev -- --host --port 5173
 Restart=always
 RestartSec=5
 StandardOutput=journal
