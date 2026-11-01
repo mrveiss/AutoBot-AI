@@ -903,18 +903,13 @@ class SessionMixin:
         try:
             self._sanitize_session_id(session_id)
             chats_directory = self._get_chats_directory()
-            chat_file = str(validate_relative_path(f"{session_id}_chat.json", chats_directory))
-
-            # Try new format first
-            file_exists = await run_in_chat_io_executor(os.path.exists, chat_file)
-            if file_exists:
-                async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
-                    file_content = await f.read()
-                chat_data = self._decrypt_data(file_content)
-
-                # Check metadata for owner field
-                metadata = chat_data.get("metadata", {})
-                return metadata.get("owner") or metadata.get("username")
+            for name in (f"{session_id}_chat.json", f"chat_{session_id}.json"):  # the older name second (#20030)
+                chat_file = str(validate_relative_path(name, chats_directory))
+                if await run_in_chat_io_executor(os.path.exists, chat_file):
+                    async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
+                        file_content = await f.read()
+                    metadata = self._decrypt_data(file_content).get("metadata", {})
+                    return metadata.get("owner") or metadata.get("username")
 
         except Exception as e:
             logger.warning("Failed to get session owner for %s: %s", session_id, e)
