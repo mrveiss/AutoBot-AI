@@ -153,7 +153,8 @@ async def _run_indexing_subprocess(
     worker_script = Path(__file__).parent / "indexing_worker.py"
 
     async with tasks_lock:
-        indexing_tasks[task_id] = create_initial_state_fn()
+        # #20491: known from the first save, so no reader takes it for another source's job.
+        indexing_tasks[task_id] = {**create_initial_state_fn(), "source_id": source_id}
         await save_task_fn(task_id)
 
     cmd = [sys.executable, str(worker_script), task_id, root_path]
