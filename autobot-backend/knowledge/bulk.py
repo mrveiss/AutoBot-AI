@@ -24,6 +24,7 @@ from autobot_shared.security.path_validator import require_path_string
 from autobot_shared.time_utils import parse_utc_iso
 from constants.threshold_constants import CategoryDefaults
 from knowledge.backup_embeddings import fetch_backup_embeddings, restore_backup_embedding
+from knowledge.backup_stream import write_backup
 from knowledge.export_fields import filter_fact_fields
 from knowledge.quarantine import BACKUP_AUDIT_ACTOR, EXPORT_AUDIT_ACTOR, QuarantineAuditFailed, read_every_fact
 
@@ -1417,11 +1418,8 @@ class BulkOperationsMixin:
             logger.info("Creating backup: %s", backup_file)
 
             facts = await read_every_fact(self, audit_actor)
-            if include_embeddings:
-                facts = await self._add_embeddings_to_facts(facts)
-
             backup_data = await self._build_backup_data(facts, description, include_embeddings, include_metadata)
-            await self._write_backup_file(backup_file, backup_data, compression)
+            await write_backup(self, backup_file, backup_data, compression)
 
             file_size = os.path.getsize(backup_file)
             logger.info(
@@ -1541,26 +1539,6 @@ class BulkOperationsMixin:
         except Exception as e:
             logger.warning("Could not include metadata: %s", e)
             return {}
-
-    async def _write_backup_file(self, backup_file: str, backup_data: Dict[str, Any], compression: bool) -> None:
-        """
-        Write backup data to file.
-
-        Issue #398: Extracted from create_backup.
-        """
-        json_data = json.dumps(backup_data, ensure_ascii=False, indent=2)
-
-        if compression:
-            await asyncio.to_thread(self._write_gzip_file, backup_file, json_data)
-        else:
-            await asyncio.to_thread(_write_file_sync, backup_file, json_data)
-
-    def _write_gzip_file(self, filepath: str, content: str) -> None:
-        """Write content to gzip-compressed file (Issue #419)."""
-        import gzip
-
-        with gzip.open(filepath, "wt", encoding="utf-8") as f:
-            f.write(content)
 
     def _read_gzip_file(self, filepath: str) -> str:
         """Read content from gzip-compressed file (Issue #419)."""
