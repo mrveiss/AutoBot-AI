@@ -165,6 +165,23 @@ def agent_context(request: Request) -> tuple[str, str]:
     return agent_id, company_id
 
 
+def require_work_item_id(request: Request) -> None:
+    """Router dependency: 404 when the ``work_item_id`` path segment is not a UUID (#20120).
+
+    ``WorkItemService`` parses the id with ``uuid.UUID`` and a malformed one is a
+    ``ValueError`` -> 500. An id that cannot be a UUID names no work item, so it is
+    a 404 here, once, for every route carrying the segment. Only the path segment
+    is parsed -- a ``ValueError`` from a handler's own logic is not caught.
+    """
+    raw = request.path_params.get("work_item_id")
+    if raw is None:
+        return
+    try:
+        uuid.UUID(str(raw))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Work item not found") from exc
+
+
 async def assert_item_in_company(item_id: str, company_id: str) -> uuid.UUID:
     """GH#12156: 404 unless the work item belongs to the caller's company.
 
