@@ -83,6 +83,8 @@ def _inside(path: Path, root: Path) -> bool:
 def plan_env_copies(root: Path | None = None) -> CleanupPlan:
     """Which ``.env.*~`` copies to remove: all but the newest. Reads names and mtimes only."""
     root = root or install_root()
+    if os.path.lexists(root / ".git"):
+        return CleanupPlan(refused="the install root is a checkout, so these are not deployed files")
     backend = root / BACKEND_DIR_NAME
     if backend.is_symlink() or not _inside(backend, root):
         return CleanupPlan(refused="the backend directory is a symlink or outside the install root")
@@ -108,10 +110,15 @@ def plan_infrastructure_dir(root: Path | None = None) -> CleanupPlan:
     target = root / INFRA_DIR_NAME
     if not os.path.lexists(target):
         return CleanupPlan()
+    if os.path.lexists(root / ".git"):
+        return CleanupPlan(refused="the install root is a checkout, so this is tracked source, not a deployed copy")
     if target.is_symlink() or not target.is_dir():
         return CleanupPlan(refused=f"{INFRA_DIR_NAME} is a symlink or not a directory")
     if not _inside(target, root) or target.resolve() == root.resolve():
         return CleanupPlan(refused=f"{INFRA_DIR_NAME} resolves outside the install root")
+    # Role manifests are read from code_source; with no copy there, nothing replaces this one (#20520).
+    if not (root / "code_source" / INFRA_DIR_NAME).is_dir():
+        return CleanupPlan(refused=f"code_source has no {INFRA_DIR_NAME}, so this may be the only copy")
     if os.path.lexists(target / ".git"):
         return CleanupPlan(refused=f"{INFRA_DIR_NAME} holds .git: it is a checkout, not the deployed copy")
     return CleanupPlan(targets=(target,), file_count=_tree_file_count(target))
@@ -136,12 +143,14 @@ def _remove_infrastructure_dir(plan: CleanupPlan, root: Path) -> int:
     return plan.file_count
 
 
-async def _audit(approval: "Approval", action: AuditAction, result: str, **details: object) -> None:
-    await audit_log(
+async def _audit(approval: "Approval", action: AuditAction, result: str, **details: object) -> bool:
+    """Whether the entry was written. Durable, as the entry before a removal must not be lost (#17038)."""
+    return await audit_log(
         action.value,
         result=result,
         user_id=approval.decided_by_user,
         resource=action.value,
+        durable=True,
         details={"approval_id": str(approval.id), **details},
     )
 
@@ -164,13 +173,19 @@ async def _execute(approval, session, *, audit_action, planner, remover, noun: s
         await _audit(approval, audit_action, "success", removed=0, self_approval=self_approval)
         await _record(approval, session, f"Nothing to remove: no {noun} found.")
         return
+    # The paper trail comes first: no committed entry means nothing is removed (#17038).
+    names = [str(p.relative_to(root)) for p in plan.targets]
+    if not await _audit(approval, audit_action, "success", phase="intent", paths=names, self_approval=self_approval):
+        await _record(approval, session, "Nothing removed: the audit entry could not be written.")
+        raise ValueError("the audit entry could not be written, so nothing was removed")
     try:
         removed = await asyncio.to_thread(remover, plan, root)
     except (OSError, ValueError) as exc:
         await _audit(approval, audit_action, "failed", error=type(exc).__name__, self_approval=self_approval)
         raise
-    names = [str(p.relative_to(root)) for p in plan.targets]
-    await _audit(approval, audit_action, "success", removed=removed, paths=names, self_approval=self_approval)
+    await _audit(
+        approval, audit_action, "success", phase="completion", removed=removed, paths=names, self_approval=self_approval
+    )
     suffix = " (self-approved by the only admin)." if self_approval else "."
     await _record(approval, session, f"Removed {removed} {noun}: {', '.join(names)}{suffix}")
 

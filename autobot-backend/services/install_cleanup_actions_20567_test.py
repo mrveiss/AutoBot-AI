@@ -101,6 +101,7 @@ async def test_a_context_path_is_ignored(tmp_path: Path) -> None:
 
 
 def _make_infra(root: Path, git: bool = False) -> Path:
+    (root / "code_source" / acts.INFRA_DIR_NAME).mkdir(parents=True)
     infra = root / "autobot-infrastructure"
     (infra / "sub").mkdir(parents=True)
     (infra / "sub" / "a.txt").write_text(_SECRET, encoding="utf-8")
@@ -176,3 +177,31 @@ def test_registration_is_server_only() -> None:
     acts.register_install_cleanup_actions()
     assert approval_execution.is_server_only_action(acts.ENV_COPIES_ACTION)
     assert approval_execution.is_server_only_action(acts.INFRA_DIR_ACTION)
+
+
+async def test_no_audit_entry_means_nothing_is_removed(tmp_path: Path) -> None:
+    """#17038: the paper trail comes first."""
+    backend = _make_env(tmp_path, {".env.1~": 100, ".env.2~": 200})
+    before = _names(backend)
+    with (
+        patch.object(acts, "install_root", return_value=tmp_path),
+        patch.object(acts, "audit_log", AsyncMock(return_value=False)),
+        pytest.raises(ValueError),
+    ):
+        await acts.execute_env_copies_cleanup(_approval(acts.ENV_COPIES_ACTION), _session())
+    assert _names(backend) == before
+
+
+def test_the_stale_directory_is_refused_while_code_source_has_no_copy(tmp_path: Path) -> None:
+    """Role manifests are read from code_source; without it this may be the only copy."""
+    (tmp_path / acts.INFRA_DIR_NAME).mkdir()
+    assert "code_source" in acts.plan_infrastructure_dir(tmp_path).refused
+
+
+def test_a_checkout_as_install_root_refuses_both(tmp_path: Path) -> None:
+    """On a dev checkout, `<root>/autobot-infrastructure` is tracked source and `.git` is one level up."""
+    (tmp_path / ".git").mkdir()
+    (tmp_path / acts.INFRA_DIR_NAME).mkdir()
+    (tmp_path / "code_source" / acts.INFRA_DIR_NAME).mkdir(parents=True)
+    assert "checkout" in acts.plan_infrastructure_dir(tmp_path).refused
+    assert "checkout" in acts.plan_env_copies(tmp_path).refused
