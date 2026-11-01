@@ -35,7 +35,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.user_management.user_service_errors import SessionReassignError
+from autobot_shared.user_management.user_service_errors import SessionReassignError, SessionStoreWriteError
 from chat_history.file_io import run_in_chat_io_executor
 from chat_history.session_listing import _extract_chat_id_from_filename
 from llc.models.membership import LLCCompanyMembership
@@ -62,14 +62,16 @@ class Handover:
     company_id: Optional[uuid.UUID] = None
 
 
-async def owned_sessions(manager: Any, username: str) -> list[tuple[str, Optional[str]]]:
-    """``(session_id, company_id)`` for every stored session whose owner is *username*.
+async def owned_sessions(manager: Any, username: str) -> tuple[list[tuple[str, Optional[str]]], list[str]]:
+    """``(session_id, company_id)`` for every session whose owner is *username*, plus the unreadable ids.
 
-    Reads the session files (the durable owner record, ``metadata.owner`` or the older ``username``). A file
-    that cannot be read is logged and skipped: its owner cannot be known, so it is not this user's to move.
+    Reads the session files (the durable owner record, ``metadata.owner`` or the older ``username``). The
+    owner of an unreadable file cannot be known, and ownership matches on the username, so a later user
+    with this name could inherit it: the caller refuses the removal.
     """
     names = await run_in_chat_io_executor(os.listdir, manager._get_chats_directory())
     found: list[tuple[str, Optional[str]]] = []
+    unreadable: list[str] = []
     for name in sorted(names):
         sid = _extract_chat_id_from_filename(name)
         if not sid:
@@ -78,11 +80,12 @@ async def owned_sessions(manager: Any, username: str) -> list[tuple[str, Optiona
             data = await manager.load_full_session(sid) or {}
         except Exception as exc:
             logger.warning("Session %s... unreadable while looking for %s's sessions: %s", sid[:8], username, exc)
+            unreadable.append(sid)
             continue
         meta = data.get("metadata") or {}
         if (meta.get("owner") or meta.get("username")) == username:
             found.append((sid, meta.get("company_id") or None))
-    return found
+    return found, unreadable
 
 
 async def member_companies(db: AsyncSession, user_id: uuid.UUID) -> list[uuid.UUID]:
@@ -148,13 +151,15 @@ async def usernames_of(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID,
     return {uid: name for uid, name in rows.all()}
 
 
-async def write_owner(manager: Any, validator: Any, session_id: str, successor_id: uuid.UUID, username: str) -> None:
+async def write_owner(
+    manager: Any, validator: Any, session_id: str, successor_id: uuid.UUID, username: str, previous_owner: str
+) -> None:
     """Hand one session to *username* in both owner stores; raises ``SessionReassignError`` if either refuses."""
     meta = build_owner_metadata({"username": username, "user_id": str(successor_id)})
     if not await manager.update_session_metadata(session_id, meta):
-        raise SessionReassignError(f"Session {session_id} could not be handed over: its file was not updated")
-    if not await validator.set_session_owner(session_id, username, force=True):
-        raise SessionReassignError(f"Session {session_id} could not be handed over: its ownership key was not set")
+        raise SessionStoreWriteError(f"Session {session_id} could not be handed over: its file was not updated")
+    if not await validator.set_session_owner(session_id, username, force=True, previous_owner=previous_owner):
+        raise SessionStoreWriteError(f"Session {session_id} could not be handed over: its ownership key was not set")
 
 
 def audit_handover(actor: str, user_id: uuid.UUID, h: Handover, outcome: str = "success") -> None:
@@ -175,12 +180,12 @@ def audit_handover(actor: str, user_id: uuid.UUID, h: Handover, outcome: str = "
 
 
 async def _apply(
-    manager: Any, validator: Any, actor: str, user_id: uuid.UUID, plan: list[Handover], names: dict
+    manager: Any, validator: Any, actor: str, user_id: uuid.UUID, plan: list[Handover], names: dict, previous_owner: str
 ) -> int:
     """Write the plan; each session's audit record says how it went."""
     for h in plan:
         try:
-            await write_owner(manager, validator, h.session_id, h.successor_id, names[h.successor_id])
+            await write_owner(manager, validator, h.session_id, h.successor_id, names[h.successor_id], previous_owner)
         except SessionReassignError:
             audit_handover(actor, user_id, h, outcome="failed")
             raise
@@ -196,7 +201,17 @@ async def reassign_user_sessions(
     if user is None:
         return {"sessions_reassigned": 0}
     manager = manager or _default_manager()
-    owned = await owned_sessions(manager, user.username)
+    owned, unreadable = await owned_sessions(manager, user.username)
+    if unreadable:
+        emit_security(
+            AuditAction.SESSION_REASSIGN,
+            actor,
+            resource_type="user",
+            resource_id=str(user_id),
+            outcome="denied",
+            metadata={"unreadable_sessions": unreadable},
+        )
+        raise SessionReassignError(f"{len(unreadable)} session file(s) cannot be read, so their owners are unknown")
     if not owned:
         return {"sessions_reassigned": 0}
     try:
@@ -208,7 +223,7 @@ async def reassign_user_sessions(
         raise
     names = await usernames_of(db, {h.successor_id for h in plan})
     validator = validator or await _default_validator()
-    return {"sessions_reassigned": await _apply(manager, validator, actor, user_id, plan, names)}
+    return {"sessions_reassigned": await _apply(manager, validator, actor, user_id, plan, names, user.username)}
 
 
 def _default_manager() -> Any:

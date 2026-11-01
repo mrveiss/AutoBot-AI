@@ -311,7 +311,7 @@ async def delete_user(
             detail=f"User {user_id} not found",
         )
     except SessionReassignError as exc:  # #20029: refused, so no session is left without an owner
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+        raise HTTPException(status_code=exc.status_code, detail=str(exc))
 
 
 # -------------------------------------------------------------------------
@@ -366,7 +366,7 @@ async def deactivate_user(
             detail=f"User {user_id} not found",
         )
     except SessionReassignError as exc:  # #20029
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+        raise HTTPException(status_code=exc.status_code, detail=str(exc))
 
 
 # Password Management: split into api/user_management/password_change.py (#15743) --

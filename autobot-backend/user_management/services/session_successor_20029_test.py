@@ -330,3 +330,46 @@ async def test_a_refusal_leaves_the_account_exactly_as_it_was():
     assert user.is_active is True and user.deleted_at is None
     svc.session.delete.assert_not_awaited()
     svc._audit_log.assert_not_awaited()
+
+
+def test_errors_map_to_their_status() -> None:
+    from autobot_shared.user_management.user_service_errors import SessionReassignError, SessionStoreWriteError
+
+    assert SessionReassignError("x").status_code == 409
+    assert SessionStoreWriteError("x").status_code == 503
+    assert issubclass(SessionStoreWriteError, SessionReassignError)
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_file_is_reported_not_silently_skipped(monkeypatch) -> None:
+    """Its owner can't be known, and a later user with this name could inherit it."""
+
+    class Broken(FakeManager):
+        async def load_full_session(self, sid: str):
+            if sid == "bad":
+                raise ValueError("corrupt")
+            return await super().load_full_session(sid)
+
+    async def listing(*_args):
+        return ["bad_chat.json", "good_chat.json"]
+
+    monkeypatch.setattr(ss, "run_in_chat_io_executor", listing)
+    monkeypatch.setattr(ss, "_extract_chat_id_from_filename", lambda name: name.split("_")[0])
+    manager = Broken({"good": {"metadata": {"owner": "ana"}}})
+    found, unreadable = await ss.owned_sessions(manager, "ana")
+    assert found == [("good", None)] and unreadable == ["bad"]
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_file_refuses_the_removal_before_any_write(monkeypatch) -> None:
+    from autobot_shared.user_management.user_service_errors import SessionReassignError
+
+    monkeypatch.setattr(ss, "owned_sessions", AsyncMock(return_value=([("good", None)], ["bad"])))
+    audit = MagicMock()
+    monkeypatch.setattr(ss, "emit_security", audit)
+    db = MagicMock(get=AsyncMock(return_value=MagicMock(username="ana")))
+    manager, validator = FakeManager({}), FakeValidator()
+    with pytest.raises(SessionReassignError):
+        await ss.reassign_user_sessions(db, uuid.uuid4(), "actor-1", manager, validator)
+    assert audit.call_args.kwargs["outcome"] == "denied"
+    assert audit.call_args.kwargs["metadata"] == {"unreadable_sessions": ["bad"]}

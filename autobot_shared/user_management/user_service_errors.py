@@ -41,3 +41,11 @@ class SessionReassignError(UserServiceError):
     No successor and no active administrator, or an owner write that failed. The removal is refused, so a
     session is never left owned by an account that can no longer act.
     """
+
+    status_code = 409
+
+
+class SessionStoreWriteError(SessionReassignError):
+    """A session's owner could not be written: a store fault, not a missing successor."""
+
+    status_code = 503
