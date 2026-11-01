@@ -46,7 +46,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/agent.py": 1349,
     "autobot-backend/api/agent_config.py": 1371,
     "autobot-backend/api/agent_terminal.py": 773,
-    "autobot-backend/api/analytics.py": 1277,
+    "autobot-backend/api/analytics.py": 1269,
     "autobot-backend/api/analytics_architecture.py": 1260,
     "autobot-backend/api/analytics_bug_prediction.py": 1430,
     "autobot-backend/api/analytics_cfg.py": 1331,

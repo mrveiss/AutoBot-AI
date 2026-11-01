@@ -42,6 +42,11 @@ _logger = get_logger(__name__)
 
 # psutil.Process.create_time() computes an absolute epoch time from
 # psutil.boot_time() on Linux, which reads the ``btime`` line of /proc/stat.
+# ``btime`` is not constant on a WSL2 host: it steps down about once per
+# 10-60 s as the guest clock is corrected, so the absolute value of the SAME
+# live process changes between two reads (GH#20466). Identity is therefore
+# the start psutil itself compares in Process.__eq__ (``Process._ident``: the
+# monotonic jiffies since boot on Linux, which never changes).
 # Some sandboxed CI containers present a /proc/stat without that line, and
 # psutil raises a bare ``RuntimeError`` for it -- NOT a psutil.Error subclass
 # (see psutil._pslinux.boot_time), so it is never caught by ``except
@@ -309,6 +314,11 @@ async def spawn_with_workspace_retry(
         return proc, None
 
 
+def _start_stamp(pid: int) -> float:
+    """The start of *pid* in psutil's own identity (``(pid, start)``); stable for the life of the process."""
+    return psutil.Process(pid)._ident[1]
+
+
 def spawn_create_time(pid: int) -> float | None:
     """The psutil-recorded start time for a just-spawned *pid* (PR#16284 review).
 
@@ -322,7 +332,7 @@ def spawn_create_time(pid: int) -> float | None:
     probe rather than crashing the invoke that just spawned this process.
     """
     try:
-        return psutil.Process(pid).create_time()
+        return _start_stamp(pid)
     except _CREATE_TIME_ERRORS as exc:
         _logger.warning("spawn_create_time: could not read create_time for PID %d: %s", pid, exc)
         return None
@@ -361,7 +371,7 @@ def probe_pid_identity(pid: int, expected_create_time: float | None) -> AdapterR
     if expected_create_time is None:
         return probe_pid(pid)
     try:
-        actual = psutil.Process(pid).create_time()
+        actual = _start_stamp(pid)
     except psutil.NoSuchProcess:
         return AdapterRunStatus(status=LLCRunStatus.COMPLETED)
     except _CREATE_TIME_ERRORS as exc:
@@ -455,7 +465,7 @@ def _identity_verified(pid: int, expected_create_time: float | None) -> bool:
     if expected_create_time is None:
         return False
     try:
-        return psutil.Process(pid).create_time() == expected_create_time
+        return _start_stamp(pid) == expected_create_time
     except _CREATE_TIME_ERRORS as exc:
         _logger.warning("_identity_verified: could not verify PID %d, refusing to signal: %s", pid, exc)
         return False
