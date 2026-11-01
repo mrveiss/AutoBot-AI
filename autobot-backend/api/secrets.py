@@ -48,6 +48,12 @@ from api.schemas_system import (
 from api.secrets_audit import audit_secret_op
 from api.secrets_failure_log import describe_failure
 from api.secrets_ownership import stamp_owner
+from api.secrets_system_vault import create_system_vault_secret as _create_system_vault_secret
+from api.secrets_system_vault import (
+    delete_system_vault_secret,
+    list_system_vault_secrets,
+    rotate_system_vault_secret,
+)
 from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.auth import resolve_auth_type, validate_config_against_schema
@@ -650,51 +656,6 @@ async def _create_connector_bridged_secret(request: SecretCreateRequest, owner_i
     return _connector_secret_metadata(secret_id, request)
 
 
-async def _create_system_vault_secret(request: SecretCreateRequest, owner_id: str) -> Dict:
-    """Route a SYSTEM-visibility secret to EnvelopeSecretsService (#17099).
-
-    The legacy file store this endpoint otherwise writes to never declared a
-    `visibility` field, so every choice in the UI's dropdown -- System
-    included -- was silently dropped by Pydantic and landed in the same
-    per-user file no service reads for vault-owned credentials. This is the
-    only vault services like the audit worker (#13859) actually query.
-
-    Raises ValueError (-> 400) when `value` is missing, and SecretAccessError
-    (-> the caller's own mapping) when the caller isn't an admin --
-    `authorize()` grants SYSTEM-vault writes to admins only.
-    """
-    from api.envelope_secrets import get_coordinator
-    from autobot_shared.secrets_vault import VaultKind, VaultRef
-    from llc.deps import get_session
-    from user_management.middleware.rbac_middleware import rbac_middleware
-
-    if not request.value:
-        raise ValueError("value is required for a system-visibility secret")
-
-    user_id = uuid.UUID(owner_id)
-    permissions = set(await rbac_middleware.get_user_permissions(user_id))
-    coordinator = get_coordinator()
-    async for session in get_session():
-        secret = await coordinator.create(
-            session,
-            user_id=user_id,
-            permissions=permissions,
-            owner_vault=VaultRef(VaultKind.SYSTEM),
-            name=request.name,
-            secret_type=request.type.value,
-            plaintext=request.value.encode("utf-8"),
-        )
-        await session.commit()
-        return {
-            "id": str(secret.id),
-            "name": secret.name,
-            "type": secret.type,
-            "owner_vault": secret.owner_vault,
-            "version": secret.version,
-        }
-    raise RuntimeError("get_session() yielded no session")  # pragma: no cover -- defensive, generator always yields
-
-
 @router.post("/", response_model=DataResponse[SecretCreatedData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -751,6 +712,10 @@ async def create_secret(
                 "secret": secret_data,
             },
         )
+    except PermissionError as e:
+        # #17099: a refused SYSTEM-vault write (non-admin) is a 403, not a 500.
+        await audit_secret_op("CREATE", None, http_request, "denied", reason=type(e).__name__)
+        raise HTTPException(status_code=403, detail="Not permitted to create this secret")
     except ValueError as e:
         await audit_secret_op("CREATE", None, http_request, "failed", reason=type(e).__name__)
         raise HTTPException(status_code=400, detail="Internal server error")
@@ -782,14 +747,13 @@ async def list_secrets(
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         secrets = await asyncio.to_thread(secrets_manager.list_secrets, chat_id=chat_id, scope=scope)
         await audit_secret_op("LIST", None, http_request, count=len(secrets))
-        return JSONResponse(
-            status_code=200,
-            content={
-                "secrets": secrets,
-                "total_count": len(secrets),
-                "filters": {"chat_id": chat_id, "scope": scope},
-            },
-        )
+        content = {"secrets": secrets, "total_count": len(secrets), "filters": {"chat_id": chat_id, "scope": scope}}
+        # #17099: admin callers also get SYSTEM-vault metadata (never values).
+        _user = get_auth_middleware().get_user_from_request(http_request)
+        system_vault = await list_system_vault_secrets(str((_user or {}).get("user_id", "unknown")))
+        if system_vault is not None:
+            content["system_vault"] = system_vault
+        return JSONResponse(status_code=200, content=content)
     except Exception as e:
         # #19476: names the cause without a value (secrets_failure_log).
         logger.error("Failed to list secrets: %s", describe_failure(e))
@@ -970,17 +934,24 @@ async def update_secret(
 ):
     """Update a secret's metadata (Issue #744: requires admin authentication)"""
     await check_rate_limit(http_request)
+    owner_id = str((get_auth_middleware().get_user_from_request(http_request) or {}).get("user_id", "unknown"))
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         secret = await asyncio.to_thread(secrets_manager.update_secret, secret_id, request, chat_id=chat_id)
         if secret:
             # One serialization for the cache, the file and every response (#19476)
             secret_data = secret.model_dump(mode="json")
+        elif system_data := await rotate_system_vault_secret(
+            secret_id,
+            request.value,
+            owner_id,
+            http_request.headers,
+        ):
+            # #17099/#17731: a SYSTEM secret lives in the vault; rotate it there.
+            secret_data = system_data
         elif request.credentials:
             # #16428: not a legacy secret; rotate it in ConnectorCredentialStore
             # instead -- #13632's one-store decision, "PUT rotates the credential."
-            _user = get_auth_middleware().get_user_from_request(http_request)
-            owner_id = str((_user or {}).get("user_id", "unknown"))
             try:
                 await get_credential_store().rotate(secret_id, request.credentials, owner_id)
             except LookupError:
@@ -1035,6 +1006,8 @@ async def delete_secret(
         owner_id = str((_user or {}).get("user_id", "unknown"))
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         success = await asyncio.to_thread(secrets_manager.delete_secret, secret_id, chat_id=chat_id)
+        # #17099/#17731: a SYSTEM secret lives in the vault; delete it there too.
+        success = success or await delete_system_vault_secret(secret_id, owner_id, http_request.headers)
         if not success:
             # #16428: revoke() never raises on a missing secret (idempotent by
             # design), so existence must be checked first to still 404 a

@@ -6886,6 +6886,19 @@
   },
   "security": {
     "secretsManager": {
+      "systemVault": {
+        "title": "System vault",
+        "unavailable": "The system vault is unavailable, so its secrets cannot be shown.",
+        "empty": "No system vault secrets.",
+        "newValue": "New value",
+        "rotate": "Rotate",
+        "save": "Save",
+        "cancel": "Cancel",
+        "delete": "Delete",
+        "deleteTitle": "Delete system secret",
+        "deleteMessage": "Delete \"{name}\" from the system vault? Services that read it will stop receiving it.",
+        "failed": "The change was refused or failed. Nothing was modified."
+      },
       "sidebarTitle": "Credentials",
       "searchPlaceholder": "Search credentials...",
       "allCredentials": "All Credentials",

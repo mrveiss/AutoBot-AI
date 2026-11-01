@@ -126,9 +126,9 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/schemas_chat.py": 702,
     "autobot-backend/api/schemas_code.py": 3257,
     "autobot-backend/api/schemas_knowledge.py": 5119,
-    "autobot-backend/api/schemas_system.py": 4176,  # #18734: log-forwarding schemas moved out (4345 -> 4176)
+    "autobot-backend/api/schemas_system.py": 4175,  # #18734 4345 -> 4176; #17731 -> 4175
     "autobot-backend/api/schemas_workflows.py": 2824,
-    "autobot-backend/api/secrets.py": 1172,  # #19476 one model_dump serialization (was 1178, #16444)
+    "autobot-backend/api/secrets.py": 1145,  # #17731 SYSTEM-vault writes moved to secrets_system_vault.py (was 1172)
     "autobot-backend/api/security_assessment.py": 913,
     "autobot-backend/api/settings.py": 881,
     "autobot-backend/api/system.py": 995,
