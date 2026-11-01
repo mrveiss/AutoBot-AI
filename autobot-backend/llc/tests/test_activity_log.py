@@ -26,6 +26,7 @@ from llc.services.activity_log import (
     ActivityLogQuery,
     LLCActivityLogService,
 )
+from llc.services.actor import ActivityRecordError
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -391,7 +392,7 @@ class TestRecordUUIDValidation:
     @pytest.mark.asyncio
     async def test_record_raises_on_invalid_company_uuid(self) -> None:
         svc = _make_service()
-        with pytest.raises(ValueError, match="Invalid company_id UUID"):
+        with pytest.raises(ActivityRecordError, match="Invalid company_id UUID"):
             await svc.record(
                 session=self._mocked_session(),
                 company_id="bad-uuid",
@@ -405,7 +406,7 @@ class TestRecordUUIDValidation:
     @pytest.mark.asyncio
     async def test_record_raises_on_invalid_entity_uuid(self) -> None:
         svc = _make_service()
-        with pytest.raises(ValueError, match="Invalid entity_id UUID"):
+        with pytest.raises(ActivityRecordError, match="Invalid entity_id UUID"):
             await svc.record(
                 session=self._mocked_session(),
                 company_id=_uuid(),

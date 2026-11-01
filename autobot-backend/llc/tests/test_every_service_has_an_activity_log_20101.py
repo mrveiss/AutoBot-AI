@@ -38,13 +38,15 @@ LLC_ROOT = Path(__file__).resolve().parent.parent
 SLOT_NAMES = {"activity_log", "_activity_log"}
 MIN_SERVICES_EXPECTED = 30
 
-EXEMPT = {
-    # file -> (allowed skips, why)
-    "scheduler/liveness_monitor.py": (1, "held by PR #19958 (the scheduler files are edited there)"),
+EXEMPT: dict[str, tuple[int, str]] = {
+    # file -> (allowed skips, why). Empty: the last one, liveness_monitor, now has a real log.
 }
 
 # Not an LLCServiceBase, but its own slot is filled with a real LLCActivityLogService when none is passed.
-OWN_REAL_DEFAULT = {"services/controls_service.py": "held by PR #19958"}
+OWN_REAL_DEFAULT = {
+    "services/controls_service.py": "takes the real log when none is passed",
+    "scheduler/liveness_monitor.py": "takes the real log when none is passed (tested in test_liveness_monitor.py)",
+}
 
 
 def _is_slot(node: ast.AST) -> bool:

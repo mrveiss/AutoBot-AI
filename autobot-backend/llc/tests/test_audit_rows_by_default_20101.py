@@ -183,7 +183,7 @@ async def test_a_failed_audit_write_fails_the_claim_as_an_activity_record_error(
 
 
 async def test_an_unparseable_company_fails_the_write_instead_of_skipping_it(session):  # noqa: ANN001
-    with pytest.raises(ValueError, match="company_id"):
+    with pytest.raises(ActivityRecordError, match="company_id"):
         await GoalService().activity_log.record(
             session, "not-a-uuid", "system", None, "goal.created", "x", str(uuid.uuid4())
         )

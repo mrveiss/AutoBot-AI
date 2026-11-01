@@ -64,13 +64,28 @@ class ActivityRecordError(RuntimeError):
     """The audit write failed. Deliberately not a ``ValueError``: routes read that as the caller's error."""
 
 
+def require_actor_id(actor_id: Any) -> None:
+    """Reject an actor id that is not a UUID as the caller's error (``ValueError``), before any write.
+
+    The acting identity comes from the request, so a malformed one is bad input, not a fault in the
+    audit store; every other failure of the write is an :class:`ActivityRecordError`.
+    """
+    if actor_id is not None and not _is_uuid(actor_id):
+        raise ValueError(f"Invalid actor_id UUID: {actor_id!r}")
+
+
 async def audit(log: Any, session: Any, **entry: Any) -> None:
     """Write one activity record in the caller's transaction.
 
-    A failure propagates as :class:`ActivityRecordError` so the operation fails with it and the
+    A bad ``actor_id`` is the caller's ``ValueError``, raised before anything is written. Any other
+    failure propagates as :class:`ActivityRecordError` so the operation fails with it and the
     caller's transaction is rolled back, rather than surfacing as a not-found or bad-request.
+    ``LLCActivityLogService.record`` already raises it; a log that does not is wrapped here.
     """
+    require_actor_id(entry.get("actor_id"))
     try:
         await log.record(session, **entry)
+    except ActivityRecordError:
+        raise
     except Exception as exc:
         raise ActivityRecordError(f"activity record failed: {exc}") from exc
