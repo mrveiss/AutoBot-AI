@@ -55,7 +55,7 @@ def test_a_run_where_only_localhost_ran_fails_with_the_reason_first(tmp_path, mo
     result = _run(tmp_path, monkeypatch, _SKIPS + "PLAY RECAP ****\n" + _LOCAL)
     assert result["success"] is False
     assert result["returncode"] == 1
-    assert result["output"].splitlines()[0].startswith("ERROR! no host named by the limit")
+    assert result["output"].splitlines()[0].startswith("ERROR! hosts named by the limit ran no task")
 
 
 def test_the_same_run_with_the_node_in_the_recap_succeeds(tmp_path, monkeypatch) -> None:
