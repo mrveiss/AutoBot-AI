@@ -47,13 +47,14 @@ def test_each_fleet_upload_location_reads_the_home(template: str) -> None:
 
 def _api_location() -> str:
     text = _read("docker/nginx/nginx-locations.conf")
+    assert "proxy_request_buffering off;" in text
     return re.search(r"location /api/ \{(.*?)\n\}", text, re.S).group(1)
 
 
 def test_docker_applies_it_at_the_upload_location_only() -> None:
     assert "include /etc/nginx/upload-cap.conf;" in _api_location()
     common = _read("docker/nginx/nginx-common.conf")
-    assert "upload-cap.conf" not in common and re.search(r"^client_max_body_size 10m;$", common, re.M)
+    assert "upload-cap.conf" not in common and re.search(r"^client_max_body_size 100m;$", common, re.M)
     slm = _read("docker/nginx/nginx-slm-locations.conf")
     assert "upload-cap.conf" not in slm and "client_max_body_size" not in slm
 
