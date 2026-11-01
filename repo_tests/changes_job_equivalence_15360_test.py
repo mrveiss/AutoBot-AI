@@ -178,6 +178,10 @@ ALLOWED_ADDITIONS = {
             "INSTALL.md",
             "docker-compose.yml",
             "docker/frontend/Dockerfile",
+            # #19868: proxy_upload_cap_one_home_19868_test.py reads it
+            "docker/nginx/nginx-common.conf",
+            "docker/nginx/nginx-locations.conf",
+            "docker/nginx/nginx-slm-locations.conf",
             # #19817: guards sweep every tracked Dockerfile, under either naming.
             "**/Dockerfile*",
             "**/*.Dockerfile",

@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from models.approval import Approval
+from services.agent_org_service import AgentOrgService
 
 from ..models.activity import ActorType
 from ..models.budget import LLCAgentBudget
@@ -72,8 +73,23 @@ def validate_payload(gate_type: ApprovalType, payload: Dict[str, Any]) -> None:
         raise ApprovalHookError(f"{gate_type.value} payload is invalid: {exc.error_count()} error(s)") from exc
 
 
+async def _require_manager_still_here(session: AsyncSession, approval: Approval, hire: HirePayload) -> None:
+    """Refuse the approval when the hire's manager has left the company since the hire was requested (#20422).
+
+    Refuse rather than clear: the board approved this reporting line, so dropping it silently would seat the
+    agent somewhere nobody approved. The approval stays pending (409); reject it and request the hire again.
+    """
+    try:
+        await AgentOrgService(session).assert_manager_in_company(hire.reports_to, approval.company_id)
+    except ValueError as exc:
+        raise ApprovalHookError(
+            f"the hire's manager {hire.reports_to!r} is no longer an agent of this company"
+        ) from exc
+
+
 async def _hire_approved(session: AsyncSession, approval: Approval, decided_by: uuid.UUID) -> Dict[str, Any]:
     hire = HirePayload.model_validate(approval.context or {})
+    await _require_manager_still_here(session, approval, hire)
     node_id = await insert_hired_agent(session, approval.company_id, hire)
     await _activity_log.record(
         session,
