@@ -136,9 +136,13 @@ jobs:
           requirements*.txt
           autobot-backend/requirements*.txt
 
+    - name: Install CI requirements
+      uses: ./.github/actions/install-ci-requirements
+      with:
+        constraints: constraints/shared.txt
+
     - name: Install Python dependencies
       run: |
-        python -m pip install --upgrade pip setuptools wheel
         # #19426: the scanners live in their OWN venv. pip-audit audits an
         # installed environment, so installing them beside the project put the
         # scanners' dependencies in the audited set — safety pins
@@ -150,12 +154,6 @@ jobs:
         "$RUNNER_TEMP/scanners/bin/python" -m pip install pip-audit safety
         echo "SCANNER_BIN=$RUNNER_TEMP/scanners/bin" >> "$GITHUB_ENV"
         echo "PROJECT_PYTHON=$(command -v python)" >> "$GITHUB_ENV"
-        # Use CI-safe requirements (excludes vllm and other GPU-dependent packages)
-        # -c applies the shared floors (filelock>=4.2.1 among them) to the audited set.
-        python -m pip install -c constraints/shared.txt -r requirements-ci.txt --prefer-binary || {
-          echo "::error::Some dependencies failed to install — security tools may be incomplete"
-          exit 1
-        }
 
     # GATES (#13543). pip-audit reports no severity field at all, so the gate
     # runs at `any` — filtering by a severity the tool never emits would pass

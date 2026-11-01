@@ -60,3 +60,43 @@ describe('HireAgentModal heartbeat switch (#15907)', () => {
     expect(body.heartbeat_enabled).toBe(true)
   })
 })
+
+describe('HireAgentModal pending approval (#8214)', () => {
+  it('a pending_approval answer shows the notice and does not claim a hire', async () => {
+    post.mockResolvedValue({ status: 'pending_approval', approval_id: 'a1' })
+    const wrapper = mountModal()
+    await hire(wrapper)
+
+    expect(wrapper.get('[data-testid="hire-pending"]').text()).toBe(en.hireAgent.pendingApproval)
+    expect(wrapper.emitted('hired')).toBeUndefined()
+    expect(wrapper.emitted('close')).toBeUndefined()
+  })
+
+  it('a hired agent still closes the modal and announces the hire', async () => {
+    post.mockResolvedValue({ agent_id: 'x' })
+    const wrapper = mountModal()
+    await hire(wrapper)
+
+    expect(wrapper.emitted('hired')).toHaveLength(1)
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    expect(wrapper.find('[data-testid="hire-pending"]').exists()).toBe(false)
+  })
+})
+
+describe('HireAgentModal submit guard and notice wording (#8214)', () => {
+  it('a second submit while the first is in flight, or after a pending answer, sends nothing', async () => {
+    post.mockResolvedValue({ status: 'pending_approval' })
+    const wrapper = mountModal()
+    await wrapper.get('input[type="text"]').setValue('Builder-1')
+    await wrapper.get('form').trigger('submit')
+    await wrapper.get('form').trigger('submit') // Enter while the first request is in flight
+    await flushPromises()
+    await wrapper.get('form').trigger('submit') // Enter after the pending answer
+    await flushPromises()
+    expect(post).toHaveBeenCalledTimes(1)
+  })
+
+  it('the notice describes the submission only, not a state the board can change', () => {
+    expect(en.hireAgent.pendingApproval).not.toMatch(/waiting|no agent has been created/i)
+  })
+})
