@@ -36,10 +36,11 @@ async def _dispatch(status: LLCRunStatus, billing, session: FakeAsyncSession, in
 
 
 @pytest.mark.asyncio
-async def test_finished_subscription_run_over_budget_is_not_failed_and_usage_is_recorded() -> None:
+async def test_finished_subscription_run_over_token_limit_is_recorded_not_failed() -> None:
     session, ingest = FakeAsyncSession(), AsyncMock(side_effect=BudgetExhausted("agent-abc", 12.0, 10.0))
     await _dispatch(LLCRunStatus.COMPLETED, BILLING_SUBSCRIPTION, session, ingest)  # must not raise
     assert ingest.await_args.args[3:6] == (1000, 200, "m")
+    assert ingest.await_args.kwargs == {"bill_dollars": False}
     assert session.commits == 1
 
 
@@ -50,6 +51,7 @@ async def test_finished_api_run_over_budget_still_raises_budget_exhausted() -> N
         with pytest.raises(BudgetExhausted):
             await _dispatch(LLCRunStatus.COMPLETED, billing, session, ingest)
         assert session.commits == 0
+        assert ingest.await_args.kwargs == {"bill_dollars": True}
 
 
 @pytest.mark.asyncio
