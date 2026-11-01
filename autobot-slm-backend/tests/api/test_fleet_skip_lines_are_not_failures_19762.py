@@ -102,3 +102,30 @@ def test_the_executor_result_carries_the_reason_as_a_fatal_line() -> None:
     assert _au.with_limit_proof(ran, ["localhost", _NODE]) is ran
     failed = {"output": "x", "returncode": 2}
     assert _au.with_limit_proof(failed, ["localhost", _NODE]) is failed
+
+
+_RAN = {"returncode": 0, "output": _SKIPS + _recap()}
+
+
+def test_self_update_needs_only_the_slm_node_and_reports_the_other_rows() -> None:
+    proved = _au.with_limit_proof(_RAN, ["localhost", _NODE, "stale-row"], must_run=[_NODE])
+    assert proved["returncode"] == 0
+    assert "NOTE: the limit also named hosts that ran no task: ['stale-row']" in proved["output"]
+
+
+def test_self_update_fails_when_the_slm_node_itself_did_not_run() -> None:
+    proved = _au.with_limit_proof(_RAN, ["localhost", "slm", _NODE], must_run=["slm"])
+    assert proved["returncode"] == 1 and "['slm']" in proved["output"].splitlines()[0]
+
+
+def test_every_host_running_adds_no_note() -> None:
+    assert _au.with_limit_proof(_RAN, ["localhost", _NODE], must_run=[_NODE]) == _RAN
+
+
+def test_an_all_skipped_host_on_the_strict_path_fails() -> None:
+    assert _NODE in _au.limit_run_failure(_SKIPS + _recap(node_ok=0), [_NODE])
+
+
+def test_the_self_update_call_passes_its_own_node_as_the_one_that_must_run() -> None:
+    source = (_BACKEND_ROOT / "api" / "code_sync.py").read_text(encoding="utf-8")
+    assert '"update-all-nodes.yml", limit=limit, detach=True, must_run=[node_id])' in source
