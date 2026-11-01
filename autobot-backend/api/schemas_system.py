@@ -3380,12 +3380,8 @@ class SecretCreateRequest(BaseModel):
     org_id: str | None = Field(None, max_length=128, description="Organization ID for org-level secrets")
     team_ids: List[str] = Field(default_factory=list, description="Team IDs for group-level secrets")
     shared_with: List[str] = Field(default_factory=list, description="User IDs to share with")
-    # #17099: the UI has offered "System" here since #685, but this field never
-    # existed -- Pydantic silently dropped it (no extra="forbid"), so every
-    # choice, System included, went through the legacy per-user file store
-    # unrouted. Only "system" gets special handling in create_secret(); every
-    # other value's current (unrouted) behaviour is unchanged by this field's
-    # mere existence.
+    # #17099: Pydantic used to drop this field silently, so "System" landed in the
+    # legacy file store. Only "system" is routed (to the vault) by create_secret().
     visibility: Literal["private", "shared", "group", "organization", "system"] | None = Field(
         None, description="A typo here must 422, not silently fall through to the legacy store (#16428 review)"
     )
@@ -3458,6 +3454,9 @@ class SecretUpdateRequest(BaseModel):
     tags: List[str] | None = None
     expires_at: datetime | None = None
     metadata: Metadata | None = None
+    # #17731: the new value for a SYSTEM-vault secret (rotated through the
+    # envelope coordinator). Ignored for a legacy secret.
+    value: str | None = Field(None, min_length=1, max_length=65536)
     # #16428: rotates a connector-bridged secret's credential in
     # ConnectorCredentialStore. Ignored for a non-bridged secret -- legacy
     # secrets have never supported value rotation via this endpoint.
