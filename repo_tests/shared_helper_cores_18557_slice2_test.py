@@ -228,6 +228,8 @@ def private_terminal_work(source: str) -> set[str]:
             found.add(node.id)
         elif isinstance(node, ast.alias):
             found.add(node.name)
+        elif isinstance(node, ast.ImportFrom):
+            found.add(node.module)
     return found & TERMINAL_DELEGATED
 
 
