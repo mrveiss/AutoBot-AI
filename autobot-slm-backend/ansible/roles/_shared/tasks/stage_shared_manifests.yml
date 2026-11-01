@@ -40,7 +40,7 @@
 
 - name: "Shared manifests | Stage constraints/shared.txt onto the node (#17331)"
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../../../constraints/shared.txt"
+    src: "{{ role_path | default(playbook_dir ~ '/x') }}/../../../../constraints/shared.txt"
     dest: "{{ autobot.base_dir }}/constraints/shared.txt"
     owner: "{{ autobot.user }}"
     mode: "0644"
@@ -53,7 +53,7 @@
 # It declares no includes of its own, so staging it needs nothing further.
 - name: "Shared manifests | Stage the root requirements.txt onto the node (#17331)"
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../../../requirements.txt"
+    src: "{{ role_path | default(playbook_dir ~ '/x') }}/../../../../requirements.txt"
     dest: "{{ autobot.base_dir }}/requirements.txt"
     owner: "{{ autobot.user }}"
     mode: "0644"
