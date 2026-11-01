@@ -37,7 +37,7 @@ _requires_posix = pytest.mark.skipif(os.name != "posix", reason="killpg/getpgid 
 
 def _create_time(pid: int) -> float:
     """The real psutil create_time for a just-spawned *pid* (PR#16284 review)."""
-    return psutil.Process(pid).create_time()
+    return psutil.Process(pid)._ident[1]
 
 
 def _pid_alive(pid: int) -> bool:
@@ -204,7 +204,7 @@ class TestPidReuseSafety:
             patch("os.kill") as mock_kill,
             patch("os.killpg") as mock_killpg,
         ):
-            mock_cls.return_value.create_time.return_value = create_time + 1.0  # a DIFFERENT process
+            mock_cls.return_value._ident = (0, create_time + 1.0)  # a DIFFERENT process
             result = await terminate_pid(
                 proc.pid, grace_seconds=1, log_name=_TEST_LOG_NAME, expected_create_time=create_time
             )
