@@ -57,7 +57,7 @@ const expanded = ref(false)
   width: 100%;
   cursor: default;
   font-size: var(--text-sm);
-  color: var(--text-primary, #e0e0e0);
+  color: var(--text-primary);
   padding: 0.15rem 0.5rem 0.15rem 0;
   border-radius: 0.25rem;
   background: none;
@@ -81,7 +81,7 @@ const expanded = ref(false)
 }
 
 .dir-icon {
-  color: #fbbf24;
+  color: var(--color-warning-light);
 }
 
 .file-icon {

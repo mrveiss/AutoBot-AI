@@ -56,22 +56,22 @@ const tooltipText = computed(() => {
 }
 
 .trust-tier-official {
-  background-color: #10b981;
-  color: #fff;
+  background-color: var(--color-success);
+  color: var(--text-on-success);
 }
 
 .trust-tier-verified {
-  background-color: #3b82f6;
-  color: #fff;
+  background-color: var(--color-info);
+  color: var(--text-on-info);
 }
 
 .trust-tier-community {
-  background-color: #f59e0b;
-  color: #fff;
+  background-color: var(--color-warning);
+  color: var(--text-on-warning);
 }
 
 .trust-tier-unverified {
-  background-color: #ef4444;
-  color: #fff;
+  background-color: var(--color-error);
+  color: var(--text-on-error);
 }
 </style>
