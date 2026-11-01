@@ -196,6 +196,24 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "Non-test backend modules whose docstring declares backward compatibility; a subset of the "
         "backend's `.py` files whose share drifts as facades are retired (#18552).",
     ),
+    "unconnected-code-modules": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Backend modules that could have a caller (no `__init__`, `__main__` script, migration or testkit); a subset "
+        "of the backends' `.py` files whose share drifts as tests and migrations are added (#20512).",
+    ),
+    "unconnected-code-routes": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Backend files that declare a route decorator; a subset of the backends' `.py` files that drifts as "
+        "non-router modules are added (#20512).",
+    ),
+    "unconnected-code-stores": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Files that push to a Redis queue or define a table; a small subset of the tracked tree that drifts "
+        "with it (#20512).",
+    ),
     "chromadb-compose-port-sites": (ABSOLUTE, "NOT_PATHS", "Parsed `ports:` entries, not files."),
     "chromadb-compose-services": (ABSOLUTE, "NOT_PATHS", "Parsed compose services, not files."),
     "collectable-modules-inert-on-import": (
