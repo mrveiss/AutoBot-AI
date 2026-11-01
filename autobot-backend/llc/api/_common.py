@@ -21,6 +21,7 @@ from typing import Optional
 
 from fastapi import HTTPException, Request, status
 
+from autobot_shared.auth.interactive_principal import is_interactive_human
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -41,6 +42,15 @@ def actor_id(current_user: dict) -> uuid.UUID:
         return uuid.UUID(str(raw))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated") from exc
+
+
+def own_task_actor(current_user: dict) -> Optional[uuid.UUID]:
+    """The caller as the owner of tasks they move (#20508): only an interactive person.
+
+    A service or agent credential resolves to a user-shaped dict too, but it must not own what it
+    created, so it gets ``None`` and keeps the normal transition rules.
+    """
+    return actor_id(current_user) if is_interactive_human(current_user) else None
 
 
 def acting_user_id(current_user: dict) -> Optional[str]:

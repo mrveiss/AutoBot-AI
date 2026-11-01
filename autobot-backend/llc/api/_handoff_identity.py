@@ -23,9 +23,11 @@ def handing_off_agent(item: LLCWorkItem, current_user: Mapping[str, Any]) -> str
 
     An agent reaches this through ``WorkItemService``, not this route.
     """
-    if is_interactive_human(current_user):
-        return str(item.assignee_agent_id)
-    raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Only a person can hand this off here")
+    if not is_interactive_human(current_user):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Only a person can hand this off here")
+    if item.assignee_agent_id is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="This work item has no assigned agent to hand off for")
+    return str(item.assignee_agent_id)
 
 
 async def member_reviewer(session: AsyncSession, company_id: Any, reviewer_user_id: str) -> str:

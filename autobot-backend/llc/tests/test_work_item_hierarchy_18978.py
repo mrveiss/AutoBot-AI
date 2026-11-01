@@ -285,10 +285,13 @@ async def test_recovery_bug_for_a_stuck_subtask_is_not_refused_and_keeps_the_pro
 async def test_recovery_for_a_stuck_item_with_no_project_is_noted_on_the_item_not_lost(session):
     from llc.models.work_item import LLCWorkItemComment
 
-    old = await _legacy(session, T.TASK)
+    empty_company = str(uuid.uuid4())  # a company with no project at all
+    old = await _legacy(session, T.TASK, company=empty_company)
     monitor = LivenessMonitor(poll_interval=9999)
     with patch.object(LivenessMonitor, "_resolve_manager", new=AsyncMock(return_value=None)):
-        await monitor._create_recovery_item(session, SimpleNamespace(id=uuid.uuid4()), old, COMPANY, str(uuid.uuid4()))
+        await monitor._create_recovery_item(
+            session, SimpleNamespace(id=uuid.uuid4()), old, empty_company, str(uuid.uuid4())
+        )
     bugs = (await session.execute(select(LLCWorkItem).where(LLCWorkItem.type == T.BUG))).scalars().all()
     notes = (
         (await session.execute(select(LLCWorkItemComment).where(LLCWorkItemComment.work_item_id == old.id)))
@@ -351,3 +354,19 @@ async def test_a_parents_project_from_another_company_does_not_flow_to_the_child
     bad_parent = await _legacy(session, T.PBI, project_id=foreign)
     with pytest.raises(HierarchyViolation, match="not found in this company"):
         await _make(session, T.TASK, parent=bad_parent)
+
+
+async def test_recovery_for_a_stuck_item_with_no_project_falls_back_to_the_companys_oldest_project(session):
+    from datetime import datetime, timezone
+
+    older = str(uuid.uuid4())
+    session.add(
+        LLCProject(
+            id=uuid.UUID(older), company_id=uuid.UUID(COMPANY), name="Older",
+            created_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
+        )
+    )  # fmt: skip
+    await session.flush()
+    old = await _legacy(session, T.TASK)
+    bug = await _recovery_bug(session, old)
+    assert str(bug.project_id) == older

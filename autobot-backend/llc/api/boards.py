@@ -30,7 +30,7 @@ from ..exceptions import WipLimitExceeded
 from ..services.board import BoardService
 from ..services.work_item_service import InvalidTransition
 from ._common import actor_id as verified_user_id
-from ._common import refused_transition
+from ._common import own_task_actor, refused_transition
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/boards", tags=["llc-boards"])
@@ -63,7 +63,6 @@ class BoardUpdateRequest(BaseModel):
 class MoveItemRequest(BaseModel):
     work_item_id: str
     column_id: str
-    actor_id: Optional[str] = None
 
 
 # ------------------------------------------------------------------
@@ -336,8 +335,8 @@ async def move_item(
             board_id=board_id,
             work_item_id=body.work_item_id,
             column_id=body.column_id,
-            actor_id=body.actor_id,
-            acting_user=verified_user_id(_current_user),
+            actor_id=str(verified_user_id(_current_user)),
+            acting_user=own_task_actor(_current_user),
         )
         await session.commit()
     except WipLimitExceeded as exc:

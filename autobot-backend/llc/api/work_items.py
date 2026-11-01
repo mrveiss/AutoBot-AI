@@ -77,7 +77,7 @@ from ..services.work_item_service import (
 )
 from ..services.work_product_service import WorkProductService
 from ._common import actor_id as verified_user_id
-from ._common import refused_transition
+from ._common import own_task_actor, refused_transition
 from ._handoff_identity import handing_off_agent, member_reviewer
 from .activity import ActivityLogEntry, ActivityLogResponse
 from .github_webhooks import validate_github_pr_url
@@ -611,7 +611,7 @@ async def transition_work_item(
         raise HTTPException(status_code=404, detail="Work item not found")
     try:
         item = await _service().transition_status(
-            session, work_item_id, body.status, acting_user=verified_user_id(_current_user)
+            session, work_item_id, body.status, acting_user=own_task_actor(_current_user)
         )
         await session.commit()
         if item.status == WorkItemStatus.DONE:

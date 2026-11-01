@@ -18,9 +18,28 @@ from ..models.enums import WorkItemStatus
 from ..models.work_item import LLCWorkItem
 
 
-def is_own_task(item: LLCWorkItem, acting_user: Optional[uuid.UUID]) -> bool:
-    """Whether *acting_user*, the verified caller, created this task or is assigned it."""
-    return acting_user is not None and acting_user in (item.created_by_user_id, item.assignee_user_id)
+def _past_its_reviewer(item: LLCWorkItem, acting_user: uuid.UUID, new_status: Optional[WorkItemStatus]) -> bool:
+    """An item in review, with a reviewer who is someone else, is not finished by moving it to done."""
+    reviewer = item.reviewer_user_id
+    return (
+        new_status == WorkItemStatus.DONE
+        and item.status == WorkItemStatus.IN_REVIEW
+        and reviewer is not None
+        and reviewer != acting_user
+    )
+
+
+def is_own_task(
+    item: LLCWorkItem, acting_user: Optional[uuid.UUID], new_status: Optional[WorkItemStatus] = None
+) -> bool:
+    """Whether *acting_user*, the verified caller, may move this task freely.
+
+    They created it or are assigned it -- except that moving it from review to done past a reviewer
+    who is someone else keeps the normal rules (#20508). A blocked task with blockers stays free.
+    """
+    if acting_user is None or acting_user not in (item.created_by_user_id, item.assignee_user_id):
+        return False
+    return not _past_its_reviewer(item, acting_user, new_status)
 
 
 def stamp_status(item: LLCWorkItem, new_status: WorkItemStatus, now: datetime, *, own: bool = False) -> None:

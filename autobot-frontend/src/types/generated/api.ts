@@ -50213,6 +50213,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/companies/{company_id}/project-backfill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Preview
+         * @description How many work items have no project and where each would go. Changes nothing.
+         */
+        get: operations["read_preview_api_llc_companies__company_id__project_backfill_get"];
+        put?: never;
+        /**
+         * Request Backfill
+         * @description File the approval request. Nothing changes until a person approves it.
+         */
+        post: operations["request_backfill_api_llc_companies__company_id__project_backfill_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/approvals": {
         parameters: {
             query?: never;
@@ -87402,8 +87426,6 @@ export interface components {
             work_item_id: string;
             /** Column Id */
             column_id: string;
-            /** Actor Id */
-            actor_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -174181,6 +174203,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProposedLineChange"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_preview_api_llc_companies__company_id__project_backfill_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_backfill_api_llc_companies__company_id__project_backfill_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */

@@ -778,7 +778,7 @@ class WorkItemService(LLCServiceBase):
 
         current = WorkItemStatus(item.status)
         allowed = _ALLOWED_TRANSITIONS.get(current, set())
-        own = is_own_task(item, acting_user)
+        own = is_own_task(item, acting_user, new_status)
         if not own and new_status not in allowed:
             raise InvalidTransition(
                 f"Cannot transition from {current.value!r} to {new_status.value!r}. "

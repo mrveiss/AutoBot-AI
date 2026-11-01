@@ -15,6 +15,7 @@ For each stuck run:
   6. Writes an activity log entry
 """
 
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -28,6 +29,7 @@ from user_management.database import get_async_session_factory
 
 from ..models.enums import ActivityEventType, WorkItemStatus, WorkItemType
 from ..models.heartbeat_run import LLCHeartbeatRun
+from ..models.sprint import LLCProject
 from ..models.work_item import LLCWorkItem
 from ..services.activity_log import LLCActivityLogService
 from ..services.work_item_hierarchy import HierarchyViolation, parent_if_allowed
@@ -202,7 +204,7 @@ class LivenessMonitor(PollLoopScheduler):
                 # Resolve manager via company hierarchy -- default to None (board-visible)
                 assignee_agent_id=await self._resolve_manager(session, company_id, agent_id),
                 parent_id=parent_id,
-                project_id=str(work_item.project_id) if work_item and work_item.project_id else None,
+                project_id=await _recovery_project(session, work_item, company_id),
                 goal_id=str(work_item.goal_id) if work_item and work_item.goal_id else None,
             )
         except HierarchyViolation as exc:
@@ -247,6 +249,20 @@ class LivenessMonitor(PollLoopScheduler):
             )
         except Exception:
             logger.debug("activity_log.record failed for run %s (swallowed)", run.id)
+
+
+async def _recovery_project(session: AsyncSession, work_item: Optional[LLCWorkItem], company_id: str) -> Optional[str]:
+    """The stuck item's project, else the company's oldest (#18978); None when the company has none."""
+    if work_item is not None and work_item.project_id:
+        return str(work_item.project_id)
+    oldest = await session.execute(
+        select(LLCProject.id)
+        .where(LLCProject.company_id == uuid.UUID(str(company_id)))
+        .order_by(LLCProject.created_at, LLCProject.id)
+        .limit(1)
+    )
+    found = oldest.scalar_one_or_none()
+    return str(found) if found else None
 
 
 async def _note_unfiled_recovery(session, svc, work_item, company_id: str, text_: str, exc: Exception) -> None:
