@@ -14,7 +14,6 @@ budgets are keyed by the slug, routines hold the node's UUID, so a reference is
 resolved to its node before either is read.
 """
 
-import logging
 import uuid
 from typing import Any, Optional
 
@@ -22,13 +21,14 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from models.agent_org import AgentOrgNode
 
 from ..models.enums import UNDISPATCHABLE_AGENT_STATUSES, LLCAgentStatus
 from ..services.budget import BudgetService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 #: The reason text a caller may need to tell apart: replay answers it with a 402.
 BUDGET_EXHAUSTED = "budget is exhausted"
