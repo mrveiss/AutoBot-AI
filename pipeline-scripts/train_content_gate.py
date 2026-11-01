@@ -11,9 +11,12 @@ on how a train is built.
 
 ``--range BASE..TIP`` runs before landing. Each ``Merge #N @ sha`` is judged at its own merge
 commit, because at the tip a deliberate in-train fix reads as a loss, and a member merged twice is
-judged by its last merge. A member fails when a file it added or deleted did not take effect there,
-or when under half of a file's added lines are present. ``--title`` names the members the train
-declares, so one with no merge at all fails too, as does a merge the gate cannot account for.
+judged at its last merge against the base of its first, so a drop in the first still counts. A member
+fails when a file it added or deleted did not take effect there, or when under half of a file's added
+lines are present. ``--title`` names the members the train declares, so one with no merge at all
+fails too, as does a merge the gate cannot account for. A head already on the train's base has landed
+and passes with a note; a head reachable only through the train leaves nothing to compare and fails.
+``--body`` may name a deliberate drop: ``train-content-drop: #N path reason``.
 
 ``--landed MERGE`` runs after landing. A file the train changed and main did not must arrive
 byte-identical.
@@ -40,7 +43,9 @@ from autobot_shared.git_probe import run_git  # noqa: E402
 MEMBER_MERGE = re.compile(r"^Merge #(\d+) @ [0-9a-f]{7,40}\b")
 #: Bringing main into the train adds no member: "Merge main into ...", "Merge branch 'main' into ...".
 BASE_MERGE = re.compile(r"^Merge (?:branch |remote-tracking branch )?['\"]?(?:origin/)?main\b")
-DECLARED_MEMBER = re.compile(r"#(\d+)")
+#: The member list of a train title: "chore(merge-train): #1 #2". A "(#3)" later in it is no member.
+DECLARED_MEMBERS = re.compile(r"^chore\(merge-train\):\s*((?:#\d+\s*)+)")
+DELIBERATE_DROP = re.compile(r"^train-content-drop:\s*#(\d+)\s+(\S+)\s+\S", re.MULTILINE)
 #: Files a train recomputes on purpose, so the member's own value is not expected to survive.
 RECOMPUTED = re.compile(r"(_known_large\.py|_baseline\.py|_ratchet_test\.py|_ratchet_\d+_test\.py)$")
 #: A line this short matches by chance; a floor pin is recomputed by the train.
@@ -62,17 +67,26 @@ def _git(*args: str) -> str:
     return run_git(list(args), capture_output=True, check=True, errors="replace").stdout
 
 
-def last_merges(rng: str, report: ContentReport) -> dict[str, str]:
-    """``{pr: merge commit}``, keeping each member's last merge; an unknown merge is a finding."""
-    found: dict[str, str] = {}
+def member_merges(rng: str, report: ContentReport) -> dict[str, tuple[str, str]]:
+    """``{pr: (last merge, first merge)}``; a merge that is neither member nor main is a finding."""
+    found: dict[str, tuple[str, str]] = {}
     for line in _git("log", "--first-parent", "--merges", "--format=%H %s", rng).splitlines():  # newest first
         sha, _, subject = line.partition(" ")
         match = MEMBER_MERGE.match(subject)
         if match:
-            found.setdefault(match.group(1), sha)
+            found[match.group(1)] = (found.get(match.group(1), (sha,))[0], sha)
         elif not BASE_MERGE.match(subject):
             report.findings.append(f"{sha[:10]} is a merge this gate cannot account for: {subject!r}")
     return found
+
+
+def declared_members(title: str) -> set[str]:
+    match = DECLARED_MEMBERS.match(title)
+    return set(re.findall(r"\d+", match.group(1))) if match else set()
+
+
+def _is_ancestor(commit: str, of: str) -> bool:
+    return run_git(["merge-base", "--is-ancestor", commit, of], capture_output=True).returncode == 0
 
 
 def changed(base: str, head: str) -> list[tuple[str, str]]:
@@ -106,30 +120,43 @@ def _judge_file(status: str, path: str, base: str, head: str, merge: str, report
     return f"only {kept}/{len(added)} added lines present" if kept < len(added) * MIN_SURVIVAL else None
 
 
-def check_range(rng: str, title: str = "") -> ContentReport:
-    """Judge every member of the train in *rng* at its own merge commit."""
+def _check_member(pr: str, last: str, first: str, rng: str, drops: set[tuple[str, str]], report: ContentReport) -> None:
+    start, tip = rng.split("..")
+    head = f"{last}^2"
+    base = _git("merge-base", f"{first}^1", f"{first}^2").strip()
+    if _git("rev-parse", head).strip() == base:
+        if _is_ancestor(head, start):
+            report.notes.append(f"#{pr}: its head is already on {start[:10]}, so it has landed")
+        else:
+            report.findings.append(f"#{pr}: its head is already in the train at {last[:10]}: nothing was measured")
+        return
+    for status, path in changed(base, head):
+        if RECOMPUTED.search(path):
+            continue
+        report.files += 1
+        why = _judge_file(status, path, base, head, last, report)
+        if why and (pr, path) in drops:
+            report.notes.append(f"#{pr} {path}: {why}, recorded as a deliberate drop")
+        elif why:
+            report.findings.append(f"#{pr} {path}: {why} at {last[:10]}")
+        elif status != "D" and not _exists_at(tip, path):
+            report.notes.append(f"#{pr} {path}: present at its merge, gone by the tip")
+    if not _git("diff", "--name-only", f"{last}^1", last).strip():
+        report.notes.append(f"#{pr}: its merge changed nothing; its content was checked above")
+
+
+def check_range(rng: str, title: str = "", body: str = "") -> ContentReport:
+    """Judge every member of the train in *rng*."""
     report = ContentReport()
-    merges = last_merges(rng, report)
+    merges = member_merges(rng, report)
     report.members = len(merges)
     if not merges:
         report.findings.append(f"no 'Merge #N @ sha' commit in {rng}: nothing was measured")
-    for pr in sorted(set(DECLARED_MEMBER.findall(title)) - set(merges), key=int):
+    for pr in sorted(declared_members(title) - set(merges), key=int):
         report.findings.append(f"#{pr} is declared by the train and has no merge in {rng}")
-    tip = rng.split("..")[-1]
-    for pr, merge in sorted(merges.items(), key=lambda item: int(item[0])):
-        head = f"{merge}^2"
-        base = _git("merge-base", f"{merge}^1", head).strip()
-        for status, path in changed(base, head):
-            if RECOMPUTED.search(path):
-                continue
-            report.files += 1
-            why = _judge_file(status, path, base, head, merge, report)
-            if why:
-                report.findings.append(f"#{pr} {path}: {why} at {merge[:10]}")
-            elif status != "D" and not _exists_at(tip, path):
-                report.notes.append(f"#{pr} {path}: present at its merge, gone by the tip")
-        if not _git("diff", "--name-only", f"{merge}^1", merge).strip():
-            report.notes.append(f"#{pr}: its merge changed nothing; its content was checked above")
+    drops = set(DELIBERATE_DROP.findall(body))
+    for pr, (last, first) in sorted(merges.items(), key=lambda item: int(item[0])):
+        _check_member(pr, last, first, rng, drops, report)
     return report
 
 
@@ -163,9 +190,10 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument("--range", help="BASE..TIP of a train branch")
     mode.add_argument("--landed", help="the merge commit that landed a train")
     parser.add_argument("--title", default="", help="the train PR's title, which lists its members")
+    parser.add_argument("--body", default="", help="the train PR's body, which may name a deliberate drop")
     args = parser.parse_args(argv)
     try:
-        report = check_range(args.range, args.title) if args.range else check_landed(args.landed)
+        report = check_range(args.range, args.title, args.body) if args.range else check_landed(args.landed)
     except subprocess.CalledProcessError as exc:
         _say(f"UNMEASURED: {' '.join(map(str, exc.cmd))}: {(exc.stderr or '').strip()}")
         return 2

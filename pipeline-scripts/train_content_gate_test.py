@@ -104,15 +104,76 @@ def test_a_later_fix_in_the_train_does_not_read_as_a_loss(train):
     assert gate.check_range("main..train").findings == []
 
 
-def test_a_member_is_judged_by_its_last_merge(train):
-    first = member("one", {"one.txt": LONG.format(1)})
-    board(1, first, "-s", "ours")
+def _second_head() -> str:
     run("switch", "-q", "one")
     write("two.txt", LONG.format(2))
     head = commit("the fix")
     run("switch", "-q", "train")
+    return head
+
+
+def test_a_member_merged_twice_passes_when_both_arrive(train):
+    board(1, member("one", {"one.txt": LONG.format(1)}))
+    board(1, _second_head())
+    report = gate.check_range("main..train")
+    assert report.findings == [] and report.files == 2
+
+
+def test_a_drop_in_the_first_of_two_merges_is_still_a_loss(train):
+    board(1, member("one", {"one.txt": LONG.format(1)}), "-s", "ours")
+    board(1, _second_head())
+    findings = gate.check_range("main..train").findings
+    assert len(findings) == 1 and "#1 one.txt: missing" in findings[0]
+
+
+def test_a_re_merge_with_no_new_commits_makes_no_merge_and_passes(train):
+    head = member("one", {"one.txt": LONG.format(1)})
     board(1, head)
+    board(1, head)  # "Already up to date": no second merge commit
     assert gate.check_range("main..train").findings == []
+
+
+def _empty_merge(pr: int, head: str) -> None:
+    """A merge commit whose second parent is already in its first."""
+    message = f"Merge #{pr} @ {head[:10]} into the merge train"
+    run("merge", "-q", "--ff-only", run("commit-tree", "HEAD^{tree}", "-p", "HEAD", "-p", head, "-m", message))
+
+
+def test_a_head_main_already_took_passes_with_a_note(repo):
+    head = commit_on_main_via_branch()
+    run("switch", "-qc", "train", "main")
+    _empty_merge(1, head)
+    report = gate.check_range("main..train")
+    assert report.findings == [] and "has landed" in report.notes[0]
+
+
+def commit_on_main_via_branch() -> str:
+    run("switch", "-qc", "one", "main")
+    write("one.txt", LONG.format(1))
+    head = commit("one")
+    run("switch", "-q", "main")
+    run("merge", "-q", "--no-ff", "-m", "landed", head)
+    return head
+
+
+def test_a_head_reachable_only_through_the_train_measures_nothing_and_fails(train):
+    head = member("one", {"one.txt": LONG.format(1)})
+    run("merge", "-q", "--no-ff", "-m", "Merge main into the merge train", head)
+    _empty_merge(1, head)
+    assert "nothing was measured" in gate.check_range("main..train").findings[0]
+
+
+def test_a_named_deliberate_drop_is_a_note_and_needs_a_reason(train):
+    board(1, member("one", {"one.txt": LONG.format(1)}), "-s", "ours")
+    report = gate.check_range("main..train", body="train-content-drop: #1 one.txt replaced by #2")
+    assert report.findings == [] and "deliberate drop" in report.notes[0]
+    assert gate.check_range("main..train", body="train-content-drop: #1 one.txt").findings
+
+
+def test_only_the_title_s_member_list_counts(train):
+    board(1, member("one", {"one.txt": LONG.format(1)}))
+    assert gate.check_range("main..train", "chore(merge-train): #1 follow-up (#9)").findings == []
+    assert "#2 is declared" in gate.check_range("main..train", "chore(merge-train): #1 #2").findings[0]
 
 
 def test_a_recomputed_file_is_skipped(train):

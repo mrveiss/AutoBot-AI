@@ -47,7 +47,8 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           TITLE: ${{ github.event.pull_request.title }}
-        run: python3 pipeline-scripts/train_content_gate.py --range "$(git merge-base "$BASE_SHA" "$HEAD_SHA")..$HEAD_SHA" --title "$TITLE"
+          BODY: ${{ github.event.pull_request.body }}
+        run: python3 pipeline-scripts/train_content_gate.py --range "$(git merge-base "$BASE_SHA" "$HEAD_SHA")..$HEAD_SHA" --title="$TITLE" --body="$BODY"
 
       - name: What the train changed reached main
         if: github.event.action == 'closed'
