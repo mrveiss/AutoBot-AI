@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field, ValidationError, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.approval_four_eyes import FourEyesError
 from autobot_shared.logging_manager import get_logger
 from models.approval import Approval
 from services.agent_org_service import AgentOrgService
@@ -30,7 +31,7 @@ from ..models.budget import LLCAgentBudget
 from ..models.enums import ActivityEventType, ApprovalStatus, ApprovalType
 from .activity_log import LLCActivityLogService
 from .agent_hire_service import HirePayload, insert_hired_agent, schedule_hired_agent
-from .authz import FourEyesError, require_four_eyes
+from .authz import require_four_eyes
 
 logger = get_logger(__name__)
 
