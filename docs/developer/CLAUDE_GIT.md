@@ -72,7 +72,7 @@ git merge-base --is-ancestor <your-sha> origin/issue-XXXX && echo "safe to force
 The `sync-branches-with-main` workflow (#19548) merges main into every open PR's branch
 on each push to main, and leaves a branch with no open PR alone (#20261), so "my local is behind my own branch" is normal. Force-pushing
 over it discards the bot's merge: `git pull` (a fast-forward) first. A PR labelled
-`sync-conflict` or `sync-needs-workflow-token` was not synced; merge main yourself.
+`sync-conflict` or `sync-needs-workflow-token` was not synced; merge main yourself. A conflict on a PR not in a train, queued or not, is resolved by the author merging main (the one allowed push to a queued head), and the trainmaster checks what changed. In a train being built, the trainmaster fixes it in the train or asks the author. On a PR carried by a running train, it is left alone until landing. A PR with a conflict does not run CI until the conflict is solved.
 
 ---
 

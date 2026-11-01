@@ -326,7 +326,7 @@ After merging all PRs in a batch:
 
 ## Merge trains
 
-The trainmaster (PR-coordinator session) alone builds and lands trains: merge commits, never squash, two CI slots, one train worked at a time. Authors send the PR number and head, then stop pushing to a queued head unless asked. CodeRabbit never blocks a first CI run; a relaunch answers open threads first. Full list: [`OWNER_RULES.md`](OWNER_RULES.md).
+The trainmaster (PR-coordinator session) alone builds and lands trains: merge commits, never squash, two CI slots, two trains may run in CI, and only the one landing next is built and fixed. Authors send the PR number and head, then stop pushing to a queued head unless asked; a head moved only by merging main stays in line, and any other new commit needs a fresh look. CodeRabbit never blocks a first CI run; a relaunch answers open threads first. Full list: [`OWNER_RULES.md`](OWNER_RULES.md).
 
 ## CI Diagnosis
 
@@ -334,7 +334,7 @@ The trainmaster (PR-coordinator session) alone builds and lands trains: merge co
 - Confirm whether checks are actually failing vs. queued on a self-hosted runner
 - Default assumption: checks are running normally, not broken
 - Only cancel/retrigger when a check has been in a non-running state for >30 minutes with no activity
-- Never cancel a `train-*` branch's runs or any run under a live `ci-slot` ledger hold (`ledger holds | grep ci-slot`); the trainmaster owns CI priority ([OWNER_RULES.md](OWNER_RULES.md))
+- Never cancel a `train-*` branch's runs or any run under a live `ci-slot` ledger hold (`ledger holds | grep ci-slot`), except that the conflict gate (`pr-merge-conflict-gate.yml`, #19769) cancels a train with a real merge conflict, because it can't land; the trainmaster owns CI priority ([OWNER_RULES.md](OWNER_RULES.md))
 
 **Why:** Sessions wasted time canceling/retriggering smoke tests that were running normally.
 
