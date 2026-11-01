@@ -679,6 +679,7 @@ services:
       - ./docker/nginx/nginx-common.conf:/etc/nginx/nginx-common.conf:ro
       - ./docker/nginx/nginx-backend-upstream.conf:/etc/nginx/nginx-backend-upstream.conf:ro
       - ./docker/nginx/nginx-locations.conf:/etc/nginx/nginx-locations.conf:ro
+      - ./autobot-slm-backend/ansible/_shared/files/upload-cap.conf:/etc/nginx/upload-cap.conf:ro
       - ./docker/nginx/nginx-slm-locations.conf:/etc/nginx/nginx-slm-locations.conf:ro
       - ./docker/nginx/nginx-tls.conf:/etc/nginx/nginx-tls.conf:ro
       - ./docker/nginx/nginx-tls-redirect.conf:/etc/nginx/nginx-tls-redirect.conf:ro

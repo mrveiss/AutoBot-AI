@@ -19261,6 +19261,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/org-tier-column": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Org Tier Column Status
+         * @description Read only: whether there is anything to propose.
+         */
+        get: operations["org_tier_column_status_api_admin_org_tier_column_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/org-tier-column/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Org Tier Column Drop
+         * @description Propose the drop -- a request, not an execution. Refused when the column is already gone.
+         */
+        post: operations["propose_org_tier_column_drop_api_admin_org_tier_column_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/analytics/dashboard/overview": {
         parameters: {
             query?: never;
@@ -50296,7 +50336,8 @@ export interface paths {
          *
          *     Returns 201 on creation, 409 if a row already exists.
          *     Returns 404 if the agent does not exist in agent_org_nodes, or belongs to
-         *     a different tenant (GH#12136).
+         *     a different tenant (GH#12136). Returns 403 unless the caller is a company
+         *     owner/admin or a platform admin (#20422).
          *     company_id is derived from agent_org_nodes — callers cannot scope rows
          *     to arbitrary companies.
          */
@@ -74822,7 +74863,8 @@ export interface components {
          * @description The current or last switch.
          *
          *     ``state``: idle, building, settling, completed, completed_with_warnings, failed, cancelled, or
-         *     stale (an active build whose heartbeat stopped). ``previous_vectors`` is the active collection's
+         *     stale (an active build whose heartbeat stopped). ``lock_unknown``: the claim registry could not
+         *     be read, so an active state may be a build that has stopped. ``previous_vectors`` is the active collection's
          *     count when the build started; the rebuild writes one vector per fact.
          */
         EmbeddingSwitchData: {
@@ -74859,6 +74901,11 @@ export interface components {
             heartbeat?: string | null;
             /** Finished */
             finished?: string | null;
+            /**
+             * Lock Unknown
+             * @default false
+             */
+            lock_unknown: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -88846,6 +88893,30 @@ export interface components {
             direct_reports_count: number;
             /** Children */
             children?: components["schemas"]["OrgNodeResponse"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OrgTierColumnRequestResponse
+         * @description The approval a proposal created.
+         */
+        OrgTierColumnRequestResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Status */
+            status: string;
+            /** Action */
+            action: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OrgTierColumnStatus
+         * @description Whether the column is still in this database.
+         */
+        OrgTierColumnStatus: {
+            /** Present */
+            present: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -133014,6 +133085,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    org_tier_column_status_api_admin_org_tier_column_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgTierColumnStatus"];
+                };
+            };
+        };
+    };
+    propose_org_tier_column_drop_api_admin_org_tier_column_requests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgTierColumnRequestResponse"];
                 };
             };
         };

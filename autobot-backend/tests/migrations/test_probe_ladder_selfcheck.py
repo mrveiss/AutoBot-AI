@@ -174,6 +174,8 @@ def test_observability_coverage():
         # returns early on a non-postgresql dialect or a missing table. So the
         # adoption re-run this allowlist permits is a genuine no-op rather than a
         # "constraint does not exist" or "relation already exists" failure.
+        "20261101_108",  # llc_agent_wiki_entries company FK (#20156): a constraint, which the
+        # ladder cannot see; re-run skips an existing constraint, and its orphan count only reads
     }
     assert unobservable <= allowed, (
         f"new unobservable revisions: {sorted(unobservable - allowed)} — "
