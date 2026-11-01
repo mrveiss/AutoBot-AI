@@ -105,7 +105,7 @@ def _discover(repo: Path) -> list[Path]:
 REACH = declare(
     "v-html-sanitiser-sinks",
     discover=_discover,
-    floor=1296,  # mid-window [1221, 1371] on a population of 1371
+    floor=1357,  # mid-window [1221, 1371] on a population of 1371
     growth=150,
     skips=0,
     what="non-test .vue/.ts source files",
