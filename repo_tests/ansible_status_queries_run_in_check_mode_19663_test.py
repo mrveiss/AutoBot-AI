@@ -36,6 +36,7 @@ from repo_tests._ansible_query_tasks import (
     is_check_safe,
     is_status_query,
     is_verify_after_install,
+    marked_verify_read_unguarded,
     query_tasks,
 )
 from repo_tests._paths import repo_root
@@ -203,3 +204,54 @@ def test_a_verify_after_install_is_marked_not_forced_into_check_mode() -> None:
         _task("node --version", when="not ansible_check_mode", changed_when=False, check_mode=False)
     )
     assert not is_check_safe(_task("node --version", when="install_nodejs", changed_when=False))
+
+
+def test_no_marked_verify_has_a_reader_that_breaks_under_check() -> None:
+    """The marker is only true of a query nothing later depends on (#19883)."""
+    found = {
+        str(path.relative_to(repo_root())): names
+        for path in REACH.examined(repo_root())
+        if (names := marked_verify_read_unguarded(path.read_text(encoding="utf-8")))
+    }
+    assert not found, f"a marked verify's result is read unguarded, so `--check` dies at the reader: {found}"
+
+
+_VERIFY = """
+- name: v
+  command: node --version
+  register: v_out
+  when: not ansible_check_mode
+  changed_when: false
+"""
+
+
+@pytest.mark.parametrize(
+    ("reader", "names"),
+    [
+        ("- name: r\n  debug: {msg: x}\n  when: v_out.rc == 0\n", ["v_out"]),
+        ("- name: r\n  debug: {msg: '{{ v_out.stdout }}'}\n", ["v_out"]),
+        ("- name: r\n  debug: {msg: '{{ v_out.stdout | default(\"\") }}'}\n", []),
+        ("- name: r\n  debug: {msg: x}\n  when: v_out is defined and v_out.rc == 0\n", []),
+        ("- name: r\n  debug: {msg: \"{{ 'x' if v_out.rc is not defined else v_out.rc }}\"}\n", []),
+        ("- name: r\n  debug: {msg: '{{ v_out.stdout }}'}\n  when: not ansible_check_mode\n", []),
+        ("- name: r\n  debug: {msg: unrelated}\n", []),
+    ],
+    ids=["when-read", "template-read", "default", "is-defined", "is-not-defined", "reader-also-marked", "no-read"],
+)
+def test_a_marked_verify_may_not_decide_a_later_task(reader: str, names: list[str]) -> None:
+    assert marked_verify_read_unguarded(_VERIFY + reader) == names
+
+
+def test_a_read_inside_a_block_is_seen() -> None:
+    text = _VERIFY + "- block:\n    - name: r\n      debug: {msg: x}\n      when: v_out.rc == 0\n"
+    assert marked_verify_read_unguarded(text) == ["v_out"]
+
+
+def test_the_marker_with_check_mode_off_is_rejected() -> None:
+    """The contradiction: the marker says skip under `--check`, `check_mode: false` says run."""
+    both = _task("node --version", when="not ansible_check_mode", check_mode=False, changed_when=False)
+    assert is_verify_after_install(both) and not is_check_safe(both)
+
+
+def test_contrast_the_marker_alone_passes() -> None:
+    assert is_check_safe(_task("node --version", when="not ansible_check_mode", changed_when=False))

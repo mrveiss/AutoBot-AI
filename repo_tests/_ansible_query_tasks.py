@@ -114,3 +114,63 @@ def query_tasks(text: str) -> list[dict]:
     except yaml.YAMLError:
         return []
     return [t for doc in docs for t in iter_tasks(doc) if is_status_query(t)]
+
+
+_TASK_LISTS = ("block", "rescue", "always", "tasks", "pre_tasks", "post_tasks", "handlers", "roles")
+
+
+def _own_task_mappings(node: Any) -> Iterator[dict]:
+    """Every task-like mapping, each without the task lists nested in it, which are visited on their own."""
+    if isinstance(node, list):
+        for item in node:
+            yield from _own_task_mappings(item)
+    elif isinstance(node, dict):
+        yield {k: v for k, v in node.items() if k not in _TASK_LISTS}
+        for key in _TASK_LISTS:
+            yield from _own_task_mappings(node.get(key))
+
+
+def _strings(node: Any) -> Iterator[str]:
+    if isinstance(node, str):
+        yield node
+    elif isinstance(node, dict):
+        for value in node.values():
+            yield from _strings(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _strings(item)
+
+
+def reads_unguarded(task: dict, name: str) -> bool:
+    """*task* reads registered *name* with nothing to survive it being skipped under `--check`.
+
+    Guarded: the task runs only outside check mode too, its text tests `<name> is [not] defined`, or the
+    read itself ends in `| default(...)`.
+    """
+    if is_verify_after_install(task):
+        return False
+    fields = {k: v for k, v in task.items() if k != "register"}
+    texts = list(_strings(fields))
+    if any(re.search(rf"\b{re.escape(name)}(\.\w+)*\s+is\s+(not\s+)?defined\b", text) for text in texts):
+        return False
+    read = re.compile(rf"\b{re.escape(name)}\b((?:\.\w+|\[[^\]]*\])*)(\s*\|\s*default\b)?")
+    return any(match.group(2) is None for text in texts for match in read.finditer(text))
+
+
+def marked_verify_read_unguarded(text: str) -> list[str]:
+    """Names a marked verify-after-install registers that another task in *text* reads unguarded.
+
+    The marker is self-declared: under `--check` that query is skipped, so a reader sees no result (#19883).
+    """
+    try:
+        docs = list(yaml.safe_load_all(text))
+    except yaml.YAMLError:
+        return []
+    names = [
+        t["register"]
+        for doc in docs
+        for t in iter_tasks(doc)
+        if is_verify_after_install(t) and is_status_query(t) and "register" in t
+    ]
+    tasks = [t for doc in docs for t in _own_task_mappings(doc)]
+    return [name for name in names if any(t.get("register") != name and reads_unguarded(t, name) for t in tasks)]
