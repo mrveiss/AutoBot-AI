@@ -50,7 +50,9 @@ def _mirrors() -> dict[str, str]:
     """Every place that restates the number, as the string it restates."""
     read = lambda p: p.read_text(encoding="utf-8")  # noqa: E731
     return {
-        "ssot-config.ts default": _one(r"getEnvNumber\('VITE_API_TIMEOUT', (\d+)\)", read(_SSOT_TS), "ssot-config.ts"),
+        "ssot-config.ts default": _one(
+            r"getEnvPositiveInt\(import\.meta\.env, 'VITE_API_TIMEOUT', (\d+)\)", read(_SSOT_TS), "ssot-config.ts"
+        ),
         "autobot-frontend/.env.example": _one(
             r"^VITE_API_TIMEOUT=(\S+)$", read(_FRONTEND_ENV_EXAMPLE), "frontend .env.example"
         ),
