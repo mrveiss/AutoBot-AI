@@ -15,7 +15,9 @@ from pathlib import Path
 import aiofiles
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.path_validator import validate_relative_path
 from chat_history import ChatHistoryManager
+from constants.path_constants import PATH
 from utils.encoding_utils import is_terminal_prompt, strip_ansi_codes
 
 logger = get_logger(__name__)
@@ -28,12 +30,12 @@ class TerminalChatIntegrator:
         self,
         conversation_id: str | None,
         chat_history_manager: ChatHistoryManager | None = None,
-        data_dir: str = "data/chats",
+        data_dir: Path | None = None,
     ) -> None:
         """Initialize chat integrator with conversation and history manager."""
         self.conversation_id = conversation_id
         self.chat_history_manager = chat_history_manager or (ChatHistoryManager() if conversation_id else None)
-        self.data_dir = Path(data_dir)
+        self.data_dir = data_dir or PATH.DATA_DIR / "chats"
 
         # Output buffering for chat integration
         self._output_buffer = ""
@@ -78,40 +80,39 @@ class TerminalChatIntegrator:
             )
 
             if should_save and self._output_buffer.strip():
-                await self._save_buffered_output(current_time)
+                if await self._save_buffered_output():
+                    self._output_buffer = ""
+                    self._last_output_save_time = current_time
 
-    async def _save_buffered_output(self, current_time: float) -> None:
-        """Save buffered output to chat history"""
+    async def _save_buffered_output(self) -> bool:
+        """Save the buffer to chat history; False keeps it for the next attempt."""
         clean_content = strip_ansi_codes(self._output_buffer).strip()
-
-        # Check if this is a terminal prompt (not real output)
         is_prompt = is_terminal_prompt(clean_content)
 
-        # Only save if there's actual text content AND it's not a terminal prompt
-        if clean_content and not is_prompt:
-            try:
-                logger.info(
-                    f"[CHAT INTEGRATION] Saving output to chat: "
-                    f"{len(self._output_buffer)} chars (clean: {len(clean_content)} chars)"
-                )
-                await self.chat_history_manager.add_message(
-                    sender="terminal",
-                    text=clean_content,
-                    message_type="terminal_output",
-                    session_id=self.conversation_id,
-                )
-                logger.info("[CHAT INTEGRATION] Output saved successfully")
-            except Exception as e:
-                logger.error("Failed to save output to chat: %s", e)
-        else:
+        if not clean_content or is_prompt:
             skip_reason = "terminal prompt" if is_prompt else "only ANSI codes"
             logger.debug(
-                f"[CHAT INTEGRATION] Skipping save - buffer is {skip_reason} " f"({len(self._output_buffer)} chars)"
+                f"[CHAT INTEGRATION] Skipping save - buffer is {skip_reason} "
+                f"({len(self._output_buffer)} chars, clean: '{clean_content[:100]}')"
             )
+            return True
 
-        # Reset buffer
-        self._output_buffer = ""
-        self._last_output_save_time = current_time
+        try:
+            logger.info(
+                f"[CHAT INTEGRATION] Saving output to chat: "
+                f"{len(self._output_buffer)} chars (clean: {len(clean_content)} chars)"
+            )
+            await self.chat_history_manager.add_message(
+                sender="terminal",
+                text=clean_content,
+                message_type="terminal_output",
+                session_id=self.conversation_id,
+            )
+            logger.info("[CHAT INTEGRATION] Output saved successfully")
+            return True
+        except Exception as e:
+            logger.error("Failed to save output to chat: %s", e)
+            return False
 
     async def flush_buffer(self) -> None:
         """Flush any remaining buffered output to chat"""
@@ -120,21 +121,20 @@ class TerminalChatIntegrator:
 
         try:
             async with self._output_lock:
-                if self._output_buffer.strip():
-                    clean_content = strip_ansi_codes(self._output_buffer).strip()
+                clean_content = strip_ansi_codes(self._output_buffer).strip()
+                if clean_content:
                     logger.info(
                         f"[CHAT INTEGRATION] Flushing remaining output buffer: "
                         f"{len(self._output_buffer)} chars (clean: {len(clean_content)} chars)"
                     )
-                    if clean_content:
-                        await self.chat_history_manager.add_message(
-                            sender="terminal",
-                            text=clean_content,
-                            message_type="terminal_output",
-                            session_id=self.conversation_id,
-                        )
-                    self._output_buffer = ""
+                    await self.chat_history_manager.add_message(
+                        sender="terminal",
+                        text=clean_content,
+                        message_type="terminal_output",
+                        session_id=self.conversation_id,
+                    )
                     logger.info("[CHAT INTEGRATION] Buffer flushed successfully")
+                self._output_buffer = ""
         except Exception as e:
             logger.error("Failed to flush output buffer: %s", e)
 
@@ -150,10 +150,13 @@ class TerminalChatIntegrator:
                 return False
 
             transcript_file = f"{self.conversation_id}_terminal_transcript.txt"
-            transcript_path = self.data_dir / transcript_file
+            transcript_path = validate_relative_path(transcript_file, self.data_dir)
             async with aiofiles.open(transcript_path, "a", encoding="utf-8") as f:
                 await f.write(clean_content)
             return True
+        except ValueError:
+            logger.error("Blocked path traversal attempt in transcript write for session %s", self.conversation_id)
+            return False
         except OSError as e:
             logger.error("Failed to write to transcript (I/O error): %s", e)
             return False
