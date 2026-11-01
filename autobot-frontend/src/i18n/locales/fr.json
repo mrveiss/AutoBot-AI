@@ -8989,6 +8989,12 @@
       "retry": "Réessayer",
       "loading": "Chargement des plans...",
       "loadFailed": "Impossible de charger le plan.",
+      "stale": {
+        "plan": "Ce plan n'a pas pu être actualisé ; l'affichage est peut-être obsolète. {reason}",
+        "gate": "Les vérifications de préparation n'ont pas pu être actualisées ; la liste de ce qui manque est peut-être obsolète. {reason}",
+        "both": "Ni le plan ni ses vérifications de préparation n'ont pu être actualisés ; l'affichage est peut-être obsolète. {reason}"
+      },
+      "rereadRetry": "Recharger le plan",
       "saveFailed": "Impossible d'enregistrer la modification.",
       "createFailed": "Impossible de créer le plan.",
       "emptyTitle": "Aucun plan pour l'instant",
@@ -9132,6 +9138,8 @@
         "approveMessage": "Vous approuvez l'aperçu affiché. Toute modification ultérieure du plan annule cette approbation.",
         "previewFailed": "Impossible de générer l'aperçu.",
         "approveFailed": "Impossible d'approuver le plan.",
+        "approveBlocked": "L'approbation est bloquée tant que ces points ne sont pas résolus :",
+        "approveDetail": "Détail du serveur : {detail}",
         "convertFailed": "Impossible de créer les workflows.",
         "retryFailed": "Impossible de réessayer les propositions de ligne d'IA."
       }
