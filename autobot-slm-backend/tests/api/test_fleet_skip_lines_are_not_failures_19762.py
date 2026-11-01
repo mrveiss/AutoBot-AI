@@ -72,9 +72,19 @@ def test_the_limit_proof_passes_when_a_named_host_ran() -> None:
     assert _au.limit_run_failure(_SKIPS + _recap(), ["localhost", _NODE]) is None
 
 
-def test_a_group_name_in_the_limit_is_satisfied_by_any_member_that_ran() -> None:
-    # Limit entries may be groups; the recap lists hosts, so a group is never "absent".
-    assert _au.limit_run_failure(_SKIPS + _recap(), ["fleet_nodes"]) is None
+def test_a_group_name_reads_as_a_host_that_did_not_run() -> None:
+    # #19766: every caller names hosts, and a recap lists only hosts.
+    assert "fleet_nodes" in _au.limit_run_failure(_SKIPS + _recap(), ["fleet_nodes"])
+
+
+def test_two_named_hosts_with_one_skipped_fails_and_names_it() -> None:
+    why = _au.limit_run_failure(_SKIPS + _recap(), ["localhost", _NODE, "other-node"])
+    assert "other-node" in why and _NODE not in why
+
+
+def test_two_named_hosts_that_both_ran_pass() -> None:
+    recap = _recap().replace(f"{_NODE} ", f"other-node : ok=2 changed=0 unreachable=0 failed=0\n{_NODE} ", 1)
+    assert _au.limit_run_failure(_SKIPS + recap, [_NODE, "other-node"]) is None
 
 
 def test_a_localhost_only_or_empty_limit_asks_nothing_extra() -> None:
@@ -87,8 +97,35 @@ def test_the_executor_result_carries_the_reason_as_a_fatal_line() -> None:
     absent = {"output": _SKIPS + _recap(with_node=False), "returncode": 0, "timed_out": False}
     proved = _au.with_limit_proof(absent, ["localhost", _NODE])
     assert proved["returncode"] == 1
-    assert proved["output"].splitlines()[0].startswith("ERROR! no host named by the limit")
+    assert proved["output"].splitlines()[0].startswith("ERROR! hosts named by the limit ran no task")
     ran = {"output": _SKIPS + _recap(), "returncode": 0}
     assert _au.with_limit_proof(ran, ["localhost", _NODE]) is ran
     failed = {"output": "x", "returncode": 2}
     assert _au.with_limit_proof(failed, ["localhost", _NODE]) is failed
+
+
+_RAN = {"returncode": 0, "output": _SKIPS + _recap()}
+
+
+def test_self_update_needs_only_the_slm_node_and_reports_the_other_rows() -> None:
+    proved = _au.with_limit_proof(_RAN, ["localhost", _NODE, "stale-row"], must_run=[_NODE])
+    assert proved["returncode"] == 0
+    assert "NOTE: the limit also named hosts that ran no task: ['stale-row']" in proved["output"]
+
+
+def test_self_update_fails_when_the_slm_node_itself_did_not_run() -> None:
+    proved = _au.with_limit_proof(_RAN, ["localhost", "slm", _NODE], must_run=["slm"])
+    assert proved["returncode"] == 1 and "['slm']" in proved["output"].splitlines()[0]
+
+
+def test_every_host_running_adds_no_note() -> None:
+    assert _au.with_limit_proof(_RAN, ["localhost", _NODE], must_run=[_NODE]) == _RAN
+
+
+def test_an_all_skipped_host_on_the_strict_path_fails() -> None:
+    assert _NODE in _au.limit_run_failure(_SKIPS + _recap(node_ok=0), [_NODE])
+
+
+def test_the_self_update_call_passes_its_own_node_as_the_one_that_must_run() -> None:
+    source = (_BACKEND_ROOT / "api" / "code_sync.py").read_text(encoding="utf-8")
+    assert '"update-all-nodes.yml", limit=limit, detach=True, must_run=[node_id])' in source
