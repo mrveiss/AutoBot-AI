@@ -45,6 +45,9 @@ jobs:
             requirements*.txt
             autobot-backend/requirements*.txt
 
+      - name: Install CI requirements
+        uses: ./.github/actions/install-ci-requirements
+
       - name: Install backend dependencies
         # #6947: pipefail required so pip install failures surface (was masked by `| tail -5`).
         # #7018: switched from `autobot-backend/requirements.txt` to `requirements-ci.txt`
@@ -55,9 +58,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m pip install --upgrade pip >/dev/null
           python -m pip install pytest >/dev/null
-          python -m pip install -r requirements-ci.txt --prefer-binary
           python -m pip install -e autobot_shared
 
       - name: Run startup-import smoke test

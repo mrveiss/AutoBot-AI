@@ -379,6 +379,7 @@ python:
   # #18500: the autofix steps moved into a composite action with a dispatch-only
   # caller; the guards above (and autofix_types_dispatch_18500_test.py) read both.
   - '.github/actions/generated-types-autofix/action.yml'
+  - '.github/actions/install-ci-requirements/action.yml'
   - '.github/workflows/dispatch-generated-types.yml'
   # #17173: `repo_tests/secrets_baseline_reason_entries.py`'s `SPECIFIC_REASONS`
   # table names files under this tree by concrete literal (baseline keys are

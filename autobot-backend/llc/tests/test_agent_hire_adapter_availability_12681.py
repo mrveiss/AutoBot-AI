@@ -20,10 +20,12 @@ from __future__ import annotations
 
 import uuid
 from types import ModuleType
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import Response
 
+from llc.services.approval import ApprovalService
 from user_management.services import TenantContext
 
 
@@ -130,10 +132,18 @@ class TestHireRejectsAnUnrunnableAdapter:
         with (
             patch.object(mod, "registered_adapter_types", return_value=["claude_code"]),
             patch("llc.adapters.base.get_adapter", return_value=_CliAdapter(available=False)),
-            patch.object(mod.BudgetService, "provision_budget", new=AsyncMock()),
+            patch("llc.services.agent_hire_service.BudgetService.provision_budget", new=AsyncMock()),
+            patch.object(mod, "company_requires_hire_approval", new=AsyncMock(return_value=False)),
             pytest.raises(mod.HTTPException) as caught,
         ):
-            await mod.hire_agent(company_id=uuid.uuid4(), body=body, session=session, ctx=_ctx())
+            await mod.hire_agent(
+                company_id=uuid.uuid4(),
+                body=body,
+                response=Response(),
+                session=session,
+                svc=ApprovalService(),
+                ctx=_ctx(),
+            )
 
         assert caught.value.status_code == 422
         assert "cannot run on this deployment" in str(caught.value.detail)
@@ -145,6 +155,7 @@ class TestHireRejectsAnUnrunnableAdapter:
         """The control: without it, a gate that rejected everything would pass above."""
         mod = _mod()
         session = AsyncMock()
+        session.add = MagicMock()
         session.execute = AsyncMock()
         session.commit = AsyncMock()
         body = mod.AgentHireRequest(agent_name="CEO", org_role="manager", title="Chief Executive")
@@ -152,9 +163,17 @@ class TestHireRejectsAnUnrunnableAdapter:
         with (
             patch.object(mod, "registered_adapter_types", return_value=["claude_code"]),
             patch("llc.adapters.base.get_adapter", return_value=_CliAdapter(available=True)),
-            patch.object(mod.BudgetService, "provision_budget", new=AsyncMock()),
+            patch("llc.services.agent_hire_service.BudgetService.provision_budget", new=AsyncMock()),
+            patch.object(mod, "company_requires_hire_approval", new=AsyncMock(return_value=False)),
         ):
-            await mod.hire_agent(company_id=uuid.uuid4(), body=body, session=session, ctx=_ctx())
+            await mod.hire_agent(
+                company_id=uuid.uuid4(),
+                body=body,
+                response=Response(),
+                session=session,
+                svc=ApprovalService(),
+                ctx=_ctx(),
+            )
 
-        session.execute.assert_awaited()
+        session.add.assert_called_once()
         session.commit.assert_awaited()
