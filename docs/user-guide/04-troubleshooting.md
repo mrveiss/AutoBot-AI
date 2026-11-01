@@ -253,7 +253,7 @@ cp -r data/ data.backup/
 cp config/config.yaml config.backup.yaml
 
 # Reset to defaults
-sudo ./install.sh --reinstall
+sudo ./install.sh --reinstall  # keeps the existing admin password
 
 # Restore data if needed
 cp -r data.backup/* data/
