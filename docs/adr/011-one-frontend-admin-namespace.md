@@ -2,7 +2,7 @@
 
 ## Status
 
-**Status**: Proposed (records the maintainer decisions of 2026-10-27; the open questions in the last section are not decided here)
+**Status**: Rejected (2026-11-02), by the maintainer: "slm is firs thing user installs and is the point from which other functionality gets installed, we keep it separate". See [ADR-012](012-slm-first-and-separate.md). The rest of this document is kept as the record of what was proposed. The `/admin` section that landed from it stays, for main-app administration only.
 
 Refines [ADR-008](008-frontend-shared-code-boundary.md) (the two-SPA boundary) for the case where there is one SPA. Does not change [ADR-005](005-single-frontend-mandate.md) or [ADR-010](010-role-separation-count-agnostic-placement.md).
 
