@@ -16,7 +16,8 @@ Every surface where an agent acts resolves its line HERE, and only here:
 and nothing else decides whether an agent may act without a person. The pieces that used to
 decide on their own are INPUTS here, and can only tighten:
 
-* the approval baseline (#18294) -- a category in the baseline can never be line 1;
+* the approval baseline (#18294) -- a category in the baseline can never be line 1, except that a
+  shell command which only reads never gets a baseline category (#19950);
 * the role policy ``CommandApprovalManager.needs_approval`` (#17463) -- a role that needs
   approval for a risk can never be line 1;
 * the work item's declared ``requires_approval_before`` -- the same floor, add-only.
@@ -56,6 +57,7 @@ from autobot_shared.ai_lines import (
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secret_redaction import redact_nested
 from autobot_shared.ssot_config import config as ssot_config
+from autobot_shared.status_enums import CommandRisk
 from autobot_shared.tool_catalogue import approval_category_for, valid_approval_categories
 from llc.services.ai_lines import stored_line
 from models.approval import Approval, ApprovalStatus, ApprovalType
@@ -69,6 +71,9 @@ logger = get_logger(__name__)
 #: handler; a held tool call has nothing to execute on approval (HOOK for #18404 is in ``_file_hold``).
 KIND_HOLD = "ai_line_hold"
 REQUESTER_PREFIX = "ai-line"
+
+#: The tool name a shell command carries in the tool-effect catalogue.
+TERMINAL_TOOL = "execute_command"
 
 
 class Outcome(str, Enum):
@@ -120,6 +125,27 @@ async def _stored(scope: Optional[LineScope], key: str) -> tuple[Optional[AiLine
         return None, True
 
 
+def _is_read_only_command(tool_name: str, params: Optional[Mapping[str, Any]]) -> bool:
+    """Whether this call is a shell command rated SAFE that also only reads (#19950).
+
+    The tool name says only "runs a command", so the command decides. SAFE alone is not enough: it covers
+    ``git push`` and ``curl -X POST``. No command, or a classifier that cannot answer, is not read-only:
+    the call keeps the tool's own line.
+    """
+    command = (params or {}).get("command") if tool_name == TERMINAL_TOOL else None
+    if not command or not isinstance(command, str):
+        return False
+    try:
+        from secure_command_executor import SecureCommandExecutor
+        from security.read_only_commands import is_read_only_command
+
+        risk, _reasons = SecureCommandExecutor(use_docker_sandbox=False).assess_command_risk(command)
+        return risk is CommandRisk.SAFE and is_read_only_command(command)
+    except Exception as exc:  # noqa: BLE001 - fail closed on an unreadable verdict
+        logger.error("Command risk unreadable (%s); the command keeps its tool's line", exc)
+        return False
+
+
 async def resolve_action_line(
     tool_name: str,
     params: Optional[Mapping[str, Any]],
@@ -131,17 +157,22 @@ async def resolve_action_line(
 ) -> LineResolution:
     """Resolve the effective line for one action. Read-only: creates nothing, runs nothing.
 
-    LineScope: the verified company; with none, the verified user's personal scope (#18430). A company that is
+    LineScope: the verified company; with none, the verified user's personal scope (#18430). A shell command that
+    only reads gets no baseline category, so the baseline floor does not apply to it, and counts as not mutating
+    (#19950); a work item's declared category still does. A company that is
     present but malformed is not a missing one and is never replaced by the user's scope.
     """
     key = action_key(tool_name, params)
     scope = resolve_scope(company_id, user_id)
     stored, unavailable = await _stored(scope, key)
-    category = approval_category_for(tool_name, await gated_categories(declared_categories))
+    read_only = _is_read_only_command(tool_name, params)
+    # A work item's own declared gate still applies to a read; the baseline's "destructive" one cannot.
+    gated = list(declared_categories) if read_only else await gated_categories(declared_categories)
+    category = approval_category_for(tool_name, gated)
     return resolve_line(
         key,
         stored=stored,
-        mutating=is_mutating(tool_name),
+        mutating=not read_only and is_mutating(tool_name),
         baseline_category=category,
         role_requires_approval=role_requires_approval,
         store_unavailable=unavailable,

@@ -88,6 +88,7 @@ async def _drive(*, has_work: bool, agent: Dict[str, Any] | None = None, rate_li
         patch.object(scheduler, "_find_rate_limited_run", AsyncMock(return_value=rate_limited)),
         patch.object(scheduler, "_create_run", create_run),
         patch.object(scheduler, "_run_adapter", run_adapter),
+        patch(f"{_HBS}.dispatch_block_reason", AsyncMock(return_value=None)),
         patch(f"{_HBS}.has_pending_work", AsyncMock(return_value=has_work)),
         patch(f"{_HBS}.get_async_session_factory", return_value=_make_session()),
     ):
