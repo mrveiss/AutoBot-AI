@@ -580,6 +580,21 @@ async def _generate_response_planned(
     }
 
 
+async def _emit_agent_execute_hook(session_id, iteration) -> None:
+    """Fire ON_AGENT_EXECUTE before an LLM iteration (generate_response, Issue #3278)."""
+    try:
+        from autobot_shared.plugin_sdk import Hook, HookRegistry
+
+        await HookRegistry().call_hook(
+            Hook.ON_AGENT_EXECUTE.value,
+            session_id=session_id,
+            iteration=iteration,
+            agent_type="chat_workflow",
+        )
+    except Exception as _hook_exc:  # noqa: BLE001
+        logger.debug("Plugin hook ON_AGENT_EXECUTE failed (non-fatal): %s", _hook_exc)
+
+
 async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
     """Run one LLM iteration: call LLM, stream response, parse tool calls.
 
@@ -611,24 +626,13 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
         step_id=step_name,
     )
 
-    # Issue #3278: notify plugins before LLM execution.
-    try:
-        from autobot_shared.plugin_sdk import Hook, HookRegistry
+    await _emit_agent_execute_hook(session_id, iteration)  # Issue #3278
 
-        await HookRegistry().call_hook(
-            Hook.ON_AGENT_EXECUTE.value,
-            session_id=session_id,
-            iteration=iteration,
-            agent_type="chat_workflow",
-        )
-    except Exception as _hook_exc:  # noqa: BLE001
-        logger.debug("Plugin hook ON_AGENT_EXECUTE failed (non-fatal): %s", _hook_exc)
-
-    # GH#11202: flag-gated plan-only path. OFF (default) falls through to the
-    # unchanged inline-dispatch path below — zero behavior change when off.
+    # GH#11202 flag-gated plan-only path; #20195: attachment turns (and that chat's later turns) take it whatever
+    # the flag, so a person can answer each call. Otherwise OFF falls through to the unchanged inline path.
     from chat_workflow.session_role import CHAT_APPROVAL_GATE_ENABLED
 
-    if CHAT_APPROVAL_GATE_ENABLED:
+    if CHAT_APPROVAL_GATE_ENABLED or ctx.approve_every_call:
         return await _generate_response_planned(
             state, manager, ctx, iteration, messages, stream_cb, step_name, _cot_start
         )
@@ -647,32 +651,10 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
             output_summary="LLM error: Request failed",
             session_id=session_id,
         )
-        # Issue #3278: notify plugins on agent error.
-        try:
-            from autobot_shared.plugin_sdk import Hook, HookRegistry
-
-            await HookRegistry().call_hook(
-                Hook.ON_AGENT_ERROR.value,
-                session_id=session_id,
-                iteration=iteration,
-                error=str(exc),
-            )
-        except Exception as _hook_exc:  # noqa: BLE001
-            logger.debug("Plugin hook ON_AGENT_ERROR failed (non-fatal): %s", _hook_exc)
+        await _emit_planned_agent_error_hooks(session_id, iteration, exc)  # Issue #3278
         return {"error": str(exc), "workflow_messages": messages}
 
-    # Issue #3278: notify plugins after successful LLM execution.
-    try:
-        from autobot_shared.plugin_sdk import Hook, HookRegistry
-
-        await HookRegistry().call_hook(
-            Hook.ON_AGENT_COMPLETE.value,
-            session_id=session_id,
-            iteration=iteration,
-            response=llm_response or "",
-        )
-    except Exception as _hook_exc:  # noqa: BLE001
-        logger.debug("Plugin hook ON_AGENT_COMPLETE failed (non-fatal): %s", _hook_exc)
+    await _emit_planned_agent_complete_hook(session_id, iteration, llm_response or "")  # Issue #3278
 
     # Issue #13295 (review B3): append unconditionally — see the matching
     # comment in _generate_response_planned for why a skipped append here

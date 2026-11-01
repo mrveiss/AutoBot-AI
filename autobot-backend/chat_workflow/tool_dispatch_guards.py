@@ -337,6 +337,7 @@ async def enforce_ai_line(
         role_requires_approval=turn_requires_approval(tool_name, ctx),  # #20195: an attachment turn gates every call
         approved_fingerprints=getattr(ctx, "approved_fingerprints", frozenset()),
         hold_in_approvals=not is_command,
+        floor_waived=bool(getattr(ctx, "attachment_floor_waived", False)),  # #20195: the trail names the setting
     )
     if verdict.outcome is Outcome.RUN:
         return None

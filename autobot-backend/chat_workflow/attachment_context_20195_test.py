@@ -52,6 +52,20 @@ def world(tmp_path, monkeypatch):
 
     monkeypatch.setattr("conversation_file_manager.get_conversation_file_manager", _get)
 
+    records: dict = {}  # the chat's durable "used an attachment" record (Redis in production)
+
+    class _FakeRedis:
+        async def get(self, key):
+            return records.get(key)
+
+        async def set(self, key, value, **_kw):
+            records[key] = value
+
+    async def _redis(_self=None):
+        return _FakeRedis()
+
+    monkeypatch.setattr("chat_workflow.attachment_floor._record._get_redis", _redis)
+
     chat = ChatWorkflowManager.__new__(ChatWorkflowManager)
     chat._register_user_message_in_history = MagicMock()
     chat._prepare_llm_request_params = AsyncMock(side_effect=lambda *a, **k: {"prompt": _BASE, "model": "m"})

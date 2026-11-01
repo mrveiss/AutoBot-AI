@@ -146,9 +146,9 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/chat_history/context_overflow.py": 845,
     "autobot-backend/chat_history/session.py": 923,
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
-    "autobot-backend/chat_workflow/graph.py": 1573,  # #20195: 1643 -> 1573 (loop-detection helpers split out)
+    "autobot-backend/chat_workflow/graph.py": 1555,  # #20195: 1643 -> 1551 (loop helpers split, hooks reused)
     "autobot-backend/chat_workflow/llm_handler.py": 1300,
-    "autobot-backend/chat_workflow/manager.py": 3859,  # #20195: 3885 -> 3859 (lightweight-mode split out)
+    "autobot-backend/chat_workflow/manager.py": 3830,  # #20195: 3885 -> 3830 (lightweight-mode, governance split)
     "autobot-backend/chat_workflow/tool_handler.py": 3617,  # #19950 (MCP approval message moved out)
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,

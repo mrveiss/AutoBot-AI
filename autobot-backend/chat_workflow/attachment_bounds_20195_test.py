@@ -29,8 +29,10 @@ from chat_workflow.attachment_context_20195_test import _ALICE, _BASE, _FACT, _c
 
 
 @pytest.fixture(autouse=True)
-def _fresh_cache():
+def _fresh_cache(monkeypatch):
     attachment_extract.clear_cache()
+    monkeypatch.setattr("chat_workflow.attachment_floor.chat_used_attachment", AsyncMock(return_value=False))
+    monkeypatch.setattr("chat_workflow.approval_baseline.fetch_slm_policy_json", AsyncMock(return_value=None))
     yield
     attachment_extract.clear_cache()
 

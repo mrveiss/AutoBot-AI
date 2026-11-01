@@ -58,6 +58,13 @@ VERIFIED_ATTACHMENT_ACCESS_KEY = "verified_attachment_access"
 #: prompt, so EVERY tool call of that turn waits for a person's approval (#20195). Set from the server's own
 #: check on every turn; a client sending it can only tighten its own turn.
 ATTACHMENT_TURN_KEY = "attachment_turn"
+#: ``context`` key set from the SERVER's durable record that this chat once used an attachment: model output derived
+#: from a file sits in its history, so every tool call of every later turn waits for a person too (#20195). Removed
+#: from whatever a client sent and written only from the record (``chat_workflow.attachment_floor``).
+ATTACHMENT_CHAT_KEY = "attachment_chat"
+#: ``context`` key set from the admin-only SLM setting ``chat.auto_approve_attachment_turns`` (off by default): when
+#: present the two keys above no longer force asking and the normal AI lines apply (#20195). Server-set each turn.
+ATTACHMENT_AUTO_APPROVE_KEY = "attachment_auto_approve"
 
 #: A line is stored under a scope: a company, or -- for a user with no company -- the user alone (#18430).
 SCOPE_COMPANY = "company"

@@ -45,7 +45,7 @@ from typing import Any, Dict, List
 from autobot_shared.ai_lines import ATTACHMENT_TURN_KEY, VERIFIED_ATTACHMENT_ACCESS_KEY, VERIFIED_USER_KEY
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.prompt_rules import frame_untrusted_block, neutralize_frame_markers, sanitize_injected
-from chat_workflow import attachment_extract, attachment_guards, limits
+from chat_workflow import attachment_extract, attachment_floor, attachment_guards, limits
 
 logger = get_logger(__name__)
 
@@ -276,6 +276,7 @@ async def apply_attachments(session, context: Dict[str, Any] | None, llm_params:
             context[ATTACHMENT_TURN_KEY] = True
     if not file_ids and not invalid:
         return
+    await attachment_floor.mark_chat(session.session_id)  # #20195: later turns of this chat keep asking
     result = await _resolve_turn(session, context, llm_params)
     if result.block:
         llm_params["prompt"] = result.block + llm_params["prompt"]
@@ -318,7 +319,7 @@ async def resume_context(graph, session_id: str, allowed: bool) -> Dict[str, Any
         context[VERIFIED_ATTACHMENT_ACCESS_KEY] = True
     else:
         context.pop(VERIFIED_ATTACHMENT_ACCESS_KEY, None)
-    return {"context": context}
+    return {"context": await attachment_floor.stamp_attachment_floor(context, session_id)}  # setting may have changed
 
 
 async def resume_command(graph, session_id: str, decision: Dict[str, Any], allowed: bool):

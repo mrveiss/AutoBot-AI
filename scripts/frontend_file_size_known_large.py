@@ -50,7 +50,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/charts/ImportTreeChart.vue": 1353,  # #19906: 1365 -> 1353
     "autobot-frontend/src/components/chat/ChatInput.vue": 1628,  # #20133: 1672 -> 1631; #20195: -> 1628
     "autobot-frontend/src/components/chat/ChatInterface.vue": 1521,
-    "autobot-frontend/src/components/chat/ChatMessages.vue": 2118,  # #18849: 2119 -> 2118
+    "autobot-frontend/src/components/chat/ChatMessages.vue": 2097,  # #20195: 2118 -> 2097 (approval routing moved out)
     "autobot-frontend/src/components/chat/ChatSidebar.vue": 807,  # #18849: 808 -> 807
     "autobot-frontend/src/components/chat/DocumentationSearchSidebar.vue": 766,
     "autobot-frontend/src/components/chat/VisionAnalysisModal.vue": 702,

@@ -325,7 +325,7 @@ export class ChatController {
     }, ChatController.PREVIEW_THROTTLE_MS)
   }
 
-  private async handleStreamingResponse(response: Response): Promise<void> {
+  async handleStreamingResponse(response: Response): Promise<void> {
     const reader = response.body?.getReader()
     if (!reader) {
       throw new Error('No response stream available')

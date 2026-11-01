@@ -3688,39 +3688,10 @@ before summarizing.
     async def _apply_session_role(
         self, session_id: str, context: Dict[str, Any] | None, auth_role: str | None = None, scope: dict | None = None
     ) -> Dict[str, Any] | None:
-        """Overlay the trusted per-session governance onto the chat context (GH#11186/#11202).
+        """Overlay the trusted per-session governance onto the chat context (GH#11186/#11202/#20195)."""
+        from chat_workflow.session_role import apply_session_governance
 
-        A server-set session role overrides any client-supplied ``agent_id`` so the
-        pinned agent's ``forbidden_work`` is enforced at the tool seam and cannot be
-        lifted by the caller. GH#11202: when the approval gate flag is on and the
-        session declares approval categories, they are overlaid as
-        ``requires_approval_before`` so the AI-line point (``_enforce_ai_line``, #18430) holds
-        matching tools BEFORE they execute — the correct pre-execution stage. The backend decides.
-        """
-        from chat_workflow.approval_baseline import with_baseline_categories
-        from chat_workflow.session_role import (
-            CHAT_APPROVAL_GATE_ENABLED,
-            SessionRoleService,
-            apply_auth_role,
-            apply_role,
-        )
-        from chat_workflow.session_work_item import SessionWorkItemService, apply_work_item
-
-        svc = SessionRoleService()
-        # #13821: the authenticated caller's RBAC role, from the endpoint's
-        # server-side identity. Applied unconditionally (it strips on a missing
-        # role) so a client-supplied auth_role can never reach the tool seam.
-        context = apply_auth_role(context, auth_role, scope)  # scope: #18430, the AI lines' verified principal
-        context = apply_role(context, await svc.get_role(session_id))
-        # #13704: same trust model for the work-item binding. A server-set value
-        # overrides any client-supplied work_item_id, and an unbound session has
-        # the client's value stripped — otherwise a caller could select whose
-        # goal chain L4 reads on their behalf (#13687).
-        context = apply_work_item(context, await SessionWorkItemService().get_work_item(session_id))
-        if CHAT_APPROVAL_GATE_ENABLED:
-            # #18294: all categories gated by default; only the SLM setting relaxes one.
-            context = await with_baseline_categories(context, await svc.get_approval_categories(session_id))
-        return context
+        return await apply_session_governance(session_id, context, auth_role, scope)
 
     async def process_message_stream(
         self,

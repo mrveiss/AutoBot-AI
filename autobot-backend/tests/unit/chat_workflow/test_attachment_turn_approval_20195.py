@@ -116,7 +116,11 @@ async def test_the_turn_is_stamped_only_when_attachments_are_named_and_a_forged_
     async def _no_files():
         return None
 
+    async def _mark(_session_id):
+        return None
+
     monkeypatch.setattr("chat_workflow.attachment_context._file_manager", _no_files)
+    monkeypatch.setattr("chat_workflow.attachment_floor.mark_chat", _mark)  # the Redis record has its own tests
     params = {"prompt": "p", "model": "m"}
     forged = {ATTACHMENT_TURN_KEY: True, VERIFIED_USER_KEY: "u"}
     await apply_attachments(_Session(), forged, dict(params))
