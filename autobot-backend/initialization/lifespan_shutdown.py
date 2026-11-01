@@ -262,6 +262,11 @@ async def stop_periodic_schedulers(app: FastAPI, report: "_ShutdownReport") -> N
         reconciler.cancel()
         await report.run("LLC schedule reconciler stop", asyncio.gather(reconciler, return_exceptions=True))
 
+    # #18412: drain the approval expiry sweep (bounded, shielded via aclose())
+    from services.approval_expiry_scheduler import stop_approval_expiry_scheduler
+
+    await report.run("Approval expiry scheduler drain", stop_approval_expiry_scheduler(app))
+
     # GH#8229: Stop LLC routine scheduler
     if hasattr(app.state, "llc_routine_scheduler") and app.state.llc_routine_scheduler:
         if await report.run("LLC routine scheduler shutdown", app.state.llc_routine_scheduler.shutdown()):

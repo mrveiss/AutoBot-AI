@@ -102,6 +102,9 @@ async def start_background_workers(app: FastAPI) -> None:
     await start_vector_reconciler(app)
     await start_telegram_poller(app)
     await start_schedule_reconciler(app)
+    from services.approval_expiry_scheduler import start_approval_expiry_scheduler
+
+    await start_approval_expiry_scheduler(app)
 
 
 async def start_schedule_reconciler(app: FastAPI) -> None:
