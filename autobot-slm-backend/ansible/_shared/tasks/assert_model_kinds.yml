@@ -25,7 +25,7 @@
     COMPLETION_MODELS: "{{ (model_kind_completion | default([])) | join('\n') }}"
   register: _model_kind_probe
   changed_when: false
-  failed_when: _model_kind_probe.rc != 0
+  failed_when: _model_kind_probe.rc not in [0, 2]
   become: true
 
 - name: "Models | Report models the server could not describe (#19736)"
@@ -36,8 +36,7 @@
 - name: "Models | Fail when a model cannot do its role's job (#19736, #19886)"
   ansible.builtin.fail:
     msg: >-
-      A model cannot be shown to do its role's job:
-      {{ _model_kind_probe.stdout_lines | select('match', '^(WRONG-KIND|MISSING-EMBEDDING|SHOW-FAILED|UNKNOWN) ') | list | join('; ') }}.
+      A model cannot be shown to do its role's job: {{ _model_kind_probe.stdout_lines | join('; ') }}.
       An embedding role needs an installed model with the "embedding" capability, a chat role one with
       "completion" (#19736, #18834).
-  when: _model_kind_probe.stdout_lines | select('match', '^(WRONG-KIND|MISSING-EMBEDDING|SHOW-FAILED|UNKNOWN) ') | list | length > 0
+  when: _model_kind_probe.rc == 2

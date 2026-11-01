@@ -44,13 +44,17 @@ def _tasks(rel: str) -> list[dict]:
 
 
 def _fake_ollama(bin_dir: Path, reachable: bool = True) -> Path:
-    listing = "".join(f"{name}:latest  id  1 GB  now\\n" for name in [*_CAPS, "flaky"])
+    listing = "".join(f"{name}:latest  id  1 GB  now\\n" for name in [*_CAPS, "flaky", "once"])
     head = [
         f"[ \"$1\" = list ] && {{ printf 'NAME  ID  SIZE  MODIFIED\\n{listing}'; exit 0; }}",
         '[ "$1" = show ] || exit 2',
     ]
     head = head if reachable else ["exit 1"]
     lines = ["#!/bin/sh", *head, 'case "$2" in', "  flaky) echo 'Error: connection reset' >&2; exit 1 ;;"]
+    lines.append(
+        '  once) [ -e "$0.seen" ] || { : > "$0.seen"; echo \'Error: busy\' >&2; exit 1; }; '
+        "printf '  Capabilities\\n    completion\\n\\n' ;;"
+    )
     for model, caps in _CAPS.items():
         body = "printf '  Model\\n    arch x\\n\\n'"
         if caps:
@@ -71,12 +75,13 @@ def _run(tmp_path: Path, embedding: str, completion: list[str], reachable: bool 
         "EMBEDDING_MODEL": embedding,
         "COMPLETION_MODELS": "\n".join(completion),
     }
+    env["MODEL_SHOW_RETRY_DELAY"] = "0"
     return subprocess.run(["sh", str(repo_root() / _SCRIPT)], capture_output=True, text=True, check=False, env=env)
 
 
 def _probe(tmp_path: Path, embedding: str, completion: list[str]) -> list[str]:
     out = _run(tmp_path, embedding, completion)
-    assert out.returncode == 0, out.stdout + out.stderr
+    assert out.returncode in (0, 2), out.stdout + out.stderr
     return out.stdout.split("\n")[:-1]
 
 
@@ -96,13 +101,20 @@ def test_the_embedding_model_in_the_pull_list_is_judged_once_as_an_embedder(tmp_
     assert _probe(tmp_path, "embedder", ["chatty", "embedder"]) == ["OK embedder embedding", "OK chatty completion"]
 
 
-@pytest.mark.parametrize(("model", "line"), [("ghost", "ABSENT ghost"), ("nocaps", "UNKNOWN nocaps")])
+@pytest.mark.parametrize(
+    ("model", "line"),
+    [("ghost", "ABSENT ghost"), ("nocaps", "UNKNOWN nocaps: no Capabilities section; upgrade Ollama")],
+)
 def test_an_undescribed_model_is_reported_not_judged(tmp_path: Path, model: str, line: str) -> None:
     assert _probe(tmp_path, "", [model]) == [line]
 
 
 def test_a_listed_model_that_show_cannot_describe_says_why(tmp_path: Path) -> None:
     assert _probe(tmp_path, "", ["flaky"]) == ["SHOW-FAILED flaky: Error: connection reset"]
+
+
+def test_a_show_that_fails_once_is_retried(tmp_path: Path) -> None:
+    assert _probe(tmp_path, "", ["once"]) == ["OK once completion"]
 
 
 def test_an_absent_embedding_model_is_its_own_verdict(tmp_path: Path) -> None:
@@ -117,9 +129,9 @@ def test_an_unreachable_model_server_fails_the_probe_instead_of_reading_absent(t
     assert not eval_when(probe["failed_when"], _model_kind_probe={"rc": 0})
 
 
-def _fires(kind: str, lines: list[str]) -> bool:
+def _fires(kind: str, lines: list[str], rc: int = 0) -> bool:
     task = next(t for t in _tasks(_TASK) if kind in t)
-    return eval_when(when_of(task), _model_kind_probe={"stdout_lines": lines})
+    return eval_when(when_of(task), _model_kind_probe={"stdout_lines": lines, "rc": rc})
 
 
 @pytest.mark.parametrize(
@@ -138,8 +150,10 @@ def _fires(kind: str, lines: list[str]) -> bool:
 def test_the_install_fails_exactly_on_a_wrong_kind_verdict(
     tmp_path: Path, embedding: str, completion: list[str], fails: bool, reports: bool
 ) -> None:
-    lines = _probe(tmp_path, embedding, completion)
-    assert _fires("ansible.builtin.fail", lines) is fails
+    out = _run(tmp_path, embedding, completion)
+    lines = out.stdout.split("\n")[:-1]
+    assert out.returncode == (2 if fails else 0), out.stdout
+    assert _fires("ansible.builtin.fail", lines, out.returncode) is fails
     assert _fires("ansible.builtin.debug", lines) is reports
 
 
@@ -245,7 +259,8 @@ def _run_bare_metal_check(tmp_path: Path, reachable: bool = True):
     head = ['[ "$1" = list ] && exit 0', '[ "$1" = pull ] && exit 0'] if reachable else ["exit 1"]
     cli = tmp_path / "ollama"
     body = "printf '  Capabilities\\n    %s\\n\\n' \"$FAKE_CAPS\""
-    cli.write_text("\n".join(["#!/bin/sh", *head, body]) + "\n", encoding="utf-8")
+    missing = '[ "$FAKE_CAPS" = missing ] && exit 1'
+    cli.write_text("\n".join(["#!/bin/sh", *head, missing, body]) + "\n", encoding="utf-8")
     cli.chmod(0o755)
     stubs = 'log_warn() { echo "WARN $*"; }; log_error() { echo "ERROR $*"; }'
     script = f'{stubs}\nsource "{repo_root() / _BARE_METAL_LIB}"\npull_embedding_model'
@@ -254,13 +269,24 @@ def _run_bare_metal_check(tmp_path: Path, reachable: bool = True):
         capture_output=True,
         text=True,
         check=False,
-        env={**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}", "FAKE_CAPS": caps},
+        env={
+            **os.environ,
+            "PATH": f"{tmp_path}:{os.environ['PATH']}",
+            "FAKE_CAPS": caps,
+            "MODEL_SHOW_RETRY_DELAY": "0",
+        },
     )
 
 
 def test_the_bare_metal_install_stops_on_a_chat_model_in_the_embedding_role(tmp_path: Path) -> None:
     out = _run_bare_metal_check(tmp_path)("completion")
     assert out.returncode == 1 and "WRONG-KIND nomic-embed-text:latest" in out.stdout
+
+
+@pytest.mark.parametrize(("caps", "verdict"), [("missing", "MISSING-EMBEDDING"), ("", "UNKNOWN")])
+def test_the_bare_metal_install_stops_on_every_failing_verdict(tmp_path: Path, caps: str, verdict: str) -> None:
+    out = _run_bare_metal_check(tmp_path)(caps)
+    assert out.returncode == 1 and f"{verdict} nomic-embed-text:latest" in out.stdout
 
 
 def test_the_bare_metal_install_accepts_an_embedder(tmp_path: Path) -> None:
