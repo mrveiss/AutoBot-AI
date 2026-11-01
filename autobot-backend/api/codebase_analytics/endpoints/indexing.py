@@ -330,6 +330,7 @@ async def get_current_indexing_job():
     Returns:
     - has_active_job: Whether an indexing job is currently running
     - task_id: The current job's task ID (if running)
+    - source_id: The source it indexes: one job runs at a time across all sources (#20491)
     - status: Current job status
     - progress: Current progress details
     """
@@ -358,6 +359,7 @@ async def get_current_indexing_job():
                 {
                     "has_active_job": False,
                     "task_id": current_task_id,
+                    "source_id": task_data.get("source_id"),
                     "status": task_data.get("status", "unknown"),
                     "result": task_data.get("result"),
                     "error": task_data.get("error"),
@@ -379,6 +381,7 @@ async def get_current_indexing_job():
         {
             "has_active_job": True,
             "task_id": current_task_id,
+            "source_id": task_data.get("source_id"),
             "status": task_data.get("status", "running"),
             "progress": task_data.get("progress"),
             "phases": task_data.get("phases"),

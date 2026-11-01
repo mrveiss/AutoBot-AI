@@ -19,6 +19,7 @@ import appConfig from '@/config/AppConfig.js'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { createLogger } from '@/utils/debugUtils'
 import { usePollingJob } from '@/composables/usePollingJob'
+import { jobBelongsToSource } from './indexingJobSource'
 
 const logger = createLogger('useIndexingJob')
 
@@ -92,6 +93,7 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
   interface CurrentJobRaw {
     has_active_job?: boolean
     task_id?: string
+    source_id?: string | null
     status?: string
     progress?: { step?: string; percent?: number }
     error?: string
@@ -246,6 +248,7 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
     }
     const data = currentJobEndpoint.data.value
     if (!data) return
+    if (!jobBelongsToSource(data.source_id, deps.selectedSource.value?.id)) return
 
     if (data.has_active_job) {
       currentJobId.value = data.task_id ?? null
