@@ -20,6 +20,9 @@ from llc.models.enums import LLCRunStatus
 
 logger = get_logger(__name__)
 
+BILLING_SUBSCRIPTION = "subscription"
+BILLING_API = "api"
+
 
 @dataclass
 class AdapterRunStatus:
@@ -32,6 +35,9 @@ class AdapterRunStatus:
     # scheduler can forward it to BudgetService.ingest_cost_event (None = unknown).
     tokens_in: Optional[int] = None
     tokens_out: Optional[int] = None
+    # #20266: how the run was billed, reported by the adapter from the CLI itself
+    # (BILLING_SUBSCRIPTION / BILLING_API); None = unknown, which is treated as API-billed.
+    billing: Optional[str] = None
 
 
 @runtime_checkable

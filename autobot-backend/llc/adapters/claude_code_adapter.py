@@ -47,6 +47,7 @@ from .claude_result_failure import (
     is_failed_result_event,
     is_turn_limit_result,
     resolve_result_event,
+    run_billing,
 )
 from .heartbeat_prompt import agent_api_tool_pattern
 from .subprocess_base import DEFAULT_OUTPUT_DIR as _DEFAULT_OUTPUT_DIR
@@ -350,6 +351,16 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         if stderr_file is not None:
             state["stderr_file"] = stderr_file  # GH#9992
         return state
+
+    async def status(self, agent_config: dict, run_id: str) -> AdapterRunStatus:
+        """Base status, plus how a finished run was billed (#20266)."""
+        result = await super().status(agent_config, run_id)
+        if not result.status.is_terminal() or (result.tokens_in is None and result.tokens_out is None):
+            return result
+        output_dir = agent_config.get("adapter_config", {}).get("output_dir", _DEFAULT_OUTPUT_DIR)
+        state = self._load_state(self._state_path(output_dir, run_id), output_dir)
+        output_file = state.get("output_file") if state else None
+        return replace(result, billing=run_billing(output_file)) if output_file else result
 
     async def _status(self, agent_config: dict, run_id: str) -> AdapterRunStatus:
         """Extend base status to detect provider rate-limiting on process exit (GH#9773).

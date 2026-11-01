@@ -76,6 +76,7 @@ from .run_key import revoke_run_key as _revoke_run_key
 from .run_status import RunSuperseded, latest_run_in, mark_running
 from .run_workspace import acquire_run_workspace, release_run_workspace, release_workspace_best_effort
 from .schedule_members import agent_due_members, drop_unschedulable_member
+from .usage_billing import ingest_run_cost
 
 logger = get_logger(__name__)
 
@@ -957,9 +958,8 @@ async def _ingest_adapter_usage(agent: Dict[str, Any], result: AdapterRunStatus)
         factory = get_async_session_factory()
         async with factory() as session:
             company = str(agent.get("company_id") or "")
-            await BudgetService().ingest_cost_event(
-                session, agent_id, company, int(result.tokens_in or 0), int(result.tokens_out or 0), model
-            )
+            usage = (int(result.tokens_in or 0), int(result.tokens_out or 0))
+            await ingest_run_cost(BudgetService(), session, result, agent_id, company, usage, model)
             await session.commit()
     except BudgetExhausted:
         raise  # GH#8215 hard-stop — propagate so the run is recorded FAILED
