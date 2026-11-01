@@ -585,3 +585,14 @@ slm_frontend_release_keep: 3
 # per file. repo_tests/tls_cert_dir_one_home_19317_test.py pins every fallback
 # to the Python home and fails on any bare literal outside them.
 autobot_tls_remote_cert_dir: "/etc/autobot/certs"
+
+# #19832: the reverse proxies whose X-Forwarded-For the SLM backend may trust (login rate limit,
+# api/login_rate_limit.py -> get_client_ip). SLM_TRUSTED_PROXIES REPLACES the backend's built-in
+# list (config.py _get_trusted_proxies), so it carries loopback, this SLM node, its inventory
+# address, and every node in the inventory's `frontend` group. A frontend node that is not in
+# this list collapses all clients into one rate-limit bucket. Hosts that carry no address are
+# dropped; nothing here is a literal fleet address.
+slm_trusted_proxies: >-
+  {{ (['127.0.0.1', '::1', slm_host | default(''), ansible_host | default(''), frontend_host | default('')]
+      + (groups['frontend'] | default([]) | map('extract', hostvars, 'ansible_host') | select('defined') | list))
+     | reject('equalto', '') | unique | join(',') }}

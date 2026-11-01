@@ -134,7 +134,7 @@ def test_only_a_certain_remote_can_fail_the_update() -> None:
 
 def _proxies(hostvars: dict, groups: dict, **extra) -> list[str]:
     ctx = {**GROUP_VARS, "groups": groups, "hostvars": hostvars, **extra}
-    out = _resolve(SLM_DEFAULTS, ("slm_trusted_proxies",), ctx)
+    out = _resolve(GROUP_VARS, ("slm_trusted_proxies",), ctx)
     return out["slm_trusted_proxies"].split(",")
 
 
