@@ -20,53 +20,10 @@
 
 name: Auto-fix Generated Types
 
+# #20552: called by ci.yml, only after verify failed. The caller's run owns concurrency, and
+# the path set is the verify gate's own, so this file carries neither.
 on:
-  pull_request:
-    paths:
-      # Backend changes can alter the OpenAPI schema that api.ts is generated from.
-      - 'autobot-backend/**/*.py'
-      - 'autobot_shared/**/*.py'
-      - 'autobot-frontend/src/types/generated/api.ts'
-      # #14368: SLM backend changes can alter the OpenAPI schema
-      # autobot-slm-frontend's openapi.json + api.ts are generated from.
-      # openapi.json (unlike the backend's, which is an ephemeral CI temp
-      # file never committed) IS a checked-in artifact here, so it is watched
-      # too — a hand-edit or bad merge of it must also trigger the fix-back.
-      - 'autobot-slm-backend/**/*.py'
-      # #12986: completes the canonical `backend-python` set from .github/filters/backend-python-paths.yml;
-      # enforced by pipeline-scripts/check_workflow_path_filters.py.
-      - '.github/filters/backend-python-paths.yml'
-      - 'autobot-slm-frontend/openapi.json'
-      - 'autobot-slm-frontend/src/types/generated/api.ts'
-      - '.github/workflows/auto-fix-generated-types.yml'
-
-# #16360: a run caused by this workflow's OWN push (github-actions[bot]
-# committing the regenerated types) gets a group of its own. Before this, the
-# `approve-parked-runs` job below released that parked run, the released run
-# joined this group, and its cancel-in-progress cancelled the very run the
-# approver lives in: on #16351 the released run 34615151655 started at
-# 15:23:12Z and the approver's run 34612780429 was cancelled at 15:23:15Z.
-# Separating the GROUP is used rather than a per-run cancel-in-progress
-# expression because it does not depend on which run's setting governs a
-# cancel, which GitHub does not document. `github.actor` is the bot on that run
-# (run API: actor and triggering_actor both github-actions[bot]; the human run
-# it cancelled: both the PR author) and, unlike `github.triggering_actor`, stays
-# the bot if a human later approves or re-runs it.
-#
-# #16363 review: "a bot" is any `[bot]` actor, not only github-actions[bot].
-# The checkout below pushes with AUTOBOT_PUSH_TOKEN when it is set; if that token
-# belongs to a GitHub App or another bot identity, the fork policy parks the push
-# and the approver releases it exactly as in the fallback case. dependabot[bot]
-# is excluded: its runs are never parked, so there is no approver to protect,
-# and its rebases should keep superseding each other.
-#
-# Accepted trade-off: two bot-caused runs for DIFFERENT head SHAs no longer
-# cancel each other. Each is the regen run of its own commit, which pushes
-# nothing when the types already match, and a stale one's push, if it made one,
-# would be rejected as a non-fast-forward.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref }}${{ endsWith(github.actor, '[bot]') && github.actor != 'dependabot[bot]' && format('-regen-{0}', github.event.pull_request.head.sha) || '' }}
-  cancel-in-progress: true
+  workflow_call:
 
 # #15362: `read`, not `write`. `autofix-types` used to commit the regenerated types
 # back to the PR branch, which invalidated every check already in flight and

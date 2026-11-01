@@ -81,7 +81,6 @@ FILTERS_DIR = Path(".github/filters")
 # being forgotten.
 INLINE_CONSUMERS: dict[str, tuple[str, ...]] = {
     "phase_validation.yml": ("push",),
-    "auto-fix-generated-types.yml": ("pull_request",),
 }
 
 # Filter files whose KEYS are literal copies of the canonical set (#18208). A key here must
