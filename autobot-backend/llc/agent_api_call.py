@@ -72,10 +72,10 @@ def run_agent_api_call(argv: list[str], env: dict, out, err) -> int:
     opener = urllib.request.build_opener(_NoRedirect)
     try:
         with opener.open(request, timeout=_TIMEOUT_SECONDS) as resp:
-            out.write(resp.read().decode("utf-8", "replace").replace(env["AUTOBOT_LLC_API_KEY"], "[redacted]") + "\n")
+            out.write(resp.read().decode("utf-8", "replace").replace(env["AUTOBOT_LLC_API_KEY"], "") + "\n")
         return 0
     except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", "replace").replace(env["AUTOBOT_LLC_API_KEY"], "[redacted]")
+        detail = exc.read().decode("utf-8", "replace").replace(env["AUTOBOT_LLC_API_KEY"], "")
         err.write(f"HTTP {exc.code}: {detail}\n")
         return 1
     except (urllib.error.URLError, OSError) as exc:
