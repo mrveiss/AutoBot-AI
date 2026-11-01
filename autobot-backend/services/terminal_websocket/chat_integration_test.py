@@ -76,6 +76,30 @@ async def test_transcript_appends_clean_text_under_the_data_dir(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_transcript_keeps_line_breaks_between_chunks(tmp_path):
+    chat = _integrator(tmp_path)
+    await chat.write_to_transcript("\x1b[31mls\x1b[0m\n")
+    await chat.write_to_transcript("pwd\n")
+    written = await asyncio.to_thread((tmp_path / "conv_terminal_transcript.txt").read_text, encoding="utf-8")
+    assert written == "ls\npwd\n"
+
+
+@pytest.mark.asyncio
+async def test_transcript_writes_nothing_for_a_chunk_of_only_escapes(tmp_path):
+    chat = _integrator(tmp_path)
+    assert await chat.write_to_transcript("\x1b[31m\x1b[0m") is False
+    assert not (tmp_path / "conv_terminal_transcript.txt").exists()
+
+
+@pytest.mark.asyncio
+async def test_transcript_drops_bracket_artifacts_from_a_pty_read(tmp_path):
+    chat = _integrator(tmp_path)
+    await chat.write_to_transcript("[?2004hls\n")
+    written = await asyncio.to_thread((tmp_path / "conv_terminal_transcript.txt").read_text, encoding="utf-8")
+    assert written == "ls\n"
+
+
+@pytest.mark.asyncio
 async def test_transcript_refuses_a_conversation_id_that_leaves_the_data_dir(tmp_path):
     chats = tmp_path / "chats"
     chats.mkdir()
