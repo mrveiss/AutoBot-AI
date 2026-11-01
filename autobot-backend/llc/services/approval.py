@@ -165,7 +165,15 @@ class ApprovalService(LLCServiceBase):
         if decision not in (ApprovalStatus.APPROVED, ApprovalStatus.REJECTED):
             raise ApprovalStateError(f"Decision must be APPROVED or REJECTED, got {decision.value!r}")
 
-        result = await session.execute(select(Approval).where(Approval.id == approval_id).with_for_update())
+        # ``populate_existing``: the route's tenant check already loaded this row into the session. Without it
+        # a decider that waited on the lock keeps that stale ``pending`` copy, so approve could overwrite a
+        # committed reject (and create the hire); with it the locked read replaces the copy with the current row.
+        result = await session.execute(
+            select(Approval)
+            .where(Approval.id == approval_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
         approval = result.scalar_one_or_none()
         if approval is None:
             raise ApprovalNotFoundError(f"Approval {approval_id} not found")
@@ -201,8 +209,8 @@ class ApprovalService(LLCServiceBase):
 
         A failure here is logged, not raised: the decision is committed and cannot be undone, and
         the database already holds the authority (the agent row, the new limit). A hire that failed to reach
-        the heartbeat schedule is put back by the schedule reconciler (#20151, not on main yet); until it lands,
-        by the next scheduler start.
+        the heartbeat schedule is put back by the schedule reconciler (#20117, merged in #20151), which re-adds
+        every enabled member missing from the schedule on its interval.
         """
         try:
             await run_post_commit_hook(approval)

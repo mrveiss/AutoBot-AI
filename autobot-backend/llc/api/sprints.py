@@ -59,6 +59,7 @@ from ..services.project_disposal import dispose
 from ..services.sprint_autoclose import SprintAutoCloseService
 from ..services.sprint_planning import SprintNotFound, SprintPlanningService
 from ..services.timeline import compute_critical_path, duration_days
+from ._common import actor_id
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["llc-sprints"])
@@ -235,7 +236,7 @@ class SprintResponse(BaseModel):
 
 class SprintCloseRequest(BaseModel):
     approval_id: uuid.UUID
-    decided_by: uuid.UUID
+    decided_by: Optional[uuid.UUID] = None  # deprecated and ignored: the decider is the authenticated caller
 
 
 # ------------------------------------------------------------------ Portfolio routes
@@ -921,7 +922,7 @@ async def close_sprint(
     sprint_id: uuid.UUID,
     body: SprintCloseRequest,
     session: AsyncSession = Depends(get_session),
-    _current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> LLCSprint:
     """Close a sprint whose SPRINT_CLOSE approval is APPROVED but not yet applied.
@@ -936,10 +937,7 @@ async def close_sprint(
         raise HTTPException(status_code=404, detail="Sprint not found")
     try:
         sprint = await _autoclose_svc.execute_close(
-            session,
-            sprint_id=sprint_id,
-            approval_id=body.approval_id,
-            decided_by=body.decided_by,
+            session, sprint_id=sprint_id, approval_id=body.approval_id, decided_by=actor_id(current_user)
         )
         await session.commit()
         _autoclose_svc.schedule_closed_sprint_summary(sprint_id)  # after the commit, off the request (#8214)

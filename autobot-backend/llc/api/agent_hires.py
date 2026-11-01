@@ -36,6 +36,7 @@ from llc.services.agent_hire_service import (
 )
 from llc.services.approval import ApprovalService
 from llc.services.model_tiers import get_model_tier_service
+from services.agent_org_service import AgentOrgService
 from user_management.database import get_async_session
 from user_management.services import TenantContext
 
@@ -535,6 +536,17 @@ def _hire_response(company_id: uuid.UUID, body: AgentHireRequest, hire: HirePayl
     )
 
 
+async def _require_manager_here(session: AsyncSession, company_id: uuid.UUID, reports_to: Optional[str]) -> None:
+    """422 unless the hire's manager is an agent of this company (the check ``upsert_node`` already makes)."""
+    try:
+        await AgentOrgService(session).assert_manager_in_company(reports_to, company_id)
+    except ValueError as exc:
+        logger.warning("Refused hire in company %s: %s", company_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="reports_to is not an agent of this company"
+        ) from exc
+
+
 @router.post(
     "/companies/{company_id}/agent-hires",
     response_model=Union[AgentHireResponse, AgentHirePending],
@@ -557,6 +569,7 @@ async def hire_agent(
     """
     assert_company_access(ctx, str(company_id))
     resolved_model = _validate_hire(body)
+    await _require_manager_here(session, company_id, body.reports_to)
     hire = _hire_payload(company_id, body, resolved_model)
     if await company_requires_hire_approval(session, company_id):
         if ctx.user_id is None:  # the request must name a verified requester, never the string "None"

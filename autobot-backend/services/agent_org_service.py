@@ -331,6 +331,18 @@ class AgentOrgService:
 
     # -- Upsert ------------------------------------------------------------
 
+    async def assert_manager_in_company(self, reports_to: str | None, company_id: uuid.UUID) -> None:
+        """Raise ``ValueError`` unless *reports_to* is None or an agent of *company_id* (#15794).
+
+        The one manager check: ``upsert_node`` and the hire route both use it, so a hire cannot be placed
+        under another company's agent. A missing manager and one elsewhere read the same.
+        """
+        if reports_to is None:
+            return
+        manager = await self.get_node(reports_to)
+        if manager is None or manager.company_id != company_id:
+            raise ValueError(f"Manager not in this company: {reports_to!r}")
+
     async def upsert_node(
         self,
         agent_id: str,
@@ -360,10 +372,7 @@ class AgentOrgService:
         if company_uuid is not None:
             if node is not None and node.company_id != company_uuid:
                 raise ValueError(f"Agent not found in org hierarchy: {agent_id!r}")
-            if reports_to is not None:
-                manager = await self.get_node(reports_to)
-                if manager is None or manager.company_id != company_uuid:
-                    raise ValueError(f"Manager not in this company: {reports_to!r}")
+            await self.assert_manager_in_company(reports_to, company_uuid)
 
         if node is None:
             if company_uuid is not None:
