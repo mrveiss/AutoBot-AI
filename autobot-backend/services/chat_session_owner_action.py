@@ -79,19 +79,29 @@ async def _comment(approval: "Approval", session: "AsyncSession", body: str) -> 
     await session.commit()
 
 
-async def _write_owner(manager, session_id: str, owner: str, user_id: str) -> None:
-    """The file record is the durable one (#14018); the Redis key only caches it, so its failure is not fatal."""
+async def _cached_owner(session_id: str) -> tuple[SessionOwnershipValidator, str | None]:
+    """The Redis owner record: an owner the ownership gate has granted may be only there."""
+    redis = await get_redis_client(async_client=True, database="main")
+    validator = SessionOwnershipValidator(redis)
+    return validator, await validator.get_session_owner(session_id)
+
+
+async def _write_owner(manager, validator, session_id: str, owner: str, user_id: str) -> str:
+    """The file record is the durable one (#14018); a Redis failure after it is reported as partial, not hidden."""
     if not await manager.update_session_metadata(
         session_id, build_owner_metadata({"username": owner, "user_id": user_id})
     ):
         raise ValueError(f"session {session_id} could not be updated")
-    redis = await get_redis_client(async_client=True, database="main")
-    if not await SessionOwnershipValidator(redis).set_session_owner(session_id, owner, force=True):
-        logger.warning("Session %s has its owner on file, but the Redis record was not written", session_id)
+    try:
+        written = await validator.set_session_owner(session_id, owner)
+    except Exception as exc:
+        logger.warning("Session %s has its owner on file; its Redis record failed: %s", session_id, type(exc).__name__)
+        return "partial"
+    return "success" if written else "partial"
 
 
 async def execute_owner_assign(approval: "Approval", session: "AsyncSession") -> None:
-    """Write the owner an approved proposal named, unless the session has gained one since."""
+    """Write the owner an approved proposal named, unless the session has gained one since, on file or in Redis."""
     ctx = approval.context or {}
     session_id, owner = ctx.get("session_id"), ctx.get("owner")
     if not session_id or not owner:
@@ -101,16 +111,25 @@ async def execute_owner_assign(approval: "Approval", session: "AsyncSession") ->
     if user_id is None:
         raise ValueError(f"{owner} is not an active user")
     manager = ChatHistoryManager()
-    existing = await manager.get_session_owner(session_id)
+    validator, cached = await _cached_owner(session_id)
+    existing = await manager.get_session_owner(session_id) or (cached if cached != owner else None)
     if existing:
         await _comment(approval, session, f"Session {session_id} already belongs to {existing}; nothing changed.")
-        await _audit(approval, session_id, "skipped", existing_owner=existing)
+        await _audit(approval, session_id, "denied", stage="skipped", existing_owner=existing)
         return
-    await _audit(approval, session_id, "started", owner=owner, self_approval=self_approved)
-    await _write_owner(manager, session_id, owner, user_id)
+    await _audit(approval, session_id, "success", stage="started", owner=owner, self_approval=self_approved)
+    outcome = await _write_owner(manager, validator, session_id, owner, user_id)
     note = " (self-approved)" if self_approved else ""
-    await _comment(approval, session, f"Session {session_id} now belongs to {owner}{note}.")
-    await _audit(approval, session_id, "success", owner=owner, self_approval=self_approved)
+    tail = "" if outcome == "success" else " Its owner is on file, but the Redis record was not written."
+    await _comment(approval, session, f"Session {session_id} now belongs to {owner}{note}.{tail}")
+    await _audit(
+        approval,
+        session_id,
+        "success" if outcome == "success" else "error",
+        stage=outcome,
+        owner=owner,
+        self_approval=self_approved,
+    )
 
 
 def register_owner_assign_action() -> None:

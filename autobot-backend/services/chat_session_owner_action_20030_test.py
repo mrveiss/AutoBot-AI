@@ -54,12 +54,13 @@ def _approval(decider=_OTHER, requested_by=_ADMIN, session_id="s1", owner="alice
     return approval
 
 
-async def _run(manager: _Manager, approval, session):
-    redis_set = AsyncMock(return_value=True)
+async def _run(manager: _Manager, approval, session, cached=None, redis_set=None):
+    redis_set = redis_set or AsyncMock(return_value=True)
+    validator = SimpleNamespace(set_session_owner=redis_set, get_session_owner=AsyncMock(return_value=cached))
     with (
         patch.object(action, "ChatHistoryManager", return_value=manager),
         patch.object(action, "get_redis_client", AsyncMock()),
-        patch.object(action, "SessionOwnershipValidator", return_value=SimpleNamespace(set_session_owner=redis_set)),
+        patch.object(action, "SessionOwnershipValidator", return_value=validator),
         patch.object(action, "audit_log", AsyncMock()) as audit,
     ):
         await action.execute_owner_assign(approval, session)
@@ -75,16 +76,16 @@ async def test_approval_writes_the_owner_to_file_and_redis_with_a_record() -> No
     manager, session = _Manager({"s1": None}), _session()
     redis_set, audit = await _run(manager, _approval(), session)
     assert manager.written[0][1]["owner"] == "alice" and manager.written[0][1]["username"] == "alice"
-    redis_set.assert_awaited_once_with("s1", "alice", force=True)
+    redis_set.assert_awaited_once_with("s1", "alice")
     assert "now belongs to alice" in session.add.call_args.args[0].body
-    assert [c.kwargs["result"] for c in audit.await_args_list] == ["started", "success"]
+    assert [c.kwargs["details"]["stage"] for c in audit.await_args_list] == ["started", "success"]
 
 
 async def test_a_session_that_gained_an_owner_is_left_alone() -> None:
     manager, session = _Manager({"s1": "bob"}), _session()
     _, audit = await _run(manager, _approval(), session)
     assert manager.written == [] and "already belongs to bob" in session.add.call_args.args[0].body
-    assert audit.await_args.args[1:] == () and audit.await_args.kwargs["result"] == "skipped"
+    assert audit.await_args.args[1:] == () and audit.await_args.kwargs["details"]["stage"] == "skipped"
 
 
 async def test_the_only_admin_may_self_approve_and_it_is_flagged() -> None:
@@ -122,13 +123,40 @@ async def test_a_bad_approval_writes_nothing(approval, user_exists: bool) -> Non
 async def test_a_failed_file_write_records_no_success() -> None:
     manager, session = _Manager({"s1": None}, fail=True), _session()
     audit = AsyncMock()
+    validator = SimpleNamespace(set_session_owner=AsyncMock(), get_session_owner=AsyncMock(return_value=None))
     with (
         patch.object(action, "ChatHistoryManager", return_value=manager),
+        patch.object(action, "get_redis_client", AsyncMock()),
+        patch.object(action, "SessionOwnershipValidator", return_value=validator),
         patch.object(action, "audit_log", audit),
         pytest.raises(ValueError),
     ):
         await action.execute_owner_assign(_approval(), session)
-    assert [c.kwargs["result"] for c in audit.await_args_list] == ["started"]
+    assert [c.kwargs["details"]["stage"] for c in audit.await_args_list] == ["started"]
+
+
+async def test_an_owner_only_in_redis_is_left_alone() -> None:
+    manager, session = _Manager({"s1": None}), _session()
+    redis_set, audit = await _run(manager, _approval(), session, cached="bob")
+    assert manager.written == [] and "already belongs to bob" in session.add.call_args.args[0].body
+    redis_set.assert_not_awaited()
+    assert audit.await_args.kwargs["details"]["stage"] == "skipped"
+
+
+async def test_a_redis_record_of_the_named_owner_does_not_block_writing_the_file() -> None:
+    manager = _Manager({"s1": None})
+    await _run(manager, _approval(), _session(), cached="alice")
+    assert manager.written
+
+
+@pytest.mark.parametrize(
+    "redis_set", [AsyncMock(side_effect=OSError("down")), AsyncMock(return_value=False)], ids=["raises", "refused"]
+)
+async def test_a_redis_failure_after_the_file_is_recorded_as_partial(redis_set) -> None:
+    manager, session = _Manager({"s1": None}), _session()
+    _, audit = await _run(manager, _approval(), session, redis_set=redis_set)
+    assert manager.written and "Redis record was not written" in session.add.call_args.args[0].body
+    assert audit.await_args.kwargs["result"] == "error" and audit.await_args.kwargs["details"]["stage"] == "partial"
 
 
 def test_the_action_is_server_only_with_its_proposer() -> None:

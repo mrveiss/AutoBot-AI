@@ -13,6 +13,7 @@ never auto-approved (#17038). The executor lives in ``services.chat_session_owne
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_ownerless_chat_sessions import (
@@ -23,7 +24,7 @@ from api.schemas_ownerless_chat_sessions import (
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
 from auth_rbac import require_role
-from models.approval import ApprovalType
+from models.approval import Approval, ApprovalStatus, ApprovalType
 from services.approval_gate_service import ApprovalGateService
 from services.chat_session_owner_action import (
     ACTION,
@@ -37,6 +38,16 @@ router = APIRouter(prefix="/admin", dependencies=[Depends(require_role("admin", 
 
 # Registered at this router's import time so the executor exists before any approve().
 register_owner_assign_action()
+
+
+async def _pending_proposal_id(session: AsyncSession, session_id: str) -> str | None:
+    query = select(Approval.id).where(
+        Approval.status == ApprovalStatus.PENDING.value,
+        Approval.context["action"].astext == ACTION,
+        Approval.context["session_id"].astext == session_id,
+    )
+    found = (await session.execute(query)).scalars().first()
+    return str(found) if found else None
 
 
 @router.get("/ownerless-chat-sessions", response_model=OwnerlessChatSessionsReport)
@@ -66,6 +77,8 @@ async def propose_chat_session_owner(
         raise HTTPException(status.HTTP_409_CONFLICT, "That session is not in the ownerless report")
     if await active_user_id(session, body.owner) is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "That owner is not an active user")
+    if await _pending_proposal_id(session, body.session_id):
+        raise HTTPException(status.HTTP_409_CONFLICT, "That session already has a pending proposal")
     approval = await ApprovalGateService(session).create_approval(
         title=f"Give chat session {body.session_id} to {body.owner}",
         approval_type=ApprovalType.DESTRUCTIVE_ACTION.value,

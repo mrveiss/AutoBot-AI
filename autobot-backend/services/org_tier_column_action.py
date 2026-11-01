@@ -56,13 +56,13 @@ async def execute_tier_column_drop(approval: "Approval", session: "AsyncSession"
     """Drop the column an approved gate named; the audit entry is written before the schema changes."""
     self_approval = await is_self_approval(approval, session)
     was_present = await column_present(session)
-    await _audit(approval, "started", self_approval=self_approval, was_present=was_present)
+    await _audit(approval, "success", stage="started", self_approval=self_approval, was_present=was_present)
     await session.execute(_DROP)
     body = "Dropped organizations.subscription_tier" if was_present else "organizations.subscription_tier was gone"
     body += " (self-approved by the only admin)." if self_approval else "."
     session.add(ApprovalComment(approval_id=approval.id, author="system", author_type="system", body=body))
     await session.commit()
-    await _audit(approval, "success", self_approval=self_approval, was_present=was_present)
+    await _audit(approval, "success", stage="done", self_approval=self_approval, was_present=was_present)
 
 
 def register_tier_column_action() -> None:
