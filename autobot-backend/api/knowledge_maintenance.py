@@ -1775,6 +1775,7 @@ async def restore_backup(
         skip_duplicates=request.skip_duplicates,
         restore_embeddings=request.restore_embeddings,
         dry_run=request.dry_run,
+        audit_actor=await request_actor(req),
     )
 
     return result
@@ -1857,8 +1858,7 @@ async def delete_backup(
         )
 
     logger.info("Delete backup request: file=%s", request.backup_file)
-
-    result = await kb.delete_backup(backup_file=request.backup_file)
+    result = await kb.delete_backup(backup_file=request.backup_file, audit_actor=await request_actor(req))
 
     return result
 

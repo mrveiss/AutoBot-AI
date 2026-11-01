@@ -168,7 +168,7 @@ class TestResolveBackupPath:
     def test_a_nested_or_traversing_name_is_refused(self):
         with tempfile.TemporaryDirectory() as root:
             stub = _BackupPathStub(root)
-            for name in ("2026/kb_backup.json", "../outside.json", "..", ".", ""):
+            for name in ("2026/kb_backup.json", "../outside.json", "..", ".", "", "a\\b.json", "a\x00b.json"):
                 assert stub._resolve_backup_path(name) is None, name
 
     def test_a_symlink_pointing_outside_is_refused(self):

@@ -2927,7 +2927,7 @@ class RestoreRequest(BaseModel):
         ...,
         min_length=1,
         max_length=500,
-        description="Path to backup file to restore",
+        description="Filename of the backup to restore, from the backups list",
     )
     overwrite_existing: bool = Field(
         default=False,
@@ -2971,21 +2971,15 @@ class DeleteBackupRequest(BaseModel):
         ...,
         min_length=1,
         max_length=500,
-        description="Path to backup file to delete",
+        description="Filename of the backup to delete, from the backups list",
     )
 
     @field_validator("backup_file")
     @classmethod
     def validate_backup_file(cls, v):
-        """Validate backup file path (Issue #419).
-
-        Uses contains_dotdot_traversal (not contains_path_traversal) because
-        backup_file is a full filesystem path — absolute paths legitimately
-        contain forward-slashes.  Only dotdot sequences and null bytes are
-        genuine traversal attacks here.  (#9670)
-        """
-        if contains_dotdot_traversal(v):
-            raise ValueError("Path traversal not allowed in backup_file")
+        """A filename only (#19721). ``.partial`` is a backup still being written, so it is refused too."""
+        if contains_path_traversal(v) or "\x00" in v or v.endswith(".partial"):
+            raise ValueError("backup_file must be a backup's filename")
         return v
 
 

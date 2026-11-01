@@ -125,7 +125,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/schemas_analytics.py": 3533,
     "autobot-backend/api/schemas_chat.py": 702,
     "autobot-backend/api/schemas_code.py": 3257,
-    "autobot-backend/api/schemas_knowledge.py": 5119,
+    "autobot-backend/api/schemas_knowledge.py": 5113,
     "autobot-backend/api/schemas_system.py": 4176,  # #18734: log-forwarding schemas moved out (4345 -> 4176)
     "autobot-backend/api/schemas_workflows.py": 2824,
     "autobot-backend/api/secrets.py": 1172,  # #19476 one model_dump serialization (was 1178, #16444)
@@ -213,7 +213,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/judges/security_risk_judge.py": 842,
     "autobot-backend/knowledge/adapters/okf_adapter.py": 770,
     "autobot-backend/knowledge/base.py": 683,
-    "autobot-backend/knowledge/bulk.py": 1930,
+    "autobot-backend/knowledge/bulk.py": 1899,
     "autobot-backend/knowledge/categories.py": 965,
     "autobot-backend/knowledge/collections.py": 728,
     "autobot-backend/knowledge/connectors/base.py": 663,
