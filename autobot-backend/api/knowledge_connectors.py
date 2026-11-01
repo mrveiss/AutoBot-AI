@@ -330,8 +330,21 @@ async def _load_or_create_instance(cfg: ConnectorConfig):
     return instance
 
 
+async def _record_failed_sync(connector_id: str, started_at: datetime, stage: str) -> None:
+    """A failed run leaves a history entry, so the panel can say so (#19714). The details stay in the log."""
+    entry = {
+        "connector_id": connector_id,
+        "started_at": started_at.isoformat(),
+        "completed_at": now_utc().isoformat(),
+        "status": "failed",
+        "errors": [f"The sync failed while {stage}. See the backend log."],
+    }
+    await _append_history(connector_id, entry)
+
+
 async def _run_sync_background(connector_id: str, incremental: bool) -> None:
     """Background task: run sync and persist result + last_sync_at."""
+    started_at = now_utc()
     cfg = await _load_connector(connector_id)
     if cfg is None:
         logger.error("Background sync: connector %s not found", connector_id)
@@ -344,13 +357,20 @@ async def _run_sync_background(connector_id: str, incremental: bool) -> None:
         cfg = await _cfg_with_credentials(cfg, auth_cls)
     except HTTPException as exc:
         logger.error("Background sync: credential load failed for %s: %s", connector_id, exc.detail)
+        await _record_failed_sync(connector_id, started_at, "loading its credentials")
         return
 
-    instance = await _load_or_create_instance(cfg)
+    try:
+        instance = await _load_or_create_instance(cfg)
+    except Exception as exc:
+        logger.error("Background sync: could not start %s: %s", connector_id, exc, exc_info=True)
+        await _record_failed_sync(connector_id, started_at, "starting the connector")
+        return
     try:
         sync_result = await instance.sync(incremental=incremental)
     except Exception as exc:
         logger.error("Background sync failed for %s: %s", connector_id, exc, exc_info=True)
+        await _record_failed_sync(connector_id, started_at, "fetching content")
         sync_result = None
 
     if sync_result is not None:

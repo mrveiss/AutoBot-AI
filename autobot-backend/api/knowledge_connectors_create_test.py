@@ -257,3 +257,27 @@ async def test_creating_a_connector_enqueues_one_full_sync():
 async def test_contrast_nothing_is_enqueued(fields: dict):
     result, tasks = await _create_web_crawler(**fields)
     assert result["sync_started"] is False and tasks.tasks == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "failing, stage",
+    [("_cfg_with_credentials", "credentials"), ("_load_or_create_instance", "starting"), ("sync", "fetching")],
+)
+async def test_a_failed_sync_leaves_a_history_entry(failing: str, stage: str):
+    """#19714: the panel opened after create has something to show, without the exception's text."""
+    boom = RuntimeError("secret detail") if failing != "_cfg_with_credentials" else HTTPException(500, "secret detail")
+    instance = MagicMock(sync=AsyncMock(side_effect=boom if failing == "sync" else None))
+    patches = {
+        "_load_connector": AsyncMock(return_value=MagicMock(connector_type="web_crawler")),
+        "_cfg_with_credentials": AsyncMock(side_effect=boom if failing == "_cfg_with_credentials" else None),
+        "_load_or_create_instance": AsyncMock(
+            return_value=instance, side_effect=boom if failing == "_load_or_create_instance" else None
+        ),
+        "_append_history": AsyncMock(),
+    }
+    with patch.multiple(mod, **patches):
+        await mod._run_sync_background("c1", False)
+    entry = patches["_append_history"].await_args.args[1]
+    assert entry["status"] == "failed" and stage in entry["errors"][0]
+    assert "secret detail" not in str(entry)

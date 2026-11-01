@@ -99,7 +99,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/knowledge_api_integration_test.py": 623,
     "autobot-backend/api/knowledge_categories.py": 674,
     "autobot-backend/api/knowledge_collections.py": 726,
-    "autobot-backend/api/knowledge_connectors.py": 909,
+    "autobot-backend/api/knowledge_connectors.py": 929,
     "autobot-backend/api/knowledge_maintenance.py": 1960,
     "autobot-backend/api/knowledge_mcp.py": 1440,
     "autobot-backend/api/knowledge_population.py": 1238,

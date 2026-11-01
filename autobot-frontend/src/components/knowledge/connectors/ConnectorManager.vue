@@ -274,10 +274,9 @@ onMounted(() => {
       size="md"
     >
       <ConnectorHistoryPanel
-        :sync-active="historySyncActive"
         v-if="historyConnectorId"
         :connector-id="historyConnectorId"
-        :sync-active="getStatus(historyConnectorId).last_sync_status === 'running'"
+        :sync-active="historySyncActive || getStatus(historyConnectorId).last_sync_status === 'running'"
         @close="showHistoryModal = false"
       />
     </BaseModal>
