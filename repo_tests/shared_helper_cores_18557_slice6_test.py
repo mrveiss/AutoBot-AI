@@ -15,8 +15,10 @@ ADAPTERS = (
     "autobot-backend/knowledge/backends/async_chromadb_adapter.py",
 )
 ARGUMENTS = {"ids", "documents", "metadatas", "embeddings", "include", "query_texts", "query_embeddings"}
+FILTERS = {"ids", "where", "where_document", "limit", "offset", "include"}
 OLD_COPY = "def add(self, ids):\n    self._raw.add(ids=list(ids))\n"
 OLD_PROVENANCE = "provenance = {'created_at': utc_timestamp()}\n"
+OLD_FILTER = "kwargs['where'] = where\n"
 DELEGATE = "def add(self, ids):\n    self._raw.add(**write_args(ids, None, None, None))\n"
 
 
@@ -29,12 +31,15 @@ def own_argument_work(source: str) -> set[str]:
                 found.add("provenance")
             if node.func.id == "list" and node.args and isinstance(node.args[0], ast.Name):
                 found |= {node.args[0].id} & ARGUMENTS
+        if isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant):
+            found |= {node.slice.value} & FILTERS
     return found
 
 
 def test_the_detector_flags_old_copies_and_passes_a_delegate() -> None:
     assert own_argument_work(OLD_COPY) == {"ids"}
     assert own_argument_work(OLD_PROVENANCE) == {"provenance"}
+    assert own_argument_work(OLD_FILTER) == {"where"}
     assert own_argument_work(DELEGATE) == set()
 
 
