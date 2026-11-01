@@ -72,6 +72,9 @@
       when: "'ai-stack' in role_list or 'backend' in role_list"
 
     - name: Deploy backend role
+      # #19731: the LLM role runs after this one here, so a model still missing may yet be pulled.
+      vars:
+        backend_model_check_warn_only: true
       ansible.builtin.include_role:
         name: backend
       when: "'backend' in role_list"

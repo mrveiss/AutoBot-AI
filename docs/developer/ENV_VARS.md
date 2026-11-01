@@ -509,6 +509,7 @@ appears outside the known overlays.
 | `SLM_POSTGRES_USER` | postgres | str | `'slm_app'` | The SLM's login role; on compose a non-default role must already exist (#19408). |
 | `SLM_REPO_PATH` | slm | str | `'/opt/autobot/code_source'` | The SLM's code_source git CHECKOUT (the directory holding .git), never the install root that contains it (default: fleet_constants.FLEET_CODE_SOURCE_DIR). Read once, in services/git_tracker.py as DEFAULT_REPO_PATH; drift checks, packaging and the python-provision playbook path all resolve under it. The provision sudoers rule does not follow an override (#19204), so leave it at the default unless that rule is changed too (#15708). |
 | `SLM_SECRET_KEY` | slm | str | `""` | SLM JWT signing secret. Empty and unset are equivalent (both mean not configured). |
+| `SLM_STALE_COMPONENTS_SCAN_TIMEOUT_SECONDS` | slm | int | `300` | Seconds /code-sync/status waits on a drift scan before serving the last result (#20250). |
 | `SLM_USERS_DATABASE_URL` | slm | str | *(none)* | SQLAlchemy DSN of the SLM admin-users database. Unset falls back to the slm_users database on the colocated PostgreSQL. |
 | `STABILITY_API_KEY` | image_generation | str | *(none)* | Stability AI API key for the image-generation plugin. Environment fallback only: credentials belong in the secrets service. |
 <!-- END_AUTOGEN_ENV_DOCS -->
