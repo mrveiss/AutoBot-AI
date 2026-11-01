@@ -56,6 +56,8 @@ def device_exists(monkeypatch):
         "services.device_jwt._device_state_cached",
         AsyncMock(return_value="active"),
     )
+    # #20446: the owner-marker gate has its own file (services/device_owner_revocation_test.py).
+    monkeypatch.setattr("services.device_jwt.reject_if_owner_revoked", AsyncMock())
 
 
 def _bearer_request(token: str | None, path: str = "/api/devices/list", method: str = "GET") -> MagicMock:
