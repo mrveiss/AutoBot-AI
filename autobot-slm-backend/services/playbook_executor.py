@@ -1177,6 +1177,7 @@ class PlaybookExecutor:
         inventory_path: Path | None = None,
         detach: bool = False,
         timeout_s: float | None = None,
+        must_run: List[str] | None = None,
     ) -> Dict[str, any]:
         """
         Execute an Ansible playbook with optional progress updates (Issue #880).
@@ -1243,11 +1244,10 @@ class PlaybookExecutor:
 
         try:
             env = self._build_ansible_env()
-            # Override ansible.cfg default inventory to prevent merging
-            # with production.yml when wizard passes a temp inventory (#2836)
+            # Override ansible.cfg's inventory: never merge production.yml with a wizard's temp one (#2836)
             env["ANSIBLE_INVENTORY"] = str(effective_inventory)
             proc_result = await self._run_subprocess(cmd, env, progress_callback, detach=detach, timeout_s=timeout_s)
-            proc_result = with_limit_proof(proc_result, limit)  # #19762: only-localhost-ran is no proof
+            proc_result = with_limit_proof(proc_result, limit, must_run)  # #19762: only-localhost-ran is no proof
             success = proc_result["returncode"] == 0
             if success:
                 logger.info(f"Playbook {playbook_name} completed successfully")
