@@ -89,6 +89,11 @@ async def list_agents(
     ]
 
 
+def _owned_by_caller(agent_company: object, org_id: object) -> bool:
+    """True only when both ids are known and equal; two unknown ids prove no ownership."""
+    return agent_company is not None and agent_company == org_id
+
+
 @router.post(
     "/{agent_id}/heartbeat/trigger",
     response_model=AgentHeartbeatTriggerResponse,
@@ -111,7 +116,7 @@ async def trigger_heartbeat(
         run, agent_cfg = await sched.trigger_manual(session, agent_id)
     except AgentNotDispatchable as exc:
         # An agent outside this company stays a 404: the reason would confirm it exists.
-        if exc.company_id != ctx.org_id:
+        if not _owned_by_caller(exc.company_id, ctx.org_id):
             raise HTTPException(
                 status_code=404,
                 detail=f"Agent {agent_id!r} not found or not configured",
@@ -122,7 +127,7 @@ async def trigger_heartbeat(
         raise HTTPException(status_code=404, detail="Internal server error")
 
     agent_company = agent_cfg.get("company_id")
-    if agent_company is not None and agent_company != ctx.org_id:
+    if ctx.org_id is None or (agent_company is not None and agent_company != ctx.org_id):
         # Return 404 (not 403) to prevent cross-tenant agent-ID enumeration oracle
         raise HTTPException(status_code=404, detail=f"Agent {agent_id!r} not found or not configured")
 
