@@ -35,6 +35,7 @@ from api.user_management.dependencies import (
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from llc.services.agent_hire_service import HireApprovalRequiredError
 from services.agent_org_service import AgentOrgService
 from services.delegation_service import DelegationService
 from user_management.services import TenantContext
@@ -338,6 +339,9 @@ async def upsert_agent_org(
             title=body.title,
             capabilities=body.capabilities,
         )
+    except HireApprovalRequiredError as exc:
+        # Updating an existing node's reporting line stays allowed; only a new node is a hire (#8214).
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 

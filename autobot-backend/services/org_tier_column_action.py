@@ -52,11 +52,8 @@ def _requester_id(approval: "Approval") -> uuid.UUID | None:
 
 
 async def _platform_admin_count(session: "AsyncSession") -> int:
-    rows = await session.execute(
-        select(func.count()).where(
-            User.is_platform_admin.is_(True), User.is_active.is_(True), User.deleted_at.is_(None)
-        )
-    )
+    query = select(func.count()).select_from(User).filter_by(is_platform_admin=True, is_active=True, deleted_at=None)
+    rows = await session.execute(query)
     return int(rows.scalar_one())
 
 
@@ -74,7 +71,7 @@ async def _is_self_approval(approval: "Approval", session: "AsyncSession") -> bo
 
 async def _audit(approval: "Approval", result: str, **details: object) -> None:
     await audit_log(
-        "organizations.subscription_tier.drop",
+        "org.subscription_tier.drop",
         result=result,
         user_id=approval.decided_by_user,
         resource="organizations.subscription_tier",
