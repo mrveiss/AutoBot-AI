@@ -219,6 +219,8 @@ export function useIndexingJob(deps: UseIndexingJobDeps) {
     }
     const data = currentJobEndpoint.data.value
     if (!data) return
+    // #20491: this page's queued job may still be behind another source's; keep waiting for it.
+    if (!jobBelongsToSource(data.source_id, deps.selectedSource.value?.id)) return
 
     currentJobStatus.value = data.status ?? null
     if (data.has_active_job) {

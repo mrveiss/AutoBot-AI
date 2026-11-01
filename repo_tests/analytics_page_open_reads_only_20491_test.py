@@ -19,6 +19,7 @@ from repo_tests._paths import repo_root
 ANALYTICS = "autobot-frontend/src/components/analytics/CodebaseAnalytics.vue"
 FETCHERS = "autobot-frontend/src/composables/analytics/useAnalyticsDataFetchers.ts"
 LOADERS = "autobot-frontend/src/composables/analytics/useDashboardLoaders.ts"
+JOB = "autobot-frontend/src/composables/analytics/useIndexingJob.ts"
 MOUNT_ALLOWED = {
     "checkCurrentIndexingJob",
     "loadCachedAnalyticsData",
@@ -98,3 +99,11 @@ def test_the_dashboard_reads_cached_duplicates() -> None:
     source = _read(LOADERS)
     assert "'/api/analytics/codebase/duplicates/cached'" in source
     assert "'/api/analytics/codebase/duplicates'," not in source
+
+
+def test_both_readers_of_the_current_job_check_its_source() -> None:
+    source = _read(JOB)
+    for reader in ("const checkCurrentIndexingJob", "const pollJobStatus"):
+        body = source[source.index(reader) :]
+        body = body[: body.index("\n  }\n")]
+        assert "jobBelongsToSource(data.source_id" in body, reader
