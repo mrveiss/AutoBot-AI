@@ -219,6 +219,13 @@ def test_a_declared_scope_that_the_sweep_does_not_reach_is_refused() -> None:
 #: and that is the point -- the scope is a decision, so it is written twice on purpose.
 _DECLARED_SCOPES = {
     "role-source-paths-depth-proof-20509": ("autobot-slm-backend/ansible/roles",),
+    "operational-docs-playbook-references-19611": (
+        ".claude",
+        "autobot-infrastructure",
+        "autobot-slm-backend",
+        "docs",
+        "install.sh",
+    ),
     "ci-requirements-one-install-workflows": (".github/workflows",),
     "no_partial_key_mask_18221.sources": ("autobot_shared", "autobot-backend", "autobot-slm-backend"),
     "autobot-has-no-pro-tier-in-user-text": ("autobot-frontend/src", "autobot-slm-frontend/src"),

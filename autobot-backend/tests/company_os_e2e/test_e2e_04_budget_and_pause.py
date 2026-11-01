@@ -6,7 +6,7 @@
 
 Each gate check names a CONTROL: another agent with work and a clean record, which must be
 dispatched at least twice in the interval. Only then is the subject's silence the claim. Setup is
-asserted for real; the open bug is recorded with pytest.xfail at the one assertion that encodes it.
+asserted for real, and the gate itself (#19240) is asserted, so a dispatch beside the control is a failure.
 """
 
 from datetime import datetime, timezone
@@ -26,7 +26,6 @@ from tests.company_os_e2e._scenario import WAKE_WINDOW_SECONDS, step, wait_for
 
 pytestmark = pytest.mark.e2e
 
-GATE = "PR #19958 (dispatch gate: budget exhaustion, pause, terminate; issue #19240)"
 # A local model has no price and needs no catalogue (a clean install has none, so a hosted model's
 # cost event is refused as unpriced); its tokens still count against a TOKEN budget.
 MODEL = "llama3"
@@ -74,11 +73,7 @@ def test_step_6_exhausted_budget_is_not_dispatched(scenario):  # noqa: ANN001
             make_ready_tasks(scenario, "Control agent's task (budget)", b["node_id"], CONTROL_TASKS)
 
         control, subject = observe_silence(scenario, b["agent_id"], a["agent_id"], arrange)
-        if subject:
-            pytest.xfail(
-                f"the exhausted agent was dispatched {subject} time(s) beside the control's {control}: "
-                f"no dispatch gate until {GATE}; remove this xfail when it lands"
-            )
+        assert not subject, f"the exhausted agent was dispatched {subject} time(s) beside the control's {control}"
         scenario.done.add(6)
 
 
@@ -123,11 +118,7 @@ def test_step_7b_paused_agent_is_not_dispatched_until_resumed(scenario):  # noqa
             make_ready_task(scenario, "Paused agent's task", b["node_id"])
 
         control, subject = observe_silence(scenario, ceo["agent_id"], b["agent_id"], arrange)
-        if subject:
-            pytest.xfail(
-                f"the paused agent was dispatched {subject} time(s) beside the control's {control}: "
-                f"no dispatch gate until {GATE}; remove this xfail when it lands"
-            )
+        assert not subject, f"the paused agent was dispatched {subject} time(s) beside the control's {control}"
         _resume(scenario, b["agent_id"], direct)
         before = len(scenario.stub_invocations(b["agent_id"]))
         woke = wait_for(lambda: len(scenario.stub_invocations(b["agent_id"])) > before, WAKE_WINDOW_SECONDS)
