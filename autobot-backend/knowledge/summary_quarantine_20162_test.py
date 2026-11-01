@@ -4,6 +4,8 @@
 # Author: mrveiss
 """A summary with no quarantine marker is withheld when its source fact is quarantined (#20162)."""
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
 from autobot_shared.scoping import Principal
@@ -38,7 +40,8 @@ def _reader(admin):
 async def test_a_markerless_summary_of_a_quarantined_source_is_withheld(admin):
     items = [_summary("old-q", "q"), _summary("old-ok", "ok"), _summary("orphan", "gone")]
 
-    kept = await summary_visibility.visible_summaries(items, _KB(), _reader(admin))
+    with patch("services.audit_logger.audit_log", new=AsyncMock(return_value=True)):
+        kept = await summary_visibility.visible_summaries(items, _KB(), _reader(admin))
 
     assert [s["id"] for s in kept] == ["old-ok"]
 
