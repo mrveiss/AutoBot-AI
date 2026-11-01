@@ -238,7 +238,7 @@ function formatResult(result: Record<string, unknown>): string {
 .btn-refresh:disabled { opacity: 0.5; }
 
 .empty-list { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); padding: var(--spacing-5); }
-.empty-list .icon { font-size: 32px; margin-bottom: var(--spacing-3); }
+.empty-list .icon { width: 32px; height: 32px; margin-bottom: var(--spacing-3); }
 
 .workflow-list { flex: 1; overflow-y: auto; padding: var(--spacing-2); }
 .workflow-item { padding: var(--spacing-3); background: var(--bg-tertiary); border-radius: var(--radius-lg); margin-bottom: var(--spacing-2); cursor: pointer; transition: all 0.15s; }
@@ -259,7 +259,7 @@ function formatResult(result: Record<string, unknown>): string {
 
 .runner-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .no-selection { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-tertiary); padding: var(--spacing-10); }
-.no-selection .icon { font-size: var(--text-5xl); margin-bottom: var(--spacing-4); }
+.no-selection .icon { width: var(--text-5xl); height: var(--text-5xl); margin-bottom: var(--spacing-4); }
 .no-selection h3 { margin: var(--spacing-0) var(--spacing-0) var(--spacing-2); color: var(--text-primary); }
 
 .workflow-header { display: flex; justify-content: space-between; align-items: flex-start; padding: var(--spacing-5); background: var(--bg-secondary); border-bottom: 1px solid var(--border-default); }

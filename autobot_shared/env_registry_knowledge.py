@@ -368,3 +368,20 @@ register_env_var(
         range=(1, 256),
     )
 )
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_AUDIT_DURABLE_TIMEOUT_SECONDS",
+        type=float,
+        default=5.0,
+        description=(
+            "Seconds the awaited audit insert of a knowledge-base admin or superadmin read may take before "
+            "the write counts as failed and the read is refused with 503; the threat analysis and the Redis "
+            "projection of that event run in the background and are not bounded by it; read by "
+            "services/audit/audit.py (#19860)."
+        ),
+        component="knowledge",
+        range=(0.1, 60.0),
+    )
+)
