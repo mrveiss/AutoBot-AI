@@ -16,15 +16,18 @@ map it to 403 so the admin sees why, rather than a generic 500.
 """
 
 import uuid
+from collections.abc import Mapping
 from typing import Dict
 
 from fastapi import HTTPException
 from sqlalchemy import select
 
 from api.schemas_system import SecretCreateRequest
+from autobot_shared.auth.internal_api_key import verify_internal_api_key
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secrets_vault import VaultKind, VaultRef
 from models.secret import Secret
+from services.envelope_secrets_service import SecretAccessError
 
 logger = get_logger(__name__)
 
@@ -43,6 +46,18 @@ async def _principal(owner_id: str) -> tuple[uuid.UUID, set[str]]:
 
     user_id = uuid.UUID(owner_id)
     return user_id, set(await rbac_middleware.get_user_permissions(user_id))
+
+
+def _refuse_internal_key(headers: Mapping[str, str] | None, action: str) -> None:
+    """An automatic actor never rotates or deletes a SYSTEM credential (#17038).
+
+    The internal API key carries admin rights through `check_admin_permission`,
+    and `SecretsCoordinator.authorize()` sees only the user id -- it cannot
+    tell that the key was presented, so this is the one place that refuses it.
+    A human admin's explicit call (no key) is unaffected.
+    """
+    if verify_internal_api_key((headers or {}).get("X-Internal-API-Key")):
+        raise SecretAccessError(f"the internal API key may not {action} a system-vault secret")
 
 
 def _coordinator_or_none():
@@ -103,7 +118,9 @@ async def create_system_vault_secret(request: SecretCreateRequest, owner_id: str
     raise RuntimeError("get_session() yielded no session")  # pragma: no cover -- defensive, generator always yields
 
 
-async def rotate_system_vault_secret(secret_id: str, value: str | None, owner_id: str) -> Dict | None:
+async def rotate_system_vault_secret(
+    secret_id: str, value: str | None, owner_id: str, headers: Mapping[str, str] | None = None
+) -> Dict | None:
     """Rotate a SYSTEM-vault secret's value; None when `secret_id` is not one.
 
     A SYSTEM secret has no metadata-only edit, so an update without `value`
@@ -114,10 +131,11 @@ async def rotate_system_vault_secret(secret_id: str, value: str | None, owner_id
     vault_id, coordinator = _as_uuid(secret_id), _coordinator_or_none()
     if vault_id is None or coordinator is None:
         return None
-    user_id, permissions = await _principal(owner_id)
     async for session in get_session():
         if not await _is_system_secret(session, vault_id):
             return None
+        _refuse_internal_key(headers, "rotate")
+        user_id, permissions = await _principal(owner_id)
         if not value:
             raise ValueError("value is required to update a system-vault secret")
         secret = await coordinator.rotate(
@@ -128,17 +146,18 @@ async def rotate_system_vault_secret(secret_id: str, value: str | None, owner_id
     return None  # pragma: no cover -- defensive, generator always yields
 
 
-async def delete_system_vault_secret(secret_id: str, owner_id: str) -> bool:
+async def delete_system_vault_secret(secret_id: str, owner_id: str, headers: Mapping[str, str] | None = None) -> bool:
     """Delete a SYSTEM-vault secret; False when `secret_id` is not one."""
     from llc.deps import get_session
 
     vault_id, coordinator = _as_uuid(secret_id), _coordinator_or_none()
     if vault_id is None or coordinator is None:
         return False
-    user_id, permissions = await _principal(owner_id)
     async for session in get_session():
         if not await _is_system_secret(session, vault_id):
             return False
+        _refuse_internal_key(headers, "delete")
+        user_id, permissions = await _principal(owner_id)
         await coordinator.delete(session, user_id=user_id, permissions=permissions, secret_id=vault_id)
         await session.commit()
         return True

@@ -128,6 +128,30 @@ def test_an_unknown_id_is_still_a_404(client_and_vault):
     assert client.put(f"/api/secrets/{other}", json={"value": "v"}).status_code == 404
 
 
+def test_the_internal_key_cannot_rotate_or_delete_a_system_secret(client_and_vault, monkeypatch):
+    """#17038: an automatic actor never destroys or rotates a SYSTEM credential."""
+    client, vault = client_and_vault()
+    monkeypatch.setattr(secrets_system_vault, "verify_internal_api_key", lambda key: key == "svc-key")
+    headers = {"X-Internal-API-Key": "svc-key"}
+    assert client.delete(f"/api/secrets/{_SECRET_ID}", headers=headers).status_code == 403
+    assert client.put(f"/api/secrets/{_SECRET_ID}", json={"value": "x"}, headers=headers).status_code == 403
+    assert vault.store == {uuid.UUID(_SECRET_ID): b"old-value"}
+    # the same call from a human admin (no key) is unchanged
+    assert client.delete(f"/api/secrets/{_SECRET_ID}").status_code == 200
+    assert vault.store == {}
+
+
+def test_a_non_uuid_caller_keeps_legacy_secrets_working(client_and_vault, monkeypatch):
+    """The principal resolves only for an actual SYSTEM secret (non-UUID identities stay 404/legacy)."""
+    client, _vault = client_and_vault()
+    monkeypatch.setattr(secrets_system_vault, "_principal", AsyncMock(side_effect=ValueError("not a uuid")))
+    legacy_only = str(uuid.uuid4())
+    with patch.object(secrets_module, "_get_connector_bridged_secret", AsyncMock(return_value=None)):
+        assert client.delete(f"/api/secrets/{legacy_only}").status_code == 404
+    assert client.put(f"/api/secrets/{legacy_only}", json={"value": "v"}).status_code == 404
+    secrets_system_vault._principal.assert_not_awaited()
+
+
 @pytest.mark.parametrize(
     "handler, helper",
     [

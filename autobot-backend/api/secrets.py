@@ -934,6 +934,7 @@ async def update_secret(
 ):
     """Update a secret's metadata (Issue #744: requires admin authentication)"""
     await check_rate_limit(http_request)
+    owner_id = str((get_auth_middleware().get_user_from_request(http_request) or {}).get("user_id", "unknown"))
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         secret = await asyncio.to_thread(secrets_manager.update_secret, secret_id, request, chat_id=chat_id)
@@ -943,15 +944,14 @@ async def update_secret(
         elif system_data := await rotate_system_vault_secret(
             secret_id,
             request.value,
-            str((get_auth_middleware().get_user_from_request(http_request) or {}).get("user_id", "unknown")),
+            owner_id,
+            http_request.headers,
         ):
             # #17099/#17731: a SYSTEM secret lives in the vault; rotate it there.
             secret_data = system_data
         elif request.credentials:
             # #16428: not a legacy secret; rotate it in ConnectorCredentialStore
             # instead -- #13632's one-store decision, "PUT rotates the credential."
-            _user = get_auth_middleware().get_user_from_request(http_request)
-            owner_id = str((_user or {}).get("user_id", "unknown"))
             try:
                 await get_credential_store().rotate(secret_id, request.credentials, owner_id)
             except LookupError:
@@ -1007,7 +1007,7 @@ async def delete_secret(
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         success = await asyncio.to_thread(secrets_manager.delete_secret, secret_id, chat_id=chat_id)
         # #17099/#17731: a SYSTEM secret lives in the vault; delete it there too.
-        success = success or await delete_system_vault_secret(secret_id, owner_id)
+        success = success or await delete_system_vault_secret(secret_id, owner_id, http_request.headers)
         if not success:
             # #16428: revoke() never raises on a missing secret (idempotent by
             # design), so existence must be checked first to still 404 a
