@@ -19,7 +19,6 @@ from autobot_shared.redis_client import get_async_redis_client
 from llc.adapters import adapter_unavailable_reason, registered_adapter_types
 from llc.models.enums import ActivityEventType, LLCCompanyStatus
 from llc.models.export import LLCExportArtifact
-from llc.models.goal import LLCGoal
 from llc.services.portability_ceo import mint_agent_ids, settle_imported_ceo
 from llc.services.portability_export import PortabilityExportMixin, _scrub_adapter_config
 from llc.services.portability_import import _PLACEHOLDER_RE, PortabilityImportMixin
@@ -39,6 +38,10 @@ _EXPORT_TTL_SECONDS = 7 * 24 * 3600  # 7 days
 # Pydantic response models live in llc/models/portability.py (imported below)
 # to keep service lean.  We use plain dicts internally.
 # ---------------------------------------------------------------------------
+
+
+class ImportNeedsApprovalError(Exception):
+    """The template would add agents to an existing company that gates hires (#8214)."""
 
 
 class TemplateImportError(Exception):
@@ -224,6 +227,7 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
         # and this has to be renderable in every shipped locale.
         dropped_links: List[Dict[str, str]] = []
 
+        await self._refuse_agents_into_gated_company(template, target_company_id)
         sp = await self.session.begin_nested()
         try:
             company_id = await self._resolve_or_create_company(template, target_company_id, remapping_options, warnings)
@@ -391,18 +395,33 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
             )
         return [r[0] for r in rows]
 
-    async def _goal_titles_exist(self, titles: List[str], company_id: Optional[uuid.UUID] = None) -> List[str]:
-        if not titles:
-            return []
-        q = select(LLCGoal.title).where(LLCGoal.title.in_(titles))
-        if company_id is not None:
-            q = q.where(LLCGoal.company_id == str(company_id))
-        result = await self.session.execute(q)
-        return [r[0] for r in result]
-
     # ------------------------------------------------------------------
     # Private helpers — entity creation
     # ------------------------------------------------------------------
+
+    async def _refuse_agents_into_gated_company(
+        self, template: Dict[str, Any], target_company_id: Optional[uuid.UUID]
+    ) -> None:
+        """An import into an EXISTING company that requires hire approval may not add agents (#8214).
+
+        Exempt on purpose: an import that creates its own company (no ``target_company_id``). That is the
+        admin bootstrapping a company, and the setting it carries comes from the template, so there is no
+        board yet to approve anything. Its default CEO is exempt for the same reason as in ``company_ceo``.
+        """
+        names = [a.get("name", "") for a in template.get("agents") or []]
+        if target_company_id is None or not names:
+            return
+        from llc.services.agent_hire_service import company_requires_hire_approval  # noqa: PLC0415
+
+        # An agent already in the company is skipped by the import, so it adds no hire.
+        existing = set(await self._agent_names_exist(names, target_company_id))
+        if existing.issuperset(names):
+            return
+        if await company_requires_hire_approval(self.session, target_company_id):
+            raise ImportNeedsApprovalError(
+                f"Company {target_company_id} requires board approval for hires; import without agents "
+                "or request each hire through the agent-hires route"
+            )
 
     async def _resolve_or_create_company(
         self,
@@ -569,4 +588,4 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
             raise TemplateImportError(f"Unsupported schema_version {version!r}; expected '1.0'")
 
 
-__all__ = ["PortabilityService", "TemplateImportError", "_scrub_adapter_config"]
+__all__ = ["PortabilityService", "TemplateImportError", "ImportNeedsApprovalError", "_scrub_adapter_config"]

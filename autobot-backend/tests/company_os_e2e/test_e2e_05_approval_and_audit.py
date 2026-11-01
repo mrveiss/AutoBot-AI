@@ -55,18 +55,12 @@ def test_step_8_hire_happens_only_after_approval(scenario):  # noqa: ANN001
     scenario.require(2, 8)
     with step("8b"):
         api.call("PATCH", api.company(""), json={"require_approval_for_hires": True})  # precondition
-        refused = api.refuse("POST", api.company("/agent-hires"), json=NEW_HIRE)
-        if refused.status_code == 201:
-            pytest.xfail(
-                "the hire route does not read require_approval_for_hires or an approval, so an unapproved "
-                "hire is created (#8214); remove this xfail when #8214 is fixed"
-            )
-        assert refused.status_code in (403, 409, 422), f"unapproved hire answered {refused.status_code}"
-        assert NEW_HIRE["agent_name"] not in _roster_names(api), "the refused hire is on the roster"
-        hired = api.call(
-            "POST", api.company("/agent-hires"), json={**NEW_HIRE, "approval_id": scenario.need("approval", 8)}
-        )
-        assert hired["agent_name"] == NEW_HIRE["agent_name"]
+        pending = api.refuse("POST", api.company("/agent-hires"), json=NEW_HIRE)
+        assert pending.status_code == 202, f"a hire needing approval answered {pending.status_code}"
+        assert NEW_HIRE["agent_name"] not in _roster_names(api), "the hire is on the roster before approval"
+        approval_id = pending.json()["approval_id"]
+        decided = api.call("POST", f"/approvals/{approval_id}/decide", json={"decision": "approved"})
+        assert decided["status"] == "approved", decided
         assert NEW_HIRE["agent_name"] in _roster_names(api), "the approved hire is not on the roster"
 
 

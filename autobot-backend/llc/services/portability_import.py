@@ -13,7 +13,7 @@ import re
 import uuid
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
@@ -171,3 +171,12 @@ class PortabilityImportMixin:
         self.session.add(obj)
         await self.session.flush()
         return new_id
+
+    async def _goal_titles_exist(self, titles: List[str], company_id: Optional[uuid.UUID] = None) -> List[str]:
+        if not titles:
+            return []
+        q = select(LLCGoal.title).where(LLCGoal.title.in_(titles))
+        if company_id is not None:
+            q = q.where(LLCGoal.company_id == str(company_id))
+        result = await self.session.execute(q)
+        return [r[0] for r in result]

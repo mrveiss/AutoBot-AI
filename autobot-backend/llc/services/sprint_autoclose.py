@@ -167,9 +167,9 @@ class SprintAutoCloseService(LLCServiceBase):
           1. Validate approval is APPROVED for this sprint.
           2. Compute actual_points from DONE work items.
           3. Set sprint status → CLOSED.
-          4. Summarize into KB (stub; real impl in Phase 5).
-          5. Roll over incomplete items.
-          6. Write activity log entry.
+          4. Roll over incomplete items.
+          5. Write activity log entry.
+        The KB summary is a separate step, ``summarize_closed_sprint``, run after the commit.
 
         Args:
             session: Async SQLAlchemy session.
@@ -223,8 +223,9 @@ class SprintAutoCloseService(LLCServiceBase):
         sprint.pending_close_approval_id = None
         await session.flush()
 
-        # -- KB summarization (GH#8238) --
-        kb_summary = await self._summarizer.summarize_and_merge(sprint_id, session=session)
+        # KB summarization (GH#8238) is NOT here: it archives a KB collection and calls an LLM, neither of which
+        # a rollback undoes, and it would hold this row lock meanwhile. Callers run ``summarize_closed_sprint``
+        # after the commit.
 
         # -- Roll over incomplete items --
         auto_rollover = await self._resolve_auto_rollover(session, sprint)
@@ -248,7 +249,6 @@ class SprintAutoCloseService(LLCServiceBase):
                 "actual_points": actual_points,
                 "rolled_over_items": rolled_count,
                 "decided_by": str(decided_by),
-                "kb_summary_generated": bool(kb_summary),
             },
         )
 
@@ -259,6 +259,30 @@ class SprintAutoCloseService(LLCServiceBase):
             rolled_count,
         )
         return sprint
+
+    def schedule_closed_sprint_summary(self, sprint_id: uuid.UUID) -> None:
+        """Run :meth:`summarize_closed_sprint` in the background so a slow LLM call cannot hold the request open.
+
+        The close is already committed; the summary takes only the id and opens its own session.
+        """
+        from autobot_shared.async_compat import fire_and_forget  # noqa: PLC0415
+
+        fire_and_forget(self.summarize_closed_sprint(sprint_id), name=f"sprint-summary-{sprint_id}")
+
+    async def summarize_closed_sprint(self, sprint_id: uuid.UUID) -> None:
+        """Archive and summarise a closed sprint's KB, in its own transaction, after the close committed.
+
+        The close is the authority; the KB is derived from it. A failure here is logged and leaves the sprint
+        closed, so the summary can be re-run, rather than undoing a decision that is already committed.
+        """
+        from user_management.database import get_async_session_factory  # noqa: PLC0415
+
+        try:
+            async with get_async_session_factory()() as session:
+                await self._summarizer.summarize_and_merge(sprint_id, session=session)
+                await session.commit()
+        except Exception:
+            logger.exception("KB summary failed for closed sprint %s; the sprint stays closed", sprint_id)
 
     # ------------------------------------------------------------------
     # Internal helpers
