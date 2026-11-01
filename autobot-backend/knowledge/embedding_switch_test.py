@@ -513,3 +513,33 @@ def test_the_target_collection_name_fits_chromadb():
     name = sw.target_collection("autobot_memory", "BAAI/bge-small-en-v1.5:latest", "0123456789abcdef")
     assert name == "autobot_memory__baai_bge_small_en_v1_5_lates__01234567"
     assert 3 <= len(name) <= 63 and name[0].isalnum() and name[-1].isalnum()
+
+
+async def test_an_unavailable_registry_reads_lock_unknown_not_stale_or_a_500(env, monkeypatch):
+    await sw._set_state(state="building", model=MODEL, collection="c")
+
+    async def _down():
+        raise work_claims.ClaimUnavailable("down")
+
+    monkeypatch.setattr(sw.lock, "holder", _down)
+    status = await sw.switch_status()
+    assert status["state"] == "building" and status["lock_unknown"] is True
+
+
+async def test_a_readable_registry_does_not_report_lock_unknown(env):
+    await sw._set_state(state="building", model=MODEL, collection="c")
+    assert "lock_unknown" not in await sw.switch_status()
+
+
+async def test_a_failed_release_cannot_mask_the_start_error(env, monkeypatch, caplog):
+    async def _state_fails(**fields):
+        raise ValueError("the real error")
+
+    async def _down(owner):
+        raise work_claims.ClaimUnavailable("down")
+
+    monkeypatch.setattr(sw, "_set_state", _state_fails)
+    monkeypatch.setattr(sw.lock, "release", _down)
+    with pytest.raises(ValueError, match="the real error"):
+        await sw.start_switch(_kb(), MODEL)
+    assert "could not release its claim" in caplog.text
