@@ -195,7 +195,7 @@ def _kb_info(**over):
     return {**info, **over}
 
 
-def _run_to_kb(tmp_path, monkeypatch, user_id, **over):
+def _run_to_kb(tmp_path, monkeypatch, owner_id, **over):
     import conversation_file_transfer as transfer
 
     path = tmp_path / "n.txt"
@@ -203,21 +203,79 @@ def _run_to_kb(tmp_path, monkeypatch, user_id, **over):
     kb = SimpleNamespace(add_document=AsyncMock(return_value={"status": "success"}))
     monkeypatch.setattr(transfer, "get_knowledge_base_async", AsyncMock(return_value=kb))
     info = _kb_info(file_path=str(path), **over)
-    asyncio.run(transfer._to_knowledge_base(info, None, user_id))
+    asyncio.run(transfer._to_knowledge_base(info, None, "root", owner_id))
     return kb
 
 
-def test_a_kb_transfer_records_the_uploader_as_owner_with_private_visibility(tmp_path, monkeypatch):
-    kb = _run_to_kb(tmp_path, monkeypatch, "admin-1", uploaded_by="alice")
+def test_a_kb_transfer_owns_the_fact_by_the_verified_caller_never_the_file_uploader(tmp_path, monkeypatch):
+    kb = _run_to_kb(tmp_path, monkeypatch, "root", uploaded_by="victim")
     metadata = kb.add_document.call_args.args[1]
-    assert (metadata["owner_id"], metadata["visibility"]) == ("alice", "private")
-
-
-def test_a_kb_transfer_falls_back_to_the_transferring_user_for_the_owner(tmp_path, monkeypatch):
-    kb = _run_to_kb(tmp_path, monkeypatch, "admin-1", uploaded_by=None)
-    assert kb.add_document.call_args.args[1]["owner_id"] == "admin-1"
+    assert (metadata["owner_id"], metadata["visibility"]) == ("root", "private")
 
 
 def test_a_kb_transfer_with_no_resolvable_owner_is_refused_not_made_public(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="no resolvable owner"):
-        _run_to_kb(tmp_path, monkeypatch, None, uploaded_by=None)
+        _run_to_kb(tmp_path, monkeypatch, None, uploaded_by="victim")
+
+
+def _route_metadata(w, file_id, user_dict):
+    body = {"file_ids": [file_id], "destination": "kb", "copy": True}
+    w.user = dict(user_dict)
+    response = w.client.post(f"/api/conversation/{_SESSION}/transfer", json=body)
+    assert response.status_code == 200, response.text
+    return w.kb.add_document.await_args.args[1]
+
+
+def test_the_route_ignores_a_file_creator_named_by_the_request_body(destinations):
+    """An agent file's ``uploaded_by`` is the body's ``agent_name`` (conversation_files.py create route)."""
+    file_id = _seed(destinations)
+    destinations.db_set_uploaded_by = None
+    for row_sql in ("UPDATE conversation_files SET uploaded_by = 'victim'",):
+        conn = sqlite3.connect(destinations.db)
+        conn.execute(row_sql)
+        conn.commit()
+        conn.close()
+    metadata = _route_metadata(destinations, file_id, _ADMIN)
+    assert (metadata["owner_id"], metadata["visibility"]) == ("root", "private")
+
+
+def test_the_route_owns_by_the_id_the_read_side_compares_when_the_token_has_a_user_id_claim(destinations):
+    file_id = _seed(destinations)
+    metadata = _route_metadata(destinations, file_id, {**_ADMIN, "user_id": "uid-7"})
+    assert metadata["owner_id"] == "uid-7"
+
+
+def test_the_transfer_runs_in_a_caller_write_scope(destinations):
+    from knowledge.write_scope import current_caller_write
+
+    seen = []
+
+    async def record(*args, **kwargs):
+        seen.append(current_caller_write())
+        return {"status": "success"}
+
+    destinations.kb.add_document = record
+    file_id = _seed(destinations)
+    destinations.user = dict(_ADMIN)
+    assert _transfer(destinations, file_id, "kb", copy=True).status_code == 200
+    assert seen and seen[0].user_id is None or seen[0].role == "admin"
+    assert seen[0].role == "admin"
+
+
+@pytest.mark.parametrize("user_dict", [_ADMIN, {**_ADMIN, "user_id": "uid-7"}])
+def test_only_the_owner_reads_the_transferred_fact_through_the_real_search_filter(destinations, user_dict):
+    from knowledge.ownership import KnowledgeOwnership
+    from knowledge.search_filters import extract_user_context_from_request, filter_search_results_by_permission
+
+    file_id = _seed(destinations)
+    metadata = _route_metadata(destinations, file_id, user_dict)
+    results = [{"id": file_id, "metadata": metadata}]
+    manager = KnowledgeOwnership(redis_client=None)
+
+    async def visible_to(user):
+        uid, org, groups = extract_user_context_from_request(user)
+        return await filter_search_results_by_permission(results, uid, org, groups, manager)
+
+    assert asyncio.run(visible_to(user_dict)) == results
+    assert asyncio.run(visible_to({"username": "mallory", "role": "user"})) == []
+    assert asyncio.run(visible_to({"username": "mallory", "role": "user", "user_id": "uid-9"})) == []
