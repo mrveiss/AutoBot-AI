@@ -20,7 +20,9 @@ from llc.services.authz import active_admin_ids
 from llc.tests.approval_enforcement_support_test import _edges  # noqa: F401 -- autouse fixture
 from llc.tests.approval_enforcement_support_test import activity  # noqa: F401 -- fixture
 from llc.tests.approval_enforcement_support_test import session_factory  # noqa: F401 -- fixture
-from llc.tests.approval_enforcement_support_test import _ORG, _board_app, _budget, _member, _post, _rows
+from llc.tests.approval_enforcement_support_test import _ORG, _board_app, _budget
+from llc.tests.approval_enforcement_support_test import _member as _membership
+from llc.tests.approval_enforcement_support_test import _post, _rows
 from models.agent_org import AgentOrgNode
 from models.approval import Approval
 from testkit.fake_async_session import FakeAsyncSession
@@ -62,6 +64,14 @@ async def _decide_as(session_factory, approval_id, decision, decider):  # noqa: 
     return approval
 
 
+async def _member(session_factory, user_id: uuid.UUID, role: str) -> None:  # noqa: ANN001
+    """A membership and the live user behind it; a membership with no user is not an admin."""
+    await _membership(session_factory, user_id, role)
+    async with session_factory() as session:
+        session.add(User(id=user_id, org_id=_ORG, email=f"{user_id}@e.test", username=str(user_id), is_active=True))
+        await session.commit()
+
+
 async def _two_admins(session_factory) -> None:  # noqa: ANN001
     await _budget(session_factory, "10")
     await _member(session_factory, ASKER, "admin")
@@ -76,7 +86,7 @@ async def _applied(session_factory, gate) -> bool:  # noqa: ANN001
 
 async def _deactivated_user(session_factory, user_id) -> None:  # noqa: ANN001
     async with session_factory() as session:
-        session.add(User(id=user_id, org_id=_ORG, email=f"{user_id}@e.test", username=str(user_id), is_active=False))
+        (await session.get(User, user_id)).is_active = False
         await session.commit()
 
 
@@ -144,6 +154,20 @@ async def test_a_deactivated_admin_does_not_count_so_the_active_one_may_self_app
 ) -> None:
     await _two_admins(session_factory)
     await _deactivated_user(session_factory, OTHER)
+    aid = await _ask(session_factory, gate, payload, ASKER)
+    await _decide_as(session_factory, aid, ApprovalStatus.APPROVED, ASKER)
+    assert await _applied(session_factory, gate)
+    assert [a["self_approval"] for a in _approved_rows(activity)] == [True]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("gate", "payload"), _KINDS)
+async def test_a_membership_left_by_a_hard_deleted_user_does_not_count(
+    session_factory, activity, gate, payload  # noqa: ANN001
+) -> None:
+    await _budget(session_factory, "10")
+    await _member(session_factory, ASKER, "admin")
+    await _membership(session_factory, OTHER, "owner")
     aid = await _ask(session_factory, gate, payload, ASKER)
     await _decide_as(session_factory, aid, ApprovalStatus.APPROVED, ASKER)
     assert await _applied(session_factory, gate)

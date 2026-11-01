@@ -146,7 +146,7 @@
 
         <template #actions>
           <button class="btn-secondary" @click="closeSettings">{{ $t('llc.cost.cancel') }}</button>
-          <button class="btn-primary" :disabled="settingsModal.saving" @click="saveBudgetSettings">
+          <button class="btn-primary" :disabled="settingsModal.saving || !!settingsModal.notice" @click="saveBudgetSettings">
             {{ settingsModal.saving ? $t('llc.cost.saving') : $t('llc.cost.save') }}
           </button>
         </template>

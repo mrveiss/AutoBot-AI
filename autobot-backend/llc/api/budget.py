@@ -380,6 +380,8 @@ async def update_limit(
         not_found_detail=f"No budget row for agent {agent_id}",
     )
     await _require_limit_admin(session, row, ctx)
+    # Classify the change against the committed limit, held until commit: a stale copy reads a raise as a cut (#8214).
+    await session.refresh(row, with_for_update=True)
 
     _validate_limit_request(body, row)
     values = {k: v for k, v in body.model_dump().items() if v is not None}

@@ -124,16 +124,19 @@ def _check_override_applies(row: LLCAgentBudget, ask: BudgetOverridePayload) -> 
     mode = ask.budget_mode or str(row.budget_mode)
     if ask.token_limit is not None and mode != "tokens":
         raise ApprovalHookError("a token limit is not enforced on a dollar budget; switch the mode with it")
-    if ask.token_limit is not None and row.token_limit is not None and mode == str(row.budget_mode):
+    same_mode = mode == str(row.budget_mode)
+    if ask.token_limit is not None and row.token_limit is not None and same_mode:
         if ask.token_limit <= int(row.token_limit):
             raise ApprovalHookError("a budget override must raise the limit")
     if ask.budget_limit is None:
+        if ask.token_limit is None and same_mode:
+            raise ApprovalHookError("a budget override must change the limit or the mode")
         return
     if ask.token_limit is None and mode == "tokens" and row.token_limit is not None:
         # Token enforcement reads token_limit and ignores budget_limit, so raising it would record an approval
         # that changes nothing.
         raise ApprovalHookError("this agent's budget is token-limited; a dollar override would not change it")
-    if ask.token_limit is None and ask.budget_mode is None and ask.budget_limit <= Decimal(str(row.budget_limit)):
+    if ask.token_limit is None and same_mode and ask.budget_limit <= Decimal(str(row.budget_limit)):
         raise ApprovalHookError("a budget override must raise the limit")
 
 
