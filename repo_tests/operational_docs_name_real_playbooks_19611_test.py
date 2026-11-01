@@ -13,8 +13,10 @@ scope by a declared list, not by omission.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
 from tools.lint._scan_helpers import tracked_paths
 
@@ -55,8 +57,6 @@ _MANIFEST = re.compile(r"""["']ansible_playbook["']\s*:\s*(["'])(?:playbooks/)?(
 _TABLE_ROW = re.compile(r"\*\*Ansible playbook\*\*\s*\|\s*`(?:playbooks/)?([\w.-]+\.ya?ml)`")
 #: The registry in Python that names a role's playbook; ``_SCOPE`` holds no Python.
 _ROLE_REGISTRY = "autobot-slm-backend/services/role_registry.py"
-#: References found across the tree, not files read: a pattern that stopped matching finds none and passes.
-_MIN_REFERENCES = 250  # 281 measured on 2026-10-31
 
 
 def _known_playbooks() -> set[str]:
@@ -89,16 +89,49 @@ def _reference_count(text: str) -> int:
     return sum(len(pattern.findall(text)) for pattern in patterns)
 
 
+def _operational_paths(root: Path) -> list[str]:
+    return [p for p in tracked_paths(root, *_SCOPE) if _in_scope(p)]
+
+
+def _references(root: Path) -> list[str]:
+    """One entry per playbook reference, not per file: a pattern that stopped matching finds none and passes."""
+    found: list[str] = []
+    for path in [*_operational_paths(root), _ROLE_REGISTRY]:
+        text = (root / path).read_text(encoding="utf-8", errors="replace")
+        found += [f"{path}#{index}" for index in range(_reference_count(text))]
+    return found
+
+
+REACH = declare(
+    "operational-docs-playbook-references-19611",
+    discover=_references,
+    floor=262,  # mid-window: population 282, window (242, 282)
+    growth=40,
+    what="playbook references in operational files",
+    roots=(
+        ".claude",
+        ".github",
+        "autobot-backend",
+        "autobot-frontend",
+        "autobot-infrastructure",
+        "autobot-slm-backend",
+        "autobot-slm-frontend",
+        "docker",
+        "docs",
+        "pipeline-scripts",
+        "repo_tests",
+        "scripts",
+        "tools",
+    ),
+)
+
+
 def test_every_operational_reference_names_a_real_playbook() -> None:
     known, offenders = _known_playbooks(), []
-    paths = [p for p in tracked_paths(repo_root(), *_SCOPE) if _in_scope(p)]
-    assert len(paths) > 200, f"only {len(paths)} operational files enumerated"
-    references = 0
-    for path in [*paths, _ROLE_REGISTRY]:
+    REACH.examined(repo_root())
+    for path in [*_operational_paths(repo_root()), _ROLE_REGISTRY]:
         text = (repo_root() / path).read_text(encoding="utf-8", errors="replace")
-        references += _reference_count(text)
         offenders += [f"{path}: {n}" for n in sorted(_missing(text, known)) if (path, n) not in _EXEMPT]
-    assert references >= _MIN_REFERENCES, f"only {references} playbook references found: the patterns stopped matching"
     assert not offenders, "these name a playbook that does not exist:\n  " + "\n  ".join(offenders)
 
 
