@@ -96,6 +96,9 @@ class ConversationFileRouteApi:
                 await connection.close()
         await self._invalidate_session_cache(session_id)
         await self._log_access(file_id, "delete", user_id, {"session_id": session_id})
+        from services.conversation_file_cleanup_proposals import propose_due_cleanups_logged
+
+        await propose_due_cleanups_logged(self)  # proposes only; removal waits for a human (#20234)
         return True
 
     async def transfer_files(
