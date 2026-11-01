@@ -244,6 +244,7 @@ async def list_approvals(
         offset=pagination.offset,
         source=source.value if source else None,
         risk_tier=risk_tier.value if risk_tier else None,
+        extra_where=svc.visibility(current_user.get("username"), is_admin_role(current_user.get("role"))),
     )
     return [_to_response(a) for a in approvals]
 
@@ -292,9 +293,11 @@ async def get_approval(
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Get a single approval gate by ID (#1402)."""
+    """Get a single approval gate by ID; another user's approval is a 404 (#1402, #18413)."""
     svc = ApprovalGateService(session)
-    approval = await svc.get(approval_id)
+    approval = await svc.get_visible(
+        approval_id, viewer=current_user.get("username"), is_admin=is_admin_role(current_user.get("role"))
+    )
     if approval is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
