@@ -375,7 +375,8 @@ async def test_hire_endpoint_calls_provision_budget(client, session_factory) -> 
     mock_execute = AsyncMock(return_value=MagicMock())
 
     with (
-        patch("llc.api.agent_hires.BudgetService.provision_budget", mock_provision),
+        patch("llc.services.agent_hire_service.BudgetService.provision_budget", mock_provision),
+        patch("llc.api.agent_hires.company_requires_hire_approval", new=AsyncMock(return_value=False)),
         patch("sqlalchemy.ext.asyncio.AsyncSession.execute", mock_execute),
         patch("llc.api.agent_hires.adapter_unavailable_reason", return_value=None),
     ):
@@ -490,7 +491,8 @@ async def test_hire_accepts_registered_adapter_type(client) -> None:  # noqa: AN
         )
     )
     with (
-        patch("llc.api.agent_hires.BudgetService.provision_budget", mock_provision),
+        patch("llc.services.agent_hire_service.BudgetService.provision_budget", mock_provision),
+        patch("llc.api.agent_hires.company_requires_hire_approval", new=AsyncMock(return_value=False)),
         patch("sqlalchemy.ext.asyncio.AsyncSession.execute", AsyncMock(return_value=MagicMock())),
         patch("llc.api.agent_hires.adapter_unavailable_reason", return_value=None),
     ):

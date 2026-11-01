@@ -236,7 +236,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llc/adapters/tests/test_claude_code_adapter.py": 602,
     "autobot-backend/llc/api/companies.py": 1627,
     "autobot-backend/llc/api/roles.py": 713,
-    "autobot-backend/llc/api/sprints.py": 1223,
+    "autobot-backend/llc/api/sprints.py": 1220,
     "autobot-backend/llc/api/work_items.py": 1303,  # #19582: comment wake moved into the service
     "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 1019,  # #19582 (shared run finder)
     "autobot-backend/llc/services/template.py": 643,
