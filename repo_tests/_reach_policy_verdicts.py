@@ -29,6 +29,12 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "The Windows install scripts that call pip on the installed requirements: a small named set, "
         "so a share of any file count means nothing.",
     ),
+    "operational-docs-playbook-references-19611": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Playbook references in operational docs and scripts, not files: docs grow at their own rate, so a share "
+        "of any file count would sink with nothing wrong.",
+    ),
     "chunk-identity-single-home-18142": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
