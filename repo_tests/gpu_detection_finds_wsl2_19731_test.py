@@ -87,5 +87,6 @@ def test_a_wsl2_stub_with_no_gpu_reads_as_none(tmp_path) -> None:
 @pytest.mark.parametrize("role", ["llm", "backend"])
 def test_both_roles_use_the_shared_probe(role: str) -> None:
     source = (_ANSIBLE / "roles" / role / "tasks" / "main.yml").read_text(encoding="utf-8")
+    source = "\n".join(line for line in source.splitlines() if not line.lstrip().startswith("#"))
     assert "_shared/tasks/detect_nvidia_gpu.yml" in source
     assert "nvidia-smi --query" not in source, f"{role} has a bare probe of its own again"
