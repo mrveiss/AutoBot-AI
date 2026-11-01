@@ -17,6 +17,7 @@ from typing import Dict, List
 
 import aiofiles
 
+from autobot_shared.scoping import ScopeLevel
 from autobot_shared.security.path_validator import resolve_within_sandbox
 from knowledge_factory import get_knowledge_base_async
 from utils.paths_manager import get_data_path
@@ -68,12 +69,18 @@ async def _to_knowledge_base(info: Dict, tags: List[str] | None, user_id: str | 
             text = await handle.read()
     except UnicodeDecodeError:
         raise ValueError("Only text files can be added to the knowledge base")
+    owner_id = info.get("uploaded_by") or user_id
+    if not owner_id:
+        raise ValueError("The file has no resolvable owner; it is not added to the knowledge base")
     metadata = {
         "source": info["original_filename"],
         "tags": tags or [],
         "origin": "conversation_file",
         "session_id": info["session_id"],
         "uploaded_by": user_id,
+        # The uploader's own, never shared: same shape as knowledge/claude_memory_importer.py (#20233).
+        "owner_id": owner_id,
+        "visibility": ScopeLevel.PRIVATE.value,
     }
     result = await kb.add_document(text, metadata, info["file_id"])
     if result.get("status") != "success":

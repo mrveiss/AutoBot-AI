@@ -188,3 +188,36 @@ def test_transfer_of_an_unknown_file_is_reported_failed_not_raised(destinations)
     body = _transfer(destinations, "no-such-file", "shared").json()
     assert (body["total_transferred"], body["total_failed"]) == (0, 1)
     assert body["failed_files"][0]["file_id"] == "no-such-file"
+
+
+def _kb_info(**over):
+    info = {"file_path": "", "original_filename": "n.txt", "session_id": _SESSION, "file_id": "f1"}
+    return {**info, **over}
+
+
+def _run_to_kb(tmp_path, monkeypatch, user_id, **over):
+    import conversation_file_transfer as transfer
+
+    path = tmp_path / "n.txt"
+    path.write_text("body", encoding="utf-8")
+    kb = SimpleNamespace(add_document=AsyncMock(return_value={"status": "success"}))
+    monkeypatch.setattr(transfer, "get_knowledge_base_async", AsyncMock(return_value=kb))
+    info = _kb_info(file_path=str(path), **over)
+    asyncio.run(transfer._to_knowledge_base(info, None, user_id))
+    return kb
+
+
+def test_a_kb_transfer_records_the_uploader_as_owner_with_private_visibility(tmp_path, monkeypatch):
+    kb = _run_to_kb(tmp_path, monkeypatch, "admin-1", uploaded_by="alice")
+    metadata = kb.add_document.call_args.args[1]
+    assert (metadata["owner_id"], metadata["visibility"]) == ("alice", "private")
+
+
+def test_a_kb_transfer_falls_back_to_the_transferring_user_for_the_owner(tmp_path, monkeypatch):
+    kb = _run_to_kb(tmp_path, monkeypatch, "admin-1", uploaded_by=None)
+    assert kb.add_document.call_args.args[1]["owner_id"] == "admin-1"
+
+
+def test_a_kb_transfer_with_no_resolvable_owner_is_refused_not_made_public(tmp_path, monkeypatch):
+    with pytest.raises(ValueError, match="no resolvable owner"):
+        _run_to_kb(tmp_path, monkeypatch, None, uploaded_by=None)
