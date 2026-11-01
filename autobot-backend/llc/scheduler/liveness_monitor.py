@@ -30,7 +30,7 @@ from ..models.enums import ActivityEventType, WorkItemStatus, WorkItemType
 from ..models.heartbeat_run import LLCHeartbeatRun
 from ..models.work_item import LLCWorkItem
 from ..services.activity_log import LLCActivityLogService
-from ..services.work_item_hierarchy import parent_if_allowed
+from ..services.work_item_hierarchy import HierarchyViolation, parent_if_allowed
 from ..services.work_item_service import WorkItemService
 from .base import PollLoopScheduler
 from .dispatch_gate import agent_ref_block_reason
@@ -176,13 +176,15 @@ class LivenessMonitor(PollLoopScheduler):
     ) -> None:
         identifier = work_item.identifier if work_item else run_id_label(str(run.id))
         title = f"Recovery: agent {agent_id} timed out on {identifier}"
-
-        # Resolve manager via company hierarchy — default to None (board-visible)
-        manager_agent_id = await self._resolve_manager(session, company_id, agent_id)
-
+        description = (
+            f"Automatic recovery item. Run {run.id} for agent {agent_id} "
+            f"exceeded the liveness timeout and was marked timed_out. "
+            f"Work item {identifier} has been set to blocked. "
+            f"Investigate and unblock manually."
+        )
         svc = WorkItemService()
-        # #18978: a recovery Bug follows the stuck item's parent only where the hierarchy rules allow it
-        # (a stuck Subtask's parent is a Task); otherwise it stays unparented in the same project.
+        # #18978: the Bug follows the stuck item's parent only where the hierarchy rules allow it
+        # (a stuck Subtask's parent is a Task) and always sits in the stuck item's project.
         parent_id = await parent_if_allowed(
             session,
             svc.get,
@@ -190,22 +192,21 @@ class LivenessMonitor(PollLoopScheduler):
             WorkItemType.BUG,
             str(work_item.parent_id) if work_item and work_item.parent_id else None,
         )
-        await svc.create(
-            session,
-            company_id=company_id,
-            type=WorkItemType.BUG,
-            title=title,
-            description=(
-                f"Automatic recovery item. Run {run.id} for agent {agent_id} "
-                f"exceeded the liveness timeout and was marked timed_out. "
-                f"Work item {identifier} has been set to blocked. "
-                f"Investigate and unblock manually."
-            ),
-            assignee_agent_id=manager_agent_id,
-            parent_id=parent_id,
-            project_id=None if parent_id or not work_item or not work_item.project_id else str(work_item.project_id),
-            goal_id=str(work_item.goal_id) if work_item and work_item.goal_id else None,
-        )
+        try:
+            await svc.create(
+                session,
+                company_id=company_id,
+                type=WorkItemType.BUG,
+                title=title,
+                description=description,
+                # Resolve manager via company hierarchy -- default to None (board-visible)
+                assignee_agent_id=await self._resolve_manager(session, company_id, agent_id),
+                parent_id=parent_id,
+                project_id=str(work_item.project_id) if work_item and work_item.project_id else None,
+                goal_id=str(work_item.goal_id) if work_item and work_item.goal_id else None,
+            )
+        except HierarchyViolation as exc:
+            await _note_unfiled_recovery(session, svc, work_item, company_id, f"{title}. {description}", exc)
 
     async def _resolve_manager(self, session: AsyncSession, company_id: str, agent_id: str) -> Optional[str]:
         """Best-effort lookup for the agent's manager agent_id."""
@@ -246,6 +247,14 @@ class LivenessMonitor(PollLoopScheduler):
             )
         except Exception:
             logger.debug("activity_log.record failed for run %s (swallowed)", run.id)
+
+
+async def _note_unfiled_recovery(session, svc, work_item, company_id: str, text_: str, exc: Exception) -> None:
+    """The recovery Bug was refused (a stuck item from before the every-item-has-a-project rule may have no
+    project, #18978): record it on the stuck item itself so the recovery is not lost."""
+    logger.error("Recovery item not created (%s); noting it on the stuck work item", exc)
+    if work_item is not None:
+        await svc.add_comment(session, str(work_item.id), company_id, f"{text_} ({exc})")
 
 
 def run_id_label(run_id: str) -> str:

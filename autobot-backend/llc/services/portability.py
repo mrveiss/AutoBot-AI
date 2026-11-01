@@ -272,20 +272,15 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
                     skipped["goals"].append(goal.get("title", ""))
 
             # projects
+            project_ids: Dict[str, str] = {}
             for project in template.get("projects", []):
                 project_id = await self._import_project(project, company_id)
                 if project_id:
                     created_entities["projects"].append(str(project_id))
+                    project_ids[str(project.get("id"))] = str(project_id)
 
             # seed work items
-            for item in template.get("work_items", []):
-                if not item.get("is_seed"):
-                    continue
-                item_id = await self._import_work_item(item, company_id)
-                if item_id:
-                    created_entities["work_items"].append(str(item_id))
-                else:
-                    skipped["work_items"].append(item.get("title", ""))
+            await self._import_seed_items(template, company_id, project_ids, created_entities, skipped, warnings)
 
             await sp.commit()
         except Exception as exc:

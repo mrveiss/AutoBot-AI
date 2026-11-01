@@ -14,7 +14,7 @@ them are only reported (``find_hierarchy_violations``), never rewritten (#17038)
 import uuid
 from typing import Awaitable, Callable, Dict, FrozenSet, List, Optional, Tuple
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.enums import WorkItemType
@@ -35,8 +35,8 @@ ALLOWED_PARENT_TYPES: Dict[WorkItemType, FrozenSet[WorkItemType]] = {
     T.SUBTASK: frozenset({T.TASK, T.BUG}),
 }
 
-# Decision (c): these types must name a project (their children inherit it).
-PROJECT_REQUIRED_TYPES: FrozenSet[WorkItemType] = frozenset({T.EPIC})
+# Owner ruling (#18978): every work item of any type belongs to a project (children inherit it).
+PROJECT_REQUIRED_TYPES: FrozenSet[WorkItemType] = frozenset(WorkItemType)
 
 # Longest chain a walk will follow. The rule table allows five levels; the margin covers
 # legacy rows, and the bound is what makes the walk terminate on cyclic data.
@@ -49,6 +49,10 @@ ItemGetter = Callable[..., Awaitable[Optional[LLCWorkItem]]]
 
 class HierarchyViolation(ValueError):
     """A write would break the hierarchy rules. A ``ValueError`` like the sibling validation."""
+
+
+class ProjectRequired(HierarchyViolation):
+    """The item would have no project (and no parent to inherit one from)."""
 
 
 def _type_of(raw) -> WorkItemType:
@@ -75,14 +79,19 @@ async def _assert_no_cycle(session: AsyncSession, get: ItemGetter, item_id: Opti
         node = None if node.parent_id is None else await get(session, node.parent_id)
 
 
-def _resolve_project(item_type: WorkItemType, parent: Optional[LLCWorkItem], project_id: Optional[str]):
-    """Inherit the parent's project; a child may not name a different one."""
+def _resolve_project(
+    item_type: WorkItemType, parent: Optional[LLCWorkItem], project_id: Optional[str], current: Optional[str] = None
+):
+    """Inherit the parent's project; a child may not name a different one.
+
+    ``current`` is a moved item's existing project: it counts only when neither parent nor caller names one.
+    """
     parent_project = str(parent.project_id) if parent is not None and parent.project_id else None
     if parent_project and project_id and str(project_id) != parent_project:
         raise HierarchyViolation("a child must sit in the same project as its parent")
-    resolved = parent_project or project_id
+    resolved = parent_project or project_id or current
     if resolved is None and item_type in PROJECT_REQUIRED_TYPES:
-        raise HierarchyViolation(f"a {item_type.value} requires a project_id")
+        raise ProjectRequired(f"a {item_type.value} requires a project_id (or a parent that has one)")
     return resolved
 
 
@@ -95,6 +104,7 @@ async def validate_parent(
     item_id: Optional[str],
     parent_id: Optional[str],
     project_id: Optional[str],
+    current_project: Optional[str] = None,
 ) -> Tuple[Optional[str], Optional[LLCWorkItem]]:
     """Check a write against the rules; return the project the item ends up in and its parent row.
 
@@ -112,7 +122,7 @@ async def validate_parent(
                 f"a {kind.value} cannot sit under a {_type_of(parent.type).value}; allowed: {allowed}"
             )
         await _assert_no_cycle(session, get, item_id, parent)
-    return _resolve_project(kind, parent, project_id), parent
+    return _resolve_project(kind, parent, project_id, current_project), parent
 
 
 async def validate_create(
@@ -185,6 +195,7 @@ async def reparent(
         item_id=str(item.id),
         parent_id=str(new_parent),
         project_id=None,
+        current_project=str(item.project_id) if item.project_id else None,
     )
     if project is not None and str(item.project_id) != project:
         item.project_id = uuid.UUID(project)
@@ -232,3 +243,13 @@ def _row_violation(row: LLCWorkItem, parent: Optional[LLCWorkItem], by_id=None) 
     if kind in PROJECT_REQUIRED_TYPES and row.project_id is None:
         return f"a {kind.value} has no project_id"
     return None
+
+
+async def count_items_without_project(session: AsyncSession) -> Dict[str, int]:
+    """Read-only: work items with no ``project_id``, per company id (the backfill proposal's measure, #17038)."""
+    stmt = (
+        select(LLCWorkItem.company_id, func.count())
+        .where(LLCWorkItem.project_id.is_(None))
+        .group_by(LLCWorkItem.company_id)
+    )
+    return {str(company): n for company, n in (await session.execute(stmt)).all()}

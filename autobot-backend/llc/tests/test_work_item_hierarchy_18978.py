@@ -20,12 +20,16 @@ import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from llc.agent_tools import LLCToolError, _create_task
 from llc.models.enums import WorkItemType as T
 from llc.models.work_item import LLCWorkItem
 from llc.scheduler.liveness_monitor import LivenessMonitor
+from llc.services.portability import PortabilityService
 from llc.services.work_item_hierarchy import (
     ALLOWED_PARENT_TYPES,
     HierarchyViolation,
+    ProjectRequired,
+    count_items_without_project,
     find_hierarchy_violations,
 )
 from llc.services.work_item_service import WorkItemService
@@ -50,7 +54,13 @@ async def session() -> AsyncIterator[AsyncSession]:
     await eng.dispose()
 
 
-async def _make(session, kind, *, parent=None, project=None, company=COMPANY):
+_DEFAULT = object()
+
+
+async def _make(session, kind, *, parent=None, project=_DEFAULT, company=COMPANY):
+    """Create through the service. Unless told otherwise: inherit from a parent, else sit in PROJECT."""
+    if project is _DEFAULT:
+        project = None if parent else PROJECT
     return await WorkItemService().create(
         session,
         company_id=company,
@@ -112,9 +122,49 @@ async def test_every_child_parent_pair(session, child, parent_kind):
             await _make(session, child, parent=parent)
 
 
-async def test_epic_requires_a_project(session):
-    with pytest.raises(HierarchyViolation, match="requires a project_id"):
-        await _make(session, T.EPIC)
+@pytest.mark.parametrize("kind", list(T))
+async def test_every_type_requires_a_project(session, kind):
+    with pytest.raises(ProjectRequired, match="requires a project_id"):
+        await _make(session, kind, project=None)
+
+
+async def test_a_new_child_of_an_old_parent_with_no_project_must_name_one(session):
+    old_pbi = await _legacy(session, T.PBI)  # from before the rule: no project
+    with pytest.raises(ProjectRequired):
+        await _make(session, T.TASK, parent=old_pbi)
+    named = await _make(session, T.TASK, parent=old_pbi, project=PROJECT)
+    assert str(named.project_id) == PROJECT
+
+
+async def test_updating_an_old_item_with_no_project_works_when_project_and_parent_are_untouched(session):
+    old = await _legacy(session, T.TASK)
+    updated = await WorkItemService().update(session, str(old.id), title="renamed", priority="high")
+    assert updated.title == "renamed" and updated.project_id is None
+
+
+async def test_moving_an_old_item_with_no_project_under_a_project_less_parent_is_refused(session):
+    """Touching the parent is a write that must leave the item in a project; update cannot name one."""
+    old_pbi = await _legacy(session, T.PBI)
+    old_task = await _legacy(session, T.TASK)
+    with pytest.raises(ProjectRequired):
+        await WorkItemService().update(session, str(old_task.id), parent_id=str(old_pbi.id))
+    assert old_task.parent_id is None
+
+
+async def test_moving_an_old_item_with_no_project_under_a_parent_with_one_gives_it_that_project(session):
+    epic = await _make(session, T.EPIC)
+    old_pbi = await _legacy(session, T.PBI)
+    moved = await WorkItemService().update(session, str(old_pbi.id), parent_id=str(epic.id))
+    assert str(moved.project_id) == PROJECT
+
+
+async def test_items_without_a_project_are_counted_per_company(session):
+    other = str(uuid.uuid4())
+    await _legacy(session, T.TASK)
+    await _legacy(session, T.PBI)
+    await _legacy(session, T.TASK, company=other)
+    await _legacy(session, T.TASK, project_id=PROJECT)
+    assert await count_items_without_project(session) == {COMPANY: 2, other: 1}
 
 
 async def test_parent_from_another_company_is_refused(session):
@@ -219,3 +269,52 @@ async def test_recovery_bug_for_a_stuck_subtask_is_not_refused_and_keeps_the_pro
     sub = await _make(session, T.SUBTASK, parent=task)
     bug = await _recovery_bug(session, sub)
     assert bug.parent_id is None and str(bug.project_id) == PROJECT
+
+
+async def test_recovery_for_a_stuck_item_with_no_project_is_noted_on_the_item_not_lost(session):
+    from llc.models.work_item import LLCWorkItemComment
+
+    old = await _legacy(session, T.TASK)
+    monitor = LivenessMonitor(poll_interval=9999)
+    with patch.object(LivenessMonitor, "_resolve_manager", new=AsyncMock(return_value=None)):
+        await monitor._create_recovery_item(session, SimpleNamespace(id=uuid.uuid4()), old, COMPANY, str(uuid.uuid4()))
+    bugs = (await session.execute(select(LLCWorkItem).where(LLCWorkItem.type == T.BUG))).scalars().all()
+    notes = (
+        (await session.execute(select(LLCWorkItemComment).where(LLCWorkItemComment.work_item_id == old.id)))
+        .scalars()
+        .all()
+    )
+    assert bugs == [] and len(notes) == 1 and "Recovery" in notes[0].body
+
+
+async def test_agent_create_task_without_a_project_gets_an_error_it_can_act_on(session):
+    with patch("llc.agent_tools._project_choices", new=AsyncMock(return_value=". Retry with a project_id from: P = 1")):
+        with pytest.raises(LLCToolError, match="requires a project_id.*Retry with a project_id"):
+            await _create_task(session, COMPANY, None, {"title": "write report"})
+    made = await _create_task(session, COMPANY, None, {"title": "write report", "project_id": PROJECT})
+    assert made["entity_type"] == "work_item"
+
+
+async def test_agent_create_task_under_a_parent_inherits_its_project(session):
+    pbi = await _make(session, T.PBI)
+    made = await _create_task(session, COMPANY, None, {"title": "child", "parent_id": str(pbi.id)})
+    row = await WorkItemService().get(session, made["entity_id"])
+    assert str(row.project_id) == PROJECT and row.parent_id == pbi.id
+
+
+async def test_template_seed_goes_through_the_rules_into_the_template_project(session):
+    created, skipped, warnings = {"work_items": []}, {"work_items": []}, []
+    template = {"work_items": [{"title": "Seed", "type": "epic", "is_seed": True, "project_id": "old-p"}]}
+    svc = PortabilityService(session=session)
+    await svc._import_seed_items(template, uuid.UUID(COMPANY), {"old-p": PROJECT}, created, skipped, warnings)
+    row = await WorkItemService().get(session, created["work_items"][0])
+    assert str(row.project_id) == PROJECT and row.type == T.EPIC and skipped["work_items"] == []
+
+
+async def test_template_seed_with_no_project_to_land_in_is_reported_not_created(session):
+    created, skipped, warnings = {"work_items": []}, {"work_items": []}, []
+    template = {"work_items": [{"title": "Seed", "type": "epic", "is_seed": True}]}
+    await PortabilityService(session=session)._import_seed_items(
+        template, uuid.UUID(COMPANY), {}, created, skipped, warnings
+    )
+    assert created["work_items"] == [] and skipped["work_items"] == ["Seed"] and "no project" in warnings[0]
