@@ -102,7 +102,7 @@ def remember_text(key: tuple | None, text: str) -> None:
             _cache.popitem(last=False)
 
 
-def clear_cache() -> None:
+def clear_text_cache() -> None:
     """Forget every remembered text (tests, and a deliberate flush)."""
     with _cache_lock:
         _cache.clear()
