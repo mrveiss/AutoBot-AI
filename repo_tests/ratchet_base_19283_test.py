@@ -13,7 +13,15 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from repo_tests._ratchet_base import BaseUnavailable, base_commit, base_table, base_text, literal_in, raised_entries
+from repo_tests._ratchet_base import (
+    BaseUnavailable,
+    added_entries,
+    base_commit,
+    base_table,
+    base_text,
+    literal_in,
+    raised_entries,
+)
 
 from autobot_shared.isolated_git import git, make_repo
 
@@ -160,3 +168,8 @@ def test_a_frozenset_table_reads_as_a_set() -> None:
     """#19704: an exemption list is a frozenset, and its base copy has to read as one."""
     source = 'ITEM = "a"\nEXEMPT = frozenset({ITEM, "b"})\n'
     assert literal_in(source, "EXEMPT") == frozenset({"a", "b"})
+
+
+def test_added_entries_reports_only_additions_and_treats_a_missing_table_as_all_added() -> None:
+    assert added_entries(frozenset({"a", "b"}), frozenset({"a", "c"})) == ["b"]
+    assert added_entries(frozenset({"a"}), {}) == ["a"]
