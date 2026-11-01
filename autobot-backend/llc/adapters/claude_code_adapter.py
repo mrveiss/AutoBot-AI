@@ -48,6 +48,7 @@ from .claude_result_failure import (
     is_turn_limit_result,
     resolve_result_event,
 )
+from .heartbeat_prompt import agent_api_tool_pattern
 from .subprocess_base import DEFAULT_OUTPUT_DIR as _DEFAULT_OUTPUT_DIR
 from .subprocess_base import SIGTERM_GRACE_SECONDS as _SIGTERM_GRACE_SECONDS
 from .subprocess_base import SubprocessLifecycleAdapter, placeholder_run_id
@@ -155,15 +156,17 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         return CLAUDE_CLI_NOT_FOUND_MESSAGE
 
     @staticmethod
-    def _tool_permission_args(cfg: dict) -> list[str]:
+    def _tool_permission_args(cfg: dict, extra_allowed: Optional[str] = None) -> list[str]:
         """Build --allowedTools/--disallowedTools argv from adapter config (GH#11186).
 
         ``disallowed_tools`` enforces a governed agent's forbidden tools on the
         external claude CLI. Both lists are sanitized (empty/flag-looking/
         delimiter-bearing names dropped) via the shared ``sanitize_tool_names``.
+        ``extra_allowed`` is the one command a heartbeat run is granted (#20247); it is
+        added to the agent's own ``allowed_tools`` and never overrides ``disallowed_tools``.
         """
         args: list[str] = []
-        allowed = sanitize_tool_names(cfg.get("allowed_tools"))
+        allowed = sanitize_tool_names([*(cfg.get("allowed_tools") or []), *([extra_allowed] if extra_allowed else [])])
         if allowed:
             args += ["--allowedTools", ",".join(allowed)]
         disallowed = sanitize_tool_names(cfg.get("disallowed_tools"))
@@ -179,6 +182,7 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         prompt: str,
         *,
         session_id: str,
+        agent_api_tool: Optional[str] = None,
     ) -> list[str]:
         """Build the claude CLI argv (GH#11186). Pure and unit-testable.
 
@@ -215,7 +219,7 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
             max_turns = cfg.get("max_turns")
             if max_turns is not None:
                 cmd += ["--max-turns", str(max_turns)]
-        cmd += ClaudeCodeAdapter._tool_permission_args(cfg)
+        cmd += ClaudeCodeAdapter._tool_permission_args(cfg, agent_api_tool)
         cmd.append("--")
         cmd.append(prompt)
         return cmd
@@ -252,7 +256,9 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
             session_id = resume_session_id
             logger.info("ClaudeCodeAdapter: resuming session %s for agent %s", session_id, agent_id)
 
-        cmd = self._build_command(cli, resume_session_id, cfg, prompt, session_id=session_id)
+        cmd = self._build_command(
+            cli, resume_session_id, cfg, prompt, session_id=session_id, agent_api_tool=agent_api_tool_pattern(context)
+        )
         env, workspace_dir = self._build_env(context)
 
         # GH#9992: redirect stderr to a sidecar file instead of an unread PIPE.

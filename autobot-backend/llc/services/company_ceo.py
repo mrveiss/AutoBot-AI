@@ -262,6 +262,8 @@ class CompanyCEOService(LLCServiceBase):
                 agent.pause_reason = None
             return agent
 
+        # Exempt from require_approval_for_hires (#8214) on purpose: a company needs its first agent, and no
+        # board exists to approve it until it has one. Only the default CEO is created here, once per company.
         try:
             async with session.begin_nested():
                 agent = AgentOrgNode(
