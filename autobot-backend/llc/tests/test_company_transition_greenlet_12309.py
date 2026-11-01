@@ -79,6 +79,7 @@ async def _seed_company(session_factory, llc_status: str = "onboarding") -> uuid
             budget_monthly_cents=0,
             spent_monthly_cents=0,
             require_approval_for_hires=False,
+            require_approval_for_budget_raises=False,
         )
         session.add(org)
         await session.commit()
@@ -87,11 +88,13 @@ async def _seed_company(session_factory, llc_status: str = "onboarding") -> uuid
 
 @pytest.fixture()
 async def session_factory():
-    engine = create_async_engine("sqlite+aiosqlite://")
+    engine = create_async_engine("sqlite+aiosqlite://")  # canonical: ignore py-adhoc-db-engine (test)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all, tables=[Organization.__table__])
     try:
-        yield async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
+        yield async_sessionmaker(  # canonical: ignore py-adhoc-db-engine (test)
+            bind=engine, expire_on_commit=False, autoflush=False
+        )
     finally:
         await engine.dispose()
 
@@ -147,7 +150,7 @@ async def test_eager_defaults_populates_updated_at_on_update_without_refresh():
     exact mechanism that kills the recurring bug class (#12209/#12309). A
     regression that drops ``eager_defaults`` fails this test.
     """
-    engine = create_async_engine("sqlite+aiosqlite://")
+    engine = create_async_engine("sqlite+aiosqlite://")  # canonical: ignore py-adhoc-db-engine (test)
     update_statements: list[str] = []
 
     @event.listens_for(engine.sync_engine, "before_cursor_execute")
@@ -157,7 +160,9 @@ async def test_eager_defaults_populates_updated_at_on_update_without_refresh():
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all, tables=[_EagerDefaultsProbe.__table__])
-    sf = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
+    sf = async_sessionmaker(  # canonical: ignore py-adhoc-db-engine (test)
+        bind=engine, expire_on_commit=False, autoflush=False
+    )
 
     row_id = uuid.uuid4().hex
     async with sf() as session:

@@ -45,6 +45,7 @@ def _org(org_id: uuid.UUID = _ORG_ID) -> SimpleNamespace:
         spent_monthly_cents=0,
         brand_color=None,
         require_approval_for_hires=False,
+        require_approval_for_budget_raises=False,
         parent_org_id=None,
         llc_status="active",
         pause_reason=None,

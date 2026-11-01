@@ -15,9 +15,9 @@ A hook is selected by the approval's type and decision and acts on the approval'
 
 import uuid
 from decimal import Decimal
-from typing import Any, Awaitable, Callable, Dict, Optional
+from typing import Any, Awaitable, Callable, Dict, Literal, Optional
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,11 +42,24 @@ class ApprovalHookError(Exception):
 
 
 class BudgetOverridePayload(BaseModel):
-    """What a BUDGET_OVERRIDE approval asks for: a higher dollar limit for one agent."""
+    """What a BUDGET_OVERRIDE approval asks for: a higher limit for one agent, in dollars or in tokens.
+
+    ``budget_mode`` switches which limit is enforced (a switch is judged as a raise, #8214);
+    at least one of the three limit fields must be present.
+    """
 
     agent_id: str = Field(min_length=1, max_length=255)
-    budget_limit: Decimal = Field(gt=0, lt=Decimal("1000000000"))
+    budget_limit: Optional[Decimal] = Field(None, gt=0, lt=Decimal("1000000000"))
+    token_limit: Optional[int] = Field(None, gt=0)
+    budget_mode: Optional[Literal["dollars", "tokens"]] = None
+    alert_threshold: Optional[float] = None
     reason: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _names_a_limit(self) -> "BudgetOverridePayload":
+        if self.budget_limit is None and self.token_limit is None and self.budget_mode is None:
+            raise ValueError("a budget override names a limit or a mode")
+        return self
 
 
 class SprintClosePayload(BaseModel):
@@ -105,6 +118,24 @@ async def _hire_approved(session: AsyncSession, approval: Approval, decided_by: 
     return {"agent_id": hire.agent_id}
 
 
+def _check_override_applies(row: LLCAgentBudget, ask: BudgetOverridePayload) -> None:
+    """Refuse an override that would change nothing or lower a limit; the approval then stays pending."""
+    mode = ask.budget_mode or str(row.budget_mode)
+    if ask.token_limit is not None and mode != "tokens":
+        raise ApprovalHookError("a token limit is not enforced on a dollar budget; switch the mode with it")
+    if ask.token_limit is not None and row.token_limit is not None and mode == str(row.budget_mode):
+        if ask.token_limit <= int(row.token_limit):
+            raise ApprovalHookError("a budget override must raise the limit")
+    if ask.budget_limit is None:
+        return
+    if ask.token_limit is None and mode == "tokens" and row.token_limit is not None:
+        # Token enforcement reads token_limit and ignores budget_limit, so raising it would record an approval
+        # that changes nothing.
+        raise ApprovalHookError("this agent's budget is token-limited; a dollar override would not change it")
+    if ask.token_limit is None and ask.budget_mode is None and ask.budget_limit <= Decimal(str(row.budget_limit)):
+        raise ApprovalHookError("a budget override must raise the limit")
+
+
 async def _budget_override_approved(session: AsyncSession, approval: Approval, decided_by: uuid.UUID) -> Dict[str, Any]:
     ask = BudgetOverridePayload.model_validate(approval.context or {})
     row = (
@@ -116,16 +147,24 @@ async def _budget_override_approved(session: AsyncSession, approval: Approval, d
     ).scalar_one_or_none()
     if row is None:
         raise ApprovalHookError(f"agent {ask.agent_id!r} has no budget in this company")
-    if row.budget_mode == "tokens" and row.token_limit is not None:
-        # Token enforcement reads token_limit and ignores budget_limit, so raising it would record an approval
-        # that changes nothing.
-        raise ApprovalHookError("this agent's budget is token-limited; a dollar override would not change it")
-    if ask.budget_limit <= Decimal(str(row.budget_limit)):
-        raise ApprovalHookError("a budget override must raise the limit")
-    before = Decimal(str(row.budget_limit))
-    row.budget_limit = ask.budget_limit
+    _check_override_applies(row, ask)
+    before = {
+        "budget_mode": str(row.budget_mode),
+        "budget_limit": str(row.budget_limit),
+        "token_limit": row.token_limit,
+    }
+    for field in ("budget_mode", "budget_limit", "token_limit", "alert_threshold"):
+        if getattr(ask, field) is not None:
+            setattr(row, field, getattr(ask, field))
     await session.flush()
-    return {"agent_id": ask.agent_id, "budget_limit_before": str(before), "budget_limit_after": str(ask.budget_limit)}
+    after = {"budget_mode": str(row.budget_mode), "budget_limit": str(row.budget_limit), "token_limit": row.token_limit}
+    return {
+        "agent_id": ask.agent_id,
+        "budget_limit_before": before["budget_limit"],
+        "budget_limit_after": after["budget_limit"],
+        "before": before,
+        "after": after,
+    }
 
 
 async def _sprint_close_approved(session: AsyncSession, approval: Approval, decided_by: uuid.UUID) -> Dict[str, Any]:
