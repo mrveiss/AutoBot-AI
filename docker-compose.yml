@@ -678,6 +678,7 @@ services:
       # Uses AUTOBOT_DOCKER_* prefix to avoid conflict with fleet .env vars (#2458)
       - ${AUTOBOT_DOCKER_NGINX_CONF:-./docker/nginx/nginx.conf}:/etc/nginx/nginx.conf:ro
       - ./docker/nginx/nginx-common.conf:/etc/nginx/nginx-common.conf:ro
+      - ./autobot-slm-backend/ansible/_shared/files/upload-cap.conf:/etc/nginx/upload-cap.conf:ro
       - ./docker/nginx/nginx-backend-upstream.conf:/etc/nginx/nginx-backend-upstream.conf:ro
       - ./docker/nginx/nginx-locations.conf:/etc/nginx/nginx-locations.conf:ro
       - ./docker/nginx/nginx-slm-locations.conf:/etc/nginx/nginx-slm-locations.conf:ro
@@ -748,6 +749,7 @@ services:
       # For TLS: set AUTOBOT_DOCKER_SLM_NGINX_CONF=./docker/nginx/nginx-slm-ssl.conf (#18593)
       - ${AUTOBOT_DOCKER_SLM_NGINX_CONF:-./docker/nginx/nginx-slm.conf}:/etc/nginx/nginx.conf:ro
       - ./docker/nginx/nginx-common.conf:/etc/nginx/nginx-common.conf:ro
+      - ./autobot-slm-backend/ansible/_shared/files/upload-cap.conf:/etc/nginx/upload-cap.conf:ro
       - ./docker/nginx/nginx-slm-locations.conf:/etc/nginx/nginx-slm-locations.conf:ro
       - ./docker/nginx/nginx-tls.conf:/etc/nginx/nginx-tls.conf:ro
       - ./docker/nginx/nginx-tls-redirect.conf:/etc/nginx/nginx-tls-redirect.conf:ro
