@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from repo_tests._paths import repo_root
@@ -12,7 +13,8 @@ from repo_tests._reach import declare
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROLES = "autobot-slm-backend/ansible/roles"
-_BAD = "playbook_dir }}/../../../"
+#: Any climb out of playbook_dir, in either spelling: its depth depends on which playbook ran.
+_BAD = re.compile(r"""playbook_dir\s*(?:\}\}|~\s*['"])/\.\.""")
 
 
 def _role_yaml(root: Path) -> list[Path]:
@@ -33,7 +35,7 @@ REACH = declare(
 
 
 def _offenders(text: str) -> bool:
-    return _BAD in text
+    return any(_BAD.search(line) for line in text.splitlines() if not line.lstrip().startswith("#"))
 
 
 def test_no_role_reaches_the_repo_through_playbook_dir() -> None:
@@ -43,7 +45,11 @@ def test_no_role_reaches_the_repo_through_playbook_dir() -> None:
 
 def test_contrast_the_old_form_is_caught() -> None:
     assert _offenders('src: "{{ playbook_dir }}/../../../constraints/shared.txt"')
+    assert _offenders("""lookup('file', playbook_dir ~ '/../../../x/requirements.txt')""")
+    assert _offenders('chdir: "{{ playbook_dir }}/../../.."')
+    assert _offenders('src: "{{ playbook_dir }}/../"')
     assert not _offenders('src: "{{ role_path }}/../../../../constraints/shared.txt"')
+    assert not _offenders("# the comment may say {{ playbook_dir }}/../")
 
 
 def test_the_ai_stack_copies_from_its_own_tree() -> None:
