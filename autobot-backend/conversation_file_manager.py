@@ -36,6 +36,7 @@ from autobot_shared.ssot_config import config
 from config import unified_config_manager
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_1_HOUR
+from conversation_file_cleanup import deleted_file_stats, pending_cleanup_stats
 from conversation_file_route_api import FILE_INFO_COLUMNS, ConversationFileRouteApi
 from conversation_file_upload_info import UploadInfo
 from utils.chat_utils import validate_chat_session_id
@@ -1134,6 +1135,9 @@ class ConversationFileManager(ConversationFileRouteApi):
             # Verify schema version
             version = await self.get_schema_version()
             logger.info("Conversation files database initialized (schema version: %s)", version)
+            from services.conversation_file_cleanup_proposals import propose_due_cleanups_logged
+
+            await propose_due_cleanups_logged(self)  # proposes only; removal waits for a human (#20234)
 
         except Exception as e:
             logger.error("Failed to initialize conversation files database: %s", e)
@@ -1182,25 +1186,16 @@ class ConversationFileManager(ConversationFileRouteApi):
             row = await cursor.fetchone()
         return row["total_sessions"] or 0
 
-    async def _get_deleted_file_stats(self, connection) -> tuple:
-        """Get deleted file count and size."""
-        query = (
-            "SELECT COUNT(*) as deleted_files, SUM(file_size) as deleted_size "
-            "FROM conversation_files WHERE is_deleted = 1"
-        )
-        async with connection.execute(query) as cursor:
-            row = await cursor.fetchone()
-        return row["deleted_files"] or 0, row["deleted_size"] or 0
-
     async def get_storage_stats(self) -> Dict[str, Any]:
         """Get storage statistics."""
         connection = await self._get_async_db_connection()
         try:
             total_files, total_size = await self._get_active_file_stats(connection)
             total_sessions = await self._get_session_count(connection)
-            deleted_files, deleted_size = await self._get_deleted_file_stats(connection)
+            deleted_files, deleted_size = await deleted_file_stats(connection)
 
             return {
+                **await pending_cleanup_stats(connection),  # bytes awaiting a human's approval (#20234)
                 "total_files": total_files,
                 "total_size_bytes": total_size,
                 "total_size_mb": round(total_size / (1024 * 1024), 2),
