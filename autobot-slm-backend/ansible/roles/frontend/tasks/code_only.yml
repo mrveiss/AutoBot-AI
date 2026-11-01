@@ -24,51 +24,27 @@
 # on every update and never touched sites-enabled. Same shape as the SLM
 # nginx_site.yml bug (#16979): render and enable now live in the same file.
 
+# Only an explicit frontend_slm_remote: true needs the fleet CA; nothing is inferred (#19832).
 - name: "Frontend | Stat the fleet CA the /slm/api proxy verifies the SLM against (#19832)"
   ansible.builtin.stat:
     path: "{{ frontend_slm_ca_cert }}"
   register: _frontend_slm_ca_stat
   become: true
-  when:
-    - not (slm_colocated_frontend | default(false) | bool)
-    - frontend_slm_placement != 'local'
-  tags: ['frontend', 'nginx']
-
-# An ambiguous placement (no gathered facts, hostnames) is settled here and never fails the
-# update: the SLM is treated as remote only when the CA it would be verified against is present,
-# otherwise as the same machine (loopback uvicorn). Verification is never switched off.
-- name: "Frontend | Settle an ambiguous SLM placement from the fleet CA (#19832)"
-  ansible.builtin.set_fact:
-    frontend_slm_backend_remote: >-
-      {{ frontend_slm_placement == 'remote'
-         or (frontend_slm_placement == 'ambiguous' and (_frontend_slm_ca_stat.stat.exists | default(false) | bool)) }}
-  when:
-    - not (slm_colocated_frontend | default(false) | bool)
-    - frontend_slm_placement != 'local'
+  when: frontend_slm_remote | bool
   tags: ['frontend', 'nginx']
 
 - name: "Frontend | Refuse to proxy to a remote SLM without its CA (#19832)"
   ansible.builtin.assert:
-    that: _frontend_slm_ca_stat.stat.exists
+    that:
+      - _frontend_slm_ca_stat.stat.exists
+      - slm_host | default('') | length > 0
+      - slm_host | default('') not in ['127.0.0.1', '::1', 'localhost']
     fail_msg: >-
-      The SLM is on another node, so /slm/api is proxied over HTTPS with certificate
-      verification, and the fleet CA {{ frontend_slm_ca_cert }} is missing here. Distribute it
+      frontend_slm_remote is true, so /slm/api is proxied over HTTPS to slm_host with certificate
+      verification. That needs slm_host set to the SLM node (now: "{{ slm_host | default('') }}")
+      and the fleet CA {{ frontend_slm_ca_cert }} present here. Distribute it
       (distribute-tls-certs.yml); verification is never switched off to get past this.
-  when:
-    - not (slm_colocated_frontend | default(false) | bool)
-    - frontend_slm_placement == 'remote'
-  tags: ['frontend', 'nginx']
-
-- name: "Frontend | Note that the SLM placement could not be determined (#19832)"
-  ansible.builtin.debug:
-    msg: >-
-      Cannot tell whether slm_host is this node (no gathered facts). Fleet CA present:
-      {{ _frontend_slm_ca_stat.stat.exists | default(false) }}; /slm/api is proxied
-      {{ 'over HTTPS to slm_host' if (frontend_slm_backend_remote | bool) else 'to the loopback SLM backend' }}.
-      Set slm_colocated_frontend or gather facts to make it certain.
-  when:
-    - not (slm_colocated_frontend | default(false) | bool)
-    - frontend_slm_placement == 'ambiguous'
+  when: frontend_slm_remote | bool
   tags: ['frontend', 'nginx']
 
 - name: "Frontend | Configure nginx"

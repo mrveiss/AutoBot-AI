@@ -39,17 +39,18 @@ def _env() -> jinja2.Environment:
     return env
 
 
-def _resolve(slm_host: str | None) -> dict:
+def _resolve(slm_host: str | None, remote: bool = False) -> dict:
     """Resolve the role defaults the way Ansible does: lazily, each against the same context."""
     env = _env()
     ctx: dict = {k: v for k, v in GROUP_VARS.items() if not (isinstance(v, str) and "{{" in v)}
-    ctx["ansible_facts"] = {"all_ipv4_addresses": _THIS_NODE}
+    ctx["ansible_facts"] = {}
     ctx["inventory_hostname"] = "node-a"
     ctx["ansible_host"] = _THIS_NODE[0]
     ctx["autobot_tls_remote_cert_dir"] = "/etc/c"
     if slm_host is not None:
         ctx["slm_host"] = slm_host
     pending = {k: v for k, v in DEFAULTS.items() if k.startswith(("frontend_slm_", "frontend_tls_cert_dir"))}
+    pending["frontend_slm_remote"] = remote  # the inventory value outranks the role default
     for _ in range(len(pending) + 1):
         for key, raw in list(pending.items()):
             if not isinstance(raw, str) or ("{{" not in raw and "{%" not in raw):
@@ -65,8 +66,8 @@ def _resolve(slm_host: str | None) -> dict:
     return ctx
 
 
-def _render(slm_host: str | None) -> str:
-    ctx = _resolve(slm_host)
+def _render(slm_host: str | None, remote: bool = False) -> str:
+    ctx = _resolve(slm_host, remote)
     ctx.update(
         ansible_host="backend.test.invalid",
         nginx_http_port=80,
@@ -90,7 +91,9 @@ def _block(text: str, header: str) -> str:
 
 
 @pytest.mark.parametrize(
-    "slm_host", ["192.0.2.10", "127.0.0.1", None], ids=["lan-address-of-this-node", "loopback", "unset"]
+    "slm_host",
+    ["192.0.2.10", "127.0.0.1", None, "198.51.100.7"],
+    ids=["lan-address-of-this-node", "loopback", "unset", "other-address-but-not-declared-remote"],
 )
 def test_same_machine_stays_on_loopback_uvicorn(slm_host: str | None) -> None:
     out = _render(slm_host)
@@ -101,7 +104,7 @@ def test_same_machine_stays_on_loopback_uvicorn(slm_host: str | None) -> None:
 
 
 def test_separate_node_proxies_https_to_the_slm_nginx_keeping_the_path() -> None:
-    out = _render("198.51.100.7")
+    out = _render("198.51.100.7", remote=True)
     assert "server 198.51.100.7:443 " in _block(out, "upstream autobot_slm_backend")
     for loc, upstream in (("location /slm/api/ ", "/slm/api/;"), ("location /slm/api/ws/ ", "/slm/api/ws/;")):
         block = _block(out, loc)
@@ -117,7 +120,7 @@ def test_separate_node_proxies_https_to_the_slm_nginx_keeping_the_path() -> None
 def test_the_remote_proxy_never_turns_verification_off() -> None:
     assert (
         "proxy_ssl_verify off"
-        not in _render("198.51.100.7").split("location /slm/api/ws/")[1].split("location /api/voice")[0]
+        not in _render("198.51.100.7", remote=True).split("location /slm/api/ws/")[1].split("location /api/voice")[0]
     )
 
 
