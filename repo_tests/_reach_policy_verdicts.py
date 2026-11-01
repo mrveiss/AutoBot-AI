@@ -92,6 +92,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "Files making outbound HTTP calls are a small subset of tracked python; the other ~6000 "
         "files grow independently, so a share of them sinks with nothing wrong with the sweep.",
     ),
+    "ansible-files-scanned-for-slm-port": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Ansible YAML and templates are a subset of tracked files; other trees grow independently of it.",
+    ),
     "ansible-apt-repo-budget-override-sweep": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

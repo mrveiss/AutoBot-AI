@@ -21,6 +21,7 @@ import jinja2
 import pytest
 import yaml
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
 ANSIBLE = repo_root() / "autobot-slm-backend" / "ansible"
 ROLE = ANSIBLE / "roles" / "frontend"
@@ -75,9 +76,26 @@ def test_the_slm_vhost_and_the_frontend_read_one_body_cap() -> None:
     assert defaults["frontend_slm_client_max_body_size"] == "{{ slm_client_max_body_size }}"
 
 
+_SLM_PORT_SUFFIXES = {".yml", ".yaml", ".j2"}
+
+REACH_ANSIBLE_FILES = declare(
+    "ansible-files-scanned-for-slm-port",
+    discover=lambda root: [
+        p.relative_to(root).as_posix()
+        for p in (root / "autobot-slm-backend" / "ansible").rglob("*")
+        if p.suffix in _SLM_PORT_SUFFIXES and p.is_file()
+    ],
+    roots=("autobot-slm-backend/ansible",),
+    floor=436,  # population 461 when measured
+    growth=40,
+    skips=0,
+    what="ansible YAML and template files scanned for the retired slm_port name",
+)
+
+
 def test_slm_port_is_gone_and_its_readers_use_the_one_name() -> None:
     for path in ANSIBLE.rglob("*"):
-        if path.suffix not in {".yml", ".yaml", ".j2"} or not path.is_file():
+        if path.suffix not in _SLM_PORT_SUFFIXES or not path.is_file():
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
         assert not re.search(r"\bslm_port\b", text), f"{path.relative_to(ANSIBLE)} still names slm_port"
