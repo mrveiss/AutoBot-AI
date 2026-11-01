@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from autobot_shared import postgres_identity
+from autobot_shared.postgres_dsn import build_postgres_dsn
 from autobot_shared.ssot_config import config
 
 logger = logging.getLogger(__name__)
@@ -73,17 +74,25 @@ class DeploymentConfig:
     @property
     def postgres_url(self) -> str:
         """Generate PostgreSQL connection URL."""
-        return (
-            f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
-            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        return build_postgres_dsn(
+            "postgresql+asyncpg",
+            self.postgres_user,
+            self.postgres_password,
+            self.postgres_host,
+            self.postgres_port,
+            self.postgres_db,
         )
 
     @property
     def postgres_sync_url(self) -> str:
         """Generate synchronous PostgreSQL connection URL (for Alembic)."""
-        return (
-            f"postgresql://{self.postgres_user}:{self.postgres_password}"
-            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        return build_postgres_dsn(
+            "postgresql",
+            self.postgres_user,
+            self.postgres_password,
+            self.postgres_host,
+            self.postgres_port,
+            self.postgres_db,
         )
 
 
