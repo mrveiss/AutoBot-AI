@@ -11,13 +11,15 @@ instead. Until it is approved the column just stays: it is nullable and nothing 
 
 from __future__ import annotations
 
+import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import text
+from sqlalchemy import func, select, text
 
 from models.approval import ApprovalComment
-from services.approval_execution import register_post_approval_action
+from services.approval_execution import register_post_approval_action, verified_decider
 from services.audit_logger import audit_log
+from user_management.models.user import User
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,25 +43,61 @@ async def column_present(session: "AsyncSession") -> bool:
     return (await session.execute(_COLUMN_PRESENT)).first() is not None
 
 
-async def execute_tier_column_drop(approval: "Approval", session: "AsyncSession") -> None:
-    """Drop the column an approved gate named, and record what happened."""
-    was_present = await column_present(session)
-    await session.execute(_DROP)
-    body = "Dropped organizations.subscription_tier." if was_present else "organizations.subscription_tier was gone."
-    session.add(ApprovalComment(approval_id=approval.id, author="system", author_type="system", body=body))
-    await session.commit()
+def _requester_id(approval: "Approval") -> uuid.UUID | None:
+    """The admin who proposed the drop, from ``requested_by_agent`` (``org-tier-column:<user id>``)."""
+    try:
+        return uuid.UUID(str(approval.requested_by_agent).rsplit(":", 1)[-1])
+    except ValueError:
+        return None
+
+
+async def _platform_admin_count(session: "AsyncSession") -> int:
+    rows = await session.execute(
+        select(func.count()).where(
+            User.is_platform_admin.is_(True), User.is_active.is_(True), User.deleted_at.is_(None)
+        )
+    )
+    return int(rows.scalar_one())
+
+
+async def _is_self_approval(approval: "Approval", session: "AsyncSession") -> bool:
+    """Four eyes: True for a flagged self-approval by the only admin; raises when the decider may not decide."""
+    decider, requester = verified_decider(approval), _requester_id(approval)
+    if decider is None or requester is None:
+        raise ValueError("the drop needs a verified decider and a requester that can be identified")
+    if decider != requester:
+        return False
+    if await _platform_admin_count(session) >= 2:
+        raise ValueError("the drop needs a different admin than the one who proposed it")
+    return True
+
+
+async def _audit(approval: "Approval", result: str, **details: object) -> None:
     await audit_log(
         "organizations.subscription_tier.drop",
-        result="success",
+        result=result,
         user_id=approval.decided_by_user,
         resource="organizations.subscription_tier",
-        details={"approval_id": str(approval.id), "was_present": was_present},
+        details={"approval_id": str(approval.id), **details},
     )
+
+
+async def execute_tier_column_drop(approval: "Approval", session: "AsyncSession") -> None:
+    """Drop the column an approved gate named; the audit entry is written before the schema changes."""
+    self_approval = await _is_self_approval(approval, session)
+    was_present = await column_present(session)
+    await _audit(approval, "started", self_approval=self_approval, was_present=was_present)
+    await session.execute(_DROP)
+    body = "Dropped organizations.subscription_tier" if was_present else "organizations.subscription_tier was gone"
+    body += " (self-approved by the only admin)." if self_approval else "."
+    session.add(ApprovalComment(approval_id=approval.id, author="system", author_type="system", body=body))
+    await session.commit()
+    await _audit(approval, "success", self_approval=self_approval, was_present=was_present)
 
 
 def register_tier_column_action() -> None:
     """Idempotent: re-registering just replaces the same key with an equal handler."""
-    register_post_approval_action(ACTION, execute_tier_column_drop, proposed_by=PROPOSED_BY)
+    register_post_approval_action(ACTION, execute_tier_column_drop, proposed_by=PROPOSED_BY, server_only=True)
 
 
 __all__ = ["ACTION", "PROPOSED_BY", "column_present", "execute_tier_column_drop", "register_tier_column_action"]

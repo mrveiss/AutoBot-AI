@@ -43,13 +43,19 @@ async def propose_org_tier_column_drop(
     session: AsyncSession = Depends(get_db_session),
 ) -> OrgTierColumnRequestResponse:
     """Propose the drop -- a request, not an execution. Refused when the column is already gone."""
+    requester = current_user.get("user_id")
+    if not requester:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "The proposal cannot be attributed to a verified user")
     if not await column_present(session):
         raise HTTPException(status.HTTP_409_CONFLICT, "organizations.subscription_tier is not in this database")
     approval = await ApprovalGateService(session).create_approval(
         title="Drop the unused organizations.subscription_tier column",
         approval_type=ApprovalType.DESTRUCTIVE_ACTION.value,
-        description="AutoBot has no paid tiers and nothing reads this column; its stored values are deleted (#19984).",
-        requested_by_agent=current_user.get("username"),
+        description=(
+            "AutoBot has no paid tiers and nothing reads this column (#19984). Approving deletes every stored value "
+            "in it for good: back up the database first if you may want them."
+        ),
+        requested_by_agent=f"org-tier-column:{requester}",
         context={"action": ACTION},
     )
     return OrgTierColumnRequestResponse(approval_id=str(approval.id), status=approval.status, action=ACTION)
