@@ -62,5 +62,5 @@ def test_the_role_refuses_an_empty_pull_list_before_pulling() -> None:
     tasks = yaml.safe_load((_ROLE / "tasks" / "main.yml").read_text(encoding="utf-8"))
     names = [str(task.get("name", "")) for task in tasks]
     guard = names.index("Models | There is something to pull")
-    assert guard < names.index("Models | Pull models appropriate for this node")
+    assert guard < names.index("Models | Pull models, retrying a failed download")
     assert tasks[guard]["ansible.builtin.assert"]["that"] == ["_llm_models_to_pull | length > 0"]
