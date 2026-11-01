@@ -9550,6 +9550,11 @@
       "subtitle": "Detalizēts atļauju vārdu krājums un tvērumu komplekti API atslēgām",
       "comingSoonTitle": "Būs pieejams nākamajā laidienā",
       "comingSoonMessage": "Detalizēti atļauju tvērumi — atļauju vārdu krājums, tvērumu komplekti un API atslēgu tvērumu izpilde — šajā laidienā nav pieejami. Šī lapa ļaus tos definēt un piešķirt, tiklīdz tie būs pieejami."
+    },
+    "layout": {
+      "title": "Administrēšana",
+      "subtitle": "Aizkulišu rīki administratoriem",
+      "ariaLabel": "Administrēšanas sadaļa"
     }
   },
   "components": {
