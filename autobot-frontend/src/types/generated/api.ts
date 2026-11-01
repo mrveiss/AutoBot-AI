@@ -74819,6 +74819,11 @@ export interface components {
             heartbeat?: string | null;
             /** Finished */
             finished?: string | null;
+            /**
+             * Lock Unknown
+             * @default false
+             */
+            lock_unknown?: boolean;
         } & {
             [key: string]: unknown;
         };
