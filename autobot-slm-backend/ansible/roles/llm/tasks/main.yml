@@ -32,7 +32,7 @@
   ansible.builtin.debug:
     msg: >-
       GPU detected: {{ _llm_gpu_detected }}
-      {% if nvidia_smi_probe is defined and nvidia_smi_probe.rc == 0 %}
+      {% if llm_has_gpu == "auto" and nvidia_smi_probe.rc == 0 %}
       ({{ nvidia_smi_probe.stdout | default('unknown') | trim }})
       {% endif %}
 

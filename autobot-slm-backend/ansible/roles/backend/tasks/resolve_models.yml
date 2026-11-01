@@ -1,0 +1,88 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# #19731: the ONE home of "does the model server hold what the backend env names", included before every
+# render of backend.env.j2. An unreachable server changes nothing and fails nothing. A model still absent
+# fails a role deploy, naming it and its role. The updater sets backend_model_check_warn_only: it runs
+# with any_errors_fatal, and one missing model must not abort a fleet rollout (#20082).
+---
+- name: "Backend | Ask the model server what it holds (#19731)"
+  ansible.builtin.uri:
+    # The server agents really call: an operator can point this elsewhere than the host and port.
+    url: >-
+      {{ (backend_llm_endpoint | default('http://' ~ (backend_ollama_host | default('127.0.0.1')) ~ ':'
+      ~ (backend_ollama_port | default('11434')))) | regex_replace('/+$', '') }}/api/tags
+    return_content: true
+    timeout: 10
+  register: _backend_model_tags
+  failed_when: false
+  check_mode: false
+  tags: ['backend', 'config', 'env']
+
+- name: "Backend | Decide the models for this model server (#19731)"
+  ansible.builtin.script:
+    cmd: "../../../_shared/files/resolve_backend_models.py"
+    executable: python3
+  environment:
+    BACKEND_MODEL_INPUT: "{{ _backend_model_input | to_json }}"
+  vars:
+    _backend_model_input:
+      # Raw: the script treats a reply it cannot read as an unreachable server, so it cannot stop an update.
+      tags_reply: "{{ _backend_model_tags.content | default('') }}"
+      gpu_models: "{{ (lookup('file', '../../llm/defaults/main.yml') | from_yaml).llm_gpu_models }}"
+      # The light tier: the last of the role's own CPU list when no value is set here.
+      fallback: "{{ backend_light_model | default((lookup('file', '../../llm/defaults/main.yml') | from_yaml).llm_cpu_models | last, true) }}"
+      roles:
+        backend_llm_model: "{{ backend_llm_model }}"
+        backend_routing_model: "{{ backend_routing_model | default('') }}"
+        backend_classification_model: "{{ backend_classification_model | default('') }}"
+        backend_light_model: "{{ backend_light_model | default('') }}"
+        backend_instruction_model: "{{ backend_instruction_model | default('') }}"
+        backend_system_model: "{{ backend_system_model | default('') }}"
+        # On a new install: the one home of the embedding role's model, which the template's default repeats.
+        backend_embedding_model: >-
+          {{ backend_embedding_model
+             | default((lookup('file', '../../agent_config/defaults/main.yml') | from_yaml).ollama_embedding_model, true) }}
+  register: _backend_model_plan
+  changed_when: false
+  check_mode: false
+  when: (_backend_model_tags.status | default(0)) == 200
+  tags: ['backend', 'config', 'env']
+
+- name: "Backend | Point roles at models this server holds (#19731)"
+  ansible.builtin.set_fact:
+    "{{ item.key }}": "{{ item.value }}"
+  loop: "{{ (_backend_model_plan.stdout | default('{}') | from_json).remap | default({}) | dict2items }}"
+  loop_control:
+    label: "{{ item.key }} -> {{ item.value }}"
+  tags: ['backend', 'config', 'env']
+
+- name: "Backend | Report which roles moved to another model, and why (#19731)"
+  ansible.builtin.debug:
+    msg: >-
+      The model server holds none of the GPU-class models, so these roles now use a model it holds
+      (role var, from, to): {{ _backend_models_remapped }}. If this node should have them, pull them again.
+  vars:
+    _backend_models_remapped: "{{ (_backend_model_plan.stdout | default('{}') | from_json).moved | default([]) }}"
+  when: _backend_models_remapped | length > 0
+  tags: ['backend', 'config', 'env']
+
+- name: "Backend | Report models the env names that the server does not hold (#19731)"
+  ansible.builtin.debug:
+    msg: "The model server does not hold what the backend env names: {{ _backend_models_missing }}"
+  vars:
+    _backend_models_missing: "{{ (_backend_model_plan.stdout | default('{}') | from_json).missing | default({}) }}"
+  when: _backend_models_missing | length > 0
+  tags: ['backend', 'config', 'env']
+
+- name: "Backend | Fail when a model the env names is missing (#19731)"
+  ansible.builtin.fail:
+    msg: "The model server does not hold what the backend env names (role var: model): {{ _backend_models_missing }}"
+  vars:
+    _backend_models_missing: "{{ (_backend_model_plan.stdout | default('{}') | from_json).missing | default({}) }}"
+  when:
+    - _backend_models_missing | length > 0
+    - not (backend_model_check_warn_only | default(false) | bool)
+  tags: ['backend', 'config', 'env']
