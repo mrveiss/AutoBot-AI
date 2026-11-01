@@ -149,7 +149,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/chat_workflow/graph.py": 1643,  # train 50: #18993 on main's 1652
     "autobot-backend/chat_workflow/llm_handler.py": 1300,
     "autobot-backend/chat_workflow/manager.py": 3885,  # #17273: graph turn lifecycle moved to turn_control
-    "autobot-backend/chat_workflow/tool_handler.py": 3697,  # #11542 dispatch merge + #14068 mirror
+    "autobot-backend/chat_workflow/tool_handler.py": 3617,  # #19950 (MCP approval message moved out)
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
     "autobot-backend/code_intelligence/analytics_infrastructure.py": 801,
@@ -302,7 +302,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/security/threat_intelligence.py": 762,
     "autobot-backend/security_layer.py": 715,
     "autobot-backend/services/agent_analytics.py": 686,
-    "autobot-backend/services/agent_terminal/service.py": 945,
+    "autobot-backend/services/agent_terminal/service.py": 922,
     "autobot-backend/services/ai_stack_client.py": 764,
     "autobot-backend/services/analytics_service.py": 835,
     "autobot-backend/services/autoresearch/auto_research_agent.py": 1187,
