@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
@@ -2021,14 +2021,14 @@ def _build_pg_dump_command(parsed, dump_path: Path, env_vars: Dict[str, str]) ->
     if parsed.port:
         cmd += ["-p", str(parsed.port)]
     if parsed.username:
-        cmd += ["-U", parsed.username]
-    db_name = (parsed.path or "").lstrip("/") or parsed.username or ""
+        cmd += ["-U", unquote(parsed.username)]
+    db_name = (parsed.path or "").lstrip("/") or unquote(parsed.username or "")
     if db_name:
         cmd.append(db_name)
 
     env = dict(os.environ)
     if parsed.password:
-        env["PGPASSWORD"] = parsed.password
+        env["PGPASSWORD"] = unquote(parsed.password)
     env.update(env_vars)
     return cmd, env
 
@@ -3224,7 +3224,7 @@ async def _ansible_self_update(node_id: str, on_failure: Optional[Callable[[str]
     executor = get_playbook_executor()
     limit = ["localhost", *await _colocated_node_ids(node_id)]
     try:
-        result = await executor.execute_playbook(playbook_name="update-all-nodes.yml", limit=limit, detach=True)
+        result = await executor.execute_playbook("update-all-nodes.yml", limit=limit, detach=True, must_run=[node_id])
         if restart_cut_the_wait(result, node_id):  # #19139: the restarted process owns the plan now
             return
         failure = None if result["success"] else summarize_playbook_failure(result["output"])
