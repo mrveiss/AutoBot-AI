@@ -19,6 +19,7 @@ import pytest
 
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.ai_lines import AiLine
+from autobot_shared.eventually import eventually
 from autobot_shared.status_enums import CommandRisk
 from chat_workflow.command_execution_record import approval_result_of, current_terminal_session
 from chat_workflow.tool_dispatch_guards import COMMAND_FORCE_APPROVAL_KEY, enforce_ai_line
@@ -408,8 +409,7 @@ async def test_a_cancelled_write_clears_only_its_own_reservation_and_closes_its_
     assert session.pending_approval == {"command_id": "someone-else"}
     assert order == []
     finish.set()
-    await asyncio.sleep(0.01)
-    assert order == ["written", "closed"]
+    await eventually(lambda: order == ["written", "closed"])
     assert command.state is CommandState.CANCELLED
 
 
