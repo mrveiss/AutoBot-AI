@@ -7,17 +7,19 @@
 
   Title/description accept props OR slots (apps pass translated strings via
   their own i18n — the kit hardcodes no user-facing text). Slots: icon, title,
-  description, actions.
+  description, actions. `compact` tightens the spacing for in-panel use (#14776,
+  promoted from the main app's fork).
 -->
 <script setup lang="ts">
 defineProps<{
   title?: string
   description?: string
+  compact?: boolean
 }>()
 </script>
 
 <template>
-  <div class="aui-empty" role="status">
+  <div class="aui-empty" :class="{ 'aui-empty--compact': compact }" role="status">
     <div v-if="$slots.icon" class="aui-empty__icon" aria-hidden="true">
       <slot name="icon" />
     </div>
@@ -43,6 +45,11 @@ defineProps<{
   padding: var(--aui-space-6) var(--aui-space-4);
   font-family: var(--aui-font-sans);
   color: var(--aui-color-text-muted);
+}
+
+.aui-empty--compact {
+  gap: var(--aui-space-2);
+  padding: var(--aui-space-4) var(--aui-space-3);
 }
 
 .aui-empty__icon {
