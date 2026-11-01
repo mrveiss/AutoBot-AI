@@ -30,6 +30,7 @@ from ..models.budget import LLCAgentBudget
 from ..models.enums import ActivityEventType, ApprovalStatus, ApprovalType
 from .activity_log import LLCActivityLogService
 from .agent_hire_service import HirePayload, insert_hired_agent, schedule_hired_agent
+from .authz import FourEyesError, require_four_eyes
 
 logger = get_logger(__name__)
 
@@ -150,6 +151,30 @@ _ON_APPROVED: Dict[str, _ApprovedHook] = {
     ApprovalType.BUDGET_OVERRIDE.value: _budget_override_approved,
     ApprovalType.SPRINT_CLOSE.value: _sprint_close_approved,
 }
+
+
+#: Types whose approval moves money or headcount: the one who asked cannot also approve while another admin exists.
+_FOUR_EYES_TYPES = frozenset({ApprovalType.HIRE.value, ApprovalType.BUDGET_OVERRIDE.value})
+
+
+async def review_decider(
+    session: AsyncSession, approval: Approval, decision: ApprovalStatus, decided_by: uuid.UUID
+) -> bool:
+    """Apply the four-eyes rule (#8214, #18430) to an APPROVED hire or budget override; True when it is a self-approval.
+
+    A requester may always reject their own request. A refusal raises :class:`ApprovalHookError`, which rolls
+    the decision back and leaves the approval pending for another admin. A requester that names no person
+    (an agent, or a row from before requesters were pinned to the verified caller) is not the decider, so it
+    passes unflagged rather than stranding the request; nothing stored is rewritten (#17038).
+    """
+    if decision != ApprovalStatus.APPROVED or approval.approval_type not in _FOUR_EYES_TYPES:
+        return False
+    try:
+        return await require_four_eyes(
+            approval, session, decided_by, what=f"a {approval.approval_type}", unidentified_requester_ok=True
+        )
+    except FourEyesError as exc:
+        raise ApprovalHookError(str(exc)) from exc
 
 
 async def run_post_decision_hook(
