@@ -426,6 +426,21 @@
   register: slm_secrets_stat
   tags: ['slm', 'secrets']
 
+# #16299: a password given to a fresh install must not be guessable. Generated ones pass by length.
+# Only with no secrets file yet: a live install's password is its owner's to change.
+- name: "SLM | Refuse a guessable admin password on a fresh install"
+  ansible.builtin.command:
+    cmd: "python3 {{ role_path }}/../../../../autobot_shared/security/password_weakness.py"
+    stdin: "{{ slm_admin_password }}"
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  no_log: true
+  when:
+    - not slm_secrets_stat.stat.exists
+    - slm_admin_password | default('') | length > 0
+  tags: ['slm', 'secrets']
+
 - name: "SLM | Generate security secrets"
   ansible.builtin.set_fact:
     slm_secret_key: "{{ lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}"
