@@ -48,6 +48,9 @@
       vars:
         deployed_embedding_env_files: ["{{ backend_code_dir }}/.env"]
 
+    - name: Resolve the models for this model server (#19731)
+      ansible.builtin.include_tasks: ../roles/backend/tasks/resolve_models.yml
+
     - name: Deploy backend environment file
       ansible.builtin.template:
         src: ../roles/backend/templates/backend.env.j2
