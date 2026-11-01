@@ -35,6 +35,8 @@
  * Author: mrveiss
  */
 
+import { getEnvPositiveInt } from '@autobot/ui';
+
 // =============================================================================
 // Type Definitions
 // =============================================================================
@@ -343,18 +345,6 @@ function getEnv(key: string, defaultValue: string): string {
 }
 
 /**
- * Get numeric environment variable with fallback.
- */
-function getEnvNumber(key: string, defaultValue: number): number {
-  const value = import.meta.env[key];
-  if (value === undefined || value === null || value === '') {
-    return defaultValue;
-  }
-  const parsed = parseInt(String(value), 10);
-  return isNaN(parsed) ? defaultValue : parsed;
-}
-
-/**
  * Get boolean environment variable with fallback.
  */
 function getEnvBoolean(key: string, defaultValue: boolean): boolean {
@@ -409,30 +399,30 @@ function buildConfig(): AutoBotConfig {
   };
 
   const port: PortConfig = {
-    backend: getEnvNumber('VITE_BACKEND_PORT', PORT_DEFAULTS.backend),
-    frontend: getEnvNumber('VITE_FRONTEND_PORT', PORT_DEFAULTS.frontend),
-    frontendServed: getEnvNumber('VITE_FRONTEND_SERVED_PORT', getEnvNumber('VITE_FRONTEND_PORT', PORT_DEFAULTS.frontend)),
-    redis: getEnvNumber('VITE_REDIS_PORT', PORT_DEFAULTS.redis),
-    ollama: getEnvNumber('VITE_OLLAMA_PORT', PORT_DEFAULTS.ollama),
-    vnc: getEnvNumber('VITE_DESKTOP_VNC_PORT', PORT_DEFAULTS.vnc),
-    browser: getEnvNumber('VITE_BROWSER_PORT', PORT_DEFAULTS.browser),
-    aistack: getEnvNumber('VITE_AI_STACK_PORT', PORT_DEFAULTS.aistack),
-    npu: getEnvNumber('VITE_NPU_WORKER_PORT', PORT_DEFAULTS.npu),
-    prometheus: getEnvNumber('VITE_PROMETHEUS_PORT', PORT_DEFAULTS.prometheus),
-    grafana: getEnvNumber('VITE_GRAFANA_PORT', PORT_DEFAULTS.grafana),
-    slm: getEnvNumber('VITE_SLM_PORT', PORT_DEFAULTS.slm),
-    slmAdmin: getEnvNumber('VITE_SLM_ADMIN_PORT', PORT_DEFAULTS.slmAdmin),
+    backend: getEnvPositiveInt(import.meta.env, 'VITE_BACKEND_PORT', PORT_DEFAULTS.backend),
+    frontend: getEnvPositiveInt(import.meta.env, 'VITE_FRONTEND_PORT', PORT_DEFAULTS.frontend),
+    frontendServed: getEnvPositiveInt(import.meta.env, 'VITE_FRONTEND_SERVED_PORT', getEnvPositiveInt(import.meta.env, 'VITE_FRONTEND_PORT', PORT_DEFAULTS.frontend)),
+    redis: getEnvPositiveInt(import.meta.env, 'VITE_REDIS_PORT', PORT_DEFAULTS.redis),
+    ollama: getEnvPositiveInt(import.meta.env, 'VITE_OLLAMA_PORT', PORT_DEFAULTS.ollama),
+    vnc: getEnvPositiveInt(import.meta.env, 'VITE_DESKTOP_VNC_PORT', PORT_DEFAULTS.vnc),
+    browser: getEnvPositiveInt(import.meta.env, 'VITE_BROWSER_PORT', PORT_DEFAULTS.browser),
+    aistack: getEnvPositiveInt(import.meta.env, 'VITE_AI_STACK_PORT', PORT_DEFAULTS.aistack),
+    npu: getEnvPositiveInt(import.meta.env, 'VITE_NPU_WORKER_PORT', PORT_DEFAULTS.npu),
+    prometheus: getEnvPositiveInt(import.meta.env, 'VITE_PROMETHEUS_PORT', PORT_DEFAULTS.prometheus),
+    grafana: getEnvPositiveInt(import.meta.env, 'VITE_GRAFANA_PORT', PORT_DEFAULTS.grafana),
+    slm: getEnvPositiveInt(import.meta.env, 'VITE_SLM_PORT', PORT_DEFAULTS.slm),
+    slmAdmin: getEnvPositiveInt(import.meta.env, 'VITE_SLM_ADMIN_PORT', PORT_DEFAULTS.slmAdmin),
   };
 
   // Timeout configuration (all in milliseconds)
   const timeout: TimeoutConfig = {
-    api: getEnvNumber('VITE_API_TIMEOUT', 60000),
-    knowledge: getEnvNumber('VITE_KNOWLEDGE_TIMEOUT', 300000),
-    retryAttempts: getEnvNumber('VITE_API_RETRY_ATTEMPTS', 3),
-    retryDelay: getEnvNumber('VITE_API_RETRY_DELAY', 1000),
-    websocket: getEnvNumber('VITE_WEBSOCKET_TIMEOUT', 30000),
-    circuitFailureThreshold: getEnvNumber('VITE_CIRCUIT_FAILURE_THRESHOLD', 3),
-    circuitRecoveryMs: getEnvNumber('VITE_CIRCUIT_RECOVERY_MS', 30000),
+    api: getEnvPositiveInt(import.meta.env, 'VITE_API_TIMEOUT', 60000),
+    knowledge: getEnvPositiveInt(import.meta.env, 'VITE_KNOWLEDGE_TIMEOUT', 300000),
+    retryAttempts: getEnvPositiveInt(import.meta.env, 'VITE_API_RETRY_ATTEMPTS', 3),
+    retryDelay: getEnvPositiveInt(import.meta.env, 'VITE_API_RETRY_DELAY', 1000),
+    websocket: getEnvPositiveInt(import.meta.env, 'VITE_WEBSOCKET_TIMEOUT', 30000),
+    circuitFailureThreshold: getEnvPositiveInt(import.meta.env, 'VITE_CIRCUIT_FAILURE_THRESHOLD', 3),
+    circuitRecoveryMs: getEnvPositiveInt(import.meta.env, 'VITE_CIRCUIT_RECOVERY_MS', 30000),
   };
 
   // DORMANT: VNC browser path replaced by screenshot panel (#1130). Preserved for #5136 re-integration.
@@ -443,15 +433,15 @@ function buildConfig(): AutoBotConfig {
   const vnc: VNCConfig = {
     desktop: {
       host: getEnv('VITE_DESKTOP_VNC_HOST', vm.main),
-      port: getEnvNumber('VITE_DESKTOP_VNC_PORT', PORT_DEFAULTS.vnc),
+      port: getEnvPositiveInt(import.meta.env, 'VITE_DESKTOP_VNC_PORT', PORT_DEFAULTS.vnc),
     },
     terminal: {
       host: getEnv('VITE_TERMINAL_VNC_HOST', vm.main),
-      port: getEnvNumber('VITE_TERMINAL_VNC_PORT', PORT_DEFAULTS.vnc),
+      port: getEnvPositiveInt(import.meta.env, 'VITE_TERMINAL_VNC_PORT', PORT_DEFAULTS.vnc),
     },
     playwright: {
       host: getEnv('VITE_PLAYWRIGHT_VNC_HOST', vm.browser),
-      port: getEnvNumber('VITE_PLAYWRIGHT_VNC_PORT', PORT_DEFAULTS.vnc), // #19327: browser noVNC is port.vnc
+      port: getEnvPositiveInt(import.meta.env, 'VITE_PLAYWRIGHT_VNC_PORT', PORT_DEFAULTS.vnc), // #19327: browser noVNC is port.vnc
     },
   };
 
