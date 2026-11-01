@@ -12,7 +12,8 @@ handlers.  Two complementary checks are applied:
    fields are scanned for SQL injection, command injection, and path-traversal
    patterns.  Any match causes an immediate 400 response.
 
-2. **Size guard** — request bodies larger than ``MAX_BODY_BYTES`` (default 1 MB)
+2. **Size guard** — request bodies larger than ``MAX_BODY_BYTES`` (default 1 MB), except uploads to a
+   route with its own limit,
    are rejected with a 413 response, preventing memory exhaustion from crafted
    payloads.
 
@@ -73,6 +74,11 @@ _EXEMPT_PREFIXES: Final[tuple[str, ...]] = (
 # and blocks saves.  The user-input entry point (/chats/{id}/message) is NOT matched.
 _BODY_SCAN_EXEMPT_RE: Final[re.Pattern[str]] = re.compile(r"^/api/chats/[^/]+/save$")
 
+# Multipart routes measured by their own limit (#19712). The 1 MiB cap is for JSON and form bodies;
+# a file upload is not read here at all, so it spools to disk rather than into memory. Add a route
+# only once it enforces a limit of its own.
+_OWN_LIMIT_MULTIPART_RE: Final[re.Pattern[str]] = re.compile(r"^/api/knowledge_base/upload$")
+
 # ---------------------------------------------------------------------------
 # Injection-pattern catalog
 # ---------------------------------------------------------------------------
@@ -123,6 +129,12 @@ def _is_fully_exempt(path: str) -> bool:
 def _is_scan_exempt(path: str) -> bool:
     """Return True when *path* should skip injection scanning but NOT the size guard."""
     return bool(_BODY_SCAN_EXEMPT_RE.match(path))
+
+
+def _is_own_limit_upload(request: Request) -> bool:
+    """Multipart to a route that enforces its own limit; any other body to it keeps the cap."""
+    content_type = request.headers.get("content-type", "").lower()
+    return content_type.startswith("multipart/form-data") and bool(_OWN_LIMIT_MULTIPART_RE.match(request.url.path))
 
 
 def _scan_value(value: str) -> str | None:
@@ -214,7 +226,7 @@ class ValidationMiddleware(BaseHTTPMiddleware):
                 )
 
         # ── Body size guard + optional injection scan (POST / PUT / PATCH) ──
-        if request.method in _BODY_METHODS:
+        if request.method in _BODY_METHODS and not _is_own_limit_upload(request):
             body_bytes = await request.body()
 
             if len(body_bytes) > self._max_body_bytes:

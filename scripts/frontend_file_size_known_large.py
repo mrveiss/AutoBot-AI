@@ -77,7 +77,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/knowledge/KnowledgePersistenceDialog.vue": 891,  # #18819+#18849 one import (-1)
     "autobot-frontend/src/components/knowledge/KnowledgeResearchPanel.vue": 1189,
     "autobot-frontend/src/components/knowledge/KnowledgeSystemDocs.vue": 863,
-    "autobot-frontend/src/components/knowledge/KnowledgeUpload.vue": 1634,
+    "autobot-frontend/src/components/knowledge/KnowledgeUpload.vue": 1632,
     "autobot-frontend/src/components/knowledge/KnowledgeVerificationQueue.vue": 797,
     "autobot-frontend/src/components/knowledge/SystemKnowledgeManager.vue": 1018,  # #19906: 1034 -> 1018
     "autobot-frontend/src/components/knowledge/WebResearchPanel.vue": 779,
