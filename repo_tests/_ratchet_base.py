@@ -144,6 +144,11 @@ def base_table(root: Path, rels: tuple[str, ...], name: str) -> Any:
     return literal_in(src, name) if src is not None else {}
 
 
+def added_entries(current: frozenset[str], base: Any) -> list[str]:
+    """Exemption-list members the base does not have; ``{}`` from `base_table` makes them all additions."""
+    return sorted(current - set(base))
+
+
 def raised_entries(now: dict[str, int], base: dict[str, int]) -> dict[str, tuple[int | None, int]]:
     """Entries that rose against the base, ``{key: (base value or None if new, now)}``."""
     return {k: (base.get(k), v) for k, v in now.items() if k not in base or v > base[k]}

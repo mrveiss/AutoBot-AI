@@ -43,11 +43,8 @@ _ICON_CLASS = re.compile(r"(?<![\w-])\.icon(?![\w-])")
 _FONT_SIZE = re.compile(r"(?<![\w-])font-size\s*:")
 _BOX_SIZE = re.compile(r"(?<![\w-])(?:width|height)\s*:")
 
-# Rules in files still held by an open PR (WorkflowRunner.vue: #20166). Delete an entry when fixed.
-PINS = {
-    "components/workflow/WorkflowRunner.vue :: .empty-list .icon": 1,
-    "components/workflow/WorkflowRunner.vue :: .no-selection .icon": 1,
-}
+# Rules that cannot be edited yet, as "<file> :: <selector>": occurrences. Down-only; all fixed (#19875).
+PINS: dict[str, int] = {}
 
 REACH_VUE_FILES = declare(
     "icon-font-size-rule-vue-files",
