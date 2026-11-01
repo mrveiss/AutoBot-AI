@@ -78,17 +78,15 @@ def _last_recap(output: str) -> dict[str, tuple[int, int, int]]:
 
 
 def limit_run_failure(output: str, limit: list[str] | None) -> str | None:
-    """Why a limited run reached none of the hosts its limit names beyond localhost, or None (#19762).
+    """Why a limited run left a host its limit names without a task run, or None (#19762, #19766).
 
-    A multi-play playbook skips every play whose group the limit leaves out, which is normal; but
-    when ONLY localhost ran, every named host was skipped. Limit entries may be group names, so
-    this asks for any non-localhost recap host with ok>=1 rather than for each name -- with several
-    named hosts, one that ran satisfies it while another may have been skipped (the known limit).
+    A multi-play playbook skips every play whose group the limit leaves out, which is normal, so a
+    run proves only what the last recap shows: each named host beyond localhost needs ok>=1. Every
+    caller names hosts; a group name is never in a recap, so it would read as a host that did not run.
     """
-    named = [h for h in (limit or ()) if h not in _LOCAL_HOSTS]
-    if not named or any(c[0] >= 1 for h, c in _last_recap(output).items() if h not in _LOCAL_HOSTS):
-        return None
-    return f"no host named by the limit {named} ran a task (only localhost did)"
+    recap = _last_recap(output)
+    absent = [h for h in (limit or ()) if h not in _LOCAL_HOSTS and recap.get(h, (0,))[0] < 1]
+    return f"hosts named by the limit ran no task: {absent}" if absent else None
 
 
 def with_limit_proof(result: dict, limit: list[str] | None) -> dict:
