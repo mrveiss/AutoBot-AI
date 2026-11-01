@@ -5993,7 +5993,7 @@ export interface paths {
          *
          *     Returns:
          *     - status: success or error
-         *     - deleted_file: Path of deleted backup file
+         *     - deleted_file: Filename of the deleted backup file
          */
         delete: operations["delete_backup_api_knowledge_base_backup_delete"];
         options?: never;
@@ -43909,7 +43909,7 @@ export interface paths {
          *
          *     Returns:
          *     - status: success or error
-         *     - deleted_file: Path of deleted backup file
+         *     - deleted_file: Filename of the deleted backup file
          */
         delete: operations["delete_backup_api_knowledge_maintenance_backup_delete"];
         options?: never;

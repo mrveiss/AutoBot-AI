@@ -1848,7 +1848,7 @@ async def delete_backup(
 
     Returns:
     - status: success or error
-    - deleted_file: Path of deleted backup file
+    - deleted_file: Filename of the deleted backup file
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:

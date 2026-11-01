@@ -23,7 +23,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import require_path_string
 from autobot_shared.time_utils import parse_utc_iso
 from constants.threshold_constants import CategoryDefaults
-from knowledge.backup_audit import audit_backup_action
+from knowledge.backup_audit import audit_backup_action, resolve_backup_name, run_audited
 from knowledge.backup_embeddings import fetch_backup_embeddings, restore_backup_embedding
 from knowledge.backup_stream import write_backup
 from knowledge.export_fields import filter_fact_fields
@@ -1463,19 +1463,7 @@ class BulkOperationsMixin:
         return str(project_root / "backups" / "knowledge")
 
     def _resolve_backup_path(self, backup_file: str) -> str | None:
-        """The path of a backup named by its bare filename, inside the backup directory, or None.
-
-        Issue #19721: the name the list returns is what comes back, and it resolves against the backup
-        directory rather than the process's cwd. Issue #9670: anything else is refused, ``../`` and
-        absolute paths included, and ``realpath`` means a symlink pointing outside is refused too.
-        """
-        if not backup_file or backup_file in (".", "..") or os.path.basename(backup_file) != backup_file:
-            return None
-        if "\\" in backup_file or "\x00" in backup_file:
-            return None
-        allowed_root = os.path.realpath(self._get_backup_dir(None))
-        resolved = os.path.realpath(os.path.join(allowed_root, backup_file))
-        return resolved if resolved.startswith(allowed_root + os.sep) else None
+        return resolve_backup_name(self._get_backup_dir(None), backup_file)
 
     def _generate_backup_path(self, backup_dir: str, compression: bool) -> tuple:
         """
@@ -1579,11 +1567,16 @@ class BulkOperationsMixin:
             if not await audit_backup_action(AuditAction.KNOWLEDGE_BACKUP_RESTORE, audit_actor, filename):
                 return {"status": "error", "message": "The restore could not be audited, so it did not run"}
 
-            results = await self._restore_facts_from_backup(
-                backup_data.get("facts", []),
-                overwrite_existing,
-                skip_duplicates,
-                restore_embeddings and backup_data.get("include_embeddings", False),
+            results = await run_audited(
+                AuditAction.KNOWLEDGE_BACKUP_RESTORE,
+                audit_actor,
+                filename,
+                self._restore_facts_from_backup(
+                    backup_data.get("facts", []),
+                    overwrite_existing,
+                    skip_duplicates,
+                    restore_embeddings and backup_data.get("include_embeddings", False),
+                ),
             )
 
             return self._build_restore_response(backup_data, results)
@@ -1887,7 +1880,8 @@ class BulkOperationsMixin:
                 return {"status": "error", "message": "Not a valid backup file"}
             if not await audit_backup_action(AuditAction.KNOWLEDGE_BACKUP_DELETE, audit_actor, filename):
                 return {"status": "error", "message": "The deletion could not be audited, so it did not run"}
-            await asyncio.to_thread(os.remove, resolved)
+            removal = asyncio.to_thread(os.remove, resolved)
+            await run_audited(AuditAction.KNOWLEDGE_BACKUP_DELETE, audit_actor, filename, removal)
             logger.info("Backup deleted: %s", filename)
             return {"status": "success", "deleted_file": filename}
         except Exception as e:
