@@ -32,7 +32,7 @@ from .agent_hire_service import HirePayload, insert_hired_agent, schedule_hired_
 
 logger = get_logger(__name__)
 
-_activity = LLCActivityLogService()
+_activity_log = LLCActivityLogService()
 
 
 class ApprovalHookError(Exception):
@@ -75,7 +75,7 @@ def validate_payload(gate_type: ApprovalType, payload: Dict[str, Any]) -> None:
 async def _hire_approved(session: AsyncSession, approval: Approval, decided_by: uuid.UUID) -> Dict[str, Any]:
     hire = HirePayload.model_validate(approval.context or {})
     node_id = await insert_hired_agent(session, approval.company_id, hire)
-    await _activity.record(
+    await _activity_log.record(
         session,
         str(approval.company_id),
         ActorType.USER,
@@ -188,7 +188,7 @@ async def record_approval_event(
     the act is the system's and the requester is kept in ``metadata`` rather than named as actor.
     """
     actor = ActorType.USER if actor_user_id else ActorType.SYSTEM
-    await _activity.record(
+    await _activity_log.record(
         session,
         str(approval.company_id),
         actor,
