@@ -38,9 +38,9 @@ async def engine():  # noqa: ANN201
 
 @pytest_asyncio.fixture
 async def session_factory(engine):  # noqa: ANN001, ANN201
-    return async_sessionmaker(
+    return async_sessionmaker(  # canonical: ignore py-adhoc-db-engine
         engine, expire_on_commit=False, class_=AsyncSession
-    )  # canonical: ignore py-adhoc-db-engine
+    )
 
 
 def _make_app(session_factory, caller_org_id: str, is_platform_admin: bool = False):  # noqa: ANN001, ANN201
@@ -173,10 +173,75 @@ async def test_update_limit_cross_tenant_returns_404(client_factory, session_fac
     assert resp.status_code == 404, resp.text
 
 
+async def _make_member(session_factory, company_id: str, role: str) -> None:  # noqa: ANN001
+    from llc.models.membership import LLCCompanyMembership
+
+    async with session_factory() as session:
+        session.add(
+            LLCCompanyMembership(id=uuid.uuid4(), company_id=uuid.UUID(company_id), user_id=_FIXED_USER_ID, role=role)
+        )
+        await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_update_limit_by_a_plain_member_is_refused(client_factory, session_factory) -> None:  # noqa: ANN001
+    """A member of the company must not set a limit directly: that bypasses BUDGET_OVERRIDE (#8214)."""
+    company_id = str(uuid.uuid4())
+    agent_id = await _insert_agent(session_factory, company_id)
+    await _make_member(session_factory, company_id, "member")
+    client = await client_factory(company_id)
+    assert (await client.post(f"/api/llc/budget/{agent_id}", json={})).status_code == 201
+
+    resp = await client.patch(f"/api/llc/budget/{agent_id}/limit", json={"budget_limit": "999.00"})
+    assert resp.status_code == 403, resp.text
+    unchanged = await client.get(f"/api/llc/budget/{agent_id}")
+    assert Decimal(unchanged.json()["budget_limit"]) != Decimal("999.00")
+
+
+@pytest.mark.asyncio
+async def test_update_limit_without_a_membership_is_refused(client_factory, session_factory) -> None:  # noqa: ANN001
+    company_id = str(uuid.uuid4())
+    agent_id = await _insert_agent(session_factory, company_id)
+    client = await client_factory(company_id)
+    assert (await client.post(f"/api/llc/budget/{agent_id}", json={})).status_code == 201
+
+    resp = await client.patch(f"/api/llc/budget/{agent_id}/limit", json={"budget_limit": "5.00"})
+    assert resp.status_code == 403, resp.text
+
+
+@pytest.mark.asyncio
+async def test_update_limit_by_a_platform_admin_without_membership_returns_200(
+    client_factory, session_factory  # noqa: ANN001
+) -> None:
+    company_id = str(uuid.uuid4())
+    agent_id = await _insert_agent(session_factory, company_id)
+    client = await client_factory(company_id, is_platform_admin=True)
+    assert (await client.post(f"/api/llc/budget/{agent_id}", json={})).status_code == 201
+
+    resp = await client.patch(f"/api/llc/budget/{agent_id}/limit", json={"budget_limit": "5.00"})
+    assert resp.status_code == 200, resp.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role", ["owner", "admin"])
+async def test_update_limit_by_an_owner_or_admin_returns_200(
+    client_factory, session_factory, role: str  # noqa: ANN001
+) -> None:
+    company_id = str(uuid.uuid4())
+    agent_id = await _insert_agent(session_factory, company_id)
+    await _make_member(session_factory, company_id, role)
+    client = await client_factory(company_id)
+    assert (await client.post(f"/api/llc/budget/{agent_id}", json={})).status_code == 201
+
+    resp = await client.patch(f"/api/llc/budget/{agent_id}/limit", json={"budget_limit": "5.00"})
+    assert resp.status_code == 200, resp.text
+
+
 @pytest.mark.asyncio
 async def test_update_limit_own_company_returns_200(client_factory, session_factory) -> None:  # noqa: ANN001
     company_id = str(uuid.uuid4())
     agent_id = await _insert_agent(session_factory, company_id)
+    await _make_member(session_factory, company_id, "admin")
     owner_client = await client_factory(company_id)
     prov = await owner_client.post(f"/api/llc/budget/{agent_id}", json={})
     assert prov.status_code == 201, prov.text

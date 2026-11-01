@@ -40,6 +40,10 @@ _EXPORT_TTL_SECONDS = 7 * 24 * 3600  # 7 days
 # ---------------------------------------------------------------------------
 
 
+class ImportNeedsApprovalError(Exception):
+    """The template would add agents to an existing company that gates hires (#8214)."""
+
+
 class TemplateImportError(Exception):
     """Raised when import cannot proceed (schema, collision, rollback)."""
 
@@ -223,6 +227,7 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
         # and this has to be renderable in every shipped locale.
         dropped_links: List[Dict[str, str]] = []
 
+        await self._refuse_agents_into_gated_company(template, target_company_id)
         sp = await self.session.begin_nested()
         try:
             company_id = await self._resolve_or_create_company(template, target_company_id, remapping_options, warnings)
@@ -397,6 +402,30 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
     # Private helpers — entity creation
     # ------------------------------------------------------------------
 
+    async def _refuse_agents_into_gated_company(
+        self, template: Dict[str, Any], target_company_id: Optional[uuid.UUID]
+    ) -> None:
+        """An import into an EXISTING company that requires hire approval may not add agents (#8214).
+
+        Exempt on purpose: an import that creates its own company (no ``target_company_id``). That is the
+        admin bootstrapping a company, and the setting it carries comes from the template, so there is no
+        board yet to approve anything. Its default CEO is exempt for the same reason as in ``company_ceo``.
+        """
+        names = [a.get("name", "") for a in template.get("agents") or []]
+        if target_company_id is None or not names:
+            return
+        from llc.services.agent_hire_service import company_requires_hire_approval  # noqa: PLC0415
+
+        # An agent already in the company is skipped by the import, so it adds no hire.
+        existing = set(await self._agent_names_exist(names, target_company_id))
+        if existing.issuperset(names):
+            return
+        if await company_requires_hire_approval(self.session, target_company_id):
+            raise ImportNeedsApprovalError(
+                f"Company {target_company_id} requires board approval for hires; import without agents "
+                "or request each hire through the agent-hires route"
+            )
+
     async def _resolve_or_create_company(
         self,
         template: Dict[str, Any],
@@ -562,4 +591,4 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
             raise TemplateImportError(f"Unsupported schema_version {version!r}; expected '1.0'")
 
 
-__all__ = ["PortabilityService", "TemplateImportError", "_scrub_adapter_config"]
+__all__ = ["PortabilityService", "TemplateImportError", "ImportNeedsApprovalError", "_scrub_adapter_config"]
