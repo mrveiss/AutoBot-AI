@@ -107,4 +107,7 @@
   --color-primary-dark: var(--primary-h);
   --color-primary-bg: color-mix(in srgb, var(--primary) 10%, transparent);
   --color-primary-bg-hover: color-mix(in srgb, var(--primary) 15%, transparent);
+  /* Components read this, not --on-primary, and its default is white: the white
+     primary here would carry a white label. */
+  --text-on-primary: var(--on-primary);
 }

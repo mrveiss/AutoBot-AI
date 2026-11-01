@@ -73,6 +73,13 @@ describe('contrast-dark pairs (#18253)', () => {
     expect(ratio(p[fg], p[bg])).toBeGreaterThanOrEqual(min)
   })
 
+  it('the tokens components read resolve to the pinned pair, whatever the accent', () => {
+    const css = read('assets/css/themes/contrast-dark.css')
+    const owned = css.slice(css.indexOf('[data-theme="contrast-dark"][data-accent]'))
+    expect(owned).toMatch(/--color-primary:\s*var\(--primary\);/)
+    expect(owned).toMatch(/--text-on-primary:\s*var\(--on-primary\);/)
+  })
+
   it('is registered in the cascade: dark tokens, Refined map, import after dark.css', () => {
     expect(read('assets/css/themes/dark.css')).toMatch(/\[data-theme="dark"\],\s*\[data-theme="contrast-dark"\]\s*\{/)
     expect(read('assets/css/themes/refined-map.css')).toContain('[data-theme="contrast-dark"]')
