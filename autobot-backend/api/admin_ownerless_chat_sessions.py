@@ -58,6 +58,9 @@ async def propose_chat_session_owner(
     session: AsyncSession = Depends(get_db_session),
 ) -> OwnerlessChatSessionRequestResponse:
     """Propose an owner -- a request, not an execution. Refused unless the session is ownerless and the user exists."""
+    requester = current_user.get("id") or current_user.get("user_id")  # as the approve route reads the decider
+    if not requester:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "The proposal cannot be attributed to a verified user")
     ownerless, _ = await ownerless_report(get_chat_history_manager(request))
     if body.session_id not in ownerless:
         raise HTTPException(status.HTTP_409_CONFLICT, "That session is not in the ownerless report")
@@ -67,12 +70,11 @@ async def propose_chat_session_owner(
         title=f"Give chat session {body.session_id} to {body.owner}",
         approval_type=ApprovalType.DESTRUCTIVE_ACTION.value,
         description="This session has no owner. Approving lets the named user read everything in it (#20025).",
-        requested_by_agent=current_user.get("username"),
+        requested_by_agent=f"chat-session-owner:{requester}",
         context={
             "action": ACTION,
             "session_id": body.session_id,
             "owner": body.owner,
-            "requested_by_id": str(current_user.get("id") or current_user.get("user_id")),
         },
     )
     return OwnerlessChatSessionRequestResponse(approval_id=str(approval.id), status=approval.status, action=ACTION)

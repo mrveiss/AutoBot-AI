@@ -13,7 +13,7 @@ import pytest
 from services import approval_execution
 from services import chat_session_owner_action as action
 
-_ADMIN = uuid.uuid4()
+_ADMIN, _OTHER = uuid.uuid4(), uuid.uuid4()
 
 
 class _Manager:
@@ -33,25 +33,22 @@ class _Manager:
         return not self.fail
 
 
-def _session(user_exists: bool = True) -> MagicMock:
+def _session(user_exists: bool = True, admins: int = 2) -> MagicMock:
     session = MagicMock()
     session.commit = AsyncMock()
     found = MagicMock()
     found.scalars.return_value.first.return_value = uuid.uuid4() if user_exists else None
+    found.scalar_one.return_value = admins
     session.execute = AsyncMock(return_value=found)
     return session
 
 
-def _approval(decider=_ADMIN, requested_by=None, session_id="s1", owner="alice") -> SimpleNamespace:
+def _approval(decider=_OTHER, requested_by=_ADMIN, session_id="s1", owner="alice") -> SimpleNamespace:
     approval = SimpleNamespace(
         id=uuid.uuid4(),
         decided_by_user="owner",
-        context={
-            "action": action.ACTION,
-            "session_id": session_id,
-            "owner": owner,
-            "requested_by_id": str(requested_by),
-        },
+        requested_by_agent=f"chat-session-owner:{requested_by}",
+        context={"action": action.ACTION, "session_id": session_id, "owner": owner},
     )
     approval_execution.set_verified_decider(approval, decider)
     return approval
@@ -90,22 +87,30 @@ async def test_a_session_that_gained_an_owner_is_left_alone() -> None:
     assert audit.await_args.args[1:] == () and audit.await_args.kwargs["result"] == "skipped"
 
 
-async def test_a_self_approval_is_flagged() -> None:
-    session = _session()
-    _, audit = await _run(_Manager({"s1": None}), _approval(requested_by=_ADMIN), session)
+async def test_the_only_admin_may_self_approve_and_it_is_flagged() -> None:
+    session = _session(admins=1)
+    _, audit = await _run(_Manager({"s1": None}), _approval(decider=_ADMIN), session)
     assert "(self-approved)" in session.add.call_args.args[0].body
     assert audit.await_args.kwargs["details"]["self_approval"] is True
+
+
+async def test_a_self_approval_with_another_admin_writes_nothing() -> None:
+    manager = _Manager({"s1": None})
+    with pytest.raises(ValueError):
+        await _run(manager, _approval(decider=_ADMIN), _session(admins=2))
+    assert manager.written == []
 
 
 @pytest.mark.parametrize(
     "approval, user_exists",
     [
         (_approval(decider=None), True),
+        (_approval(requested_by="someone"), True),
         (_approval(owner=""), True),
         (_approval(session_id=""), True),
         (_approval(), False),
     ],
-    ids=["no-verified-decider", "no-owner", "no-session", "owner-not-a-user"],
+    ids=["no-verified-decider", "unknown-requester", "no-owner", "no-session", "owner-not-a-user"],
 )
 async def test_a_bad_approval_writes_nothing(approval, user_exists: bool) -> None:
     manager = _Manager({"s1": None})
