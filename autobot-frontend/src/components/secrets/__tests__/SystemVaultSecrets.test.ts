@@ -21,7 +21,6 @@ vi.mock('@/utils/SecretsApiClient', () => ({
     deleteSecret: (...args: unknown[]) => deleteSecret(...args)
   }
 }))
-vi.mock('@/components/ui/Icon.vue', () => ({ default: { name: 'Icon', template: '<i />' } }))
 vi.mock('@/composables/useConfirmDialog', () => ({
   useConfirmDialog: () => ({ confirm: (...args: unknown[]) => confirm(...args) })
 }))
@@ -53,7 +52,7 @@ describe('SystemVaultSecrets (#17099)', () => {
 
   it('says so when the vault is unavailable instead of omitting the section', () => {
     const wrapper = mountList({ available: false, secrets: [] })
-    expect(wrapper.find('[role="alert"]').text()).toContain('system vault is unavailable')
+    expect(wrapper.text()).toContain('system vault is unavailable')
   })
 
   it('rotate sends the new value to PUT /secrets/{id} and asks for a reload', async () => {

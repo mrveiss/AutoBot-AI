@@ -6,52 +6,44 @@
   rotate sends a new one to PUT /api/secrets/{id}, delete calls DELETE.
 -->
 <template>
-  <section v-if="vault" class="system-vault" data-testid="system-vault">
-    <h3 class="system-vault-title">{{ t('security.secretsManager.systemVault.title') }}</h3>
-    <p v-if="!vault.available" class="system-vault-unavailable" role="alert">
-      {{ t('security.secretsManager.systemVault.unavailable') }}
-    </p>
-    <p v-else-if="!vault.secrets.length" class="system-vault-empty">
-      {{ t('security.secretsManager.systemVault.empty') }}
-    </p>
-    <ul v-else class="system-vault-list">
-      <li v-for="secret in vault.secrets" :key="secret.id" class="system-vault-row">
-        <Icon name="key" />
-        <span class="system-vault-name">{{ secret.name }}</span>
-        <span class="system-vault-type">{{ secret.type }}</span>
+  <BaseCard v-if="vault" :title="t('security.secretsManager.systemVault.title')" data-testid="system-vault">
+    <BaseAlert v-if="!vault.available" variant="warning" :message="t('security.secretsManager.systemVault.unavailable')" />
+    <EmptyState v-else-if="!vault.secrets.length" :title="t('security.secretsManager.systemVault.empty')" />
+    <ul v-else>
+      <li v-for="secret in vault.secrets" :key="secret.id" class="flex items-center gap-3 py-2">
+        <span class="font-medium">{{ secret.name }}</span>
+        <BaseBadge :label="secret.type" />
         <template v-if="rotatingId === secret.id">
-          <input
+          <BaseInput
             v-model="newValue"
             type="password"
-            autocomplete="new-password"
-            class="system-vault-input"
-            :aria-label="t('security.secretsManager.systemVault.newValue')"
+            :placeholder="t('security.secretsManager.systemVault.newValue')"
           />
-          <button type="button" class="system-vault-btn" :disabled="!newValue || busy" data-testid="rotate-save" @click="rotate(secret)">
+          <BaseButton size="sm" :disabled="!newValue || busy" data-testid="rotate-save" @click="rotate(secret)">
             {{ t('security.secretsManager.systemVault.save') }}
-          </button>
-          <button type="button" class="system-vault-btn" @click="cancelRotate">
+          </BaseButton>
+          <BaseButton size="sm" variant="ghost" @click="cancelRotate">
             {{ t('security.secretsManager.systemVault.cancel') }}
-          </button>
+          </BaseButton>
         </template>
         <template v-else>
-          <button type="button" class="system-vault-btn" data-testid="rotate-start" @click="startRotate(secret.id)">
+          <BaseButton size="sm" variant="outline" data-testid="rotate-start" @click="startRotate(secret.id)">
             {{ t('security.secretsManager.systemVault.rotate') }}
-          </button>
-          <button type="button" class="system-vault-btn system-vault-danger" data-testid="delete" @click="remove(secret)">
+          </BaseButton>
+          <BaseButton size="sm" variant="error" data-testid="delete" @click="remove(secret)">
             {{ t('security.secretsManager.systemVault.delete') }}
-          </button>
+          </BaseButton>
         </template>
       </li>
     </ul>
-    <p v-if="failed" class="system-vault-unavailable" role="alert">{{ t('security.secretsManager.systemVault.failed') }}</p>
-  </section>
+    <BaseAlert v-if="failed" variant="error" :message="t('security.secretsManager.systemVault.failed')" />
+  </BaseCard>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import Icon from '@/components/ui/Icon.vue'
+import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseInput, EmptyState } from '@autobot/ui'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { secretsApiClient } from '@/utils/SecretsApiClient'
 import { createLogger } from '@/utils/debugUtils'
@@ -112,57 +104,3 @@ async function remove(secret: SystemVaultEntry) {
   if (ok) await run(() => secretsApiClient.deleteSecret(secret.id))
 }
 </script>
-
-<style scoped>
-.system-vault {
-  margin: var(--spacing-4) 0;
-  padding: var(--spacing-4);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-}
-.system-vault-title {
-  margin: 0 0 var(--spacing-2);
-  font-size: var(--text-lg);
-  color: var(--text-primary);
-}
-.system-vault-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.system-vault-row {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-3);
-  padding: var(--spacing-2) 0;
-}
-.system-vault-name {
-  font-weight: var(--font-medium);
-  color: var(--text-primary);
-}
-.system-vault-type,
-.system-vault-empty {
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-}
-.system-vault-unavailable {
-  color: var(--color-warning);
-  font-size: var(--text-sm);
-}
-.system-vault-input {
-  padding: var(--spacing-1) var(--spacing-2);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-}
-.system-vault-btn {
-  padding: var(--spacing-1) var(--spacing-3);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--text-primary);
-  cursor: pointer;
-}
-.system-vault-danger {
-  color: var(--color-error);
-}
-</style>
