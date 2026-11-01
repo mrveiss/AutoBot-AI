@@ -87,8 +87,8 @@
             @click="selectEntry(entry)"
           >
             <td class="col-timestamp">
-              <span class="timestamp-full mono-timestamp">{{ formatTimestamp(entry.timestamp) }}</span>
-              <span class="timestamp-relative">{{ formatRelativeTime(entry.timestamp) }}</span>
+              <span class="timestamp-full mono-timestamp">{{ formatDateTime(auditTimestampToDate(entry.timestamp)) }}</span>
+              <span class="timestamp-relative">{{ formatTimeAgo(auditTimestampToDate(entry.timestamp)) }}</span>
             </td>
             <td class="col-operation">
               <span class="operation-name">{{ formatOperationName(entry.operation) }}</span>
@@ -171,7 +171,7 @@
             </div>
             <div class="detail-item">
               <label>{{ $t('audit.logTable.timestamp') }}</label>
-              <span>{{ formatTimestamp(selectedEntry.timestamp) }}</span>
+              <span>{{ formatDateTime(auditTimestampToDate(selectedEntry.timestamp)) }}</span>
             </div>
             <div class="detail-item">
               <label>{{ $t('audit.logTable.operation') }}</label>
@@ -283,11 +283,6 @@ const hasDetails = computed(() => {
   if (!selectedEntry.value?.details) return false
   return Object.keys(selectedEntry.value.details).length > 0
 })
-
-// `timestamp` is epoch seconds; `new Date(seconds)` would read it as milliseconds (#20176)
-const formatTimestamp = (seconds: number) => formatDateTime(auditTimestampToDate(seconds))
-
-const formatRelativeTime = (seconds: number) => formatTimeAgo(auditTimestampToDate(seconds))
 
 function formatOperationName(operation: string): string {
   return operation
