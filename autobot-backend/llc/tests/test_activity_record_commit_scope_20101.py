@@ -251,6 +251,28 @@ async def test_a_rolled_back_savepoint_publishes_nothing_for_its_row(session, de
     assert delivered.await_args.args[1]["id"] == str(kept.id)
 
 
+async def _record_in_released_savepoint(session) -> None:  # noqa: ANN001
+    async with session.begin_nested():
+        await LLCActivityLogService().record(session, actor_type=ActorType.SYSTEM, actor_id=None, **_entry())
+    await _drain_publishes()
+
+
+async def test_a_released_savepoint_then_an_outer_rollback_publishes_nothing(session, delivered):  # noqa: ANN001
+    await _record_in_released_savepoint(session)
+    delivered.assert_not_awaited()  # releasing a savepoint is not the commit
+    await session.rollback()
+    await session.commit()  # the same session again: nothing undone may linger for this commit
+    await _drain_publishes()
+    delivered.assert_not_awaited()
+
+
+async def test_a_released_savepoint_then_an_outer_commit_publishes_once(session, delivered):  # noqa: ANN001
+    await _record_in_released_savepoint(session)
+    await session.commit()
+    await _drain_publishes()
+    delivered.assert_awaited_once()
+
+
 async def test_a_session_with_no_commit_to_follow_publishes_at_once(delivered):  # noqa: ANN001
     fake = FakeAsyncSession(assign_ids=uuid.uuid4)
     await LLCActivityLogService().record(fake, actor_type=ActorType.SYSTEM, actor_id=None, **_entry())

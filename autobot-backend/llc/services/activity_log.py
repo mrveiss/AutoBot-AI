@@ -45,7 +45,12 @@ def _spawn_publish(service: "LLCActivityLogService", company_id: str, payload: d
 
 
 def _send_committed_activity(sync_session: Session) -> None:
-    """``after_commit``: publish each row that is now durable; a row since expunged is skipped."""
+    """``after_commit``: publish each row that is now durable; a row since expunged is skipped.
+
+    This event also fires when a SAVEPOINT is released, and that row can still be rolled back.
+    """
+    if sync_session.in_nested_transaction():
+        return
     for service, company_id, entry, payload in sync_session.info.pop(_ACTIVITY_PENDING_KEY, []):
         if sa_inspect(entry).persistent:
             _spawn_publish(service, company_id, payload)
