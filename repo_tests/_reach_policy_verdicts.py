@@ -278,6 +278,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test source is a subset of tracked .py under two detector packages; the test-file share drifts.",
     ),
+    "docker-smoke-context-publishers": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Top-level .yml under .github/workflows, against all tracked workflow files; reusable-body share drifts.",
+    ),
     "cache-never-in-repo": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

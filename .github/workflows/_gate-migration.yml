@@ -1,0 +1,162 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# Migration Gate (#10001 / #10026 / #10002)
+# Runs the backend Alembic migration matrix against a disposable Postgres 16:
+#   (a) empty DB            -> upgrade head
+#   (b) stamped-intermediate -> upgrade head
+#   (c) schema-without-stamp -> baseline adoption -> upgrade head
+#   (d) head -> downgrade -1 -> upgrade head
+# plus the baseline state machine (refusals incl.), the probe-ladder
+# self-checks, the schema-authority sweep (no runtime create_all), and the
+# Ansible migration-invocation contract.
+#
+# None of the five #9759 failure classes was CI-detectable before this gate.
+#
+# #18208: this file is the reusable BODY of one gate. ci.yml calls it; the triggers, the
+# `changes` job, the concurrency group and any required-context job that used to live here
+# are in ci.yml now. Nothing in this file may publish a required context: a job in a called
+# workflow reports as `<caller job> / <job>`, which is not the name branch protection matches.
+
+name: Migration Gate (reusable body)
+
+on:
+  workflow_call:
+    outputs:
+      ok:
+        description: "'true' only when every step of the migration matrix passed"
+        value: ${{ jobs.migration-tests.outputs.ok }}
+
+permissions:
+  contents: read
+  packages: read  # pull the ghcr CI image mirror (#18160)
+
+jobs:
+  migration-tests:
+    name: Migration Matrix Tests
+    outputs:
+      ok: ${{ steps.done.outputs.ok }}
+    # Run the full matrix whenever a migration-relevant path changed. Using
+    # `!= 'false'` (rather than `== 'true'`) is fail-safe: any unexpected/empty
+    # filter output still runs the gate instead of silently skipping it. On PRs
+    # that touch no migration paths this job is skipped, and the
+    # `migration-matrix` job below turns that into an explicit verdict.
+    #
+    # #17490: the scheduled and manual runs ignore the filter entirely. Their
+    # whole purpose is to catch a break no diff caused, so gating them on "did
+    # a path change" would reproduce the blind spot they exist to close --
+    # a scheduled run has no diff to filter on.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        # Mirror of the upstream image (ci-image-mirror.yml, #18160): anonymous
+        # pulls hit the per-IP quota. The ghcr packages must be public or grant
+        # this repo read access so fork PRs can pull them.
+        image: ghcr.io/mrveiss/ci-postgres:16
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          POSTGRES_USER: migtest
+          POSTGRES_PASSWORD: migtest
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U migtest"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python 3.12
+        uses: ./.github/actions/setup-python-ci
+        with:
+          cache-dependency-path: .github/workflows/migration-gate.yml
+
+      - name: Install migration-test dependencies
+        # Deliberately minimal — exactly what migrations/env.py and the
+        # baseline entrypoint import. Keeping this lean keeps the gate fast
+        # and proves migrations don't silently grow heavyweight deps.
+        # structlog is required because test_unified_secrets_api.py mounts the
+        # full FastAPI router which transitively imports security.service_auth
+        # (structlog-based structured logging for HMAC service-auth).
+        # test_secrets_coordinator.py's #17099 test imports api.secrets, which used to
+        # drag in several eager package __init__ files, each pulling a third-party
+        # import that has nothing to do with migrations. #17138 fixed two of the four
+        # found (verified empirically, not just by re-reading the fix): connectors'
+        # __init__ no longer imports every connector at package-import time
+        # (gdrive.py -> aiohttp, #16444; nextcloud.py -> defusedxml, #17134 -- both
+        # now lazy, resolved on first real use by registry.ConnectorRegistry), and
+        # plugin_sdk/loader.py no longer binds jsonschema.Draft202012Validator at
+        # module level (reached via middleware/__init__ -> plugin_sdk/__init__ ->
+        # loader.py) -- so defusedxml and jsonschema are gone from this list.
+        #
+        # aiohttp and prometheus_client stay: #17138's own fix does not reach them.
+        # Confirmed by import-blocking the four names one at a time against a fresh
+        # `from api.secrets import _create_system_vault_secret` after the #17138 fix
+        # landed, rather than trusting the walk below to still be complete:
+        #   - aiohttp: api.secrets -> autobot_memory_graph -> autobot_memory_graph.
+        #     queries -> autobot_shared.security (eager __init__) -> ssrf_guard.py.
+        #     A DIFFERENT eager package __init__ than connectors', not touched here.
+        #   - prometheus_client: api.secrets -> auth_middleware -> security_layer ->
+        #     autobot_shared.monitoring (eager __init__) -> prometheus_metrics.py.
+        #     A third, also-untouched eager package __init__.
+        # Both are the same general pattern #17138's own issue named but did not
+        # scope to fix (autobot_shared.security and autobot_shared.monitoring have
+        # far wider callers than connectors/plugin_sdk) -- tracked as a follow-up
+        # rather than silently left for the next red run to rediscover.
+        #
+        # starlette is the only other name a static import-graph walk of
+        # api/secrets.py reports, and pip already installs it with fastapi.
+        #
+        # #18133: that walk was NOT complete -- it missed cachetools, reached by
+        # api.secrets -> autobot_memory_graph (eager __init__) -> core.py's
+        # `from cachetools import LRUCache`. A fourth eager package __init__, the same
+        # pattern the three above describe. The gate failed on every PR with
+        # ModuleNotFoundError while `migration-tests` is not itself a required context --
+        # but it feeds `migration-matrix`, which IS, so the red propagated and blocked
+        # merges anyway. Added by name, as this hand-picked list intends.
+        run: |
+          python -m pip install --upgrade pip
+          # -c pins these to the versions requirements-ci/storage.txt already
+          # declares (#17490). Without it these are lower bounds, so pip took
+          # sqlalchemy 2.1.0 over the declared ==2.0.54 and this gate ran on a
+          # version no other job uses. The names stay listed here because this
+          # job installs a hand-picked subset, not the whole file.
+          # croniter: services/trigger_service.py imports it at module level since #18469, and the
+          # migration tests import that module through api.schemas_workflows; without it the
+          # backend conftest stubs the module and TriggerType becomes a MagicMock. Version: constraints.
+          python -m pip install -c requirements-ci/storage.txt -c constraints/shared.txt \
+            "alembic>=1.13" "sqlalchemy[asyncio]>=2.0" asyncpg aiosqlite croniter \
+            pydantic pydantic-settings "email-validator>=2.3.0" \
+            bcrypt pyjwt redis httpx aiofiles python-dotenv pyyaml \
+            cryptography fastapi structlog aiohttp prometheus_client cachetools \
+            pytest pytest-asyncio
+
+      - name: Run migration matrix
+        env:
+          AUTOBOT_MIGRATION_TEST_ADMIN_URL: postgresql+asyncpg://migtest:migtest@127.0.0.1:5432/postgres
+          AUTOBOT_MIGRATION_TEST_REQUIRE_DB: "1"  # #20080: a missing URL fails, never skips
+        run: |
+          python -m pytest autobot-backend/tests/migrations/ \
+            -m migration_gate -v --tb=short -p no:cacheprovider
+
+      - name: Run static gates (no database)
+        run: |
+          python -m pytest \
+            autobot-backend/tests/migrations/test_probe_ladder_selfcheck.py \
+            autobot-backend/tests/migrations/test_schema_authority.py \
+            autobot-backend/tests/migrations/test_ansible_migration_contract.py \
+            -v --tb=short -p no:cacheprovider
+
+      # Positive evidence for the `migration-matrix` gate in ci.yml (#18208): this step is
+      # reached only when every step above it succeeded, so the output below is
+      # 'true' on a full pass and empty on a failure, a cancel or a timeout.
+      - name: Record that every step passed
+        id: done
+        shell: bash
+        run: echo "ok=true" >> "$GITHUB_OUTPUT"

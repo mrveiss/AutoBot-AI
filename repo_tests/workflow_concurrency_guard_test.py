@@ -36,29 +36,12 @@ yaml = pytest.importorskip("yaml", reason="PyYAML needed to parse the workflows"
 REPO_ROOT = repo_root()
 WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 
-# The required-context shims publish a context branch protection demands, from a
-# job that is SKIPPED by its own `if:` whenever the real suite runs instead. Put
-# them in a concurrency group and a superseded run takes the shim down with it -
-# the context is then never reported at all, and the pull request blocks forever
-# on "Expected - Waiting for status". Both files say so inline (#13405, #14353).
-DELIBERATELY_EXEMPT = {
-    "frontend-required-context.yml": (
-        "publishes the required 'Unit & Integration Tests' context; cancelling a "
-        "superseded run would leave it unreported and deadlock the pull request"
-    ),
-    "python-required-context.yml": ("publishes the required 'python-suite' context; same deadlock (#14353)"),
-    # Landed by #15300 with the rationale spelled out inline and the exemption
-    # never added here, so the guard failed on every pull request until #15302.
-    "docker-smoke-required-context.yml": (
-        "publishes the required 'docker-smoke-required-context' context; same deadlock (#15300)"
-    ),
-    "backend-required-context.yml": (
-        "publishes the required 'startup-import-smoke' context; same deadlock (#15606)"
-    ),
-    "code-quality-required-context.yml": (
-        "publishes the required 'code-quality' context; same deadlock (#15608)"
-    ),
-}
+# Empty since #18208 deleted the five required-context shims. They were exempt because a shim
+# is SKIPPED by its own `if:` whenever the real suite runs instead, so a superseded run that
+# took the shim down with it left the context unreported and the pull request blocked (#13405,
+# #14353). There is no shim now: every required context is published by an `if: always()`
+# gate in ci.yml, which sits in ci.yml's own concurrency group like any other job.
+DELIBERATELY_EXEMPT: dict[str, str] = {}
 
 
 def _triggers(doc: dict) -> dict:
@@ -179,3 +162,22 @@ def test_base_branch_cancellation_does_not_spread():
         "cancels the previous merge's verification (#13432). Guard cancel-in-progress "
         "on github.event_name == 'pull_request'."
     )
+
+
+def test_reusable_gate_bodies_declare_no_workflow_level_concurrency():
+    """#18208 / #18558: ci.yml's group is the ONE concurrency block.
+
+    A `_gate-*.yml` body is called from ci.yml. A workflow-level `concurrency:` inside it keyed on
+    `github.workflow` / `github.ref` resolves to the CALLER's values -- the same group as ci.yml's --
+    and a run waiting on its own caller's group never starts. Seven workflows used to carry a
+    byte-similar block; bodies must not bring one back.
+    """
+    bodies = sorted(WORKFLOW_DIR.glob("_gate-*.yml"))
+    assert len(bodies) >= 10, f"only {len(bodies)} reusable bodies found: the scan is not bound to them"
+    offenders = [p.name for p in bodies if "concurrency" in (yaml.safe_load(p.read_text(encoding="utf-8")) or {})]
+    assert not offenders, f"{offenders} declare a workflow-level concurrency group; ci.yml owns it"
+
+
+def test_the_concurrency_block_exists_once_in_ci():
+    doc = yaml.safe_load((WORKFLOW_DIR / "ci.yml").read_text(encoding="utf-8"))
+    assert doc["concurrency"]["cancel-in-progress"] == "${{ github.event_name == 'pull_request' }}"

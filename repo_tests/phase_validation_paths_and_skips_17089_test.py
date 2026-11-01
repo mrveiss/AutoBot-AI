@@ -51,6 +51,9 @@ _MIN_CRITERIA_PATHS = 30
 _MIN_LAMBDA_PATHS = 12
 
 
+_FRONTEND_GATE = ".github/workflows/_gate-frontend-test.yml"
+
+
 def _tree(source: str | None = None) -> ast.Module:
     """The system module's AST, or a fixture's.
 
@@ -426,32 +429,28 @@ class TestAPhaseVerifiedElsewhereReportsNoScore:
             assert (repo_root() / gate).exists(), f"{self._UI_PHASE} names a workflow that does not exist: {gate}"
 
     def test_a_deferring_phase_reports_neither_percentage(self) -> None:
-        report = (
-            _policy()
-            .PhaseScore(ran=2, passed=2, skipped=("endpoints",), defers_to=(".github/workflows/frontend-test.yml",))
-            .as_report()
-        )
+        report = _policy().PhaseScore(ran=2, passed=2, skipped=("endpoints",), defers_to=(_FRONTEND_GATE,)).as_report()
 
         assert not [
             key for key in report if "percentage" in key
         ], f"a deferring phase must publish no figure of its own; got {sorted(report)}"
         assert report["status"] == "deferred-to-dedicated-gates"
         assert report["complete"] is False
-        assert report["authoritative_gates"] == [".github/workflows/frontend-test.yml"]
+        assert report["authoritative_gates"] == [_FRONTEND_GATE]
         assert "frontend-test" in report["why_no_score"]
 
     def test_a_deferring_phase_contributes_nothing_to_the_aggregate(self) -> None:
         # Otherwise its number still reaches the CI gate through the average,
         # and "reports no score" would be true of the phase and false of the run.
         policy = _policy()
-        deferring = policy.PhaseScore(ran=2, passed=2, defers_to=(".github/workflows/frontend-test.yml",))
+        deferring = policy.PhaseScore(ran=2, passed=2, defers_to=(_FRONTEND_GATE,))
         scored = policy.PhaseScore(ran=4, passed=2)
 
         aggregate = policy.overall([(deferring, 100.0), (scored, 100.0)])
 
         assert aggregate["structural_presence"] == 50.0, "the scored phase alone, not averaged with a 100"
         assert aggregate["phases_excluded_from_score"] == 1
-        assert aggregate["verified_by_dedicated_gates"] == [".github/workflows/frontend-test.yml"]
+        assert aggregate["verified_by_dedicated_gates"] == [_FRONTEND_GATE]
 
     def test_a_non_deferring_phase_still_contributes(self) -> None:
         # The control: without it, an `overall` that excluded everything would

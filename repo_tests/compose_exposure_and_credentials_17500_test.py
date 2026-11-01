@@ -300,7 +300,7 @@ def test_when_docker_cannot_be_asked_no_db_password_is_generated(tmp_path: Path)
     assert "AUTOBOT_DB_PASSWORD" not in (tmp_path / "stack" / "docker" / ".env.secrets").read_text(encoding="utf-8")
 
 
-_SMOKE_WORKFLOWS = (".github/workflows/docker-smoke-test.yml", ".github/workflows/co-located-smoke.yml")
+_SMOKE_WORKFLOWS = (".github/workflows/_gate-docker-smoke.yml", ".github/workflows/co-located-smoke.yml")
 
 
 def smoke_exported_credentials(workflow_text: str) -> set[str]:

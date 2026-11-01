@@ -1,63 +1,51 @@
 # AutoBot CI/CD Pipeline
+#
+# THE pull-request workflow (#18208, delivering #15360's "8 -> 1"). Change detection runs
+# ONCE here, in the `changes` job; every gate below reads its answer. Before #18208 about
+# twenty workflows each booted a runner to run the same dorny/paths-filter against the
+# same diff (13 rows on a docs-only pull request, 17 on a train), and a required context
+# was published by a real job plus a "shim" job of the same name in a second workflow.
+#
+# SHAPE
+#   changes   one job, one dorny step per filter file in .github/filters/. Its outputs are
+#             `run_<gate>` booleans, each defined once. The workflow files themselves count
+#             as an input: `self` (gate-paths.yml) forces every gate.
+#   work      the bodies. python-suite's shards live in this file; every other body is a
+#             reusable `_gate-<x>.yml` called from a `run-<x>` job. Work jobs may be
+#             skipped; their names never equal a required context.
+#   gates     one top-level `if: always()` job per required context, named exactly as
+#             branch protection names it. A gate is never `skipped`: it passes "not
+#             affected", passes on a verified run, and fails on a draft, a failed or
+#             cancelled run, or a failed detection (.github/actions/gate-verdict).
+#
+# WHY GATES ARE TOP-LEVEL. A required status context is matched by check-run NAME. A job
+# in a called workflow reports as `<caller job> / <job>`, so a required context must never
+# be published from inside a `_gate-*.yml`. repo_tests/required_context_complements_test.py
+# enforces that, and that each gate is `if: always()`.
+#
+# NOT HERE, ON PURPOSE. `No commit trailers` and `No open blocks-merge issues reference
+# this PR` stay their own workflows: the second listens to `edited`, and folding it in would
+# rerun full CI on every pull-request body edit. Scheduled and manual runs of the bodies
+# are the thin `scheduled-*.yml` callers.
 
 name: AutoBot CI/CD Pipeline
 
 on:
   push:
-    branches: [ release, main ]
+    branches: [ release, main, develop, dev ]
   merge_group:
-    # #14353: every one of the ten required contexts already carries this. The
-    # two workflows that publish `python-suite` -- this one and
-    # python-required-context.yml -- were the only ones without it, so the
-    # context could never report inside a merge queue. A required context that
-    # never reports blocks forever, which is why the queue (#15937 / #14054)
-    # could not be enabled while this was missing.
+    # #14054: every required context reports inside a merge queue. Inert until the
+    # `merge_queue` ruleset rule is enabled -- this event does not exist before then.
   pull_request:
-    # ready_for_review is REQUIRED here: the jobs below are gated on
-    # draft == false, and marking a PR ready fires ONLY this event. Without
-    # it a required context stays `skipped` and the PR can never merge.
+    # ready_for_review is REQUIRED here: marking a PR ready fires ONLY this event, and the
+    # gates fail ("draft: mark ready for review") on a draft until it does.
     types: [opened, synchronize, reopened, ready_for_review]
-    # #14747: NO `branches:` FILTER, DELIBERATE. It used to read
-    # `[ release, main ]`, which excluded STACKED pull requests -- one whose
-    # base is another feature branch. Those never triggered this workflow, so
-    # `python-suite` never ran and the Python tests for that change never
-    # executed, while the PR still showed a set of green checks from the
-    # workflows that did run. Measured on PR #14641: zero CI/CD runs.
+    # NO `branches:` FILTER (#14747): a STACKED pull request -- base is another feature
+    # branch -- must start the run, or no required context ever reports on it.
     #
-    # The complement shim has no `branches:` filter, so on a stacked PR WITH
-    # Python changes it correctly skips -- and with this workflow not triggering
-    # either, the context went unreported. Harmless while `python-suite` is not
-    # required; a permanent hard block the moment it is.
-    #
-    # main is the integration branch every PR targets; without a trigger
-    # here the backend suite below only ran post-merge on push, so backend
-    # regressions were only discovered once already on the shared branch
-    # (#10691).
-    #
-    # NO `pull_request.paths` FILTER — REMOVED BY #14353, DELIBERATE.
-    #
-    # #13388 added one, and its safety argument was explicit: "SAFE because this
-    # workflow publishes NO required status context ... Any workflow here that
-    # DOES publish one of the ten deliberately has no `pull_request.paths`
-    # filter." That premise is exactly what this change retires — `python-suite`
-    # is produced by this workflow and is being promoted to a required context,
-    # so #13388's own rule now mandates removing the filter.
-    #
-    # The failure it prevents is a deadlock, not a missed test. The filter and
-    # `.github/filters/python-paths.yml` were not identical: a pull request
-    # touching only the filter file or the shim workflow matched the filter but
-    # not this trigger, so ci.yml never started, while the shim read the filter,
-    # computed `python == 'true'` and skipped. NEITHER workflow reported
-    # `python-suite` and the pull request waited forever on a context nobody
-    # could produce.
-    #
-    # Keeping the two lists as a maintained superset was the alternative and is
-    # the weaker option: it re-arms the same trap on every future edit to the
-    # path set. `frontend-test.yml` and `code-quality.yml` both already dropped
-    # their pull_request.paths for this precise reason, and both say so inline.
-    #
-    # Cost is one `changes` job on pull requests that touch no gated path; every
-    # job doing real work stays gated on `changes` below and self-skips.
+    # NO `paths:` FILTER, DELIBERATE (#13388, #14353): a path-filtered workflow that
+    # publishes a required context deadlocks every pull request that misses the filter.
+    # Which gates have work is decided by `changes` below, never by the event filter.
 
 concurrency:
   # #19283 review: a push keys on its own commit, so no later merge can cancel it. With one
@@ -68,23 +56,17 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}
   # #13432: cancel superseded PR runs, but let a push to a base branch finish.
   #
-  # On a pull request a new push makes the previous run obsolete, so cancelling
-  # is right. On a push to main it meant each merge cancelled the previous
-  # merge's verification, and merges arrive faster than the suite completes: of
-  # the last 39 completed base runs, 26 were cancelled and NONE succeeded. The
-  # base branch was effectively never verified, and measuring the #13162 backlog
-  # repeatedly meant hunting for a run that happened to survive.
+  # On a pull request a new push makes the previous run obsolete, so cancelling is right.
+  # On a push to main it meant each merge cancelled the previous merge's verification, and
+  # merges arrive faster than the suite completes: of the last 39 completed base runs, 26
+  # were cancelled and NONE succeeded.
   #
   # Base pushes no longer serialise in one group (#19283 review, above): each runs in its
   # own, so every merge gets a verdict. That is bounded by the merge rate -- trains land a
   # few times an hour -- not by PR traffic, which keeps the per-ref, cancel-superseded group.
   #
-  # Cost is bounded to GitHub-hosted capacity: every job in THIS workflow is
-  # ubuntu-latest (the eight python-suite shards included, see the note above
-  # the python-shard job). It adds nothing to the [self-hosted, Linux, X64]
-  # singleton, which other workflows depend on.
+  # #18558: this is the ONE concurrency block. Seven workflows used to carry a copy of it.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
 
 permissions:
   contents: read
@@ -92,39 +74,143 @@ permissions:
 
 jobs:
   changes:
-    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and
-    # every `always()` aggregate below reads `needs.changes.result`.
-    # Gating it makes those read `skipped` and exit 1, so a REQUIRED
+    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and every gate reads
+    # `needs.changes.result`. Gating it makes those read `skipped` and fail, so a REQUIRED
     # context would report FAILED on every draft -- worse than no gate.
-    # Gate the expensive jobs, never the cheap thing others read.
     name: Detect changed paths
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
-      python: ${{ steps.filter-python.outputs.python }}
-      frontend: ${{ steps.filter.outputs.frontend }}
+      # ready: the run is not a draft pull request. Work behind a required gate is held back
+      # until then; the gate itself fails with the reason (D4, #18208).
+      ready: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+      # D8: python-suite on merge_group is parity -- it runs only when Python changed.
+      run_python_suite: ${{ steps.gp.outputs.self == 'true' || steps.suite.outputs.python == 'true' }}
+      run_frontend_tests: ${{ steps.gp.outputs.self == 'true' || steps.fe.outputs.frontend == 'true' }}
+      run_code_quality: ${{ github.event_name == 'merge_group' || steps.gp.outputs.self == 'true' || steps.cq.outputs.backend == 'true' }}
+      run_startup_smoke: ${{ github.event_name == 'merge_group' || steps.gp.outputs.self == 'true' || steps.bp.outputs.startup_smoke == 'true' }}
+      run_unit_tests: ${{ github.event_name == 'merge_group' || steps.gp.outputs.self == 'true' || steps.fe.outputs.frontend == 'true' }}
+      # A push to main builds the images unconditionally (as docker-smoke-test.yml did); a
+      # pull request builds them only when an image input changed.
+      run_docker_smoke: >-
+        ${{ github.event_name == 'merge_group'
+            || (github.event_name == 'push' && github.ref_name == 'main')
+            || steps.gp.outputs.self == 'true'
+            || steps.dk.outputs.docker == 'true' }}
+      run_api_wiring: ${{ github.event_name == 'merge_group' || steps.gp.outputs.self == 'true' || steps.bp.outputs.wiring == 'true' }}
+      # `!= 'false'`, not `== 'true'`: an empty output still RUNS the check (#13862).
+      run_migrations: ${{ steps.gp.outputs.self == 'true' || steps.gp.outputs.migrations != 'false' }}
+      run_types: ${{ steps.gp.outputs.self == 'true' || steps.gp.outputs.types != 'false' }}
+      run_slm_types: ${{ steps.gp.outputs.self == 'true' || steps.gp.outputs.slm_types != 'false' }}
+      # verify-precommit-config is never filtered; only its repo-wide sweep is scoped.
+      run_precommit_sweep: ${{ steps.docs.outputs.precommit_sweep == 'true' }}
+      run_security: >-
+        ${{ (github.event_name == 'push' && contains(fromJSON('["release","dev","main"]'), github.ref_name))
+            || (github.event_name == 'pull_request'
+                && (steps.gp.outputs.self == 'true' || steps.gp.outputs.security_scope == 'true')) }}
+      run_deps_scan: ${{ steps.gp.outputs.self == 'true' || steps.bp.outputs.deps == 'true' }}
+      run_static_analysis: ${{ steps.gp.outputs.self == 'true' || steps.bp.outputs.static_analysis == 'true' }}
+      codeql_languages: ${{ steps.langs.outputs.languages }}
+      run_ai_review: ${{ github.event_name == 'pull_request' && (steps.gp.outputs.self == 'true' || steps.bp.outputs.reviewable == 'true') }}
+      run_npm: >-
+        ${{ steps.gp.outputs.self == 'true' || steps.gp.outputs.npm_browser_worker == 'true'
+            || steps.gp.outputs.npm_mcp == 'true' || steps.gp.outputs.npm_sdk_ts == 'true'
+            || steps.gp.outputs.npm_structured_thinking == 'true' }}
+      npm_browser_worker: ${{ steps.gp.outputs.self == 'true' || steps.gp.outputs.npm_browser_worker == 'true' }}
+      npm_mcp: ${{ steps.gp.outputs.self == 'true' || steps.gp.outputs.npm_mcp == 'true' }}
+      npm_sdk_ts: ${{ steps.gp.outputs.self == 'true' || steps.gp.outputs.npm_sdk_ts == 'true' }}
+      npm_structured_thinking: ${{ steps.gp.outputs.self == 'true' || steps.gp.outputs.npm_structured_thinking == 'true' }}
+      run_slm_frontend: ${{ steps.gp.outputs.self == 'true' || steps.gp.outputs.slm_frontend == 'true' }}
     steps:
       - uses: actions/checkout@v7
-      # #14353: the Python set moved to a shared file so the shim in
-      # python-required-context.yml evaluates the identical patterns. The two
-      # `if:` conditions are exact complements; a second inline copy here could
-      # drift, and the direction that matters is silent — the shim reporting the
-      # required context green while the real suite never ran.
+
+      # One dorny step per filter file, each with a distinct id. `base` is the merge group's
+      # base on EVERY step: dorny/paths-filter errors on a merge_group event unless it is
+      # given, and a failed `changes` job fails every gate closed (#14054). It is empty on
+      # push/PR, so their behaviour is unchanged. This subsumes #18191 (the old ci.yml
+      # steps never set it).
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
-        id: filter-python
+        id: gp
         with:
+          base: ${{ github.event.merge_group.base_sha || '' }}
+          filters: .github/filters/gate-paths.yml
+
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
+        id: suite
+        with:
+          base: ${{ github.event.merge_group.base_sha || '' }}
           filters: .github/filters/python-paths.yml
+
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
-        id: filter
+        id: cq
         with:
-          filters: |
-            frontend:
-              - 'autobot-frontend/**'
-              - '.github/workflows/ci.yml'
-              # #15002/#16260: the redactor drift guard reads the terminal
-              # plugin's copy, so a plugin-only edit must still run the
-              # frontend-tests job below. Dropped from #15002 because this
-              # file could not be staged through the hardcoded-values hook.
-              - 'autobot-plugins/terminal/**'
+          base: ${{ github.event.merge_group.base_sha || '' }}
+          filters: .github/filters/code-quality-paths.yml
+
+      # #12986: the canonical backend-Python set and every filter composed from it.
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
+        id: bp
+        with:
+          base: ${{ github.event.merge_group.base_sha || '' }}
+          filters: .github/filters/backend-python-paths.yml
+
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
+        id: fe
+        with:
+          base: ${{ github.event.merge_group.base_sha || '' }}
+          filters: .github/filters/frontend-paths.yml
+
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
+        id: dk
+        with:
+          base: ${{ github.event.merge_group.base_sha || '' }}
+          filters: .github/filters/docker-paths.yml
+
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
+        id: docs
+        with:
+          base: ${{ github.event.merge_group.base_sha || '' }}
+          filters: .github/filters/docs-only-paths.yml
+
+      # The languages CodeQL analyses. A pull request analyses the languages whose filter
+      # matched (all three when ci.yml itself changed); a push to release/main analyses all
+      # three, unfiltered, because a pull request's results are compared with the analysis of
+      # its base branch and a base scan must never be skipped by a path filter. Any other
+      # event analyses nothing. A step that yields no answer falls through to ALL three on a
+      # pull request, never to none.
+      - name: Select the CodeQL languages
+        id: langs
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          SELF: ${{ steps.gp.outputs.self }}
+          PY: ${{ steps.gp.outputs.codeql_python }}
+          JS: ${{ steps.gp.outputs.codeql_javascript_typescript }}
+          ACTIONS: ${{ steps.gp.outputs.codeql_actions }}
+        run: |
+          set -euo pipefail
+          all='["python","javascript-typescript","actions"]'
+          case "${EVENT}" in
+            push)
+              if [ "${REF_NAME}" = "release" ] || [ "${REF_NAME}" = "main" ]; then langs="${all}"; else langs='[]'; fi
+              ;;
+            pull_request)
+              if [ "${SELF}" = "true" ]; then
+                langs="${all}"
+              else
+                picked=()
+                [ "${PY}" = "true" ] && picked+=('"python"')
+                [ "${JS}" = "true" ] && picked+=('"javascript-typescript"')
+                [ "${ACTIONS}" = "true" ] && picked+=('"actions"')
+                langs="[$(IFS=,; echo "${picked[*]:-}")]"
+              fi
+              ;;
+            *)
+              langs='[]'
+              ;;
+          esac
+          echo "languages=${langs}" >> "$GITHUB_OUTPUT"
+          echo "CodeQL languages: ${langs}"
 
   # #13316: the suite is split eight ways here (twelve until #19527); `python-suite` below reports the
   # combined verdict. Measured per-step baseline of the single job this replaces:
@@ -157,7 +243,7 @@ jobs:
   provision-packages:
     name: provision-packages
     needs: changes
-    if: ${{ (needs.changes.outputs.python == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    if: ${{ needs.changes.outputs.run_python_suite == 'true' && needs.changes.outputs.ready == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -244,7 +330,7 @@ jobs:
   python-shard:
     name: python-suite shard ${{ matrix.shard }}/${{ strategy.job-total }}
     needs: [changes, provision-packages]
-    if: ${{ (needs.changes.outputs.python == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    if: ${{ needs.changes.outputs.run_python_suite == 'true' && needs.changes.outputs.ready == 'true' }}
     runs-on: ubuntu-latest
     # #16320: first in, first out across PRs.
     #
@@ -700,57 +786,46 @@ jobs:
     # marker-tests.yml, selected deliberately, not swept in by a directory
     # check regaining its footing.
 
-  # #10691: the PR gate reports one pass/fail context. The historical
-  # `python-suite` job id is kept so `deployment-check` and `notify`, which both
-  # gate on `needs.python-suite.result`, need no change.
+  # Gate: publishes the REQUIRED `python-suite` context (#10691). Its job id is kept so `deployment-check`
+  # and `notify`, which gate on `needs.python-suite.result`, need no change.
+  #
+  # `if: always()`, never `!cancelled()` and never a filter condition: a gate that can be SKIPPED re-publishes
+  # `skipped` on the context, which is the defect #18208 retires (and #18106: a re-run of a draft-era run
+  # replayed `draft: true` and settled the context as skipped with zero shards run). A draft or a failed shard
+  # is a red here, a missing shard run is a red here, and only "Python did not change" is a green without shards.
+  # The number in 'All 12' must equal the python-shard matrix length (repo_tests/ci_shard_count_message_test.py).
   python-suite:
     name: python-suite
     needs: [changes, python-shard]
-    # `!cancelled()` rather than `success()` so this always reports a verdict
-    # for the matrix, including when shards fail. The `changes` guard is
-    # required too, or this would run when no Python path changed and every
-    # shard was skipped.
-    #
-    # The draft guard is the THIRD condition and must mirror `python-shard`'s
-    # exactly (#17957). The shards are draft-gated; this job is not a matrix
-    # job, so nothing gates it by inheritance. Without the same condition it
-    # ran against twelve skipped shards and the step below re-asserted
-    # `result != 'success'`, which `skipped` satisfies -- so every draft PR
-    # reported a red `python-suite` for shards that were deliberately not run.
-    # Marking a PR ready fires `ready_for_review`, which is in this workflow's
-    # trigger types, so the real verdict arrives before the PR can merge.
-    if: >-
-      ${{ !cancelled() && needs.changes.outputs.python == 'true'
-          && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    if: always()
+    # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
+    permissions:
+      contents: read
+      actions: write
     runs-on: ubuntu-latest
     timeout-minutes: 5
-
     steps:
-    # Because this job runs on `!cancelled()`, a shard failure does NOT
-    # propagate here on its own. It has to be re-asserted explicitly:
-    # `deployment-check` and `notify` both gate on `needs.python-suite.result`,
-    # so without this step a red test suite would leave `python-suite` green and
-    # let deployment checks proceed on a broken tree. For a matrix, `result` is
-    # the aggregate across all shards.
-    - name: Fail if any shard failed
-      if: ${{ needs.python-shard.result != 'success' }}
-      run: |
-        echo "::error::python-suite shards reported '${{ needs.python-shard.result }}' — see the individual shard jobs for the failing tests."
-        exit 1
-
-    - name: Report success
-      # The number here must equal the python-shard matrix length. It said "All
-      # 6" against a 12-way matrix (#14353). `strategy.job-total` is not usable
-      # -- this is the aggregate job, not a matrix job, so it expands to empty
-      # here. The agreement is enforced instead by
-      # repo_tests/ci_shard_count_message_test.py, which reads both numbers out
-      # of this file; update them together or that test fails.
-      run: echo "All 8 python-suite shards passed."
-
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
+      - uses: ./.github/actions/cancel-run-on-cancelled-upstream
+        with:
+          results: ${{ needs.changes.result }} ${{ needs.python-shard.result }}
+      - uses: ./.github/actions/gate-verdict
+        with:
+          context: python-suite
+          changes-result: ${{ needs.changes.result }}
+          applies: ${{ needs.changes.outputs.run_python_suite }}
+          work-ok: ${{ needs.python-shard.result == 'success' }}
+          work-detail: ${{ needs.python-shard.result == 'success' && 'All 8 python-suite shards passed.' || format('python-shard={0}', needs.python-shard.result) }}
+          event: ${{ github.event_name }}
+          draft: ${{ github.event.pull_request.draft == true }}
 
   frontend-tests:
     needs: changes
-    if: needs.changes.outputs.frontend == 'true'
+    if: needs.changes.outputs.run_frontend_tests == 'true'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v7
@@ -813,6 +888,370 @@ jobs:
       if: always()
       run: |
         rm -rf autobot-frontend/node_modules autobot-frontend/dist || true
+
+  # Work behind the `code-quality` gate. The body's secret (CONVENTIONS_DENYLIST) is inherited.
+  run-code-quality:
+    needs: changes
+    if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.run_code_quality == 'true' }}
+    uses: ./.github/workflows/_gate-code-quality.yml
+    secrets: inherit  # pragma: allowlist secret
+    permissions:
+      contents: read
+      security-events: read
+
+  # Gate: publishes the REQUIRED `code-quality` context.
+  code-quality:
+    name: code-quality
+    needs: [changes, run-code-quality]
+    if: always()
+    # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
+    permissions:
+      contents: read
+      actions: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
+      - uses: ./.github/actions/cancel-run-on-cancelled-upstream
+        with:
+          results: ${{ needs.changes.result }} ${{ needs.run-code-quality.result }}
+      - uses: ./.github/actions/gate-verdict
+        with:
+          context: code-quality
+          changes-result: ${{ needs.changes.result }}
+          applies: ${{ needs.changes.outputs.run_code_quality }}
+          work-ok: ${{ needs.run-code-quality.outputs.ok == 'true' }}
+          work-detail: run-code-quality=${{ needs.run-code-quality.result }}
+          event: ${{ github.event_name }}
+          draft: ${{ github.event.pull_request.draft == true }}
+
+  run-startup-import-smoke:
+    needs: changes
+    if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.run_startup_smoke == 'true' }}
+    uses: ./.github/workflows/_gate-startup-import-smoke.yml
+    permissions:
+      contents: read
+
+  # Gate: publishes the REQUIRED `startup-import-smoke` context.
+  startup-import-smoke:
+    name: startup-import-smoke
+    needs: [changes, run-startup-import-smoke]
+    if: always()
+    # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
+    permissions:
+      contents: read
+      actions: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
+      - uses: ./.github/actions/cancel-run-on-cancelled-upstream
+        with:
+          results: ${{ needs.changes.result }} ${{ needs.run-startup-import-smoke.result }}
+      - uses: ./.github/actions/gate-verdict
+        with:
+          context: startup-import-smoke
+          changes-result: ${{ needs.changes.result }}
+          applies: ${{ needs.changes.outputs.run_startup_smoke }}
+          work-ok: ${{ needs.run-startup-import-smoke.outputs.ok == 'true' }}
+          work-detail: run-startup-import-smoke=${{ needs.run-startup-import-smoke.result }}
+          event: ${{ github.event_name }}
+          draft: ${{ github.event.pull_request.draft == true }}
+
+  run-frontend-test:
+    needs: changes
+    if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.run_unit_tests == 'true' }}
+    uses: ./.github/workflows/_gate-frontend-test.yml
+    permissions:
+      contents: read
+
+  # Gate: publishes the REQUIRED `Unit & Integration Tests` context. Only the unit suite decides it;
+  # the Security Scan and Build Test jobs in the same body report for themselves, as they always did.
+  unit-tests:
+    name: Unit & Integration Tests
+    needs: [changes, run-frontend-test]
+    if: always()
+    # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
+    permissions:
+      contents: read
+      actions: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
+      - uses: ./.github/actions/cancel-run-on-cancelled-upstream
+        with:
+          results: ${{ needs.changes.result }} ${{ needs.run-frontend-test.result }}
+      - uses: ./.github/actions/gate-verdict
+        with:
+          context: Unit & Integration Tests
+          changes-result: ${{ needs.changes.result }}
+          applies: ${{ needs.changes.outputs.run_unit_tests }}
+          work-ok: ${{ needs.run-frontend-test.outputs.ok == 'true' }}
+          work-detail: run-frontend-test=${{ needs.run-frontend-test.result }}
+          event: ${{ github.event_name }}
+          draft: ${{ github.event.pull_request.draft == true }}
+
+  run-docker-smoke:
+    needs: changes
+    if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.run_docker_smoke == 'true' }}
+    uses: ./.github/workflows/_gate-docker-smoke.yml
+    permissions:
+      contents: read
+
+  # Gate: publishes the REQUIRED `smoke-test` context. Fail-closed when detection fails (#17126):
+  # "cannot tell" is a red here, no longer a build that races a second publisher (#17391).
+  smoke-test:
+    name: smoke-test
+    needs: [changes, run-docker-smoke]
+    if: always()
+    # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
+    permissions:
+      contents: read
+      actions: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
+      - uses: ./.github/actions/cancel-run-on-cancelled-upstream
+        with:
+          results: ${{ needs.changes.result }} ${{ needs.run-docker-smoke.result }}
+      - uses: ./.github/actions/gate-verdict
+        with:
+          context: smoke-test
+          changes-result: ${{ needs.changes.result }}
+          applies: ${{ needs.changes.outputs.run_docker_smoke }}
+          work-ok: ${{ needs.run-docker-smoke.outputs.ok == 'true' }}
+          work-detail: run-docker-smoke=${{ needs.run-docker-smoke.result }}
+          event: ${{ github.event_name }}
+          draft: ${{ github.event.pull_request.draft == true }}
+
+  run-api-wiring:
+    needs: changes
+    if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.run_api_wiring == 'true' }}
+    uses: ./.github/workflows/_gate-api-wiring.yml
+    permissions:
+      contents: read
+
+  # Gate: publishes the REQUIRED `api-wiring` context.
+  api-wiring:
+    name: api-wiring
+    needs: [changes, run-api-wiring]
+    if: always()
+    # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
+    permissions:
+      contents: read
+      actions: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
+      - uses: ./.github/actions/cancel-run-on-cancelled-upstream
+        with:
+          results: ${{ needs.changes.result }} ${{ needs.run-api-wiring.result }}
+      - uses: ./.github/actions/gate-verdict
+        with:
+          context: api-wiring
+          changes-result: ${{ needs.changes.result }}
+          applies: ${{ needs.changes.outputs.run_api_wiring }}
+          work-ok: ${{ needs.run-api-wiring.outputs.ok == 'true' }}
+          work-detail: run-api-wiring=${{ needs.run-api-wiring.result }}
+          event: ${{ github.event_name }}
+          draft: ${{ github.event.pull_request.draft == true }}
+
+  run-migration-gate:
+    needs: changes
+    if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.run_migrations == 'true' }}
+    uses: ./.github/workflows/_gate-migration.yml
+    permissions:
+      contents: read
+      packages: read
+
+  # Gate: publishes the REQUIRED `migration-matrix` context.
+  migration-matrix:
+    name: migration-matrix
+    needs: [changes, run-migration-gate]
+    if: always()
+    # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
+    permissions:
+      contents: read
+      actions: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
+      - uses: ./.github/actions/cancel-run-on-cancelled-upstream
+        with:
+          results: ${{ needs.changes.result }} ${{ needs.run-migration-gate.result }}
+      - uses: ./.github/actions/gate-verdict
+        with:
+          context: migration-matrix
+          changes-result: ${{ needs.changes.result }}
+          applies: ${{ needs.changes.outputs.run_migrations }}
+          work-ok: ${{ needs.run-migration-gate.outputs.ok == 'true' }}
+          work-detail: run-migration-gate=${{ needs.run-migration-gate.result }}
+          event: ${{ github.event_name }}
+          draft: ${{ github.event.pull_request.draft == true }}
+
+  run-generated-types:
+    needs: changes
+    if: ${{ needs.changes.outputs.ready == 'true' && (needs.changes.outputs.run_types == 'true' || needs.changes.outputs.run_slm_types == 'true') }}
+    uses: ./.github/workflows/_gate-generated-types.yml
+    permissions:
+      contents: read
+    with:
+      run_types: ${{ needs.changes.outputs.run_types }}
+      run_slm_types: ${{ needs.changes.outputs.run_slm_types }}
+
+  # Gate: publishes the REQUIRED `verify-generated-types` context. The SLM sibling job in the body is
+  # deliberately NOT in this verdict (#13862): it is not a required context.
+  verify-generated-types:
+    name: verify-generated-types
+    needs: [changes, run-generated-types]
+    if: always()
+    # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
+    permissions:
+      contents: read
+      actions: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
+      - uses: ./.github/actions/cancel-run-on-cancelled-upstream
+        with:
+          results: ${{ needs.changes.result }} ${{ needs.run-generated-types.result }}
+      - uses: ./.github/actions/gate-verdict
+        with:
+          context: verify-generated-types
+          changes-result: ${{ needs.changes.result }}
+          applies: ${{ needs.changes.outputs.run_types }}
+          work-ok: ${{ needs.run-generated-types.outputs.ok == 'true' }}
+          work-detail: run-generated-types=${{ needs.run-generated-types.result }}
+          event: ${{ github.event_name }}
+          draft: ${{ github.event.pull_request.draft == true }}
+
+  # Never filtered and never draft-gated: it carries the SPDX and symlink checks, which must cover EVERY pull
+  # request including docs-only drafts (#17957). Only the repo-wide sweep inside is scoped, by `sweep`.
+  run-precommit:
+    needs: changes
+    uses: ./.github/workflows/_gate-precommit.yml
+    permissions:
+      contents: read
+    with:
+      sweep: ${{ needs.changes.outputs.run_precommit_sweep }}
+
+  # Gate: publishes the REQUIRED `verify-precommit-config` context. It always applies: nothing about a diff
+  # makes the config check not affected, so `applies` is the literal 'true' and drafts run it too.
+  verify-precommit-config:
+    name: verify-precommit-config
+    needs: [changes, run-precommit]
+    if: always()
+    # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
+    permissions:
+      contents: read
+      actions: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
+      - uses: ./.github/actions/cancel-run-on-cancelled-upstream
+        with:
+          results: ${{ needs.changes.result }} ${{ needs.run-precommit.result }}
+      - uses: ./.github/actions/gate-verdict
+        with:
+          context: verify-precommit-config
+          changes-result: ${{ needs.changes.result }}
+          applies: 'true'
+          work-ok: ${{ needs.run-precommit.outputs.ok == 'true' }}
+          work-detail: run-precommit=${{ needs.run-precommit.result }}
+          event: ${{ github.event_name }}
+          draft: ${{ github.event.pull_request.draft == true }}
+          draft-gated: 'false'
+
+  # ---- checks that are not required contexts: same bodies, same conditions as before ----
+
+  run-security:
+    needs: changes
+    if: ${{ needs.changes.outputs.run_security == 'true' }}
+    uses: ./.github/workflows/_gate-security.yml
+    permissions:
+      contents: read
+      security-events: write
+    with:
+      deps: ${{ needs.changes.outputs.run_deps_scan }}
+      static_analysis: ${{ needs.changes.outputs.run_static_analysis }}
+
+  run-codeql:
+    needs: changes
+    if: ${{ needs.changes.outputs.codeql_languages != '[]' }}
+    uses: ./.github/workflows/_gate-codeql.yml
+    permissions:
+      contents: read
+      security-events: write
+    with:
+      languages: ${{ needs.changes.outputs.codeql_languages }}
+
+  run-ai-security-review:
+    needs: changes
+    if: ${{ needs.changes.outputs.run_ai_review == 'true' }}
+    uses: ./.github/workflows/_gate-ai-security-review.yml
+    secrets: inherit  # pragma: allowlist secret
+    permissions:
+      contents: read
+      pull-requests: write
+
+  run-npm-package-tests:
+    needs: changes
+    if: ${{ needs.changes.outputs.run_npm == 'true' }}
+    uses: ./.github/workflows/_gate-npm-package-tests.yml
+    permissions:
+      contents: read
+    with:
+      browser_worker: ${{ needs.changes.outputs.npm_browser_worker }}
+      mcp: ${{ needs.changes.outputs.npm_mcp }}
+      sdk_ts: ${{ needs.changes.outputs.npm_sdk_ts }}
+      structured_thinking: ${{ needs.changes.outputs.npm_structured_thinking }}
+
+  run-slm-frontend:
+    needs: changes
+    if: ${{ needs.changes.outputs.run_slm_frontend == 'true' }}
+    uses: ./.github/workflows/_gate-slm-frontend.yml
+    permissions:
+      contents: read
+    with:
+      slm_frontend: ${{ needs.changes.outputs.run_slm_frontend }}
 
   deployment-check:
     runs-on: ubuntu-latest

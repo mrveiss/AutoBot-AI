@@ -15,17 +15,17 @@ REPO_ROOT = repo_root()
 ACTION = REPO_ROOT / ".github" / "actions" / "install-ci-requirements" / "action.yml"
 _OWN_INSTALL = re.compile(r"pip install\b[^\n]*-r requirements-ci\.txt|requirements-file:\s*requirements-ci\.txt")
 _CALLERS = {
-    "api-wiring.yml",
+    "_gate-api-wiring.yml",
+    "_gate-generated-types.yml",
+    "_gate-security.yml",
+    "_gate-startup-import-smoke.yml",
     "ci.yml",
     "co-located-smoke.yml",
     "company-os-contract.yml",
     "company-os-workflow-e2e.yml",
     "import-hermeticity-sweep.yml",
     "marker-tests.yml",
-    "security.yml",
-    "startup-import-smoke.yml",
     "trajectory-eval.yml",
-    "verify-generated-types.yml",
 }
 
 

@@ -4,30 +4,25 @@
 # workflow's `changes` job. Same contract as backend-python-paths.yml,
 # frontend-paths.yml and python-paths.yml in this directory.
 #
-# WHY IT WAS EXTRACTED. `code-quality` is a REQUIRED status context published by
-# exactly one job, gated on
-# `github.event_name == 'merge_group' || needs.changes.outputs.backend == 'true'`.
-# A job whose `if:` is false is SKIPPED, and a skipped check run's conclusion is
-# `skipped`, not `success` — which branch protection does not accept. A pull
-# request touching none of these paths (frontend-only TypeScript, say) therefore
-# blocked on a context nothing could produce. The fix is a complement shim in
-# .github/workflows/code-quality-required-context.yml, and a shim can only be
-# safe if both halves resolve the SAME set by reference. A second copy would
-# drift, and the drift direction is silent: a shim that believes nothing changed
-# while the gate believes otherwise publishes `code-quality` green for an audit
-# that never ran.
+# WHY IT WAS EXTRACTED. `code-quality` is a REQUIRED status context. A job whose
+# `if:` is false is SKIPPED, and a skipped job must never be the thing that
+# reports a required context. Since #18208 the `code-quality` gate job in ci.yml
+# is `if: always()` and reads `run_code_quality`, computed from this one set in
+# ci.yml's single `changes` job. Before that a complement shim in a second
+# workflow had to resolve the SAME set by reference, and a second copy would
+# drift in the silent direction: a shim that believed nothing changed while the
+# gate believed otherwise published `code-quality` green for an audit that never
+# ran.
 #
 # Two kinds of consumer, and only one of them can read this file:
 #
-#   1. A `changes` job's dorny/paths-filter step. It loads this file by path, so
-#      it tracks the set automatically. Both halves of the pair do that.
+#   1. ci.yml's `changes` job (dorny/paths-filter). It loads this file by path, so
+#      it tracks the set automatically.
 #
-#   2. `.github/workflows/code-quality.yml`'s `on.push.paths` trigger. GitHub
-#      offers NO include mechanism for event path filters — they must be
-#      literal, in the workflow file. That copy cannot be removed, so
-#      `pipeline-scripts/check_workflow_path_filters.py` asserts it still
-#      contains all of `backend` and fails the build when it does not. The
-#      duplication that is unavoidable is at least no longer silent.
+#   2. Nothing else. The `on.push.paths` copy in code-quality.yml went away when
+#      #18208 merged that workflow into ci.yml (which has no `paths:`), so the
+#      duplication check in check_workflow_path_filters.py has nothing left to
+#      police for this set.
 #
 # NO YAML ANCHORS OR ALIASES IN THIS FILE. `tools/lint/check_code_quality_guard_reach.py`
 # re-derives this set to prove every guarded checker's inputs are reachable, and
@@ -105,10 +100,6 @@ backend:
   - 'scripts/lib/**'
   # #15473: the job runs this script; `scripts/lib/**` does not match it.
   - 'scripts/lint-conventions.sh'
-  - '.github/workflows/code-quality.yml'
-  # #15608: this file and the complement shim are inputs to what `code-quality`
-  # means. Editing either must run the REAL gate, not the shim reporting green
-  # over its own change -- the same self-reference backend-python-paths.yml
-  # carries for `startup-import-smoke`.
+  # #15608: this file is an input to what `code-quality` means; editing it must
+  # run the gate. (The workflow files are covered by `self` in gate-paths.yml.)
   - '.github/filters/code-quality-paths.yml'
-  - '.github/workflows/code-quality-required-context.yml'

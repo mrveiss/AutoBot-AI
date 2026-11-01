@@ -1,3 +1,6 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
 # NPM Package Tests — the small npm suites that no other workflow reaches
 # (#15674, #15675, #15676, #15677)
 #
@@ -14,86 +17,54 @@
 # Deliberately WITHOUT continue-on-error on any test step: a gate that cannot
 # turn the check red is not a gate, which is the whole reason these suites were
 # found unreached in the first place.
+#
+# #18208: this file is the reusable BODY of one gate. ci.yml calls it; the triggers, the
+# `changes` job, the concurrency group and any required-context job that used to live here
+# are in ci.yml now. Nothing in this file may publish a required context: a job in a called
+# workflow reports as `<caller job> / <job>`, which is not the name branch protection matches.
 
-name: NPM Package Tests
+name: NPM Package Tests (reusable body)
 
 on:
-  push:
-    branches: [release, main, develop]
-    paths:
-      - '.mcp/**'
-      - 'autobot-browser-worker/**'
-      - 'libs/autobot-sdk-ts/**'
-      - 'autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking/**'
-      - '.github/workflows/npm-package-tests.yml'
-      - '.github/workflows/_changes.yml'
-  pull_request:
-    # ready_for_review is REQUIRED here: the jobs below are gated on
-    # draft == false, and marking a PR ready fires ONLY this event. Without
-    # it a required context stays `skipped` and the PR can never merge.
-    types: [opened, synchronize, reopened, ready_for_review]
-    branches: [release, main, develop]
-    # SAFE under #13388: "NPM Package Tests" is not one of the required contexts
-    # on main, so this workflow may skip its run entirely. The job-level
-    # self-skip below exists so the check still reports a conclusion when the
-    # workflow does run but nothing it owns changed.
-    paths:
-      - '.mcp/**'
-      - 'autobot-browser-worker/**'
-      - 'libs/autobot-sdk-ts/**'
-      - 'autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking/**'
-      - '.github/workflows/npm-package-tests.yml'
-      - '.github/workflows/_changes.yml'
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  workflow_call:
+    inputs:
+      browser_worker:
+        description: "'true' when the browser_worker package changed"
+        type: string
+        default: 'false'
+      mcp:
+        description: "'true' when the mcp package changed"
+        type: string
+        default: 'false'
+      sdk_ts:
+        description: "'true' when the sdk_ts package changed"
+        type: string
+        default: 'false'
+      structured_thinking:
+        description: "'true' when the structured_thinking package changed"
+        type: string
+        default: 'false'
 
 permissions:
   contents: read
 
 jobs:
-  # Always runs so the check reports a conclusion even when nothing matched.
-  changes:
-    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and
-    # every `always()` aggregate below reads `needs.changes.result`.
-    # Gating it makes those read `skipped` and exit 1, so a REQUIRED
-    # context would report FAILED on every draft -- worse than no gate.
-    # Gate the expensive jobs, never the cheap thing others read.
-    name: Detect changed packages
-    uses: ./.github/workflows/_changes.yml
-    with:
-      filters: |
-        browser_worker:
-          - 'autobot-browser-worker/**'
-          - '.github/workflows/npm-package-tests.yml'
-        mcp:
-          - '.mcp/**'
-          - '.github/workflows/npm-package-tests.yml'
-        sdk_ts:
-          - 'libs/autobot-sdk-ts/**'
-          - '.github/workflows/npm-package-tests.yml'
-        structured_thinking:
-          - 'autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking/**'
-          - '.github/workflows/npm-package-tests.yml'
-
   npm-package-tests:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: NPM Package Tests
-    needs: changes
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 
       - name: Self-skip when no gated package changed
-        if: needs.changes.outputs.mcp != 'true' && needs.changes.outputs.sdk_ts != 'true' && needs.changes.outputs.structured_thinking != 'true'
-          && needs.changes.outputs.browser_worker != 'true'
+        if: inputs.mcp != 'true' && inputs.sdk_ts != 'true' && inputs.structured_thinking != 'true'
+          && inputs.browser_worker != 'true'
         run: echo "No gated npm package changed — skipping (reporting success)."
 
       - name: Set up Node
-        if: needs.changes.outputs.mcp == 'true' || needs.changes.outputs.sdk_ts == 'true' || needs.changes.outputs.structured_thinking == 'true'
-          || needs.changes.outputs.browser_worker == 'true'
+        if: inputs.mcp == 'true' || inputs.sdk_ts == 'true' || inputs.structured_thinking == 'true'
+          || inputs.browser_worker == 'true'
         uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
@@ -108,12 +79,12 @@ jobs:
       # server's PROJECT_ROOT clamping and command validation. Measured at
       # 0.25s; the install is the only part with any cost.
       - name: Install .mcp dependencies
-        if: needs.changes.outputs.mcp == 'true'
+        if: inputs.mcp == 'true'
         working-directory: .mcp
         run: npm ci
 
       - name: Test .mcp (node --test)
-        if: needs.changes.outputs.mcp == 'true'
+        if: inputs.mcp == 'true'
         working-directory: .mcp
         run: npm test
 
@@ -122,12 +93,12 @@ jobs:
       # for its PYTHON marker-selected suite only, so the TypeScript SDK's own
       # suite had no runner at all. Measured at 3.6s including the transform.
       - name: Install libs/autobot-sdk-ts dependencies
-        if: needs.changes.outputs.sdk_ts == 'true'
+        if: inputs.sdk_ts == 'true'
         working-directory: libs/autobot-sdk-ts
         run: npm ci
 
       - name: Test libs/autobot-sdk-ts (jest)
-        if: needs.changes.outputs.sdk_ts == 'true'
+        if: inputs.sdk_ts == 'true'
         working-directory: libs/autobot-sdk-ts
         run: npm test
 
@@ -141,17 +112,17 @@ jobs:
       # honest wherever it is run rather than only under this workflow.
       # Measured at 7.8s and 7.3s from a clean tree, build included.
       - name: Install mcp-structured-thinking dependencies
-        if: needs.changes.outputs.structured_thinking == 'true'
+        if: inputs.structured_thinking == 'true'
         working-directory: autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking
         run: npm ci
 
       - name: Test mcp-structured-thinking (jest)
-        if: needs.changes.outputs.structured_thinking == 'true'
+        if: inputs.structured_thinking == 'true'
         working-directory: autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking
         run: npm test
 
       - name: Test mcp-structured-thinking (jest, integration)
-        if: needs.changes.outputs.structured_thinking == 'true'
+        if: inputs.structured_thinking == 'true'
         working-directory: autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking
         run: npm run test:integration
 
@@ -166,6 +137,6 @@ jobs:
       # that does exist: 19 tests in 0.27s with no node_modules at all, which
       # is why this package gets no install step.
       - name: Test autobot-browser-worker (node --test)
-        if: needs.changes.outputs.browser_worker == 'true'
+        if: inputs.browser_worker == 'true'
         working-directory: autobot-browser-worker
         run: npm test

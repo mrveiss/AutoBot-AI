@@ -5,7 +5,7 @@
 
 Every `AUTOBOT_*` environment variable must be registered before code reads it. The pre-commit hook
 `env-vars-documented` (`pipeline-scripts/check_env_var_registry.py`) enforces that, and it fails when the
-table below no longer matches the registry. `code-quality.yml` runs the same check over the whole tree.
+table below no longer matches the registry. `_gate-code-quality.yml` runs the same check over the whole tree.
 
 To add a variable:
 

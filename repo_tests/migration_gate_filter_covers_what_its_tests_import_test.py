@@ -34,11 +34,12 @@ from repo_tests._reach import declare
 
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
-_WORKFLOW = Path(".github/workflows/migration-gate.yml")
+#: Where the `migrations` globs live since #18208 -- one key in one filter file, loaded by ci.yml's
+#: `changes` job. They used to be an inline `filters:` block AND a copy in `on.push.paths`.
+_FILTER_FILE = Path(".github/filters/gate-paths.yml")
+_WORKFLOW = Path(".github/workflows/_gate-migration.yml")
+_CI = Path(".github/workflows/ci.yml")
 _TEST_DIR = Path("autobot-backend/tests/migrations")
-#: The reusable job the caller hands its filter to (#15360). The push trigger lists it too, so
-#: editing the detection logic reruns the gate; the filter itself does not.
-_REUSABLE = ".github/workflows/_changes.yml"
 _FILTER_KEY = "migrations"
 
 
@@ -74,21 +75,9 @@ _ROOTS = {
 }
 
 
-def _caller_filter(source: str) -> list[str]:
-    """The ``migrations`` globs in the ``with: filters`` of the ``changes`` job.
-
-    Parsed, not matched textually: the filter is inline YAML inside a block scalar, and the job
-    must be the one that calls the reusable workflow, or the list read is not the list in force.
-    """
-    job = yaml.safe_load(source)["jobs"]["changes"]
-    assert job.get("uses") == "./" + _REUSABLE, "`changes` does not call the reusable job; wrong shape"
-    return list(yaml.safe_load(job["with"]["filters"])[_FILTER_KEY])
-
-
-def _push_paths(source: str) -> list[str]:
-    """``on.push.paths`` (PyYAML reads the ``on`` key as the boolean ``True``)."""
-    doc = yaml.safe_load(source)
-    return list(doc[True if True in doc else "on"]["push"]["paths"])
+def _filter_globs(source: str) -> list[str]:
+    """The ``migrations`` globs in the filter file the ``changes`` job loads."""
+    return list(yaml.safe_load(source)[_FILTER_KEY])
 
 
 def _imported_modules(root: Path) -> set[str]:
@@ -131,7 +120,7 @@ def _matches(rel: str, glob: str) -> bool:
 
 def _covered_modules() -> tuple[list[str], list[str], int]:
     root = repo_root()
-    globs = _caller_filter((root / _WORKFLOW).read_text(encoding="utf-8"))
+    globs = _filter_globs((root / _FILTER_FILE).read_text(encoding="utf-8"))
     uncovered, covered = [], []
     for module in sorted(_imported_modules(root)):
         rel = _module_to_path(module, root)
@@ -141,20 +130,22 @@ def _covered_modules() -> tuple[list[str], list[str], int]:
     return covered, uncovered, len(globs)
 
 
-def test_the_push_trigger_and_the_filter_list_the_same_paths() -> None:
-    """Two copies of one list; a path added to one and not the other is the old bug.
+def test_the_filter_has_one_home_and_no_trigger_copy() -> None:
+    """Two copies of one list was the old bug; since #18208 there is one.
 
-    The push trigger carries exactly one extra entry, the reusable job (#15360); nothing else.
+    The list is a key of ``gate-paths.yml``, loaded by ci.yml's ``changes`` job. The reusable body
+    has no ``push``/``pull_request`` trigger, so there is no ``on.paths`` copy left to drift.
     """
-    source = (repo_root() / _WORKFLOW).read_text(encoding="utf-8")
-    on_paths, filter_paths = _push_paths(source), _caller_filter(source)
-    assert on_paths and filter_paths, "neither list was found — the guard is reading the wrong shape"
-    assert sorted(set(on_paths) - {_REUSABLE}) == sorted(filter_paths), (
-        "the trigger list and the caller's filter disagree:\n"
-        f"  only in on.push: {sorted(set(on_paths) - set(filter_paths) - {_REUSABLE})}\n"
-        f"  only in the filter: {sorted(set(filter_paths) - set(on_paths))}"
-    )
-    assert _REUSABLE in on_paths, "editing the reusable job no longer reruns the gate on push"
+    root = repo_root()
+    ci = yaml.safe_load((root / _CI).read_text(encoding="utf-8"))
+    loaded = [s["with"]["filters"] for s in ci["jobs"]["changes"]["steps"] if "paths-filter" in str(s.get("uses", ""))]
+    assert str(_FILTER_FILE) in loaded, "ci.yml's `changes` job no longer loads the filter file holding `migrations`"
+    body = yaml.safe_load((root / _WORKFLOW).read_text(encoding="utf-8"))
+    triggers = body.get(True) or body.get("on") or {}
+    assert set(triggers) == {
+        "workflow_call"
+    }, f"{_WORKFLOW.name} grew triggers {sorted(triggers)}: a path copy can return"
+    assert _filter_globs((root / _FILTER_FILE).read_text(encoding="utf-8")), "the `migrations` key is empty"
 
 
 def test_every_module_the_migration_tests_import_is_covered_by_the_filter() -> None:
@@ -162,7 +153,7 @@ def test_every_module_the_migration_tests_import_is_covered_by_the_filter() -> N
     assert not uncovered, (
         "the Migration Gate will NOT run when these change, yet its tests import them:\n  "
         + "\n  ".join(uncovered)
-        + "\n\nAdd a matching glob to BOTH lists in .github/workflows/migration-gate.yml (on.push.paths and the `changes` job filter). "
+        + "\n\nAdd a matching glob to the `migrations` key of .github/filters/gate-paths.yml. "
         "A gate that skips on the code under test reports success without running (#17822)."
     )
     assert covered, "no first-party import resolved at all — the resolver is broken, not the filter"
@@ -175,7 +166,7 @@ def test_the_coverage_check_is_not_vacuous() -> None:
         f"only {len(covered)} imported module(s) resolved to a file; expected the secrets and "
         "credential surface. A resolver that finds nothing makes the check above always pass."
     )
-    assert glob_count >= 20, f"only {glob_count} globs read from the workflow; the two lists total more"
+    assert glob_count >= 20, f"only {glob_count} globs read from the filter file"
 
 
 #: Synthetic on purpose. Real repo globs here read to `glob_declared_reads_15900_test`

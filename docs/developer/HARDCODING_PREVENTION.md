@@ -35,7 +35,7 @@ The pre-commit hook (`autobot-infrastructure/shared/scripts/hooks/pre-commit-har
 git commit ...
 
 # CI: runs as the "Block hardcoded value regressions" step
-# in .github/workflows/code-quality.yml — uses pipeline-scripts/check-hardcoded-values-pr.sh
+# in .github/workflows/_gate-code-quality.yml — uses pipeline-scripts/check-hardcoded-values-pr.sh
 # which calls the same hook in argv mode against changed files.
 ```
 
@@ -158,7 +158,7 @@ how the gap #15208 names went unnoticed for months.
 To add a new hook to CI:
 
 1. Add argv mode to the hook (positional args = files to scan, no args = `git diff --cached`).
-2. Add a step in `.github/workflows/code-quality.yml`:
+2. Add a step in `.github/workflows/_gate-code-quality.yml`:
 
    ```yaml
    - name: Block <thing> regressions (#issue)

@@ -79,7 +79,7 @@ Exit code 0 = clean, exit code 1 = violations.
 
 ### CI (pull requests)
 
-`.github/workflows/code-quality.yml` includes a semgrep step that runs the
+`.github/workflows/_gate-code-quality.yml` includes a semgrep step that runs the
 rules in `security/semgrep/extension-import-boundaries.yaml` on every PR
 touching covered paths.
 

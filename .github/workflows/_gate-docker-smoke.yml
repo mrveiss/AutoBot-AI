@@ -1,104 +1,32 @@
-name: Docker Smoke Test
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# #18208: this file is the reusable BODY of one gate. ci.yml calls it; the triggers, the
+# `changes` job, the concurrency group and any required-context job that used to live here
+# are in ci.yml now. Nothing in this file may publish a required context: a job in a called
+# workflow reports as `<caller job> / <job>`, which is not the name branch protection matches.
+
+name: Docker Smoke Test (reusable body)
 
 on:
-  # #14054: the merge queue builds each entrant against base + the entries
-  # ahead of it and expects the required contexts to report against that
-  # temporary ref. A required context with no `merge_group:` trigger never
-  # fires, and the queue waits on it forever. Inert until the `merge_queue`
-  # ruleset rule is enabled -- this event does not exist before then.
-  merge_group:
-  push:
-    branches:
-      - main
-  pull_request:
-    # ready_for_review is REQUIRED here: the jobs below are gated on
-    # draft == false, and marking a PR ready fires ONLY this event. Without
-    # it a required context stays `skipped` and the PR can never merge.
-    types: [opened, synchronize, reopened, ready_for_review]
-    branches:
-      - main
-    # Required status check via branch protection (#6723) — must run on PR
-  schedule:
-    - cron: '0 10 * * 0'  # Every Sunday at 10 AM UTC
+  workflow_call:
+    outputs:
+      ok:
+        description: "'true' only when every step of the smoke test passed"
+        value: ${{ jobs.docker-smoke.outputs.ok }}
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
-# Least privilege (#15299). The workflow only checks out, builds images, starts
-# the compose stack and uploads an artifact — none of which needs write. It had
-# no block at all until CodeQL flagged both jobs once this file was touched;
-# hardened-smoke-test.yml and co-located-smoke.yml already declare exactly this.
 permissions:
   contents: read
 
 jobs:
-  # Gated because the build is the whole cost: on PR #15250 (one markdown file)
-  # `smoke-test` spent 373s building images and 65s starting the stack for a
-  # change that cannot reach an image (#15299). Unlike the pre-commit sweep this
-  # cannot be scoped to changed files — an image either gets built or it does
-  # not — so the required context moves to a shim on the exact complement, the
-  # pattern #14353 established for `python-suite`.
-  changes:
-    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and
-    # every `always()` aggregate below reads `needs.changes.result`.
-    # Gating it makes those read `skipped` and exit 1, so a REQUIRED
-    # context would report FAILED on every draft -- worse than no gate.
-    # Gate the expensive jobs, never the cheap thing others read.
-    name: Detect changed paths (docker smoke)
-    uses: ./.github/workflows/_changes.yml
-    with:
-      # Pull requests only: on `push` the base is the previous commit and on
-      # `schedule` there is no diff at all, so the filter would be meaningless.
-      # Both of those events keep running the smoke test unconditionally below.
-      pr_only: true
-      timeout_minutes: 10
-      filters: .github/filters/docker-paths.yml
-
-  smoke-test:
-    needs: changes
-    # Runs on a pull request when the filter says Docker paths changed -- and
-    # ALSO when the filter did not answer at all (#17126).
-    #
-    # The comment this replaces claimed fail-closed: "if `changes` errors,
-    # `needs` skips this job rather than reporting green, and the shim's
-    # complement leaves the context unreported -- which blocks the pull
-    # request". Two of those three steps were right and the conclusion was
-    # wrong. GitHub counts a SKIPPED check run as satisfying a required status
-    # check, so a `changes` failure skipped both this job and the shim and the
-    # required `smoke-test` context was satisfied with no smoke test run at
-    # all. A comment cannot hold an invariant the platform decides.
-    #
-    # `needs.changes.result != 'success'` is therefore not an escape hatch but
-    # the point: when nothing can say whether an image could have changed, the
-    # honest answer is to build it. That costs a full run on a rare
-    # infrastructure failure, which is the correct direction for a gate the
-    # owner rule of 2026-09-19 states nothing lands without.
-    #
-    # The widening reaches EVERY trigger, not only pull_request (review): on
-    # `merge_group`, `push` and `schedule`, a `changes` job that fails now runs
-    # the full build where it previously skipped. On merge_group that is a
-    # ~45-minute build for every queued entrant when the detector blips, which
-    # is a real cost -- and still the right direction, because the merge queue
-    # is the last gate before main and "we could not tell" must not become
-    # "we did not look". The shim does not run on merge_group at all (its
-    # trigger is pull_request only), so nothing double-reports there.
-    #
-    # Note what this does NOT claim: the shim in
-    # docker-smoke-required-context.yml has its OWN `changes` job, so the two
-    # can disagree -- and when they do, this context gets either two
-    # conclusions or none. The four-case table is in that file's comment. The
-    # case worth knowing here: if the shim's detector says no Docker paths
-    # changed while this one says they did, the shim publishes a green with no
-    # build behind it, and whether that or this build's result decides the
-    # context depends on completion order. Tracked as #17391, the
-    # single-publisher problem; it is not fixable in either condition alone.
-    if: >-
-      always() && (
-        github.event_name != 'pull_request'
-        || needs.changes.result != 'success'
-        || needs.changes.outputs.docker == 'true'
-      )
+  docker-smoke:
+    name: Docker Image Build and Compose Smoke
+    outputs:
+      ok: ${{ steps.done.outputs.ok }}
+    # Whether this runs is decided by the `smoke-test` gate in ci.yml, from the one
+    # `changes` job (#18208). #17126 once ran the build when detection FAILED ("we could
+    # not tell, so build"); the gate now fails closed instead, because a second publisher
+    # of the same context racing the shim is what #17391 and #14922 measured as unsafe.
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -306,3 +234,11 @@ jobs:
       - name: Clean up
         if: always()
         run: docker compose --env-file docker/.env.docker down
+
+      # Positive evidence for the `smoke-test` gate in ci.yml (#18208): this step is
+      # reached only when every step above it succeeded, so the output below is
+      # 'true' on a full pass and empty on a failure, a cancel or a timeout.
+      - name: Record that every step passed
+        id: done
+        shell: bash
+        run: echo "ok=true" >> "$GITHUB_OUTPUT"

@@ -1,0 +1,141 @@
+# Path sets for the gates of ci.yml that have no canonical file of their own (#18208).
+#
+# SINGLE SOURCE OF TRUTH -- do not inline a copy back into a workflow. Every key
+# here used to be an inline `filters:` string in the `changes` job of its own
+# workflow, or (for `security_scope`, `codeql_*`, `npm_*`, `slm_frontend`) a
+# literal `on.pull_request.paths` list, which GitHub offers no way to share.
+# ci.yml has no `paths:` at all, so the lists live once, here, and ci.yml's one
+# `changes` job loads this file next to the other files in this directory.
+#
+# Key names are unique across EVERY file in .github/filters/
+# (repo_tests/filter_keys_are_unique_18208_test.py). Before #18208 `backend`,
+# `python` and `frontend` each meant two different sets in two files; one `changes`
+# job loading both would have silently merged them.
+#
+# The workflow files themselves are not listed per gate any more: `self` below
+# forces EVERY gate when ci.yml, a `_gate-*.yml` body or the gate-verdict action
+# changes. That is wider than the per-workflow self-references it replaces, on
+# purpose: the bodies are now reusable pieces of one pipeline.
+
+# Any hit forces every gate to run.
+self:
+  - '.github/workflows/ci.yml'
+  - '.github/workflows/_gate-*.yml'
+  - '.github/actions/gate-verdict/**'
+  - '.github/filters/gate-paths.yml'
+
+# ci.yml `migration-matrix` gate. Run on `!= 'false'`, so an empty output also runs.
+migrations:
+  - 'autobot-backend/migrations/**'
+  - 'autobot-backend/tests/migrations/**'
+  - 'autobot-backend/user_management/models/**'
+  - 'autobot-backend/llc/models/**'
+  - 'autobot-backend/llc/services/workspace_lease.py'
+  - 'autobot-backend/llc/services/company.py'
+  - 'autobot-backend/llc/services/company_ceo.py'
+  - 'autobot-backend/llc/services/company_move_lock.py'
+  - 'autobot-backend/llc/services/authz.py'
+  - 'autobot-backend/llc/services/membership_policy.py'
+  - 'autobot-backend/llc/services/membership_service.py'
+  - 'autobot-backend/llc/services/budget.py'
+  - 'autobot-backend/llc/exceptions.py'
+  - 'autobot-backend/llc/scheduler/run_status.py'
+  - 'autobot_shared/db_errors.py'
+  - 'autobot-backend/canvas/models.py'
+  - 'autobot-backend/models/**'
+  - 'autobot-backend/initialization/lifespan.py'
+  - 'autobot-slm-backend/ansible/setup-user-backend.yml'
+  - 'autobot-slm-backend/ansible/playbooks/update-all-nodes.yml'
+  - 'autobot-backend/services/*secret*.py'
+  - 'autobot-backend/services/credential_*.py'
+  - 'autobot-backend/services/orphan_repair*.py'
+  - 'autobot-backend/services/provider_key_vault.py'
+  - 'autobot-backend/services/__init__.py'
+  - 'autobot-backend/services/approval_gate_service.py'
+  - 'autobot-backend/api/**'
+  - 'autobot_shared/secrets_envelope.py'
+  - 'autobot_shared/status_enums.py'
+  - 'autobot_shared/time_utils.py'
+  - 'autobot_shared/auth/device_capabilities.py'
+  - 'autobot_shared/secrets_vault.py'
+  - 'autobot_shared/legacy_secret_keys.py'
+
+# ci.yml `verify-generated-types` gate (autobot-frontend). Run on `!= 'false'`.
+types:
+  - 'autobot-backend/**/*.py'
+  - 'autobot_shared/**/*.py'
+  - 'autobot-frontend/src/types/generated/api.ts'
+  - 'autobot-frontend/package.json'
+  - 'autobot-frontend/package-lock.json'
+  - 'scripts/audit_api_wiring.py'
+  - '**/requirements*.txt'
+
+# ci.yml generated-types job for autobot-slm-frontend (not a required context).
+slm_types:
+  - 'autobot-slm-backend/**/*.py'
+  - 'autobot_shared/**/*.py'
+  - 'autobot-slm-frontend/src/types/generated/api.ts'
+  - 'autobot-slm-frontend/package.json'
+  - 'autobot-slm-frontend/package-lock.json'
+  - 'scripts/audit_api_wiring.py'
+  - '**/requirements*.txt'
+
+# ci.yml security scans. Formerly security.yml's `on.pull_request.paths`: the exact
+# UNION of backend-python-paths.yml `static_analysis` and `deps`, plus the two
+# extras that were only in the trigger. repo_tests/filter_keys_are_unique_18208_test.py
+# keeps it a superset of both. `secret-detection` and `compliance-check` are
+# whole-tree and ungated by any narrower set.
+security_scope:
+  - 'autobot-backend/**/*.py'
+  - 'autobot-slm-backend/**/*.py'
+  - 'autobot_shared/**/*.py'
+  - '.github/filters/backend-python-paths.yml'
+  - '**/requirements*.txt'
+  - 'requirements-ci/**'
+  - 'pyproject.toml'
+  - 'autobot_shared/pyproject.toml'
+  - '**/package*.json'
+  - '.secrets.baseline'  # #17067: a baseline-only PR must trigger the whole-tree secret scan too
+
+# ci.yml CodeQL gate: one key per language, and the matrix analyses the ones that matched.
+codeql_python:
+  - '**/*.py'
+  - '.github/codeql/**'
+codeql_javascript_typescript:
+  - '**/*.js'
+  - '**/*.jsx'
+  - '**/*.mjs'
+  - '**/*.cjs'
+  - '**/*.ts'
+  - '**/*.tsx'
+  - '**/*.mts'
+  - '**/*.cts'
+  - '**/*.vue'
+  - '**/*.html'
+  - '**/*.htm'
+  - '**/tsconfig*.json'
+  - '.github/codeql/**'
+codeql_actions:
+  - '.github/workflows/**'
+  - '**/action.yml'
+  - '**/action.yaml'
+  - '.github/codeql/**'
+
+# ci.yml npm package tests: one key per package.
+npm_browser_worker:
+  - 'autobot-browser-worker/**'
+npm_mcp:
+  - '.mcp/**'
+npm_sdk_ts:
+  - 'libs/autobot-sdk-ts/**'
+npm_structured_thinking:
+  - 'autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking/**'
+
+# ci.yml SLM frontend check.
+slm_frontend:
+  - 'autobot-slm-frontend/**'
+  - 'autobot-frontend/scripts/check-i18n-keys.mjs'
+  # The job runs the i18n parity check, so the locale files and the lift script it
+  # reads belong to the same trigger.
+  - 'autobot-frontend/src/i18n/locales/**'
+  - 'scripts/lift_locale_translations.py'

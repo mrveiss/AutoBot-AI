@@ -214,7 +214,7 @@ def workflow_reads(workflow: dict) -> dict[str, set[str]]:
     """Literal repo-path tokens read by each job gated on the python filter output."""
     reads: dict[str, set[str]] = {}
     for job, spec in (workflow.get("jobs") or {}).items():
-        if not isinstance(spec, dict) or "outputs.python" not in str(spec.get("if", "")):
+        if not isinstance(spec, dict) or "outputs.run_python_suite" not in str(spec.get("if", "")):
             continue
         steps = spec.get("steps") or []
         text = " ".join(
@@ -226,7 +226,9 @@ def workflow_reads(workflow: dict) -> dict[str, set[str]]:
 
 
 def _gated_jobs(workflow: dict) -> list[str]:
-    return [j for j, spec in (workflow.get("jobs") or {}).items() if "outputs.python" in str(spec.get("if", ""))]
+    return [
+        j for j, spec in (workflow.get("jobs") or {}).items() if "outputs.run_python_suite" in str(spec.get("if", ""))
+    ]
 
 
 def _uncovered_reads(patterns: list[str]) -> tuple[dict[str, set[str]], int]:
@@ -414,7 +416,7 @@ COVERAGE_CONTRASTS = (
     # #15713 widened the filter to this tree; a role default is covered now.
     ("autobot-slm-backend/ansible/roles/backend/defaults/main.yml", True),
     # A workflow the filter does NOT name -- the shape the record exists for.
-    (".github/workflows/code-quality.yml", False),
+    (".github/workflows/actionlint.yml", False),
     # A generated frontend type a guard compares against.
     ("autobot-slm-frontend/openapi.json", False),
 )
@@ -517,7 +519,7 @@ def test_a_workflow_read_absent_from_the_filter_is_reported() -> None:
     workflow = {
         "jobs": {
             "gated": {
-                "if": "needs.changes.outputs.python == 'true'",
+                "if": "needs.changes.outputs.run_python_suite == 'true'",
                 "steps": [{"run": "pytest --shard-durations .test_durations_slm"}],
             },
             "ungated": {"steps": [{"run": "cat pytest.ini"}]},
