@@ -48,7 +48,11 @@ CANONICAL = frozenset(
     )
 )
 BINDINGS = {
-    "autobot-backend/user_management/services/user_service.py": {"invalidate_other_sessions", "reassign_memory"},
+    "autobot-backend/user_management/services/user_service.py": {
+        "invalidate_other_sessions",
+        "reassign_memory",
+        "reassign_sessions",
+    },
     "autobot-slm-backend/user_management/services/user_service.py": set(),
 }
 SINGLE_DEFINITIONS = (

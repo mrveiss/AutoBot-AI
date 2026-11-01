@@ -115,12 +115,13 @@ class UserLifecycleMixin(UserServiceBase):
     async def _set_active(self, user_id: uuid.UUID, active: bool) -> bool:
         """Set ``is_active`` and audit it; raises ``UserNotFoundError``."""
         user = await self._require_user(user_id)
+        handover = {} if active else await self.reassign_sessions(user_id)  # before the flip: a refusal changes nothing
         user.is_active = active
         user.updated_at = now_utc()
         await self.session.flush()
         action = IdentityAuditAction.USER_ACTIVATED if active else IdentityAuditAction.USER_DEACTIVATED
         # Reactivation revokes nothing: the tokens from before stay void, the user signs in again (#20443).
-        details = {} if active else self._revoke_tokens_after_commit(user.username)
+        details = {} if active else {**handover, **self._revoke_tokens_after_commit(user.username)}
         await self._audit_log(action, AuditResourceType.USER, user_id, details)
         logger.info("%s user: %s", "Activated" if active else "Deactivated", user_id)
         return True
@@ -186,6 +187,9 @@ class UserLifecycleMixin(UserServiceBase):
         if reassign_to is not None:
             details["reassign_to"] = str(reassign_to)
             details["reassign_counts"] = await self._reassign_before_delete(user_id, reassign_to, hard_delete)
+        details.update(
+            await self.reassign_sessions(user_id)
+        )  # chat sessions never stay with a deleted account (#20029)
 
         if hard_delete:
             await self._queue_membership_epoch_bumps(user)  # the cascade removes the rows this reads
