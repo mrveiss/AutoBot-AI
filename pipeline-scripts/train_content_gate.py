@@ -35,7 +35,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from autobot_shared.paths import scrubbed_git_env  # noqa: E402
+from autobot_shared.git_probe import run_git  # noqa: E402
 
 MEMBER_MERGE = re.compile(r"^Merge #(\d+) @ [0-9a-f]{7,40}\b")
 #: Bringing main into the train adds no member: "Merge main into ...", "Merge branch 'main' into ...".
@@ -50,7 +50,7 @@ MIN_SURVIVAL = 0.5
 
 
 @dataclass
-class Report:
+class ContentReport:
     members: int = 0
     files: int = 0
     lines: int = 0
@@ -58,15 +58,14 @@ class Report:
     notes: list[str] = field(default_factory=list)
 
 
-def git(*args: str) -> str:
-    done = subprocess.run(["git", *args], capture_output=True, check=True, env=scrubbed_git_env())
-    return done.stdout.decode("utf-8", "replace")
+def _git(*args: str) -> str:
+    return run_git(list(args), capture_output=True, check=True, errors="replace").stdout
 
 
-def last_merges(rng: str, report: Report) -> dict[str, str]:
+def last_merges(rng: str, report: ContentReport) -> dict[str, str]:
     """``{pr: merge commit}``, keeping each member's last merge; an unknown merge is a finding."""
     found: dict[str, str] = {}
-    for line in git("log", "--first-parent", "--merges", "--format=%H %s", rng).splitlines():  # newest first
+    for line in _git("log", "--first-parent", "--merges", "--format=%H %s", rng).splitlines():  # newest first
         sha, _, subject = line.partition(" ")
         match = MEMBER_MERGE.match(subject)
         if match:
@@ -78,21 +77,21 @@ def last_merges(rng: str, report: Report) -> dict[str, str]:
 
 def changed(base: str, head: str) -> list[tuple[str, str]]:
     """``(status, path)`` per file; NUL-separated, so no path is quoted or split."""
-    fields = git("diff", "--name-status", "--no-renames", "-z", base, head).split("\0")
+    fields = _git("diff", "--name-status", "--no-renames", "-z", base, head).split("\0")
     return list(zip(fields[0::2], fields[1::2]))
 
 
 def _exists_at(commit: str, path: str) -> bool:
-    return bool(git("ls-tree", commit, "--", path).strip())
+    return bool(_git("ls-tree", commit, "--", path).strip())
 
 
 def _added_lines(base: str, head: str, path: str) -> list[str]:
-    diff = git("diff", "--unified=0", "--no-renames", base, head, "--", path).splitlines()
+    diff = _git("diff", "--unified=0", "--no-renames", base, head, "--", path).splitlines()
     added = (line[1:].strip() for line in diff if line.startswith("+") and not line.startswith("+++"))
     return [line for line in added if len(line) >= MIN_LINE and FLOOR_LINE not in line]
 
 
-def _judge_file(status: str, path: str, base: str, head: str, merge: str, report: Report) -> str | None:
+def _judge_file(status: str, path: str, base: str, head: str, merge: str, report: ContentReport) -> str | None:
     """Why *path* did not take effect at *merge*, or None."""
     if status == "D":
         return "deleted by the member, still present" if _exists_at(merge, path) else None
@@ -101,15 +100,15 @@ def _judge_file(status: str, path: str, base: str, head: str, merge: str, report
     added = _added_lines(base, head, path)
     if not added:
         return None
-    present = {line.strip() for line in git("show", f"{merge}:{path}").splitlines()}
+    present = {line.strip() for line in _git("show", f"{merge}:{path}").splitlines()}
     kept = sum(line in present for line in added)
     report.lines += len(added)
     return f"only {kept}/{len(added)} added lines present" if kept < len(added) * MIN_SURVIVAL else None
 
 
-def check_range(rng: str, title: str = "") -> Report:
+def check_range(rng: str, title: str = "") -> ContentReport:
     """Judge every member of the train in *rng* at its own merge commit."""
-    report = Report()
+    report = ContentReport()
     merges = last_merges(rng, report)
     report.members = len(merges)
     if not merges:
@@ -119,7 +118,7 @@ def check_range(rng: str, title: str = "") -> Report:
     tip = rng.split("..")[-1]
     for pr, merge in sorted(merges.items(), key=lambda item: int(item[0])):
         head = f"{merge}^2"
-        base = git("merge-base", f"{merge}^1", head).strip()
+        base = _git("merge-base", f"{merge}^1", head).strip()
         for status, path in changed(base, head):
             if RECOMPUTED.search(path):
                 continue
@@ -129,25 +128,25 @@ def check_range(rng: str, title: str = "") -> Report:
                 report.findings.append(f"#{pr} {path}: {why} at {merge[:10]}")
             elif status != "D" and not _exists_at(tip, path):
                 report.notes.append(f"#{pr} {path}: present at its merge, gone by the tip")
-        if not git("diff", "--name-only", f"{merge}^1", merge).strip():
+        if not _git("diff", "--name-only", f"{merge}^1", merge).strip():
             report.notes.append(f"#{pr}: its merge changed nothing; its content was checked above")
     return report
 
 
-def check_landed(merge: str) -> Report:
+def check_landed(merge: str) -> ContentReport:
     """A file the train changed and main did not must reach main byte-identical."""
-    report = Report(members=1)
-    if len(git("rev-list", "--parents", "-n", "1", merge).split()) != 3:
+    report = ContentReport(members=1)
+    if len(_git("rev-list", "--parents", "-n", "1", merge).split()) != 3:
         report.findings.append(f"{merge[:10]} is not a two-parent merge, so it cannot be compared to the train's tip")
         return report
     main_before, tip = f"{merge}^1", f"{merge}^2"
-    base = git("merge-base", main_before, tip).strip()
+    base = _git("merge-base", main_before, tip).strip()
     main_changed = {path for _, path in changed(base, main_before)}
     for _, path in changed(base, tip):
         if path in main_changed:
             continue
         report.files += 1
-        if git("diff", "--name-only", tip, merge, "--", path).strip():
+        if _git("diff", "--name-only", tip, merge, "--", path).strip():
             report.findings.append(f"{path}: differs from the train's tip at {merge[:10]}")
     if not report.files:
         report.findings.append(f"{merge[:10]}: no file to compare, so nothing was measured")
@@ -168,7 +167,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         report = check_range(args.range, args.title) if args.range else check_landed(args.landed)
     except subprocess.CalledProcessError as exc:
-        _say(f"UNMEASURED: {' '.join(map(str, exc.cmd))}: {exc.stderr.decode('utf-8', 'replace').strip()}")
+        _say(f"UNMEASURED: {' '.join(map(str, exc.cmd))}: {(exc.stderr or '').strip()}")
         return 2
     _say(f"examined {report.members} member(s), {report.files} file(s), {report.lines} added line(s)")
     for note in report.notes:

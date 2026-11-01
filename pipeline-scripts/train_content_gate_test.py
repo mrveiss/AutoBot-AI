@@ -6,8 +6,6 @@
 
 from __future__ import annotations
 
-import subprocess
-
 import pytest
 import train_content_gate as gate
 
@@ -26,9 +24,7 @@ def repo(tmp_path, monkeypatch):
 
 
 def run(*args: str) -> str:
-    return subprocess.run(
-        ["git", *args], capture_output=True, text=True, check=True, env=gate.scrubbed_git_env()
-    ).stdout.strip()
+    return gate.run_git(list(args), capture_output=True, text=True, check=True).stdout.strip()
 
 
 def write(path: str, text: str) -> None:
