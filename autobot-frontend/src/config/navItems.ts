@@ -152,7 +152,7 @@ export const navIconItems: NavIconItem[] = [
   { to: '/secrets', labelKey: 'nav.secrets', ariaKey: 'nav.secrets', tipKey: 'nav.vaultTip', adv: true, keywords: ['nav.keywords.vault'], iconPaths: ['M4 12a4 4 0 108 0 4 4 0 00-8 0z', 'M12 12h9M18 12v3M21 12v2'], iconViewBox: '0 0 24 24', iconStroke: true },
   { to: '/preferences', labelKey: 'nav.preferences', ariaKey: 'nav.preferences', tipKey: 'nav.preferencesTip', keywords: ['nav.keywords.preferences'], iconPaths: [ICONS.cog], iconViewBox: '0 0 24 24', iconStroke: true },
   // Platform admin: the SLM console, in a new tab. The permission gate is the
-  // old SLM link's (admin and operator roles carry service.management).
+  // old SLM link's (admin and operator roles carry service.management; the SLM refuses its admin-only routes unless is_admin).
   { href: getSLMAdminUrl, labelKey: 'nav.platformAdmin', ariaKey: 'nav.platformAdminAria', tipKey: 'nav.platformAdminTip', adv: true, requires: 'serviceManagement', afterToggle: true, iconPaths: ['M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z', 'M9 12l2 2 4-4'], iconViewBox: '0 0 24 24', iconStroke: true },
 ];
 
