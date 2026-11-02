@@ -169,4 +169,4 @@ export const REFINED_SIZE_TOKENS: readonly string[] = [
 ] as const
 
 /** Built-in themes, as the `data-theme` attribute values useTheme.ts applies. */
-export const BUILTIN_THEMES: readonly string[] = ['light', 'dark', 'contrast', 'mono'] as const
+export const BUILTIN_THEMES: readonly string[] = ['light', 'dark', 'contrast', 'contrast-dark', 'mono'] as const
