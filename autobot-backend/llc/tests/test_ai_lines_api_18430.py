@@ -36,6 +36,8 @@ from llc.tests import _e2e_harness as harness
 from models.agent_org import AgentOrgNode
 from models.approval import Approval, ApprovalComment, TaskApprovalLink
 from user_management.models.base import Base
+from user_management.models.organization import Organization
+from user_management.models.user import User
 from user_management.services import TenantContext
 
 COMPANY, OTHER = uuid.uuid4(), uuid.uuid4()
@@ -45,11 +47,19 @@ PERSON = {"auth_method": "session"}
 AGENT_CREDENTIAL = {"auth_method": "run_jwt", "username": "run:abc"}
 
 
+def _add_member(session: AsyncSession, user: uuid.UUID, role: MembershipRole) -> None:
+    """A membership and the live user behind it; four-eyes counts only members who still exist."""
+    session.add(LLCCompanyMembership(id=uuid.uuid4(), company_id=COMPANY, user_id=user, role=role.value))
+    session.add(User(id=user, org_id=COMPANY, email=f"{user}@e.test", username=str(user), is_active=True))
+
+
 @pytest_asyncio.fixture
 async def factory():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")  # canonical: ignore py-adhoc-db-engine (test-local)
     tables = [
         LLCActivityLog.__table__,  # #8214: every decision writes an activity row
+        Organization.__table__,
+        User.__table__,  # #8214: four-eyes leaves out deactivated admins
         Approval.__table__,
         ApprovalComment.__table__,
         TaskApprovalLink.__table__,
@@ -67,7 +77,7 @@ async def factory():
     )
     async with maker() as session:
         for user, role in ((OWNER, MembershipRole.OWNER), (MEMBER, MembershipRole.MEMBER)):
-            session.add(LLCCompanyMembership(id=uuid.uuid4(), company_id=COMPANY, user_id=user, role=role.value))
+            _add_member(session, user, role)
         await session.commit()
     yield maker
     await engine.dispose()
@@ -235,7 +245,7 @@ async def test_approving_twice_does_not_rewrite_or_duplicate_the_line(factory):
 
 async def _add_admin(factory, user, role=MembershipRole.ADMIN):
     async with factory() as session:
-        session.add(LLCCompanyMembership(id=uuid.uuid4(), company_id=COMPANY, user_id=user, role=role.value))
+        _add_member(session, user, role)
         await session.commit()
 
 
