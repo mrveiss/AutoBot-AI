@@ -242,7 +242,7 @@ REACH = declare(
     # (an unparseable file fails the test outright), so skips=0 and completed() == population.
     # Window [6196, 6596]; floor=6396 is mid-window: ~200 files of headroom from the bottom and
     # under completed(), so ordinary growth or shrink no longer forces a re-pin every train.
-    floor=6730,  # mid-window: population 6930, window (6530, 6930)
+    floor=6896,  # mid-window: population 7096, window (6696, 7096)
     growth=400,
     skips=0,
     what="tracked python files",

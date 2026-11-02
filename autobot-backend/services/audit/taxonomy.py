@@ -62,8 +62,11 @@ class AuditAction(str, Enum):
     SESSION_DELETE = "session.delete"
     SESSION_EXPORT = "session.export"
     SESSION_OWNER_ASSIGN = "session.owner_assign"
+    SESSION_REASSIGN = "session.reassign"  # #20029: a removed user's chat session handed to a successor
     KNOWLEDGE_ADD = "knowledge.add"
     KNOWLEDGE_REMOVE = "knowledge.remove"
+    KNOWLEDGE_BACKUP_DELETE = "knowledge.backup.delete"
+    KNOWLEDGE_BACKUP_RESTORE = "knowledge.backup.restore"
     KNOWLEDGE_QUARANTINE_READ = "knowledge.quarantine.read"  # #19163: an opt-out read of the research quarantine
     KNOWLEDGE_ADMIN_READ = "kb.admin_read"  # #16665: an admin's read of any fact through an explicit read API
     API_KEY_CREATE = "api_key.create"  # pragma: allowlist secret -- an action name, not a key

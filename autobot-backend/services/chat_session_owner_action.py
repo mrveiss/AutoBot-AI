@@ -136,7 +136,7 @@ async def execute_owner_assign(approval: "Approval", session: "AsyncSession") ->
     session_id, owner = ctx.get("session_id"), ctx.get("owner")
     if not session_id or not owner:
         raise ValueError(f"approval {approval.id} needs a session and an owner")
-    self_approved = await is_self_approval(approval, session)
+    self_approved = await is_self_approval(approval, session, what="the owner assignment")
     user_id = await active_user_id(session, owner)
     if user_id is None:
         raise ValueError(f"{owner} is not an active user")

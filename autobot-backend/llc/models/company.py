@@ -35,6 +35,7 @@ class CompanyBase(BaseModel):
     budget_monthly_cents: int = Field(0, ge=0)
     brand_color: Optional[str] = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$")
     require_approval_for_hires: bool = False
+    require_approval_for_budget_raises: bool = False
     parent_org_id: Optional[uuid.UUID] = None
 
     model_config = {"from_attributes": True}
@@ -94,6 +95,7 @@ class CompanyUpdate(BaseModel):
     budget_monthly_cents: Optional[int] = Field(None, ge=0)
     brand_color: Optional[str] = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$")
     require_approval_for_hires: Optional[bool] = None
+    require_approval_for_budget_raises: Optional[bool] = None
     pause_reason: Optional[str] = None
 
     model_config = {"from_attributes": True}
