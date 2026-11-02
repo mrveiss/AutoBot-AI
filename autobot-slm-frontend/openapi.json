@@ -4910,6 +4910,14 @@
             },
             "title": "Required Down",
             "type": "array"
+          },
+          "roles_with_nodes_down": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RoleNodeHealth"
+            },
+            "title": "Roles With Nodes Down",
+            "type": "array"
           }
         },
         "required": [
@@ -10742,6 +10750,36 @@
           "roles"
         ],
         "title": "RoleListResponse",
+        "type": "object"
+      },
+      "RoleNodeHealth": {
+        "description": "A multi-node role with at least one of its nodes down.",
+        "properties": {
+          "nodes_down": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Nodes Down",
+            "type": "array"
+          },
+          "nodes_up": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Nodes Up",
+            "type": "array"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "nodes_up",
+          "nodes_down"
+        ],
+        "title": "RoleNodeHealth",
         "type": "object"
       },
       "RolePurgeRequest": {
@@ -31920,7 +31958,7 @@
     },
     "/api/roles/owners": {
       "get": {
-        "description": "Return role -> node_id mapping for all assigned service roles (#1389).\n\nUsed by deployment/migration UIs to show which node owns each role.",
+        "description": "Return role -> node ids, and which roles may hold several (#1389, #19706).",
         "operationId": "get_role_owners_endpoint_api_roles_owners_get",
         "parameters": [
           {

@@ -19,6 +19,13 @@ from status_enums import NodeStatus, RoleStatus
 
 _ASSIGNED_STATUSES = ["active", "installed", "not_installed"]
 _NODE_DOWN_STATUSES = {NodeStatus.OFFLINE.value, NodeStatus.ERROR.value}
+# Not serving and not failed: on its way in, planned downtime, or retired.
+_NODE_NOT_COUNTED_STATUSES = {
+    NodeStatus.PENDING.value,
+    NodeStatus.ENROLLING.value,
+    NodeStatus.MAINTENANCE.value,
+    NodeStatus.DECOMMISSIONED.value,
+}
 
 
 class RoleNodeHealth(BaseModel):
@@ -40,22 +47,29 @@ async def get_role_owners(db: AsyncSession) -> Dict[str, List[str]]:
     return owners
 
 
-def _service_multi_node_roles() -> List[str]:
-    """Multi-node roles that run a service; a role with none has nothing that can go down."""
-    from services.role_registry import DEFAULT_ROLES
+def _scaled_service_roles() -> List[str]:
+    """Multi-node roles that run a service users rely on.
 
-    return [r["name"] for r in DEFAULT_ROLES if r.get("multi_node") and r.get("systemd_service")]
+    Infrastructure roles sit on every node, so counting them would report any offline node as
+    a degraded fleet, which is a different question from a scaled role losing a node.
+    """
+    from services.role_registry import _INFRA_ROLES, DEFAULT_ROLES
+
+    infra = {r["name"] for r in _INFRA_ROLES}
+    return [
+        r["name"] for r in DEFAULT_ROLES if r.get("multi_node") and r.get("systemd_service") and r["name"] not in infra
+    ]
 
 
 def classify_role_nodes(rows: Iterable) -> List[RoleNodeHealth]:
     """Split each role's nodes into up and down, keeping only roles with a node down.
 
-    A node a role is not installed on yet is neither: the role has not been started there.
+    A node the role is not installed on yet, or a node in _NODE_NOT_COUNTED_STATUSES, is neither.
     """
     up: Dict[str, List[str]] = {}
     down: Dict[str, List[str]] = {}
     for row in rows:
-        if row.status == RoleStatus.NOT_INSTALLED.value:
+        if row.status == RoleStatus.NOT_INSTALLED.value or row.node_status in _NODE_NOT_COUNTED_STATUSES:
             continue
         is_down = row.status == RoleStatus.INACTIVE.value or row.node_status in _NODE_DOWN_STATUSES
         (down if is_down else up).setdefault(row.role_name, []).append(row.hostname)
@@ -67,10 +81,13 @@ def classify_role_nodes(rows: Iterable) -> List[RoleNodeHealth]:
 
 async def get_roles_with_nodes_down(db: AsyncSession) -> List[RoleNodeHealth]:
     """Return the multi-node roles that have at least one node down."""
+    roles = _scaled_service_roles()
+    if not roles:
+        return []
     result = await db.execute(
         select(NodeRole.role_name, NodeRole.status, Node.hostname, Node.status.label("node_status"))
         .join(Node, Node.node_id == NodeRole.node_id)
-        .where(NodeRole.role_name.in_(_service_multi_node_roles()))
+        .where(NodeRole.role_name.in_(roles))
     )
     return classify_role_nodes(result.all())
 

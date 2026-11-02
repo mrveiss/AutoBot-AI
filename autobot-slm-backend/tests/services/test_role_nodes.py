@@ -9,6 +9,8 @@ import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 _SPEC = importlib.util.spec_from_file_location(
     "_role_nodes_under_test", Path(__file__).parents[2] / "services" / "role_nodes.py"
 )
@@ -43,6 +45,13 @@ def test_an_inactive_service_on_an_online_node_is_down():
 def test_a_node_not_installed_yet_is_neither_up_nor_down():
     result = role_nodes.classify_role_nodes([_row("a", status="not_installed", node_status="offline"), _row("b")])
     assert result == []
+
+
+@pytest.mark.parametrize("node_status", ["decommissioned", "maintenance", "pending", "enrolling"])
+def test_a_node_not_serving_by_plan_is_neither_up_nor_down(node_status):
+    rows = [_row("a", node_status=node_status), _row("b", node_status="offline")]
+    result = role_nodes.classify_role_nodes(rows)
+    assert (result[0].nodes_up, result[0].nodes_down) == ([], ["b"])
 
 
 def test_every_node_down_is_still_reported():

@@ -5441,9 +5441,7 @@ export interface paths {
         };
         /**
          * Get Role Owners Endpoint
-         * @description Return role -> node_id mapping for all assigned service roles (#1389).
-         *
-         *     Used by deployment/migration UIs to show which node owns each role.
+         * @description Return role -> node ids, and which roles may hold several (#1389, #19706).
          */
         get: operations["get_role_owners_endpoint_api_roles_owners_get"];
         put?: never;
@@ -9619,7 +9617,7 @@ export interface components {
              * Roles With Nodes Down
              * @default []
              */
-            roles_with_nodes_down?: components["schemas"]["RoleNodeHealth"][];
+            roles_with_nodes_down: components["schemas"]["RoleNodeHealth"][];
         } & {
             [key: string]: unknown;
         };
@@ -12471,6 +12469,8 @@ export interface components {
             nodes_up: string[];
             /** Role */
             role: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RolePurgeRequest
