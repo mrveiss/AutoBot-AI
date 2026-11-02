@@ -71,7 +71,7 @@ async def test_heartbeat_timeout_is_a_warning_and_buffers_the_event(tmp_path, ca
         assert await agent._send_heartbeat_request({"x": 1}) is False
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert len(warnings) == 1 and "failed within" in warnings[0].getMessage()
-    assert warnings[0].getMessage().split("heartbeat:", 1)[1].strip()  # says what happened
+    assert warnings[0].getMessage().split("failed within", 1)[1].strip()  # says what happened
     assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
     assert len(event_buffer.read_unsynced(agent.buffer_db)) == 1
 
