@@ -10,6 +10,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy import event
 
 from autobot_shared.ai_lines import SCOPE_COMPANY, AiLine, LineScope
 from services.ai_line_change_proposal import propose_line_change
@@ -52,3 +53,20 @@ async def test_the_conversion_files_every_proposal_under_the_plans_identity(fact
         props[0].outcome = None  # the plan save failed after filing: a retry by someone else files it again
         await lines.file_proposals(COMPANY, "intake", 1, props, uuid.uuid4())
     assert props[0].approval_id == first
+
+
+async def test_the_lookup_filters_by_the_plan_in_the_query_not_after_loading_every_request(factory):
+    await _propose(factory, "admin-1", "workflow-plan:intake")
+    lookups: list[str] = []
+
+    def _record(_conn, _cursor, statement, parameters, *_rest):
+        if statement.lstrip().startswith("SELECT approvals."):
+            lookups.append(str(parameters))
+
+    engine = factory.kw["bind"].sync_engine
+    event.listen(engine, "before_cursor_execute", _record)
+    try:
+        await _propose(factory, "admin-2", "workflow-plan:intake")
+    finally:
+        event.remove(engine, "before_cursor_execute", _record)
+    assert lookups and "workflow-plan:intake" in lookups[0]

@@ -55,6 +55,8 @@ async def _pending_match(  # noqa: ANN001
     ]
     if plan_ref is None:
         where.append(Approval.requested_by_agent == requester)
+    else:
+        where.append(Approval.context["plan_ref"].as_string().in_([plan_ref, *legacy_plan_refs]))
     for existing in (await session.execute(select(Approval).where(*where))).scalars().all():
         ctx = existing.context or {}
         same = (ctx.get("action"), ctx.get("action_key"), ctx.get("line"), ctx.get("scope_id"))

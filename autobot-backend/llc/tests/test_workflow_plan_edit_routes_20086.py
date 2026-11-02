@@ -230,6 +230,18 @@ async def test_an_edge_case_is_added_edited_and_deleted_on_its_own(edit):
     assert {c["key"] for c in gone["edge_cases"]} == {"e1", "e2"} and len(gone["sub_steps"]) == sub
 
 
+async def test_after_the_one_number_moves_its_old_cases_stay_put_and_their_keys_stay_taken(edit):
+    admin, _, _ = edit
+    one = {"title": "Hours", "step_key": "s1", "return_kind": "hours_back", "direction": "down", "unit": "hours"}
+    moved = await admin.put(f"{PREFIX}/intake/one-number", json={**one, "baseline_value": 1})
+    assert moved.status_code == 200, moved.text
+    reused = await admin.post(f"{PREFIX}/intake/steps/s1/edge-cases", json={**CASE, "key": "e1"})
+    assert reused.status_code == 422 and "duplicate edge case key" in reused.text
+    assert (await admin.patch(f"{PREFIX}/intake/edge-cases/e1", json={"handling": "x"})).status_code == 409
+    assert (await admin.delete(f"{PREFIX}/intake/edge-cases/e1")).status_code == 409
+    assert "e1" in {c["key"] for c in (await _get(admin))["edge_cases"]}
+
+
 async def test_an_edge_case_without_handling_reopens_the_label_gate(edit):
     admin, _, _ = edit
     plan = (await admin.patch(f"{PREFIX}/intake/edge-cases/e1", json={"handling": ""})).json()

@@ -77,11 +77,20 @@ def _case_index(cases: Sequence[EdgeCase], case_key: str) -> int:
     return find_index(cases, "edge case", repr(case_key), lambda c: c.key == case_key)
 
 
-def add_edge_case(plan: CompanyWorkflowPlan, step_key: str, case: EdgeCase) -> None:
-    """Add one edge case to the chosen step (FR-4.2); a key the step already uses is a 422."""
-    find_step(plan, step_key)
+def _require_chosen_step(plan: CompanyWorkflowPlan, step_key: str) -> None:
     if plan.one_number is None or plan.one_number.step_key != step_key:
         raise CompanyOsConflict("pick the One Number on this step before breaking it down")
+
+
+def add_edge_case(plan: CompanyWorkflowPlan, step_key: str, case: EdgeCase) -> None:
+    """Add one edge case to the chosen step (FR-4.2); a key the plan already uses is a 422.
+
+    Plan-wide because a case stays on its step when the One Number moves, and a key is how PATCH and DELETE find it.
+    """
+    find_step(plan, step_key)
+    _require_chosen_step(plan, step_key)
+    if any(c.key == case.key for c in plan.edge_cases):
+        raise GraphInvalid([f"duplicate edge case key {case.key!r}"])
     added = case.model_copy(update={"step_key": step_key})
     _store_cases(plan, step_key, [*_step_cases(plan, step_key), added])
 
@@ -92,6 +101,7 @@ def _edge_case_step(plan: CompanyWorkflowPlan, case_key: str) -> str:
 
 def patch_edge_case(plan: CompanyWorkflowPlan, case_key: str, fields: Dict[str, Any]) -> None:
     step_key = _edge_case_step(plan, case_key)
+    _require_chosen_step(plan, step_key)
     cases = _step_cases(plan, step_key)
     i = _case_index(cases, case_key)
     cases[i] = changed(cases[i], fields)
@@ -100,6 +110,7 @@ def patch_edge_case(plan: CompanyWorkflowPlan, case_key: str, fields: Dict[str, 
 
 def remove_edge_case(plan: CompanyWorkflowPlan, case_key: str) -> None:
     step_key = _edge_case_step(plan, case_key)
+    _require_chosen_step(plan, step_key)
     cases = _step_cases(plan, step_key)
     del cases[_case_index(cases, case_key)]
     _store_cases(plan, step_key, cases)
