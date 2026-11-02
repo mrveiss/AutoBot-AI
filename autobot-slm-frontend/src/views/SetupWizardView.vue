@@ -1167,7 +1167,7 @@ onMounted(async () => {
   height: var(--spacing-8);
   border-radius: var(--radius-default);
   cursor: pointer;
-  font-size: 1rem;
+  font-size: var(--text-base);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1237,7 +1237,7 @@ onMounted(async () => {
 }
 
 .check {
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 /* Step content */
@@ -1273,7 +1273,7 @@ onMounted(async () => {
 
 .info-box h3 {
   margin: 0 0 0.5rem;
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 .info-box ul {
@@ -1319,7 +1319,7 @@ onMounted(async () => {
 .status-badge {
   padding: 0.2rem 0.6rem;
   border-radius: var(--radius-xl);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 500;
   text-transform: uppercase;
 }
@@ -1367,7 +1367,7 @@ onMounted(async () => {
 
 .add-node-form h3 {
   margin: 0 0 0.75rem;
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 .form-row {
@@ -1399,7 +1399,7 @@ onMounted(async () => {
 }
 
 .field-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -1436,7 +1436,7 @@ input.full-width {
 
 .role-assignment h3 {
   margin: 0 0 0.5rem;
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 .role-chips {
@@ -1507,7 +1507,7 @@ input.full-width {
 }
 
 .role-group-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -1523,7 +1523,7 @@ input.full-width {
   align-items: center;
   gap: 0.4rem;
   margin-top: 0.4rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
@@ -1536,7 +1536,7 @@ input.full-width {
   border-color: var(--border-color);
   opacity: 0.7;
   cursor: default;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 /* Role state indicators (#1353) */
@@ -1659,7 +1659,7 @@ input.full-width {
 .provision-phase {
   padding: 0.2rem 0.6rem;
   border-radius: var(--radius-default);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: var(--text-secondary);
@@ -1770,7 +1770,7 @@ input.full-width {
 
 .secret-entry h3 {
   margin: 0 0 0.25rem;
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 .secret-desc {
