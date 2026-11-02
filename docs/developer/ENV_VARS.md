@@ -136,6 +136,8 @@ appears outside the known overlays.
 | `AUTOBOT_DOCKER_MGMT_POOL` | slm | str | `'10.128.0.0/9'` | Private IPv4 block (/24 or larger) that docker/pick_mgmt_prefix.py draws the compose management /24 from, skipping any range a host route or Docker network uses (#16833). |
 | `AUTOBOT_DOCKER_MGMT_PREFIX` | slm | str | `""` | First three octets of the compose autobot-mgmt /24 (e.g. 10.77.3). No default: docker/generate-secrets.sh picks a free private range per host, docker-compose.yml refuses to start without it, and compose_fleet.py builds node IPs from it (#16833). |
 | `AUTOBOT_DOCKER_POOL_SIZE` | execution | int | `3` | Number of warm containers kept when AUTOBOT_DOCKER_USE_POOL is on. Ignored entirely when pooling is off. |
+| `AUTOBOT_DOCKER_PROXY_TOKEN` | slm | str | *(none)* | What the SLM presents to the limited Docker proxy, from docker/generate-secrets.sh (#20629). |
+| `AUTOBOT_DOCKER_PROXY_URL` | slm | str | *(none)* | Where the SLM reaches the limited Docker proxy on a compose stack (#20629). |
 | `AUTOBOT_DOCKER_SLM_HTTPS_PORT` | slm | int | `443` | Host port the SLM-only web GUI publishes for HTTPS (container port 443). Change it when host port 443 is already taken; the GUI's HTTP port stays 80 (#18593). |
 | `AUTOBOT_DOCKER_SLM_NGINX_CONF` | slm | str | `'./docker/nginx/nginx-slm.conf'` | nginx config the SLM-only web GUI (compose profile slm) mounts. The default serves HTTP; ./docker/nginx/nginx-slm-ssl.conf serves HTTPS with ./docker/certs (#18593). |
 | `AUTOBOT_DOCKER_USE_POOL` | execution | bool | false | Reuse a pool of warm containers for tool execution instead of starting one per call. Off by default — the pool trades isolation between calls for start-up latency. |

@@ -569,6 +569,33 @@ services:
         ipv4_address: ${AUTOBOT_DOCKER_MGMT_PREFIX}.15
       autobot-data:
 
+  # #20629: the only container with the Docker socket. A fixed list of actions on this stack's
+  # containers (docker/docker-proxy/proxy.py), reachable only from the SLM, with no published port.
+  autobot-docker-proxy:
+    image: python:3.13-slim-bookworm
+    container_name: autobot-docker-proxy
+    restart: unless-stopped
+    command: ["python3", "/app/proxy.py"]
+    volumes:
+      - ./docker/docker-proxy/proxy.py:/app/proxy.py:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - AUTOBOT_DOCKER_PROXY_TOKEN=${AUTOBOT_DOCKER_PROXY_TOKEN:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}
+      - DOCKER_PROXY_PORT=2375
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.25'
+    logging: *default-logging
+    networks:
+      - autobot-docker-control
+
   autobot-slm:
     build:
       context: .
@@ -599,6 +626,8 @@ services:
       - AUTOBOT_USERS_DATABASE_URL=postgresql+asyncpg://${SLM_POSTGRES_USER:-${AUTOBOT_POSTGRES_USER:-${AUTOBOT_DB_USER:-autobot}}}:${AUTOBOT_DB_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}@autobot-postgres:5432/${AUTOBOT_POSTGRES_DB:-${AUTOBOT_USERS_DB_NAME:-autobot_users}}
       - AUTOBOT_COMPOSE_LEGACY_DB_VARS=${AUTOBOT_DB_USER:+AUTOBOT_DB_USER }${AUTOBOT_DB_NAME:+AUTOBOT_DB_NAME }${AUTOBOT_USERS_DB_NAME:+AUTOBOT_USERS_DB_NAME}
       - SLM_POSTGRES_HOST=autobot-postgres
+      - AUTOBOT_DOCKER_PROXY_URL=http://autobot-docker-proxy:2375
+      - AUTOBOT_DOCKER_PROXY_TOKEN=${AUTOBOT_DOCKER_PROXY_TOKEN:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}
       - SLM_ADMIN_PASSWORD=${SLM_ADMIN_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}
       - SLM_DATA_DIR=/app/data
       # Point LoggingManager at the writable slm_logs volume so read_only: true
@@ -660,6 +689,7 @@ services:
         ipv4_address: ${AUTOBOT_DOCKER_MGMT_PREFIX}.16
       autobot-data:
       autobot-app:
+      autobot-docker-control:
 
   autobot-frontend:
     build:
@@ -933,6 +963,10 @@ volumes:
   grafana_data:
 
 networks:
+  # #20629: only the SLM and the Docker proxy.
+  autobot-docker-control:
+    driver: bridge
+    internal: true
   autobot-data:
     driver: bridge
   autobot-app:

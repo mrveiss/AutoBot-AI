@@ -77,3 +77,21 @@ _register(
     "manager node's status (autobot-slm-backend/services/compose_fleet.py, #19292).",
     (1, 86400),
 )
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DOCKER_PROXY_URL",
+        type=str,
+        default=None,
+        description="Where the SLM reaches the limited Docker proxy on a compose stack (#20629).",
+        component="slm",
+    )
+)
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DOCKER_PROXY_TOKEN",
+        type=str,
+        default=None,
+        description="What the SLM presents to the limited Docker proxy, from docker/generate-secrets.sh (#20629).",
+        component="slm",
+    )
+)

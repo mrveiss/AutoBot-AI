@@ -689,7 +689,7 @@
    ]
   },
   "other_jobs_sha256": {
-   "smoke-test": "af6db7ac-51fdf5ba-d041178b-660b9450-ad7ace2c-72a29fa5-07c96d98-1d0ed6fc"
+   "smoke-test": "9d8e0ae6-eccd257f-40590340-42c4c4a6-34effc37-9f836b4f-96e5b739-6f20b47d"
   },
   "outputs": [
    "docker"
