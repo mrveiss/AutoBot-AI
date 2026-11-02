@@ -1,4 +1,4 @@
-paramiko>=5.0.0
+paramiko>=5.1.0
 
 # Retry logic for resilient operations
 tenacity>=9.2.1
