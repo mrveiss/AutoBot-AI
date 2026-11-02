@@ -2,7 +2,12 @@
 <!-- Copyright (c) 2025 mrveiss -->
 <!-- Author: mrveiss -->
 <template>
-  <div v-if="isAdmin">
+  <div v-if="isAdmin || loadFailed">
+    <BaseAlert v-if="loadFailed" variant="error" class="mb-3" data-testid="load-error" :message="$t('llc.approvals.stuckCleanup.loadError')">
+      <template #actions>
+        <BaseButton size="sm" @click="load">{{ $t('common.retry') }}</BaseButton>
+      </template>
+    </BaseAlert>
     <section v-if="pending.length > 0" class="p-3 mb-3 border rounded-md" data-testid="removal-proposals">
       <p class="font-semibold">{{ $t('llc.approvals.removals.title', { count: pending.length }) }}</p>
       <p class="text-sm text-secondary mb-2">{{ $t('llc.approvals.removals.hint') }}</p>
@@ -43,7 +48,7 @@
  * (non-company approvals, `GET /api/approval-gates/pending`) are approved or rejected here through the
  * existing approval-gate routes, and a file stuck after repeated refusals can be proposed again (#20234).
  */
-import { BaseButton, formatBytes } from '@autobot/ui'
+import { BaseAlert, BaseButton, formatBytes, isHttpError } from '@autobot/ui'
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
@@ -59,26 +64,43 @@ const api = useApiClient()
 const { t } = useI18n()
 const { showToast } = useNotificationBus()
 const isAdmin = ref(false)
+const loadFailed = ref(false)
 const status = ref<CleanupStatus | null>(null)
 const pending = ref<Proposal[]>([])
 const resetting = ref(new Set<string>())
 const deciding = ref(new Set<string>())
 
+/** 401/403 mean the caller is not an admin: the panel hides. Any other failure is shown with a Retry. */
+function isNotAdmin(err: unknown): boolean {
+  return isHttpError(err) && (err.status === 401 || err.status === 403)
+}
+
 async function load() {
+  loadFailed.value = false
   try {
     const current: CleanupStatus = await api.get('/api/conversation-files/cleanup/status')
     status.value = current
     isAdmin.value = true
   } catch (err) {
-    // 401/403 for a non-admin: the panel stays hidden and asks for nothing more.
-    logger.debug('Cleanup status unavailable', err)
+    if (isNotAdmin(err)) {
+      logger.debug('Cleanup status refused, panel hidden', err)
+      isAdmin.value = false
+      return
+    }
+    logger.error('Cleanup status failed to load', err)
+    loadFailed.value = true
     return
   }
   try {
     const rows: Proposal[] = await api.get('/api/approval-gates/pending')
     pending.value = rows.filter((row) => row.approval_type === 'destructive_action')
   } catch (err) {
+    if (isNotAdmin(err)) {
+      isAdmin.value = false
+      return
+    }
     logger.error('Failed to load pending removal proposals', err)
+    loadFailed.value = true
   }
 }
 

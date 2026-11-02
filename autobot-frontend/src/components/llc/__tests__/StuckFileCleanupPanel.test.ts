@@ -5,6 +5,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
+import { HttpError } from '@autobot/ui'
 import en from '@/i18n/locales/en.json'
 
 const get = vi.fn()
@@ -65,10 +66,29 @@ describe('StuckFileCleanupPanel (#20234)', () => {
     expect(post).toHaveBeenCalledWith('/api/conversation-files/cleanup/f1/reset', {})
   })
 
-  it('shows nothing, and never asks for proposals, when the caller is not an admin', async () => {
-    get.mockRejectedValue(new Error('403'))
+  it.each([401, 403])('hides the panel and never asks for proposals on HTTP %i', async (status) => {
+    get.mockRejectedValue(new HttpError(status, 'refused'))
     const wrapper = await mountPanel()
     expect(wrapper.html()).not.toContain('removal-proposals')
+    expect(wrapper.find('[data-testid="load-error"]').exists()).toBe(false)
     expect(get).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows an error alert, not an empty panel, when the status call fails with a server error', async () => {
+    get.mockRejectedValueOnce(new HttpError(500, 'boom'))
+    const wrapper = await mountPanel()
+    const alert = wrapper.find('[data-testid="load-error"]')
+    expect(alert.exists()).toBe(true)
+    expect(alert.text()).toContain(en.llc.approvals.stuckCleanup.loadError)
+    expect(wrapper.find('[data-testid="stuck-files"]').exists()).toBe(false)
+  })
+
+  it('retries a failed load and shows the data once it succeeds', async () => {
+    get.mockRejectedValueOnce(new HttpError(500, 'boom'))
+    const wrapper = await mountPanel()
+    await wrapper.find('[data-testid="load-error"] button').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="load-error"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="stuck-files"]').exists()).toBe(true)
   })
 })
