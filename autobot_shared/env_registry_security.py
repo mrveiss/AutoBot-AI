@@ -478,3 +478,13 @@ register_env_var(
         component="security",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PERSON_COPY_COMPARE_INTERVAL_S",
+        type=int,
+        default=300,
+        description="Seconds between passes that push every linked person's copy to the SLM (#10200). Minimum 30.",
+        component="backend",
+    )
+)

@@ -9,8 +9,9 @@ lives in another database, so ``slm_user_id`` cannot be a foreign key.
 """
 
 import uuid
+from datetime import datetime
 
-from sqlalchemy import ForeignKey, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -29,3 +30,6 @@ class PersonLink(Base, TimestampMixin):
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
+    # Set while the SLM's copy of this person could not be updated (#10200). Admins see it.
+    push_failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    push_error: Mapped[str | None] = mapped_column(String(200), nullable=True)

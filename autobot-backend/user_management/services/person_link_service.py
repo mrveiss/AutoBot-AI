@@ -107,6 +107,9 @@ async def link_first_slm_admin(session: AsyncSession, person: SlmPerson | None) 
 
 async def link_first_slm_admin_at_startup(session: AsyncSession) -> None:
     """An unreachable SLM must not stop the main app starting; seeding still runs."""
+    from user_management.services.person_copy_sync import start_person_copy_sync
+
+    start_person_copy_sync()
     try:
         await link_first_slm_admin(session, await fetch_first_slm_admin())
     except Exception as exc:
