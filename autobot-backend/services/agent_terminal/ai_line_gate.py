@@ -43,6 +43,7 @@ logger = get_logger(__name__)
 
 PENDING_APPROVAL_REFUSAL = "An earlier command is still waiting for your decision; this one did not run"
 CLAIM_UNAVAILABLE_REFUSAL = "Could not reserve this command for your decision; it did not run"
+_CLEAR_RETRY_DELAYS_SECONDS = (1, 5, 30, 120)
 
 
 async def _owner_user_id(owner: str | None) -> str | None:
@@ -127,9 +128,18 @@ async def settle_pending(session: AgentTerminalSession, session_manager) -> None
     command_id = session.get_pending_command_id()
     session.clear_pending_and_resume()
     redis = session_manager.redis_client
-    if usable_redis(redis):
-        await session_manager._persist_session(session)
+    if usable_redis(redis) and not await session_manager._persist_session(session):
+        fire_and_forget(_retry_clear(session, session_manager), name=f"retry-clear-{session.session_id}")
     await release_pending_slot(redis, session.session_id, command_id)
+
+
+async def _retry_clear(session: AgentTerminalSession, session_manager) -> None:
+    """A stale persisted approval refuses every command, so the save that clears it is retried while it is true."""
+    for delay in _CLEAR_RETRY_DELAYS_SECONDS:
+        await asyncio.sleep(delay)
+        if session.has_pending_approval() or await session_manager._persist_session(session):
+            return
+    logger.error("Session %s still shows a decided approval in Redis; its commands stay refused", session.session_id)
 
 
 async def write_reservation(session: AgentTerminalSession, command, queue, redis=None) -> None:

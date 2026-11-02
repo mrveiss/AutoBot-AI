@@ -483,8 +483,8 @@ class SessionManager:
 
         return True
 
-    async def _persist_session(self, session: AgentTerminalSession) -> None:
-        """Persist session to Redis.
+    async def _persist_session(self, session: AgentTerminalSession) -> bool:
+        """Persist session to Redis; ``False`` if the session record was not written.
 
         #13478: the TTL depends on whether the session is *idle* or *waiting on a
         human*. TTL_1_HOUR garbage-collects abandoned sessions, which is right —
@@ -526,8 +526,10 @@ class SessionManager:
 
             logger.debug("Persisted session %s to Redis with key %s (ttl=%ds)", session.session_id, key, ttl)
 
+            return True
         except Exception as e:
             logger.error("Failed to persist session to Redis: %s", e)
+            return False
 
     async def _conversation_for_expired_session(self, session_id: str) -> str | None:
         """The conversation a vanished session was serving, if it had an approval."""

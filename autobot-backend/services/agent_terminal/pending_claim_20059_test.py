@@ -243,3 +243,51 @@ async def test_a_failed_renewal_does_not_skip_the_conversation_pointer(redis, mo
     )
     await worker.manager._persist_session(worker.session)
     assert await redis.get(f"agent_terminal:approval_conversation:{SID}") == "conv-1"
+
+
+async def test_a_failed_save_at_the_decision_is_retried_until_other_workers_can_queue(redis, monkeypatch):
+    monkeypatch.setattr("services.agent_terminal.ai_line_gate._CLEAR_RETRY_DELAYS_SECONDS", (0, 0, 0))
+    first, second = _worker(redis), _worker(redis)
+    await _claim(first, redis, "cmd-1")
+    _set_pending(first.session, "cmd-1")
+    await first.manager._persist_session(first.session)
+    real_setex = redis.setex
+    redis.setex = _fail_twice_then(real_setex)
+
+    await settle_pending(first.session, first.manager)
+    assert (await _claim(second, redis, "cmd-2"))["error"] == PENDING_APPROVAL_REFUSAL  # still stale here
+
+    await _until_session_is_cleared(redis)
+    await redis.delete(_claim_key(SID))
+    assert await _claim(second, redis, "cmd-3") is None
+
+
+async def test_the_retry_stops_once_a_newer_approval_owns_the_record(redis, monkeypatch):
+    monkeypatch.setattr("services.agent_terminal.ai_line_gate._CLEAR_RETRY_DELAYS_SECONDS", (0,))
+    worker = _worker(redis)
+    worker.manager._persist_session = AsyncMock(return_value=False)
+    await settle_pending(worker.session, worker.manager)
+    _set_pending(worker.session, "cmd-new")
+    calls = worker.manager._persist_session.await_count
+    await asyncio.sleep(0.01)
+    assert worker.manager._persist_session.await_count == calls
+
+
+def _fail_twice_then(real):
+    failures = iter([ConnectionError("blip"), ConnectionError("blip")])
+
+    async def _setex(*args, **kwargs):
+        failure = next(failures, None)
+        if failure is not None:
+            raise failure
+        return await real(*args, **kwargs)
+
+    return _setex
+
+
+async def _until_session_is_cleared(redis) -> None:
+    for _ in range(50):
+        if json.loads(await redis.get(f"agent_terminal:session:{SID}"))["pending_approval"] is None:
+            return
+        await asyncio.sleep(0.01)
+    pytest.fail("the session record still shows the decided approval")
