@@ -22,6 +22,7 @@
 [data-theme="light"],
 [data-theme="dark"],
 [data-theme="contrast"],
+[data-theme="contrast-dark"],
 [data-theme="mono"] {
   /* Surfaces: page, then panel/card/field, then the quiet second surface */
   --bg-primary: var(--bg);
