@@ -142,11 +142,11 @@
         </div>
 
         <div v-if="settingsModal.error" class="modal-error">{{ settingsModal.error }}</div>
-        <p v-if="settingsModal.notice" class="field-hint" data-testid="budget-raise-pending">{{ settingsModal.notice }}</p>
+        <p v-if="settingsModal.notice" class="field-hint" role="status" data-testid="budget-raise-pending">{{ settingsModal.notice }}</p>
 
         <template #actions>
           <button class="btn-secondary" @click="closeSettings">{{ $t('llc.cost.cancel') }}</button>
-          <button class="btn-primary" :disabled="settingsModal.saving" @click="saveBudgetSettings">
+          <button class="btn-primary" :disabled="settingsModal.saving || !!settingsModal.notice" @click="saveBudgetSettings">
             {{ settingsModal.saving ? $t('llc.cost.saving') : $t('llc.cost.save') }}
           </button>
         </template>

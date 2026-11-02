@@ -31,11 +31,10 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.approval_four_eyes import FourEyesError, four_eyes_self_approval, requester_id
-from user_management.models.user import User
 
 from ..models.enums import MembershipRole
 from ..models.membership import LLCCompanyMembership
@@ -152,25 +151,24 @@ async def require_company_admin_unless_platform(
 
 
 async def active_admin_ids(session: AsyncSession, company_id: uuid.UUID) -> set[uuid.UUID]:
-    """The company's current owners/admins, leaving out anyone deactivated or deleted, who cannot act.
+    """The company's current owners/admins, leaving out anyone deactivated, deleted or hard-deleted, who cannot act.
 
     Locks those memberships until the decision commits, so a second admin cannot leave after this
     check, and two concurrent decisions on one company take turns. A platform admin is not counted:
     a company's sole owner or admin may self-approve even while a platform admin exists.
     """
-    gone = select(User.id).where(
-        User.id == LLCCompanyMembership.user_id, or_(~User.is_active, User.deleted_at.isnot(None))
-    )
+    from .member_standing import member_people  # noqa: PLC0415 -- it imports this module
+
     rows = await session.execute(
         select(LLCCompanyMembership.user_id)
         .where(
             LLCCompanyMembership.company_id == company_id,
             LLCCompanyMembership.role.in_(GRANTING_ROLES),
-            ~gone.exists(),
         )
         .with_for_update(of=LLCCompanyMembership)
     )
-    return set(rows.scalars().all())
+    _names, may_act = await member_people(session, list(rows.scalars().all()))
+    return {user_id for user_id, active in may_act.items() if active}
 
 
 async def require_four_eyes(

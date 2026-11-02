@@ -41,7 +41,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/agents/security_scanner_agent.py": 663,
     "autobot-backend/agents/system_command_agent.py": 903,
     "autobot-backend/agents/web_researcher.py": 1390,
-    "autobot-backend/ai_hardware_accelerator.py": 1040,
+    "autobot-backend/ai_hardware_accelerator.py": 1034,
     "autobot-backend/api/advanced_control.py": 615,
     "autobot-backend/api/agent.py": 1349,
     "autobot-backend/api/agent_config.py": 1371,
@@ -84,7 +84,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/endpoints/environment.py": 698,  # #13602: sanitised traversal log
     "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 817,
     "autobot-backend/api/codebase_analytics/endpoints/report.py": 2262,
-    "autobot-backend/api/codebase_analytics/endpoints/stats.py": 663,
+    "autobot-backend/api/codebase_analytics/endpoints/stats.py": 659,
     "autobot-backend/api/conversation_files.py": 981,
     "autobot-backend/api/database_mcp.py": 1056,
     "autobot-backend/api/development_speedup.py": 611,
@@ -125,7 +125,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/schemas_analytics.py": 3533,
     "autobot-backend/api/schemas_chat.py": 702,
     "autobot-backend/api/schemas_code.py": 3257,
-    "autobot-backend/api/schemas_knowledge.py": 5119,
+    "autobot-backend/api/schemas_knowledge.py": 5113,
     "autobot-backend/api/schemas_system.py": 4176,  # #18734: log-forwarding schemas moved out (4345 -> 4176)
     "autobot-backend/api/schemas_workflows.py": 2824,
     "autobot-backend/api/secrets.py": 1172,  # #19476 one model_dump serialization (was 1178, #16444)
@@ -213,7 +213,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/judges/security_risk_judge.py": 842,
     "autobot-backend/knowledge/adapters/okf_adapter.py": 770,
     "autobot-backend/knowledge/base.py": 683,
-    "autobot-backend/knowledge/bulk.py": 1941,
+    "autobot-backend/knowledge/bulk.py": 1893,
     "autobot-backend/knowledge/categories.py": 965,
     "autobot-backend/knowledge/collections.py": 728,
     "autobot-backend/knowledge/connectors/base.py": 663,
@@ -441,7 +441,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/services/drift_checker.py": 838,
     "autobot-slm-backend/services/drift_checker_test.py": 1351,
     "autobot-slm-backend/services/inventory_builder.py": 710,
-    "autobot-slm-backend/services/playbook_executor.py": 1309,  # #17150: ansible_dir self-heal, re-detect before sync
+    "autobot-slm-backend/services/playbook_executor.py": 1304,  # #17150: ansible_dir self-heal, re-detect before sync
     "autobot-slm-backend/services/reconciler.py": 2188,
     # Not legacy debt: created after this guard existed (#14465/#14548). Tracked
     # as a live violation, not #5060 backlog -- see #14630.
