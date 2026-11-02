@@ -17,7 +17,7 @@ from knowledge.search_components.keyword_search import KeywordSearcher
 
 def _searcher() -> KeywordSearcher:
     searcher = KeywordSearcher(MagicMock())
-    searcher.recompute_corpus_stats = AsyncMock()
+    searcher.recompute_corpus_stats = AsyncMock(return_value=True)
     return searcher
 
 
@@ -50,6 +50,56 @@ async def test_no_write_means_no_sweep() -> None:
     assert searcher._refresh_task is None
 
 
+def _blocking(searcher: KeywordSearcher) -> tuple[asyncio.Event, dict]:
+    """A recompute that stays running until released, counting how many overlap."""
+    release, seen = asyncio.Event(), {"running": 0, "most": 0, "runs": 0}
+
+    async def recompute() -> bool:
+        seen["running"] += 1
+        seen["runs"] += 1
+        seen["most"] = max(seen["most"], seen["running"])
+        await release.wait()
+        seen["running"] -= 1
+        return True
+
+    searcher.recompute_corpus_stats = recompute
+    return release, seen
+
+
+@pytest.mark.asyncio
+async def test_writes_during_a_running_recompute_dont_overlap_it_and_get_one_after(monkeypatch) -> None:
+    """The defect itself: each write started another full read while earlier ones still ran."""
+    monkeypatch.setattr(keyword_search, "BM25_REFRESH_MIN_INTERVAL_S", 0.01)
+    searcher = _searcher()
+    release, seen = _blocking(searcher)
+    searcher.request_refresh()
+    await _settle()
+    for _ in range(200):
+        searcher.request_refresh()
+    await _settle()
+    assert seen == {"running": 1, "most": 1, "runs": 1}
+    release.set()
+    await asyncio.wait_for(searcher._refresh_task, 1)
+    assert seen["most"] == 1 and seen["runs"] == 2
+
+
+@pytest.mark.asyncio
+async def test_a_failed_recompute_is_tried_again(monkeypatch) -> None:
+    monkeypatch.setattr(keyword_search, "BM25_REFRESH_MIN_INTERVAL_S", 0.01)
+    searcher = _searcher()
+    searcher.recompute_corpus_stats = AsyncMock(side_effect=[False, True])
+    searcher.request_refresh()
+    await asyncio.wait_for(searcher._refresh_task, 1)
+    assert searcher.recompute_corpus_stats.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_a_failure_in_the_scan_reads_as_a_failure() -> None:
+    redis = MagicMock()
+    redis.scan = AsyncMock(side_effect=ConnectionError("down"))
+    assert await KeywordSearcher(redis).recompute_corpus_stats() is False
+
+
 @pytest.mark.asyncio
 async def test_a_process_exiting_doesnt_lose_the_waiting_recompute(monkeypatch) -> None:
     monkeypatch.setattr(keyword_search, "BM25_REFRESH_MIN_INTERVAL_S", 3600.0)
@@ -57,8 +107,33 @@ async def test_a_process_exiting_doesnt_lose_the_waiting_recompute(monkeypatch) 
     searcher.request_refresh()
     await _settle()
     searcher.request_refresh()
-    await searcher.flush_refresh()
+    await asyncio.wait_for(searcher.flush_refresh(), 1)
     assert searcher.recompute_corpus_stats.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_a_flush_waits_for_a_running_recompute_rather_than_cutting_it_off(monkeypatch) -> None:
+    monkeypatch.setattr(keyword_search, "BM25_REFRESH_MIN_INTERVAL_S", 3600.0)
+    searcher = _searcher()
+    release, seen = _blocking(searcher)
+    searcher.request_refresh()
+    await _settle()
+    flush = asyncio.create_task(searcher.flush_refresh())
+    await _settle()
+    assert not flush.done() and seen["running"] == 1
+    release.set()
+    await asyncio.wait_for(flush, 1)
+    assert seen == {"running": 0, "most": 1, "runs": 1}, "nothing asked for since, so no second read"
+
+
+@pytest.mark.asyncio
+async def test_a_flush_with_a_failing_recompute_still_ends(monkeypatch) -> None:
+    monkeypatch.setattr(keyword_search, "BM25_REFRESH_MIN_INTERVAL_S", 3600.0)
+    searcher = _searcher()
+    searcher.recompute_corpus_stats = AsyncMock(return_value=False)
+    searcher.request_refresh()
+    await _settle()
+    await asyncio.wait_for(searcher.flush_refresh(), 1)
 
 
 @pytest.mark.asyncio

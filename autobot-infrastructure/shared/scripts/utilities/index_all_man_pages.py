@@ -332,6 +332,7 @@ async def main():
     logger.info("COMPREHENSIVE MAN PAGE INDEXING")
     logger.info("=" * 80)
 
+    kb_v2 = None
     try:
         # Initialize Knowledge Base V2
         from knowledge_factory import get_knowledge_base_async
@@ -363,7 +364,6 @@ async def main():
 
         # Index in batches
         total_indexed = await _index_commands_in_batches(kb_v2, all_commands, system_ctx)
-        await kb_v2._get_keyword_searcher().flush_refresh()
 
         # Get final stats
         stats = await kb_v2.get_stats()
@@ -385,6 +385,11 @@ async def main():
 
         traceback.print_exc()
         return 1
+
+    finally:
+        # Facts stored before a failure still count; this process's loop would cancel a waiting recompute (#19726).
+        if kb_v2 is not None:
+            await kb_v2._get_keyword_searcher().flush_refresh()
 
 
 if __name__ == "__main__":

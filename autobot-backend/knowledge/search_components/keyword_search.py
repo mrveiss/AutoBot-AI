@@ -50,7 +50,8 @@ class KeywordSearcher:
         self._bm25: BM25Scorer | None = None
         self._refresh_wanted = False
         self._refresh_task: asyncio.Task | None = None
-        self._last_refresh = float("-inf")
+        self._next_refresh = float("-inf")
+        self._flush = asyncio.Event()
 
     # ------------------------------------------------------------------
     # Corpus statistics
@@ -102,15 +103,15 @@ class KeywordSearcher:
         """Discard cached BM25Scorer so the next search reloads from Redis."""
         self._bm25 = None
 
-    async def recompute_corpus_stats(self) -> None:
+    async def recompute_corpus_stats(self) -> bool:
         """
         Scan all ``fact:*`` keys and persist BM25 corpus stats to Redis (#1720).
 
         Call this after facts are added or removed so IDF values stay current.
-        Stats are stored as JSON at ``bm25:corpus_stats``.
+        Stats are stored as JSON at ``bm25:corpus_stats``. Returns whether they were.
         """
         if not self.redis_client:
-            return
+            return False
         try:
             total_docs = 0
             total_length = 0
@@ -154,8 +155,10 @@ class KeywordSearcher:
                 avg_len,
                 len(doc_freq),
             )
+            return True
         except Exception as exc:
             logger.error("Failed to recompute BM25 corpus stats: %s", exc)
+            return False
 
     def request_refresh(self) -> None:
         """Ask for a recompute after a write: one runs at a time, at most once per interval (#19726)."""
@@ -163,21 +166,31 @@ class KeywordSearcher:
         if self._refresh_task is None or self._refresh_task.done():
             self._refresh_task = asyncio.create_task(self._run_refreshes())
 
+    async def _wait_for_next_refresh(self) -> None:
+        """Until the interval has passed, or a flush asks for it now."""
+        delay = self._next_refresh - time.monotonic()
+        if delay > 0:
+            try:
+                await asyncio.wait_for(self._flush.wait(), delay)
+            except TimeoutError:
+                pass
+
     async def _run_refreshes(self) -> None:
         while self._refresh_wanted:
-            await asyncio.sleep(max(0.0, self._last_refresh + BM25_REFRESH_MIN_INTERVAL_S - time.monotonic()))
+            await self._wait_for_next_refresh()
             self._refresh_wanted = False
-            await self.recompute_corpus_stats()
-            self._last_refresh = time.monotonic()
+            succeeded = await self.recompute_corpus_stats()
+            self._next_refresh = time.monotonic() + BM25_REFRESH_MIN_INTERVAL_S
+            if not succeeded and not self._flush.is_set():  # tried again after the interval, unless exiting
+                self._refresh_wanted = True
 
     async def flush_refresh(self) -> None:
-        """Run a waiting recompute now, for a process about to exit, whose loop would cancel it."""
-        if self._refresh_task is not None and not self._refresh_task.done():
-            self._refresh_task.cancel()
-            await asyncio.gather(self._refresh_task, return_exceptions=True)
-            self._refresh_wanted = False
-            await self.recompute_corpus_stats()
-            self._last_refresh = time.monotonic()
+        """Finish what's running and run what's waiting now, for a process whose loop would cancel it."""
+        if self._refresh_task is None or self._refresh_task.done():
+            return
+        self._flush.set()
+        await asyncio.gather(self._refresh_task, return_exceptions=True)
+        self._flush.clear()
 
     # ------------------------------------------------------------------
     # Batch processing
