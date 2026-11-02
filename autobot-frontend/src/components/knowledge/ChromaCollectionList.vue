@@ -18,7 +18,7 @@
     >
       <div class="collection-info">
         <span class="collection-name">{{ collection.name }}</span>
-        <span class="collection-count">{{ collection.count }} documents</span>
+        <span class="collection-count">{{ $t('knowledge.chromaExplorer.documentCount', { count: collection.count }) }}</span>
       </div>
       <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
