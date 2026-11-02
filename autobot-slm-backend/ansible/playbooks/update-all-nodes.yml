@@ -634,11 +634,11 @@
       ansible.builtin.include_tasks:
         file: ../roles/_shared/tasks/clear_venv_husks.yml
         apply:
-          tags: [slm, deps]
+          tags: [slm, slm-backend, deps]
       vars:
         husk_venv_dir: "{{ autobot.base_dir }}/autobot-slm-backend/venv"
       when: hostvars['localhost']['python_deps_changed'] | bool
-      tags: [slm, deps]
+      tags: [slm, slm-backend, deps]
 
     - name: "[PLAY 1] SLM | Install Python dependencies"
       command:
