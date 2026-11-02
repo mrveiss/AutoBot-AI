@@ -41,6 +41,7 @@ _STAGE_FNS = (
 _STUBS = (
     "RED=; CLR=; EXIT_CODE=0; ALLOW_UNRUNNABLE=0; ALLOW_TIMEOUT=0; STAGE_CLEAN=1\n"
     "STAGE_PIDS=(); STAGE_LOGS=(); STAGE_NAMES=(); STAGE_KEYS=()\n"
+    "machine_slot_wait() { :; }\n"
     'ok() { echo "OK $*" >&2; }; fail() { echo "FAIL $*" >&2; }; warn() { echo "WARN $*" >&2; }\n'
 )
 
