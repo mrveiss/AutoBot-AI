@@ -8585,7 +8585,8 @@
         "hint": "The bytes are still on disk. Reset lets a file be proposed again; removal still needs an approval.",
         "reset": "Propose again",
         "resetDone": "The file will be proposed for removal again.",
-        "resetError": "Could not reset this file."
+        "resetError": "Could not reset this file.",
+        "loadError": "Could not load the file cleanup status. Try again."
       },
       "tabPending": "Pending",
       "tabHistory": "History",
