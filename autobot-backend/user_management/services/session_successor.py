@@ -62,6 +62,14 @@ class Handover:
     company_id: Optional[uuid.UUID] = None
 
 
+def _session_file_names(directory: str) -> list[str]:
+    """A directory not created yet means no session was ever written, not an unreadable one."""
+    try:
+        return os.listdir(directory)
+    except FileNotFoundError:
+        return []
+
+
 async def owned_sessions(manager: Any, username: str) -> tuple[list[tuple[str, Optional[str]]], list[str]]:
     """``(session_id, company_id)`` for every session whose owner is *username*, plus the unreadable ids.
 
@@ -69,7 +77,7 @@ async def owned_sessions(manager: Any, username: str) -> tuple[list[tuple[str, O
     owner of an unreadable file cannot be known, and ownership matches on the username, so a later user
     with this name could inherit it: the caller refuses the removal.
     """
-    names = await run_in_chat_io_executor(os.listdir, manager._get_chats_directory())
+    names = await run_in_chat_io_executor(_session_file_names, manager._get_chats_directory())
     found: list[tuple[str, Optional[str]]] = []
     unreadable: list[str] = []
     for name in sorted(names):
