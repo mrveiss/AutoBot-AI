@@ -70,7 +70,11 @@ async def _audit(approval: "Approval", result: str, **details: object) -> None:
 
 
 async def execute_tier_column_drop(approval: "Approval", session: "AsyncSession") -> None:
-    """Drop the column an approved gate named; the audit entry is written before the schema changes."""
+    """Drop the column an approved gate named; the audit entry is written before the schema changes.
+
+    The decider check re-runs here, after the commit, so an admin leaving in that window can still leave the row
+    approved and unapplied with a comment; that is accepted.
+    """
     self_approval = await _is_self_approval(approval, session)
     was_present = await column_present(session)
     await _audit(approval, "started", self_approval=self_approval, was_present=was_present)

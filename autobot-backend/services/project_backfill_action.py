@@ -43,7 +43,11 @@ async def _review_decider(approval: "Approval", session: "AsyncSession") -> bool
 
 
 async def execute_project_backfill(approval: "Approval", session: "AsyncSession") -> None:
-    """Apply the approved backfill to the approval's company. Raises (recorded by the dispatcher) when it must not."""
+    """Apply the approved backfill to the approval's company. Raises (recorded by the dispatcher) when it must not.
+
+    The decider check re-runs here, after the commit, so an admin leaving in that window can still leave the row
+    approved and unapplied with a comment; that is accepted.
+    """
     if approval.status != ApprovalStatus.APPROVED.value or approval.company_id is None:
         raise ValueError("not an approved, company-scoped project backfill")
     self_approval = await _review_decider(approval, session)

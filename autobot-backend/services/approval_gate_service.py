@@ -48,6 +48,11 @@ _VALID_TRANSITIONS = {
 }
 
 
+def _expired(approval: Approval) -> bool:
+    """Whether the row's ``expires_at`` has passed, whether or not a sweeper has marked it yet."""
+    return approval.expires_at is not None and approval.expires_at <= now_utc()
+
+
 class ApprovalGateService:
     """Service for approval gate CRUD and lifecycle transitions."""
 
@@ -470,6 +475,9 @@ class ApprovalGateService:
     async def _review_decider(self, approval_id: uuid.UUID, decider_id: uuid.UUID | None) -> None:
         """The action's check on who decides, in the transaction the transition commits: its locks hold until then."""
         approval = await self._get_or_raise(approval_id)
+        approvable = ApprovalStatus.APPROVED.value in _VALID_TRANSITIONS.get(approval.status, ())
+        if not approvable or _expired(approval):
+            return  # no decision to review: ``_transition`` gives its usual error
         try:
             await review_decision(approval, self.session, decider_id)
         except Exception:
@@ -487,7 +495,7 @@ class ApprovalGateService:
         """Perform a status transition atomically; resume the source only for the winning caller."""
         current = await self._get_or_raise(approval_id)
         prior_status = current.status  # read now: a rollback below expires the instance
-        if current.expires_at is not None and current.expires_at <= now_utc():
+        if _expired(current):
             if prior_status == ApprovalStatus.PENDING.value:
                 await self._expire_if_pending(approval_id)
             raise ValueError(f"Cannot transition: approval {approval_id} expired")

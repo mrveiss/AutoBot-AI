@@ -313,7 +313,7 @@ async function persistBacklogOrder(ordered: WorkItem[], previous: WorkItem[]): P
 
 function openCreateForm() {
   showCreateForm.value = true
-  if (projects.value.length === 0) loadProjects()
+  if (projects.value.length === 0 && !isLoadingProjects.value) loadProjects()
 }
 
 // Refetched, not prepended: the form can pick any project and the list is filtered by the server.

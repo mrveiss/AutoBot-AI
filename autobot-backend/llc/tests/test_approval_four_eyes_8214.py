@@ -190,6 +190,9 @@ async def test_a_requester_that_names_no_person_does_not_strand_the_request(
     await _decide_as(session_factory, aid, ApprovalStatus.APPROVED, ASKER)
     assert await _applied(session_factory, ApprovalType.BUDGET_OVERRIDE)
     assert [a["self_approval"] for a in _approved_rows(activity)] == [False]
+    other = await _ask(session_factory, ApprovalType.BUDGET_OVERRIDE, _RAISE, requested_by)
+    rejected = await _decide_as(session_factory, other, ApprovalStatus.REJECTED, ASKER)
+    assert rejected.status == ApprovalStatus.REJECTED.value
 
 
 @pytest.mark.asyncio
