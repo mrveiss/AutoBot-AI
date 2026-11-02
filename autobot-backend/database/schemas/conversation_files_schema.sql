@@ -104,6 +104,11 @@ CREATE INDEX IF NOT EXISTS idx_conversation_files_hash
 CREATE INDEX IF NOT EXISTS idx_conversation_files_uploaded_at
     ON conversation_files(uploaded_at DESC);
 
+-- Per-owner quota sum (conversation_file_quota.py, #20217): every upload sums one owner's bytes.
+-- IF NOT EXISTS: an existing install gains the index the next time the schema is applied; no row changes.
+CREATE INDEX IF NOT EXISTS idx_conversation_files_uploaded_by
+    ON conversation_files(uploaded_by, is_deleted);
+
 CREATE INDEX IF NOT EXISTS idx_file_metadata_file_id
     ON file_metadata(file_id);
 

@@ -141,8 +141,7 @@ async def upload_conversation_file(
     try:
         user_data = await _authorize_file_operation(request, session_id, "upload", owner_upload=True)
         file_manager = _get_required_file_manager(request)
-        quota_left = await file_manager.remaining_upload_quota(user_data.get("username"))
-        content = await validate_and_read_upload_file(file, quota_left)
+        content = await validate_and_read_upload_file(file, file_manager, user_data.get("username"))
 
         file_info_dict = await file_manager.upload_file(
             session_id=session_id,

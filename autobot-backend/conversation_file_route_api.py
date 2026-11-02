@@ -13,13 +13,10 @@ from __future__ import annotations
 import mimetypes
 from typing import Any, Dict, List
 
-from autobot_shared.env_registry import env
 from autobot_shared.logging_manager import get_logger
+from conversation_file_quota import UploadRefused, quota_refusal, remaining_bytes, usage
 
 logger = get_logger(__name__)
-
-#: Bytes one user may keep across conversations (``AUTOBOT_CONVERSATION_FILE_USER_QUOTA_BYTES``, #20217).
-USER_QUOTA_BYTES: int = int(env("AUTOBOT_CONVERSATION_FILE_USER_QUOTA_BYTES"))
 
 #: The ``conversation_files`` columns a route returns, named as ``ConversationFileInfo`` names them.
 #: ``uploaded_by`` is nullable in storage (agent-created files may have none); it is returned as stored.
@@ -52,16 +49,21 @@ class ConversationFileRouteApi:
         return {**stored, "filename": filename, "size": stored["file_size"], "extension": extension}
 
     async def remaining_upload_quota(self, user_id: str | None) -> int:
-        """Bytes *user_id* may still upload. Soft-deleted files count: their bytes stay until a human approves."""
+        """Bytes *user_id* may still store; deleted files awaiting human-approved removal count (#20217)."""
         connection = await self._get_async_db_connection()
         try:
-            async with connection.execute(
-                "SELECT COALESCE(SUM(file_size), 0) FROM conversation_files WHERE uploaded_by IS ?", (user_id,)
-            ) as cursor:
-                used = (await cursor.fetchone())[0]
+            return await remaining_bytes(connection, user_id)
         finally:
             await connection.close()
-        return USER_QUOTA_BYTES - used
+
+    async def upload_quota_refusal(self, user_id: str | None) -> UploadRefused:
+        """The 413 for *user_id* out of room: live bytes and bytes awaiting human-approved removal, apart."""
+        connection = await self._get_async_db_connection()
+        try:
+            held = await usage(connection, user_id)
+        finally:
+            await connection.close()
+        return quota_refusal(held["live"], held["pending_removal"])
 
     async def get_file_info(self, session_id: str, file_id: str) -> Dict[str, Any] | None:
         """The live file ``file_id`` of ``session_id`` as a ``ConversationFileInfo`` dict, else ``None``."""
