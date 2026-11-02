@@ -1634,6 +1634,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/code-sync/update-all/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Update Progress
+         * @description What the running self-update is doing, from its own log, across the SLM's restart (#20254).
+         */
+        get: operations["get_update_progress_api_code_sync_update_all_progress_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/code-sync/update-all/report": {
         parameters: {
             query?: never;
@@ -14806,6 +14826,27 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * UpdateProgress
+         * @description A running self-update's position in its own log (#20254).
+         */
+        UpdateProgress: {
+            /** Elapsed Seconds */
+            elapsed_seconds?: number | null;
+            /** Last Line At */
+            last_line_at?: string | null;
+            /** Play */
+            play?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "waiting" | "running" | "quiet" | "exited_without_recap" | "finished" | "unknown";
+            /** Task */
+            task?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * UpdateSummaryResponse
          * @description Lightweight summary for sidebar badge polling.
          */
@@ -17972,6 +18013,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UpdateAllJob"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_update_progress_api_code_sync_update_all_progress_get: {
+        parameters: {
+            query?: {
+                since?: string | null;
+            };
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateProgress"];
                 };
             };
             /** @description Validation Error */

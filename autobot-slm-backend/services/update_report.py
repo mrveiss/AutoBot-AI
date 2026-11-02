@@ -18,9 +18,8 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from autobot_shared.secret_redaction import redact_content, redact_text
-from services.self_update_log_reader import _read_log_text, read_self_update_verdict
+from services.self_update_log_reader import TASK_LINE, _read_log_text, read_self_update_verdict
 
-_TASK_LINE = re.compile(r"^TASK \[(?P<name>.*?)\] \*+\s*$", re.MULTILINE)
 _FAILURE_LINE = re.compile(r"^(?:fatal|failed): \[[^\]]+\]: FAILED! => (?P<detail>.*)$", re.MULTILINE)
 _ERROR_LIMIT = 2000
 
@@ -45,7 +44,7 @@ def first_failure(log_text: str) -> dict[str, str] | None:
     failure = _FAILURE_LINE.search(log_text)
     if failure is None:
         return None
-    tasks = list(_TASK_LINE.finditer(log_text, 0, failure.start()))
+    tasks = list(TASK_LINE.finditer(log_text, 0, failure.start()))
     return {
         "task": _safe(tasks[-1].group("name")) if tasks else "unknown",
         "error": _safe(_error_text(failure.group("detail"))),

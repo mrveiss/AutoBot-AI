@@ -15456,6 +15456,72 @@
         "title": "UpdatePolicyResponse",
         "type": "object"
       },
+      "UpdateProgress": {
+        "description": "A running self-update's position in its own log (#20254).",
+        "properties": {
+          "elapsed_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elapsed Seconds"
+          },
+          "last_line_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Line At"
+          },
+          "play": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Play"
+          },
+          "state": {
+            "enum": [
+              "waiting",
+              "running",
+              "quiet",
+              "exited_without_recap",
+              "finished",
+              "unknown"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "task": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "title": "UpdateProgress",
+        "type": "object"
+      },
       "UpdateSummaryResponse": {
         "description": "Lightweight summary for sidebar badge polling.",
         "properties": {
@@ -21014,6 +21080,77 @@
           }
         ],
         "summary": "Start Update All",
+        "tags": [
+          "code-sync"
+        ]
+      }
+    },
+    "/api/code-sync/update-all/progress": {
+      "get": {
+        "description": "What the running self-update is doing, from its own log, across the SLM's restart (#20254).",
+        "operationId": "get_update_progress_api_code_sync_update_all_progress_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateProgress"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Update Progress",
         "tags": [
           "code-sync"
         ]

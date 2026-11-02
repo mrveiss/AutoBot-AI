@@ -77,3 +77,12 @@ _register(
     "manager node's status (autobot-slm-backend/services/compose_fleet.py, #19292).",
     (1, 86400),
 )
+register_env_var(
+    EnvVarSpec(
+        name="SLM_UPDATE_PROGRESS_STALL_SECONDS",
+        type=int,
+        default=600,
+        description="Seconds a live self-update's log may stay still before the page reports it as quiet (#20254).",
+        component="slm",
+    )
+)
