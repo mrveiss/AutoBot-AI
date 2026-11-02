@@ -59,3 +59,21 @@ async def test_an_slm_without_an_admin_links_nothing() -> None:
     linked, _, _ = await _link(session, person=None)
     assert linked is False
     session.execute.assert_not_awaited()
+
+
+async def test_a_404_from_the_slm_says_so_in_the_log() -> None:
+    """A proxy's 404 reads the same as no admin, and seeding follows, so it must not be silent."""
+    response = MagicMock(status=404)
+    context = MagicMock(
+        __aenter__=AsyncMock(return_value=response),
+        __aexit__=AsyncMock(return_value=False),
+    )
+    http = MagicMock(get=MagicMock(return_value=context))
+    client = MagicMock(_get_session=AsyncMock(return_value=http), _rest_url=lambda path: f"https://slm{path}")
+    with (
+        patch("services.slm_client.get_slm_client", return_value=client),
+        patch.object(service, "assert_egress_policy", AsyncMock()),
+        patch.object(service, "logger") as logger,
+    ):
+        assert await service.fetch_first_slm_admin() is None
+    logger.warning.assert_called_once()
