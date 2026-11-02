@@ -316,7 +316,7 @@
 # Issue #937: Sync and install autobot_shared before requirements (prometheus metrics)
 - name: "SLM | Sync autobot_shared to SLM server"
   ansible.posix.synchronize:
-    src: "{{ playbook_dir }}/../../../autobot_shared/"
+    src: "{{ role_path }}/../../../../autobot_shared/"
     dest: "{{ slm_base_dir }}/autobot_shared/"
     rsync_opts:
       - "--chmod=o-w"  # #19503

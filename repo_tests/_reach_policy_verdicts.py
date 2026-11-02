@@ -23,6 +23,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "Workflow files are a subset of tracked YAML (#20191); compose, ansible and filter files grow "
         "at their own rate, so a share of all YAML would sink with nothing wrong.",
     ),
+    "role-source-paths-depth-proof-20509": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Ansible YAML under roles, a subset of tracked files that grows at its own rate.",
+    ),
     "operational-docs-playbook-references-19611": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
