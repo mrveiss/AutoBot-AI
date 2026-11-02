@@ -241,7 +241,7 @@ def _form_request(upload):
     async def form():
         return {"file": upload}
 
-    return SimpleNamespace(form=form, app=SimpleNamespace(), client=None)
+    return SimpleNamespace(form=form, app=SimpleNamespace(), client=None, headers={})
 
 
 @pytest.fixture

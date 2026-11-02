@@ -40,6 +40,7 @@ def _org(llc_status: str = "active", pause_reason=None) -> SimpleNamespace:
         spent_monthly_cents=0,
         brand_color=None,
         require_approval_for_hires=False,
+        require_approval_for_budget_raises=False,
         parent_org_id=None,
         llc_status=llc_status,
         pause_reason=pause_reason,
