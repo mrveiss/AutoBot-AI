@@ -10,6 +10,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint._comment_syntax import strip_trailing_comment
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROLES = "autobot-slm-backend/ansible/roles"
@@ -35,7 +36,7 @@ REACH = declare(
 
 
 def _offenders(text: str) -> bool:
-    return any(_BAD.search(line) for line in text.splitlines() if not line.lstrip().startswith("#"))
+    return any(_BAD.search(strip_trailing_comment(line, ("#",))) for line in text.splitlines())
 
 
 def test_no_role_reaches_the_repo_through_playbook_dir() -> None:
