@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional
 
 from utils.file_types import TEXT_FILE_EXTENSIONS
 
-from .collections import kb_chroma_client, work_item_collection
+from .collections import KbCollectionManager, kb_chroma_client, work_item_collection
 
 logger = logging.getLogger(__name__)
 
@@ -168,7 +168,10 @@ class WorkItemKB:
             # #19519: the KB client maps ``:`` to a ChromaDB-valid name; the raw
             # client passes ``work_item:<id>`` through and ChromaDB rejects it.
             client = await kb_chroma_client()
-            collection = await client.get_or_create_collection(_collection_name(work_item_id))
+            collection = await client.get_or_create_collection(
+                _collection_name(work_item_id),
+                metadata={"entity_type": KbCollectionManager.WORK_ITEM_PREFIX, "entity_id": str(work_item_id)},
+            )
             await collection.upsert(
                 ids=[doc_id],
                 documents=[content],
