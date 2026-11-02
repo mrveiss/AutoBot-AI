@@ -25,7 +25,12 @@
         </button>
       </div>
     </h3>
-    <div v-if="problems && problems.length > 0" class="section-content">
+    <EmptyState
+      v-if="error"
+      icon="exclamation-triangle"
+      :message="$t('analytics.codebase.sectionLoadFailed', { error })"
+    />
+    <div v-else-if="problems && problems.length > 0" class="section-content">
       <!-- Severity Summary Cards -->
       <div class="summary-cards">
         <div class="summary-card total">
@@ -141,6 +146,8 @@ interface Problem {
 
 interface Props {
   problems: Problem[]
+  /** A failed load is not "no problems detected" -- show it as a failure. */
+  error?: string
 }
 
 const props = defineProps<Props>()
