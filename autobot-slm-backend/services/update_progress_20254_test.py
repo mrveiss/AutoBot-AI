@@ -18,11 +18,11 @@ _STARTED = "2026-10-31T10:00:00+00:00"
 _NOW = datetime(2026, 10, 31, 10, 30, tzinfo=timezone.utc)
 
 
-def _load(name: str):
-    """Real modules by path, past the conftest's services stub."""
+def _load(name: str, monkeypatch: pytest.MonkeyPatch):
+    """Real modules by path, past the conftest's services stub; monkeypatch undoes the install at teardown."""
     spec = importlib.util.spec_from_file_location(f"services.{name}", _HERE / f"{name}.py")
     module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
+    monkeypatch.setitem(sys.modules, spec.name, module)
     spec.loader.exec_module(module)
     return module
 
@@ -30,9 +30,8 @@ def _load(name: str):
 @pytest.fixture
 def progress(monkeypatch):
     for name in ("self_update_log_reader", "update_report"):
-        monkeypatch.delitem(sys.modules, f"services.{name}", raising=False)
-        _load(name)
-    return _load("update_progress")
+        _load(name, monkeypatch)
+    return _load("update_progress", monkeypatch)
 
 
 def _log(tmp_path: Path, body: str, age_seconds: float = 5) -> Path:

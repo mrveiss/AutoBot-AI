@@ -5,7 +5,6 @@
 Discovery and type-safe access; ``check_env_var_registry`` requires every var
 to be registered. A NEW one goes in an ``env_registry_<component>.py`` sibling
 imported below -- this file is at its ceiling and may not grow (#14236).
-
 Closes GH#7081.
 """
 
@@ -75,7 +74,6 @@ from autobot_shared import env_registry_logging  # noqa: E402,F401
 from autobot_shared import env_registry_memory  # noqa: E402,F401
 from autobot_shared import env_registry_npu  # noqa: E402,F401
 from autobot_shared import env_registry_security  # noqa: E402,F401
-from autobot_shared import env_registry_slm  # noqa: E402,F401
 from autobot_shared import env_registry_tls  # noqa: E402,F401
 from autobot_shared import (  # noqa: E402,F401
     env_registry_agent_tools,
@@ -85,6 +83,8 @@ from autobot_shared import (  # noqa: E402,F401
     env_registry_ledger,
     env_registry_postgres,
     env_registry_rag,
+    env_registry_slm,
+    env_registry_slm_health,
     env_registry_terminal,
     env_registry_testing,
 )
