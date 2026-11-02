@@ -19,10 +19,8 @@ import aiohttp
 
 from autobot_shared import node_proxy
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.slm_credential_deletion import ACTION, CREDENTIAL_KIND, delete_path
-from autobot_shared.slm_rest_url import rest_url
+from autobot_shared.slm_credential_deletion import ACTION, APPROVAL_QUERY, CREDENTIAL_KIND, delete_path
 from autobot_shared.ssot_config import config
-from autobot_shared.tls import get_internal_tls_context
 from models.approval import ApprovalComment
 from services.approval_execution import register_post_approval_action, verified_decider
 from services.audit_logger import audit_log
@@ -39,16 +37,26 @@ PROPOSED_BY = "api.internal_slm_credential_proposals"
 _AUDIT_ACTION = "node.ssh_password.delete"  # an AuditAction member (services/audit/taxonomy.py)
 
 
-async def _delete_in_slm(node_id: str) -> bool | None:
-    """Ask the SLM to delete the node's stored password; True if removed, False if none, None if no such node."""
-    slm_url = config.slm_url.rstrip("/")
-    if not slm_url or not node_proxy.internal_api_key():
-        raise RuntimeError("the SLM URL or the internal service key is not configured")
-    url = rest_url(slm_url, delete_path(node_id))
-    connector = aiohttp.TCPConnector(ssl=get_internal_tls_context())
+def _slm_direct_url() -> str:
+    """The SLM's own uvicorn URL (vm.slm : port.slm), never the nginx edge ``SLM_URL`` may name.
+
+    The edge denies ``/api/internal/`` (#20046), so this call cannot go through it, and it must not add the
+    ``/slm`` prefix ``rest_url`` adds behind nginx: uvicorn has no such route.
+    """
+    return f"http://{config.vm.slm}:{config.port.slm}"
+
+
+async def _delete_in_slm(node_id: str, approval_id: str) -> bool | None:
+    """Ask the SLM to delete the node's stored password; True if removed, False if none, None if no such node.
+
+    The SLM re-verifies *approval_id* with this backend before it deletes anything.
+    """
+    if not node_proxy.internal_api_key():
+        raise RuntimeError("the internal service key is not configured")
+    url = f"{_slm_direct_url()}{delete_path(node_id)}"
     timeout = aiohttp.ClientTimeout(total=node_proxy.node_timeout())
-    async with aiohttp.ClientSession(headers=node_proxy.internal_headers(), connector=connector) as http:
-        async with http.delete(url, timeout=timeout) as response:
+    async with aiohttp.ClientSession(headers=node_proxy.internal_headers()) as http:
+        async with http.delete(url, params={APPROVAL_QUERY: approval_id}, timeout=timeout) as response:
             if response.status == 404:
                 return None
             if response.status != 200:
@@ -79,7 +87,7 @@ async def execute_ssh_password_delete(approval: "Approval", session: "AsyncSessi
     if not await _audit(approval, "success", phase="intent"):
         raise ValueError("the audit entry could not be written, so nothing was deleted")
     try:
-        removed = await _delete_in_slm(node_id)
+        removed = await _delete_in_slm(node_id, str(approval.id))
     except Exception as exc:
         await _audit(approval, "failed", error=type(exc).__name__)
         raise

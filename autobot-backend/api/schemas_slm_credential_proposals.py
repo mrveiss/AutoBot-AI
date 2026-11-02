@@ -22,3 +22,16 @@ class SshPasswordDeletionProposalResponse(BaseModel):
     approval_id: str
     status: str
     created: bool
+
+
+class SshPasswordDeletionClaim(BaseModel):
+    """The SLM names the node it is about to delete a password for; the approval must name the same one."""
+
+    node_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9._-]+$")
+
+
+class SshPasswordDeletionClaimResponse(BaseModel):
+    """The approval was valid and is now spent."""
+
+    approval_id: str
+    node_id: str

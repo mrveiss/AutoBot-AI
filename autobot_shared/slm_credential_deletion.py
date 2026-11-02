@@ -19,6 +19,15 @@ CREDENTIAL_KIND = "ssh_password"  # nosec B105  # pragma: allowlist secret -- a 
 PROPOSAL_PATH = "/api/internal/slm/ssh-password-deletion-proposals"
 #: The SLM path template the backend DELETEs through once approved (internal key only).
 DELETE_PATH_TEMPLATE = "/api/internal/nodes/{node_id}/ssh-password"  # nosec B105  # pragma: allowlist secret
+#: The backend path the SLM POSTs to, before deleting, to verify and consume an approval (internal key only).
+CLAIM_PATH_TEMPLATE = "/api/internal/slm/ssh-password-deletion-approvals/{approval_id}/claim"
+#: Query parameter that carries the approval id on the SLM delete route.
+APPROVAL_QUERY = "approval_id"
+
+
+def claim_path(approval_id: str) -> str:
+    """The backend path that verifies and consumes *approval_id*."""
+    return CLAIM_PATH_TEMPLATE.format(approval_id=approval_id)
 
 
 def proposer_id(node_id: str) -> str:

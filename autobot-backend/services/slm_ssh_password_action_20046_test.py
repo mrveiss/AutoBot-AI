@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import uuid
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI, HTTPException
@@ -53,7 +53,7 @@ async def test_approval_deletes_and_audits(removed: bool | None, said: str) -> N
         patch.object(action, "audit_log", AsyncMock()) as audit,
     ):
         await action.execute_ssh_password_delete(_approval(), session)
-    delete.assert_awaited_once_with("node-a")
+    delete.assert_awaited_once_with("node-a", ANY)
     assert said in session.add.call_args.args[0].body
     kwargs = audit.await_args.kwargs
     assert kwargs["result"] == "success" and kwargs["resource"] == "node:node-a"
@@ -99,7 +99,7 @@ async def _decide(method: str) -> AsyncMock:
 
 
 async def test_approving_deletes_and_rejecting_keeps_it() -> None:
-    (await _decide("approve")).assert_awaited_once_with("node-a")
+    (await _decide("approve")).assert_awaited_once_with("node-a", ANY)
     (await _decide("reject")).assert_not_awaited()
 
 
@@ -182,3 +182,8 @@ async def test_no_committed_entry_means_nothing_is_deleted() -> None:
     delete.assert_not_awaited()
     assert audit.await_args.kwargs["durable"] is True
     assert audit.await_args.kwargs["details"]["phase"] == "intent"
+
+
+def test_the_backend_calls_the_slm_directly_never_through_the_edge() -> None:
+    url = action._slm_direct_url()
+    assert url.startswith("http://") and "/slm" not in url and "/api/internal" not in url

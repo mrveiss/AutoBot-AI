@@ -13,6 +13,7 @@ up (ADR-012): a failed proposal is logged and enrollment carries on.
 from __future__ import annotations
 
 import logging
+import uuid
 from typing import Any
 
 import httpx
@@ -20,9 +21,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared import node_proxy
-from autobot_shared.slm_credential_deletion import ACTION, CREDENTIAL_KIND, PROPOSAL_PATH
+from autobot_shared.slm_credential_deletion import (
+    ACTION,
+    CREDENTIAL_KIND,
+    PROPOSAL_PATH,
+    claim_path,
+)
 from config import settings
 from models.database import Node
+from services.node_ssh_key_probe import key_auth_and_sudo_work
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +50,13 @@ async def propose_password_deletion(node: Node) -> bool:
     a later enrollment of the node proposes again, and the backend de-duplicates.
     """
     if not has_stored_password(node):
+        return False
+    if node.auth_method != "key" or not await key_auth_and_sudo_work(node):
+        logger.warning(
+            "Deletion of node %s's stored SSH password not proposed: key access is not proven; "
+            "a later enrollment proposes again",
+            node.node_id,
+        )
         return False
     base_url = node_proxy.resolve_node_url(settings.authority_base_url)
     if not base_url or not node_proxy.internal_api_key():
@@ -68,15 +82,73 @@ async def propose_password_deletion(node: Node) -> bool:
     return True
 
 
-async def delete_stored_password(db: AsyncSession, node_id: str) -> bool | None:
-    """Delete only *node_id*'s stored SSH password fields; True if any were removed, None if no such node."""
+class DeletionRefused(Exception):
+    """The deletion may not proceed; ``status_code`` is what the route answers."""
+
+    def __init__(self, status_code: int, reason: str):
+        super().__init__(reason)
+        self.status_code = status_code
+        self.reason = reason
+
+
+async def _claim_approval(approval_id: uuid.UUID, node_id: str) -> None:
+    """Have the backend verify the approval is a human's, for this node, and unused -- and spend it."""
+    base_url = node_proxy.resolve_node_url(settings.authority_base_url)
+    if not base_url or not node_proxy.internal_api_key():
+        raise DeletionRefused(503, "the backend cannot be asked to verify the approval")
+    try:
+        async with node_proxy.node_client() as client:
+            response = await client.post(
+                f"{base_url}{claim_path(str(approval_id))}",
+                json={"node_id": node_id},
+                headers=node_proxy.internal_headers(),
+            )
+    except httpx.HTTPError as exc:
+        reason = node_proxy.classify_transport_error(exc).reason
+        raise DeletionRefused(503, f"the backend could not be reached to verify the approval ({reason})")
+    if response.status_code != 200:
+        raise DeletionRefused(
+            403 if response.status_code == 403 else 503, "the approval does not authorize this deletion"
+        )
+
+
+async def _audit(db: AsyncSession, node_id: str, approval_id: uuid.UUID, phase: str, success: bool = True) -> None:
+    """Commit an audit row naming the node and the approval; never a value."""
+    from api.security import create_audit_log
+
+    await create_audit_log(
+        db,
+        category="node_management",
+        action="node.ssh_password.delete",
+        resource_type="node",
+        resource_id=node_id,
+        description=f"Stored SSH password deletion ({phase}) under approval {approval_id}",
+        success=success,
+        extra_data={"approval_id": str(approval_id), "credential_kind": CREDENTIAL_KIND, "phase": phase},
+    )
+    await db.commit()
+
+
+async def delete_stored_password(db: AsyncSession, node_id: str, approval_id: uuid.UUID) -> bool:
+    """Delete only *node_id*'s stored SSH password fields after a spent human approval; raises DeletionRefused.
+
+    Order: key access is proven again, the backend verifies and spends the approval, the audit row commits,
+    then the fields go. Nothing is deleted unless every step passed. Returns True if any field was removed.
+    """
     node = (await db.execute(select(Node).where(Node.node_id == node_id))).scalar_one_or_none()
     if node is None:
-        return None
+        raise DeletionRefused(404, "Node not found")
+    if node.auth_method != "key":
+        raise DeletionRefused(409, "the node does not use key authentication")
+    if not await key_auth_and_sudo_work(node):
+        raise DeletionRefused(409, "key access to the node is not proven")
+    await _claim_approval(approval_id, node_id)
+    await _audit(db, node_id, approval_id, "intent")
     extra = dict(node.extra_data or {})
-    removed = [extra.pop(key, None) is not None for key in _PASSWORD_KEYS]
-    if any(removed):
+    removed = any([extra.pop(key, None) is not None for key in _PASSWORD_KEYS])
+    if removed:
         node.extra_data = extra  # reassigned: an in-place edit of a JSON column is not tracked
         await db.commit()
-    logger.info("Stored SSH password of node %s deleted after approval: %s", node_id, any(removed))
-    return any(removed)
+    await _audit(db, node_id, approval_id, "completed")
+    logger.info("Stored SSH password of node %s deleted under approval %s: %s", node_id, approval_id, removed)
+    return removed

@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import uuid
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -35,12 +36,20 @@ def _load(name: str, relative: str):
 
 
 _load("models.schemas_node_ssh_password", "models/schemas_node_ssh_password.py")  # `models` is a conftest stub
-ssh = _load("node_ssh_password_under_20046_test", "services/node_ssh_password.py")
 route = _load("node_ssh_password_internal_under_20046_test", "api/node_ssh_password_internal.py")
+ssh = sys.modules["services.node_ssh_password"]  # the very module the route imported, so patches reach both
+assert not isinstance(ssh.delete_stored_password, MagicMock), "services.node_ssh_password is a stub"
 
 
-def _node(extra: dict | None) -> SimpleNamespace:
-    return SimpleNamespace(node_id="node-a", extra_data=extra)
+def _node(extra: dict | None, auth_method: str = "key") -> SimpleNamespace:
+    return SimpleNamespace(
+        node_id="node-a",
+        extra_data=extra,
+        auth_method=auth_method,
+        ip_address="192.0.2.10",
+        ssh_user="autobot",
+        ssh_port=22,
+    )
 
 
 class _Client:
@@ -56,7 +65,8 @@ class _Client:
         return False
 
 
-def _configure(monkeypatch, client: _Client) -> None:
+def _configure(monkeypatch, client: _Client, probe: bool = True) -> None:
+    monkeypatch.setattr(ssh, "key_auth_and_sudo_work", AsyncMock(return_value=probe))
     monkeypatch.setenv("AUTOBOT_INTERNAL_API_KEY", _KEY)
     monkeypatch.setattr(ssh.node_proxy, "resolve_node_url", lambda fallback="": "https://backend.invalid")
     monkeypatch.setattr(ssh.node_proxy, "node_client", lambda **_: client)
@@ -121,7 +131,28 @@ async def test_an_unset_key_proposes_nothing_and_says_so(monkeypatch, caplog) ->
     assert "not proposed" in caplog.text
 
 
-# --- deletion -------------------------------------------------------------
+# --- the proposal waits for proven key access ------------------------------------
+
+
+async def test_a_node_whose_key_access_is_not_proven_proposes_nothing(monkeypatch, caplog) -> None:
+    client = _Client(_ok())
+    _configure(monkeypatch, client, probe=False)
+    with caplog.at_level("WARNING"):
+        assert await ssh.propose_password_deletion(_node({"ssh_password": _SECRET})) is False
+    client.post.assert_not_awaited()
+    assert "key access is not proven" in caplog.text
+
+
+async def test_a_node_not_on_key_auth_proposes_nothing(monkeypatch) -> None:
+    client = _Client(_ok())
+    _configure(monkeypatch, client)
+    assert await ssh.propose_password_deletion(_node({"ssh_password": _SECRET}, auth_method="password")) is False
+    client.post.assert_not_awaited()
+
+
+# --- deletion: every gate, with the real function ---------------------------------
+
+_APPROVAL = uuid.uuid4()
 
 
 def _db(node) -> MagicMock:
@@ -131,66 +162,169 @@ def _db(node) -> MagicMock:
     return db
 
 
-async def test_delete_removes_only_the_password_fields_of_that_node() -> None:
-    node = _node({"ssh_password": _SECRET, "ssh_password_encrypted": True, "keep": "me"})
-    db = _db(node)
-    assert await ssh.delete_stored_password(db, "node-a") is True
-    assert node.extra_data == {"keep": "me"}
-    db.commit.assert_awaited_once()
+class _Backend:
+    """The backend end of the claim: answers a status and records what it was asked."""
+
+    def __init__(self, status_code: int = 200, error: Exception | None = None):
+        self.post = AsyncMock(side_effect=error, return_value=SimpleNamespace(status_code=status_code))
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
 
 
-async def test_delete_with_nothing_stored_changes_nothing() -> None:
-    node, db = _node({"keep": "me"}), _db(_node({"keep": "me"}))
-    db = _db(node)
-    assert await ssh.delete_stored_password(db, "node-a") is False
-    db.commit.assert_not_awaited()
-
-
-async def test_delete_for_an_unknown_node_is_none() -> None:
-    assert await ssh.delete_stored_password(_db(None), "ghost") is None
-
-
-# --- the internal route -----------------------------------------------------
-
-
-def _app(monkeypatch, node) -> TestClient:
+@pytest.fixture
+def world(monkeypatch):
+    """A node with a stored password, a passing probe, an approving backend, and a recording audit."""
     monkeypatch.setenv("AUTOBOT_INTERNAL_API_KEY", _KEY)
+    backend = _Backend()
+    audit = AsyncMock()
+    monkeypatch.setitem(sys.modules, "api.security", SimpleNamespace(create_audit_log=audit))
+    monkeypatch.setattr(ssh.node_proxy, "resolve_node_url", lambda fallback="": "https://backend.invalid")
+    monkeypatch.setattr(ssh.node_proxy, "node_client", lambda **_: backend)
+    monkeypatch.setattr(ssh, "key_auth_and_sudo_work", AsyncMock(return_value=True))
+    node = _node({"ssh_password": _SECRET, "ssh_password_encrypted": True, "keep": "me"})
+    return SimpleNamespace(node=node, db=_db(node), backend=backend, audit=audit)
+
+
+async def test_an_accepted_approval_deletes_only_the_password_fields_and_audits_first(world) -> None:
+    assert await ssh.delete_stored_password(world.db, "node-a", _APPROVAL) is True
+    assert world.node.extra_data == {"keep": "me"}
+    phases = [c.kwargs["extra_data"]["phase"] for c in world.audit.await_args_list]
+    assert phases == ["intent", "completed"]
+    assert all(str(_APPROVAL) in str(c.kwargs) and _SECRET not in str(c.kwargs) for c in world.audit.await_args_list)
+    url = world.backend.post.await_args.args[0]
+    assert url.endswith(f"/ssh-password-deletion-approvals/{_APPROVAL}/claim")
+    assert world.backend.post.await_args.kwargs["json"] == {"node_id": "node-a"}
+
+
+@pytest.mark.parametrize(
+    ("prepare", "status_code"),
+    [
+        ("backend-refuses", 403),
+        ("backend-down", 503),
+        ("backend-errors", 503),
+        ("auth-not-key", 409),
+        ("probe-fails", 409),
+        ("unknown-node", 404),
+    ],
+)
+async def test_every_failed_gate_deletes_nothing(world, monkeypatch, prepare, status_code) -> None:
+    if prepare == "backend-refuses":
+        world.backend.post.return_value = SimpleNamespace(status_code=403)
+    elif prepare == "backend-down":
+        world.backend.post.side_effect = httpx.ConnectError("refused")
+    elif prepare == "backend-errors":
+        world.backend.post.return_value = SimpleNamespace(status_code=500)
+    elif prepare == "auth-not-key":
+        world.node.auth_method = "password"
+    elif prepare == "probe-fails":
+        monkeypatch.setattr(ssh, "key_auth_and_sudo_work", AsyncMock(return_value=False))
+    else:
+        world.db.execute.return_value = MagicMock(scalar_one_or_none=lambda: None)
+    with pytest.raises(ssh.DeletionRefused) as refused:
+        await ssh.delete_stored_password(world.db, "node-a", _APPROVAL)
+    assert refused.value.status_code == status_code
+    assert world.node.extra_data == {"ssh_password": _SECRET, "ssh_password_encrypted": True, "keep": "me"}
+    world.db.commit.assert_not_awaited()
+    world.audit.assert_not_awaited()
+
+
+async def test_the_probe_is_the_first_gate_so_a_spent_approval_is_never_wasted(world, monkeypatch) -> None:
+    monkeypatch.setattr(ssh, "key_auth_and_sudo_work", AsyncMock(return_value=False))
+    with pytest.raises(ssh.DeletionRefused):
+        await ssh.delete_stored_password(world.db, "node-a", _APPROVAL)
+    world.backend.post.assert_not_awaited()
+
+
+async def test_no_audit_row_means_no_deletion(world) -> None:
+    world.audit.side_effect = RuntimeError("audit store down")
+    with pytest.raises(RuntimeError):
+        await ssh.delete_stored_password(world.db, "node-a", _APPROVAL)
+    assert "ssh_password" in world.node.extra_data
+
+
+async def test_a_node_with_nothing_stored_reports_false(world) -> None:
+    world.node.extra_data = {"keep": "me"}
+    assert await ssh.delete_stored_password(world.db, "node-a", _APPROVAL) is False
+
+
+# --- the key probe ----------------------------------------------------------------
+
+
+def _load_probe(spawn):
+    real_utils = _load("ssh_utils_under_20046_test", "services/ssh_utils.py")
+    stubs = {"services.ssh_utils": real_utils, "services.orchestrator_ssh": SimpleNamespace(spawn_ssh=spawn)}
+    with patch.dict(sys.modules, stubs):
+        return _load("node_ssh_key_probe_under_20046_test", "services/node_ssh_key_probe.py")
+
+
+async def test_the_probe_runs_a_key_only_passwordless_sudo_check() -> None:
+    spawn = AsyncMock(return_value=(0, b"", b""))
+    probe = _load_probe(spawn)
+    assert await probe.key_auth_and_sudo_work(_node({})) is True
+    argv = spawn.await_args.args[0]
+    assert "BatchMode=yes" in argv and "PasswordAuthentication=no" in argv and argv[-1] == "sudo -n true"
+    assert "sshpass" not in argv and "autobot@192.0.2.10" in argv
+
+
+@pytest.mark.parametrize("outcome", [(255, b"", b"denied"), (1, b"", b""), TimeoutError(), OSError("no ssh")])
+async def test_the_probe_fails_closed(outcome) -> None:
+    spawn = AsyncMock(side_effect=outcome) if isinstance(outcome, Exception) else AsyncMock(return_value=outcome)
+    assert await _load_probe(spawn).key_auth_and_sudo_work(_node({})) is False
+
+
+# --- the internal route -----------------------------------------------------------
+
+
+def _app(world) -> TestClient:
     app = FastAPI()
     app.include_router(route.router, prefix="/api")
-    app.dependency_overrides[route.get_db] = lambda: _db(node)
+    app.dependency_overrides[route.get_db] = lambda: world.db
     return TestClient(app)
 
 
-def test_the_route_is_refused_without_the_key(monkeypatch) -> None:
-    node = _node({"ssh_password": _SECRET})
-    client = _app(monkeypatch, node)
+def _delete(client: TestClient, headers: dict | None = None, approval: str | None = str(_APPROVAL)):
+    headers = {"X-Internal-API-Key": _KEY} if headers is None else headers
+    params = {"approval_id": approval} if approval else {}
+    return client.delete("/api/internal/nodes/node-a/ssh-password", headers=headers, params=params)
+
+
+def test_the_route_is_refused_without_the_key(world) -> None:
+    client = _app(world)
     for headers in ({}, {"X-Internal-API-Key": "wrong"}, {"Authorization": "Bearer user-token"}):
-        assert client.delete("/api/internal/nodes/node-a/ssh-password", headers=headers).status_code == 403
-    assert node.extra_data == {"ssh_password": _SECRET}
+        assert _delete(client, headers).status_code == 403
+    assert "ssh_password" in world.node.extra_data
 
 
-def test_the_route_refuses_everyone_when_no_key_is_configured(monkeypatch) -> None:
-    client = _app(monkeypatch, _node({"ssh_password": _SECRET}))
+def test_the_route_refuses_everyone_when_no_key_is_configured(world, monkeypatch) -> None:
     monkeypatch.delenv("AUTOBOT_INTERNAL_API_KEY")
-    assert (
-        client.delete("/api/internal/nodes/node-a/ssh-password", headers={"X-Internal-API-Key": ""}).status_code == 403
-    )
+    assert _delete(_app(world), {"X-Internal-API-Key": ""}).status_code == 403
 
 
-def test_the_route_deletes_and_returns_no_value(monkeypatch) -> None:
-    node = _node({"ssh_password": _SECRET, "ssh_password_encrypted": True})
-    response = _app(monkeypatch, node).delete(
-        "/api/internal/nodes/node-a/ssh-password", headers={"X-Internal-API-Key": _KEY}
-    )
+def test_the_key_alone_is_not_enough_without_an_approval(world) -> None:
+    assert _delete(_app(world), approval=None).status_code == 422
+    assert _delete(_app(world), approval="not-a-uuid").status_code == 422
+    assert "ssh_password" in world.node.extra_data
+
+
+def test_the_key_and_a_refused_approval_delete_nothing(world) -> None:
+    world.backend.post.return_value = SimpleNamespace(status_code=403)
+    response = _delete(_app(world))
+    assert response.status_code == 403 and "ssh_password" in world.node.extra_data
+
+
+def test_the_route_deletes_under_an_accepted_approval_and_returns_no_value(world) -> None:
+    response = _delete(_app(world))
     assert response.status_code == 200 and response.json() == {"node_id": "node-a", "deleted": True}
-    assert _SECRET not in response.text and node.extra_data == {}
+    assert _SECRET not in response.text and "ssh_password" not in world.node.extra_data
 
 
-def test_the_route_answers_404_for_an_unknown_node(monkeypatch) -> None:
-    response = _app(monkeypatch, None).delete(
-        "/api/internal/nodes/ghost/ssh-password", headers={"X-Internal-API-Key": _KEY}
-    )
-    assert response.status_code == 404
+def test_the_route_answers_409_when_key_access_is_not_proven(world, monkeypatch) -> None:
+    monkeypatch.setattr(ssh, "key_auth_and_sudo_work", AsyncMock(return_value=False))
+    assert _delete(_app(world)).status_code == 409 and "ssh_password" in world.node.extra_data
 
 
 # --- wiring -------------------------------------------------------------------
