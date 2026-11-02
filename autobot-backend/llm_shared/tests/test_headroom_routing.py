@@ -93,6 +93,7 @@ class _World:
         }
         degradation = MagicMock()
         degradation.mark_degraded = AsyncMock()
+        degradation.is_degraded = AsyncMock(return_value=False)  # a hop is skipped while degraded (#19753)
 
         async def emit(**kw):
             self.events.append(kw)
