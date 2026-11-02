@@ -92,7 +92,7 @@ ISSUE_17822_ENTRIES = tuple(
 # `services/ai_line_change_proposal.py` + `autobot_shared/ai_lines.py` (imported by `plan_convert_lines.py`, which that test runs, #20086).
 assert (
     len(ISSUE_17822_ENTRIES) == 28
-), "the pinned migration-gate set is 26 entries; an emptied fixture would pin nothing"
+), "the pinned migration-gate set is 28 entries; an emptied fixture would pin nothing"
 ISSUE_17822_WORKFLOW = "migration-gate"
 EVENTS = ("push", "pull_request", "merge_group", "schedule", "workflow_dispatch")
 MG_SHA = "merge-group-base-sha"  # a stand-in value; only its presence or absence is compared
