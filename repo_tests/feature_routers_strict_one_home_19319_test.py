@@ -2,20 +2,16 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""`AUTOBOT_FEATURE_ROUTERS_STRICT` has one home: two SSOT profile constants (#19319).
+"""`AUTOBOT_FEATURE_ROUTERS_STRICT` has one home: the environment decides it (#19319, #19395).
 
-#6690 ruled strict boot for dev/CI and a degraded start in production. The production value
-lived only as a literal ``0`` in ``backend.env.j2`` while the SSOT field said ``"1"``, so the
-default a reader saw depended on which file it opened. Now:
+#6690 ruled strict boot for dev/CI and a degraded start in production. Now:
 
 * ``FEATURE_ROUTERS_STRICT_DEFAULT`` / ``FEATURE_ROUTERS_STRICT_PRODUCTION`` are assigned once each,
-  in ``ssot_role_mirrors``, and the ``ssot_config`` ``MiscConfig`` field defaults to the first by name;
-* files that cannot import Python carry a profile value as a declared, pinned carrier
-  (``_CARRIERS``): the backend role default, the production ``docker-compose.yml`` (owner ruling on
-  #19319) and the dev compose override example. Every compose service serving the backend app is one;
-* the template renders the role variable, never a literal;
-* no other tracked file sets the variable to a literal: an env/compose/YAML assignment, a Python
-  read with a literal fallback, or a second role/group default.
+  in ``ssot_role_mirrors``, and ``deployment_profile.feature_routers_strict_default`` picks between them;
+* the ``ssot_config`` ``MiscConfig`` field defaults to that function, and an explicit value overrides it;
+* the template renders the optional inventory override and nothing else;
+* no tracked file sets the variable to a literal: an env/compose/YAML assignment, a Python read with
+  a literal fallback, or a role/group default.
 
 A planted copy of each shape proves the sweep can fail, so its green is not a blind detector's.
 """
@@ -26,10 +22,12 @@ import ast
 import re
 from pathlib import Path
 
+import pytest
 import yaml
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from autobot_shared.deployment_profile import feature_routers_strict_default
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOT = repo_root()
@@ -45,8 +43,6 @@ _PRODUCTION = "FEATURE_ROUTERS_STRICT_PRODUCTION"
 _PROFILES = (_DEFAULT, _PRODUCTION)
 _COMPOSE = "docker-compose.yml"
 _COMPOSE_DEV = "docker-compose.override.example.yml"
-#: The files allowed to hold a literal, each pinned to the profile constant it carries.
-_CARRIERS = {_ROLE_DEFAULTS: _PRODUCTION, _COMPOSE: _PRODUCTION, _COMPOSE_DEV: _DEFAULT}
 _SKIP_PARTS = frozenset({"__pycache__", "node_modules", ".worktrees", "venv", ".venv"})
 #: ``NAME=0`` / ``- NAME=0`` / ``export NAME=0`` / ``NAME: "0"`` / ``backend_feature_routers_strict: "1"``
 #: -- an assignment to a literal. A Jinja ``{{ var }}`` value is a derivation, not a copy.
@@ -98,10 +94,10 @@ def _python_copies(text: str) -> bool:
 
 
 def literal_copies(files: dict[str, str]) -> list[str]:
-    """Every file, other than a declared carrier, that gives the flag a literal value."""
+    """Every file that gives the flag a literal value."""
     found = []
     for rel, text in files.items():
-        if rel in _CARRIERS or (_NAME not in text and _ROLE_VAR not in text):
+        if _NAME not in text and _ROLE_VAR not in text:
             continue
         hit = _python_copies(text) if rel.endswith(".py") else bool(_LITERAL_ASSIGNMENT.search(text))
         if hit:
@@ -119,16 +115,6 @@ def _live_files() -> dict[str, str]:
     return files
 
 
-def carrier_mismatches(files: dict[str, str], profiles: dict[str, str]) -> list[str]:
-    """Each carrier must assign at least one literal, and every literal must equal its profile."""
-    bad = []
-    for rel, constant in _CARRIERS.items():
-        values = [m.group("value") for m in _LITERAL_ASSIGNMENT.finditer(files.get(rel, ""))]
-        if not values or any(v != profiles[constant] for v in values):
-            bad.append(f"{rel}: {values} != {constant} ({profiles[constant]!r})")
-    return bad
-
-
 def _tree(rel: str) -> ast.Module:
     return ast.parse((_ROOT / rel).read_text(encoding="utf-8"))
 
@@ -143,11 +129,11 @@ def _profile_values() -> dict[str, list[str]]:
     return values
 
 
-def _field_default() -> ast.expr:
+def _field_factory() -> ast.expr:
     for node in ast.walk(_tree(_SSOT)):
         if isinstance(node, ast.AnnAssign) and getattr(node.target, "id", "") == "feature_routers_strict":
             assert isinstance(node.value, ast.Call), "feature_routers_strict is no longer a Field(...)"
-            return next(k.value for k in node.value.keywords if k.arg == "default")
+            return next(k.value for k in node.value.keywords if k.arg == "default_factory")
     raise AssertionError(f"{_SSOT} no longer declares feature_routers_strict")
 
 
@@ -158,30 +144,41 @@ def test_each_profile_is_assigned_once_and_the_two_differ() -> None:
     assert values[_PRODUCTION] == ["0"], "the production profile is the #6690 degraded start"
 
 
-def test_the_field_defaults_to_the_default_profile_by_name() -> None:
-    default = _field_default()
-    assert isinstance(default, ast.Name) and default.id == "FEATURE_ROUTERS_STRICT_DEFAULT", ast.dump(default)
-    imported = {
-        alias.name
-        for node in _tree(_SSOT).body
-        if isinstance(node, ast.ImportFrom) and node.module == "autobot_shared.ssot_role_mirrors"
-        for alias in node.names
-    }
-    assert default.id in imported, f"{_SSOT} must take the default profile from {_MIRRORS}, not define its own"
+def test_the_field_defaults_to_the_environment_derivation() -> None:
+    factory = _field_factory()
+    assert isinstance(factory, ast.Attribute) and factory.attr == "feature_routers_strict_default", ast.dump(factory)
 
 
-def _profiles() -> dict[str, str]:
-    return {name: values[0] for name, values in _profile_values().items()}
+@pytest.mark.parametrize(
+    ("environ", "expected"),
+    [
+        ({"AUTOBOT_ENVIRONMENT": "production"}, "0"),
+        ({"AUTOBOT_ENVIRONMENT": "staging"}, "0"),
+        ({"AUTOBOT_ENV": "production"}, "0"),
+        ({"AUTOBOT_ENVIRONMENT": "development"}, "1"),
+        ({"AUTOBOT_ENVIRONMENT": "ci"}, "1"),
+        ({"AUTOBOT_ENVIRONMENT": "test"}, "1"),
+        ({}, "1"),
+        ({"AUTOBOT_ENVIRONMENT": "  "}, "1"),
+    ],
+)
+def test_the_environment_decides_and_an_unnamed_one_stays_strict(environ: dict[str, str], expected: str) -> None:
+    assert feature_routers_strict_default(environ) == expected
 
 
-def test_the_role_default_mirrors_the_production_profile() -> None:
+def test_an_explicit_value_overrides_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    from autobot_shared.ssot_config import MiscConfig
+
+    monkeypatch.setenv("AUTOBOT_ENVIRONMENT", "production")
+    monkeypatch.delenv(_NAME, raising=False)
+    assert MiscConfig().feature_routers_strict == "0"
+    monkeypatch.setenv(_NAME, "1")
+    assert MiscConfig().feature_routers_strict == "1"
+
+
+def test_the_role_sets_no_default() -> None:
     role = yaml.safe_load((_ROOT / _ROLE_DEFAULTS).read_text(encoding="utf-8"))
-    assert str(role[_ROLE_VAR]) == _profiles()[_PRODUCTION]
-
-
-def test_every_carrier_holds_its_profile_value() -> None:
-    files = {rel: (_ROOT / rel).read_text(encoding="utf-8") for rel in _CARRIERS}
-    assert carrier_mismatches(files, _profiles()) == []
+    assert _ROLE_VAR not in role
 
 
 def _backend_app_services(rel: str) -> dict[str, list[str]]:
@@ -196,13 +193,13 @@ def _backend_app_services(rel: str) -> dict[str, list[str]]:
     return found
 
 
-def test_every_compose_service_serving_the_backend_carries_its_profile() -> None:
-    profiles = _profiles()
-    for rel in (_COMPOSE, _COMPOSE_DEV):
+def test_every_compose_service_serving_the_backend_names_its_environment_and_no_mode() -> None:
+    for rel, environment in ((_COMPOSE, "production"), (_COMPOSE_DEV, "development")):
         services = _backend_app_services(rel)
         assert services, f"{rel}: no service serves main:app from /app/autobot-backend -- the detector went blind"
-        expected = f"{_NAME}={profiles[_CARRIERS[rel]]}"
-        assert {n: expected in env for n, env in services.items()} == dict.fromkeys(services, True), rel
+        for name, env in services.items():
+            assert f"AUTOBOT_ENVIRONMENT={environment}" in env, f"{rel}:{name}"
+            assert not [e for e in env if e.startswith(_NAME)], f"{rel}:{name}"
 
 
 def test_the_template_renders_the_role_variable_once() -> None:
@@ -213,7 +210,9 @@ def test_the_template_renders_the_role_variable_once() -> None:
 def test_no_tracked_file_holds_a_literal_copy() -> None:
     files = _live_files()
     assert _TEMPLATE in files and _SSOT in files, "the sweep did not reach the two files it must see"
-    assert literal_copies(files) == [], f"a second default for {_NAME}; derive from ssot_role_mirrors instead"
+    assert (
+        literal_copies(files) == []
+    ), f"a literal default for {_NAME}; name the environment instead, or override through the inventory"
 
 
 def test_every_planted_copy_is_caught_and_derivations_are_not() -> None:
@@ -233,14 +232,3 @@ def test_every_planted_copy_is_caught_and_derivations_are_not() -> None:
         _SSOT: f'f: str = Field(default=FEATURE_ROUTERS_STRICT_DEFAULT, alias="{_NAME}", description="d")\n',
     }
     assert literal_copies({**copies, **derived}) == sorted(copies)
-
-
-def test_a_carrier_with_the_wrong_value_or_no_value_is_caught() -> None:
-    profiles = {_DEFAULT: "1", _PRODUCTION: "0"}
-    files = {
-        _ROLE_DEFAULTS: f'{_ROLE_VAR}: "0"\n',
-        _COMPOSE: f"    environment:\n      - {_NAME}=1\n",
-        _COMPOSE_DEV: "    environment:\n      - AUTOBOT_ENVIRONMENT=development\n",
-    }
-    bad = carrier_mismatches(files, profiles)
-    assert [b.split(":")[0] for b in bad] == [_COMPOSE, _COMPOSE_DEV], bad
