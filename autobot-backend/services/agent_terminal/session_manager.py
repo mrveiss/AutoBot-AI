@@ -509,8 +509,6 @@ class SessionManager:
             ttl = APPROVAL_PENDING_SESSION_TTL if session.has_pending_approval() else TTL_1_HOUR
             json_data = json.dumps(session_data)
             await self.redis_client.setex(key, ttl, json_data)
-            if session.has_pending_approval():
-                await hold_pending_slot(self.redis_client, session.session_id, session.get_pending_command_id(), ttl)
 
             # #13478: a companion pointer so the approve path can still find the
             # conversation after the session itself is gone. `get_session` takes
@@ -523,6 +521,8 @@ class SessionManager:
                     APPROVAL_PENDING_SESSION_TTL,
                     session.conversation_id,
                 )
+            if session.has_pending_approval():
+                await hold_pending_slot(self.redis_client, session.session_id, session.get_pending_command_id(), ttl)
 
             logger.debug("Persisted session %s to Redis with key %s (ttl=%ds)", session.session_id, key, ttl)
 

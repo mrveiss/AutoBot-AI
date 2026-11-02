@@ -210,3 +210,36 @@ async def test_a_restored_approval_without_a_command_id_still_writes_its_convers
     await worker.manager._persist_session(worker.session)
     assert await redis.get(f"agent_terminal:approval_conversation:{SID}") == "conv-1"
     assert await redis.get(_claim_key(SID)) is None
+
+
+async def test_a_claim_lost_while_its_approval_waits_is_re_asserted(redis):
+    """A failed renewal lets the claim lapse: the waiting approval still refuses the next command, on every try."""
+    first, second = _worker(redis), _worker(redis)
+    await _claim(first, redis, "cmd-1")
+    _set_pending(first.session, "cmd-1")
+    await first.manager._persist_session(first.session)
+    await redis.delete(_claim_key(SID))
+
+    assert (await _claim(second, redis, "cmd-2"))["error"] == PENDING_APPROVAL_REFUSAL
+    assert await redis.get(_claim_key(SID)) == "cmd-1"
+    assert await redis.ttl(_claim_key(SID)) > CLAIM_WRITE_TTL
+    assert (await _claim(second, redis, "cmd-3"))["error"] == PENDING_APPROVAL_REFUSAL
+
+
+async def test_a_lost_claim_on_a_restored_approval_without_an_id_still_refuses_and_leaves_no_claim(redis):
+    worker = _worker(redis)
+    worker.session.pending_approval = {"command": "rm x", "risk": CommandRisk.HIGH.value}
+    await worker.manager._persist_session(worker.session)
+    assert (await _claim(_worker(redis), redis, "cmd-2"))["error"] == PENDING_APPROVAL_REFUSAL
+    assert await redis.get(_claim_key(SID)) is None
+
+
+async def test_a_failed_renewal_does_not_skip_the_conversation_pointer(redis, monkeypatch):
+    worker = _worker(redis)
+    worker.session.conversation_id = "conv-1"
+    _set_pending(worker.session, "cmd-1")
+    monkeypatch.setattr(
+        "services.agent_terminal.session_manager.hold_pending_slot", AsyncMock(side_effect=ConnectionError("blip"))
+    )
+    await worker.manager._persist_session(worker.session)
+    assert await redis.get(f"agent_terminal:approval_conversation:{SID}") == "conv-1"
