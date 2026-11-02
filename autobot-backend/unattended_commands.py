@@ -26,6 +26,9 @@ from __future__ import annotations
 
 import re
 import shlex
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable
 
 #: Commands that cannot execute other code, read file contents or write files. Each is also SAFE
 #: in the classifier (a test pins that), which still runs after this list.
@@ -38,18 +41,66 @@ UNATTENDED_ALLOWED_COMMANDS: frozenset[str] = frozenset(
 #: (``run_bounded`` executes the parsed words directly).
 _SHELL_META = re.compile(r"[;&|<>$`\\\n\r(){}]")
 
-#: Arguments that make a command run another program, whichever command carries them.
-_EXEC_STYLE_ARGS: frozenset[str] = frozenset(
-    {"-exec", "-execdir", "-ok", "-okdir", "--exec", "--eval", "--to-command", "--checkpoint-action"}
-)
-#: Per-command arguments that read a named file or change state, matched by prefix so ``-f/etc/x`` and
-#: ``--file=/etc/x`` are caught as well as ``-f /etc/x``. ``date``: -f/--file read dates from a file,
-#: -r/--reference read a file's mtime, -s/--set change the clock; a short cluster such as ``-uf`` counts.
-#: ``hostname``: -F/--file read a name from a file. The other allowlisted commands take no file-reading flag.
-_COMMAND_SPECIFIC_ARGS: dict[str, re.Pattern[str]] = {
-    "date": re.compile(r"^(-[A-Za-z]*[fsr]|--(file|reference|set))"),
-    "hostname": re.compile(r"^(-[A-Za-z]*F|--file)"),
+
+@dataclass(frozen=True)
+class ArgSpec:
+    """The only arguments an allowlisted command accepts when nobody is watching.
+
+    GNU tools accept any unambiguous prefix of a long option (``date --fil`` is
+    ``--file``), so banning option names cannot work; everything not named here is
+    refused. ``short`` lists permitted single-letter flags (clusters allowed); no long
+    option is ever permitted. ``positional`` judges each non-flag word.
+    """
+
+    short: str = ""
+    positional: Callable[[str], bool] = lambda word: False
+
+
+def _any_word(word: str) -> bool:
+    return True
+
+
+def _date_format(word: str) -> bool:
+    """``date +FORMAT`` only: a bare positional such as ``0101120026`` sets the clock."""
+    return word.startswith("+")
+
+
+def _user_name(word: str) -> bool:
+    """``id NAME``: a plain account name, never a path."""
+    return re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", word) is not None
+
+
+def _local_path(word: str) -> bool:
+    """``ls PATH``: relative to the working directory, no parent, no home, no option look-alike."""
+    return not word.startswith(("/", "~", "-")) and ".." not in Path(word).parts
+
+
+#: Per command, what it may be given. Flags that name a file or change state are simply absent.
+_ARG_SPECS: dict[str, ArgSpec] = {
+    "echo": ArgSpec(short="neE", positional=_any_word),
+    "pwd": ArgSpec(short="LP"),
+    "whoami": ArgSpec(),
+    "hostname": ArgSpec(short="sfdi"),  # no positional: ``hostname NAME`` renames the host
+    "uname": ArgSpec(short="asnrvmpio"),
+    "uptime": ArgSpec(short="ps"),
+    "id": ArgSpec(short="ugGnr", positional=_user_name),
+    "date": ArgSpec(short="uIR", positional=_date_format),
+    "ls": ArgSpec(short="lAahtrS1dF", positional=_local_path),
 }
+
+
+def _arguments_refused(command: str, args: list[str]) -> bool:
+    """Whether any of *args* falls outside what *command*'s spec permits."""
+    spec = _ARG_SPECS[command]
+    for arg in args:
+        if arg.startswith("--") or arg == "-":
+            return True  # no long option is ever permitted; "--" and "-" are not needed
+        if arg.startswith("-"):
+            if not set(arg[1:]) <= set(spec.short):
+                return True
+        elif not spec.positional(arg):
+            return True
+    return False
 
 
 def unattended_refusal(command: str) -> str | None:
@@ -64,7 +115,6 @@ def unattended_refusal(command: str) -> str | None:
         return "it is empty"
     if words[0] not in UNATTENDED_ALLOWED_COMMANDS:
         return "its command is not on the unattended allowlist"
-    specific = _COMMAND_SPECIFIC_ARGS.get(words[0])
-    if _EXEC_STYLE_ARGS.intersection(words[1:]) or (specific and any(specific.match(w) for w in words[1:])):
-        return "it carries an argument that executes code or reads a file"
+    if _arguments_refused(words[0], words[1:]):
+        return "it carries an argument outside what the command may be given unattended"
     return None

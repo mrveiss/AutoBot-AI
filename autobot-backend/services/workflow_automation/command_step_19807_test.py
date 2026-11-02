@@ -134,7 +134,7 @@ async def test_stdout_is_the_commands_output_and_exit_is_real(layer):
 @pytest.mark.asyncio
 async def test_non_zero_exit_fails_the_step_with_real_code_and_stderr(layer):
     with pytest.raises(CommandStepFailed) as failed:
-        await _run("ls /nonexistent-19807-dir")
+        await _run("ls nonexistent-19807-dir")
     result = failed.value.result
     assert result["exit_code"] != 0
     assert "nonexistent-19807-dir" in result["stderr"]
@@ -417,6 +417,26 @@ async def test_disabled_command_security_refuses_the_step(layer):
         "date --file=/etc/shadow",
         "date -uf /etc/shadow",
         "hostname -F /etc/shadow",
+        "date --fil /etc/shadow",
+        "date --fi=/etc/shadow",
+        "date --s=2000-01-01",
+        "date 010100002026",
+        "date -d @0",
+        "hostname newname",
+        "hostname --file /etc/hostname",
+        "uname --all",
+        "uname -z",
+        "id --help",
+        "id /etc/shadow",
+        "uptime --since",
+        "ls /etc",
+        "ls ../x",
+        "ls ~",
+        "ls --ignore=x",
+        "ls --time-style=full-iso",
+        "echo --version",
+        "whoami --help",
+        "pwd -x",
     ],
 )
 async def test_an_unattended_run_refuses_what_is_not_on_the_allowlist(layer, command):
@@ -528,3 +548,45 @@ def test_import_and_clone_need_an_administrator(role):
     doc = {"export_document": {}, "session_id": "s"}
     assert client.post("/import", json=doc).status_code == 403
     assert client.post("/share/abc/clone", json={"session_id": "s"}).status_code == 403
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "date",
+        "date +%Y",
+        "date -u +%s",
+        "hostname",
+        "hostname -f",
+        "uname -a",
+        "id",
+        "id root",
+        "ls -la",
+        "ls sub",
+        "uptime -p",
+    ],
+)
+def test_the_positive_allowlist_admits_the_named_safe_forms(command):
+    from unattended_commands import unattended_refusal
+
+    assert unattended_refusal(command) is None
+
+
+@pytest.mark.parametrize("step_type", ["command_execution", "shell", "anything-the-executor-treats-as-a-command"])
+def test_every_non_vision_step_type_requires_confirmation(step_type):
+    from .models import WorkflowStep
+
+    step = WorkflowStep(
+        step_id="s", command="echo hi", description="d", requires_confirmation=False, step_type=step_type
+    )
+    assert step.requires_confirmation is True
+
+
+def test_a_vision_step_keeps_the_creators_confirmation_choice():
+    """Vision steps call the vision API with step_config and run no command, so the flag stays the creator's."""
+    from .models import WorkflowStep
+    from .vision_step_handler import VISION_STEP_TYPES
+
+    for step_type in VISION_STEP_TYPES:
+        step = WorkflowStep(step_id="s", command="", description="d", requires_confirmation=False, step_type=step_type)
+        assert step.requires_confirmation is False

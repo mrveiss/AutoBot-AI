@@ -23,6 +23,8 @@ from pydantic import BaseModel, Field, field_validator
 from autobot_shared.risk_tier import presented_risk_tier_value
 from type_defs.common import Metadata
 
+from .vision_step_handler import VISION_STEP_TYPES
+
 
 class WorkflowStepStatus(Enum):
     """Status of a workflow step"""
@@ -154,8 +156,13 @@ class WorkflowStep:
     step_config: Metadata | None = None
 
     def __post_init__(self) -> None:
-        """Issue #19807: a command step always needs confirmation, whoever built it (route, import, clone, store)."""
-        if self.step_type == "command_execution":
+        """Issue #19807: every step that is not a vision step needs confirmation, whoever built it.
+
+        The executor sends any ``step_type`` outside ``VISION_STEP_TYPES`` down the command path
+        (``_resolve_and_run_step``), so an unknown type still runs ``command``. Vision steps call the
+        vision API with ``step_config`` and run no command; their flag stays the creator's choice.
+        """
+        if self.step_type not in VISION_STEP_TYPES:
             self.requires_confirmation = True
 
     # === Issue #372: Feature Envy Reduction Methods ===
