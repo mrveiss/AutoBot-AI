@@ -1435,8 +1435,8 @@ async def _seed_default_admin() -> None:
         from user_management.services.person_link_service import link_first_slm_admin_at_startup
         from user_management.services.seed import seed_default_admin
 
+        await link_first_slm_admin_at_startup()
         async with get_async_session_factory()() as session:
-            await link_first_slm_admin_at_startup(session)
             await seed_default_admin(session)
             # seed_default_admin (via UserService) only flushes; without an
             # explicit commit the created admin is rolled back on session
