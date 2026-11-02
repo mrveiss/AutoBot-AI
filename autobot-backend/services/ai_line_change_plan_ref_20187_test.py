@@ -47,8 +47,8 @@ async def test_the_conversion_files_every_proposal_under_the_plans_identity(fact
 
     props = [AiLineProposal(tool_action="mail:draft", line="autonomous", sub_step_key="p1")]
     with patch("services.ai_line_change_proposal.get_async_session_factory", lambda: factory):
-        await lines.file_proposals(COMPANY, "intake", props, uuid.uuid4())
+        await lines.file_proposals(COMPANY, "intake", 1, props, uuid.uuid4())
         first = props[0].approval_id
         props[0].outcome = None  # the plan save failed after filing: a retry by someone else files it again
-        await lines.file_proposals(COMPANY, "intake", props, uuid.uuid4())
+        await lines.file_proposals(COMPANY, "intake", 1, props, uuid.uuid4())
     assert props[0].approval_id == first
