@@ -148,7 +148,7 @@ async def execute_owner_assign(approval: "Approval", session: "AsyncSession") ->
         await _comment(approval, session, f"Session {session_id} already belongs to {existing}; nothing changed.")
         await _audit(approval, session_id, "denied", stage="skipped", existing_owner=existing)
         return
-    await _audit(approval, session_id, "success", stage="started", owner=owner, self_approval=self_approved)
+    await _audit(approval, session_id, "attempted", stage="started", owner=owner, self_approval=self_approved)
     try:
         outcome = await _write_owner(manager, validator, session_id, owner, user_id)
     except ValueError:

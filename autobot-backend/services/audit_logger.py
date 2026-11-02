@@ -43,7 +43,8 @@ logger = get_logger(__name__)
 # shown as the backend address in the audit dashboard (#10502 item #11).
 _NON_ROUTABLE_HOSTS = frozenset({"0.0.0.0", "::", "127.0.0.1", "::1", "localhost", ""})
 
-AuditResult = Literal["success", "denied", "failed", "error"]
+# "attempted" is written before the work runs, so nothing counts it as done until its own "success" (#20030, #20665).
+AuditResult = Literal["success", "denied", "failed", "error", "attempted"]
 
 #: Actor recorded when an operation has no user (a system action).
 SYSTEM_ACTOR = "system"

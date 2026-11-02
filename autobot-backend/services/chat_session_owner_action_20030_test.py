@@ -93,6 +93,7 @@ async def test_approval_writes_the_owner_to_file_and_redis_with_a_record() -> No
     redis_set.assert_awaited_once_with("s1", "alice")
     assert "now belongs to alice" in session.add.call_args.args[0].body
     assert [c.kwargs["details"]["stage"] for c in audit.await_args_list] == ["started", "success"]
+    assert audit.await_args_list[0].kwargs["result"] == "attempted", "nothing has happened yet"
 
 
 async def test_a_session_that_gained_an_owner_is_left_alone() -> None:

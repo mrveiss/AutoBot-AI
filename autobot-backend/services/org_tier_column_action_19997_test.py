@@ -55,6 +55,7 @@ async def test_approval_drops_it_and_leaves_a_record(present: bool, said: str) -
     assert _dropped(session) and said in session.add.call_args.args[0].body
     session.commit.assert_awaited_once()
     assert [c.kwargs["details"]["stage"] for c in audit.await_args_list] == ["started", "done"]
+    assert [c.kwargs["result"] for c in audit.await_args_list] == ["attempted", "success"]
     assert audit.await_args.kwargs["details"]["was_present"] is present
 
 
