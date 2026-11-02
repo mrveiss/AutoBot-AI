@@ -135,8 +135,13 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         },
         "root-relative `*.ts` sweep; the matching files live outside the python filter's trees",
     ),
+    "*.css": (
+        {"repo_tests/primary_fill_label_reads_text_on_primary_20425_test.py"},
+        "root-relative `*.css` sweep; the matching files live outside the python filter's trees (#20425).",
+    ),
     "*.vue": (
         {
+            "repo_tests/primary_fill_label_reads_text_on_primary_20425_test.py",
             "repo_tests/_hardcoded_colour_detect.py",
             "repo_tests/_hardcoded_ui_literal_detect.py",
             "repo_tests/_raw_palette_detect.py",
