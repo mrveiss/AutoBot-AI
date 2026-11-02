@@ -76,14 +76,6 @@ async def _check_redis_health() -> str:
         return "unhealthy"
 
 
-_NOT_EXPECTED_ONLINE = [
-    NodeStatus.PENDING.value,
-    NodeStatus.ENROLLING.value,
-    NodeStatus.MAINTENANCE.value,
-    NodeStatus.DECOMMISSIONED.value,
-]
-
-
 @router.get("/health", response_model=HealthResponse)
 async def health_check(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -92,17 +84,14 @@ async def health_check(
     try:
         online_count = await db.execute(select(func.count(Node.id)).where(Node.status == NodeStatus.ONLINE.value))
         total_count = await db.execute(select(func.count(Node.id)))
-        expected_count = await db.execute(select(func.count(Node.id)).where(Node.status.notin_(_NOT_EXPECTED_ONLINE)))
 
         nodes_online = online_count.scalar() or 0
         nodes_total = total_count.scalar() or 0
-        nodes_expected_online = expected_count.scalar() or 0
         db_status = "healthy"
     except Exception as e:
         logger.error("Database health check failed: %s", e)
         nodes_online = 0
         nodes_total = 0
-        nodes_expected_online = 0
         db_status = "unhealthy"
 
     redis_status = await _check_redis_health()
@@ -124,7 +113,6 @@ async def health_check(
         frontend=frontend_status,
         nodes_online=nodes_online,
         nodes_total=nodes_total,
-        nodes_expected_online=nodes_expected_online,
     )
 
 

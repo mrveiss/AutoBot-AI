@@ -914,7 +914,7 @@ onUnmounted(() => {
 
 <template>
   <div>
-    <UpdateNodesOfflineAlert />
+    <UpdateNodesOfflineAlert :updating="updateAllPolling" />
     <div class="flex items-center justify-between mb-6">
       <div>
         <h2 class="text-lg font-semibold text-gray-900">{{ $t('codeSyncView.codeSync') }}</h2>

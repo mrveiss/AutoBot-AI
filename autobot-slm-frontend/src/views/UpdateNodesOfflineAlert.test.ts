@@ -15,6 +15,8 @@ vi.mock('@/utils/ApiClient', () => ({ slmApiClient: { get: (...args: unknown[]) 
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en }, missingWarn: false, fallbackWarn: false })
 
+const AT = '2026-11-02T10:00:00Z'
+
 async function text(): Promise<string> {
   const wrapper = mount(UpdateNodesOfflineAlert, { global: { plugins: [i18n] } })
   await flushPromises()
@@ -23,12 +25,25 @@ async function text(): Promise<string> {
 
 describe('UpdateNodesOfflineAlert', () => {
   it('says how many nodes stayed offline', async () => {
-    get.mockResolvedValueOnce({ nodes_offline: 1, nodes_total: 2 })
-    expect(await text()).toContain('1 of 2 nodes')
+    get.mockResolvedValueOnce({ nodes_offline: 1, nodes_total: 2, run_started_at: AT })
+    const shown = await text()
+    expect(shown).toContain('1 of the 2 nodes')
+    expect(shown).toContain(new Date(AT).toLocaleString())
+  })
+
+  it('asks again when the update ends', async () => {
+    get.mockResolvedValueOnce({ nodes_offline: 0, nodes_total: 2, run_started_at: AT })
+    const wrapper = mount(UpdateNodesOfflineAlert, { props: { updating: true }, global: { plugins: [i18n] } })
+    await flushPromises()
+    expect(wrapper.text()).toBe('')
+    get.mockResolvedValueOnce({ nodes_offline: 1, nodes_total: 2, run_started_at: AT })
+    await wrapper.setProps({ updating: false })
+    await flushPromises()
+    expect(wrapper.text()).toContain('1 of the 2 nodes')
   })
 
   it('shows nothing when all came back', async () => {
-    get.mockResolvedValueOnce({ nodes_offline: 0, nodes_total: 2 })
+    get.mockResolvedValueOnce({ nodes_offline: 0, nodes_total: 2, run_started_at: AT })
     expect(await text()).toBe('')
   })
 

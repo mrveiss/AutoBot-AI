@@ -1643,7 +1643,7 @@ export interface paths {
         };
         /**
          * Get Nodes Offline After Update
-         * @description Nodes the last self-update left offline (#20250): a warning, so the update page says so.
+         * @description Nodes the last self-update left offline and still are (#20250), with when that update ran.
          */
         get: operations["get_nodes_offline_after_update_api_code_sync_update_all_nodes_offline_get"];
         put?: never;
@@ -9987,11 +9987,6 @@ export interface components {
              * @default unknown
              */
             frontend: string;
-            /**
-             * Nodes Expected Online
-             * @default 0
-             */
-            nodes_expected_online: number;
             /** Nodes Online */
             nodes_online: number;
             /** Nodes Total */
@@ -18028,7 +18023,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: number;
+                        [key: string]: number | string;
                     };
                 };
             };

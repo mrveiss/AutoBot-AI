@@ -35,5 +35,3 @@ class HealthResponse(BaseModel):
     redis: str
     nodes_online: int
     nodes_total: int
-    # #20250: nodes meant to be online now, leaving out those being enrolled, in maintenance or retired.
-    nodes_expected_online: int = 0

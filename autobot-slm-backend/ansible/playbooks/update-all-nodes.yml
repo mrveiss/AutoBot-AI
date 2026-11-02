@@ -322,6 +322,17 @@
       register: deploy_commit_subject
       changed_when: false
 
+    # #20250: Play 3 waits for this many nodes. Only a run that touches the SLM's own host: a per-node
+    # update has --limit localhost,<node> and needn't wait for the whole fleet.
+    - name: "[PRE-FLIGHT] Count the nodes online before the update"
+      uri:
+        url: "https://{{ slm_host }}/slm/api/health"
+        validate_certs: false
+        status_code: 200
+      register: fleet_nodes_before
+      failed_when: false
+      when: ansible_limit is not defined or slm_manager_inventory_host in ansible_limit.split(',')
+
     - name: "[PRE-FLIGHT] Notify SLM of new commit"
       uri:
         url: "https://localhost/api/code-source/notify"
@@ -2492,8 +2503,8 @@
       delay: 10
 
     # #20250: the agents reconnect after the restarts above, so read the count once they have had
-    # time to. Only a run that touched the SLM's own host: a per-node update has --limit localhost,<node>
-    # and needn't wait for the whole fleet. Not a failure of this task: the marker below says it.
+    # time to. Judged against the count before the update, so a node that was already down costs no
+    # wait and isn't blamed on it. Not a failure of this task: the marker below says it.
     - name: Wait for the nodes to report back
       uri:
         url: "https://{{ slm_host }}/slm/api/health"
@@ -2502,11 +2513,11 @@
       register: fleet_nodes_health
       until: >-
         fleet_nodes_health.status == 200 and
-        (fleet_nodes_health.json.nodes_online | default(0) | int) >= (fleet_nodes_health.json.nodes_expected_online | default(0) | int)
+        (fleet_nodes_health.json.nodes_online | default(0) | int) >= (fleet_nodes_before.json.nodes_online | default(0) | int)
       retries: "{{ update_nodes_online_retries | default(18) }}"
       delay: "{{ update_nodes_online_delay | default(10) }}"
       failed_when: false
-      when: ansible_limit is not defined or (ansible_limit.split(',') | intersect(groups['slm_server'] | default([]))) | length > 0
+      when: fleet_nodes_before.json is defined
 
     - name: Clean up deploy archives
       file:
@@ -2518,11 +2529,12 @@
       debug:
         msg: >-
           NODES OFFLINE AFTER UPDATE:
-          {{ (fleet_nodes_health.json.nodes_expected_online | default(0) | int) - (fleet_nodes_health.json.nodes_online | default(0) | int) }}
-          of {{ fleet_nodes_health.json.nodes_expected_online | default(0) | int }}
+          {{ (fleet_nodes_before.json.nodes_online | default(0) | int) - (fleet_nodes_health.json.nodes_online | default(0) | int) }}
+          of {{ fleet_nodes_before.json.nodes_online | default(0) | int }}
       when:
+        - fleet_nodes_before.json is defined
         - fleet_nodes_health.json is defined
-        - (fleet_nodes_health.json.nodes_online | default(0) | int) < (fleet_nodes_health.json.nodes_expected_online | default(0) | int)
+        - (fleet_nodes_health.json.nodes_online | default(0) | int) < (fleet_nodes_before.json.nodes_online | default(0) | int)
 
     - name: Display update summary
       debug:

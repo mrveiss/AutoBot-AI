@@ -10,12 +10,12 @@ from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.env_utils import env_int_clamped
-from models.database import Deployment
+from models.database import Deployment, Node, NodeStatus
 from services.auth import require_permission
 from services.database import get_db
 from services.playbook_executor import SELF_UPDATE_LOG_PATH
@@ -41,12 +41,19 @@ async def _deploy_runs_since(db: AsyncSession, started_at: str | None) -> list[D
 @router.get("/update-all/nodes-offline")
 async def get_nodes_offline_after_update(
     _: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
-) -> dict[str, int]:
-    """Nodes the last self-update left offline (#20250): a warning, so the update page says so."""
-    from services.self_update_log_reader import read_self_update_verdict
-
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, int | str]:
+    """Nodes the last self-update left offline and still are (#20250), with when that update ran."""
     verdict = read_self_update_verdict(SELF_UPDATE_LOG_PATH)
-    return {"nodes_offline": verdict.nodes_offline, "nodes_total": verdict.nodes_total}
+    online = (await db.execute(select(func.count(Node.id)).where(Node.status == NodeStatus.ONLINE.value))).scalar() or 0
+    still_offline = min(verdict.nodes_offline, max(0, verdict.nodes_total - online))
+    if not verdict.run_started_at:  # an undated report can't be told from an old one, so it isn't shown
+        still_offline = 0
+    return {
+        "nodes_offline": still_offline,
+        "nodes_total": verdict.nodes_total,
+        "run_started_at": verdict.run_started_at or "",
+    }
 
 
 @router.get("/update-all/report")
