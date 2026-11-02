@@ -29,6 +29,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "The Windows install scripts that call pip on the installed requirements: a small named set, "
         "so a share of any file count means nothing.",
     ),
+    "role-source-paths-depth-proof-20509": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Ansible YAML under roles, a subset of tracked files that grows at its own rate.",
+    ),
     "operational-docs-playbook-references-19611": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

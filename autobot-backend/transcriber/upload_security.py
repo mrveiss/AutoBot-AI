@@ -13,6 +13,7 @@ import uuid
 from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from autobot_shared.ssot_constants import SecurityConstants
 
 logger = get_logger(__name__)
@@ -29,17 +30,26 @@ class UploadSecurityError(Exception):
     """Exception raised for upload security violations."""
 
 
+def transcriber_data_dir() -> Path:
+    """The transcriber's data directory, absolute: ``create_recording`` rejects relative paths (#12310)."""
+    return Path(os.getenv("TRANSCRIBER_DATA_DIR", "data/transcriber")).resolve()
+
+
+def _configured_upload_dir() -> str:
+    return config.path.upload_dir
+
+
 def get_upload_base_dir() -> Path:
-    """Get the base upload directory from environment or default.
+    """The one upload directory: uploads are written here and the path guard allows exactly this (#19823).
 
     Returns:
-        Path to upload base directory
+        Absolute path to the upload base directory
 
     Raises:
         RuntimeError: If upload directory cannot be created
     """
-    base_dir = os.environ.get("AUTOBOT_UPLOAD_DIR", "/var/lib/autobot/uploads")
-    upload_path = Path(base_dir)
+    configured = _configured_upload_dir()
+    upload_path = Path(configured).resolve() if configured else transcriber_data_dir() / "uploads"
 
     # Create directory if it doesn't exist
     try:
