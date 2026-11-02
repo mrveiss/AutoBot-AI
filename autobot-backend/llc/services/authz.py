@@ -29,13 +29,19 @@ identical to one that does.
 from __future__ import annotations
 
 import uuid
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.approval_four_eyes import FourEyesError, four_eyes_self_approval, requester_id
+from user_management.models.user import User
+
 from ..models.enums import MembershipRole
 from ..models.membership import LLCCompanyMembership
+
+if TYPE_CHECKING:
+    from models.approval import Approval
 
 #: Membership roles permitted to change a company's roles, occupancy,
 #: permissions and workflow attachments.
@@ -143,3 +149,48 @@ async def require_company_admin_unless_platform(
     if platform_admin:
         return
     await require_company_admin(session, company_id, actor_user_id, for_update=for_update)
+
+
+async def active_admin_ids(session: AsyncSession, company_id: uuid.UUID) -> set[uuid.UUID]:
+    """The company's current owners/admins, leaving out anyone deactivated, deleted or hard-deleted, who cannot act.
+
+    Locks those memberships until the decision commits, so a second admin cannot leave after this
+    check, and two concurrent decisions on one company take turns. A platform admin is not counted:
+    a company's sole owner or admin may self-approve even while a platform admin exists.
+    """
+    rows = await session.execute(
+        select(LLCCompanyMembership.user_id)
+        .join(User, User.id == LLCCompanyMembership.user_id)
+        .where(
+            LLCCompanyMembership.company_id == company_id,
+            LLCCompanyMembership.role.in_(GRANTING_ROLES),
+            User.is_active.is_(True),
+            User.deleted_at.is_(None),
+        )
+        .with_for_update(of=LLCCompanyMembership)
+    )
+    return set(rows.scalars().all())
+
+
+async def require_four_eyes(
+    approval: "Approval",
+    session: AsyncSession,
+    decider: Optional[uuid.UUID],
+    *,
+    what: str,
+    unidentified_requester_ok: bool = False,
+) -> bool:
+    """The four-eyes rule (#18430, #8214): True for a flagged self-approval; raises when refused.
+
+    The one who asked may approve their own request only when they are the company's single active owner/admin.
+    A requester that names no person (an agent, or a row written before requesters were pinned to the
+    verified caller) cannot be the decider: with *unidentified_requester_ok* that passes unflagged,
+    otherwise it is refused. Call it inside the decision's transaction so the count is the current one.
+    """
+    requester = requester_id(approval.requested_by_agent)
+    if decider is None or (requester is None and not unidentified_requester_ok):
+        raise FourEyesError(f"{what} needs a verified decider and a requester that can be identified")
+    if requester is None:
+        return False
+    eligible = await active_admin_ids(session, approval.company_id)
+    return four_eyes_self_approval(decider, requester, eligible, what=what)

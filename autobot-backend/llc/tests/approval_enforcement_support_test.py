@@ -52,11 +52,13 @@ class _ActivityRecorder:
 
     def __init__(self) -> None:
         self.calls: list[tuple] = []
+        self.rows: list[tuple] = []  # (event type, the keyword arguments the activity row is written with)
 
     async def record(
         self, session, company_id, actor_type, actor_id, event_type, entity_type, entity_id, **kw
     ):  # noqa: ANN001, ANN201
         self.calls.append((event_type.value, actor_type, actor_id, entity_type, entity_id))
+        self.rows.append((event_type.value, kw))
 
 
 @pytest.fixture
