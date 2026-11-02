@@ -77,3 +77,12 @@ _register(
     "manager node's status (autobot-slm-backend/services/compose_fleet.py, #19292).",
     (1, 86400),
 )
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DOCKER_SLM_HTTP_PORT",
+        type=int,
+        default=8080,
+        description="Host port the compose SLM GUI publishes plain HTTP on; the frontend holds 80 (#20620).",
+        component="slm",
+    )
+)

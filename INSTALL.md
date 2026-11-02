@@ -190,7 +190,7 @@ images needs headroom on top:
 
 | What you start | Containers | Memory limits (sum) | Measured use | Host RAM |
 |----------------|------------|---------------------|--------------|----------|
-| SLM web GUI only (`--profile slm`) | SLM, its GUI, Redis, PostgreSQL | ~3.1 GB | ~215 MiB idle just after start (CI); ~414 MiB with the SLM restarting (an external test) | 1 GB+ free to run; building the images needs more (not measured) |
+| SLM web GUI only (`up -d autobot-slm-gui`) | SLM, its GUI, Redis, PostgreSQL | ~3.1 GB | ~215 MiB idle just after start (CI); ~414 MiB with the SLM restarting (an external test) | 1 GB+ free to run; building the images needs more (not measured) |
 | Full stack | backend, worker, celery-beat, SLM, frontend, Redis, PostgreSQL, ChromaDB | ~9 GB | not measured | 16 GB recommended |
 
 ### First: per-host secrets and network range
@@ -242,11 +242,10 @@ from the GUI's Setup Wizard:
 git clone https://github.com/mrveiss/AutoBot-AI.git
 cd AutoBot-AI
 bash docker/generate-secrets.sh
-docker compose --env-file docker/.env.docker --env-file docker/.env.secrets --profile slm up -d --build autobot-slm-gui
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d --build autobot-slm-gui
 ```
 
-The SLM GUI is then at **http://localhost/slm/**. It binds ports 80 and 443, like the full
-stack's frontend — run one or the other, not both.
+The SLM GUI is then at **http://localhost:8080/slm/**. It has its own ports, so it runs alongside the full stack's frontend, and it starts with the full stack too. Change them with `AUTOBOT_DOCKER_SLM_HTTP_PORT` and `AUTOBOT_DOCKER_SLM_HTTPS_PORT` (default 8443).
 
 To serve it over HTTPS, put a certificate in `docker/certs/` (`autobot.crt` and `autobot.key`;
 `bash docker/certs/generate-self-signed.sh` makes a self-signed pair for testing) and select
@@ -254,12 +253,10 @@ the TLS config. Port 80 then redirects to HTTPS:
 
 ```bash
 AUTOBOT_DOCKER_SLM_NGINX_CONF=./docker/nginx/nginx-slm-ssl.conf \
-  docker compose --env-file docker/.env.docker --env-file docker/.env.secrets --profile slm up -d autobot-slm-gui
+  docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d autobot-slm-gui
 ```
 
-The GUI is then at **https://localhost/slm/**. If host port 443 is already in use, publish
-HTTPS on another port with `AUTOBOT_DOCKER_SLM_HTTPS_PORT=<port>` (the GUI is then at
-`https://localhost:<port>/slm/`). The full stack's frontend switches to TLS the same way, with
+The GUI is then at **https://localhost:8443/slm/**. Open that address directly: the plain-HTTP redirect goes to the default HTTPS port, which on a full stack is the frontend. The full stack's frontend switches to TLS the same way, with
 `AUTOBOT_DOCKER_NGINX_CONF=./docker/nginx/nginx-ssl.conf`.
 
 ### Full stack
@@ -268,8 +265,8 @@ HTTPS on another port with `AUTOBOT_DOCKER_SLM_HTTPS_PORT=<port>` (the GUI is th
 docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d --build
 ```
 
-This starts the core services: backend, SLM, frontend, Redis, PostgreSQL, and
-ChromaDB.
+This starts the core services: backend, SLM, the SLM GUI at `http://localhost:8080/slm/`,
+frontend, Redis, PostgreSQL, and ChromaDB.
 
 ### Profiles
 
