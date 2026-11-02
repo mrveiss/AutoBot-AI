@@ -26,9 +26,35 @@ NEW_PORT="${SLM_COPY_NEW_PORT:-5432}"
 
 new_psql() { psql -h "$NEW_HOST" -p "$NEW_PORT" -U "$POSTGRES_USER" -v ON_ERROR_STOP=1 -qtA "$@"; }
 old_psql() { psql -h "$OLD_HOST" -p "$OLD_PORT" -U "$POSTGRES_USER" -v ON_ERROR_STOP=1 -qtA "$@"; }
-database_exists() { [ "$("$1" -d postgres -c "SELECT 1 FROM pg_database WHERE datname = '$2'")" = 1 ]; }
+sql_literal() { printf "'%s'" "${1//\'/\'\'}"; }
+
+# Not "no" when the query fails: read that way, a wrong password would mark an empty copy as done.
+database_exists() {  # psql-function name
+    local found
+    found="$("$1" -d postgres -c "SELECT 1 FROM pg_database WHERE datname = $(sql_literal "$2")")" || {
+        echo "ERROR: could not ask ${1%_psql} Postgres whether ${2} exists; nothing was copied." >&2
+        exit 1
+    }
+    [ "$found" = 1 ]
+}
 
 mark_done() { new_psql -d postgres -c "CREATE DATABASE ${MARKER}"; }
+
+if [ "$SLM_DB_NAME" = "$MARKER" ]; then
+    echo "ERROR: SLM_DB_NAME can't be ${MARKER}; that name records that this copy has run." >&2
+    exit 1
+fi
+
+# A custom SLM role exists only where it was created by hand: make it here, before the marker check,
+# so the SLM can log in after any run. It acts through the owner, since the copy has no other owners.
+ensure_slm_role() {
+    [ -n "${SLM_POSTGRES_USER:-}" ] && [ "$SLM_POSTGRES_USER" != "$POSTGRES_USER" ] || return 0
+    if [ -z "$(new_psql -d postgres -c "SELECT 1 FROM pg_roles WHERE rolname = $(sql_literal "$SLM_POSTGRES_USER")")" ]; then
+        new_psql -d postgres -c "CREATE ROLE \"${SLM_POSTGRES_USER//\"/\"\"}\" LOGIN PASSWORD $(sql_literal "$PGPASSWORD")"
+    fi
+    new_psql -d postgres -c "GRANT \"${POSTGRES_USER//\"/\"\"}\" TO \"${SLM_POSTGRES_USER//\"/\"\"}\""
+}
+ensure_slm_role
 
 if database_exists new_psql "$MARKER"; then
     echo "SLM databases: already in place"
@@ -58,10 +84,11 @@ copy_database() {  # name
         echo "SLM databases: ${1} isn't in the main Postgres, nothing to copy"
         return 0
     fi
-    database_exists new_psql "$1" || new_psql -d postgres -c "CREATE DATABASE \"${1}\""
+    database_exists new_psql "$1" || new_psql -d postgres -c "CREATE DATABASE \"${1//\"/\"\"}\""
     # --clean: a rerun after a failure replaces the partial copy; the SLM hasn't started on it.
+    # --no-owner, --no-acl: roles and grants from the old server may not exist on this one.
     pg_dump -h "$OLD_HOST" -p "$OLD_PORT" -U "$POSTGRES_USER" -Fc "$1" |
-        pg_restore -h "$NEW_HOST" -p "$NEW_PORT" -U "$POSTGRES_USER" -d "$1" --clean --if-exists --no-owner --exit-on-error
+        pg_restore -h "$NEW_HOST" -p "$NEW_PORT" -U "$POSTGRES_USER" -d "$1" --clean --if-exists --no-owner --no-acl --exit-on-error
     echo "SLM databases: copied ${1}; the original stays in the main Postgres"
 }
 

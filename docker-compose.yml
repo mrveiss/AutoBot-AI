@@ -135,6 +135,35 @@ services:
       - POSTGRES_USER=${AUTOBOT_POSTGRES_USER:-${AUTOBOT_DB_USER:-autobot}}
       - POSTGRES_PASSWORD=${AUTOBOT_DB_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}
       - POSTGRES_DB=${SLM_DB_NAME:-${AUTOBOT_DB_NAME:-autobot_slm}}
+    healthcheck:
+      # -d targets an existing DB; without it pg_isready connects to db=user
+      # ("autobot"), which is never created → FATAL spam every interval (#9713).
+      test: ["CMD-SHELL", "pg_isready -U ${AUTOBOT_POSTGRES_USER:-${AUTOBOT_DB_USER:-autobot}} -d ${SLM_DB_NAME:-${AUTOBOT_DB_NAME:-autobot_slm}}"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+    logging: *default-logging
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      autobot-mgmt:
+        ipv4_address: ${AUTOBOT_DOCKER_MGMT_PREFIX}.18
+      autobot-data:
+
   # #20639: copies the SLM's databases out of autobot-postgres once, on an install that has them there.
   autobot-slm-postgres-copy:
     image: postgres:16-bookworm
@@ -148,6 +177,7 @@ services:
       - POSTGRES_USER=${AUTOBOT_POSTGRES_USER:-${AUTOBOT_DB_USER:-autobot}}
       - PGPASSWORD=${AUTOBOT_DB_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}
       - SLM_DB_NAME=${SLM_DB_NAME:-${AUTOBOT_DB_NAME:-autobot_slm}}
+      - SLM_POSTGRES_USER=${SLM_POSTGRES_USER:-}
     depends_on:
       autobot-slm-postgres:
         condition: service_healthy

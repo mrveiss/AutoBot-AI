@@ -82,7 +82,7 @@ def _seed_old(old: _Cluster) -> None:
         old.sql(database, f"CREATE TABLE t (v text); INSERT INTO t VALUES ('{value}')")
 
 
-def _copy(old: _Cluster, new: _Cluster, old_data: Path, wait: int = 0) -> subprocess.CompletedProcess:
+def _copy(old: _Cluster, new: _Cluster, old_data: Path, wait: int = 0, **extra: str) -> subprocess.CompletedProcess:
     env = {
         **os.environ,
         "PATH": f"{_BIN}:{os.environ['PATH']}",
@@ -95,6 +95,7 @@ def _copy(old: _Cluster, new: _Cluster, old_data: Path, wait: int = 0) -> subpro
         "SLM_COPY_NEW_PORT": str(new.port),
         "SLM_COPY_OLD_DATA": str(old_data),
         "SLM_COPY_WAIT_SECONDS": str(wait),
+        **extra,
     }
     return subprocess.run(
         [shutil.which("bash"), _SCRIPT], env=env, capture_output=True, text=True, timeout=120, check=False
@@ -152,6 +153,52 @@ def test_a_rerun_after_a_partial_copy_completes_it(clusters) -> None:
     assert new.sql("autobot_slm", "SELECT v FROM t") == "node-1"
 
 
+def _marked(new: _Cluster) -> bool:
+    return new.sql("postgres", "SELECT count(*) FROM pg_database WHERE datname = 'slm_copy_done'") == "1"
+
+
+def test_a_failed_query_on_the_old_server_stops_and_marks_nothing(clusters) -> None:
+    """A wrong password must not read as "nothing to copy": the SLM would start empty."""
+    old, new = clusters
+    _seed_old(old)
+    old.sql("postgres", "ALTER ROLE autobot PASSWORD 'other'")
+    done = _copy(old, new, old.data)
+    assert done.returncode != 0 and not _marked(new)
+    assert "nothing was copied" in done.stderr
+
+
+def test_the_marker_name_is_refused_as_the_slm_database(clusters) -> None:
+    old, new = clusters
+    done = _copy(old, new, old.data, SLM_DB_NAME="slm_copy_done")
+    assert done.returncode != 0 and not _marked(new)
+
+
+def test_a_database_name_with_an_apostrophe_is_still_copied(clusters) -> None:
+    old, new = clusters
+    old.sql("postgres", 'CREATE DATABASE "team\'s_slm"')
+    old.sql("team's_slm", "CREATE TABLE t (v text); INSERT INTO t VALUES ('x')")
+    done = _copy(old, new, old.data, SLM_DB_NAME="team's_slm")
+    assert done.returncode == 0, done.stderr
+    assert new.sql("team's_slm", "SELECT v FROM t") == "x"
+
+
+def test_grants_to_a_role_the_new_server_lacks_dont_stop_the_copy(clusters) -> None:
+    old, new = clusters
+    _seed_old(old)
+    old.sql("postgres", "CREATE ROLE gone")
+    old.sql("autobot_slm", "GRANT SELECT ON t TO gone")
+    done = _copy(old, new, old.data)
+    assert done.returncode == 0, done.stderr
+
+
+def test_a_custom_slm_role_exists_afterwards_and_can_read_the_copy(clusters) -> None:
+    old, new = clusters
+    _seed_old(old)
+    done = _copy(old, new, old.data, SLM_POSTGRES_USER="slm_app")
+    assert done.returncode == 0, done.stderr
+    assert new.sql("autobot_slm", "SET ROLE slm_app; SELECT v FROM t") == "node-1"
+
+
 def _services() -> dict:
     return yaml.safe_load((_ROOT / "docker-compose.yml").read_text(encoding="utf-8"))["services"]
 
@@ -170,3 +217,26 @@ def test_the_copy_step_doesnt_depend_on_the_main_postgres_and_reads_its_volume_o
 
 def test_the_slm_has_its_own_volume() -> None:
     assert "slm_postgres_data:/var/lib/postgresql/data" in _services()["autobot-slm-postgres"]["volumes"]
+
+
+def test_every_healthy_dependency_can_become_healthy_and_is_reachable() -> None:
+    """A dependent of a service with no healthcheck or shared network never starts (#20641 review)."""
+    services = _services()
+
+    def networks(service: dict) -> set:
+        return set(service.get("networks") or [])
+
+    for name, service in services.items():
+        depends = service.get("depends_on") or {}
+        for dependency, rule in (depends.items() if isinstance(depends, dict) else ()):
+            if rule.get("condition") == "service_healthy":
+                assert "healthcheck" in services[dependency], f"{name} waits on {dependency}, which has no healthcheck"
+            if services[dependency].get("networks") and service.get("networks"):
+                assert networks(service) & networks(services[dependency]), f"{name} can't reach {dependency}"
+
+
+def test_the_slm_postgres_has_the_address_the_fleet_expects() -> None:
+    address = _services()["autobot-slm-postgres"]["networks"]["autobot-mgmt"]["ipv4_address"]
+    assert address.endswith(".18")
+    fleet = (_ROOT / "autobot-slm-backend" / "services" / "compose_fleet.py").read_text(encoding="utf-8")
+    assert '"id": "autobot-slm-postgres"' in fleet and '"host": 18' in fleet
