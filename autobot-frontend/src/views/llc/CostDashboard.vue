@@ -142,10 +142,11 @@
         </div>
 
         <div v-if="settingsModal.error" class="modal-error">{{ settingsModal.error }}</div>
+        <p v-if="settingsModal.notice" class="field-hint" role="status" data-testid="budget-raise-pending">{{ settingsModal.notice }}</p>
 
         <template #actions>
           <button class="btn-secondary" @click="closeSettings">{{ $t('llc.cost.cancel') }}</button>
-          <button class="btn-primary" :disabled="settingsModal.saving" @click="saveBudgetSettings">
+          <button class="btn-primary" :disabled="settingsModal.saving || !!settingsModal.notice" @click="saveBudgetSettings">
             {{ settingsModal.saving ? $t('llc.cost.saving') : $t('llc.cost.save') }}
           </button>
         </template>
@@ -298,6 +299,8 @@ import { createDateFormatter } from '@/utils/formatHelpers'
 import { BaseModal } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import type { components } from '@/types/generated/api'
+import { isPendingApproval } from '@/utils/pendingApproval'
+import { limitPatchBody } from './budgetLimitRequest'
 
 const logger = createLogger('CostDashboard')
 const api = useApiClient()
@@ -375,6 +378,7 @@ const settingsModal = reactive({
   budget: null as BudgetEntry | null,
   saving: false,
   error: '',
+  notice: '',
 })
 
 const settingsForm = reactive({
@@ -529,7 +533,7 @@ function exportCsv() {
 
 function openSettings(b: BudgetEntry) {
   settingsModal.budget = b
-  settingsModal.error = ''
+  settingsModal.error = settingsModal.notice = ''
   settingsForm.budget_mode = b.budget_mode
   settingsForm.budget_limit = parseFloat(b.budget_limit)
   settingsForm.token_limit = b.token_limit ?? 0
@@ -546,18 +550,14 @@ function closeSettings() {
 async function saveBudgetSettings() {
   if (!settingsModal.budget) return
   settingsModal.saving = true
-  settingsModal.error = ''
+  settingsModal.error = settingsModal.notice = ''
   try {
-    const body: Record<string, unknown> = {
-      budget_mode: settingsForm.budget_mode,
-      alert_threshold: settingsForm.alert_threshold_pct / 100,
+    const result = await api.patch(`/api/llc/budget/${settingsModal.budget.agent_id}/limit`, limitPatchBody(settingsForm))
+    if (isPendingApproval(result)) {
+      // A company that gates budget raises answers 202: the request is filed, the limit has not moved (#8214).
+      settingsModal.notice = t('llc.cost.raisePendingApproval')
+      return
     }
-    if (settingsForm.budget_mode === 'dollars') {
-      body.budget_limit = settingsForm.budget_limit.toFixed(2)
-    } else {
-      body.token_limit = settingsForm.token_limit
-    }
-    await api.patch(`/api/llc/budget/${settingsModal.budget.agent_id}/limit`, body)
     closeSettings()
     await fetchBudgets()
   } catch (err: unknown) {
