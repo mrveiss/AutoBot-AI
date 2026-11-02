@@ -13,7 +13,7 @@ to cancel (never the gate's own).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Mapping, Optional
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
 STATUS_CONTEXT = "no-merge-conflicts"
 
@@ -27,7 +27,7 @@ CANCELLABLE_STATUSES = frozenset({"queued", "in_progress", "waiting", "pending",
 
 DESC_CONFLICT = "merge conflict with main: merge main and push"
 DESC_MERGEABLE = "no merge conflict with main"
-DESC_UNKNOWN = "mergeability still unknown after retries; not treated as clean"
+DESC_UNKNOWN = "mergeability still unknown or not yet current after retries; not treated as clean"
 
 
 @dataclass(frozen=True)
@@ -52,6 +52,15 @@ def classify(pull: Mapping[str, Any]) -> str:
     if pull.get("mergeable") is True:
         return MERGEABLE
     return UNKNOWN
+
+
+def is_current(test_merge_parents: Sequence[str], base_tip: str, head_sha: str) -> bool:
+    """Whether GitHub's test merge was built from this base tip and this head (#20573).
+
+    A push to the base leaves ``mergeable: true`` standing until GitHub rebuilds the test
+    merge, with no null in between; only its parents show which trees the answer is about.
+    """
+    return list(test_merge_parents) == [base_tip, head_sha]
 
 
 def decide(kind: str) -> Verdict:
