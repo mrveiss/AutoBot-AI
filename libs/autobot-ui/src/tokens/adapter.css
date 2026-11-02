@@ -103,6 +103,7 @@
   --aui-z-dropdown: var(--z-dropdown);
   --aui-z-modal: var(--z-modal);
   --aui-z-tooltip: var(--z-tooltip);
+  --aui-z-toast: var(--z-toast);
 
   /* ---- Tooltip ------------------------------------------------------- */
   --aui-tooltip-delay: var(--tooltip-delay);
