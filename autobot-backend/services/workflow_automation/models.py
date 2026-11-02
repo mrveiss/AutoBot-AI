@@ -191,8 +191,6 @@ class ActiveWorkflow:
     prometheus_start_time: float | None = None  # For Prometheus duration tracking
     # Issue #2153: Owner identifier for workflow secret resolution.
     owner_id: str | None = None
-    # Issue #19807: Role of the creator; command steps run with this role's permissions, never more.
-    creator_role: str | None = None
     # Issue #2601: Store step execution results keyed by step_id for reference passing.
     step_results: Dict[str, Metadata] = field(default_factory=dict)
     # Issue #3101: Per-workflow notification routing configuration.

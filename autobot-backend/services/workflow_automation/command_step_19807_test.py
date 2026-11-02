@@ -11,14 +11,23 @@ stood in for, so the recording sites can be inspected.
 """
 
 import os
+import uuid
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
+import pytest_asyncio
 from fastapi import FastAPI
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.compiler import compiles
 from starlette.testclient import TestClient
 
 from auth_middleware import get_current_user
 from security_layer import SecurityLayer
+from user_management.models import Role, User, UserRole
+from user_management.models.base import Base
 from utils.bounded_subprocess import run_bounded
 
 from . import command_step, routes
@@ -31,29 +40,68 @@ def _mask(text: str) -> str:
     return text.replace(SECRET, "***")
 
 
-class _Accounts:
-    """Stands in for the config manager; ``security_config.allowed_users`` is the live account table."""
-
-    def __init__(self):
-        self.users = {"u-1": {"role": "admin"}}
-
-    def get(self, key, default=None):
-        return {"allowed_users": self.users} if key == "security_config" else default
+_OWNER = uuid.UUID(int=19807)
+_TABLES = [User.__table__, UserRole.__table__, Role.__table__]
 
 
-@pytest.fixture
-def layer(monkeypatch, tmp_path):
-    """A real SecurityLayer with auth on; audit records are captured, not stored."""
+@compiles(JSONB, "sqlite")
+def _compile_jsonb_as_json_on_sqlite(element, compiler, **kw):  # noqa: ANN001
+    return "JSON"
+
+
+@asynccontextmanager
+async def _session_scope(factory):
+    async with factory() as session:
+        yield session
+
+
+async def _seed(factory, user_id: uuid.UUID = _OWNER, **fields) -> None:
+    """Commit a real user row; an admin by default, as login would issue the ``admin`` role for."""
+    row = {
+        "id": user_id,
+        "email": f"{user_id}@example.invalid",
+        "username": f"user-{user_id}",
+        "password_hash": None,
+        "display_name": "u",
+        "org_id": None,
+        "is_platform_admin": True,
+        "is_active": True,
+        "is_verified": False,
+        "mfa_enabled": False,
+        "preferences": {},
+    }
+    async with factory() as session:
+        session.add(User(**{**row, **fields}))
+        await session.commit()
+
+
+async def _update(factory, **fields) -> None:
+    """Change the owner's row after the workflow was created (demotion, deactivation, deletion)."""
+    async with factory() as session:
+        await session.execute(User.__table__.update().where(User.__table__.c.id == _OWNER).values(**fields))
+        await session.commit()
+
+
+@pytest_asyncio.fixture
+async def layer(monkeypatch, tmp_path):
+    """A real SecurityLayer and a real user database (in-memory); audit records are captured, not stored."""
     audit = []
     monkeypatch.setattr(command_step, "WORKFLOW_COMMAND_CWD", str(tmp_path))
-    accounts = _Accounts()
-    monkeypatch.setattr(command_step, "get_config_manager", lambda: accounts)
+    engine = create_async_engine("sqlite+aiosqlite://")  # canonical: ignore py-adhoc-db-engine (test-local, in-memory)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all, tables=_TABLES)
+    factory = async_sessionmaker(bind=engine, expire_on_commit=False)  # canonical: ignore py-adhoc-db-engine
+    await _seed(factory)
+    monkeypatch.setattr(command_step, "db_session_context", lambda: _session_scope(factory))
     with patch("security_layer.emit_security", side_effect=lambda *a, **k: audit.append((a, k)) or True):
         security = SecurityLayer()
         security.audit = audit
-        security.accounts = accounts
+        security.db = factory
         monkeypatch.setattr(command_step, "get_security_layer", lambda: security)
-        yield security
+        try:
+            yield security
+        finally:
+            await engine.dispose()
 
 
 def _write_big_file(path) -> None:
@@ -73,10 +121,8 @@ def _signal_recorded_pid(pid_file) -> None:
     os.kill(int(pid_file.read_text(encoding="utf-8")), 0)
 
 
-async def _run(command: str, role: str = "admin", redactor=_mask, layer=None):
-    if layer is not None:
-        layer.accounts.users["u-1"] = {"role": role}
-    return await run_command_step(command, user="u-1", role=role, value_redactor=redactor)
+async def _run(command: str, redactor=_mask, user: str | None = str(_OWNER)):
+    return await run_command_step(command, user=user, value_redactor=redactor)
 
 
 @pytest.mark.asyncio
@@ -107,20 +153,66 @@ async def test_a_command_needing_approval_is_refused_and_nothing_runs(layer):
     assert failed.value.result["exit_code"] != 0
 
 
-@pytest.mark.asyncio
-async def test_a_role_without_shell_permission_runs_nothing(layer):
+async def _refused_with_nothing_run(**kwargs):
+    """Run a step expecting a refusal; returns the failure after asserting no process started."""
     with patch("secure_command_executor.execute_shell_command", new=AsyncMock()) as ran:
         with pytest.raises(CommandStepFailed) as failed:
-            await _run("echo hi", role="user", layer=layer)
+            await _run("echo hi", **kwargs)
     ran.assert_not_called()
-    assert failed.value.result["refused"] is True
+    assert failed.value.result["refused"] is True and failed.value.result["exit_code"] == 1
+    return failed.value
 
 
 @pytest.mark.asyncio
-async def test_a_workflow_with_no_creator_role_runs_nothing(layer):
-    with pytest.raises(CommandStepFailed) as failed:
-        await run_command_step("echo hi", user=None, role="admin", value_redactor=_mask)
-    assert failed.value.result["refused"] is True and failed.value.result["exit_code"] == 1
+async def test_a_plain_database_user_is_refused_by_the_permission_check(layer):
+    """A non-admin account is issued the ``user`` role, which lacks allow_shell_execute."""
+    plain = uuid.uuid4()
+    await _seed(layer.db, plain, is_platform_admin=False)
+    failure = await _refused_with_nothing_run(user=str(plain))
+    assert "shell execution privileges" in failure.result["stderr"]
+
+
+@pytest.mark.asyncio
+async def test_an_unchanged_platform_admin_row_runs_end_to_end(layer):
+    result = await _run("echo from-a-real-row")
+    assert result["stdout"] == "from-a-real-row" and result["exit_code"] == 0
+
+
+@pytest.mark.asyncio
+async def test_a_demoted_owner_runs_nothing(layer):
+    assert (await _run("echo hi"))["exit_code"] == 0
+    await _update(layer.db, is_platform_admin=False)  # demoted after the workflow was created
+    await _refused_with_nothing_run()
+
+
+@pytest.mark.asyncio
+async def test_a_deactivated_owner_runs_nothing(layer):
+    await _update(layer.db, is_active=False)
+    failure = await _refused_with_nothing_run()
+    assert "no longer holds an active account" in failure.result["stderr"]
+
+
+@pytest.mark.asyncio
+async def test_a_deleted_owner_runs_nothing(layer):
+    await _update(layer.db, deleted_at=datetime.now(tz=timezone.utc))
+    await _refused_with_nothing_run()
+
+
+@pytest.mark.asyncio
+async def test_an_owner_with_no_row_or_no_account_id_runs_nothing(layer):
+    await _refused_with_nothing_run(user=str(uuid.uuid4()))
+    await _refused_with_nothing_run(user="admin")  # the synthetic auth-off admin is not an account row
+    await _refused_with_nothing_run(user=None)
+
+
+@pytest.mark.asyncio
+async def test_a_store_failure_refuses_the_step(layer, monkeypatch):
+    def _down():
+        raise ConnectionError("database unreachable")
+
+    monkeypatch.setattr(command_step, "db_session_context", _down)
+    failure = await _refused_with_nothing_run()
+    assert "could not be verified" in failure.result["stderr"]
 
 
 @pytest.mark.asyncio
@@ -195,10 +287,9 @@ def test_a_user_without_shell_permission_cannot_create_a_workflow(monkeypatch, p
 
 
 @pytest.mark.parametrize("path,body", [_CREATE, _CHAT])
-def test_the_creators_role_is_recorded_on_the_workflow(monkeypatch, path, body):
+def test_a_user_who_may_run_commands_can_create_a_workflow(monkeypatch, path, body):
     client, created = _client(monkeypatch, {"user_id": "u-1", "role": "operator"})
     assert client.post(path, json=body).status_code == 200
-    assert created[0]["creator_role"] == "operator"
 
 
 def test_create_from_chat_reports_a_missing_field_as_400_not_500(monkeypatch):
@@ -244,27 +335,6 @@ async def test_no_unredacted_output_or_name_reaches_the_tee_directory(layer, mon
     result = await _run("cat big.txt")
     assert result["exit_code"] == 0
     _assert_tee_is_clean(tee)
-
-
-@pytest.mark.asyncio
-async def test_a_demoted_creator_runs_nothing(layer):
-    assert (await _run("echo hi", role="admin", layer=layer))["exit_code"] == 0
-    layer.accounts.users["u-1"] = {"role": "user"}  # demoted after the workflow was created
-    with patch("secure_command_executor.execute_shell_command", new=AsyncMock()) as ran:
-        with pytest.raises(CommandStepFailed) as failed:
-            await run_command_step("echo hi", user="u-1", role="admin", value_redactor=_mask)
-    ran.assert_not_called()
-    assert failed.value.result["refused"] is True
-
-
-@pytest.mark.asyncio
-async def test_a_removed_creator_runs_nothing(layer):
-    layer.accounts.users.clear()
-    with patch("secure_command_executor.execute_shell_command", new=AsyncMock()) as ran:
-        with pytest.raises(CommandStepFailed) as failed:
-            await run_command_step("echo hi", user="u-1", role="admin", value_redactor=_mask)
-    ran.assert_not_called()
-    assert failed.value.result["refused"] is True
 
 
 def _rule(layer, action, rule_info):

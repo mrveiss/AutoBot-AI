@@ -79,7 +79,6 @@ async def create_workflow(
             session_id=request.session_id,
             automation_mode=automation_mode,
             owner_id=caller_id(current_user),
-            creator_role=current_user.get("role"),
         )
 
         return {
@@ -283,7 +282,7 @@ async def create_workflow_from_chat(request: dict, current_user: dict = Depends(
             raise HTTPException(status_code=400, detail="user_request and session_id are required")
 
         workflow_id = await get_workflow_manager().create_workflow_from_chat_request(
-            user_request, session_id, owner_id=caller_id(current_user), creator_role=current_user.get("role")
+            user_request, session_id, owner_id=caller_id(current_user)
         )
 
         if workflow_id:

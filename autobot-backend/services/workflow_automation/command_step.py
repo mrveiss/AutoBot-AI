@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import tempfile
 import time
+import uuid
 from pathlib import Path
 from typing import Callable, FrozenSet
 
@@ -27,11 +28,13 @@ from autobot_shared.env_utils import env_int, env_str
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secret_redaction import REDACTED_PLACEHOLDER, redact_text
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.user_management.login_eligibility import login_refusal
 from command_run_policy import CommandRunPolicy
-from config import get_config_manager
 from security_layer import SecurityLayer
 from services.workflow_secret_service import get_workflow_secret_service
 from type_defs.common import Metadata
+from user_management.database import db_session_context
+from user_management.services.user_service import UserService
 
 logger = get_logger(__name__)
 
@@ -62,18 +65,24 @@ def require_command_permission(user: dict | None) -> None:
         raise HTTPException(status_code=403, detail="Running workflow commands requires shell execution permission")
 
 
-def current_role(owner_id: str, creator_role: str | None) -> str | None:
-    """The role *owner_id* holds now, or None when the account is gone.
+async def current_role(owner_id: str) -> str | None:
+    """The role the account *owner_id* holds now, or None when it may not act.
 
-    Login reads the role from ``security_config.allowed_users`` (auth_middleware
-    ``authenticate_user``), so this reads the same table, fresh: the role captured
-    when the workflow was created can be stale after a demotion or removal. With
-    authentication off there are no accounts, so the recorded role stands.
+    Reads the user database -- the store login authenticates against
+    (``api/auth.py`` ``_authenticate_and_build_user_data``) -- by the id
+    ``caller_id`` recorded, and derives the role with the function login uses. A
+    missing, deleted or deactivated account yields None (``login_refusal``, the one
+    rule login applies). Login has no authentication-off branch, so neither does
+    this: the lookup runs in every mode, and an owner that is not an account row
+    (for example the synthetic admin of an auth-off request) runs nothing.
     """
-    if not get_security_layer().enable_auth:
-        return creator_role
-    account = get_config_manager().get("security_config", {}).get("allowed_users", {}).get(owner_id)
-    return account.get("role") if account else None
+    try:
+        user_id = uuid.UUID(owner_id)
+    except ValueError:
+        return None
+    async with db_session_context() as session:
+        user = await UserService(session).get_user(user_id)
+    return None if user is None or login_refusal(user) else UserService.account_role(user)
 
 
 def _work_dir() -> str:
@@ -127,25 +136,31 @@ def _failure(raw: Metadata, result: Metadata) -> CommandStepFailed:
     return CommandStepFailed(f"Command exited with code {result['exit_code']}: {result['stderr']}", result)
 
 
-async def run_command_step(
-    command: str,
-    *,
-    user: str | None,
-    role: str | None,
-    value_redactor: Callable[[str], str],
-) -> Metadata:
-    """Run *command* as *user*; return the step result or raise ``CommandStepFailed``.
+def _refused(message: str) -> CommandStepFailed:
+    """A step refused before anything ran; the exit code is never 0."""
+    return CommandStepFailed(
+        f"Command refused: {message}",
+        {"refused": True, "exit_code": 1, "stdout": "", "stderr": message, "command": REDACTED_PLACEHOLDER},
+    )
 
-    The role is the user's current account role (``current_role``); *role*, the one recorded at
-    creation, stands only when authentication is off.
-    """
-    role = current_role(user, role) if user else None
-    if not user or not role:
-        message = "the workflow records no creator, or the creator no longer holds an account"
-        raise CommandStepFailed(
-            f"Command refused: {message}",
-            {"refused": True, "exit_code": 1, "stdout": "", "stderr": message, "command": REDACTED_PLACEHOLDER},
-        )
+
+async def _resolve_role(user: str | None) -> str:
+    """The owner's current role, or a refusal when there is none or the store cannot answer."""
+    if not user:
+        raise _refused("the workflow records no creator to run it as")
+    try:
+        role = await current_role(user)
+    except Exception as exc:
+        logger.error("Workflow command refused: the account store could not answer (%s)", type(exc).__name__)
+        raise _refused("the creator's account could not be verified") from exc
+    if not role:
+        raise _refused("the creator no longer holds an active account")
+    return role
+
+
+async def run_command_step(command: str, *, user: str | None, value_redactor: Callable[[str], str]) -> Metadata:
+    """Run *command* as *user* in the role the account holds now; return the result or raise ``CommandStepFailed``."""
+    role = await _resolve_role(user)
     started = time.monotonic()
     raw = await get_security_layer().execute_command(command, user, role, policy=build_policy(value_redactor))
     result = _step_result(raw, value_redactor, started)

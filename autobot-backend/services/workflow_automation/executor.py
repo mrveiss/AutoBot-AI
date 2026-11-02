@@ -676,9 +676,7 @@ class WorkflowExecutor:
 
         *command* has had ${secrets.NAME} resolved: never log or return it. (#2153)
         """
-        return await run_command_step(
-            command, user=workflow.owner_id, role=workflow.creator_role, value_redactor=value_redactor
-        )
+        return await run_command_step(command, user=workflow.owner_id, value_redactor=value_redactor)
 
     def _record_workflow_completion_metrics(
         self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]

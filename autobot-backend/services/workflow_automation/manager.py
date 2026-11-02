@@ -88,7 +88,7 @@ class WorkflowAutomationManager:
         return self.messenger.terminal_sessions
 
     async def create_workflow_from_chat_request(
-        self, user_request: str, session_id: str, owner_id: str | None = None, creator_role: str | None = None
+        self, user_request: str, session_id: str, owner_id: str | None = None
     ) -> str | None:
         """Create automated workflow from natural language chat request.
 
@@ -116,7 +116,6 @@ class WorkflowAutomationManager:
                 steps=workflow_steps,
                 session_id=session_id,
                 owner_id=owner_id,
-                creator_role=creator_role,
             )
         except Exception as e:
             # #13730: this handler is what made the un-awaited planning calls
@@ -194,12 +193,11 @@ class WorkflowAutomationManager:
         session_id: str,
         automation_mode: AutomationMode = AutomationMode.SEMI_AUTOMATIC,
         owner_id: str | None = None,
-        creator_role: str | None = None,
     ) -> str:
         """Create new automated workflow.
 
-        Issue #19807: creator_role is the creating user's role; command steps run
-        with it. Callers with no user context leave it None and no command runs.
+        Issue #19807: command steps run as owner_id in the role that account holds
+        when the step runs; with no owner_id no command runs.
 
         Issue #2304: owner_id should be passed by callers that have authenticated
         user context (e.g. API endpoints using Depends(get_current_user)).
@@ -215,7 +213,6 @@ class WorkflowAutomationManager:
             steps=steps,
             automation_mode=automation_mode,
             owner_id=owner_id,
-            creator_role=creator_role,
         )
 
         if not owner_id:

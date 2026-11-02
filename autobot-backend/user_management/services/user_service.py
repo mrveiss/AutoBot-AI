@@ -13,6 +13,7 @@ Error classes are imported from ``autobot_shared.user_management.user_service_er
 import uuid
 from typing import Any
 
+from autobot_shared.auth.permissions import Role, role_value
 from autobot_shared.user_management.user_service import UserService as SharedUserService
 from user_management.models import User
 from user_management.services.session_service import SessionService
@@ -22,6 +23,15 @@ class UserService(SharedUserService):
     """User service bound to this backend's ``User`` and its session store."""
 
     user_model = User
+
+    @staticmethod
+    def account_role(user: User) -> str:
+        """The role login issues for *user*: ``admin`` for a platform admin, else ``user``.
+
+        The one derivation: ``api/auth.py`` builds the token's role with it, and a
+        workflow step re-derives the role an account holds when it runs (#19807).
+        """
+        return role_value(Role.ADMIN) if user.is_platform_admin else role_value(Role.USER)
 
     async def invalidate_other_sessions(self, user_id: uuid.UUID, current_token: str | None) -> int:
         """Invalidate every session but *current_token* in this backend's store.

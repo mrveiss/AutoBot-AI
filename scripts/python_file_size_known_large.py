@@ -352,7 +352,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/tool_output_filter.py": 639,
     "autobot-backend/services/trigger_service.py": 842,
     "autobot-backend/services/wake_word_service.py": 615,
-    "autobot-backend/services/workflow_automation/executor.py": 1095,
+    "autobot-backend/services/workflow_automation/executor.py": 1093,
     "autobot-backend/services/workflow_export_test.py": 611,
     "autobot-backend/services/workflow_io.py": 693,
     "autobot-backend/slash_command_handler.py": 1662,
