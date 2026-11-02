@@ -34,8 +34,10 @@ os.environ.setdefault("AUTOBOT_FRONTEND_SERVED_BY", "vite")
 # plugin or test module imports huggingface_hub.
 # SSOT singleton restore (#19232): a test that clears get_config() leaves it as it found it,
 # so import-time bindings to the singleton (models/settings.py's aliases) never go stale.
+# Machine-wide queue for a big local run (#20518), so a run from any directory under this root queues.
 pytest_plugins = [
     "repo_tests.hermetic_model_cache",
+    "repo_tests.machine_slot",
     "repo_tests.sys_modules_leak_guard",
     "repo_tests.dependency_floor_banner",
     "repo_tests.ssot_config_singleton_guard",
