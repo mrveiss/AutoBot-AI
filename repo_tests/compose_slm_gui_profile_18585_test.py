@@ -128,7 +128,7 @@ def test_the_slm_gui_switches_to_tls_like_the_frontend() -> None:
     assert "${AUTOBOT_DOCKER_SLM_NGINX_CONF:-./docker/nginx/nginx-slm.conf}:/etc/nginx/nginx.conf:ro" in volumes
     assert "./docker/certs:/etc/nginx/certs:ro" in volumes, "the TLS config would find no certificate"
     assert "${AUTOBOT_DOCKER_SLM_HTTP_PORT:-8080}:80" in gui["ports"]
-    assert "${AUTOBOT_DOCKER_SLM_HTTPS_PORT:-443}:443" in gui["ports"], "a taken host port 443 must not block start"
+    assert "${AUTOBOT_DOCKER_SLM_HTTPS_PORT:-8443}:443" in gui["ports"], "a taken host port must not block start"
 
 
 def test_tls_settings_are_defined_once() -> None:
