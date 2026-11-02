@@ -312,14 +312,13 @@
    "file": ".github/filters/backend-python-paths.yml",
    "sha256": "18bfcaf8-e98f2c5c-797e4af0-fbb9e626-918c0ffa-8d56bcf0-58848749-72ffe9df"
   },
-  "header_sha256": "6629c9ed-7906202f-b2e85727-a7f74b8c-5d24a02b-5111c92a-a8a034fa-c2491067",
+  "header_sha256": "66426f3b-cd2c9019-8031f6b4-84badbc9-04b2e676-ed7a79ba-cd5eed18-9d7cf578",
   "job_level_extras": [],
   "on": {
    "pull_request": {
     "branches": [
      "release",
-     "main",
-     "develop"
+     "main"
     ]
    }
   },
@@ -388,15 +387,14 @@
    "file": ".github/filters/code-quality-paths.yml",
    "sha256": "83ac730c-745162c5-e32f6573-c5f40561-fe25f4f4-d55e69d5-de2748cc-1362af3e"
   },
-  "header_sha256": "5038f297-5490d82c-e53d78c7-b13d9f9a-44d5ece5-70782fbe-346d8ec4-5f6496fd",
+  "header_sha256": "0357c377-20bc02bd-b9d03d10-7071cf3e-df0725ce-b2e02658-71f7562b-1d168dea",
   "job_level_extras": [],
   "on": {
    "merge_group": null,
    "pull_request": {
     "branches": [
      "release",
-     "main",
-     "develop"
+     "main"
     ],
     "types": [
      "opened",
@@ -408,8 +406,7 @@
    "push": {
     "branches": [
      "release",
-     "main",
-     "develop"
+     "main"
     ],
     "paths": [
      "**/*.py",
@@ -510,14 +507,13 @@
    "file": ".github/filters/code-quality-paths.yml",
    "sha256": "83ac730c-745162c5-e32f6573-c5f40561-fe25f4f4-d55e69d5-de2748cc-1362af3e"
   },
-  "header_sha256": "cad81a4c-5ce99eec-c4f17ee4-2194a963-a7672eb9-d6251c56-2b4a1602-c65966fd",
+  "header_sha256": "037dca00-1d20244a-e4c0571c-c5da9610-f4450a6b-037e2f65-f873e1b5-4316c465",
   "job_level_extras": [],
   "on": {
    "pull_request": {
     "branches": [
      "release",
-     "main",
-     "develop"
+     "main"
     ]
    }
   },
@@ -725,14 +721,13 @@
    "file": ".github/filters/frontend-paths.yml",
    "sha256": "ec60310f-a63662a5-5c13a669-1ae53689-716feb07-28a20947-5261a30a-2b95bbf3"
   },
-  "header_sha256": "541b38f2-f2fbe2fa-75830233-a5f53ce5-4ea84e36-b605b44b-1833b9c6-9903a3bf",
+  "header_sha256": "846f571e-dc6b5222-4123c2b4-eda0f063-a40b49c6-6d1a290f-5ec822b8-7409dd77",
   "job_level_extras": [],
   "on": {
    "pull_request": {
     "branches": [
      "release",
-     "main",
-     "develop"
+     "main"
     ]
    }
   },
@@ -779,15 +774,14 @@
    "file": ".github/filters/frontend-paths.yml",
    "sha256": "ec60310f-a63662a5-5c13a669-1ae53689-716feb07-28a20947-5261a30a-2b95bbf3"
   },
-  "header_sha256": "34e9f824-febd2255-192c6bb2-7dc6e3e1-dcd0f356-a55c171a-b3eca103-9b5a6440",
+  "header_sha256": "2a84ce46-b0a702a0-5c83184b-829ad8a5-5193119b-cd1bdc1c-d0343100-fac5fb89",
   "job_level_extras": [],
   "on": {
    "merge_group": null,
    "pull_request": {
     "branches": [
      "release",
-     "main",
-     "develop"
+     "main"
     ],
     "types": [
      "opened",
@@ -799,8 +793,7 @@
    "push": {
     "branches": [
      "release",
-     "main",
-     "develop"
+     "main"
     ],
     "paths": [
      "autobot-frontend/**",
@@ -979,14 +972,13 @@
     ]
    }
   },
-  "header_sha256": "d86c9c24-ccd0a6cd-c7d7e2cf-bacb5c89-caa3344c-35d2c33c-47a416f7-06a3d739",
+  "header_sha256": "1a5ee810-40ebe330-787b09d9-09498183-7351bd73-39a4791c-446b7264-73806d64",
   "job_level_extras": [],
   "on": {
    "pull_request": {
     "branches": [
      "release",
-     "main",
-     "develop"
+     "main"
     ],
     "paths": [
      ".mcp/**",
@@ -1005,8 +997,7 @@
    "push": {
     "branches": [
      "release",
-     "main",
-     "develop"
+     "main"
     ],
     "paths": [
      ".mcp/**",
@@ -1226,7 +1217,7 @@
    "file": ".github/filters/backend-python-paths.yml",
    "sha256": "18bfcaf8-e98f2c5c-797e4af0-fbb9e626-918c0ffa-8d56bcf0-58848749-72ffe9df"
   },
-  "header_sha256": "bfaff9a0-ae317ee9-456cb33b-8b49b884-67a45cde-4037ca9e-3a435a98-e0c89fb8",
+  "header_sha256": "92479c26-000545fb-b54a09b3-9b80a220-6bef0434-11c56cf4-8f7c9fcc-210efd02",
   "job_level_extras": [],
   "on": {
    "pull_request": {
@@ -1257,7 +1248,6 @@
    "push": {
     "branches": [
      "release",
-     "dev",
      "main"
     ]
    },
@@ -1332,14 +1322,13 @@
     ]
    }
   },
-  "header_sha256": "a43a848b-97a71ebc-b7ce9d62-13150778-cf7d7773-71ca8766-bfb00045-4e4673fd",
+  "header_sha256": "4a695f54-e39611f8-f41c6653-2dc9f36c-ed7674f0-03a2b697-24825071-f72f86a9",
   "job_level_extras": [],
   "on": {
    "pull_request": {
     "branches": [
      "release",
-     "main",
-     "develop"
+     "main"
     ],
     "paths": [
      "autobot-slm-frontend/**",
@@ -1358,8 +1347,7 @@
    "push": {
     "branches": [
      "release",
-     "main",
-     "develop"
+     "main"
     ],
     "paths": [
      "autobot-slm-frontend/**",
@@ -1461,15 +1449,14 @@
    "file": ".github/filters/backend-python-paths.yml",
    "sha256": "18bfcaf8-e98f2c5c-797e4af0-fbb9e626-918c0ffa-8d56bcf0-58848749-72ffe9df"
   },
-  "header_sha256": "f512d3b6-efd5481d-818ab8cb-3d9f85f4-0925f555-180926e3-c80918c7-df36334f",
+  "header_sha256": "d50c032a-9f0e2896-9221c59a-39bb4c03-36587bab-a7940be0-327b22c2-2849df56",
   "job_level_extras": [],
   "on": {
    "merge_group": null,
    "pull_request": {
     "branches": [
      "release",
-     "main",
-     "develop"
+     "main"
     ],
     "types": [
      "opened",
@@ -1481,8 +1468,7 @@
    "push": {
     "branches": [
      "release",
-     "main",
-     "develop"
+     "main"
     ],
     "paths": [
      "autobot-backend/**/*.py",
