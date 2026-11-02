@@ -14,8 +14,9 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import func, select, text
+from sqlalchemy import select, text
 
+from autobot_shared.approval_four_eyes import four_eyes_self_approval, requester_id
 from models.approval import ApprovalComment
 from services.approval_execution import register_post_approval_action, verified_decider
 from services.audit_logger import audit_log
@@ -43,30 +44,19 @@ async def column_present(session: "AsyncSession") -> bool:
     return (await session.execute(_COLUMN_PRESENT)).first() is not None
 
 
-def _requester_id(approval: "Approval") -> uuid.UUID | None:
-    """The admin who proposed the drop, from ``requested_by_agent`` (``org-tier-column:<user id>``)."""
-    try:
-        return uuid.UUID(str(approval.requested_by_agent).rsplit(":", 1)[-1])
-    except ValueError:
-        return None
-
-
-async def _platform_admin_count(session: "AsyncSession") -> int:
-    query = select(func.count()).select_from(User).filter_by(is_platform_admin=True, is_active=True, deleted_at=None)
-    rows = await session.execute(query)
-    return int(rows.scalar_one())
+async def _platform_admin_ids(session: "AsyncSession") -> set[uuid.UUID]:
+    """The active platform admins, locked until the decision commits so none can leave after the check."""
+    query = select(User.id).filter_by(is_platform_admin=True, is_active=True, deleted_at=None).with_for_update()
+    return set((await session.execute(query)).scalars().all())
 
 
 async def _is_self_approval(approval: "Approval", session: "AsyncSession") -> bool:
     """Four eyes: True for a flagged self-approval by the only admin; raises when the decider may not decide."""
-    decider, requester = verified_decider(approval), _requester_id(approval)
+    decider, requester = verified_decider(approval), requester_id(approval.requested_by_agent)
     if decider is None or requester is None:
         raise ValueError("the drop needs a verified decider and a requester that can be identified")
-    if decider != requester:
-        return False
-    if await _platform_admin_count(session) >= 2:
-        raise ValueError("the drop needs a different admin than the one who proposed it")
-    return True
+    eligible = await _platform_admin_ids(session)
+    return four_eyes_self_approval(decider, requester, eligible, what="the drop", who="admin")
 
 
 async def _audit(approval: "Approval", result: str, **details: object) -> None:
