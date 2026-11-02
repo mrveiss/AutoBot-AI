@@ -21,7 +21,7 @@ Covers:
 from __future__ import annotations
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 from middleware.validation_middleware import ValidationMiddleware
@@ -316,3 +316,36 @@ def test_save_path_oversized_body_rejected() -> None:
     )
     assert resp.status_code == 413
     assert resp.json()["error"] == "PAYLOAD_TOO_LARGE"
+
+
+# ---------------------------------------------------------------------------
+# #19712: a knowledge upload is measured by its route's limit, nothing else is
+# ---------------------------------------------------------------------------
+
+
+def _upload_app() -> TestClient:
+    app = FastAPI()
+    app.add_middleware(ValidationMiddleware, max_body_bytes=10)
+
+    @app.post("/api/knowledge_base/upload")
+    async def upload(request: Request) -> dict:
+        return {"received": len(await request.body())}
+
+    @app.post("/api/other")
+    async def other(request: Request) -> dict:
+        return {"received": len(await request.body())}
+
+    return TestClient(app, raise_server_exceptions=False)
+
+
+def test_a_multipart_knowledge_upload_passes_the_cap_and_arrives_whole() -> None:
+    response = _upload_app().post("/api/knowledge_base/upload", files={"file": ("a.txt", b"x" * 100)})
+    assert response.status_code == 200 and response.json()["received"] > 100
+
+
+def test_contrast_json_to_the_upload_route_keeps_the_cap() -> None:
+    assert _upload_app().post("/api/knowledge_base/upload", json={"a": "x" * 100}).status_code == 413
+
+
+def test_contrast_multipart_to_any_other_route_keeps_the_cap() -> None:
+    assert _upload_app().post("/api/other", files={"file": ("a.txt", b"x" * 100)}).status_code == 413

@@ -14,6 +14,17 @@ from autobot_shared.env_registry import EnvVarSpec, register_env_var
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_KB_UPLOAD_MAX_MB",
+        type=int,
+        default=10,
+        description="Largest knowledge file the upload route accepts, in MB; the upload dialog reads it too (#19712).",
+        component="knowledge",
+        range=(1, 1024),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_KB_EMBED_WINDOW_CHARS",
         type=int,
         default=4000,
