@@ -437,7 +437,7 @@ async def run_role_full_procedure(role: Role, target_node_id: str) -> dict:
             # deploy_role.yml needs `role_name` (not `deploy_role` alone, #11782); the
             # slm-agent playbook also gets slm_agent_run_common=false (#19040).
             limit=[target_node_id],
-            extra_vars=role_procedure_extra_vars(role),
+            extra_vars=role_procedure_extra_vars(role, target_node_id),
         )
     except FileNotFoundError as exc:
         logger.exception("Playbook not found: %s", role.ansible_playbook)
