@@ -65,3 +65,10 @@ def test_sso_redirects_a_non_admin_with_a_reason() -> None:
 
 def test_the_websocket_applies_the_same_rule() -> None:
     assert "is_admin_session(payload)" in _source("api/websocket.py")
+
+
+def test_sso_and_ldap_share_the_audit_that_records_a_refusal_as_a_failure() -> None:
+    source = _source("api/sso_auth.py")
+    assert source.count("await _audit_sso_login(audit_db, user, provider_id_str") == 2
+    assert "success=bool(user.is_platform_admin)" in source
+    assert "success=True" not in source[source.index("async def oauth_callback") :].split("except (SSO")[0]
