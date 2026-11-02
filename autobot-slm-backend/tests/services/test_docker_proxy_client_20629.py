@@ -51,14 +51,16 @@ def test_a_native_slms_own_node_isnt_a_compose_node() -> None:
 @pytest.mark.asyncio
 async def test_the_real_egress_guard_allows_the_configured_proxy(monkeypatch) -> None:
     """The guard isn't patched here: a private name must pass only because it is registered."""
+    from autobot_shared import egress_allowlist as allowlist
     from autobot_shared.http_egress_guard import EgressBlockedError, assert_egress_policy
 
     monkeypatch.setenv("AUTOBOT_DOCKER_PROXY_URL", "http://autobot-docker-proxy:2375")
-    client.register_internal_origin_provider(client._proxy_origin)
+    allowlist.register_internal_origin_provider(client._proxy_origin)
     await assert_egress_policy("http://autobot-docker-proxy:2375/containers/autobot-redis/restart")
-    monkeypatch.setenv("AUTOBOT_DOCKER_PROXY_URL", "http://autobot-docker-proxy:2375/")
-    with pytest.raises(EgressBlockedError):  # a control: the guard really is on
-        await assert_egress_policy("http://somewhere-else:2375/containers/autobot-redis/restart")
+    with pytest.raises(EgressBlockedError):  # a control: another private address is still refused
+        await assert_egress_policy("http://10.0.0.5:2375/containers/autobot-redis/restart")
+    monkeypatch.delenv("AUTOBOT_DOCKER_PROXY_URL")
+    allowlist._cache = None
 
 
 @pytest.mark.asyncio

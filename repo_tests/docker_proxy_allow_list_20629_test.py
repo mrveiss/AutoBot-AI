@@ -37,7 +37,8 @@ class _Docker:
         if path.endswith("/logs?stdout=1&stderr=1&tail=200"):
             return 200, b"a line"
         if "/containers/autobot-" in path:
-            return 200, json.dumps(_OURS).encode()
+            name = path.split("/")[2]
+            return 200, json.dumps({**_OURS, "Name": f"/{name}"}).encode()
         if "/containers/other/" in path:
             return 200, json.dumps(_THEIRS).encode()
         return 404, b""
@@ -99,6 +100,25 @@ def test_another_projects_container_is_refused() -> None:
 def test_what_runs_the_slm_can_be_restarted_but_not_stopped(name) -> None:
     assert _ask("POST", f"/containers/{name}/stop")[0] == 403
     assert _ask("POST", f"/containers/{name}/restart")[0] == 200
+
+
+def test_every_protected_name_is_a_real_container() -> None:
+    services = yaml.safe_load((_ROOT / "docker-compose.yml").read_text(encoding="utf-8"))["services"]
+    names = {service.get("container_name") for service in services.values()}
+    assert proxy.NEVER_STOP <= names, proxy.NEVER_STOP - names
+
+
+def test_a_container_id_doesnt_skip_the_protection() -> None:
+    """Docker accepts an id where a name goes, so the check must use the name it reports."""
+    docker = _Docker()
+    assert proxy.handle(docker, "stack", "autobot-docker-proxy", "POST", "/containers/autobot-a1b2c3/stop")[0] == 200
+
+    def reports(name: str):
+        return lambda method, path: (200, json.dumps({**_OURS, "Name": name}).encode())
+
+    assert proxy.handle(reports("/autobot-postgres"), "stack", "x", "POST", "/containers/a1b2c3d4e5f6/stop")[0] == 403
+    own = "autobot-docker-proxy"
+    assert proxy.handle(reports(f"/{own}"), "stack", own, "POST", "/containers/a1b2c3d4e5f6/restart")[0] == 403
 
 
 def test_the_proxy_does_not_act_on_itself() -> None:

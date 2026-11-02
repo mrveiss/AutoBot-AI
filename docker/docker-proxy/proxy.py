@@ -26,7 +26,7 @@ SOCKET_PATH = os.environ.get("DOCKER_PROXY_SOCKET", "/var/run/docker.sock")
 PROJECT_LABEL = "com.docker.compose.project"
 ACTIONS = {"start", "stop", "restart"}
 #: The SLM and what it needs to run: stopping one from the SLM could leave nobody to start it again.
-NEVER_STOP = {"autobot-slm", "autobot-slm-gui", "autobot-slm-postgres", "autobot-redis"}
+NEVER_STOP = {"autobot-slm", "autobot-slm-gui", "autobot-postgres", "autobot-redis"}
 LOG_LINES = 200
 _NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$")
 
@@ -103,9 +103,11 @@ def handle(docker: Docker, project: str, own_name: str, method: str, path: str) 
     if action == "logs":
         status, body = docker("GET", f"/containers/{quote(name)}/logs?stdout=1&stderr=1&tail={LOG_LINES}")
         return (200, {"logs": body.decode("utf-8", "replace")}) if status == 200 else (502, {"error": "logs failed"})
-    if name == own_name:  # it could not answer afterwards, and the SLM would lose its way back
+    # The name Docker reports, not the URL's: a container id would otherwise skip both checks below.
+    resolved = details.get("Name", "").lstrip("/")
+    if resolved == own_name:  # it could not answer afterwards, and the SLM would lose its way back
         return 403, {"error": "the proxy does not act on itself"}
-    if action == "stop" and name in NEVER_STOP:
+    if action == "stop" and resolved in NEVER_STOP:
         return 403, {"error": "this container runs the SLM and can only be restarted"}
     status, _body = docker("POST", f"/containers/{quote(name)}/{action}")
     if status in (204, 304):  # 304: already in that state
@@ -114,7 +116,7 @@ def handle(docker: Docker, project: str, own_name: str, method: str, path: str) 
 
 
 def authorized(expected: str, header: Optional[str]) -> bool:
-    return bool(expected) and bool(header) and hmac.compare_digest(expected, header)
+    return bool(expected) and bool(header) and hmac.compare_digest(expected.encode(), header.encode())
 
 
 def make_handler(token: str, project: str, own_name: str, docker: Docker = call_docker):

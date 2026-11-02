@@ -27,6 +27,9 @@ async def _proxy_origin() -> Iterable[str]:
     return [url] if url else []
 
 
+register_internal_origin_provider(_proxy_origin)
+
+
 def is_compose_node(node) -> bool:
     """Only a container this stack seeded. The SLM's own node on a native install isn't one."""
     from services.compose_fleet import _COMPOSE_NODE_SPECS, _compose_nodes_enabled
@@ -40,7 +43,6 @@ async def run_compose_service_action(node, service_name: str, action: str) -> Tu
     headers = {"X-Docker-Proxy-Token": os.getenv("AUTOBOT_DOCKER_PROXY_TOKEN", "")}
     timeout = aiohttp.ClientTimeout(total=_ACTION_TIMEOUT_SECONDS)
     try:
-        register_internal_origin_provider(_proxy_origin)
         await assert_egress_policy(url)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(url, headers=headers, allow_redirects=False) as response:
@@ -48,6 +50,8 @@ async def run_compose_service_action(node, service_name: str, action: str) -> Tu
                     logger.info("Container %s %s completed", node.node_id, action)
                     return True, f"Service {service_name} {action} completed"
                 logger.error("Docker proxy refused %s on %s: HTTP %s", action, node.node_id, response.status)
+                if response.status == 401:
+                    return False, f"Failed to {action} service: the Docker proxy token is missing or doesn't match"
                 return False, f"Failed to {action} service: the Docker proxy answered {response.status}"
     except Exception as exc:
         logger.error("Docker proxy unreachable for %s on %s: %s", action, node.node_id, exc)
