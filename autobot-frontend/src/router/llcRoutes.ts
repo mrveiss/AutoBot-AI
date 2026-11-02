@@ -76,6 +76,8 @@ export const llcCompanyChildren: RouteRecordRaw[] = [
   { path: 'ceo-chat', name: 'llc-ceo-chat', component: () => import('@/views/llc/CeoChatView.vue'), props: true, meta: { title: 'CEO Chat', requiresAuth: true } },
   { path: 'activity', name: 'llc-activity', component: () => import('@/views/llc/ActivityFeedView.vue'), props: true, meta: { title: 'Activity', requiresAuth: true } },
   { path: 'roles', name: 'llc-roles', component: () => import('@/views/llc/RolesView.vue'), props: true, meta: { title: 'Roles', requiresAuth: true } },
+  // #18431: Organization > Handbook -- generated role/workflow/process pages from the company model.
+  { path: 'handbook', name: 'llc-handbook', component: () => import('@/views/llc/HandbookView.vue'), props: true, meta: { title: 'Handbook', requiresAuth: true } },
   { path: 'members', name: 'llc-members', component: () => import('@/views/llc/MembersView.vue'), props: true, meta: { title: 'Members', requiresAuth: true } },
   { path: 'portability', name: 'llc-company-portability', component: () => import('@/views/llc/CompanyPortabilityView.vue'), props: true, meta: { title: 'Portability', requiresAuth: true } },
   { path: 'secrets', name: 'llc-company-secrets', component: () => import('@/views/llc/CompanySecretsView.vue'), props: true, meta: { title: 'Secrets', requiresAuth: true } },
