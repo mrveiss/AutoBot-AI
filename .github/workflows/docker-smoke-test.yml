@@ -254,7 +254,7 @@ jobs:
           # `set -e`. User and database come from the container, where compose set them.
           rows="" why="the SLM registered no fleet nodes"
           for _ in $(seq 1 12); do
-            rows="$(docker compose --env-file docker/.env.docker exec -T autobot-postgres \
+            rows="$(docker compose --env-file docker/.env.docker exec -T autobot-slm-postgres \
               sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tA -F " " -c "SELECT node_id, ip_address FROM nodes ORDER BY node_id"' \
               2>/dev/null)" || rows=""
             if [ -n "$rows" ]; then why="$(compare_nodes "$rows")" && { why=""; break; }; fi
@@ -263,6 +263,43 @@ jobs:
           while IFS= read -r row; do echo "  node $row"; done <<< "$rows"
           [ -z "$why" ] || fail "$why"
           echo "✓ all ${#declared[@]} compose services are registered at the address Docker gave them, all in ${subnet}"
+
+      - name: The SLM reads autobot_users, and logs in with that database down (#19406)
+        # The SLM owns the first login and works without the main app, so its login must not
+        # need autobot_users. The refused read while the database is closed is the control:
+        # without it, a login that passes says nothing about the database being down.
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="http://localhost/slm/api"
+          users_sql() {
+            docker compose --env-file docker/.env.docker exec -T autobot-postgres \
+              sh -c 'psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 -q' <<< "$1" > /dev/null
+          }
+          login() {
+            jq -n --arg p "$SLM_ADMIN_PASSWORD" '{username: "admin", password: $p}' \
+              | curl -s -o /tmp/slm-login.json -w '%{http_code}' -H 'Content-Type: application/json' \
+                  -d @- "$url/auth/login"
+          }
+          read_users() {
+            curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $token" "$url/autobot-users"
+          }
+          code="$(login)"
+          [ "$code" = 200 ] || { echo "::error::SLM login answered $code with autobot_users up"; exit 1; }
+          token="$(jq -r .access_token /tmp/slm-login.json)"
+          echo "::add-mask::$token"
+          code="$(read_users)"
+          [ "$code" = 200 ] || { echo "::error::autobot-users answered $code with autobot_users up"; exit 1; }
+          echo "✓ the SLM read autobot_users"
+
+          trap "users_sql 'ALTER DATABASE autobot_users ALLOW_CONNECTIONS true'" EXIT
+          users_sql "ALTER DATABASE autobot_users ALLOW_CONNECTIONS false;
+            SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'autobot_users';"
+          code="$(read_users)"
+          [ "$code" != 200 ] || { echo "::error::autobot-users still answered with its database closed"; exit 1; }
+          code="$(login)"
+          [ "$code" = 200 ] || { echo "::error::SLM login answered $code with autobot_users down"; exit 1; }
+          echo "✓ the SLM logged in with autobot_users down"
 
       - name: Verify services are running
         shell: bash
