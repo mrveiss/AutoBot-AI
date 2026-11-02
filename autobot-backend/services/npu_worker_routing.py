@@ -6,10 +6,15 @@
 
 The worker registry (``NPUWorkerManager``) knows every paired worker and its health. Requests
 used to go to one configured URL whatever the registry said, so a second worker got no traffic.
+
+Moving a failed POST to the next worker can run the same job twice, for instance after a timeout
+on a worker that is still computing. That costs compute only: embedding, transcription and
+inference return their result and change nothing outside the worker's own cache and counters.
 """
 
+import time
 from itertools import count, takewhile
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterator, List, Tuple
 
 import aiohttp
 
@@ -43,6 +48,7 @@ async def npu_worker_urls(configured_url: str) -> List[str]:
     """
     from services import npu_worker_manager
 
+    configured_url = configured_url.rstrip("/")
     manager = npu_worker_manager._worker_manager
     if manager is None:
         return [configured_url]
@@ -71,14 +77,26 @@ async def _post_inference(url: str, request_data: Dict[str, Any], timeout_second
     return result_data.get("result", {})
 
 
+def worker_attempts(urls: List[str], total_seconds: float) -> Iterator[Tuple[str, float]]:
+    """Each worker with the time left, so a hung worker cannot multiply the caller's timeout."""
+    deadline = time.monotonic() + total_seconds
+    for url in urls:
+        left = deadline - time.monotonic()
+        if left <= 0:
+            logger.warning("NPU request ran out of time before trying %s", url)
+            return
+        yield url, left
+
+
 async def post_inference_with_failover(
     configured_url: str, request_data: Dict[str, Any], timeout_seconds: float
 ) -> Dict[str, Any]:
     """Run an inference on the first worker that completes it; raise the last error if none does."""
-    urls = await npu_worker_urls(configured_url)
-    for url in urls[:-1]:
+    last_error: Exception = TimeoutError("NPU inference ran out of time")
+    for url, left in worker_attempts(await npu_worker_urls(configured_url), timeout_seconds):
         try:
-            return await _post_inference(url, request_data, timeout_seconds)
+            return await _post_inference(url, request_data, left)
         except Exception as exc:
-            logger.warning("NPU worker %s failed, trying the next one: %s", url, exc)
-    return await _post_inference(urls[-1], request_data, timeout_seconds)
+            logger.warning("NPU worker %s failed: %s", url, exc)
+            last_error = exc
+    raise last_error

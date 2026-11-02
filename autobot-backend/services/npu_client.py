@@ -31,7 +31,7 @@ from autobot_shared.http_client import get_http_client
 from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config, get_config
-from services.npu_worker_routing import npu_worker_urls
+from services.npu_worker_routing import npu_worker_urls, worker_attempts
 
 logger = get_logger(__name__)
 
@@ -260,14 +260,14 @@ class NPUClient:
             return None
         model_name = model_name or active_embedding_model()
 
-        for base_url in await self._worker_urls():
-            result = await self._embed_on_worker(base_url, texts, model_name, use_cache)
+        for base_url, left in worker_attempts(await self._worker_urls(), BATCH_TIMEOUT):
+            result = await self._embed_on_worker(base_url, texts, model_name, use_cache, left)
             if result is not None:
                 return result
         return None
 
     async def _embed_on_worker(
-        self, base_url: str, texts: List[str], model_name: str, use_cache: bool
+        self, base_url: str, texts: List[str], model_name: str, use_cache: bool, timeout: float
     ) -> EmbeddingResult | None:
         """Generate embeddings on one worker; None if it fails."""
         try:
@@ -278,7 +278,7 @@ class NPUClient:
                 url,
                 json=texts,
                 params={"model_name": npu_worker_model_name(model_name), "use_cache": str(use_cache).lower()},
-                timeout=aiohttp.ClientTimeout(total=BATCH_TIMEOUT),
+                timeout=aiohttp.ClientTimeout(total=timeout),
                 allow_redirects=False,
             ) as response:
                 if response.status == 200:
@@ -337,8 +337,8 @@ class NPUClient:
             Transcribed text string, or None if the worker is unavailable / returns
             an error (caller should fall back to local CPU Whisper).
         """
-        for base_url in await self._worker_urls():
-            transcript = await self._transcribe_on_worker(base_url, audio_path, model, language, timeout)
+        for base_url, left in worker_attempts(await self._worker_urls(), timeout):
+            transcript = await self._transcribe_on_worker(base_url, audio_path, model, language, left)
             if transcript is not None:
                 return transcript
         return None

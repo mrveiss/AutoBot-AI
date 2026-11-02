@@ -265,14 +265,20 @@ class AIHardwareAccelerator:
         self.device_status[HardwareDevice.CPU]["last_check"] = datetime.now(tz=timezone.utc)
 
     async def _check_npu_availability(self):
-        """Check NPU Worker availability."""
+        """The NPU is available if any worker is: one down must not send every task to the CPU (#19706)."""
+        for url in await npu_worker_urls(self.npu_worker_url):
+            await self._probe_npu_worker(url)
+            if self.device_status[HardwareDevice.NPU]["available"]:
+                return
+
+    async def _probe_npu_worker(self, url: str) -> None:
+        """Record one worker's availability."""
         try:
             # Use singleton HTTP client for connection pooling
             http_client = get_http_client()
             # NPU worker may be absent — keep probe failures at DEBUG (#9767).
-            urls = await npu_worker_urls(self.npu_worker_url)  # #19706: the worker requests go to first
             async with await http_client.get(
-                f"{urls[0]}/health",
+                f"{url}/health",
                 timeout=aiohttp.ClientTimeout(total=5),
                 suppress_error_log=True,
             ) as response:

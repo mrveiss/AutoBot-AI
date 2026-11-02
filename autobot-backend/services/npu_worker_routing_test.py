@@ -101,3 +101,60 @@ async def test_embeddings_move_to_the_next_worker_when_one_fails():
 @pytest.mark.asyncio
 async def test_a_client_built_for_one_url_stays_on_it():
     assert await NPUClient(base_url="http://only:1")._worker_urls() == ["http://only:1"]
+
+
+@pytest.mark.asyncio
+async def test_a_configured_url_with_a_trailing_slash_is_not_listed_twice():
+    registry = _registry(_worker(CONFIGURED))
+    with patch.object(npu_worker_manager, "_worker_manager", registry):
+        assert await npu_worker_routing.npu_worker_urls(CONFIGURED + "/") == [CONFIGURED]
+
+
+def test_workers_share_one_deadline():
+    clock = iter([100.0, 100.0, 107.0, 111.0])
+    with patch.object(npu_worker_routing, "time", SimpleNamespace(monotonic=lambda: next(clock))):
+        attempts = list(npu_worker_routing.worker_attempts(["a", "b", "c"], 10))
+    assert attempts == [("a", 10.0), ("b", 3.0)]
+
+
+@pytest.mark.asyncio
+async def test_inference_out_of_time_raises_without_a_call():
+    post = AsyncMock()
+    with (
+        patch.object(npu_worker_routing, "npu_worker_urls", AsyncMock(return_value=["http://a:1"])),
+        patch.object(npu_worker_routing, "_post_inference", post),
+        pytest.raises(TimeoutError),
+    ):
+        await npu_worker_routing.post_inference_with_failover(CONFIGURED, {}, 0)
+    post.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_transcription_moves_to_the_next_worker_when_one_fails():
+    client = NPUClient()
+    transcribe = AsyncMock(side_effect=[None, "words"])
+    with (
+        patch.object(client, "_worker_urls", AsyncMock(return_value=["http://a:1", "http://b:1"])),
+        patch.object(client, "_transcribe_on_worker", transcribe),
+    ):
+        assert await client.transcribe_audio("/a.wav") == "words"
+    assert [call.args[0] for call in transcribe.await_args_list] == ["http://a:1", "http://b:1"]
+
+
+@pytest.mark.asyncio
+async def test_one_worker_down_leaves_the_npu_available():
+    from ai_hardware_accelerator import AIHardwareAccelerator, HardwareDevice
+
+    manager = AIHardwareAccelerator.__new__(AIHardwareAccelerator)
+    manager.npu_worker_url = CONFIGURED
+    manager.device_status = {HardwareDevice.NPU: {"available": False}}
+
+    async def probe(url):
+        manager.device_status[HardwareDevice.NPU]["available"] = url == "http://b:1"
+
+    with (
+        patch("ai_hardware_accelerator.npu_worker_urls", AsyncMock(return_value=["http://a:1", "http://b:1"])),
+        patch.object(manager, "_probe_npu_worker", probe),
+    ):
+        await manager._check_npu_availability()
+    assert manager.device_status[HardwareDevice.NPU]["available"] is True
