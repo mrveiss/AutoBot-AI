@@ -90,7 +90,11 @@ jobs:
 
   structure:
     name: Issue structure (milestone, phase, parent)
-    if: github.event_name != 'issues' || !github.event.issue.pull_request
+    # #20552: of all labels, only a phase label and needs-structure can change this verdict.
+    if: >-
+      github.event_name != 'issues' || (!github.event.issue.pull_request && (
+      (github.event.action != 'labeled' && github.event.action != 'unlabeled') ||
+      startsWith(github.event.label.name, 'phase:') || github.event.label.name == 'needs-structure'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     concurrency:

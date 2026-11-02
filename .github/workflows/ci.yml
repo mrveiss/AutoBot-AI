@@ -212,6 +212,44 @@ jobs:
           echo "languages=${langs}" >> "$GITHUB_OUTPUT"
           echo "CodeQL languages: ${langs}"
 
+  # Short check (#20552): the fast guards, seconds to minutes, before anything expensive starts.
+  # Every expensive job needs it, so a red here stops them, and each gate then fails on its own
+  # verdict (a skipped upstream is no evidence, verdict.sh step 5): a required context reports a
+  # failure, never a skip. A cancel still clears the way: the gates pass this result to
+  # cancel-run-on-cancelled-upstream. The three reach_* guards import the whole backend, so they
+  # stay with the suite. Drafts run it too, because run-security and friends run on drafts.
+  short-check:
+    name: short-check
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 2
+    - uses: actions/setup-python@v7
+      with:
+        python-version-file: '.python-version'
+    - uses: ./.github/actions/release-promotion-base
+      id: release-base
+    - name: Ratchet base (#19283)
+      env:
+        EVENT_BASE: ${{ steps.release-base.outputs.base-sha || github.event.merge_group.base_sha || (github.event_name == 'push' && github.event.before) || '' }}
+      run: |
+        if [ -n "${EVENT_BASE//0/}" ]; then
+          git fetch --no-tags --depth=1 origin "$EVENT_BASE"
+          echo "AUTOBOT_RATCHET_BASE_SHA=${EVENT_BASE}" >> "$GITHUB_ENV"
+        fi
+    - name: Install what the guards import
+      run: |
+        grep -E '^pytest(-asyncio|-xdist)?(==|$)' requirements-ci-test.txt > "$RUNNER_TEMP/short-check.txt"
+        pip install -c constraints/shared.txt -r "$RUNNER_TEMP/short-check.txt" pyyaml jinja2
+    - name: Fast guards
+      run: |
+        sed -e 's/#.*//' -e 's/[[:space:]]*$//' -e '/^$/d' tools/git-hooks/fast_guard_tests.txt \
+          | grep -vE '^repo_tests/reach_(declarations|roots_record|scope_claim)' \
+          | xargs python -m pytest -q -p no:cacheprovider -m "not reach_floor" --tb=short -n auto
+
   # #13316: the suite is split eight ways here (twelve until #19527); `python-suite` below reports the
   # combined verdict. Measured per-step baseline of the single job this replaces:
   # dependency install 162s, TEST EXECUTION 3055s, everything else ~14s — so
@@ -242,7 +280,7 @@ jobs:
   # work is not wasted.
   provision-packages:
     name: provision-packages
-    needs: changes
+    needs: [changes, short-check]
     if: ${{ needs.changes.outputs.run_python_suite == 'true' && needs.changes.outputs.ready == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -796,7 +834,7 @@ jobs:
   # The number in 'All 12' must equal the python-shard matrix length (repo_tests/ci_shard_count_message_test.py).
   python-suite:
     name: python-suite
-    needs: [changes, python-shard]
+    needs: [changes, short-check, python-shard]
     if: always()
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
@@ -812,19 +850,19 @@ jobs:
       # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
       - uses: ./.github/actions/cancel-run-on-cancelled-upstream
         with:
-          results: ${{ needs.changes.result }} ${{ needs.python-shard.result }}
+          results: ${{ needs.changes.result }} ${{ needs.short-check.result }} ${{ needs.python-shard.result }}
       - uses: ./.github/actions/gate-verdict
         with:
           context: python-suite
           changes-result: ${{ needs.changes.result }}
           applies: ${{ needs.changes.outputs.run_python_suite }}
           work-ok: ${{ needs.python-shard.result == 'success' }}
-          work-detail: ${{ needs.python-shard.result == 'success' && 'All 8 python-suite shards passed.' || format('python-shard={0}', needs.python-shard.result) }}
+          work-detail: short-check=${{ needs.short-check.result }} ${{ needs.python-shard.result == 'success' && 'All 8 python-suite shards passed.' || format('python-shard={0}', needs.python-shard.result) }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
 
   frontend-tests:
-    needs: changes
+    needs: [changes, short-check]
     if: needs.changes.outputs.run_frontend_tests == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -891,7 +929,7 @@ jobs:
 
   # Work behind the `code-quality` gate. The body's secret (CONVENTIONS_DENYLIST) is inherited.
   run-code-quality:
-    needs: changes
+    needs: [changes, short-check]
     if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.run_code_quality == 'true' }}
     uses: ./.github/workflows/_gate-code-quality.yml
     secrets: inherit  # pragma: allowlist secret
@@ -902,7 +940,7 @@ jobs:
   # Gate: publishes the REQUIRED `code-quality` context.
   code-quality:
     name: code-quality
-    needs: [changes, run-code-quality]
+    needs: [changes, short-check, run-code-quality]
     if: always()
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
@@ -918,19 +956,19 @@ jobs:
       # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
       - uses: ./.github/actions/cancel-run-on-cancelled-upstream
         with:
-          results: ${{ needs.changes.result }} ${{ needs.run-code-quality.result }}
+          results: ${{ needs.changes.result }} ${{ needs.short-check.result }} ${{ needs.run-code-quality.result }}
       - uses: ./.github/actions/gate-verdict
         with:
           context: code-quality
           changes-result: ${{ needs.changes.result }}
           applies: ${{ needs.changes.outputs.run_code_quality }}
           work-ok: ${{ needs.run-code-quality.outputs.ok == 'true' }}
-          work-detail: run-code-quality=${{ needs.run-code-quality.result }}
+          work-detail: short-check=${{ needs.short-check.result }} run-code-quality=${{ needs.run-code-quality.result }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
 
   run-startup-import-smoke:
-    needs: changes
+    needs: [changes, short-check]
     if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.run_startup_smoke == 'true' }}
     uses: ./.github/workflows/_gate-startup-import-smoke.yml
     permissions:
@@ -939,7 +977,7 @@ jobs:
   # Gate: publishes the REQUIRED `startup-import-smoke` context.
   startup-import-smoke:
     name: startup-import-smoke
-    needs: [changes, run-startup-import-smoke]
+    needs: [changes, short-check, run-startup-import-smoke]
     if: always()
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
@@ -955,19 +993,19 @@ jobs:
       # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
       - uses: ./.github/actions/cancel-run-on-cancelled-upstream
         with:
-          results: ${{ needs.changes.result }} ${{ needs.run-startup-import-smoke.result }}
+          results: ${{ needs.changes.result }} ${{ needs.short-check.result }} ${{ needs.run-startup-import-smoke.result }}
       - uses: ./.github/actions/gate-verdict
         with:
           context: startup-import-smoke
           changes-result: ${{ needs.changes.result }}
           applies: ${{ needs.changes.outputs.run_startup_smoke }}
           work-ok: ${{ needs.run-startup-import-smoke.outputs.ok == 'true' }}
-          work-detail: run-startup-import-smoke=${{ needs.run-startup-import-smoke.result }}
+          work-detail: short-check=${{ needs.short-check.result }} run-startup-import-smoke=${{ needs.run-startup-import-smoke.result }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
 
   run-frontend-test:
-    needs: changes
+    needs: [changes, short-check]
     if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.run_unit_tests == 'true' }}
     uses: ./.github/workflows/_gate-frontend-test.yml
     permissions:
@@ -977,7 +1015,7 @@ jobs:
   # the Security Scan and Build Test jobs in the same body report for themselves, as they always did.
   unit-tests:
     name: Unit & Integration Tests
-    needs: [changes, run-frontend-test]
+    needs: [changes, short-check, run-frontend-test]
     if: always()
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
@@ -993,19 +1031,19 @@ jobs:
       # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
       - uses: ./.github/actions/cancel-run-on-cancelled-upstream
         with:
-          results: ${{ needs.changes.result }} ${{ needs.run-frontend-test.result }}
+          results: ${{ needs.changes.result }} ${{ needs.short-check.result }} ${{ needs.run-frontend-test.result }}
       - uses: ./.github/actions/gate-verdict
         with:
           context: Unit & Integration Tests
           changes-result: ${{ needs.changes.result }}
           applies: ${{ needs.changes.outputs.run_unit_tests }}
           work-ok: ${{ needs.run-frontend-test.outputs.ok == 'true' }}
-          work-detail: run-frontend-test=${{ needs.run-frontend-test.result }}
+          work-detail: short-check=${{ needs.short-check.result }} run-frontend-test=${{ needs.run-frontend-test.result }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
 
   run-docker-smoke:
-    needs: changes
+    needs: [changes, short-check]
     if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.run_docker_smoke == 'true' }}
     uses: ./.github/workflows/_gate-docker-smoke.yml
     permissions:
@@ -1015,7 +1053,7 @@ jobs:
   # "cannot tell" is a red here, no longer a build that races a second publisher (#17391).
   smoke-test:
     name: smoke-test
-    needs: [changes, run-docker-smoke]
+    needs: [changes, short-check, run-docker-smoke]
     if: always()
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
@@ -1031,19 +1069,19 @@ jobs:
       # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
       - uses: ./.github/actions/cancel-run-on-cancelled-upstream
         with:
-          results: ${{ needs.changes.result }} ${{ needs.run-docker-smoke.result }}
+          results: ${{ needs.changes.result }} ${{ needs.short-check.result }} ${{ needs.run-docker-smoke.result }}
       - uses: ./.github/actions/gate-verdict
         with:
           context: smoke-test
           changes-result: ${{ needs.changes.result }}
           applies: ${{ needs.changes.outputs.run_docker_smoke }}
           work-ok: ${{ needs.run-docker-smoke.outputs.ok == 'true' }}
-          work-detail: run-docker-smoke=${{ needs.run-docker-smoke.result }}
+          work-detail: short-check=${{ needs.short-check.result }} run-docker-smoke=${{ needs.run-docker-smoke.result }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
 
   run-api-wiring:
-    needs: changes
+    needs: [changes, short-check]
     if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.run_api_wiring == 'true' }}
     uses: ./.github/workflows/_gate-api-wiring.yml
     permissions:
@@ -1052,7 +1090,7 @@ jobs:
   # Gate: publishes the REQUIRED `api-wiring` context.
   api-wiring:
     name: api-wiring
-    needs: [changes, run-api-wiring]
+    needs: [changes, short-check, run-api-wiring]
     if: always()
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
@@ -1068,19 +1106,19 @@ jobs:
       # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
       - uses: ./.github/actions/cancel-run-on-cancelled-upstream
         with:
-          results: ${{ needs.changes.result }} ${{ needs.run-api-wiring.result }}
+          results: ${{ needs.changes.result }} ${{ needs.short-check.result }} ${{ needs.run-api-wiring.result }}
       - uses: ./.github/actions/gate-verdict
         with:
           context: api-wiring
           changes-result: ${{ needs.changes.result }}
           applies: ${{ needs.changes.outputs.run_api_wiring }}
           work-ok: ${{ needs.run-api-wiring.outputs.ok == 'true' }}
-          work-detail: run-api-wiring=${{ needs.run-api-wiring.result }}
+          work-detail: short-check=${{ needs.short-check.result }} run-api-wiring=${{ needs.run-api-wiring.result }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
 
   run-migration-gate:
-    needs: changes
+    needs: [changes, short-check]
     if: ${{ needs.changes.outputs.ready == 'true' && needs.changes.outputs.run_migrations == 'true' }}
     uses: ./.github/workflows/_gate-migration.yml
     permissions:
@@ -1090,7 +1128,7 @@ jobs:
   # Gate: publishes the REQUIRED `migration-matrix` context.
   migration-matrix:
     name: migration-matrix
-    needs: [changes, run-migration-gate]
+    needs: [changes, short-check, run-migration-gate]
     if: always()
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
@@ -1106,19 +1144,19 @@ jobs:
       # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
       - uses: ./.github/actions/cancel-run-on-cancelled-upstream
         with:
-          results: ${{ needs.changes.result }} ${{ needs.run-migration-gate.result }}
+          results: ${{ needs.changes.result }} ${{ needs.short-check.result }} ${{ needs.run-migration-gate.result }}
       - uses: ./.github/actions/gate-verdict
         with:
           context: migration-matrix
           changes-result: ${{ needs.changes.result }}
           applies: ${{ needs.changes.outputs.run_migrations }}
           work-ok: ${{ needs.run-migration-gate.outputs.ok == 'true' }}
-          work-detail: run-migration-gate=${{ needs.run-migration-gate.result }}
+          work-detail: short-check=${{ needs.short-check.result }} run-migration-gate=${{ needs.run-migration-gate.result }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
 
   run-generated-types:
-    needs: changes
+    needs: [changes, short-check]
     if: ${{ needs.changes.outputs.ready == 'true' && (needs.changes.outputs.run_types == 'true' || needs.changes.outputs.run_slm_types == 'true') }}
     uses: ./.github/workflows/_gate-generated-types.yml
     permissions:
@@ -1127,11 +1165,23 @@ jobs:
       run_types: ${{ needs.changes.outputs.run_types }}
       run_slm_types: ${{ needs.changes.outputs.run_slm_types }}
 
+  # #20552: regenerate only after verify failed; a green or skipped verify has nothing to fix.
+  run-auto-fix-types:
+    needs: [changes, run-generated-types]
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && needs.run-generated-types.result == 'failure' }}
+    uses: ./.github/workflows/auto-fix-generated-types.yml
+    secrets: inherit  # pragma: allowlist secret
+    permissions:
+      contents: read
+      actions: write
+      statuses: write
+      pull-requests: read
+
   # Gate: publishes the REQUIRED `verify-generated-types` context. The SLM sibling job in the body is
   # deliberately NOT in this verdict (#13862): it is not a required context.
   verify-generated-types:
     name: verify-generated-types
-    needs: [changes, run-generated-types]
+    needs: [changes, short-check, run-generated-types]
     if: always()
     # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
     permissions:
@@ -1147,14 +1197,14 @@ jobs:
       # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
       - uses: ./.github/actions/cancel-run-on-cancelled-upstream
         with:
-          results: ${{ needs.changes.result }} ${{ needs.run-generated-types.result }}
+          results: ${{ needs.changes.result }} ${{ needs.short-check.result }} ${{ needs.run-generated-types.result }}
       - uses: ./.github/actions/gate-verdict
         with:
           context: verify-generated-types
           changes-result: ${{ needs.changes.result }}
           applies: ${{ needs.changes.outputs.run_types }}
           work-ok: ${{ needs.run-generated-types.outputs.ok == 'true' }}
-          work-detail: run-generated-types=${{ needs.run-generated-types.result }}
+          work-detail: short-check=${{ needs.short-check.result }} run-generated-types=${{ needs.run-generated-types.result }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
 
@@ -1203,7 +1253,7 @@ jobs:
   # ---- checks that are not required contexts: same bodies, same conditions as before ----
 
   run-security:
-    needs: changes
+    needs: [changes, short-check]
     if: ${{ needs.changes.outputs.run_security == 'true' }}
     uses: ./.github/workflows/_gate-security.yml
     permissions:
@@ -1214,7 +1264,7 @@ jobs:
       static_analysis: ${{ needs.changes.outputs.run_static_analysis }}
 
   run-codeql:
-    needs: changes
+    needs: [changes, short-check]
     if: ${{ needs.changes.outputs.codeql_languages != '[]' }}
     uses: ./.github/workflows/_gate-codeql.yml
     permissions:
@@ -1224,7 +1274,7 @@ jobs:
       languages: ${{ needs.changes.outputs.codeql_languages }}
 
   run-ai-security-review:
-    needs: changes
+    needs: [changes, short-check]
     if: ${{ needs.changes.outputs.run_ai_review == 'true' }}
     uses: ./.github/workflows/_gate-ai-security-review.yml
     secrets: inherit  # pragma: allowlist secret
@@ -1233,7 +1283,7 @@ jobs:
       pull-requests: write
 
   run-npm-package-tests:
-    needs: changes
+    needs: [changes, short-check]
     if: ${{ needs.changes.outputs.run_npm == 'true' }}
     uses: ./.github/workflows/_gate-npm-package-tests.yml
     permissions:
@@ -1245,7 +1295,7 @@ jobs:
       structured_thinking: ${{ needs.changes.outputs.npm_structured_thinking }}
 
   run-slm-frontend:
-    needs: changes
+    needs: [changes, short-check]
     if: ${{ needs.changes.outputs.run_slm_frontend == 'true' }}
     uses: ./.github/workflows/_gate-slm-frontend.yml
     permissions:
@@ -1255,7 +1305,7 @@ jobs:
 
   deployment-check:
     runs-on: ubuntu-latest
-    needs: [changes, python-suite, frontend-tests]
+    needs: [changes, short-check, python-suite, frontend-tests]
     if: |
       (github.ref == 'refs/heads/release' || github.ref == 'refs/heads/main') &&
       (needs.python-suite.result == 'success' || needs.python-suite.result == 'skipped') &&
