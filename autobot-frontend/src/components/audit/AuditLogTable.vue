@@ -389,7 +389,7 @@ function exportLogs(format: 'json' | 'csv') {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-default);
   box-shadow: var(--shadow-lg);
-  z-index: 10;
+  z-index: var(--z-10);
   min-width: 150px;
 }
 
