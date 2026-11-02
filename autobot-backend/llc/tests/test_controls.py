@@ -519,3 +519,18 @@ async def test_resume_company_raises_company_not_found():
 
     with pytest.raises(CompanyNotFoundError):
         await svc.resume_company(session, company_id, actor_id)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("control", ["pause_agent", "terminate_agent", "resume_agent"])
+async def test_a_failed_activity_write_changes_no_redis_flag_20150(control):
+    log = _activity_log_mock()
+    log.record = AsyncMock(side_effect=RuntimeError("activity write failed"))
+    svc = ControlsService(activity_log=log)
+    session = _mock_session(rows=[("paused", "available")])
+    redis = AsyncMock()
+    with patch("llc.services.controls_service.get_async_redis_client", AsyncMock(return_value=redis)):
+        with pytest.raises(RuntimeError):
+            await getattr(svc, control)(session, str(uuid.uuid4()), "agent-1", str(uuid.uuid4()))
+    redis.set.assert_not_awaited()
+    redis.delete.assert_not_awaited()

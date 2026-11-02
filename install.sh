@@ -39,16 +39,12 @@ readonly SECRETS_FILE="/etc/autobot/slm-secrets.env"
 # #18653: what this installer itself created -- read by scripts/uninstall.sh, which removes an
 # account, package or apt source only if it is recorded here, never a pre-existing one.
 readonly INSTALL_RECORD="/etc/autobot/install-record"
-# The service account that owns ${AUTOBOT_BASE} and runs the AutoBot units, and the
-# account the SLM later reaches this node as (PathConfig.ssh_user, AUTOBOT_SSH_USER).
-# Named once here because this script runs before the repository, and so before
-# ssot-config.sh, exists on the host.
+# The account that owns ${AUTOBOT_BASE}, runs the units and is how the SLM reaches this node
+# (PathConfig.ssh_user, AUTOBOT_SSH_USER). Named here: this script runs before ssot-config.sh exists.
 readonly AUTOBOT_USER="autobot"
 readonly AUTOBOT_HOME="/home/${AUTOBOT_USER}"
-# #9956: Default SLM manager node_id. Must match the host/slm_node_id written
-# into the generated localhost inventory (generate_inventory) — that inventory
-# is the canonical definition; this constant mirrors it for the API
-# registration calls so the value is not duplicated as scattered literals.
+# #9956: Default SLM manager node_id. generate_inventory's localhost inventory is the canonical
+# definition; this mirrors it for the API registration calls, so it must match host/slm_node_id.
 readonly SLM_NODE_ID="00-SLM-Manager"
 # External hosts the install reaches, each named once. The connectivity pre-flight
 # probes these same hosts, so it checks exactly what the install goes on to use.
@@ -586,6 +582,7 @@ code_deployment() {
     local installed_sha  # #18586: record exactly what was installed
     installed_sha="$(sudo -u "${AUTOBOT_USER}" git -C "${CODE_SOURCE}" rev-parse HEAD)"; [[ -z "${PINNED_COMMIT}" || "${GIT_BRANCH}" != "${DEFAULT_BRANCH}" || "${installed_sha}" == "${PINNED_COMMIT}" ]] || fatal "${GIT_BRANCH} checked out ${installed_sha}, but this signed installer was built for ${PINNED_COMMIT}; the tag moved -- refusing (#18666)"
     success "Installing ${DEFAULT_REPO} branch ${GIT_BRANCH} @ ${installed_sha}"
+    refuse_guessable_admin_password
 
     # Copy code from code_source to service directories where Ansible expects them
     info "Distributing code to service directories..."
@@ -650,9 +647,7 @@ all:
 INVENTORY
     success "  Localhost inventory generated"
 
-    if [[ -z "${ADMIN_PASSWORD}" ]]; then
-        ADMIN_PASSWORD=$(generate_admin_password); ADMIN_PASSWORD_GENERATED=true
-    fi
+    [[ -n "${ADMIN_PASSWORD}" ]] || { ADMIN_PASSWORD=$(generate_admin_password); ADMIN_PASSWORD_GENERATED=true; }
 
     if [[ ! -f "${SECRETS_FILE}" ]] || [[ "${REINSTALL}" == true ]]; then
         info "Writing secrets file..."
@@ -982,6 +977,11 @@ prompt_from_tty() {
     fi
     exec {__fd}<&-
     printf -v "${__var}" '%s' "${__value}"
+}
+
+refuse_guessable_admin_password() {  # #16299: before any secret is written; a kept or generated one is not checked
+    local why; [[ -n "${ADMIN_PASSWORD}" ]] && ! ${ADMIN_PASSWORD_GENERATED} && ! ${ADMIN_PASSWORD_PRESERVED} || return 0
+    why="$(printf '%s' "${ADMIN_PASSWORD}" | python3 "${CODE_SOURCE}/autobot_shared/security/password_weakness.py")" || fatal "The admin password was refused: ${why}"
 }
 
 # One generator, so the interactive-blank and no-terminal paths cannot drift.

@@ -706,18 +706,18 @@ class AuthenticationMiddleware:
             from services.device_jwt import validate_device_jwt
 
             claims = await validate_device_jwt(token)
+        except HTTPException:
+            raise  # #20446: the revocation store could not answer -- the shared 503, not a 401
         except Exception:
             return None
 
-        device_id = str(claims.get("device_id", ""))
-        user_id = str(claims.get("user_id", ""))
-        scope = str(claims.get("scope", "read"))
+        device_id, user_id = (str(claims.get(claim, "")) for claim in ("device_id", "user_id"))
         return {
             "username": f"device:{device_id}",
             "user_id": user_id,
             "role": "device",
             "device_id": device_id,
-            "scope": scope,
+            "scope": str(claims.get("scope", "read")),
             "auth_method": "device_jwt",
         }
 
