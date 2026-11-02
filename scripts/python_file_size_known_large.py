@@ -473,7 +473,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot_shared/security/ssrf_guard_test.py": 633,
     "autobot_shared/ssot_config.py": 3211,  # splits: #19319 role_mirrors, #15501 hosted_models, #19934 company_os_flags
     "autobot_shared/ssot_config_test.py": 776,
-    "autobot_shared/ssot_constants.py": 861,
+    "autobot_shared/ssot_constants.py": 859,
     "autobot_shared/user_management/team_service.py": 659,
     "pipeline-scripts/check-pre-commit-hook-pr_test.py": 747,
     "pipeline-scripts/ci_dispatch_watchdog.py": 1244,  # #13439: supersession split to ci_run_supersession.py

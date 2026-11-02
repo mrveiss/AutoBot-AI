@@ -18,19 +18,17 @@ import subprocess  # nosec B404  # used for internal script execution only
 import sys
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_constants import PATH
+from autobot_shared.paths import infrastructure_dir
 
 logger = get_logger(__name__)
 
-#: The man-page indexer, anchored to the repository root.
+#: The man-page indexer, in code_source's infrastructure tree (#20578: the copy beside the install is stale).
 #:
 #: This was addressed relative to the process working directory, which is not
 #: the repo root under Celery, systemd or a test runner -- and no such directory
 #: exists at the root under any cwd. The script is real; only the path was not.
 #: So the refresh returned its failed dict on every run.
-MAN_PAGE_INDEXER = (
-    PATH.PROJECT_ROOT / "autobot-infrastructure" / "shared" / "scripts" / "utilities" / "index_all_man_pages.py"
-)
+MAN_PAGE_INDEXER = infrastructure_dir() / "shared" / "scripts" / "utilities" / "index_all_man_pages.py"
 
 
 def parse_indexing_output(output: str) -> tuple:

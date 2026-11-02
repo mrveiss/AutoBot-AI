@@ -17,6 +17,7 @@ import yaml
 
 from autobot_shared.error_boundaries import ErrorCategory
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import infrastructure_dir
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.path_constants import PATH
 
@@ -467,10 +468,9 @@ class ErrorCatalog:
 
         ``PATH.CONFIG_DIR`` said ``infrastructure/shared/config`` while the
         directory here is ``autobot-infrastructure/shared/config``, so that
-        candidate never resolved; #14892 corrected the constant. Both explicit
-        spellings stay: this loader must not depend on the constant being right,
-        deduplication makes the now-correct one free, and a deployed layout may
-        still use the bare ``infrastructure/`` spelling.
+        candidate never resolved; #14892 corrected the constant. The explicit spellings stay: this loader
+        must not depend on it (#20578: ``infrastructure_dir()`` is code_source's copy, never the stale
+        one beside the install), and a deployed layout may use ``infrastructure/``.
         """
         here = Path(__file__).resolve()
         backend_dir = here.parent.parent
@@ -479,7 +479,7 @@ class ErrorCatalog:
             PATH.STATIC_DIR / CATALOG_FILENAME,
             backend_dir / "static" / CATALOG_FILENAME,
             PATH.CONFIG_DIR / CATALOG_FILENAME,
-            install_root / "autobot-infrastructure" / "shared" / "config" / CATALOG_FILENAME,
+            infrastructure_dir() / "shared" / "config" / CATALOG_FILENAME,  # #20578
             install_root / "infrastructure" / "shared" / "config" / CATALOG_FILENAME,
         ]
         ordered: list[Path] = []

@@ -27,18 +27,18 @@ from typing import Callable, Dict, List, Set
 import pytest
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import infrastructure_dir
 from constants.user_scope_constants import GLOBAL_USER
 
 # Add project root and shared infrastructure to path so benchmark_base is importable
 _repo_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(_repo_root))
-sys.path.insert(0, str(_repo_root / "autobot-infrastructure" / "shared"))
+sys.path.insert(0, str(infrastructure_dir() / "shared"))  # #20578: code_source, not beside the install
 
 try:
     from tests.benchmarks.benchmark_base import BenchmarkRunner, assert_performance
 except ModuleNotFoundError:
-    # benchmark_base is only available when the full infrastructure tree is present.
-    # TestRealKBBenchmarks (below) does not require it; the mock benchmark classes do.
+    # benchmark_base needs the full infrastructure tree; TestRealKBBenchmarks (below) does not, the mocks do.
     BenchmarkRunner = None  # type: ignore[assignment,misc]
     assert_performance = None  # type: ignore[assignment]
 

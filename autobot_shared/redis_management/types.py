@@ -57,14 +57,27 @@ def _base_dir() -> str | None:
         return None
 
 
+def _infrastructure_config_dir() -> str:
+    """``shared/config`` of code_source's infrastructure tree, never the stale copy beside the install (#20578).
+
+    Never raises (see ``_base_dir``): with no determinable root, the tree two levels above this module.
+    """
+    from autobot_shared.paths import INFRASTRUCTURE_DIR_NAME, ProjectRootUndeterminable, infrastructure_dir
+
+    try:
+        infra = str(infrastructure_dir())
+    except ProjectRootUndeterminable:
+        infra = os.path.join(os.path.dirname(__file__), "..", "..", INFRASTRUCTURE_DIR_NAME)
+    return os.path.join(infra, "shared", "config")
+
+
 def _yaml_candidates() -> list[str]:
     """Every place redis-databases.yaml may live, in priority order -- the ONE list (#19232).
 
     Built per call, never at import, so a path that changes after import is seen.
     """
-    here = os.path.dirname(__file__)
     candidates = [
-        os.path.join(here, "..", "..", "autobot-infrastructure", "shared", "config", _YAML_NAME),  # checkout/install
+        os.path.join(_infrastructure_config_dir(), _YAML_NAME),  # code_source (#20578), else checkout/install
         os.path.join("/app/config", _YAML_NAME),  # container
         os.path.join(".", "config", _YAML_NAME),  # host relative
     ]
