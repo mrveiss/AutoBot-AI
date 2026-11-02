@@ -811,10 +811,9 @@ async def get_sync_status(
     # this is deployed files vs the process's in-memory state.
     process_divergence = await _compute_process_divergence()
 
-    # #12776: the self-update path restarts this backend mid-run, so nothing
-    # in-process can assert the playbook finished. Read the verdict off the log
-    # instead, so a run that died before Play 2 stops being reported as success.
-    verdict = _read_last_self_update_verdict()
+    # #12776: the self-update path restarts this backend mid-run, so the verdict is read
+    # off the log; #19770: liveness tells "still running" from "died before Play 2".
+    verdict = _read_last_self_update_verdict(run_alive=(await read_deploy_activity()).in_progress)
 
     return CodeSyncStatusResponse(
         latest_version=latest_version,
@@ -839,7 +838,7 @@ _SELF_UPDATE_QUEUED_MESSAGE = (
 )
 
 
-def _read_last_self_update_verdict(not_before: Optional[str] = None):
+def _read_last_self_update_verdict(not_before: Optional[str] = None, run_alive: Optional[bool] = None):
     """Verdict for the last self-update run; never fails the status endpoint (#12776).
 
     #12959: the log only says whether the *playbook* finished. A run can reach
@@ -856,7 +855,7 @@ def _read_last_self_update_verdict(not_before: Optional[str] = None):
     from services.self_update_log_reader import SelfUpdateVerdict, read_self_update_verdict
 
     try:
-        verdict = read_self_update_verdict(SELF_UPDATE_LOG_PATH, not_before)
+        verdict = read_self_update_verdict(SELF_UPDATE_LOG_PATH, not_before, run_alive)
     except Exception as exc:  # noqa: BLE001 — status must answer even if this cannot
         logger.warning("self-update verdict unavailable: %s", exc)
         verdict = SelfUpdateVerdict(reason=None)
@@ -5248,7 +5247,7 @@ def _completion_is_newer_than(completed_at: Optional[str], since: Optional[str])
     return done > fired
 
 
-def _rotated_completion_time() -> Optional[str]:
+def _rotated_completion_time(run_alive: Optional[bool] = None) -> Optional[str]:
     """When the last verdict came from the ROTATED log, when that log was rotated.
 
     Returns None when the verdict came from the live log (the normal case) or
@@ -5269,7 +5268,7 @@ def _rotated_completion_time() -> Optional[str]:
         from services.playbook_executor import SELF_UPDATE_LOG_PATH
         from services.self_update_log_reader import read_self_update_verdict
 
-        verdict = read_self_update_verdict(SELF_UPDATE_LOG_PATH)
+        verdict = read_self_update_verdict(SELF_UPDATE_LOG_PATH, run_alive=run_alive)
         if getattr(verdict, "from_rotated_log", False) is not True:
             return None
         # Only a run that reached its recap is a completion. `complete` is a real
@@ -5345,7 +5344,7 @@ async def _reconcile_self_update_stage(
     # probe_role_delivery and `/status` already gates on. Resolving this stage
     # on the weaker check would let a degraded self-update be reported as
     # resolved and then deploy to the fleet on the strength of it.
-    verdict = _read_last_self_update_verdict(stage.started_at)
+    verdict = _read_last_self_update_verdict(stage.started_at, run_alive=(await read_deploy_activity()).in_progress)
     if verdict.degraded:
         # Carry the reason into the stage: the count alone gave an operator
         # nothing to act on.

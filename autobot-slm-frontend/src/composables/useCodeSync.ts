@@ -313,6 +313,9 @@ export function isSelfUpdateReconnecting(
   return running?.name === SLM_SELF_UPDATE_STAGE
 }
 
+/** `getUpdateAllStatus()` result for a 401: an auth failure, never a control plane restart (#20201). */
+export const UPDATE_ALL_UNAUTHENTICATED = 'unauthenticated' as const
+
 export type UpdateAllPollDecision = 'continue' | 'lost-contact' | 'giveup'
 
 /**
@@ -1025,26 +1028,20 @@ export function useCodeSync() {
   }
 
   /**
-   * Poll the status of the current update-all job.
-   *
-   * F1 / #12593: Returns null ONLY on a true 404 (no job ever started) so the
-   * caller stops polling. Returns undefined on transient errors (connection
-   * refused / network / 5xx during the SLM self-restart window) so the caller
-   * keeps polling instead of treating the control-plane bounce as a hard stop.
-   *
-   * MUST use rawRequest: `slmApiClient.get` throws a generic `Error('HTTP <n>:
-   * …')` on non-2xx and retries transient failures, which would erase the
-   * 404-vs-transient distinction this #12593 contract depends on.
+   * Poll the status of the current update-all job (F1 / #12593).
+   * null = true 404 (stop); undefined = transient (connection refused / network /
+   * 5xx during the SLM self-restart: keep polling); UPDATE_ALL_UNAUTHENTICATED =
+   * 401 (#20201: the session is gone, not the control plane).
+   * MUST use rawRequest: `slmApiClient.get` throws on non-2xx and would erase
+   * those distinctions.
    */
-  async function getUpdateAllStatus(): Promise<UpdateAllJob | null | undefined> {
+  async function getUpdateAllStatus(): Promise<UpdateAllJob | null | undefined | typeof UPDATE_ALL_UNAUTHENTICATED> {
     try {
       const response = await slmApiClient.rawRequest('/code-sync/update-all/status', {
         method: 'GET',
       })
-      // True 404 = no job started yet → stop polling
-      if (response.status === 404) {
-        return null
-      }
+      if (response.status === 404) return null
+      if (response.status === 401) return UPDATE_ALL_UNAUTHENTICATED
       // 5xx (or any other non-2xx) during SLM restart → transient, keep polling
       if (!response.ok) {
         return undefined

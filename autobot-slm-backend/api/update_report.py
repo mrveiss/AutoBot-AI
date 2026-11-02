@@ -18,6 +18,7 @@ from autobot_shared.env_utils import env_int_clamped
 from models.database import Deployment
 from services.auth import require_permission
 from services.database import get_db
+from services.deploy_activity import read_deploy_activity
 from services.playbook_executor import SELF_UPDATE_LOG_PATH
 from services.self_update_log_reader import read_self_update_verdict
 from services.update_report import build_update_report
@@ -46,6 +47,7 @@ async def get_update_report(
     """The last update's target, stage, result, failed task, error and role deploys."""
     from api.code_sync import _get_slm_deployed_commit  # code_sync mounts this router
 
-    started_at = read_self_update_verdict(SELF_UPDATE_LOG_PATH).run_started_at
+    alive = (await read_deploy_activity()).in_progress  # #19770: running vs ended without a recap
+    started_at = read_self_update_verdict(SELF_UPDATE_LOG_PATH, run_alive=alive).run_started_at
     target = await _get_slm_deployed_commit()  # the marker moves before pip runs, so it is the target, not a success
-    return build_update_report(SELF_UPDATE_LOG_PATH, target, await _deploy_runs_since(db, started_at))
+    return build_update_report(SELF_UPDATE_LOG_PATH, target, await _deploy_runs_since(db, started_at), alive)

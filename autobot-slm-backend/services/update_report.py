@@ -62,9 +62,11 @@ def _deploy_run(run: Any) -> dict[str, Any]:
     }
 
 
-def build_update_report(log_path: Path, target_commit: str | None, deploy_runs: Iterable[Any]) -> dict[str, Any]:
+def build_update_report(
+    log_path: Path, target_commit: str | None, deploy_runs: Iterable[Any], run_alive: bool | None = None
+) -> dict[str, Any]:
     """The last update's target, how far it got, its result, what failed, and the role deploys around it."""
-    verdict = read_self_update_verdict(log_path)
+    verdict = read_self_update_verdict(log_path, run_alive=run_alive)
     source = _read_log_text(log_path)
     failure = first_failure(source.text) if source.text else None
     return {
