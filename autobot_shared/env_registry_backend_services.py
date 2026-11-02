@@ -583,3 +583,13 @@ register_env_var(
         component="backend",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_UPLOAD_DIR",
+        type=str,
+        default="",
+        description="Transcriber uploads, the only base the path guard allows; empty: <TRANSCRIBER_DATA_DIR>/uploads.",
+        component="backend",
+    )
+)

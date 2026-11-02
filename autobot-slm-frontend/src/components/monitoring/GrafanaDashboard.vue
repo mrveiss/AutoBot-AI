@@ -242,7 +242,7 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 9999;
+  z-index: var(--z-maximum);
   border-radius: 0;
 }
 
@@ -262,7 +262,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   background: var(--slm-gray-50);
-  z-index: 10;
+  z-index: var(--z-10);
 }
 
 .controls {

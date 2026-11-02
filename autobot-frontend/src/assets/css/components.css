@@ -1033,7 +1033,7 @@
 }
 .board-load-error-detail {
   opacity: 0.85;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 .board-load-error-retry {
   margin-inline-start: auto;
