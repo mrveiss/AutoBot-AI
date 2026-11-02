@@ -85,7 +85,7 @@ HARDCODED_COLOUR_LITERALS: dict[str, int] = {
     "#fecaca": 1,
     "#fef2f2": 1,
     "#ffeaa7": 1,
-    "#fff": 5,
+    "#fff": 3,
     "#fff3cd": 1,
     "#ffffff": 3,
 }

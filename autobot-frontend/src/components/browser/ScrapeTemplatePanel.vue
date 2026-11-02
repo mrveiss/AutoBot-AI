@@ -179,7 +179,7 @@
             @click="doDelete"
             :disabled="isDeleting"
             class="px-4 py-2 text-sm rounded-lg font-medium"
-            style="background: var(--color-error); color: #fff"
+            style="background: var(--color-error); color: var(--text-on-error)"
           >
             <Icon v-if="isDeleting" name="spinner" class="animate-spin mr-1" />
             {{ $t('common.delete') }}

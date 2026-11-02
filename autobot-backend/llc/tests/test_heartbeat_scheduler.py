@@ -295,9 +295,9 @@ class TestDispatchAdapterRouting:
 
     async def test_claude_code_routed_through_registry(self):
         agent = _make_agent(adapter_type="claude_code")
-        fake_adapter = MagicMock()
         with (
-            patch(f"{_HBS}.get_adapter", return_value=fake_adapter) as mock_get,
+            patch(f"{_HBS}.adapter_block_reason", return_value=None),  # routing, not this host's CLI
+            patch(f"{_HBS}.get_adapter", return_value=MagicMock()) as mock_get,
             patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
         ):
             await _dispatch_adapter(agent, {})
