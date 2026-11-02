@@ -784,6 +784,16 @@
       "browser": "Przeglądarka",
       "novnc": "Pulpit zdalny",
       "ariaLabel": "Sekcje czatu"
+    },
+    "attachmentNotice": {
+      "unavailable": "Nie znaleziono załączonego pliku w tej rozmowie, więc nie został użyty.",
+      "too_many": "Użyto tylko pierwszych {limit} załączonych plików; pozostałe pominięto.",
+      "image": "\"{filename}\" jest obrazem i nie można go odczytać jako tekstu, więc nie został użyty.",
+      "unsupported": "\"{filename}\" nie jest plikiem tekstowym, który asystent potrafi odczytać, więc nie został użyty.",
+      "unreadable": "Nie udało się odczytać pliku \"{filename}\", więc nie został użyty.",
+      "empty": "Plik \"{filename}\" nie zawiera czytelnego tekstu, więc nie został użyty.",
+      "truncated": "Plik \"{filename}\" jest długi, więc użyto tylko jego początku.",
+      "over_budget": "Załączone pliki osiągnęły limit rozmiaru, więc plik \"{filename}\" nie został użyty."
     }
   },
   "settings": {
