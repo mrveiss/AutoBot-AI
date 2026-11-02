@@ -41,8 +41,14 @@ def test_the_ai_stack_service_gets_what_the_failsafe_needs() -> None:
     """Its server creates ClassificationAgent, which raises without these."""
     template = _ROOT / "autobot-slm-backend" / "ansible" / "roles" / "ai-stack" / "templates" / "ai-stack.env.j2"
     text = template.read_text(encoding="utf-8")
-    for key in ("PROVIDER", "ENDPOINT", "MODEL", "SECONDARY_MODEL"):
-        assert re.search(rf"^AUTOBOT_LLM_FAILSAFE_{key}=", text, re.M), key
+    expected = {
+        "PROVIDER": "ollama",
+        "ENDPOINT": "{{ ai_chat_endpoint }}",
+        "MODEL": "{{ ai_llm_failsafe_model }}",
+        "SECONDARY_MODEL": "{{ ai_llm_failsafe_secondary_model }}",
+    }
+    for key, value in expected.items():
+        assert re.search(rf"^AUTOBOT_LLM_FAILSAFE_{key}={re.escape(value)}$", text, re.M), key
 
 
 def test_the_same_model_twice_is_refused(monkeypatch) -> None:
