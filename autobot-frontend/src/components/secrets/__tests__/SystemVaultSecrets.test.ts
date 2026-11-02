@@ -8,6 +8,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
+import { HttpError } from '@autobot/ui'
 import en from '@/i18n/locales/en.json'
 import SystemVaultSecrets from '../SystemVaultSecrets.vue'
 
@@ -91,5 +92,27 @@ describe('SystemVaultSecrets (#17099)', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('Nothing was modified')
     expect(wrapper.emitted('changed')).toBeUndefined()
+  })
+
+  it('a delete refused for dependents lists them in a second confirm, then forces it (#20557)', async () => {
+    confirm.mockResolvedValue(true)
+    const detail = { code: 'secret_has_dependents', dependents: [{ dependent_kind: 'service', dependent_id: 'scheduler' }] }
+    deleteSecret.mockRejectedValueOnce(new HttpError(409, 'Dependents use this secret', { detail })).mockResolvedValue({})
+    const wrapper = mountList({ available: true, secrets: [entry] })
+    await wrapper.find('[data-testid="delete"]').trigger('click')
+    await flushPromises()
+    expect(confirm).toHaveBeenCalledTimes(2)
+    expect(confirm.mock.calls[1][0].message).toContain('service:scheduler')
+    expect(deleteSecret).toHaveBeenLastCalledWith('sys-1', { confirmDependents: true })
+  })
+
+  it('declining the dependents confirm sends no forced delete (#20557)', async () => {
+    confirm.mockResolvedValueOnce(true).mockResolvedValueOnce(false)
+    const detail = { code: 'secret_has_dependents', dependents: [{ dependent_kind: 'agent', dependent_id: 'a-1' }] }
+    deleteSecret.mockRejectedValue(new HttpError(409, 'Dependents use this secret', { detail }))
+    const wrapper = mountList({ available: true, secrets: [entry] })
+    await wrapper.find('[data-testid="delete"]').trigger('click')
+    await flushPromises()
+    expect(deleteSecret).toHaveBeenCalledTimes(1)
   })
 })

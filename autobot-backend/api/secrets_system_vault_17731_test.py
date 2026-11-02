@@ -43,6 +43,9 @@ class _FakeVault:
         self.store[secret_id] = new_plaintext
         return SimpleNamespace(id=secret_id, name="n", type="api_key", owner_vault="system", version=2)
 
+    async def describe_dependencies(self, session, *, user_id, permissions, secret_id):
+        return []  # #20557: no dependents unless a test registers some
+
     async def delete(self, session, *, user_id, permissions, secret_id):
         self._check()
         del self.store[secret_id]

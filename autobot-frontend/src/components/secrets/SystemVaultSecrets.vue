@@ -43,7 +43,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseInput, EmptyState } from '@autobot/ui'
+import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseInput, EmptyState, isHttpError } from '@autobot/ui'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { secretsApiClient } from '@/utils/SecretsApiClient'
 import { createLogger } from '@/utils/debugUtils'
@@ -101,6 +101,34 @@ async function remove(secret: SystemVaultEntry) {
     title: t('security.secretsManager.systemVault.deleteTitle'),
     message: t('security.secretsManager.systemVault.deleteMessage', { name: secret.name })
   })
-  if (ok) await run(() => secretsApiClient.deleteSecret(secret.id))
+  if (ok) await run(() => deleteConfirmingDependents(secret))
+}
+
+interface Dependent {
+  dependent_kind: string
+  dependent_id: string
+}
+
+/** Dependents the backend refused the delete for (409), or null for any other error (#20557). */
+function dependentsOf(error: unknown): Dependent[] | null {
+  if (!isHttpError(error) || error.status !== 409) return null
+  const detail = error.details?.detail as { code?: string; dependents?: Dependent[] } | undefined
+  return detail?.code === 'secret_has_dependents' ? (detail.dependents ?? []) : null
+}
+
+/** Delete; when dependents still use the secret, list them in a second confirm before forcing it. */
+async function deleteConfirmingDependents(secret: SystemVaultEntry) {
+  try {
+    return await secretsApiClient.deleteSecret(secret.id)
+  } catch (error) {
+    const dependents = dependentsOf(error)
+    if (!dependents) throw error
+    const listed = dependents.map((d) => `${d.dependent_kind}:${d.dependent_id}`).join(', ')
+    const ok = await confirm({
+      title: t('security.secretsManager.systemVault.dependentsTitle'),
+      message: t('security.secretsManager.systemVault.dependentsMessage', { name: secret.name, dependents: listed })
+    })
+    if (ok) return secretsApiClient.deleteSecret(secret.id, { confirmDependents: true })
+  }
 }
 </script>

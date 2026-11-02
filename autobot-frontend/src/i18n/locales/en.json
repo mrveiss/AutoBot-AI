@@ -6897,7 +6897,9 @@
         "delete": "Delete",
         "deleteTitle": "Delete system secret",
         "deleteMessage": "Delete \"{name}\" from the system vault? Services that read it will stop receiving it.",
-        "failed": "The change was refused or failed. Nothing was modified."
+        "failed": "The change was refused or failed. Nothing was modified.",
+        "dependentsTitle": "Secret is in use",
+        "dependentsMessage": "\"{name}\" is still used by: {dependents}. Delete it anyway? These will stop receiving it."
       },
       "sidebarTitle": "Credentials",
       "searchPlaceholder": "Search credentials...",

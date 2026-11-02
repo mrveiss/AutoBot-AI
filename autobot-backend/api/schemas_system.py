@@ -3455,7 +3455,7 @@ class SecretUpdateRequest(BaseModel):
     expires_at: datetime | None = None
     metadata: Metadata | None = None
     # #17731: the new value for a SYSTEM-vault secret (rotated through the
-    # envelope coordinator). Ignored for a legacy secret.
+    # envelope coordinator); #20557: for a legacy secret it re-encrypts the stored value.
     value: str | None = Field(None, min_length=1, max_length=65536)
     # #16428: rotates a connector-bridged secret's credential in
     # ConnectorCredentialStore. Ignored for a non-bridged secret -- legacy

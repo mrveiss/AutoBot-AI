@@ -382,6 +382,8 @@ class SecretsManager:
             secret_data["expires_at"] = request.expires_at.isoformat() if request.expires_at else None
         if request.metadata is not None:
             secret_data["metadata"] = request.metadata
+        if request.value is not None:  # #20557: applied through the store's own cipher, never dropped
+            secret_data["encrypted_value"] = self._encrypt_value(request.value)
 
         secret_data["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
 
@@ -935,23 +937,19 @@ async def update_secret(
     """Update a secret's metadata (Issue #744: requires admin authentication)"""
     await check_rate_limit(http_request)
     owner_id = str((get_auth_middleware().get_user_from_request(http_request) or {}).get("user_id", "unknown"))
+    rotating = bool(request.value or request.credentials)
     try:
-        # Issue #666: Wrap blocking file I/O in asyncio.to_thread
+        if rotating:  # #20557: no credential is replaced without its record
+            await audit_secret_op("UPDATE", secret_id, http_request, required=True, phase="before_write")
         secret = await asyncio.to_thread(secrets_manager.update_secret, secret_id, request, chat_id=chat_id)
         if secret:
             # One serialization for the cache, the file and every response (#19476)
             secret_data = secret.model_dump(mode="json")
-        elif system_data := await rotate_system_vault_secret(
-            secret_id,
-            request.value,
-            owner_id,
-            http_request.headers,
-        ):
+        elif system_data := await rotate_system_vault_secret(secret_id, request.value, owner_id, http_request.headers):
             # #17099/#17731: a SYSTEM secret lives in the vault; rotate it there.
             secret_data = system_data
         elif request.credentials:
-            # #16428: not a legacy secret; rotate it in ConnectorCredentialStore
-            # instead -- #13632's one-store decision, "PUT rotates the credential."
+            # #16428: not a legacy secret; rotate it in ConnectorCredentialStore (#13632).
             try:
                 await get_credential_store().rotate(secret_id, request.credentials, owner_id)
             except LookupError:
@@ -962,7 +960,8 @@ async def update_secret(
             await audit_secret_op("UPDATE", secret_id, http_request, "failed", reason="not_found")
             raise HTTPException(status_code=404, detail="Secret not found")
 
-        await audit_secret_op("UPDATE", secret_id, http_request)
+        if not rotating:
+            await audit_secret_op("UPDATE", secret_id, http_request)
         return JSONResponse(
             status_code=200,
             content={
@@ -975,8 +974,7 @@ async def update_secret(
         await audit_secret_op("UPDATE", secret_id, http_request, "denied", reason="permission_denied")
         raise HTTPException(status_code=403, detail="Internal server error")
     except ValueError as e:
-        # #16428: rotate()'s merged-bundle validation failure -- a bad
-        # request, not a server fault.
+        # #16428: rotate()'s merged-bundle validation failure: a bad request.
         await audit_secret_op("UPDATE", secret_id, http_request, "failed", reason=type(e).__name__)
         raise HTTPException(status_code=400, detail="Internal server error")
     except HTTPException:
@@ -997,6 +995,7 @@ async def delete_secret(
     secret_id: str,
     http_request: Request,
     chat_id: str | None = Query(None),
+    confirm_dependents: bool = Query(False),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Delete a secret (Issue #744: requires admin authentication)"""
@@ -1004,22 +1003,21 @@ async def delete_secret(
     try:
         _user = get_auth_middleware().get_user_from_request(http_request)
         owner_id = str((_user or {}).get("user_id", "unknown"))
-        # Issue #666: Wrap blocking file I/O in asyncio.to_thread
+        # #20557: the record comes first; a failed write stops the delete
+        await audit_secret_op("DELETE", secret_id, http_request, required=True, phase="before_write")
         success = await asyncio.to_thread(secrets_manager.delete_secret, secret_id, chat_id=chat_id)
-        # #17099/#17731: a SYSTEM secret lives in the vault; delete it there too.
-        success = success or await delete_system_vault_secret(secret_id, owner_id, http_request.headers)
+        # #17099/#17731: a SYSTEM secret lives in the vault; delete it there too (409 while dependents exist).
+        success = success or await delete_system_vault_secret(
+            secret_id, owner_id, http_request.headers, confirm_dependents
+        )
         if not success:
-            # #16428: revoke() never raises on a missing secret (idempotent by
-            # design), so existence must be checked first to still 404 a
-            # secret_id that is not in either store -- #13632's one-store
-            # decision, "DELETE revokes it there."
+            # #16428: revoke() is idempotent, so check existence first to 404 an unknown id.
             bridged = await _get_connector_bridged_secret(secret_id, owner_id)
             if bridged is None:
                 await audit_secret_op("DELETE", secret_id, http_request, "failed", reason="not_found")
                 raise HTTPException(status_code=404, detail="Secret not found")
             await get_credential_store().revoke(secret_id, owner_id)
 
-        await audit_secret_op("DELETE", secret_id, http_request)
         audit_record(
             user_id=str((_user or {}).get("user_id", "unknown")),
             action=AuditAction.API_KEY_REVOKE,

@@ -146,8 +146,34 @@ async def rotate_system_vault_secret(
     return None  # pragma: no cover -- defensive, generator always yields
 
 
-async def delete_system_vault_secret(secret_id: str, owner_id: str, headers: Mapping[str, str] | None = None) -> bool:
-    """Delete a SYSTEM-vault secret; False when `secret_id` is not one."""
+async def _refuse_unconfirmed_dependents(coordinator, session, user_id, permissions, vault_id: uuid.UUID) -> None:
+    """409 with the dependents listed when anything still consumes the secret (#20557).
+
+    The listing comes from `describe_dependencies` (manage-authority gated). The
+    caller repeats the delete with `confirm_dependents` once a human has seen it.
+    """
+    deps = await coordinator.describe_dependencies(
+        session, user_id=user_id, permissions=permissions, secret_id=vault_id
+    )
+    if deps:
+        dependents = [{"dependent_kind": d.dependent_kind, "dependent_id": d.dependent_id} for d in deps]
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "secret_has_dependents", "message": "Dependents use this secret", "dependents": dependents},
+        )
+
+
+async def delete_system_vault_secret(
+    secret_id: str,
+    owner_id: str,
+    headers: Mapping[str, str] | None = None,
+    confirm_dependents: bool = False,
+) -> bool:
+    """Delete a SYSTEM-vault secret; False when `secret_id` is not one.
+
+    Refused (409) while dependents exist unless `confirm_dependents` is set. The
+    internal API key is refused before any of this, so it cannot confirm.
+    """
     from llc.deps import get_session
 
     vault_id, coordinator = _as_uuid(secret_id), _coordinator_or_none()
@@ -158,6 +184,8 @@ async def delete_system_vault_secret(secret_id: str, owner_id: str, headers: Map
             return False
         _refuse_internal_key(headers, "delete")
         user_id, permissions = await _principal(owner_id)
+        if not confirm_dependents:
+            await _refuse_unconfirmed_dependents(coordinator, session, user_id, permissions, vault_id)
         await coordinator.delete(session, user_id=user_id, permissions=permissions, secret_id=vault_id)
         await session.commit()
         return True
