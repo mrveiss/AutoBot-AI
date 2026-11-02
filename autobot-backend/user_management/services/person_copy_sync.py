@@ -8,14 +8,19 @@ After the link the main app is the record for password and active state. A chang
 commits, and a periodic pass pushes every linked person, which heals a missed push and any write
 that bypassed the ORM. The SLM writes only what differs, so that pass changes nothing when in step.
 
+The main app is the record, so an SLM-side change to a linked person's password or active state is
+undone by the next pass, within the compare interval.
+
 A failed push is recorded on the link and shown to admins. A person deactivated during a failure
 keeps SLM access until a push succeeds, so the failure must not be silent.
 """
 
 import asyncio
+import time
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Iterable
+from typing import AsyncIterator, Iterable
 
 from sqlalchemy import event, inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,8 +28,11 @@ from sqlalchemy.orm import Session
 
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.http_egress_guard import assert_egress_policy
+from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.node_proxy import internal_api_key
+from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_utils import delete_if_value
 from user_management.models import User
 from user_management.models.person_link import PersonLink
 
@@ -33,6 +41,9 @@ logger = get_logger(__name__)
 PERSON_COPY_COMPARE_INTERVAL_S = env_int_clamped("AUTOBOT_PERSON_COPY_COMPARE_INTERVAL_S", 300, min_v=30)
 
 _COPY_PATH = "/api/internal/person-copy"
+_LOCK_TTL_S = 60
+_LOCK_WAIT_S = 15
+_LOCK_POLL_S = 0.2
 _WATCHED_FIELDS = ("password_hash", "is_active", "deleted_at")
 _CHANGED_KEY = "person_copy_changed_user_ids"
 _background: set[asyncio.Task] = set()
@@ -58,27 +69,69 @@ async def _post_copy(slm_user_id: uuid.UUID, user: User) -> None:
         response.raise_for_status()
 
 
-async def _push_link(link: PersonLink, user: User) -> None:
+@asynccontextmanager
+async def _person_lock(user_id: uuid.UUID) -> AsyncIterator[None]:
+    """One push per person at a time, across workers. Raises TimeoutError if it can't be had.
+
+    The row is read inside the lock, so a slower worker can't send an older hash over a newer one.
+    """
+    redis = await get_async_redis_client(database="main")
+    if redis is None:
+        raise TimeoutError("Redis is unavailable")
+    key, token = f"person-copy:push:{user_id}", uuid.uuid4().hex
+    deadline = time.monotonic() + _LOCK_WAIT_S
+    while not await redis.set(key, token, nx=True, ex=_LOCK_TTL_S):
+        if time.monotonic() >= deadline:
+            raise TimeoutError("another push is still running")
+        await asyncio.sleep(_LOCK_POLL_S)
+    try:
+        yield
+    finally:
+        await delete_if_value(redis, key, token)
+
+
+async def _read_pair(session: AsyncSession, user_id: uuid.UUID) -> tuple[PersonLink, User] | None:
+    query = (
+        select(PersonLink, User)
+        .join(User, User.id == PersonLink.user_id)
+        .where(PersonLink.user_id == user_id)
+        .execution_options(populate_existing=True)
+    )
+    return (await session.execute(query)).first()
+
+
+def _record(link: PersonLink, error: str | None) -> None:
+    link.push_error = error
+    link.push_failed_at = (link.push_failed_at or datetime.now(timezone.utc)) if error else None
+
+
+async def _push_person(session: AsyncSession, user_id: uuid.UUID) -> None:
     """Push one person and record the outcome on their link. Only the error's type is kept."""
     try:
-        await _post_copy(link.slm_user_id, user)
+        async with _person_lock(user_id):
+            pair = await _read_pair(session, user_id)
+            if pair is None:
+                return
+            await _post_copy(pair[0].slm_user_id, pair[1])
+            _record(pair[0], None)
+            await session.commit()  # inside the lock: the next pusher sees this outcome
+            return
     except Exception as exc:
-        logger.warning("Could not push %s's copy to the SLM: %s", user.username, type(exc).__name__)
-        link.push_failed_at = link.push_failed_at or datetime.now(timezone.utc)
-        link.push_error = type(exc).__name__
-        return
-    link.push_failed_at = None
-    link.push_error = None
+        await session.rollback()
+        logger.warning("Could not push a person's copy to the SLM: %s", type(exc).__name__)
+        error = type(exc).__name__
+    pair = await _read_pair(session, user_id)
+    if pair is not None:
+        _record(pair[0], error)
+        await session.commit()
 
 
 async def push_people(session: AsyncSession, user_ids: Iterable[uuid.UUID] | None = None) -> None:
-    """Push the given linked people, or everyone linked. Commits the recorded outcomes."""
-    query = select(PersonLink, User).join(User, User.id == PersonLink.user_id)
-    if user_ids is not None:
-        query = query.where(PersonLink.user_id.in_(list(user_ids)))
-    for link, user in (await session.execute(query)).all():
-        await _push_link(link, user)
-    await session.commit()
+    """Push the given linked people, or everyone linked."""
+    if user_ids is None:
+        user_ids = (await session.execute(select(PersonLink.user_id))).scalars().all()
+    for user_id in list(user_ids):
+        await _push_person(session, user_id)
 
 
 async def _push_in_own_session(user_ids: Iterable[uuid.UUID] | None) -> None:
@@ -119,10 +172,13 @@ def _push_committed_changes(session: Session) -> None:
 
 
 async def _compare_loop() -> None:
+    # Longer than a pass's gap, so the worker holding it keeps it between passes.
+    lease = LeaderLease("person-copy:compare", ttl_ms=PERSON_COPY_COMPARE_INTERVAL_S * 3000)
     while True:
         await asyncio.sleep(PERSON_COPY_COMPARE_INTERVAL_S)
         try:
-            await _push_in_own_session(None)
+            if await lease.update_leadership():  # one worker per pass
+                await _push_in_own_session(None)
         except Exception as exc:
             logger.warning("Periodic push of people to the SLM failed: %s", type(exc).__name__)
 

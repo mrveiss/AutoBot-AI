@@ -74,7 +74,8 @@ async def update_person_copy(
     user = await session.get(User, body.slm_user_id)
     if user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no such SLM user")
-    if user.password_hash != body.password_hash:
+    # No hash means the main app holds none. That must not wipe the password this person logs in with.
+    if body.password_hash and user.password_hash != body.password_hash:
         user.password_hash = body.password_hash
     if user.is_active != body.is_active:
         user.is_active = body.is_active

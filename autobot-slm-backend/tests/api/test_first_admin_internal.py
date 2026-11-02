@@ -81,3 +81,13 @@ async def test_a_person_copy_for_nobody_is_a_404():
     with patch.object(route, "verify_internal_api_key", return_value=True), pytest.raises(HTTPException) as missing:
         await route.update_person_copy(_copy_body(), session, "key")
     assert missing.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_no_hash_never_wipes_the_password_but_still_deactivates():
+    user = SimpleNamespace(password_hash="old", is_active=True)
+    session = SimpleNamespace(get=AsyncMock(return_value=user), commit=AsyncMock())
+    body = route.PersonCopyRequest(slm_user_id=uuid.uuid4(), password_hash=None, is_active=False)
+    with patch.object(route, "verify_internal_api_key", return_value=True):
+        await route.update_person_copy(body, session, "key")
+    assert (user.password_hash, user.is_active) == ("old", False)
