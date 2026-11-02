@@ -51,6 +51,7 @@ async def _seed_company(session_factory, llc_status: str = "active") -> uuid.UUI
             budget_monthly_cents=0,
             spent_monthly_cents=0,
             require_approval_for_hires=False,
+            require_approval_for_budget_raises=False,
         )
         session.add(org)
         await session.commit()
@@ -68,9 +69,9 @@ async def session_factory() -> AsyncIterator:
             Base.metadata.create_all, tables=[Organization.__table__, LLCContact.__table__, LLCActivityLog.__table__]
         )
     try:
-        yield async_sessionmaker(  # canonical: ignore py-adhoc-db-engine (test-local factory)
+        yield async_sessionmaker(  # canonical: ignore py-adhoc-db-engine (test)
             bind=engine, expire_on_commit=False, autoflush=False
-        )  # canonical: ignore py-adhoc-db-engine (test-local)
+        )
     finally:
         await engine.dispose()
 

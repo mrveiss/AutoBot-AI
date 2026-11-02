@@ -6146,6 +6146,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/knowledge_base/upload/limit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Upload Limit
+         * @description The largest knowledge file the upload route accepts; the same permission as uploading.
+         */
+        get: operations["get_upload_limit_api_knowledge_base_upload_limit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/knowledge_base/ai-stack/search/rag": {
         parameters: {
             query?: never;
@@ -20835,6 +20855,7 @@ export interface paths {
          *     Returns:
          *     - has_active_job: Whether an indexing job is currently running
          *     - task_id: The current job's task ID (if running)
+         *     - source_id: The source it indexes: one job runs at a time across all sources (#20491)
          *     - status: Current job status
          *     - progress: Current progress details
          */
@@ -50334,7 +50355,8 @@ export interface paths {
          * Provision Budget
          * @description Provision a default budget row for an agent (GH#9901).
          *
-         *     Returns 201 on creation, 409 if a row already exists.
+         *     Returns 201 on creation, 409 if a row already exists. In a company with ``require_approval_for_budget_raises``
+         *     a first limit above the default is created at the default and the rest is filed as a pending override: 202.
          *     Returns 404 if the agent does not exist in agent_org_nodes, or belongs to
          *     a different tenant (GH#12136). Returns 403 unless the caller is a company
          *     owner/admin or a platform admin (#20422).
@@ -50401,6 +50423,9 @@ export interface paths {
         /**
          * Update Limit
          * @description Update budget limits and mode (GH#8215, GH#8997).
+         *
+         *     A company with ``require_approval_for_budget_raises`` answers 202 with a pending override instead when the
+         *     change raises the enforced limit; nothing changes until the board approves it (#8214).
          */
         patch: operations["update_limit_api_llc_budget__agent_id__limit_patch"];
         trace?: never;
@@ -62607,6 +62632,25 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * BudgetRaisePending
+         * @description Answer to a limit change that needs the board: the request exists, the limit has not moved (#8214).
+         */
+        BudgetRaisePending: {
+            /**
+             * Status
+             * @default pending_approval
+             */
+            status: string;
+            /** Approval Id */
+            approval_id: string;
+            /** Company Id */
+            company_id: string;
+            /** Agent Id */
+            agent_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * BudgetResponse
          * @description Budget status response (GH#8215, GH#8997).
          */
@@ -66140,6 +66184,11 @@ export interface components {
              * @default false
              */
             require_approval_for_hires: boolean;
+            /**
+             * Require Approval For Budget Raises
+             * @default false
+             */
+            require_approval_for_budget_raises: boolean;
             /** Parent Org Id */
             parent_org_id?: string | null;
             /** @default onboarding */
@@ -66175,6 +66224,11 @@ export interface components {
              * @default false
              */
             require_approval_for_hires: boolean;
+            /**
+             * Require Approval For Budget Raises
+             * @default false
+             */
+            require_approval_for_budget_raises: boolean;
             /** Parent Org Id */
             parent_org_id?: string | null;
             /**
@@ -66317,6 +66371,8 @@ export interface components {
             brand_color?: string | null;
             /** Require Approval For Hires */
             require_approval_for_hires?: boolean | null;
+            /** Require Approval For Budget Raises */
+            require_approval_for_budget_raises?: boolean | null;
             /** Pause Reason */
             pause_reason?: string | null;
         } & {
@@ -82772,6 +82828,13 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** KnowledgeUploadLimitResponse */
+        KnowledgeUploadLimitResponse: {
+            /** Max Mb */
+            max_mb: number;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * KnowledgeVerificationApproveResponse
          * @description Response for POST /verification/{fact_id}/approve.
@@ -94042,6 +94105,8 @@ export interface components {
         RemappingOptions: {
             /** Require Approval For Hires */
             require_approval_for_hires?: boolean | null;
+            /** Require Approval For Budget Raises */
+            require_approval_for_budget_raises?: boolean | null;
         } & {
             [key: string]: unknown;
         };
@@ -116123,6 +116188,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_upload_limit_api_knowledge_base_upload_limit_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeUploadLimitResponse"];
                 };
             };
         };
@@ -174445,7 +174530,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BudgetResponse"];
+                    "application/json": components["schemas"]["BudgetResponse"] | components["schemas"]["BudgetRaisePending"];
                 };
             };
             /** @description Validation Error */
@@ -174549,7 +174634,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BudgetResponse"];
+                    "application/json": components["schemas"]["BudgetResponse"] | components["schemas"]["BudgetRaisePending"];
                 };
             };
             /** @description Validation Error */
