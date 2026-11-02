@@ -8560,6 +8560,13 @@
     },
     "approvals": {
       "title": "Approvals Inbox",
+      "removals": {
+        "title": "{count} removal proposal(s) await your decision.",
+        "hint": "Approving permanently removes the named data; rejecting keeps it and the proposal is not repeated.",
+        "approve": "Approve",
+        "reject": "Reject",
+        "decideError": "Could not record the decision."
+      },
       "stuckCleanup": {
         "title": "{count} deleted file(s), {size}, are stuck: removal was refused repeatedly and they are no longer proposed.",
         "hint": "The bytes are still on disk. Reset lets a file be proposed again; removal still needs an approval.",
