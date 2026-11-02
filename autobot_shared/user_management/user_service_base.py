@@ -82,6 +82,9 @@ class UserServiceBase(BaseService):
         """
         return {}
 
+    async def check_session_reassign(self, user_id: uuid.UUID) -> None:
+        """Raise ``SessionReassignError`` if ``reassign_sessions`` would refuse, writing nothing (#20029)."""
+
     async def reassign_sessions(self, user_id: uuid.UUID) -> dict[str, Any]:
         """Hand the user's chat sessions to a successor before they are deleted or deactivated (#20029).
 

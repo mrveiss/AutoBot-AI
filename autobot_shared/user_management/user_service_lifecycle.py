@@ -188,6 +188,7 @@ class UserLifecycleMixin(UserServiceBase):
         user = await self._require_user(user_id, include_deleted=not hard_delete)
         details: dict[str, Any] = {"hard_delete": hard_delete}
         if reassign_to is not None:
+            await self.check_session_reassign(user_id)  # a memory move cannot be undone, so a refusal comes first
             details["reassign_to"] = str(reassign_to)
             details["reassign_counts"] = await self._reassign_before_delete(user_id, reassign_to, hard_delete)
         details.update(
