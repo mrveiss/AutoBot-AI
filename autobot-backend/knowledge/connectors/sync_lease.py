@@ -54,12 +54,16 @@ async def claim_connector_sync(connector_id: str) -> LeaderLease:
 
 
 async def _keep_renewing(lease: LeaderLease) -> None:
-    """Retry a failed renewal while the lease can still be alive: a Redis blip isn't a lost lease."""
+    """Retry a failed renewal while the lease can still be alive: a Redis blip isn't a lost lease.
+
+    Not ``update_leadership``: it marks the lease lost on one failure, and the next try would then
+    be a SET NX that fails against this run's own key, leaving its TTL to run out.
+    """
     loop = asyncio.get_running_loop()
     renewed_at = loop.time()
     while True:
         await asyncio.sleep(DEFAULT_REFRESH_S)
-        if await lease.update_leadership():
+        if await lease.try_acquire_or_refresh():
             renewed_at = loop.time()
         elif loop.time() - renewed_at >= DEFAULT_TTL_MS / 1000:
             logger.error("Lost the sync lease %s mid-run; a second sync could now start", lease.key)

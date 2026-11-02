@@ -140,10 +140,8 @@ async def test_the_route_holds_the_lease_it_claimed_for_the_run(redis) -> None:
     assert redis.keys == {}
 
 
-async def _renewals_until_stopped(monkeypatch, answers) -> int:
-    """Run the renewal loop on a clock that moves one refresh per sleep."""
-    lease = AsyncMock()
-    lease.update_leadership.side_effect = answers
+def _one_refresh_per_tick(monkeypatch) -> None:
+    """A clock that moves one refresh per sleep, so the renewal loop runs without waiting."""
     loop = asyncio.get_running_loop()
     now = [loop.time()]
     monkeypatch.setattr(loop, "time", lambda: now[0])
@@ -152,16 +150,27 @@ async def _renewals_until_stopped(monkeypatch, answers) -> int:
         now[0] += seconds
 
     monkeypatch.setattr(sync_lease.asyncio, "sleep", tick)
+
+
+@pytest.mark.asyncio
+async def test_a_redis_blip_still_extends_the_lease_it_holds(redis, monkeypatch) -> None:
+    """A real lease: the retry after an error must extend this run's key, not try to take it again."""
+    lease = await sync_lease.claim_connector_sync("a")
+    key = sync_lease._key("a")
+    real_eval, evals = redis.eval, []
+
+    async def flaky_eval(*args):
+        evals.append(args)
+        if len(evals) == 1:
+            raise ConnectionError("blip")
+        if len(evals) == 2:
+            return await real_eval(*args)  # extends: held, so the failure's clock resets
+        redis.keys[key] = "another-run"  # the lease lapsed and someone else took it
+        return await real_eval(*args)
+
+    monkeypatch.setattr(redis, "eval", flaky_eval)
+    _one_refresh_per_tick(monkeypatch)
     await asyncio.wait_for(sync_lease._keep_renewing(lease), timeout=5)
-    return lease.update_leadership.await_count
 
-
-@pytest.mark.asyncio
-async def test_a_redis_blip_does_not_end_renewal(monkeypatch) -> None:
-    # Two failures fit inside the lease's life; the success resets it for three more.
-    assert await _renewals_until_stopped(monkeypatch, [False, False, True] + [False] * 3) == 6
-
-
-@pytest.mark.asyncio
-async def test_renewal_stops_once_the_lease_has_expired(monkeypatch) -> None:
-    assert await _renewals_until_stopped(monkeypatch, [False] * 3) == 3
+    assert len(evals) == 5, "1 blip, 1 extend, then 3 refusals across one lease lifetime"
+    assert redis.keys[key] == "another-run", "a lease held by another run is never taken back"
