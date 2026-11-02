@@ -90,14 +90,14 @@ watch(
 }
 
 .slash-command-name {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-primary);
   font-family: monospace;
 }
 
 .slash-command-desc {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;

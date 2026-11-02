@@ -642,7 +642,7 @@ onMounted(async () => {
 }
 
 .view-title {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 600;
   margin: 0;
 }
@@ -653,7 +653,7 @@ onMounted(async () => {
   color: var(--text-primary);
   border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
@@ -687,13 +687,13 @@ onMounted(async () => {
 }
 
 .card-sub {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   word-break: break-all;
 }
 
 .section-title {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   margin: 0 0 0.75rem;
 }
@@ -716,7 +716,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .budget-agent {
@@ -779,7 +779,7 @@ onMounted(async () => {
 
 .shadow-cost {
   color: var(--text-secondary);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   margin-left: 0.25rem;
 }
 
@@ -829,7 +829,7 @@ onMounted(async () => {
   background: transparent;
   border: none;
   cursor: pointer;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   transition: background 0.15s, color 0.15s;
 }
@@ -851,7 +851,7 @@ onMounted(async () => {
   padding: 0.45rem 0.6rem;
   background: var(--bg-elevated);
   border-right: 1px solid var(--border-default);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -861,7 +861,7 @@ onMounted(async () => {
   border-radius: 0.375rem;
   background: var(--bg-surface);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   width: 100%;
 }
 
@@ -871,7 +871,7 @@ onMounted(async () => {
 }
 
 .field-hint {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   margin: 0;
 }
@@ -895,7 +895,7 @@ onMounted(async () => {
   color: var(--text-on-primary);
   border: none;
   border-radius: 0.375rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   cursor: pointer;
   font-weight: 500;
 }
@@ -911,7 +911,7 @@ onMounted(async () => {
   color: var(--text-primary);
   border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
@@ -965,11 +965,11 @@ onMounted(async () => {
   border-radius: 0.375rem;
   background: var(--bg-surface);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .date-sep {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -982,7 +982,7 @@ onMounted(async () => {
 .cost-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .cost-table th {

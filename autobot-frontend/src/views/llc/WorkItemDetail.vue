@@ -540,7 +540,7 @@ onMounted(() => {
   padding: 0.5rem 1.25rem;
   background: var(--bg-elevated);
   border-bottom: 1px solid var(--border-default);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   flex-shrink: 0;
 }
@@ -556,7 +556,7 @@ onMounted(() => {
 
 .item-title {
   margin: 0;
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   cursor: text;
   line-height: 1.4;
@@ -564,7 +564,7 @@ onMounted(() => {
 
 .title-input {
   width: 100%;
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   border: 1px solid var(--color-primary);
   border-radius: 0.25rem;
@@ -609,7 +609,7 @@ onMounted(() => {
 }
 
 .assignee-edit {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   cursor: pointer;
 }
@@ -629,7 +629,7 @@ onMounted(() => {
 }
 
 .assignee-cancel {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -734,7 +734,7 @@ onMounted(() => {
 }
 
 .section-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -742,7 +742,7 @@ onMounted(() => {
 }
 
 .description-text {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   line-height: 1.6;
   cursor: text;
   min-height: 2rem;
@@ -755,7 +755,7 @@ onMounted(() => {
   border-radius: 0.375rem;
   background: var(--bg-surface);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   resize: vertical;
 }
 
@@ -769,7 +769,7 @@ onMounted(() => {
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
@@ -823,7 +823,7 @@ onMounted(() => {
 }
 
 .comment-body {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   line-height: 1.5;
   margin-left: 2.25rem;
 }
@@ -844,7 +844,7 @@ onMounted(() => {
   border-radius: 0.375rem;
   background: var(--bg-surface);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   resize: none;
 }
 
@@ -866,7 +866,7 @@ onMounted(() => {
 }
 
 .artifact-type-icon {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
 }
 
 .artifact-info {
@@ -877,7 +877,7 @@ onMounted(() => {
 }
 
 .artifact-name {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
@@ -920,7 +920,7 @@ onMounted(() => {
 }
 
 .handoff-brief {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   line-height: 1.6;
 }
 
@@ -930,7 +930,7 @@ onMounted(() => {
   color: white;
   border: none;
   border-radius: 0.375rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   flex-shrink: 0;

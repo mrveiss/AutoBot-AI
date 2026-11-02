@@ -57,7 +57,6 @@ from autobot_shared.secret_redaction import RedactedReprMixin
 from autobot_shared.ssot_company_os_flags import CompanyOsFeatureFlags
 from autobot_shared.ssot_llm_oauth_config import LlmOAuthConfig
 from autobot_shared.ssot_role_mirrors import (  # #19319: SSOT defaults an Ansible role mirrors
-    FEATURE_ROUTERS_STRICT_DEFAULT,
     SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE_DEFAULT,
     SERVICE_AUTH_ENFORCEMENT_MODE_DEFAULT,
     SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES_DEFAULT,
@@ -68,7 +67,6 @@ from autobot_shared.ssot_tls import TLSConfig, TLSMode
 
 _Env = Annotated[str, BeforeValidator(_profile.env_field), Field(validation_alias=AliasChoices(*_profile.ENV_NAMES))]
 # Determine project root for .env file location.
-#
 # The resolution itself lives in ``autobot_shared.paths`` (#13149) so that the
 # 50-odd standalone tooling scripts that also need the project root can ask for
 # it without importing this module, which builds every pydantic settings model.
@@ -1578,7 +1576,9 @@ class MiscConfig(RedactedSettings):
             "See utils/error_metrics.py."
         ),
     )
-    feature_routers_strict: str = Field(default=FEATURE_ROUTERS_STRICT_DEFAULT, alias="AUTOBOT_FEATURE_ROUTERS_STRICT")
+    feature_routers_strict: str = Field(
+        default_factory=_profile.feature_routers_strict_default, alias="AUTOBOT_FEATURE_ROUTERS_STRICT"
+    )
     gc_threshold_0: int = Field(default=700, alias="AUTOBOT_GC_THRESHOLD_0")  # #13264 batch 3
     gc_threshold_1: int = Field(default=10, alias="AUTOBOT_GC_THRESHOLD_1")  # #13264 batch 3
     gc_threshold_2: int = Field(default=10, alias="AUTOBOT_GC_THRESHOLD_2")  # #13264 batch 3
