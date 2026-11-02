@@ -166,7 +166,7 @@ const tabs: Tab[] = [
   display: flex;
   align-items: center;
   gap: var(--spacing-2-5);
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   margin: 0;
   color: var(--text-primary);
@@ -180,7 +180,7 @@ const tabs: Tab[] = [
 }
 
 .wrp-header__subtitle {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-muted);
   margin: 0;
 }
@@ -196,7 +196,7 @@ const tabs: Tab[] = [
   background: color-mix(in srgb, var(--status-warning) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--status-warning) 35%, transparent);
   border-radius: var(--radius-lg);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
@@ -246,7 +246,7 @@ const tabs: Tab[] = [
 
 .wrp-tab {
   padding: var(--spacing-3) 18px;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-muted);
   background: transparent;
@@ -332,7 +332,7 @@ const tabs: Tab[] = [
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   outline: none;
   transition: border-color 0.15s;
 }
@@ -361,7 +361,7 @@ const tabs: Tab[] = [
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   outline: none;
   cursor: pointer;
 }
@@ -392,7 +392,7 @@ const tabs: Tab[] = [
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary, var(--text-primary));
   cursor: pointer;
 }
@@ -416,7 +416,7 @@ const tabs: Tab[] = [
   align-items: center;
   gap: var(--spacing-2);
   padding: 9px 18px;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   border-radius: var(--radius-md);
   border: none;
@@ -546,7 +546,7 @@ const tabs: Tab[] = [
   background: color-mix(in srgb, var(--color-error) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--color-error) 30%, transparent);
   border-radius: var(--radius-lg);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--color-error);
 }
 
@@ -609,14 +609,14 @@ const tabs: Tab[] = [
 }
 
 .wr-result__title {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   margin: 0;
   color: var(--text-primary);
 }
 
 .wr-result__meta {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   margin-left: auto;
 }
@@ -653,7 +653,7 @@ const tabs: Tab[] = [
 
 .wr-result__content--markdown {
   font-family: inherit;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 /* ── Badges ──────────────────────────────────────────────────────────────── */
@@ -765,14 +765,14 @@ const tabs: Tab[] = [
 }
 
 .wr-filter-count {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   white-space: nowrap;
 }
 
 .wr-empty-filter {
   text-align: center;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-muted);
   padding: var(--spacing-6);
 }
