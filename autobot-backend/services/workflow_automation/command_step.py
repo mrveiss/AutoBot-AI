@@ -28,6 +28,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.secret_redaction import REDACTED_PLACEHOLDER, redact_text
 from autobot_shared.singleton_factory import lazy_singleton
 from command_run_policy import CommandRunPolicy
+from config import get_config_manager
 from security_layer import SecurityLayer
 from services.workflow_secret_service import get_workflow_secret_service
 from type_defs.common import Metadata
@@ -61,6 +62,20 @@ def require_command_permission(user: dict | None) -> None:
         raise HTTPException(status_code=403, detail="Running workflow commands requires shell execution permission")
 
 
+def current_role(owner_id: str, creator_role: str | None) -> str | None:
+    """The role *owner_id* holds now, or None when the account is gone.
+
+    Login reads the role from ``security_config.allowed_users`` (auth_middleware
+    ``authenticate_user``), so this reads the same table, fresh: the role captured
+    when the workflow was created can be stale after a demotion or removal. With
+    authentication off there are no accounts, so the recorded role stands.
+    """
+    if not get_security_layer().enable_auth:
+        return creator_role
+    account = get_config_manager().get("security_config", {}).get("allowed_users", {}).get(owner_id)
+    return account.get("role") if account else None
+
+
 def _work_dir() -> str:
     """The directory commands run in, created if it is the default one."""
     path = Path(WORKFLOW_COMMAND_CWD or Path(tempfile.gettempdir()) / _DEFAULT_CWD_NAME)
@@ -87,6 +102,7 @@ def build_policy(value_redactor: Callable[[str], str]) -> CommandRunPolicy:
         cwd=_work_dir(),
         refuse_approval=True,
         redact=lambda command: redact_text(value_redactor(command)),
+        redact_output=value_redactor,
     )
 
 
@@ -118,9 +134,14 @@ async def run_command_step(
     role: str | None,
     value_redactor: Callable[[str], str],
 ) -> Metadata:
-    """Run *command* as *user* in *role*; return the step result or raise ``CommandStepFailed``."""
+    """Run *command* as *user*; return the step result or raise ``CommandStepFailed``.
+
+    The role is the user's current account role (``current_role``); *role*, the one recorded at
+    creation, stands only when authentication is off.
+    """
+    role = current_role(user, role) if user else None
     if not user or not role:
-        message = "the workflow records no creator to run it as"
+        message = "the workflow records no creator, or the creator no longer holds an account"
         raise CommandStepFailed(
             f"Command refused: {message}",
             {"refused": True, "exit_code": 1, "stdout": "", "stderr": message, "command": REDACTED_PLACEHOLDER},

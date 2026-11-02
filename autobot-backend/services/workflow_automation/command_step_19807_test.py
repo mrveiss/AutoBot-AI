@@ -31,16 +31,41 @@ def _mask(text: str) -> str:
     return text.replace(SECRET, "***")
 
 
+class _Accounts:
+    """Stands in for the config manager; ``security_config.allowed_users`` is the live account table."""
+
+    def __init__(self):
+        self.users = {"u-1": {"role": "admin"}}
+
+    def get(self, key, default=None):
+        return {"allowed_users": self.users} if key == "security_config" else default
+
+
 @pytest.fixture
 def layer(monkeypatch, tmp_path):
     """A real SecurityLayer with auth on; audit records are captured, not stored."""
     audit = []
     monkeypatch.setattr(command_step, "WORKFLOW_COMMAND_CWD", str(tmp_path))
+    accounts = _Accounts()
+    monkeypatch.setattr(command_step, "get_config_manager", lambda: accounts)
     with patch("security_layer.emit_security", side_effect=lambda *a, **k: audit.append((a, k)) or True):
         security = SecurityLayer()
         security.audit = audit
+        security.accounts = accounts
         monkeypatch.setattr(command_step, "get_security_layer", lambda: security)
         yield security
+
+
+def _write_big_file(path) -> None:
+    """A file whose lines hold the secret, large enough that the filter tees it."""
+    path.write_text((SECRET + " " + "x" * 40 + "\n") * 4000, encoding="utf-8")
+
+
+def _assert_tee_is_clean(tee) -> None:
+    """The tee directory holds something, and neither a name nor a body carries the secret."""
+    written = list(tee.iterdir()) if tee.exists() else []
+    assert written, "the filter did not tee, so this proves nothing"
+    assert all(SECRET not in f.name and SECRET not in f.read_text(encoding="utf-8") for f in written)
 
 
 def _signal_recorded_pid(pid_file) -> None:
@@ -48,7 +73,9 @@ def _signal_recorded_pid(pid_file) -> None:
     os.kill(int(pid_file.read_text(encoding="utf-8")), 0)
 
 
-async def _run(command: str, role: str = "admin", redactor=_mask):
+async def _run(command: str, role: str = "admin", redactor=_mask, layer=None):
+    if layer is not None:
+        layer.accounts.users["u-1"] = {"role": role}
     return await run_command_step(command, user="u-1", role=role, value_redactor=redactor)
 
 
@@ -84,7 +111,7 @@ async def test_a_command_needing_approval_is_refused_and_nothing_runs(layer):
 async def test_a_role_without_shell_permission_runs_nothing(layer):
     with patch("secure_command_executor.execute_shell_command", new=AsyncMock()) as ran:
         with pytest.raises(CommandStepFailed) as failed:
-            await _run("echo hi", role="user")
+            await _run("echo hi", role="user", layer=layer)
     ran.assert_not_called()
     assert failed.value.result["refused"] is True
 
@@ -92,7 +119,7 @@ async def test_a_role_without_shell_permission_runs_nothing(layer):
 @pytest.mark.asyncio
 async def test_a_workflow_with_no_creator_role_runs_nothing(layer):
     with pytest.raises(CommandStepFailed) as failed:
-        await run_command_step("echo hi", user="u-1", role=None, value_redactor=_mask)
+        await run_command_step("echo hi", user=None, role="admin", value_redactor=_mask)
     assert failed.value.result["refused"] is True and failed.value.result["exit_code"] == 1
 
 
@@ -195,3 +222,93 @@ async def test_the_filter_savings_failure_log_does_not_carry_the_command(monkeyp
         await tool_output_filter.record_filter_savings(f"echo {SECRET}", 10)
     assert "record_filter_savings: failed" in caplog.text
     assert SECRET not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_a_chained_command_with_a_secret_reaches_no_history_or_audit_row(layer):
+    result = await _run(f"echo {SECRET} && echo done")
+    assert result["exit_code"] == 0
+    rows = str(layer.audit) + str(layer.command_executor.command_history)
+    assert "Chained command" in rows, "the chained-reason path was not exercised"
+    assert SECRET not in rows
+
+
+@pytest.mark.asyncio
+async def test_no_unredacted_output_or_name_reaches_the_tee_directory(layer, monkeypatch, tmp_path):
+    from services import tool_output_filter
+
+    tee = tmp_path / "tee"
+    monkeypatch.setattr(tool_output_filter, "_TEE_DIR", tee)
+    big = tmp_path / "big.txt"
+    _write_big_file(big)
+    result = await _run("cat big.txt")
+    assert result["exit_code"] == 0
+    _assert_tee_is_clean(tee)
+
+
+@pytest.mark.asyncio
+async def test_a_demoted_creator_runs_nothing(layer):
+    assert (await _run("echo hi", role="admin", layer=layer))["exit_code"] == 0
+    layer.accounts.users["u-1"] = {"role": "user"}  # demoted after the workflow was created
+    with patch("secure_command_executor.execute_shell_command", new=AsyncMock()) as ran:
+        with pytest.raises(CommandStepFailed) as failed:
+            await run_command_step("echo hi", user="u-1", role="admin", value_redactor=_mask)
+    ran.assert_not_called()
+    assert failed.value.result["refused"] is True
+
+
+@pytest.mark.asyncio
+async def test_a_removed_creator_runs_nothing(layer):
+    layer.accounts.users.clear()
+    with patch("secure_command_executor.execute_shell_command", new=AsyncMock()) as ran:
+        with pytest.raises(CommandStepFailed) as failed:
+            await run_command_step("echo hi", user="u-1", role="admin", value_redactor=_mask)
+    ran.assert_not_called()
+    assert failed.value.result["refused"] is True
+
+
+def _rule(layer, action, rule_info):
+    return patch.object(
+        layer.command_executor, "check_permission_rules", new=AsyncMock(return_value=(action, rule_info))
+    )
+
+
+@pytest.mark.asyncio
+async def test_approval_memory_does_not_count_under_a_policy(layer):
+    with _rule(layer, "allow", {"action": "allow", "from_memory": True}):
+        with patch("secure_command_executor.execute_shell_command", new=AsyncMock()) as ran:
+            with pytest.raises(CommandStepFailed) as failed:
+                await _run("frobnicate-19807 --now")
+    ran.assert_not_called()
+    assert failed.value.result["refused"] is True
+
+
+@pytest.mark.asyncio
+async def test_an_explicit_permission_rule_still_allows(layer):
+    run = AsyncMock(return_value={"stdout": "ok", "stderr": "", "return_code": 0, "status": "success"})
+    with _rule(layer, "allow", {"action": "allow", "pattern": "frobnicate*"}):
+        with patch("secure_command_executor.execute_shell_command", new=run):
+            result = await _run("frobnicate-19807 --now")
+    run.assert_called_once()
+    assert result["stdout"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_a_rule_does_not_lift_a_block_under_a_policy(layer):
+    with _rule(layer, "allow", {"action": "allow", "pattern": "*"}):
+        with patch("secure_command_executor.execute_shell_command", new=AsyncMock()) as ran:
+            with pytest.raises(CommandStepFailed) as failed:
+                await _run("rm -rf /")
+    ran.assert_not_called()
+    assert failed.value.result["refused"] is True
+
+
+@pytest.mark.asyncio
+async def test_disabled_command_security_refuses_the_step(layer):
+    layer.enable_command_security = False
+    with patch("secure_command_executor.execute_shell_command", new=AsyncMock()) as ran:
+        with pytest.raises(CommandStepFailed) as failed:
+            await _run("echo hi")
+    ran.assert_not_called()
+    assert failed.value.result["refused"] is True
+    assert "security is disabled" in failed.value.result["stderr"]

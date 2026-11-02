@@ -952,11 +952,8 @@ class SecureCommandExecutor(CommandResultBuilders):
             result = await execute_shell_command(actual_command, policy)
             log_entry["executed"] = True
             log_entry["return_code"] = result["return_code"]
-            result["stdout"] = _filter.filter(
-                prepared_command,
-                result.get("stdout", ""),
-                exit_code=result["return_code"],
-            )
+            filter_command, filter_stdout = self._filter_inputs(prepared_command, result.get("stdout", ""), policy)
+            result["stdout"] = _filter.filter(filter_command, filter_stdout, exit_code=result["return_code"])
             self.command_history.append(log_entry)
             result["security"] = self._build_execution_security_info(risk, reasons, log_entry, rule_info)
             return result
@@ -989,18 +986,21 @@ class SecureCommandExecutor(CommandResultBuilders):
         """
         shown = command if policy is None else policy.show(command)
         permission_action, rule_info = await self.check_permission_rules(command, tool)
+        permission_action, rule_info = self._policy_permission(permission_action, rule_info, policy)
 
         if permission_action == "deny":
             return self._build_permission_deny_result(shown, rule_info)
 
         if permission_action == "allow":
             logger.info(f"Command auto-approved by permission rule: {shown[:50]}...")
-            risk, reasons = self.assess_command_risk(command)
+            risk, reasons = self._assess_for(command, policy)
             log_entry = self._build_auto_approved_log_entry(shown, risk, reasons, rule_info)
+            if policy is not None and risk.blocks:  # a rule never lifts a block for an unattended caller
+                return await self._handle_forbidden_command(shown, risk, reasons, log_entry)
             return await self._execute_command(command, risk, reasons, log_entry, rule_info, policy)
 
         # Risk-based assessment fallback
-        risk, reasons = self.assess_command_risk(command)
+        risk, reasons = self._assess_for(command, policy)
         log_entry = self._build_standard_log_entry(shown, risk, reasons)
 
         # #13845: ask ``.blocks`` rather than comparing against FORBIDDEN alone.

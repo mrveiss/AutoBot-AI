@@ -27,7 +27,6 @@ from secure_command_executor import CommandSecurityPolicy, SecureCommandExecutor
 from security_layer_roles import DEPRECATED_PRIVILEGED_ROLES, _normalise_role, canonical_role_permissions
 from services.audit.audit import emit_security, query_filtered
 from services.audit.taxonomy import AuditCategory, AuditFilter
-from utils.command_utils import execute_shell_command
 
 logger = get_logger(__name__)
 
@@ -526,8 +525,8 @@ class SecurityLayer:
 
     async def _execute_basic_command(self, command: str, policy: CommandRunPolicy | None = None) -> Dict[str, Any]:
         """Execute command without security controls (fallback mode). Issue #620."""
-        if policy is not None:
-            return {**await execute_shell_command(command, policy), "security": {"enabled": False}}
+        if policy is not None:  # no risk check here: an unattended caller is refused, not run unchecked (#19807)
+            return self.command_executor.build_refused_result("Command refused: command security is disabled")
         process = await asyncio.create_subprocess_shell(
             command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )

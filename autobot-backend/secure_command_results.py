@@ -16,6 +16,7 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import CommandRisk
+from command_run_policy import CommandRunPolicy
 
 logger = get_logger(__name__)
 
@@ -168,4 +169,38 @@ class CommandResultBuilders:
             "timestamp": asyncio.get_running_loop().time(),
             "approved": False,
             "executed": False,
+        }
+
+    def _assess_for(self, command: str, policy: CommandRunPolicy | None) -> tuple[CommandRisk, List[str]]:
+        """Risk and reasons for *command*; under a policy the reasons are redacted (#19807).
+
+        Chained-command reasons quote each resolved segment, and they reach the
+        history, the result's security info and the audit row.
+        """
+        risk, reasons = self.assess_command_risk(command)
+        return risk, reasons if policy is None else [policy.show(reason) for reason in reasons]
+
+    @staticmethod
+    def _policy_permission(action: str | None, rule_info: Dict[str, Any] | None, policy: CommandRunPolicy | None):
+        """Under a policy, approval memory is not a permission: only an explicit rule allows (#19807)."""
+        if policy is not None and action == "allow" and (rule_info or {}).get("from_memory"):
+            return None, None
+        return action, rule_info
+
+    @staticmethod
+    def _filter_inputs(prepared: str, stdout: str, policy: CommandRunPolicy | None) -> tuple[str, str]:
+        """Command and output as the output filter may see them; it can write both to disk (#19807)."""
+        if policy is None:
+            return prepared, stdout
+        return policy.show(prepared), policy.show_output(stdout)
+
+    @staticmethod
+    def build_refused_result(message: str) -> Dict[str, Any]:
+        """A blocked result for a command refused before any risk assessment (#19807)."""
+        return {
+            "stdout": "",
+            "stderr": message,
+            "return_code": 1,
+            "status": "error",
+            "security": {"enabled": False, "blocked": True},
         }
