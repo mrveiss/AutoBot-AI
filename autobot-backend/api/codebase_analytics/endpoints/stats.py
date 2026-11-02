@@ -30,6 +30,7 @@ from .shared import (
     resolve_git_repo_root,
     resolve_source_root,
 )
+from .store_state import index_state, store_unavailable
 
 logger = get_logger(__name__)
 
@@ -616,33 +617,27 @@ async def get_codebase_problems(
     source_root = await resolve_source_root(source_id)
 
     code_collection = await asyncio.to_thread(get_code_collection)
-    all_problems = []
     storage_type = "chromadb"
 
-    # Try ChromaDB first (Issue #315, #1710: per-source filter)
-    if code_collection:
-        try:
-            all_problems = _fetch_problems_from_chromadb(
-                code_collection,
-                problem_type,
-                source_id=source_id,
-                source_root=source_root,
-            )
-            logger.info("Retrieved %s problems from ChromaDB", len(all_problems))
-        except Exception as chroma_error:
-            logger.warning("ChromaDB query failed: %s, falling back to Redis", chroma_error)
-            code_collection = None
-
-    # Issue #1759: Problems are stored to ChromaDB only (not Redis).
-    # When ChromaDB is unavailable, return no_data directly.
+    # Issue #1759: Problems are stored to ChromaDB only (not Redis). An unreadable
+    # store is a 503, not "no data" (#17651): the panel cannot tell an outage from
+    # a source nobody indexed when both arrive as an empty list.
     if not code_collection:
-        return JSONResponse(
-            {
-                "status": "no_data",
-                "message": "ChromaDB unavailable. Run indexing first.",
-                "problems": [],
-            }
+        logger.error("problems: the code index store could not be opened")
+        raise store_unavailable()
+    try:
+        all_problems = await asyncio.to_thread(
+            _fetch_problems_from_chromadb,
+            code_collection,
+            problem_type,
+            source_id=source_id,
+            source_root=source_root,
         )
+        state = await asyncio.to_thread(index_state, code_collection, source_id, bool(all_problems))
+    except Exception as store_error:
+        logger.error("problems: the code index store read failed: %s", store_error)
+        raise store_unavailable() from store_error
+    logger.info("Retrieved %s problems from ChromaDB", len(all_problems))
 
     severity_order = {s.value: i for i, s in enumerate(reversed(Severity.triage_ladder()))}
     all_problems.sort(
@@ -655,6 +650,7 @@ async def get_codebase_problems(
     return JSONResponse(
         {
             "status": "success",
+            **state,
             "problems": all_problems,
             "total_count": len(all_problems),
             "problem_types": list(set(p.get("type", "unknown") for p in all_problems)),
