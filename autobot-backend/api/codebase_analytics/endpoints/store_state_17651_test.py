@@ -21,6 +21,7 @@ from api.codebase_analytics import storage as analytics_storage
 from api.codebase_analytics.endpoints import declarations as decl_mod
 from api.codebase_analytics.endpoints import stats as stats_mod
 from api.codebase_analytics.endpoints.store_state import index_state, source_is_indexed
+from autobot_shared.status_enums import Severity
 from knowledge.backends.memory_adapter import InMemoryClient
 
 _names = itertools.count()
@@ -39,7 +40,13 @@ def _collection(rows: list[dict]):
 
 
 FUNC = {"type": "function", "name": "f", "file_path": "a.py", "start_line": "3", "source_id": "s1"}
-PROBLEM = {"type": "problem", "problem_type": "p", "severity": "low", "file_path": "a.py", "source_id": "s1"}
+PROBLEM = {
+    "type": "problem",
+    "problem_type": "p",
+    "severity": Severity.LOW.value,
+    "file_path": "a.py",
+    "source_id": "s1",
+}
 
 
 class _Broken:

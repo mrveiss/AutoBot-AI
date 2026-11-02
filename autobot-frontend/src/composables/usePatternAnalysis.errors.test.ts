@@ -18,6 +18,7 @@ vi.mock('@/utils/ApiClient', () => ({
 }))
 // The UI kit's barrel pulls component dependencies this composable never uses.
 vi.mock('@autobot/ui', () => ({
+  getEnvPositiveInt: (_env: unknown, _key: string, fallback: number) => fallback,
   isHttpError: () => false,
   usePollingJob: () => ({ start: vi.fn(), stop: vi.fn() }),
 }))
