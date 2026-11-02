@@ -57,6 +57,17 @@ async def ownerless_report(manager) -> tuple[list[str], list[str]]:
     return ownerless, unreadable
 
 
+async def session_is_ownerless(manager, session_id: str) -> bool:
+    """One session's answer, for a proposal: the full report reads every session on disk.
+
+    A session whose id is invalid or whose owner cannot be read is not ownerless (#14033).
+    """
+    try:
+        return await manager.session_exists(session_id) and not await manager.get_session_owner(session_id)
+    except (ValueError, SessionOwnerUnreadable):
+        return False
+
+
 async def active_user_id(session: "AsyncSession", username: str) -> str | None:
     """The id of the active user *username*, or None: an owner must be someone who exists."""
     query = select(User.id).filter_by(username=username, is_active=True, deleted_at=None)
@@ -79,13 +90,6 @@ async def _comment(approval: "Approval", session: "AsyncSession", body: str) -> 
     await session.commit()
 
 
-async def _cached_owner(session_id: str) -> tuple[SessionOwnershipValidator, str | None]:
-    """The Redis owner record: an owner the ownership gate has granted may be only there."""
-    redis = await get_redis_client(async_client=True, database="main")
-    validator = SessionOwnershipValidator(redis)
-    return validator, await validator.get_session_owner(session_id)
-
-
 async def _write_owner(manager, validator, session_id: str, owner: str, user_id: str) -> str:
     """The file record is the durable one (#14018); a Redis failure after it is reported as partial, not hidden."""
     if not await manager.update_session_metadata(
@@ -100,6 +104,32 @@ async def _write_owner(manager, validator, session_id: str, owner: str, user_id:
     return "success" if written else "partial"
 
 
+async def _claim_in_redis(validator, session_id: str, owner: str) -> bool:
+    """Atomically take an unowned session; True if *owner* holds it afterwards.
+
+    set_session_owner reads then writes, so two writers can both see no owner; here Redis decides.
+    A Redis failure raises: "could not check" must not read as "free".
+    """
+    key = validator._get_ownership_key(session_id)
+    if await validator.redis.set(key, owner, nx=True, ex=validator.ownership_ttl):
+        return True
+    return await validator.get_session_owner(session_id) == owner
+
+
+async def _owner_elsewhere(manager, validator, session_id: str, owner: str) -> str | None:
+    """Who holds the session if not *owner*. Otherwise *owner* now holds it in Redis.
+
+    The ownership gate may have granted an owner that is only in Redis. The claim is atomic, so
+    a grant made while this runs loses to it or wins over it, never both.
+    """
+    on_file = await manager.get_session_owner(session_id)
+    if on_file:
+        return on_file
+    if await _claim_in_redis(validator, session_id, owner):
+        return None
+    return await validator.get_session_owner(session_id)
+
+
 async def execute_owner_assign(approval: "Approval", session: "AsyncSession") -> None:
     """Write the owner an approved proposal named, unless the session has gained one since, on file or in Redis."""
     ctx = approval.context or {}
@@ -111,14 +141,20 @@ async def execute_owner_assign(approval: "Approval", session: "AsyncSession") ->
     if user_id is None:
         raise ValueError(f"{owner} is not an active user")
     manager = ChatHistoryManager()
-    validator, cached = await _cached_owner(session_id)
-    existing = await manager.get_session_owner(session_id) or (cached if cached != owner else None)
+    validator = SessionOwnershipValidator(await get_redis_client(async_client=True, database="main"))
+    held_before = await validator.get_session_owner(session_id)
+    existing = await _owner_elsewhere(manager, validator, session_id, owner)
     if existing:
         await _comment(approval, session, f"Session {session_id} already belongs to {existing}; nothing changed.")
         await _audit(approval, session_id, "denied", stage="skipped", existing_owner=existing)
         return
     await _audit(approval, session_id, "success", stage="started", owner=owner, self_approval=self_approved)
-    outcome = await _write_owner(manager, validator, session_id, owner, user_id)
+    try:
+        outcome = await _write_owner(manager, validator, session_id, owner, user_id)
+    except ValueError:
+        if held_before is None:  # our claim alone would let them in with the proposal failed
+            await validator.redis.delete(validator._get_ownership_key(session_id))
+        raise
     note = " (self-approved)" if self_approved else ""
     tail = "" if outcome == "success" else " Its owner is on file, but the Redis record was not written."
     await _comment(approval, session, f"Session {session_id} now belongs to {owner}{note}.{tail}")
@@ -143,5 +179,6 @@ __all__ = [
     "active_user_id",
     "execute_owner_assign",
     "ownerless_report",
+    "session_is_ownerless",
     "register_owner_assign_action",
 ]

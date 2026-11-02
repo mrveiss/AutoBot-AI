@@ -890,29 +890,28 @@ class SessionMixin:
         self._sanitize_session_id(session_id)
         return await self._load_session_from_file(session_id)
 
+    async def _existing_chat_file(self, session_id: str) -> str | None:
+        """The session's chat file under its current name, then its older one (#20030)."""
+        self._sanitize_session_id(session_id)
+        for name in (f"{session_id}_chat.json", f"chat_{session_id}.json"):
+            chat_file = str(validate_relative_path(name, self._get_chats_directory()))
+            if await run_in_chat_io_executor(os.path.exists, chat_file):
+                return chat_file
+        return None
+
+    async def session_exists(self, session_id: str) -> bool:
+        return await self._existing_chat_file(session_id) is not None
+
     async def get_session_owner(self, session_id: str) -> str | None:
-        """
-        Get the owner/creator of a specific session.
-
-        Args:
-            session_id: The session identifier
-
-        Returns:
-            Username of session owner, or None if not found/set
-        """
+        """Username of the session's owner, or None if it has no file or records none."""
         try:
-            self._sanitize_session_id(session_id)
-            chats_directory = self._get_chats_directory()
-            for name in (f"{session_id}_chat.json", f"chat_{session_id}.json"):  # the older name second (#20030)
-                chat_file = str(validate_relative_path(name, chats_directory))
-                if await run_in_chat_io_executor(os.path.exists, chat_file):
-                    async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
-                        file_content = await f.read()
-                    metadata = self._decrypt_data(file_content).get("metadata", {})
-                    return metadata.get("owner") or metadata.get("username")
-
+            chat_file = await self._existing_chat_file(session_id)
+            if chat_file is None:
+                return None
+            async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
+                file_content = await f.read()
+            metadata = self._decrypt_data(file_content).get("metadata", {})
+            return metadata.get("owner") or metadata.get("username")
         except Exception as e:
             logger.warning("Failed to get session owner for %s: %s", session_id, e)
             raise SessionOwnerUnreadable(session_id) from e
-
-        return None

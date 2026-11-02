@@ -31,6 +31,7 @@ from services.chat_session_owner_action import (
     active_user_id,
     ownerless_report,
     register_owner_assign_action,
+    session_is_ownerless,
 )
 from utils.chat_utils import get_chat_history_manager
 
@@ -72,8 +73,7 @@ async def propose_chat_session_owner(
     requester = current_user.get("id") or current_user.get("user_id")  # as the approve route reads the decider
     if not requester:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "The proposal cannot be attributed to a verified user")
-    ownerless, _ = await ownerless_report(get_chat_history_manager(request))
-    if body.session_id not in ownerless:
+    if not await session_is_ownerless(get_chat_history_manager(request), body.session_id):
         raise HTTPException(status.HTTP_409_CONFLICT, "That session is not in the ownerless report")
     if await active_user_id(session, body.owner) is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "That owner is not an active user")

@@ -20,6 +20,9 @@ class _Manager:
     def __init__(self, owners: dict, fail: bool = False) -> None:
         self.owners, self.fail, self.written = owners, fail, []
 
+    async def session_exists(self, session_id):
+        return session_id in self.owners
+
     async def list_sessions(self):
         return [{"chatId": session_id} for session_id in self.owners]
 
@@ -54,9 +57,20 @@ def _approval(decider=_OTHER, requested_by=_ADMIN, session_id="s1", owner="alice
     return approval
 
 
-async def _run(manager: _Manager, approval, session, cached=None, redis_set=None):
-    redis_set = redis_set or AsyncMock(return_value=True)
-    validator = SimpleNamespace(set_session_owner=redis_set, get_session_owner=AsyncMock(return_value=cached))
+def _validator(cached=None, redis_set=None, claim=None) -> SimpleNamespace:
+    """Redis as claim sees it: SET NX succeeds only when no owner is cached."""
+    return SimpleNamespace(
+        set_session_owner=redis_set or AsyncMock(return_value=True),
+        get_session_owner=AsyncMock(return_value=cached),
+        redis=SimpleNamespace(set=claim or AsyncMock(return_value=cached is None), delete=AsyncMock()),
+        ownership_ttl=60,
+        _get_ownership_key=lambda session_id: f"key:{session_id}",
+    )
+
+
+async def _run(manager: _Manager, approval, session, cached=None, redis_set=None, claim=None):
+    validator = _validator(cached, redis_set, claim)
+    redis_set = validator.set_session_owner
     with (
         patch.object(action, "ChatHistoryManager", return_value=manager),
         patch.object(action, "get_redis_client", AsyncMock()),
@@ -123,7 +137,7 @@ async def test_a_bad_approval_writes_nothing(approval, user_exists: bool) -> Non
 async def test_a_failed_file_write_records_no_success() -> None:
     manager, session = _Manager({"s1": None}, fail=True), _session()
     audit = AsyncMock()
-    validator = SimpleNamespace(set_session_owner=AsyncMock(), get_session_owner=AsyncMock(return_value=None))
+    validator = _validator()
     with (
         patch.object(action, "ChatHistoryManager", return_value=manager),
         patch.object(action, "get_redis_client", AsyncMock()),
@@ -133,6 +147,7 @@ async def test_a_failed_file_write_records_no_success() -> None:
     ):
         await action.execute_owner_assign(_approval(), session)
     assert [c.kwargs["details"]["stage"] for c in audit.await_args_list] == ["started"]
+    validator.redis.delete.assert_awaited_once_with("key:s1")  # the failed proposal leaves no claim
 
 
 async def test_an_owner_only_in_redis_is_left_alone() -> None:
@@ -157,6 +172,44 @@ async def test_a_redis_failure_after_the_file_is_recorded_as_partial(redis_set) 
     _, audit = await _run(manager, _approval(), session, redis_set=redis_set)
     assert manager.written and "Redis record was not written" in session.add.call_args.args[0].body
     assert audit.await_args.kwargs["result"] == "error" and audit.await_args.kwargs["details"]["stage"] == "partial"
+
+
+async def test_a_grant_landing_during_the_approval_loses_nothing_and_writes_nothing() -> None:
+    """Nothing cached when the approval began, but Redis refuses the claim: someone just took it."""
+    manager, session = _Manager({"s1": None}), _session()
+    validator = _validator(cached="bob", claim=AsyncMock(return_value=False))
+    with (
+        patch.object(action, "ChatHistoryManager", return_value=manager),
+        patch.object(action, "get_redis_client", AsyncMock()),
+        patch.object(action, "SessionOwnershipValidator", return_value=validator),
+        patch.object(action, "audit_log", AsyncMock()),
+    ):
+        await action.execute_owner_assign(_approval(), session)
+    assert manager.written == [] and "already belongs to bob" in session.add.call_args.args[0].body
+    validator.redis.set.assert_awaited_once_with("key:s1", "alice", nx=True, ex=60)
+
+
+async def test_redis_failing_at_the_claim_writes_nothing() -> None:
+    manager = _Manager({"s1": None})
+    with pytest.raises(ConnectionError):
+        await _run(manager, _approval(), _session(), claim=AsyncMock(side_effect=ConnectionError()))
+    assert manager.written == []
+
+
+@pytest.mark.parametrize(
+    "owners, expected",
+    [({"s1": None}, True), ({"s1": "bob"}, False), ({"s1": "UNREADABLE"}, False), ({}, False)],
+    ids=["ownerless", "owned", "unreadable", "no-such-session"],
+)
+async def test_one_sessions_answer_for_a_proposal(owners: dict, expected: bool) -> None:
+    manager = _Manager(owners)
+    manager.list_sessions = AsyncMock(side_effect=AssertionError("must not read every session"))
+    assert await action.session_is_ownerless(manager, "s1") is expected
+
+
+async def test_an_invalid_session_id_is_not_ownerless() -> None:
+    manager = SimpleNamespace(session_exists=AsyncMock(side_effect=ValueError("bad id")))
+    assert await action.session_is_ownerless(manager, "../x") is False
 
 
 def test_the_action_is_server_only_with_its_proposer() -> None:
