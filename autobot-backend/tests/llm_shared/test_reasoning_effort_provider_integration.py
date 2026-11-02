@@ -273,7 +273,7 @@ class TestOpenAIProviderReasoningEffortMerge:
 @pytest.mark.asyncio
 async def test_resolution_order_per_conversation_wins():
     """Per-conversation effort overrides user default."""
-    from chat_workflow.manager import _resolve_reasoning_effort
+    from chat_workflow.reasoning_kwargs import resolve_reasoning_effort as _resolve_reasoning_effort
 
     context = {"reasoning_effort": "high", "user_id": "u-1"}
     mock_prefs = MagicMock()
@@ -288,7 +288,7 @@ async def test_resolution_order_per_conversation_wins():
 @pytest.mark.asyncio
 async def test_resolution_order_user_default_used_when_no_per_conversation():
     """User-default used when no per-conversation value in context."""
-    from chat_workflow.manager import _resolve_reasoning_effort
+    from chat_workflow.reasoning_kwargs import resolve_reasoning_effort as _resolve_reasoning_effort
 
     context = {"user_id": "u-2"}
     mock_prefs = MagicMock()
@@ -303,7 +303,7 @@ async def test_resolution_order_user_default_used_when_no_per_conversation():
 @pytest.mark.asyncio
 async def test_resolution_order_falls_back_to_auto_when_no_user():
     """No context effort + no user_id → 'auto' (inert)."""
-    from chat_workflow.manager import _resolve_reasoning_effort
+    from chat_workflow.reasoning_kwargs import resolve_reasoning_effort as _resolve_reasoning_effort
 
     context: Dict[str, Any] = {}
     effort = await _resolve_reasoning_effort(context)
@@ -315,7 +315,7 @@ async def test_resolution_order_redis_error_falls_back_to_auto():
     """Redis error during user-default lookup → 'auto' (safe fallback)."""
     from redis.exceptions import RedisError
 
-    from chat_workflow.manager import _resolve_reasoning_effort
+    from chat_workflow.reasoning_kwargs import resolve_reasoning_effort as _resolve_reasoning_effort
 
     context = {"user_id": "u-3"}
 
