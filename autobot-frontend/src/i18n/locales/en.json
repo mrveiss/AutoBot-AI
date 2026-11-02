@@ -9801,10 +9801,6 @@
         "title": "Old .env copies",
         "description": "Copies of the backend secrets file left by earlier renders. The newest is kept, the rest are removed. Contents are never shown."
       },
-      "infrastructureDir": {
-        "title": "Stale infrastructure directory",
-        "description": "The old autobot-infrastructure directory beside the install. A directory holding a git checkout is never proposed."
-      },
       "tierColumn": {
         "title": "Unused subscription tier column",
         "description": "The organizations.subscription_tier column no longer used by AutoBot. Approving it deletes every stored value for good.",

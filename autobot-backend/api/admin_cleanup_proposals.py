@@ -2,13 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Admin API: PROPOSE two install cleanups on this node (#20567).
+"""Admin API: PROPOSE removing old ``.env.*~`` copies on this node (#20567).
 
 Endpoints:
     GET  /api/admin/env-copies-cleanup                   how many ``.env.*~`` copies would go
     POST /api/admin/env-copies-cleanup/requests          PROPOSE it -- creates a PENDING approval
-    GET  /api/admin/stale-infrastructure-dir             whether the stale directory is there
-    POST /api/admin/stale-infrastructure-dir/requests    PROPOSE removing it
 
 No route removes anything. Nothing runs until a human approves it in the Approvals inbox, and it is
 never auto-approved (#17038). Only this node's files are handled. The executors live in
@@ -24,14 +22,12 @@ from api.schemas_cleanup_proposals import CleanupRequestResponse, CleanupStatus
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
 from auth_rbac import require_role
-from models.approval import ApprovalType
+from models.approval import Approval, ApprovalStatus, ApprovalType
 from services.approval_gate_service import ApprovalGateService
 from services.install_cleanup_actions import (
     ENV_COPIES_ACTION,
-    INFRA_DIR_ACTION,
     CleanupPlan,
     plan_env_copies,
-    plan_infrastructure_dir,
     register_install_cleanup_actions,
 )
 
@@ -51,21 +47,10 @@ def _env_status(plan: CleanupPlan) -> CleanupStatus:
     return _status(plan, f"{plan.count} older .env.*~ copies; the newest is kept", "No older .env.*~ copies")
 
 
-def _infra_status(plan: CleanupPlan) -> CleanupStatus:
-    found = f"The stale autobot-infrastructure directory ({plan.file_count} files)"
-    return _status(plan, found, "No stale autobot-infrastructure directory")
-
-
 @router.get("/env-copies-cleanup", response_model=CleanupStatus)
 async def env_copies_status() -> CleanupStatus:
     """Read only: counts, never a file's contents."""
     return _env_status(await asyncio.to_thread(plan_env_copies))
-
-
-@router.get("/stale-infrastructure-dir", response_model=CleanupStatus)
-async def infrastructure_dir_status() -> CleanupStatus:
-    """Read only: whether the stale directory is there and may be removed."""
-    return _infra_status(await asyncio.to_thread(plan_infrastructure_dir))
 
 
 async def _propose(
@@ -78,7 +63,16 @@ async def _propose(
         raise HTTPException(status.HTTP_409_CONFLICT, f"Not proposable: {plan.refused}")
     if not plan.targets:
         raise HTTPException(status.HTTP_409_CONFLICT, "There is nothing to remove")
-    approval = await ApprovalGateService(session).create_approval(
+    service = ApprovalGateService(session)
+    pending = await service.list_approvals(
+        status=ApprovalStatus.PENDING.value,
+        approval_type=ApprovalType.DESTRUCTIVE_ACTION.value,
+        extra_where=(Approval.context["action"].astext == action,),
+        limit=1,
+    )
+    if pending:
+        raise HTTPException(status.HTTP_409_CONFLICT, "This cleanup is already waiting for review")
+    approval = await service.create_approval(
         title=title,
         approval_type=ApprovalType.DESTRUCTIVE_ACTION.value,
         description=description,
@@ -101,27 +95,6 @@ async def propose_env_copies_cleanup(
         description=(
             f"{plan.count} older copies of the backend's secrets file sit beside it. Approving deletes them for "
             "good and keeps the newest. The paths are chosen by the server when it runs, not by this request."
-        ),
-        current_user=current_user,
-        session=session,
-    )
-
-
-@router.post(
-    "/stale-infrastructure-dir/requests", response_model=CleanupRequestResponse, status_code=status.HTTP_201_CREATED
-)
-async def propose_infrastructure_dir_removal(
-    current_user: dict = Depends(get_current_user), session: AsyncSession = Depends(get_db_session)
-) -> CleanupRequestResponse:
-    """Propose removing the stale directory -- a request, not an execution."""
-    plan = await asyncio.to_thread(plan_infrastructure_dir)
-    return await _propose(
-        plan,
-        action=INFRA_DIR_ACTION,
-        title="Remove the stale autobot-infrastructure directory",
-        description=(
-            f"The deployed copy beside the install ({plan.file_count} files) is stale. Approving deletes it for "
-            "good. The path is chosen by the server when it runs, not by this request."
         ),
         current_user=current_user,
         session=session,

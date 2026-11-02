@@ -29,9 +29,10 @@ def _seed(root: Path) -> None:
 async def test_status_counts_and_proposal_does_not_remove(tmp_path: Path) -> None:
     await asyncio.to_thread(_seed, tmp_path)
     create = AsyncMock(return_value=SimpleNamespace(id="a1", status="pending"))
+    service = SimpleNamespace(create_approval=create, list_approvals=AsyncMock(return_value=[]))
     with (
         patch.object(acts, "install_root", return_value=tmp_path),
-        patch.object(routes, "ApprovalGateService", return_value=SimpleNamespace(create_approval=create)),
+        patch.object(routes, "ApprovalGateService", return_value=service),
     ):
         status = await routes.env_copies_status()
         reply = await routes.propose_env_copies_cleanup({"id": "u1"}, MagicMock())
@@ -43,5 +44,19 @@ async def test_status_counts_and_proposal_does_not_remove(tmp_path: Path) -> Non
 async def test_nothing_to_remove_is_409(tmp_path: Path) -> None:
     with patch.object(acts, "install_root", return_value=tmp_path):
         with pytest.raises(HTTPException) as err:
-            await routes.propose_infrastructure_dir_removal({"id": "u1"}, MagicMock())
+            await routes.propose_env_copies_cleanup({"id": "u1"}, MagicMock())
     assert err.value.status_code == 409
+
+
+async def test_a_repeat_proposal_is_409_and_creates_nothing(tmp_path: Path) -> None:
+    await asyncio.to_thread(_seed, tmp_path)
+    create = AsyncMock()
+    service = SimpleNamespace(create_approval=create, list_approvals=AsyncMock(return_value=[object()]))
+    with (
+        patch.object(acts, "install_root", return_value=tmp_path),
+        patch.object(routes, "ApprovalGateService", return_value=service),
+    ):
+        with pytest.raises(HTTPException) as err:
+            await routes.propose_env_copies_cleanup({"id": "u1"}, MagicMock())
+    assert err.value.status_code == 409 and "already waiting" in err.value.detail
+    create.assert_not_awaited()

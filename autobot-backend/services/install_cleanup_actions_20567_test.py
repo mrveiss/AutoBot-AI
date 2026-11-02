@@ -93,90 +93,43 @@ async def test_a_symlinked_copy_refuses_and_removes_nothing(tmp_path: Path) -> N
 
 
 async def test_a_context_path_is_ignored(tmp_path: Path) -> None:
-    victim = tmp_path / "victim"
-    await asyncio.to_thread(victim.mkdir)
-    approval = _approval(acts.INFRA_DIR_ACTION, context={"action": acts.INFRA_DIR_ACTION, "path": str(victim)})
-    await _run(acts.execute_infrastructure_dir_removal, approval, tmp_path)
+    victim = tmp_path / "victim.txt"
+    await asyncio.to_thread(victim.write_text, "x", encoding="utf-8")
+    await asyncio.to_thread(_make_env, tmp_path, {".env.1~": 100, ".env.2~": 200})
+    approval = _approval(acts.ENV_COPIES_ACTION, context={"action": acts.ENV_COPIES_ACTION, "path": str(victim)})
+    await _run(acts.execute_env_copies_cleanup, approval, tmp_path)
     assert await asyncio.to_thread(victim.exists)
 
 
-def _make_infra(root: Path, git: bool = False) -> Path:
-    (root / "code_source" / acts.INFRA_DIR_NAME).mkdir(parents=True)
-    infra = root / "autobot-infrastructure"
-    (infra / "sub").mkdir(parents=True)
-    (infra / "sub" / "a.txt").write_text(_SECRET, encoding="utf-8")
-    (infra / "b.txt").write_text(_SECRET, encoding="utf-8")
-    if git:
-        (infra / ".git").mkdir()
-    return infra
-
-
-async def test_stale_directory_is_removed_after_approval(tmp_path: Path) -> None:
-    infra = await asyncio.to_thread(_make_infra, tmp_path)
-    audit = await _run(acts.execute_infrastructure_dir_removal, _approval(acts.INFRA_DIR_ACTION), tmp_path)
-    assert not await asyncio.to_thread(infra.exists)
-    assert audit.await_args.kwargs["details"]["removed"] == 2
-
-
-async def test_without_approval_nothing_changes(tmp_path: Path) -> None:
-    infra = await asyncio.to_thread(_make_infra, tmp_path)
-    plan = await asyncio.to_thread(acts.plan_infrastructure_dir, tmp_path)
-    assert plan.count == 1 and await asyncio.to_thread(infra.exists)
-    unverified = _approval(acts.INFRA_DIR_ACTION, decider=None)
+async def test_without_a_verified_decider_nothing_changes(tmp_path: Path) -> None:
+    backend = await asyncio.to_thread(_make_env, tmp_path, {".env.1~": 100, ".env.2~": 200})
     with pytest.raises(ValueError):
-        await _run(acts.execute_infrastructure_dir_removal, unverified, tmp_path)
-    assert await asyncio.to_thread(infra.exists)
-
-
-async def test_a_checkout_is_refused(tmp_path: Path) -> None:
-    infra = await asyncio.to_thread(_make_infra, tmp_path, True)
-    with pytest.raises(ValueError, match=r"\.git"):
-        await _run(acts.execute_infrastructure_dir_removal, _approval(acts.INFRA_DIR_ACTION), tmp_path)
-    assert await asyncio.to_thread(infra.exists)
-
-
-async def test_a_symlinked_directory_is_refused(tmp_path: Path) -> None:
-    real = tmp_path / "elsewhere"
-    root = tmp_path / "root"
-    await asyncio.to_thread(real.mkdir)
-    await asyncio.to_thread(root.mkdir)
-    await asyncio.to_thread((root / "autobot-infrastructure").symlink_to, real, True)
-    with pytest.raises(ValueError, match="symlink"):
-        await _run(acts.execute_infrastructure_dir_removal, _approval(acts.INFRA_DIR_ACTION), root)
-    assert await asyncio.to_thread(real.exists)
-
-
-async def test_absent_directory_is_nothing_to_do(tmp_path: Path) -> None:
-    plan = await asyncio.to_thread(acts.plan_infrastructure_dir, tmp_path)
-    assert plan.count == 0 and plan.refused is None
-    session = _session()
-    await _run(acts.execute_infrastructure_dir_removal, _approval(acts.INFRA_DIR_ACTION), tmp_path, session)
-    assert "Nothing to remove" in session.add.call_args.args[0].body
+        await _run(acts.execute_env_copies_cleanup, _approval(acts.ENV_COPIES_ACTION, decider=None), tmp_path)
+    assert await asyncio.to_thread(_names, backend) == [".env", ".env.1~", ".env.2~"]
 
 
 async def test_four_eyes_applies(tmp_path: Path) -> None:
-    infra = await asyncio.to_thread(_make_infra, tmp_path)
+    backend = await asyncio.to_thread(_make_env, tmp_path, {".env.1~": 100, ".env.2~": 200})
     with pytest.raises(ValueError, match="different admin"):
         await _run(
-            acts.execute_infrastructure_dir_removal,
-            _approval(acts.INFRA_DIR_ACTION, decider=_ADMIN),
+            acts.execute_env_copies_cleanup,
+            _approval(acts.ENV_COPIES_ACTION, decider=_ADMIN),
             tmp_path,
             _session(admins=2),
         )
-    assert await asyncio.to_thread(infra.exists)
+    assert len(await asyncio.to_thread(_names, backend)) == 3
     await _run(
-        acts.execute_infrastructure_dir_removal,
-        _approval(acts.INFRA_DIR_ACTION, decider=_ADMIN),
+        acts.execute_env_copies_cleanup,
+        _approval(acts.ENV_COPIES_ACTION, decider=_ADMIN),
         tmp_path,
         _session(admins=1),
     )
-    assert not await asyncio.to_thread(infra.exists)
+    assert await asyncio.to_thread(_names, backend) == [".env", ".env.2~"]
 
 
 def test_registration_is_server_only() -> None:
     acts.register_install_cleanup_actions()
     assert approval_execution.is_server_only_action(acts.ENV_COPIES_ACTION)
-    assert approval_execution.is_server_only_action(acts.INFRA_DIR_ACTION)
 
 
 async def test_no_audit_entry_means_nothing_is_removed(tmp_path: Path) -> None:
@@ -192,16 +145,7 @@ async def test_no_audit_entry_means_nothing_is_removed(tmp_path: Path) -> None:
     assert _names(backend) == before
 
 
-def test_the_stale_directory_is_refused_while_code_source_has_no_copy(tmp_path: Path) -> None:
-    """Role manifests are read from code_source; without it this may be the only copy."""
-    (tmp_path / acts.INFRA_DIR_NAME).mkdir()
-    assert "code_source" in acts.plan_infrastructure_dir(tmp_path).refused
-
-
-def test_a_checkout_as_install_root_refuses_both(tmp_path: Path) -> None:
-    """On a dev checkout, `<root>/autobot-infrastructure` is tracked source and `.git` is one level up."""
+def test_a_checkout_as_install_root_refuses(tmp_path: Path) -> None:
+    """On a dev checkout the install root holds `.git`: these are not deployed copies."""
     (tmp_path / ".git").mkdir()
-    (tmp_path / acts.INFRA_DIR_NAME).mkdir()
-    (tmp_path / "code_source" / acts.INFRA_DIR_NAME).mkdir(parents=True)
-    assert "checkout" in acts.plan_infrastructure_dir(tmp_path).refused
     assert "checkout" in acts.plan_env_copies(tmp_path).refused

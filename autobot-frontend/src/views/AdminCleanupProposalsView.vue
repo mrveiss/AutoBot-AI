@@ -74,7 +74,6 @@ const makeCard = (id: string, base: string): Card => ({
 
 const cards = reactive<Card[]>([
   makeCard('envCopies', 'env-copies-cleanup'),
-  makeCard('infrastructureDir', 'stale-infrastructure-dir'),
   makeCard('tierColumn', 'org-tier-column'),
 ])
 

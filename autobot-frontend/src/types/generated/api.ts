@@ -19341,46 +19341,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/admin/stale-infrastructure-dir": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Infrastructure Dir Status
-         * @description Read only: whether the stale directory is there and may be removed.
-         */
-        get: operations["infrastructure_dir_status_api_admin_stale_infrastructure_dir_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/admin/stale-infrastructure-dir/requests": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Propose Infrastructure Dir Removal
-         * @description Propose removing the stale directory -- a request, not an execution.
-         */
-        post: operations["propose_infrastructure_dir_removal_api_admin_stale_infrastructure_dir_requests_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/analytics/dashboard/overview": {
         parameters: {
             query?: never;
@@ -133258,46 +133218,6 @@ export interface operations {
         };
     };
     propose_env_copies_cleanup_api_admin_env_copies_cleanup_requests_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CleanupRequestResponse"];
-                };
-            };
-        };
-    };
-    infrastructure_dir_status_api_admin_stale_infrastructure_dir_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CleanupStatus"];
-                };
-            };
-        };
-    };
-    propose_infrastructure_dir_removal_api_admin_stale_infrastructure_dir_requests_post: {
         parameters: {
             query?: never;
             header?: never;

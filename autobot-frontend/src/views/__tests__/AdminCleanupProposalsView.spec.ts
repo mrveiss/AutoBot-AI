@@ -52,8 +52,8 @@ describe('AdminCleanupProposalsView.vue', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('Found: 2.')
     const buttons = wrapper.findAll('button')
-    expect(buttons).toHaveLength(3)
-    expect(buttons[2].attributes('disabled')).toBeDefined()
+    expect(buttons).toHaveLength(2)
+    expect(buttons[1].attributes('disabled')).toBeDefined()
   })
 
   it('proposing reports the review queue and calls the requests route', async () => {
