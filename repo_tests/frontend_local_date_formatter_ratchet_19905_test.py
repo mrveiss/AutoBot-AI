@@ -66,7 +66,7 @@ _COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*).*$", re.M)
 # Measured on 5b0014f63a plus #20004's migrations.
 NAMED = "local_date_formatter_declarations"
 BEHAVIOUR = "local_date_formatter_functions_by_behaviour"
-PINS = {NAMED: 24, BEHAVIOUR: 20}
+PINS = {NAMED: 23, BEHAVIOUR: 20}
 
 
 def _sources(src: Path) -> list[Path]:
