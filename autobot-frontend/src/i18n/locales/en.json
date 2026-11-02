@@ -993,7 +993,8 @@
       "deployed": "Deployed via SLM · v{version}",
       "empty": "No additional themes are deployed.",
       "info": "Administrators install and deploy themes in the SLM console.",
-      "slmLink": "SLM › Settings › Themes ↗"
+      "slmLink": "SLM › Settings › Themes ↗",
+      "adminManaged": "An administrator manages additional themes."
     },
     "telegramPanel": {
       "title": "Telegram Bot",
@@ -4273,7 +4274,8 @@
         "no": "No",
         "available": "Available",
         "notAvailable": "Not available",
-        "configureLink": "Configure web research in the SLM console"
+        "configureLink": "Configure web research in the SLM console",
+        "adminManaged": "An administrator manages web research settings."
       }
     },
     "watchFolders": {
