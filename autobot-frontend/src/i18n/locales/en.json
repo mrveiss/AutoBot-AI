@@ -786,6 +786,16 @@
       "browser": "Browser",
       "novnc": "Remote Desktop",
       "ariaLabel": "Chat sections"
+    },
+    "attachmentNotice": {
+      "unavailable": "An attached file could not be found in this conversation, so it was not used.",
+      "too_many": "Only the first {limit} attached files were used; the rest were left out.",
+      "image": "\"{filename}\" is an image and cannot be read as text, so it was not used.",
+      "unsupported": "\"{filename}\" is not a text file this assistant can read, so it was not used.",
+      "unreadable": "\"{filename}\" could not be read, so it was not used.",
+      "empty": "\"{filename}\" has no readable text, so it was not used.",
+      "truncated": "\"{filename}\" is long, so only the start of it was used.",
+      "over_budget": "The attached files reached the size limit, so \"{filename}\" was not used."
     }
   },
   "settings": {
