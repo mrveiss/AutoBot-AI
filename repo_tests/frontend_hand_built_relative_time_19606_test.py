@@ -33,7 +33,7 @@ _HAND_BUILT = re.compile(rf"`[^`\n]*\$\{{[^}}`\n]*\}}\s*{_UNIT}\s+ago\b[^`\n]*`"
 _COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*).*$", re.M)
 
 # Measured on origin/main with this detector; lowered as the held files move to the kit.
-PINS = {"hand_built_ago_strings": 10}
+PINS = {"hand_built_ago_strings": 3}
 
 
 def _sources(src: Path) -> list[Path]:
