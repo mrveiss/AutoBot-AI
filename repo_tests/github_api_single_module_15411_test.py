@@ -71,7 +71,7 @@ REACH = declare(
     "github-api-single-module",
     discover=_source_population,
     # Mid-window, from REACH.window().
-    floor=69,  # mid-window: population 79, window (59, 79)
+    floor=78,  # mid-window: population 88, window (68, 88)
     what="non-test python source",
     roots=("pipeline-scripts", "scripts"),
     growth=20,
