@@ -88869,6 +88869,10 @@ export interface components {
             is_active?: boolean | null;
             /** Heartbeat Enabled */
             heartbeat_enabled?: boolean | null;
+            /** Can Run */
+            can_run?: boolean | null;
+            /** Cannot Run Reason */
+            cannot_run_reason?: string | null;
             /** Last Heartbeat */
             last_heartbeat: string | null;
             /** Budget Spent */
