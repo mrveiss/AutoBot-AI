@@ -1639,6 +1639,7 @@
       "clearStoredPatterns": "Clear stored patterns",
       "lastScan": "Last scan",
       "noAnalysis": "No pattern analysis available",
+      "errorTitle": "Pattern analysis could not be loaded",
       "emptyHint": "Click 'Analyze Patterns' to detect duplicates, complexity hotspots, and optimization opportunities.",
       "confirmClear": "Clear all stored patterns from ChromaDB?"
     },
