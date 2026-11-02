@@ -136,6 +136,8 @@ class AuditAction(str, Enum):
     ROLE_DELETE = "role.delete"
     API_KEY_USE = "api_key.use"  # pragma: allowlist secret -- an action name, not a key
     SECURITY_SUSPICIOUS_ACTIVITY = "security.suspicious_activity"
+    CONVERSATION_FILE_CLEANUP = "conversation_file.cleanup"
+    CONVERSATION_FILE_CLEANUP_RESET = "conversation_file.cleanup_reset"
 
 
 class ComplianceEventType(str, Enum):

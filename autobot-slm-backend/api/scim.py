@@ -29,6 +29,11 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.user_management.revocation_outcome import (
+    REVOCATION_INCOMPLETE_MESSAGE,
+    RevocationIncompleteError,
+    commit_reporting_revocation,
+)
 from autobot_shared.user_management.user_service_errors import DuplicateUserError, UserNotFoundError
 from services.database import db_service
 from services.system_secrets_vault import retrieve_secret
@@ -100,8 +105,33 @@ async def _require_scim_bearer(request: Request) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _scim_error(detail: str, scim_type: str = "invalidValue", status_code: int = 400) -> dict:
-    return {"schemas": [_SCIM_ERROR_SCHEMA], "detail": detail, "scimType": scim_type, "status": str(status_code)}
+def _scim_error(detail: str, scim_type: str | None = "invalidValue", status_code: int = 400) -> dict:
+    """A SCIM error body; ``scimType`` is left out for a server error, which RFC 7644 gives none."""
+    error = {"schemas": [_SCIM_ERROR_SCHEMA], "detail": detail, "status": str(status_code)}
+    return {**error, "scimType": scim_type} if scim_type else error
+
+
+async def _commit_scim(db: AsyncSession) -> None:
+    """Commit, answering a revocation that did not take effect as SCIM 503 (#20443).
+
+    The change stands. The IdP is told the revocation may be incomplete and repeats the request, which
+    queues the marker again (an inactive user is deactivated again, a soft-deleted one deleted again).
+    """
+    try:
+        await commit_reporting_revocation(db)
+    except RevocationIncompleteError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=_scim_error(REVOCATION_INCOMPLETE_MESSAGE, None, 503),
+        ) from exc
+
+
+async def _commit_new_user(db: AsyncSession) -> None:
+    """Commit a create: a 503 here would send the IdP back to a 409, and a new account has no sessions to revoke."""
+    try:
+        await commit_reporting_revocation(db)
+    except RevocationIncompleteError:
+        logger.warning("Marker not recorded for a user created inactive; it has no sessions yet (#20443)")
 
 
 def _user_to_scim(user: User, base_url: str) -> dict:
@@ -193,7 +223,7 @@ async def scim_create_user(request: Request, db: AsyncSession = Depends(_get_slm
         )
         if not fields["active"]:
             await user_svc.deactivate_user(user.id)
-        await db.commit()
+        await _commit_new_user(db)
     except DuplicateUserError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -271,7 +301,7 @@ async def scim_replace_user(user_id: str, request: Request, db: AsyncSession = D
     user_svc = UserService(db, context)
     await user_svc.update_user(user.id, email=fields["email"], display_name=fields["display_name"])
     await _apply_active_flag(user, fields["active"], user_svc)
-    await db.commit()
+    await _commit_scim(db)
     updated = await user_svc.get_user(user.id)
     return JSONResponse(content=_user_to_scim(updated, _base_url(request)))
 
@@ -284,7 +314,7 @@ async def scim_patch_user(user_id: str, request: Request, db: AsyncSession = Dep
     context = TenantContext(is_platform_admin=True)
     user_svc = UserService(db, context)
     await _apply_patch_ops(body.get("Operations", []), user, user_svc)
-    await db.commit()
+    await _commit_scim(db)
     updated = await user_svc.get_user(user.id)
     return JSONResponse(content=_user_to_scim(updated, _base_url(request)))
 
@@ -309,7 +339,8 @@ async def _apply_patch_ops(ops: list[dict], user: User, user_svc: UserService) -
 
 
 async def _apply_active_flag(user: User, active: bool, user_svc: UserService) -> None:
-    if not active and user.is_active:
+    if not active:
+        # Also for an inactive user: a repeat of a request whose marker write failed must queue it again (#20443).
         await user_svc.deactivate_user(user.id)
     elif active and not user.is_active:
         await user_svc.activate_user(user.id)
@@ -317,21 +348,24 @@ async def _apply_active_flag(user: User, active: bool, user_svc: UserService) ->
 
 @router.delete("/Users/{user_id}", dependencies=[Depends(_require_scim_bearer)], status_code=204)
 async def scim_delete_user(user_id: str, db: AsyncSession = Depends(_get_slm_db)):
-    """DELETE /scim/v2/Users/{id} — deactivate/soft-delete a user."""
-    user = await _get_user_or_404(user_id, db)
+    """DELETE /scim/v2/Users/{id} — deactivate/soft-delete a user.
+
+    A soft-deleted user is found again, so a delete answered 503 can be repeated (#20443).
+    """
+    user = await _get_user_or_404(user_id, db, include_deleted=True)
     context = TenantContext(is_platform_admin=True)
     user_svc = UserService(db, context)
     await user_svc.delete_user(user.id, hard_delete=False)
-    await db.commit()
+    await _commit_scim(db)
 
 
-async def _get_user_or_404(user_id: str, db: AsyncSession) -> User:
+async def _get_user_or_404(user_id: str, db: AsyncSession, *, include_deleted: bool = False) -> User:
     try:
         uid = uuid.UUID(user_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=_scim_error("Not found", "invalidValue", 404)) from exc
     context = TenantContext(is_platform_admin=True)
-    user = await UserService(db, context).get_user(uid)
+    user = await UserService(db, context).get_user(uid, include_deleted=include_deleted)
     if not user:
         raise HTTPException(status_code=404, detail=_scim_error("User not found", "invalidValue", 404))
     return user
