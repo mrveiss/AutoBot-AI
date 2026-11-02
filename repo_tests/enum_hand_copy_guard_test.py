@@ -225,7 +225,7 @@ REACH = declare(
     # the bottom tenth of `growth`, because that is zero tolerance dressed as an allowance.
     # Re-measured by the mechanism itself, not carried across (#15928); the arithmetic is in
     # the commit message, which cannot drift from the tree it describes.
-    floor=7496,  # re-pinned mid-window (train 54): population 7209, window [6809, 7209]
+    floor=7658,  # re-pinned mid-window (train 54): population 7209, window [6809, 7209]
     growth=400,
     what="tracked python files",
 )
