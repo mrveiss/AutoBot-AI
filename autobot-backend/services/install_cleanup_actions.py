@@ -60,6 +60,11 @@ class CleanupPlan:
         return 0 if self.refused else len(self.targets)
 
 
+def _backend_dir(root: Path) -> Path:
+    """Where the backend's ``.env`` lives. On a deployed host AUTOBOT_BASE_DIR already is that directory."""
+    return root if root.name == BACKEND_DIR_NAME else root / BACKEND_DIR_NAME
+
+
 def install_root() -> Path:
     """This node's install root, from the SSOT path config (never a literal)."""
     return Path(config.path.base_dir)
@@ -79,7 +84,7 @@ def plan_env_copies(root: Path | None = None) -> CleanupPlan:
     root = root or install_root()
     if os.path.lexists(root / ".git"):
         return CleanupPlan(refused="the install root is a checkout, so these are not deployed files")
-    backend = root / BACKEND_DIR_NAME
+    backend = _backend_dir(root)
     if backend.is_symlink() or not _inside(backend, root):
         return CleanupPlan(refused="the backend directory is a symlink or outside the install root")
     if not backend.is_dir():
@@ -95,7 +100,7 @@ def plan_env_copies(root: Path | None = None) -> CleanupPlan:
 
 
 def _remove_env_copies(plan: CleanupPlan, root: Path) -> int:
-    backend = root / BACKEND_DIR_NAME
+    backend = _backend_dir(root)
     removed = 0
     for path in plan.targets:
         if path.is_symlink() or not _inside(path, backend):

@@ -149,3 +149,16 @@ def test_a_checkout_as_install_root_refuses(tmp_path: Path) -> None:
     """On a dev checkout the install root holds `.git`: these are not deployed copies."""
     (tmp_path / ".git").mkdir()
     assert "checkout" in acts.plan_env_copies(tmp_path).refused
+
+
+async def test_a_deployed_base_dir_is_the_backend_directory_itself(tmp_path: Path) -> None:
+    """On a host AUTOBOT_BASE_DIR is <install>/autobot-backend; reading one level deeper found nothing."""
+    backend = _make_env(tmp_path, {".env.1~": 100, ".env.2~": 200})
+    assert [p.name for p in acts.plan_env_copies(backend).targets] == [".env.1~"]
+    await _run(acts.execute_env_copies_cleanup, _approval(acts.ENV_COPIES_ACTION), backend)
+    assert ".env.1~" not in _names(backend) and ".env.2~" in _names(backend) and ".env" in _names(backend)
+
+
+def test_contrast_an_install_root_still_finds_the_backend_directory(tmp_path: Path) -> None:
+    _make_env(tmp_path, {".env.1~": 100, ".env.2~": 200})
+    assert [p.name for p in acts.plan_env_copies(tmp_path).targets] == [".env.1~"]
