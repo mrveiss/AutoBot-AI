@@ -188,11 +188,49 @@ def _scan(root: Path) -> dict[str, int]:
 
 _STYLE_CONTENT = re.compile(r"<style\b[^>]*>(.*?)</style>", re.DOTALL | re.IGNORECASE)
 _IMPORTANT = re.compile(r"!\s*important", re.IGNORECASE)
+#: Selectors that style markup a third-party library injects at runtime. There
+#: `!important` is the only way to beat the library's own inline styles, so it is
+#: not a design-system override and is not counted (#17567). Each entry carries
+#: its reason; a selector with no stated reason is indistinguishable from an
+#: oversight. A lookalike (`.apexcharts` without the dash, `.my-xtermish`) is NOT
+#: exempt: the patterns need the vendor's own class prefix.
+VENDOR_SELECTORS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"\.apexcharts-"), "ApexCharts injects its canvas/tooltip/legend DOM with inline styles"),
+    (re.compile(r"\.xterm(?:-[\w-]+)?(?![\w-])"), "xterm.js sets inline styles on its viewport and rows"),
+)
+_RULE_BLOCK = re.compile(r"([^{}]*)\{([^{}]*)\}")
 _THEME_SOURCES = (
     "assets/css/design-tokens.css",
     "assets/css/themes/light.css",
     "assets/css/themes/dark.css",
 )
+
+
+def _selector_list(selector: str) -> list[str]:
+    """The comma-separated selectors of a rule; a comma inside ``:is(...)`` does not split."""
+    parts, depth, current = [], 0, ""
+    for ch in selector:
+        depth += (ch == "(") - (ch == ")")
+        if ch == "," and depth == 0:
+            parts.append(current)
+            current = ""
+        else:
+            current += ch
+    return [*parts, current]
+
+
+def _is_vendor_rule(selector: str) -> bool:
+    """Every selector in the list targets a vendor class: ``.apexcharts-tooltip, .card`` styles app CSS too."""
+    return all(any(p.search(part) for p, _reason in VENDOR_SELECTORS) for part in _selector_list(selector))
+
+
+def _without_vendor_rules(css: str) -> str:
+    """``css`` with the rule blocks that target only vendor-injected classes removed."""
+
+    def keep(m: re.Match[str]) -> str:
+        return "" if _is_vendor_rule(m.group(1)) else m.group(0)
+
+    return _RULE_BLOCK.sub(keep, css)
 
 
 def _scan_important(root: Path) -> dict[str, int]:
@@ -211,7 +249,7 @@ def _scan_important(root: Path) -> dict[str, int]:
         except (OSError, UnicodeDecodeError):
             continue
         css = "\n".join(m.group(1) for m in _STYLE_CONTENT.finditer(text))
-        found = len(_IMPORTANT.findall(css))
+        found = len(_IMPORTANT.findall(_without_vendor_rules(css)))
         if found:
             counts[path.relative_to(root).as_posix()] = found
     return counts
