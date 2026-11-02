@@ -762,6 +762,16 @@
     "lightweightMode": "Lightweight mode",
     "lightweightModeTooltip": "lightweight Mode tooltip",
     "errors": {
+      "budgetExhausted": "Your {period} spending limit for this {scope} (${limit}) has been reached. Chat is unavailable until it resets or an administrator raises the limit.",
+      "budgetScope": {
+        "user": "account",
+        "tenant": "organization"
+      },
+      "budgetPeriod": {
+        "hour": "hourly",
+        "day": "daily",
+        "month": "monthly"
+      },
       "deleteFailed": "Couldn't delete the chat. Please try again.",
       "createFailed": "Failed to create chat: {error}",
       "loadSessionsFailed": "Failed to load chat sessions: {error}",

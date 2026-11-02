@@ -41,6 +41,7 @@ from llm_shared import get_provider_registry
 from llm_shared.model_fallback_coordinator import get_fallback_coordinator
 from llm_shared.models import LLMRequest
 from llm_shared.run_credentials import get_llm_principal, llm_principal_scope_for, stream_with_llm_principal
+from services.chat_budget_gate import enforce_chat_budget
 from services.llm_api_key_service import LLMApiKeyRecord, get_llm_api_key_service
 from services.llm_cost_tracker import get_cost_tracker
 from services.llm_usage_recording import (
@@ -322,6 +323,7 @@ async def messages(
 
 async def _handle_messages(body: AnthropicRequest, api_key_record: LLMApiKeyRecord | None) -> Any:
     """Route, call and format one Messages request, under the caller's LLM principal (#19241)."""
+    await enforce_chat_budget()  # 402 when the user's or tenant's budget is exhausted (#16845)
     # Resolve auto-* model aliases via tiered routing
     if body.model in _AUTO_MODEL_NAMES:
         messages_raw: List[Dict[str, str]] = []

@@ -197,6 +197,7 @@ async def compare_models(
     """
     from autobot_shared.principal import resolve_principal_id
     from llm_shared.run_credentials import stream_with_llm_principal
+    from services.chat_budget_gate import enforce_chat_budget
 
     # Ensure LLMInterface singleton is initialized (used for future non-registry paths).
     await _get_compare_interface()
@@ -207,6 +208,8 @@ async def compare_models(
 
     messages = [{"role": "user", "content": user_content}]
     user_id = resolve_principal_id(current_user)
+    # Before the SSE headers go out: a refusal is a 402, not a 200 stream of per-model errors (#16845).
+    await enforce_chat_budget(user_id, str(current_user.get("org_id") or ""))
 
     return StreamingResponse(
         # #19241: each fanned-out call prefers this user's own signed-in provider token, for this response only.

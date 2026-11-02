@@ -40,6 +40,7 @@ from llm_shared.run_credentials import llm_principal_scope_for
 from services.tool_output_filter import cap_unmatched_output, get_tool_output_filter
 from slash_command_handler import get_slash_command_handler
 
+from .budget_refusal import budget_refusal_message
 from .conversation import ConversationHandlerMixin
 from .llm_handler import LLMHandlerMixin, _emit_after_continuation, _emit_before_continuation
 from .models import (
@@ -2052,17 +2053,7 @@ before summarizing.
         return tool_calls
 
     def _create_llm_service_error(self, status_code: int) -> WorkflowMessage:
-        """
-        Create an error WorkflowMessage for LLM service failures.
-
-        Issue #620: Extracted from _process_single_llm_iteration to reduce function length.
-
-        Args:
-            status_code: HTTP status code from the failed request
-
-        Returns:
-            WorkflowMessage with error details. Issue #620.
-        """
+        """Error WorkflowMessage for an LLM service failure with HTTP ``status_code`` (#620)."""
         logger.error("[ChatWorkflowManager] Ollama request failed: %s", status_code)
         return WorkflowMessage(
             type="error",
@@ -2118,6 +2109,10 @@ before summarizing.
         """
         import aiohttp
 
+        if (refusal := await budget_refusal_message()) is not None:  # budget gate, before any spend (#16845)
+            yield refusal
+            yield (None, None)
+            return
         payload = self._get_llm_request_payload(
             selected_model,
             current_prompt,
@@ -3849,20 +3844,18 @@ before summarizing.
         self,
         session_id: str,
         decision: Dict[str, Any],
+        auth_scope: dict | None = None,
     ):
-        """Resume a paused graph after command approval interrupt.
-
-        Issue #1043: Called when the user approves or denies a command.
-        The graph resumes from its checkpointed state with the decision.
-        """
+        """Resume a paused graph after a command approval decision (#1043), as the caller (#16845 gate, #19241)."""
         from langgraph.types import Command
 
         from .graph import get_compiled_graph
 
         graph = await get_compiled_graph(self)
-        async with aclosing(stream_graph_turn(self, graph, session_id, Command(resume=decision))) as turn:
-            async for msg in turn:
-                yield msg
+        with llm_principal_scope_for(auth_scope):
+            async with aclosing(stream_graph_turn(self, graph, session_id, Command(resume=decision))) as turn:
+                async for msg in turn:
+                    yield msg
 
     async def shutdown(self):
         """Shutdown the workflow manager and clean up resources."""

@@ -121,6 +121,50 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_CHAT_BUDGET_CHECK_TIMEOUT_SECONDS",
+        type=float,
+        default=2.0,
+        description=(
+            "How long the pre-call chat budget check (services/chat_budget_bounds.py, #16845) may take before "
+            "the budget store counts as unavailable. What that does is decided in one place, "
+            "STORE_OUTAGE_ALLOWS_REQUEST."
+        ),
+        component="ai",
+        range=(0.1, 30.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_BUDGET_SPEND_CACHE_TTL_SECONDS",
+        type=float,
+        default=5.0,
+        description=(
+            "Seconds a scope's spend reading is reused by the chat budget gate (#16845), so a tool loop does "
+            "not re-read up to 31 daily keys per iteration. Spend can exceed a limit by at most this long "
+            "before a refusal. 0 disables the cache."
+        ),
+        component="ai",
+        range=(0.0, 300.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_BUDGET_OUTAGE_LOG_INTERVAL_SECONDS",
+        type=float,
+        default=60.0,
+        description=(
+            "Minimum seconds between logged chat budget store failures (#16845); failures inside the interval "
+            "are counted, not logged, so an outage does not flood the log."
+        ),
+        component="ai",
+        range=(1.0, 3600.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_LLM_SPEND_RECORD_TIMEOUT_SECONDS",
         type=float,
         default=10.0,

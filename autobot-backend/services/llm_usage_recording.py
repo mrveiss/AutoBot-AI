@@ -43,6 +43,7 @@ from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.token_count import estimate_fast
 from llm_shared.models import LLMRequest, LLMResponse
+from services.chat_budget_gate import attributed_user, record_tenant_spend
 from services.llm_cost_tracker import get_cost_tracker
 
 logger = get_logger(__name__)
@@ -112,13 +113,13 @@ async def record_token_usage(
     failing has to be visible to someone, which ``logger.debug`` was not.
     """
     try:
-        await get_cost_tracker().track_usage(
+        record = await get_cost_tracker().track_usage(
             provider=provider,
             model=model,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             session_id=session_id,
-            user_id=user_id,
+            user_id=attributed_user(user_id),  # chat spend is the principal's (#16845)
             agent_id=agent_id,
             endpoint=endpoint,
             latency_ms=None,
@@ -126,6 +127,7 @@ async def record_token_usage(
             error_message=error_message,
             metadata=metadata,
         )
+        await record_tenant_spend(record)
     except Exception:
         logger.exception(
             "Cost tracking failed for %s/%s: %d in / %d out unrecorded, and budget policy cannot see this spend",
@@ -169,13 +171,13 @@ async def record_response_usage(
         return
     input_tokens, output_tokens = counts
     try:
-        await get_cost_tracker().track_usage(
+        record = await get_cost_tracker().track_usage(
             provider=response.provider,
             model=model or response.model,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             session_id=session_id,
-            user_id=user_id,
+            user_id=attributed_user(user_id),  # chat spend is the principal's (#16845)
             agent_id=agent_id,
             endpoint=endpoint,
             latency_ms=response.processing_time * 1000 if response.processing_time else None,
@@ -183,6 +185,7 @@ async def record_response_usage(
             error_message=response.error,
             metadata=metadata,
         )
+        await record_tenant_spend(record)
     except Exception:
         logger.exception(
             "Cost tracking failed for %s/%s: %d in / %d out unrecorded, and budget policy cannot see this spend",
