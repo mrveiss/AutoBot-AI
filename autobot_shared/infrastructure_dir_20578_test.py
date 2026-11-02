@@ -11,10 +11,15 @@ directories and checks which one a reader returns.
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
+
+import pytest
 
 from autobot_shared import paths
 from autobot_shared.redis_management import types as redis_types
+
+_INVENTORY = "autobot-slm-backend/ansible/inventory/dynamic/generate_inventory.py"
 
 
 def _tree(root: Path, marker: str) -> Path:
@@ -69,10 +74,34 @@ def test_redis_databases_yaml_is_read_from_code_source(tmp_path, monkeypatch) ->
     )
 
 
-def test_contrast_stale_copy_is_what_the_old_anchor_would_have_read(tmp_path) -> None:
-    install, _ = _host(tmp_path)
-    old_anchor = install / paths.INFRASTRUCTURE_DIR_NAME / "shared" / "config" / "redis-databases.yaml"
-    assert old_anchor.read_text(encoding="utf-8") == "# stale\n"
+def test_contrast_with_no_code_source_the_install_copy_is_what_is_read(tmp_path, monkeypatch) -> None:
+    """The same reader as above, so the difference between them is code_source and nothing else."""
+    install, code_source = _host(tmp_path)
+    shutil.rmtree(code_source / paths.INFRASTRUCTURE_DIR_NAME)
+    monkeypatch.setenv(paths.CODE_SOURCE_ENV, str(code_source))
+    monkeypatch.setenv(paths.BASE_DIR_ENV, str(install))
+    first = redis_types._yaml_candidates()[0]
+    assert Path(first).read_text(encoding="utf-8") == "# stale\n"
+
+
+def _inventory_infra(root: Path) -> Path:
+    """generate_inventory.py's own lines, run as if the script sat under *root*: it can't import the helper."""
+    source = (Path(__file__).resolve().parent.parent / _INVENTORY).read_text(encoding="utf-8")
+    block = source[source.index("_ROOT = Path(__file__)") : source.index("_DATABASES_YAML = _INFRA")]
+    scope = {"Path": Path, "__file__": str(root / _INVENTORY)}
+    exec(block, scope)  # noqa: S102  # nosec B102  # a slice of this repo's own script
+    return scope["_INFRA"]
+
+
+@pytest.mark.parametrize("present", [("code_source", "install"), ("code_source",), ("install",), ()])
+def test_the_inventory_scripts_copy_of_the_order_matches_the_helper(tmp_path, present) -> None:
+    """Twice-defined because the script runs without autobot_shared (#1086), so the two are pinned equal."""
+    if "code_source" in present:
+        (tmp_path / "code_source" / paths.INFRASTRUCTURE_DIR_NAME).mkdir(parents=True)
+    if "install" in present:
+        (tmp_path / paths.INFRASTRUCTURE_DIR_NAME).mkdir(parents=True)
+    helper = paths.infrastructure_dir(code_source=tmp_path / "code_source", base_dir=tmp_path)
+    assert _inventory_infra(tmp_path) == helper
 
 
 def test_path_config_dir_follows_code_source(tmp_path) -> None:

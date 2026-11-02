@@ -34,11 +34,11 @@ except ImportError:
 #: The one name -> number table (#19232), read with plain PyYAML: this script runs under
 #: Ansible's interpreter without autobot_shared (#1086), so it cannot use database_number().
 #: The tree beside this one is code_source's checkout or the install; the install's copy is never
-#: updated (#20578), so code_source's wins when present.
+#: updated (#20578), so code_source's wins when present. Pinned equal to infrastructure_dir() by a test.
 _ROOT = Path(__file__).resolve().parents[4]
 _INFRA = next(
     (c for c in (_ROOT / "code_source" / "autobot-infrastructure", _ROOT / "autobot-infrastructure") if c.is_dir()),
-    _ROOT / "autobot-infrastructure",
+    _ROOT / "code_source" / "autobot-infrastructure",
 )
 _DATABASES_YAML = _INFRA / "shared" / "config" / "redis-databases.yaml"
 #: The override contract, mirrored from database_overrides.py (pinned equal to the Python and
