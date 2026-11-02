@@ -58,23 +58,12 @@
           <p>No collections found</p>
         </div>
 
-        <div v-else class="collections-list">
-          <button
-            v-for="collection in collections"
-            :key="collection.name"
-            @click="selectCollection(collection)"
-            class="collection-item"
-            :class="{ active: selectedCollection?.name === collection.name }"
-          >
-            <div class="collection-info">
-              <span class="collection-name">{{ collection.name }}</span>
-              <span class="collection-count">{{ collection.count }} documents</span>
-            </div>
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        </div>
+        <ChromaCollectionList
+          v-else
+          :collections="collections"
+          :selected-name="selectedCollection?.name"
+          @select="selectCollection"
+        />
       </div>
 
       <!-- Collection Details -->
@@ -241,6 +230,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import ChromaCollectionList from './ChromaCollectionList.vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useTransientError } from '@/composables/useTransientError'
@@ -609,62 +599,6 @@ onMounted(loadCollections)
 /* ============================================
  * COLLECTIONS LIST
  * ============================================ */
-
-.collections-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--spacing-2);
-}
-
-.collection-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: var(--spacing-3);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
-  cursor: pointer;
-  text-align: left;
-  transition: all var(--duration-150) ease;
-  margin-bottom: var(--spacing-1);
-}
-
-.collection-item:hover {
-  background: var(--bg-tertiary);
-  border-color: var(--border-default);
-}
-
-.collection-item.active {
-  background: var(--color-info-bg);
-  border-color: var(--color-info);
-  color: var(--color-info);
-}
-
-.collection-info {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-1);
-  flex: 1;
-}
-
-.collection-name {
-  font-size: var(--text-sm);
-  font-weight: 500;
-}
-
-.collection-count {
-  font-size: var(--text-xs);
-  opacity: 0.7;
-}
-
-.collection-item svg {
-  width: var(--spacing-4);
-  height: var(--spacing-4);
-  flex-shrink: 0;
-}
 
 /* ============================================
  * LOADING & EMPTY STATES
