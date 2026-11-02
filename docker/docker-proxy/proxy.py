@@ -20,14 +20,15 @@ import re
 import socket
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable, Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 SOCKET_PATH = os.environ.get("DOCKER_PROXY_SOCKET", "/var/run/docker.sock")
 PROJECT_LABEL = "com.docker.compose.project"
 ACTIONS = {"start", "stop", "restart"}
 #: The SLM and what it needs to run: stopping one from the SLM could leave nobody to start it again.
 NEVER_STOP = {"autobot-slm", "autobot-slm-gui", "autobot-postgres", "autobot-redis"}
-LOG_LINES = 200
+#: How long a client may take to send or read one request, so a stalled one can't hold a thread.
+REQUEST_TIMEOUT_SECONDS = int(os.environ.get("DOCKER_PROXY_REQUEST_TIMEOUT", "30"))
 _NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$")
 
 #: (method, docker path) -> (status, body)
@@ -89,8 +90,6 @@ def handle(docker: Docker, project: str, own_name: str, method: str, path: str) 
     name, verb = parts[1], parts[2] if len(parts) == 3 else None
     if (method, verb) == ("GET", None):
         action = "inspect"
-    elif (method, verb) == ("GET", "logs"):
-        action = "logs"
     elif method == "POST" and verb in ACTIONS:
         action = verb
     else:
@@ -100,9 +99,6 @@ def handle(docker: Docker, project: str, own_name: str, method: str, path: str) 
         return 404, {"error": "no such container in this stack"}
     if action == "inspect":
         return 200, _summary(details)
-    if action == "logs":
-        status, body = docker("GET", f"/containers/{quote(name)}/logs?stdout=1&stderr=1&tail={LOG_LINES}")
-        return (200, {"logs": body.decode("utf-8", "replace")}) if status == 200 else (502, {"error": "logs failed"})
     # The name Docker reports, not the URL's: a container id would otherwise skip both checks below.
     resolved = details.get("Name", "").lstrip("/")
     if resolved == own_name:  # it could not answer afterwards, and the SLM would lose its way back
@@ -129,6 +125,8 @@ def authorized(expected: str, header: Optional[str]) -> bool:
 
 def make_handler(token: str, project: str, own_name: str, docker: Docker = call_docker):
     class Handler(BaseHTTPRequestHandler):
+        timeout = REQUEST_TIMEOUT_SECONDS
+
         def _answer(self) -> None:
             if not authorized(token, self.headers.get("X-Docker-Proxy-Token")):
                 status, payload = 401, {"error": "token required"}
@@ -155,9 +153,8 @@ def main() -> None:
     project = own_project(call_docker, own_id)
     _status, body = call_docker("GET", f"/containers/{quote(own_id)}/json")
     own_name = json.loads(body).get("Name", "").lstrip("/")
-    ThreadingHTTPServer(
-        ("", int(os.environ["DOCKER_PROXY_PORT"])), make_handler(token, project, own_name)
-    ).serve_forever()
+    port = urlsplit(os.environ["AUTOBOT_DOCKER_PROXY_URL"]).port
+    ThreadingHTTPServer(("", port), make_handler(token, project, own_name)).serve_forever()
 
 
 if __name__ == "__main__":

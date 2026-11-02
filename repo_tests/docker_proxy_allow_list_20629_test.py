@@ -34,8 +34,6 @@ class _Docker:
         self.calls.append((method, path))
         if method == "POST":
             return 204, b""
-        if path.endswith("/logs?stdout=1&stderr=1&tail=200"):
-            return 200, b"a line"
         if "/containers/autobot-" in path:
             name = path.split("/")[2]
             return 200, json.dumps({**_OURS, "Name": f"/{name}"}).encode()
@@ -65,8 +63,10 @@ def test_inspect_gives_only_a_summary_never_the_environment() -> None:
     }
 
 
-def test_logs_are_bounded() -> None:
-    assert _ask("GET", "/containers/autobot-redis/logs")[1] == {"logs": "a line"}
+def test_logs_are_refused() -> None:
+    status, _payload, calls = _ask("GET", "/containers/autobot-redis/logs")
+    assert status == 403
+    assert calls == []
 
 
 @pytest.mark.parametrize(
@@ -145,3 +145,18 @@ def test_only_the_proxy_has_the_socket_and_only_the_slm_shares_its_network() -> 
     sharing = [n for n, s in services.items() if "autobot-docker-control" in (s.get("networks") or [])]
     assert sorted(sharing) == ["autobot-docker-proxy", "autobot-slm"]
     assert "ports" not in services["autobot-docker-proxy"]
+
+
+def test_the_proxy_and_the_slm_read_one_url() -> None:
+    services = yaml.safe_load((_ROOT / "docker-compose.yml").read_text(encoding="utf-8"))["services"]
+    entries = [
+        [e for e in services[name]["environment"] if e.startswith("AUTOBOT_DOCKER_PROXY_URL=")]
+        for name in ("autobot-docker-proxy", "autobot-slm")
+    ]
+    assert entries[0] == entries[1]
+    assert len(entries[0]) == 1
+    assert proxy.urlsplit(entries[0][0].split("=", 1)[1]).port
+
+
+def test_a_stalled_client_times_out() -> None:
+    assert proxy.make_handler("t", "stack", "own").timeout == proxy.REQUEST_TIMEOUT_SECONDS

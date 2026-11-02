@@ -10,6 +10,7 @@ A compose node is a container, with no SSH or systemd to reach: the node's id is
 import logging
 import os
 from typing import Iterable, Tuple
+from urllib.parse import quote
 
 import aiohttp
 
@@ -39,7 +40,7 @@ def is_compose_node(node) -> bool:
 
 async def run_compose_service_action(node, service_name: str, action: str) -> Tuple[bool, str]:
     """Run start, stop or restart on the node's container. Returns (success, message)."""
-    url = f"{os.getenv('AUTOBOT_DOCKER_PROXY_URL', '')}/containers/{node.node_id}/{action}"
+    url = f"{os.getenv('AUTOBOT_DOCKER_PROXY_URL', '')}/containers/{quote(node.node_id)}/{action}"
     headers = {"X-Docker-Proxy-Token": os.getenv("AUTOBOT_DOCKER_PROXY_TOKEN", "")}
     timeout = aiohttp.ClientTimeout(total=_ACTION_TIMEOUT_SECONDS)
     try:
