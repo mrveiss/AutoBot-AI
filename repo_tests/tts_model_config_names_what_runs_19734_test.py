@@ -24,14 +24,15 @@ def test_the_default_is_the_engine_s_own_model() -> None:
     assert _default().startswith("kyutai/pocket-tts")
 
 
-def test_the_worker_s_fallback_is_the_same_name() -> None:
-    assert f'os.getenv("TTS_MODEL_ID", "{_default()}")' in _read("templates/tts-worker.py.j2")
+def test_the_worker_s_fallback_renders_from_the_one_setting() -> None:
+    assert 'os.getenv("TTS_MODEL_ID", "{{ tts_model_id }}")' in _read("templates/tts-worker.py.j2")
 
 
 def test_the_default_is_not_treated_as_gated_in_either_place() -> None:
     for template in ("templates/tts-worker.py.j2", "templates/predownload-model.py.j2"):
-        block = re.search(r"GATED[A-Z_]*\b[^=]*=\s*\((.*?)\)", _read(template), re.S).group(1)
-        prefixes = re.findall(r'"([^"]+)"', block)
+        block = re.search(r"GATED[A-Z_]*\b[^=]*=\s*\((.*?)\)", _read(template), re.S)
+        assert block, f"{template} has no gated-model prefix tuple"
+        prefixes = re.findall(r'"([^"]+)"', block.group(1))
         assert prefixes and not any(_default().startswith(prefix) for prefix in prefixes), template
 
 

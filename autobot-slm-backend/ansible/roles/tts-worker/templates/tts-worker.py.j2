@@ -113,7 +113,7 @@ _GATED_MODEL_PREFIXES = (
 )
 
 HF_TOKEN: Optional[str] = os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN")
-TTS_MODEL_ID: str = os.getenv("TTS_MODEL_ID", "kyutai/pocket-tts")
+TTS_MODEL_ID: str = os.getenv("TTS_MODEL_ID", "{{ tts_model_id }}")
 
 
 def _check_cache_writable(models_dir: Path) -> None:
