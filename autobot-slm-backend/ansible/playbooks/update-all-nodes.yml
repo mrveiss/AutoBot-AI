@@ -2491,10 +2491,35 @@
       retries: 12
       delay: 10
 
+    # #20250: the agents reconnect after the restarts above, so read the count once they have had
+    # time to. The summary line right after the restart said "Nodes: 0/2" on a healthy update, and
+    # a node really left offline read the same. Not a failure of this task: the marker below says it.
+    - name: Wait for the nodes to report back
+      uri:
+        url: "https://{{ slm_host }}/slm/api/health"
+        validate_certs: false
+        status_code: 200
+      register: slm_health
+      until: >-
+        slm_health.status == 200 and
+        (slm_health.json.nodes_online | default(0) | int) >= (slm_health.json.nodes_total | default(0) | int)
+      retries: "{{ update_nodes_online_retries | default(18) }}"
+      delay: "{{ update_nodes_online_delay | default(10) }}"
+      failed_when: false
+
     - name: Clean up deploy archives
       file:
         path: /tmp/autobot-deploy
         state: absent
+
+    # Read by services/self_update_log_reader.py, so the update page says so too.
+    - name: Report nodes still offline after the update
+      debug:
+        msg: >-
+          NODES OFFLINE AFTER UPDATE:
+          {{ (slm_health.json.nodes_total | default(0) | int) - (slm_health.json.nodes_online | default(0) | int) }}
+          of {{ slm_health.json.nodes_total | default(0) | int }}
+      when: (slm_health.json.nodes_online | default(0) | int) < (slm_health.json.nodes_total | default(0) | int)
 
     - name: Display update summary
       debug:

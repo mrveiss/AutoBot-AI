@@ -30,6 +30,7 @@ logger = get_logger(__name__)
 # Ansible emits "PLAY [name] ****" per play and one "PLAY RECAP" at the end.
 # A run that produced no RECAP did not finish, whatever else it logged.
 _PLAY_HEADER = re.compile(r"^PLAY \[(?P<name>[^\]]*)\]", re.MULTILINE)
+_NODES_OFFLINE = re.compile(r"NODES OFFLINE AFTER UPDATE:\s+(\d+)\s+of\s+(\d+)")  # #20250: update-all-nodes.yml
 _PLAY_RECAP = re.compile(r"^PLAY RECAP", re.MULTILINE)
 # RECAP lines look like: host : ok=12 changed=3 unreachable=0 failed=0 skipped=1
 _RECAP_COUNTS = re.compile(r"\b(?P<key>failed|unreachable)=(?P<count>\d+)")
@@ -113,6 +114,9 @@ class SelfUpdateVerdict:
     #: caller can tell WHICH run this verdict describes. ``None`` when the log
     #: carries no header (a pre-#12776 log, or the "nothing to say" verdicts).
     run_started_at: str | None = None
+    #: #20250: nodes that hadn't reported back when the run finished waiting for them.
+    nodes_offline: int = 0
+    nodes_total: int = 0
 
     @property
     def degraded(self) -> bool:
@@ -127,7 +131,7 @@ class SelfUpdateVerdict:
             return True
         if not self.log_present:
             return False
-        return not self.complete or self.failed_hosts > 0 or self.unreachable_hosts > 0
+        return not self.complete or self.failed_hosts > 0 or self.unreachable_hosts > 0 or self.nodes_offline > 0
 
 
 def _read_tail(path: Path, max_bytes: int = MAX_LOG_BYTES) -> str | None:
@@ -272,7 +276,11 @@ def read_self_update_verdict(log_path: Path, not_before: str | None = None) -> S
             else:
                 unreachable += int(m.group("count"))
 
+    offline = _NODES_OFFLINE.findall(text)
+    nodes_offline, nodes_total = (int(offline[-1][0]), int(offline[-1][1])) if offline else (0, 0)
     verdict = SelfUpdateVerdict(
+        nodes_offline=nodes_offline,
+        nodes_total=nodes_total,
         log_present=True,
         complete=has_recap,
         plays_seen=plays,
@@ -312,6 +320,8 @@ def _describe(v: SelfUpdateVerdict) -> str:
         return f"self-update finished with {v.unreachable_hosts} unreachable host(s){suffix}"
     if v.failed_hosts:
         return f"self-update finished with {v.failed_hosts} failed task(s){suffix}"
+    if v.nodes_offline:
+        return f"self-update finished, but {v.nodes_offline} of {v.nodes_total} nodes are still offline{suffix}"
     return f"self-update completed ({len(v.plays_seen)} plays, no failures){suffix}"
 
 
