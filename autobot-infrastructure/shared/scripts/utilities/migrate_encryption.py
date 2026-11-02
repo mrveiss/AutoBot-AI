@@ -19,6 +19,7 @@ import logging
 import os
 import shutil
 import sys
+from autobot_shared.ssot_config import config as ssot_config
 from datetime import datetime
 from pathlib import Path
 
@@ -66,7 +67,7 @@ class ChatEncryptionMigrator:
         data_config = global_config_manager.get("data", {})
         return data_config.get(
             "chats_directory",
-            os.getenv("AUTOBOT_CHATS_DIRECTORY", "data/chats"),
+            ssot_config.misc.chats_directory or "data/chats",
         )
 
     def backup_file(self, file_path: str) -> str:
