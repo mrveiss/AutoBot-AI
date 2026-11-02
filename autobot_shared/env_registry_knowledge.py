@@ -414,6 +414,17 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_KB_BM25_REFRESH_MIN_INTERVAL_S",
+        type=float,
+        default=60.0,
+        description="Least time between BM25 corpus-stats recomputes, each of which reads every fact (#19726).",
+        component="knowledge",
+        range=(1.0, 3600.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_CONVERSATION_FILE_CLEANUP_COOLDOWN_SECONDS",
         type=int,
         default=86400,
@@ -423,5 +434,16 @@ register_env_var(
             "inbox; lowering it retries sooner (conversation_file_cleanup.py, #20234)."
         ),
         component="conversation_files",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_KEYWORD_SEARCH_MAX_SCAN",
+        type=int,
+        default=10000,
+        description="Facts one keyword search reads at most; a warning says when it cut one short (#19726).",
+        component="knowledge",
+        range=(100, 1000000),
     )
 )
