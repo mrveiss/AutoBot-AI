@@ -41,6 +41,13 @@ def test_creating_an_entity_creates_no_collection() -> None:
     assert offenders == [], "a collection is created by its first write, not when the entity is"
 
 
+def test_a_route_handler_doesnt_create_a_collection_directly() -> None:
+    routes = [p for p in (_LLC / "api").rglob("*.py") if not p.name.endswith("_test.py")]
+    assert routes, "the guard would be judging nothing"
+    offenders = [str(p) for p in routes if "get_or_create_collection" in p.read_text(encoding="utf-8")]
+    assert offenders == [], "a collection is created by the KB code that writes to it"
+
+
 def test_no_collection_name_is_built_by_hand() -> None:
     sources = [p for p in _sources() if p != _NAME_BUILDER]
     offenders = [str(p) for p in sources if _HAND_BUILT_NAME.search(p.read_text(encoding="utf-8"))]

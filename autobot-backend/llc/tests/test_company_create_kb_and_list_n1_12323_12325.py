@@ -102,7 +102,7 @@ def _membership() -> MagicMock:
 @pytest.mark.asyncio
 async def test_create_commits_once_and_makes_no_kb_collection(monkeypatch):
     """Happy path: response serialized, one commit, and no empty collections (#19725)."""
-    ensure = AsyncMock()
+    ensure = AsyncMock(side_effect=RuntimeError("chroma down"))  # creating a company doesn't depend on it
     monkeypatch.setattr(companies.KbCollectionManager, "ensure_collection", ensure)
     svc = _create_svc()
     membership = _membership()
