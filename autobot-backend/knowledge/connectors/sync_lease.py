@@ -14,7 +14,7 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-from autobot_shared.leader_lease import DEFAULT_REFRESH_S, LeaderLease
+from autobot_shared.leader_lease import DEFAULT_REFRESH_S, DEFAULT_TTL_MS, LeaderLease
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import delete_if_value
@@ -54,11 +54,18 @@ async def claim_connector_sync(connector_id: str) -> LeaderLease:
 
 
 async def _keep_renewing(lease: LeaderLease) -> None:
+    """Retry a failed renewal while the lease can still be alive: a Redis blip isn't a lost lease."""
+    loop = asyncio.get_running_loop()
+    renewed_at = loop.time()
     while True:
         await asyncio.sleep(DEFAULT_REFRESH_S)
-        if not await lease.update_leadership():
+        if await lease.update_leadership():
+            renewed_at = loop.time()
+        elif loop.time() - renewed_at >= DEFAULT_TTL_MS / 1000:
             logger.error("Lost the sync lease %s mid-run; a second sync could now start", lease.key)
             return
+        else:
+            logger.warning("Could not renew the sync lease %s; retrying", lease.key)
 
 
 async def _release(lease: LeaderLease) -> None:

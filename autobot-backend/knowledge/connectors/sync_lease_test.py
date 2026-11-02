@@ -4,6 +4,7 @@
 # Author: mrveiss
 """#20556: a connector runs one sync at a time, and other connectors are unaffected."""
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -137,3 +138,30 @@ async def test_the_route_holds_the_lease_it_claimed_for_the_run(redis) -> None:
     await job(stand_in, connector_id, lease, incremental)
     stand_in.assert_awaited_once_with("a", True)
     assert redis.keys == {}
+
+
+async def _renewals_until_stopped(monkeypatch, answers) -> int:
+    """Run the renewal loop on a clock that moves one refresh per sleep."""
+    lease = AsyncMock()
+    lease.update_leadership.side_effect = answers
+    loop = asyncio.get_running_loop()
+    now = [loop.time()]
+    monkeypatch.setattr(loop, "time", lambda: now[0])
+
+    async def tick(seconds):
+        now[0] += seconds
+
+    monkeypatch.setattr(sync_lease.asyncio, "sleep", tick)
+    await asyncio.wait_for(sync_lease._keep_renewing(lease), timeout=5)
+    return lease.update_leadership.await_count
+
+
+@pytest.mark.asyncio
+async def test_a_redis_blip_does_not_end_renewal(monkeypatch) -> None:
+    # Two failures fit inside the lease's life; the success resets it for three more.
+    assert await _renewals_until_stopped(monkeypatch, [False, False, True] + [False] * 3) == 6
+
+
+@pytest.mark.asyncio
+async def test_renewal_stops_once_the_lease_has_expired(monkeypatch) -> None:
+    assert await _renewals_until_stopped(monkeypatch, [False] * 3) == 3
