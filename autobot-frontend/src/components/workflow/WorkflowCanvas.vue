@@ -241,7 +241,7 @@
              :aria-describedby="instructionsId"
              @pointerdown="onNodePointerDown(node, $event)"
              @click.stop="selectNode(node.id, $event)"
-             @contextmenu.prevent.stop="!readonly && onNodeContextMenu(node, $event)"
+             @contextmenu.prevent.stop="onNodeContextMenu(node, $event)"
              @focus="focusedNodeId = node.id"
              @keydown="onNodeKeydown(node, $event)">
           <div class="node-header">
@@ -261,7 +261,7 @@
                  and activated by Enter/Space like any other control. -->
             <button
               type="button"
-              v-if="!readonly" class="node-menu-btn"
+              class="node-menu-btn"
               data-testid="node-menu-btn"
               :aria-label="$t('workflow.canvas.contextMenuButtonLabel', { name: nodeTitle(node) })"
               @click.stop="onNodeContextMenu(node, $event)"
@@ -1327,7 +1327,7 @@ function isMultiOnlySelected(node: CanvasNode): boolean {
  *  or out of `selectedIds` (shift-click / shift-Enter); otherwise the
  *  selection is replaced with just `id` (a plain click/Enter). */
 function applySelectionIntent(id: string, additive: boolean): void {
-  if (additive && !props.readonly) { // #14749: readonly has no multi-select; shift acts as a plain click
+  if (additive) {
     mutateSelection((ids) => {
       if (ids.has(id)) ids.delete(id);
       else ids.add(id);
@@ -1700,7 +1700,7 @@ function onNodeKeydown(node: CanvasNode, e: KeyboardEvent): void {
   // convention many keyboards and screen readers still send) is the
   // keyboard's own way to open a context menu — anchored on the node's own
   // element, since a keyboard gesture carries no pointer position.
-  if (!props.readonly && (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) { // #14749
+  if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
     e.preventDefault();
     const rect = nodeEls.get(node.id)?.getBoundingClientRect();
     openContextMenuAt(node.id, rect ? rect.left + rect.width / 2 : 0, rect ? rect.top + rect.height / 2 : 0);
@@ -2149,7 +2149,7 @@ function startPan(e: PointerEvent) {
   // plain press (only shift/middle-click bubble here instead, both handled
   // above) — so this is the one gesture slot marquee-select can claim
   // without taking anything away from pan, drag or touch.
-  if (e.button === 0 && !props.readonly) startMarquee(e); // #14749
+  if (e.button === 0) startMarquee(e);
 }
 
 /**
@@ -2496,14 +2496,14 @@ const contextMenuActions = computed<CanvasContextMenuAction[]>(() => {
     });
   }
 
-  if (node.type === 'org-process') {
+  if (!props.readonly && node.type === 'org-process') {
     actions.push({
       id: 'detach-process',
       label: processDetachLabel(node),
       run: () => emit('process-detached', nodeText(node, 'role_id'), nodeText(node, 'workflow_id')),
     });
   }
-  if (node.type === 'org-tool') {
+  if (!props.readonly && node.type === 'org-tool') {
     for (const role of toolRoles(node)) {
       actions.push({
         id: `detach-tool-${role.role_id}`,

@@ -125,11 +125,12 @@ describe('the menu offers only actions that genuinely exist today (#14603/#14612
     expect(menu(w).findAll('[role="menuitem"]')).toHaveLength(3)
   })
 
-  it('offers no menu at all on a readonly canvas, so no delete either (#14749)', async () => {
+  it('never offers delete on a readonly canvas', async () => {
     const w = mountCanvas({ nodes: [step('n1', 10, 10)], readonly: true })
     await node(w, 'n1').trigger('contextmenu', { clientX: 10, clientY: 10 })
 
-    expect(menu(w).exists()).toBe(false)
+    expect(menuItem(w, 'delete').exists()).toBe(false)
+    expect(menuItem(w, 'select').exists()).toBe(true)
   })
 })
 

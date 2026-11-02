@@ -1152,7 +1152,7 @@ export function useWorkflowBuilder() {
   function onWorkflowNotice(data: Record<string, unknown>): void {
     const workflowId = showWorkflowNotice(data);
     if (data.type === 'automation_control_refused') return;
-    void getWorkflowStatus(workflowId); // the step's new status lives on the workflow
+    if (workflowId) void getWorkflowStatus(workflowId); // the step's new status lives on the workflow
     loadActiveWorkflows();
   }
 
@@ -1192,7 +1192,7 @@ export function useWorkflowBuilder() {
         loadActiveWorkflows();
         break;
       default:
-        logger.debug('Unhandled WebSocket message:', data);
+        logger.warn('Unhandled WebSocket message:', data);
     }
   }
 

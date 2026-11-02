@@ -66,6 +66,14 @@ describe('useWorkflowBuilder workflow socket notices (#17677)', () => {
     expect(http.get).not.toHaveBeenCalled();
   });
 
+  it('a notice with no workflow id toasts but does not fetch a status for an empty id', async () => {
+    useWorkflowBuilder();
+    send({ type: 'step_rejected_by_judge', step_id: 's2', reason: 'destructive' });
+    await flush();
+    expect(toast).toHaveBeenCalled();
+    expect(getUrls()).not.toContain('workflow_status');
+  });
+
   it('start_workflow refreshes the active list and raises no notice', async () => {
     useWorkflowBuilder();
     send({ type: 'start_workflow', workflow: { id: 'wf-1' } });
