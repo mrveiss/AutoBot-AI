@@ -259,6 +259,14 @@ class TestTheVendorExemptionIsNarrow:
         )
         assert self._count(tmp_path, css) == 3
 
+    def test_a_mixed_selector_list_is_counted(self, tmp_path):
+        assert self._count(tmp_path, ".apexcharts-tooltip, .card { color: red !important; }") == 1
+        assert self._count(tmp_path, ".card, .xterm-viewport { color: red !important; }") == 1
+
+    def test_a_list_of_only_vendor_selectors_is_not_counted(self, tmp_path):
+        assert self._count(tmp_path, ".apexcharts-tooltip, :deep(.xterm-rows) { color: red !important; }") == 0
+        assert self._count(tmp_path, ":is(.apexcharts-a, .apexcharts-b) { color: red !important; }") == 0
+
     def test_a_new_non_vendor_important_trips_the_ratchet(self, tmp_path):
         d = tmp_path / "autobot-frontend" / "src" / "views"
         d.mkdir(parents=True)

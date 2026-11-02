@@ -206,13 +206,29 @@ _THEME_SOURCES = (
 )
 
 
+def _selector_list(selector: str) -> list[str]:
+    """The comma-separated selectors of a rule; a comma inside ``:is(...)`` does not split."""
+    parts, depth, current = [], 0, ""
+    for ch in selector:
+        depth += (ch == "(") - (ch == ")")
+        if ch == "," and depth == 0:
+            parts.append(current)
+            current = ""
+        else:
+            current += ch
+    return [*parts, current]
+
+
+def _is_vendor_rule(selector: str) -> bool:
+    """Every selector in the list targets a vendor class: ``.apexcharts-tooltip, .card`` styles app CSS too."""
+    return all(any(p.search(part) for p, _reason in VENDOR_SELECTORS) for part in _selector_list(selector))
+
+
 def _without_vendor_rules(css: str) -> str:
-    """``css`` with the rule blocks whose selector targets a vendor-injected class removed."""
+    """``css`` with the rule blocks that target only vendor-injected classes removed."""
 
     def keep(m: re.Match[str]) -> str:
-        if any(p.search(m.group(1)) for p, _reason in VENDOR_SELECTORS):
-            return ""
-        return m.group(0)
+        return "" if _is_vendor_rule(m.group(1)) else m.group(0)
 
     return _RULE_BLOCK.sub(keep, css)
 
