@@ -2545,7 +2545,7 @@
 
     - name: Say when the nodes could not be counted
       debug:
-        msg: "Could not compare the nodes online before and after this update: the SLM's database wasn't healthy"
+        msg: "Could not compare the nodes online before and after this update"
       when: >-
         fleet_nodes_before.json is defined and
         (fleet_nodes_before.json.database != 'healthy' or fleet_nodes_health.json.database | default('') != 'healthy')
