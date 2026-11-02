@@ -2,16 +2,32 @@
 # {{ ansible_managed }}
 # #20620: the SLM must always be running. systemd's start limit stays (#4090), so a broken unit
 # still shows as failed, and this clears it and tries again on every timer tick. A process that is
-# active but fails its health check is restarted only after several ticks, so a slow start or an
-# update in progress isn't interrupted. To keep the SLM down on purpose, stop this timer too.
+# active but fails its health check is restarted only after several ticks, so a slow start isn't
+# interrupted. While a builtin update runs this does nothing, up to a limit so that a stuck update
+# can't keep the SLM down. To keep the SLM down on purpose, stop this timer too.
 set -u
 
 unit="{{ slm_backend_service }}"
 health_url="http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/health"
 max_failures="{{ slm_watchdog_max_health_failures }}"
 counter="${SLM_WATCHDOG_STATE:-/run/autobot-slm-watchdog.failures}"
+update_ticks_file="${counter}.update"
+max_update_ticks="{{ slm_watchdog_max_update_ticks }}"
 
 log() { logger -p "daemon.$1" -t autobot-slm-watchdog "$2" 2>/dev/null || true; }
+
+# The self-update runs in a transient unit (playbook_executor.py SELF_UPDATE_DETACH_UNIT_PREFIX).
+if [ -n "$(systemctl list-units --no-legend --state=active,activating "{{ slm_self_update_unit_prefix }}*" 2>/dev/null)" ]; then
+    ticks=$(( $(cat "$update_ticks_file" 2>/dev/null || echo 0) + 1 ))
+    echo "$ticks" >"$update_ticks_file"
+    if [ "$ticks" -le "$max_update_ticks" ]; then
+        rm -f "$counter"
+        exit 0
+    fi
+    log err "an update has been running for $ticks checks; looking after $unit regardless"
+else
+    rm -f "$update_ticks_file"
+fi
 
 state="$(systemctl is-active "$unit" 2>/dev/null)"
 case "$state" in

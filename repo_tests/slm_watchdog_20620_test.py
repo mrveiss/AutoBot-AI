@@ -24,10 +24,12 @@ _VARS = {
     "slm_backend_port": 8000,
     "slm_watchdog_max_health_failures": 3,
     "slm_watchdog_health_timeout": 1,
+    "slm_self_update_unit_prefix": "autobot-selfupdate",
+    "slm_watchdog_max_update_ticks": 2,
 }
 
 
-def _run(tmp_path: Path, state: str, healthy: bool) -> list[str]:
+def _run(tmp_path: Path, state: str, healthy: bool, updating: bool = False) -> list[str]:
     """One tick; returns the systemctl actions it took (is-active itself is not an action)."""
     bash = shutil.which("bash")
     if bash is None:
@@ -37,7 +39,10 @@ def _run(tmp_path: Path, state: str, healthy: bool) -> list[str]:
     log = tmp_path / "actions"
     log.write_text("", encoding="utf-8")
     (bin_dir / "systemctl").write_text(
-        f'#!/bin/sh\nif [ "$1" = is-active ]; then echo {state}; exit 0; fi\necho "$*" >> {log}\n', encoding="utf-8"
+        f'#!/bin/sh\nif [ "$1" = is-active ]; then echo {state}; exit 0; fi\n'
+        f'if [ "$1" = list-units ]; then {"echo autobot-selfupdate-1.service" if updating else ":"}; exit 0; fi\n'
+        f'echo "$*" >> {log}\n',
+        encoding="utf-8",
     )
     (bin_dir / "curl").write_text(f"#!/bin/sh\nexit {0 if healthy else 22}\n", encoding="utf-8")
     (bin_dir / "logger").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
@@ -110,3 +115,43 @@ def test_decommissioning_stops_the_watchdog_before_the_services() -> None:
 def test_the_bootstrap_unit_restarts_always_too() -> None:
     unit = _ROOT / "autobot-infrastructure" / "autobot-slm-backend" / "templates" / "autobot-slm-backend.service"
     assert "Restart=always" in unit.read_text(encoding="utf-8")
+
+
+def test_a_running_update_holds_the_watchdog_off(tmp_path) -> None:
+    assert _run(tmp_path, "failed", healthy=False, updating=True) == []
+
+
+def test_a_stuck_update_holds_it_off_only_up_to_the_limit(tmp_path) -> None:
+    assert _run(tmp_path, "failed", healthy=False, updating=True) == []
+    assert _run(tmp_path, "failed", healthy=False, updating=True) == []
+    assert _run(tmp_path, "failed", healthy=False, updating=True) == [
+        "reset-failed autobot-slm-backend",
+        "start --no-block autobot-slm-backend",
+    ]
+
+
+def test_health_failures_during_an_update_dont_count(tmp_path) -> None:
+    _run(tmp_path, "active", healthy=False)
+    _run(tmp_path, "active", healthy=False, updating=True)
+    assert _run(tmp_path, "active", healthy=False) == []
+
+
+def test_the_update_prefix_matches_the_code_that_starts_the_update() -> None:
+    executor = (_ROOT / "autobot-slm-backend" / "services" / "playbook_executor.py").read_text(encoding="utf-8")
+    assert '"SLM_SELF_UPDATE_UNIT_PREFIX", "autobot-selfupdate"' in executor
+    defaults = yaml.safe_load((_ROLE / "defaults" / "main.yml").read_text(encoding="utf-8"))
+    assert defaults["slm_self_update_unit_prefix"] == "autobot-selfupdate"
+
+
+def test_bootstrap_installs_the_watchdog_with_nothing_left_unrendered(tmp_path) -> None:
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("bash is needed")
+    helper = _ROOT / "autobot-infrastructure" / "autobot-slm-backend" / "scripts" / "install-slm-watchdog.sh"
+    for name in ("autobot-slm-watchdog.sh", "autobot-slm-watchdog.service", "autobot-slm-watchdog.timer"):
+        command = f'PROJECT_ROOT="{_ROOT}"; source "{helper}"; render_slm_watchdog_file {name}'
+        done = subprocess.run([bash, "-c", command], capture_output=True, text=True, timeout=20)
+        assert done.returncode == 0, done.stderr
+        assert done.stdout and "{{" not in done.stdout, name
+    bootstrap = helper.with_name("bootstrap-slm.sh").read_text(encoding="utf-8")
+    assert "install_slm_watchdog" in bootstrap
