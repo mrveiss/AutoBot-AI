@@ -193,6 +193,7 @@ describe('getUpdateAllStatus poll contract through slmApiClient (#12593 / #12420
 
     expect(mockRawRequest).toHaveBeenCalledWith('/code-sync/update-all/status', {
       method: 'GET',
+      keepSessionOn401: true,
     })
     expect(result).toEqual(job)
   })
@@ -212,6 +213,7 @@ describe('getUpdateAllStatus poll contract through slmApiClient (#12593 / #12420
     const result = await useCodeSync().getUpdateAllStatus()
 
     expect(result).toBe('unauthenticated')
+    expect(mockRawRequest.mock.calls[0][1]).toMatchObject({ keepSessionOn401: true })
   })
 
   it('returns undefined on a 502 during the SLM self-restart so the caller KEEPS polling', async () => {

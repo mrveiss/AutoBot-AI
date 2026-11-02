@@ -761,6 +761,7 @@ async def get_sync_status(
     # #11820: never read "up to date" while a co-located managed component is stale. #20250: first,
     # so a slow scan holds no open transaction; and a scan with no answer says so, never "none stale".
     stale_components, stale_scan_unknown = await _stale_components_cache.get_or_unknown(_scan_stale_components, [])
+    deploy_activity = await read_deploy_activity()  # #19770: before any query; slow systemctl, no pooled connection
     tracker = await _get_tracker_for_db(db)
 
     # Get latest version from settings
@@ -811,9 +812,8 @@ async def get_sync_status(
     # this is deployed files vs the process's in-memory state.
     process_divergence = await _compute_process_divergence()
 
-    # #12776: the self-update path restarts this backend mid-run, so the verdict is read
-    # off the log; #19770: liveness tells "still running" from "died before Play 2".
-    verdict = _read_last_self_update_verdict(run_alive=(await read_deploy_activity()).in_progress)
+    # #12776: the self-update restarts this backend, so the log has the verdict; #19770: liveness reads it.
+    verdict = _read_last_self_update_verdict(run_alive=deploy_activity.in_progress)
 
     return CodeSyncStatusResponse(
         latest_version=latest_version,

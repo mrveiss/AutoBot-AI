@@ -1037,9 +1037,9 @@ export function useCodeSync() {
    */
   async function getUpdateAllStatus(): Promise<UpdateAllJob | null | undefined | typeof UPDATE_ALL_UNAUTHENTICATED> {
     try {
-      const response = await slmApiClient.rawRequest('/code-sync/update-all/status', {
-        method: 'GET',
-      })
+      // keepSessionOn401: the banner offers the log-in
+      const opts = { method: 'GET', keepSessionOn401: true }
+      const response = await slmApiClient.rawRequest('/code-sync/update-all/status', opts)
       if (response.status === 404) return null
       if (response.status === 401) return UPDATE_ALL_UNAUTHENTICATED
       // 5xx (or any other non-2xx) during SLM restart → transient, keep polling
