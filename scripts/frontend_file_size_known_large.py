@@ -29,7 +29,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/analytics/CodeGenerationDashboard.vue": 1108,
     "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": 1791,
     "autobot-frontend/src/components/analytics/CodeReviewDashboard.vue": 1220,
-    "autobot-frontend/src/components/analytics/CodebaseAnalytics.vue": 1267,
+    "autobot-frontend/src/components/analytics/CodebaseAnalytics.vue": 1260,
     "autobot-frontend/src/components/analytics/CodebaseAnalyticsLanding.vue": 758,
     "autobot-frontend/src/components/analytics/ConversationFlowDashboard.vue": 909,
     "autobot-frontend/src/components/analytics/LLMPatternDashboard.vue": 1080,
