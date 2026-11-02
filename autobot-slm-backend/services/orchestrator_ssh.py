@@ -42,14 +42,24 @@ def ssh_base_cmd(ssh_user: str, ssh_key, host: str) -> list:
     ]
 
 
-async def spawn_ssh(ssh_cmd: list) -> tuple:
-    """Run *ssh_cmd*; returns (returncode, stdout, stderr)."""
+async def spawn_ssh(ssh_cmd: list, timeout: float = _SSH_TIMEOUT_S) -> tuple:
+    """Run *ssh_cmd*; returns (returncode, stdout, stderr).
+
+    On timeout the child is killed and reaped before ``TimeoutError`` propagates: ``wait_for`` only cancels
+    the wait, so a hung ssh (a stuck sudo, a dead peer) used to outlive its caller as an orphan (#20046).
+    """
     process = await asyncio.create_subprocess_exec(
         *ssh_cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=_SSH_TIMEOUT_S)
+    try:
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+    except BaseException:  # TimeoutError, and cancellation of the caller: the child must not outlive either
+        if process.returncode is None:
+            process.kill()
+        await process.wait()
+        raise
     return process.returncode, stdout, stderr
 
 

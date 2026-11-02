@@ -77,3 +77,19 @@ _register(
     "manager node's status (autobot-slm-backend/services/compose_fleet.py, #19292).",
     (1, 86400),
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SLM_KEY_PROBE_TIMEOUT_SECONDS",
+        type=float,
+        default=10.0,
+        description=(
+            "Wall-clock ceiling on the SSH key-access probe that runs before a stored SSH password's deletion is "
+            "proposed (inline in enrollment) and again before it is deleted (#20046). The probe is killed at the "
+            "ceiling and counts as failed, so a hung node delays enrollment by at most this long and the proposal "
+            "waits for a later enrollment."
+        ),
+        component="slm",
+        range=(2.0, 60.0),
+    )
+)

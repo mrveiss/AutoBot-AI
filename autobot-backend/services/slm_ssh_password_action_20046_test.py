@@ -187,3 +187,60 @@ async def test_no_committed_entry_means_nothing_is_deleted() -> None:
 def test_the_backend_calls_the_slm_directly_never_through_the_edge() -> None:
     url = action._slm_direct_url()
     assert url.startswith("http://") and "/slm" not in url and "/api/internal" not in url
+
+
+class _Resp:
+    def __init__(self, status: int, body):
+        self.status, self._body = status, body
+
+    async def json(self, content_type=None):
+        if isinstance(self._body, Exception):
+            raise self._body
+        return self._body
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+def _slm_answers(monkeypatch, response: _Resp) -> None:
+    monkeypatch.setenv("AUTOBOT_INTERNAL_API_KEY", _KEY)
+
+    class _Session:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        def delete(self, *a, **k):
+            return response
+
+    monkeypatch.setattr(action.aiohttp, "ClientSession", _Session)
+
+
+@pytest.mark.parametrize(
+    ("response", "expected"),
+    [
+        (_Resp(404, {"detail": "Node not found"}), None),
+        (_Resp(200, {"deleted": True}), True),
+        (_Resp(200, {"deleted": False}), False),
+    ],
+)
+async def test_only_the_slms_own_node_not_found_reads_as_a_missing_node(monkeypatch, response, expected) -> None:
+    _slm_answers(monkeypatch, response)
+    assert await action._delete_in_slm("node-a", "approval") is expected
+
+
+@pytest.mark.parametrize(
+    "response", [_Resp(404, {"detail": "Not Found"}), _Resp(404, ValueError("html")), _Resp(404, [1])]
+)
+async def test_a_misrouted_404_is_a_failure_not_a_missing_node(monkeypatch, response) -> None:
+    _slm_answers(monkeypatch, response)
+    with pytest.raises(RuntimeError, match="wrong place"):
+        await action._delete_in_slm("node-a", "approval")

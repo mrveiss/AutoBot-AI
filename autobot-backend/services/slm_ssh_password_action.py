@@ -19,7 +19,13 @@ import aiohttp
 
 from autobot_shared import node_proxy
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.slm_credential_deletion import ACTION, APPROVAL_QUERY, CREDENTIAL_KIND, delete_path
+from autobot_shared.slm_credential_deletion import (
+    ACTION,
+    APPROVAL_QUERY,
+    CREDENTIAL_KIND,
+    NODE_NOT_FOUND_DETAIL,
+    delete_path,
+)
 from autobot_shared.ssot_config import config
 from models.approval import ApprovalComment
 from services.approval_execution import register_post_approval_action, verified_decider
@@ -46,6 +52,15 @@ def _slm_direct_url() -> str:
     return f"http://{config.vm.slm}:{config.port.slm}"
 
 
+async def _detail(response: aiohttp.ClientResponse) -> object:
+    """The ``detail`` of a JSON error body, or ``None`` for anything else (an HTML 404 from a proxy)."""
+    try:
+        body = await response.json(content_type=None)
+    except ValueError:
+        return None
+    return body.get("detail") if isinstance(body, dict) else None
+
+
 async def _delete_in_slm(node_id: str, approval_id: str) -> bool | None:
     """Ask the SLM to delete the node's stored password; True if removed, False if none, None if no such node.
 
@@ -58,6 +73,8 @@ async def _delete_in_slm(node_id: str, approval_id: str) -> bool | None:
     async with aiohttp.ClientSession(headers=node_proxy.internal_headers()) as http:
         async with http.delete(url, params={APPROVAL_QUERY: approval_id}, timeout=timeout) as response:
             if response.status == 404:
+                if await _detail(response) != NODE_NOT_FOUND_DETAIL:
+                    raise RuntimeError("the SLM route was not found: the call reached the wrong place")
                 return None
             if response.status != 200:
                 raise RuntimeError(f"the SLM answered HTTP {response.status}")

@@ -24,6 +24,7 @@ from autobot_shared import node_proxy
 from autobot_shared.slm_credential_deletion import (
     ACTION,
     CREDENTIAL_KIND,
+    NODE_NOT_FOUND_DETAIL,
     PROPOSAL_PATH,
     claim_path,
 )
@@ -129,26 +130,58 @@ async def _audit(db: AsyncSession, node_id: str, approval_id: uuid.UUID, phase: 
     await db.commit()
 
 
-async def delete_stored_password(db: AsyncSession, node_id: str, approval_id: uuid.UUID) -> bool:
-    """Delete only *node_id*'s stored SSH password fields after a spent human approval; raises DeletionRefused.
+async def _audit_best_effort(db: AsyncSession, node_id: str, approval_id: uuid.UUID, phase: str, success: bool) -> bool:
+    """Record what happened after the intent row; a failure here is logged loudly, never raised over the outcome."""
+    try:
+        await _audit(db, node_id, approval_id, phase, success)
+    except Exception:
+        await db.rollback()
+        logger.error(
+            "Audit row '%s' for node %s under approval %s could not be written; the intent row stands",
+            phase,
+            node_id,
+            approval_id,
+        )
+        return False
+    return True
 
-    Order: key access is proven again, the backend verifies and spends the approval, the audit row commits,
-    then the fields go. Nothing is deleted unless every step passed. Returns True if any field was removed.
-    """
-    node = (await db.execute(select(Node).where(Node.node_id == node_id))).scalar_one_or_none()
-    if node is None:
-        raise DeletionRefused(404, "Node not found")
-    if node.auth_method != "key":
-        raise DeletionRefused(409, "the node does not use key authentication")
-    if not await key_auth_and_sudo_work(node):
-        raise DeletionRefused(409, "key access to the node is not proven")
-    await _claim_approval(approval_id, node_id)
-    await _audit(db, node_id, approval_id, "intent")
+
+async def _remove_password_fields(db: AsyncSession, node: Node) -> bool:
     extra = dict(node.extra_data or {})
     removed = any([extra.pop(key, None) is not None for key in _PASSWORD_KEYS])
     if removed:
         node.extra_data = extra  # reassigned: an in-place edit of a JSON column is not tracked
         await db.commit()
-    await _audit(db, node_id, approval_id, "completed")
+    return removed
+
+
+async def delete_stored_password(db: AsyncSession, node_id: str, approval_id: uuid.UUID) -> bool:
+    """Delete only *node_id*'s stored SSH password fields after a spent human approval; raises DeletionRefused.
+
+    Order: key access is proven again, the intent audit row commits, the backend verifies and spends the
+    approval, the fields go, then a completion row records the outcome. A failed intent row means nothing
+    was spent or deleted. Once the fields are gone the deletion stands: a failed completion row is logged,
+    not raised, so the caller is told what happened. Returns True if any field was removed.
+    """
+    node = (await db.execute(select(Node).where(Node.node_id == node_id))).scalar_one_or_none()
+    if node is None:
+        raise DeletionRefused(404, NODE_NOT_FOUND_DETAIL)
+    if node.auth_method != "key":
+        raise DeletionRefused(409, "the node does not use key authentication")
+    if not await key_auth_and_sudo_work(node):
+        raise DeletionRefused(409, "key access to the node is not proven")
+    await _audit(db, node_id, approval_id, "intent")
+    try:
+        await _claim_approval(approval_id, node_id)
+    except DeletionRefused:
+        await _audit_best_effort(db, node_id, approval_id, "refused", False)
+        raise
+    try:
+        removed = await _remove_password_fields(db, node)
+    except Exception:
+        await db.rollback()
+        await _audit_best_effort(db, node_id, approval_id, "failed", False)
+        raise
+    await _audit_best_effort(db, node_id, approval_id, "completed", True)
     logger.info("Stored SSH password of node %s deleted under approval %s: %s", node_id, approval_id, removed)
     return removed

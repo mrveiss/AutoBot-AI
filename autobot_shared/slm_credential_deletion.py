@@ -21,6 +21,8 @@ PROPOSAL_PATH = "/api/internal/slm/ssh-password-deletion-proposals"
 DELETE_PATH_TEMPLATE = "/api/internal/nodes/{node_id}/ssh-password"  # nosec B105  # pragma: allowlist secret
 #: The backend path the SLM POSTs to, before deleting, to verify and consume an approval (internal key only).
 CLAIM_PATH_TEMPLATE = "/api/internal/slm/ssh-password-deletion-approvals/{approval_id}/claim"
+#: The SLM's 404 detail for a node it does not know; any other 404 means the call reached the wrong place.
+NODE_NOT_FOUND_DETAIL = "Node not found"
 #: Query parameter that carries the approval id on the SLM delete route.
 APPROVAL_QUERY = "approval_id"
 

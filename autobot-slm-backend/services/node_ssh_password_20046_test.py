@@ -158,6 +158,7 @@ _APPROVAL = uuid.uuid4()
 def _db(node) -> MagicMock:
     db = MagicMock()
     db.commit = AsyncMock()
+    db.rollback = AsyncMock()
     db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: node))
     return db
 
@@ -228,8 +229,9 @@ async def test_every_failed_gate_deletes_nothing(world, monkeypatch, prepare, st
         await ssh.delete_stored_password(world.db, "node-a", _APPROVAL)
     assert refused.value.status_code == status_code
     assert world.node.extra_data == {"ssh_password": _SECRET, "ssh_password_encrypted": True, "keep": "me"}
-    world.db.commit.assert_not_awaited()
-    world.audit.assert_not_awaited()
+    phases = [c.kwargs["extra_data"]["phase"] for c in world.audit.await_args_list]
+    # The intent row precedes the claim, so a refused claim leaves intent + refused; earlier gates leave nothing.
+    assert phases == (["intent", "refused"] if prepare.startswith("backend") else [])
 
 
 async def test_the_probe_is_the_first_gate_so_a_spent_approval_is_never_wasted(world, monkeypatch) -> None:
@@ -239,11 +241,46 @@ async def test_the_probe_is_the_first_gate_so_a_spent_approval_is_never_wasted(w
     world.backend.post.assert_not_awaited()
 
 
-async def test_no_audit_row_means_no_deletion(world) -> None:
+async def test_a_failed_intent_row_means_the_approval_is_not_spent_and_nothing_is_deleted(world) -> None:
     world.audit.side_effect = RuntimeError("audit store down")
     with pytest.raises(RuntimeError):
         await ssh.delete_stored_password(world.db, "node-a", _APPROVAL)
+    world.backend.post.assert_not_awaited()
     assert "ssh_password" in world.node.extra_data
+
+
+async def test_the_intent_row_is_committed_before_the_approval_is_spent(world) -> None:
+    order: list[str] = []
+    world.audit.side_effect = lambda *a, **k: order.append("audit")
+    world.db.commit.side_effect = lambda: order.append("commit")
+    world.backend.post.side_effect = lambda *a, **k: order.append("spend") or SimpleNamespace(status_code=200)
+    await ssh.delete_stored_password(world.db, "node-a", _APPROVAL)
+    assert order[:3] == ["audit", "commit", "spend"]
+
+
+async def test_a_refused_claim_leaves_a_refused_row_after_the_intent_row(world) -> None:
+    world.backend.post.return_value = SimpleNamespace(status_code=403)
+    with pytest.raises(ssh.DeletionRefused):
+        await ssh.delete_stored_password(world.db, "node-a", _APPROVAL)
+    rows = [(c.kwargs["extra_data"]["phase"], c.kwargs["success"]) for c in world.audit.await_args_list]
+    assert rows == [("intent", True), ("refused", False)]
+    assert "ssh_password" in world.node.extra_data
+
+
+async def test_a_failed_completion_row_does_not_turn_a_deletion_into_a_failure(world, caplog) -> None:
+    world.audit.side_effect = [None, RuntimeError("audit store down")]
+    with caplog.at_level("ERROR"):
+        assert await ssh.delete_stored_password(world.db, "node-a", _APPROVAL) is True
+    assert "ssh_password" not in world.node.extra_data
+    assert "could not be written" in caplog.text and "intent row stands" in caplog.text
+    assert _SECRET not in caplog.text
+
+
+async def test_a_failed_removal_is_recorded_failed_and_raised(world) -> None:
+    world.db.commit.side_effect = [None, RuntimeError("db down"), None]
+    with pytest.raises(RuntimeError):
+        await ssh.delete_stored_password(world.db, "node-a", _APPROVAL)
+    assert [c.kwargs["extra_data"]["phase"] for c in world.audit.await_args_list][-1] == "failed"
 
 
 async def test_a_node_with_nothing_stored_reports_false(world) -> None:
@@ -266,7 +303,10 @@ async def test_the_probe_runs_a_key_only_passwordless_sudo_check() -> None:
     probe = _load_probe(spawn)
     assert await probe.key_auth_and_sudo_work(_node({})) is True
     argv = spawn.await_args.args[0]
-    assert "BatchMode=yes" in argv and "PasswordAuthentication=no" in argv and argv[-1] == "sudo -n true"
+    assert {"BatchMode=yes", "PasswordAuthentication=no", "IdentitiesOnly=yes"} <= set(argv) and argv[
+        -1
+    ] == "sudo -n true"
+    assert spawn.await_args.kwargs["timeout"] == probe.KEY_PROBE_TIMEOUT_SECONDS <= 60
     assert "sshpass" not in argv and "autobot@192.0.2.10" in argv
 
 
@@ -346,3 +386,43 @@ def test_enrollment_success_proposes_after_the_commit_and_never_deletes() -> Non
     body = source[source.index("async def _handle_enrollment_success") :].split("\n    async def ")[0]
     assert body.index("await db.commit()") < body.index("await propose_password_deletion(node)")
     assert "delete_stored_password" not in source
+
+
+# --- a hung ssh is killed, not orphaned -------------------------------------------
+
+
+def _load_orchestrator_ssh():
+    stubs = {
+        "services.service_restart": SimpleNamespace(run_systemctl_over_ssh=None, systemctl_remote_command=None),
+        "services.ssh_utils": SimpleNamespace(ssh_destination=None),
+    }
+    with patch.dict(sys.modules, stubs):
+        return _load("orchestrator_ssh_under_20046_test", "services/orchestrator_ssh.py")
+
+
+async def test_a_timed_out_ssh_is_killed_and_reaped() -> None:
+    """A real slow subprocess: it must be gone when the timeout propagates, not left running."""
+    import asyncio
+    import os
+
+    module = _load_orchestrator_ssh()
+    spawned: list = []
+    real = asyncio.create_subprocess_exec
+
+    async def _record(*args, **kwargs):
+        process = await real(*args, **kwargs)
+        spawned.append(process)
+        return process
+
+    with patch.object(module.asyncio, "create_subprocess_exec", _record), pytest.raises(asyncio.TimeoutError):
+        await module.spawn_ssh(["sleep", "30"], timeout=0.3)
+    (process,) = spawned
+    assert process.returncode is not None, "the child was left running"
+    with pytest.raises(ProcessLookupError):
+        os.kill(process.pid, 0)
+
+
+async def test_a_fast_command_still_returns_its_output() -> None:
+    module = _load_orchestrator_ssh()
+    code, out, _err = await module.spawn_ssh(["echo", "hi"], timeout=5)
+    assert (code, out.strip()) == (0, b"hi")

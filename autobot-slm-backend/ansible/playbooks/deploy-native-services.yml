@@ -295,6 +295,11 @@
                   try_files $uri $uri/ /index.html;
               }
 
+              # #20046: service-to-service only; never served through this edge.
+              location ^~ /api/internal/ {
+                  return 404;
+              }
+
               # Proxy API requests to backend VM
               location /api/ {
                   proxy_pass http://{{ backend_host }}:{{ backend_port }}/api/;
