@@ -86,3 +86,14 @@ register_env_var(
         component="slm",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SLM_REFUSED_SESSION_AUDIT_WINDOW_S",
+        type=int,
+        default=300,
+        description="Seconds between audit records of one person's refused non-admin SLM sessions (#20664).",
+        component="slm",
+        range=(1, 86400),
+    )
+)
