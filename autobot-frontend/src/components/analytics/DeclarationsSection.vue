@@ -18,6 +18,11 @@
       <Icon name="spinner" :spin="true" />
       <span>{{ $t('analytics.codebase.actions.loading') }}</span>
     </div>
+    <EmptyState
+      v-else-if="error"
+      icon="exclamation-triangle"
+      :message="$t('analytics.codebase.sectionLoadFailed', { error })"
+    />
     <div v-else-if="declarations && declarations.length > 0" class="section-content">
       <!-- Type Summary Cards -->
       <div class="summary-cards">
@@ -122,6 +127,8 @@ interface Props {
   declarations: Declaration[]
   /** #5368: render a spinner during the scan instead of empty-state. */
   loading?: boolean
+  /** A failed load is not "no declarations found" -- show it as a failure. */
+  error?: string
 }
 
 const props = defineProps<Props>()

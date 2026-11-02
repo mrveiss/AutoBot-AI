@@ -221,7 +221,7 @@ async def update_setting(
     await db.commit()
     await db.refresh(setting)
 
-    logger.info("Setting updated: %s = %s", key, setting_data.value)
+    logger.info("Setting updated: %s", key)
     return SettingResponse.model_validate(setting)
 
 
@@ -249,7 +249,7 @@ async def create_setting(
     await db.commit()
     await db.refresh(setting)
 
-    logger.info("Setting created: %s = %s", key, setting_data.value)
+    logger.info("Setting created: %s", key)
     return SettingResponse.model_validate(setting)
 
 
