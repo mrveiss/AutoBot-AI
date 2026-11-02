@@ -4,7 +4,7 @@
 # Author: mrveiss
 #
 # #19731: the ONE home of "does the model server hold what the backend env names", included before every
-# render of backend.env.j2. An unreachable server changes nothing and fails nothing. A model still absent
+# render of backend.env.j2. An unreachable server changes nothing and fails nothing, but is reported (#19879). A model still absent
 # fails a role deploy, naming it and its role. The updater sets backend_model_check_warn_only: it runs
 # with any_errors_fatal, and one missing model must not abort a fleet rollout (#20082).
 ---
@@ -49,6 +49,19 @@
   changed_when: false
   check_mode: false
   when: (_backend_model_tags.status | default(0)) == 200
+  tags: ['backend', 'config', 'env']
+
+# #19879: an unreachable server (or one that answers something else) is no longer silent. It is reported with
+# what was asked and what came back, but never fails the play: the model server may be installed by a role that
+# runs after this one, or the endpoint may be a hosted provider with no /api/tags.
+- name: "Backend | Report a model server that could not be asked what it holds (#19879)"
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: the model server did not answer the model-list request (status {{ _backend_model_tags.status | default('none') }},
+      {{ _backend_model_tags.msg | default('no detail') }}), so this deploy could not confirm it holds the models the
+      backend env names, including the embedding model {{ backend_embedding_model | default('(default)') }}. If it lacks
+      one, embedding or chat calls fail until it is pulled.
+  when: (_backend_model_tags.status | default(0)) != 200
   tags: ['backend', 'config', 'env']
 
 - name: "Backend | Point roles at models this server holds (#19731)"

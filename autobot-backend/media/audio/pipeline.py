@@ -20,6 +20,7 @@ from typing import Any
 from autobot_shared.audio_wav import wav_duration_seconds
 from autobot_shared.env_utils import env_float
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_hf_models import SPEECH_TO_TEXT_MODEL
 
 # Optional: transformers Whisper pipeline for transcription
 try:
@@ -47,7 +48,7 @@ _whisper_pipeline_lock = threading.Lock()
 _whisper_inference_lock = threading.Lock()
 _whisper_retry_at = 0.0
 _whisper_integrity_error: Exception | None = None
-WHISPER_MODEL = "openai/whisper-base"
+WHISPER_MODEL = SPEECH_TO_TEXT_MODEL  # the one definition: autobot_shared/ssot_hf_models.py (#19869)
 WHISPER_LOAD_RETRY_SECONDS = env_float("AUTOBOT_WHISPER_LOAD_RETRY_SECONDS", 60.0)
 
 #: MIME type -> temp-file suffix, for the one Whisper transcription path (#17780).

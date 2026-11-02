@@ -41,7 +41,6 @@ _CHUNKER = "local sentence-transformer, owned by the semantic-chunker branch (#1
 ALLOWED: dict[str, str] = {
     "autobot_shared/embedding_model.py": "the list: KNOWN_EMBEDDING_MODEL_PREFIXES names the families the matcher itself looks for",
     "autobot_shared/pinned_model_registry.py": "not a choice: a revision/digest pin keyed by repo id for a model the code index already names (CODEBERT_MODEL_NAME)",
-    "autobot-backend/code_embedding_generator.py": "index-bound: CODEBERT_MODEL_NAME is the code index's recorded space; index_embedding_space.py:80-85 reads it into CODE_INDEX",
     _SPACE_TABLE: "the table: the one place an index's recorded model is written",
     _SSOT: "ssot default of the active model (DEFAULT_EMBEDDING_MODEL)",
     "autobot-backend/api/analytics_embedding_patterns.py": _PRICING,

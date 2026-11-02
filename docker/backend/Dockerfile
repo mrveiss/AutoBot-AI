@@ -149,7 +149,7 @@ COPY autobot-infrastructure/shared/config/permission_rules.yaml /app/autobot-bac
 COPY docker/backend/entrypoint.sh /app/entrypoint.sh
 
 # Create required directories (including /opt/autobot for model storage)
-RUN mkdir -p /app/data /app/logs /app/autobot-backend/data /opt/autobot/data \
+RUN mkdir -p /app/data /app/logs /app/huggingface /app/autobot-backend/data /opt/autobot/data \
     && chown -R autobot:autobot /app /opt/autobot
 
 # Symlink for legacy import compatibility (database only)
@@ -169,6 +169,8 @@ ENV AUTOBOT_ENVIRONMENT=production
 ENV AUTOBOT_LOG_LEVEL=INFO
 # #19316: no AUTOBOT_DEPLOYMENT_MODE -- unset is auto-detect, docker_local in a container.
 ENV AUTOBOT_BACKEND_PORT=8001
+# #19869: the model cache, a volume in compose, so a recreated container does not download again.
+ENV HF_HOME=/app/huggingface
 
 EXPOSE 8001
 

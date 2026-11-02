@@ -210,3 +210,11 @@ backend_tls_cert_dir: "{{ autobot_tls_remote_cert_dir | default('/etc/autobot/ce
 
 # Feature-router boot mode (#6690, #19395): derived from AUTOBOT_ENVIRONMENT, so this role sets nothing.
 # To override it, set backend_feature_routers_strict per inventory ("1" hard-fails on a broken router).
+
+# #19869, #19738: the pinned speech-to-text and code-embedding models fetched at install. How many times a
+# failed download is retried and the seconds between tries.
+# #19869: false skips the pre-fetch, for an air-gapped host. Required stops a host that can't get one.
+backend_prefetch_models: true
+backend_model_prefetch_required: false
+backend_model_prefetch_retries: 3
+backend_model_prefetch_retry_delay: 30
