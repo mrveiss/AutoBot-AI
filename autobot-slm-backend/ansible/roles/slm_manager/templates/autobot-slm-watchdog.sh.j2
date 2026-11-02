@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+# #20620: the SLM must always be running. systemd's start limit stays (#4090), so a broken unit
+# still shows as failed, and this clears it and tries again on every timer tick. A process that is
+# active but fails its health check is restarted only after several ticks, so a slow start or an
+# update in progress isn't interrupted. To keep the SLM down on purpose, stop this timer too.
+set -u
+
+unit="{{ slm_backend_service }}"
+health_url="http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/health"
+max_failures="{{ slm_watchdog_max_health_failures }}"
+counter="${SLM_WATCHDOG_STATE:-/run/autobot-slm-watchdog.failures}"
+
+log() { logger -p "daemon.$1" -t autobot-slm-watchdog "$2" 2>/dev/null || true; }
+
+state="$(systemctl is-active "$unit" 2>/dev/null)"
+case "$state" in
+    active) ;;
+    activating|deactivating|reloading) exit 0 ;;  # systemd is already working on it
+    *)
+        log err "$unit is $state; clearing its failure state and starting it"
+        systemctl reset-failed "$unit" 2>/dev/null
+        systemctl start --no-block "$unit"
+        rm -f "$counter"
+        exit 0
+        ;;
+esac
+
+if curl -fsS -m {{ slm_watchdog_health_timeout }} -o /dev/null "$health_url"; then
+    rm -f "$counter"
+    exit 0
+fi
+
+failures=$(( $(cat "$counter" 2>/dev/null || echo 0) + 1 ))
+echo "$failures" >"$counter"
+if [ "$failures" -lt "$max_failures" ]; then
+    log warning "$unit failed its health check ($failures of $max_failures)"
+    exit 0
+fi
+log err "$unit is active but failed $failures health checks in a row; restarting it"
+rm -f "$counter"
+systemctl restart --no-block "$unit"
