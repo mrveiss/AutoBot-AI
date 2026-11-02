@@ -36,6 +36,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from api.user_management.human_decider import require_interactive_human
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
@@ -76,6 +77,8 @@ from ..services.work_item_service import (
 )
 from ..services.work_product_service import WorkProductService
 from ._common import actor_id as verified_user_id
+from ._common import own_task_actor, refused_transition
+from ._handoff_identity import handing_off_agent, member_reviewer
 from .activity import ActivityLogEntry, ActivityLogResponse
 from .github_webhooks import validate_github_pr_url
 from .work_item_comments import require_work_item_id, serialize_comment
@@ -216,29 +219,17 @@ class HandoffAttachmentRequest(BaseModel):
 
 
 class HandoffToAgentRequest(BaseModel):
-    user_id: str
-    company_id: str
     target_agent_id: str
     human_notes: str
-    user_display: str = ""
     attachments: Optional[List[HandoffAttachmentRequest]] = None
 
 
 class HandoffToHumanRequest(BaseModel):
-    agent_id: str
-    reviewer_user_id: str
-    company_id: str
+    reviewer_user_id: str  # who is being asked, a company member; never who is acting (#20476)
     agent_notes: Optional[str] = None
 
 
-class ReviewApproveRequest(BaseModel):
-    reviewer_user_id: str
-    company_id: str
-
-
 class ReviewChangesRequest(BaseModel):
-    reviewer_user_id: str
-    company_id: str
     change_request: str
     return_to_agent_id: Optional[str] = None
 
@@ -418,7 +409,7 @@ async def create_work_item(
             assignee_agent_id=body.assignee_agent_id,
             assignee_user_id=body.assignee_user_id,
             created_by_agent_id=body.created_by_agent_id,
-            created_by_user_id=body.created_by_user_id,
+            created_by_user_id=str(verified_user_id(_current_user)),  # never the body: it decides who owns the task
             labels=body.labels,
             requires_approval_before=body.requires_approval_before,
         )
@@ -619,22 +610,15 @@ async def transition_work_item(
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
     try:
-        item = await _service().transition_status(session, work_item_id, body.status)
+        item = await _service().transition_status(
+            session, work_item_id, body.status, acting_user=own_task_actor(_current_user)
+        )
         await session.commit()
         if item.status == WorkItemStatus.DONE:
             await _kb_manager.archive_collection(KbCollectionManager.WORK_ITEM_PREFIX, item.id)
         return await _item_to_dict(item, session)
     except InvalidTransition as exc:
-        # #12740: the service already computed the exact, useful reason
-        # ("Cannot transition from X to Y. Allowed: [...]"). Replacing it with a
-        # generic 422 "Internal server error" threw that away, so the UI could
-        # not tell the user what went wrong or what IS allowed. The message is
-        # purely domain-level — statuses and permitted transitions, no internals
-        # — so it is safe to surface. 409 Conflict is the correct code: the
-        # request is well-formed (422 implies malformed), it conflicts with the
-        # item's current state.
-        logger.info("Rejected illegal work-item transition: %s", exc)
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise refused_transition(exc)
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=404, detail="Internal server error")
@@ -855,10 +839,10 @@ async def handoff_to_agent(
             session,
             work_item_id=work_item_id,
             target_agent_id=body.target_agent_id,
-            user_id=body.user_id,
-            company_id=body.company_id,
+            user_id=str(verified_user_id(_current_user)),
+            company_id=str(ctx.org_id),
             human_notes=body.human_notes,
-            user_display=body.user_display,
+            user_display=str(_current_user.get("display_name") or _current_user.get("username") or ""),
             attachments=atts,
         )
         await session.commit()
@@ -897,9 +881,9 @@ async def handoff_to_human(
         item = await _handoff_service().agent_to_human(
             session,
             work_item_id=work_item_id,
-            agent_id=body.agent_id,
-            reviewer_user_id=body.reviewer_user_id,
-            company_id=body.company_id,
+            agent_id=handing_off_agent(existing, _current_user),
+            reviewer_user_id=await member_reviewer(session, ctx.org_id, body.reviewer_user_id),
+            company_id=str(ctx.org_id),
             agent_notes=body.agent_notes,
         )
         await session.commit()
@@ -915,11 +899,11 @@ async def handoff_to_human(
 @router.post("/{work_item_id}/review/approve")
 async def review_approve(
     work_item_id: str,
-    body: ReviewApproveRequest,
     session: AsyncSession = Depends(get_session),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    require_interactive_human(_current_user, "work item review")
     # IDOR guard (M4/GH#9861).
     existing = await _service().get(session, work_item_id)
     if existing is None or str(existing.company_id) != str(ctx.org_id):
@@ -928,8 +912,8 @@ async def review_approve(
         item = await _handoff_service().approve(
             session,
             work_item_id=work_item_id,
-            reviewer_user_id=body.reviewer_user_id,
-            company_id=body.company_id,
+            reviewer_user_id=str(verified_user_id(_current_user)),
+            company_id=str(ctx.org_id),
         )
         await session.commit()
         return await _item_to_dict(item, session)
@@ -949,6 +933,7 @@ async def review_request_changes(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    require_interactive_human(_current_user, "work item review")
     # IDOR guard (M4/GH#9861).
     existing = await _service().get(session, work_item_id)
     if existing is None or str(existing.company_id) != str(ctx.org_id):
@@ -957,8 +942,8 @@ async def review_request_changes(
         item = await _handoff_service().request_changes(
             session,
             work_item_id=work_item_id,
-            reviewer_user_id=body.reviewer_user_id,
-            company_id=body.company_id,
+            reviewer_user_id=str(verified_user_id(_current_user)),
+            company_id=str(ctx.org_id),
             change_request=body.change_request,
             return_to_agent_id=body.return_to_agent_id,
         )

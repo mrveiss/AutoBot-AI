@@ -8465,6 +8465,7 @@
     },
     "cost": {
       "title": "Cost Dashboard",
+      "raisePendingApproval": "This company requires board approval to raise a budget limit. Your request was submitted for approval; the limit has not changed.",
       "exportCsv": "Export CSV",
       "selectCompany": "Select a company to view costs.",
       "totalThisMonth": "Total This Month",
@@ -8679,6 +8680,8 @@
       "project": "Project",
       "sprint": "Sprint",
       "selectProject": "Select a project…",
+      "fieldProject": "Project",
+      "noProjectsHint": "This company has no project yet. Create a project first; every work item belongs to one.",
       "selectSprint": "Select a sprint…",
       "loadingProjects": "Loading projects…",
       "loadingSprints": "Loading sprints…",
@@ -9131,6 +9134,7 @@
     },
     "board": {
       "loadFailed": "Could not load this board",
+      "moveFailed": "Could not move this task",
       "retry": "Retry",
       "loadingItem": "Loading work item…",
       "itemLoadFailed": "Could not load this work item"

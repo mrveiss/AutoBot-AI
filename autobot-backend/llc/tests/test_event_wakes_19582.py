@@ -94,7 +94,13 @@ async def _agent(factory, *, status: str = "available", company=_COMPANY, adapte
 async def _item(factory, assignee=None, description=None) -> uuid.UUID:  # noqa: ANN001
     async with factory() as session:
         item = await WorkItemService().create(
-            session, str(_COMPANY), WorkItemType.TASK, "Task", description=description, assignee_agent_id=assignee
+            session,
+            str(_COMPANY),
+            WorkItemType.TASK,
+            "Task",
+            description=description,
+            assignee_agent_id=assignee,
+            project_id=await harness.seed_project(session, _COMPANY),
         )
         await session.commit()
         return item.id

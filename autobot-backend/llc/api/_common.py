@@ -21,6 +21,7 @@ from typing import Any, Optional
 
 from fastapi import HTTPException, Request, status
 
+from autobot_shared.auth.interactive_principal import is_interactive_human
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -41,6 +42,15 @@ def actor_id(current_user: dict) -> uuid.UUID:
         return uuid.UUID(str(raw))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated") from exc
+
+
+def own_task_actor(current_user: dict) -> Optional[uuid.UUID]:
+    """The caller as the owner of tasks they move (#20508): only an interactive person.
+
+    A service or agent credential resolves to a user-shaped dict too, but it must not own what it
+    created, so it gets ``None`` and keeps the normal transition rules.
+    """
+    return actor_id(current_user) if is_interactive_human(current_user) else None
 
 
 def acting_user_id(current_user: dict) -> Optional[str]:
@@ -225,3 +235,13 @@ async def assert_item_in_company(item_id: str, company_id: str) -> uuid.UUID:
     if item is None or str(item.company_id) != str(company_id):
         raise HTTPException(status_code=404, detail="Work item not found")
     return parsed
+
+
+def refused_transition(exc: Exception) -> HTTPException:
+    """A refused status move as 409, with the service's reason (#12740).
+
+    The reason names only statuses and permitted moves, so it is safe to show, and the UI can tell
+    the user what went wrong. 409, not 422: the request is well-formed but conflicts with the item's state.
+    """
+    logger.info("Rejected illegal work-item transition: %s", exc)
+    return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))

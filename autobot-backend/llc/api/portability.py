@@ -43,6 +43,7 @@ class ImportPreviewResponse(BaseModel):
 
 class RemappingOptions(BaseModel):
     require_approval_for_hires: Optional[bool] = None
+    require_approval_for_budget_raises: Optional[bool] = None
 
 
 class ImportExecuteRequest(BaseModel):

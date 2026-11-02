@@ -35,7 +35,7 @@ def _modules(root: Path) -> list[Path]:
 REACH = declare(
     "llc-sigterm-grace-copies",
     discover=_modules,
-    floor=247,  # mid-window: population 257, window (237, 257)
+    floor=258,  # mid-window: population 268, window (248, 268)
     growth=20,  # ~9%: ordinary LLC growth between repins must not turn an unrelated PR red
     what="non-test LLC modules",
     roots=(_LLC,),

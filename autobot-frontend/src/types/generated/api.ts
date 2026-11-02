@@ -50213,6 +50213,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/companies/{company_id}/project-backfill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Preview
+         * @description How many work items have no project and where each would go. Changes nothing.
+         */
+        get: operations["read_preview_api_llc_companies__company_id__project_backfill_get"];
+        put?: never;
+        /**
+         * Request Backfill
+         * @description File the approval request. Nothing changes until a person approves it.
+         */
+        post: operations["request_backfill_api_llc_companies__company_id__project_backfill_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/approvals": {
         parameters: {
             query?: never;
@@ -50334,7 +50358,8 @@ export interface paths {
          * Provision Budget
          * @description Provision a default budget row for an agent (GH#9901).
          *
-         *     Returns 201 on creation, 409 if a row already exists.
+         *     Returns 201 on creation, 409 if a row already exists. In a company with ``require_approval_for_budget_raises``
+         *     a first limit above the default is created at the default and the rest is filed as a pending override: 202.
          *     Returns 404 if the agent does not exist in agent_org_nodes, or belongs to
          *     a different tenant (GH#12136). Returns 403 unless the caller is a company
          *     owner/admin or a platform admin (#20422).
@@ -50401,6 +50426,9 @@ export interface paths {
         /**
          * Update Limit
          * @description Update budget limits and mode (GH#8215, GH#8997).
+         *
+         *     A company with ``require_approval_for_budget_raises`` answers 202 with a pending override instead when the
+         *     change raises the enforced limit; nothing changes until the board approves it (#8214).
          */
         patch: operations["update_limit_api_llc_budget__agent_id__limit_patch"];
         trace?: never;
@@ -62607,6 +62635,25 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * BudgetRaisePending
+         * @description Answer to a limit change that needs the board: the request exists, the limit has not moved (#8214).
+         */
+        BudgetRaisePending: {
+            /**
+             * Status
+             * @default pending_approval
+             */
+            status: string;
+            /** Approval Id */
+            approval_id: string;
+            /** Company Id */
+            company_id: string;
+            /** Agent Id */
+            agent_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * BudgetResponse
          * @description Budget status response (GH#8215, GH#8997).
          */
@@ -66140,6 +66187,11 @@ export interface components {
              * @default false
              */
             require_approval_for_hires: boolean;
+            /**
+             * Require Approval For Budget Raises
+             * @default false
+             */
+            require_approval_for_budget_raises: boolean;
             /** Parent Org Id */
             parent_org_id?: string | null;
             /** @default onboarding */
@@ -66175,6 +66227,11 @@ export interface components {
              * @default false
              */
             require_approval_for_hires: boolean;
+            /**
+             * Require Approval For Budget Raises
+             * @default false
+             */
+            require_approval_for_budget_raises: boolean;
             /** Parent Org Id */
             parent_org_id?: string | null;
             /**
@@ -66317,6 +66374,8 @@ export interface components {
             brand_color?: string | null;
             /** Require Approval For Hires */
             require_approval_for_hires?: boolean | null;
+            /** Require Approval For Budget Raises */
+            require_approval_for_budget_raises?: boolean | null;
             /** Pause Reason */
             pause_reason?: string | null;
         } & {
@@ -78910,19 +78969,10 @@ export interface components {
         };
         /** HandoffToAgentRequest */
         HandoffToAgentRequest: {
-            /** User Id */
-            user_id: string;
-            /** Company Id */
-            company_id: string;
             /** Target Agent Id */
             target_agent_id: string;
             /** Human Notes */
             human_notes: string;
-            /**
-             * User Display
-             * @default
-             */
-            user_display: string;
             /** Attachments */
             attachments?: components["schemas"]["HandoffAttachmentRequest"][] | null;
         } & {
@@ -78930,12 +78980,8 @@ export interface components {
         };
         /** HandoffToHumanRequest */
         HandoffToHumanRequest: {
-            /** Agent Id */
-            agent_id: string;
             /** Reviewer User Id */
             reviewer_user_id: string;
-            /** Company Id */
-            company_id: string;
             /** Agent Notes */
             agent_notes?: string | null;
         } & {
@@ -87380,8 +87426,6 @@ export interface components {
             work_item_id: string;
             /** Column Id */
             column_id: string;
-            /** Actor Id */
-            actor_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -94042,6 +94086,8 @@ export interface components {
         RemappingOptions: {
             /** Require Approval For Hires */
             require_approval_for_hires?: boolean | null;
+            /** Require Approval For Budget Raises */
+            require_approval_for_budget_raises?: boolean | null;
         } & {
             [key: string]: unknown;
         };
@@ -94705,21 +94751,8 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** ReviewApproveRequest */
-        ReviewApproveRequest: {
-            /** Reviewer User Id */
-            reviewer_user_id: string;
-            /** Company Id */
-            company_id: string;
-        } & {
-            [key: string]: unknown;
-        };
         /** ReviewChangesRequest */
         ReviewChangesRequest: {
-            /** Reviewer User Id */
-            reviewer_user_id: string;
-            /** Company Id */
-            company_id: string;
             /** Change Request */
             change_request: string;
             /** Return To Agent Id */
@@ -174183,6 +174216,72 @@ export interface operations {
             };
         };
     };
+    read_preview_api_llc_companies__company_id__project_backfill_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_backfill_api_llc_companies__company_id__project_backfill_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_pending_api_llc_approvals_get: {
         parameters: {
             query: {
@@ -174445,7 +174544,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BudgetResponse"];
+                    "application/json": components["schemas"]["BudgetResponse"] | components["schemas"]["BudgetRaisePending"];
                 };
             };
             /** @description Validation Error */
@@ -174549,7 +174648,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BudgetResponse"];
+                    "application/json": components["schemas"]["BudgetResponse"] | components["schemas"]["BudgetRaisePending"];
                 };
             };
             /** @description Validation Error */
@@ -179191,11 +179290,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReviewApproveRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

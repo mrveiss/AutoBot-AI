@@ -25,6 +25,7 @@ from llc.deps import assert_company_access, get_session, load_authorized, servic
 from models.approval import Approval
 from services.ai_line_change_action import ACTION as LINE_CHANGE_ACTION
 from services.approval_execution import is_server_only_action, run_post_approval_actions, set_verified_decider
+from services.project_backfill_action import ACTION as PROJECT_BACKFILL_ACTION
 from user_management.services import TenantContext
 
 from ..models.enums import ApprovalStatus, ApprovalType
@@ -110,7 +111,7 @@ async def request_approval(
                 company_id=body.company_id,
                 gate_type=body.type,
                 payload=body.payload,
-                requested_by=body.requested_by_agent_id,
+                requested_by=_recorded_requester(body, ctx),
                 actor_user_id=ctx.user_id,  # the verified caller, not the claimed requester
             )
     except ApprovalHookError as exc:
@@ -229,10 +230,13 @@ async def decide_approval(
     await svc.log_decision_to_kb(approval)  # GH#8243: index to decisions KB
     if body.decision == ApprovalStatus.APPROVED:
         # #18430: this route decided an approval without ever running what it proposed. Same dispatcher as
-        # the generic route, but ONLY for the AI-line change: approvals here are self-created with arbitrary
-        # payloads, and running any registered action from one is the #17161 class.
+        # the generic route, but ONLY for the AI-line change and the project backfill (#18978: both server-only,
+        # both refuse a non-admin decider): approvals here are self-created with arbitrary payloads, and running
+        # any registered action from one is the #17161 class.
         set_verified_decider(approval, decided_by)  # the verified caller (ctx.user_id), see _verified_decider
-        await run_post_approval_actions(approval, session, only=frozenset({LINE_CHANGE_ACTION}))
+        await run_post_approval_actions(
+            approval, session, only=frozenset({LINE_CHANGE_ACTION, PROJECT_BACKFILL_ACTION})
+        )
     return _to_response(approval)
 
 
@@ -246,6 +250,18 @@ def _refuse_unrequestable(body: ApprovalRequest) -> None:
     if body.type == ApprovalType.HIRE:
         # A hire is requested only by the hire route, which fixes the agent id and validates the adapter.
         raise HTTPException(status_code=422, detail="A hire approval is requested through the agent-hires route")
+
+
+def _recorded_requester(body: ApprovalRequest, ctx: TenantContext) -> uuid.UUID:
+    """Who the approval records as having asked: the verified caller for a type the four-eyes rule covers (#8214).
+
+    The body's ``requested_by_agent_id`` is the caller's claim; letting it name someone else would let the one
+    who asked also approve with a second admin present. Other types keep the claim, and so does a caller with
+    no user id (an agent credential), which cannot decide an approval anyway.
+    """
+    if body.type == ApprovalType.BUDGET_OVERRIDE and ctx.user_id is not None:
+        return ctx.user_id
+    return body.requested_by_agent_id
 
 
 def _verified_decider(ctx: TenantContext, body: ApprovalDecision) -> uuid.UUID:

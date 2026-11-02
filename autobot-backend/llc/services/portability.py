@@ -272,20 +272,15 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
                     skipped["goals"].append(goal.get("title", ""))
 
             # projects
+            project_ids: Dict[str, str] = {}
             for project in template.get("projects", []):
                 project_id = await self._import_project(project, company_id)
                 if project_id:
                     created_entities["projects"].append(str(project_id))
+                    project_ids[str(project.get("id"))] = str(project_id)
 
             # seed work items
-            for item in template.get("work_items", []):
-                if not item.get("is_seed"):
-                    continue
-                item_id = await self._import_work_item(item, company_id)
-                if item_id:
-                    created_entities["work_items"].append(str(item_id))
-                else:
-                    skipped["work_items"].append(item.get("title", ""))
+            await self._import_seed_items(template, company_id, project_ids, created_entities, skipped, warnings)
 
             await sp.commit()
         except Exception as exc:
@@ -451,6 +446,11 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
             meta.get("require_approval_for_hires", False),
         )
 
+        require_budget_approval = remapping_options.get(
+            "require_approval_for_budget_raises",
+            meta.get("require_approval_for_budget_raises", False),
+        )
+
         org = Organization(
             id=uuid.uuid4(),
             name=meta.get("name", "Imported Company"),
@@ -460,6 +460,7 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
             budget_monthly_cents=meta.get("budget_monthly_cents", 0),
             brand_color=meta.get("brand_color"),
             require_approval_for_hires=require_approval,
+            require_approval_for_budget_raises=require_budget_approval,
             llc_status=LLCCompanyStatus.ONBOARDING.value,
             settings={},
             issue_counter=0,

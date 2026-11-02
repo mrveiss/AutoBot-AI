@@ -150,7 +150,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/SettingsView.vue": 739,
     "autobot-frontend/src/views/VisionAutomationView.vue": 848,
     "autobot-frontend/src/views/WorkflowBuilderView.vue": 2201,  # #13422: 2300 -> 2267 (kit RiskBadge)
-    "autobot-frontend/src/views/llc/BacklogView.vue": 823,
+    "autobot-frontend/src/views/llc/BacklogView.vue": 630,
     "autobot-frontend/src/views/llc/CompanyCreationWizard.vue": 909,
     "autobot-frontend/src/views/llc/CompanyPortabilityView.vue": 761,
     "autobot-frontend/src/views/llc/CostDashboard.vue": 1012,  # #20123: 1015 -> 1012 (mixed bucket lists each currency)
@@ -162,7 +162,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/llc/RoutinesView.vue": 688,
     "autobot-frontend/src/views/llc/SprintBoardView.vue": 664,
     # #14780: 1046 -> 1013 (kit BaseDrawer); #18750: 994 (comments tab returns)
-    "autobot-frontend/src/views/llc/WorkItemDetail.vue": 948,  # #20068: 994 -> 949
+    "autobot-frontend/src/views/llc/WorkItemDetail.vue": 947,  # #20068: 994 -> 949
     "autobot-infrastructure/shared/ide-extensions/vscode-autobot/src/extension.ts": 741,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/background-monitor.ts": 713,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/index.ts": 957,

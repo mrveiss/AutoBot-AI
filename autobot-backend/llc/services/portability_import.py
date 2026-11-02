@@ -19,7 +19,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.logging_manager import get_logger
 from llc.models.goal import LLCGoal
 from llc.models.sprint import LLCProject
-from llc.models.work_item import LLCWorkItem
 
 logger = get_logger(__name__)
 
@@ -154,20 +153,48 @@ class PortabilityImportMixin:
         await self.session.flush()
         return new_id
 
-    async def _import_work_item(self, item: Dict[str, Any], company_id: uuid.UUID) -> Optional[uuid.UUID]:
-        new_id = uuid.uuid4()
-        identifier = f"IMP-{new_id.hex[:8].upper()}"
-        obj = LLCWorkItem(
-            id=new_id,
-            company_id=company_id,
-            type=item.get("type", "epic"),
-            identifier=identifier,
+    async def _import_work_item(
+        self, item: Dict[str, Any], company_id: uuid.UUID, project_id: str
+    ) -> Optional[uuid.UUID]:
+        """Create a seed work item through ``WorkItemService``, so the hierarchy rules apply (#20472)."""
+        from llc.models.enums import WorkItemPriority, WorkItemType  # noqa: PLC0415
+        from llc.services.work_item_service import WorkItemService  # noqa: PLC0415
+
+        created = await WorkItemService().create(
+            self.session,
+            company_id=str(company_id),
+            type=WorkItemType(item.get("type", "epic")),
             title=item.get("title", ""),
             description=item.get("description"),
-            status="backlog",
-            priority=item.get("priority", "medium"),
+            priority=WorkItemPriority(item.get("priority", "medium")),
             labels=item.get("labels", []),
+            project_id=project_id,
         )
-        self.session.add(obj)
-        await self.session.flush()
-        return new_id
+        return created.id
+
+    async def _import_seed_items(
+        self,
+        template: Dict[str, Any],
+        company_id: uuid.UUID,
+        project_ids: Dict[str, str],
+        created_entities: Dict[str, Any],
+        skipped: Dict[str, Any],
+        warnings: List[str],
+    ) -> None:
+        """Import the template's seed items, each into the project it names or else the first imported one.
+
+        Every work item needs a project; a template with none cannot place its seeds, and says so.
+        """
+        fallback = next(iter(project_ids.values()), None)
+        for item in template.get("work_items", []):
+            if not item.get("is_seed"):
+                continue
+            project_id = project_ids.get(str(item.get("project_id"))) or fallback
+            if project_id is None:
+                skipped["work_items"].append(item.get("title", ""))
+                warnings.append(
+                    f"Work item {item.get('title', '')!r} skipped: the template has no project to place it in"
+                )
+                continue
+            item_id = await self._import_work_item(item, company_id, project_id)
+            created_entities["work_items"].append(str(item_id))

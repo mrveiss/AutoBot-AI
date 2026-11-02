@@ -36,6 +36,8 @@ from llc.tests import _e2e_harness as harness
 from models.agent_org import AgentOrgNode
 from models.approval import Approval, ApprovalComment, TaskApprovalLink
 from user_management.models.base import Base
+from user_management.models.organization import Organization
+from user_management.models.user import User
 from user_management.services import TenantContext
 
 COMPANY, OTHER = uuid.uuid4(), uuid.uuid4()
@@ -50,6 +52,8 @@ async def factory():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")  # canonical: ignore py-adhoc-db-engine (test-local)
     tables = [
         LLCActivityLog.__table__,  # #8214: every decision writes an activity row
+        Organization.__table__,
+        User.__table__,  # #8214: four-eyes leaves out deactivated admins
         Approval.__table__,
         ApprovalComment.__table__,
         TaskApprovalLink.__table__,

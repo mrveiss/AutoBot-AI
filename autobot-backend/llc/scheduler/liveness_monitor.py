@@ -15,6 +15,7 @@ For each stuck run:
   6. Writes an activity log entry
 """
 
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -28,8 +29,10 @@ from user_management.database import get_async_session_factory
 
 from ..models.enums import ActivityEventType, WorkItemStatus, WorkItemType
 from ..models.heartbeat_run import LLCHeartbeatRun
+from ..models.sprint import LLCProject
 from ..models.work_item import LLCWorkItem
 from ..services.activity_log import LLCActivityLogService
+from ..services.work_item_hierarchy import HierarchyViolation, parent_if_allowed
 from ..services.work_item_service import WorkItemService
 from .base import PollLoopScheduler
 from .dispatch_gate import agent_ref_block_reason
@@ -175,26 +178,37 @@ class LivenessMonitor(PollLoopScheduler):
     ) -> None:
         identifier = work_item.identifier if work_item else run_id_label(str(run.id))
         title = f"Recovery: agent {agent_id} timed out on {identifier}"
-
-        # Resolve manager via company hierarchy — default to None (board-visible)
-        manager_agent_id = await self._resolve_manager(session, company_id, agent_id)
-
-        svc = WorkItemService()
-        await svc.create(
-            session,
-            company_id=company_id,
-            type=WorkItemType.BUG,
-            title=title,
-            description=(
-                f"Automatic recovery item. Run {run.id} for agent {agent_id} "
-                f"exceeded the liveness timeout and was marked timed_out. "
-                f"Work item {identifier} has been set to blocked. "
-                f"Investigate and unblock manually."
-            ),
-            assignee_agent_id=manager_agent_id,
-            parent_id=str(work_item.parent_id) if work_item and work_item.parent_id else None,
-            goal_id=str(work_item.goal_id) if work_item and work_item.goal_id else None,
+        description = (
+            f"Automatic recovery item. Run {run.id} for agent {agent_id} "
+            f"exceeded the liveness timeout and was marked timed_out. "
+            f"Work item {identifier} has been set to blocked. "
+            f"Investigate and unblock manually."
         )
+        svc = WorkItemService()
+        # #18978: the Bug follows the stuck item's parent only where the hierarchy rules allow it
+        # (a stuck Subtask's parent is a Task) and always sits in the stuck item's project.
+        parent_id = await parent_if_allowed(
+            session,
+            svc.get,
+            company_id,
+            WorkItemType.BUG,
+            str(work_item.parent_id) if work_item and work_item.parent_id else None,
+        )
+        try:
+            await svc.create(
+                session,
+                company_id=company_id,
+                type=WorkItemType.BUG,
+                title=title,
+                description=description,
+                # Resolve manager via company hierarchy -- default to None (board-visible)
+                assignee_agent_id=await self._resolve_manager(session, company_id, agent_id),
+                parent_id=parent_id,
+                project_id=await _recovery_project(session, work_item, company_id),
+                goal_id=str(work_item.goal_id) if work_item and work_item.goal_id else None,
+            )
+        except HierarchyViolation as exc:
+            await _note_unfiled_recovery(session, svc, work_item, company_id, f"{title}. {description}", exc)
 
     async def _resolve_manager(self, session: AsyncSession, company_id: str, agent_id: str) -> Optional[str]:
         """Best-effort lookup for the agent's manager agent_id."""
@@ -235,6 +249,28 @@ class LivenessMonitor(PollLoopScheduler):
             )
         except Exception:
             logger.debug("activity_log.record failed for run %s (swallowed)", run.id)
+
+
+async def _recovery_project(session: AsyncSession, work_item: Optional[LLCWorkItem], company_id: str) -> Optional[str]:
+    """The stuck item's project, else the company's oldest (#18978); None when the company has none."""
+    if work_item is not None and work_item.project_id:
+        return str(work_item.project_id)
+    oldest = await session.execute(
+        select(LLCProject.id)
+        .where(LLCProject.company_id == uuid.UUID(str(company_id)))
+        .order_by(LLCProject.created_at, LLCProject.id)
+        .limit(1)
+    )
+    found = oldest.scalar_one_or_none()
+    return str(found) if found else None
+
+
+async def _note_unfiled_recovery(session, svc, work_item, company_id: str, text_: str, exc: Exception) -> None:
+    """The recovery Bug was refused (a stuck item from before the every-item-has-a-project rule may have no
+    project, #18978): record it on the stuck item itself so the recovery is not lost."""
+    logger.error("Recovery item not created (%s); noting it on the stuck work item", exc)
+    if work_item is not None:
+        await svc.add_comment(session, str(work_item.id), company_id, f"{text_} ({exc})")
 
 
 def run_id_label(run_id: str) -> str:

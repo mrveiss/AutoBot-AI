@@ -43,6 +43,11 @@ CREATE_TASK_SCHEMA: dict = {
             "enum": ["critical", "high", "medium", "low"],
             "description": "Priority. Default 'medium'.",
         },
+        "project_id": {
+            "type": "string",
+            "description": "UUID of the project. Required unless parent_id is given (the item inherits its parent's).",
+        },
+        "parent_id": {"type": "string", "description": "UUID of the parent work item, if any."},
     },
     "required": ["title"],
 }
@@ -108,7 +113,8 @@ by emitting ONE of these tool calls (same <TOOL_CALL> syntax as other tools) —
 do NOT ask for clarification if the intent is clear. Example params shown; keep
 titles/summaries concise:
 
-- create_task — params: {"title":"...","priority":"high|medium|low","description":"..."}
+- create_task — params: {"title":"...","priority":"high|medium|low","description":"...","project_id":"<uuid>"}
+  Every task needs project_id (or parent_id, whose project it inherits); omit both and the error lists the projects.
 - update_goal — params: {"goal_id":"<uuid-from-context>","status":"...","title":"..."}
 - request_approval — params: {"gate_type":"strategy","summary":"..."}
 - record_decision — params: {"decision":"...","rationale":"..."}
@@ -137,24 +143,45 @@ def _enum_or_error(enum_cls, value, field: str):
         raise LLCToolError(f"invalid {field}: {value!r}") from None
 
 
+async def _project_choices(session, company_id: str) -> str:
+    """The company's projects, appended to a missing-project error so the agent can retry with one (#18978)."""
+    from sqlalchemy import select
+
+    from .models.sprint import LLCProject
+
+    rows = await session.execute(
+        select(LLCProject.id, LLCProject.name).where(LLCProject.company_id == uuid.UUID(str(company_id))).limit(20)
+    )
+    listed = "; ".join(f"{name} = {pid}" for pid, name in rows.all())
+    return f". Retry with a project_id from: {listed}" if listed else ". The company has no project; create one first"
+
+
 async def _create_task(session, company_id: str, user_id: str | None, params: Dict[str, Any]) -> Dict[str, Any]:
     from .models.enums import WorkItemPriority, WorkItemType
+    from .services.work_item_hierarchy import HierarchyViolation, ProjectRequired
     from .services.work_item_service import WorkItemService
 
     title = (params.get("title") or "").strip()
     if not title:
         raise LLCToolError("create_task requires a non-empty 'title'")
-    item = await WorkItemService().create(
-        session,
-        company_id=company_id,
-        type=_enum_or_error(WorkItemType, params.get("type", "task"), "type"),
-        title=title,
-        description=params.get("description"),
-        priority=_enum_or_error(WorkItemPriority, params.get("priority", "medium"), "priority"),
-        # #11501 review: audit actor comes from the authenticated session, never
-        # from LLM-supplied params.
-        created_by_user_id=user_id,
-    )
+    try:
+        item = await WorkItemService().create(
+            session,
+            company_id=company_id,
+            type=_enum_or_error(WorkItemType, params.get("type", "task"), "type"),
+            title=title,
+            description=params.get("description"),
+            priority=_enum_or_error(WorkItemPriority, params.get("priority", "medium"), "priority"),
+            # #11501 review: audit actor comes from the authenticated session, never
+            # from LLM-supplied params.
+            created_by_user_id=user_id,
+            project_id=params.get("project_id"),
+            parent_id=params.get("parent_id"),
+        )
+    except ProjectRequired as exc:
+        raise LLCToolError(f"{exc}{await _project_choices(session, company_id)}") from None
+    except HierarchyViolation as exc:
+        raise LLCToolError(str(exc)) from None
     return {"entity_type": "work_item", "entity_id": str(item.id), "title": title}
 
 

@@ -337,16 +337,17 @@ async def test_import_agent_insert_binds_match_named_params() -> None:
 async def test_execute_import_skips_non_seed_work_items() -> None:
     svc = _make_svc()
     tmpl = _template(
+        projects=[{"id": "p1", "name": "P1"}],
         work_items=[
             {"title": "Epic seed", "type": "epic", "is_seed": True},
             {"title": "Task not seed", "type": "task", "is_seed": False},
-        ]
+        ],
     )
 
     company_id = uuid.uuid4()
     created: list[str] = []
 
-    async def fake_import_work_item(item, cid):  # noqa: ANN001
+    async def fake_import_work_item(item, cid, project_id):  # noqa: ANN001
         created.append(item["title"])
         return uuid.uuid4()
 
@@ -354,6 +355,7 @@ async def test_execute_import_skips_non_seed_work_items() -> None:
         patch.object(svc, "_resolve_or_create_company", return_value=company_id),
         # The CEO step has its own SQLite tests (#19588); this mock session cannot run it.
         patch("llc.services.portability.settle_imported_ceo", AsyncMock()),
+        patch.object(svc, "_import_project", return_value=uuid.uuid4()),
         patch.object(svc, "_import_work_item", side_effect=fake_import_work_item),
     ):
         sp_mock = AsyncMock()
