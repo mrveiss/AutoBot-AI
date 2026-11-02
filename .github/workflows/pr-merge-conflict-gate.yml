@@ -10,11 +10,20 @@
 # runs cancelled (this run excepted) and `no-merge-conflicts` set to failure; a
 # MERGEABLE one gets success. UNKNOWN after the bounded retry is `pending`, never green.
 #
+# A `mergeable: true` counts only when GitHub's test merge has the live base tip and the
+# PR's head as its parents (#20573). A push to main leaves `true` standing with no null in
+# between until the test merge is rebuilt: 5 PRs that conflicted with main read `true` over
+# 4 minutes after the push, and went green. A PR whose test merge is older is re-read, and
+# stays UNKNOWN (`pending`, never green) if it does not settle.
+#
 # WHY THERE IS A SCHEDULE. GitHub starts no pull_request run on a head that conflicts
 # with its base, so a PR that is pushed already conflicting never triggers the
-# pull_request path above. Every 10 minutes (and on workflow_dispatch) the same full
-# open-PR sweep as a push to main runs, which fails such a PR and cancels its runs.
+# pull_request path above. The same full open-PR sweep as a push to main runs on this
+# schedule (and on workflow_dispatch), which fails such a PR and cancels its runs.
 # The sweep also re-checks PRs left `pending` as UNKNOWN, so they are not stuck.
+# The cron asks for every 10 minutes; GitHub delivers far fewer: the latest 25 scheduled
+# runs measured on 2026-11-01 had a median interval of 306.9 minutes. Do not rely on this
+# path for timing: the bound on a main push comes from the push sweep.
 #
 # GITHUB_TOKEN only, minimal scopes; no PAT. The checkout is main, never the PR's code:
 # a conflicting PR has no merge ref, and the script that runs must be main's.

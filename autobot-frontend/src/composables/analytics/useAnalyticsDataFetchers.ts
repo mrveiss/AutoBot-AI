@@ -134,12 +134,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   const callGraphSummary = ref<Record<string, unknown> | null>(null)
   const callGraphOrphaned = ref<OrphanedFunction[]>([])
 
-  const loadingProgress = reactive({
-    declarations: false,
-    duplicates: false,
-    hardcodes: false,
-    problems: false,
-  })
+  const loadingProgress = reactive({ declarations: false, duplicates: false, hardcodes: false, problems: false })
 
   const showAllProblems = ref(false)
   const showAllDeclarations = ref(false)
@@ -652,6 +647,8 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     duplicateScanState,
     declarationAnalysis,
     hardcodeAnalysis,
+    // A failed load must not render as an empty ("none found") section.
+    problemsError: problemsEndpoint.error, declarationsError: declarationsSilent.error, hardcodesError: hardcodesSilent.error,
     chartData: chartEndpoint.data,
     chartDataLoading: chartEndpoint.loading,
     chartDataError: chartEndpoint.error,
