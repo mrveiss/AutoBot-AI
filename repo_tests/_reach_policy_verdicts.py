@@ -17,6 +17,12 @@ ABSOLUTE = "ABSOLUTE"
 CONVERTIBLE = "CONVERTIBLE"
 
 _A_TO_M: dict[str, tuple[str, str, str]] = {
+    "edge-configs-proxying-api-20046": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Configs and generators that proxy a public /api location: a small set, so a share of any file count "
+        "means nothing.",
+    ),
     "ci-requirements-one-install-workflows": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

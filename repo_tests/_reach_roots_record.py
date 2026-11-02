@@ -141,6 +141,11 @@ REACH_ROOTS = {
     "repo_tests/hardcoded_ui_literal_ratchet_12732_test.py": ("autobot-frontend/src/", "autobot-slm-frontend/src/"),
     "repo_tests/icon_rule_sets_font_size_only_19875_test.py": ("autobot-frontend/src",),
     "repo_tests/infra_scripts_no_backend_imports_18288_test.py": ("autobot-infrastructure",),
+    "repo_tests/internal_paths_denied_at_edge_20046_test.py": (
+        "autobot-infrastructure",
+        "autobot-slm-backend",
+        "docker",
+    ),
     "repo_tests/kb_admin_read_bypass_guard_test.py": ("autobot-backend/", "autobot_shared/"),
     "repo_tests/kb_construction_baseline_18122_test.py": (
         "autobot-backend/",
