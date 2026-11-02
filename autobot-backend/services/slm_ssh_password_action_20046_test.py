@@ -168,3 +168,17 @@ async def test_require_internal_key_raises_403() -> None:
     with pytest.raises(HTTPException) as err:
         await proposals.require_internal_key(None)
     assert err.value.status_code == 403
+
+
+async def test_no_committed_entry_means_nothing_is_deleted() -> None:
+    """#17038: the paper trail comes first, durably."""
+    delete = AsyncMock(return_value=True)
+    with (
+        patch.object(action, "_delete_in_slm", delete),
+        patch.object(action, "audit_log", AsyncMock(return_value=False)) as audit,
+        pytest.raises(ValueError),
+    ):
+        await action.execute_ssh_password_delete(_approval(), _session())
+    delete.assert_not_awaited()
+    assert audit.await_args.kwargs["durable"] is True
+    assert audit.await_args.kwargs["details"]["phase"] == "intent"

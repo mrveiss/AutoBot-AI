@@ -56,10 +56,12 @@ async def _delete_in_slm(node_id: str) -> bool | None:
             return bool((await response.json()).get("deleted"))
 
 
-async def _audit(approval: "Approval", result: str, **details: object) -> None:
-    await audit_log(
+async def _audit(approval: "Approval", result: str, **details: object) -> bool:
+    """Whether the entry was written. Durable: the entry before a deletion must not be lost (#17038)."""
+    return await audit_log(
         _AUDIT_ACTION,
         result=result,
+        durable=True,
         user_id=approval.decided_by_user,
         resource=f"node:{(approval.context or {}).get('node_id')}",
         details={"approval_id": str(approval.id), "credential_kind": CREDENTIAL_KIND, **details},
@@ -73,6 +75,9 @@ async def execute_ssh_password_delete(approval: "Approval", session: "AsyncSessi
     if not node_id or not isinstance(decider, uuid.UUID):
         await _audit(approval, "denied", reason="no node id or no verified human decider")
         raise ValueError("the deletion needs a node id and a verified human decider")
+    # The paper trail comes first: no committed entry means nothing is deleted (#17038).
+    if not await _audit(approval, "success", phase="intent"):
+        raise ValueError("the audit entry could not be written, so nothing was deleted")
     try:
         removed = await _delete_in_slm(node_id)
     except Exception as exc:
@@ -85,7 +90,7 @@ async def execute_ssh_password_delete(approval: "Approval", session: "AsyncSessi
     }
     session.add(ApprovalComment(approval_id=approval.id, author="system", author_type="system", body=body[removed]))
     await session.commit()
-    await _audit(approval, "success", removed=removed)
+    await _audit(approval, "success", phase="completion", removed=removed)
 
 
 def register_ssh_password_action() -> None:
