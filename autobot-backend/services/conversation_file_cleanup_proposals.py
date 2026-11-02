@@ -13,7 +13,7 @@ bytes are gone), so the next sweep proposes that file again, until the removal h
 ``AUTOBOT_CONVERSATION_FILE_CLEANUP_MAX_ATTEMPTS`` times (``conversation_file_cleanup.py``).
 
 Two workers can both read "not proposed yet"; the partial unique index
-``uq_approvals_pending_file_cleanup`` (migration 20261101_109) lets exactly one insert win, and the
+``uq_approvals_pending_file_cleanup`` (migration 20261101_110) lets exactly one insert win, and the
 loser's ``IntegrityError`` is read as "already proposed".
 """
 

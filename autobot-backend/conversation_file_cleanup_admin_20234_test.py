@@ -102,7 +102,7 @@ async def test_routes_are_admin_only_and_declared():
 
 
 def _migration():
-    path = Path(__file__).parent / "migrations/versions/20261101_109_approvals_pending_file_cleanup_unique.py"
+    path = Path(__file__).parent / "migrations/versions/20261101_110_approvals_pending_file_cleanup_unique.py"
     spec = importlib.util.spec_from_file_location("mig109_admin_test", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

@@ -132,7 +132,7 @@ async def test_model_index_is_postgres_only_and_matches_the_migration():
     assert "UNIQUE" in ddl and "(context ->> 'file_id')" in ddl and PENDING_FILE_CLEANUP_WHERE in ddl
     assert f"requested_by_agent = '{conversation_file_cleanup_proposals.REQUESTED_BY}'" in PENDING_FILE_CLEANUP_WHERE
     assert f"= '{conversation_file_cleanup_proposals.ACTION}'" in PENDING_FILE_CLEANUP_WHERE
-    path = Path(__file__).parent / "migrations/versions/20261101_109_approvals_pending_file_cleanup_unique.py"
+    path = Path(__file__).parent / "migrations/versions/20261101_110_approvals_pending_file_cleanup_unique.py"
     spec = importlib.util.spec_from_file_location("mig109", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
