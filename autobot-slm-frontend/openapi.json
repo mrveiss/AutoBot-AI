@@ -38192,7 +38192,7 @@
     },
     "/scim/v2/Users/{user_id}": {
       "delete": {
-        "description": "DELETE /scim/v2/Users/{id} — deactivate/soft-delete a user.",
+        "description": "DELETE /scim/v2/Users/{id} — deactivate/soft-delete a user.\n\nA soft-deleted user is found again, so a delete answered 503 can be repeated (#20443).",
         "operationId": "scim_delete_user_scim_v2_Users__user_id__delete",
         "parameters": [
           {

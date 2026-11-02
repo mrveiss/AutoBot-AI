@@ -7379,6 +7379,8 @@ export interface paths {
         /**
          * Scim Delete User
          * @description DELETE /scim/v2/Users/{id} — deactivate/soft-delete a user.
+         *
+         *     A soft-deleted user is found again, so a delete answered 503 can be repeated (#20443).
          */
         delete: operations["scim_delete_user_scim_v2_Users__user_id__delete"];
         options?: never;
