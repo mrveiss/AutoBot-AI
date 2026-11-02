@@ -43,17 +43,10 @@ _WHITE = re.compile(
     re.I,
 )
 
-# Rules in files still held by an open PR. Delete an entry when its file is converted.
+# Rules in files still held by an open PR (#20401: ChatInput.vue; #20478: BacklogView.vue, WorkItemDetail.vue). Delete an entry when its file is converted.
 PINS = {
-    "components/browser/InteractiveScreenshot.vue :: .type-submit": 1,
     "components/chat/ChatInput.vue :: .image-gen-submit": 1,
-    "components/chat/MCPPromptTemplatePicker.vue :: .btn-apply": 1,
-    "components/plugins/CapabilityApprovalDialog.vue :: .btn-primary": 1,
-    "components/profile/DeviceManagementPanel.vue :: .btn-primary": 1,
-    "components/workflow/WorkflowRunner.vue :: .step-icon.executing": 1,
-    "views/llc/ApprovalsInbox.vue :: .tab-btn.active": 1,
     "views/llc/BacklogView.vue :: .btn-primary": 1,
-    "views/llc/HeartbeatMonitor.vue :: .btn-trigger": 1,
     "views/llc/WorkItemDetail.vue :: .action-done, .action-ready": 1,
     "views/llc/WorkItemDetail.vue :: .btn-primary": 1,
 }
