@@ -16,9 +16,13 @@ describe('streamErrorText', () => {
   it('renders the translation a refusal names, with its params', () => {
     const text = streamErrorText({
       content: 'english fallback',
-      metadata: { i18n_key: 'chat.errors.budgetExhausted', i18n_params: { scope: 'user', period: 'day', limit: '5.00' } },
+      metadata: {
+        i18n_key: 'chat.errors.budgetExhausted',
+        i18n_params: { limit: '5.00' },
+        i18n_param_keys: { scope: 'chat.errors.budgetScope.user', period: 'chat.errors.budgetPeriod.day' },
+      },
     })
-    expect(text).toContain('day spending limit')
+    expect(text).toContain('daily spending limit for this account')
     expect(text).toContain('$5.00')
     expect(text).not.toContain('english fallback')
   })

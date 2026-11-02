@@ -21,6 +21,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import services.budget_policy as bp_mod
+import services.chat_budget_bounds as guard
 import services.chat_budget_gate as gate
 from autobot_shared.time_utils import now_utc
 from llm_shared.models import LLMRequest, LLMResponse
@@ -46,6 +47,8 @@ async def redis(monkeypatch):
 
     monkeypatch.setattr(bp_mod, "get_async_redis_client", _client)
     monkeypatch.setattr(gate, "get_async_redis_client", _client)
+    monkeypatch.setattr(guard, "SPEND_CACHE_TTL_SECONDS", 0)
+    guard.reset_state()
     monkeypatch.setattr("services.audit.audit.record", AsyncMock())
     yield client
     await client.aclose()
@@ -201,3 +204,22 @@ async def test_resumed_graph_turn_runs_under_the_principal(monkeypatch):
     ]
     assert out == ["msg"] and seen["principal"] == (USER, ORG)
     assert get_llm_principal() is None
+
+
+def test_anthropic_gateway_refuses_with_402(redis, monkeypatch):
+    import asyncio
+
+    from api import anthropic_compat
+
+    app = FastAPI()
+    app.include_router(anthropic_compat.router)
+    monkeypatch.setattr(anthropic_compat, "_resolve_auth", AsyncMock(return_value=({"id": USER, "org_id": ORG}, None)))
+    monkeypatch.setattr(anthropic_compat._oai_limiter, "check_or_429", AsyncMock())
+    monkeypatch.setattr(
+        anthropic_compat, "get_provider_registry", MagicMock(side_effect=AssertionError("provider reached"))
+    )
+    asyncio.run(_over_budget(redis))
+    body = {"model": "m", "messages": [{"role": "user", "content": "hi"}]}
+    response = TestClient(app).post("/messages", json=body)
+    assert response.status_code == 402
+    assert response.json()["detail"]["i18n_param_keys"]["scope"] == "chat.errors.budgetScope.user"

@@ -28,6 +28,7 @@ logger = get_logger(__name__)
 
 _POLICY_NS = "budget_policy"
 _POLICY_IDX_NS = "budget_policy:idx"
+_SEEDED_NS = "budget_policy:seeded"  # one marker per tenant, kept with the policies (#16845)
 _POLICY_TTL = 365 * 24 * 3600
 
 # Matches LLMCostTracker.AGENT_TOTALS_KEY prefix
@@ -121,7 +122,7 @@ async def get_policy(policy_id: str) -> Optional[BudgetPolicy]:
     return BudgetPolicy.model_validate_json(data)
 
 
-async def list_policies_for_scope(scope: str, scope_id: str) -> List[BudgetPolicy]:
+async def list_policies_for_scope(scope: str, scope_id: str, include_disabled: bool = False) -> List[BudgetPolicy]:
     r = await _get_redis()
     idx_key = f"{_POLICY_IDX_NS}:{scope}:{scope_id}"
     raw_ids = await r.smembers(idx_key)
@@ -129,7 +130,7 @@ async def list_policies_for_scope(scope: str, scope_id: str) -> List[BudgetPolic
     for raw_id in raw_ids:
         pid = raw_id.decode() if isinstance(raw_id, bytes) else raw_id
         p = await get_policy(pid)
-        if p and p.enabled:
+        if p and (p.enabled or include_disabled):
             results.append(p)
     return results
 
@@ -492,13 +493,22 @@ def trigger_budget_evaluation(
 
 async def seed_default_policies(tenant_id: str = "default") -> None:
     """
-    Create default policies if none exist for the tenant (GH#6470).
+    Create the default policies once per tenant (GH#6470, #16845).
 
     - Per-tenant monthly $500 hard-stop (alert_then_pause)
+
+    "Once" is a marker stored with the policies. Without it an admin who disabled
+    or deleted the default got it back on the next start, and since #16845 that
+    policy refuses chat. A tenant that already has any policy, enabled or not, is
+    marked and left alone. (A default deleted before this marker existed is seeded
+    one last time, then marked.)
     """
-    existing = await list_policies_for_scope(SCOPE_TENANT, tenant_id)
-    monthly_exists = any(p.period == PERIOD_MONTH for p in existing)
-    if not monthly_exists:
+    r = await _get_redis()
+    marker = f"{_SEEDED_NS}:{tenant_id}"
+    if await r.exists(marker):
+        return
+    existing = await list_policies_for_scope(SCOPE_TENANT, tenant_id, include_disabled=True)
+    if not existing:
         await create_policy(
             BudgetPolicy(
                 scope=SCOPE_TENANT,
@@ -512,3 +522,4 @@ async def seed_default_policies(tenant_id: str = "default") -> None:
             )
         )
         logger.info("Seeded default tenant monthly $500 budget policy for tenant=%s", tenant_id)
+    await r.set(marker, "1")

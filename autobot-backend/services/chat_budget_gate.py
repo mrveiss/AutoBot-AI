@@ -22,17 +22,21 @@ Only ``pause`` and ``alert_then_pause`` policies refuse, as in
 ``budget_policy.evaluate_policies``; ``alert`` never does. No policy, no
 principal, or no spend means no refusal.
 
-If the budget store cannot be read the request is allowed and the failure is
-logged with its traceback, exactly as ``trigger_budget_evaluation`` behaves:
-an unreachable store must not turn every chat into an outage.
+If the budget store cannot be read (error or timeout) the outcome is
+``chat_budget_bounds.STORE_OUTAGE_ALLOWS_REQUEST``: today the request is allowed,
+as ``trigger_budget_evaluation`` does. Failures are logged once per interval,
+spend is cached for a few seconds and the whole check is time-bounded; see
+``services/chat_budget_bounds.py``.
 """
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any, List, Tuple
 
 from fastapi import HTTPException
 
+import services.chat_budget_bounds as guard
 from autobot_shared.category_defaults import CategoryDefaults
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
@@ -47,7 +51,6 @@ from services.budget_policy import (
     SCOPE_TENANT,
     SCOPE_USER,
     BudgetPolicy,
-    get_namespace_period_spend,
     list_policies_for_scope,
 )
 from services.llm_cost_tracker import LLMCostTracker
@@ -58,11 +61,21 @@ CHAT_BUDGET_ERROR_CODE = "chat_budget_exhausted"
 #: Frontend i18n key for the refusal text; the English ``message`` is the API fallback.
 CHAT_BUDGET_I18N_KEY = "chat.errors.budgetExhausted"
 CHAT_BUDGET_STATUS = 402
+I18N_DETAIL_KEYS = ("i18n_key", "i18n_params", "i18n_param_keys")
 
 USER_SPEND_NS = LLMCostTracker.USER_TOTALS_KEY
 TENANT_SPEND_NS = f"{LLMCostTracker.REDIS_KEY_PREFIX}by_tenant"
 _REFUSING_ACTIONS = (ACTION_PAUSE, ACTION_ALERT_THEN_PAUSE)
 _SCOPE_NAMESPACES = {SCOPE_USER: USER_SPEND_NS, SCOPE_TENANT: TENANT_SPEND_NS}
+
+
+class ChatBudgetUnavailable(HTTPException):
+    """Raised only if ``STORE_OUTAGE_ALLOWS_REQUEST`` is False and the budget store cannot answer."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=503, detail={"error_code": "chat_budget_unavailable", "message": "Budget check unavailable"}
+        )
 
 
 class ChatBudgetExceeded(HTTPException):
@@ -86,7 +99,12 @@ class ChatBudgetExceeded(HTTPException):
                 "error_code": CHAT_BUDGET_ERROR_CODE,
                 "message": self.message,
                 "i18n_key": CHAT_BUDGET_I18N_KEY,
-                "i18n_params": {"scope": policy.scope, "period": policy.period, "limit": f"{policy.threshold_usd:.2f}"},
+                "i18n_params": {"limit": f"{policy.threshold_usd:.2f}"},
+                # Values are i18n keys of their own, so no English word sits inside the translated sentence.
+                "i18n_param_keys": {
+                    "scope": f"chat.errors.budgetScope.{policy.scope}",
+                    "period": f"chat.errors.budgetPeriod.{policy.period}",
+                },
             },
         )
 
@@ -108,7 +126,7 @@ async def _first_hard_stop(scope: str, scope_id: str) -> ChatBudgetExceeded | No
             # No hourly counter exists: ``get_namespace_period_spend`` answers an hour policy with the DAY total,
             # which would refuse someone under their hourly budget. Skipped until an hourly counter is written.
             continue
-        spend = await get_namespace_period_spend(_SCOPE_NAMESPACES[scope], scope_id, policy.period)
+        spend = await guard.cached_spend(_SCOPE_NAMESPACES[scope], scope_id, policy.period)
         if spend >= policy.threshold_usd:
             return ChatBudgetExceeded(policy, spend)
     return None
@@ -158,10 +176,12 @@ async def enforce_chat_budget(user_id: str | None = None, org_id: str | None = N
     principal_user, principal_org = get_llm_principal() or ("", "")
     uid, org = user_id or principal_user, org_id or principal_org
     try:
-        exceeded = await _find_hard_stop(uid, org)
-    except Exception:
-        logger.exception("Chat budget check failed for user=%s org=%s; allowing the request", uid, org)
-        return
+        exceeded = await asyncio.wait_for(_find_hard_stop(uid, org), guard.CHECK_TIMEOUT_SECONDS)
+    except Exception as exc:  # includes TimeoutError: both mean the store could not answer
+        guard.log_store_failure(f"user={uid} org={org}: {type(exc).__name__}: {exc}", exc_info=True)
+        if guard.STORE_OUTAGE_ALLOWS_REQUEST:
+            return
+        raise ChatBudgetUnavailable() from exc
     if exceeded is not None:
         await _audit_refusal(exceeded, uid, org)
         raise exceeded
@@ -189,7 +209,7 @@ async def chat_budget_refusal(request: Any) -> LLMResponse | None:
 
 
 def _refusal_detail(exc: ChatBudgetExceeded) -> dict[str, Any]:
-    return {"i18n_key": exc.detail["i18n_key"], "i18n_params": exc.detail["i18n_params"]}
+    return {key: exc.detail[key] for key in I18N_DETAIL_KEYS}
 
 
 def is_budget_refusal(response: Any) -> bool:
@@ -201,7 +221,7 @@ def budget_refusal_reply(response: Any) -> dict[str, Any] | None:
     """The assistant reply dict (with its i18n metadata) for a budget-refusal response, else None."""
     if not is_budget_refusal(response):
         return None
-    meta = {k: response.metadata[k] for k in ("error_code", "i18n_key", "i18n_params")}
+    meta = {k: response.metadata[k] for k in ("error_code", *I18N_DETAIL_KEYS)}
     return {"content": response.error, "role": CategoryDefaults.ROLE_ASSISTANT, "metadata": meta}
 
 

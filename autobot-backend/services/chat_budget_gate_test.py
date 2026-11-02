@@ -23,8 +23,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import services.budget_policy as bp_mod
+import services.chat_budget_bounds as guard
 import services.chat_budget_gate as gate
-from api import anthropic_compat, openai_compat
+from api import openai_compat
 from autobot_shared.time_utils import now_utc
 from chat_workflow.budget_refusal import budget_refusal_message
 from llm_shared.models import LLMResponse
@@ -54,6 +55,8 @@ async def redis(monkeypatch):
 
     monkeypatch.setattr(bp_mod, "get_async_redis_client", _client)
     monkeypatch.setattr(gate, "get_async_redis_client", _client)
+    monkeypatch.setattr(guard, "SPEND_CACHE_TTL_SECONDS", 0)  # these tests change spend between calls
+    guard.reset_state()
     yield client
     await client.aclose()
 
@@ -136,7 +139,7 @@ class TestGate:
         monkeypatch.setattr(gate, "list_policies_for_scope", AsyncMock(side_effect=ConnectionError("down")))
         with llm_principal_scope(USER, ORG):
             await gate.enforce_chat_budget()
-        assert "Chat budget check failed" in caplog.text
+        assert "Chat budget store failure" in caplog.text
 
     @pytest.mark.asyncio
     async def test_recorded_chat_spend_is_what_the_gate_compares(self, redis, monkeypatch):
@@ -185,19 +188,28 @@ class TestEveryEntryIsGated:
             async for _ in service.stream([{"role": "user", "content": "hi"}]):
                 pass
 
-    @pytest.mark.parametrize(
-        "fn",
-        [LLMService.chat, LLMService.stream, LLMService.chat_optimized, openai_compat._complete_chat]
-        + [anthropic_compat._handle_messages],
-    )
-    def test_gate_call_removed_would_be_caught(self, fn):
-        source = inspect.getsource(fn)
-        assert "enforce_chat_budget" in source or "chat_budget_refusal" in source
+    def test_chat_optimized_calls_the_gate(self):
+        # Behavioural coverage would need the whole prompt assembly; chat/stream/compat/workflow are behavioural.
+        assert "chat_budget_refusal" in inspect.getsource(LLMService.chat_optimized)
 
-    def test_workflow_llm_iteration_calls_the_gate(self):
+    @pytest.mark.asyncio
+    async def test_workflow_iteration_yields_the_refusal_and_never_posts(self, redis, audit):
         from chat_workflow.manager import ChatWorkflowManager
 
-        assert "budget_refusal_message" in inspect.getsource(ChatWorkflowManager._process_single_llm_iteration)
+        await _policy(SCOPE_USER, USER, 1)
+        await _spend(redis, gate.USER_SPEND_NS, USER, 2)
+        http_client = MagicMock(post=AsyncMock())
+        with llm_principal_scope(USER, ORG):
+            items = [
+                i
+                async for i in ChatWorkflowManager._process_single_llm_iteration(
+                    MagicMock(), http_client, "http://x/api/generate", "m", "p", "t", False, [], 1
+                )
+            ]
+        assert items[0].type == "error" and items[0].metadata["error_code"] == gate.CHAT_BUDGET_ERROR_CODE
+        assert items[1] == (None, None)
+        http_client.post.assert_not_called()
+        assert audit.await_count == 1  # one refusal, one audit event
 
 
 def _compat_client(monkeypatch):

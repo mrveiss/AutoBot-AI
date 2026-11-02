@@ -150,9 +150,17 @@ export async function describeFailedResponse(response: Response): Promise<string
 export function streamErrorText(data: {
   content?: string
   message?: string
-  metadata?: { i18n_key?: string; i18n_params?: Record<string, unknown> }
+  metadata?: {
+    i18n_key?: string
+    i18n_params?: Record<string, unknown>
+    i18n_param_keys?: Record<string, string> // params whose values are themselves i18n keys
+  }
 }): string {
   const key = data.metadata?.i18n_key
-  if (key) return i18n.global.t(key, data.metadata?.i18n_params ?? {}) as string
-  return `Error: ${data.content || data.message || 'Unknown error'}`
+  if (!key) return `Error: ${data.content || data.message || 'Unknown error'}`
+  const params: Record<string, unknown> = { ...(data.metadata?.i18n_params ?? {}) }
+  for (const [name, paramKey] of Object.entries(data.metadata?.i18n_param_keys ?? {})) {
+    params[name] = i18n.global.t(paramKey)
+  }
+  return i18n.global.t(key, params) as string
 }
