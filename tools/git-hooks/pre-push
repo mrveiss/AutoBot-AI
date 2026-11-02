@@ -249,21 +249,21 @@ stage_cached() {
   marker=$(stage_marker "$1" "$2") && [ -f "$marker" ] || return 1
   ok "$1: unchanged since a recorded pass @ ${2:0:10}, skipped"
 }
-# Before a stage's subshell: STAGE_LOG is where it writes.
 # #20260: while the gate runs, a marker on the remote keeps the auto-sync off this branch, so the
 # push cannot lose to it at the very end. The expiry is the most the fast gate's two stages can take,
 # so a hook that dies holds nothing longer. Set by API, since a push here would run this hook again.
 # A marker that cannot be written only warns: the push is then as racy as it was before.
-PUSH_MARKERS=()
+# Kept in a file: a stage's subshell renews the marker after queueing, and the parent's exit clears it.
+PUSH_MARKER_FILE=$(mktemp)
 push_marker_api() {
   timeout 20 gh api "$@" >/dev/null 2>&1
 }
 push_marker_clear() {
   local ref
-  for ref in ${PUSH_MARKERS[@]+"${PUSH_MARKERS[@]}"}; do
-    push_marker_api -X DELETE "repos/{owner}/{repo}/git/refs/${ref}" || warn "could not remove the marker ${ref}; it expires by itself"
-  done
-  PUSH_MARKERS=()
+  while IFS= read -r ref; do
+    [ -z "$ref" ] || push_marker_api -X DELETE "repos/{owner}/{repo}/git/refs/${ref}" || warn "could not remove the marker ${ref}; it expires by itself"
+  done < "$PUSH_MARKER_FILE"
+  rm -f "$PUSH_MARKER_FILE"
 }
 # $1 branch, $2 the sha the remote holds now. A new branch has no PR for the sync to touch.
 push_marker_set() {
@@ -274,11 +274,39 @@ push_marker_set() {
     push_marker_api -X DELETE "repos/{owner}/{repo}/git/${old}" || true
   done
   if push_marker_api -X POST "repos/{owner}/{repo}/git/refs" -f "ref=refs/${ref}" -f "sha=$2"; then
-    PUSH_MARKERS+=("$ref")
+    printf '%s\n' "$ref" >> "$PUSH_MARKER_FILE"
   else
     warn "could not mark this push on the remote, so the auto-sync can still move the branch during the gate (#20260)"
   fi
 }
+# #20518: one machine-wide queue for heavy work, shared with repo_tests/machine_slot.py. It runs
+# BEFORE any stage timeout, so a push never times out while queued. A dead holder's lock goes with
+# it. Runs at lower priority, so the install always wins. CI has its own runners.
+machine_slot_wait() {
+  [ -z "${CI:-}" ] && [ -z "${AUTOBOT_MACHINE_SLOT_HELD:-}" ] || return 0
+  command -v flock >/dev/null 2>&1 || { warn "flock is missing: this stage did not queue for a machine slot"; return 0; }
+  local dir="${AUTOBOT_MACHINE_SLOT_DIR:-${XDG_RUNTIME_DIR:-/tmp}/autobot-machine-slots}" i start=$SECONDS
+  mkdir -p "$dir"
+  while :; do
+    for ((i = 1; i <= ${AUTOBOT_MACHINE_SLOTS:-4}; i++)); do
+      exec 9>"$dir/slot-$i"
+      if flock -n 9; then
+        export AUTOBOT_MACHINE_SLOT_HELD=1
+        renice -n 10 -p "$BASHPID" >/dev/null 2>&1
+        ionice -c 3 -p "$BASHPID" >/dev/null 2>&1
+        if [ "$SECONDS" != "$start" ]; then
+          log "waited $((SECONDS - start))s for a machine slot"
+          # #20260: the queue has no time limit, so the marker set before it may be about to expire.
+          [ -z "${branch_name:-}" ] || push_marker_set "$branch_name" "${remote_sha:-$ZERO}"
+        fi
+        return 0
+      fi
+    done
+    exec 9>&-
+    sleep "${AUTOBOT_MACHINE_SLOT_POLL:-5}"
+  done
+}
+# Before a stage's subshell: STAGE_LOG is where it writes.
 stage_begin() {
   STAGE_LOG=$(mktemp)
   STAGE_NAMES+=("$1"); STAGE_KEYS+=("$2"); STAGE_LOGS+=("$STAGE_LOG")
@@ -844,6 +872,8 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     if ! stage_cached "vue-tsc ${project}" "$tsc_key"; then
     stage_begin "vue-tsc ${project}" "$tsc_key"
     (
+      machine_slot_wait
+      ! stage_cached "vue-tsc ${project}" "$tsc_key" || exit 0  # the same tree passed while this one queued
     EXIT_CODE=0; STAGE_CLEAN=1
     log "${project}: frontend files changed — running vue-tsc (timeout ${TYPE_CHECK_TIMEOUT}s)"
     if node_modules_usable "$project_dir"; then
@@ -961,6 +991,8 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     if [ -n "$all_tests" ] && ! stage_cached "vitest ${project}" "$vitest_key"; then
     stage_begin "vitest ${project}" "$vitest_key"
     (
+      machine_slot_wait
+      ! stage_cached "vitest ${project}" "$vitest_key" || exit 0  # the same tree passed while this one queued
     EXIT_CODE=0; STAGE_CLEAN=1
     if [ -n "$all_tests" ] && node_modules_usable "$project_dir"; then
       log "${project}: running vitest on relevant tests (timeout ${TEST_TIMEOUT}s):"
@@ -1008,6 +1040,8 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     if [ -n "$kit_changed" ] && ! stage_cached "vitest related ${project}" "$kit_key"; then
     stage_begin "vitest related ${project}" "$kit_key"
     (
+      machine_slot_wait
+      ! stage_cached "vitest related ${project}" "$kit_key" || exit 0  # the same tree passed while this one queued
     EXIT_CODE=0; STAGE_CLEAN=1
     if [ -n "$kit_changed" ] && node_modules_usable "$project_dir"; then
       kit_rel=$(echo "$kit_changed" | sed 's|^|../|')
@@ -1088,7 +1122,9 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     fast_key=$(stage_key "fast guards|${PYTEST_PYTHON}|${py_env}" "")
     if ! stage_cached "fast guards" "$fast_key"; then
       stage_begin "fast guards" "$fast_key"
-      ( EXIT_CODE=0; STAGE_CLEAN=1; run_fast_guards; stage_exit ) </dev/null >"$STAGE_LOG" 2>&1 &
+      ( EXIT_CODE=0; STAGE_CLEAN=1; machine_slot_wait
+        ! stage_cached "fast guards" "$fast_key" || exit 0  # the same tree passed while this one queued
+        run_fast_guards; stage_exit ) </dev/null >"$STAGE_LOG" 2>&1 &
       stage_track $!
     fi
     stage_wait_all
@@ -1117,6 +1153,8 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   if [ -n "$all_py_tests" ] && ! stage_cached "pytest" "$pytest_key"; then
   stage_begin "pytest" "$pytest_key"
   (
+    machine_slot_wait
+    ! stage_cached "pytest" "$pytest_key" || exit 0  # the same tree passed while this one queued
   EXIT_CODE=0; STAGE_CLEAN=1
     # The selection can outgrow the changeset, so the budget follows it too (#15985).
     selected_count=$(printf '%s\n' "$all_py_tests" | grep -c . || true)

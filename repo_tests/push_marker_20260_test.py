@@ -4,10 +4,12 @@
 
 from __future__ import annotations
 
+import fcntl
 import os
 import re
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 from repo_tests._paths import repo_root
@@ -83,7 +85,7 @@ def _hook(tmp_path: Path, body: str, gh_exit: int = 0) -> tuple[subprocess.Compl
     (fake / "gh").write_text(f'#!/bin/bash\necho "$*" >> {log}\nexit {gh_exit}\n', encoding="utf-8")
     (fake / "gh").chmod(0o755)
     script = (
-        f'ZERO={_ZERO}; MAX_BUDGET=600; PUSH_MARKERS=(); warn() {{ echo "WARN $*"; }}\n'
+        f'ZERO={_ZERO}; MAX_BUDGET=600; PUSH_MARKER_FILE=$(mktemp); warn() {{ echo "WARN $*"; }}\n'
         f'{_fn("push_marker_api")}\n{_fn("push_marker_clear")}\n{_fn("push_marker_set")}\n{body}\n'
     )
     env = {**os.environ, "PATH": f"{fake}:{os.environ['PATH']}", "AUTOBOT_PUSH_MARKER": "1"}
@@ -107,3 +109,35 @@ def test_a_new_branch_sets_no_marker(tmp_path: Path) -> None:
 def test_a_marker_that_cannot_be_written_warns_and_never_blocks(tmp_path: Path) -> None:
     done, _ = _hook(tmp_path, "push_marker_set issue-1-a abc; echo CARRIED-ON", gh_exit=1)
     assert "WARN could not mark" in done.stdout and "CARRIED-ON" in done.stdout
+
+
+def test_a_marker_set_in_a_stage_subshell_is_cleared_by_the_parent(tmp_path: Path) -> None:
+    """#20260: the renewal after queueing runs in a subshell, and the parent's exit clears it."""
+    _, calls = _hook(tmp_path, "(push_marker_set issue-1-a abc); push_marker_clear")
+    created = re.search(r"ref=refs/(push-gate/issue-1-a/\d+)", calls)
+    assert created and f"git/refs/{created.group(1)}" in calls.split("-X POST")[1]
+
+
+def test_queueing_renews_the_marker(tmp_path: Path) -> None:
+    """The real wait against a held slot: having waited, it sets a fresh marker for this branch."""
+    held = os.open(tmp_path / "slot-1", os.O_CREAT | os.O_WRONLY, 0o600)
+    fcntl.flock(held, fcntl.LOCK_EX)
+    threading.Timer(1.5, os.close, (held,)).start()
+    body = (
+        f"{_fn('machine_slot_wait')}\nlog() {{ :; }}\nunset CI AUTOBOT_MACHINE_SLOT_HELD\n"
+        f"export AUTOBOT_MACHINE_SLOT_DIR={tmp_path} AUTOBOT_MACHINE_SLOTS=1 AUTOBOT_MACHINE_SLOT_POLL=0.2\n"
+        "branch_name=issue-1-a; remote_sha=abc; machine_slot_wait\n"
+    )
+    done, calls = _hook(tmp_path, body)
+    assert done.returncode == 0, done.stderr
+    assert "ref=refs/push-gate/issue-1-a/" in calls
+
+
+def test_contrast_no_wait_means_no_extra_network_call(tmp_path: Path) -> None:
+    body = (
+        f"{_fn('machine_slot_wait')}\nlog() {{ :; }}\nunset CI AUTOBOT_MACHINE_SLOT_HELD\n"
+        f"export AUTOBOT_MACHINE_SLOT_DIR={tmp_path} AUTOBOT_MACHINE_SLOTS=1\n"
+        "branch_name=issue-1-a; remote_sha=abc; machine_slot_wait\n"
+    )
+    _, calls = _hook(tmp_path, body)
+    assert calls == ""
