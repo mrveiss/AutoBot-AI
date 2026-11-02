@@ -303,8 +303,8 @@ class TestIdempotentInitialization:
         )
         table_count = rows[0][0]
 
-        # Expected: 5 schema tables + 1 schema_migrations table
-        assert table_count == 6, f"Should have exactly 6 tables, found {table_count}"
+        # Expected: 6 schema tables (5 + chat_attachment_marks, #20195) + 1 schema_migrations table
+        assert table_count == 7, f"Should have exactly 7 tables, found {table_count}"
         logger.info(f"✓ Table count correct: {table_count}")
 
         logger.info("=== Test 1.2: PASSED ===\n")
@@ -629,7 +629,7 @@ class TestConcurrentInitialization:
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
         )
         table_count = rows[0][0]
-        assert table_count == 6, f"Should have 6 tables, found {table_count}"
+        assert table_count == 7, f"Should have 7 tables, found {table_count}"
         logger.info("✓ All tables exist after concurrent initialization")
 
         # Verify all manager instances can query schema version
