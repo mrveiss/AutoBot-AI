@@ -494,7 +494,7 @@ onMounted(() => {
   background: none;
   border: none;
   color: var(--text-tertiary);
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   cursor: pointer;
   line-height: 1;
 }

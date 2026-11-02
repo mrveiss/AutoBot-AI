@@ -560,13 +560,13 @@ onMounted(() => {
 }
 
 .view-title {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 600;
   margin: 0;
 }
 
 .item-count {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -588,7 +588,7 @@ onMounted(() => {
   border-radius: 0.375rem;
   background: var(--bg-surface);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .filter-search {
@@ -606,7 +606,7 @@ onMounted(() => {
 .backlog-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .backlog-table th {
@@ -652,7 +652,7 @@ onMounted(() => {
 
 
 .sprint-tag {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   padding: 0.125rem 0.5rem;
   background: var(--backlogview-sprint-tag-bg);
   color: var(--backlogview-sprint-tag-text);
@@ -703,7 +703,7 @@ onMounted(() => {
   border-radius: 0.375rem;
   background: var(--bg-surface);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   width: 100%;
 }
 
@@ -757,7 +757,7 @@ onMounted(() => {
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
@@ -769,7 +769,7 @@ onMounted(() => {
 
 .form-hint {
   margin: 0.25rem 0 0;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -782,7 +782,7 @@ onMounted(() => {
   color: white;
   border: none;
   border-radius: 0.375rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   transition: background 0.15s;
@@ -806,7 +806,7 @@ onMounted(() => {
   color: var(--text-primary);
   border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   transition: background 0.15s;

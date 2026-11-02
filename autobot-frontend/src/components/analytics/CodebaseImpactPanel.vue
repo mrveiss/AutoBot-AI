@@ -200,7 +200,7 @@ async function run(): Promise<void> {
 
 .metric-value {
   display: block;
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 600;
 }
 
