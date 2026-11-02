@@ -117,7 +117,7 @@ def check_pull(
     return verdict
 
 
-def sweep(
+def settle_pulls(
     api: GitHubApi,
     numbers: Sequence[int],
     own_run_id: Optional[int],
@@ -169,7 +169,7 @@ def run(api: GitHubApi, event: str, pr_number: str, base: str, own_run_id: Optio
         numbers = [int(pr_number)]
     else:
         numbers = open_pull_numbers(api, base)
-    verdicts, failures = sweep(api, numbers, own_run_id, target_url)
+    verdicts, failures = settle_pulls(api, numbers, own_run_id, target_url)
     unknown = sum(verdict.kind == core.UNKNOWN for verdict in verdicts.values())
     if unknown:
         logger.warning("%s PR(s) still UNKNOWN after %s attempts", unknown, UNKNOWN_MAX_ATTEMPTS)

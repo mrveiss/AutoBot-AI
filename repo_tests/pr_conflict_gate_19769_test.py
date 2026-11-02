@@ -85,7 +85,7 @@ class _UnsettledApi(FakeApi):
 
 
 def _check(api: FakeApi, sleep: Any = lambda _s: None) -> Optional[Any]:
-    return gate.sweep(api, [7], OWN_RUN, "", sleep=sleep)[0].get(7)
+    return gate.settle_pulls(api, [7], OWN_RUN, "", sleep=sleep)[0].get(7)
 
 
 def test_conflicting_cancels_runs_and_fails_status_excluding_own_run() -> None:
@@ -161,7 +161,7 @@ def test_is_current_needs_both_parents_in_order() -> None:
 
 def test_one_wait_covers_every_unsettled_pr() -> None:
     sleeps: List[float] = []
-    verdicts, failures = gate.sweep(_UnsettledApi(), [1, 2, 3], OWN_RUN, "", sleep=sleeps.append)
+    verdicts, failures = gate.settle_pulls(_UnsettledApi(), [1, 2, 3], OWN_RUN, "", sleep=sleeps.append)
     assert failures == 0 and len(verdicts) == 3
     assert len(sleeps) == gate.UNKNOWN_MAX_ATTEMPTS - 1
 
