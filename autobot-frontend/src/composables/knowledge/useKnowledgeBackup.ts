@@ -37,8 +37,17 @@ export interface BackupInfo {
   facts_count?: number
 }
 
+/** One entry as `GET /knowledge-maintenance/backups` returns it (`_scan_backup_files`, #19721). */
+interface BackupListEntry {
+  filename: string
+  size: number
+  created_at: string
+  description?: string
+  facts_count?: number
+}
+
 interface BackupListResponse {
-  backups?: BackupInfo[]
+  backups?: BackupListEntry[]
   [key: string]: unknown
 }
 
@@ -81,7 +90,7 @@ export function useKnowledgeBackup(): UseKnowledgeBackupReturn {
         `${getApiBase()}/knowledge-maintenance/backups`,
       )
       if (data.backups) {
-        backups.value = data.backups
+        backups.value = data.backups.map(({ filename, ...rest }) => ({ name: filename, ...rest }))
       }
     })
   }
