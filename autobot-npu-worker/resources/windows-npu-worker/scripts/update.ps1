@@ -58,6 +58,8 @@ try {
     & $pipExe install --upgrade pip | Out-Null
 
     # Update requirements
+    . (Join-Path $PSScriptRoot "stage-constraints.ps1")
+    Set-InstalledConstraints -InstallPath $InstallPath -SourceDir (Split-Path -Parent $PSScriptRoot)
     & $pipExe install --upgrade -r (Join-Path $InstallPath "requirements.txt")
     Write-Success "Dependencies updated"
 } catch {
