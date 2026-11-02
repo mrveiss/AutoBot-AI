@@ -215,7 +215,7 @@ function formatRelativeTime(dateStr: string): string {
 }
 
 .section-header h3 {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   margin: 0;
 }
@@ -254,7 +254,7 @@ function formatRelativeTime(dateStr: string): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   color: var(--text-primary);
 }
 
@@ -271,12 +271,12 @@ function formatRelativeTime(dateStr: string): string {
 }
 
 .device-platform {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
 .device-meta {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   display: flex;
   flex-wrap: wrap;
@@ -337,7 +337,7 @@ function formatRelativeTime(dateStr: string): string {
 
 .error-alert p {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 /* Buttons */
@@ -348,7 +348,7 @@ function formatRelativeTime(dateStr: string): string {
   padding: 0.5rem 1rem;
   border-radius: 6px;
   border: 1px solid transparent;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;

@@ -351,7 +351,7 @@ onMounted(async () => {
 
 .view-title {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 600;
 }
 
@@ -359,7 +359,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   cursor: pointer;
   user-select: none;
 }
@@ -391,7 +391,7 @@ onMounted(async () => {
   justify-content: space-between;
   padding: 0.625rem 0.875rem;
   font-weight: 600;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   border-bottom: 1px solid var(--border-default);
   border-radius: 0.5rem 0.5rem 0 0;
   transition: background 0.15s;
@@ -414,7 +414,7 @@ onMounted(async () => {
 }
 
 .column-count {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 700;
 }
 
@@ -466,7 +466,7 @@ onMounted(async () => {
 }
 
 .lane-empty {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   text-align: center;
   padding: 0.5rem;
@@ -545,7 +545,7 @@ onMounted(async () => {
 .column-empty {
   text-align: center;
   padding: 1.5rem 0.5rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   border: 2px dashed var(--border-default);
   border-radius: 0.375rem;
