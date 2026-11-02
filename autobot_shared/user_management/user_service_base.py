@@ -82,6 +82,14 @@ class UserServiceBase(BaseService):
         """
         return {}
 
+    async def reassign_sessions(self, user_id: uuid.UUID) -> dict[str, Any]:
+        """Hand the user's chat sessions to a successor before they are deleted or deactivated (#20029).
+
+        Only the backend owns chat sessions. Raises ``SessionReassignError`` to refuse the removal when a
+        session would be left without a receiving owner. Returns counts for the audit entry.
+        """
+        return {}
+
     # -------------------------------------------------------------------------
     # Password utilities
     # -------------------------------------------------------------------------
