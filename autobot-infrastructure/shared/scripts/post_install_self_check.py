@@ -41,9 +41,8 @@ EMBEDDING_PROBE = "embedding_model"
 CHAT_ERROR_REPLY = "I encountered an error processing your message"
 REQUEST_TIMEOUT_S = 180
 KIND_SCRIPT_TIMEOUT_S = 300
-#: A cached measurement is refused, so this waits out the backend's probe cache: its default 300 s
-#: time to live, plus its 60 s timeout. Straight after a restart there's nothing cached and it's quick.
-EMBEDDING_WAIT_S = 420
+#: How long to wait for a measurement until the backend says how long its probe cache can take.
+EMBEDDING_WAIT_S = 120
 EMBEDDING_POLL_S = 5
 FAILING_KINDS = ("WRONG-KIND", "MISSING-EMBEDDING", "SHOW-FAILED", "UNKNOWN", "UNREACHABLE")
 
@@ -136,20 +135,24 @@ def _delete_session(base: str, token: str, session_id: str, cafile: Optional[str
 def probe_embeddings(base: str, _token: str, env: Mapping[str, str], sleep: Callable[[float], None] = time.sleep) -> None:
     """The backend's own probe has embedded for real, read from the public health route, whose ``probes`` carry it."""
     started = time.monotonic()
-    deadline = started + EMBEDDING_WAIT_S
     while True:
         status, body = _request(f"{base}/api/system/health", cafile=env.get("SELF_CHECK_CA_FILE") or None)
         probes = _json(status, body, "health").get("probes") or []
         component = next((p for p in probes if isinstance(p, dict) and p.get("name") == EMBEDDING_PROBE), None)
         if component is None:
             raise ProbeFailed(f"a {EMBEDDING_PROBE} health probe", "none in the reply")
-        if component.get("status") != "ok":
+        data = component.get("data") or {}
+        age = data.get("embedding_measured_age_s")
+        elapsed = time.monotonic() - started
+        fresh = age is not None and age <= elapsed  # measured since this check began
+        ok = component.get("status") == "ok"
+        if not ok and (fresh or age is None):  # no age: not a cached result, such as a chat model in the role
             raise ProbeFailed("the embedding model to embed", str(component.get("detail")))
-        age = (component.get("data") or {}).get("embedding_measured_age_s")
-        if age is not None and age <= time.monotonic() - started:  # measured since this check began
+        if ok and fresh:
             return
-        if time.monotonic() >= deadline:
-            raise ProbeFailed("an embedding measured during this check", f"none within {EMBEDDING_WAIT_S}s")
+        # A cached result, either way, says nothing about now; the backend refreshes it within this long.
+        if elapsed >= max(EMBEDDING_WAIT_S, data.get("embedding_refresh_within_s") or 0):
+            raise ProbeFailed("an embedding measured during this check", f"none within {elapsed:.0f}s")
         sleep(EMBEDDING_POLL_S)
 
 

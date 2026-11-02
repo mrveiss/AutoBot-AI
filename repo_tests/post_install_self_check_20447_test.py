@@ -188,6 +188,48 @@ def test_a_measurement_cached_from_before_this_check_is_not_a_pass(stack, tmp_pa
     assert "during this check" in _failed(tmp_path)["embeddings"]["expected"]
 
 
+def test_the_wait_follows_the_backends_own_refresh_time(monkeypatch) -> None:
+    """A raised cache lifetime must not make the check impossible to pass."""
+    clock = {"now": 0.0}
+    monkeypatch.setattr(check.time, "monotonic", lambda: clock["now"])
+    monkeypatch.setattr(check, "EMBEDDING_WAIT_S", 10)
+
+    def health(*_args, **_kwargs):
+        age = 900 if clock["now"] < 1000 else 0
+        probe = {"name": "embedding_model", "status": "ok"}
+        probe["data"] = {"embedding_measured_age_s": age, "embedding_refresh_within_s": 2000}
+        return 200, json.dumps({"probes": [probe]})
+
+    monkeypatch.setattr(check, "_request", health)
+    check.probe_embeddings("http://x", "", {}, sleep=lambda s: clock.update(now=clock["now"] + 500))
+    assert clock["now"] == 1000
+
+
+def test_a_cached_failure_from_before_the_check_is_measured_again(monkeypatch) -> None:
+    """The model may have been fixed since; only a failure measured now counts."""
+    clock = {"now": 0.0}
+    monkeypatch.setattr(check.time, "monotonic", lambda: clock["now"])
+
+    def health(*_args, **_kwargs):
+        stale = clock["now"] == 0
+        probe = {"name": "embedding_model", "status": "degraded" if stale else "ok", "detail": "old"}
+        probe["data"] = {"embedding_measured_age_s": 50 if stale else 1}
+        return 200, json.dumps({"probes": [probe]})
+
+    monkeypatch.setattr(check, "_request", health)
+    check.probe_embeddings("http://x", "", {}, sleep=lambda s: clock.update(now=clock["now"] + 5))
+    assert clock["now"] == 5
+
+
+def test_a_failure_measured_during_the_check_fails_it(monkeypatch) -> None:
+    monkeypatch.setattr(check.time, "monotonic", lambda: 0.0)
+    probe = {"name": "embedding_model", "status": "degraded", "detail": "could not embed"}
+    probe["data"] = {"embedding_measured_age_s": 0}
+    monkeypatch.setattr(check, "_request", lambda *a, **k: (200, json.dumps({"probes": [probe]})))
+    with pytest.raises(check.ProbeFailed, match="could not embed"):
+        check.probe_embeddings("http://x", "", {}, sleep=lambda s: None)
+
+
 def test_the_ca_file_comes_from_the_environment_it_was_given(stack, tmp_path: Path, monkeypatch) -> None:
     base, _, _ = stack
     used = []
