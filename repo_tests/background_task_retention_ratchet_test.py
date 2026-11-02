@@ -155,7 +155,6 @@ KNOWN_DISCARDED_LAUNCHES: dict[str, int] = {
     "autobot-backend/chat_workflow/manager.py": 2,
     "autobot-backend/chat_workflow/tool_handler.py": 2,
     "autobot-backend/initialization/lifespan.py": 1,
-    "autobot-backend/knowledge/facts.py": 1,
     "autobot-backend/middleware/audit_middleware.py": 1,
     "autobot-backend/orchestrator.py": 1,
     "autobot-backend/secure_sandbox_executor.py": 1,

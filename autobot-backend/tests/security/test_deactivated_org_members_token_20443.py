@@ -63,6 +63,24 @@ async def _run_scoped(act, **session_kwargs):
     return org
 
 
+@pytest.fixture
+def kb_epochs(monkeypatch):
+    """The knowledge-base membership epoch store (#19670): a hard delete bumps it after the commit."""
+    from autobot_shared import membership_epoch  # noqa: PLC0415
+
+    store = {}
+
+    class _Client:
+        async def set(self, key, value, **_kw):
+            store[key] = value
+
+    async def _client(**_kw):
+        return _Client()
+
+    monkeypatch.setattr(membership_epoch, "get_async_redis_client", _client)
+    return store
+
+
 @pytest.mark.asyncio
 async def test_the_control_a_members_token_is_admitted_while_the_organisation_is_live(get_current_user, epochs):
     assert (await get_current_user(token_request(username="alice")))["username"] == "alice"
@@ -70,7 +88,9 @@ async def test_the_control_a_members_token_is_admitted_while_the_organisation_is
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("how", ["deactivate", "soft_delete", "hard_delete"])
-async def test_a_members_token_is_refused_and_another_organisations_member_is_untouched(get_current_user, epochs, how):
+async def test_a_members_token_is_refused_and_another_organisations_member_is_untouched(
+    get_current_user, epochs, kb_epochs, how
+):
     alice, bob, carol, visitor = (token_request(username=n) for n in ("alice", "bob", "carol", "visitor"))
     acts = {
         "deactivate": lambda svc: svc.deactivate_organization(ORG),
@@ -79,6 +99,7 @@ async def test_a_members_token_is_refused_and_another_organisations_member_is_un
     }
     await _run_scoped(acts[how])
 
+    assert bool(kb_epochs) is (how == "hard_delete"), "only a hard delete bumps the knowledge-base epoch"
     await assert_refused(get_current_user, alice)
     await assert_refused(get_current_user, bob)
     assert (await get_current_user(carol))["username"] == "carol"

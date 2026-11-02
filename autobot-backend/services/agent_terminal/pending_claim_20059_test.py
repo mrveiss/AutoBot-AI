@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock
 import fakeredis.aioredis
 import pytest
 
+from autobot_shared.eventually import DEFAULT_DEADLINE_S, eventually
 from autobot_shared.status_enums import CommandRisk
 from services.agent_terminal.ai_line_gate import (
     CLAIM_UNAVAILABLE_REFUSAL,
@@ -109,10 +110,11 @@ async def test_a_failed_queue_write_releases_the_slot(redis):
     queue.add_command.side_effect = OSError("disk")
     with pytest.raises(OSError):
         await write_reservation(worker.session, SimpleNamespace(command_id="cmd-1"), queue, redis)
-    for _ in range(20):
-        if await redis.get(_claim_key(SID)) is None:
-            break
-        await asyncio.sleep(0.01)
+
+    async def _claim_is_free():
+        return await redis.get(_claim_key(SID)) is None
+
+    await _eventually_async(_claim_is_free)
     assert await redis.get(_claim_key(SID)) is None
     assert worker.session.pending_approval is None
 
@@ -269,7 +271,7 @@ async def test_the_retry_stops_once_a_newer_approval_owns_the_record(redis, monk
     await settle_pending(worker.session, worker.manager)
     _set_pending(worker.session, "cmd-new")
     calls = worker.manager._persist_session.await_count
-    await asyncio.sleep(0.01)
+    await eventually(lambda: not _retry_tasks_running())
     assert worker.manager._persist_session.await_count == calls
 
 
@@ -285,9 +287,23 @@ def _fail_twice_then(real):
     return _setex
 
 
+def _retry_tasks_running() -> list:
+    """The background tasks that retry clearing this session's decided approval."""
+    return [t for t in asyncio.all_tasks() if t.get_name() == f"retry-clear-{SID}" and not t.done()]
+
+
+async def _eventually_async(condition) -> None:
+    """``eventually`` for a condition that must be awaited: poll it until it holds or the deadline passes."""
+
+    async def _poll() -> None:
+        while not await condition():
+            await asyncio.sleep(0)
+
+    await asyncio.wait_for(_poll(), timeout=DEFAULT_DEADLINE_S)
+
+
 async def _until_session_is_cleared(redis) -> None:
-    for _ in range(50):
-        if json.loads(await redis.get(f"agent_terminal:session:{SID}"))["pending_approval"] is None:
-            return
-        await asyncio.sleep(0.01)
-    pytest.fail("the session record still shows the decided approval")
+    async def _cleared():
+        return json.loads(await redis.get(f"agent_terminal:session:{SID}"))["pending_approval"] is None
+
+    await _eventually_async(_cleared)
