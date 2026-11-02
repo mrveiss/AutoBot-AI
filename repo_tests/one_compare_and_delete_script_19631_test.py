@@ -13,8 +13,12 @@ different operations and do not match.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
+
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 HOME = "autobot_shared/redis_utils.py"
 ROOTS = ("autobot-backend", "autobot_shared", "autobot-slm-backend")
@@ -26,20 +30,40 @@ COPY = re.compile(
 SHAPES_IN_HOME = 2
 
 
+def _python_files(root: Path) -> list[str]:
+    """Tracked python files under ``ROOTS``; empty on an empty tree."""
+    try:
+        return [path for path in tracked_paths(root, *ROOTS) if path.endswith(".py")]
+    except EmptyEnumeration:
+        return []
+
+
+REACH = declare(
+    "one-compare-and-delete-script",
+    discover=_python_files,
+    floor=6202,  # mid-window: population 6402, growth 400
+    growth=400,
+    what="tracked python files under the backends and autobot_shared",
+)
+
+
 def _copies() -> dict[str, int]:
     root = repo_root()
+    paths = _python_files(root)
+    REACH.completed(len(paths))
     found: dict[str, int] = {}
-    for top in ROOTS:
-        for path in (root / top).rglob("*.py"):
+    for rel in paths:
+        path = root / rel
+        if path.is_file():
             hits = len(COPY.findall(path.read_text(encoding="utf-8", errors="replace")))
             if hits:
-                found[path.relative_to(root).as_posix()] = hits
+                found[rel] = hits
     return found
 
 
 def test_only_the_home_defines_the_scripts():
     copies = _copies()
-    assert copies.pop(HOME, 0) == SHAPES_IN_HOME, "the sweep no longer sees the home: the pattern or walk broke"
+    assert copies.pop(HOME, 0) == SHAPES_IN_HOME, "the home's scripts are not seen: the pattern broke"
     assert not copies, f"use delete_if_value / expire_if_value from {HOME}: {copies}"
 
 
