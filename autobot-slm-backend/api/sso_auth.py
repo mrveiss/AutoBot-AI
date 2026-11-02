@@ -149,6 +149,8 @@ async def _redirect_with_session_code(user) -> RedirectResponse:
     # #18322: mint from the provisioned User record itself. A stand-in lacked
     # `is_platform_admin`, so create_token_response raised; the role comes only from
     # the record (role_for_user), never from a default.
+    if not user.is_platform_admin:  # #20628: the browser is mid-redirect, so say it there
+        return RedirectResponse(url=_sso_callback_url("error=admin_only"), status_code=status.HTTP_302_FOUND)
     token_response = await auth_service.create_token_response(user)
     try:
         code = await issue_exchange_code(token_response.model_dump())
