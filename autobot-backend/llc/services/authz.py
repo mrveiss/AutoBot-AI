@@ -35,7 +35,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.approval_four_eyes import FourEyesError, four_eyes_self_approval, requester_id
-from user_management.models.user import User
 
 from ..models.enums import MembershipRole
 from ..models.membership import LLCCompanyMembership
@@ -158,18 +157,18 @@ async def active_admin_ids(session: AsyncSession, company_id: uuid.UUID) -> set[
     check, and two concurrent decisions on one company take turns. A platform admin is not counted:
     a company's sole owner or admin may self-approve even while a platform admin exists.
     """
+    from .member_standing import member_people  # noqa: PLC0415 -- it imports this module
+
     rows = await session.execute(
         select(LLCCompanyMembership.user_id)
-        .join(User, User.id == LLCCompanyMembership.user_id)
         .where(
             LLCCompanyMembership.company_id == company_id,
             LLCCompanyMembership.role.in_(GRANTING_ROLES),
-            User.is_active.is_(True),
-            User.deleted_at.is_(None),
         )
         .with_for_update(of=LLCCompanyMembership)
     )
-    return set(rows.scalars().all())
+    _names, may_act = await member_people(session, list(rows.scalars().all()))
+    return {user_id for user_id, active in may_act.items() if active}
 
 
 async def require_four_eyes(
