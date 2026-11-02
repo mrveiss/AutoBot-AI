@@ -34,6 +34,7 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from redis.exceptions import RedisError
 
+from api._connector_sync_claim import claim_or_refuse, run_claimed_sync
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.auth import validate_config_against_schema
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -45,7 +46,7 @@ from knowledge.connectors.credential_store import get_credential_store
 from knowledge.connectors.models import ConnectorConfig
 from knowledge.connectors.registry import ConnectorRegistry
 from knowledge.connectors.scheduler import get_connector_scheduler
-from knowledge.connectors.sync_lease import connector_sync_running, one_sync_per_connector
+from knowledge.connectors.sync_lease import one_sync_per_connector
 from knowledge.schemas.connectors import (
     ConnectorCreateResponse,
     ConnectorDetailResponse,
@@ -733,9 +734,8 @@ async def trigger_sync(
     cfg = await _load_connector(connector_id)
     if cfg is None:
         raise HTTPException(status_code=404, detail=ERR_CONNECTOR_NOT_FOUND)
-    if await connector_sync_running(connector_id):
-        raise HTTPException(status_code=409, detail="This connector is already syncing")
-    background_tasks.add_task(_run_sync_background, connector_id, incremental)
+    lease = await claim_or_refuse(connector_id)
+    background_tasks.add_task(run_claimed_sync, _run_sync_background.__wrapped__, connector_id, lease, incremental)
     logger.info("Triggered sync for connector %s (incremental=%s)", connector_id, incremental)
     return {
         "connector_id": connector_id,

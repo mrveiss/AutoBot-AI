@@ -25,42 +25,74 @@ _DATABASE = "knowledge"
 
 
 class ConnectorSyncBusy(Exception):
-    """This connector already has a sync running, or Redis could not say otherwise."""
+    """This connector already has a sync running."""
+
+
+class ConnectorSyncUnavailable(Exception):
+    """Redis can't be reached, so whether a sync is running can't be told, and none starts."""
 
 
 def _key(connector_id: str) -> str:
     return f"connector:sync:{connector_id}"
 
 
-async def connector_sync_running(connector_id: str) -> bool:
-    redis = await get_async_redis_client(database=_DATABASE)
-    return redis is not None and bool(await redis.exists(_key(connector_id)))
+async def claim_connector_sync(connector_id: str) -> LeaderLease:
+    """Take the connector's lease now, for a run that may start later. It lapses if never held."""
+    try:
+        redis = await get_async_redis_client(database=_DATABASE)
+        if redis is None:
+            raise ConnectorSyncUnavailable(connector_id)
+        await redis.ping()
+    except ConnectorSyncUnavailable:
+        raise
+    except Exception as exc:
+        raise ConnectorSyncUnavailable(connector_id) from exc
+    lease = LeaderLease(_key(connector_id), database=_DATABASE, worker_id=uuid.uuid4().hex)
+    if not await lease.update_leadership():
+        raise ConnectorSyncBusy(connector_id)
+    return lease
 
 
 async def _keep_renewing(lease: LeaderLease) -> None:
     while True:
         await asyncio.sleep(DEFAULT_REFRESH_S)
-        await lease.update_leadership()
+        if not await lease.update_leadership():
+            logger.error("Lost the sync lease %s mid-run; a second sync could now start", lease.key)
+            return
+
+
+async def _release(lease: LeaderLease) -> None:
+    """A failed release must not replace the sync's own result; the lease expires by itself."""
+    try:
+        redis = await get_async_redis_client(database=_DATABASE)
+        if redis is not None:
+            await delete_if_value(redis, lease.key, lease.worker_id)
+    except Exception as exc:
+        logger.warning("Could not release the sync lease %s: %s", lease.key, exc)
 
 
 @asynccontextmanager
-async def connector_sync_lease(connector_id: str) -> AsyncIterator[None]:
-    """Hold the connector's lease for the block. Raises ConnectorSyncBusy if it can't be taken."""
-    lease = LeaderLease(_key(connector_id), database=_DATABASE, worker_id=uuid.uuid4().hex)
-    if not await lease.update_leadership():
-        raise ConnectorSyncBusy(connector_id)
+async def holding_connector_sync(lease: LeaderLease) -> AsyncIterator[None]:
+    """Keep a claimed lease renewed for the block, then release it."""
     renewing = asyncio.create_task(_keep_renewing(lease))
     try:
         yield
     finally:
         renewing.cancel()
-        redis = await get_async_redis_client(database=_DATABASE)
-        if redis is not None:
-            await delete_if_value(redis, lease.key, lease.worker_id)
+        await asyncio.gather(renewing, return_exceptions=True)
+        await _release(lease)
+
+
+@asynccontextmanager
+async def connector_sync_lease(connector_id: str) -> AsyncIterator[None]:
+    """Claim and hold the lease. Raises ConnectorSyncBusy or ConnectorSyncUnavailable."""
+    lease = await claim_connector_sync(connector_id)
+    async with holding_connector_sync(lease):
+        yield
 
 
 def one_sync_per_connector(func):
-    """For a background job taking connector_id first: skip the run if one is already going."""
+    """For a background job taking connector_id first: skip the run if it can't take the lease."""
 
     @functools.wraps(func)
     async def wrapper(connector_id: str, *args, **kwargs):
@@ -69,6 +101,8 @@ def one_sync_per_connector(func):
                 return await func(connector_id, *args, **kwargs)
         except ConnectorSyncBusy:
             logger.info("Connector %s already has a sync running; this one did not start", connector_id)
-            return None
+        except ConnectorSyncUnavailable:
+            logger.warning("Connector %s did not sync: Redis is unavailable", connector_id)
+        return None
 
     return wrapper

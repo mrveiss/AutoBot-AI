@@ -24,7 +24,7 @@ from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_scan import scan_keys
-from knowledge.connectors.sync_lease import ConnectorSyncBusy, connector_sync_lease
+from knowledge.connectors.sync_lease import ConnectorSyncBusy, ConnectorSyncUnavailable, connector_sync_lease
 
 logger = get_logger(__name__)
 
@@ -318,6 +318,8 @@ class ConnectorScheduler:
             )
         except ConnectorSyncBusy:
             logger.info("Scheduled sync skipped: connector %s already has a sync running", connector_id)
+        except ConnectorSyncUnavailable:
+            logger.warning("Scheduled sync skipped: Redis is unavailable for connector %s", connector_id)
         except Exception as exc:
             elapsed = time.monotonic() - started_at
             logger.error("Scheduled sync failed: connector=%s elapsed=%.1fs error=%s", connector_id, elapsed, exc)
