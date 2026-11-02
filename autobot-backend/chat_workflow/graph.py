@@ -32,6 +32,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
 from chat_workflow import limits
 from chat_workflow.approval_binding import ai_line_calls_shown, bind_decision
+from chat_workflow.attachment_context import attachment_prompt, stream_notices, without_block
 from chat_workflow.checkpointer_connection import describe_connection, describe_error, get_checkpointer_connection
 from chat_workflow.graph_tool_dispatch import (
     dispatch_approved_calls,
@@ -133,11 +134,6 @@ class ChatState(TypedDict, total=False):
 
     # Error tracking
     error: str | None
-
-
-# ---------------------------------------------------------------------------
-# Tool-call loop detection helpers (#3254)
-# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------
@@ -247,7 +243,9 @@ async def prepare_llm(state: ChatState, config: RunnableConfig) -> dict:
     manager = config["configurable"]["manager"]
 
     session = await manager.get_or_create_session(state["session_id"])
-    llm_params = await manager._prepare_llm_workflow_params(session, state["user_message"], state.get("context", {}))
+    updated_context = dict(state.get("context", {}) or {})  # #20195: the seam stamps INTO this; the node returns it
+    llm_params = await manager._prepare_llm_workflow_params(session, state["user_message"], updated_context)
+    stream_notices(llm_params, config["configurable"].get("stream_callback"))  # #20195: streamed, not persisted
     ctx = manager._create_llm_iteration_context(
         llm_params,
         state["session_id"],
@@ -261,7 +259,6 @@ async def prepare_llm(state: ChatState, config: RunnableConfig) -> dict:
     # into ctx.context. Without this, the ctx built above — which DOES carry
     # the flag via _create_llm_iteration_context — is discarded, and the
     # response-metadata cost badge sees it only on the non-graph path.
-    updated_context = dict(state.get("context", {}) or {})
     updated_context["lightweight_mode_used"] = llm_params.get("lightweight_mode_used", False)
 
     return {
@@ -269,7 +266,7 @@ async def prepare_llm(state: ChatState, config: RunnableConfig) -> dict:
             "ollama_endpoint": ctx.ollama_endpoint,
             "selected_model": ctx.selected_model,
             "system_prompt": ctx.system_prompt,
-            "initial_prompt": ctx.initial_prompt,
+            "initial_prompt": without_block(llm_params),  # #20195: file text never rides the Redis checkpoint
         },
         "used_knowledge": ctx.used_knowledge,
         "rag_citations": [c for c in (ctx.rag_citations or [])],
@@ -404,7 +401,7 @@ async def _run_llm_iteration(manager, ctx, iteration, messages, stream_cb):
 
     async for item in manager._run_continuation_loop_iteration(
         http_client,
-        ctx.initial_prompt,
+        await attachment_prompt(manager, ctx),  # #20195: file text re-resolved per call, never checkpointed
         iteration,
         ctx,
     ):
@@ -461,7 +458,7 @@ async def _run_llm_iteration_plan(manager, ctx, iteration, messages, stream_cb):
 
     async for item in manager._run_llm_iteration_plan_only(
         http_client,
-        ctx.initial_prompt,
+        await attachment_prompt(manager, ctx),  # #20195: file text re-resolved per call, never checkpointed
         iteration,
         ctx,
     ):
@@ -640,13 +637,13 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
         step_id=step_name,
     )
 
-    await _emit_agent_execute_hook(session_id, iteration)
+    await _emit_agent_execute_hook(session_id, iteration)  # Issue #3278
 
-    # GH#11202: flag-gated plan-only path. OFF (default) falls through to the
-    # unchanged inline-dispatch path below — zero behavior change when off.
+    # GH#11202 flag-gated plan-only path; #20195: attachment turns (and that chat's later turns) take it whatever
+    # the flag, so a person can answer each call. Otherwise OFF falls through to the unchanged inline path.
     from chat_workflow.session_role import CHAT_APPROVAL_GATE_ENABLED
 
-    if CHAT_APPROVAL_GATE_ENABLED:
+    if CHAT_APPROVAL_GATE_ENABLED or ctx.approve_every_call:
         return await _generate_response_planned(
             state, manager, ctx, iteration, messages, stream_cb, step_name, _cot_start
         )
@@ -665,10 +662,10 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
             output_summary="LLM error: Request failed",
             session_id=session_id,
         )
-        await _emit_planned_agent_error_hooks(session_id, iteration, exc)
+        await _emit_planned_agent_error_hooks(session_id, iteration, exc)  # Issue #3278
         return {"error": str(exc), "workflow_messages": messages}
 
-    await _emit_planned_agent_complete_hook(session_id, iteration, llm_response or "")
+    await _emit_planned_agent_complete_hook(session_id, iteration, llm_response or "")  # Issue #3278
 
     # Issue #13295 (review B3): append unconditionally — see the matching
     # comment in _generate_response_planned for why a skipped append here

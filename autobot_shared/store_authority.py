@@ -291,6 +291,16 @@ STORE_AUTHORITY: dict[str, Concept] = {
         note="The one system of record for conversation turns (#18293). The per-turn transcript "
         "files that once duplicated them are legacy_conversation_transcripts: read-only.",
     ),
+    "chat_attachment_use": Concept(
+        name="chat_attachment_use",
+        system_of_record=Store.DISK,
+        projections=(),
+        write_sites=("autobot-backend/chat_attachment_marks.py",),
+        rebuilt_by="Nothing copies it: the chat_attachment_marks table in the conversation files SQLite store "
+        "is the only home (#20195). It cannot be rebuilt from file rows, which a delete removes.",
+        note="Whether a chat ever ran an attachment turn, so every later tool call keeps asking. Durable by "
+        "design: losing it silently lifts the approval floor, so there is no evictable copy.",
+    ),
     "legacy_conversation_transcripts": Concept(
         name="legacy_conversation_transcripts",
         system_of_record=Store.DISK,
