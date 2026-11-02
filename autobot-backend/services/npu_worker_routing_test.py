@@ -99,6 +99,14 @@ async def test_embeddings_move_to_the_next_worker_when_one_fails():
 
 
 @pytest.mark.asyncio
+async def test_a_paired_worker_is_an_internal_origin_for_the_egress_guard():
+    with patch.object(npu_worker_manager, "_worker_manager", _registry(_worker("http://paired.test:8081"))):
+        assert await npu_worker_routing._paired_worker_origins() == ["http://paired.test:8081"]
+    with patch.object(npu_worker_manager, "_worker_manager", None):
+        assert await npu_worker_routing._paired_worker_origins() == []
+
+
+@pytest.mark.asyncio
 async def test_a_client_built_for_one_url_stays_on_it():
     assert await NPUClient(base_url="http://only:1")._worker_urls() == ["http://only:1"]
 
