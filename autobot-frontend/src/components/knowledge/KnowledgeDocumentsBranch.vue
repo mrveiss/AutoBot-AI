@@ -425,7 +425,7 @@ const formatDate = createDateFormatter({ kind: 'date', intl: { year: 'numeric', 
 }
 
 .btn-link {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--color-primary);
   text-decoration: none;
   padding: var(--spacing-1) var(--spacing-2);
