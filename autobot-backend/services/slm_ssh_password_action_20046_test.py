@@ -166,7 +166,7 @@ def test_a_node_id_cannot_smuggle_a_value(monkeypatch) -> None:
 
 async def test_require_internal_key_raises_403() -> None:
     with pytest.raises(HTTPException) as err:
-        await proposals.require_internal_key(None)
+        await proposals.require_internal_api_key(None)
     assert err.value.status_code == 403
 
 

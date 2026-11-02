@@ -11,27 +11,20 @@ a node whose proposal is still pending returns that one. Nothing is deleted here
 the Approvals inbox, and ``services.slm_ssh_password_action`` then asks the SLM to delete it.
 """
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_slm_credential_proposals import SshPasswordDeletionProposal, SshPasswordDeletionProposalResponse
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
-from autobot_shared.auth.internal_api_key import verify_internal_api_key
+from autobot_shared.auth.internal_api_key import require_internal_api_key
 from autobot_shared.slm_credential_deletion import ACTION, CREDENTIAL_KIND, proposer_id
 from models.approval import Approval, ApprovalStatus, ApprovalType
 from services.approval_gate_service import ApprovalGateService
 from services.slm_ssh_password_action import register_ssh_password_action
 
-
-async def require_internal_key(x_internal_api_key: str | None = Header(None, alias="X-Internal-API-Key")) -> None:
-    """Only the SLM's service key may propose; a user session is refused."""
-    if not verify_internal_api_key(x_internal_api_key):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "internal service key required")
-
-
-# get_current_user is the recognised gate; require_internal_key narrows it to the service key alone.
-router = APIRouter(prefix="/internal/slm", dependencies=[Depends(require_internal_key), Depends(get_current_user)])
+# get_current_user is the recognised gate; require_internal_api_key narrows it to the service key alone.
+router = APIRouter(prefix="/internal/slm", dependencies=[Depends(require_internal_api_key), Depends(get_current_user)])
 
 # Registered at this router's import time so the executor exists before any approve().
 register_ssh_password_action()
