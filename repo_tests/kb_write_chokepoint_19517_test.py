@@ -64,7 +64,11 @@ WRITE_PATHS: dict[str, tuple[str, str]] = {
     _B + "knowledge/document_ingest.py": (DELEGATED, "ingest_document -> _add_document_internal"),
     _B + "knowledge/kb_ingest_result.py": (DELEGATED, "ingest_in_kb -> add_document"),
     _B + "conversation_file_route_api.py": (DELEGATED, "transfer_files -> conversation_file_transfer"),
-    _B + "conversation_file_transfer.py": (SYSTEM, "admin-only transfer route: metadata built here; owner is #20233"),
+    _B
+    + "conversation_file_transfer.py": (
+        SYSTEM,
+        "admin-only transfer route: metadata built here with owner_id and private visibility (#20233)",
+    ),
     _B + "knowledge/bulk.py": (SYSTEM, "backup restore / bulk import: admin routes, stored facts"),
     _B + "api/knowledge.py": (ROUTE_ADMIN, "upload / add_text routes: admin or owner checks at the route"),
     _B + "api/knowledge_extract.py": (ROUTE_BUILT, "extraction route"),
