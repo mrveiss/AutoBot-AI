@@ -15,9 +15,7 @@
 
 import { ref } from 'vue'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
-import { useBackgroundTask } from '@/composables/useBackgroundTask'
 import { createLogger } from '@/utils/debugUtils'
-import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useDashboardLoaders')
 
@@ -57,8 +55,6 @@ export interface UseDashboardLoadersDeps {
 }
 
 export function useDashboardLoaders(deps: UseDashboardLoadersDeps) {
-  const dashboardTask = useBackgroundTask(`${getApiBase()}/analytics/dashboard/overview`)
-
   const systemOverview = ref<SystemOverviewData | null>(null)
   const communicationPatterns = ref<CommunicationPatternsData | null>(null)
   const codeQuality = ref<CodeQualityData | null>(null)
@@ -88,7 +84,7 @@ export function useDashboardLoaders(deps: UseDashboardLoadersDeps) {
 
   const duplicatesEndpoint = useFetchEndpoint<Raw, Raw>(
     {
-      path: '/api/analytics/codebase/duplicates',
+      path: '/api/analytics/codebase/duplicates/cached', // #20491: page open reads, never scans
       scopeToSource: true,
       pickData: (r) => r,
       label: 'Codebase duplicates',
@@ -114,11 +110,18 @@ export function useDashboardLoaders(deps: UseDashboardLoadersDeps) {
     label: 'Monitoring status',
   })
 
+  // #20491: a plain read of live metrics; the POST form queues a task on every page open.
+  const overviewEndpoint = useFetchEndpoint<Raw, Raw>({
+    path: '/api/analytics/dashboard/overview',
+    pickData: (r) => r,
+    label: 'System overview',
+  })
+
   const loadSystemOverview = async () => {
     try {
-      const ok = await dashboardTask.start()
-      if (ok && dashboardTask.result.value) {
-        const result = dashboardTask.result.value as Record<string, unknown>
+      await overviewEndpoint.load()
+      if (overviewEndpoint.data.value) {
+        const result = overviewEndpoint.data.value
 
         const commPatterns = (result.communication_patterns || {}) as Record<string, unknown>
         const perfMetrics = (result.performance_metrics || {}) as Record<string, unknown>
@@ -211,6 +214,7 @@ export function useDashboardLoaders(deps: UseDashboardLoadersDeps) {
     let duplicateCount = 0
     if (duplicatesData?.status === 'success') {
       duplicateCount =
+        (duplicatesData.total_count as number) ||
         (duplicatesData.total_duplicates as number) ||
         (duplicatesData.count as number) ||
         0
