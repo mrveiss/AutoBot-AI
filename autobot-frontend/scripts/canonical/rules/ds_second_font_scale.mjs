@@ -18,7 +18,7 @@ export const FIX_HINT =
 //: Files an open PR holds, recorded by file with the count of references and
 //: the PR. Remove the entry in the PR that converts the file; a file with MORE
 //: references than recorded is reported again.
-const WAIVED_FILES = new Map([["autobot-frontend/src/views/llc/CompanySelectorView.vue", { count: 1, pr: "#20388" }]]);
+const WAIVED_FILES = new Map();
 
 export const waivedFilesForTest = () => new Map(WAIVED_FILES);
 

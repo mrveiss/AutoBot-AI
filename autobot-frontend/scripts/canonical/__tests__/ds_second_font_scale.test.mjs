@@ -45,17 +45,14 @@ describe("ds-second-font-scale (#20390)", () => {
     expect(await rule.check(file)).toEqual([]);
   });
 
-  it("waives a recorded file up to its recorded count and reports the excess", async () => {
+  it("reports a reference in a file that was once waived (no file waiver remains)", async () => {
     const dir = await mkdtemp(join(tmpdir(), "font-waiver-"));
     const rel = "autobot-frontend/src/views/llc/CompanySelectorView.vue";
     await mkdir(join(dir, "autobot-frontend/src/views/llc"), { recursive: true });
     const file = join(dir, rel);
-    const { count } = rule.waivedFilesForTest().get(rel);
-    const line = ".a { font-size: var(--font-size-xs); }";
-    await writeFile(file, Array.from({ length: count }, () => line).join("\n"), "utf-8");
-    expect(await rule.check(file)).toEqual([]);
-    await writeFile(file, Array.from({ length: count + 1 }, () => line).join("\n"), "utf-8");
-    expect((await rule.check(file)).map((d) => d.line)).toEqual([count + 1]);
+    await writeFile(file, ".a { font-size: var(--font-size-xs); }", "utf-8");
+    expect(rule.waivedFilesForTest().size).toBe(0);
+    expect((await rule.check(file)).map((d) => d.line)).toEqual([1]);
   });
 
   it("every waiver names a PR and a positive count", () => {
