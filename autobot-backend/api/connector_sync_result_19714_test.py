@@ -6,7 +6,7 @@
 
 import json
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from redis.exceptions import WatchError
@@ -18,64 +18,48 @@ from knowledge.connectors.base import ConnectorConfig
 _WHEN = datetime(2026, 11, 2, tzinfo=timezone.utc)
 
 
-class _Pipe:
-    def __init__(self, store: dict, conflicts: int = 0) -> None:
-        self.store, self.conflicts = store, conflicts
+def _redis(store: dict, conflicts: int = 0) -> MagicMock:
+    """A Redis whose pipeline reads and writes ``store``, raising WatchError for the first conflicts."""
+    pipe = MagicMock()
+    pipe.__enter__.return_value = pipe
+    pipe.get.side_effect = store.get
+    pending: dict = {}
+    pipe.set.side_effect = lambda key, value: pending.update({key: value})
+    left = [conflicts]
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *_exc) -> None:
-        return None
-
-    def watch(self, _key) -> None: ...
-
-    def unwatch(self) -> None: ...
-
-    def multi(self) -> None: ...
-
-    def get(self, key):
-        return self.store.get(key)
-
-    def set(self, key, value) -> None:
-        self.pending = (key, value)
-
-    def execute(self) -> None:
-        if self.conflicts:
-            self.conflicts -= 1
+    def execute() -> None:
+        if left[0]:
+            left[0] -= 1
             raise WatchError()
-        self.store[self.pending[0]] = self.pending[1]
+        store.update(pending)
 
-
-class _Redis:
-    def __init__(self, store: dict, conflicts: int = 0) -> None:
-        self._pipe = _Pipe(store, conflicts)
-
-    def pipeline(self):
-        return self._pipe
+    pipe.execute.side_effect = execute
+    client = MagicMock()
+    client.pipeline.return_value = pipe
+    return client
 
 
 def test_only_the_time_changes_on_the_current_record() -> None:
     store = {"k": json.dumps({"name": "edited during the sync", "config": {"host": "h"}})}
-    assert result._write_last_sync(_Redis(store), "k", "T") is True
+    assert result._write_last_sync(_redis(store), "k", "T") is True
     assert json.loads(store["k"]) == {"name": "edited during the sync", "config": {"host": "h"}, "last_sync_at": "T"}
 
 
 def test_a_connector_deleted_during_the_sync_stays_deleted() -> None:
     store: dict = {}
-    assert result._write_last_sync(_Redis(store), "k", "T") is False
+    assert result._write_last_sync(_redis(store), "k", "T") is False
     assert store == {}
 
 
 def test_an_edit_racing_the_write_is_retried_on_the_new_record() -> None:
     store = {"k": json.dumps({"name": "n"})}
-    assert result._write_last_sync(_Redis(store, conflicts=1), "k", "T") is True
+    assert result._write_last_sync(_redis(store, conflicts=1), "k", "T") is True
     assert json.loads(store["k"])["last_sync_at"] == "T"
 
 
 def test_it_gives_up_rather_than_spinning() -> None:
     store = {"k": json.dumps({"name": "n"})}
-    assert result._write_last_sync(_Redis(store, conflicts=99), "k", "T") is False
+    assert result._write_last_sync(_redis(store, conflicts=99), "k", "T") is False
     assert "last_sync_at" not in json.loads(store["k"])
 
 
