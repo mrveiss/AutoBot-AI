@@ -16,7 +16,7 @@ const COLLECTIONS = [
 function list(collections = COLLECTIONS) {
   return mount(ChromaCollectionList, {
     props: { collections },
-    global: { mocks: { $t: (key: string) => key } },
+    global: { mocks: { $t: (key: string, params?: { count: number }) => `${key}:${params?.count}` } },
   })
 }
 
@@ -24,18 +24,19 @@ describe('ChromaCollectionList', () => {
   it('hides empty collections until asked', async () => {
     const wrapper = list()
     expect(wrapper.findAll('.collection-name').map((n) => n.text())).toEqual(['docs'])
-    await wrapper.find('input').setValue(true)
+    expect(wrapper.text()).toContain('includeEmpty:1')
+    await wrapper.find('[role="switch"]').trigger('click')
     expect(wrapper.findAll('.collection-name').map((n) => n.text())).toEqual(['docs', 'work_item_a'])
   })
 
   it('offers no toggle when nothing is hidden', () => {
-    expect(list([{ name: 'docs', count: 2 }]).find('input').exists()).toBe(false)
+    expect(list([{ name: 'docs', count: 2 }]).find('[role="switch"]').exists()).toBe(false)
   })
 
   it('still offers the toggle when every collection is empty', () => {
     const wrapper = list([{ name: 'work_item_a', count: 0 }])
     expect(wrapper.findAll('.collection-name')).toHaveLength(0)
-    expect(wrapper.find('input').exists()).toBe(true)
+    expect(wrapper.find('[role="switch"]').exists()).toBe(true)
   })
 
   it('names the one chosen', async () => {

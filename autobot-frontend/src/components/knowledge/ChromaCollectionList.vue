@@ -5,10 +5,10 @@
 <template>
   <div class="collections-list">
     <!-- #19725: most collections on a node can be empty, which read as "lots of empty facts". -->
-    <label v-if="emptyCount > 0">
-      <input v-model="showEmpty" type="checkbox" />
+    <div v-if="emptyCount > 0">
+      <BaseSwitch v-model="showEmpty" :label="$t('knowledge.chromaExplorer.includeEmpty', { count: emptyCount })" />
       {{ $t('knowledge.chromaExplorer.includeEmpty', { count: emptyCount }) }}
-    </label>
+    </div>
     <button
       v-for="collection in visible"
       :key="collection.name"
@@ -29,6 +29,7 @@
 
 <script setup lang="ts" generic="T extends { name: string; count: number }">
 import { computed, ref } from 'vue'
+import { BaseSwitch } from '@autobot/ui'
 
 const props = defineProps<{ collections: T[]; selectedName?: string }>()
 const emit = defineEmits<{ (e: 'select', collection: T): void }>()
