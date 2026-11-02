@@ -173,7 +173,7 @@ def _scanned_files(root: Path) -> list[str]:
 FILES = declare(
     "service-port-homes-scan",
     discover=_scanned_files,
-    floor=5507,  # mid-window: population 5582, window (5432, 5582)
+    floor=5570,  # mid-window: population 5645, window (5495, 5645)
     growth=150,
     what="production python and text sources swept for a second definition of a service port",
     roots=_SCAN_ROOTS,
@@ -388,7 +388,9 @@ def test_an_unreadable_discovered_file_fails_the_sweep(tmp_path: Path) -> None:
 
 def test_a_retired_number_has_no_home() -> None:
     assert _homes(6081) == set(), "6081 is served by no host; nothing may state it"
-    found = forbidden_sites(6081, {"autobot-frontend/src/config/x.ts": "port: getEnvNumber('P', 6081),\n"})
+    found = forbidden_sites(
+        6081, {"autobot-frontend/src/config/x.ts": "port: getEnvPositiveInt(import.meta.env, 'P', 6081),\n"}
+    )
     assert found == ["autobot-frontend/src/config/x.ts:1: 6081 -- read PortConfig.vnc"]
 
 

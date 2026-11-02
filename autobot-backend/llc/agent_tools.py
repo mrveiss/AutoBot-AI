@@ -192,13 +192,22 @@ async def _request_approval(session, company_id: str, user_id: str | None, param
     # rather than attribute the request to an arbitrary/forged id.
     if not user_id:
         raise LLCToolError("request_approval requires an authenticated user in the chat context")
-    appr = await ApprovalService().request_approval(
-        session,
-        company_id=uuid.UUID(str(company_id)),
-        gate_type=_enum_or_error(ApprovalType, params.get("gate_type", "strategy"), "gate_type"),
-        payload={"summary": summary},
-        requested_by=uuid.UUID(str(user_id)),
-    )
+    from .services.approval_hooks import ApprovalHookError  # noqa: PLC0415
+
+    gate_type = _enum_or_error(ApprovalType, params.get("gate_type", "strategy"), "gate_type")
+    try:
+        appr = await ApprovalService().request_approval(
+            session,
+            company_id=uuid.UUID(str(company_id)),
+            gate_type=gate_type,
+            payload={"summary": summary},
+            requested_by=uuid.UUID(str(user_id)),
+            actor_user_id=uuid.UUID(str(user_id)),
+        )
+    except ApprovalHookError as exc:
+        # A gate whose approval EXECUTES something (hire, budget override, sprint close) needs a payload a
+        # summary cannot be; requesting it from chat would make an approval that can never be approved (#8214).
+        raise LLCToolError(f"gate_type {gate_type.value!r} cannot be requested from chat: {exc}") from exc
     return {"entity_type": "approval", "entity_id": str(appr.id), "summary": summary}
 
 

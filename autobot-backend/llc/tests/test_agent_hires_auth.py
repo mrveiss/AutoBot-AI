@@ -153,7 +153,8 @@ async def test_hire_same_tenant_authorized(session_factory) -> None:  # noqa: AN
 
     async with client:
         with (
-            patch("llc.api.agent_hires.BudgetService.provision_budget", mock_provision),
+            patch("llc.services.agent_hire_service.BudgetService.provision_budget", mock_provision),
+            patch("llc.api.agent_hires.company_requires_hire_approval", new=AsyncMock(return_value=False)),
             patch("llc.api.agent_hires.adapter_unavailable_reason", return_value=None),
             patch("sqlalchemy.ext.asyncio.AsyncSession.execute", mock_execute),
         ):
