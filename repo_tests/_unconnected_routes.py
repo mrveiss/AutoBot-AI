@@ -70,7 +70,7 @@ def load_script(root: Path, name: str) -> ModuleType:
     The audit script prepends its own directory to ``sys.path`` and imports ``dead_surface``;
     leaving either installed trips the session-finish leak guard (#13361).
     """
-    path_before, modules_before = list(sys.path), set(sys.modules)
+    path_before, modules_before = list(sys.path), dict(sys.modules)
     spec = importlib.util.spec_from_file_location(name, root / "scripts" / f"{name}.py")
     module = importlib.util.module_from_spec(spec)
     sys.modules[name] = module
@@ -78,8 +78,10 @@ def load_script(root: Path, name: str) -> ModuleType:
         spec.loader.exec_module(module)
     finally:
         sys.path[:] = path_before
-        for leaked in set(sys.modules) - modules_before:
+        for leaked in set(sys.modules) - set(modules_before):
             sys.modules.pop(leaked, None)
+        if name in modules_before:  # a module already installed under this name is put back, not left replaced
+            sys.modules[name] = modules_before[name]
     return module
 
 
