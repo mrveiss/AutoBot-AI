@@ -190,4 +190,56 @@ describe('InstallMetrics', () => {
     await flushPromises()
     expect(client.get).toHaveBeenCalledTimes(18)
   })
+
+  describe('circuit breaker: polling pauses on repeated failure and Retry resumes it', () => {
+    const LIMIT = 5
+
+    async function pauseWithMainAppDown(): Promise<VueWrapper> {
+      serve(allDown())
+      const w = await mountView()
+      for (let i = 1; i < LIMIT; i++) await vi.advanceTimersByTimeAsync(15000)
+      return w
+    }
+
+    it('stops reading the main app after five consecutive all-failed polls', async () => {
+      const w = await pauseWithMainAppDown()
+      expect(client.get).toHaveBeenCalledTimes(LIMIT * 6)
+      await vi.advanceTimersByTimeAsync(60000)
+      expect(client.get).toHaveBeenCalledTimes(LIMIT * 6)
+      expect(w.find('[data-polling-paused]').exists()).toBe(true)
+    })
+
+    it('shows the paused notice with Retry while the screen says the main app is not available', async () => {
+      const w = await pauseWithMainAppDown()
+      expect(byId(w, 'slm-install-unavailable').exists()).toBe(true)
+      const paused = w.find('[data-polling-paused]')
+      expect(paused.exists()).toBe(true)
+      expect(paused.text()).toContain(en.common.polling.retry)
+    })
+
+    it('recovers: all down, paused, main app returns, Retry shows the figures and polling resumes', async () => {
+      const w = await pauseWithMainAppDown()
+      serve()
+      await w.find('[data-polling-paused] button').trigger('click')
+      await flushPromises()
+      expect(byId(w, 'slm-install-unavailable').exists()).toBe(false)
+      expect(w.find('[data-polling-paused]').exists()).toBe(false)
+      expect(byId(w, 'slm-install-stat-cpu').text()).toContain('12.5%')
+      const after = client.get.mock.calls.length
+      await vi.advanceTimersByTimeAsync(15000)
+      expect(client.get.mock.calls.length).toBe(after + 6)
+    })
+
+    it('one good poll resets the count, so failures that are not consecutive never pause', async () => {
+      const w = await mountView()
+      for (let round = 0; round < 3; round++) {
+        serve(allDown())
+        for (let i = 0; i < LIMIT - 1; i++) await vi.advanceTimersByTimeAsync(15000)
+        serve()
+        await vi.advanceTimersByTimeAsync(15000)
+      }
+      expect(w.find('[data-polling-paused]').exists()).toBe(false)
+      expect(byId(w, 'slm-install-stat-cpu').text()).toContain('12.5%')
+    })
+  })
 })

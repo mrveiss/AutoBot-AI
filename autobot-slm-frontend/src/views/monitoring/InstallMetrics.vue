@@ -24,6 +24,8 @@
       </div>
     </header>
 
+    <!-- Outside the state chain: polling pauses after repeated failed reads, which is exactly when the screen is on "not available". -->
+    <PollingPausedAlert :poller="poller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" @retry="restart" />
     <p v-if="state === 'loading'" role="status" class="m-0 flex items-center gap-2 text-(--aui-color-text-muted)" data-testid="slm-install-loading">
       <BaseSpinner size="sm" />{{ t(`${NS}.loading`) }}
     </p>
@@ -32,7 +34,6 @@
       :title="t(`${NS}.unavailableTitle`)" :message="unavailableText"
     />
     <template v-else-if="reading">
-      <PollingPausedAlert :poller="poller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" @retry="restart" />
       <BaseAlert
         v-for="failure in failures" :key="failure.section" variant="error" data-testid="slm-install-section-failed"
         :title="t(`${NS}.sectionFailedTitle`, { section: failure.label })" :message="failure.text"
