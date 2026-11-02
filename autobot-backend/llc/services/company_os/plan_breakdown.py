@@ -10,7 +10,7 @@ from collections import Counter
 from typing import Any, Dict, List, Sequence
 
 from .errors import CompanyOsConflict, CompanyOsNotFound, GraphInvalid
-from .plan_map import changed, find_index
+from .plan_map import find_index, with_changes
 from .plan_measure import find_step
 from .plan_types import CompanyWorkflowPlan, EdgeCase, Label, PlanApprovalPolicy, SubStep, SubStepState
 
@@ -104,7 +104,7 @@ def patch_edge_case(plan: CompanyWorkflowPlan, case_key: str, fields: Dict[str, 
     _require_chosen_step(plan, step_key)
     cases = _step_cases(plan, step_key)
     i = _case_index(cases, case_key)
-    cases[i] = changed(cases[i], fields)
+    cases[i] = with_changes(cases[i], fields)
     _store_cases(plan, step_key, cases)
 
 

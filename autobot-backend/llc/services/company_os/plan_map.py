@@ -87,7 +87,7 @@ def find_index(items: Sequence[M], kind: str, ident: str, same: Callable[[M], bo
     raise CompanyOsNotFound(f"{kind} {ident} does not exist in this plan")
 
 
-def changed(current: M, fields: Dict[str, Any]) -> M:
+def with_changes(current: M, fields: Dict[str, Any]) -> M:
     """The model with *fields* set, validated again: a patch cannot step round the model's own rules."""
     try:
         return type(current)(**{**dict(current), **fields})
@@ -103,7 +103,7 @@ def add_lane(plan: CompanyWorkflowPlan, lane: Lane) -> MapParts:
 def patch_lane(plan: CompanyWorkflowPlan, lane_key: str, fields: Dict[str, Any]) -> MapParts:
     lanes, steps, edges = _parts(plan)
     i = find_index(lanes, "lane", repr(lane_key), lambda x: x.key == lane_key)
-    lanes[i] = changed(lanes[i], fields)
+    lanes[i] = with_changes(lanes[i], fields)
     return lanes, steps, edges
 
 
@@ -122,7 +122,7 @@ def add_step(plan: CompanyWorkflowPlan, step: Step) -> MapParts:
 def patch_step(plan: CompanyWorkflowPlan, step_key: str, fields: Dict[str, Any]) -> MapParts:
     lanes, steps, edges = _parts(plan)
     i = find_index(steps, "step", repr(step_key), lambda x: x.key == step_key)
-    steps[i] = changed(steps[i], fields)
+    steps[i] = with_changes(steps[i], fields)
     return lanes, steps, edges
 
 
@@ -149,7 +149,7 @@ def _is_edge(from_step: str, to_step: str) -> Callable[[Edge], bool]:
 def patch_edge(plan: CompanyWorkflowPlan, from_step: str, to_step: str, fields: Dict[str, Any]) -> MapParts:
     lanes, steps, edges = _parts(plan)
     i = find_index(edges, "edge", f"{from_step!r} -> {to_step!r}", _is_edge(from_step, to_step))
-    edges[i] = changed(edges[i], fields)
+    edges[i] = with_changes(edges[i], fields)
     return lanes, steps, edges
 
 
