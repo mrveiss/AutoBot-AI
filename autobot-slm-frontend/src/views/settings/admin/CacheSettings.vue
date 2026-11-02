@@ -3,6 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
+import { BaseAlert, BaseSwitch } from '@autobot/ui'
 /**
  * CacheSettings - Cache Management Component
  *
@@ -11,6 +12,7 @@
  */
 
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { formatBytes } from '@/utils/formatHelpers'
 import {
   useAutobotApi,
@@ -19,6 +21,7 @@ import {
   type CacheStats,
 } from '@/composables/useAutobotApi'
 
+const { t } = useI18n()
 const api = useAutobotApi()
 
 // State
@@ -106,35 +109,35 @@ async function saveCacheConfig(): Promise<void> {
 
   try {
     await api.updateCacheConfig(cacheConfig)
-    success.value = 'Cache configuration saved successfully'
+    success.value = t('settings.admin.cacheSettings.configurationSaved')
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to save cache configuration'
+    error.value = e instanceof Error ? e.message : t('settings.admin.cacheSettings.failedToSaveCacheConfiguration')
   } finally {
     saving.value = false
   }
 }
 
 async function clearCache(type: string = 'all'): Promise<void> {
-  if (!confirm(`Are you sure you want to clear the ${type} cache?`)) return
+  if (!confirm(t('settings.admin.cacheSettings.confirmClearCache', { type }))) return
 
   clearing.value = true
   error.value = null
 
   try {
     await api.clearCache(type)
-    success.value = `${formatCacheType(type)} cache cleared successfully`
+    success.value = t('settings.admin.cacheSettings.cacheCleared', { type: formatCacheType(type) })
     await fetchCacheStats()
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to clear cache'
+    error.value = e instanceof Error ? e.message : t('settings.admin.cacheSettings.failedToClearCache')
   } finally {
     clearing.value = false
   }
 }
 
 async function clearRedisCache(database: string): Promise<void> {
-  if (!confirm(`Are you sure you want to clear the ${database} Redis database?`)) return
+  if (!confirm(t('settings.admin.cacheSettings.confirmClearRedisDatabase', { database }))) return
 
   clearing.value = true
   error.value = null
@@ -144,11 +147,11 @@ async function clearRedisCache(database: string): Promise<void> {
     // a rejected or failed clear still reported success. The client rejects on
     // a non-2xx, so the operator now sees the real outcome.
     await api.clearRedisDatabase(database)
-    success.value = `Redis ${database} database cleared successfully`
+    success.value = t('settings.admin.cacheSettings.redisDatabaseCleared', { database })
     await fetchCacheStats()
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = autobotApiErrorMessage(e, 'Failed to clear Redis database')
+    error.value = autobotApiErrorMessage(e, t('settings.admin.cacheSettings.failedToClearRedisDatabase'))
   } finally {
     clearing.value = false
   }
@@ -160,11 +163,11 @@ async function warmupCaches(): Promise<void> {
 
   try {
     await api.warmupCache()
-    success.value = 'Cache warmup completed successfully'
+    success.value = t('settings.admin.cacheSettings.warmupCompleted')
     await fetchCacheStats()
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to warm up caches'
+    error.value = e instanceof Error ? e.message : t('settings.admin.cacheSettings.failedToWarmUpCaches')
   } finally {
     clearing.value = false
   }
@@ -193,65 +196,32 @@ onMounted(async () => {
 <template>
   <div class="p-6 space-y-6">
     <!-- Messages -->
-    <div v-if="error" class="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-center gap-3">
-      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-      {{ error }}
-      <button @click="error = null" class="ml-auto text-red-500 hover:text-red-700" :aria-label="$t('settings.admin.cacheSettings.dismissError')">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-    </div>
+    <BaseAlert v-if="error" variant="error" :message="error" dismissible :dismiss-label="$t('settings.admin.cacheSettings.dismissError')" @dismiss="error = null" />
 
-    <div v-if="success" class="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 flex items-center gap-3">
-      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-      {{ success }}
-    </div>
+    <BaseAlert v-if="success" variant="success" :message="success" />
 
     <!-- Cache API Unavailable Warning -->
-    <div v-if="!cacheApiAvailable && !loading" class="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
-      <div class="flex gap-4">
-        <svg class="w-6 h-6 text-yellow-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-        </svg>
-        <div>
-          <h3 class="font-semibold text-yellow-800">{{ $t('settings.admin.cacheSettings.cacheAPIUnavailable') }}</h3>
-          <p class="text-yellow-700 mt-1">
-            {{ $t('settings.admin.cacheSettings.theCacheManagementAPI') }}
-          </p>
-          <p class="text-sm text-yellow-600 mt-2">
-            {{ $t('settings.admin.cacheSettings.thisIsNormalWhen') }}
-          </p>
-        </div>
-      </div>
+    <BaseAlert
+      v-if="!cacheApiAvailable && !loading"
+      variant="warning"
+      :title="$t('settings.admin.cacheSettings.cacheAPIUnavailable')"
+    >
+      <p>{{ $t('settings.admin.cacheSettings.theCacheManagementAPI') }}</p>
+      <p class="mt-2">{{ $t('settings.admin.cacheSettings.thisIsNormalWhen') }}</p>
 
       <!-- Alternative Info -->
-      <div class="mt-6 space-y-3">
-        <h4 class="font-medium text-yellow-800">{{ $t('settings.admin.cacheSettings.alternativeCacheInformation') }}</h4>
-        <div class="grid gap-3">
-          <div class="flex items-start gap-3 p-3 bg-white/50 rounded-lg">
-            <svg class="w-5 h-5 text-yellow-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div class="text-sm text-yellow-700">
-              <strong>{{ $t('settings.admin.cacheSettings.browserCache') }}</strong> {{ $t('settings.admin.cacheSettings.yourBrowserIsStill') }}
-            </div>
-          </div>
-          <div class="flex items-start gap-3 p-3 bg-white/50 rounded-lg">
-            <svg class="w-5 h-5 text-yellow-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
-            </svg>
-            <div class="text-sm text-yellow-700">
-              <strong>{{ $t('settings.admin.cacheSettings.redisCache') }}</strong> {{ $t('settings.admin.cacheSettings.redisDatabasesAreStill') }}
-            </div>
-          </div>
-        </div>
+      <div class="mt-4 space-y-2">
+        <h4 class="font-medium">{{ $t('settings.admin.cacheSettings.alternativeCacheInformation') }}</h4>
+        <ul class="list-disc list-inside space-y-1">
+          <li>
+            <strong>{{ $t('settings.admin.cacheSettings.browserCache') }}</strong> {{ $t('settings.admin.cacheSettings.yourBrowserIsStill') }}
+          </li>
+          <li>
+            <strong>{{ $t('settings.admin.cacheSettings.redisCache') }}</strong> {{ $t('settings.admin.cacheSettings.redisDatabasesAreStill') }}
+          </li>
+        </ul>
       </div>
-    </div>
+    </BaseAlert>
 
     <!-- Loading -->
     <div v-if="loading" class="flex items-center justify-center py-12">
@@ -273,10 +243,7 @@ onMounted(async () => {
               <label class="block text-sm font-medium text-gray-900">{{ $t('settings.admin.cacheSettings.enableCaching') }}</label>
               <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.cacheSettings.turnCachingOnOr') }}</p>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" v-model="cacheConfig.enabled" class="sr-only peer" />
-              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-            </label>
+            <BaseSwitch v-model="cacheConfig.enabled" :label="$t('settings.admin.cacheSettings.enableCaching')" />
           </div>
 
           <!-- Default TTL -->
@@ -366,7 +333,7 @@ onMounted(async () => {
           </div>
           <div class="p-4 bg-gray-50 rounded-lg">
             <p class="text-sm text-gray-500">{{ $t('settings.admin.cacheSettings.cacheSize') }}</p>
-            <p class="text-2xl font-semibold text-gray-900">{{ formatBytes((cacheStats.size_mb || 0) * 1024 * 1024, { units: ['B', 'KB', 'MB', 'GB'], zeroText: '0 B' }) }}</p>
+            <p class="text-2xl font-semibold text-gray-900">{{ formatBytes((cacheStats.size_mb || 0) * 1024 * 1024, { units: ['B', 'KB', 'MB', 'GB'], zeroText: t('common.zeroSize') }) }}</p>
           </div>
           <div class="p-4 bg-gray-50 rounded-lg">
             <p class="text-sm text-gray-500">{{ $t('settings.admin.cacheSettings.hitRate') }}</p>

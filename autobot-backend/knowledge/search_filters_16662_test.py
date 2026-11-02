@@ -77,3 +77,53 @@ async def test_an_admin_read_is_not_narrowed_and_passes_the_admin_input_through(
     kept = await filter_search_results_by_permission(results, "admin-1", ownership_manager=mgr, is_admin=True)
     assert kept == results
     assert await filter_search_results_by_permission(results, "admin-1", ownership_manager=mgr) == []
+
+
+class _OrmUser:
+    """Attribute-only stand-in for the ORM User: no ``.get``."""
+
+    def __init__(self, user_id, role):
+        self.id = user_id
+        self.role = role
+        self.org_id = None
+        self.team_memberships = []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role", ["admin", "user"])
+async def test_can_read_fact_gives_a_dict_user_and_an_orm_user_the_same_verdict(role):
+    from unittest.mock import AsyncMock, MagicMock
+
+    from knowledge.search_filters import can_read_fact
+
+    verdicts = []
+    for user in ({"user_id": "u1", "role": role}, _OrmUser("u1", role)):
+        mgr = MagicMock()
+        mgr.check_access = AsyncMock(return_value=True)
+        await can_read_fact(mgr, "f", {}, user)
+        kwargs = mgr.check_access.await_args.kwargs
+        verdicts.append((kwargs["user_id"], kwargs["is_admin"]))
+    assert verdicts[0] == verdicts[1] == ("u1", role == "admin")
+
+
+def test_can_write_fact_is_the_owner_or_an_admin_for_dict_and_orm_users():
+    """One write decision (#18184): the owner and an admin write; a reader, or anyone on an ownerless fact, does not."""
+    from knowledge.search_filters import can_write_fact
+
+    owned = {"owner_id": "alice"}
+    for user in ({"user_id": "alice", "role": "user"}, _OrmUser("alice", "user")):
+        assert can_write_fact(owned, user)
+        assert not can_write_fact({"owner_id": "bob"}, user)
+        assert not can_write_fact({}, user)
+    for user in ({"user_id": "root", "role": "admin"}, _OrmUser("root", "admin")):
+        assert can_write_fact({"owner_id": "bob"}, user) and can_write_fact({}, user)
+
+
+def test_an_int_owner_id_is_writable_by_an_admin_only():
+    """An ORM caller's id is stringified, so a stored int owner id never equals it: only an admin writes (#18184)."""
+    from knowledge.search_filters import can_write_fact
+
+    fact = {"owner_id": 7}
+    assert not can_write_fact(fact, _OrmUser(7, "user"))
+    assert can_write_fact(fact, _OrmUser(7, "admin"))
+    assert can_write_fact(fact, {"user_id": "root", "role": "admin"})

@@ -55,7 +55,12 @@ class MessagesMixin:
             sender: The sender of the message.
             text: The content of the message.
             message_type: The type of message.
-            raw_data: Additional raw data (metadata).
+            raw_data: Additional raw data (metadata). ``None`` is persisted as
+                ``{}`` (#13280), so a message never stores ``metadata: null``.
+                Every other value survives verbatim, ``0``/``""``/``[]``/``False``
+                included — so the contract is "never null", **not** "always a
+                mapping". A reader needing a mapping must still check;
+                ``test_falsy_but_supplied_metadata_survives_verbatim`` pins it.
             tool_markers: Optional list of tool usage markers.
             author_id: Optional user ID for multi-user attribution (Issue #3282).
             sources: Optional RAG retrieval sources for citation display (Issue #4448).
@@ -71,7 +76,13 @@ class MessagesMixin:
             "sender": sender,
             "text": text,
             "messageType": message_type,
-            "metadata": raw_data,
+            # #13280: ``raw_data`` defaults to ``None``, and persisting that
+            # ``None`` is what made every reader of a chat message defend
+            # against ``"metadata": null`` (#13220). Normalise at the writer so
+            # the shape is uniform from here on. ``is not None`` rather than a
+            # truthiness test, because ``0``/``""``/``[]`` are metadata a caller
+            # chose to pass and must survive the round-trip.
+            "metadata": raw_data if raw_data is not None else {},
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "sources": sources if sources is not None else [],
         }
@@ -281,10 +292,14 @@ class MessagesMixin:
 
         Issue #620.
         """
-        # Issue #13220: messages are persisted with ``"metadata": None`` whenever
-        # ``add_message`` is called without ``raw_data``. ``.get(key, {})`` returns
-        # that explicit ``None`` — the default only applies when the key is absent —
-        # so test the *value*, not key presence.
+        # Issue #13220: ``.get(key, {})`` returns an explicit stored ``None`` —
+        # the default only applies when the key is *absent* — so test the
+        # *value*, not key presence.
+        # #13280 fixed the writer, so nothing persisted from that commit onward
+        # carries ``"metadata": null``. Sessions already on disk were not
+        # rewritten and keep it forever, so this guard stays: it defends
+        # historical data, which is not dead code just because the producer
+        # stopped producing.
         msg_metadata = message.get("metadata") or {}
         return all(msg_metadata.get(key) == value for key, value in metadata_filter.items())
 
@@ -301,6 +316,9 @@ class MessagesMixin:
         # Issue #13220: ``"metadata" not in message`` is False for a persisted
         # ``"metadata": None``, so the guard passed and ``None.update()`` raised.
         # Testing the value handles missing, ``None`` and ``{}`` uniformly.
+        # Retained past the #13280 writer fix for the same reason as
+        # ``_message_matches_filter`` above — old sessions do not rewrite
+        # themselves.
         if not message.get("metadata"):
             message["metadata"] = {}
         message["metadata"].update(metadata_updates)

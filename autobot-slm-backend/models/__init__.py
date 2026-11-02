@@ -35,11 +35,11 @@ from .schemas import (
     RoleListResponse,
     SettingResponse,
     SettingUpdate,
+    SlmAdminUserCreate,
+    SlmAdminUserResponse,
     SystemMetrics,
     TokenRequest,
     TokenResponse,
-    UserCreate,
-    UserResponse,
 )
 from .schemas_health import HealthResponse
 
@@ -57,8 +57,8 @@ __all__ = [
     # Auth schemas
     "TokenRequest",
     "TokenResponse",
-    "UserCreate",
-    "UserResponse",
+    "SlmAdminUserCreate",
+    "SlmAdminUserResponse",
     # Node schemas
     "NodeCreate",
     "NodeUpdate",

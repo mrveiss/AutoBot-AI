@@ -33,10 +33,83 @@ python:
   # bypassed: a PR touching only this workflow computes `python != true`,
   # python-suite reports green, and the test guarding it never runs.
   - '.github/workflows/duplication-guard.yml'
+  # #18559: the duplication-guard pins file, read by
+  # duplication_guard_names_the_failing_scope_test.py and duplication_guard_scopes_18559_test.py.
+  - '.github/duplication-pins.json'
+  # #17856: frontend_api_timeout_ssot_17856_test.py reads both files' API
+  # timeout and holds them equal to TimeoutConfig.api; an edit confined to one
+  # must run it.
+  - '.env.example'
+  - 'autobot-frontend/.env.example'
+  # #18555: env_file_family_18555_test.py reads every tracked env file -- one
+  # host-key format across the family, one Docker env file; an edit confined to
+  # any of them, or a new one, must run it.
+  - '**/.env*'
+  # #18555: root-level env files (.env.base and the overlays) -- `**/` alone does not match the root here.
+  - '.env*'
+  - '**/*.env'
+  # #18922: locale_completeness_allow_missing_18922_test.py reads the SLM app's check:locales script.
+  - 'autobot-slm-frontend/package.json'
+  # #18653: uninstall_covers_role_packages_18653_test.py reads the interpreter
+  # version the python_interpreter role installs (python{{ version }} packages).
+  - '.python-version'
+  # #18729: docker_admin_seed_18729_test.py reads every Docker entrypoint's user-mode default.
+  - 'docker/*/*entrypoint*.sh'
+  # #18592: install_preflight_and_source_18581_test.py reads INSTALL.md; compose_slm_gui_profile_18585_test.py reads the root compose file and the frontend Dockerfile.
+  - 'INSTALL.md'
+  - 'docker-compose.yml'
+  # #17500: compose_exposure_and_credentials_17500_test.py checks every compose file's ports and credentials.
+  - 'docker-compose.hardened.yml'
+  - 'docker-compose.override.example.yml'
+  - 'docker/mcp-bridges.yml'
+  - 'docker/frontend/Dockerfile'
+  # #19868: proxy_upload_cap_one_home_19868_test.py reads it
+  - 'docker/nginx/nginx-common.conf'
+  - 'docker/nginx/nginx-locations.conf'
+  - 'docker/nginx/nginx-slm-locations.conf'
+  - '.github/workflows/docker-smoke-test.yml'
+  - '.github/workflows/co-located-smoke.yml'
+  # #17500, #18729: compose_exposure_and_credentials_17500_test.py and docker_admin_seed_18729_test.py read the secrets generator.
+  - 'docker/generate-secrets.sh'
+  # #19408: compose_db_names_19408_test.py checks the script creates the users database compose names.
+  - 'docker/postgres/init-databases.sh'
+  # #18556: one_static_data_copy_18556_test.py reads the canonical static data files.
+  - 'autobot-backend/config/permission_rules.yaml'
+  - 'autobot-backend/static/error_messages.yaml'
+  - 'autobot-monitoring/prometheus.yml'
+  - 'autobot-monitoring/grafana/provisioning/datasources/prometheus.yml'
+  - 'autobot-backend/config/llm_models.yaml'
+  - 'autobot-infrastructure/shared/config/permission_rules.yaml'
+  # The guard scans the whole repo by basename (pathspec *<name>), so an unallowed copy can
+  # land anywhere: one glob per guarded basename, not just the listed trees.
+  - '**/error_messages.yaml'
+  - '**/prometheus.yml'
+  - '**/permission_rules.yaml'
+  - '**/llm_models.yaml'
+  # #18549: one_playwright_server_18549_test.py reads the canonical server and its store.
+  - 'autobot-browser-worker/playwright-server.js'
+  - 'autobot-browser-worker/session-store.js'
   # #17329: frontend_path_filter_mirror_test.py PARSES this file and compares it
   # to frontend-test.yml's push paths, so its verdict depends on the content --
   # a real dependency, covered here rather than recorded as a bypass.
   - '.github/filters/frontend-paths.yml'
+  # #19527: changes_job_equivalence_15360_test.py declares the smoke-action entries
+  # of this filter and checks the file holds exactly them on top of its frozen content.
+  - '.github/filters/docker-paths.yml'
+  # #17885: scripts/frontend_file_size_known_large.py names 184
+  # frontend files BY CONCRETE LITERAL and the ratchet reads each one to
+  # compare it with its ceiling. Without these two trees a change confined to a
+  # measured .ts/.vue takes the required-context shim's green while the guard
+  # that measures it never runs -- the bypass python_filter_covers_its_guards
+  # exists to catch, and it caught this one.
+  #
+  # The hook (`frontend-file-size` in .pre-commit-config.yaml) is the
+  # first-line gate and runs on every PR via enforce-precommit.yml, so a file
+  # growing past its ceiling is caught either way. What these entries protect
+  # is the rest of the guard: anchor agreement, the reach floor and the ceiling
+  # TOTAL (#17970), which a hook run against the diff cannot check.
+  - 'autobot-frontend/src/**'
+  - 'autobot-slm-frontend/src/**'
   # Read by repo_tests/npm_audit_covers_its_workspaces_test.py, which asserts the
   # audit's workspace set against the tracked tree (#16131). Without this, a change
   # confined to security.yml takes the required-context shim's green while the guard
@@ -52,8 +125,24 @@ python:
   # The shim gates a required context, so editing it must run the real suite for
   # the same reason editing ci.yml does.
   - '.github/workflows/python-required-context.yml'
+  # #15360: the one reusable `changes` job every converted workflow calls; the
+  # equivalence and one-job guards under repo_tests read it, so editing it must
+  # run them rather than take the shim's green.
+  - '.github/workflows/_changes.yml'
+  # #19769: the conflict gate's guard reads its workflow, so editing it runs the suite.
+  - '.github/workflows/pr-merge-conflict-gate.yml'
   # A change here changes what "python" means for both workflows.
   - '.github/filters/python-paths.yml'
+  # #17822: migration_gate_filter_covers_what_its_tests_import_test reads this workflow
+  # by concrete literal to prove its path filter still covers the modules its tests
+  # import. Editing the workflow without running that guard is how the filter drifted
+  # in the first place -- the gate skipped on the code under test and merged green.
+  - '.github/workflows/migration-gate.yml'
+  # #18467: pr_comment_upsert_12984_test reads it by concrete literal -- the sticky PR-comment helper's caller.
+  - '.github/workflows/ai-security-review.yml'
+  # #19523: dependabot_root_coverage_19523_test reads it by concrete literal. Deleting a
+  # block's `directory` is the regression it catches, and that edit touches no .py file.
+  - '.github/dependabot.yml'
   # #14544/#14575: repo_tests/deployment_declares_project_root_14544_test.py
   # asserts each of these five non-.py deployment sources still declares
   # AUTOBOT_PROJECT_ROOT. Without an explicit entry here, editing only one of
@@ -61,6 +150,9 @@ python:
   # `python-suite` green, and the guard test that would have caught a dropped
   # declaration never runs -- the exact "required check gated by a filter that
   # omits the inputs it guards" shape flagged in review.
+  # #19817: guards sweep every tracked Dockerfile, under either naming.
+  - '**/Dockerfile*'
+  - '**/*.Dockerfile'
   - 'docker/backend/Dockerfile'
   - 'docker/slm/Dockerfile'
   # #17096: repo_tests/secrets_baseline_reasons.py reads this file by literal
@@ -110,6 +202,17 @@ python:
   - 'autobot-slm-backend/ansible/**'
   - 'tools/git-hooks/**'
   - 'scripts/install-git-hooks.sh'
+
+  # #18553: redis_direct_constructor_baseline_18553.py names this shell script, which embeds a
+  # direct Redis client. A change confined to it touches no `**/*.py`, so python-suite would
+  # report green while the guard that counts its constructor never ran. (The two deploy scripts
+  # it also names sit under the ansible tree above.)
+  - 'autobot-backend/code_analysis/install.sh'
+  # #15469: one_brand_mark_and_announcer_18240_test.py pins these icons to the kit mark (byte
+  # identity / a sha256 pair). A change confined to one touches no `**/*.py`, so the guard must still run.
+  - 'autobot-frontend/public/favicon.ico'
+  - 'autobot-frontend/public/favicon.svg'
+  - 'autobot-slm-frontend/public/favicon.svg'
 
   # #16249: the CI wrappers under pipeline-scripts/ and the one library they
   # source. Each has a python-suite test that runs the script, so a change
@@ -184,6 +287,9 @@ python:
   # is exactly the change that skips the suite guarding it -- the guard would be
   # bypassable by touching the one file it exists to watch.
   - 'sync-frontend.sh'
+  - '.github/workflows/wiki.yml'
+  - '.github/actions/cancel-run-on-cancelled-upstream/action.yml'
+  - 'autobot-slm-frontend/scripts/sync-to-admin.sh'
   # #15900: seven more of the same shape, found once the coverage detector
   # stopped keying on how a guard binds its repo root. Each is read by a
   # repo_tests guard; without an entry here, a change confined to one of them
@@ -196,6 +302,10 @@ python:
   - '.github/workflows/no-commit-trailers.yml'
   - '.github/workflows/pr-issue-validation.yml'
   - '.github/workflows/release.yml'
+  # #18666: install_release_signed_18666_test.py checks release.yml's cosign pin against image-sign.yml.
+  - '.github/workflows/image-sign.yml'
+  # #18666: the same test runs the signing-key gate against the real cosign.pub.
+  - 'cosign.pub'
   # #15495: `by_path_loaded_modules_are_package_free_test.py` derives its targets
   # from this workflow's `spec_from_file_location` calls. Without an entry here,
   # adding a fourth by-path load is exactly the change that skips the guard
@@ -206,6 +316,21 @@ python:
   # green while the guard that reads it never runs.
   - '.github/workflows/sync-main-to-release.yml'
   - 'autobot-frontend/package.json'
+  # #19328/#14725: node_major_one_home_19328_test.py reads the Node home and checks the
+  # frontend engines floor against every locked dependency -- a lock bump that needs a
+  # newer Node, or an edit to the home, must run that guard.
+  - '.nvmrc'
+  - 'autobot-frontend/package-lock.json'
+  # #19324: browser_port_single_home_19324_test.py pins this file's browser-port
+  # fallback to ssot_config.port.browser; an edit confined to it must run that guard.
+  - 'autobot-frontend/vite.config.js'
+  # #13841: `preroll_reset_is_complete_13841_test.py` reads this composable by literal
+  # path, comparing the fields `_preroll` declares against the fields its `reset()`
+  # clears -- a property nothing behavioural catches, since dropping a field leaves all
+  # 18 pre-roll tests passing. Covered rather than recorded as a bypass: a guard that
+  # does not run when the file it reads is the only thing edited is the vacuity it was
+  # written to prevent, arriving through the path filter instead of the assertion.
+  - 'autobot-frontend/src/composables/useVoiceOutput.ts'
   # #15749: `frontend_reduced_motion_guard_test.py` reads these two by literal
   # path to assert the reduced-motion wiring holds. Without an entry here, a
   # change confined to either is exactly the change that skips the suite
@@ -237,12 +362,16 @@ python:
   # The import-hermeticity entry above is read by that guard too, for the same
   # `--diff-filter=d` reason.
   - '.github/workflows/stylelint-tokens.yml'
-  # #15163: a repo-root file, so `**/requirements*.txt` above does not reach it --
-  # this filter is matched with fnmatch, which (unlike the real dorny/paths-filter
-  # matcher) requires a literal `/` before `requirements` for a `**/` prefix, and a
-  # bare root-level filename has none. ansible_manifest_resolution.py and
-  # backend_gpu_faiss_gating_test.py both read this manifest; without an entry
-  # here, a change confined to it skips both guards.
+  # #17674: `phase_validation_report_contract_17674_test.py` reads this
+  # workflow to prove no gate re-creates the `|| echo "0"` default that made an
+  # absent `structural_presence` indistinguishable from a 0% score, and that the
+  # keys it reads are the keys the producer emits. Without an entry here, a
+  # change confined to the workflow -- the only change that could reintroduce
+  # the default -- skips that guard.
+  - '.github/workflows/phase_validation.yml'
+  # #15163: a repo-root file, also matched by `**/requirements*.txt` above (#19817);
+  # named here so its readers stay on record. ansible_manifest_resolution.py and
+  # backend_gpu_faiss_gating_test.py both read this manifest.
   - 'requirements-gpu-faiss.txt'
   # #15151: `configuration_guide_env_vars_test.py` asserts every AUTOBOT_* name
   # this guide documents is either registered in env_registry.REGISTRY or listed
@@ -250,6 +379,12 @@ python:
   # confined to the guide -- documenting a name that resolves to nothing -- skips
   # the guard written to catch exactly that.
   - 'docs/guides/CONFIGURATION_GUIDE.md'
+  # #19459: `disaster_recovery_names_real_units_19459_test.py` reads this runbook by concrete
+  # literal to check every unit it tells an operator to start is one a role deploys.
+  - 'docs/operations/disaster-recovery.md'
+  # #19279: `landing_page_claims_19279_test.py` reads the public landing page by concrete literal
+  # for the libraries it names and any placeholder it renders.
+  - 'docs/index.html'
   # #16427: `secretsmanager_template_names_match_vault_registry_16427_test.py`
   # reads this component's `credentialTemplates` array by concrete literal, to
   # assert its provider names still match the vault registry. Without an entry
@@ -262,6 +397,11 @@ python:
   # here, a change confined to this file -- the only change that could add
   # `install-git-hooks.sh` back in -- skips the guard.
   - '.github/workflows/auto-fix-generated-types.yml'
+  # #18500: the autofix steps moved into a composite action with a dispatch-only
+  # caller; the guards above (and autofix_types_dispatch_18500_test.py) read both.
+  - '.github/actions/generated-types-autofix/action.yml'
+  - '.github/actions/install-ci-requirements/action.yml'
+  - '.github/workflows/dispatch-generated-types.yml'
   # #17173: `repo_tests/secrets_baseline_reason_entries.py`'s `SPECIFIC_REASONS`
   # table names files under this tree by concrete literal (baseline keys are
   # (filename, type, hashed_secret) triples) -- the same filter-gap shape as
@@ -303,3 +443,60 @@ python:
   - 'autobot-frontend/src/assets/css/design-tokens.css'
   - 'autobot-frontend/src/assets/css/themes/light.css'
   - 'autobot-frontend/src/assets/css/themes/dark.css'
+  # #17787: the shard balancer reads this file to weight modules, and
+  # repo_tests/stable_shard_test.py now reads it BY LITERAL PATH to assert the
+  # assignment lands within slack of the theoretical optimum. Since #17787 it
+  # decides how CI cost is distributed across the twelve shards, so a change
+  # confined to it must run the suite that measures the result -- otherwise the
+  # one file that sets shard balance is the one file whose change is invisible
+  # to the balance guard, and the PR takes the required-context shim's green.
+  - '.test_durations'
+  # #17798, #17886: the SLM suite's shard weights, read by --shard-durations in
+  # this same suite and, since #17886, by the durations-coverage guard. Without
+  # it a change confined to this file (e.g. a bot refresh) ran nothing, so the
+  # guard added to judge that file could not run on it.
+  - '.test_durations_slm'
+  # #17798: the test-only dependencies the python suite installs (ci.yml reads
+  # it in the gated job). A change to it alone -- e.g. an unpinned test dep --
+  # alters how every test runs, so it must run the suite (#17839 was exactly
+  # that: an upstream fakeredis release broke every shard with no diff here).
+  - 'requirements-ci-test.txt'
+  # #17893: repo_tests/research_index_phase_claims_17893_test.py reads
+  # docs/research/_index.md AND every document it links, comparing each row's
+  # phase claim against its document's headings. Both sides of that comparison
+  # live here, so a change confined to docs/research/ -- which is exactly the
+  # change that creates the drift -- would take the required-context shim's
+  # green while the guard that detects it never runs.
+  - 'docs/research/**'
+  # #17930: `repo_tests/_glob_declared_uncovered.py` names this workflow by
+  # concrete literal, and `glob_declared_reads_15900_test.py` parses it to verify
+  # the claim that the Liquid guard's `docs/**/*.md` declaration runs on its own
+  # trigger rather than being uncovered debt -- that the `paths:` filter fires on
+  # that tree and that a `run:` step invokes the guard. A change confined to this
+  # workflow is precisely the change that can falsify that claim, so it must run
+  # the suite holding the check.
+  #
+  # ONE FILE, not `docs/**`: covering the docs tree here would run the twelve-shard
+  # suite on every documentation edit, which is the cost this whole arrangement
+  # exists to avoid (owner decision, #17930 review). Same shape as the
+  # `auto-fix-generated-types.yml` and `stylelint-tokens.yml` entries above.
+  - '.github/workflows/docs-liquid-tags.yml'
+  # #19178: `user_docs_stay_consistent_19178_test.py` reads the docs index by
+  # concrete literal to check the user-doc set it links stays consistent. ONE
+  # FILE, not `docs/**` (the #17930 owner decision above): a change confined to
+  # the index is the change that can break the link set, so it runs the guard.
+  - 'docs/README.md'
+  # #19184: the same guard reads the five Company OS docs by concrete literal
+  # (`_COMPANY_OS_DOCS`, no bare "LLC" product name). One file each, not `docs/**`.
+  - 'docs/GLOSSARY.md'
+  - 'docs/INDEX.md'
+  - 'docs/architecture/PLATFORM_MODEL.md'
+  - 'docs/features/CATALOG.md'
+  - 'docs/llc/_index.md'
+  # #19611: `operational_docs_name_real_playbooks_19611_test.py` reads this guide by concrete
+  # literal for its one declared exemption. One file, not `docs/**`.
+  - 'docs/guides/slm-docker-ansible-deployment.md'
+  # #18266: `social_preview_18266_test.py` pins the repository social-preview
+  # image's dimensions and size. A change confined to the image -- replacing it
+  # with one of the wrong shape -- is exactly what the guard exists to catch.
+  - 'docs/assets/social-preview.png'

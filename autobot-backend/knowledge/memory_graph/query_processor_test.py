@@ -12,12 +12,12 @@ future accidental re-fork (a shim drifting back into its own implementation)
 fails fast here instead of silently reintroducing the duplicate engine.
 """
 
+from autobot_memory_graph.semantic_search import EntitySearchResult as CanonicalEntitySearchResult
 from autobot_memory_graph.semantic_search import HybridScorer as CanonicalHybridScorer
 from autobot_memory_graph.semantic_search import MemoryGraphQueryProcessor as CanonicalMemoryGraphQueryProcessor
 from autobot_memory_graph.semantic_search import QueryIntent as CanonicalQueryIntent
-from autobot_memory_graph.semantic_search import SearchResult as CanonicalSearchResult
 from autobot_memory_graph.semantic_search import ensure_indexes as canonical_ensure_indexes
-from knowledge.memory_graph.hybrid_scorer import HybridScorer, SearchResult
+from knowledge.memory_graph.hybrid_scorer import EntitySearchResult, HybridScorer
 from knowledge.memory_graph.query_processor import (
     MemoryGraphQueryProcessor,
     QueryIntent,
@@ -30,7 +30,7 @@ def test_hybrid_scorer_is_canonical_object():
 
 
 def test_search_result_is_canonical_object():
-    assert SearchResult is CanonicalSearchResult
+    assert EntitySearchResult is CanonicalEntitySearchResult
 
 
 def test_query_processor_is_canonical_object():

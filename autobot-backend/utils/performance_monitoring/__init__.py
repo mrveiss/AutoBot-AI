@@ -57,7 +57,7 @@ from utils.performance_monitoring.collectors import (
 )
 
 # Decorator
-from utils.performance_monitoring.decorator import monitor_performance, set_redis_client
+from utils.performance_monitoring.decorator import monitor_performance
 
 # Hardware detection
 from utils.performance_monitoring.hardware import HardwareDetector
@@ -106,7 +106,6 @@ __all__ = [
     "HardwareDetector",
     # Decorator
     "monitor_performance",
-    "set_redis_client",
     # Constants
     "CRITICAL_SERVICE_STATUSES",
     "DEFAULT_PERFORMANCE_BASELINES",

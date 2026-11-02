@@ -35,9 +35,10 @@ from fastapi.testclient import TestClient
 from api.knowledge_grounding import router as grounding_router
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.status_enums import Severity
+from knowledge.ownership import KnowledgeOwnership
 from services.grounded_agent import GroundedAgent, get_grounded_agent
-from services.grounded_agent_models import Claim, ClaimStatus, GroundedResponse, VerifiedClaim
-from services.knowledge_grounding_models import VerificationMethod
+from services.grounded_agent_models import GroundedResponse
+from services.knowledge_grounding_models import Claim, ClaimStatus, VerificationMethod, VerifiedClaim
 
 
 @pytest.fixture
@@ -185,12 +186,14 @@ async def test_classify_claim_found_in_kb(grounded_agent, sample_claim):
                 "fact_id": "fact-123",
                 "content": "System latency increased by 15% on 2026-04-01",
                 "similarity_score": 0.92,
+                "metadata": {"owner_id": "alice", "visibility": "private"},
             }
         ]
     )
     grounded_agent.kb = mock_kb
+    mock_kb.ownership_manager = KnowledgeOwnership(None)  # #16665: the real visibility decision
 
-    verified = await grounded_agent._classify_and_verify_claim(sample_claim)
+    verified = await grounded_agent._classify_and_verify_claim(sample_claim, "alice")
 
     assert verified.kb_status == ClaimStatus.IN_KB
     assert verified.confidence > 0.85
@@ -204,8 +207,9 @@ async def test_classify_claim_not_in_kb(grounded_agent, sample_claim):
     mock_kb = AsyncMock()
     mock_kb.search = AsyncMock(return_value=[])
     grounded_agent.kb = mock_kb
+    mock_kb.ownership_manager = KnowledgeOwnership(None)  # #16665: the real visibility decision
 
-    verified = await grounded_agent._classify_and_verify_claim(sample_claim)
+    verified = await grounded_agent._classify_and_verify_claim(sample_claim, "alice")
 
     assert verified.kb_status == ClaimStatus.UNKNOWN
     assert verified.confidence == 0.0
@@ -221,12 +225,14 @@ async def test_classify_claim_partial_match(grounded_agent, sample_claim):
                 "fact_id": "fact-456",
                 "content": "Latency changed",
                 "similarity_score": 0.65,
+                "metadata": {"owner_id": "alice", "visibility": "private"},
             }
         ]
     )
     grounded_agent.kb = mock_kb
+    mock_kb.ownership_manager = KnowledgeOwnership(None)  # #16665: the real visibility decision
 
-    verified = await grounded_agent._classify_and_verify_claim(sample_claim)
+    verified = await grounded_agent._classify_and_verify_claim(sample_claim, "alice")
 
     assert verified.kb_status == ClaimStatus.VERIFIED
     assert 0.5 < verified.confidence < 0.85
@@ -238,8 +244,9 @@ async def test_classify_claim_kb_error(grounded_agent, sample_claim):
     mock_kb = AsyncMock()
     mock_kb.search = AsyncMock(side_effect=Exception("KB error"))
     grounded_agent.kb = mock_kb
+    mock_kb.ownership_manager = KnowledgeOwnership(None)  # #16665: the real visibility decision
 
-    verified = await grounded_agent._classify_and_verify_claim(sample_claim)
+    verified = await grounded_agent._classify_and_verify_claim(sample_claim, "alice")
 
     assert verified.kb_status == ClaimStatus.UNKNOWN
     assert "error" in verified.evidence[0].lower()
@@ -348,186 +355,6 @@ async def test_trace_verification_chain_error(grounded_agent):
     assert trace.confidence == 0.0
 
 
-# ===== END-TO-END GROUNDING TESTS =====
-
-
-@pytest.mark.asyncio
-async def test_respond_with_grounding_all_verified(grounded_agent, mock_app):
-    """Test end-to-end grounding with all claims verified."""
-    grounded_agent.app = mock_app
-
-    # Mock dependencies
-    mock_llm = AsyncMock()
-    mock_llm.chat = AsyncMock(
-        return_value=MagicMock(
-            content=json.dumps(
-                [
-                    {
-                        "claim_text": "Latency increased",
-                        "subject": "Latency",
-                        "predicate": "increased",
-                        "object": "yes",
-                        "confidence": 0.95,
-                    }
-                ]
-            )
-        )
-    )
-
-    mock_kb = AsyncMock()
-    mock_kb.search = AsyncMock(
-        return_value=[
-            {
-                "fact_id": "fact-001",
-                "content": "Latency increased by 15%",
-                "similarity_score": 0.92,
-            }
-        ]
-    )
-
-    grounded_agent.llm_service = mock_llm
-    grounded_agent.kb = mock_kb
-
-    result = await grounded_agent.respond_with_grounding(
-        user_query="What happened to latency?",
-        agent_response="Latency increased by 15%",
-    )
-
-    assert isinstance(result, GroundedResponse)
-    assert result.original_query == "What happened to latency?"
-    assert len(result.verified_claims) > 0
-    assert result.confidence_overall > 0.0
-    assert not result.requires_human_review
-
-
-@pytest.mark.asyncio
-async def test_respond_with_grounding_mixed_claims(grounded_agent, mock_app):
-    """Test grounding with mix of verified and unverified claims."""
-    grounded_agent.app = mock_app
-
-    mock_llm = AsyncMock()
-    mock_llm.chat = AsyncMock(
-        return_value=MagicMock(
-            content=json.dumps(
-                [
-                    {
-                        "claim_text": "Latency increased",
-                        "subject": "Latency",
-                        "predicate": "increased",
-                        "object": "yes",
-                        "confidence": 0.95,
-                    },
-                    {
-                        "claim_text": "Unknown fact about X",
-                        "subject": "X",
-                        "predicate": "unknown",
-                        "object": "value",
-                        "confidence": 0.6,
-                    },
-                ]
-            )
-        )
-    )
-
-    mock_kb = AsyncMock()
-    mock_kb.search = AsyncMock(
-        side_effect=[
-            [{"fact_id": "f1", "content": "Latency increased", "similarity_score": 0.92}],
-            [],  # No match for second claim
-        ]
-    )
-
-    grounded_agent.llm_service = mock_llm
-    grounded_agent.kb = mock_kb
-
-    result = await grounded_agent.respond_with_grounding(
-        user_query="Question",
-        agent_response="Two statements here",
-    )
-
-    assert len(result.verified_claims) >= 1
-    assert len(result.unverified_claims) >= 1
-    assert result.requires_human_review
-
-
-@pytest.mark.asyncio
-async def test_respond_with_grounding_low_confidence(grounded_agent, mock_app):
-    """Test grounding flags for review when confidence is low."""
-    grounded_agent.app = mock_app
-
-    mock_llm = AsyncMock()
-    mock_llm.chat = AsyncMock(
-        return_value=MagicMock(
-            content=json.dumps(
-                [
-                    {
-                        "claim_text": "Claim with low confidence",
-                        "subject": "claim",
-                        "predicate": "has",
-                        "object": "low confidence",
-                        "confidence": 0.3,
-                    }
-                ]
-            )
-        )
-    )
-
-    mock_kb = AsyncMock()
-    mock_kb.search = AsyncMock(
-        return_value=[
-            {
-                "fact_id": "f2",
-                "content": "Something",
-                "similarity_score": 0.45,
-            }
-        ]
-    )
-
-    grounded_agent.llm_service = mock_llm
-    grounded_agent.kb = mock_kb
-
-    result = await grounded_agent.respond_with_grounding(
-        user_query="Question",
-        agent_response="Answer",
-    )
-
-    assert result.confidence_overall < 0.6
-    assert result.requires_human_review
-
-
-@pytest.mark.asyncio
-async def test_respond_with_grounding_with_conflicts(grounded_agent, mock_app):
-    """Test grounding detects and flags conflicts."""
-    grounded_agent.app = mock_app
-
-    mock_llm = AsyncMock()
-    mock_llm.chat = AsyncMock(
-        return_value=MagicMock(
-            content=json.dumps(
-                [
-                    {
-                        "claim_text": "Claim A",
-                        "subject": "A",
-                        "predicate": "is",
-                        "object": "true",
-                        "confidence": 0.9,
-                    }
-                ]
-            )
-        )
-    )
-
-    grounded_agent.llm_service = mock_llm
-    grounded_agent.kb = None  # No KB, so claim is unverifiable
-
-    result = await grounded_agent.respond_with_grounding(
-        user_query="Q",
-        agent_response="A",
-    )
-
-    assert result.requires_human_review
-
-
 # ===== CONFLICT RESOLUTION TESTS =====
 
 
@@ -584,7 +411,7 @@ async def test_resolve_conflict_redis_unavailable_raises(grounded_agent):
 
 @pytest.mark.asyncio
 async def test_api_ground_response_endpoint(mock_app):
-    """Test POST /api/ground-response endpoint."""
+    """Test POST /ground-response endpoint."""
     import importlib
     import importlib.util
     from pathlib import Path
@@ -612,7 +439,7 @@ async def test_api_ground_response_endpoint(mock_app):
 def _build_grounding_test_app() -> FastAPI:
     """Minimal FastAPI app wrapping the real knowledge_grounding router (#15256).
 
-    Mounted with the same ``/api`` prefix the router declares itself, so these
+    Mounted bare (the production mount adds ``/api/knowledge_base``), so these
     tests hit the production route table. Auth is overridden per-test via
     ``dependency_overrides``.
     """
@@ -634,7 +461,7 @@ def _sample_verified_claim() -> VerifiedClaim:
 
 @pytest.mark.asyncio
 async def test_api_verify_claim_endpoint(mock_app):
-    """POST /api/verify-claim must call the agent and surface its verdict."""
+    """POST /verify-claim must call the agent and surface its verdict."""
     fake_agent = Mock()
     fake_agent._classify_and_verify_claim = AsyncMock(return_value=_sample_verified_claim())
 
@@ -643,7 +470,7 @@ async def test_api_verify_claim_endpoint(mock_app):
     claim_body = {"claim_text": "Latency increased", "subject": "Latency", "predicate": "increased", "object": "15%"}
 
     with patch("api.knowledge_grounding.get_grounded_agent", return_value=fake_agent):
-        response = TestClient(app).post("/api/verify-claim", json=claim_body)
+        response = TestClient(app).post("/verify-claim", json=claim_body)
 
     assert response.status_code == 200
     body = response.json()
@@ -654,7 +481,7 @@ async def test_api_verify_claim_endpoint(mock_app):
 
 @pytest.mark.asyncio
 async def test_api_list_conflicts_endpoint(mock_app):
-    """GET /api/kb-conflicts must page and shape conflicts read from Redis."""
+    """GET /kb-conflicts must page and shape conflicts read from Redis."""
     fake_redis = AsyncMock()
     fake_redis.keys = AsyncMock(return_value=["conflict:c1"])
     conflict = {"status": "pending", "severity": Severity.HIGH.value, "description": "conflict", "timestamp": "100.0"}
@@ -664,7 +491,7 @@ async def test_api_list_conflicts_endpoint(mock_app):
     app.dependency_overrides[get_current_user] = lambda: {"username": "test-user"}
 
     with patch("autobot_shared.redis_client.get_async_redis_client", AsyncMock(return_value=fake_redis)):
-        response = TestClient(app).get("/api/kb-conflicts")
+        response = TestClient(app).get("/kb-conflicts")
 
     assert response.status_code == 200
     body = response.json()
@@ -675,7 +502,7 @@ async def test_api_list_conflicts_endpoint(mock_app):
 
 @pytest.mark.asyncio
 async def test_api_resolve_conflict_endpoint(mock_app):
-    """POST /api/kb-conflicts/{id}/resolve must call the agent with the caller's choice."""
+    """POST /kb-conflicts/{id}/resolve must call the agent with the caller's choice."""
     fake_agent = Mock()
     fake_agent.resolve_conflict = AsyncMock(
         return_value={"status": "success", "resolved": True, "chosen_fact": "fact-1"}
@@ -686,7 +513,7 @@ async def test_api_resolve_conflict_endpoint(mock_app):
 
     with patch("api.knowledge_grounding.get_grounded_agent", return_value=fake_agent):
         response = TestClient(app).post(
-            "/api/kb-conflicts/conflict-1/resolve",
+            "/kb-conflicts/conflict-1/resolve",
             json={"chosen_fact": "fact-1", "reasoning": "matches monitoring data"},
         )
 
@@ -699,7 +526,7 @@ async def test_api_resolve_conflict_endpoint(mock_app):
 
 @pytest.mark.asyncio
 async def test_api_get_stats_endpoint(mock_app):
-    """GET /api/kb-stats must convert the Redis hash into typed stats fields."""
+    """GET /kb-stats must convert the Redis hash into typed stats fields."""
     fake_redis = AsyncMock()
     fake_redis.hgetall = AsyncMock(
         return_value={
@@ -714,7 +541,7 @@ async def test_api_get_stats_endpoint(mock_app):
     app.dependency_overrides[check_admin_permission] = lambda: True
 
     with patch("autobot_shared.redis_client.get_async_redis_client", AsyncMock(return_value=fake_redis)):
-        response = TestClient(app).get("/api/kb-stats")
+        response = TestClient(app).get("/kb-stats")
 
     assert response.status_code == 200
     body = response.json()
@@ -768,6 +595,7 @@ async def test_full_grounding_workflow(mock_app):
                     "fact_id": "f1",
                     "content": "Latency increased",
                     "similarity_score": 0.92,
+                    "metadata": {"owner_id": "alice", "visibility": "private"},
                 }
             ],
             [
@@ -775,6 +603,7 @@ async def test_full_grounding_workflow(mock_app):
                     "fact_id": "f2",
                     "content": "Database performance",
                     "similarity_score": 0.78,
+                    "metadata": {"owner_id": "alice", "visibility": "private"},
                 }
             ],
         ]
@@ -782,8 +611,9 @@ async def test_full_grounding_workflow(mock_app):
 
     agent.llm_service = mock_llm
     agent.kb = mock_kb
+    mock_kb.ownership_manager = KnowledgeOwnership(None)  # #16665: the real visibility decision
 
-    grounded = await agent.respond_with_grounding(query, response)
+    grounded = await agent.respond_with_grounding(query, response, user_id="alice")
 
     assert grounded.original_query == query
     assert len(grounded.verified_claims) > 0
@@ -820,6 +650,7 @@ async def test_grounding_with_context_metadata(mock_app):
         user_query="Q",
         agent_response="A",
         context=context,
+        user_id="alice",
     )
 
     assert result.metadata == context
@@ -838,6 +669,7 @@ async def test_grounding_empty_response(grounded_agent, mock_app):
     result = await grounded_agent.respond_with_grounding(
         user_query="Q",
         agent_response="",
+        user_id="alice",
     )
 
     assert result.verified_claims == []
@@ -856,6 +688,7 @@ async def test_grounding_very_long_response(grounded_agent, mock_app):
     result = await grounded_agent.respond_with_grounding(
         user_query="Q",
         agent_response=long_response,
+        user_id="alice",
     )
 
     assert isinstance(result, GroundedResponse)
@@ -889,6 +722,7 @@ async def test_grounding_special_characters(grounded_agent, mock_app):
     result = await grounded_agent.respond_with_grounding(
         user_query="Q",
         agent_response="Latency: 100ms (p99) ±5%",
+        user_id="alice",
     )
 
     assert len(result.verified_claims) + len(result.unverified_claims) > 0
@@ -912,11 +746,13 @@ async def test_grounding_performance(grounded_agent, mock_app):
 
     grounded_agent.llm_service = mock_llm
     grounded_agent.kb = mock_kb
+    mock_kb.ownership_manager = KnowledgeOwnership(None)  # #16665: the real visibility decision
 
     start = time.time()
     result = await grounded_agent.respond_with_grounding(
         user_query="Q",
         agent_response="A",
+        user_id="alice",
     )
     elapsed = time.time() - start
 

@@ -19,7 +19,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from api.voice import _whisper_sync
+from api.voice import TranscriptionFailed, _whisper_sync
 
 
 def _pipe(text: str, language: str | None = None):
@@ -91,9 +91,11 @@ class TestRealSpeechStillTranscribes:
         assert result["text"] == ""
         assert result["confidence"] == 0.0
 
-    def test_pipeline_failure_still_returns_the_empty_shape(self):
+    def test_pipeline_failure_is_a_failure_not_an_empty_transcript(self):
         failing = MagicMock(side_effect=RuntimeError("model exploded"))
 
-        result = _whisper_sync(failing, b"x", ".wav", "en")
+        with pytest.raises(TranscriptionFailed) as caught:
+            _whisper_sync(failing, b"x", ".wav", "en")
 
-        assert result == {"text": "", "language": "unknown", "confidence": 0.0}
+        assert caught.value.status_code == 500
+        assert "model exploded" not in str(caught.value)

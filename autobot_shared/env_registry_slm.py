@@ -21,6 +21,27 @@ from autobot_shared.env_registry import EnvVarSpec, register_env_var
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_UPDATE_CODE_SOURCE_FETCH_RETRY_DELAY_S",
+        type=int,
+        default=5,
+        description="Seconds before retrying a failed git fetch of the code source (#20089).",
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SLM_UPDATE_REPORT_DEPLOY_RUNS",
+        type=int,
+        default=50,
+        description="Newest role deploys listed in the update report (api/update_report.py, #19962).",
+        component="slm",
+        range=(1, 500),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_PLAYBOOK_PIPE_LINE_LIMIT",
         type=int,
         default=10 * 1024 * 1024,
@@ -104,6 +125,34 @@ register_env_var(
         ),
         component="slm",
         range=(1.0, 600.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SLM_FAILURE_DIAG_JOURNAL_LINES",
+        type=int,
+        default=30,
+        description=(
+            "Journal lines fetched from a node whose fleet start/stop/restart failed, "
+            "returned in the response `diagnostics` (services/service_restart.py, #18714)."
+        ),
+        component="slm",
+        range=(1, 500),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SLM_FAILURE_DIAG_MAX_CHARS",
+        type=int,
+        default=4000,
+        description=(
+            "Characters kept (the tail) of each failure-diagnostics section, `systemctl status` "
+            "and journal, per failed node (services/service_restart.py, #18714)."
+        ),
+        component="slm",
+        range=(200, 65536),
     )
 )
 
@@ -374,6 +423,21 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_SYNC_GIT_TRANSPORT_TIMEOUT_S",
+        type=float,
+        default=600.0,
+        description=(
+            "Timeout, in seconds, for the SLM git tracker's `git fetch --prune` and "
+            "`git pull` against the code_source remote. Transport commands download "
+            "history, so they get a far longer bound than AUTOBOT_SYNC_GIT_TIMEOUT_S "
+            "(autobot-slm-backend/services/git_tracker.py, #17855)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_CONSTRAINTS_RSYNC_TIMEOUT_S",
         type=float,
         default=30.0,
@@ -413,6 +477,121 @@ register_env_var(
             "slower migration; lowering it fails a wedged migration sooner "
             "(autobot-slm-backend/api/code_sync_paths.py, #11255, #16713)."
         ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SYNC_RESTART_TIMEOUT_S",
+        type=int,
+        default=60,
+        description=(
+            "Seconds the code-sync orchestrator waits for one `sudo -n systemctl restart` "
+            "over SSH before recording the restart as failed "
+            "(autobot-slm-backend/services/post_sync_runner.py, #17455)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="SLM_COMPOSE_NODES",
+        type=str,
+        default="",
+        description=(
+            "Surface each compose container as an SLM fleet node (#9761). Unset follows the deployment "
+            "mode: on for docker_local (the compose stack, or a dev checkout run inside a container), off "
+            "on a bare-metal/VM fleet and a host dev checkout; true|false overrides, a blank or unrecognised "
+            "value is warned about and treated as unset. The one default is autobot-slm-backend/config.py "
+            "Settings.compose_nodes_enabled (#19323); docker-compose.yml passes the name through only."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DOCKER_MGMT_PREFIX",
+        type=str,
+        default="",
+        description=(
+            "First three octets of the compose autobot-mgmt /24 (e.g. 10.77.3). No default: "
+            "docker/generate-secrets.sh picks a free private range per host, docker-compose.yml "
+            "refuses to start without it, and compose_fleet.py builds node IPs from it (#16833)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DOCKER_SLM_NGINX_CONF",
+        type=str,
+        default="./docker/nginx/nginx-slm.conf",
+        description=(
+            "nginx config the SLM-only web GUI (compose profile slm) mounts. The default serves "
+            "HTTP; ./docker/nginx/nginx-slm-ssl.conf serves HTTPS with ./docker/certs (#18593)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DOCKER_SLM_HTTPS_PORT",
+        type=int,
+        default=443,
+        description=(
+            "Host port the SLM-only web GUI publishes for HTTPS (container port 443). Change it when "
+            "host port 443 is already taken; the GUI's HTTP port stays 80 (#18593)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DOCKER_MGMT_POOL",
+        type=str,
+        default="10.128.0.0/9",
+        description=(
+            "Private IPv4 block (/24 or larger) that docker/pick_mgmt_prefix.py draws the "
+            "compose management /24 from, skipping any range a host route or Docker network uses (#16833)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_REVOCATION_RETRY_AFTER_SECONDS",
+        type=int,
+        default=5,
+        description=(
+            "Seconds in the Retry-After header of the 503 (detail "
+            "revocation_check_unavailable) both backends answer when a token's revocation "
+            "check cannot run (#18892). The token is still refused; the client keeps its "
+            "session and retries. Raising it spaces retries out during a long store "
+            "outage; lowering it recovers faster once the store is back "
+            "(autobot_shared/auth/revocation_unavailable.py). Floor 1."
+        ),
+        component="auth",
+        range=(1, 300),
+    )
+)
+
+# Node-health vars live in a sibling for room (#19292); importing it here
+# registers them whenever this module loads.
+from autobot_shared import env_registry_slm_health  # noqa: E402,F401
+
+register_env_var(
+    EnvVarSpec(
+        name="SLM_STALE_COMPONENTS_SCAN_TIMEOUT_SECONDS",
+        type=int,
+        default=300,
+        description="Seconds /code-sync/status waits on a drift scan before serving the last result (#20250).",
         component="slm",
     )
 )

@@ -30,6 +30,7 @@ from security.command_patterns import (
     SYSTEM_PATHS,
     check_dangerous_patterns,
 )
+from security.command_segments import command_segments, unparsed_segment_reasons
 from services.tool_output_filter import get_tool_output_filter
 from utils.command_utils import execute_shell_command
 
@@ -197,34 +198,6 @@ def _check_argument_aware_risk(command: str) -> Tuple["CommandRisk", List[str]] 
                     [f"export of dangerous env-var: {var}={value_part!r}"],
                 )
 
-    # 5. #7406: `cmd1; cmd2` chained-command separator with a high-risk
-    # right-hand side. shlex.split keeps `;` glued to the preceding token,
-    # so split on it manually and recurse on each sub-command. Take the
-    # highest risk seen across all sub-commands.
-    if any(";" in t for t in tokens):
-        # Re-split on the raw `;` separator to get the actual sub-command
-        # boundaries (shlex preserves `;` as a literal — strip it back out).
-        sub_commands = [s.strip() for s in command.split(";") if s.strip()]
-        if len(sub_commands) > 1:
-            from typing import cast
-
-            highest_risk: "CommandRisk" | None = None
-            all_reasons: List[str] = []
-            for sub in sub_commands:
-                sub_result = _check_argument_aware_risk(sub)
-                if sub_result is None:
-                    continue
-                sub_risk, sub_reasons = sub_result
-                # Take the strictest risk (FORBIDDEN > HIGH > MODERATE > SAFE).
-                if highest_risk is None or sub_risk.rank > highest_risk.rank:
-                    highest_risk = sub_risk
-                all_reasons.extend(sub_reasons)
-            if highest_risk is not None:
-                return (
-                    cast("CommandRisk", highest_risk),
-                    [f"Chained command (`;` separator): {r}" for r in all_reasons],
-                )
-
     return None
 
 
@@ -263,7 +236,7 @@ def _check_dangerous_env_var_prefix(command: str) -> List[str] | None:
 # Issue #765: Path constants now imported from security.command_patterns
 
 
-class SecurityPolicy:
+class CommandSecurityPolicy:
     """Security policy for command execution.
 
     Issue #765: Now uses centralized patterns from security.command_patterns.
@@ -341,7 +314,7 @@ class SecureCommandExecutor:
 
     def __init__(
         self,
-        policy: SecurityPolicy | None = None,
+        policy: CommandSecurityPolicy | None = None,
         require_approval_callback=None,
         use_docker_sandbox: bool = False,
         is_admin: bool = False,
@@ -352,14 +325,14 @@ class SecureCommandExecutor:
         Initialize secure command executor
 
         Args:
-            policy: Security policy to use (default: SecurityPolicy())
+            policy: Security policy to use (default: CommandSecurityPolicy())
             require_approval_callback: Async callback function for user approval
             use_docker_sandbox: Whether to execute commands in Docker container
             is_admin: Whether current user has admin privileges (for permission v2)
             project_path: Current project path (for approval memory)
             user_id: Current user ID (for approval memory)
         """
-        self.policy = policy or SecurityPolicy()
+        self.policy = policy or CommandSecurityPolicy()
         self.require_approval_callback = require_approval_callback
         self.use_docker_sandbox = use_docker_sandbox
         self.docker_image = "autobot-sandbox:latest"
@@ -667,6 +640,21 @@ class SecureCommandExecutor:
 
         return None
 
+    def _assess_chained_risk(self, command: str, segments: List[str]) -> tuple[CommandRisk, List[str]]:
+        """The strictest risk across ``segments`` (#7406, #19462).
+
+        Whole-line patterns run first: some (a fork bomb) span the separators
+        the split removes.
+        """
+        dangerous = self._check_dangerous_patterns(command) + unparsed_segment_reasons(segments)
+        if dangerous:
+            return CommandRisk.FORBIDDEN, [f"Dangerous pattern: {p}" for p in dangerous]
+        assessed = [(segment, *self.assess_command_risk(segment)) for segment in segments]
+        risk = max((seg_risk for _seg, seg_risk, _r in assessed), key=lambda r: r.rank)
+        label = "Chained command" if len(segments) > 1 else "Command"
+        reasons = [f"{label} `{seg}`: {reason}" for seg, _risk, rs in assessed for reason in rs]
+        return risk, reasons
+
     def assess_command_risk(self, command: str) -> tuple[CommandRisk, List[str]]:
         """
         Assess the risk level of a command.
@@ -688,6 +676,13 @@ class SecureCommandExecutor:
         if dangerous_env_vars:
             reasons = [f"Dangerous env-var prefix: {var}" for var in dangerous_env_vars]
             return CommandRisk.FORBIDDEN, reasons
+
+        # #19462: a line running several commands is as risky as its riskiest
+        # one -- naming `cat x | sh` by `cat` alone rated it SAFE.
+        segments = command_segments(command)
+        # `(cmd)`, `{ cmd; }`, `time cmd` and `cmd;` are judged as cmd, not `(cmd`.
+        if len(segments) > 1 or (segments and segments[0] != command):
+            return self._assess_chained_risk(command, segments)
 
         # #7384: argument-aware risk for tools whose base command is
         # allowlisted but whose flags / arguments elevate them to attack

@@ -14,9 +14,9 @@ from autobot_shared.logging_manager import get_logger
 
 from .models import (
     SmartWorkflowStep,
+    SmartWorkflowTemplate,
     WorkflowComplexity,
     WorkflowIntent,
-    WorkflowTemplate,
 )
 
 logger = get_logger(__name__)
@@ -27,7 +27,7 @@ class TemplateManager:
 
     def __init__(self) -> None:
         """Initialize template manager with built-in workflow templates."""
-        self.templates: Dict[str, WorkflowTemplate] = {}
+        self.templates: Dict[str, SmartWorkflowTemplate] = {}
         self._initialize_templates()
 
     def _initialize_templates(self) -> None:
@@ -45,15 +45,15 @@ class TemplateManager:
 
         logger.info("Initialized %s intelligent workflow templates", len(templates))
 
-    def get_template(self, template_id: str) -> WorkflowTemplate | None:
+    def get_template(self, template_id: str) -> SmartWorkflowTemplate | None:
         """Get a template by ID"""
         return self.templates.get(template_id)
 
-    def list_templates(self) -> List[WorkflowTemplate]:
+    def list_templates(self) -> List[SmartWorkflowTemplate]:
         """List all available templates"""
         return list(self.templates.values())
 
-    def _create_smart_development_environment_template(self) -> WorkflowTemplate:
+    def _create_smart_development_environment_template(self) -> SmartWorkflowTemplate:
         """Create intelligent development environment setup template"""
         steps = [
             SmartWorkflowStep(
@@ -91,7 +91,7 @@ class TemplateManager:
             ),
         ]
 
-        return WorkflowTemplate(
+        return SmartWorkflowTemplate(
             template_id="smart_dev_environment",
             name="Smart Development Environment",
             description="AI-optimized setup of complete development environment",
@@ -103,7 +103,7 @@ class TemplateManager:
             tags=["development", "git", "nodejs", "python", "tools"],
         )
 
-    def _create_intelligent_security_hardening_template(self) -> WorkflowTemplate:
+    def _create_intelligent_security_hardening_template(self) -> SmartWorkflowTemplate:
         """Create intelligent security hardening template"""
         steps = [
             SmartWorkflowStep(
@@ -143,7 +143,7 @@ class TemplateManager:
             ),
         ]
 
-        return WorkflowTemplate(
+        return SmartWorkflowTemplate(
             template_id="intelligent_security_hardening",
             name="Intelligent Security Hardening",
             description=("AI-driven system security hardening with firewall configuration"),
@@ -155,7 +155,7 @@ class TemplateManager:
             tags=["security", "firewall", "hardening", "ufw"],
         )
 
-    def _create_adaptive_deployment_template(self) -> WorkflowTemplate:
+    def _create_adaptive_deployment_template(self) -> SmartWorkflowTemplate:
         """Create adaptive application deployment template"""
         steps = [
             SmartWorkflowStep(
@@ -192,7 +192,7 @@ class TemplateManager:
             ),
         ]
 
-        return WorkflowTemplate(
+        return SmartWorkflowTemplate(
             template_id="adaptive_deployment",
             name="Adaptive Application Deployment",
             description="Smart deployment workflow that adapts to system configuration",
@@ -204,7 +204,7 @@ class TemplateManager:
             tags=["deployment", "docker", "containers", "automation"],
         )
 
-    def _create_predictive_maintenance_template(self) -> WorkflowTemplate:
+    def _create_predictive_maintenance_template(self) -> SmartWorkflowTemplate:
         """Create predictive system maintenance template"""
         steps = [
             SmartWorkflowStep(
@@ -241,7 +241,7 @@ class TemplateManager:
             ),
         ]
 
-        return WorkflowTemplate(
+        return SmartWorkflowTemplate(
             template_id="predictive_maintenance",
             name="Predictive System Maintenance",
             description="AI-powered system maintenance with predictive cleanup",
@@ -253,7 +253,7 @@ class TemplateManager:
             tags=["maintenance", "cleanup", "monitoring", "system"],
         )
 
-    def _create_ai_backup_strategy_template(self) -> WorkflowTemplate:
+    def _create_ai_backup_strategy_template(self) -> SmartWorkflowTemplate:
         """Create AI-driven backup strategy template"""
         steps = [
             SmartWorkflowStep(
@@ -292,7 +292,7 @@ class TemplateManager:
             ),
         ]
 
-        return WorkflowTemplate(
+        return SmartWorkflowTemplate(
             template_id="ai_backup_strategy",
             name="AI Backup Strategy",
             description="Intelligent backup workflow with automated organization",

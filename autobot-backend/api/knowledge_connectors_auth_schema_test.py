@@ -214,7 +214,7 @@ async def test_create_confluence_schema_valid_credentials_authenticate():
         },
     )
     try:
-        result, cfg = await _create_via_api(req, "knowledge.connectors.confluence.get_http_client", fake_client)
+        result, cfg = await _create_via_api(req, "knowledge.connectors.atlassian_base.get_http_client", fake_client)
         assert result["connector_id"] == cfg.connector_id
         assert capture["auth"].login == _FAKE_USERNAME
         assert capture["auth"].password == _FAKE_API_CREDENTIAL
@@ -239,7 +239,7 @@ async def test_create_jira_schema_valid_credentials_authenticate():
         },
     )
     try:
-        result, cfg = await _create_via_api(req, "knowledge.connectors.jira.get_http_client", fake_client)
+        result, cfg = await _create_via_api(req, "knowledge.connectors.atlassian_base.get_http_client", fake_client)
         assert result["connector_id"] == cfg.connector_id
         assert capture["auth"].login == _FAKE_USERNAME
         assert capture["auth"].password == _FAKE_API_CREDENTIAL

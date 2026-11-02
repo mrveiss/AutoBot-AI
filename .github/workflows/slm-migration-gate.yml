@@ -27,6 +27,10 @@ on:
       - 'autobot-slm-backend/user_management/models/**'
       - '.github/workflows/slm-migration-gate.yml'
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [ release, main ]
     paths: *paths
 
@@ -36,16 +40,24 @@ concurrency:
 
 permissions:
   contents: read
+  packages: read  # pull the ghcr CI image mirror (#18160)
 
 jobs:
   slm-migration-matrix:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: SLM migration runner — Postgres 16
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     services:
       postgres:
-        image: postgres:16
+        # Mirror of the upstream image (ci-image-mirror.yml, #18160): anonymous
+        # pulls hit the per-IP quota. The ghcr packages must be public or grant
+        # this repo read access so fork PRs can pull them.
+        image: ghcr.io/mrveiss/ci-postgres:16
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
         env:
           POSTGRES_USER: slmtest
           POSTGRES_PASSWORD: slmtest

@@ -158,7 +158,6 @@ per-file-ignores =
     # Dashboard/monitoring files with long command strings and JS templates
     autobot-slm-backend/monitoring/performance_optimizer.py:E501
     # Backward-compatibility re-export shims (intentionally long inline comments)
-    autobot-backend/context_aware_decision_system.py:E501
     autobot-backend/enhanced_project_state_tracker.py:E501
     autobot-backend/workflow_templates.py:E501
 

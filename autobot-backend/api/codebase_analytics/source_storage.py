@@ -12,6 +12,7 @@ Uses the analytics Redis database (DB 11) with keys:
 
 from typing import List
 
+from autobot_shared.error_boundaries.types import PassThroughError
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
@@ -23,13 +24,16 @@ _SOURCES_KEY_PREFIX = "code_source:"
 _SOURCES_INDEX_KEY = "code_sources:index"
 
 
-class RegistryUnavailable(RuntimeError):
+class RegistryUnavailable(PassThroughError, RuntimeError):
     """The source registry (Redis) could not be reached.
 
     Never raised to mean "no such source" -- that is a legitimate empty
     result. Raised only when the store itself failed, so a caller (an
     orphan detector, in particular) cannot mistake a fault for "this id
     genuinely has no record" (#17039 review, #17050).
+
+    A ``PassThroughError``: ``with_error_handling`` lets it reach the app-level
+    503 handler instead of converting it into a generic 500 (#17982).
     """
 
 
@@ -54,15 +58,35 @@ update_source = save_source
 
 
 async def get_source(source_id: str) -> CodeSource | None:
-    """Retrieve a CodeSource by ID. Returns None if not found."""
+    """Retrieve a CodeSource by ID. Returns None only if there is no such source.
+
+    Raises ``RegistryUnavailable`` when the registry itself cannot be reached
+    (#17982). It used to return None there, which a caller reads as "no such
+    source" -- so a worker that could not build its Redis client refused every
+    scan with a message asserting the id was unknown.
+    """
     redis = await get_async_redis_client(database="analytics")
     if redis is None:
-        return None
+        raise RegistryUnavailable("source registry (Redis) is unavailable")
     key = f"{_SOURCES_KEY_PREFIX}{source_id}"
     data = await redis.get(key)
     if data is None:
         return None
     return CodeSource.model_validate_json(data.decode("utf-8") if isinstance(data, bytes) else data)
+
+
+async def get_source_or_none_if_unreadable(source_id: str) -> CodeSource | None:
+    """``get_source`` for DECORATION only: an unreadable registry yields None, logged.
+
+    For callers that can render without the source (a project list's summary
+    card). Anything that acts on the source must call ``get_source`` and let
+    ``RegistryUnavailable`` propagate (#17982).
+    """
+    try:
+        return await get_source(source_id)
+    except RegistryUnavailable:
+        logger.warning("source %s omitted: the source registry is unavailable", source_id)
+        return None
 
 
 def _is_visible(source: CodeSource, owner_id: str | None) -> bool:
@@ -115,7 +139,13 @@ async def registered_source_ids() -> set[str]:
 
 
 async def get_default_source_id() -> str | None:
-    """Return the ID of the most recently indexed source, or None (#2653)."""
+    """Return the ID of the most recently indexed source, or None (#2653).
+
+    None means the registry holds no source. An unreachable registry raises
+    ``RegistryUnavailable`` instead (#17982): ``list_sources`` returns ``[]`` for
+    it, and a caller cannot tell "no sources" from "could not look".
+    """
+    await registered_source_ids()
     sources = await list_sources()
     if not sources:
         return None

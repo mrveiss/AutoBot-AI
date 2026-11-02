@@ -18,6 +18,7 @@ from typing import Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.scoping import Principal, ResourceDescriptor, ScopeLevel, is_visible
+from knowledge.acl_epoch import bump_acl_epoch
 from knowledge.utils import decode_id_list
 
 logger = get_logger(__name__)
@@ -43,7 +44,7 @@ class AccessLevel(str, Enum):
 VisibilityLevel = ScopeLevel
 
 
-class SourceType(str, Enum):
+class FactSourceType(str, Enum):
     """Source type for fact creation."""
 
     CHAT = "chat"  # Created from chat conversation
@@ -89,7 +90,7 @@ class KnowledgeOwnership:
         await asyncio.to_thread(self.redis_client.sadd, f"user:kb:facts:{owner_id}", fact_id)
 
         # Add to chat_knowledge category if source is chat
-        if source_type == SourceType.CHAT:
+        if source_type == FactSourceType.CHAT:
             await asyncio.to_thread(self.redis_client.sadd, "kb:category:chat_knowledge", fact_id)
 
         # Add to organization index
@@ -115,7 +116,7 @@ class KnowledgeOwnership:
         fact_id: str,
         owner_id: str,
         visibility: str = VisibilityLevel.PRIVATE,
-        source_type: str = SourceType.MANUAL,
+        source_type: str = FactSourceType.MANUAL,
         shared_with: List[str] | None = None,
         organization_id: str | None = None,
         group_ids: List[str] | None = None,
@@ -408,9 +409,9 @@ class KnowledgeOwnership:
         removed_users = await self._unshare_from_users(fact_id, user_ids, shared_with)
         removed_groups = await self._unshare_from_groups(fact_id, group_ids, fact_group_ids)
 
-        # Update metadata
         fact_metadata["shared_with"] = list(shared_with)
         fact_metadata["group_ids"] = list(fact_group_ids)
+        await asyncio.to_thread(bump_acl_epoch, self.redis_client)  # #16664: orphan cached RAG results
 
         # Adjust visibility if needed
         if not shared_with and not fact_group_ids:
@@ -723,12 +724,11 @@ class KnowledgeOwnership:
         group_ids = decode_id_list(fact_metadata.get("group_ids"))
         visibility = fact_metadata.get("visibility")
 
-        # Remove from owner's index
         if owner_id:
             await asyncio.to_thread(self.redis_client.srem, f"user:kb:facts:{owner_id}", fact_id)
 
         # Remove from chat_knowledge category
-        if source_type == SourceType.CHAT:
+        if source_type == FactSourceType.CHAT:
             await asyncio.to_thread(self.redis_client.srem, "kb:category:chat_knowledge", fact_id)
 
         # Remove from organization index
@@ -743,9 +743,9 @@ class KnowledgeOwnership:
         for user_id in shared_with:
             await asyncio.to_thread(self.redis_client.srem, f"user:kb:shared:{user_id}", fact_id)
 
-        # Remove from system index
         if visibility == VisibilityLevel.SYSTEM:
             await asyncio.to_thread(self.redis_client.srem, "kb:system:facts", fact_id)
+        await asyncio.to_thread(bump_acl_epoch, self.redis_client)  # #16664: orphan cached RAG results
 
         logger.debug(
             "Cleaned up ownership indexes for fact %s (owner=%s, org=%s, groups=%d, shared=%d)",

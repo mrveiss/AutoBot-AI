@@ -12,51 +12,14 @@ Based on Cursor's dependency detection patterns.
 from typing import Callable
 
 from autobot_shared.logging_manager import get_logger
-from tools.parallel.types import DependencyType, ToolCall
+from autobot_shared.tool_catalogue import ToolEffect, canonical_tool_name, has_effect
+from tools.parallel.types import DependencyType, ParallelToolCall
 
 logger = get_logger(__name__)
 
 
 class DependencyAnalyzer:
     """Analyzes dependencies between tool calls for parallel execution"""
-
-    # Tools that read from resources
-    READ_TOOLS = {
-        "read_file",
-        "grep_search",
-        "file_search",
-        "list_dir",
-        "list_directory",
-        "web_search",
-        "query_database",
-        "get_redis_value",
-        "semantic_search",
-        "search_knowledge",
-    }
-
-    # Tools that write to resources
-    WRITE_TOOLS = {
-        "edit_file",
-        "write_file",
-        "delete_file",
-        "execute_command",
-        "set_redis_value",
-        "insert_database",
-        "create_file",
-        "move_file",
-        "rename_file",
-    }
-
-    # Tools that affect system state
-    STATE_TOOLS = {
-        "execute_command",
-        "manage_service",
-        "create_directory",
-        "delete_directory",
-        "run_shell",
-        "start_process",
-        "stop_process",
-    }
 
     # Resource extraction patterns for common tools
     RESOURCE_EXTRACTORS: dict[str, Callable[[dict], str | None]] = {
@@ -66,9 +29,9 @@ class DependencyAnalyzer:
         "delete_file": lambda args: args.get("file_path") or args.get("path"),
         "create_file": lambda args: args.get("file_path") or args.get("path"),
         "grep_search": lambda args: args.get("path") or args.get("directory"),
-        "list_dir": lambda args: args.get("path") or args.get("directory"),
         "list_directory": lambda args: args.get("path") or args.get("directory"),
         "create_directory": lambda args: args.get("path"),
+        "remove_directory": lambda args: args.get("path"),
         "move_file": lambda args: args.get("source") or args.get("destination"),
     }
 
@@ -85,7 +48,7 @@ class DependencyAnalyzer:
 
     def analyze_dependencies(
         self,
-        tool_calls: list[ToolCall],
+        tool_calls: list[ParallelToolCall],
     ) -> dict[str, list[str]]:
         """
         Analyze dependencies between tool calls.
@@ -110,13 +73,13 @@ class DependencyAnalyzer:
 
     def _check_dependency(
         self,
-        call_a: ToolCall,
-        call_b: ToolCall,
+        call_a: ParallelToolCall,
+        call_b: ParallelToolCall,
     ) -> DependencyType:
         """Check if call_b depends on call_a"""
 
         # Rule 1: Write → Read/Write on same resource
-        if call_a.tool_name in self.WRITE_TOOLS:
+        if has_effect(call_a.tool_name, ToolEffect.WRITE):
             resource_a = self._extract_resource(call_a)
             resource_b = self._extract_resource(call_b)
 
@@ -125,7 +88,7 @@ class DependencyAnalyzer:
                     return DependencyType.RESOURCE
 
         # Rule 2: Read → Write on same resource (read must complete first)
-        if call_a.tool_name in self.READ_TOOLS and call_b.tool_name in self.WRITE_TOOLS:
+        if has_effect(call_a.tool_name, ToolEffect.READ) and has_effect(call_b.tool_name, ToolEffect.WRITE):
             resource_a = self._extract_resource(call_a)
             resource_b = self._extract_resource(call_b)
 
@@ -134,7 +97,7 @@ class DependencyAnalyzer:
                     return DependencyType.RESOURCE
 
         # Rule 3: State-changing tools create order dependencies
-        if call_a.tool_name in self.STATE_TOOLS:
+        if has_effect(call_a.tool_name, ToolEffect.STATE):
             if self._might_depend_on_state(call_a, call_b):
                 return DependencyType.ORDER
 
@@ -144,14 +107,14 @@ class DependencyAnalyzer:
 
         return DependencyType.NONE
 
-    def _extract_resource(self, call: ToolCall) -> str | None:
+    def _extract_resource(self, call: ParallelToolCall) -> str | None:
         """Extract resource identifier from tool call"""
         # Check custom extractors first
         if call.tool_name in self._custom_extractors:
             return self._custom_extractors[call.tool_name](call.arguments)
 
         # Fall back to built-in extractors
-        extractor = self.RESOURCE_EXTRACTORS.get(call.tool_name)
+        extractor = self.RESOURCE_EXTRACTORS.get(canonical_tool_name(call.tool_name))
         if extractor:
             return extractor(call.arguments)
 
@@ -177,8 +140,8 @@ class DependencyAnalyzer:
 
     def _might_depend_on_state(
         self,
-        state_call: ToolCall,
-        dependent_call: ToolCall,
+        state_call: ParallelToolCall,
+        dependent_call: ParallelToolCall,
     ) -> bool:
         """Check if dependent_call might need state from state_call"""
 
@@ -215,8 +178,8 @@ class DependencyAnalyzer:
 
     def _has_data_dependency(
         self,
-        call_a: ToolCall,
-        call_b: ToolCall,
+        call_a: ParallelToolCall,
+        call_b: ParallelToolCall,
     ) -> bool:
         """
         Check if call_b uses output from call_a as input.
@@ -233,8 +196,8 @@ class DependencyAnalyzer:
 
     def get_parallel_groups(
         self,
-        tool_calls: list[ToolCall],
-    ) -> list[list[ToolCall]]:
+        tool_calls: list[ParallelToolCall],
+    ) -> list[list[ParallelToolCall]]:
         """
         Group tool calls for parallel execution.
 
@@ -245,7 +208,7 @@ class DependencyAnalyzer:
         # First analyze dependencies
         self.analyze_dependencies(tool_calls)
 
-        groups: list[list[ToolCall]] = []
+        groups: list[list[ParallelToolCall]] = []
         remaining = set(tc.call_id for tc in tool_calls)
         completed: set[str] = set()
         call_map = {tc.call_id: tc for tc in tool_calls}
@@ -277,6 +240,6 @@ class DependencyAnalyzer:
 
         return groups
 
-    def can_parallelize(self, call_a: ToolCall, call_b: ToolCall) -> bool:
+    def can_parallelize(self, call_a: ParallelToolCall, call_b: ParallelToolCall) -> bool:
         """Quick check if two calls can run in parallel"""
         return self._check_dependency(call_a, call_b) == DependencyType.NONE

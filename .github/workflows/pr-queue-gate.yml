@@ -2,7 +2,7 @@ name: PR Queue Gate
 
 on:
   pull_request:
-    types: [opened, reopened]
+    types: [opened, reopened, ready_for_review]
 
 # #14434: without this, every push left its predecessors queued. 42 of a 271-run
 # sample were for commits no longer at their branch tip - work nothing would ever
@@ -21,6 +21,7 @@ concurrency:
 
 jobs:
   check-pr-limit:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     permissions:
       # Declaring any `permissions:` sets every unlisted scope to `none`, so the
@@ -45,17 +46,15 @@ jobs:
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          # AUTOBOT_OPEN_PR_CAP (default 40) is the actual limit (#17006):
-          # pre-push refuses a push that opens a NEW branch once open PRs
-          # (excluding forks/bots) reach it -- tools/git-hooks/pre-push.
-          # CLAUDE.md states this under **Never violate** as "Open-PR cap".
+          # There is no cap on open PRs (#19397, owner rule): the former
+          # pre-push open-PR cap (#17006) is retired, and nothing limits how
+          # many PRs are open. Landing throughput is governed by merge trains
+          # and the CI slots.
           #
-          # This workflow is a separate, earlier, warn-only notice. It runs on
-          # `opened`/`reopened`, after a PR already exists, so it cannot block
-          # anything the way pre-push can -- it only flags a queue depth worth
-          # a glance well before the hard cap.
+          # This workflow is a warn-only notice. It runs on `opened`/`reopened`,
+          # after a PR already exists, so it cannot block anything.
           #
-          # This threshold is NOT that cap and must never be read as one. It
+          # This threshold is NOT a cap and must never be read as one. It
           # is a runaway detector: a number high enough that reaching it means
           # something is opening PRs in a loop, or that the merge pipeline has
           # stalled so nothing is draining. Warn-only — it posts a comment and
@@ -94,7 +93,7 @@ jobs:
             BODY=$(printf '%s\n' \
               "## Notice: $EXISTING open PRs — past the runaway threshold ($RUNAWAY_THRESHOLD)" \
               "" \
-              "**This is not a request to defer this PR.** The actual limit is the open-PR cap (\`AUTOBOT_OPEN_PR_CAP\`, default 40), enforced at pre-push against NEW branches only -- pushing more commits to this PR's own branch is never blocked by it." \
+              "**This is not a request to defer this PR.** There is no cap on open PRs (#19397) -- nothing blocks opening or pushing a PR." \
               "" \
               "This notice only means the count is high enough to be worth a glance for a *runaway* — something opening PRs in a loop, or a merge pipeline that has stalled so nothing is draining." \
               "" \
@@ -103,7 +102,7 @@ jobs:
               "" \
               "**If the queue is draining normally, ignore this.** Otherwise:" \
               '1. Check whether CI is dispatching at all — see the `ci-dispatch-watchdog` status on these PRs' \
-              '2. Merge the ones whose CI has finished and review has passed: `gh pr merge <number> --squash --delete-branch`' \
+              '2. Approved PRs land through the merge train the coordinator sequences (merge commits, never squash) -- check the open `chore(merge-train)` PR is moving, not each PR on its own' \
               "3. Look for a loop opening near-identical PRs" \
               "" \
               '> Warn-only runaway detector — `.github/workflows/pr-queue-gate.yml`. It never blocks a merge.')

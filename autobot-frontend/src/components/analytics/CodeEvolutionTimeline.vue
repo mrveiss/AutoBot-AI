@@ -212,10 +212,11 @@ import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 import { useNotificationBus } from '@/composables/useNotificationBus'
 import { useCodeEvolutionData } from '@/composables/analytics/useCodeEvolutionData'
 import type { TimelinePoint, TrendData, PatternPoint } from '@/composables/analytics/useCodeEvolutionData'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const { t } = useI18n()
 
@@ -406,11 +407,7 @@ function formatPatternName(pattern: string): string {
     .join(' ')
 }
 
-function formatDate(timestamp: string): string {
-  if (!timestamp) return ''
-  const date = new Date(timestamp)
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
+const formatDate = createDateFormatter({ kind: 'date', locale: 'en-US', intl: { month: 'short', day: 'numeric' } })
 
 // Trend helpers
 function getTrendClass(direction: string): string {

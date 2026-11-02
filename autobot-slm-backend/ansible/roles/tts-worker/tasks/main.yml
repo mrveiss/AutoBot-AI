@@ -210,8 +210,7 @@
 - name: "TTS Worker | Install FastAPI and server dependencies"
   ansible.builtin.pip:
     name:
-      - fastapi>=0.141.1
-      - uvicorn[standard]>=0.53.0
+      - uvicorn[standard]>=0.54.0
       - python-multipart>=0.0.32
       - aiofiles>=25.1.0
     virtualenv: "{{ tts_install_dir }}/venv"
@@ -224,14 +223,42 @@
   timeout: 300  # Issue #2835: prevent indefinite hang on dependency resolution
   tags: ['tts', 'packages']
 
-# #15598: floor raised from `>=2.5.0` to the `>=2.13.0` that
-# `autobot-tts-worker/requirements.txt` declares. Pocket TTS needs >=2.5, but
-# the worker ships against 2.13 and this task is what actually populates its
-# venv, so the lower number was the one that bound.
+# #15598 raised this floor by hand to match `autobot-tts-worker/requirements.txt`,
+# and #18127 is what that hand-editing costs: a dependabot bump moved the manifest and
+# not this file, so `ansible_requirements_parity_test` failed #18105 on a shard. One
+# declaration now -- the manifest -- read here instead of restated.
+#
+# Read from the CONTROLLER via playbook_dir, the same anchor
+# `_shared/tasks/stage_shared_manifests.yml` uses for `constraints/shared.txt`; the
+# component manifest is not synced to the node, so it cannot be read from there.
+#
+# `[^\s#]*` stops at whitespace, so a trailing comment is excluded and so is an
+# environment marker. A marker on torch would be silently dropped, which is why the
+# assert below also fails if the extracted value is not a torch requirement.
+- name: "TTS Worker | Read the torch requirement from the component manifest (#18127)"
+  ansible.builtin.set_fact:
+    _tts_torch_requirement: >-
+      {{ lookup('file', playbook_dir ~ '/../../../autobot-tts-worker/requirements.txt')
+         | regex_search('^torch(?![A-Za-z0-9_.-])[^\s#]*', multiline=True) }}
+  tags: ['tts', 'packages']
+
+# Fail closed: an unreadable manifest or a renamed package would otherwise render an
+# empty pip name, and `pip install ""` is not an error pip reports usefully.
+- name: "TTS Worker | The torch requirement must have been found (#18127)"
+  ansible.builtin.assert:
+    that:
+      - _tts_torch_requirement is string
+      - _tts_torch_requirement.startswith('torch')
+    fail_msg: >-
+      Could not read a torch requirement from autobot-tts-worker/requirements.txt
+      (got {{ _tts_torch_requirement | default('<undefined>') }}). This role installs
+      torch from the CPU wheel index and takes its version from that manifest (#18127).
+  tags: ['tts', 'packages']
+
 - name: "TTS Worker | Install torch CPU-only from the CPU wheel index"
   ansible.builtin.pip:
     name:
-      - "torch>=2.14.0"
+      - "{{ _tts_torch_requirement }}"
     virtualenv: "{{ tts_install_dir }}/venv"
     # #16641: see "TTS Worker | Upgrade pip in venv" above.
     virtualenv_command: "{{ python_interpreter_binary }} -m venv"
@@ -272,7 +299,13 @@
       # A major bump is not a floor move. The parity guard fires on the
       # NUMBER and cannot know whether the API that number gates still
       # exists; answering that is the only reason this pin carries a comment.
-      - pocket-tts>=3.1.0
+      #
+      # Raised 3.1.0 -> 3.3.0 with `autobot-tts-worker/requirements.txt` (#17707).
+      # This does NOT re-open the API question the paragraph above answers: the old
+      # `>=3.1.0` already admitted 3.3.0 and everything above it, so the floor move
+      # narrows what may install rather than widening it. If `generate_audio_stream`
+      # had gone in 3.3.x, the previous floor was already unsafe.
+      - pocket-tts>=3.3.0
       # #15598: `>=0.14.0` is the floor `autobot-tts-worker/requirements.txt`
       # declares for this worker; `>=0.12.0` here undercut it by two minors.
       - soundfile>=0.14.0
@@ -288,6 +321,9 @@
       # roles/npu-worker, roles/agent_config/openvino and roles/browser onto this
       # same shape, so all five pip constraint sites now agree.
       - numpy
+      # #18060: fastapi's floor lives in constraints/shared.txt, so it is installed here,
+      # in the task that carries the `-c` for it, rather than bare in the task above.
+      - fastapi
       - scipy>=1.18.1
     virtualenv: "{{ tts_install_dir }}/venv"
     # #16641: see "TTS Worker | Upgrade pip in venv" above.
@@ -334,9 +370,17 @@
   register: _tts_predownload
   # Exit 2 = could not download (gated/no-token or offline); the worker retries
   # on first start, so do not fail provisioning. Only a crash (rc 1) is fatal.
-  failed_when: _tts_predownload.rc not in [0, 2]
+  no_log: true  # #19846: the environment carries the Hugging Face token
+  failed_when: false
   changed_when: _tts_predownload.rc == 0
   timeout: 900  # Model shards are large; cap the download like the torch step.
+  when: tts_predownload_model | default(true) | bool
+  tags: ['tts', 'model']
+
+- name: "TTS Worker | Check the pre-download did not crash"
+  ansible.builtin.assert:
+    that: _tts_predownload.rc in [0, 2]
+    fail_msg: "predownload-model.py exited {{ _tts_predownload.rc }}: {{ _tts_predownload.stderr_lines | default([]) | last | default('') }}"
   when: tts_predownload_model | default(true) | bool
   tags: ['tts', 'model']
 

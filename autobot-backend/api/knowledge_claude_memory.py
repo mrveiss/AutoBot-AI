@@ -134,13 +134,4 @@ async def get_import_claude_memory_status(task_id: str):
     """Poll the status of a background Claude Code memory import task (#16642)."""
     from services.knowledge.task_status_manager import TaskStatusManager
 
-    task_status = await TaskStatusManager.get_task(task_id)
-
-    if not task_status:
-        return {
-            "status": "not_found",
-            "message": f"Task {task_id} not found",
-            "task_id": task_id,
-        }
-
-    return task_status.to_response_dict()
+    return await TaskStatusManager.get_task_response(task_id)

@@ -19,7 +19,7 @@ Never hard-code hex color values or numeric pixels for spacing in scoped styles.
 
 ## CSS Token Vocabulary
 
-All tokens are defined in `src/assets/styles/theme.css` and `src/assets/tokens.css`.
+All base tokens are defined once, in `src/assets/css/design-tokens.css`; per-theme overrides live in `src/assets/css/themes/`. Precedence is written down in `src/assets/css/index.css`.
 
 ### Color — Status / Semantic
 
@@ -157,9 +157,25 @@ The following patterns need tokens or a documented decision:
 
 ## Enforcement
 
-1. **Code review**: flag any new `#hex` value in a `<style scoped>` block
-2. **Lint rule**: (future) add `stylelint-no-unsupported-browser-features` + custom rule for hardcoded colors
-3. **CI gate**: (future) add a grep-based CI step that fails if new scoped styles introduce un-mapped hex values
+A **local override** is a component giving itself a value the design system owns. There are
+five forms, each caught by exactly one check, so a sixth found later has an obvious home:
+
+| Form | Owner check | Mode |
+|---|---|---|
+| hex in a `<style>` block | stylelint `color-no-hex` (`.stylelintrc.json` in each app and in `libs/autobot-ui`; `stylelint-tokens.yml`) | changed files, report-only |
+| hex in `<script>` / a template attribute | `repo_tests/hardcoded_colour_ratchet_17560_test.py` (#17560) | whole tree, shrink-only |
+| raw Tailwind palette class in a template (`bg-red-50`) | `repo_tests/raw_palette_class_ratchet_14580_test.py` (#14580) | whole tree, both apps, shrink-only |
+| `!important` in a component `<style>` | the same file as hex-in-script, `TestTheImportantPopulationOnlyShrinks` (#17567) | whole tree, both apps, shrink-only |
+| a token declared as a base value in two files, or a stylesheet nothing imports | `autobot-frontend/scripts/canonical/rules/ds_duplicate_base_declaration.mjs`, `ds_unloaded_stylesheet.mjs` (#14785, #17613) | whole tree, blocking |
+
+A token redefined inside a component's `<style>` is not on this list on purpose: #17567 measured
+it and found zero (the component-local custom properties are aliases assigned *from* tokens, the
+pattern the system is for).
+
+Each ratchet freezes the measured population in a baseline module and fails only on growth, with
+a message that names the token to use. Baselines move one way: when a count falls, lower its
+entry. The stylelint step is not yet whole-tree: that switch waits until the `<style>` hex
+population reaches zero (#17567).
 
 ---
 

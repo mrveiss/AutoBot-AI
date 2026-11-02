@@ -20,8 +20,10 @@ import { createLogger } from '@/utils/debugUtils'
 import { extractErrorMessage } from '@/utils/errorExtract'
 import { useBackgroundTask } from '@/composables/useBackgroundTask'
 import { useLoadingState } from '@/composables/useLoadingState'
+import { CLEAR_STUCK_FORBIDDEN_MESSAGE, forceClearStuck, isClearStuckForbidden } from '@/composables/usePatternClearStuck'
 
 const logger = createLogger('usePatternAnalysis')
+const CLEAR_STUCK_PATH = '/api/analytics/codebase/patterns/tasks/clear-stuck?force=true'
 
 // Type definitions for Pattern Analysis
 export interface CodeLocation {
@@ -264,7 +266,7 @@ export function usePatternAnalysis() {
 
     try {
       const backendUrl = await getBackendUrl()
-      let response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/analyze`, { // fetchWithAuth retained: AbortController signal + response.status === 409 — exempt (#6256)
+      const postAnalyze = (background: boolean) => fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/analyze`, { // fetchWithAuth retained: AbortController signal + response.status === 409 — exempt (#6256)
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -273,39 +275,21 @@ export function usePatternAnalysis() {
           enable_complexity_analysis: enableComplexity,
           enable_duplicate_detection: enableDuplicates,
           similarity_threshold: similarityThreshold,
-          run_in_background: runInBackground
+          run_in_background: background
         }),
         signal: _analyzeSignal,
       })
+      let response = await postAnalyze(runInBackground)
 
       // Issue #647: Handle 409 Conflict by clearing stuck tasks and retrying
       if (response.status === 409) {
         logger.info('Another analysis is running, attempting to clear stuck tasks...')
-
-        // Try to clear stuck tasks with force=true
-        const clearResponse = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/tasks/clear-stuck?force=true`, { // fetchWithAuth retained: AbortController signal — exempt (#6256)
-          method: 'POST',
-          signal: _analyzeSignal,
-        })
-
+        // #18718: a refused clear (non-admin) is reported as such, never as "please wait".
+        const clearResponse = await forceClearStuck(`${backendUrl}${CLEAR_STUCK_PATH}`, _analyzeSignal)
+        if (clearResponse === null) throw new Error(CLEAR_STUCK_FORBIDDEN_MESSAGE)
         if (clearResponse.ok) {
-          const clearResult = await clearResponse.json()
-          logger.info('Cleared stuck tasks:', clearResult)
-
-          // Retry the analysis
-          response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/analyze`, { // fetchWithAuth retained: AbortController signal + response.status === 409 — exempt (#6256)
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              path,
-              enable_regex_detection: enableRegex,
-              enable_complexity_analysis: enableComplexity,
-              enable_duplicate_detection: enableDuplicates,
-              similarity_threshold: similarityThreshold,
-              run_in_background: runInBackground
-            }),
-            signal: _analyzeSignal,
-          })
+          logger.info('Cleared stuck tasks:', await clearResponse.json())
+          response = await postAnalyze(runInBackground)
         }
       }
 
@@ -327,39 +311,22 @@ export function usePatternAnalysis() {
         // Poll until task completes — caller awaits this
         const pollResult = await pollTaskStatus(data.task_id)
 
-        // Auto-retry once if orphaned: clear stuck tasks and start fresh
+        // Auto-retry once if orphaned: clear stuck tasks and start fresh; a failed clear or retry is an error.
         if (pollResult === 'orphaned') {
           logger.info('Pattern task orphaned, clearing stuck tasks and retrying…')
           wasInterrupted.value = false
           error.value = null
 
-          await fetchWithAuth( // fetchWithAuth retained: AbortController signal — exempt (#6256)
-            `${backendUrl}/api/analytics/codebase/patterns/tasks/clear-stuck?force=true`,
-            { method: 'POST', signal: _analyzeSignal },
-          )
-          const retryResp = await fetchWithAuth( // fetchWithAuth retained: AbortController signal + response.status check — exempt (#6256)
-            `${backendUrl}/api/analytics/codebase/patterns/analyze`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                path,
-                enable_regex_detection: enableRegex,
-                enable_complexity_analysis: enableComplexity,
-                enable_duplicate_detection: enableDuplicates,
-                similarity_threshold: similarityThreshold,
-                run_in_background: true,
-              }),
-              signal: _analyzeSignal,
-            },
-          )
-          if (retryResp.ok) {
-            const retryData = await retryResp.json()
-            if (retryData.task_id) {
-              currentTaskId.value = retryData.task_id
-              taskStatus.value = { task_id: retryData.task_id, status: 'pending' }
-              await pollTaskStatus(retryData.task_id)
-            }
+          const clearResponse = await forceClearStuck(`${backendUrl}${CLEAR_STUCK_PATH}`, _analyzeSignal)
+          if (clearResponse === null) throw new Error(CLEAR_STUCK_FORBIDDEN_MESSAGE)
+          if (!clearResponse.ok) throw new Error(`Analysis failed: ${clearResponse.statusText}`)
+          const retryResp = await postAnalyze(true)
+          if (!retryResp.ok) throw new Error(`Analysis failed: ${retryResp.statusText}`)
+          const retryData = await retryResp.json()
+          if (retryData.task_id) {
+            currentTaskId.value = retryData.task_id
+            taskStatus.value = { task_id: retryData.task_id, status: 'pending' }
+            await pollTaskStatus(retryData.task_id)
           }
         }
 
@@ -735,14 +702,12 @@ export function usePatternAnalysis() {
    */
   const clearStorage = async (): Promise<boolean> => {
     return wrap(async () => {
-      const data = await apiClient.delete<{ status: string }>(
+      // Handler returns {message} on 2xx and raises on failure (no status field).
+      await apiClient.post(
         '/api/analytics/codebase/patterns/storage/clear',
       )
-      if (data.status === 'success') {
-        storageStats.value = null
-        return true
-      }
-      return false
+      storageStats.value = null
+      return true
     }).catch((e: unknown) => {
       logger.error('Clear storage failed:', e)
       return false
@@ -828,14 +793,16 @@ export function usePatternAnalysis() {
    * Clear stuck analysis tasks
    * Issue #647: Manual recovery for stuck tasks
    */
-  const clearStuckTasks = async (force: boolean = false): Promise<{ cleared: number; message: string }> => {
+  const clearStuckTasks = async (force: boolean = false): Promise<{ cleared: number; message: string; forbidden: boolean }> => {
     try {
       const result = await apiClient.post<{ cleared_count: number; message: string }>(
         `/api/analytics/codebase/patterns/tasks/clear-stuck?force=${force}`,
       )
       logger.info('Cleared stuck tasks:', result)
-      return { cleared: result.cleared_count, message: result.message }
+      return { cleared: result.cleared_count, message: result.message, forbidden: false }
     } catch (e: unknown) {
+      // A refusal is its own result, never a successful no-op (#18718).
+      if (isClearStuckForbidden(e)) return { cleared: 0, message: CLEAR_STUCK_FORBIDDEN_MESSAGE, forbidden: true }
       logger.error('Failed to clear stuck tasks:', e)
       throw e
     }

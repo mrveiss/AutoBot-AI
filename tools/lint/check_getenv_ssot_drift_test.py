@@ -123,7 +123,7 @@ def test_main_refuses_when_the_pair_sweep_matched_nothing(
     monkeypatch.setattr(guard, "find_drift", lambda _root: ([], 0))
 
     with caplog.at_level(logging.ERROR):
-        assert guard.main() == 1
+        assert guard.main() == 2  # exit 2 = vacuous scan, distinct from 1 = findings (#14896)
 
     assert "FIX THE SWEEP" in caplog.text
 

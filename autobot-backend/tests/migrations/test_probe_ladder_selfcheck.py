@@ -17,11 +17,12 @@ No database needed — pure static analysis.
 import ast
 from pathlib import Path
 
-import pytest
+# A plain submodule import, never importorskip (#20146): the backend conftest stubs a missing `alembic`
+# with a MagicMock, so only a submodule import fails when the package is absent, and a failure is a
+# collection error that turns the Migration Gate red instead of a skip that keeps it green.
+import alembic.script  # noqa: F401
 
-pytest.importorskip("alembic", reason="probe-ladder self-checks need alembic")
-
-from migrations.baseline import (  # noqa: E402 — after importorskip by design
+from migrations.baseline import (  # noqa: E402 — after the alembic import by design
     TIMESTAMPTZ_MARKERS,
     Artifacts,
     _script_directory,
@@ -155,6 +156,26 @@ def test_observability_coverage():
         # nothing and the DELETE matches nothing. Both statements are also
         # scoped to rows still in the shape the backfill created, so a row edited
         # since is untouched on the first run and every later one.
+        "20260928_097",  # workspace-lease path unique among LIVE leases only
+        # (#16818) — drops a table-wide UNIQUE constraint and creates a partial
+        # unique index in its place. It creates no table and no column, and
+        # extract_artifacts observes revisions solely through create_table and
+        # add_column, so it cannot be observable by construction. Same structural
+        # category as 20260821_081 (index-only) and 20260906_089 (constraint swap)
+        # above, not a new one. NOTE for anyone reading the assertion message
+        # below: the `_TABLE`-variable hint does not apply here — this revision
+        # has no add_column calls at all, so inlining the literal table name
+        # would change nothing about its observability.
+        #
+        # Extended consciously, and idempotent by inspection rather than by
+        # construction: upgrade() reads get_unique_constraints before dropping
+        # the old constraint and get_indexes before creating the new one, acting
+        # in each case only when the first state is still present. It also
+        # returns early on a non-postgresql dialect or a missing table. So the
+        # adoption re-run this allowlist permits is a genuine no-op rather than a
+        # "constraint does not exist" or "relation already exists" failure.
+        "20261101_108",  # llc_agent_wiki_entries company FK (#20156): a constraint, which the
+        # ladder cannot see; re-run skips an existing constraint, and its orphan count only reads
     }
     assert unobservable <= allowed, (
         f"new unobservable revisions: {sorted(unobservable - allowed)} — "

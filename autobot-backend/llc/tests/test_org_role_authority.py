@@ -161,11 +161,11 @@ def test_the_flag_defaults_off():
 
 def test_both_dispatch_sources_carry_the_role():
     """A source that drops org_role would have every run refused: pin that both load it."""
-    from llc.scheduler.heartbeat_scheduler import HeartbeatScheduler
-    from llc.services.comment_wake_service import CommentWakeService
+    from llc.scheduler.heartbeat_scheduler import LLCHeartbeatScheduler
 
-    assert "aon.org_role" in inspect.getsource(HeartbeatScheduler._load_enabled_agents)
-    assert '"org_role": agent_row.get("org_role")' in inspect.getsource(CommentWakeService)
+    assert "aon.org_role" in inspect.getsource(LLCHeartbeatScheduler._load_enabled_agents)
+    # #19582: every per-run lookup (tick, manual, every event wake) goes through this one.
+    assert "aon.org_role" in inspect.getsource(LLCHeartbeatScheduler._get_agent_config)
 
 
 def test_an_in_process_run_is_attributed_to_the_org_agent():

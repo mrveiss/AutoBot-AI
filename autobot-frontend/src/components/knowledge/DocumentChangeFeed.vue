@@ -111,14 +111,14 @@
     <div class="change-list" v-if="recentChanges.length > 0">
       <div class="change-filters">
         <BaseButton
-          :variant="activeFilter === 'all' ? 'primary' : 'outline-solid'"
+          :variant="activeFilter === 'all' ? 'primary' : 'outline'"
           size="sm"
           @click="activeFilter = 'all'"
         >
           {{ $t('knowledge.changeFeed.filterAll') }} ({{ totalChanges }})
         </BaseButton>
         <BaseButton
-          :variant="activeFilter === 'added' ? 'primary' : 'outline-solid'"
+          :variant="activeFilter === 'added' ? 'primary' : 'outline'"
           size="sm"
           @click="activeFilter = 'added'"
           v-if="changeSummary.added > 0"
@@ -126,7 +126,7 @@
           {{ $t('knowledge.changeFeed.filterAdded') }} ({{ changeSummary.added }})
         </BaseButton>
         <BaseButton
-          :variant="activeFilter === 'updated' ? 'primary' : 'outline-solid'"
+          :variant="activeFilter === 'updated' ? 'primary' : 'outline'"
           size="sm"
           @click="activeFilter = 'updated'"
           v-if="changeSummary.updated > 0"
@@ -134,7 +134,7 @@
           {{ $t('knowledge.changeFeed.filterUpdated') }} ({{ changeSummary.updated }})
         </BaseButton>
         <BaseButton
-          :variant="activeFilter === 'removed' ? 'primary' : 'outline-solid'"
+          :variant="activeFilter === 'removed' ? 'primary' : 'outline'"
           size="sm"
           @click="activeFilter = 'removed'"
           v-if="changeSummary.removed > 0"
@@ -191,11 +191,11 @@
 
     <!-- Actions -->
     <div class="feed-actions" v-if="recentChanges.length > 0">
-      <BaseButton variant="outline-solid" size="sm" @click="handleClearChanges">
+      <BaseButton variant="outline" size="sm" @click="handleClearChanges">
         <Icon name="trash" />
         {{ $t('knowledge.changeFeed.clearHistory') }}
       </BaseButton>
-      <BaseButton variant="outline-solid" size="sm" @click="handleExportChanges">
+      <BaseButton variant="outline" size="sm" @click="handleExportChanges">
         <Icon name="download" />
         {{ $t('knowledge.changeFeed.exportChanges') }}
       </BaseButton>
@@ -217,7 +217,7 @@ const { confirm } = useConfirmDialog()
 import type { DocumentChange } from '@/composables/useDocumentChanges'
 import { formatBytes } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 
 // Composable
 const {

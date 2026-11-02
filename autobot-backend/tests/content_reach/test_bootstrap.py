@@ -6,16 +6,16 @@
 
 from content_reach.bootstrap import build_default_registry, register_default_sources
 from content_reach.registry import ContentSourceRegistry
-from source_attribution import SourceType
+from source_attribution import SourceKind
 
 _EXPECTED_SOURCES = {"web_search", "web_page", "youtube", "reddit", "social"}
 
 _SOURCE_TYPE_MAP = {
-    "web_search": SourceType.WEB_SEARCH,
-    "web_page": SourceType.WEB_PAGE,
-    "youtube": SourceType.YOUTUBE,
-    "reddit": SourceType.REDDIT,
-    "social": SourceType.SOCIAL,
+    "web_search": SourceKind.WEB_SEARCH,
+    "web_page": SourceKind.WEB_PAGE,
+    "youtube": SourceKind.YOUTUBE,
+    "reddit": SourceKind.REDDIT,
+    "social": SourceKind.SOCIAL,
 }
 
 

@@ -16,10 +16,10 @@
         <p class="page-subtitle">{{ t('advancedControl.subtitle') }}</p>
       </div>
       <div class="header-actions">
-        <button class="btn-action-secondary" :disabled="loading" @click="loadTakeovers">
+        <BaseButton variant="secondary" size="sm" :disabled="loading" @click="loadTakeovers">
           <Icon name="sync-alt" :spin="loading" />
           {{ t('common.refresh') }}
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -219,10 +219,10 @@
         <section class="table-section">
           <h3 class="section-title section-title--with-action">
             <span>{{ t('advancedControl.streaming.title') }}</span>
-            <button class="btn-action-secondary" @click="toggleCreateForm">
+            <BaseButton variant="secondary" size="sm" @click="toggleCreateForm">
               <Icon name="plus-circle" />
               {{ t('advancedControl.streaming.newSession') }}
-            </button>
+            </BaseButton>
           </h3>
 
           <form v-if="showCreateForm" class="streaming-create-form" @submit.prevent="onCreateStreaming">
@@ -250,12 +250,12 @@
               <input id="streaming-depth" v-model.number="createForm.depth" type="number" min="1" />
             </div>
             <div class="form-actions">
-              <button type="button" class="btn-action-secondary" @click="toggleCreateForm">
+              <BaseButton variant="secondary" size="sm" type="button" @click="toggleCreateForm">
                 {{ t('common.cancel') }}
-              </button>
-              <button type="submit" class="btn-action-primary" :disabled="loading">
+              </BaseButton>
+              <BaseButton size="sm" type="submit" :disabled="loading">
                 {{ t('common.create') }}
-              </button>
+              </BaseButton>
             </div>
           </form>
 
@@ -396,14 +396,13 @@
                 <p>{{ t('advancedControl.monitoring.emergencyStopDescription') }}</p>
               </div>
             </div>
-            <button
-              class="btn-danger-full"
+            <BaseButton variant="error" size="sm"
               :disabled="loading"
               @click="onEmergencyStop"
             >
               <Icon name="power-off" />
               {{ t('advancedControl.monitoring.emergencyStop') }}
-            </button>
+            </BaseButton>
           </div>
         </section>
       </template>
@@ -419,6 +418,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { formatUptime } from '@/utils/formatHelpers'
 import { useI18n } from 'vue-i18n'
@@ -940,33 +940,6 @@ onMounted(loadTakeovers)
   color: var(--color-error);
 }
 
-.btn-action-secondary,
-.btn-action-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-1-5);
-  padding: var(--spacing-2) var(--spacing-4);
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  border: 1px solid var(--border-default);
-  background: transparent;
-  color: var(--text-primary);
-  cursor: pointer;
-}
-
-.btn-action-primary {
-  border-color: transparent;
-  background: var(--color-primary);
-  color: var(--text-on-primary);
-}
-
-.btn-action-secondary:disabled,
-.btn-action-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 /* ── Streaming tab ──────────────────────────────────────────────────────── */
 
 .section-title--with-action {
@@ -1075,29 +1048,9 @@ onMounted(loadTakeovers)
   line-height: 1.5;
 }
 
-.btn-danger-full {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-1-5);
-  padding: var(--spacing-2) var(--spacing-4);
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  border: 1px solid var(--color-error);
-  background: var(--color-error);
-  color: var(--text-on-primary);
-  cursor: pointer;
-  white-space: nowrap;
+
+.danger-card > :deep(.aui-btn) {
   flex-shrink: 0;
-}
-
-.btn-danger-full:hover:not(:disabled) {
-  background: var(--color-error-dark);
-  border-color: var(--color-error-dark);
-}
-
-.btn-danger-full:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  white-space: nowrap;
 }
 </style>

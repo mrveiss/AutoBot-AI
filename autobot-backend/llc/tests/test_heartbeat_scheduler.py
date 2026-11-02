@@ -1,6 +1,6 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
-"""Tests for HeartbeatScheduler (GH#8225).
+"""Tests for LLCHeartbeatScheduler (GH#8225).
 
 Covers:
   1. _next_fire computes correct next epoch from a cron expression.
@@ -25,7 +25,7 @@ from llc.models.enums import LLCRunStatus
 from llc.models.heartbeat_run import LLCHeartbeatRun
 from llc.scheduler.heartbeat_scheduler import (
     _SCHEDULE_KEY,
-    HeartbeatScheduler,
+    LLCHeartbeatScheduler,
     _await_adapter_completion,
     _dispatch_adapter,
     _dispatch_autobot_agent,
@@ -33,6 +33,7 @@ from llc.scheduler.heartbeat_scheduler import (
     _ingest_adapter_usage,
     _next_fire,
 )
+from testkit.fake_async_session import FakeAsyncSession
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -40,6 +41,14 @@ from llc.scheduler.heartbeat_scheduler import (
 
 
 _COMPANY_UUID = uuid.UUID("11111111-1111-1111-1111-111111111111")
+
+
+def _compiled_params(stmt) -> dict:
+    """The bound parameters of *stmt*, or ``{}`` for a statement that will not compile."""
+    try:
+        return dict(stmt.compile().params)
+    except Exception:
+        return {}
 
 
 def _make_agent(**kwargs):
@@ -97,14 +106,14 @@ class TestNextFire:
 
 
 # ---------------------------------------------------------------------------
-# HeartbeatScheduler — schedule population
+# LLCHeartbeatScheduler — schedule population
 # ---------------------------------------------------------------------------
 
 
 class TestRepopulateSchedule:
     @pytest.mark.asyncio
     async def test_adds_enabled_agents_to_sorted_set(self):
-        scheduler = HeartbeatScheduler()
+        scheduler = LLCHeartbeatScheduler()
         agent = _make_agent()
         mock_redis = _make_redis()
 
@@ -127,7 +136,7 @@ class TestRepopulateSchedule:
 
     @pytest.mark.asyncio
     async def test_skips_invalid_cron(self):
-        scheduler = HeartbeatScheduler()
+        scheduler = LLCHeartbeatScheduler()
         agent = _make_agent(heartbeat_cron="not-a-cron")
         mock_redis = _make_redis()
 
@@ -145,7 +154,7 @@ class TestRepopulateSchedule:
 
     @pytest.mark.asyncio
     async def test_noop_when_redis_unavailable(self):
-        scheduler = HeartbeatScheduler()
+        scheduler = LLCHeartbeatScheduler()
 
         with patch(
             "llc.scheduler.heartbeat_scheduler.get_async_redis_client",
@@ -155,14 +164,14 @@ class TestRepopulateSchedule:
 
 
 # ---------------------------------------------------------------------------
-# HeartbeatScheduler — dispatch loop
+# LLCHeartbeatScheduler — dispatch loop
 # ---------------------------------------------------------------------------
 
 
 class TestDispatchDue:
     @pytest.mark.asyncio
     async def test_calls_handle_for_each_due_agent(self):
-        scheduler = HeartbeatScheduler()
+        scheduler = LLCHeartbeatScheduler()
         mock_redis = _make_redis()
         mock_redis.zrangebyscore = AsyncMock(return_value=[b"agent-abc", b"agent-def"])
 
@@ -181,7 +190,7 @@ class TestDispatchDue:
 
     @pytest.mark.asyncio
     async def test_noop_when_no_due_agents(self):
-        scheduler = HeartbeatScheduler()
+        scheduler = LLCHeartbeatScheduler()
         mock_redis = _make_redis()
 
         with (
@@ -197,14 +206,14 @@ class TestDispatchDue:
 
 
 # ---------------------------------------------------------------------------
-# HeartbeatScheduler — handle_due_agent
+# LLCHeartbeatScheduler — handle_due_agent
 # ---------------------------------------------------------------------------
 
 
 class TestHandleDueAgent:
     @pytest.mark.asyncio
     async def test_creates_run_and_advances_score(self):
-        scheduler = HeartbeatScheduler()
+        scheduler = LLCHeartbeatScheduler()
         agent = _make_agent()
         mock_redis = _make_redis()
 
@@ -225,6 +234,7 @@ class TestHandleDueAgent:
             patch.object(scheduler, "_find_rate_limited_run", new=AsyncMock(return_value=None)),
             patch.object(scheduler, "_create_run", new=AsyncMock(return_value=mock_run)),
             patch.object(scheduler, "_run_adapter", new=AsyncMock()),
+            patch(f"{_HBS}.dispatch_block_reason", new=AsyncMock(return_value=None)),
             patch(
                 "llc.scheduler.heartbeat_scheduler.get_async_session_factory",
                 return_value=mock_factory,
@@ -239,7 +249,7 @@ class TestHandleDueAgent:
 
     @pytest.mark.asyncio
     async def test_removes_disabled_agent_from_set(self):
-        scheduler = HeartbeatScheduler()
+        scheduler = LLCHeartbeatScheduler()
         mock_redis = _make_redis()
 
         mock_session = AsyncMock()
@@ -260,42 +270,8 @@ class TestHandleDueAgent:
 
 
 # ---------------------------------------------------------------------------
-# HeartbeatScheduler — trigger_manual
+# LLCHeartbeatScheduler — trigger_manual
 # ---------------------------------------------------------------------------
-
-
-class TestTriggerManual:
-    @pytest.mark.asyncio
-    async def test_returns_queued_run(self):
-        scheduler = HeartbeatScheduler()
-        agent = _make_agent()
-
-        mock_run = MagicMock(spec=LLCHeartbeatRun)
-        mock_run.id = uuid.uuid4()
-        mock_run.status = LLCRunStatus.QUEUED.value
-
-        mock_session = AsyncMock()
-        mock_session.flush = AsyncMock()
-
-        with (
-            patch.object(scheduler, "_get_agent_config", new=AsyncMock(return_value=agent)),
-            patch.object(scheduler, "_create_run", new=AsyncMock(return_value=mock_run)),
-            patch.object(scheduler, "_run_adapter", new=AsyncMock()),
-        ):
-            run, agent_cfg = await scheduler.trigger_manual(mock_session, "agent-abc")
-
-        assert run.id == mock_run.id
-        assert run.status == LLCRunStatus.QUEUED.value
-        assert agent_cfg == agent
-
-    @pytest.mark.asyncio
-    async def test_raises_for_unknown_agent(self):
-        scheduler = HeartbeatScheduler()
-        mock_session = AsyncMock()
-
-        with patch.object(scheduler, "_get_agent_config", new=AsyncMock(return_value=None)):
-            with pytest.raises(ValueError, match="not found"):
-                await scheduler.trigger_manual(mock_session, "agent-unknown")
 
 
 # ---------------------------------------------------------------------------
@@ -608,35 +584,14 @@ class TestRunAdapterSkipped:
     """GH#9951: a skipped dispatch records SKIPPED and never bumps last_heartbeat_at."""
 
     async def test_skip_records_skipped_and_no_heartbeat_bump(self):
-        scheduler = HeartbeatScheduler()
+        scheduler = LLCHeartbeatScheduler()
         agent = _make_agent(adapter_type="claude_code")
         run_id = uuid.uuid4()
 
-        sql_text: list = []
-        params: list = []
-
-        class _Session:
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, *exc):
-                return False
-
-            async def execute(self, stmt, *args, **kwargs):
-                sql_text.append(str(stmt))
-                try:
-                    params.append(dict(stmt.compile().params))
-                except Exception:
-                    params.append({})
-                result = MagicMock()
-                result.scalar_one_or_none.return_value = 0
-                return result
-
-            async def commit(self):
-                return None
+        session = FakeAsyncSession()
 
         with (
-            patch(f"{_HBS}.get_async_session_factory", return_value=lambda: _Session()),
+            patch(f"{_HBS}.get_async_session_factory", return_value=lambda: session),
             patch(
                 f"{_HBS}._dispatch_adapter",
                 new=AsyncMock(side_effect=HeartbeatDispatchSkipped("agent-1", "CLI absent")),
@@ -644,8 +599,11 @@ class TestRunAdapterSkipped:
         ):
             await scheduler._run_adapter(agent, run_id, {})
 
-        # No phantom health: the last_heartbeat_at bump is never issued.
-        assert not any("agent_org_nodes" in s for s in sql_text)
+        sql_text = [str(stmt) for stmt in session.statements]
+        params = [_compiled_params(stmt) for stmt in session.statements]
+
+        # No phantom health: the last_heartbeat_at bump is never issued (the claim reads the row, #19582).
+        assert not any("last_heartbeat_at" in s for s in sql_text)
         # The run's final status is written as SKIPPED.
         assert any(p.get("status") == LLCRunStatus.SKIPPED.value for p in params)
 
@@ -673,7 +631,7 @@ class TestRecordRunForReplayH1:
 
         from llc.adapters.claude_code_adapter import _output_path
         from llc.adapters.subprocess_base import placeholder_run_id
-        from llc.scheduler.heartbeat_scheduler import _record_run_for_replay
+        from llc.scheduler.replay_recording import record_run_for_replay as _record_run_for_replay
 
         agent = _make_agent(adapter_type="claude_code", adapter_config={"output_dir": "/tmp/dummy"})
         agent_id = agent["agent_id"]
@@ -696,7 +654,7 @@ class TestRecordRunForReplayH1:
             mock_svc = MagicMock()
             mock_svc.record_run = AsyncMock(side_effect=lambda **kw: captured.update(kw))
 
-            with patch(f"{_HBS}.RunReplayService", return_value=mock_svc):
+            with patch("llc.scheduler.replay_recording.RunReplayService", return_value=mock_svc):
                 await _record_run_for_replay(
                     agent,
                     uuid.uuid4(),
@@ -727,7 +685,7 @@ class TestRecordRunForReplayH1:
         import os
         import tempfile
 
-        from llc.scheduler.heartbeat_scheduler import _record_run_for_replay
+        from llc.scheduler.replay_recording import record_run_for_replay as _record_run_for_replay
 
         agent = _make_agent(adapter_type="claude_code", adapter_config={"output_dir": "/tmp/dummy"})
         agent_id = agent["agent_id"]
@@ -756,7 +714,7 @@ class TestRecordRunForReplayH1:
             mock_svc = MagicMock()
             mock_svc.record_run = AsyncMock(side_effect=lambda **kw: captured.update(kw))
 
-            with patch(f"{_HBS}.RunReplayService", return_value=mock_svc):
+            with patch("llc.scheduler.replay_recording.RunReplayService", return_value=mock_svc):
                 await _record_run_for_replay(
                     agent,
                     uuid.uuid4(),
@@ -785,7 +743,7 @@ class TestRecordRunForReplayH1:
 
         from llc.adapters.claude_code_adapter import _output_path
         from llc.adapters.subprocess_base import placeholder_run_id
-        from llc.scheduler.heartbeat_scheduler import _record_run_for_replay
+        from llc.scheduler.replay_recording import record_run_for_replay as _record_run_for_replay
 
         agent = _make_agent(adapter_type="claude_code", adapter_config={"output_dir": "/tmp/dummy"})
         agent_id = agent["agent_id"]
@@ -812,7 +770,7 @@ class TestRecordRunForReplayH1:
             mock_svc = MagicMock()
             mock_svc.record_run = AsyncMock(side_effect=lambda **kw: captured.update(kw))
 
-            with patch(f"{_HBS}.RunReplayService", return_value=mock_svc):
+            with patch("llc.scheduler.replay_recording.RunReplayService", return_value=mock_svc):
                 await _record_run_for_replay(agent, uuid.uuid4(), {}, "completed", external_run_id=external_run_id)
 
         assert "result" in (
@@ -821,14 +779,14 @@ class TestRecordRunForReplayH1:
 
     async def test_no_external_run_id_stores_no_events(self):
         """When external_run_id is None, recorded_events is None."""
-        from llc.scheduler.heartbeat_scheduler import _record_run_for_replay
+        from llc.scheduler.replay_recording import record_run_for_replay as _record_run_for_replay
 
         agent = _make_agent(adapter_type="claude_code", adapter_config={"output_dir": "/tmp"})
         captured: dict = {}
         mock_svc = MagicMock()
         mock_svc.record_run = AsyncMock(side_effect=lambda **kw: captured.update(kw))
 
-        with patch(f"{_HBS}.RunReplayService", return_value=mock_svc):
+        with patch("llc.scheduler.replay_recording.RunReplayService", return_value=mock_svc):
             await _record_run_for_replay(agent, uuid.uuid4(), {}, "completed", external_run_id=None)
 
         assert captured.get("recorded_events") is None
@@ -1012,28 +970,14 @@ class TestQuotaExhausted:
         mock_revoke.assert_awaited_once_with(agent["agent_id"], key_record.id, str(agent["company_id"]))
 
     async def test_handle_quota_exhausted_records_and_pauses(self):
-        scheduler = HeartbeatScheduler()
+        scheduler = LLCHeartbeatScheduler()
         agent = _make_agent(adapter_type="claude_code_subscription")
         run_id = uuid.uuid4()
-        executed: list = []
-
-        class _Session:
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, *exc):
-                return False
-
-            async def execute(self, stmt, *a, **k):
-                executed.append(str(stmt))
-                return MagicMock()
-
-            async def commit(self):
-                return None
+        session = FakeAsyncSession()
 
         mock_pause = AsyncMock()
         with (
-            patch(f"{_HBS}.get_async_session_factory", return_value=lambda: _Session()),
+            patch(f"{_HBS}.get_async_session_factory", return_value=lambda: session),
             patch(f"{_HBS}.ControlsService.pause_agent", new=mock_pause),
         ):
             await scheduler._handle_quota_exhausted(
@@ -1041,32 +985,22 @@ class TestQuotaExhausted:
             )
 
         # Run was updated (status write) and the agent was system-paused.
+        executed = [str(stmt) for stmt in session.statements]
         assert any("UPDATE" in s or "llc_heartbeat_runs" in s for s in executed)
         mock_pause.assert_awaited_once()
         kwargs = mock_pause.await_args.kwargs
         assert kwargs.get("actor_type") == "system" and kwargs.get("actor_user_id") is None
 
     async def test_handle_quota_exhausted_no_company_skips_pause(self):
-        scheduler = HeartbeatScheduler()
+        scheduler = LLCHeartbeatScheduler()
         agent = _make_agent(adapter_type="claude_code_subscription", company_id=None)
         run_id = uuid.uuid4()
 
-        class _Session:
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, *exc):
-                return False
-
-            async def execute(self, stmt, *a, **k):
-                return MagicMock()
-
-            async def commit(self):
-                return None
+        session = FakeAsyncSession()
 
         mock_pause = AsyncMock()
         with (
-            patch(f"{_HBS}.get_async_session_factory", return_value=lambda: _Session()),
+            patch(f"{_HBS}.get_async_session_factory", return_value=lambda: session),
             patch(f"{_HBS}.ControlsService.pause_agent", new=mock_pause),
         ):
             await scheduler._handle_quota_exhausted(

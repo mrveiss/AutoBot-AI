@@ -35,6 +35,24 @@ export interface CaptchaEvent {
 // Composable
 // ============================================================================
 
+/** Backend `CaptchaType` wire values -> `research.captcha.types.*` locale keys (#18131). */
+const CAPTCHA_TYPE_KEYS: Record<string, string> = {
+  recaptcha: 'recaptcha',
+  hcaptcha: 'hcaptcha',
+  cloudflare: 'cloudflare',
+  slider: 'slider',
+  image_select: 'imageSelect',
+  text: 'text',
+  text_image: 'text', // recorded before the backend enums were merged
+  math: 'math',
+  unknown: 'unknown',
+}
+
+/** The locale key for a CAPTCHA type; an unrecognised or missing type shows the UNKNOWN label. */
+export function captchaTypeLabelKeyFor(captchaType: string | undefined): string {
+  return `research.captcha.types.${CAPTCHA_TYPE_KEYS[captchaType ?? ''] ?? 'unknown'}`
+}
+
 export function useCaptchaStatus() {
   const activeCaptcha = ref<CaptchaEvent | null>(null)
   const timeRemaining = ref(0)
@@ -107,15 +125,7 @@ export function useCaptchaStatus() {
   // Computed
   // --------------------------------------------------------------------------
 
-  const captchaTypeLabel = computed(() => {
-    const types: Record<string, string> = {
-      recaptcha: 'reCAPTCHA',
-      hcaptcha: 'hCaptcha',
-      cloudflare: 'Cloudflare Challenge',
-      unknown: 'Unknown CAPTCHA'
-    }
-    return types[activeCaptcha.value?.captcha_type || 'unknown'] || 'CAPTCHA'
-  })
+  const captchaTypeLabelKey = computed(() => captchaTypeLabelKeyFor(activeCaptcha.value?.captcha_type))
 
   const truncatedUrl = computed(() => {
     const url = activeCaptcha.value?.url || ''
@@ -226,7 +236,7 @@ export function useCaptchaStatus() {
     activeCaptcha,
     timeRemaining,
     isSubmitting,
-    captchaTypeLabel,
+    captchaTypeLabelKey,
     truncatedUrl,
     progressPercentage,
     formatTime,

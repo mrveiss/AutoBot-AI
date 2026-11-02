@@ -57,7 +57,6 @@ from __future__ import annotations
 import asyncio
 import configparser
 import json
-import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -65,15 +64,11 @@ from typing import Dict, List, Optional, Set, Tuple
 
 import venv_provenance as provenance
 from autobot_shared.env_utils import env_float
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.slug import sanitize_token
 from autobot_shared.time_utils import utc_timestamp
 
-# Plain stdlib logging, deliberately (mirrors code_sync.py itself, and the
-# password_epoch.py precedent CLAUDE.md documents): this module is imported
-# at collection time by tests that stub `config` as a MagicMock, and
-# `autobot_shared.logging_manager.get_logger()` reads real config at import
-# time to size its file handler — under that stub regime it raises before a
-# single test in the file can run.
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Timeouts are env-backed module constants, never a hardcoded bare number
 # scattered through call sites — mirrors the existing pip-install timeout
@@ -94,7 +89,6 @@ _DECLARED_LOCK_FILENAME = ".autobot_declared_lock.json"
 EXPLICIT_LIST_COMPONENTS: frozenset = frozenset({"autobot-npu-worker", "autobot-browser-worker", "autobot-slm-agent"})
 
 _NAME_BOUNDARY_RE = re.compile(r"[<>=!~;\[\s]")
-_NORMALIZE_RE = re.compile(r"[-_.]+")
 # Narrow, dependency-free extraction of a PEP 621 `[project] name = "..."` field —
 # a full TOML parser is unwarranted for the one string this needs, and `tomllib`
 # is 3.11+ only while this module must import under whatever interpreter the
@@ -103,7 +97,7 @@ _TOML_PROJECT_NAME_RE = re.compile(r'(?m)^\s*name\s*=\s*["\']([^"\']+)["\']')
 
 
 @dataclass(frozen=True)
-class ReconcileReport:
+class VenvReconcileReport:
     """Outcome of one `reconcile_component` run, for tests and callers."""
 
     component: str
@@ -118,7 +112,7 @@ class ReconcileReport:
 
 def normalize_name(name: str) -> str:
     """PEP 503 normalization — how pip itself compares distribution names."""
-    return _NORMALIZE_RE.sub("-", name).strip("-").lower()
+    return sanitize_token(name, allowed=None, separator_chars="-_.", case="lower", strip_edges="-")
 
 
 def extract_requirement_name(spec: str) -> Optional[str]:
@@ -359,14 +353,16 @@ async def uninstall_packages(pip_bin: Path, names: List[str]) -> Tuple[List[str]
 
 def _report(
     component: str, status: str, reason: str, steps: List[str], *, declared: Optional[Set[str]] = None
-) -> ReconcileReport:
+) -> VenvReconcileReport:
     msg = f"venv-reconcile[{component}]: {status} — {reason}" if reason else f"venv-reconcile[{component}]: {status}"
     steps.append(msg)
     (logger.warning if status == "refused" else logger.info)(msg)
-    return ReconcileReport(component=component, status=status, reason=reason, declared=tuple(sorted(declared or ())))
+    return VenvReconcileReport(
+        component=component, status=status, reason=reason, declared=tuple(sorted(declared or ()))
+    )
 
 
-def refuse_explicit_list(component: str, steps: List[str]) -> ReconcileReport:
+def refuse_explicit_list(component: str, steps: List[str]) -> VenvReconcileReport:
     """Report — not silently skip — a component with no requirements file
     to reconcile against (#15063 AC4)."""
     reason = (
@@ -394,7 +390,7 @@ async def _apply_removals(
     lock_path: Path,
     pip: Path,
     steps: List[str],
-) -> ReconcileReport:
+) -> VenvReconcileReport:
     candidates = previous - declared
     closure = transitive_closure(declared, graph)
     kept = candidates & closure
@@ -421,7 +417,7 @@ async def _apply_removals(
         steps.append(kept_msg)
         logger.info(kept_msg)
     write_lock(lock_path, declared | set(failed) | skipped)
-    return ReconcileReport(
+    return VenvReconcileReport(
         component=component,
         status="ok",
         reason="",
@@ -433,7 +429,7 @@ async def _apply_removals(
     )
 
 
-async def reconcile_component(component: str, req_path: str, pip_bin: str, steps: List[str]) -> ReconcileReport:
+async def reconcile_component(component: str, req_path: str, pip_bin: str, steps: List[str]) -> VenvReconcileReport:
     """Bring *component*'s venv to its declared dependency set, including
     removals — or refuse and report exactly what could not be reconciled
     (#15063). Never removes and discovers: every branch that cannot establish

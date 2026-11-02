@@ -20,7 +20,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { reloadConfig, runtimeHttpProto, getBackendUrl, getConfig } from '../ssot-config';
+import { getEnvPositiveInt } from '@autobot/ui';
+import { reloadConfig, runtimeHttpProto, getBackendUrl, getConfig, getServiceUrl } from '../ssot-config';
 
 // Note: In a real test environment, we would need to mock import.meta.env
 // For now, these tests validate the TypeScript structure and default values
@@ -77,22 +78,6 @@ describe('SSOT Config Types', () => {
     });
   });
 
-  describe('LLMConfig interface', () => {
-    it('should have all required LLM properties', () => {
-      const llmConfig = {
-        defaultModel: 'qwen3.5:9b',
-        embeddingModel: 'nomic-embed-text:latest',
-        provider: 'ollama',
-        timeout: 30000,
-      };
-
-      expect(llmConfig.defaultModel).toBe('qwen3.5:9b');
-      expect(llmConfig.embeddingModel).toBe('nomic-embed-text:latest');
-      expect(llmConfig.provider).toBe('ollama');
-      expect(llmConfig.timeout).toBe(30000);
-    });
-  });
-
   describe('TimeoutConfig interface', () => {
     it('should have all required timeout properties in milliseconds', () => {
       const timeoutConfig = {
@@ -126,14 +111,14 @@ describe('SSOT Config Types', () => {
         },
         playwright: {
           host: '10.0.0.6',
-          port: 6081,
+          port: 6080,
         },
       };
 
       expect(vncConfig.desktop.host).toBe('10.0.0.1');
       expect(vncConfig.desktop.port).toBe(6080);
       expect(vncConfig.playwright.host).toBe('10.0.0.6');
-      expect(vncConfig.playwright.port).toBe(6081);
+      expect(vncConfig.playwright.port).toBe(6080);
     });
   });
 
@@ -183,50 +168,22 @@ describe('SSOT Config Helper Functions', () => {
     });
   });
 
-  describe('getEnvNumber helper', () => {
+  describe('numeric env reading (#20135)', () => {
     it('should return default value when env is undefined', () => {
-      const getEnvNumber = (_key: string, defaultValue: number): number => {
-        const value = undefined;
-        if (value === undefined || value === null || value === '') {
-          return defaultValue;
-        }
-        const parsed = parseInt(String(value), 10);
-        return isNaN(parsed) ? defaultValue : parsed;
-      };
-
-      expect(getEnvNumber('VITE_MISSING_PORT', 8001)).toBe(8001);
+      expect(getEnvPositiveInt({}, 'VITE_MISSING_PORT', 8001)).toBe(8001);
     });
 
     it('should parse numeric string correctly', () => {
-      const getEnvNumber = (key: string, defaultValue: number): number => {
-        const mockEnv: Record<string, string> = {
-          VITE_BACKEND_PORT: '9000',
-        };
-        const value = mockEnv[key];
-        if (value === undefined || value === null || value === '') {
-          return defaultValue;
-        }
-        const parsed = parseInt(String(value), 10);
-        return isNaN(parsed) ? defaultValue : parsed;
-      };
-
-      expect(getEnvNumber('VITE_BACKEND_PORT', 8001)).toBe(9000);
+      expect(getEnvPositiveInt({ VITE_BACKEND_PORT: '9000' }, 'VITE_BACKEND_PORT', 8001)).toBe(9000);
     });
 
     it('should return default for invalid number', () => {
-      const getEnvNumber = (key: string, defaultValue: number): number => {
-        const mockEnv: Record<string, string> = {
-          VITE_INVALID_PORT: 'not-a-number',
-        };
-        const value = mockEnv[key];
-        if (value === undefined || value === null || value === '') {
-          return defaultValue;
-        }
-        const parsed = parseInt(String(value), 10);
-        return isNaN(parsed) ? defaultValue : parsed;
-      };
+      expect(getEnvPositiveInt({ VITE_INVALID_PORT: 'not-a-number' }, 'VITE_INVALID_PORT', 8001)).toBe(8001);
+    });
 
-      expect(getEnvNumber('VITE_INVALID_PORT', 8001)).toBe(8001);
+    it('should return default for a zero or negative port', () => {
+      expect(getEnvPositiveInt({ VITE_BACKEND_PORT: '0' }, 'VITE_BACKEND_PORT', 8001)).toBe(8001);
+      expect(getEnvPositiveInt({ VITE_BACKEND_PORT: '-1' }, 'VITE_BACKEND_PORT', 8001)).toBe(8001);
     });
   });
 
@@ -313,14 +270,6 @@ describe('SSOT Config URL Computation', () => {
     const wsProtocol = httpProtocol === 'https' ? 'wss' : 'ws';
     const websocketUrl = `${wsProtocol}://${vm.main}:${port.backend}/ws`;
     expect(websocketUrl).toBe('ws://10.0.0.1:8001/ws');
-  });
-
-  it('should compute Redis URL correctly', () => {
-    const vm = { redis: '10.0.0.4' };
-    const port = { redis: 6379 };
-
-    const redisUrl = `redis://${vm.redis}:${port.redis}`;
-    expect(redisUrl).toBe('redis://10.0.0.4:6379');
   });
 
   it('should compute VNC URL correctly', () => {
@@ -441,10 +390,11 @@ describe('SSOT Config runtimeHttpProto() — protocol detection', () => {
       expect(result).toMatch(/^https:\/\//);
     });
 
-    it('redisUrl still uses redis:// (not affected by protocol detection)', () => {
+    it('builds no Redis URL: a browser never dials Redis (#19232)', () => {
       setProtocol('https:');
       const cfg = reloadConfig();
-      expect(cfg.redisUrl).toMatch(/^redis:\/\//);
+      expect('redisUrl' in cfg).toBe(false);
+      expect(getServiceUrl('redis')).toBeUndefined();
     });
   });
 
@@ -534,7 +484,6 @@ describe('SSOT Config Service Lookup', () => {
     const urls: Record<string, string> = {
       backend: 'http://10.0.0.1:8001',
       frontend: 'http://10.0.0.2:5173',
-      redis: 'redis://10.0.0.4:6379',
       ollama: 'http://127.0.0.1:11434',
     };
 
@@ -544,7 +493,6 @@ describe('SSOT Config Service Lookup', () => {
 
     expect(getServiceUrl('backend')).toBe('http://10.0.0.1:8001');
     expect(getServiceUrl('BACKEND')).toBe('http://10.0.0.1:8001');
-    expect(getServiceUrl('redis')).toBe('redis://10.0.0.4:6379');
     expect(getServiceUrl('unknown')).toBeUndefined();
   });
 

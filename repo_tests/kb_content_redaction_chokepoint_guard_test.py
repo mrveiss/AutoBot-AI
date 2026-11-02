@@ -192,7 +192,7 @@ def _connector_module_files(root: Path) -> list[str]:
 REACH = declare(
     "kb-content-redaction-chokepoint",
     discover=_connector_module_files,
-    floor=141,
+    floor=173,  # re-pinned mid-window (train 71) (#17844)
     growth=10,
     skips=0,
     what="non-test files under knowledge/",

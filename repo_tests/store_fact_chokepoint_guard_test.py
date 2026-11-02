@@ -73,10 +73,12 @@ def _production_files(root: Path) -> list[str]:
 REACH = declare(
     "store-fact-chokepoint",
     discover=_production_files,
-    floor=2590,
+    floor=3019,  # re-pinned mid-window (train 77): population 2953, window [2753, 2953]
     growth=200,
     skips=0,
-    what="production python files under autobot-backend/ and autobot_shared/",
+    # Scope as data (#17844); `declare` renders the longhand from `roots`.
+    what="production python files",
+    roots=SCAN_ROOTS,
 )
 
 

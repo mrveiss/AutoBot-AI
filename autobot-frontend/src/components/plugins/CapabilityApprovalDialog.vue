@@ -32,14 +32,7 @@
       </div>
 
       <div v-if="loading" class="dialog-loading">
-        <svg class="spinner" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-          <path
-            class="opacity-75"
-            fill="currentColor"
-            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-          />
-        </svg>
+        <BaseSpinner size="md" />
         <span>{{ $t('plugins.capabilities.loading') }}</span>
       </div>
 
@@ -116,6 +109,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseSpinner } from '@autobot/ui'
 import { ref, watch } from 'vue'
 import { usePlugins, type CapabilityInfo } from '@/composables/usePlugins'
 
@@ -251,7 +245,7 @@ watch(() => props.open, (isOpen) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .capability-approval-dialog {
@@ -275,7 +269,7 @@ watch(() => props.open, (isOpen) => {
 
 .dialog-header h2 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -313,17 +307,6 @@ watch(() => props.open, (isOpen) => {
   color: var(--color-error);
 }
 
-.spinner {
-  width: 24px;
-  height: 24px;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
 .dialog-body {
   flex: 1;
   overflow-y: auto;
@@ -339,7 +322,7 @@ watch(() => props.open, (isOpen) => {
 
 .plugin-info h3 {
   margin: 0;
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -347,35 +330,35 @@ watch(() => props.open, (isOpen) => {
 .trust-tier-badge {
   padding: 0.25rem 0.75rem;
   border-radius: 12px;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
 }
 
 .tier-official {
-  background-color: #10b981;
+  background-color: var(--color-success);
   color: white;
 }
 
 .tier-verified {
-  background-color: #3b82f6;
+  background-color: var(--color-info);
   color: white;
 }
 
 .tier-community {
-  background-color: #f59e0b;
+  background-color: var(--color-warning);
   color: white;
 }
 
 .tier-unverified {
-  background-color: #ef4444;
+  background-color: var(--color-error);
   color: white;
 }
 
 .approval-description {
   margin-bottom: 1.5rem;
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .capabilities-list {
@@ -419,7 +402,7 @@ watch(() => props.open, (isOpen) => {
   display: block;
   margin-left: 1.65rem;
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .no-pending {
@@ -440,7 +423,7 @@ watch(() => props.open, (isOpen) => {
   padding: 0.5rem 1rem;
   border-radius: 6px;
   font-weight: 500;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   cursor: pointer;
   transition: all 0.2s;
   border: none;

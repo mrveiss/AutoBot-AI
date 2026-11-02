@@ -10,7 +10,7 @@ against a root that falls back to ``get_project_root()`` (hardcoded
 ``parents[4]``) when no ``source_root`` was resolved. In the deployed
 standalone rsync layout ``parents[4]`` resolves to ``/opt/autobot`` -- not
 the analyzable repo -- so the fallback must instead use
-``resolve_project_root()`` (git-walk-up / deployed ``code_source`` probe,
+``resolve_git_repo_root()`` (git-walk-up / deployed ``code_source`` probe,
 #10730), matching the fix already applied to ``resolve_scan_root`` (#12393)
 and ``report._fetch_problems_from_chromadb`` (#12399).
 """
@@ -23,7 +23,7 @@ class TestFetchProblemsFromChromaDBFallback:
 
     def test_unresolved_fallback_uses_deployed_layout_aware_root(self, tmp_path):
         """When source_root is None, path validation must resolve against
-        resolve_project_root(), not the plain parents[4] get_project_root()."""
+        resolve_git_repo_root(), not the plain parents[4] get_project_root()."""
         from api.codebase_analytics.endpoints import stats as stats_mod
 
         deployed_root = tmp_path / "opt_autobot" / "code_source"
@@ -43,7 +43,7 @@ class TestFetchProblemsFromChromaDBFallback:
                 return_value={"metadatas": [{"file_path": "x.py"}]},
             ),
             patch.object(stats_mod, "filter_problems_by_file_existence", side_effect=fake_filter),
-            patch.object(stats_mod, "resolve_project_root", return_value=str(deployed_root)),
+            patch.object(stats_mod, "resolve_git_repo_root", return_value=str(deployed_root)),
         ):
             stats_mod._fetch_problems_from_chromadb(
                 fake_collection, problem_type=None, source_id=None, source_root=None

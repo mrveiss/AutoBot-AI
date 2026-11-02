@@ -66,15 +66,15 @@
             <button class="btn-notif" @click="showNotifConfig = true" :aria-label="$t('workflow.notifications.title')">
               <Icon name="bell" />
             </button>
-            <button v-if="currentWorkflow.is_paused" class="btn-success" @click="$emit('resume-workflow', currentWorkflow.workflow_id)">
+            <BaseButton variant="success" size="sm" v-if="currentWorkflow.is_paused" @click="$emit('resume-workflow', currentWorkflow.workflow_id)">
               <Icon name="play" /> {{ $t('workflow.runner.resume') }}
-            </button>
-            <button v-else class="btn-warning" @click="$emit('pause-workflow', currentWorkflow.workflow_id)">
+            </BaseButton>
+            <BaseButton variant="warning" size="sm" v-else @click="$emit('pause-workflow', currentWorkflow.workflow_id)">
               <Icon name="pause" /> {{ $t('workflow.runner.pause') }}
-            </button>
-            <button class="btn-danger" @click="$emit('cancel-workflow', currentWorkflow.workflow_id)">
+            </BaseButton>
+            <BaseButton variant="error" size="sm" @click="$emit('cancel-workflow', currentWorkflow.workflow_id)">
               <Icon name="stop" /> {{ $t('workflow.runner.cancel') }}
-            </button>
+            </BaseButton>
           </div>
         </div>
 
@@ -114,18 +114,19 @@
                 </div>
                 <code class="step-command">{{ step.command }}</code>
                 <div class="step-meta">
-                  <span class="risk" :class="step.risk_level"><Icon name="shield-alt" /> {{ step.risk_level }}</span>
+                  <RiskBadge v-if="step.risk_tier" :tier="step.risk_tier" :label="$t(`common.riskTier.${step.risk_tier}`)" />
+                  <BaseBadge v-else-if="step.risk_level" size="sm" :label="step.risk_level" />
                   <span v-if="step.started_at"><Icon name="play" /> {{ formatTime(step.started_at) }}</span>
                   <span v-if="step.completed_at"><Icon name="check" /> {{ formatTime(step.completed_at) }}</span>
                 </div>
                 <!-- Approval Actions -->
                 <div v-if="step.status === 'waiting_approval' && step.requires_confirmation" class="step-actions">
-                  <button class="btn-success btn-sm" @click="$emit('approve-step', currentWorkflow.workflow_id, step.step_id)">
+                  <BaseButton variant="success" size="xs" @click="$emit('approve-step', currentWorkflow.workflow_id, step.step_id)">
                     <Icon name="check" /> {{ $t('workflow.runner.approve') }}
-                  </button>
-                  <button class="btn-secondary btn-sm" @click="$emit('skip-step', currentWorkflow.workflow_id, step.step_id)">
+                  </BaseButton>
+                  <BaseButton variant="secondary" size="xs" @click="$emit('skip-step', currentWorkflow.workflow_id, step.step_id)">
                     <Icon name="forward" /> {{ $t('workflow.runner.skip') }}
-                  </button>
+                  </BaseButton>
                 </div>
                 <!-- Execution Result -->
                 <div v-if="step.execution_result" class="step-result" :class="{ error: step.status === 'failed' }">
@@ -139,25 +140,31 @@
     </div>
 
     <!-- Notification Config Modal (#3139) -->
-    <NotificationConfigModal
+    <BaseModal
       v-if="currentWorkflow"
-      :visible="showNotifConfig"
-      :workflow-id="currentWorkflow.workflow_id"
-      @close="showNotifConfig = false"
-      @saved="$emit('refresh')"
-    />
+      v-model="showNotifConfig"
+      :title="$t('workflow.notifications.title')"
+      :close-label="$t('common.close')"
+    >
+      <WorkflowNotificationConfig
+        v-if="showNotifConfig"
+        :workflow-id="currentWorkflow.workflow_id"
+        @saved="onNotifSaved"
+      />
+    </BaseModal>
   </div>
 </template>
 
 <script setup lang="ts">
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
+import { BaseBadge, BaseModal, RiskBadge, BaseButton } from '@autobot/ui'
 import { ref, computed } from 'vue';
 import type { ActiveWorkflow } from '@/composables/useWorkflowBuilder';
-import NotificationConfigModal from './NotificationConfigModal.vue';
+import WorkflowNotificationConfig from './WorkflowNotificationConfig.vue';
 
 const props = defineProps<{ workflows: ActiveWorkflow[]; currentWorkflow: ActiveWorkflow | null; loading: boolean }>();
-defineEmits<{
+const emit = defineEmits<{
   (e: 'start-workflow', id: string): void;
   (e: 'pause-workflow', id: string): void;
   (e: 'resume-workflow', id: string): void;
@@ -168,6 +175,11 @@ defineEmits<{
 }>();
 
 const showNotifConfig = ref(false);
+
+function onNotifSaved(): void {
+  showNotifConfig.value = false;
+  emit('refresh');
+}
 
 const completedSteps = computed(() => props.currentWorkflow?.steps.filter(s => s.status === 'completed').length ?? 0);
 const failedSteps = computed(() => props.currentWorkflow?.steps.filter(s => s.status === 'failed').length ?? 0);
@@ -220,13 +232,13 @@ function formatResult(result: Record<string, unknown>): string {
 .runner-sidebar { width: 300px; min-width: 300px; background: var(--bg-secondary); border-right: 1px solid var(--border-default); display: flex; flex-direction: column; }
 .sidebar-header { display: flex; justify-content: space-between; align-items: center; padding: var(--spacing-4); border-bottom: 1px solid var(--border-default); }
 .sidebar-header h4 { margin: var(--spacing-0); font-size: var(--text-sm); color: var(--text-primary); display: flex; align-items: center; gap: var(--spacing-2); }
-.sidebar-header h4 i { color: var(--color-primary); }
+.sidebar-header h4 .icon { color: var(--color-primary); }
 .btn-refresh { padding: var(--spacing-1-5); background: transparent; border: none; color: var(--text-tertiary); cursor: pointer; border-radius: var(--radius-default); }
 .btn-refresh:hover:not(:disabled) { background: var(--bg-hover); }
 .btn-refresh:disabled { opacity: 0.5; }
 
 .empty-list { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); padding: var(--spacing-5); }
-.empty-list i { font-size: 32px; margin-bottom: var(--spacing-3); }
+.empty-list .icon { width: 32px; height: 32px; margin-bottom: var(--spacing-3); }
 
 .workflow-list { flex: 1; overflow-y: auto; padding: var(--spacing-2); }
 .workflow-item { padding: var(--spacing-3); background: var(--bg-tertiary); border-radius: var(--radius-lg); margin-bottom: var(--spacing-2); cursor: pointer; transition: all 0.15s; }
@@ -247,7 +259,7 @@ function formatResult(result: Record<string, unknown>): string {
 
 .runner-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .no-selection { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-tertiary); padding: var(--spacing-10); }
-.no-selection i { font-size: var(--text-5xl); margin-bottom: var(--spacing-4); }
+.no-selection .icon { width: var(--text-5xl); height: var(--text-5xl); margin-bottom: var(--spacing-4); }
 .no-selection h3 { margin: var(--spacing-0) var(--spacing-0) var(--spacing-2); color: var(--text-primary); }
 
 .workflow-header { display: flex; justify-content: space-between; align-items: flex-start; padding: var(--spacing-5); background: var(--bg-secondary); border-bottom: 1px solid var(--border-default); }
@@ -288,14 +300,14 @@ function formatResult(result: Record<string, unknown>): string {
 
 .steps-container { flex: 1; overflow-y: auto; padding: var(--spacing-5); }
 .steps-container h4 { margin: var(--spacing-0) var(--spacing-0) var(--spacing-4); font-size: var(--text-sm); color: var(--text-primary); display: flex; align-items: center; gap: var(--spacing-2); }
-.steps-container h4 i { color: var(--color-primary); }
+.steps-container h4 .icon { color: var(--color-primary); }
 
 .steps-list { display: flex; flex-direction: column; }
 .step-item { display: flex; gap: var(--spacing-4); padding-bottom: var(--spacing-4); }
 .step-indicator { display: flex; flex-direction: column; align-items: center; }
 .step-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); font-weight: 600; background: var(--bg-tertiary); color: var(--text-tertiary); }
 .step-icon.completed { background: var(--color-success); color: white; }
-.step-icon.failed { background: var(--color-error); color: white; }
+.step-icon.failed { background: var(--color-error-solid); color: var(--text-on-error); }
 .step-icon.executing { background: var(--color-primary); color: white; }
 .step-icon.waiting_approval { background: var(--color-warning); color: white; }
 .step-icon.skipped { background: var(--bg-tertiary); color: var(--text-muted); }
@@ -319,23 +331,10 @@ function formatResult(result: Record<string, unknown>): string {
 .step-command { display: block; padding: var(--spacing-2) var(--spacing-2-5); background: var(--bg-tertiary); border-radius: var(--radius-default); font-size: var(--text-xs); color: var(--text-secondary); margin-bottom: var(--spacing-2); overflow-x: auto; }
 .step-meta { display: flex; gap: var(--spacing-3); font-size: var(--text-xs); color: var(--text-tertiary); }
 .step-meta span { display: flex; align-items: center; gap: var(--spacing-1); }
-.step-meta .risk { padding: var(--spacing-0-5) var(--spacing-1-5); border-radius: var(--radius-lg); }
-.step-meta .risk.low { background: var(--color-success-bg); color: var(--color-success); }
-.step-meta .risk.medium { background: var(--color-warning-bg); color: var(--color-warning); }
-.step-meta .risk.high { background: var(--color-error-bg); color: var(--color-error); }
 
 .step-actions { display: flex; gap: var(--spacing-2); margin-top: var(--spacing-3); padding-top: var(--spacing-3); border-top: 1px solid var(--border-default); }
 .step-result { margin-top: var(--spacing-3); padding: var(--spacing-2-5); background: var(--bg-tertiary); border-radius: var(--radius-default); }
 .step-result.error { background: var(--color-error-bg); }
 .step-result pre { margin: var(--spacing-0); font-size: var(--text-xs); color: var(--text-secondary); white-space: pre-wrap; word-break: break-all; max-height: 150px; overflow-y: auto; }
 
-.btn-success { padding: var(--spacing-2) var(--spacing-4); background: var(--color-success); color: white; border: none; border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: var(--spacing-1-5); }
-.btn-success:hover { filter: brightness(1.1); }
-.btn-warning { padding: var(--spacing-2) var(--spacing-4); background: var(--color-warning); color: white; border: none; border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: var(--spacing-1-5); }
-.btn-warning:hover { filter: brightness(1.1); }
-.btn-danger { padding: var(--spacing-2) var(--spacing-4); background: var(--color-error); color: white; border: none; border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: var(--spacing-1-5); }
-.btn-danger:hover { filter: brightness(1.1); }
-.btn-secondary { padding: var(--spacing-2) var(--spacing-4); background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-md); font-size: var(--text-sm); cursor: pointer; display: inline-flex; align-items: center; gap: var(--spacing-1-5); }
-.btn-secondary:hover { background: var(--bg-hover); }
-.btn-sm { padding: var(--spacing-1-5) var(--spacing-3); font-size: var(--text-xs); }
 </style>

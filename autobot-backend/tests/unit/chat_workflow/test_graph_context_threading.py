@@ -66,3 +66,15 @@ def test_shallow_copy_isolates_graph_state():
     ctx = build(state)
     ctx.context["delegations_this_turn"] = 3  # simulate an in-seam write
     assert "delegations_this_turn" not in state["context"]  # original untouched
+
+
+def test_only_a_bound_approved_decision_reaches_the_seam_and_a_request_cannot_forge_it():
+    """#18430: the seam gets exactly the fingerprints request_approval bound, and never the request's own."""
+    build = _build()
+    bound = {"approved": True, "reason": "", "bound": ["fp1", "fp2"]}
+    assert build(_state({}) | {"approval_decision": bound}).approved_fingerprints == frozenset({"fp1", "fp2"})
+    denied = {"approved": False, "reason": "no", "bound": ["fp1"]}
+    assert build(_state({}) | {"approval_decision": denied}).approved_fingerprints == frozenset()
+    assert build(_state({})).approved_fingerprints == frozenset()
+    for key in ("approved_fingerprints", "bound", "person_approved"):
+        assert build(_state({key: ["fp1"]})).approved_fingerprints == frozenset()

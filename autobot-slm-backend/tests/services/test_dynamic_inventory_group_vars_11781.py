@@ -29,6 +29,7 @@ _STUBS = [
     "services.ansible_secrets",
     "services.inventory_builder",
     "services.provision_progress",
+    "services.unit_names",
 ]
 
 

@@ -248,7 +248,7 @@ install_nodejs() {
     log "Installing Node.js..."
 
     if ! command -v node &>/dev/null; then
-        curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+        curl -fsSL ${AUTOBOT_NODESOURCE_BASE_URL}/setup_${NODE_MAJOR:?NODE_MAJOR unset: .nvmrc not found}.x | bash -
         apt-get install -y -qq nodejs
     fi
 
@@ -306,7 +306,7 @@ install_grafana() {
         echo "deb [signed-by=/usr/share/keyrings/grafana.key] https://apt.grafana.com stable main" \
             > /etc/apt/sources.list.d/grafana.list
         apt-get update -qq
-        apt-get install -y -qq grafana
+        apt-get install -y -qq "grafana=${GRAFANA_VERSION:=11.1.0}"
     fi
 
     # Configure Grafana
@@ -357,7 +357,7 @@ setup_code() {
         fi
     else
         log "Syncing from dev machine ($DEV_HOST)..."
-        rsync -avz --delete \
+        rsync -avz --chmod=o-w --delete \
             --exclude 'node_modules/' \
             --exclude 'venv/' \
             --exclude '__pycache__/' \
@@ -792,7 +792,7 @@ main() {
                 die "Unknown option: $1"
                 ;;
         esac
-    done
+    done; cd /  # the service user cannot read the caller's cwd, and git aborts in it (#19403)
 
     print_banner
     check_prerequisites

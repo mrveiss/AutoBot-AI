@@ -31,12 +31,18 @@ it exists to catch.
 import ast
 import re
 
+import yaml
 from repo_tests._paths import repo_root
+
+from autobot_shared import fleet_constants
+from tools.lint._comment_syntax import code_text
 
 REPO_ROOT = repo_root()
 _PLAYBOOK = REPO_ROOT / "autobot-slm-backend/ansible/playbooks/configure-python-provision-permissions.yml"
 _CODE_SYNC = REPO_ROOT / "autobot-slm-backend/api/code_sync.py"
 _GIT_TRACKER = REPO_ROOT / "autobot-slm-backend/services/git_tracker.py"
+# The install root's one definition (#18587); the playbook spells the path through it (#18881).
+_GROUP_VARS_ALL = REPO_ROOT / "autobot-slm-backend/ansible/inventory/group_vars/all.yml"
 
 
 def _strip_comments(text: str) -> str:
@@ -45,36 +51,44 @@ def _strip_comments(text: str) -> str:
     Both files explain this coupling in prose immediately above the code that
     implements it, and those comments quote the path. Matching raw text, a
     check can be satisfied by the explanation rather than the value.
+
+    Delegates to the shared stripper (#17941) -- one of seven private copies.
+    Both subjects are YAML, which shares the `#` marker.
     """
-    return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+    return code_text(text, name="x.yml")
 
 
 def ansible_playbook_path() -> str:
-    """The literal the sudoers rule is built from."""
+    """The path the sudoers rule is built from, as Ansible renders it."""
     text = _strip_comments(_PLAYBOOK.read_text(encoding="utf-8"))
     match = re.search(r'^\s*provision_playbook:\s*"([^"]+)"\s*$', text, re.MULTILINE)
     assert match, "provision_playbook is no longer a plain literal in the playbook"
-    return match.group(1)
+    root = yaml.safe_load(_GROUP_VARS_ALL.read_text(encoding="utf-8"))["autobot"]["base_dir"]
+    return match.group(1).replace("{{ autobot.base_dir }}", root)  # what Ansible renders
 
 
 def default_repo_path() -> str:
-    r"""`DEFAULT_REPO_PATH`'s fallback, read from git_tracker rather than restated.
+    """`DEFAULT_REPO_PATH`'s fallback, resolved from git_tracker's AST rather than restated.
 
-    Deliberately does **not** strip comments, unlike the readers above, and is
-    safe only because the pattern is anchored `^DEFAULT_REPO_PATH` with no
-    leading `\s*`: a commented-out copy is indented behind `# `, so the anchor
-    excludes it.
-
-    That safety is a property of the regex, not of the input. Adding `\s*` to
-    tolerate an indented definition -- the natural future edit -- would silently
-    admit `# DEFAULT_REPO_PATH = os.environ.get("SLM_REPO_PATH", "/old/path")`
-    and nothing here would fail. If this ever needs to match an indented
-    assignment, strip comments first.
+    The fallback is a ``fleet_constants`` name git_tracker must import from there (#15708); it is
+    resolved against that module. Reading the AST means a commented-out copy never matches.
     """
-    text = _GIT_TRACKER.read_text(encoding="utf-8")
-    match = re.search(r'^DEFAULT_REPO_PATH\s*=\s*os\.environ\.get\(\s*"[^"]+"\s*,\s*"([^"]+)"', text, re.MULTILINE)
-    assert match, "DEFAULT_REPO_PATH is no longer an os.environ.get with a literal default"
-    return match.group(1)
+    tree = ast.parse(_GIT_TRACKER.read_text(encoding="utf-8"))
+    fleet = {
+        a.asname or a.name
+        for n in tree.body
+        if isinstance(n, ast.ImportFrom) and n.module == "autobot_shared.fleet_constants"
+        for a in n.names
+    }
+    call = next(
+        n.value
+        for n in tree.body
+        if isinstance(n, ast.Assign) and [ast.unparse(t) for t in n.targets] == ["DEFAULT_REPO_PATH"]
+    )
+    assert ast.unparse(call.func) == "os.environ.get" and len(call.args) == 2, "DEFAULT_REPO_PATH is not an env read"
+    name = ast.unparse(call.args[1])
+    assert name in fleet, f"DEFAULT_REPO_PATH's fallback {name} is not imported from fleet_constants"
+    return getattr(fleet_constants, name)
 
 
 def code_sync_playbook_path() -> str:

@@ -108,8 +108,7 @@
 import type { IconName } from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
-import BaseButton from '@/components/base/BaseButton.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/ui/Icon.vue'
 import { createLogger } from '@/utils/debugUtils'
@@ -247,7 +246,7 @@ onMounted(() => {
 }
 
 .browser-header h2 {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 0.5rem;
@@ -255,7 +254,7 @@ onMounted(() => {
 
 .description {
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .loading-state,
@@ -351,7 +350,7 @@ onMounted(() => {
 }
 
 .resource-uri {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   font-family: 'Monaco', 'Courier New', monospace;
   word-break: break-all;
@@ -359,7 +358,7 @@ onMounted(() => {
 
 .resource-description {
   margin-top: 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -372,7 +371,7 @@ onMounted(() => {
   padding: 0.25rem 0.75rem;
   background: var(--bg-tertiary);
   border-radius: 0.25rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   font-family: 'Monaco', 'Courier New', monospace;
 }
@@ -410,7 +409,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .content-text {
@@ -418,7 +417,7 @@ onMounted(() => {
   background: var(--bg-tertiary);
   border-radius: 0.375rem;
   font-family: 'Monaco', 'Courier New', monospace;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   white-space: pre-wrap;
   word-break: break-word;
   color: var(--text-primary);

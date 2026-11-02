@@ -320,16 +320,16 @@ async def analyze_code():
 
 ## Testing
 
-Run the comprehensive test suite:
+Run the comprehensive test suite (a backend tool: it puts `autobot-backend` and the repository root on its own path, so it runs from any directory with no PYTHONPATH -- #18288):
 
 ```bash
 # Test all functionality
-python scripts/test_long_running_operations.py --demo-type all
+python3 autobot-infrastructure/shared/scripts/test_long_running_operations.py --demo-type all
 
 # Test specific components
-python scripts/test_long_running_operations.py --demo-type indexing
-python scripts/test_long_running_operations.py --demo-type testing
-python scripts/test_long_running_operations.py --demo-type checkpoint
+python3 autobot-infrastructure/shared/scripts/test_long_running_operations.py --demo-type indexing
+python3 autobot-infrastructure/shared/scripts/test_long_running_operations.py --demo-type testing
+python3 autobot-infrastructure/shared/scripts/test_long_running_operations.py --demo-type checkpoint
 ```
 
 ## Integration with AutoBot

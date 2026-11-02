@@ -107,7 +107,7 @@ def _make_redis_mock(store: dict | None = None):
     async def _pexpire(key, ms):
         return 1 if key in store else 0
 
-    async def _scan_iter(match="*"):
+    async def _scan_iter(match="*", count=None):
         import fnmatch
 
         for k in list(store):
@@ -269,6 +269,29 @@ class TestConnectorSchedulerRedis:
         # After rehydration both connectors have local asyncio tasks
         assert "c1" in new_scheduler._tasks
         assert "c2" in new_scheduler._tasks
+
+    async def test_reconcile_walks_the_keyspace_with_a_bounded_count(self):
+        """#18999: one SCAN walk per tick at REDIS_SCAN_COUNT, not redis-py's default 10-key pages."""
+        from autobot_shared.redis_scan import REDIS_SCAN_COUNT
+
+        store = {_SCHEDULE_PREFIX + "c1": json.dumps({"connector_id": "c1", "interval_seconds": 300})}
+        mock_redis, _ = _make_redis_mock(store)
+        seen = []
+        inner = mock_redis.scan_iter
+
+        def _recording_scan_iter(match="*", count=None):
+            seen.append(count)
+            return inner(match=match, count=count)
+
+        mock_redis.scan_iter = _recording_scan_iter
+        with patch("knowledge.connectors.scheduler.get_async_redis_client", return_value=mock_redis):
+            scheduler = ConnectorScheduler()
+            scheduler._is_leader = True
+            await scheduler._reconcile_schedules()
+            await scheduler.stop_all()
+
+        assert seen == [REDIS_SCAN_COUNT]
+        assert REDIS_SCAN_COUNT > 10
 
     async def test_reconcile_cancels_orphaned_tasks(self):
         """Tasks for connectors removed from Redis are cancelled during reconciliation."""

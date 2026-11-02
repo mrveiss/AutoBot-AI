@@ -6,6 +6,7 @@
 // GH#9627: tests for the LLC company selector store.
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { HttpError } from '@autobot/ui'
 import { setActivePinia, createPinia } from 'pinia'
 import { useLlcCompanyStore, type LlcCompany } from '../useLlcCompanyStore'
 
@@ -77,7 +78,7 @@ describe('useLlcCompanyStore (GH#9627)', () => {
 
   it('fetchCompanies flags unavailable (not error) on HTTP 503', async () => {
     getMock.mockRejectedValue(
-      new Error('HTTP 503: This feature requires PostgreSQL (single_company or multi_company mode).'),
+      new HttpError(503, 'This feature requires PostgreSQL (single_company or multi_company mode).'),
     )
     const store = useLlcCompanyStore()
     await store.fetchCompanies()
@@ -148,7 +149,7 @@ describe('useLlcCompanyStore (GH#9627)', () => {
   })
 
   it('deleteCompany re-throws and keeps the company on failure', async () => {
-    deleteMock.mockRejectedValue(new Error('HTTP 409: has children'))
+    deleteMock.mockRejectedValue(new HttpError(409, 'has children'))
     const store = useLlcCompanyStore()
     await store.fetchCompanies()
     await expect(store.deleteCompany('company-1')).rejects.toThrow('409')

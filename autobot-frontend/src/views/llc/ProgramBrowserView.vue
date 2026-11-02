@@ -26,7 +26,7 @@
     <div v-if="loading" class="browser-state">{{ t('llcBrowser.programs.loading') }}</div>
 
     <template v-else-if="loadError">
-      <ErrorBanner :message="t('llcBrowser.programs.loadError')" class="browser-error" />
+      <BaseAlert variant="error" :message="t('llcBrowser.programs.loadError')" class="browser-error" dismissible :dismiss-label="t('common.dismiss')" />
       <BaseButton variant="secondary" size="sm" @click="loadPrograms">
         {{ t('llcBrowser.retry') }}
       </BaseButton>
@@ -59,7 +59,7 @@
       :title="t('llcBrowser.programs.createTitle')"
       size="sm"
     >
-      <ErrorBanner v-if="createError" :message="createError" class="browser-error" />
+      <BaseAlert variant="error" v-if="createError" :message="createError" class="browser-error" dismissible :dismiss-label="t('common.dismiss')" />
       <div class="create-form">
         <BaseInput
           v-model="form.name"
@@ -104,10 +104,7 @@ import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import LlcBreadcrumb, { type BreadcrumbItem } from '@/components/llc/LlcBreadcrumb.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
-import BaseInput from '@/components/base/BaseInput.vue'
-import { BaseModal } from '@autobot/ui'
-import ErrorBanner from '@/components/base/ErrorBanner.vue'
+import { BaseAlert, BaseButton, BaseInput, BaseModal } from '@autobot/ui'
 
 interface ProgramResponse {
   id: string
@@ -224,14 +221,14 @@ onMounted(loadPrograms)
 }
 
 .browser-title {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
 }
 
 .browser-count {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -264,7 +261,7 @@ onMounted(loadPrograms)
 }
 
 .entity-card:hover {
-  border-color: var(--color-accent, #c4651a);
+  border-color: var(--color-accent);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
@@ -276,14 +273,14 @@ onMounted(loadPrograms)
 }
 
 .card-name {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
 }
 
 .card-desc {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   margin: 0;
   display: -webkit-box;
@@ -294,7 +291,7 @@ onMounted(loadPrograms)
 }
 
 .card-meta {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   margin: 0;
 }
@@ -336,7 +333,7 @@ onMounted(loadPrograms)
   border: 1px solid var(--border-default);
   background: var(--bg-surface);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   resize: vertical;
 }
 </style>

@@ -15,9 +15,11 @@ import re
 from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.logging_manager import get_llm_logger
+from autobot_shared.paths import chromadb_data_dir
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import get_ollama_url
 from constants.path_constants import PATH
+from constants.rag_graph_constants import RAG_SCORE_THRESHOLD
 
 if TYPE_CHECKING:
     from knowledge.backends import BaseClient, BaseCollection
@@ -26,6 +28,26 @@ logger = get_llm_logger("doc_searcher")
 
 # Issue #380: Use centralized PathConstants instead of repeated computation
 PROJECT_ROOT = PATH.PROJECT_ROOT
+
+
+_WARNED: set[str] = set()
+
+
+def _warn_unrecorded_once(collection: str, model: str, dim: int) -> None:
+    """Warn once per process that ``collection`` is searched on a dimension match, and propose a stamp."""
+    if collection in _WARNED:
+        return
+    _WARNED.add(collection)
+    logger.warning(
+        "Collection '%s': unrecorded space, dimension-matched: dimension match only, model unverified "
+        "(assumed %s, %d-d) (#18143)",
+        collection,
+        model,
+        dim,
+    )
+    from services.knowledge.collection_space_proposal import schedule_stamp_proposal
+
+    schedule_stamp_proposal(collection, model, dim)
 
 
 class DocumentationSearcher:
@@ -66,6 +88,7 @@ class DocumentationSearcher:
         self._client: "BaseClient" | None = None
         self._collection: "BaseCollection" | None = None
         self._embed_model = None
+        self._space = None
         self._initialized = False
         self._doc_patterns = [re.compile(p, re.IGNORECASE) for p in self.DOC_QUERY_PATTERNS]
 
@@ -85,7 +108,7 @@ class DocumentationSearcher:
             from knowledge.backends import get_default_client
 
             # Initialize ChromaDB via pluggable backend seam (#5062, #5194).
-            chromadb_path = PROJECT_ROOT / "data" / "chromadb"
+            chromadb_path = chromadb_data_dir()
             self._client = get_default_client(db_path=str(chromadb_path))
 
             # Get documentation collection (don't create if not exists)
@@ -104,8 +127,11 @@ class DocumentationSearcher:
                 )
                 return False
 
-            # Initialize embedding model
-            self._embed_model = OllamaEmbedding(model_name="nomic-embed-text", base_url=get_ollama_url())
+            # #18143: query in the space the collection records for itself, never a model chosen here.
+            self._space = self._recorded_space()
+            if self._space is None:
+                return False
+            self._embed_model = OllamaEmbedding(model_name=self._space.model_name, base_url=get_ollama_url())
 
             self._initialized = True
             return True
@@ -113,6 +139,47 @@ class DocumentationSearcher:
         except Exception as e:
             logger.error("Failed to initialize DocumentationSearcher: %s", e)
             return False
+
+    def _recorded_space(self):
+        """The (model, dim) the collection records, else the active model if it matches the stored dimension.
+
+        Neither -> None and the search is refused. An unrecorded collection is searched on a dimension match
+        alone (warned once, and a stamp is PROPOSED for a human to approve); it is never stamped here (#18143).
+        """
+        from autobot_shared.embedding_provenance import provenance_from_metadata
+
+        recorded = provenance_from_metadata(getattr(self._collection, "metadata", None))
+        return recorded or self._dimension_matched_space()
+
+    def _stored_dim(self) -> int | None:
+        """Dimension of one stored vector, read-only; None when the collection is empty or unreadable."""
+        try:
+            embs = self._collection.peek(limit=1).get("embeddings")
+            return len(embs[0]) if embs is not None and len(embs) > 0 and embs[0] is not None else None
+        except Exception as exc:
+            logger.error("Could not read a stored vector of '%s': %s", self.collection_name, exc)
+            return None
+
+    def _dimension_matched_space(self):
+        """The active model as the collection's space, only when its vectors have the stored dimension."""
+        from llama_index.embeddings.ollama import OllamaEmbedding
+
+        from autobot_shared.embedding_model import active_embedding_model
+        from autobot_shared.embedding_provenance import EmbeddingProvenance
+
+        stored, model = self._stored_dim(), active_embedding_model()
+        probe = OllamaEmbedding(model_name=model, base_url=get_ollama_url()).get_text_embedding("dimension probe")
+        if stored is None or len(probe) != stored:
+            logger.error(
+                "Documentation collection '%s' records no embedding model and its stored dimension (%s) does "
+                "not match the active model (%d-d); search refused until it is re-indexed (#18143)",
+                self.collection_name,
+                stored,
+                len(probe),
+            )
+            return None
+        _warn_unrecorded_once(self.collection_name, model, stored)
+        return EmbeddingProvenance(model, stored)
 
     def is_documentation_query(self, query: str) -> bool:
         """
@@ -178,9 +245,12 @@ class DocumentationSearcher:
             "subsection": meta.get("subsection", ""),
             "doc_type": meta.get("doc_type", "documentation"),
             "priority": meta.get("priority", "medium"),
+            "metadata": dict(meta),  # #18944: the stored visibility grant, for filter_for_principal
         }
 
-    def search(self, query: str, n_results: int = 3, score_threshold: float = 0.3) -> List[Dict[str, Any]]:
+    def search(
+        self, query: str, n_results: int = 3, score_threshold: float = RAG_SCORE_THRESHOLD
+    ) -> List[Dict[str, Any]]:
         """Search documentation for relevant content.
 
         Args:
@@ -196,6 +266,14 @@ class DocumentationSearcher:
 
         try:
             embedding = self._embed_model.get_text_embedding(query)
+            if len(embedding) != self._space.dim:
+                logger.error(
+                    "Query vector is %d-d but '%s' is %d-d; refused",
+                    len(embedding),
+                    self.collection_name,
+                    self._space.dim,
+                )
+                return []
             results = self._query_chromadb(embedding, n_results)
 
             if not results:

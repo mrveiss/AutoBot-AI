@@ -26,7 +26,7 @@ _BOOLEAN_OP_TYPES = (ast.And, ast.Or)
 
 
 @dataclass
-class CodeFunction:
+class CoverageFunction:
     """Represents a function in the codebase"""
 
     file_path: str
@@ -59,13 +59,13 @@ class TestFunction:
 
 
 @dataclass
-class CoverageGap:
+class TestCoverageGap:
     """Represents a testing coverage gap"""
 
     gap_type: str  # untested_function, missing_edge_cases, no_integration_tests
     severity: str  # critical, high, medium, low
     description: str
-    affected_functions: List[CodeFunction]
+    affected_functions: List[CoverageFunction]
     suggested_tests: List[str]
     priority_score: int
 
@@ -169,7 +169,7 @@ class TestingCoverageAnalyzer:
         logger.info(f"Testing coverage analysis complete in {analysis_time:.2f}s")
         return results
 
-    async def _discover_all_functions(self, root_path: str, patterns: List[str]) -> List[CodeFunction]:
+    async def _discover_all_functions(self, root_path: str, patterns: List[str]) -> List[CoverageFunction]:
         """Discover all functions in the codebase"""
 
         functions = []
@@ -224,7 +224,7 @@ class TestingCoverageAnalyzer:
         path_str = str(file_path)
         return any(re.search(pattern, path_str) for pattern in self.test_patterns)
 
-    async def _extract_functions_from_file(self, file_path: str) -> List[CodeFunction]:
+    async def _extract_functions_from_file(self, file_path: str) -> List[CoverageFunction]:
         """Extract functions from a file"""
 
         functions = []
@@ -249,7 +249,7 @@ class TestingCoverageAnalyzer:
 
         return functions
 
-    def _analyze_function(self, node: ast.AST, file_path: str, content: str) -> CodeFunction | None:
+    def _analyze_function(self, node: ast.AST, file_path: str, content: str) -> CoverageFunction | None:
         """Analyze a function node"""
 
         try:
@@ -286,7 +286,7 @@ class TestingCoverageAnalyzer:
             # Check for file operations
             has_file_operations = self._function_has_file_ops(node)
 
-            return CodeFunction(
+            return CoverageFunction(
                 file_path=file_path,
                 name=node.name,
                 line_number=node.lineno,
@@ -523,17 +523,17 @@ class TestingCoverageAnalyzer:
 
     def _create_untested_gaps(
         self,
-        critical_untested: List[CodeFunction],
-        high_priority_untested: List[CodeFunction],
-    ) -> List[CoverageGap]:
-        """Build CoverageGap entries for critical and high-priority untested functions.
+        critical_untested: List[CoverageFunction],
+        high_priority_untested: List[CoverageFunction],
+    ) -> List[TestCoverageGap]:
+        """Build TestCoverageGap entries for critical and high-priority untested functions.
 
         Issue #1183: Extracted from _analyze_coverage_gaps() to reduce function length.
         """
-        gaps: List[CoverageGap] = []
+        gaps: List[TestCoverageGap] = []
         if critical_untested:
             gaps.append(
-                CoverageGap(
+                TestCoverageGap(
                     gap_type="critical_untested_functions",
                     severity="critical",
                     description=f"{len(critical_untested)} critical functions lack tests",
@@ -544,7 +544,7 @@ class TestingCoverageAnalyzer:
             )
         if high_priority_untested:
             gaps.append(
-                CoverageGap(
+                TestCoverageGap(
                     gap_type="high_priority_untested_functions",
                     severity="high",
                     description=f"{len(high_priority_untested)} high-priority functions lack tests",
@@ -556,20 +556,20 @@ class TestingCoverageAnalyzer:
         return gaps
 
     def _create_integration_and_edge_gaps(
-        self, functions: List[CodeFunction], tests: List[TestFunction]
-    ) -> List[CoverageGap]:
-        """Build CoverageGap entries for missing integration and edge-case tests.
+        self, functions: List[CoverageFunction], tests: List[TestFunction]
+    ) -> List[TestCoverageGap]:
+        """Build TestCoverageGap entries for missing integration and edge-case tests.
 
         Issue #1183: Extracted from _analyze_coverage_gaps() to reduce function length.
         """
-        gaps: List[CoverageGap] = []
+        gaps: List[TestCoverageGap] = []
         need_integration = [
             f for f in functions if (f.calls_external_apis or f.has_database_operations) and f.is_public
         ]
         integration_tests = [t for t in tests if t.test_type == "integration"]
         if len(need_integration) > len(integration_tests):
             gaps.append(
-                CoverageGap(
+                TestCoverageGap(
                     gap_type="missing_integration_tests",
                     severity="high",
                     description=f"Missing integration tests for {len(need_integration)} functions with external dependencies",
@@ -582,7 +582,7 @@ class TestingCoverageAnalyzer:
         edge_case_tests = [t for t in tests if t.covers_edge_cases]
         if len(complex_functions) > len(edge_case_tests):
             gaps.append(
-                CoverageGap(
+                TestCoverageGap(
                     gap_type="missing_edge_case_tests",
                     severity="medium",
                     description=f"Missing edge case tests for {len(complex_functions)} complex functions",
@@ -594,8 +594,8 @@ class TestingCoverageAnalyzer:
         return gaps
 
     async def _analyze_coverage_gaps(
-        self, functions: List[CodeFunction], tests: List[TestFunction]
-    ) -> List[CoverageGap]:
+        self, functions: List[CoverageFunction], tests: List[TestFunction]
+    ) -> List[TestCoverageGap]:
         """Analyze coverage gaps between functions and tests"""
 
         # Create mapping of tested functions
@@ -614,7 +614,7 @@ class TestingCoverageAnalyzer:
 
         return gaps
 
-    def _is_critical_function(self, func: CodeFunction) -> bool:
+    def _is_critical_function(self, func: CoverageFunction) -> bool:
         """Check if function is critical and needs testing"""
         return (
             func.calls_external_apis
@@ -625,7 +625,7 @@ class TestingCoverageAnalyzer:
             or "security" in func.name.lower()
         )
 
-    def _is_high_priority_function(self, func: CodeFunction) -> bool:
+    def _is_high_priority_function(self, func: CoverageFunction) -> bool:
         """Check if function is high priority for testing"""
         return (
             func.complexity > 3
@@ -636,7 +636,7 @@ class TestingCoverageAnalyzer:
             or "execute" in func.name.lower()
         )
 
-    def _suggest_tests_for_functions(self, functions: List[CodeFunction]) -> List[str]:
+    def _suggest_tests_for_functions(self, functions: List[CoverageFunction]) -> List[str]:
         """Suggest tests for functions"""
         suggestions = []
 
@@ -655,7 +655,7 @@ class TestingCoverageAnalyzer:
 
         return suggestions
 
-    def _suggest_integration_tests(self, functions: List[CodeFunction]) -> List[str]:
+    def _suggest_integration_tests(self, functions: List[CoverageFunction]) -> List[str]:
         """Suggest integration tests"""
         suggestions = []
 
@@ -672,7 +672,7 @@ class TestingCoverageAnalyzer:
 
         return suggestions
 
-    def _suggest_edge_case_tests(self, functions: List[CodeFunction]) -> List[str]:
+    def _suggest_edge_case_tests(self, functions: List[CoverageFunction]) -> List[str]:
         """Suggest edge case tests"""
         suggestions = []
 
@@ -687,9 +687,9 @@ class TestingCoverageAnalyzer:
 
     def _calculate_testing_metrics(
         self,
-        functions: List[CodeFunction],
+        functions: List[CoverageFunction],
         tests: List[TestFunction],
-        gaps: List[CoverageGap],
+        gaps: List[TestCoverageGap],
     ) -> TestingMetrics:
         """Calculate testing metrics"""
 
@@ -731,7 +731,7 @@ class TestingCoverageAnalyzer:
             missing_edge_case_tests=missing_edge_case_tests,
         )
 
-    async def _generate_test_recommendations(self, gaps: List[CoverageGap]) -> List[str]:
+    async def _generate_test_recommendations(self, gaps: List[TestCoverageGap]) -> List[str]:
         """Generate test improvement recommendations"""
 
         recommendations = []
@@ -761,7 +761,7 @@ class TestingCoverageAnalyzer:
 
         return recommendations
 
-    def _serialize_function(self, func: CodeFunction) -> Dict[str, Any]:
+    def _serialize_function(self, func: CoverageFunction) -> Dict[str, Any]:
         """Serialize function for output"""
         return {
             "file": func.file_path,
@@ -792,7 +792,7 @@ class TestingCoverageAnalyzer:
             "covers_edge_cases": test.covers_edge_cases,
         }
 
-    def _serialize_coverage_gap(self, gap: CoverageGap) -> Dict[str, Any]:
+    def _serialize_coverage_gap(self, gap: TestCoverageGap) -> Dict[str, Any]:
         """Serialize coverage gap for output"""
         return {
             "type": gap.gap_type,

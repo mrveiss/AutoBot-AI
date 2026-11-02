@@ -16,7 +16,7 @@
   # references stay inside that guard's population rather than silently leaving
   # it (which is how #13744 would become undetectable again).
   vars: &deploy_paths
-    deployed_src_root: /opt/autobot/src
+    deployed_src_root: "{{ autobot.base_dir }}/src"
 
   tasks:
     - name: Install common packages
@@ -42,7 +42,7 @@
         name: autobot-service
         system: true
         shell: /bin/bash
-        home: /opt/autobot
+        home: "{{ autobot.base_dir }}"
         create_home: true
 
     - name: Create service directories
@@ -53,10 +53,10 @@
         group: autobot-service
         mode: '0755'
       loop:
-        - /opt/autobot
-        - /opt/autobot/logs
-        - /opt/autobot/data
-        - /opt/autobot/config
+        - "{{ autobot.base_dir }}"
+        - "{{ autobot.base_dir }}/logs"
+        - "{{ autobot.base_dir }}/data"
+        - "{{ autobot.base_dir }}/config"
         - /var/log/autobot
 
 # Deploy Redis Stack natively on VM3 (Database VM)
@@ -188,7 +188,7 @@
               [Service]
               Type=simple
               User=autobot-service
-              WorkingDirectory=/opt/autobot
+              WorkingDirectory={{ autobot.base_dir }}
               ExecStart=/usr/local/bin/redisinsight --port 8002 --host 0.0.0.0
               Restart=always
               RestartSec=3
@@ -216,7 +216,12 @@
 
     - name: Test Redis connectivity
       # #16678: the username always travels with the password -- a nopass server refuses AUTH <pw> alone
-      shell: redis-cli --user {{ (autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) or 'default') | quote }} -a {{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) | quote }} ping
+      shell: redis-cli --user {{ (autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) or 'default') | quote }} ping
+      # #19846: REDISCLI_AUTH, not -a: the password stays out of the task log and of ps
+      vars:
+        _redis_password: "{{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"
+      environment: "{{ {'REDISCLI_AUTH': _redis_password} if _redis_password else {} }}"
+      no_log: true
       register: redis_test
 
     - name: Display Redis status
@@ -231,23 +236,9 @@
   vars: *deploy_paths
 
   tasks:
-    - name: Install Node.js 20
-      block:
-        - name: Add NodeSource GPG key
-          apt_key:
-            url: https://deb.nodesource.com/gpgkey/nodesource.gpg.key
-            state: present
-
-        - name: Add NodeSource repository
-          apt_repository:
-            repo: "deb https://deb.nodesource.com/node_20.x {{ ansible_facts['distribution_release'] }} main"
-            state: present
-
-        - name: Install Node.js
-          apt:
-            name: nodejs
-            state: present
-            update_cache: true
+    - name: Install Node.js
+      ansible.builtin.include_role:
+        name: nodejs
 
     - name: Copy frontend source files from deployment directory
       copy:
@@ -376,7 +367,7 @@
     <<: *deploy_paths
     # Matches roles/npu-worker's npu_install_dir (#13746) so the role-based and
     # playbook-based NPU paths build the same venv rather than two.
-    npu_venv: /opt/autobot/autobot-npu-worker/venv
+    npu_venv: "{{ autobot.base_dir }}/autobot-npu-worker/venv"
 
   tasks:
     # #13747: was pinned to 3.11 on the premise that OpenVINO ships no 3.14
@@ -410,12 +401,14 @@
 
     - name: Copy AutoBot source code for NPU Worker
       synchronize:
-        src: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/
+        src: ${AUTOBOT_PROJECT_ROOT:-{{ autobot.base_dir }}/code_source}/
         dest: "{{ deployed_src_root }}/"
         delete: false
         recursive: true
         owner: false
         group: false
+        rsync_opts:
+          - "--chmod=o-w"  # #19503
       delegate_to: localhost
 
     - name: Set ownership of source code for NPU Worker
@@ -513,7 +506,7 @@
           openvino_device = AUTO
           npu_priority = high
           gpu_fallback = true
-          device_cache_dir = /opt/autobot/data/device_cache
+          device_cache_dir = {{ autobot.base_dir }}/data/device_cache
 
           [server]
           host = 0.0.0.0
@@ -530,7 +523,7 @@
           log_device_usage = true
           performance_metrics = true
           temperature_monitoring = true
-        dest: /opt/autobot/config/npu-worker.conf
+        dest: "{{ autobot.base_dir }}/config/npu-worker.conf"
         owner: autobot-service
         group: autobot-service
         mode: '0644'
@@ -589,6 +582,9 @@
   hosts: aiml
   become: true
   vars: *deploy_paths
+  # One home for the pulled model set and its embedding role (#19736), as in deploy-hybrid-docker.yml.
+  vars_files:
+    - ../roles/agent_config/defaults/main.yml
 
   tasks:
     - name: Install Python dependencies for AI services
@@ -607,12 +603,14 @@
 
     - name: Copy AutoBot source code
       synchronize:
-        src: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/
+        src: ${AUTOBOT_PROJECT_ROOT:-{{ autobot.base_dir }}/code_source}/
         dest: "{{ deployed_src_root }}/"
         delete: false
         recursive: true
         owner: false
         group: false
+        rsync_opts:
+          - "--chmod=o-w"  # #19503
       delegate_to: localhost
 
     - name: Set ownership of source code
@@ -631,17 +629,17 @@
         name: python_interpreter
         tasks_from: ensure_venv_version
       vars:
-        venv_path: /opt/autobot/venv
+        venv_path: "{{ autobot.base_dir }}/venv"
         venv_python: python3.14
 
     - name: Create Python virtual environment
       shell: |
-        cd /opt/autobot
+        cd {{ autobot.base_dir }}
         python3.14 -m venv venv
         source venv/bin/activate
         pip install --upgrade pip setuptools wheel
       args:
-        creates: /opt/autobot/venv/bin/activate
+        creates: "{{ autobot.base_dir }}/venv/bin/activate"
       become_user: autobot-service
       environment:
         PIP_DEFAULT_TIMEOUT: "120"
@@ -649,7 +647,7 @@
 
     - name: Install Python dependencies
       shell: |
-        cd /opt/autobot
+        cd {{ autobot.base_dir }}
         source venv/bin/activate
         pip install --timeout 120 -r src/requirements.txt
       become_user: autobot-service
@@ -678,10 +676,10 @@
               [Service]
               Type=simple
               User=autobot-service
-              WorkingDirectory=/opt/autobot
+              WorkingDirectory={{ autobot.base_dir }}
               ExecStart=/usr/local/bin/ollama serve
               Environment="OLLAMA_HOST=0.0.0.0:11434"
-              Environment="OLLAMA_MODELS=/opt/autobot/models"
+              Environment="OLLAMA_MODELS={{ autobot.base_dir }}/models"
               Restart=always
               RestartSec=3
 
@@ -703,14 +701,14 @@
           become_user: autobot-service
           async: 600
           poll: 15
-          loop:
-            - "llama3.2:1b"           # Routing tier
-            - "gemma2:2b"             # Classification tier
-            - "phi3:mini"             # Light processing tier
-            - "mistral:7b-instruct"   # Instruction tier
-            - "dolphin-llama3:8b"     # System/uncensored tier
-            - "qwen3.5:9b"            # Quality tier
-            - "nomic-embed-text"      # Embeddings
+          loop: "{{ ollama_models }}"
+
+        - name: Check every pulled model is the right kind for its role (#19736)
+          ansible.builtin.include_tasks: ../_shared/tasks/assert_model_kinds.yml
+          vars:
+            model_kind_cli: /usr/local/bin/ollama
+            model_kind_embedding: "{{ ollama_embedding_model }}"
+            model_kind_completion: "{{ ollama_models }}"
 
     - name: Create AI Stack service
       copy:
@@ -724,7 +722,7 @@
           Type=simple
           User=autobot-service
           WorkingDirectory={{ deployed_src_root }}
-          ExecStart=/opt/autobot/venv/bin/python -m docker.ai-stack.ai_server
+          ExecStart={{ autobot.base_dir }}/venv/bin/python -m docker.ai-stack.ai_server
           Environment="AI_SERVER_HOST=0.0.0.0"
           Environment="AI_SERVER_PORT=8080"
           Environment="REDIS_HOST={{ redis_host }}"
@@ -750,7 +748,7 @@
           Type=simple
           User=autobot-service
           WorkingDirectory={{ deployed_src_root }}
-          ExecStart=/opt/autobot/venv/bin/python -m docker.npu-worker.npu_worker
+          ExecStart={{ autobot.base_dir }}/venv/bin/python -m docker.npu-worker.npu_worker
           Environment="NPU_SERVER_HOST=0.0.0.0"
           Environment="NPU_SERVER_PORT=8081"
           Environment="REDIS_HOST={{ redis_host }}"
@@ -803,9 +801,11 @@
           - xvfb
           - fluxbox
           - xterm
-          - nodejs
-          - npm
         state: present
+
+    - name: Install Node.js
+      ansible.builtin.include_role:
+        name: nodejs
 
     - name: Install Playwright
       shell: |
@@ -815,12 +815,14 @@
 
     - name: Copy AutoBot source code
       synchronize:
-        src: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/
+        src: ${AUTOBOT_PROJECT_ROOT:-{{ autobot.base_dir }}/code_source}/
         dest: "{{ deployed_src_root }}/"
         delete: false
         recursive: true
         owner: false
         group: false
+        rsync_opts:
+          - "--chmod=o-w"  # #19503
       delegate_to: localhost
 
     - name: Set ownership of source code
@@ -842,9 +844,10 @@
           User=autobot-service
           WorkingDirectory={{ deployed_src_root }}
           ExecStartPre=/usr/bin/Xvfb :99 -screen 0 1920x1080x24 &
-          ExecStart=/usr/bin/node playwright-server.js
+          ExecStart=/usr/bin/node {{ deployed_src_root }}/autobot-browser-worker/playwright-server.js
+          Environment="PLAYWRIGHT_PORT={{ browser_port }}"
           Environment="DISPLAY=:99"
-          Environment="PLAYWRIGHT_SERVER_PORT=3000"
+          Environment="PLAYWRIGHT_SERVER_PORT={{ browser_port }}"
           Environment="REDIS_HOST={{ redis_host }}"
           Environment="REDIS_PORT={{ redis_port }}"
           Environment="REDIS_PASSWORD={{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"
@@ -888,7 +891,7 @@
         port: "{{ item }}"
         proto: tcp
       loop:
-        - '3000'  # Playwright
+        - "{{ browser_port }}"  # Playwright (#19324: the port the unit above binds)
         - '5900'  # VNC
 
 
@@ -935,7 +938,7 @@
             - { url: 'http://localhost:8080/health', name: 'AI Stack', expected_status: [200, 404] }
             - { url: 'http://localhost:8081/health', name: 'NPU Worker', expected_status: [200, 404] }
           'autobot-browser':
-            - { url: 'http://localhost:3000/health', name: 'Browser Service', expected_status: [200, 404] }
+            - { url: 'http://localhost:{{ browser_port }}/health', name: 'Browser Service', expected_status: [200, 404] }
       ignore_errors: true
 
     - name: Display deployment summary

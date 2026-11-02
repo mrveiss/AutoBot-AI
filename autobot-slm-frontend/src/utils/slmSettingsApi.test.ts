@@ -165,7 +165,8 @@ describe('slmSettingsApi', () => {
     expect(sessionStorage.getItem(TOKEN_KEY)).toBeNull()
     expect(sessionStorage.getItem(USER_KEY)).toBeNull()
     expect(localStorage.getItem(TOKEN_KEY)).toBeNull()
-    expect(window.location.href).toBe('/login')
+    // #18892: the base-aware login URL carries the current route back as ?redirect=
+    expect(window.location.href).toBe('/login?redirect=%2Fsettings%2Fgeneral')
   })
 
   it('surfaces a server error instead of yielding an empty settings list', async () => {

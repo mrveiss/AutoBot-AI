@@ -125,6 +125,9 @@ repos:
       - id: mypy
         name: mypy (autobot_shared - strict)
         files: ^autobot_shared/
+        # Mirrors [tool.mypy].exclude: pre-commit names changed files on the
+        # command line, where mypy's own `exclude` does not apply (#17856).
+        exclude: (_test\.py$|/tests/|conftest\.py$)
         args: [--config-file=pyproject.toml]
         additional_dependencies: [
           pydantic-settings,
@@ -138,6 +141,7 @@ repos:
       - id: mypy
         name: mypy (backends - informational)
         files: ^(autobot-backend|autobot-slm-backend)/
+        exclude: (_test\.py$|/tests/|conftest\.py$|^autobot-backend/code_analysis/)
         args: [--config-file=pyproject.toml]
         additional_dependencies: [
           pydantic-settings,
@@ -254,6 +258,20 @@ repos:
         files: \.py$
         stages: [pre-commit]
         description: "Fails if new os.getenv('AUTOBOT_*') is added without register_env_var, or docs diverge from registry"
+
+  # AutoBot custom: #18094 env forks. One env var read with differing fallbacks, a fallback that
+  # disagrees with the env registry, or a module constant shadowing an SSOT constant. Its own entrypoint,
+  # separate from the ssot_config drift check, so neither verdict can swallow the other (#19215).
+  - repo: local
+    hooks:
+      - id: env-forks
+        name: One env var, one fallback; one SSOT constant, one definition (#18094)
+        entry: tools/lint/check_env_forks.py
+        language: python
+        files: \.py$
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Fails when an env var is read with differing fallbacks or a module constant shadows an SSOT constant"
 
   # AutoBot custom: regression-prevention for #6743 (chat-session TTL drift).
   # The root cause was a literal `3600` in setex() with no env-var knob.
@@ -564,11 +582,22 @@ repos:
         stages: [pre-commit]
         description: "Block requests.* and Path.read_text/write_text inside async def bodies (#7444)"
 
+  # AutoBot custom: #18514 group_vars/<name>.yml shadowed by group_vars/<name>/.
+  - repo: local
+    hooks:
+      - id: group-vars-no-shadow
+        name: group_vars file must not coexist with same-named directory (#18514)
+        entry: tools/lint/check_group_vars_no_shadow.py
+        language: python
+        files: ^autobot-slm-backend/ansible/.*(group_vars|host_vars)
+        pass_filenames: false
+        stages: [pre-commit]
+
   # AutoBot custom: regression-prevention for #7053 Ansible role-name drift.
   # Short-form role names ('backend', 'frontend', etc.) in node_roles checks
   # are deprecated; canonical form is 'autobot-X'. New gates must use the
   # role_X_active shared facts or the canonical 'autobot-X' form directly.
-  # Allowlist: group_vars/all.yml and vars/role_active_facts.yml (OR-chains
+  # Allowlist: group_vars/all.yml (OR-chains
   # maintained for backward compat with existing hosts).
   - repo: local
     hooks:
@@ -609,7 +638,7 @@ repos:
         # collect it under any python_files pattern, so the naming rule has nothing
         # to enforce there. Was an enumeration that listed `_code_sync_import.py` and
         # silently did not cover `_e2e_harness.py`/`_pricing_seed.py` beside it (#16230).
-        exclude: (_test\.py$|^(tests/|autobot-infrastructure/.*/tests/|autobot-.*/tests/).*(results/|benchmarks/|fixtures/|conftest\.py|mock_llm_interface\.py|ci_cd_integration\.py|integration_test_infrastructure\.py|security_port_audit\.py|frontend_comprehensive_corrected\.py|phase9_comprehensive_test_suite\.py|benchmark_base\.py|api_benchmarks\.py|rag_benchmarks\.py|mocks\.py|system_assessment_report\.py|(?<![A-Za-z0-9])_[a-z0-9_]+\.py$))
+        exclude: (_test\.py$|^(tests/|autobot-infrastructure/.*/tests/|autobot-.*/tests/).*(results/|benchmarks/|fixtures/|conftest\.py|mock_llm_interface\.py|ci_cd_integration\.py|integration_test_infrastructure\.py|security_port_audit\.py|frontend_comprehensive_corrected\.py|phase9_comprehensive_test_suite\.py|comprehensive_test_suite\.py|benchmark_base\.py|api_benchmarks\.py|rag_benchmarks\.py|mocks\.py|system_assessment_report\.py|(?<![A-Za-z0-9])_[a-z0-9_]+\.py$))
 
   # Security checks with bandit
   - repo: https://github.com/PyCQA/bandit
@@ -766,19 +795,29 @@ repos:
         # change to judge; the checker scopes to the functions it touched (#16191).
         pass_filenames: true
         stages: [pre-commit]
+        # PYTHON ONLY, AND THAT IS A RECORDED DECISION, NOT AN OVERSIGHT (#17885).
+        # `.ts`/`.vue` function length is NOT measured anywhere in this repo. The
+        # checker parses Python with `ast`; it has no TypeScript or SFC parser, and
+        # giving it one is a different change from the FILE-length gate #17885 added
+        # (`frontend-file-size` above). ESLint's `max-lines-per-function` is the
+        # natural home and is not configured in either frontend. Tracked at #17936 --
+        # so a reader finding `types: [python]` here learns that the gap is known and
+        # where it lives, rather than inferring that the frontend was checked.
         description: "Blocks commits with functions >65 lines, warns for 51-65 lines"
 
-  # No direct redis.Redis() in production code (Issue #1086)
+  # No new direct Redis client (Issue #1086, #18553): ONE matcher (tools/lint/check_no_direct_redis.py)
+  # and ONE baseline (repo_tests/redis_direct_constructor_baseline_18553.py), the same pair the
+  # whole-tree ratchet runs. Reads .py and .sh; `# noqa: redis` is retired.
   - repo: local
     hooks:
       - id: no-direct-redis
-        name: 'No Direct Redis Connections in Production Code (Issue #1086)'
+        name: 'No New Direct Redis Clients (Issue #1086, #18553)'
         entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-direct-redis
         language: script
-        types: [python]
+        types_or: [python, shell]
         pass_filenames: false
         stages: [pre-commit]
-        description: "Blocks commits with direct redis.Redis() — use get_redis_client() instead"
+        description: "Blocks a direct Redis client outside the baseline — use get_redis_client() instead"
 
   # No new module-level singletons in agent/runtime paths (GH#6630)
   - repo: local
@@ -983,6 +1022,20 @@ repos:
         exclude: ^\.worktrees/
         stages: [pre-commit]
         description: "Reject shell files exceeding 600 lines; grandfathered files may not grow (#17353)"
+
+      - id: frontend-file-size
+        name: Frontend file size guard (#17885, max 600 lines)
+        entry: python3 scripts/check_frontend_file_size.py
+        language: python
+        files: \.(ts|vue)$
+        # Mirrored by EXCLUDED_PREFIXES in the hook, which a ratchet test parses
+        # this file to verify as SET EQUALITY. The two generated/ trees hold
+        # OpenAPI-derived clients (178894 and 26584 lines) that no human edits
+        # and no split would help -- excluded by a recorded prefix rather than by
+        # a special case inside the walk.
+        exclude: ^(\.worktrees/|autobot-frontend/src/types/generated/|autobot-slm-frontend/src/types/generated/)
+        stages: [pre-commit]
+        description: "Reject .ts/.vue files exceeding 600 lines; grandfathered files may not grow (#17885)"
 
       - id: canonical-check-py
         name: Canonical check — Python (#7458)

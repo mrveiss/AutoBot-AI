@@ -48,7 +48,7 @@
 
       <!-- Refresh vectorization status button (Issue #162) -->
       <BaseButton
-        variant="outline-solid"
+        variant="outline"
         size="sm"
         :loading="isRefreshingStatus"
         :disabled="isRefreshingStatus"
@@ -103,22 +103,18 @@
     />
 
     <!-- Breadcrumb navigation -->
-    <div v-if="selectedFile" class="breadcrumb">
-      <BaseButton
-        variant="ghost"
-        size="sm"
-        @click="clearSelection"
-        class="breadcrumb-item"
-        :aria-label="$t('knowledge.browser.backToRoot')"
-      >
-        <Icon name="home" /> {{ $t('knowledge.browser.root') }}
-      </BaseButton>
-      <Icon name="chevron-right" class="breadcrumb-sep" />
-      <span v-for="(part, idx) in breadcrumbParts" :key="idx" class="breadcrumb-item active">
-        {{ part }}
-        <Icon name="chevron-right" class="breadcrumb-sep" v-if="idx < breadcrumbParts.length - 1" />
-      </span>
-    </div>
+    <Breadcrumb
+      v-if="selectedFile"
+      class="breadcrumb"
+      :items="crumbs"
+      :label="$t('common.breadcrumb')"
+      @select="clearSelection"
+    >
+      <template #item="{ item, index }">
+        <Icon v-if="index === 0" name="home" /> {{ item.label }}
+      </template>
+      <template #separator><Icon name="chevron-right" /></template>
+    </Breadcrumb>
 
     <!-- Issue #11555: Category edit modal wired into the browser -->
     <CategoryEditModal
@@ -258,7 +254,8 @@ import KnowledgeSearchResults from './KnowledgeSearchResults.vue'
 import KnowledgeDocumentsBranch from './KnowledgeDocumentsBranch.vue'
 import AIDocumentEditor from '@/components/documents/AIDocumentEditor.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton, Breadcrumb, type BreadcrumbItem } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 import KnowledgeMainCategories from './KnowledgeMainCategories.vue'
 import CategoryEditModal from './modals/CategoryEditModal.vue'
 import type { Category } from './modals/CategoryEditModal.vue'
@@ -444,16 +441,20 @@ const resetPagination = () => {
 }
 
 // Computed
-const breadcrumbParts = computed(() => {
+const { t } = useI18n()
+
+// The kit trail (#17563): the root returns to the tree; the file's path parts are not links
+const crumbs = computed<BreadcrumbItem[]>(() => {
   if (!selectedFile.value) return []
-  return selectedFile.value.path.split('/').filter(p => p)
+  const parts = selectedFile.value.path.split('/').filter(p => p)
+  return [{ label: t('knowledge.browser.root'), selectable: true }, ...parts.map((label) => ({ label }))]
 })
 
 const availableCategories = computed((): CategoryOption[] => {
   const categories: CategoryOption[] = [
     {
       value: null,
-      label: 'All',
+      label: t('common.all'),
       icon: 'th-large',
       count: Object.values(categoryCounts.value).reduce((sum, count) => sum + count, 0)
     }
@@ -1460,15 +1461,15 @@ watch(() => props.mode, () => {
   flex-shrink: 0;
 }
 
-.refresh-status-btn i {
-  font-size: var(--text-sm);
+.refresh-status-btn .icon {
+  width: var(--text-sm); height: var(--text-sm);
 }
 
 /* Batch Toolbar */
 .batch-toolbar {
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: var(--z-dropdown);
   background: var(--color-primary);
   box-shadow: 0 4px 12px var(--color-primary-alpha-30);
   padding: var(--spacing-3) var(--spacing-6);
@@ -1491,8 +1492,8 @@ watch(() => props.mode, () => {
   font-weight: 500;
 }
 
-.toolbar-info i {
-  font-size: var(--text-xl);
+.toolbar-info .icon {
+  width: var(--text-xl); height: var(--text-xl);
 }
 
 .toolbar-actions {
@@ -1565,23 +1566,9 @@ watch(() => props.mode, () => {
 
 /* Breadcrumb */
 .breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
   padding: var(--spacing-3) var(--spacing-6);
   background: var(--bg-card);
   border-bottom: 1px solid var(--border-default);
-  font-size: var(--text-sm);
-}
-
-.breadcrumb-item.active {
-  color: var(--text-primary);
-  cursor: default;
-}
-
-.breadcrumb-sep {
-  color: var(--border-light);
-  font-size: var(--text-xs);
 }
 
 /* Split pane layout */
@@ -1628,8 +1615,8 @@ watch(() => props.mode, () => {
   font-size: var(--text-sm);
 }
 
-.loading-more i {
-  font-size: var(--text-base);
+.loading-more .icon {
+  width: var(--text-base); height: var(--text-base);
 }
 
 /* States */
@@ -1645,10 +1632,10 @@ watch(() => props.mode, () => {
   color: var(--text-tertiary);
 }
 
-.loading-state i,
-.error-state i,
-.placeholder-state i {
-  font-size: var(--text-5xl);
+.loading-state > .icon,
+.error-state > .icon,
+.placeholder-state > .icon {
+  width: var(--text-5xl); height: var(--text-5xl);
   margin-bottom: var(--spacing-4);
   opacity: 0.5;
 }
@@ -1684,8 +1671,8 @@ watch(() => props.mode, () => {
   flex: 1;
 }
 
-.file-info > i {
-  font-size: 2rem;
+.file-info > .icon {
+  width: 2rem; height: 2rem;
   color: var(--color-primary);
   margin-top: var(--spacing-1);
 }

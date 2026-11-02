@@ -1,0 +1,79 @@
+/* Copyright 2025-2026 mrveiss
+   SPDX-License-Identifier: Apache-2.0 */
+/**
+ * AutoBot - AI-Powered Automation Platform
+ * Author: mrveiss
+ *
+ * refined-map.css - Refined names to the existing semantic names (#18223)
+ * Issue #14785: one token system, no fork.
+ *
+ * The Refined UI redesign names its colours --bg, --surface, --text, --border
+ * and so on. The application already ships --bg-*, --text-*, --border-* and
+ * the card/table/input fills, used by every view. This file is the whole
+ * bridge: each existing name resolves to the Refined name of the active
+ * theme, so one value (declared per theme) feeds both vocabularies.
+ *
+ * Applies to the four built-in themes. Specificity is deliberately a single
+ * attribute selector so [data-theme-variant="ember"] and the high-contrast
+ * accessibility rules (both more specific) still win. Not mapped on purpose,
+ * with the reason, in docs/design/REFINED_TOKEN_MAPPING.md.
+ */
+
+[data-theme="light"],
+[data-theme="dark"],
+[data-theme="contrast"],
+[data-theme="mono"] {
+  /* Surfaces: page, then panel/card/field, then the quiet second surface */
+  --bg-primary: var(--bg);
+  --bg-secondary: var(--surface);
+  --bg-tertiary: var(--surface2);
+  --bg-elevated: var(--surface);
+  --bg-surface: var(--surface);
+  --bg-card: var(--surface);
+  --bg-input: var(--surface);
+
+  /* Text */
+  --text-primary: var(--text);
+  --text-secondary: var(--text2);
+  --text-tertiary: var(--muted);
+  --text-muted: var(--muted);
+  --text-inverse: var(--on-primary);
+  --text-link: var(--link);
+  --text-link-hover: var(--link-h);
+
+  /* Borders */
+  --border-default: var(--border);
+  --border-subtle: var(--line);
+
+  /* Component fills */
+  --card-bg: var(--surface);
+  --card-border: var(--border);
+  --table-header-bg: var(--surface2);
+  --table-row-bg: var(--surface);
+  --table-border: var(--border);
+  --input-bg: var(--surface);
+  --input-border: var(--border);
+
+  /* Focus ring and the second brand colour */
+  --color-focus: var(--focus);
+  --color-focus-ring: var(--focus);
+  --color-accent: var(--accent);
+}
+
+/* The `theme` accent, the default (#18223): useTheme sets no data-accent, so no
+   accents.css rule applies and the theme's own primary stands. The Refined ink is
+   navy in light and a pale ink in dark, hence text on it is --on-primary and not the
+   fixed white of --text-on-primary. Choosing an accent preset sets data-accent and
+   this block stops matching; contrast and mono (their own files) keep the ink
+   whatever the accent. */
+:root[data-theme="light"]:not([data-accent]),
+:root[data-theme="dark"]:not([data-accent]) {
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-h);
+  --color-primary-active: var(--primary-h);
+  --color-primary-light: color-mix(in srgb, var(--primary) 60%, var(--surface));
+  --color-primary-dark: var(--primary-h);
+  --color-primary-bg: color-mix(in srgb, var(--primary) 10%, transparent);
+  --color-primary-bg-hover: color-mix(in srgb, var(--primary) 15%, transparent);
+  --text-on-primary: var(--on-primary);
+}

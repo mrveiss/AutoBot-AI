@@ -43,6 +43,19 @@ from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import CategoryDefaults
 from autobot_shared.time_utils import now_utc
+from autobot_shared.tool_catalogue import (
+    CODE_EXEC_TOOLS,
+    CONTAINER_ORCH_TOOLS,
+    DEPLOY_TOOLS,
+    FILE_DELETE_TOOLS,
+    FILE_WRITE_TOOLS,
+    GIT_PUSH_TOOLS,
+    GIT_RESET_TOOLS,
+    HTTP_WRITE_TOOLS,
+    SHELL_EXEC_TOOLS,
+    SYSTEM_EXEC_TOOLS,
+    TERMINAL_TOOLS,
+)
 from autobot_shared.verifier_degradation import (
     VerifierDegradation,
     VerifierObservation,
@@ -92,28 +105,12 @@ VERIFIER_TIMEOUT_S: float = env_float("VERIFIER_TIMEOUT_S", 30.0)
 # Action class mapping (tool name -> threshold) — pure
 # ---------------------------------------------------------------------------
 
-_DEPLOY_TOOLS = frozenset({"deploy", "ansible", "docker", "kubectl", "helm", "terraform"})
-_MUTATE_TOOLS = frozenset(
-    {
-        "write_file",
-        "edit_file",
-        "delete_file",
-        "move_file",
-        "copy_file",
-        "create_directory",
-        "remove_directory",
-        "git_push",
-        "git_commit",
-        "git_merge",
-        "git_rebase",
-        "git_reset",
-        "git_force_push",
-    }
-)
-_NETWORK_TOOLS = frozenset({"http_post", "http_put", "http_patch", "http_delete", "send_request"})
-_EXEC_TOOLS = frozenset(
-    {"bash", "shell", "execute_command", "run_command", "terminal", "system_exec", "code_interpreter"}
-)
+# Risk classes are the catalogue's atoms (#18294) -- one declaration of which tools deploy,
+# mutate, reach the network or execute; this module keeps only the thresholds.
+_DEPLOY_TOOLS = frozenset(DEPLOY_TOOLS + CONTAINER_ORCH_TOOLS)
+_MUTATE_TOOLS = frozenset(FILE_WRITE_TOOLS + FILE_DELETE_TOOLS + GIT_PUSH_TOOLS + GIT_RESET_TOOLS)
+_NETWORK_TOOLS = frozenset(HTTP_WRITE_TOOLS)
+_EXEC_TOOLS = frozenset(SHELL_EXEC_TOOLS + TERMINAL_TOOLS + SYSTEM_EXEC_TOOLS + CODE_EXEC_TOOLS)
 
 
 def _threshold_for_tool(tool_name: str) -> float:

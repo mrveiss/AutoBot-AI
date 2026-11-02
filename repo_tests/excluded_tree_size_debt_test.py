@@ -37,6 +37,7 @@ from pathlib import Path
 
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
+
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 #: #15925: one spelling of the root, not a hand-rolled `__file__` walk.
@@ -55,7 +56,7 @@ _SOURCE_TREES = ("autobot-infrastructure/", "autobot-backend/code_analysis/")
 #: Lower it by splitting a file, or by bringing its tree into
 #: `EXCLUDED_PREFIXES`' scope — which is a decision for whoever also updates
 #: `.pre-commit-config.yaml`, not something to do incidentally here.
-EXCLUDED_TREE_DEBT = 47
+EXCLUDED_TREE_DEBT = 43  # #19232: an excluded-tree file dropped under 600 lines
 
 
 def _hook():
@@ -121,10 +122,7 @@ def test_the_size_debt_hidden_by_exclusions_only_shrinks() -> None:
     """
     hook = _hook()
     over = sorted(
-        (
-            (rel, _line_count(_REPO_ROOT / rel))
-            for rel in _source_tree_files(_REPO_ROOT)
-        ),
+        ((rel, _line_count(_REPO_ROOT / rel)) for rel in _source_tree_files(_REPO_ROOT)),
         key=lambda pair: -pair[1],
     )
     offenders = [(rel, n) for rel, n in over if n > hook.MAX_LINES]

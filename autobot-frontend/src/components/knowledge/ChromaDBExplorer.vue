@@ -9,7 +9,7 @@
         </svg>
         <h1>ChromaDB Explorer</h1>
       </div>
-      <p class="header-subtitle">Browse and search vector collections at port 8100</p>
+      <p class="header-subtitle">{{ $t('knowledge.chromaExplorer.subtitle') }}</p>
     </div>
 
     <!-- Error Alert -->
@@ -147,6 +147,7 @@
             >
               <div class="result-header">
                 <span class="result-id">{{ result.id }}</span>
+                <ResearchQuarantineBadge v-if="result.quarantined" />
                 <span v-if="result.distance !== null" class="result-distance">
                   {{ result.distance.toFixed(4) }}
                 </span>
@@ -206,6 +207,7 @@
             >
               <div class="document-header">
                 <span class="document-id">{{ doc.id }}</span>
+                <ResearchQuarantineBadge v-if="doc.quarantined" />
                 <span v-if="doc.embedding_dim" class="embedding-info">
                   {{ doc.embedding_dim }}D embedding
                 </span>
@@ -242,6 +244,7 @@ import { ref, onMounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useTransientError } from '@/composables/useTransientError'
+import ResearchQuarantineBadge from './ResearchQuarantineBadge.vue'
 
 const logger = createLogger('ChromaDBExplorer')
 const apiClient = useApiClient()
@@ -258,12 +261,10 @@ interface DocumentItem {
   document: string | null
   metadata: Record<string, unknown> | null
   embedding_dim: number | null
+  quarantined: boolean
 }
 
-interface SearchResultItem {
-  id: string
-  document: string | null
-  metadata: Record<string, unknown> | null
+interface SearchResultItem extends Omit<DocumentItem, 'embedding_dim'> {
   distance: number | null
 }
 
@@ -332,6 +333,7 @@ async function loadDocuments() {
         documents: (string | null)[]
         metadatas: (Record<string, unknown> | null)[]
         embedding_dim: number | null
+        quarantined_ids?: string[]
       }
       total: number
       error?: string
@@ -340,13 +342,14 @@ async function loadDocuments() {
     )
 
     if (response.success && response.data) {
-      const { ids, documents: docs, metadatas, embedding_dim } = response.data
+      const { ids, documents: docs, metadatas, embedding_dim, quarantined_ids = [] } = response.data
 
       documents.value = ids.map((id: string, idx: number) => ({
         id,
         document: docs?.[idx] || null,
         metadata: metadatas?.[idx] || null,
-        embedding_dim: embedding_dim || null
+        embedding_dim: embedding_dim || null,
+        quarantined: quarantined_ids.includes(id)
       }))
 
       logger.info(`Loaded ${documents.value.length} documents`)
@@ -418,16 +421,10 @@ function prevPage() {
 }
 
 function toggleMetadata(idx: number) {
-  if (expandedDocs.value.has(idx)) {
-    expandedDocs.value.delete(idx)
-  } else {
-    expandedDocs.value.add(idx)
-  }
+  if (!expandedDocs.value.delete(idx)) expandedDocs.value.add(idx)
 }
 
-onMounted(() => {
-  loadCollections()
-})
+onMounted(loadCollections)
 </script>
 
 <style scoped>
@@ -858,7 +855,7 @@ onMounted(() => {
   align-items: center;
   gap: var(--spacing-2);
   padding: var(--spacing-2) var(--spacing-4);
-  background: var(--color-info);
+  background: var(--color-info-solid);
   border: none;
   border-radius: var(--radius-md);
   color: white;

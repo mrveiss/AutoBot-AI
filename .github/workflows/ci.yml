@@ -13,6 +13,10 @@ on:
     # never reports blocks forever, which is why the queue (#15937 / #14054)
     # could not be enabled while this was missing.
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     # #14747: NO `branches:` FILTER, DELIBERATE. It used to read
     # `[ release, main ]`, which excluded STACKED pull requests -- one whose
     # base is another feature branch. Those never triggered this workflow, so
@@ -56,7 +60,12 @@ on:
     # job doing real work stays gated on `changes` below and self-skips.
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # #19283 review: a push keys on its own commit, so no later merge can cancel it. With one
+  # group per ref, GitHub's `queue: single` cancelled a PENDING push run when the next merge
+  # queued -- and the ratchets' base for a push is the commit before it, so a raise in the
+  # cancelled merge was accepted for good by the next one (`queue: max` cannot be combined
+  # with cancel-in-progress, which PRs need). PRs and merge groups keep the per-ref group.
+  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}
   # #13432: cancel superseded PR runs, but let a push to a base branch finish.
   #
   # On a pull request a new push makes the previous run obsolete, so cancelling
@@ -66,14 +75,12 @@ concurrency:
   # base branch was effectively never verified, and measuring the #13162 backlog
   # repeatedly meant hunting for a run that happened to survive.
   #
-  # This does not queue unboundedly. This group keeps GitHub's default
-  # `queue: single` (python-shard opts into `queue: max`, #16320): with
-  # cancel-in-progress false, at most one run is in progress and one pending per
-  # group, and a newly queued run cancels the pending one. Base runs serialise and
-  # at most one waits; under a burst you get a verdict for a recent commit.
+  # Base pushes no longer serialise in one group (#19283 review, above): each runs in its
+  # own, so every merge gets a verdict. That is bounded by the merge rate -- trains land a
+  # few times an hour -- not by PR traffic, which keeps the per-ref, cancel-superseded group.
   #
   # Cost is bounded to GitHub-hosted capacity: every job in THIS workflow is
-  # ubuntu-latest (the twelve python-suite shards included, see the note above
+  # ubuntu-latest (the eight python-suite shards included, see the note above
   # the python-shard job). It adds nothing to the [self-hosted, Linux, X64]
   # singleton, which other workflows depend on.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -81,9 +88,15 @@ concurrency:
 
 permissions:
   contents: read
+  packages: read  # pull the ghcr CI image mirror (#18160)
 
 jobs:
   changes:
+    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and
+    # every `always()` aggregate below reads `needs.changes.result`.
+    # Gating it makes those read `skipped` and exit 1, so a REQUIRED
+    # context would report FAILED on every draft -- worse than no gate.
+    # Gate the expensive jobs, never the cheap thing others read.
     name: Detect changed paths
     runs-on: ubuntu-latest
     outputs:
@@ -113,7 +126,7 @@ jobs:
               # file could not be staged through the hardcoded-values hook.
               - 'autobot-plugins/terminal/**'
 
-  # #13316: the suite is split twelve ways here; `python-suite` below reports the
+  # #13316: the suite is split eight ways here (twelve until #19527); `python-suite` below reports the
   # combined verdict. Measured per-step baseline of the single job this replaces:
   # dependency install 162s, TEST EXECUTION 3055s, everything else ~14s — so
   # 95% of the job was the pytest run and nothing but parallelising the tests
@@ -129,14 +142,113 @@ jobs:
   # verify-generated-types, auto-fix-generated-types and auto-update use that).
   # Six concurrent shards therefore cost the self-hosted queue nothing — which
   # is what makes a matrix safe here and was the original #10691 objection.
-  python-shard:
-    name: python-suite shard ${{ matrix.shard }}/12
+  # #18102: fetch the CI system packages ONCE per run, not once per shard.
+  #
+  # The twelve shards each ran the same ~100MB apt fetch, so one run made the same
+  # download up to twelve times and a different shard drew the slow mirror every time --
+  # four reds on 2026-10-08 (shards 4, 1, 2, 6), each burning ~16 minutes and reporting
+  # red having run no tests. Exposure is now one fetch per run instead of twelve, and a
+  # provisioning failure is a single named job rather than a random 1-of-12 shard red.
+  #
+  # This job runs the setup action UNCHANGED rather than carrying its own copy of the apt
+  # retry logic -- a second copy of that is the kind of fork the repo is trying to retire.
+  # Running the whole action also warms the venv cache the shards read, so the redundant
+  # work is not wasted.
+  provision-packages:
+    name: provision-packages
     needs: changes
-    if: needs.changes.outputs.python == 'true'
+    if: ${{ (needs.changes.outputs.python == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v7
+
+    # #18102: the runner's apt mirror can be too slow to fetch the ~63 MB ffmpeg/tesseract set
+    # inside the per-attempt bound, and a failed provision skips every shard. The archive cache,
+    # including the partial downloads apt resumes from, is carried between runs: a hit installs
+    # offline, and a slow run still saves what it fetched (if: always()), so the next run resumes
+    # instead of starting from zero. Keys are per run (caches are immutable); restore takes the
+    # newest for this image, then any image -- debs a newer image no longer wants are ignored.
+    # #19308: `env.ImageVersion` was always empty -- ImageOS/ImageVersion are runner
+    # environment variables, not entries of the `env` context -- so every key read
+    # `ci-apt-archives-Linux--<run>` and debs from any runner image were restored alike.
+    - name: "Runner image for the apt cache key (#19308)"
+      id: image
+      shell: bash
+      run: echo "image=${ImageOS}-${ImageVersion}" >> "$GITHUB_OUTPUT"
+
+    - name: "Restore the apt archive cache (#18102)"
+      uses: actions/cache/restore@v6
+      with:
+        path: ${{ runner.temp }}/apt-archive-cache
+        key: ci-apt-archives-${{ runner.os }}-${{ steps.image.outputs.image }}-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: |
+          ci-apt-archives-${{ runner.os }}-${{ steps.image.outputs.image }}-
+          ci-apt-archives-${{ runner.os }}-
+
+    - name: "Seed apt's archive directory from the cache (#18102)"
+      shell: bash
+      run: |
+        set -euo pipefail
+        src="${RUNNER_TEMP}/apt-archive-cache"
+        if [ -d "$src" ] && [ -n "$(ls -A "$src" 2>/dev/null)" ]; then
+          sudo mkdir -p /var/cache/apt/archives/partial
+          sudo cp -a "$src"/. /var/cache/apt/archives/
+          echo "seeded $(find "$src" -maxdepth 1 -name '*.deb' | wc -l) .deb(s) and $(find "$src/partial" -type f 2>/dev/null | wc -l) partial file(s)"
+        else
+          echo "no apt archive cache for this image yet; downloading from the mirror"
+        fi
+
+    - uses: ./.github/actions/setup-python-suite
+
+    - name: "Stage the apt archive for the cache, complete or partial (#18102)"
+      if: always()
+      shell: bash
+      run: |
+        set -euo pipefail
+        dst="${RUNNER_TEMP}/apt-archive-cache"
+        rm -rf "$dst" && mkdir -p "$dst/partial"
+        sudo cp /var/cache/apt/archives/*.deb "$dst"/ 2>/dev/null || true
+        sudo cp /var/cache/apt/archives/partial/* "$dst/partial"/ 2>/dev/null || true
+        sudo chown -R "$(id -u):$(id -g)" "$dst"
+        echo "staged $(find "$dst" -maxdepth 1 -name '*.deb' | wc -l) .deb(s), $(du -sb "$dst" | cut -f1) bytes"
+
+    - name: "Save the apt archive cache (#18102)"
+      if: always()
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ runner.temp }}/apt-archive-cache
+        key: ci-apt-archives-${{ runner.os }}-${{ steps.image.outputs.image }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+    - name: "Collect the downloaded .debs for the shards (#18102)"
+      shell: bash
+      run: |
+        set -euo pipefail
+        dest="${RUNNER_TEMP}/apt-debs"
+        mkdir -p "$dest"
+        # An empty archive cache means the runner image already carried the binaries, so
+        # the shards will find them too and their own early-out applies. Not a failure.
+        if ! sudo cp /var/cache/apt/archives/*.deb "$dest"/ 2>/dev/null; then
+          echo "::notice title=no .debs to share::the image already provides ffmpeg/tesseract (#18102)"
+        fi
+        sudo chown -R "$(id -u):$(id -g)" "$dest"
+        echo "collected $(find "$dest" -maxdepth 1 -name '*.deb' | wc -l) .deb(s)"
+
+    - uses: actions/upload-artifact@v7.0.2
+      with:
+        name: ci-apt-debs
+        path: ${{ runner.temp }}/apt-debs
+        retention-days: 1
+        if-no-files-found: ignore
+
+  python-shard:
+    name: python-suite shard ${{ matrix.shard }}/${{ strategy.job-total }}
+    needs: [changes, provision-packages]
+    if: ${{ (needs.changes.outputs.python == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     runs-on: ubuntu-latest
     # #16320: first in, first out across PRs.
     #
-    # Every push used to start all twelve shards at once, and GitHub interleaved
+    # Every push used to start all of its shards at once, and GitHub interleaved
     # them with every other PR's jobs, so no suite finished early. Over five PRs
     # on 2026-09-11 the median push-to-green was 132.6 min, and 44-98 min of it
     # passed before the first shard even started.
@@ -146,7 +258,7 @@ jobs:
     # through ahead of one that pushed later.
     #
     # - The shard number is in the key. One shared key would make a PR's own
-    #   twelve shards wait on each other.
+    #   shards wait on each other.
     # - Pushes and merge groups key on the ref as well, so a post-merge
     #   verification never queues behind PR work.
     # - `queue: max` can't be combined with cancel-in-progress, and doesn't need
@@ -159,7 +271,7 @@ jobs:
       group: ${{ github.event_name == 'pull_request' && format('python-suite-shard-{0}', matrix.shard) || format('python-suite-shard-{0}-{1}', matrix.shard, github.ref) }}
       queue: max
       cancel-in-progress: false
-    # A twelfth of a ~51-minute run, with generous headroom: observed runner
+    # An eighth of a ~51-minute run, with generous headroom: observed runner
     # variance on this suite is roughly 2x for identical work (12m18s and
     # 1h24m have both been recorded), and a shard whose durations have drifted
     # can run long without being broken.
@@ -195,7 +307,16 @@ jobs:
       # useless on essentially every run.
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+        # #19527: eight, not twelve. Every shard pays a fixed ~4.8 min (setup
+        # plus collecting the whole tree), so with twelve shards ~58 of a run's
+        # ~86 runner-minutes were that fixed cost, and the twelve-wide fan-out
+        # alone filled most of the ~20-job hosted-runner ceiling. With durations
+        # that match the tree, eight shards finish about as fast as the
+        # unbalanced twelve did. THIS LIST IS THE SHARD COUNT: the job name and
+        # both --shard-splits read it through `strategy.job-total`, and
+        # repo_tests/ci_shard_count_message_test.py holds the aggregate's
+        # message to it.
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
 
     # #10691: the suite has always run with no Redis, so every test needing
     # real atomic ops (rather than a `fakeredis` stub) was a standing failure
@@ -207,7 +328,13 @@ jobs:
     # action already points at localhost:6379, so no extra env wiring is needed.
     services:
       redis:
-        image: redis:7-alpine
+        # Mirror of the upstream image (ci-image-mirror.yml, #18160): anonymous
+        # pulls hit the per-IP quota. The ghcr packages must be public or grant
+        # this repo read access so fork PRs can pull them.
+        image: ghcr.io/mrveiss/ci-redis:7-alpine
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
         ports:
           - 6379:6379
         options: >-
@@ -218,6 +345,43 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
+      # #19283: depth 2, so HEAD^1 -- the merge ref's base parent -- is readable. Down-only
+      # ratchets compare each entry with the base commit's table (repo_tests/_ratchet_base.py)
+      # instead of a hand-summed total, and refuse when the base cannot be read.
+      with:
+        fetch-depth: 2
+
+    # #19283 review: the base a ratchet compares with. A merge group names its own base; a push
+    # to main compares with the commit main pointed at before, always an ancestor, so a raise a
+    # cancelled PR run missed turns main red on the push that lands it. A pull_request's
+    # `before` is the previous PR head (orphaned by a rebase), so it is not passed; HEAD^1 of
+    # the merge ref is the base there. The named commit is fetched here.
+    #
+    # #19466: a PR into `release` is judged only on commits not already on main (owner ruling
+    # 2026-10-24), so its base is the merge base with main, not the release tip. HEAD^1 there is
+    # the weeks-old release tip, and every ceiling main raised on its own gated PRs read as a raise.
+    # The action yields nothing for any other event or base; the step below fetches the base.
+    - uses: ./.github/actions/release-promotion-base
+      id: release-base
+
+    - name: Ratchet base (#19283)
+      env:
+        EVENT_BASE: ${{ steps.release-base.outputs.base-sha || github.event.merge_group.base_sha || (github.event_name == 'push' && github.event.before) || '' }}
+      run: |
+        if [ -n "${EVENT_BASE//0/}" ]; then
+          git fetch --no-tags --depth=1 origin "$EVENT_BASE"
+          echo "AUTOBOT_RATCHET_BASE_SHA=${EVENT_BASE}" >> "$GITHUB_ENV"
+        fi
+
+    # #18102: the .debs provision-packages already fetched. The setup action installs from
+    # this directory with --no-download when it exists, so a shard does no network fetch.
+    # `continue-on-error` keeps the suite alive if the artifact is missing: the action
+    # falls back to fetching, which is exactly its behaviour for coverage.yml.
+    - uses: actions/download-artifact@v8
+      continue-on-error: true
+      with:
+        name: ci-apt-debs
+        path: ${{ runner.temp }}/apt-debs
 
     - uses: ./.github/actions/setup-python-suite
       # #16394: named so the SLM venv's own path (the `slm-venv` output) is
@@ -232,7 +396,7 @@ jobs:
     # since #15091, but no workflow ever called it. Gated to shard 1 only:
     # every shard restores the identical cached venv keyed off the same
     # requirements-ci.txt (see setup-python-suite's cache key), so checking
-    # all twelve would report the same drift twelve times for one PR-blocking
+    # every shard would report the same drift once per shard for one PR-blocking
     # signal.
     #
     # #16394: scoped with --roots to the files THIS (backend) venv actually
@@ -279,29 +443,37 @@ jobs:
     # against 0.15 and could never fire. Every Python test passed, because they
     # asserted substrings of the expr strings. The promtool suite catches it.
     #
-    # Version pinned to match install-prometheus-stack.sh, so CI validates rules
-    # with the same binary the hosts run.
-    # Cached: the tarball is ~95.7 MB and this job runs 12 shards, so an
+    # Version: read from the monitoring role's prometheus_version, the one
+    # declaration of the Prometheus version (#18556), so CI and hosts cannot drift.
+    # Cached: the tarball is ~95.7 MB and this job runs 8 shards, so an
     # uncached download is ~1.15 GB per run of which ~1.05 GB is waste — the
     # promtool tests collect into exactly one shard. Not gated on the shard
     # number: which shard they land in is a function of .test_durations and
     # moves silently.
+    - name: Resolve the Prometheus version from the monitoring role (#18556)
+      id: promver
+      run: |
+        set -euo pipefail
+        V=$(sed -nE 's/^prometheus_version:[[:space:]]*"?([0-9][0-9.]*)"?.*/\1/p' autobot-slm-backend/ansible/roles/monitoring/defaults/main.yml)
+        test -n "$V"
+        echo "version=$V" >> "$GITHUB_OUTPUT"
+
     - name: Cache promtool
       id: promtool-cache
       uses: actions/cache@v6
       with:
         path: /usr/local/bin/promtool
-        key: promtool-${{ runner.os }}-2.47.0
+        key: promtool-${{ runner.os }}-${{ steps.promver.outputs.version }}
 
     - name: Install promtool (Prometheus rule validation, #13927)
       if: steps.promtool-cache.outputs.cache-hit != 'true'
       run: |
         set -euo pipefail
-        PROM_VERSION=2.47.0
+        PROM_VERSION="${{ steps.promver.outputs.version }}"
         TARBALL="prometheus-${PROM_VERSION}.linux-amd64"
         # --retry: this step sits in front of the entire Python suite. One
         # transient CDN 5xx would redden python-shard -> python-suite ->
-        # deployment-check with a message about Prometheus, 12 times over. A PR
+        # deployment-check with a message about Prometheus, once per shard. A PR
         # about indicators whose red carries no information must not add that.
         curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 10 \
           -o "/tmp/${TARBALL}.tar.gz" \
@@ -318,6 +490,13 @@ jobs:
       run: |
         echo "AUTOBOT_REQUIRE_PROMTOOL=1" >> "$GITHUB_ENV"
         promtool --version
+
+    - name: Enforce reach-floor staleness on merge trains (#19282)
+      # A floor the tree outgrew is stale, not lost. It fails where it is fixed -- the merge train,
+      # which re-pins with scripts/repin_reach_floors.py -- and only warns on other PRs, whose
+      # authors did not grow the tree. A real reach loss fails everywhere (repo_tests/_reach.py).
+      if: startsWith(github.head_ref, 'train-')
+      run: echo "AUTOBOT_REACH_AUDIT=1" >> "$GITHUB_ENV"
 
     # Static checks (black / isort / flake8 / bandit) deliberately live in
     # code-quality.yml, NOT here (#13162). They were duplicated across both
@@ -338,8 +517,8 @@ jobs:
     # a whole job. The two are wildly unequal — the backend invocation is the
     # measured ~51 minutes, while slm-backend had never executed in CI at all
     # before #13300 — so splitting per-invocation would have produced one
-    # enormous job and one short one, capping the speed-up at roughly 1x. Six
-    # shards that each run a twelfth of BOTH keeps every shard the same shape and
+    # enormous job and one short one, capping the speed-up at roughly 1x. Shards
+    # that each run an equal share of BOTH keeps every shard the same shape and
     # keeps the #13084 interpreter separation intact inside each shard.
     - name: Run unit tests — backend, shared, tts-worker, repo_tests
       run: |
@@ -411,10 +590,10 @@ jobs:
         # deselects the marker-carrying tests already covered elsewhere, so nothing
         # here runs twice within the PR gate.
         python -m pytest \
-          autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks .claude/skills/claims-audit autobot-infrastructure/shared/tests libs \
+          autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks autobot-infrastructure/shared/scripts/monitoring .claude/skills/claims-audit autobot-infrastructure/shared/tests libs plugins/core-plugins \
           -n auto --dist loadscope \
           -p repo_tests.stable_shard \
-          --shard-splits 12 --shard-group ${{ matrix.shard }} \
+          --shard-splits ${{ strategy.job-total }} --shard-group ${{ matrix.shard }} \
           --shard-durations .test_durations \
           -m "not integration and not slow and not distributed and not performance" \
           --tb=short \
@@ -437,7 +616,7 @@ jobs:
         # /shard argument below is unchanged.
         SLM_PYTHON: ${{ steps.setup-python-suite.outputs.slm-venv }}/bin/python
       run: |
-        echo "Running unit tests for autobot-slm-backend (shard ${{ matrix.shard }}/12)..."
+        echo "Running unit tests for autobot-slm-backend (shard ${{ matrix.shard }}/${{ strategy.job-total }})..."
         # A SECOND durations file, not the backend one: pytest-split's
         # --clean-durations regeneration writes only the tests that ran, so a
         # shared path would have each invocation truncate the other's timings.
@@ -467,7 +646,7 @@ jobs:
           autobot-slm-backend \
           -n auto --dist loadscope \
           -p repo_tests.stable_shard \
-          --shard-splits 12 --shard-group ${{ matrix.shard }} \
+          --shard-splits ${{ strategy.job-total }} --shard-group ${{ matrix.shard }} \
           --shard-durations .test_durations_slm \
           -m "not integration and not slow and not distributed and not performance" \
           --tb=short \
@@ -478,10 +657,23 @@ jobs:
         status=$?
         set -e
         if [ "$status" -eq 5 ]; then
-          echo "::notice::autobot-slm-backend shard ${{ matrix.shard }}/12 collected no tests (pytest exit 5) — empty split group, see #13637"
+          echo "::notice::autobot-slm-backend shard ${{ matrix.shard }}/${{ strategy.job-total }} collected no tests (pytest exit 5) — empty split group, see #13637"
           exit 0
         fi
         exit "$status"
+
+    # #19647: autobot-backend/conftest.py leaves a hollow chromadb stub in sys.modules, so in a shared
+    # session a test of the real library skips itself and reads as green. Its own session, and a skip fails.
+    - name: Run the real-ChromaDB tests in their own session
+      if: matrix.shard == 1
+      run: |
+        out=$(python -m pytest repo_tests/backup_embeddings_on_real_chroma_19647_test.py \
+          repo_tests/chromadb_missing_key_serving_where_18820_test.py -q -rs) || { echo "$out"; exit 1; }
+        echo "$out"
+        if grep -q SKIPPED <<< "$out"; then
+          echo "::error::a real-ChromaDB test was skipped"
+          exit 1
+        fi
 
     # RETIRED (#15051). This step named `infrastructure/shared/tests/integration`,
     # a path #734 moved to `autobot-infrastructure/shared/tests/integration`
@@ -518,7 +710,18 @@ jobs:
     # for the matrix, including when shards fail. The `changes` guard is
     # required too, or this would run when no Python path changed and every
     # shard was skipped.
-    if: ${{ !cancelled() && needs.changes.outputs.python == 'true' }}
+    #
+    # The draft guard is the THIRD condition and must mirror `python-shard`'s
+    # exactly (#17957). The shards are draft-gated; this job is not a matrix
+    # job, so nothing gates it by inheritance. Without the same condition it
+    # ran against twelve skipped shards and the step below re-asserted
+    # `result != 'success'`, which `skipped` satisfies -- so every draft PR
+    # reported a red `python-suite` for shards that were deliberately not run.
+    # Marking a PR ready fires `ready_for_review`, which is in this workflow's
+    # trigger types, so the real verdict arrives before the PR can merge.
+    if: >-
+      ${{ !cancelled() && needs.changes.outputs.python == 'true'
+          && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -528,7 +731,7 @@ jobs:
     # `deployment-check` and `notify` both gate on `needs.python-suite.result`,
     # so without this step a red test suite would leave `python-suite` green and
     # let deployment checks proceed on a broken tree. For a matrix, `result` is
-    # the aggregate across all twelve shards.
+    # the aggregate across all shards.
     - name: Fail if any shard failed
       if: ${{ needs.python-shard.result != 'success' }}
       run: |
@@ -542,7 +745,7 @@ jobs:
       # here. The agreement is enforced instead by
       # repo_tests/ci_shard_count_message_test.py, which reads both numbers out
       # of this file; update them together or that test fails.
-      run: echo "All 12 python-suite shards passed."
+      run: echo "All 8 python-suite shards passed."
 
 
   frontend-tests:
@@ -555,7 +758,7 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v7
       with:
-        node-version: '22'
+        node-version-file: .nvmrc
         cache: 'npm'
         cache-dependency-path: autobot-frontend/package-lock.json
 
@@ -602,7 +805,8 @@ jobs:
     - name: Run frontend unit tests with coverage gate
       run: |
         cd autobot-frontend
-        # test:coverage enforces 70% threshold via vitest.config.ts thresholds (#3285)
+        # test:coverage enforces the floors in autobot-frontend/vitest.config.ts
+        # (source of truth, #17324); 70% is the long-term target, not the enforced value.
         npm run test:coverage
 
     - name: Cleanup
@@ -633,10 +837,8 @@ jobs:
           requirements*.txt
           autobot-backend/requirements*.txt
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip setuptools wheel
-        python -m pip install -r requirements-ci.txt --prefer-binary
+    - name: Install CI requirements
+      uses: ./.github/actions/install-ci-requirements
 
     - name: Create necessary directories and config files
       run: |
@@ -644,37 +846,7 @@ jobs:
         touch data/.gitkeep logs/.gitkeep static/.gitkeep
 
         # Create minimal config.yaml for CI testing
-        cat > config/config.yaml << 'EOF'
-        # CI Testing Configuration
-        llm:
-          orchestrator_llm: "mock"
-          task_llm: "mock"
-          ollama:
-            model: "mock-model"
-            models: {}
-          unified:
-            embedding:
-              providers:
-                ollama:
-                  selected_model: "mock-embed"
-
-        deployment:
-          mode: "local"
-
-        data:
-          reliability_stats_file: "data/reliability_stats.json"
-
-        diagnostics:
-          enabled: false
-          use_llm_for_analysis: false
-          use_web_search_for_analysis: false
-          auto_apply_fixes: false
-
-        redis:
-          host: "localhost"
-          port: 6379
-          db: 0
-        EOF
+        cp .github/actions/setup-python-suite/ci-config.yaml config/config.yaml
 
     - name: Test production configuration
       run: |
@@ -725,7 +897,7 @@ jobs:
         cat DEPLOYMENT_SUMMARY.md
 
     - name: Upload deployment artifact
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@v7.0.2
       with:
         name: deployment-summary
         path: DEPLOYMENT_SUMMARY.md

@@ -4,10 +4,9 @@
 # Author: mrveiss
 """Shared route helpers for the LLC API surface.
 
-``_actor_id`` and the error translators were written three times over
-(``roles.py``, ``contacts.py``, ``workflows.py``) with identical bodies and
-three different docstrings. This is the single copy; the existing three are
-tracked for migration separately so that change stays reviewable on its own.
+``actor_id`` was written three times over (``roles.py``, ``contacts.py``,
+``workflows.py``) with identical bodies and three different docstrings. This is
+the single copy (#15754); ``repo_tests/one_actor_id_15754_test.py`` keeps it so.
 
 The actor rule is the one worth stating once and keeping stated: the acting
 user comes from the authenticated session and never from the request body or
@@ -18,7 +17,7 @@ USER/SYSTEM discriminator be whatever the caller typed (#13969 review M1).
 from __future__ import annotations
 
 import uuid
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import HTTPException, Request, status
 
@@ -28,9 +27,33 @@ logger = get_logger(__name__)
 
 
 def actor_id(current_user: dict) -> uuid.UUID:
-    """The acting user, from the session — never from the body or query."""
+    """The acting user, from the authenticated session -- never the body or query.
+
+    A client-supplied ``actor`` let the audit trail's actor identity and its
+    USER/SYSTEM discriminator be whatever the caller typed, and an unparseable
+    value was an unhandled 500 in ``ActivityLogService.record`` (#13969 review
+    M1). The same hazard applies to a session user with no usable id, so that
+    case is a 401 here, not a ``ValueError`` out of ``uuid.UUID("None")``
+    (#15754).
+    """
     raw = current_user.get("id") or current_user.get("user_id")
-    return uuid.UUID(str(raw))
+    try:
+        return uuid.UUID(str(raw))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated") from exc
+
+
+def acting_user_id(current_user: dict) -> Optional[str]:
+    """The acting user's id for the activity log, or None for a principal that is not a user.
+
+    A service principal, or one whose id is not a UUID, cannot be recorded as a user: its act
+    is recorded as the system's rather than refused (``actor_id`` refuses, for routes where an
+    unattributed write is the error).
+    """
+    try:
+        return str(uuid.UUID(str(current_user.get("id") or current_user.get("user_id"))))
+    except ValueError:
+        return None
 
 
 def bad_request(exc: Exception) -> HTTPException:
@@ -140,6 +163,27 @@ def agent_context(request: Request) -> tuple[str, str]:
         logger.warning("Agent context for %s carries a non-UUID company: %r", agent_id, company_id)
         raise HTTPException(status_code=401, detail="Agent context carries a malformed company") from exc
     return agent_id, company_id
+
+
+def parse_work_item_id(raw: Any) -> uuid.UUID:
+    """The id as a UUID; 404 when it cannot be one, since such an id names no work item (#20120)."""
+    try:
+        return uuid.UUID(str(raw))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Work item not found") from exc
+
+
+def require_work_item_id(request: Request) -> None:
+    """Router dependency: 404 when the ``work_item_id`` path segment is not a UUID (#20120).
+
+    ``WorkItemService`` parses the id with ``uuid.UUID`` and a malformed one is a
+    ``ValueError`` -> 500. Only the path segment is parsed -- a ``ValueError`` from a
+    handler's own logic is not caught. This runs before each handler's auth, so an
+    unauthenticated caller with a malformed id gets 404 too; it says nothing about any row.
+    """
+    raw = request.path_params.get("work_item_id")
+    if raw is not None:
+        parse_work_item_id(raw)
 
 
 async def assert_item_in_company(item_id: str, company_id: str) -> uuid.UUID:

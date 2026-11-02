@@ -14,10 +14,12 @@
     </template>
 
             <!-- Name -->
-            <div class="form-group">
-              <label class="form-label" for="source-name">{{ $t('analytics.sources.form.name') }} <span class="required">*</span></label>
+            <BaseFormField id="source-name" :label="$t('analytics.sources.form.name')" required :error="errors.name" v-slot="{ describedBy, invalid, required }">
               <input
                 id="source-name"
+                :aria-describedby="describedBy"
+                :aria-invalid="invalid"
+                :aria-required="required"
                 v-model="form.name"
                 class="form-input"
                 :placeholder="$t('analytics.sources.form.namePlaceholder')"
@@ -25,8 +27,7 @@
                 autocomplete="off"
                 :class="{ 'form-input--error': errors.name }"
               />
-              <span v-if="errors.name" class="form-error">{{ errors.name }}</span>
-            </div>
+            </BaseFormField>
 
             <!-- Source Type -->
             <div class="form-group">
@@ -55,10 +56,12 @@
 
             <!-- GitHub fields -->
             <template v-if="form.source_type === 'github'">
-              <div class="form-group">
-                <label class="form-label" for="source-repo">{{ $t('analytics.sources.form.repository') }} <span class="required">*</span></label>
+              <BaseFormField id="source-repo" :label="$t('analytics.sources.form.repository')" required :error="errors.repo" v-slot="{ describedBy, invalid, required }">
                 <input
                   id="source-repo"
+                  :aria-describedby="describedBy"
+                  :aria-invalid="invalid"
+                  :aria-required="required"
                   v-model="form.repo"
                   class="form-input"
                   :placeholder="$t('analytics.sources.form.repoPlaceholder')"
@@ -66,25 +69,25 @@
                   autocomplete="off"
                   :class="{ 'form-input--error': errors.repo }"
                 />
-                <span v-if="errors.repo" class="form-error">{{ errors.repo }}</span>
-              </div>
+              </BaseFormField>
 
-              <div class="form-group">
-                <label class="form-label" for="source-branch">{{ $t('analytics.sources.form.branch') }}</label>
+              <BaseFormField id="source-branch" :label="$t('analytics.sources.form.branch')" v-slot="{ describedBy, invalid }">
                 <input
                   id="source-branch"
+                  :aria-describedby="describedBy"
+                  :aria-invalid="invalid"
                   v-model="form.branch"
                   class="form-input"
                   :placeholder="$t('analytics.sources.form.branchPlaceholder')"
                   type="text"
                   autocomplete="off"
                 />
-              </div>
+              </BaseFormField>
 
-              <div class="form-group">
-                <label class="form-label" for="source-credential">{{ $t('analytics.sources.form.credentialOptional') }}</label>
+              <BaseFormField id="source-credential" :label="$t('analytics.sources.form.credentialOptional')" :error="secretsLoadError" :hint="$t('analytics.sources.form.credentialHint')" v-slot="{ describedBy }">
                 <select
                   id="source-credential"
+                  :aria-describedby="describedBy"
                   v-model="form.credential_id"
                   class="form-select"
                 >
@@ -97,20 +100,17 @@
                     {{ secret.name }} ({{ secret.type }})
                   </option>
                 </select>
-                <span class="form-hint">
-                  <Icon name="info-circle" />
-                  {{ $t('analytics.sources.form.credentialHint') }}
-                </span>
-                <div v-if="secretsLoadError" class="form-error">{{ secretsLoadError }}</div>
-              </div>
+              </BaseFormField>
             </template>
 
             <!-- Local Path fields -->
             <template v-if="form.source_type === 'local'">
-              <div class="form-group">
-                <label class="form-label" for="source-path">{{ $t('analytics.sources.form.localPath') }} <span class="required">*</span></label>
+              <BaseFormField id="source-path" :label="$t('analytics.sources.form.localPath')" required :error="errors.local_path" v-slot="{ describedBy, invalid, required }">
                 <input
                   id="source-path"
+                  :aria-describedby="describedBy"
+                  :aria-invalid="invalid"
+                  :aria-required="required"
                   v-model="form.local_path"
                   class="form-input"
                   :placeholder="$t('analytics.sources.form.localPathPlaceholder')"
@@ -118,20 +118,20 @@
                   autocomplete="off"
                   :class="{ 'form-input--error': errors.local_path }"
                 />
-                <span v-if="errors.local_path" class="form-error">{{ errors.local_path }}</span>
-              </div>
+              </BaseFormField>
 
-              <div class="form-group">
-                <label class="form-label" for="source-branch-local">{{ $t('analytics.sources.form.branchOptional') }}</label>
+              <BaseFormField id="source-branch-local" :label="$t('analytics.sources.form.branchOptional')" v-slot="{ describedBy, invalid }">
                 <input
                   id="source-branch-local"
+                  :aria-describedby="describedBy"
+                  :aria-invalid="invalid"
                   v-model="form.branch"
                   class="form-input"
                   :placeholder="$t('analytics.sources.form.branchPlaceholder')"
                   type="text"
                   autocomplete="off"
                 />
-              </div>
+              </BaseFormField>
             </template>
 
             <!-- Access -->
@@ -164,9 +164,10 @@
             </div>
 
     <template #actions>
-      <button class="btn-cancel" @click="handleClose" type="button">{{ $t('analytics.sources.form.cancel') }}</button>
-      <button
-        class="btn-submit"
+      <BaseButton variant="secondary" size="sm" @click="handleClose" type="button">{{ $t('analytics.sources.form.cancel') }}</BaseButton>
+      <BaseButton
+        variant="info"
+        size="sm"
         @click="handleSubmit"
         :disabled="submitting"
         type="button"
@@ -174,7 +175,7 @@
         <i v-if="submitting" class="fas fa-spinner fa-spin"></i>
         <Icon v-else :name="isEditMode ? 'save' : 'plus'" />
         {{ submitting ? $t('analytics.sources.form.saving') : (isEditMode ? $t('analytics.sources.form.saveChanges') : $t('analytics.sources.addSource')) }}
-      </button>
+      </BaseButton>
     </template>
   </BaseModal>
 </template>
@@ -191,7 +192,7 @@
  */
 
 import Icon from '@/components/ui/Icon.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseFormField, BaseModal, BaseButton } from '@autobot/ui'
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { fetchSourceSecrets, saveCodeSource } from '@/composables/analytics/useSourceRegistry'
@@ -411,9 +412,6 @@ onMounted(() => {
   color: var(--text-secondary);
 }
 
-.required {
-  color: var(--color-error);
-}
 
 .form-input,
 .form-select {
@@ -448,10 +446,6 @@ onMounted(() => {
   color: var(--text-muted);
 }
 
-.form-error {
-  font-size: var(--text-xs);
-  color: var(--color-error);
-}
 
 /* Source Type Toggle */
 .type-toggle {
@@ -484,24 +478,5 @@ onMounted(() => {
 .type-btn--active {
   background: var(--color-info);
   color: var(--bg-secondary);
-}
-
-.btn-submit {
-  padding: var(--spacing-2-5) var(--spacing-5);
-  background: var(--color-info);
-  border: none;
-  border-radius: var(--radius-lg);
-  color: var(--bg-secondary);
-  font-size: var(--text-sm);
-  font-weight: var(--font-semibold);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  transition: background var(--duration-200);
-}
-
-.btn-submit:hover:not(:disabled) {
-  background: var(--color-info-dark);
 }
 </style>

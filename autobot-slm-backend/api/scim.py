@@ -29,12 +29,13 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.user_management.user_service_errors import DuplicateUserError, UserNotFoundError
 from services.database import db_service
 from services.system_secrets_vault import retrieve_secret
 from user_management.database import get_slm_session
 from user_management.models import Role, User, UserRole
 from user_management.services.base_service import TenantContext
-from user_management.services.user_service import DuplicateUserError, UserNotFoundError, UserService
+from user_management.services.user_service import UserService
 
 logger = logging.getLogger(__name__)
 

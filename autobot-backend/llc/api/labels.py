@@ -39,8 +39,11 @@ from ..services.label_service import (
     WorkItemNotFound,
     _label_to_dict,
 )
+from ._common import acting_user_id, require_work_item_id
 
-router = APIRouter(prefix="/companies/{company_id}/labels", tags=["llc-labels"])
+router = APIRouter(
+    prefix="/companies/{company_id}/labels", tags=["llc-labels"], dependencies=[Depends(require_work_item_id)]
+)
 _service = service_dep(LLCLabelService)
 
 
@@ -208,6 +211,7 @@ async def assign_labels(
             work_item_id=work_item_id,
             label_ids=body.label_ids,
             assigned_by=body.assigned_by,
+            actor_user_id=acting_user_id(_current_user),
         )
         await session.commit()
         return {
@@ -234,6 +238,7 @@ async def remove_label(
             session,
             work_item_id=work_item_id,
             label_id=label_id,
+            actor_user_id=acting_user_id(_current_user),
         )
         await session.commit()
     except WorkItemNotFound:

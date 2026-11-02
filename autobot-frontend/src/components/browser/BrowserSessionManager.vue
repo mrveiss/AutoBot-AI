@@ -128,7 +128,7 @@
           <div class="session-actions">
             <BaseButton
               v-if="session.status === 'active'"
-              variant="outline-solid"
+              variant="outline"
               size="sm"
               @click="pauseSession(session.id)"
             >
@@ -147,7 +147,7 @@
             </BaseButton>
 
             <BaseButton
-              variant="outline-solid"
+              variant="outline"
               size="sm"
               @click="openSession(session.id)"
             >
@@ -201,7 +201,7 @@
         />
       </div>
       <template #actions>
-        <BaseButton variant="outline-solid" @click="showCreateModal = false">
+        <BaseButton variant="outline" @click="showCreateModal = false">
           {{ $t('browser.sessionManager.cancel') }}
         </BaseButton>
         <BaseButton
@@ -223,13 +223,13 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useBrowserAutomation } from '@/composables/useBrowserAutomation'
-import BaseButton from '@/components/base/BaseButton.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import Icon from '@/components/ui/Icon.vue'
 import type { SessionStatus } from '@/types/browser'
 import { createLogger } from '@/utils/debugUtils'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('BrowserSessionManager')
 
@@ -383,14 +383,7 @@ export default {
       }
     }
 
-    const formatDate = (dateStr: string): string => {
-      return new Intl.DateTimeFormat('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      }).format(new Date(dateStr))
-    }
+    const formatDate = createDateFormatter({ locale: 'en-US', intl: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } })
 
     const formatTimeAgo = (dateStr: string): string => {
       const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
@@ -520,15 +513,15 @@ export default {
 }
 
 .session-card.status-active {
-  border-left: 4px solid #10b981;
+  border-left: 4px solid var(--color-success);
 }
 
 .session-card.status-idle {
-  border-left: 4px solid #f59e0b;
+  border-left: 4px solid var(--color-warning);
 }
 
 .session-card.status-closed {
-  border-left: 4px solid #6b7280;
+  border-left: 4px solid var(--text-muted);
   opacity: 0.7;
 }
 

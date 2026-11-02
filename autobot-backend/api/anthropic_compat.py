@@ -27,17 +27,20 @@ from pydantic import BaseModel
 
 from api.openai_compat import (
     _AUTO_MODEL_NAMES,
+    _enforce_virtual_key,
     _estimate_tokens,
     _oai_limiter,
     _remote_addr,
     _resolve_auth,
     _resolve_auto_model,
+    _select_provider_or_503,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from llm_shared import get_provider_registry
 from llm_shared.model_fallback_coordinator import get_fallback_coordinator
 from llm_shared.models import LLMRequest
+from llm_shared.run_credentials import get_llm_principal, llm_principal_scope_for, stream_with_llm_principal
 from services.llm_api_key_service import LLMApiKeyRecord, get_llm_api_key_service
 from services.llm_cost_tracker import get_cost_tracker
 from services.llm_usage_recording import (
@@ -252,97 +255,10 @@ async def _stream_generator_anthropic(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/messages", response_model=None)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="messages",
-    error_code_prefix="ANTHROPIC_COMPAT",
-)
-async def messages(
-    body: AnthropicRequest,
-    request: Request,
-) -> Any:
-    """Anthropic-compatible messages endpoint (#6591).
-
-    Accepts Bearer token auth (platform JWT or virtual sk-... key), delegates
-    to ProviderRegistry, returns Anthropic Messages-format response.
-    Virtual keys enforce per-key monthly budget and model whitelist.
-    """
-    _user, api_key_record = await _resolve_auth(request)
-    await _oai_limiter.check_or_429(_remote_addr(request))
-
-    # Virtual key enforcement: model whitelist + budget
-    if api_key_record is not None:
-        from services.llm_api_key_service import LLMApiKeyService
-
-        if body.model not in _AUTO_MODEL_NAMES and body.model != "autobot-default":
-            if not LLMApiKeyService.model_allowed(api_key_record, body.model):
-                raise HTTPException(
-                    status_code=403,
-                    detail="Model not permitted for this API key",
-                    headers={"x-llm-key-allowed-models": ",".join(api_key_record.allowed_models)},
-                )
-        allowed, _remaining = await get_llm_api_key_service().check_budget(api_key_record)
-        if not allowed:
-            raise HTTPException(
-                status_code=429,
-                detail="Monthly budget exhausted",
-                headers={"x-llm-budget-remaining": "0"},
-            )
-
-    # Resolve auto-* model aliases via tiered routing
-    if body.model in _AUTO_MODEL_NAMES:
-        messages_raw: List[Dict[str, str]] = []
-        if body.system:
-            messages_raw.append({"role": "system", "content": body.system})
-        messages_raw += [{"role": m.role, "content": _extract_content_text(m.content)} for m in body.messages]
-        resolved_model = await _resolve_auto_model(body.model, messages_raw)
-    elif body.model == "autobot-default":
-        resolved_model = None
-    else:
-        resolved_model = body.model
-
-    registry = get_provider_registry()
-    llm_request = _build_llm_request(body, resolved_model=resolved_model)
-
-    provider = await registry.get_provider_for_request(request=llm_request)
-    if provider is None:
-        raise HTTPException(status_code=503, detail="No LLM providers available")
-
-    if not inspect.isasyncgenfunction(provider.stream_completion):
-        raise ValueError(f"Provider {provider.provider_name!r} stream_completion must be an async generator function")
-
-    message_id = _make_message_id()
-    if resolved_model is None:
-        resolved_model = provider.provider_name
-
-    if body.stream:
-        prompt_text = (body.system or "") + "\n" + "\n".join(_extract_content_text(m.content) for m in body.messages)
-        stream_headers: Dict[str, str] = {
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        }
-        if body.model in _AUTO_MODEL_NAMES:
-            stream_headers["x-llm-routed-from"] = body.model
-        return StreamingResponse(
-            _stream_generator_anthropic(
-                provider,
-                llm_request,
-                message_id,
-                resolved_model,
-                prompt_text=prompt_text,
-                api_key_record=api_key_record,
-            ),
-            media_type="text/event-stream",
-            headers=stream_headers,
-        )
-
-    # Non-streaming path — use fallback coordinator for quota-triggered model switch
-    llm_response = await get_fallback_coordinator().execute_with_fallback(llm_request, registry)
-    if llm_response.error:
-        raise HTTPException(status_code=502, detail=llm_response.error)
-
+async def _message_json_response(
+    llm_response, *, message_id: str, resolved_model: str, requested_model: str, api_key_record
+) -> JSONResponse:
+    """Build the non-streaming Anthropic Messages reply: usage, cost header, per-key spend."""
     tokens = llm_response.usage or {}
     prompt_tokens = tokens.get("prompt_tokens", 0)
     completion_tokens = tokens.get("completion_tokens", 0)
@@ -361,8 +277,8 @@ async def messages(
     headers: Dict[str, str] = {}
     if cost_usd > 0:
         headers["x-llm-cost"] = str(cost_usd)
-    if body.model in _AUTO_MODEL_NAMES:
-        headers["x-llm-routed-from"] = body.model
+    if requested_model in _AUTO_MODEL_NAMES:
+        headers["x-llm-routed-from"] = requested_model
 
     if api_key_record is not None:
         svc = get_llm_api_key_service()
@@ -378,3 +294,92 @@ async def messages(
     )
 
     return JSONResponse(content=response.model_dump(exclude_none=True), headers=headers)
+
+
+@router.post("/messages", response_model=None)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="messages",
+    error_code_prefix="ANTHROPIC_COMPAT",
+)
+async def messages(
+    body: AnthropicRequest,
+    request: Request,
+) -> Any:
+    """Anthropic-compatible messages endpoint (#6591).
+
+    Accepts Bearer token auth (platform JWT or virtual sk-... key), delegates
+    to ProviderRegistry, returns Anthropic Messages-format response.
+    Virtual keys enforce per-key monthly budget and model whitelist.
+    """
+    _user, api_key_record = await _resolve_auth(request)
+    await _oai_limiter.check_or_429(_remote_addr(request))
+    await _enforce_virtual_key(api_key_record, body.model)  # model whitelist + budget (#6590)
+    # #19241: a JWT user's own signed-in provider token first; a team sk- key names no user (system, then API key).
+    with llm_principal_scope_for(_user):
+        return await _handle_messages(body, api_key_record)
+
+
+async def _handle_messages(body: AnthropicRequest, api_key_record: LLMApiKeyRecord | None) -> Any:
+    """Route, call and format one Messages request, under the caller's LLM principal (#19241)."""
+    # Resolve auto-* model aliases via tiered routing
+    if body.model in _AUTO_MODEL_NAMES:
+        messages_raw: List[Dict[str, str]] = []
+        if body.system:
+            messages_raw.append({"role": "system", "content": body.system})
+        messages_raw += [{"role": m.role, "content": _extract_content_text(m.content)} for m in body.messages]
+        resolved_model = await _resolve_auto_model(body.model, messages_raw)
+    elif body.model == "autobot-default":
+        resolved_model = None
+    else:
+        resolved_model = body.model
+
+    registry = get_provider_registry()
+    llm_request = _build_llm_request(body, resolved_model=resolved_model)
+
+    provider = await _select_provider_or_503(registry, llm_request)
+
+    if not inspect.isasyncgenfunction(provider.stream_completion):
+        raise ValueError(f"Provider {provider.provider_name!r} stream_completion must be an async generator function")
+
+    message_id = _make_message_id()
+    if resolved_model is None:
+        resolved_model = provider.provider_name
+
+    if body.stream:
+        prompt_text = (body.system or "") + "\n" + "\n".join(_extract_content_text(m.content) for m in body.messages)
+        stream_headers: Dict[str, str] = {
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+        if body.model in _AUTO_MODEL_NAMES:
+            stream_headers["x-llm-routed-from"] = body.model
+        return StreamingResponse(
+            stream_with_llm_principal(  # #19241: the body streams after the endpoint's principal scope has ended
+                get_llm_principal(),
+                _stream_generator_anthropic(
+                    provider,
+                    llm_request,
+                    message_id,
+                    resolved_model,
+                    prompt_text=prompt_text,
+                    api_key_record=api_key_record,
+                ),
+            ),
+            media_type="text/event-stream",
+            headers=stream_headers,
+        )
+
+    # Non-streaming path — use fallback coordinator for quota-triggered model switch
+    llm_response = await get_fallback_coordinator().execute_with_fallback(llm_request, registry)
+    if llm_response.error:
+        raise HTTPException(status_code=502, detail=llm_response.error)
+
+    return await _message_json_response(
+        llm_response,
+        message_id=message_id,
+        resolved_model=resolved_model,
+        requested_model=body.model,
+        api_key_record=api_key_record,
+    )

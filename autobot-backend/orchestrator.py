@@ -20,7 +20,7 @@ Refactored in #5058: god-class decomposed into collaborators.
 
 Primitives extracted in #5060:
   - retry_with_backoff  (orchestration/primitives/retry.py)
-  - publish_event       (orchestration/primitives/events.py)
+  - publish_event       (events/bus.py)
   Supporting modules:   orchestration/orchestrator_config.py
                         orchestration/orchestrator_stubs.py
                         orchestration/orchestrator_legacy_api.py
@@ -43,6 +43,8 @@ from autobot_shared.workflow import ExecutionStrategy
 from config.manager import get_config_manager as _get_config_manager
 from constants.threshold_constants import LLMDefaults, TimingConstants
 from diagnostics import get_performance_diagnostics
+from events.bus import PersistStrategy
+from events.bus import publish_event as _publish_event
 from memory import LongTermMemoryManager
 
 # Issue #5040 / #10666 B3: multi-agent imports (consolidated into orchestration)
@@ -83,8 +85,6 @@ from orchestration.orchestrator_stubs import (
     WorkflowStep,
 )
 from orchestration.performance_tracker import PerformanceTracker
-from orchestration.primitives.events import PersistStrategy
-from orchestration.primitives.events import publish_event as _publish_event
 from orchestration.primitives.retry import (  # noqa: F401 — re-exported
     retry_with_backoff,
 )
@@ -97,9 +97,9 @@ from utils.agent_selection import reserve_agent as _reserve_agent
 
 logger = get_logger("orchestrator")
 
-# Import KnowledgeBase for enhanced features
+# Import the canonical KnowledgeBase accessor for enhanced features (#18122)
 try:
-    from knowledge_base import KnowledgeBase
+    from knowledge_factory import get_knowledge_base_async
 
     KNOWLEDGE_BASE_AVAILABLE = True
 except ImportError:
@@ -171,15 +171,9 @@ class Orchestrator(_DeprecatedRequestMixin):
         self._profile_registry = AgentCapabilityRegistry(initialize_defaults=False)
         self.workflow_documentation: Dict[str, WorkflowDocumentation] = {}
         self.agent_interactions: List[AgentInteraction] = []
-        # #13162: honour an injected KnowledgeBase and hand the (possibly
-        # injected) ConfigManager to the default instance instead of letting it
-        # reach for the global singleton.
-        if knowledge_base is not None:
-            self.knowledge_base = knowledge_base
-        elif KNOWLEDGE_BASE_AVAILABLE:
-            self.knowledge_base = KnowledgeBase(config_manager=self.config_manager)
-        else:
-            self.knowledge_base = None
+        # #13162: honour an injected KnowledgeBase. #18122: otherwise nothing is built here --
+        # the canonical instance is resolved at first use (see _get_documenter).
+        self.knowledge_base = knowledge_base
         self.knowledge_extraction_enabled = KNOWLEDGE_BASE_AVAILABLE
         self.auto_doc_enabled = True
         self.workflow_metrics = {
@@ -322,7 +316,7 @@ class Orchestrator(_DeprecatedRequestMixin):
             llm_service: LLMService used for model calls. Falls back to the
                 shared singleton.
             knowledge_base: KnowledgeBase used for auto-documentation. Falls
-                back to a new instance bound to ``config_manager``.
+                back to the canonical shared instance, resolved at first use.
             diagnostics: Diagnostics collaborator. Falls back to the canonical
                 lazy singleton.
         """
@@ -492,12 +486,18 @@ class Orchestrator(_DeprecatedRequestMixin):
 
     # ------------------------------------------------- run_workflow
 
-    def _get_documenter(self) -> WorkflowDocumenter:
+    async def _resolve_knowledge_base(self):
+        """Injected KB, else the canonical instance; None while unavailable or the module is absent."""
+        if self.knowledge_base is not None or not KNOWLEDGE_BASE_AVAILABLE:
+            return self.knowledge_base
+        return await get_knowledge_base_async()
+
+    async def _get_documenter(self) -> WorkflowDocumenter:
+        kb = await self._resolve_knowledge_base()
         if not hasattr(self, "_documenter") or self._documenter is None:
-            self._documenter = WorkflowDocumenter(
-                knowledge_base=self.knowledge_base,
-                llm_service=self.llm_service,
-            )
+            self._documenter = WorkflowDocumenter(knowledge_base=kb, llm_service=self.llm_service)
+        elif self._documenter.knowledge_base is None and kb is not None:
+            self._documenter.knowledge_base = kb  # init failed earlier; adopt it once it is up
         return self._documenter
 
     async def run_workflow(
@@ -530,7 +530,7 @@ class Orchestrator(_DeprecatedRequestMixin):
             logger.debug("WorkflowMemory init store skipped: %s", _mem_exc)
 
         if auto_document:
-            documenter = self._get_documenter()
+            documenter = await self._get_documenter()
             doc = documenter.create_workflow_doc(
                 workflow_id=workflow_id,
                 title=f"Workflow: {user_request[:50]}...",
@@ -554,14 +554,14 @@ class Orchestrator(_DeprecatedRequestMixin):
             self.workflow_metrics["average_execution_time"] = ((cur_avg * (total - 1)) + elapsed) / total
 
             if auto_document:
-                documenter = self._get_documenter()
+                documenter = await self._get_documenter()
                 await documenter.generate_workflow_documentation(workflow_id, exec_result)
                 doc = documenter.get_doc(workflow_id)
                 if doc:
                     self.workflow_documentation[workflow_id] = doc
 
             if self.knowledge_extraction_enabled:
-                documenter = self._get_documenter()
+                documenter = await self._get_documenter()
                 await documenter.extract_workflow_knowledge(workflow_id, user_request, exec_result, self.agent_registry)
 
             return {
@@ -577,7 +577,7 @@ class Orchestrator(_DeprecatedRequestMixin):
         except Exception as e:
             logger.error("Workflow %s failed: %s", workflow_id, e)
             if auto_document:
-                documenter = self._get_documenter()
+                documenter = await self._get_documenter()
                 await documenter.document_workflow_failure(workflow_id, str(e))
                 doc = documenter.get_doc(workflow_id)
                 if doc:
@@ -595,7 +595,7 @@ class Orchestrator(_DeprecatedRequestMixin):
         """Classify request complexity.
 
         Retained for callers in orchestration/workflow_planner.py,
-        services/workflow_automation/, services/advanced_workflow/, and tests.
+        services/advanced_workflow/, and tests (chat moved off it, #13809).
         Callers that need to know whether the value was *judged* or merely
         defaulted should use :meth:`classify_request_complexity_verdict`.
         """
@@ -662,7 +662,7 @@ class Orchestrator(_DeprecatedRequestMixin):
         """Plan WorkflowStep objects based on complexity.
 
         Retained for callers in orchestration/workflow_planner.py,
-        services/workflow_automation/, services/advanced_workflow/, and tests.
+        services/advanced_workflow/, and tests (chat moved off it, #13809).
         """
         if not WORKFLOW_TYPES_AVAILABLE:
             return []
@@ -725,19 +725,14 @@ class Orchestrator(_DeprecatedRequestMixin):
 
     # ------------------------------------------ workflow planning (canonical path)
 
-    def _build_planning_prompt(
-        self,
-        goal: str,
-        *,
-        learned_prompt_template: str | None = None,
-        similar_trajectories: List[Any] | None = None,
-    ) -> str:
-        """Render the planning prompt.
+    def _build_planning_prompt(self, goal: str, planning_ctx: Dict[str, Any]) -> str:
+        """Render the planning prompt from what ``_fetch_planning_context`` gathered.
 
         #10580: passes ``learned_prompt_template`` from a high-confidence
         LearnedStrategy so the planner benefits from proven approaches.
         #10581: passes ``similar_trajectories`` as few-shot priors so the planner
         can reuse proven decompositions from past high-reward executions.
+        #13809: passes ``shell_commands`` for a plan whose steps run in a terminal.
         """
         capabilities_json = json.dumps(
             {agent: [cap.value for cap in caps] for agent, caps in self.agent_capabilities.items()},
@@ -746,8 +741,9 @@ class Orchestrator(_DeprecatedRequestMixin):
         return build_planning_prompt(
             goal,
             capabilities_json,
-            learned_prompt_template=learned_prompt_template,
-            similar_trajectories=similar_trajectories,
+            learned_prompt_template=planning_ctx.get("learned_prompt_template"),
+            similar_trajectories=planning_ctx.get("similar_trajectories"),
+            shell_commands=planning_ctx.get("shell_commands", False),
         )
 
     def _parse_planning_response(self, response: Any, goal: str) -> Dict[str, Any]:
@@ -828,11 +824,7 @@ class Orchestrator(_DeprecatedRequestMixin):
         """Generate one candidate plan from the LLM."""
         from agents.llm_failsafe_agent import get_robust_llm_response
 
-        prompt = self._build_planning_prompt(
-            goal,
-            learned_prompt_template=planning_ctx.get("learned_prompt_template"),
-            similar_trajectories=planning_ctx.get("similar_trajectories"),
-        )
+        prompt = self._build_planning_prompt(goal, planning_ctx)
         response = await get_robust_llm_response(prompt, context)
         plan_data = self._parse_planning_response(response, goal)
         return await self._strategy_planner.build_workflow_plan(goal, plan_data)
@@ -916,6 +908,8 @@ class Orchestrator(_DeprecatedRequestMixin):
         logger.info("Creating workflow plan for: %s", goal)
         try:
             planning_ctx = await self._fetch_planning_context(goal, context)
+            # #13809: a caller whose steps run in a terminal asks for commands.
+            planning_ctx["shell_commands"] = bool((context or {}).get("shell_commands"))
 
             if PLAN_BEST_OF_N_ENABLED:
                 plan = await self._select_best_plan(goal, context, planning_ctx, PLAN_BEST_OF_N_COUNT)

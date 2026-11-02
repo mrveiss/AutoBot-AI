@@ -52,7 +52,7 @@
 # ============================================================
 - name: "Browser | Ensure worker directory exists"
   ansible.builtin.file:
-    path: /opt/autobot/autobot-browser-worker
+    path: "{{ autobot.base_dir }}/autobot-browser-worker"
     state: directory
     owner: "{{ browser_user }}"
     group: "{{ browser_group }}"
@@ -63,8 +63,9 @@
 - name: "Browser | Sync browser worker code from code_source"
   ansible.posix.synchronize:
     src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-browser-worker/"
-    dest: /opt/autobot/autobot-browser-worker/
+    dest: "{{ autobot.base_dir }}/autobot-browser-worker/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=node_modules"
       - "--exclude=__pycache__"
       - "--exclude=.git"
@@ -199,7 +200,7 @@
 
 - name: "Browser | Check if browser worker directory exists"
   ansible.builtin.stat:
-    path: /opt/autobot/autobot-browser-worker/package.json
+    path: "{{ autobot.base_dir }}/autobot-browser-worker/package.json"
   register: _browser_worker_dir
   tags: ['browser', 'packages']
 
@@ -207,7 +208,7 @@
 # failures on a deployed worker directory must surface.
 - name: "Browser | Install Node.js dependencies for browser worker"
   npm:
-    path: /opt/autobot/autobot-browser-worker
+    path: "{{ autobot.base_dir }}/autobot-browser-worker"
     state: present
   become: true
   when: _browser_worker_dir.stat.exists | default(false)
@@ -242,7 +243,7 @@
 - name: "Browser | Install Playwright chromium browser via Node.js"
   ansible.builtin.command:
     cmd: node_modules/.bin/playwright install chromium
-    chdir: /opt/autobot/autobot-browser-worker
+    chdir: "{{ autobot.base_dir }}/autobot-browser-worker"
   become: true
   environment:
     PLAYWRIGHT_BROWSERS_PATH: /var/lib/autobot/playwright-browsers
@@ -325,6 +326,7 @@
     chmod 0600 /home/autobot/.vnc/passwd
     chown autobot:autobot /home/autobot/.vnc/passwd
   become: true
+  no_log: true  # #19846
   when:
     - install_vnc | default(false)
     - node_roles is not defined or 'vnc' in node_roles

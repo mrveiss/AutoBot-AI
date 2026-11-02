@@ -16,7 +16,8 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from advanced_rag_optimizer import RAGMetrics, SearchResult
+from advanced_rag_optimizer import RAGMetrics, RankedResult
+from knowledge.search_filters import SYSTEM_SCOPE
 from services.knowledge_base_adapter import KnowledgeBaseAdapter
 from services.rag_config import (
     RAGConfig,
@@ -45,23 +46,21 @@ def _reset_rag_config_singleton():
 def _isolate_hash_cache(tmp_path, monkeypatch):
     """Isolate the doc-indexer hash cache from ambient on-disk state (#12673).
 
-    ``RAGService._filter_stale_chunks`` reads ``doc_indexer.HASH_CACHE_FILE``
+    ``knowledge.stale_filter`` reads ``doc_indexer.HASH_CACHE_FILE``
     through a module-level TTL memo.  Without isolation the suite picks up the
     real ``data/.doc_index_hashes.json`` that exists on any machine where the
     indexer has run, so the provenance filter drops every test-double chunk.
     Point the cache at an absent tmp path and reset the memo around each test.
     """
-    import services.rag_service as rag_mod
+    from knowledge.stale_filter import reset_hash_cache
 
     monkeypatch.setattr(
         "services.knowledge.doc_indexer.HASH_CACHE_FILE",
         tmp_path / "absent_doc_index_hashes.json",
     )
-    rag_mod._hash_cache_memo = {}
-    rag_mod._hash_cache_loaded_at = 0.0
+    reset_hash_cache()
     yield
-    rag_mod._hash_cache_memo = {}
-    rag_mod._hash_cache_loaded_at = 0.0
+    reset_hash_cache()
 
 
 class TestKnowledgeBaseAdapter:
@@ -249,12 +248,15 @@ class TestRAGService:
         """Test fallback to basic search when RAG disabled."""
         mock_kb = AsyncMock()
         mock_kb.__class__.__name__ = "KnowledgeBase"
-        mock_kb.search.return_value = [{"content": "fallback result", "metadata": {}, "score": 0.8}]
+        # A system-visible fact: the SYSTEM_SCOPE principal below reads non-private facts only (#16664).
+        mock_kb.search.return_value = [
+            {"content": "fallback result", "metadata": {"visibility": "system"}, "score": 0.8}
+        ]
 
         config = RAGConfig(enable_advanced_rag=False)
         service = RAGService(mock_kb, config=config)
 
-        results, metrics = await service.advanced_search("test query")
+        results, metrics = await service.advanced_search("test query", principal=SYSTEM_SCOPE)
 
         # Should use fallback
         assert len(results) == 1
@@ -281,7 +283,7 @@ class TestRAGService:
 
         # Mock reranking to return in different order
         reranked_search_results = [
-            SearchResult(
+            RankedResult(
                 content="result 2",
                 metadata={},
                 semantic_score=0.8,
@@ -291,7 +293,7 @@ class TestRAGService:
                 source_path="test",
                 rerank_score=0.95,
             ),
-            SearchResult(
+            RankedResult(
                 content="result 1",
                 metadata={},
                 semantic_score=0.5,
@@ -351,7 +353,7 @@ class TestCrossEncoderReranking:
 
         # Create test results
         results = [
-            SearchResult(
+            RankedResult(
                 content="test content with query terms",
                 metadata={},
                 semantic_score=0.5,
@@ -391,7 +393,7 @@ class TestCrossEncoderReranking:
 
         # Create test results
         results = [
-            SearchResult(
+            RankedResult(
                 content="result 1",
                 metadata={},
                 semantic_score=0.5,
@@ -400,7 +402,7 @@ class TestCrossEncoderReranking:
                 relevance_rank=1,
                 source_path="test",
             ),
-            SearchResult(
+            RankedResult(
                 content="result 2",
                 metadata={},
                 semantic_score=0.7,
@@ -462,8 +464,8 @@ class TestKBSynthesisSchemaCache:
             ),
         ):
             service = RAGService.__new__(RAGService)
-            await service._get_kb_synthesis_context("query one")
-            await service._get_kb_synthesis_context("query two")
+            await service._get_kb_synthesis_context("query one", SYSTEM_SCOPE)
+            await service._get_kb_synthesis_context("query two", SYSTEM_SCOPE)
 
         mock_loader.assert_called_once()
 

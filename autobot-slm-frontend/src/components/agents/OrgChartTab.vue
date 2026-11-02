@@ -13,6 +13,7 @@
  * cleanup, no timeout).
  */
 
+import { useI18n } from 'vue-i18n'
 import { onMounted, ref } from 'vue'
 import {
   useAutobotApi,
@@ -22,8 +23,10 @@ import {
   type AgentDirectReport,
   type AgentOrgNode,
 } from '@/composables/useAutobotApi'
+import { BaseFormField, BaseButton } from '@autobot/ui'
 import OrgTreeNode from './OrgTreeNode.vue'
 
+const { t } = useI18n()
 const api = useAutobotApi()
 const tree = ref<AgentOrgNode[]>([])
 const loading = ref(true)
@@ -42,7 +45,7 @@ async function fetchTree() {
   try {
     tree.value = await api.getAgentOrgTree()
   } catch (err) {
-    error.value = autobotApiErrorMessage(err, 'Failed to load org tree')
+    error.value = autobotApiErrorMessage(err, t('agents.orgChartTab.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -74,7 +77,7 @@ async function submitDelegation() {
     showDelegateForm.value = false
     await selectNode(selectedNode.value)
   } catch (err) {
-    delegateError.value = autobotApiErrorMessage(err, 'Delegation failed')
+    delegateError.value = autobotApiErrorMessage(err, t('agents.orgChartTab.delegationFailed'))
   }
 }
 
@@ -175,19 +178,17 @@ onMounted(fetchTree)
         </div>
 
         <div v-if="directReports.length" class="delegate-section">
-          <button
+          <BaseButton
             v-if="!showDelegateForm"
-            class="btn-primary"
             @click="showDelegateForm = true"
           >
             {{ $t('agents.orgChartTab.delegateTask') }}
-          </button>
+          </BaseButton>
           <div v-else class="delegate-form">
             <h4>{{ $t('agents.orgChartTab.newDelegation') }}</h4>
             <div v-if="delegateError" class="error-inline">{{ delegateError }}</div>
-            <div class="form-group">
-              <label>{{ $t('agents.orgChartTab.assignTo') }}</label>
-              <select v-model="delegateForm.assignee_id">
+            <BaseFormField id="delegate-assignee" :label="$t('agents.orgChartTab.assignTo')" v-slot="{ describedBy }">
+              <select id="delegate-assignee" v-model="delegateForm.assignee_id" class="delegate-control" :aria-describedby="describedBy">
                 <option value="" disabled>{{ $t('agents.orgChartTab.selectReport') }}</option>
                 <option
                   v-for="r in directReports"
@@ -197,18 +198,20 @@ onMounted(fetchTree)
                   {{ r.name }}
                 </option>
               </select>
-            </div>
-            <div class="form-group">
-              <label>{{ $t('agents.orgChartTab.task') }}</label>
+            </BaseFormField>
+            <BaseFormField id="delegate-task" :label="$t('agents.orgChartTab.task')" v-slot="{ describedBy }">
               <textarea
+                id="delegate-task"
                 v-model="delegateForm.task_description"
+                class="delegate-control"
+                :aria-describedby="describedBy"
                 rows="3"
                 :placeholder="$t('agents.orgChartTab.describeTheTask')"
               />
-            </div>
+            </BaseFormField>
             <div class="form-actions">
-              <button class="btn-primary" @click="submitDelegation">{{ $t('agents.orgChartTab.submit') }}</button>
-              <button class="btn-cancel" @click="showDelegateForm = false">{{ $t('agents.orgChartTab.cancel') }}</button>
+              <BaseButton @click="submitDelegation">{{ $t('agents.orgChartTab.submit') }}</BaseButton>
+              <BaseButton variant="secondary" @click="showDelegateForm = false">{{ $t('agents.orgChartTab.cancel') }}</BaseButton>
             </div>
           </div>
         </div>
@@ -252,7 +255,7 @@ onMounted(fetchTree)
 .badge-blue { background: var(--slm-blue-100); color: var(--slm-blue-600); }
 .badge-green { background: var(--slm-emerald-100); color: var(--slm-emerald-600); }
 .badge-gray { background: var(--slm-gray-100); color: var(--slm-gray-500); }
-.badge-red { background: var(--slm-red-100); color: var(--color-danger-600); }
+.badge-red { background: var(--slm-red-100); color: var(--color-error-600); }
 .badge-orange { background: var(--slm-orange-100); color: var(--slm-orange-600); }
 .agent-title { color: var(--text-secondary); font-size: var(--text-sm); margin: var(--spacing-1) 0 var(--spacing-4); }
 .capabilities { font-size: 13px; color: var(--text-secondary); margin-bottom: var(--spacing-4); line-height: 1.5; }
@@ -265,13 +268,8 @@ h4 { font-size: var(--text-sm); font-weight: 600; margin: 0 0 var(--spacing-3) 0
 .direct-reports ul { list-style: none; padding: 0; margin: 0; }
 .direct-reports li { padding: 6px 0; display: flex; align-items: center; gap: var(--spacing-2); font-size: var(--text-sm); }
 .delegate-form { background: var(--slm-gray-50); border-radius: var(--radius-lg); padding: var(--spacing-4); }
-.form-group { display: flex; flex-direction: column; gap: var(--spacing-1); margin-bottom: var(--spacing-3); }
-.form-group label { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
-.form-group select, .form-group textarea { padding: var(--spacing-2) var(--spacing-3); border: 1px solid var(--slm-gray-300); border-radius: var(--radius-lg); font-size: var(--text-sm); font-family: inherit; }
+.delegate-control { padding: var(--spacing-2) var(--spacing-3); border: 1px solid var(--slm-gray-300); border-radius: var(--radius-lg); font-size: var(--text-sm); font-family: inherit; }
 .form-actions { display: flex; gap: var(--spacing-2); }
-.btn-primary { background: var(--slm-indigo-500); color: white; border: none; padding: var(--spacing-2) var(--spacing-4); border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: 500; cursor: pointer; }
-.btn-primary:hover { background: var(--slm-indigo-600); }
-.btn-cancel { background: var(--slm-gray-200); color: var(--slm-gray-700); border: none; padding: var(--spacing-2) var(--spacing-4); border-radius: var(--radius-md); font-size: var(--text-sm); cursor: pointer; }
 .delegation-item { padding: 10px 0; border-bottom: 1px solid var(--slm-gray-100); }
 .delegation-header { display: flex; align-items: center; gap: var(--spacing-2); }
 .status-badge { font-size: 10px; padding: 2px var(--spacing-2); border-radius: var(--radius-default); font-weight: 600; text-transform: uppercase; }
@@ -280,7 +278,7 @@ h4 { font-size: var(--text-sm); font-weight: 600; margin: 0 0 var(--spacing-3) 0
 .delegation-time { font-size: 11px; color: var(--text-secondary); }
 .detail-panel.empty-state { display: flex; align-items: center; justify-content: center; min-height: 400px; color: var(--text-secondary); }
 .empty-state { color: var(--text-secondary); text-align: center; padding: var(--spacing-10); }
-.error-banner { background: var(--slm-red-100); border: 1px solid var(--color-danger-500); color: var(--slm-red-700); padding: var(--spacing-3) var(--spacing-4); border-radius: var(--radius-lg); margin-bottom: var(--spacing-4); display: flex; justify-content: space-between; align-items: center; }
+.error-banner { background: var(--slm-red-100); border: 1px solid var(--color-error-500); color: var(--slm-red-700); padding: var(--spacing-3) var(--spacing-4); border-radius: var(--radius-lg); margin-bottom: var(--spacing-4); display: flex; justify-content: space-between; align-items: center; }
 .error-inline { background: var(--slm-red-100); color: var(--slm-red-700); padding: var(--spacing-2) var(--spacing-3); border-radius: var(--radius-md); font-size: 13px; margin-bottom: var(--spacing-3); }
 .loading { text-align: center; color: var(--text-secondary); padding: 60px; }
 .detail-header { display: flex; align-items: center; gap: var(--spacing-3); margin-bottom: var(--spacing-2); }

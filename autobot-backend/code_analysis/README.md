@@ -101,20 +101,14 @@ python scripts/generate_patches.py
 ## 🔧 Configuration
 
 ### Redis Configuration
-```python
-# Default Redis connection
-REDIS_HOST = "localhost"
-REDIS_PORT = 6379
-REDIS_DB = 0
-
-# Configure in src/config.py or environment variables
-export REDIS_URL="redis://localhost:6379/0"
-```
+The suite connects through `autobot_shared.redis_client` (database `main`), so the host,
+port and credentials come from the shared endpoint resolver and the database number from
+`redis-databases.yaml` (`AUTOBOT_REDIS_DB_MAIN` overrides it) -- nothing to set here (#19232).
 
 ### NPU Support (Optional)
 ```bash
 # Install OpenVINO for Intel NPU acceleration (#14476: floor matches the SSOT)
-pip install "openvino>=2026.4.0"
+pip install "openvino>=2026.4.1"
 ```
 
 ## 📋 Detailed Usage

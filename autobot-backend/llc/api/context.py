@@ -5,10 +5,12 @@
 """LLC heartbeat context API (GH#8236).
 
 Routes:
-  GET  /api/llc/agent/context/{item_id}  — get assembled heartbeat context
+  GET  /api/llc/context/{item_id}  — get assembled heartbeat context (user JWT, org-scoped)
+
+/api/llc/agent/context/{item_id} is the agent-key handler in agent_api.py (#18721); this one used to share
+that path and sat behind it, unreachable.
 """
 
-import uuid
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -22,8 +24,9 @@ from ..kb.context_builder import HeartbeatContextBuilder
 from ..kb.rag_assembler import LLCRAGAssembler
 from ..services.goal import GoalService
 from ..services.work_item_service import WorkItemService
+from ._common import parse_work_item_id
 
-router = APIRouter(prefix="/agent", tags=["llc-context"])
+router = APIRouter(tags=["llc-context"])
 
 
 def _get_context_services() -> Dict[str, Any]:
@@ -67,10 +70,7 @@ async def get_context(
         404: Work item not found
         422: Invalid context_mode
     """
-    try:
-        work_item_id = uuid.UUID(item_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid UUID format")
+    work_item_id = parse_work_item_id(item_id)
 
     services = _get_context_services()
     builder = HeartbeatContextBuilder(

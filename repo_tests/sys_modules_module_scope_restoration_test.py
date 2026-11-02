@@ -54,6 +54,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from repo_tests._paths import repo_root  # noqa: E402
+from repo_tests._ratchet_base import added_entries, base_table  # noqa: E402
 
 from tools.lint._scan_helpers import tracked_paths  # noqa: E402
 
@@ -79,6 +80,8 @@ _RESTORES = re.compile(
     r"|sys\.modules\.update\("
 )
 
+_THIS_FILE = "repo_tests/sys_modules_module_scope_restoration_test.py"
+
 #: Files with a module-scope `sys.modules` write and no restoration anywhere in
 #: them. Frozen so a NEW one fails. Shrinks only, and a shrink must be recorded.
 GRANDFATHERED = frozenset(
@@ -91,7 +94,6 @@ GRANDFATHERED = frozenset(
         "autobot-backend/knowledge_sync_incremental_test.py",
         "autobot-backend/llc/tests/test_autobot_agent_adapter.py",
         "autobot-backend/onboarding/doctor_test.py",
-        "autobot-backend/services/audit_logger_test.py",
         "autobot-backend/services/knowledge/test_contradiction_detector.py",
         "autobot-backend/services/knowledge/test_doc_indexer.py",
         "autobot-backend/services/knowledge/test_doc_indexer_dim_mismatch.py",
@@ -218,3 +220,18 @@ def test_the_grandfathered_list_has_not_gone_stale() -> None:
     assert not stale, "GRANDFATHERED entries that now restore -- remove them, the list only shrinks:\n  " + "\n  ".join(
         stale
     )
+
+
+def test_the_grandfathered_list_never_grows() -> None:
+    """Adding a new offender to the list satisfies both tests above, so the base commit decides (#20243)."""
+    grown = added_entries(GRANDFATHERED, base_table(repo_root(), (_THIS_FILE,), "GRANDFATHERED"))
+    assert not grown, (
+        "GRANDFATHERED gained entries against the base commit -- restore the substitution "
+        "instead of exempting it:\n  " + "\n  ".join(grown)
+    )
+
+
+def test_the_growth_check_finds_an_added_entry() -> None:
+    """Known positive: the check must see an addition before its silence means anything."""
+    planted = "autobot-backend/planted_leak_test.py"
+    assert added_entries(GRANDFATHERED | {planted}, GRANDFATHERED) == [planted]

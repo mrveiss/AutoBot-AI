@@ -17,8 +17,7 @@ from autobot_shared.env_utils import blank_to_none
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_30_DAYS
-from services.grounded_agent_models import VerifiedClaim
-from services.knowledge_grounding_models import VerificationMethod
+from services.knowledge_grounding_models import VerificationMethod, VerifiedClaim
 
 logger = get_logger(__name__)
 

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 
-class ProviderStatus(str, Enum):
+class ProviderHealthStatus(str, Enum):
     """Provider health status enumeration"""
 
     HEALTHY = "healthy"
@@ -35,7 +35,7 @@ class ProviderHealthResult:
         details: Additional provider-specific details
     """
 
-    status: ProviderStatus
+    status: ProviderHealthStatus
     available: bool
     message: str
     response_time: float
@@ -85,7 +85,7 @@ class BaseProviderHealth(ABC):
 
     def _create_result(
         self,
-        status: ProviderStatus,
+        status: ProviderHealthStatus,
         available: bool,
         message: str,
         response_time: float,

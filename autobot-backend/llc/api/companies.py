@@ -16,8 +16,7 @@ Route group: /llc/companies
   POST   /{id}/suspend             — status transition -> PAUSED (GH#12211)
   POST   /{id}/offboard            — status transition -> OFFBOARDING (GH#12234)
   POST   /{id}/archive             — status transition -> ARCHIVED (GH#12211)
-  POST   /{id}/members             — add a member (GH#8223)
-  DELETE /{id}/members/{user_id}   — remove a member (GH#8223)
+  POST, PATCH, DELETE /{id}/members — membership writes: see company_members.py (#19654)
   GET    /{id}/members             — list members (GH#8223)
   GET    /{id}/teams               — list teams + their member user ids (GH#13938)
   POST   /{id}/export/template     — export structural template, secrets scrubbed (GH#8245)
@@ -35,12 +34,17 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.user_management.dependencies import _parse_uuid_safe, get_current_user, require_org_context
-from autobot_shared.auth.permissions import is_admin_role
+from api.user_management.dependencies import (
+    _is_platform_admin_claim,
+    _parse_uuid_safe,
+    get_current_user,
+    require_org_context,
+)
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import QueryDefaults
 from autobot_shared.user_management.models.user import resolve_display_name
 from llc.deps import assert_company_access, get_session, service_dep
-from llc.kb.collections import KbCollectionManager
+from llc.kb.collections import KbCollectionManager, company_id_of
 from llc.models.company import (
     CompanyAncestor,
     CompanyCreate,
@@ -57,6 +61,7 @@ from llc.models.enums import (
     WorkItemStatus,
 )
 from llc.models.membership import LLCCompanyMembership
+from llc.services.authz import NotAuthorisedError, may_attach_under
 from llc.services.backlog import BacklogService
 from llc.services.company import (
     CompanyBudgetError,
@@ -66,9 +71,9 @@ from llc.services.company import (
     CompanyNotFoundError,
     CompanyService,
 )
+from llc.services.company_move_lock import CompanyMoveContendedError
+from llc.services.member_standing import member_people, person_is_active, viewer_standing
 from llc.services.membership_service import (
-    MemberAlreadyExistsError,
-    MemberNotFoundError,
     MembershipService,
 )
 from llc.services.org_chart_placement import apply_reporting_lines, assemble_forest
@@ -90,11 +95,6 @@ _kb_manager = KbCollectionManager()
 # ------------------------------------------------------------------
 # Member management schemas (GH#8223)
 # ------------------------------------------------------------------
-
-
-class MemberAddRequest(BaseModel):
-    user_id: uuid.UUID
-    role: MembershipRole = MembershipRole.MEMBER
 
 
 class MemberRead(BaseModel):
@@ -146,17 +146,6 @@ def _get_service(session: AsyncSession = Depends(get_async_session)) -> CompanyS
     return CompanyService(session=session)
 
 
-def _is_platform_admin(current_user: dict) -> bool:
-    """Platform-admin detection mirroring ``get_tenant_context`` (#12233).
-
-    The collection routes (list/create) carry no ``company_id`` path param, so
-    they authenticate with ``get_current_user`` (not ``require_org_context``)
-    and derive admin status from the JWT the same way the tenant-context
-    dependency does: an explicit ``is_platform_admin`` flag or ``role == "admin"``.
-    """
-    return bool(current_user.get("is_platform_admin")) or is_admin_role(current_user.get("role"))
-
-
 def _current_user_id(current_user: dict) -> str:
     """Return the caller's user id, or raise 401 when absent/malformed (#12233).
 
@@ -195,7 +184,7 @@ async def list_companies(
     companies while leaving them recoverable via the "show archived" toggle.
     """
     companies = await svc.list_root_companies(include_archived=include_archived)
-    if _is_platform_admin(current_user):
+    if _is_platform_admin_claim(current_user):
         return [_to_read(c) for c in companies]
     user_id = _current_user_id(current_user)
     # #12325: one membership query for the caller, then an in-memory filter —
@@ -206,6 +195,35 @@ async def list_companies(
     return [_to_read(c) for c in visible]
 
 
+async def _assert_may_create_under(
+    svc: CompanyService, parent_org_id: Optional[uuid.UUID], user_id: str, current_user: dict
+) -> None:
+    """404 unless the caller may attach under *parent_org_id*: "not mine" reads as "doesn't exist" (#12238)."""
+    admin = _is_platform_admin_claim(current_user)
+    allowed = parent_org_id is None or await may_attach_under(
+        svc.session, parent_org_id, uuid.UUID(user_id), platform_admin=admin
+    )
+    if not allowed:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+
+
+async def _create_and_commit(
+    svc: CompanyService, membership_svc: MembershipService, body: CompanyCreate, user_id: str
+) -> CompanyRead:
+    """Insert, record the creator as OWNER, ensure the KB collections, THEN commit (GH#12323).
+
+    A failure in any step is rolled back by the route, so no committed-but-unreported row;
+    ``ensure_collection`` is idempotent, so a rollback leaves only reusable empty collections.
+    """
+    org = await svc.create(body)
+    await membership_svc.add_member(svc.session, str(org.id), user_id, MembershipRole.OWNER)
+    read = _to_read(org)
+    for suffix in (None, KbCollectionManager.AGENTS_SUFFIX, KbCollectionManager.DECISIONS_SUFFIX):
+        await _kb_manager.ensure_collection(KbCollectionManager.COMPANY_PREFIX, org.id, suffix)
+    await svc.session.commit()
+    return read
+
+
 @router.post("/", response_model=CompanyRead, status_code=status.HTTP_201_CREATED)
 async def create_company(
     body: CompanyCreate,
@@ -213,48 +231,15 @@ async def create_company(
     current_user: dict = Depends(get_current_user),
     membership_svc: MembershipService = Depends(_get_membership_service),
 ) -> CompanyRead:
-    """Create a company (root, or a sub-company under an owned parent).
-
-    Tenant scope (#12233): previously unauthenticated — any caller could create
-    a company and, by supplying ``parent_org_id``, graft one under *another*
-    tenant's company. Now authenticated; a non-admin may only create a
-    sub-company under a parent they belong to (cross-tenant parent → 404, so the
-    parent's existence is not disclosed). Root creation (no ``parent_org_id``,
-    the creation-wizard flow) is open to any authenticated user. The creator is
-    recorded as the company ``OWNER`` so they can immediately access it and it
-    surfaces in their tenant-scoped ``list_companies``.
-    """
+    """Create a root company, or one under a parent the caller owns/admins (#12233, #19634); creator is OWNER."""
     user_id = _current_user_id(current_user)
-    if body.parent_org_id is not None and not _is_platform_admin(current_user):
-        if not await membership_svc.is_member(svc.session, str(body.parent_org_id), user_id):
-            # 404 (not 403): a cross-tenant caller must not distinguish "not my
-            # company" from "doesn't exist" — identical semantics to
-            # assert_company_access (#12238).
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+    await _assert_may_create_under(svc, body.parent_org_id, user_id, current_user)
     try:
-        org = await svc.create(body)
-        await membership_svc.add_member(svc.session, str(org.id), user_id, MembershipRole.OWNER)
-        # GH#12323: serialize the response AND ensure the KB collections BEFORE
-        # commit — mirroring the #12309/#12321 "serialize before commit" invariant
-        # the transition handlers use. If either step fails the except handler's
-        # rollback undoes the INSERT, so a 500 never leaves a committed-but-
-        # unreported company (previously commit() ran first, stranding the row).
-        # ensure_collection is idempotent (get_or_create), so a rollback after a
-        # partial KB pass — or a commit failure after a full one — leaves only
-        # harmless empty collections that the next create call reuses. create()'s
-        # INSERT populates updated_at via RETURNING, so no refresh is needed here.
-        read = _to_read(org)
-        for suffix in (None, KbCollectionManager.AGENTS_SUFFIX, KbCollectionManager.DECISIONS_SUFFIX):
-            await _kb_manager.ensure_collection(KbCollectionManager.COMPANY_PREFIX, org.id, suffix)
-        await svc.session.commit()
-        return read
+        return await _create_and_commit(svc, membership_svc, body, user_id)
     except CompanyIssuePrefixConflictError:
         await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Internal server error")
-    except CompanyBudgetError:
-        await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
-    except CompanyCycleError:
+    except (CompanyBudgetError, CompanyCycleError):
         await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
     except CompanyNotFoundError:
@@ -287,16 +272,15 @@ async def update_company(
     company_id: uuid.UUID,
     body: CompanyUpdate,
     svc: CompanyService = Depends(_get_service),
-    _current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyRead:
-    # Issue #12233: tenant authz — caller's org must match company_id unless admin.
+    # #12233: tenant authz (caller's org must match unless admin); a move is authorized again in move() (#19634)
     assert_company_access(ctx, company_id)  # shared guard (#12238)
+    actor = uuid.UUID(_current_user_id(current_user))
     try:
-        org = await svc.update(company_id, body)
-        # GH#12309: serialize BEFORE commit so that if response building ever
-        # fails the except handler's rollback still undoes the change — never
-        # leave a committed-but-500 state where the DB and caller disagree.
+        org = await svc.update(company_id, body, actor_user_id=actor, platform_admin=ctx.is_platform_admin)
+        # GH#12309: serialize BEFORE commit, so a failed response build is rolled back (never committed-but-500).
         read = _to_read(org)
         await svc.session.commit()
         return read
@@ -306,12 +290,15 @@ async def update_company(
     except CompanyIssuePrefixConflictError:
         await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Internal server error")
-    except CompanyBudgetError:
+    except CompanyMoveContendedError:  # lost a lock race, nothing changed (#19593)
+        await svc.session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Concurrent move in progress; try again")
+    except (CompanyBudgetError, CompanyCycleError):
         await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
-    except CompanyCycleError:
+    except NotAuthorisedError as exc:  # fixed public text only; the ids/roles are logged by the service (#19634)
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.public_detail)
     except Exception:
         await svc.session.rollback()
         raise
@@ -370,8 +357,7 @@ async def activate_company(
     assert_company_access(ctx, company_id)  # shared guard (#12238)
     try:
         org = await svc.activate(company_id)
-        # GH#12309: serialize BEFORE commit so a failed response never persists
-        # a partial transition (commit only lands on the success path).
+        # GH#12309: serialize BEFORE commit so a failed response never persists a partial transition.
         read = _to_read(org)
         await svc.session.commit()
         return read
@@ -557,7 +543,7 @@ async def get_kb_ancestry_collections(
             collection_name=collection_name,
             # False positive: the ValueError above is caught and
             # re-raised as a generic HTTPException; no exception data flows into this response.
-            company_id=collection_name.split(":")[0],
+            company_id=company_id_of(collection_name),
             weight=weight,
         )
         for collection_name, weight in chain
@@ -579,31 +565,12 @@ async def list_members(
 ) -> List[Dict[str, Any]]:
     # Issue #12233: tenant authz — caller's org must match company_id unless admin.
     assert_company_access(ctx, company_id)  # shared guard (#12238)
-    from sqlalchemy import select  # noqa: PLC0415
-
-    from user_management.models.user import User  # noqa: PLC0415
-
     members = await svc.list_members(session, str(company_id))
-    # Resolve display names so the assignee/reviewer pickers show people, not UUIDs.
-    user_ids = [m.user_id for m in members]
-    names: Dict[uuid.UUID, str] = {}
-    # #13956: whether each member may still be given work. Carried, not
-    # filtered -- see `_person_is_active`. The picker needs both facts: who is
-    # a member, and which of them can take an assignment.
-    active: Dict[uuid.UUID, bool] = {}
-    if user_ids:
-        # #13957: ``User.full_name`` is a hybrid property, so the canonical
-        # "display_name, else username" rule is selected in SQL here rather than
-        # re-spelled in the comprehension below. This is an inner select on
-        # ``users``, so a returned row always has the NOT NULL ``username`` to
-        # fall back to and the two-rung rule is complete.
-        rows = (
-            await session.execute(
-                select(User.id, User.full_name, User.is_active, User.deleted_at).where(User.id.in_(user_ids))
-            )
-        ).all()
-        names = {uid: name for uid, name, _ia, _da in rows}
-        active = {uid: _person_is_active(ia, da) for uid, _name, ia, da in rows}
+    # Resolve display names so the assignee/reviewer pickers show people, not UUIDs. `active` is #13956:
+    # whether each member may still be given work. Carried, not filtered -- see `person_is_active`.
+    names, active = await member_people(session, [m.user_id for m in members])
+    # #20073: the caller's own standing, computed here from the verified context so the view only reflects it.
+    standing = await viewer_standing(session, company_id, ctx.user_id, platform_admin=ctx.is_platform_admin)
     return [
         {
             **_to_member_read(m),
@@ -612,48 +579,10 @@ async def list_members(
             # False: nothing is known about them, and unknown must not read as
             # available.
             "is_active": active.get(m.user_id, False),
+            **standing,
         }
         for m in members
     ]
-
-
-@router.post("/{company_id}/members", status_code=status.HTTP_201_CREATED)
-async def add_member(
-    company_id: uuid.UUID,
-    body: MemberAddRequest,
-    session: AsyncSession = Depends(get_async_session),
-    svc: MembershipService = Depends(_get_membership_service),
-    _current_user: dict = Depends(get_current_user),
-    ctx: TenantContext = Depends(require_org_context),
-) -> Dict[str, Any]:
-    # Issue #12233: tenant authz — caller's org must match company_id unless admin.
-    assert_company_access(ctx, company_id)  # shared guard (#12238)
-    try:
-        membership = await svc.add_member(session, str(company_id), str(body.user_id), body.role)
-        await session.commit()
-        return _to_member_read(membership)
-    except MemberAlreadyExistsError:
-        await session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Internal server error")
-
-
-@router.delete("/{company_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_member(
-    company_id: uuid.UUID,
-    user_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
-    svc: MembershipService = Depends(_get_membership_service),
-    _current_user: dict = Depends(get_current_user),
-    ctx: TenantContext = Depends(require_org_context),
-) -> None:
-    # Issue #12233: tenant authz — caller's org must match company_id unless admin.
-    assert_company_access(ctx, company_id)  # shared guard (#12238)
-    try:
-        await svc.remove_member(session, str(company_id), str(user_id))
-        await session.commit()
-    except MemberNotFoundError:
-        await session.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
 
 
 # ------------------------------------------------------------------
@@ -886,6 +815,7 @@ class OrgChartNode(BaseModel):
     # user-management lifecycle at all -- so a bare `False` default would
     # quietly assert every agent is inactive.
     is_active: Optional[bool] = None
+    heartbeat_enabled: Optional[bool] = None  # #15907: periodic schedule on/off; None for a person
     last_heartbeat: Optional[str]
     budget_spent: float
     budget_total: float
@@ -896,33 +826,6 @@ class OrgChartNode(BaseModel):
 
 class OrgChartResponse(BaseModel):
     nodes: List[OrgChartNode]
-
-
-def _person_is_active(is_active: Optional[bool], deleted_at: Optional[Any]) -> bool:
-    """Whether a person may still be given work (#13956).
-
-    Both the members picker and the org chart ask this, and the issue is
-    explicit that they must not diverge -- so neither computes it inline.
-
-    Deliberately *not* a filter. The org chart is where a company reads its own
-    structure, and dropping someone who has left rewrites that structure
-    silently: their work items stay behind (they are only reassigned
-    explicitly), the role they held stays behind, and a chart that omits them
-    cannot explain who those items belong to. Precedent in this module already
-    chose the same way -- ``_compose_human_nodes`` uses an outer join
-    specifically so "a membership whose user row is gone still yields a node
-    instead of vanishing silently".
-
-    So the answer is rendered, not applied: the surfaces show the person and
-    mark them, and the picker refuses them as an assignee.
-
-    A user row that is missing entirely (outer join miss) is inactive: nothing
-    is known about them, and "unknown" must never read as "available".
-    """
-    if deleted_at is not None:
-        return False
-    # `None` reaches here from an outer-join miss, not from a real column value.
-    return bool(is_active)
 
 
 def _heartbeat_status_to_org_status(run_status: Optional[str]) -> str:
@@ -1056,7 +959,7 @@ async def _compose_human_nodes(session: AsyncSession, company_id: uuid.UUID) -> 
                 status="idle",
                 adapter_type=_HUMAN_ADAPTER_TYPE,
                 is_human=True,
-                is_active=_person_is_active(is_active, deleted_at),
+                is_active=person_is_active(is_active, deleted_at),
                 last_heartbeat=None,
                 budget_spent=0.0,
                 budget_total=0.0,
@@ -1116,14 +1019,12 @@ def _compose_agent_node(
         # heartbeat status — see `_resolve_org_status` for the precedence
         # rule and why every other lifecycle value falls through to it.
         status=_resolve_org_status(row.status, run.status if run else None),
-        # #14109: the real ``adapter_type`` column, not ``org_role``. Falls
-        # back to "" (not the role) when NULL: the hire flow
-        # (agent_hires.py) always sets a concrete adapter — "claude_code"
-        # by default — so a NULL here means a legacy/manually-seeded row
-        # with genuinely no configured adapter, and reusing ``org_role``
-        # is exactly the dishonest substitution this fix removes.
+        # #14109: the real ``adapter_type`` column, not ``org_role``. "" when
+        # NULL (a provisioned CEO or a legacy row, no adapter configured): substituting
+        # ``org_role`` is exactly the dishonest substitution this fix removes.
         adapter_type=row.adapter_type or "",
         is_human=False,
+        heartbeat_enabled=row.heartbeat_enabled,
         # Liveness: latest run is picked by created_at; a just-queued run
         # may have no started_at, so fall back to created_at.
         last_heartbeat=(
@@ -1600,12 +1501,7 @@ async def get_company_teams(
     )
 
 
-# Capability-search result bounds. These literals predate #13936; they were named
-# when the hardcoded-values gate flagged them on this PR. (#13950 has since made
-# that gate line-scoped, so the original file-scoped rationale no longer applies —
-# the constants are kept because naming them is right, not because a gate forces it.)
-_AGENT_SEARCH_DEFAULT_LIMIT = 10
-_AGENT_SEARCH_MAX_LIMIT = 100
+# Capability-search result bounds are the shared search defaults (#17888).
 
 
 @router.get("/{company_id}/agents/search")
@@ -1613,9 +1509,9 @@ async def search_agents(
     company_id: uuid.UUID,
     q: str = Query(..., min_length=1, description="Search query for agent capabilities"),
     limit: int = Query(
-        _AGENT_SEARCH_DEFAULT_LIMIT,
+        QueryDefaults.DEFAULT_TOP_K,
         ge=1,
-        le=_AGENT_SEARCH_MAX_LIMIT,
+        le=QueryDefaults.MAX_SEARCH_LIMIT,
         description="Max results",
     ),
     _current_user: dict = Depends(get_current_user),

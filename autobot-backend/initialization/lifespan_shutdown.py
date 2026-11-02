@@ -256,6 +256,12 @@ async def stop_llc_services(app: FastAPI, report: "_ShutdownReport") -> None:
 
 async def stop_periodic_schedulers(app: FastAPI, report: "_ShutdownReport") -> None:
     """Stop the routine, heartbeat, backup and key-rotation schedulers; drain clustering."""
+    # #20117: Stop the schedule reconciler before the pollers it repairs
+    reconciler = getattr(app.state, "schedule_reconciler_task", None)
+    if reconciler is not None and not reconciler.done():
+        reconciler.cancel()
+        await report.run("LLC schedule reconciler stop", asyncio.gather(reconciler, return_exceptions=True))
+
     # GH#8229: Stop LLC routine scheduler
     if hasattr(app.state, "llc_routine_scheduler") and app.state.llc_routine_scheduler:
         if await report.run("LLC routine scheduler shutdown", app.state.llc_routine_scheduler.shutdown()):
@@ -333,6 +339,19 @@ async def stop_background_loops(app: FastAPI, report: "_ShutdownReport") -> None
             await asyncio.gather(presence_task, return_exceptions=True)
     except Exception as _pt_err:
         report.failed("Agent presence sync task cancel", _pt_err)
+
+    # #19010: stop the Telegram poller (it releases its leader lease on cancel)
+    # and any polled replies still being generated.
+    try:
+        poller_task = getattr(app.state, "telegram_poller_task", None)
+        pending = [t for t in getattr(app.state, "telegram_update_tasks", ()) if not t.done()]
+        if poller_task is not None and not poller_task.done():
+            pending.append(poller_task)
+        for task in pending:
+            task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
+    except Exception as _tp_err:
+        report.failed("Telegram poller task cancel", _tp_err)
 
 
 async def shutdown_agent_runtime(app: FastAPI, report: "_ShutdownReport") -> None:

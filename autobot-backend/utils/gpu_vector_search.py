@@ -30,6 +30,7 @@ import numpy as np
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.missing_dep import MissingDep as _MissingDep
 from knowledge.backends import BaseClient, BaseCollection
+from knowledge.backends.where_filter import matches_where
 from knowledge.hnsw_prefetch import attach_prefetcher
 from utils.async_initializable import AsyncInitializable
 
@@ -115,7 +116,7 @@ class VectorSearchConfig:
 
 
 @dataclass
-class SearchResult:
+class GpuSearchResult:
     """Individual search result."""
 
     doc_id: str
@@ -126,7 +127,7 @@ class SearchResult:
 
 
 @dataclass
-class SearchMetrics:
+class GpuSearchMetrics:
     """Performance metrics for search operation."""
 
     query_time_ms: float
@@ -413,9 +414,9 @@ class GPUVectorIndex:
 
         return query
 
-    def _convert_search_results(self, distances: np.ndarray, indices: np.ndarray) -> List["SearchResult"]:
+    def _convert_search_results(self, distances: np.ndarray, indices: np.ndarray) -> List["GpuSearchResult"]:
         """
-        Convert FAISS search output to SearchResult objects.
+        Convert FAISS search output to GpuSearchResult objects.
 
         Issue #620: Extracted from search to reduce function length.
 
@@ -424,7 +425,7 @@ class GPUVectorIndex:
             indices: Index array from FAISS
 
         Returns:
-            List of SearchResult objects
+            List of GpuSearchResult objects
         """
         results = []
         for dist, idx in zip(distances[0], indices[0]):
@@ -442,7 +443,7 @@ class GPUVectorIndex:
                 score = 1.0 / (1.0 + float(dist))  # Convert L2 distance to similarity
 
             results.append(
-                SearchResult(
+                GpuSearchResult(
                     doc_id=doc_id,
                     score=score,
                     distance=float(dist),
@@ -456,7 +457,7 @@ class GPUVectorIndex:
         query_embedding: np.ndarray,
         top_k: int = 10,
         normalize: bool = True,
-    ) -> Tuple[List[SearchResult], SearchMetrics]:
+    ) -> Tuple[List[GpuSearchResult], GpuSearchMetrics]:
         """
         Search for similar vectors.
 
@@ -499,7 +500,7 @@ class GPUVectorIndex:
 
         query_time = (time.perf_counter() - start_time) * 1000
 
-        metrics = SearchMetrics(
+        metrics = GpuSearchMetrics(
             query_time_ms=query_time,
             total_vectors_searched=self.index.ntotal if self.index else 0,
             results_returned=len(results),
@@ -532,9 +533,9 @@ class GPUVectorIndex:
 
     def _convert_batch_search_results(
         self, distances: np.ndarray, indices: np.ndarray, num_queries: int
-    ) -> List[List["SearchResult"]]:
+    ) -> List[List["GpuSearchResult"]]:
         """
-        Convert FAISS batch search output to lists of SearchResult objects.
+        Convert FAISS batch search output to lists of GpuSearchResult objects.
 
         Args:
             distances: Distance array from FAISS of shape (n, k)
@@ -542,7 +543,7 @@ class GPUVectorIndex:
             num_queries: Number of queries processed
 
         Returns:
-            List of SearchResult lists, one per query. Issue #620.
+            List of GpuSearchResult lists, one per query. Issue #620.
         """
         all_results = []
         for q_idx in range(num_queries):
@@ -558,7 +559,7 @@ class GPUVectorIndex:
                 else:
                     score = 1.0 / (1.0 + float(dist))
 
-                results.append(SearchResult(doc_id=doc_id, score=score, distance=float(dist)))
+                results.append(GpuSearchResult(doc_id=doc_id, score=score, distance=float(dist)))
 
             all_results.append(results)
 
@@ -569,7 +570,7 @@ class GPUVectorIndex:
         query_embeddings: np.ndarray,
         top_k: int = 10,
         normalize: bool = True,
-    ) -> Tuple[List[List[SearchResult]], SearchMetrics]:
+    ) -> Tuple[List[List[GpuSearchResult]], GpuSearchMetrics]:
         """
         Batch search for multiple query vectors.
 
@@ -604,7 +605,7 @@ class GPUVectorIndex:
 
         query_time = (time.perf_counter() - start_time) * 1000
 
-        metrics = SearchMetrics(
+        metrics = GpuSearchMetrics(
             query_time_ms=query_time,
             total_vectors_searched=self.index.ntotal * len(queries),
             results_returned=sum(len(r) for r in all_results),
@@ -937,7 +938,7 @@ class HybridVectorSearch(AsyncInitializable):
         collection_name: str = "default",
         metadata_filter: Dict[str, Any] | None = None,
         include_documents: bool = True,
-    ) -> Tuple[List[SearchResult], SearchMetrics]:
+    ) -> Tuple[List[GpuSearchResult], GpuSearchMetrics]:
         """
         Hybrid search using FAISS for speed and ChromaDB for documents.
 
@@ -954,9 +955,11 @@ class HybridVectorSearch(AsyncInitializable):
         # Try FAISS first for speed
         if self.gpu_index.index is not None and self.gpu_index.index.ntotal > 0:
             results, metrics = await self.gpu_index.search(query_embedding, top_k)
-
-            # Enrich results with documents from ChromaDB
-            if include_documents and self.chromadb is not None and results:
+            # Enrich from ChromaDB; a filter is checked there, and one that cannot be checked serves nothing (#19144)
+            if metadata_filter and self.chromadb is None:
+                logger.warning("GPU search with a metadata filter but no ChromaDB client; serving no results (#19144)")
+                results = []
+            elif (include_documents or metadata_filter) and self.chromadb is not None and results:
                 results = await self._enrich_from_chromadb(results, collection_name, metadata_filter)
 
             return results, metrics
@@ -966,7 +969,7 @@ class HybridVectorSearch(AsyncInitializable):
             return await self._chromadb_search(query_embedding, top_k, collection_name, metadata_filter)
 
         # No backend available
-        return [], SearchMetrics(
+        return [], GpuSearchMetrics(
             query_time_ms=0,
             total_vectors_searched=0,
             results_returned=0,
@@ -995,47 +998,45 @@ class HybridVectorSearch(AsyncInitializable):
 
     async def _enrich_from_chromadb(
         self,
-        results: List[SearchResult],
+        results: List[GpuSearchResult],
         collection_name: str,
         metadata_filter: Dict[str, Any] | None = None,
-    ) -> List[SearchResult]:
-        """Fetch document content and metadata from ChromaDB."""
+    ) -> List[GpuSearchResult]:
+        """Fetch document content and metadata from ChromaDB.
+
+        Under a *metadata_filter* a hit is kept only when its metadata was fetched and matches: a hit
+        the lookup misses, or a failed lookup, cannot be checked and is dropped (fail closed, #19144).
+        """
         try:
             collection: BaseCollection = await asyncio.to_thread(self.chromadb.get_collection, collection_name)
             doc_ids = [r.doc_id for r in results]
-
             chromadb_results = await asyncio.to_thread(collection.get, ids=doc_ids, include=["documents", "metadatas"])
             doc_lookup = self._build_doc_lookup(chromadb_results)
 
             enriched = []
             for result in results:
-                if result.doc_id in doc_lookup:
-                    data = doc_lookup[result.doc_id]
-
-                    if metadata_filter:
-                        if not self._matches_filter(data["metadata"], metadata_filter):
-                            continue
-
+                data = doc_lookup.get(result.doc_id)
+                if metadata_filter and (data is None or not self._matches_filter(data["metadata"], metadata_filter)):
+                    continue
+                if data is not None:
                     result.content = data["content"]
                     result.metadata = data["metadata"]
-
                 enriched.append(result)
-
             return enriched
 
         except Exception as e:
             logger.error("Failed to enrich from ChromaDB: %s", e)
-            return results
+            return [] if metadata_filter else results
 
-    def _convert_chromadb_results(self, chromadb_results: Dict[str, Any]) -> List[SearchResult]:
+    def _convert_chromadb_results(self, chromadb_results: Dict[str, Any]) -> List[GpuSearchResult]:
         """
-        Convert ChromaDB query results to SearchResult objects.
+        Convert ChromaDB query results to GpuSearchResult objects.
 
         Args:
             chromadb_results: Raw results from ChromaDB query
 
         Returns:
-            List of SearchResult objects. Issue #620.
+            List of GpuSearchResult objects. Issue #620.
         """
         results = []
         if not chromadb_results["ids"] or not chromadb_results["ids"][0]:
@@ -1046,7 +1047,7 @@ class HybridVectorSearch(AsyncInitializable):
             score = 1.0 / (1.0 + distance)
 
             results.append(
-                SearchResult(
+                GpuSearchResult(
                     doc_id=doc_id,
                     score=score,
                     distance=distance,
@@ -1057,14 +1058,14 @@ class HybridVectorSearch(AsyncInitializable):
 
         return results
 
-    def _create_error_metrics(self) -> SearchMetrics:
+    def _create_error_metrics(self) -> GpuSearchMetrics:
         """
-        Create SearchMetrics for error cases.
+        Create GpuSearchMetrics for error cases.
 
         Returns:
-            SearchMetrics with zero values for error state. Issue #620.
+            GpuSearchMetrics with zero values for error state. Issue #620.
         """
-        return SearchMetrics(
+        return GpuSearchMetrics(
             query_time_ms=0,
             total_vectors_searched=0,
             results_returned=0,
@@ -1079,7 +1080,7 @@ class HybridVectorSearch(AsyncInitializable):
         top_k: int,
         collection_name: str,
         metadata_filter: Dict[str, Any] | None = None,
-    ) -> Tuple[List[SearchResult], SearchMetrics]:
+    ) -> Tuple[List[GpuSearchResult], GpuSearchMetrics]:
         """Fallback search using ChromaDB."""
         start_time = time.perf_counter()
 
@@ -1100,7 +1101,7 @@ class HybridVectorSearch(AsyncInitializable):
             query_time = (time.perf_counter() - start_time) * 1000
             total_vectors_searched = await asyncio.to_thread(collection.count)
 
-            metrics = SearchMetrics(
+            metrics = GpuSearchMetrics(
                 query_time_ms=query_time,
                 total_vectors_searched=total_vectors_searched,
                 results_returned=len(results),
@@ -1116,13 +1117,8 @@ class HybridVectorSearch(AsyncInitializable):
             return [], self._create_error_metrics()
 
     def _matches_filter(self, metadata: Dict[str, Any], filter_dict: Dict[str, Any]) -> bool:
-        """Check if metadata matches filter."""
-        for key, value in filter_dict.items():
-            if key not in metadata:
-                return False
-            if metadata[key] != value:
-                return False
-        return True
+        """Check metadata against a ChromaDB ``where`` filter (shared evaluator, #18874)."""
+        return matches_where(metadata, filter_dict)
 
     async def sync_from_chromadb(self, collection_name: str = "default") -> int:
         """
@@ -1212,8 +1208,8 @@ __all__ = [
     "GPUVectorIndex",
     "HybridVectorSearch",
     "VectorSearchConfig",
-    "SearchResult",
-    "SearchMetrics",
+    "GpuSearchResult",
+    "GpuSearchMetrics",
     "IndexType",
     "SearchBackend",
     "get_hybrid_vector_search",
@@ -1225,7 +1221,7 @@ __all__ = [
 # Issue #3828: VectorSearchEngine adapter
 #
 # VectorSearchEngine._GPUBackend calls get_hybrid_vector_search() directly and
-# converts HybridVectorSearch.SearchResult objects to the canonical form.
+# converts HybridVectorSearch.GpuSearchResult objects to the canonical form.
 # No changes to HybridVectorSearch internals are required; the bridge lives
 # entirely in knowledge/vector_search_engine.py.
 # ---------------------------------------------------------------------------

@@ -49,20 +49,14 @@ permissions:
 jobs:
   changes:
     name: Detect changed paths (backend required context)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
-        id: filter
-        with:
-          # #14054: dorny/paths-filter errors on an event it does not recognise
-          # unless `base` is given. Empty on pull_request, matching the sibling.
-          base: ${{ github.event.merge_group.base_sha || '' }}
-          # #12986: `backend` is defined in the canonical filter file.
-          filters: .github/filters/backend-python-paths.yml
+    uses: ./.github/workflows/_changes.yml
+    with:
+      timeout_minutes: 10
+      # #14054: dorny/paths-filter errors on an event it does not recognise
+      # unless `base` is given. Empty on pull_request, matching the sibling.
+      merge_group_base: true
+      # #12986: `backend` is defined in the canonical filter file.
+      filters: .github/filters/backend-python-paths.yml
 
   startup-import-smoke:
     # IDENTICAL to the job name in startup-import-smoke.yml on purpose: the

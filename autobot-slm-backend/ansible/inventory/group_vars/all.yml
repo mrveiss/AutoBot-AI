@@ -15,6 +15,22 @@
 autobot_ssh_key_path: "/etc/autobot/ssh/autobot_key"
 
 # ==========================================
+# AI STACK PORT (#17856)
+# ==========================================
+# The ONE ansible literal for the AI-stack port. Every other home (inventory, role defaults,
+# playbook vars, backend.env) references `ai_stack_port`; none restates 8080. 11434 is the
+# Ollama port, a different service. Mirrors backend ssot_config.port.aistack
+# (AUTOBOT_AI_STACK_PORT); ansible cannot import that pydantic default, so the two literals are
+# kept equal by repo_tests/ansible_concept_forks_17856_test.py.
+ai_stack_port: 8080
+
+# ==========================================
+# CHROMADB HEARTBEAT PATH (#19413)
+# ==========================================
+# chromadb_heartbeat_path lives in vars/chromadb_endpoints.yml, loaded by the plays that probe
+# ChromaDB (#19413).
+
+# ==========================================
 # AUTOBOT APPLICATION CONFIGURATION
 # ==========================================
 
@@ -56,6 +72,9 @@ autobot:
   version: "2.0.0"
   environment: "production"
   domain: "autobot.internal"
+  # THE install root (#15632): the folder AutoBot deploys to. Every path under it derives
+  # from `autobot.base_dir`; install.sh's AUTOBOT_BASE must equal it (#18880). Plain string:
+  # controller plays read this mapping, so it may hold no template (#15731).
   base_dir: "/opt/autobot"
   user: "autobot"
   group: "autobot"
@@ -146,11 +165,11 @@ system:
 
   # System directories
   directories:
-    - "/opt/autobot"
+    - "{{ autobot.base_dir }}"
     - "/var/log/autobot"
     - "/var/lib/autobot"
     - "/etc/autobot"
-    - "/opt/autobot/backups"
+    - "{{ autobot.base_dir }}/backups"
 
 # ==========================================
 # SECURITY CONFIGURATION
@@ -204,6 +223,17 @@ logging:
 # MONITORING CONFIGURATION
 # ==========================================
 
+# The backend's systemd EnvironmentFile (#16375 scrape token lives here). One declaration,
+# shared by the backend role and the updater's monitoring play (#18994); override per host
+# if the backend env file lives elsewhere.
+autobot_backend_env_file: "/etc/autobot/autobot-backend.env"
+
+# Addresses the monitoring services bind to / are reached at (#18556). Declared here,
+# not in roles/monitoring/defaults, because the slm_agent role renders the monitoring
+# role's node_exporter.service.j2 as well and role defaults are not shared across roles.
+monitoring_listen_address: "0.0.0.0"
+monitoring_local_host: "localhost"
+
 monitoring:
   enabled: true
 
@@ -247,7 +277,7 @@ backup:
 
   # Backup storage
   storage:
-    local_path: "/opt/autobot/backups"
+    local_path: "{{ autobot.base_dir }}/backups"
     compress: true
     encryption: true
 
@@ -279,13 +309,18 @@ debug:
   log_level: "debug"
   verbose_output: false
 
+# Node.js major for every fleet install path: pinned to the repo-root .nvmrc by
+# repo_tests/node_major_one_home_19328_test.py (#19328). Roles and playbooks read this, never a literal.
+node_major: "22"
+# The NodeSource base URL has one home, read by every play (env-backed like the shell SSOT, #19662).
+nodesource_base_url: "{{ lookup('env', 'AUTOBOT_NODESOURCE_BASE_URL') | default('https://deb.nodesource.com', true) }}"
+
+# #19805: where a GPU host gets torch. The version pair stays in constraints/shared.txt; every build of
+# that pair must exist on this index. Override for a GPU or driver this CUDA does not suit.
+backend_torch_cuda_index_url: "{{ lookup('env', 'AUTOBOT_TORCH_CUDA_INDEX_URL') | default('https://download.pytorch.org/whl/cu130', true) }}"
+
 # Package repositories
 repositories:
-  # Add NodeSource for Node.js
-  nodejs:
-    key_url: "https://deb.nodesource.com/gpgkey/nodesource.gpg.key"
-    repo: "deb https://deb.nodesource.com/node_20.x {{ ansible_facts['distribution_release'] }} main"
-
   # Add Redis repository
   redis:
     key_url: "https://packages.redis.io/gpg"
@@ -324,6 +359,19 @@ _role_aliases:
   browser: autobot-browser-worker
   browser-service: autobot-browser-worker
   tts-worker: autobot-tts-worker
+
+# ==========================================
+# ROLE-ACTIVE FACTS: THE ONLY DEFINITION lives in this file (#14678, #18514)
+# ==========================================
+# role_*_active and chromadb_service_owner are defined below and nowhere else.
+# They live IN all.yml, never in a sibling group_vars/all/ directory: Ansible
+# resolves the `all` group to that directory when both exist and then does NOT
+# load all.yml at all, which left autobot.base_dir undefined (#18514).
+# tools/lint/check_group_vars_no_shadow.py forbids the coexistence.
+# Consumers: every inventory with a group_vars/ directory beside it (dynamic
+# builders link one, #11781, #14286), and deploy.yml via `vars_files:` naming
+# this file, because its callers pass a bare `-i "<host>,"` string (#15348).
+# tools/lint/check_role_facts_single_source.py enforces the single definition.
 
 # ==========================================
 # SHARED ROLE-ACTIVE FACTS (#7031, #7053)
@@ -419,27 +467,18 @@ role_redis_active: >-
      (inventory_hostname in (groups.get('redis', []) | default([]))) or
      (inventory_hostname in (groups.get('database', []) | default([]))) }}
 
+# #13870: ChromaDB is a database, so the db stack owns its unit wherever that
+# stack is present. It is also the only venv with chromadb installed — the
+# ai-stack fallback exists solely for a topology that runs ai-stack alone.
+chromadb_service_owner: "{{ 'redis' if (role_redis_active | default(false) | bool) else 'ai-stack' }}"
+
+
 # #13060: NO groups['main'] / groups['backend'] fallback. Those clauses pulled the
 # full desktop stack (tigervnc, x11vnc, novnc, websockify, xfce4) onto every backend
 # and main host, including ones that never selected the role. Activation is explicit,
 # matching role_xrdp_active below.
 # Migration: a backend/main host that relied on implicit activation must now list
 # 'vnc' in node_roles (or join vnc_nodes) to keep its desktop provisioned.
-# #13870: ChromaDB is a database, so the db stack owns its unit wherever that
-# stack is present. It is also the only venv with chromadb installed — the
-# ai-stack fallback exists solely for a topology that runs ai-stack alone.
-chromadb_service_owner: "{{ 'redis' if (role_redis_active | default(false) | bool) else 'ai-stack' }}"
-
-# #15317: separate from chromadb_host (the DIAL address handed to clients via
-# CHROMADB_HOST). Both templates that render the unit used chromadb_host as the
-# BIND address too, and one of the two hardcoded 0.0.0.0 directly — in front of
-# four unpatchable chromadb advisories, one a pre-auth RCE. Loopback by default
-# (Option A): a multi-node install must set this explicitly and add a
-# subnet-scoped firewall rule, which fails loud (unreachable) rather than silent
-# (exposed). Matches the bind the bare-metal installer already uses
-# (install-bare-metal.sh's own heredoc unit).
-chromadb_bind_host: "127.0.0.1"
-
 role_vnc_active: >-
   {{ ('vnc' in (node_roles | default([]))) or
      (inventory_hostname in (groups.get('vnc_nodes', []) | default([]))) }}
@@ -452,14 +491,6 @@ role_xrdp_active: >-
 # #14567: `ai_stack`/`llm_nodes` are declaration-gated deploy targets, so this
 # fact reads node_roles_declared (#14560).
 #
-# #14678: this is the canonical, single tracked definition of the role-active
-# facts. It used to have two byte-identical siblings kept in step by a diff
-# guard; the guard worked but enforcing three copies was never the fix #7095
-# asked for. The test inventory's copy is now generated from this file at CI
-# time (never tracked). One tracked sibling remains --
-# playbooks/vars/role_active_facts.yml -- because deploy.yml's only two
-# callers invoke it with a bare host inventory that has no group_vars to
-# discover; see deploy.yml's own comment and check_role_facts_synced.py.
 # #14682: `ai_stack` is NOT an LLM signal. It is granted by `chromadb` and
 # `tts-worker` as well as by `ai-stack` and `autobot-llm-*`, so gating on it
 # meant declaring a vector database or a speech synthesiser ran roles/llm --
@@ -476,6 +507,17 @@ role_llm_active: >-
 role_tts_worker_active: >-
   {{ ('tts-worker' in (node_roles | default([]))) or
      ('autobot-tts-worker' in (node_roles | default([]))) }}
+
+# #15317: separate from chromadb_host (the DIAL address handed to clients via
+# CHROMADB_HOST). Both templates that render the unit used chromadb_host as the
+# BIND address too, and one of the two hardcoded 0.0.0.0 directly — in front of
+# four unpatchable chromadb advisories, one a pre-auth RCE. Loopback by default
+# (Option A): a multi-node install must set this explicitly and add a
+# subnet-scoped firewall rule, which fails loud (unreachable) rather than silent
+# (exposed). Matches the bind the bare-metal installer already uses
+# (install-bare-metal.sh's own heredoc unit).
+chromadb_bind_host: "127.0.0.1"
+
 
 # ==========================================
 # SLM MANAGER IDENTITY (#9956)
@@ -518,3 +560,13 @@ slm_manager_node_id: >-
 # read Ansible inventory, so the two halves carry the number separately and
 # must be changed together.
 slm_frontend_release_keep: 3
+
+# #19317/#19366: the node's flat TLS directory (server-cert.pem, server-key.pem,
+# ca-cert.pem). Python's home is DEFAULT_TLS_REMOTE_CERT_DIR in
+# autobot_shared/env_registry_tls.py; this is the ONE Ansible spelling of it.
+# Plays that do not see group_vars (enable-tls.yml via api/tls.py's static
+# inventory.yml, inline `-i "<ip>,"` runs) fall back per file to
+# `autobot_tls_remote_cert_dir | default('/etc/autobot/certs')`, spelled once
+# per file. repo_tests/tls_cert_dir_one_home_19317_test.py pins every fallback
+# to the Python home and fails on any bare literal outside them.
+autobot_tls_remote_cert_dir: "/etc/autobot/certs"

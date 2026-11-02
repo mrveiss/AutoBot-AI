@@ -57,6 +57,7 @@
   register: node_version
   changed_when: false
   tags: ['frontend', 'validation']
+  when: not ansible_check_mode
 
 - name: "Frontend | Ensure frontend directory exists"
   file:
@@ -73,6 +74,7 @@
     src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-frontend/"
     dest: "{{ frontend_install_dir }}/autobot-frontend/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=node_modules"
       - "--exclude=dist"
       - "--exclude=__pycache__"
@@ -115,6 +117,7 @@
     src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-plugins/"
     dest: "{{ frontend_install_dir }}/autobot-plugins/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=node_modules"
       - "--exclude=dist"
       - "--exclude=.git"
@@ -139,6 +142,7 @@
     src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/libs/"
     dest: "{{ frontend_install_dir }}/libs/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=node_modules"
       - "--exclude=dist"
       - "--exclude=.git"
@@ -202,7 +206,7 @@
 # node_modules/@autobot/* unlinked (or dangling at an old libs revision) so the
 # install below does NOT recreate the file: symlinks — vite then externalises
 # @autobot/ui to a bare specifier and the app white-pages at runtime. Remove the
-# @autobot scope first so `npm install` re-creates every file: workspace symlink
+# @autobot scope first so the install re-creates every file: workspace symlink
 # against the freshly-synced libs/ + autobot-plugins/ trees.
 - name: "Frontend | Remove stale @autobot workspace symlinks so npm relinks file: deps (#12112)"
   ansible.builtin.file:
@@ -213,9 +217,12 @@
   when: package_json_path.stat.exists
   tags: ['frontend', 'npm']
 
+# #20517: npm ci, the same install the updater runs: `npm install` rewrote the deployed
+# package-lock.json, which the Full-Tree Drift Check then reported as drift. esbuild is
+# declared in package.json and pinned in the lockfile, so this installs it too.
 - name: "Frontend | Install npm dependencies"
   ansible.builtin.command:
-    cmd: npm install --legacy-peer-deps
+    cmd: npm ci --ignore-scripts
     chdir: "{{ frontend_install_dir }}/autobot-frontend"
   become: true
   become_user: "{{ frontend_user }}"
@@ -224,16 +231,6 @@
   when: package_json_path.stat.exists
   register: _npm_install
   changed_when: _npm_install.rc == 0
-  tags: ['frontend', 'npm']
-
-- name: "Frontend | Install esbuild (required by vite/rolldown)"
-  ansible.builtin.command:
-    cmd: npm install esbuild --legacy-peer-deps
-    chdir: "{{ frontend_install_dir }}/autobot-frontend"
-  become: true
-  become_user: "{{ frontend_user }}"
-  when: package_json_path.stat.exists
-  changed_when: true
   tags: ['frontend', 'npm']
 
 # #10084: Vite bakes VITE_* into the bundle at BUILD time from .env* files in
@@ -335,7 +332,7 @@
 - name: "Frontend | Configure firewall - Allow HTTPS"
   ufw:
     rule: allow
-    port: "{{ frontend_port }}"
+    port: "{{ frontend_tls_port }}"
     proto: tcp
     comment: "HTTPS"
   become: true
@@ -370,7 +367,7 @@
   debug:
     msg:
       - "=== Frontend Configuration Complete ==="
-      - "Node.js: {{ node_version.stdout }}"
+      - "Node.js: {{ node_version.stdout | default('not probed under --check') }}"
       - "Frontend URL: https://{{ ansible_facts['default_ipv4'].address | default(ansible_host) }}"
       - "TLS: Enabled ({{ frontend_tls_cert }})"
       - "API Proxy: {{ backend_host | default(ansible_host) }}:{{ backend_port | default(8443) }}"

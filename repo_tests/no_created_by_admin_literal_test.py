@@ -86,7 +86,7 @@ def _tracked_backend_python_files(root: Path = REPO_ROOT) -> list[Path]:
 REACH = declare(
     "no-created-by-admin-literal",
     discover=_tracked_backend_python_files,
-    floor=3514,
+    floor=4131,  # re-pinned mid-window (#19654): population 4158
     growth=300,
     what="tracked backend python files (tests excluded)",
 )

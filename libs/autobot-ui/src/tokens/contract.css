@@ -28,6 +28,10 @@
   --aui-color-primary-active: #3730a3;
   --aui-color-primary-contrast: #ffffff; /* text/icon on a primary surface   */
 
+  /* ---- Color: brand mark (tile + stroke of BrandMark) ---------------- */
+  --aui-brand-bg: #1e2a44;
+  --aui-brand-fg: #ffffff;
+
   /* ---- Color: neutrals / chrome -------------------------------------- */
   --aui-color-surface: #ffffff;          /* component background              */
   --aui-color-surface-raised: #f8fafc;   /* hover / elevated rows            */
@@ -40,13 +44,37 @@
 
   /* ---- Color: status ------------------------------------------------- */
   --aui-color-success: #16a34a;
-  --aui-color-success-contrast: #ffffff;
+  --aui-color-success-contrast: #000000;
   --aui-color-warning: #d97706;
-  --aui-color-warning-contrast: #ffffff;
-  --aui-color-danger: #dc2626;
-  --aui-color-danger-contrast: #ffffff;
+  --aui-color-warning-contrast: #000000;
+  --aui-color-error: #dc2626;
+  --aui-color-error-contrast: #ffffff;
+  /* Solid-fill shades behind the white contrast (#19872): the status fill itself
+     for error, a darker sky for info (white on #0284c7 is 4.10:1). */
+  --aui-color-error-solid: #dc2626;
   --aui-color-info: #0284c7;
   --aui-color-info-contrast: #ffffff;
+  --aui-color-info-solid: #0369a1;
+
+  /* ---- Color: risk tier (#13422) -------------------------------------
+   * The four-rung RiskTier ladder (autobot_shared/risk_tier.py). Aliases of the
+   * status colours, so each theme resolves them through the adapter; a theme
+   * may override one tier without touching the status set. */
+  --aui-risk-low: var(--aui-color-success);
+  --aui-risk-low-contrast: var(--aui-color-success-contrast);
+  --aui-risk-medium: var(--aui-color-warning);
+  --aui-risk-medium-contrast: var(--aui-color-warning-contrast);
+  --aui-risk-high: var(--aui-color-error);
+  --aui-risk-high-contrast: var(--aui-color-error-contrast);
+  --aui-risk-critical: var(--aui-color-error);
+  --aui-risk-critical-contrast: var(--aui-color-error-contrast);
+  /* Label ink per tier: 40% tier colour, 60% theme text (contrast rationale in RiskBadge.vue).
+     Resolved at :root, where every theme sets its inputs; a subtree override of
+     --aui-color-text does not re-tint it (#13422). */
+  --aui-risk-low-ink: color-mix(in srgb, var(--aui-risk-low) 40%, var(--aui-color-text));
+  --aui-risk-medium-ink: color-mix(in srgb, var(--aui-risk-medium) 40%, var(--aui-color-text));
+  --aui-risk-high-ink: color-mix(in srgb, var(--aui-risk-high) 40%, var(--aui-color-text));
+  --aui-risk-critical-ink: color-mix(in srgb, var(--aui-risk-critical) 40%, var(--aui-color-text));
 
   /* ---- Color: overlay (modal/dialog backdrop scrim) ------------------ */
   --aui-color-overlay: rgb(0 0 0 / 0.5);
@@ -86,8 +114,49 @@
   --aui-space-5: 1.25rem;
   --aui-space-6: 1.5rem;
 
+  /* ---- Form controls (BaseInput) ------------------------------------- */
+  --aui-input-bg: #ffffff;
+  --aui-input-border: #cbd5e1;
+  --aui-input-height-sm: 32px;
+  --aui-input-height-md: 40px;
+  --aui-input-height-lg: 48px;
+  --aui-input-padding-x: 0.75rem;
+
   /* ---- Layering ------------------------------------------------------ */
+  --aui-z-dropdown: 100;
   --aui-z-modal: 1000;
+  --aui-z-tooltip: 1200;
+  --aui-z-toast: calc(var(--aui-z-tooltip) + 100);
+  --aui-z-raised: 1;
+  --aui-z-skip-link: calc(var(--aui-z-modal) + 1);
+
+  /* ---- Tooltip (BaseTooltip) ----------------------------------------- */
+  --aui-tooltip-delay: 500ms;
+  --aui-tooltip-hide-delay: 100ms;
+  --aui-tooltip-offset: 8px;
+  --aui-tooltip-max: 280px;
+
+  /* ---- Table (BaseTable; spec 4.6) ------------------------------------ */
+  --aui-table-font-size: 13px;
+  --aui-table-row-h: 44px;
+  --aui-table-cell-px: 16px;
+  --aui-table-cell-py: 10px;
+  --aui-table-head-h: 36px;
+  --aui-table-head-bg: var(--aui-color-surface-raised);
+  --aui-table-head-fg: var(--aui-color-text-muted);
+  --aui-table-head-font: 600 11.5px/1.2 var(--aui-font-sans);
+  --aui-table-head-case: uppercase;
+  --aui-table-head-ls: 0.05em;
+  --aui-table-head-border: 1px solid var(--aui-color-border);
+  --aui-table-border: 1px solid var(--aui-color-border);
+  --aui-table-row-hover: var(--aui-color-surface-raised);
+  --aui-table-row-selected: var(--aui-color-surface-raised);
+  --aui-table-row-selected-edge: 3px solid var(--aui-color-primary);
+  --aui-table-zebra-bg: var(--aui-color-surface-raised);
+  --aui-table-row-tint: 8%;
+  --aui-table-check-w: 44px;
+  --aui-table-min-col: 96px;
+  --aui-table-num: tabular-nums;
 
   /* ---- Motion (components must honor prefers-reduced-motion) ---------- */
   --aui-transition-fast: 120ms ease;

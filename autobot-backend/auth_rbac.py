@@ -6,8 +6,9 @@
 Role-Based Access Control (RBAC) Permission System for AutoBot API
 
 This module provides fine-grained permission control for API endpoints through
-decorators and FastAPI dependencies. It integrates with the existing SecurityLayer
-for permission checks and audit logging.
+FastAPI dependencies. ``require_permission`` / ``require_any_permission`` are the
+shared gate's (``autobot_shared.auth.permission_gate``, #18263), re-exported;
+``require_role`` stays here and audits through SecurityLayer.
 
 Issue #744: Phase 6 - RBAC permission decorators for API endpoints.
 Issue #6511: Permission/Role/ROLE_PERMISSIONS moved to autobot_shared.auth.permissions
@@ -16,12 +17,10 @@ Issue #6511: Permission/Role/ROLE_PERMISSIONS moved to autobot_shared.auth.permi
 
 Usage:
     from auth_rbac import require_permission, require_role, Permission
-from autobot_shared.logging_manager import get_logger
 
     @router.get("/admin/users")
     async def list_users(
-        current_user: dict = Depends(get_current_user),
-        _: bool = Depends(require_permission(Permission.ADMIN_USERS_READ)),
+        caller: dict = Depends(require_permission(Permission.ADMIN_USERS_READ)),
     ):
         ...
 
@@ -35,9 +34,11 @@ from autobot_shared.logging_manager import get_logger
 
 from typing import Callable, List
 
-from fastapi import Request
+from fastapi import Depends, Request
 
-from auth_middleware import get_auth_middleware
+from auth_middleware import check_admin_permission, resolve_human_user
+from autobot_shared.auth.mcp_tool_permissions import required_permission
+from autobot_shared.auth.permission_gate import PermissionGate
 from autobot_shared.auth.permissions import (  # noqa: F401 — re-exported for callers
     ADMIN_ROLES,
     ROLE_PERMISSIONS,
@@ -63,125 +64,49 @@ _get_security_layer = lazy_singleton(SecurityLayer)
 # callers keep working.
 
 
-def _get_user_permissions(user_role: str) -> List[str]:
+async def _request_caller(request: Request) -> dict | None:
+    """The authenticated caller of *request*, or None: the backend's caller for the shared gate.
+
+    The canonical resolution, so a token revoked by a password change is 401 here too (#18688).
     """
-    Get all permissions for a user role.
+    return await resolve_human_user(request)
 
-    Combines RBAC role permissions with SecurityLayer defaults.
 
-    Args:
-        user_role: The user's role string
+def _wire_rbac() -> None:
+    """Import this service's RBAC shim, which calls ``configure_rbac`` (DB grants, deny audit)."""
+    import user_management.middleware.rbac_middleware  # noqa: F401, PLC0415
 
-    Returns:
-        List of permission strings the user has
+
+# The one shared gate (#18263). The decision is ``autobot_shared.auth.permission_evaluator``
+# (ROLE_PERMISSIONS UNION DB custom-role grants, AND API-key scope narrowing); a denial is
+# audited through the shared RBAC audit writer and answered 403, a missing caller 401. The
+# string-accepting forms that lived here, and their SecurityLayer-defaults grant source,
+# are retired; the decision changes are tabulated on #18263.
+_permission_gate = PermissionGate(_request_caller, wire_rbac=_wire_rbac)
+require_permission = _permission_gate.require_permission
+require_any_permission = _permission_gate.require_any_permission
+
+
+async def check_mcp_tool_permission(request: Request) -> None:
+    """Router dependency for a bridge's ``/mcp/<tool>`` routes: the caller holds the tool's permission (#19087).
+
+    The permission is read from ``mcp_tool_permissions.TOOL_PERMISSIONS`` (the SSOT), never named per route. An
+    undeclared tool is refused, as the dispatcher refuses it (#14523). Routes outside ``/mcp/<tool>`` (and the
+    ``/mcp/tools`` listing) pass; the router's own gate still applies to them.
     """
-    permissions = []
-
-    # Get RBAC permissions from our mapping
-    try:
-        role_enum = Role(role_value(user_role).lower())
-        role_perms = ROLE_PERMISSIONS.get(role_enum, [])
-        permissions.extend([p.value if isinstance(p, Permission) else p for p in role_perms])
-    except ValueError:
-        # Unknown role, check if it's in SecurityLayer defaults
-        pass
-
-    # Also get permissions from SecurityLayer (for backward compatibility)
-    security_perms = _get_security_layer()._get_default_role_permissions(user_role)
-    permissions.extend(security_perms)
-
-    return list(set(permissions))  # Remove duplicates
+    route_path = getattr(request.scope.get("route"), "path", "")
+    parts = route_path.rstrip("/").split("/")
+    if len(parts) < 2 or parts[-2] != "mcp" or parts[-1] == "tools":
+        return
+    permission = required_permission(parts[-1])
+    if permission is None:
+        raise_auth_error("AUTH_0003", f"MCP tool {parts[-1]} has no declared permission")
+    await _permission_gate.enforce(request, await _request_caller(request), (permission,))
 
 
-def has_permission(user_data: dict, permission: Permission | str) -> bool:
-    """
-    Check if a user has a specific permission.
-
-    Args:
-        user_data: User data dict with 'role' key
-        permission: The permission to check (Permission enum or string)
-
-    Returns:
-        True if user has the permission, False otherwise
-    """
-    if not user_data:
-        return False
-
-    user_role = user_data.get("role", "")
-    if not user_role:
-        return False
-
-    # Convert Permission enum to string if needed
-    perm_str = permission.value if isinstance(permission, Permission) else permission
-
-    # Check using SecurityLayer for audit logging
-    return _get_security_layer().check_permission(user_role, perm_str)
-
-
-def _deny_permission_access(user_data: dict, perm_str: str, request: Request) -> None:
-    """
-    Log denied access and raise auth error. Issue #620.
-
-    Args:
-        user_data: User data dict
-        perm_str: Permission string
-        request: FastAPI request object
-
-    Raises:
-        HTTPException via raise_auth_error
-    """
-    _get_security_layer().audit_log(
-        action="permission_denied",
-        user=user_data.get("username", "unknown"),
-        outcome="denied",
-        details={
-            "permission_required": perm_str,
-            "user_role": user_data.get("role"),
-            "endpoint": str(request.url.path),
-        },
-    )
-    raise_auth_error(
-        "AUTH_0003",
-        f"Permission '{perm_str}' required for this operation",
-    )
-
-
-def require_permission(
-    permission: Permission | str,
-) -> Callable:
-    """
-    FastAPI dependency that requires a specific permission.
-
-    Usage:
-        @router.get("/endpoint")
-        async def endpoint(
-            current_user: dict = Depends(get_current_user),
-            _: bool = Depends(require_permission(Permission.ANALYTICS_VIEW)),
-        ):
-            ...
-
-    Args:
-        permission: The required permission
-
-    Returns:
-        FastAPI dependency function
-
-    Issue #744: RBAC permission decorator for API endpoints.
-    """
-
-    def dependency(request: Request) -> bool:
-        """Check permission and return True or raise error."""
-        user_data = get_auth_middleware().get_user_from_request(request)
-        if not user_data:
-            raise_auth_error("AUTH_0002", "Authentication required")
-
-        perm_str = permission.value if isinstance(permission, Permission) else permission
-        if not has_permission(user_data, permission):
-            _deny_permission_access(user_data, perm_str, request)
-
-        return True
-
-    return dependency
+async def check_admin_mcp_tool_permission(request: Request, _admin: bool = Depends(check_admin_permission)) -> None:
+    """The admin-role gate (a sub-dependency), then the tool's declared permission (#19087)."""
+    await check_mcp_tool_permission(request)
 
 
 def _deny_role_access(user_data: dict, allowed_roles: List[str], user_role: str, request: Request) -> None:
@@ -213,34 +138,6 @@ def _deny_role_access(user_data: dict, allowed_roles: List[str], user_role: str,
     )
 
 
-def _deny_any_permission_access(user_data: dict, perm_strs: List[str], request: Request) -> None:
-    """
-    Log denied permission access when none of required permissions match. Issue #620.
-
-    Args:
-        user_data: User data dict
-        perm_strs: List of permission strings that were required
-        request: FastAPI request object
-
-    Raises:
-        HTTPException via raise_auth_error
-    """
-    _get_security_layer().audit_log(
-        action="permission_denied",
-        user=user_data.get("username", "unknown"),
-        outcome="denied",
-        details={
-            "permissions_required_any": perm_strs,
-            "user_role": user_data.get("role"),
-            "endpoint": str(request.url.path),
-        },
-    )
-    raise_auth_error(
-        "AUTH_0003",
-        f"One of permissions {perm_strs} required for this operation",
-    )
-
-
 def require_role(*roles: Role | str) -> Callable:
     """
     FastAPI dependency that requires one of the specified roles.
@@ -262,9 +159,9 @@ def require_role(*roles: Role | str) -> Callable:
     Issue #744: RBAC role decorator for API endpoints.
     """
 
-    def dependency(request: Request) -> bool:
-        """Check role and return True or raise error."""
-        user_data = get_auth_middleware().get_user_from_request(request)
+    async def dependency(request: Request) -> bool:
+        """Check role and return True or raise error; a revoked JWT is 401 (#18688)."""
+        user_data = await resolve_human_user(request)
         if not user_data:
             raise_auth_error("AUTH_0002", "Authentication required")
 
@@ -284,72 +181,10 @@ def require_role(*roles: Role | str) -> Callable:
     return dependency
 
 
-def require_any_permission(
-    *permissions: Permission | str,
-) -> Callable:
-    """
-    FastAPI dependency that requires ANY of the specified permissions.
-
-    Usage:
-        @router.get("/endpoint")
-        async def endpoint(
-            current_user: dict = Depends(get_current_user),
-            _: bool = Depends(require_any_permission(
-                Permission.ANALYTICS_VIEW,
-                Permission.ADMIN_SYSTEM
-            )),
-        ):
-            ...
-
-    Args:
-        *permissions: The permissions (user needs at least one)
-
-    Returns:
-        FastAPI dependency function
-    """
-
-    def dependency(request: Request) -> bool:
-        """Check at least one permission and return True or raise error."""
-        user_data = get_auth_middleware().get_user_from_request(request)
-        if not user_data:
-            raise_auth_error("AUTH_0002", "Authentication required")
-
-        for perm in permissions:
-            if has_permission(user_data, perm):
-                return True
-
-        perm_strs = [p.value if isinstance(p, Permission) else p for p in permissions]
-        _deny_any_permission_access(user_data, perm_strs, request)
-
-    return dependency
-
-
-# Convenience functions for common permission checks
-def check_analytics_permission(request: Request) -> bool:
-    """Dependency for analytics endpoints. Issue #744."""
-    return require_permission(Permission.ANALYTICS_VIEW)(request)
-
-
-def check_analytics_admin_permission(request: Request) -> bool:
-    """Dependency for analytics admin endpoints. Issue #744."""
-    return require_permission(Permission.ANALYTICS_MANAGE)(request)
-
-
-def check_knowledge_read_permission(request: Request) -> bool:
-    """Dependency for knowledge read endpoints. Issue #744."""
-    return require_permission(Permission.KNOWLEDGE_READ)(request)
-
-
-def check_knowledge_write_permission(request: Request) -> bool:
-    """Dependency for knowledge write endpoints. Issue #744."""
-    return require_permission(Permission.KNOWLEDGE_WRITE)(request)
-
-
-def check_agent_execute_permission(request: Request) -> bool:
-    """Dependency for agent execution endpoints. Issue #744."""
-    return require_permission(Permission.AGENT_EXECUTE)(request)
-
-
-def check_shell_execute_permission(request: Request) -> bool:
-    """Dependency for shell execution (dangerous). Issue #744."""
-    return require_permission(Permission.SHELL_EXECUTE)(request)
+# Pre-built dependencies for common permission checks (Issue #744), on the shared gate.
+check_analytics_permission = require_permission(Permission.ANALYTICS_VIEW)
+check_analytics_admin_permission = require_permission(Permission.ANALYTICS_MANAGE)
+check_knowledge_read_permission = require_permission(Permission.KNOWLEDGE_READ)
+check_knowledge_write_permission = require_permission(Permission.KNOWLEDGE_WRITE)
+check_agent_execute_permission = require_permission(Permission.AGENT_EXECUTE)
+check_shell_execute_permission = require_permission(Permission.SHELL_EXECUTE)

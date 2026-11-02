@@ -67,6 +67,17 @@ Environment=AUTOBOT_PROJECT_ROOT={{ slm_agent_dir | dirname }}
 # Issue #9226: Redis connection for autobot_shared imports
 Environment=REDIS_HOST={{ slm_agent_redis_host }}
 Environment=AUTOBOT_REDIS_HOST={{ slm_agent_redis_host }}
+# #19628: ProtectSystem=strict leaves only ReadWritePaths writable, so the
+# shared logging manager's default ./logs under WorkingDirectory is read-only
+# and get_logger() at import crash-looped the agent. Log inside the data dir.
+Environment=AUTOBOT_LOGS_DIR={{ slm_agent_data_dir }}/logs
+# #19461: request timeouts, passed only when set, so slm/agent/request_timeouts.py keeps the one default.
+{% if slm_agent_heartbeat_timeout is defined %}
+Environment=SLM_HEARTBEAT_TIMEOUT={{ slm_agent_heartbeat_timeout }}
+{% endif %}
+{% if slm_agent_event_sync_timeout is defined %}
+Environment=SLM_EVENT_SYNC_TIMEOUT={{ slm_agent_event_sync_timeout }}
+{% endif %}
 # #11450: AUTOBOT_INTERNAL_API_KEY for machine-to-machine auth. Loaded from a
 # 0600 file (not baked into this world-readable unit). Optional (-) so a node
 # missing the file still starts (the agent warns and heartbeats 401 until fixed).

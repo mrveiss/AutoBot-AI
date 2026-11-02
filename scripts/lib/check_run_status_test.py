@@ -9,7 +9,9 @@ rather than asserting that the code does what it does.
 
 from __future__ import annotations
 
+import ast
 import json
+import re
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -17,16 +19,23 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+import check_run_status as check_run_status_module  # noqa: E402
 from check_run_status import (  # noqa: E402
+    CHECK_RUNS_PER_PAGE,
     all_pages,
     check_run_status,
+    check_runs_endpoint,
     latest_per_name,
     latest_runs,
     pending_ages,
     rank,
     split_by_state,
+    walk_check_runs,
 )
+
+from tools.lint._scan_helpers import tracked_paths  # noqa: E402
 
 
 def _run(name: str, started: str, conclusion: str | None, status: str = "completed") -> dict:
@@ -101,6 +110,20 @@ def test_a_failure_in_one_source_is_not_masked_by_a_pass_in_another() -> None:
     assert latest_per_name(check_runs, statuses) == {"ci": "failure"}
 
 
+def test_a_listing_short_of_total_count_raises_instead_of_returning_a_partial_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#19085: the API said 3 runs exist, 2 were read -- fail closed, never a short list."""
+
+    class _Result:
+        stdout = json.dumps([{"total_count": 3, "check_runs": [_run("a", "2026-09-09T08:00:00Z", "success")] * 2}])
+
+    monkeypatch.setattr("check_run_status.subprocess.run", lambda *_a, **_k: _Result())
+    monkeypatch.setattr("check_run_status.time.sleep", lambda _s: None)
+    with pytest.raises(check_run_status_module.CheckRunsIncomplete):
+        check_run_status_module.check_runs_for("owner/repo", "deadbeef")
+
+
 def test_pagination_reaches_past_the_first_page(monkeypatch: pytest.MonkeyPatch) -> None:
     """#16120 defect 2: `per_page=100` without `--paginate` truncates silently.
 
@@ -110,8 +133,11 @@ def test_pagination_reaches_past_the_first_page(monkeypatch: pytest.MonkeyPatch)
 
     Remove `--paginate` from `all_pages` and this fails.
     """
-    page_one = {"check_runs": [_run(f"shard {i}", "2026-09-09T08:00:00Z", "success") for i in range(100)]}
-    page_two = {"check_runs": [_run("startup-import-smoke", "2026-09-09T08:00:00Z", "cancelled")]}
+    page_one = {
+        "total_count": 101,
+        "check_runs": [_run(f"shard {i}", "2026-09-09T08:00:00Z", "success") for i in range(100)],
+    }
+    page_two = {"total_count": 101, "check_runs": [_run("startup-import-smoke", "2026-09-09T08:00:00Z", "cancelled")]}
 
     captured: dict[str, list[str]] = {}
 
@@ -325,3 +351,179 @@ def test_an_unparseable_timestamp_is_omitted_not_raised() -> None:
     """A malformed timestamp must not crash a caller that is only trying to triage."""
     runs = [_run("flaky-source", "not-a-timestamp", None, status="queued")]
     assert pending_ages(runs) == {}
+
+
+# ---------------------------------------------------------------------------
+# AC2 of #16120: "every sweep, gate and status reader calls it -- no direct
+# check-runs query remains outside it, verified by a grep returning only the
+# helper."
+#
+# The criterion was not met by the PR that closed on it: the module shipped
+# with ZERO production callers while reporting 43/43 green, because new unit
+# tests passing in isolation prove nothing about the old path being gone. Two
+# callers then imported the grouping rules and built the URL themselves anyway.
+# So the grep is a test, not an instruction in an issue body.
+# ---------------------------------------------------------------------------
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+#: The file allowed to spell the endpoint. Everything else goes through it.
+ENDPOINT_OWNER = "scripts/lib/check_run_status.py"
+
+#: This file, because its positive control has to CONTAIN the shape it detects
+#: -- a detector whose control is written in a form it cannot see reports a
+#: confident clean. Named rather than filtered by a `_test.py` suffix: a
+#: suffix-wide exemption would let a real query ride into any test file, and an
+#: exemption is only readable while it is narrow enough to be read.
+ENDPOINT_ALLOWED = frozenset({ENDPOINT_OWNER, "scripts/lib/check_run_status_test.py"})
+
+#: A literal is a QUERY, rather than prose mentioning one, when it reads as a
+#: path from its first character. Error messages and docstrings here do name
+#: `/commits/{sha}/check-runs`, correctly and on purpose, and a detector that
+#: counted those would be unusable -- so it anchors instead of searching.
+_QUERY_RE = re.compile(r"^/?repos/.*/check-runs")
+
+
+def _string_templates(source: str) -> list[str]:
+    """Every string and f-string in *source*, f-strings reduced to a template.
+
+    An f-string is several Constant parts in the AST, so `check-runs` and the
+    `/repos/` that anchors it sit in different nodes: judged node by node, the
+    hand-built query that AC2 is about is invisible. Joining the parts back
+    into one template is what makes the anchor usable.
+    """
+    templates: list[str] = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            templates.append(node.value)
+        elif isinstance(node, ast.JoinedStr):
+            templates.append("".join(part.value if isinstance(part, ast.Constant) else "{}" for part in node.values))
+    return templates
+
+
+def _files_spelling_the_endpoint() -> set[str]:
+    """Tracked Python files containing a check-runs QUERY literal.
+
+    `tracked_paths` rather than a bare `git ls-files` (#14896): an inherited
+    `GIT_DIR` outranks a `cwd=`, so the raw call enumerates another checkout's
+    index and answers confidently about the wrong tree -- an empty result that
+    would read here as "nothing builds the endpoint".
+    """
+    offenders: set[str] = set()
+    for relative in tracked_paths(REPO_ROOT, "*.py"):
+        path = REPO_ROOT / relative
+        try:
+            source = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if "check-runs" not in source:
+            continue
+        try:
+            templates = _string_templates(source)
+        except SyntaxError:
+            continue
+        if any(_QUERY_RE.search(template) for template in templates):
+            offenders.add(relative)
+    return offenders
+
+
+def test_the_query_detector_finds_a_hand_built_endpoint() -> None:
+    """Positive control, asserted before the set below is read.
+
+    One case per shape the query takes in this tree: a plain literal, and the
+    f-string the two migrated callers actually used.
+    """
+    plain = 'PATH = "/repos/owner/repo/commits/abc/check-runs?per_page=100"\n'
+    interpolated = 'def f(r, s):\n    return f"/repos/{r}/commits/{s}/check-runs?per_page=100"\n'
+    for shape, source in (("plain literal", plain), ("f-string", interpolated)):
+        assert any(_QUERY_RE.search(t) for t in _string_templates(source)), f"detector blind to: {shape}"
+    prose = '"""A docstring naming /commits/{sha}/check-runs in passing."""\n'
+    assert not any(_QUERY_RE.search(t) for t in _string_templates(prose)), "prose must not count as a query"
+
+
+def test_no_python_file_outside_the_helper_builds_a_check_runs_query() -> None:
+    """AC2, as a grep that runs. `scripts/pr_required_gate.py` and
+    `pipeline-scripts/ci_red_cause.py` each had one; both now call in."""
+    offenders = _files_spelling_the_endpoint()
+    assert (
+        ENDPOINT_OWNER in offenders
+    ), "known positive absent -- the detector found nothing, so the set below is empty for the wrong reason"
+    strays = sorted(offenders - ENDPOINT_ALLOWED)
+    assert strays == [], f"check-runs query built outside the helper: {strays}"
+
+
+def test_the_endpoint_is_spelled_with_the_shared_page_size() -> None:
+    endpoint = check_runs_endpoint("owner/repo", "deadbeef")
+    assert endpoint == f"/repos/owner/repo/commits/deadbeef/check-runs?per_page={CHECK_RUNS_PER_PAGE}"
+    assert check_runs_endpoint("owner/repo", "deadbeef", page=3).endswith("&page=3")
+
+
+def _page(count: int, total: int, first_name: str = "shard") -> tuple[int, dict]:
+    return 200, {
+        "total_count": total,
+        "check_runs": [_run(f"{first_name} {i}", "2026-09-09T08:00:00Z", "success") for i in range(count)],
+    }
+
+
+def test_walk_check_runs_reaches_past_the_first_page() -> None:
+    """The transport-injected walk paginates, same as the `gh` route."""
+    pages = {1: _page(CHECK_RUNS_PER_PAGE, 101, "a"), 2: _page(1, 101, "b")}
+    seen: list[str] = []
+
+    def fetch(path: str):
+        seen.append(path)
+        return pages[int(path.rsplit("page=", 1)[1])]
+
+    runs, error = walk_check_runs("owner/repo", "deadbeef", fetch)
+    assert error == ""
+    assert len(runs) == 101, f"expected both pages, got {len(runs)}"
+    assert len(seen) == 2 and seen[0].endswith("&page=1")
+
+
+def test_walk_check_runs_reports_a_short_read_rather_than_returning_it_clean() -> None:
+    """`total_count` is the endpoint's own statement of the population.
+
+    A walk that stops short must say so: a 'no red checks' verdict from a
+    partial list is the exact failure the helper exists to prevent.
+    """
+    runs, error = walk_check_runs("owner/repo", "deadbeef", lambda _p: _page(3, 9))
+    assert len(runs) == 3
+    assert "reached 3 of 9" in error, error
+
+
+def test_walk_check_runs_bounds_the_page_ceiling_instead_of_looping() -> None:
+    runs, error = walk_check_runs("owner/repo", "deadbeef", lambda _p: _page(CHECK_RUNS_PER_PAGE, 10_000), max_pages=2)
+    assert "exceeded 2 pages" in error, error
+    assert runs, "the runs collected so far are reported, not discarded"
+
+
+def test_walk_check_runs_turns_a_transport_failure_into_an_error_not_an_empty_list() -> None:
+    """An empty list and a failed request must not look the same (#15953)."""
+    runs, error = walk_check_runs("owner/repo", "deadbeef", lambda _p: (404, None))
+    assert runs == []
+    assert "HTTP 404" in error, error
+
+
+_DEFAULT_DELAY = check_run_status_module.SHORT_READ_RETRY_DELAY_DEFAULT_SECONDS
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (None, _DEFAULT_DELAY),
+        ("inf", _DEFAULT_DELAY),
+        ("nan", _DEFAULT_DELAY),
+        ("-1", _DEFAULT_DELAY),
+        ("1e9", _DEFAULT_DELAY),
+        ("abc", _DEFAULT_DELAY),
+        ("0", 0.0),
+        ("5", 5.0),
+    ],
+)
+def test_short_read_retry_delay_is_bounded(monkeypatch: pytest.MonkeyPatch, raw: str | None, expected: float) -> None:
+    """inf would make time.sleep raise OverflowError; a huge value would stall the gate."""
+    if raw is None:
+        monkeypatch.delenv("AUTOBOT_CHECK_RUNS_RETRY_DELAY", raising=False)
+    else:
+        monkeypatch.setenv("AUTOBOT_CHECK_RUNS_RETRY_DELAY", raw)
+    assert check_run_status_module._short_read_retry_delay() == expected

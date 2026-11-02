@@ -9,6 +9,9 @@ import type { App } from 'vue'
 import rumAgent from '../utils/RumAgent'
 import { createLogger } from '@/utils/debugUtils'
 import { isChunkLoadError } from '@/utils/chunkLoadError'
+import { isBenignBrowserNotice } from '@/utils/benignBrowserNotice'
+import i18n from '@/i18n'
+import { useAppStore } from '@/stores/useAppStore'
 
 // Create scoped logger for errorHandler
 const logger = createLogger('errorHandler')
@@ -25,19 +28,7 @@ const isTelemetryUrl = (url: unknown): boolean =>
 // most one per this window so a transient outage can't spam the console.
 const NETWORK_ERROR_THROTTLE_MS = 10000
 
-interface ErrorNotification {
-  id: string
-  message: string
-  type: 'error' | 'warning' | 'info'
-  timestamp: number
-  stack?: string
-  dismissible: boolean
-}
-
 class GlobalErrorHandler {
-  private notifications: ErrorNotification[] = []
-  private listeners: Set<(notifications: ErrorNotification[]) => void> = new Set()
-  private maxNotifications = 5
   // Timestamp of the last surfaced connectivity failure — see NETWORK_ERROR_THROTTLE_MS.
   private lastNetworkErrorAt = 0
 
@@ -49,20 +40,9 @@ class GlobalErrorHandler {
     // Catch unhandled promise rejections
     window.addEventListener('unhandledrejection', (event) => {
       logger.error('Unhandled promise rejection:', event.reason)
-
-      this.addNotification({
-        message: this.getUnhandledRejectionMessage(event.reason),
-        type: 'error',
-        dismissible: true,
-        stack: event.reason?.stack
-      })
-
-      // Track with RUM
-      rumAgent.trackError('unhandled_promise_rejection', {
-        message: event.reason?.message || 'Unknown promise rejection',
-        stack: event.reason?.stack,
-        source: 'global_error_handler'
-      })
+      if (!isBenignBrowserNotice(event.reason)) {
+        this.notifyUser(event.reason)
+      }
 
       // Prevent the default browser error logging
       event.preventDefault()
@@ -70,38 +50,37 @@ class GlobalErrorHandler {
 
     // Catch JavaScript errors
     window.addEventListener('error', (event) => {
-      // ResizeObserver loop notices are benign browser warnings — both the old
-      // "loop limit exceeded" and the newer Chromium "loop completed with
-      // undelivered notifications" variants. Never surface them as an Application
-      // Error notification (they fire during normal responsive layout).
-      const rawMessage = event.message || event.error?.message || ''
-      if (typeof rawMessage === 'string' && rawMessage.includes('ResizeObserver loop')) {
+      // Benign browser notices (ResizeObserver loop, both wordings) fire during
+      // normal responsive layout — never surface them as an Application Error.
+      if (isBenignBrowserNotice(event.message, event.error)) {
         event.preventDefault()
         return
       }
 
       logger.error('Global JavaScript error:', event.error)
-
-      this.addNotification({
-        message: this.getJavaScriptErrorMessage(event.error, event.filename, event.lineno),
-        type: 'error',
-        dismissible: true,
-        stack: event.error?.stack
-      })
-
-      // Track with RUM
-      rumAgent.trackError('javascript_error', {
-        message: event.message,
-        filename: event.filename,
-        lineno: event.lineno,
-        colno: event.colno,
-        stack: event.error?.stack,
-        source: 'global_error_handler'
-      })
+      this.notifyUser(event.error || event)
     })
 
     // Catch network errors (fetch failures)
     this.interceptFetch()
+  }
+
+  /**
+   * The user-visible channel: the app store's system notification (what the
+   * notification centre renders). This plugin is the single owner of the window
+   * `error` / `unhandledrejection` registration (#19458), so App.vue no longer
+   * registers its own listeners and the benign filter above cannot be bypassed.
+   */
+  notifyUser(error: unknown) {
+    const appStore = useAppStore()
+    if (typeof appStore?.addSystemNotification !== 'function') return
+    const { t } = i18n.global
+    const message = error instanceof Error ? error.message : (error as { message?: string } | null)?.message
+    appStore.addSystemNotification({
+      severity: 'error',
+      title: t('nav.applicationError'),
+      message: message || t('nav.unexpectedError')
+    })
   }
 
   private interceptFetch() {
@@ -139,32 +118,6 @@ class GlobalErrorHandler {
             logger.warn(`[HTTP ${response.status}] Client error: ${requestUrl} - ${response.statusText}`)
           } else if (response.status >= 500) {
             logger.error(`[HTTP ${response.status}] Server error: ${requestUrl} - ${response.statusText}`)
-          }
-
-          if (response.status >= 500) {
-            this.addNotification({
-              message: `Server error (${response.status}). Please try again later.`,
-              type: 'error',
-              dismissible: true
-            })
-          } else if (response.status === 401) {
-            this.addNotification({
-              message: 'Authentication required. Please log in again.',
-              type: 'warning',
-              dismissible: true
-            })
-          } else if (response.status === 403) {
-            this.addNotification({
-              message: 'Access denied. You may not have permission for this action.',
-              type: 'warning',
-              dismissible: true
-            })
-          } else if (response.status === 404) {
-            this.addNotification({
-              message: 'Requested resource not found.',
-              type: 'warning',
-              dismissible: true
-            })
           }
         }
 
@@ -209,150 +162,55 @@ class GlobalErrorHandler {
           })
         }
 
-        // Only show notification for non-health-check, non-throttled failures
-        if (!isHealthCheck && !throttled) {
-          this.addNotification({
-            message: 'Network connection failed. Please check your internet connection.',
-            type: 'error',
-            dismissible: true,
-            stack: err.stack
-          })
-        }
-
         throw error
       }
     }
-  }
-
-  private getUnhandledRejectionMessage(reason: unknown): string {
-    const message = (reason as { message?: unknown })?.message
-    if (typeof message === 'string') {
-      // Check chunk failures first: a stale-deploy dynamic-import error also
-      // contains "Failed to fetch", so this must precede that generic branch.
-      if (isChunkLoadError(message)) {
-        return 'Application update detected. Please reload the page.'
-      }
-      if (message.includes('Failed to fetch')) {
-        return 'Connection failed. Please check your internet connection and try again.'
-      }
-      if (message.includes('NetworkError')) {
-        return 'Network error occurred. Please try again.'
-      }
-    }
-
-    return 'An unexpected error occurred. Please try refreshing the page.'
-  }
-
-  private getJavaScriptErrorMessage(error: Error, _filename?: string, _lineno?: number): string {
-    if (error?.message) {
-      if (isChunkLoadError(error)) {
-        return 'Application files failed to load. Please reload the page.'
-      }
-      if (error.message.includes('ResizeObserver loop limit exceeded')) {
-        return 'Display refresh needed. This is usually harmless.'
-      }
-      if (error.message.includes('Cannot read properties')) {
-        return 'Data loading issue. Please try refreshing the page.'
-      }
-    }
-
-    return 'A JavaScript error occurred. Please try refreshing the page.'
-  }
-
-  private addNotification(notification: Omit<ErrorNotification, 'id' | 'timestamp'>) {
-    // Defensive programming: ensure notifications array is initialized
-    if (!Array.isArray(this.notifications)) {
-      this.notifications = []
-    }
-
-    const id = `error_${crypto.randomUUID()}`
-    const fullNotification: ErrorNotification = {
-      ...notification,
-      id,
-      timestamp: Date.now()
-    }
-
-    // Prevent duplicate notifications
-    const isDuplicate = this.notifications.some(n =>
-      n.message === notification.message &&
-      Date.now() - n.timestamp < 5000 // Within 5 seconds
-    )
-
-    if (!isDuplicate) {
-      this.notifications.unshift(fullNotification)
-
-      // Keep only the most recent notifications
-      if (this.notifications.length > this.maxNotifications) {
-        this.notifications = this.notifications.slice(0, this.maxNotifications)
-      }
-
-      this.notifyListeners()
-
-      // Auto-dismiss info notifications after 5 seconds
-      if (notification.type === 'info') {
-        setTimeout(() => {
-          this.dismissNotification(id)
-        }, 5000)
-      }
-    }
-  }
-
-  public dismissNotification(id: string) {
-    this.notifications = this.notifications.filter(n => n.id !== id)
-    this.notifyListeners()
-  }
-
-  public clearAllNotifications() {
-    this.notifications = []
-    this.notifyListeners()
-  }
-
-  public subscribe(listener: (notifications: ErrorNotification[]) => void) {
-    this.listeners.add(listener)
-    // Immediately call with current notifications
-    listener([...this.notifications])
-
-    return () => {
-      this.listeners.delete(listener)
-    }
-  }
-
-  private notifyListeners() {
-    this.listeners.forEach(listener => {
-      listener([...this.notifications])
-    })
-  }
-
-  public getNotifications(): ErrorNotification[] {
-    return [...this.notifications]
-  }
-
-  public addManualNotification(message: string, type: ErrorNotification['type'] = 'info', dismissible = true) {
-    this.addNotification({ message, type, dismissible })
   }
 }
 
 const globalErrorHandler = new GlobalErrorHandler()
 
+function recoverFromChunkLoadError(error: Error, componentName: string) {
+  logger.warn('Chunk loading error detected, initiating cache clear...')
+  import('@/utils/cacheManagement')
+    .then(({ handleChunkLoadingError }) => {
+      handleChunkLoadingError(error, componentName)
+    })
+    .catch((cacheError) => {
+      logger.error('Failed to handle chunk error:', cacheError)
+      // Fallback to hard reload
+      window.location.reload()
+    })
+}
+
 // Plugin installation
 export default {
   install(app: App) {
-    // Enhanced Vue error handler
-    const originalErrorHandler = app.config.errorHandler
-
+    // The ONE app.config.errorHandler (#19458). It chains: log -> RUM report ->
+    // chunk-load recovery -> user notification. rum.ts and main.ts used to assign
+    // their own and overwrite each other; neither assigns one any more.
     app.config.errorHandler = (error, instance, info) => {
+      const err = error as Error
       logger.error('Vue Error:', { error, info })
 
-      // Call original handler (RUM plugin)
-      if (originalErrorHandler) {
-        originalErrorHandler(error, instance, info)
+      // A RUM failure must not stop recovery or the user notice below (#19458 review)
+      try {
+        rumAgent.trackError('vue_error', {
+          message: err?.message,
+          stack: err?.stack,
+          componentInfo: info,
+          component: instance?.$options?.name || 'unknown'
+        })
+      } catch (rumError) {
+        logger.warn('RUM trackError failed:', rumError)
       }
 
-      // Show user-friendly notification
-      globalErrorHandler.addManualNotification(
-        'Component error occurred. Some features may not work correctly.',
-        'error'
-      )
+      if (isChunkLoadError(err)) {
+        // The page reloads to recover; a toast just before the reload is noise (#19458 review)
+        recoverFromChunkLoadError(err, instance?.$?.type?.name || 'Unknown')
+      } else if (!isBenignBrowserNotice(err)) {
+        globalErrorHandler.notifyUser(error)
+      }
     }
 
     // Add error handler to global properties
@@ -366,4 +224,3 @@ export default {
 }
 
 export { globalErrorHandler }
-export type { ErrorNotification }

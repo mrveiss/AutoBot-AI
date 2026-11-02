@@ -90,6 +90,7 @@ import Icon from '@/components/ui/Icon.vue'
 import PairDeviceDialog from '@/components/mobile/PairDeviceDialog.vue'
 import { useDevices } from '@/composables/useDevices'
 import { createLogger } from '@/utils/debugUtils'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('DeviceManagementPanel')
 const { t } = useI18n()
@@ -154,13 +155,7 @@ function formatPlatform(platform: string): string {
   return labels[platform] || platform
 }
 
-function formatDate(dateStr: string): string {
-  try {
-    return new Date(dateStr).toLocaleDateString()
-  } catch {
-    return dateStr
-  }
-}
+const formatDate = createDateFormatter({ kind: 'date' })
 
 function formatRelativeTime(dateStr: string): string {
   try {
@@ -220,7 +215,7 @@ function formatRelativeTime(dateStr: string): string {
 }
 
 .section-header h3 {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   margin: 0;
 }
@@ -259,7 +254,7 @@ function formatRelativeTime(dateStr: string): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   color: var(--text-primary);
 }
 
@@ -276,12 +271,12 @@ function formatRelativeTime(dateStr: string): string {
 }
 
 .device-platform {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
 .device-meta {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   display: flex;
   flex-wrap: wrap;
@@ -342,7 +337,7 @@ function formatRelativeTime(dateStr: string): string {
 
 .error-alert p {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 /* Buttons */
@@ -353,7 +348,7 @@ function formatRelativeTime(dateStr: string): string {
   padding: 0.5rem 1rem;
   border-radius: 6px;
   border: 1px solid transparent;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;

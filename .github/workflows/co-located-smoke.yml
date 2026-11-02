@@ -29,6 +29,10 @@ name: Co-located Smoke
 
 on:
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - main
     paths:
@@ -51,6 +55,10 @@ on:
       - 'autobot-frontend/src/assets/**'
       # the gate itself
       - '.github/workflows/co-located-smoke.yml'
+      # #19527: the image build and disk guard it runs
+      - '.github/actions/build-smoke-images/**'
+      - '.github/actions/free-disk-space/**'
+      - '.github/actions/install-ci-requirements/**'
       - 'scripts/check_colocated_csp.py'
       - 'autobot-slm-backend/tests/api/test_collect_outdated_node_ids.py'
       - 'autobot-backend/transcriber/tests/test_multiuser_authz.py'
@@ -66,6 +74,7 @@ permissions:
 jobs:
   # Classes (c) + (d): pytest-shaped regression pins. Fast, no containers.
   authz-and-selection:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -80,10 +89,11 @@ jobs:
             requirements*.txt
             autobot-backend/requirements*.txt
 
+      - name: Install CI requirements
+        uses: ./.github/actions/install-ci-requirements
+
       - name: Install test dependencies
         run: |
-          python -m pip install --upgrade pip setuptools wheel
-          python -m pip install -r requirements-ci.txt --prefer-binary || true
           # Hermetic essentials for both test files (no Postgres/Redis needed).
           python -m pip install aiosqlite aiofiles pytest pytest-asyncio httpx python-multipart --prefer-binary
 
@@ -116,6 +126,7 @@ jobs:
   # Classes (a) + (b): live co-located compose stack (frontend at /, SLM at
   # /slm — the same single-host topology as bare-metal co-located installs).
   colocated-stack:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -125,41 +136,47 @@ jobs:
       - name: Free disk space
         uses: ./.github/actions/free-disk-space
         with:
-          min-free-gb: '15'
+          # The run itself consumes ~17 GB (images, layer cache, service images);
+          # 30 leaves headroom, and the toolchain removal runs only below it (#19527).
+          min-free-gb: '30'
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4
-
-      - name: Cache Docker layers
-        # Shares the docker-smoke-test cache prefix so layers stay warm.
-        uses: actions/cache@v6
         with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}-colocated
-          restore-keys: |
-            ${{ runner.os }}-buildx-
+          # #19527: tearing the builder down cost 30-60s per run on a runner that is
+          # discarded anyway. A persistent self-hosted runner still cleans up.
+          cleanup: ${{ runner.environment == 'self-hosted' }}
 
       - name: Create .env from .env.example
         run: cp .env.example .env
 
-      - name: Ensure cache directory exists
-        run: mkdir -p /tmp/.buildx-cache
-
-      - name: Build images with layer cache
+      - name: Pick the management network range (#16833)
+        # docker-compose.yml has no default autobot-mgmt range; this is the pick
+        # docker/generate-secrets.sh makes for a user, exported for every compose step.
         run: |
-          for component in backend slm frontend; do
-            echo "=== Building ${component} image ==="
-            docker buildx build \
-              --cache-from type=local,src=/tmp/.buildx-cache \
-              --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
-              --file "docker/${component}/Dockerfile" \
-              --tag "autobot/${component}:latest" \
-              --load \
-              .
-            df -h / | grep -v Filesystem
+          prefix="$(python3 docker/pick_mgmt_prefix.py)"
+          echo "AUTOBOT_DOCKER_MGMT_PREFIX=${prefix}" >> "$GITHUB_ENV"
+
+      - name: Required credentials (#17793)
+        # Compose has no fallback for these and refuses to start without them; for a user,
+        # docker/generate-secrets.sh writes them. Only these are exported: the signing secrets
+        # stay unset, so the GH#9905 auto-provisioning path is still what this run tests.
+        # repo_tests/compose_exposure_and_credentials_17500_test.py keeps this list equal to
+        # the credentials compose requires.
+        run: |
+          for key in AUTOBOT_DB_PASSWORD GRAFANA_ADMIN_PASSWORD AUTOBOT_ADMIN_PASSWORD SLM_ADMIN_PASSWORD; do
+            value="$(openssl rand -hex 16)Aa1"  # the admin schema wants upper, lower and a digit
+            echo "::add-mask::${value}"
+            echo "${key}=${value}" >> "$GITHUB_ENV"
           done
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+      - name: Build images
+        # Same images and cache namespace as docker-smoke-test. This workflow never
+        # runs on a main push, so it only ever restores what docker-smoke-test saved.
+        uses: ./.github/actions/build-smoke-images
+        with:
+          group: smoke
+          cache-key-prefix: buildx-bake-smoke
 
       - name: Start co-located stack
         run: docker compose --env-file docker/.env.docker up -d
@@ -233,7 +250,7 @@ jobs:
 
       - name: Upload failure logs
         if: failure()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: colocated-smoke-logs
           path: colocated-failure-logs.txt

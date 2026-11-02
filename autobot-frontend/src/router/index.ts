@@ -31,8 +31,13 @@ import type { Role } from '@/types/_generated/workflow'
 import { setupAsyncComponentErrorHandler } from '@/utils/asyncComponentHelpers'
 import { isChunkLoadError } from '@/utils/chunkLoadError'
 import { createLogger } from '@/utils/debugUtils'
+import { setDocumentTitle } from '@/utils/documentTitle'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { getBackendUrl, getSLMAdminUrl } from '@/config/ssot-config'
 import { llcCompanyParamGuard } from './llcGuards'
+import { llcCompanyChildren } from './llcRoutes'
+import { preferencesRoutes } from './preferencesRoutes'
+import { adminRoutes, resolveAdminPermissionRedirect } from './adminRoutes'
 
 const logger = createLogger('Router');
 
@@ -42,7 +47,6 @@ setupAsyncComponentErrorHandler()
 // Views (Page-level components) - Use direct imports for simple containers to avoid circular dependencies
 import ChatView from '@/views/ChatView.vue'
 import KnowledgeView from '@/views/KnowledgeView.vue'
-import WorkflowBuilderView from '@/views/WorkflowBuilderView.vue'
 import AnalyticsView from '@/views/AnalyticsView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
 import PermissionDeniedView from '@/views/PermissionDeniedView.vue'
@@ -630,19 +634,7 @@ export const routes: RouteRecordRaw[] = [
       },
     ]
   },
-  // Issue #753: User preferences (appearance, font size, colors, etc.)
-  {
-    path: '/preferences',
-    name: 'preferences',
-    component: () => import('@/views/SettingsView.vue'),
-    meta: {
-      title: 'Preferences',
-      icon: 'fas fa-sliders-h',
-      description: 'Customize your AutoBot experience',
-      requiresAuth: true,
-      hideInNav: true,
-    }
-  },
+  ...preferencesRoutes, // Issue #753 Settings + #19241 provider sign-in callback
   // Issue #4492: Home serves custom dashboard — renamed from /custom-dashboard
   {
     path: '/home',
@@ -781,125 +773,8 @@ export const routes: RouteRecordRaw[] = [
       hideInNav: true,
     },
   },
-  // Issue #1801: Admin User Management
-  {
-    path: '/admin/users',
-    name: 'admin-users',
-    component: () => import('@/views/AdminUsersView.vue'),
-    meta: {
-      title: 'User Management',
-      icon: 'fas fa-users',
-      description: 'Manage users, roles, and account status',
-      requiresAuth: true,
-      admin: true,
-    },
-  },
-  // Issue #7773: Sandbox file inspector — wires useFileSandbox() into admin UI
-  {
-    path: '/admin/sandbox',
-    name: 'admin-sandbox',
-    component: () => import('@/views/AdminSandboxView.vue'),
-    meta: {
-      title: 'Sandbox Inspector',
-      description: 'Browse code-execution sandbox files',
-      requiresAuth: true,
-      admin: true,
-      hideInNav: true,
-    },
-  },
-  // Issue #12162 (#12102/#11506 T1 Stage 1): Advanced Control — takeover approval queue
-  {
-    path: '/admin/advanced-control',
-    name: 'admin-advanced-control',
-    component: () => import('@/views/AdvancedControlView.vue'),
-    meta: {
-      title: 'Advanced Control',
-      description: 'Takeover approval queue, streaming, and monitoring',
-      requiresAuth: true,
-      admin: true,
-      hideInNav: true,
-    },
-  },
-  // GH#6470: Budget policy management (admin-only)
-  {
-    path: '/admin/budget-policies',
-    name: 'budget-policies',
-    component: () => import('@/views/BudgetPolicies.vue'),
-    meta: {
-      title: 'Budget Policies',
-      description: 'Manage agent spend thresholds and auto-pause rules',
-      requiresAuth: true,
-      admin: true,
-      hideInNav: true,
-    },
-  },
-  // Issue #10932: Admin System Health panel — CONTENT_REACH probe
-  {
-    path: '/admin/system-health',
-    name: 'admin-system-health',
-    component: () => import('@/views/SystemHealthView.vue'),
-    meta: {
-      title: 'System Health',
-      hideInNav: true,
-      requiresAuth: true,
-      admin: true,
-    },
-  },
-  // Issue #11996 (#11994): Always-on provider-fallback observability panel
-  {
-    path: '/admin/provider-fallback',
-    name: 'admin-provider-fallback',
-    component: () => import('@/views/ProviderFallbackView.vue'),
-    meta: {
-      title: 'Provider Fallback',
-      hideInNav: true,
-      requiresAuth: true,
-      admin: true,
-    },
-  },
-  // Issue #16825: live model-pricing refresh status + manual override —
-  // the GH#6480/#16228/#16231 backend had no reachable GUI.
-  {
-    path: '/admin/pricing',
-    name: 'admin-pricing',
-    component: () => import('@/views/AdminPricingView.vue'),
-    meta: {
-      title: 'Model Pricing',
-      hideInNav: true,
-      requiresAuth: true,
-      admin: true,
-    },
-  },
-  // Issue #16825: external MCP server admin CRUD — the #11542 backend had no
-  // reachable GUI.
-  {
-    path: '/admin/mcp-servers',
-    name: 'admin-mcp-servers',
-    component: () => import('@/views/AdminMcpServersView.vue'),
-    meta: {
-      title: 'MCP Servers',
-      hideInNav: true,
-      requiresAuth: true,
-      admin: true,
-    },
-  },
-  // Issue #16825: fine-grained permission scopes -- no backend or frontend
-  // exists for this one yet (unlike MCP admin/pricing above, which already
-  // ship). This route is a "coming in a later release" panel, not a stub of
-  // a working feature -- no form, no table, no API call. hideInNav + an
-  // adminMenuItems entry, same pattern as the two routes above (#16933's
-  // nav-items-coverage.test.ts enforces this pairing for every /admin/* route).
-  {
-    path: '/admin/permission-scopes',
-    name: 'admin-permission-scopes',
-    component: () => import('@/views/AdminPermissionScopesView.vue'),
-    meta: {
-      title: 'Permission Scopes',
-      hideInNav: true,
-      requiresAuth: true,
-      admin: true,
-    },
-  },
+  // #19833: the 9 /admin/* routes are children of the /admin parent (adminRoutes.ts)
+  ...adminRoutes,
   // /desktop removed from nav — noVNC is accessible via the Chat tab's noVNC tab.
   // Redirect any bookmarked /desktop URLs to /chat.
   { path: '/desktop', redirect: '/chat' },
@@ -1138,132 +1013,7 @@ export const routes: RouteRecordRaw[] = [
     component: () => import('@/views/llc/LlcCompanyLayout.vue'),
     beforeEnter: llcCompanyParamGuard,
     meta: { requiresAuth: true, llcScope: true, hideInNav: true },
-    children: [
-      { path: '', redirect: { name: 'llc-backlog' } },
-      {
-        path: 'backlog',
-        name: 'llc-backlog',
-        component: () => import('@/views/llc/BacklogView.vue'),
-        meta: { title: 'Backlog', requiresAuth: true, hideInNav: true },
-      },
-      {
-        path: 'boards/:boardId/sprint',
-        name: 'llc-sprint-board',
-        component: () => import('@/views/llc/SprintBoardView.vue'),
-        meta: { title: 'Sprint Board', requiresAuth: true, hideInNav: true },
-      },
-      {
-        path: 'boards/:boardId/kanban',
-        name: 'llc-kanban-board',
-        component: () => import('@/views/llc/KanbanBoardView.vue'),
-        meta: { title: 'Kanban Board', requiresAuth: true, hideInNav: true },
-      },
-      {
-        path: 'timeline',
-        name: 'llc-timeline',
-        component: () => import('@/views/llc/GanttTimelineView.vue'),
-        meta: { title: 'Timeline', requiresAuth: true, hideInNav: true },
-      },
-      {
-        path: 'boards',
-        name: 'llc-boards',
-        component: () => import('@/views/llc/BoardsView.vue'),
-        meta: { title: 'Boards', requiresAuth: true, hideInNav: true },
-      },
-      {
-        path: 'reviews',
-        name: 'llc-reviews',
-        component: () => import('@/views/llc/ReviewInboxView.vue'),
-        meta: { title: 'My Reviews', requiresAuth: true, hideInNav: true },
-      },
-      {
-        path: 'portfolios',
-        name: 'llc-portfolios',
-        component: () => import('@/views/llc/PortfolioBrowserView.vue'),
-        meta: { title: 'Portfolios', requiresAuth: true, hideInNav: true },
-      },
-      {
-        path: 'portfolios/:portfolioId/programs',
-        name: 'llc-programs',
-        component: () => import('@/views/llc/ProgramBrowserView.vue'),
-        meta: { title: 'Programs', requiresAuth: true, hideInNav: true },
-      },
-      {
-        path: 'programs/:programId/projects',
-        name: 'llc-projects',
-        component: () => import('@/views/llc/ProjectBrowserView.vue'),
-        meta: { title: 'Projects', requiresAuth: true, hideInNav: true },
-      },
-      { path: 'approvals', name: 'llc-approvals', component: () => import('@/views/llc/ApprovalsInbox.vue'), props: true, meta: { title: 'Approvals Inbox', requiresAuth: true } },
-      { path: 'costs', name: 'llc-costs', component: () => import('@/views/llc/CostDashboard.vue'), props: true, meta: { title: 'Cost Dashboard', requiresAuth: true } },
-      { path: 'heartbeat', name: 'llc-heartbeat', component: () => import('@/views/llc/HeartbeatMonitor.vue'), props: true, meta: { title: 'Heartbeat Monitor', requiresAuth: true } },
-      { path: 'routines', name: 'llc-routines', component: () => import('@/views/llc/RoutinesView.vue'), props: true, meta: { title: 'Routines', requiresAuth: true } },
-      { path: 'ceo-chat', name: 'llc-ceo-chat', component: () => import('@/views/llc/CeoChatView.vue'), props: true, meta: { title: 'CEO Chat', requiresAuth: true } },
-      { path: 'activity', name: 'llc-activity', component: () => import('@/views/llc/ActivityFeedView.vue'), props: true, meta: { title: 'Activity', requiresAuth: true } },
-      { path: 'roles', name: 'llc-roles', component: () => import('@/views/llc/RolesView.vue'), props: true, meta: { title: 'Roles', requiresAuth: true } },
-      { path: 'members', name: 'llc-members', component: () => import('@/views/llc/MembersView.vue'), props: true, meta: { title: 'Members', requiresAuth: true } },
-      { path: 'portability', name: 'llc-company-portability', component: () => import('@/views/llc/CompanyPortabilityView.vue'), props: true, meta: { title: 'Portability', requiresAuth: true } },
-      { path: 'secrets', name: 'llc-company-secrets', component: () => import('@/views/llc/SecretsView.vue'), props: true, meta: { title: 'Secrets', requiresAuth: true } },
-      // GH#10750 (B3): in-layout variants of the formerly top-level dashboard/
-      // goals/org-chart views so the LlcSidebar stays mounted on navigation.
-      // The views resolve the active company from :companyId via
-      // useLlcCompanyContext (param -> ?company= fallback for back-compat).
-      { path: 'dashboard', name: 'llc-company-dashboard', component: () => import('@/views/llc/CompanyDashboard.vue'), props: true, meta: { title: 'Company Dashboard', requiresAuth: true } },
-      { path: 'goals', name: 'llc-company-goals', component: () => import('@/views/llc/GoalTree.vue'), props: true, meta: { title: 'Goal Tree', requiresAuth: true } },
-      { path: 'org-chart', name: 'llc-company-org-chart', component: () => import('@/views/llc/OrgChart.vue'), props: true, meta: { title: 'Org Chart', requiresAuth: true } },
-      // GH#13939: the automation module, moved here from /automation/*. Route
-      // names are preserved so deep links and the builder's own active-state
-      // checks keep working. Child routes render inside WorkflowBuilderView's
-      // <router-view /> (#2368); ':section' is rendered inline via
-      // route.params.section (GH#8750).
-      {
-        path: 'automation',
-        name: 'llc-company-automation',
-        component: WorkflowBuilderView,
-        // #16901: no longer hidden — it has a Company OS sidebar entry now.
-        meta: { title: 'Workflow Automation', requiresAuth: true },
-        children: [
-          {
-            // Named so vue-router does not warn about an unnamed empty-path
-            // child under a named parent.
-            path: '',
-            name: 'llc-company-automation-index',
-            redirect: (to) => `/llc/companies/${to.params.companyId}/automation/overview`
-          },
-          {
-            path: 'browser-automation',
-            name: 'browser-automation',
-            component: () => import('@/views/BrowserAutomationView.vue'),
-            meta: {
-              title: 'Browser Automation',
-              icon: 'fas fa-globe',
-              description: 'Control browser workers and automate web tasks',
-              requiresAuth: true
-            }
-          },
-          // Issue #9890: Vision Automation panel — dedicated component route
-          {
-            path: 'vision-automation',
-            name: 'vision-automation',
-            component: () => import('@/views/VisionAutomationView.vue'),
-            meta: {
-              title: 'Vision Automation',
-              description: 'Screen analysis, element detection, OCR, and automation opportunities',
-              requiresAuth: true
-            }
-          },
-          {
-            path: ':section',
-            name: 'automation-section',
-            component: { render: () => null },
-            meta: {
-              sectionRoute: true,
-              requiresAuth: true
-            }
-          }
-        ]
-      },
-    ],
+    children: llcCompanyChildren,
   },
   // Issue #9044: Transcriber — audio/video transcription module
   {
@@ -1436,9 +1186,9 @@ router.beforeEach(async (to, from) => {
       logger.debug('Route requires auth, verifying session against backend')
       const backendAuthenticated = await userStore.checkAuthFromBackend()
       if (backendAuthenticated) {
+        // Fall through: the permission and role gates below must still run on a
+        // session restored from the backend (#19833 -- fail closed).
         logger.debug('Backend confirmed authenticated session')
-        // Continue to route - user is now authenticated
-        return
       }
     }
 
@@ -1456,6 +1206,13 @@ router.beforeEach(async (to, from) => {
 
       // Redirect to login (no redirect param -- clean URL)
       return { name: 'login' }
+    }
+
+    // /admin section permission (#19833): table-derived, fails closed
+    const adminRedirect = resolveAdminPermissionRedirect(to, userStore)
+    if (adminRedirect) {
+      logger.debug('Admin section blocked, redirecting', adminRedirect)
+      return adminRedirect
     }
 
     // Block admin-only routes for non-admin users
@@ -1498,10 +1255,7 @@ router.beforeEach(async (to, from) => {
       let presetApplied = sessionStorage.getItem('onboarding_preset_applied')
       if (presetApplied === null) {
         try {
-          const resp = await fetch(`${getBackendUrl()}/api/onboarding/status`, {
-            credentials: 'include',
-            headers: { Accept: 'application/json' },
-          })
+          const resp = await fetchWithAuth(`${getBackendUrl()}/api/onboarding/status`, { credentials: 'include', headers: { Accept: 'application/json' } })
           if (resp.ok) {
             const data = await resp.json()
             presetApplied = data?.preset_applied ? '1' : '0'
@@ -1534,9 +1288,7 @@ router.beforeEach(async (to, from) => {
     }
 
     // Update document title
-    if (to.meta.title) {
-      document.title = `${to.meta.title} - AutoBot Pro`
-    }
+    if (to.meta.title) setDocumentTitle(to.meta.title)
 
     // Update active tab in store (with null safety)
     // Issue #729: Updated valid tabs for business-only routes

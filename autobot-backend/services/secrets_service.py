@@ -96,14 +96,14 @@ class SecretsService:
             # 1. Environment variable (direct)
             # 2. Config manager (may map from env)
             # 3. Shared canonical key file (#14081 review round 5): minted
-            #    and persisted if it doesn't exist yet via the same helper
-            #    SecretsManager uses, cross-process-locked, so the two
-            #    classes can never disagree about the key and two processes
-            #    racing a genuine first boot can't each mint their own.
-            #    Replaces the previous fallback here, which generated a key
-            #    on a WARNING and never wrote it to disk -- indistinguishable
-            #    from first boot even with a real store present, and
-            #    undecryptable by any other process or the next restart.
+            #    and persisted if missing via the helper SecretsManager uses,
+            #    cross-process-locked so racing first boots can't each mint
+            #    a key. The classes can still DISAGREE on the key: this one
+            #    prefers AUTOBOT_SECRETS_KEY / security.secrets_key (1, 2),
+            #    api/secrets.py reads only the key file. See #10088.
+            #    Replaces the previous fallback, which generated a key on a
+            #    WARNING and never wrote it to disk -- undecryptable by any
+            #    other process or the next restart.
             env_key = config.secrets_key
             if not env_key:
                 env_key = config_manager.get("security.secrets_key", None)

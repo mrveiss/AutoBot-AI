@@ -24,48 +24,14 @@ import pytest
 from llm_shared import token_budget
 from llm_shared.base_provider import BaseProvider
 from llm_shared.models import LLMRequest, LLMResponse
+from testkit.fake_redis_pipeline import FakeAsyncPipeline
 
-
-class _FakePipeline:
-    """MULTI/EXEC: buffers commands and applies them together on `execute()`.
-
-    Added because the code moved to a transaction and a double that lacks
-    `pipeline` does not fail loudly -- with an `AsyncMock` it silently swallows
-    every command and the spend counter simply stays at zero, which reads as a
-    broken gate rather than a test double missing a method (review finding on
-    #17380).
-
-    Each `execute()` appends its command list to `redis.transactions`, so a test
-    can assert the increment and the expiry went in ONE transaction rather than
-    merely that both happened.
-    """
-
-    def __init__(self, redis: "_FakeRedis") -> None:
-        self._redis = redis
-        self._queued: List[tuple] = []
-
-    async def __aenter__(self) -> "_FakePipeline":
-        return self
-
-    async def __aexit__(self, *exc_info) -> bool:
-        return False
-
-    def incrby(self, key: str, amount: int) -> "_FakePipeline":
-        self._queued.append(("incrby", key, amount))
-        return self
-
-    def expire(self, key: str, ttl: int) -> "_FakePipeline":
-        self._queued.append(("expire", key, ttl))
-        return self
-
-    async def execute(self) -> None:
-        self._redis.transactions.append(list(self._queued))
-        for command, key, argument in self._queued:
-            if command == "incrby":
-                await self._redis.incrby(key, argument)
-            else:
-                await self._redis.expire(key, argument)
-        self._queued.clear()
+# The MULTI/EXEC pipeline is the canonical testkit.fake_redis_pipeline one. It was added here because the
+# code moved to a transaction and a double that lacks `pipeline` does not fail loudly -- with an `AsyncMock`
+# it silently swallows every command and the spend counter simply stays at zero, which reads as a broken
+# gate rather than a test double missing a method (review finding on #17380). `_FakeRedis.transactions`
+# lists the commands of each `execute()`, so a test can assert the increment and the expiry went in ONE
+# transaction rather than merely that both happened.
 
 
 class _FakeRedis:
@@ -74,7 +40,7 @@ class _FakeRedis:
     def __init__(self) -> None:
         self._store: Dict[str, int] = {}
         #: One entry per `pipeline().execute()`, each the commands it carried.
-        self.transactions: List[List[tuple]] = []
+        self.pipelines: List[FakeAsyncPipeline] = []
         #: Keys that ever received an expiry, so a test can tell a key with a
         #: TTL from one left immortal.
         self.expired: Dict[str, int] = {}
@@ -91,9 +57,15 @@ class _FakeRedis:
         self.expired[key] = ttl
         return None
 
-    def pipeline(self, transaction: bool = False) -> _FakePipeline:
+    @property
+    def transactions(self) -> List[List[tuple]]:
+        return [batch for pipe in self.pipelines for batch in pipe.executed]
+
+    def pipeline(self, transaction: bool = False) -> FakeAsyncPipeline:
         assert transaction, "the budget gate must use a TRANSACTIONAL pipeline"
-        return _FakePipeline(self)
+        pipe = FakeAsyncPipeline(self, transaction=transaction)
+        self.pipelines.append(pipe)
+        return pipe
 
 
 class _EchoProvider(BaseProvider):

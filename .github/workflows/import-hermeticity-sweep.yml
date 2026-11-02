@@ -33,6 +33,10 @@ name: import-hermeticity-sweep
 # update or close an issue: those describe the base, not a diff that may never merge.
 on:
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
     paths:
       - 'autobot-backend/**'
@@ -72,6 +76,7 @@ concurrency:
 
 jobs:
   sweep:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     # issues: write so a red sweep on the base reaches a reader. A push or scheduled
@@ -132,14 +137,16 @@ jobs:
       # torch>=2.11.0 plus transitive vllm 0.19.x (which requires torch==2.10.0), an
       # unsatisfiable resolver state (#7018). Same install as startup-import-smoke,
       # which asks the closest question to this one.
+      - name: Install CI requirements
+        if: steps.mode.outputs.mode != 'none'
+        uses: ./.github/actions/install-ci-requirements
+
       - name: Install declared dependencies
         if: steps.mode.outputs.mode != 'none'
         shell: bash
         run: |
           set -euo pipefail
-          python -m pip install --upgrade pip >/dev/null
           python -m pip install pytest >/dev/null
-          python -m pip install -r requirements-ci.txt --prefer-binary
           python -m pip install -e autobot_shared
 
       - name: Sweep the modules this run examines
@@ -187,7 +194,7 @@ jobs:
 
       - name: Keep the raw output
         if: always() && steps.mode.outputs.mode != 'none'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: import-hermeticity-sweep
           path: sweep-output.txt

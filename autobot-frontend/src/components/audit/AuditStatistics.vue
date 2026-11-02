@@ -343,7 +343,7 @@ function formatOperationName(operation: string): string {
   color: var(--text-primary);
 }
 
-.section-title i {
+.section-title .icon {
   color: var(--color-primary);
 }
 
@@ -414,8 +414,9 @@ function formatOperationName(operation: string): string {
   color: var(--text-secondary);
 }
 
-.loading-overlay i {
-  font-size: var(--text-2xl);
+.loading-overlay .icon {
+  width: var(--text-2xl);
+  height: var(--text-2xl);
   color: var(--color-primary);
 }
 

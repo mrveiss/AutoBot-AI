@@ -30,15 +30,22 @@ router = APIRouter()
     error_code_prefix="CODEBASE",
 )
 async def clear_codebase_cache(
-    source_id: str | None = Query(None, description="#1772: clear only this source's cache"),
+    source_id: str = Query(..., min_length=1, description="Required (#17758): the source whose cache to clear"),
 ):
-    """Clear codebase analysis cache from storage.
+    """Clear ONE code source's analysis cache from storage.
 
-    Issue #1772: source_id scopes deletion to per-project keys.
+    Issue #1772 scoped deletion to per-project keys when a source_id was
+    supplied. #17758: it is now required, because the `else "codebase:*"` branch
+    made a request that omitted the parameter delete **every** source's cached
+    analytics -- reachable by leaving a query string off a DELETE.
+
+    There is deliberately no "clear all sources" mode here. Destroying every
+    project's cached analysis is not something a caller should express by
+    omission, and adding it as an explicit flag would be adding a destructive
+    capability this change has no mandate to invent.
     """
     redis_client = await get_redis_connection()
-    # Issue #1772: scope pattern to source_id when provided
-    match_pattern = f"codebase:{source_id}:*" if source_id else "codebase:*"
+    match_pattern = f"codebase:{source_id}:*"
 
     if redis_client:
         # Get all codebase keys

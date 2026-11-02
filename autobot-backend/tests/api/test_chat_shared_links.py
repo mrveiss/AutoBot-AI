@@ -21,6 +21,7 @@ from api.chat_shared_links import router
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
 from autobot_shared.time_utils import now_utc
+from testkit.canonical_gate import canonical_resolver
 
 # Test users
 _USER_ALICE = {"user_id": "alice", "username": "alice", "role": "user"}
@@ -36,11 +37,11 @@ def _patch_auth_middleware():
     """Make require_role() (#12704) see the injected test user.
 
     The admin cross-user route uses ``require_role("admin", "superadmin")``,
-    which reads the user via ``auth_rbac.get_auth_middleware()``.
+    which reads the user via ``auth_rbac.resolve_human_user``.
     """
     mw = MagicMock()
     mw.get_user_from_request.side_effect = lambda request: _CURRENT["user"]
-    with patch("auth_rbac.get_auth_middleware", return_value=mw):
+    with canonical_resolver("auth_rbac.resolve_human_user", mw):
         yield
     _CURRENT["user"] = None
 

@@ -27,14 +27,13 @@ if TYPE_CHECKING:
     import aioredis
     import redis
 from autobot_shared.logging_manager import get_logger
+from utils.validators import validate_email
 
 logger = get_logger(__name__)
 
 # Supported field types
 FIELD_TYPES = {"string", "number", "date", "boolean", "list", "url", "email"}
 
-# Validation pattern for email
-EMAIL_PATTERN = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+$")
 
 # Validation pattern for URL
 URL_PATTERN = re.compile(
@@ -398,7 +397,14 @@ class MetadataMixin:
             if not isinstance(value, str) or not URL_PATTERN.match(value):
                 return f"Field '{field_name}' must be a valid URL"
         elif field_type == "email":
-            if not isinstance(value, str) or not EMAIL_PATTERN.match(value):
+            # #18093: was a local EMAIL_PATTERN that disagreed with the canonical in
+            # both directions -- it rejected `has%percent@example.com` and accepted
+            # `user@example.123` and `a@b.c`, neither of which the canonical allows.
+            if not isinstance(value, str):
+                return f"Field '{field_name}' must be a valid email"
+            try:
+                validate_email(value)
+            except ValueError:
                 return f"Field '{field_name}' must be a valid email"
 
         return None  # No error

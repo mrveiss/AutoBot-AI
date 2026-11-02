@@ -15,8 +15,8 @@ import subprocess  # nosec B404 -- fixed argv, no shell; one positive control
 import pytest
 
 from agents.ac_criteria import (
-    Citation,
     Criterion,
+    CriterionCitation,
     code_searcher,
     criteria_after_the_section,
     criterion_terms,
@@ -111,22 +111,22 @@ class TestCitations:
         assert parse_citations("the ratio was 3:1 and the note said: done") == []
 
     def test_a_real_line_is_accepted(self):
-        verified, rejected = verify_citations([Citation("x.py", 2)], lambda _p: "one\ntwo\n")
+        verified, rejected = verify_citations([CriterionCitation("x.py", 2)], lambda _p: "one\ntwo\n")
 
         assert [str(c) for c in verified] == ["x.py:2"] and rejected == []
 
     def test_a_line_past_the_end_is_rejected(self):
-        verified, rejected = verify_citations([Citation("x.py", 9)], lambda _p: "one\ntwo\n")
+        verified, rejected = verify_citations([CriterionCitation("x.py", 9)], lambda _p: "one\ntwo\n")
 
         assert verified == [] and "file has 2 line(s)" in rejected[0]
 
     def test_a_missing_file_is_rejected(self):
-        verified, rejected = verify_citations([Citation("x.py", 1)], lambda _p: None)
+        verified, rejected = verify_citations([CriterionCitation("x.py", 1)], lambda _p: None)
 
         assert verified == [] and "no such file" in rejected[0]
 
     def test_a_blank_line_is_rejected(self):
-        verified, rejected = verify_citations([Citation("x.py", 2)], lambda _p: "one\n\nthree\n")
+        verified, rejected = verify_citations([CriterionCitation("x.py", 2)], lambda _p: "one\n\nthree\n")
 
         assert verified == [] and "blank" in rejected[0]
 

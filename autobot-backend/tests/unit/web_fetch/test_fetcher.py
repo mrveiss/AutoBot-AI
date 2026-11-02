@@ -4,6 +4,7 @@
 # Author: mrveiss
 """Tests for web_fetch.fetcher — render mode selection, SPA detection, fallback chain."""
 
+import contextlib
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -52,6 +53,38 @@ more text to make absolutely sure we have enough content here for the tests
 to pass reliably without any brittle assertions on character count. More words
 here to ensure we hit the limit comfortably without any guessing.
 """
+
+
+@contextlib.contextmanager
+def _auto_mode_offline(jina_text: str = _JINA_RESPONSE):
+    """Stub every egress path AUTO mode can take, not just the first one.
+
+    ``_run_auto`` cascades Jina -> BS4 -> Playwright, and a fixture long enough
+    as a string can still be short once parsed: ``_JINA_RESPONSE`` is 516
+    characters and 463 after ``_parse_jina_markdown`` strips its
+    ``Title:``/``URL Source:`` header, which is under ``_MIN_CONTENT_CHARS``
+    (500). A test that patches only ``_fetch_jina`` therefore falls straight
+    through to an unpatched ``_fetch_bs4`` and fetches the real internet --
+    which is #17746: this file 404ing against example.com, and passing in
+    whichever shard happened to have working egress. The fixture's own comment
+    claims it exceeds the threshold, and it does, as the wrong string.
+
+    So the parser is pinned alongside the fetcher, and the paths that must not
+    run raise instead of returning. A fall-through now fails loudly and names
+    itself, rather than going online and reporting whatever it found.
+    """
+    with (
+        patch("web_fetch.fetcher._is_public_url", return_value=True),
+        patch("web_fetch.fetcher._fetch_jina", return_value=jina_text),
+        patch("web_fetch.fetcher._parse_jina_markdown", return_value=("Hello World", jina_text)),
+        patch("web_fetch.fetcher._fetch_bs4", side_effect=AssertionError("_fetch_bs4 reached: AUTO fell through Jina")),
+        patch.object(
+            WebFetcher,
+            "_run_playwright",
+            side_effect=AssertionError("_run_playwright reached: AUTO fell through Jina and BS4"),
+        ),
+    ):
+        yield
 
 
 def _make_redis(cache_store=None):
@@ -107,14 +140,14 @@ class TestFetchBS4SSRFPinning:
     @pytest.mark.asyncio
     async def test_blocks_private_ip_literal_no_network_call(self) -> None:
         with patch("aiohttp.ClientSession") as mock_session_cls:
-            html, status = await _fetch_bs4("http://10.0.0.5/secret", timeout=5.0)
+            html, status, _content_type = await _fetch_bs4("http://10.0.0.5/secret", timeout=5.0)
         assert (html, status) == (None, None)
         mock_session_cls.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_blocks_link_local_metadata_no_network_call(self) -> None:
         with patch("aiohttp.ClientSession") as mock_session_cls:
-            html, status = await _fetch_bs4("http://169.254.169.254/latest/meta-data/", timeout=5.0)
+            html, status, _content_type = await _fetch_bs4("http://169.254.169.254/latest/meta-data/", timeout=5.0)
         assert (html, status) == (None, None)
         mock_session_cls.assert_not_called()
 
@@ -134,7 +167,7 @@ class TestFetchBS4SSRFPinning:
             ),
             patch("aiohttp.ClientSession") as mock_session_cls,
         ):
-            html, status = await _fetch_bs4("https://rebind.example.com/page", timeout=5.0)
+            html, status, _content_type = await _fetch_bs4("https://rebind.example.com/page", timeout=5.0)
 
         assert (html, status) == (None, None)
         mock_session_cls.assert_not_called()
@@ -182,7 +215,7 @@ class TestFetchBS4SSRFPinning:
             patch("autobot_shared.url_safety.socket.getaddrinfo", side_effect=fake_dns),
             patch("aiohttp.ClientSession", _FakeSession),
         ):
-            html, status = await _fetch_bs4("https://open-redirect.example.com/go", timeout=5.0)
+            html, status, _content_type = await _fetch_bs4("https://open-redirect.example.com/go", timeout=5.0)
 
         assert (html, status) == (None, None)
         # Only the first (legitimate) hop connected; hop 2 was blocked pre-connect.
@@ -195,6 +228,7 @@ class TestFetchBS4SSRFPinning:
 
         ok_resp = MagicMock()
         ok_resp.status = 200
+        ok_resp.headers = {"Content-Type": "text/html; charset=utf-8"}  # a real response's header map
 
         async def _iter_chunked(_size):
             yield b"<html><body>hi</body></html>"
@@ -215,7 +249,7 @@ class TestFetchBS4SSRFPinning:
             patch("autobot_shared.url_safety.socket.getaddrinfo", side_effect=fake_dns),
             patch("aiohttp.ClientSession", _FakeSession),
         ):
-            html, status = await _fetch_bs4("https://real.example.com/page", timeout=5.0)
+            html, status, _content_type = await _fetch_bs4("https://real.example.com/page", timeout=5.0)
 
         assert status == 200
         assert "hi" in html
@@ -259,12 +293,7 @@ class TestRenderModeAuto:
     @pytest.mark.asyncio
     async def test_jina_success_returns_markdown(self) -> None:
         # Jina returns enough content — should short-circuit before BS4.
-        with (
-            patch("web_fetch.fetcher._is_public_url", return_value=True),
-            patch("web_fetch.fetcher._fetch_jina", return_value=_JINA_RESPONSE),
-            patch("web_fetch.fetcher._parse_jina_markdown", return_value=("Hello World", _JINA_RESPONSE)),
-            patch("web_fetch.fetcher._fetch_bs4", side_effect=AssertionError("should not be called")),
-        ):
+        with _auto_mode_offline():
             result = await WebFetcher.fetch("https://example.com")
 
         assert result.success is True
@@ -277,7 +306,7 @@ class TestRenderModeAuto:
         with (
             patch("web_fetch.fetcher._is_public_url", return_value=True),
             patch("web_fetch.fetcher._fetch_jina", return_value=None),
-            patch("web_fetch.fetcher._fetch_bs4", return_value=(_STATIC_HTML, 200)),
+            patch("web_fetch.fetcher._fetch_bs4", return_value=(_STATIC_HTML, 200, "text/html")),
         ):
             result = await WebFetcher.fetch("https://example.com")
 
@@ -291,7 +320,7 @@ class TestRenderModeAuto:
         with (
             patch("web_fetch.fetcher._is_public_url", return_value=True),
             patch("web_fetch.fetcher._fetch_jina", return_value=None),
-            patch("web_fetch.fetcher._fetch_bs4", return_value=(_SPA_HTML, 200)),
+            patch("web_fetch.fetcher._fetch_bs4", return_value=(_SPA_HTML, 200, "text/html")),
             patch("web_fetch.fetcher._fetch_playwright", return_value=playwright_html),
         ):
             result = await WebFetcher.fetch("https://spa.example.com")
@@ -327,7 +356,7 @@ class TestRenderModeFast:
         with (
             patch("web_fetch.fetcher._is_public_url", return_value=True),
             patch("web_fetch.fetcher._fetch_jina", return_value=None),
-            patch("web_fetch.fetcher._fetch_bs4", return_value=(_SPA_HTML, 200)),
+            patch("web_fetch.fetcher._fetch_bs4", return_value=(_SPA_HTML, 200, "text/html")),
             patch("web_fetch.fetcher._fetch_playwright", side_effect=track_playwright),
         ):
             await WebFetcher.fetch("https://example.com", render=RenderMode.FAST)
@@ -389,7 +418,7 @@ class TestDispatchAndCacheWrite:
         with (
             patch("web_fetch.fetcher._is_public_url", return_value=True),
             patch("web_fetch.fetcher._fetch_jina", return_value=None),
-            patch("web_fetch.fetcher._fetch_bs4", return_value=(_STATIC_HTML, 200)),
+            patch("web_fetch.fetcher._fetch_bs4", return_value=(_STATIC_HTML, 200, "text/html")),
         ):
             result = await WebFetcher.fetch(
                 "https://example.com/cached-path",
@@ -434,7 +463,7 @@ class TestCacheIntegration:
         redis, store = _make_redis()
         from web_fetch.cache import _content_cache_key
 
-        key = _content_cache_key("https://example.com", "auto")
+        key = _content_cache_key("https://example.com", "auto", "document")
         store[key] = json.dumps(cached_payload)
 
         jina_called = False
@@ -455,13 +484,10 @@ class TestCacheIntegration:
     async def test_cache_populated_after_fetch(self) -> None:
         redis, store = _make_redis()
 
-        with (
-            patch("web_fetch.fetcher._is_public_url", return_value=True),
-            patch("web_fetch.fetcher._fetch_jina", return_value=_JINA_RESPONSE),
-        ):
+        with _auto_mode_offline():
             result = await WebFetcher.fetch("https://example.com", redis_client=redis)
 
-        assert result.success is True
+        assert result.success is True, f"expected a cached success, got {result.error_code!r}"
         # Verify something was stored in the cache store
         assert len(store) > 0
 
@@ -480,7 +506,7 @@ class TestFetchRawHtml:
     async def test_returns_html_and_status_tuple(self) -> None:
         with patch(
             "web_fetch.fetcher._fetch_bs4",
-            return_value=("<html><body>ok</body></html>", 200),
+            return_value=("<html><body>ok</body></html>", 200, "text/html"),
         ):
             html, status = await WebFetcher.fetch_raw_html("https://example.com")
 
@@ -489,7 +515,7 @@ class TestFetchRawHtml:
 
     @pytest.mark.asyncio
     async def test_returns_none_tuple_on_error(self) -> None:
-        with patch("web_fetch.fetcher._fetch_bs4", return_value=(None, None)):
+        with patch("web_fetch.fetcher._fetch_bs4", return_value=(None, None, None)):
             html, status = await WebFetcher.fetch_raw_html("https://example.com")
 
         assert html is None
@@ -502,7 +528,7 @@ class TestFetchRawHtml:
         async def _capture(url, timeout):
             captured["url"] = url
             captured["timeout"] = timeout
-            return ("<html/>", 200)
+            return ("<html/>", 200, "text/html")
 
         with patch("web_fetch.fetcher._fetch_bs4", side_effect=_capture):
             await WebFetcher.fetch_raw_html("https://example.com", timeout=7.5)
@@ -515,7 +541,7 @@ class TestFetchRawHtml:
 
         async def _capture(url, timeout):
             captured["timeout"] = timeout
-            return ("<html/>", 200)
+            return ("<html/>", 200, "text/html")
 
         with patch("web_fetch.fetcher._fetch_bs4", side_effect=_capture):
             await WebFetcher.fetch_raw_html("https://example.com")

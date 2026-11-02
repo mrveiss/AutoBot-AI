@@ -83,13 +83,25 @@ def is_purpose_bound(claims: Mapping[str, Any]) -> bool:
     - it carries any :data:`NON_LOGIN_CLAIMS` member — ``aud``, ``device_id``,
       ``mfa_pending``, ``run_id``, ``scope``, ``service``;
     - it carries a ``token_type`` that is not ``login`` — e.g. the
-      ``token_type: device`` that ``services/device_token_service.py`` mints,
-      which none of the claims above would catch.
+      ``token_type: device`` once minted by the retired ``device_token_service``
+      (``services/device_jwt.py`` is the one device-JWT minter now), which none of the
+      claims above would catch.
     """
     if not NON_LOGIN_CLAIMS.isdisjoint(claims):
         return True
     token_type = claims.get("token_type")
     return token_type is not None and token_type != LOGIN_TOKEN_TYPE
+
+
+def is_service_token(claims: Mapping[str, Any]) -> bool:
+    """True for a service-to-service token: ``service: true`` and no other purpose (#18338).
+
+    The backend->SLM token (``services/slm_client.py``) is exactly this. A token that
+    also carries ``mfa_pending``, ``aud`` or any other purpose claim, or a
+    ``token_type``, is not one -- so ``service`` cannot launder a pre-MFA token.
+    """
+    other_purposes = NON_LOGIN_CLAIMS - {"service"}
+    return claims.get("service") is True and other_purposes.isdisjoint(claims) and "token_type" not in claims
 
 
 def is_interactive_human(user: Optional[Mapping[str, Any]]) -> bool:

@@ -26,6 +26,7 @@ from user_management.database import get_async_session
 from user_management.services import TenantContext
 
 from ..org_role_authority import describe_role_bound
+from ..scheduler.dispatch_gate import AgentNotDispatchable
 from ..scheduler.heartbeat_scheduler import get_heartbeat_scheduler
 from ..services.agent_presence_queries import agent_org_nodes_with_latest_heartbeat
 
@@ -33,7 +34,7 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/agents", tags=["llc-agents"])
 
 
-class TriggerResponse(BaseModel):
+class AgentHeartbeatTriggerResponse(BaseModel):
     run_id: uuid.UUID
     status: str
 
@@ -88,13 +89,22 @@ async def list_agents(
     ]
 
 
-@router.post("/{agent_id}/heartbeat/trigger", response_model=TriggerResponse, status_code=202)
+def _owned_by_caller(agent_company: object, org_id: object) -> bool:
+    """True only when both ids are known and equal; two unknown ids prove no ownership."""
+    return agent_company is not None and agent_company == org_id
+
+
+@router.post(
+    "/{agent_id}/heartbeat/trigger",
+    response_model=AgentHeartbeatTriggerResponse,
+    status_code=202,
+)
 async def trigger_heartbeat(
     agent_id: str,
     session: AsyncSession = Depends(get_async_session),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
-) -> TriggerResponse:
+) -> AgentHeartbeatTriggerResponse:
     """Manually trigger a heartbeat run for *agent_id* immediately.
 
     Requires an authenticated user with org context. The agent must belong to
@@ -104,15 +114,23 @@ async def trigger_heartbeat(
     sched = get_heartbeat_scheduler()
     try:
         run, agent_cfg = await sched.trigger_manual(session, agent_id)
+    except AgentNotDispatchable as exc:
+        # An agent outside this company stays a 404: the reason would confirm it exists.
+        if not _owned_by_caller(exc.company_id, ctx.org_id):
+            raise HTTPException(
+                status_code=404,
+                detail=f"Agent {agent_id!r} not found or not configured",
+            )
+        raise HTTPException(status_code=409, detail=f"Cannot run: {exc.reason}")
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=404, detail="Internal server error")
 
     agent_company = agent_cfg.get("company_id")
-    if agent_company is not None and agent_company != ctx.org_id:
+    if ctx.org_id is None or (agent_company is not None and agent_company != ctx.org_id):
         # Return 404 (not 403) to prevent cross-tenant agent-ID enumeration oracle
         raise HTTPException(status_code=404, detail=f"Agent {agent_id!r} not found or not configured")
 
     await session.commit()
     sched.dispatch_run(agent_cfg, run.id)
-    return TriggerResponse(run_id=run.id, status=run.status)
+    return AgentHeartbeatTriggerResponse(run_id=run.id, status=run.status)

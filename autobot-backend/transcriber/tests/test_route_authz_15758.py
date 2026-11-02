@@ -23,7 +23,13 @@ from fastapi import FastAPI, HTTPException, Request
 from httpx import ASGITransport, AsyncClient
 
 from transcriber.database import Database
-from transcriber.deps import DEFAULT_USER, authenticate, get_current_user, get_db, resolve_user_id
+from transcriber.deps import (
+    DEFAULT_USER,
+    authenticate,
+    get_current_user,
+    get_transcriber_db_from_request,
+    resolve_user_id,
+)
 from transcriber.routes.ai import router as ai_router
 from transcriber.routes.export import router as export_router
 from transcriber.routes.kb import router as kb_router
@@ -72,7 +78,7 @@ async def seeded(tmp_path):
         return await call_next(request)
 
     await db.connect()
-    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_transcriber_db_from_request] = override_db
     app.dependency_overrides[authenticate] = lambda: None
     for router in (ai_router, kb_router, recordings_router):
         app.include_router(router, prefix=PREFIX)
@@ -128,7 +134,7 @@ def _unauthenticated_app(current_user=None) -> FastAPI:
     app = FastAPI()
     for router in _ALL_ROUTERS:
         app.include_router(router, prefix=PREFIX)
-    app.dependency_overrides[get_db] = lambda: MagicMock()
+    app.dependency_overrides[get_transcriber_db_from_request] = lambda: MagicMock()
     app.dependency_overrides[get_current_user] = current_user or _refuse_login
     return app
 
@@ -166,7 +172,7 @@ async def test_a_signed_in_caller_passes_the_same_gate():
     app = _unauthenticated_app(lambda: {"user_id": OWNER, "role": "user"})
     with (
         patch("transcriber.routes.providers.list_available_providers", return_value=[]),
-        patch("transcriber.routes.providers.get_active_provider_id", return_value=None),
+        patch("transcriber.routes.providers.get_active_asr_provider_id", return_value=None),
     ):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             r = await c.get(f"{PREFIX}/providers")
@@ -181,9 +187,9 @@ async def test_a_signed_in_caller_passes_the_same_gate():
 async def _patch_providers_as(role: str):
     app = _unauthenticated_app(lambda: {"user_id": "someone", "role": role})
     with (
-        patch("transcriber.routes.providers.set_active_provider") as set_provider,
+        patch("transcriber.routes.providers.set_active_asr_provider") as set_provider,
         patch("transcriber.routes.providers.list_available_providers", return_value=[]),
-        patch("transcriber.routes.providers.get_active_provider_id", return_value=None),
+        patch("transcriber.routes.providers.get_active_asr_provider_id", return_value=None),
     ):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             r = await c.patch(f"{PREFIX}/providers", json={"provider": None})

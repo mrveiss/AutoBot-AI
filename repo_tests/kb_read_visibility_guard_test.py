@@ -100,8 +100,20 @@ FILTER_HELPERS = frozenset(
         "augment_search_request_with_permissions",
         "build_chromadb_permission_filter",
         "check_access",
+        "can_read_fact",
+        "can_write_fact",  # owner-or-admin: a strict subset of who can_read_fact allows (#18184)
         "filter_accessible_facts",
         "get_all_accessible_facts",
+        # #16664: the principal-aware wrappers over filter_search_results_by_permission /
+        # filter_non_private_results (SYSTEM_SCOPE); RAG legs call them, never a second filter.
+        "filter_for_principal",
+        "filter_ranked",
+        # #16665: the API-caller and identified-user adapters over filter_for_principal.
+        "filter_for_caller",
+        "filter_for_user_id",
+        # #19280: api/knowledge_search.py's permission filter plus the shared stale filter, in that order
+        # (filter_search_results_by_permission, then drop_stale) -- the same filter, not a second one.
+        "_readable_fresh",
     }
 )
 
@@ -165,7 +177,38 @@ MIN_READS_FOUND = 40
 #: knowledge_ai_stack.py's _search_local_knowledge_base/search(), but #16716 had
 #: already filtered that read (no allowlist entry), so removing it changes nothing
 #: this scan counts.
-UNFILTERED_READ_CEILING = 95
+#: Then 95 -> 96 (#17546): the watch folder learned to remove a deleted file's document,
+#: and that removal resolves a file_path to fact ids through search_by_metadata. It is
+#: classified NOT_USER_FACING rather than filtered -- see _WATCH_RECONCILE in the
+#: allowlist for why a visibility filter would make a reconciliation delete *wrong*,
+#: not safer.
+#: Then 94 -> 87 (#16664 slice 1): ``advanced_search`` takes a required ``principal`` and filters every
+#: leg itself. The detector was deliberately widened in two places -- an ``advanced_search(...)`` call
+#: with a ``principal=`` keyword counts as filtered (agentic_search x2, cag_service, graph_rag_service,
+#: knowledge/service.py), and ``filter_for_principal`` / ``filter_ranked`` are filter helpers (RAGService's
+#: optimizer and fallback legs). That removes 7 entries -- a measured shrink, not new debt. The new
+#: population was derived a second way (an independent AST pass over the 94 recorded keys) and the sets
+#: compared: the symmetric difference is exactly those 7 keys. See RATCHET_BASELINES.md section 3-5.
+#: Then 87 -> 86 (#18944, #16664 slice 2): ``advanced_knowledge_search`` took a required ``principal`` and now
+#: reads through ``search_visible`` (``filter_ranked``), so it is no longer an unfiltered ``optimizer.advanced_search``.
+#: No detector change. The optimizer's context path moved to ``rag_optimizer_context.py`` and the synthesis and
+#: lessons legs to ``services/rag_derived_context.py``; neither holds a detected read. The live set was compared
+#: before and after over every changed file: the only difference is that one key.
+#: Then 86 -> 87 (#19216): the system-knowledge import's ``_adopt_duplicate`` reads the matched fact's
+#: metadata only, from a job with no user, and returns an id and status (classified NOT_USER_FACING).
+#: Then 87 -> 71 (#16665): the MCP knowledge routes, chat citations, the async chat workflow, the grounded agent and claim
+#: verifier, the agent KB tools, the KB librarian, the agent diary and the essential story now filter through
+#: ``filter_for_caller`` / ``filter_for_user_id`` (adapters over ``filter_for_principal``, so not a second filter).
+#: 16 entries removed; no detector change beyond adding those two names to FILTER_HELPERS.
+#: Then 71 -> 64 (#16665): the agent context/research routes, the knowledge-retrieval agent, chat knowledge search, the
+#: research planner's skip-known read and the KB search task handler filter through ``filter_for_user_id``.
+#: Then 64 -> 65 (#16665, train-85f): ``knowledge/summary_visibility._source_metadata`` reads the source fact's
+#: metadata to make the visibility decision itself; classified SCOPED.
+#: Then 65 -> 64 (#16665, #19644): ``/ai-stack/knowledge/search`` scopes its local hits to the caller, so the scan
+#: marks it filtered and its _SCOPED_ADMIN_ROUTER allowlist entry is removed.
+#: Then 64 -> 66 (#19647): the backup's vector read and the restore's existence check, both NOT_USER_FACING.
+#: Then 66 -> 67 (#20028): the sync's pre-delete check of a replaced fact, NOT_USER_FACING.
+UNFILTERED_READ_CEILING = 67
 
 _REASON_PREFIXES = ("TRACKED_GAP #", "SCOPED: ", "NOT_USER_FACING: ", "IMPL: ", "ADMIN_ONLY: ")
 _NESTED = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
@@ -192,21 +235,28 @@ def _production_files(root: Path) -> list[str]:
     return [rel for rel in tracked if _is_production(rel)]
 
 
-#: MEASURED 2026-09-14 against this tree: 2555 production files by this guard's own filter
-#: (2356 autobot-backend, 195 autobot_shared, 4 infra MCP) -- #16466 retired
-#: browser_tracking.py/file_tracking.py/terminal_tracking.py/knowledge/activity_types.py as
-#: dead code, dropping autobot-backend's count by 3 net of other merged growth. `growth=250`
-#: (~10%) absorbs ordinary additions, since most feature work adds production modules. That
+#: FLOOR PINNED 2026-10-19 to 2762 against a measured population of 2887 production files by this
+#: guard's own filter (branch issue-18825-graph-owner-scope; the repo_tests run that reported
+#: "the window against a population of 2887 is [2637, 2887]"). With `growth=250` and `skips=0`
+#: that window is 2637..2887 and 2762 sits mid-window (`_reach` refuses a floor in the bottom 25).
+#: Earlier figure, no longer current: 2555 measured 2026-09-14 (2356 autobot-backend, 195
+#: autobot_shared, 4 infra MCP). The per-root split of 2887 was not recorded in that run. `growth=250`
+#: absorbs ordinary additions, since most feature work adds production modules. That
 #: band cannot see a small root vanish, so `test_every_scan_root_is_reached` checks each root
 #: separately. `skips=0`: every discovered file is parsed, and an unparseable one fails the
 #: scan loudly.
 REACH = declare(
     "kb-read-visibility-production-sweep",
     discover=_production_files,
-    floor=2555,
+    floor=2975,  # mid-window: population 3100, window (2850, 3100)
     growth=250,
     skips=0,
     what="production python files",
+    # The scope as DATA (#17844). This declaration was the named instance: `what=` said
+    # "production python files" unqualified while the docstring at :26 said the truth, and a
+    # reach report reads the machine-readable string. Seven guards claimed that same phrase over
+    # floors spanning 2555..3247 -- the spread is legitimate scoping and was invisible.
+    roots=SCAN_ROOTS,
 )
 
 
@@ -252,6 +302,20 @@ def _is_kb_read(call: ast.Call) -> bool:
     receiver, method = _dotted(func.value), func.attr
     return (method in READ_METHODS and receiver in KB_RECEIVERS) or (
         method in RAG_METHODS and receiver in RAG_RECEIVERS
+    )
+
+
+def _is_principal_scoped_rag_call(call: ast.Call) -> bool:
+    """An ``advanced_search(...)`` passing ``principal=``: RAGService filters every leg for it (#16664).
+
+    A call-level rule, unlike FILTER_HELPERS' function-level one: the caller does no filtering of its
+    own, the service it calls does. It reads the keyword, not its value, so ``principal=None`` is
+    seen as scoped -- the service raises on it before any read (``require_kb_principal``).
+    """
+    return (
+        isinstance(call.func, ast.Attribute)
+        and call.func.attr in RAG_METHODS
+        and any(kw.arg == "principal" for kw in call.keywords)
     )
 
 
@@ -302,7 +366,7 @@ def kb_reads(source: str, rel: str = "") -> list[tuple[str, int, bool]]:
                 filtered = any(_called_name(c) in FILTER_HELPERS for c in ast.walk(child) if isinstance(c, ast.Call))
                 aliases = _handle_aliases(child)
                 reads.extend(
-                    (name, c.lineno, filtered)
+                    (name, c.lineno, filtered or _is_principal_scoped_rag_call(c))
                     for c in _own_calls(child)
                     if _is_kb_read(c) or _is_raw_kb_read(c, rel, aliases)
                 )
@@ -421,6 +485,23 @@ def test_a_method_read_is_keyed_by_class_and_method():
 def test_a_nested_function_owns_its_read():
     source = "def outer(kb):\n    async def inner():\n        return await kb.get_all_facts()\n    return inner\n"
     assert kb_reads(source) == [("outer.inner", 3, False)]
+
+
+def test_an_advanced_search_with_a_principal_keyword_is_filtered_and_without_one_is_not():
+    """Contrast pair for the #16664 call-level rule: only the ``principal=`` keyword scopes the call."""
+    scoped = "async def r(rag_service, p):\n    return await rag_service.advanced_search('q', principal=p)\n"
+    bare = "async def r(rag_service, p):\n    return await rag_service.advanced_search('q', p)\n"
+    assert kb_reads(scoped) == [("r", 2, True)]
+    assert kb_reads(bare) == [("r", 2, False)]
+
+
+def test_a_leg_that_filters_through_the_principal_helpers_is_marked_filtered():
+    source = (
+        "async def leg(self, p):\n"
+        "    rows = await self.kb_adapter.search('q')\n"
+        "    return await filter_ranked(rows, p, self._ownership_manager())\n"
+    )
+    assert kb_reads(source) == [("leg", 2, True)]
 
 
 def test_rag_reads_count_and_unrelated_search_calls_do_not():

@@ -19,7 +19,7 @@
     # SAME meaning it has in roles/backend/defaults/main.yml (the component
     # dir), not the deploy root. backend_deployed_root holds the root under
     # its own name for every task below that genuinely wants it.
-    backend_deployed_root: /opt/autobot
+    backend_deployed_root: "{{ autobot.base_dir }}"
     backend_code_dir: "{{ backend_deployed_root }}/autobot-backend"
     backend_install_dir: "{{ backend_code_dir }}"
     backend_log_dir: /var/log/autobot
@@ -27,7 +27,6 @@
     backend_group: autobot
     backend_host: "0.0.0.0"
     backend_port: 8443
-    backend_workers: 4
 
   tasks:
     # ============================================================
@@ -99,14 +98,12 @@
     # leftover from before the template covered it. Later phases read the value
     # back out of the rendered unit rather than restating it.
 
+    # #17856: one template path -- roles/backend unit_only renders the canonical unit (worker
+    # count from the role default) and reloads systemd itself.
     - name: Deploy corrected systemd service file
-      template:
-        src: ../roles/backend/templates/autobot-backend.service.j2
-        dest: /etc/systemd/system/autobot-backend.service
-        owner: root
-        group: root
-        mode: '0644'
-      notify: reload systemd
+      ansible.builtin.include_role:
+        name: backend
+        tasks_from: unit_only
 
     - name: Read back the rendered systemd unit (#15560)
       ansible.builtin.slurp:

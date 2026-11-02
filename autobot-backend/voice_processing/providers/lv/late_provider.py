@@ -16,7 +16,13 @@ import subprocess
 from typing import List, Optional
 
 from autobot_shared.logging_manager import get_logger
-from voice_processing.providers import SpeechProvider, TranscriptSegment
+from voice_processing.providers import (
+    ProviderFailed,
+    ProviderUnavailable,
+    SpeechProvider,
+    TranscriptSegment,
+    failures_as_provider_failed,
+)
 
 logger = get_logger(__name__)
 
@@ -31,6 +37,7 @@ class LateProvider(SpeechProvider):
             late_binary_path: Path to LATE binary (defaults to env var or 'late')
         """
         self.late_binary = late_binary_path or os.getenv("LATE_BINARY_PATH", "late")
+        self._binary_ok = False
         self._check_availability()
 
     def _check_availability(self):
@@ -44,6 +51,7 @@ class LateProvider(SpeechProvider):
                 encoding="utf-8",
             )
             if result.returncode == 0:
+                self._binary_ok = True
                 logger.info(f"LATE binary available: {self.late_binary}")
             else:
                 logger.warning(f"LATE binary check failed: {result.stderr}")
@@ -65,50 +73,25 @@ class LateProvider(SpeechProvider):
         Returns:
             List of transcript segments
         """
+        if not self._binary_ok:
+            raise ProviderUnavailable("LATE: binary not available")
         if not os.path.exists(audio_path):
-            logger.error(f"Audio file not found: {audio_path}")
-            return []
-
-        try:
-            # Run LATE transcription
-            # LATE typically outputs JSON with segments
-            cmd = [
-                self.late_binary,
-                "transcribe",
-                audio_path,
-                "--format",
-                "json",
-                "--segments",
-            ]
-
-            logger.info(f"Running LATE transcription: {' '.join(cmd)}")
-
-            # Run in executor to avoid blocking
+            raise ProviderFailed("LATE: audio file not found")
+        cmd = [self.late_binary, "transcribe", audio_path, "--format", "json", "--segments"]
+        logger.info(f"Running LATE transcription: {' '.join(cmd)}")
+        with failures_as_provider_failed(self.provider_name):
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(None, self._run_late_command, cmd)
-
-            if result is None:
-                logger.error("LATE transcription failed")
-                return []
-
-            # Parse LATE JSON output
             segments = self._parse_late_output(result)
-            logger.info(f"LATE transcription completed: {len(segments)} segments")
-            return segments
+        logger.info(f"LATE transcription completed: {len(segments)} segments")
+        return segments
 
-        except Exception as e:
-            logger.error(f"LATE transcription failed: {e}")
-            return []
+    def is_available(self) -> bool:
+        """LATE can run only when its binary answered ``--version``."""
+        return self._binary_ok
 
-    def _run_late_command(self, cmd: List[str]) -> Optional[str]:
-        """Run LATE command and return output.
-
-        Args:
-            cmd: Command and arguments
-
-        Returns:
-            JSON output string or None on failure
-        """
+    def _run_late_command(self, cmd: List[str]) -> str:
+        """Run LATE and return its stdout; raises :class:`ProviderFailed` on a non-zero exit or timeout."""
         try:
             result = (
                 subprocess.run(  # nosec B603  # cmd is [late_binary + fixed flags]; callers construct argv, no user
@@ -119,19 +102,12 @@ class LateProvider(SpeechProvider):
                     encoding="utf-8",
                 )
             )
-
-            if result.returncode != 0:
-                logger.error(f"LATE command failed: {result.stderr}")
-                return None
-
-            return result.stdout
-
-        except subprocess.TimeoutExpired:
-            logger.error("LATE command timed out after 5 minutes")
-            return None
-        except Exception as e:
-            logger.error(f"LATE command execution failed: {e}")
-            return None
+        except subprocess.TimeoutExpired as exc:
+            raise ProviderFailed("LATE command timed out after 5 minutes") from exc
+        if result.returncode != 0:
+            logger.error(f"LATE command failed: {result.stderr}")
+            raise ProviderFailed(f"LATE command exited {result.returncode}")
+        return result.stdout
 
     def _parse_late_output(self, json_output: str) -> List[TranscriptSegment]:
         """Parse LATE JSON output into TranscriptSegments.
@@ -142,42 +118,34 @@ class LateProvider(SpeechProvider):
         Returns:
             List of transcript segments
         """
-        try:
-            data = json.loads(json_output)
+        data = json.loads(json_output)
 
-            # LATE format (assumed):
-            # {
-            #   "segments": [
-            #     {
-            #       "text": "...",
-            #       "start": 0.0,
-            #       "end": 1.5,
-            #       "confidence": 0.95
-            #     },
-            #     ...
-            #   ]
-            # }
+        # LATE format (assumed):
+        # {
+        #   "segments": [
+        #     {
+        #       "text": "...",
+        #       "start": 0.0,
+        #       "end": 1.5,
+        #       "confidence": 0.95
+        #     },
+        #     ...
+        #   ]
+        # }
 
-            segments = []
-            for seg in data.get("segments", []):
-                segments.append(
-                    TranscriptSegment(
-                        text=seg.get("text", ""),
-                        start_time=seg.get("start", 0.0),
-                        end_time=seg.get("end", 0.0),
-                        confidence=seg.get("confidence", 0.0),
-                        language="lv",
-                    )
+        segments = []
+        for seg in data.get("segments", []):
+            segments.append(
+                TranscriptSegment(
+                    text=seg.get("text", ""),
+                    start_time=seg.get("start", 0.0),
+                    end_time=seg.get("end", 0.0),
+                    confidence=seg.get("confidence", 0.0),
+                    language="lv",
                 )
+            )
 
-            return segments
-
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse LATE JSON output: {e}")
-            return []
-        except Exception as e:
-            logger.error(f"Failed to parse LATE output: {e}")
-            return []
+        return segments
 
     @property
     def provider_name(self) -> str:

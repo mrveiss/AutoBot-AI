@@ -13,12 +13,15 @@ import { ref, computed, onMounted } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useFleetStore } from '@/stores/fleet'
-import { formatDateTime as formatDateTimeTz } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import { useToast } from '@/composables/useToast'
 import { createLogger } from '@/utils/debugUtils'
 import type { Replication, ReplicationRequest } from '@/types/slm'
+import { BaseAlert, BaseModal } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 
 const logger = createLogger('ReplicationView')
+const { t } = useI18n()
 const api = useSlmApi()
 const ws = useSlmWebSocket()
 const fleetStore = useFleetStore()
@@ -126,7 +129,7 @@ async function handleCreateReplication(): Promise<void> {
 }
 
 async function handlePromote(replicationId: string): Promise<void> {
-  if (!confirm('Are you sure you want to promote this replica to primary? This will make the target node a standalone master.')) {
+  if (!confirm(t('replicationView.areYouSureYouWantToPromote'))) {
     return
   }
 
@@ -140,7 +143,7 @@ async function handlePromote(replicationId: string): Promise<void> {
 }
 
 async function handleStop(replicationId: string): Promise<void> {
-  if (!confirm('Are you sure you want to stop this replication? The replica will remain connected but replication link will be marked as stopped.')) {
+  if (!confirm(t('replicationView.areYouSureYouWantToStop'))) {
     return
   }
 
@@ -204,11 +207,6 @@ function getStatusClass(status: string): string {
   }
 }
 
-function formatDateTime(isoString: string | null): string {
-  if (!isoString) return '-'
-  return formatDateTimeTz(isoString)
-}
-
 function formatLag(lagBytes: number): string {
   if (lagBytes === 0) return '0 B (in sync)'
   if (lagBytes < 1024) return `${lagBytes} B`
@@ -257,14 +255,12 @@ function getNodeHostname(nodeId: string): string {
     </div>
 
     <!-- Warning if less than 2 Redis nodes -->
-    <div v-if="redisNodes.length < 2" class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-      <div class="flex items-center gap-3">
-        <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-        </svg>
-        <p class="text-sm text-yellow-700">{{ $t('replicationView.atLeast2NodesWithThe', { count: redisNodes.length }) }}</p>
-      </div>
-    </div>
+    <BaseAlert
+      v-if="redisNodes.length < 2"
+      variant="warning"
+      class="mb-6"
+      :message="$t('replicationView.atLeast2NodesWithThe', { count: redisNodes.length })"
+    />
 
     <!-- Summary Stats -->
     <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
@@ -391,7 +387,7 @@ function getNodeHostname(nodeId: string): string {
                 </span>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {{ formatDateTime(replication.started_at) }}
+                {{ formatFleetDateTime(replication.started_at, '-') }}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-right">
                 <div class="flex items-center justify-end gap-2">
@@ -464,268 +460,240 @@ function getNodeHostname(nodeId: string): string {
     </div>
 
     <!-- Create Dialog -->
-    <div
-      v-if="showCreateDialog"
-      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-      @click.self="showCreateDialog = false"
+    <BaseModal
+      v-model="showCreateDialog"
+      :title="$t('replicationView.newReplication')"
+      width="32rem"
+      :close-label="$t('replicationView.close')"
     >
-      <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
-        <div class="px-6 py-4 border-b border-gray-200">
-          <h3 class="text-lg font-semibold text-gray-900">{{ $t('replicationView.newReplication') }}</h3>
-          <p class="text-sm text-gray-500 mt-1">
-            {{ $t('replicationView.setUpRedisMaster') }}
-          </p>
-        </div>
-        <div class="px-6 py-4 space-y-4">
-          <!-- Source Node Selection -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              <span class="flex items-center gap-2">
-                <div class="w-3 h-3 rounded-full bg-purple-500"></div>
-                {{ $t('replicationView.sourceNodePrimaryMaster') }}
-              </span>
-            </label>
-            <select
-              v-model="newReplication.source_node_id"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-            >
-              <option value="">{{ $t('replicationView.selectPrimaryNode') }}</option>
-              <option v-for="opt in redisNodes" :key="opt.value" :value="opt.value">
-                {{ opt.label }} - {{ opt.status }}
-              </option>
-            </select>
-          </div>
-
-          <!-- Target Node Selection -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              <span class="flex items-center gap-2">
-                <div class="w-3 h-3 rounded-full bg-cyan-500"></div>
-                {{ $t('replicationView.targetNodeReplica') }}
-              </span>
-            </label>
-            <select
-              v-model="newReplication.target_node_id"
-              :disabled="!newReplication.source_node_id"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
-            >
-              <option value="">{{ $t('replicationView.selectReplicaNode') }}</option>
-              <option v-for="opt in availableTargets" :key="opt.value" :value="opt.value">
-                {{ opt.label }} - {{ opt.status }}
-              </option>
-            </select>
-          </div>
-
-          <!-- Service Type -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('replicationView.serviceType') }}</label>
-            <select
-              v-model="newReplication.service_type"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-            >
-              <option value="redis">{{ $t('replicationView.redis') }}</option>
-            </select>
-            <p class="text-xs text-gray-500 mt-1">{{ $t('replicationView.currentlyOnlyRedisReplication') }}</p>
-          </div>
-
-          <!-- Info Box -->
-          <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
-            <p class="text-sm text-blue-700">
-              {{ $t('replicationView.thisWillConfigureThe') }}
-              <code class="bg-blue-100 px-1 rounded-sm">REPLICAOF</code> {{ $t('replicationView.commandViaAnsibleThe') }}
-            </p>
-          </div>
-        </div>
-        <div class="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
-          <button
-            @click="showCreateDialog = false; resetForm()"
-            class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+      <template #subtitle>
+        {{ $t('replicationView.setUpRedisMaster') }}
+      </template>
+      <div class="space-y-4">
+        <!-- Source Node Selection -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">
+            <span class="flex items-center gap-2">
+              <div class="w-3 h-3 rounded-full bg-purple-500"></div>
+              {{ $t('replicationView.sourceNodePrimaryMaster') }}
+            </span>
+          </label>
+          <select
+            v-model="newReplication.source_node_id"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
           >
-            {{ $t('replicationView.cancel') }}
-          </button>
-          <button
-            @click="handleCreateReplication"
-            :disabled="!newReplication.source_node_id || !newReplication.target_node_id || isCreating"
-            class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            <div v-if="isCreating" class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
-            {{ $t('replicationView.startReplication') }}
-          </button>
+            <option value="">{{ $t('replicationView.selectPrimaryNode') }}</option>
+            <option v-for="opt in redisNodes" :key="opt.value" :value="opt.value">
+              {{ opt.label }} - {{ opt.status }}
+            </option>
+          </select>
         </div>
+
+        <!-- Target Node Selection -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">
+            <span class="flex items-center gap-2">
+              <div class="w-3 h-3 rounded-full bg-cyan-500"></div>
+              {{ $t('replicationView.targetNodeReplica') }}
+            </span>
+          </label>
+          <select
+            v-model="newReplication.target_node_id"
+            :disabled="!newReplication.source_node_id"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100"
+          >
+            <option value="">{{ $t('replicationView.selectReplicaNode') }}</option>
+            <option v-for="opt in availableTargets" :key="opt.value" :value="opt.value">
+              {{ opt.label }} - {{ opt.status }}
+            </option>
+          </select>
+        </div>
+
+        <!-- Service Type -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('replicationView.serviceType') }}</label>
+          <select
+            v-model="newReplication.service_type"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+          >
+            <option value="redis">{{ $t('replicationView.redis') }}</option>
+          </select>
+          <p class="text-xs text-gray-500 mt-1">{{ $t('replicationView.currentlyOnlyRedisReplication') }}</p>
+        </div>
+
+        <!-- Info Box -->
+        <BaseAlert variant="info" size="compact">
+          {{ $t('replicationView.thisWillConfigureThe') }}
+          <code>REPLICAOF</code> {{ $t('replicationView.commandViaAnsibleThe') }}
+        </BaseAlert>
       </div>
-    </div>
+      <template #actions>
+        <button
+          @click="showCreateDialog = false; resetForm()"
+          class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+        >
+          {{ $t('replicationView.cancel') }}
+        </button>
+        <button
+          @click="handleCreateReplication"
+          :disabled="!newReplication.source_node_id || !newReplication.target_node_id || isCreating"
+          class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          <div v-if="isCreating" class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+          {{ $t('replicationView.startReplication') }}
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- Details Modal -->
-    <Teleport to="body">
-      <Transition
-        enter-active-class="transition duration-200 ease-out"
-        enter-from-class="opacity-0"
-        enter-to-class="opacity-100"
-        leave-active-class="transition duration-150 ease-in"
-        leave-from-class="opacity-100"
-        leave-to-class="opacity-0"
-      >
-        <div
-          v-if="showDetailsModal && selectedReplication"
-          class="fixed inset-0 z-50 flex items-center justify-center p-4"
-        >
-          <div class="fixed inset-0 bg-gray-500/75" @click="closeDetails"></div>
-          <div class="relative bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
-            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <div class="flex items-center gap-3">
-                <h3 class="text-lg font-semibold text-gray-900">{{ $t('replicationView.replicationDetails') }}</h3>
-                <span :class="['px-2 py-1 text-xs font-medium rounded-full', getStatusClass(selectedReplication.status)]">
-                  {{ selectedReplication.status }}
-                </span>
-              </div>
-              <button @click="closeDetails" class="text-gray-400 hover:text-gray-600" :aria-label="$t('replicationView.close')">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
+    <BaseModal
+      v-if="selectedReplication"
+      :model-value="showDetailsModal"
+      :title="$t('replicationView.replicationDetails')"
+      width="42rem"
+      :close-label="$t('replicationView.close')"
+      @close="closeDetails"
+    >
+      <template #subtitle>
+        <span v-if="selectedReplication" :class="['px-2 py-1 text-xs font-medium rounded-full', getStatusClass(selectedReplication.status)]">
+          {{ selectedReplication.status }}
+        </span>
+      </template>
+      <!-- Node Info -->
+      <div class="grid grid-cols-2 gap-4 mb-6">
+        <div class="p-4 bg-purple-50 rounded-lg">
+          <p class="text-sm font-medium text-purple-800 mb-1">{{ $t('replicationView.sourcePrimary') }}</p>
+          <p class="text-lg font-semibold text-purple-900">{{ getNodeHostname(selectedReplication.source_node_id) }}</p>
+          <p class="text-xs text-purple-600 mt-1">{{ selectedReplication.source_node_id }}</p>
+        </div>
+        <div class="p-4 bg-cyan-50 rounded-lg">
+          <p class="text-sm font-medium text-cyan-800 mb-1">{{ $t('replicationView.targetReplica') }}</p>
+          <p class="text-lg font-semibold text-cyan-900">{{ getNodeHostname(selectedReplication.target_node_id) }}</p>
+          <p class="text-xs text-cyan-600 mt-1">{{ selectedReplication.target_node_id }}</p>
+        </div>
+      </div>
 
-            <div class="p-6 overflow-y-auto max-h-[calc(80vh-8rem)]">
-              <!-- Node Info -->
-              <div class="grid grid-cols-2 gap-4 mb-6">
-                <div class="p-4 bg-purple-50 rounded-lg">
-                  <p class="text-sm font-medium text-purple-800 mb-1">{{ $t('replicationView.sourcePrimary') }}</p>
-                  <p class="text-lg font-semibold text-purple-900">{{ getNodeHostname(selectedReplication.source_node_id) }}</p>
-                  <p class="text-xs text-purple-600 mt-1">{{ selectedReplication.source_node_id }}</p>
-                </div>
-                <div class="p-4 bg-cyan-50 rounded-lg">
-                  <p class="text-sm font-medium text-cyan-800 mb-1">{{ $t('replicationView.targetReplica') }}</p>
-                  <p class="text-lg font-semibold text-cyan-900">{{ getNodeHostname(selectedReplication.target_node_id) }}</p>
-                  <p class="text-xs text-cyan-600 mt-1">{{ selectedReplication.target_node_id }}</p>
-                </div>
-              </div>
+      <!-- Lag & Sync Info -->
+      <div class="mb-6 p-4 border border-gray-200 rounded-lg">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-sm font-medium text-gray-700">{{ $t('replicationView.replicationLag') }}</p>
+          <span :class="[
+            'text-lg font-bold',
+            selectedReplication.lag_bytes === 0 ? 'text-green-600' :
+            selectedReplication.lag_bytes < 1024 * 1024 ? 'text-yellow-600' : 'text-red-600'
+          ]">
+            {{ formatLag(selectedReplication.lag_bytes) }}
+          </span>
+        </div>
+        <div v-if="selectedReplication.sync_position" class="text-xs text-gray-500">{{ $t('replicationView.syncPositionValue0', { value0: selectedReplication.sync_position }) }}</div>
+      </div>
 
-              <!-- Lag & Sync Info -->
-              <div class="mb-6 p-4 border border-gray-200 rounded-lg">
-                <div class="flex items-center justify-between mb-2">
-                  <p class="text-sm font-medium text-gray-700">{{ $t('replicationView.replicationLag') }}</p>
-                  <span :class="[
-                    'text-lg font-bold',
-                    selectedReplication.lag_bytes === 0 ? 'text-green-600' :
-                    selectedReplication.lag_bytes < 1024 * 1024 ? 'text-yellow-600' : 'text-red-600'
-                  ]">
-                    {{ formatLag(selectedReplication.lag_bytes) }}
-                  </span>
-                </div>
-                <div v-if="selectedReplication.sync_position" class="text-xs text-gray-500">{{ $t('replicationView.syncPositionValue0', { value0: selectedReplication.sync_position }) }}</div>
-              </div>
+      <!-- Sync Verification Results -->
+      <div v-if="isVerifying" class="mb-6 flex items-center justify-center py-8">
+        <div class="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full"></div>
+        <span class="ml-3 text-gray-600">{{ $t('replicationView.verifyingSyncStatus') }}</span>
+      </div>
 
-              <!-- Sync Verification Results -->
-              <div v-if="isVerifying" class="mb-6 flex items-center justify-center py-8">
-                <div class="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full"></div>
-                <span class="ml-3 text-gray-600">{{ $t('replicationView.verifyingSyncStatus') }}</span>
-              </div>
+      <div v-else-if="syncVerifyResult" class="mb-6">
+        <div class="flex items-center gap-2 mb-3">
+          <svg
+            :class="['w-5 h-5', syncVerifyResult.is_healthy ? 'text-green-600' : 'text-red-600']"
+            fill="none" stroke="currentColor" viewBox="0 0 24 24"
+          >
+            <path
+              v-if="syncVerifyResult.is_healthy"
+              stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+            <path
+              v-else
+              stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+          <p :class="['font-medium', syncVerifyResult.is_healthy ? 'text-green-700' : 'text-red-700']">
+            {{ syncVerifyResult.is_healthy ? $t('replicationView.replicationIsHealthyAndInSync') : $t('replicationView.replicationIssuesDetected') }}
+          </p>
+        </div>
 
-              <div v-else-if="syncVerifyResult" class="mb-6">
-                <div class="flex items-center gap-2 mb-3">
-                  <svg
-                    :class="['w-5 h-5', syncVerifyResult.is_healthy ? 'text-green-600' : 'text-red-600']"
-                    fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                  >
-                    <path
-                      v-if="syncVerifyResult.is_healthy"
-                      stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                    <path
-                      v-else
-                      stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  <p :class="['font-medium', syncVerifyResult.is_healthy ? 'text-green-700' : 'text-red-700']">
-                    {{ syncVerifyResult.is_healthy ? $t('replicationView.replicationIsHealthyAndInSync') : $t('replicationView.replicationIssuesDetected') }}
-                  </p>
-                </div>
-
-                <!-- Checks -->
-                <div class="space-y-2">
-                  <div
-                    v-for="check in syncVerifyResult.checks"
-                    :key="check.name"
-                    class="flex items-center gap-2 p-2 rounded-md"
-                    :class="check.status === 'passed' ? 'bg-green-50' : check.status === 'failed' ? 'bg-red-50' : 'bg-gray-50'"
-                  >
-                    <svg
-                      :class="[
-                        'w-4 h-4',
-                        check.status === 'passed' ? 'text-green-500' :
-                        check.status === 'failed' ? 'text-red-500' : 'text-gray-400'
-                      ]"
-                      fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                    >
-                      <path
-                        v-if="check.status === 'passed'"
-                        stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"
-                      />
-                      <path
-                        v-else-if="check.status === 'failed'"
-                        stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"
-                      />
-                      <path
-                        v-else
-                        stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01"
-                      />
-                    </svg>
-                    <span class="text-sm font-medium">{{ check.name }}:</span>
-                    <span class="text-sm text-gray-600">{{ check.message }}</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Timestamps -->
-              <div class="grid grid-cols-2 gap-4 mb-6">
-                <div>
-                  <p class="text-sm text-gray-500">{{ $t('replicationView.created') }}</p>
-                  <p class="text-sm font-medium">{{ formatDateTime(selectedReplication.created_at) }}</p>
-                </div>
-                <div>
-                  <p class="text-sm text-gray-500">{{ $t('replicationView.started') }}</p>
-                  <p class="text-sm font-medium">{{ formatDateTime(selectedReplication.started_at) }}</p>
-                </div>
-                <div v-if="selectedReplication.completed_at">
-                  <p class="text-sm text-gray-500">{{ $t('replicationView.completed') }}</p>
-                  <p class="text-sm font-medium">{{ formatDateTime(selectedReplication.completed_at) }}</p>
-                </div>
-              </div>
-
-              <!-- Error -->
-              <div v-if="selectedReplication.error" class="mb-6">
-                <p class="text-sm text-gray-500 mb-2">{{ $t('replicationView.error') }}</p>
-                <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <p class="text-sm text-red-800 font-mono whitespace-pre-wrap">{{ selectedReplication.error }}</p>
-                </div>
-              </div>
-            </div>
-
-            <div class="flex justify-end gap-3 px-6 py-4 border-t border-gray-200">
-              <button
-                @click="handleVerifySync(selectedReplication)"
-                :disabled="isVerifying"
-                class="btn btn-secondary flex items-center gap-2"
-              >
-                <div v-if="isVerifying" class="animate-spin w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full"></div>
-                {{ $t('replicationView.verifySync') }}
-              </button>
-              <button
-                v-if="selectedReplication.status === 'active'"
-                @click="handlePromote(selectedReplication.replication_id); closeDetails()"
-                class="btn bg-green-600 text-white hover:bg-green-700"
-              >
-                {{ $t('replicationView.promoteToPrimary') }}
-              </button>
-              <button @click="closeDetails" class="btn btn-secondary">
-                {{ $t('replicationView.close') }}
-              </button>
-            </div>
+        <!-- Checks -->
+        <div class="space-y-2">
+          <div
+            v-for="check in syncVerifyResult.checks"
+            :key="check.name"
+            class="flex items-center gap-2 p-2 rounded-md"
+            :class="check.status === 'passed' ? 'bg-green-50' : check.status === 'failed' ? 'bg-red-50' : 'bg-gray-50'"
+          >
+            <svg
+              :class="[
+                'w-4 h-4',
+                check.status === 'passed' ? 'text-green-500' :
+                check.status === 'failed' ? 'text-red-500' : 'text-gray-400'
+              ]"
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
+              <path
+                v-if="check.status === 'passed'"
+                stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"
+              />
+              <path
+                v-else-if="check.status === 'failed'"
+                stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"
+              />
+              <path
+                v-else
+                stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01"
+              />
+            </svg>
+            <span class="text-sm font-medium">{{ check.name }}:</span>
+            <span class="text-sm text-gray-600">{{ check.message }}</span>
           </div>
         </div>
-      </Transition>
-    </Teleport>
+      </div>
+
+      <!-- Timestamps -->
+      <div class="grid grid-cols-2 gap-4 mb-6">
+        <div>
+          <p class="text-sm text-gray-500">{{ $t('replicationView.created') }}</p>
+          <p class="text-sm font-medium">{{ formatFleetDateTime(selectedReplication.created_at, '-') }}</p>
+        </div>
+        <div>
+          <p class="text-sm text-gray-500">{{ $t('replicationView.started') }}</p>
+          <p class="text-sm font-medium">{{ formatFleetDateTime(selectedReplication.started_at, '-') }}</p>
+        </div>
+        <div v-if="selectedReplication.completed_at">
+          <p class="text-sm text-gray-500">{{ $t('replicationView.completed') }}</p>
+          <p class="text-sm font-medium">{{ formatFleetDateTime(selectedReplication.completed_at, '-') }}</p>
+        </div>
+      </div>
+
+      <!-- Error -->
+      <div v-if="selectedReplication.error" class="mb-6">
+        <p class="text-sm text-gray-500 mb-2">{{ $t('replicationView.error') }}</p>
+        <BaseAlert variant="error">
+          <p class="text-sm font-mono whitespace-pre-wrap">{{ selectedReplication.error }}</p>
+        </BaseAlert>
+      </div>
+      <template #actions>
+        <button
+          @click="handleVerifySync(selectedReplication)"
+          :disabled="isVerifying"
+          class="btn btn-secondary flex items-center gap-2"
+        >
+          <div v-if="isVerifying" class="animate-spin w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full"></div>
+          {{ $t('replicationView.verifySync') }}
+        </button>
+        <button
+          v-if="selectedReplication.status === 'active'"
+          @click="handlePromote(selectedReplication.replication_id); closeDetails()"
+          class="btn bg-green-600 text-white hover:bg-green-700"
+        >
+          {{ $t('replicationView.promoteToPrimary') }}
+        </button>
+        <button @click="closeDetails" class="btn btn-secondary">
+          {{ $t('replicationView.close') }}
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>

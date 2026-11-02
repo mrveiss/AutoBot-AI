@@ -26,6 +26,7 @@ from typing import List, Tuple
 
 import psycopg2
 
+from autobot_shared.secret_redaction import redact_url_credentials
 from migrations import utils as _migration_utils
 
 logger = logging.getLogger(__name__)
@@ -80,6 +81,14 @@ MIGRATIONS = [
     "widen_systemd_service_to_sequence",
     # Issue #15495: per-node LLM hardware capability profile (RAM/VRAM/GPU/NPU).
     "add_node_capability_profiles_table",
+    # Issue #17225: audit_logs is the audit trail's system of record; the shared
+    # AuditLog model gained category/actor/session_id/resource_ref.
+    "add_audit_logs_canonical_columns",
+    # Issue #17455: one row per post-sync command/restart a code sync executed.
+    "add_post_sync_action_runs_table",
+    # Issue #18663: the jti denylist and password epoch move from Redis to PostgreSQL,
+    # so the SLM works without the Redis it deploys.
+    "add_auth_revocation_tables",
 ]
 
 
@@ -167,19 +176,8 @@ def _resolve_migration_db_url(module, default_db_url: str) -> str:
 
 
 def _parse_db_url(url: str) -> dict:
-    """Parse PostgreSQL URL into connection parameters (#786)."""
-    # postgresql://user:pass@host:port/database
-    # postgresql://user@host:port/database (no password)
-    from urllib.parse import urlparse
-
-    parsed = urlparse(url)
-    return {
-        "host": parsed.hostname or "localhost",
-        "port": parsed.port or 5432,
-        "database": parsed.path.lstrip("/") if parsed.path else "slm",
-        "user": parsed.username or "slm_app",
-        "password": parsed.password,
-    }
+    """Parse PostgreSQL URL into connection parameters (#786; one parser, #19320)."""
+    return _migration_utils.parse_db_url(url)
 
 
 def get_connection(db_url: str = None, timeout: int = 10) -> psycopg2.extensions.connection:
@@ -236,17 +234,22 @@ def ensure_migrations_table(conn: psycopg2.extensions.connection) -> None:
         # migrate() this issue added. Guarded on the 'agents' table and a
         # known roster member so it never re-fires once seeding has run,
         # and never errors on a fresh DB where 'agents' doesn't exist yet.
+        # The 'agents' read sits in its own nested IF: PL/pgSQL plans an IF
+        # condition as one expression, so an AND-ed `SELECT ... FROM agents`
+        # fails with 'relation "agents" does not exist' on a fresh DB even
+        # behind the to_regclass guard (#19238 made that failure fatal).
         cur.execute("""
             DO $$
             BEGIN
                 IF EXISTS (
                     SELECT 1 FROM migrations_applied WHERE name = 'seed_agents'
                 )
-                AND to_regclass('public.agents') IS NOT NULL
-                AND NOT EXISTS (
-                    SELECT 1 FROM agents WHERE agent_id = 'chat'
-                ) THEN
-                    DELETE FROM migrations_applied WHERE name = 'seed_agents';
+                AND to_regclass('public.agents') IS NOT NULL THEN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM agents WHERE agent_id = 'chat'
+                    ) THEN
+                        DELETE FROM migrations_applied WHERE name = 'seed_agents';
+                    END IF;
                 END IF;
             END
             $$;
@@ -442,7 +445,8 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
     db_url = sys.argv[1] if len(sys.argv) > 1 else get_db_url()
-    logger.info(f"Running migrations on PostgreSQL: {db_url}")
+    # #18664: never the password -- the URL is logged with its userinfo credentials masked.
+    logger.info("Running migrations on PostgreSQL: %s", redact_url_credentials(db_url))
 
     results = run_all_migrations(db_url)
 

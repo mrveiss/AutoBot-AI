@@ -21,6 +21,10 @@ on:
       # audit never sees the file kinds it exists to read.
       - '**/*.md'
       - '**/*.json'
+      # #17885: keep in step with .github/filters/code-quality-paths.yml, as the
+      # Markdown/JSON pair above does. The frontend size audit runs in this job.
+      - '**/*.ts'
+      - '**/*.vue'
       - '**/requirements*.txt'
       - 'requirements-ci/**'
       - 'repo_tests/**'
@@ -31,12 +35,8 @@ on:
       - 'pipeline-scripts/**'
       - 'tools/lint/**'
       - 'autobot-infrastructure/shared/scripts/**'
-      # #14584: was 'autobot-infrastructure/ansible/roles/slm_agent/files/**',
-      # a path that never existed (autobot-infrastructure/ has no ansible/
-      # tree at all) -- a stranded entry that matched nothing since it was
-      # added. Corrected to the real mirror path, and widened to the second
-      # canonical/mirror pair detect-agent-code-drift.sh now also checks.
-      - 'autobot-slm-backend/ansible/roles/slm_agent/files/**'
+      # #18548: the slm_agent role no longer carries a files/ mirror of the agent;
+      # it deploys autobot-slm-backend/slm/agent/ directly.
       - 'autobot-slm-backend/ansible/roles/backend/files/**'
       - 'autobot-backend/config/permission_rules.yaml'
       - 'autobot-backend/static/error_messages.yaml'
@@ -66,6 +66,7 @@ on:
       # the job green on a linter nothing had executed.
       - 'scripts/lint-conventions.sh'
       - '.github/workflows/code-quality.yml'
+      - '.github/workflows/_changes.yml'
       # #15608: the shared filter file and the complement shim publishing the
       # same required context. Editing either must run the REAL gate, not the
       # shim reporting green over its own change.
@@ -79,6 +80,10 @@ on:
   # Branch-protection promotion to required is the separate owner-confirmed
   # follow-up (#10022).
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [ release, main, develop ]
 
 concurrency:
@@ -93,34 +98,33 @@ permissions:
 
 jobs:
   changes:
+    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and
+    # every `always()` aggregate below reads `needs.changes.result`.
+    # Gating it makes those read `skipped` and exit 1, so a REQUIRED
+    # context would report FAILED on every draft -- worse than no gate.
+    # Gate the expensive jobs, never the cheap thing others read.
     name: Detect changed paths
-    runs-on: ubuntu-latest
-    outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
-        id: filter
-        with:
-          # #14054: dorny/paths-filter errors on an event it does not
-          # recognise unless `base` is given, and a failed `changes` job
-          # skips every job that needs it -- i.e. the required context
-          # never reports and the queue deadlocks. Empty on push/PR, so
-          # their existing behaviour is unchanged.
-          base: ${{ github.event.merge_group.base_sha || '' }}
-          # #15608: the path set is defined ONCE in
-          # .github/filters/code-quality-paths.yml and read by reference from
-          # both halves of the required-context pair -- this gate and the
-          # complement shim in code-quality-required-context.yml. A second
-          # inline copy is how the two sides drift apart, and the drift
-          # direction is silent: a shim that believes nothing changed while
-          # this gate believes otherwise publishes `code-quality` green for an
-          # audit that never ran.
-          filters: .github/filters/code-quality-paths.yml
+    uses: ./.github/workflows/_changes.yml
+    with:
+      # #14054: dorny/paths-filter errors on an event it does not
+      # recognise unless `base` is given, and a failed `changes` job
+      # skips every job that needs it -- i.e. the required context
+      # never reports and the queue deadlocks. Empty on push/PR, so
+      # their existing behaviour is unchanged.
+      merge_group_base: true
+      # #15608: the path set is defined ONCE in
+      # .github/filters/code-quality-paths.yml and read by reference from
+      # both halves of the required-context pair -- this gate and the
+      # complement shim in code-quality-required-context.yml. A second
+      # inline copy is how the two sides drift apart, and the drift
+      # direction is silent: a shim that believes nothing changed while
+      # this gate believes otherwise publishes `code-quality` green for an
+      # audit that never ran.
+      filters: .github/filters/code-quality-paths.yml
 
   code-quality:
     needs: changes
-    if: github.event_name == 'merge_group' || needs.changes.outputs.backend == 'true'
+    if: ${{ (github.event_name == 'merge_group' || needs.changes.outputs.backend == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     # ubuntu-latest (#15395). This job publishes a REQUIRED context, and a
     # required context pinned to a two-machine pool cannot report when that
     # pool is down -- the #13401 deadlock, recurring as #15185 and #14444.
@@ -321,8 +325,12 @@ jobs:
         # one from copying the pattern forward.
         bash pipeline-scripts/check-pre-commit-hook-pr.sh --python tools/lint/check_no_live_install_sys_path_default.py --ext py
 
-    - name: Block direct redis client regressions (#1086, #6785)
-      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-no-direct-redis
+    - name: Block direct redis client regressions (#1086, #6785, #18553)
+      # The hook runs tools/lint/check_no_direct_redis.py against the frozen baseline: the same
+      # matcher and baseline as repo_tests/redis_direct_constructor_18553_test.py (one guard).
+      # --ext py,sh: the matcher reads .sh too; the wrapper's default pathspec has no .sh, so a
+      # shell-only change would otherwise never reach it.
+      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-no-direct-redis --ext py,sh
 
     - name: Block print/console regressions (#1082, #6785)
       # --changed-lines-only (#14051, same treatment #13950 gave the
@@ -503,21 +511,6 @@ jobs:
           echo "⚠️ Security issues detected - review bandit output"
           exit 1
         }
-
-    - name: Check canonical/Ansible-mirror file pairs stay in sync (#1629, #14584)
-      run: |
-        # Byte-diffs every canonical source file (SLM agent modules incl.
-        # their test-file mirrors, backend permission/error-message config)
-        # against its ansible/roles/*/files/ deployment copy. #14584: this
-        # used to blanket-exclude *_test.py, which is exactly how the
-        # health_collector_state_change_test.py mirror silently drifted and
-        # failed 2 tests on base for a full CI cycle before anyone traced it.
-        bash pipeline-scripts/detect-agent-code-drift.sh || {
-          echo "A canonical source file and its Ansible-role mirror have drifted"
-          echo "See Issue #1629 and #14584 for details"
-          exit 1
-        }
-
 
     - name: Check developer docs reference existing files (#3425)
       run: |
@@ -713,6 +706,21 @@ jobs:
         # 4 of the 10 oversized files.
         python3 scripts/check_shell_file_size.py --audit-ceilings
 
+    - name: Audit the frontend-file-size ceilings for drift (#17885)
+      run: |
+        # Same reasoning as the two audits above. `.ts`/`.vue` had NO length
+        # measurement of any kind before #17885 -- not per file, not per
+        # function -- so 184 of 1779 in-scope tracked files sat over the limit
+        # an equivalent .py file would have been refused at, with nothing in
+        # the tree asking. This walks every in-scope tracked *.ts/*.vue file.
+        #
+        # Scope note: the two src/types/generated/ trees are excluded by a
+        # recorded prefix (OpenAPI-derived clients, 178894 and 26584 lines).
+        # The gate measures .ts and .vue only -- frontend .js is NOT measured,
+        # and repo_tests/frontend_file_size_ratchet_test.py records that gap
+        # with its own sweep rather than leaving it to be inferred.
+        python3 scripts/check_frontend_file_size.py --audit-ceilings
+
     - name: Audit requirements-ci for silent drift from production (#14551)
       run: |
         # autobot-backend/requirements.txt and autobot-slm-backend/requirements.txt
@@ -794,6 +802,9 @@ jobs:
     - name: The open CodeQL alert backlog may not grow (#15333, #17300)
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # #18123 review: on pull_request GITHUB_SHA is the MERGE commit, which analyses are
+        # recorded against -- but check runs attach to the PR HEAD. The check-run reads use this.
+        CODEQL_CHECK_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       run: |
         set -euo pipefail
         # BLOCKING, and in this job rather than in codeql.yml on purpose: this is

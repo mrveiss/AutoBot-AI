@@ -15,11 +15,12 @@ from autobot_logging.terminal_logger import TerminalLogger
 from autobot_shared.logging_manager import get_logger
 from chat_history import ChatHistoryManager
 from monitoring.prometheus_metrics import get_metrics_manager
-from secure_command_executor import SecureCommandExecutor, SecurityPolicy
+from secure_command_executor import CommandSecurityPolicy, SecureCommandExecutor
 from services.command_approval_manager import AgentRole, CommandApprovalManager
 from services.command_execution_queue import get_command_queue
 from type_defs.common import Metadata
 
+from .ai_line_gate import PENDING_APPROVAL_REFUSAL, decide_command, permission_refusal, write_reservation
 from .approval_handler import ApprovalHandler
 from .command_executor import CommandExecutor
 from .errors import PostExecutionError, execution_failed_response, post_execution_failed_response, post_execution_guard
@@ -59,7 +60,7 @@ class AgentTerminalService:
             command_queue: Command execution queue (default: singleton instance)
         """
         self.redis_client = redis_client
-        self.security_policy = SecurityPolicy()
+        self.security_policy = CommandSecurityPolicy()
 
         self.chat_history_manager = ChatHistoryManager()
 
@@ -201,8 +202,9 @@ class AgentTerminalService:
             interactive_reasons=interactive_reasons,
         )
 
-        await self.command_queue.add_command(cmd_execution)
-        logger.info("✅ [QUEUE] Added command %s to queue", cmd_execution.command_id)
+        # #19951: no await between this check and the write below, so overlapping calls cannot both pass it.
+        if session.has_pending_approval():
+            return session.get_permission_denied_response(PENDING_APPROVAL_REFUSAL, command, risk.value)
 
         # #14955 review: session.pending_approval["risk"] (read back via
         # get_pending_risk_level()) feeds the auto-approve rules engine
@@ -228,6 +230,9 @@ class AgentTerminalService:
             is_interactive=is_interactive,
             interactive_reasons=interactive_reasons,
         )
+
+        await write_reservation(session, cmd_execution, self.command_queue)
+        logger.info("✅ [QUEUE] Added command %s to queue", cmd_execution.command_id)
 
         if self.redis_client:
             await self.session_manager._persist_session(session)
@@ -632,30 +637,9 @@ class AgentTerminalService:
     # Command Execution (delegated to CommandExecutor)
     # ============================================================================
 
-    def _check_agent_permission(
-        self,
-        session: AgentTerminalSession,
-        command: str,
-        risk,
-    ) -> Metadata | None:
-        """
-        Check if agent has permission to execute command at given risk level.
-
-        Issue #665: Extracted from execute_command for single responsibility.
-
-        Args:
-            session: Terminal session containing agent role
-            command: Command being executed
-            risk: Assessed risk level of the command
-
-        Returns:
-            Error response if permission denied, None if allowed
-        """
-        allowed, permission_reason = self.approval_handler.check_agent_permission(session.agent_role, risk)
-        if not allowed:
-            logger.warning(f"Agent {session.agent_id} denied command execution: {permission_reason}")
-            return session.get_permission_denied_response(permission_reason, command, risk.value)
-        return None
+    def _check_agent_permission(self, session: AgentTerminalSession, command: str, risk) -> Metadata | None:
+        """Error response if the role may not run *risk*, else ``None`` (Issue #665)."""
+        return permission_refusal(self.approval_handler, session, command, risk)
 
     async def _check_auto_approval_or_queue(
         self,
@@ -666,33 +650,19 @@ class AgentTerminalService:
         reasons: list,
         is_interactive: bool,
         interactive_reasons: list,
+        force_approval: bool = False,
     ) -> tuple[bool, Metadata | None]:
+        """Resolve the command's AI line, then check auto-approve rules or queue it (#665, #18430).
+
+        Line 3 is refused and line 1 runs; only line 2 reaches the rules and this terminal's queue.
+        Returns ``(is_auto_approved, queue_or_refusal_response)``.
         """
-        Check auto-approve rules or queue command for manual approval.
-
-        Issue #665: Extracted from execute_command for single responsibility.
-
-        Args:
-            session: Terminal session
-            command: Command to execute
-            description: Optional command description
-            risk: Assessed risk level
-            reasons: Risk assessment reasons
-            is_interactive: Whether command requires stdin
-            interactive_reasons: Reasons for interactivity
-
-        Returns:
-            Tuple of (is_auto_approved, queue_response_if_not_approved)
-        """
-        user_id = session.get_user_id()
-        is_auto_approved = await self.approval_handler.check_auto_approve_rules(
-            user_id=user_id,
-            command=command,
-            risk_level=risk.value,
+        is_auto_approved, refusal = await decide_command(
+            self.approval_handler, session, command, risk, force_approval=force_approval
         )
-
+        if refusal is not None:
+            return False, session.get_permission_denied_response(refusal, command, risk.value)
         if is_auto_approved:
-            logger.info(f"Command auto-approved by rule: {command} " f"(user: {user_id}, risk: {risk.value})")
             return True, None
 
         queue_response = await self._queue_command_for_approval(
@@ -749,6 +719,7 @@ class AgentTerminalService:
             reasons,
             is_interactive,
             interactive_reasons,
+            force_approval=force_approval,
         )
         if not is_auto_approved:
             return queue_response

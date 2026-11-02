@@ -80,7 +80,7 @@
     <!-- Preset list -->
     <section class="preset-list" :aria-label="$t('chat.presets.listLabel')">
       <div v-if="store.isLoading" class="list-loading" aria-live="polite">
-        <Icon name="spinner" class="spin" aria-hidden="true" />
+        <BaseSpinner size="sm" />
         {{ $t('chat.presets.loading') }}
       </div>
 
@@ -156,7 +156,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useChatPresetsStore } from '@/stores/useChatPresetsStore'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton, BaseSpinner } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import type { SlashCommandPreset } from '@/types/api'
 
@@ -268,8 +268,8 @@ async function executeDelete(id: string): Promise<void> {
   gap: var(--spacing-2);
   padding: var(--spacing-3) var(--spacing-4);
   margin-bottom: var(--spacing-4);
-  background: var(--color-danger-subtle, #fef2f2);
-  color: var(--color-error, #dc2626);
+  background: var(--color-error-bg);
+  color: var(--color-error);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
 }
@@ -321,7 +321,7 @@ async function executeDelete(id: string): Promise<void> {
 
 .field-input[aria-invalid="true"],
 .field-textarea[aria-invalid="true"] {
-  border-color: var(--color-error, #dc2626);
+  border-color: var(--color-error);
 }
 
 .field-textarea {
@@ -331,7 +331,7 @@ async function executeDelete(id: string): Promise<void> {
 
 .field-error {
   font-size: var(--text-xs);
-  color: var(--color-error, #dc2626);
+  color: var(--color-error);
 }
 
 .form-actions {
@@ -362,14 +362,6 @@ async function executeDelete(id: string): Promise<void> {
   gap: var(--spacing-2);
 }
 
-.spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 .preset-row {
   display: flex;
   align-items: center;
@@ -385,7 +377,7 @@ async function executeDelete(id: string): Promise<void> {
 }
 
 .preset-row.is-editing {
-  background: var(--color-primary-subtle, #eff6ff);
+  background: var(--color-primary-bg);
   outline: 1px solid var(--color-primary);
 }
 
@@ -429,7 +421,7 @@ async function executeDelete(id: string): Promise<void> {
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-md);
-  z-index: 1;
+  z-index: var(--z-raised);
 }
 
 .delete-confirm-card {

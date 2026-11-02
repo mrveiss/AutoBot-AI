@@ -24,6 +24,7 @@ Closes GH#7081.
 from __future__ import annotations
 
 from autobot_shared.env_registry import EnvVarSpec, register_env_var
+from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
 
 register_env_var(
     EnvVarSpec(
@@ -466,7 +467,7 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_CODE_SOURCE_ALLOWED_ROOTS",
         type=str,
-        default="/opt/autobot",
+        default=FLEET_INSTALL_ROOT,
         description=(
             "Comma-separated roots a code-source repo_path may live under (#17300). The value "
             "arrives from a POST body and used to reach Path(...).is_dir()/.iterdir() unconfined, "
@@ -492,5 +493,93 @@ register_env_var(
         ),
         component="storage",
         range=(1, 720),
+    )
+)
+
+
+# #17651: the call-graph endpoint AST-parses every `.py` file under the scan
+# root on every cache miss (6,293 in this repo) and was unbounded by #13468's
+# decision. Registered HERE rather than in `env_registry.py` for the reason this
+# module's own docstring gives -- that file sits at its grandfathered ceiling
+# with no slack, and `env_registry_backend.py` is five lines from MAX_LINES.
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CALL_GRAPH_SCAN_BUDGET_SECONDS",
+        type=float,
+        default=30.0,
+        description=(
+            "Seconds the call-graph AST scan may run before it stops and reports the scope it "
+            "covered. Default 30 -- half the tightest /api/ proxy_read_timeout the repo ships "
+            "(60s in the container config and user template; 300s from the bare-metal "
+            "installer), because a scan that "
+            "outlives the gateway returns 504 to the browser while the backend keeps working, "
+            "so the route's own files_scanned/files_total/truncated reporting never reaches the "
+            "client. Non-positive means unbounded, which is the pre-#17651 behaviour."
+        ),
+        component="analytics",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_VECTORIZE_CHECK_INTERVAL_SECONDS",
+        type=int,
+        default=300,
+        description=(
+            "Seconds between vector-reconciler wakes (#17548). The reconciler finds knowledge "
+            "facts that were stored but never vectorised -- the declared half of the projection "
+            "contract that previously never ran. Env-backed rather than a literal because the "
+            "cadence suiting a KB with a handful of facts is not the one suiting a large one, and "
+            "floored at 30s so a misconfiguration cannot turn it into a busy loop against Redis. "
+            "Prefixed AUTOBOT_ deliberately: the registry's sweep is keyed on that prefix, so an "
+            "unprefixed name is not reported as unregistered, it is invisible (#17751)."
+        ),
+        component="knowledge",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_TURN_TIMEOUT_SECONDS",
+        type=float,
+        default=1800.0,
+        description=(
+            "Total wall-clock budget for one LangGraph chat turn, across every LLM call and tool "
+            "step in it (chat_workflow/turn_control.py, #17273). A turn that exceeds it is "
+            "cancelled, its checkpoint dropped, and the client told the model took too long. A "
+            "turn parked on a command-approval interrupt has returned, so the wait for a human "
+            "is not counted against it."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_LLM_CALL_TIMEOUT_SECONDS",
+        type=float,
+        default=600.0,
+        description=(
+            "Total timeout for a single streaming chat LLM request, connect included "
+            "(chat_workflow/turn_control.py, #17273). The request previously set a connect "
+            "timeout only, so a model that accepted the connection and then stalled held the "
+            "turn forever."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_TURN_CANCEL_ACK_TIMEOUT_SECONDS",
+        type=float,
+        default=5.0,
+        description=(
+            "How long a chat turn-cancel request waits for the other backend workers that were "
+            "listening to confirm they stopped their turn (chat_workflow/turn_cancel_bus.py, "
+            "#18448). A worker that does not answer in time makes the response report "
+            "'unconfirmed' rather than a false 'no_active_turn'. Must be positive and finite."
+        ),
+        component="backend",
     )
 )

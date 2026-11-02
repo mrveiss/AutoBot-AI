@@ -17,14 +17,22 @@ Issue #10666 B2: Migrated from services.memory.memory_manager.MemoryManager
   (now deleted) to the canonical memory.MemoryManager.provider sub-layer.
 """
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, create_autospec, patch
 
 import pytest
 
+from autobot_memory_graph.owner_scope import UNSCOPED_ALL_USERS, OwnerScope
 from services.memory import (
     PostgresMemoryProvider,
     RedisMemoryProvider,
 )
+
+
+def _spec_graph():
+    """Mock restricted to the real AutoBotMemoryGraph interface (#18414)."""
+    from autobot_memory_graph import AutoBotMemoryGraph
+
+    return create_autospec(AutoBotMemoryGraph, instance=True)
 
 
 class TestPostgresMemoryProvider:
@@ -51,7 +59,7 @@ class TestPostgresMemoryProvider:
     @pytest.mark.asyncio
     async def test_close(self, provider):
         """Test provider cleanup."""
-        mock_graph = AsyncMock()
+        mock_graph = _spec_graph()
         provider.memory_graph = mock_graph
 
         await provider.close()
@@ -61,7 +69,7 @@ class TestPostgresMemoryProvider:
     @pytest.mark.asyncio
     async def test_prefetch_with_conversation(self, provider):
         """Test prefetch with conversation context."""
-        mock_graph = AsyncMock()
+        mock_graph = _spec_graph()
         provider.memory_graph = mock_graph
 
         mock_graph.get_entity.return_value = {"id": "conv_123", "type": "conversation"}
@@ -80,27 +88,69 @@ class TestPostgresMemoryProvider:
     @pytest.mark.asyncio
     async def test_search(self, provider):
         """Test semantic search."""
-        mock_graph = AsyncMock()
+        mock_graph = _spec_graph()
         provider.memory_graph = mock_graph
         mock_graph.search_entities.return_value = [
             {"id": "entity_1", "score": 0.95},
             {"id": "entity_2", "score": 0.87},
         ]
 
-        results = await provider.search("test query", limit=10)
+        results = await provider.search("test query", limit=10, filters={"user_id": "user_456"})
 
         assert len(results) == 2
-        mock_graph.search_entities.assert_called_once_with("test query", limit=10)
+        mock_graph.search_entities.assert_called_once_with(
+            "test query", limit=10, owner=OwnerScope.for_user("user_456")
+        )
 
     @pytest.mark.asyncio
     async def test_health_check(self, provider):
         """Test health check."""
-        mock_graph = AsyncMock()
+        mock_graph = _spec_graph()
         provider.memory_graph = mock_graph
 
         health = await provider.health_check()
 
         assert isinstance(health, bool)
+
+    @pytest.mark.asyncio
+    async def test_update_entity_appends_observations_by_name(self, provider):
+        """Updates go through add_observations; the graph is keyed by name (#18414)."""
+        graph = provider.memory_graph = _spec_graph()
+        graph.get_entity.return_value = {"id": "e1", "name": "Redis"}
+
+        await provider.update_entity("e1", {"observations": ["port: 6379"]})
+
+        graph.get_entity.assert_awaited_once_with(entity_id="e1", owner=UNSCOPED_ALL_USERS)
+        graph.add_observations.assert_awaited_once_with("Redis", ["port: 6379"])
+
+    @pytest.mark.asyncio
+    async def test_update_entity_refuses_fields_the_graph_cannot_update(self, provider):
+        provider.memory_graph = _spec_graph()
+        with pytest.raises(ValueError, match="Unsupported"):
+            await provider.update_entity("e1", {"entity_type": "x"})
+
+    @pytest.mark.asyncio
+    async def test_update_entity_with_nothing_to_apply_is_refused_not_a_silent_noop(self, provider):
+        provider.memory_graph = _spec_graph()
+        with pytest.raises(ValueError, match="no observations"):
+            await provider.update_entity("e1", {})
+
+    @pytest.mark.asyncio
+    async def test_delete_entity_resolves_id_to_name(self, provider):
+        graph = provider.memory_graph = _spec_graph()
+        graph.get_entity.return_value = {"id": "e1", "name": "Redis"}
+
+        await provider.delete_entity("e1")
+
+        graph.delete_entity.assert_awaited_once_with("Redis")
+
+    @pytest.mark.asyncio
+    async def test_sync_passes_relation_type_on_delete(self, provider):
+        graph = provider.memory_graph = _spec_graph()
+        await provider.sync(
+            {"relation_updates": [{"action": "delete", "from_entity": "a", "to_entity": "b", "relation_type": "uses"}]}
+        )
+        graph.delete_relation.assert_awaited_once_with(from_entity="a", to_entity="b", relation_type="uses")
 
 
 class TestRedisMemoryProvider:
@@ -133,6 +183,7 @@ class TestRedisMemoryProvider:
 
         turn = {
             "conversation_id": "conv_123",
+            "user_id": "user-1",  # #18825: a turn with no owner is not cached
             "timestamp": "2025-04-13T10:00:00Z",
             "entity_updates": [{"action": "create", "name": "Task 1"}],
             "relation_updates": [],

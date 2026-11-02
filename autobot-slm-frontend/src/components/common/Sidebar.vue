@@ -12,7 +12,8 @@
  * Issue #754: Added ARIA attributes, keyboard navigation, high contrast toggle.
  */
 
-import { computed, onMounted, onUnmounted } from 'vue'
+import { BrandMark, usePollingJob } from '@autobot/ui'
+import { computed, onMounted } from 'vue'
 import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -33,7 +34,6 @@ const highContrast = useHighContrast()
 
 // Polling interval for code sync + system updates status (1 minute)
 const STATUS_POLL_INTERVAL = 60000
-let statusPollTimer: ReturnType<typeof setInterval> | null = null
 
 // Combined badge count for sidebar
 const combinedUpdateCount = computed(() =>
@@ -45,7 +45,7 @@ const hasCombinedUpdates = computed(() => combinedUpdateCount.value > 0)
 
 // Badge color: orange when system updates present, amber when only code sync
 const badgeColor = computed(() =>
-  systemUpdates.updateCount.value > 0 ? '#f97316' : '#f59e0b',
+  systemUpdates.updateCount.value > 0 ? 'var(--slm-orange-500)' : 'var(--slm-amber-500)',
 )
 
 interface NavItem {
@@ -104,7 +104,7 @@ const healthClass = computed(() => {
   switch (fleetStore.overallHealth) {
     case 'healthy': return 'bg-success-500'
     case 'degraded': return 'bg-warning-500'
-    case 'unhealthy': return 'bg-danger-500'
+    case 'unhealthy': return 'bg-error-500'
     default: return 'bg-gray-400'
   }
 })
@@ -174,19 +174,15 @@ async function refreshStatusPolling(): Promise<void> {
   ])
 }
 
-onMounted(async () => {
-  if (!authStore.isAuthenticated) return
-  // Fetch initial status for both code sync and system updates
-  await refreshStatusPolling()
-  // Set up combined polling
-  statusPollTimer = setInterval(refreshStatusPolling, STATUS_POLL_INTERVAL)
-})
+// #19482: usePollingJob for scope disposal. No consecutiveErrorLimit and no paused
+// alert: this is a 60s status poll in the app chrome, where a banner would be the
+// wrong surface, so it keeps polling through failures as before.
+const statusPoller = usePollingJob(refreshStatusPolling, { intervalMs: STATUS_POLL_INTERVAL, maxAttempts: Infinity })
 
-onUnmounted(() => {
-  if (statusPollTimer) {
-    clearInterval(statusPollTimer)
-    statusPollTimer = null
-  }
+onMounted(() => {
+  if (!authStore.isAuthenticated) return
+  // The first tick fetches code sync and system updates now; then every minute.
+  statusPoller.start('')
 })
 </script>
 
@@ -198,12 +194,7 @@ onUnmounted(() => {
     <!-- Logo & Title -->
     <div class="p-4 border-b border-gray-800">
       <div class="flex items-center gap-3">
-        <div
-          class="w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center"
-          aria-hidden="true"
-        >
-          <span class="text-xl font-bold">S</span>
-        </div>
+        <BrandMark :size="40" />
         <div>
           <h1 class="font-bold text-lg">{{ $t('common.sidebar.sLMAdmin') }}</h1>
           <p class="text-xs text-gray-400">{{ $t('common.sidebar.serviceLifecycleManager') }}</p>
@@ -235,7 +226,7 @@ onUnmounted(() => {
           <span>{{ fleetStore.fleetSummary.degraded_nodes }}</span>
         </div>
         <div class="flex justify-between">
-          <span class="text-danger-500">{{ $t('common.sidebar.unhealthy') }}</span>
+          <span class="text-error-500">{{ $t('common.sidebar.unhealthy') }}</span>
           <span>{{ fleetStore.fleetSummary.unhealthy_nodes }}</span>
         </div>
       </div>

@@ -11,11 +11,8 @@
  * Issue #4534: Options API components without TypeScript stubs
  */
 
-export { default as BaseAlert } from './BaseAlert.vue'
 export { BaseModal } from '@autobot/ui'
 export { default as CommandPermissionDialog } from './CommandPermissionDialog.vue'
-export { default as DarkModeToggle } from './DarkModeToggle.vue'
-export { default as DataTable } from './DataTable.vue'
 export { default as EmptyState } from './EmptyState.vue'
 export { default as HostSelectionDialog } from './HostSelectionDialog.vue'
 export { default as HostSelector } from './HostSelector.vue'
@@ -29,7 +26,6 @@ export { default as StableLoadingState } from './StableLoadingState.vue'
 export { default as StatusBadge } from './StatusBadge.vue'
 export { default as SystemStatusNotification } from './SystemStatusNotification.vue'
 export { default as ThemeToggle } from './ThemeToggle.vue'
-export { default as ToastContainer } from './ToastContainer.vue'
 export { default as TouchFriendlyButton } from './TouchFriendlyButton.vue'
 export { default as LoadingBoundary } from './LoadingBoundary.vue'
 export { default as LoadingOverlay } from './LoadingOverlay.vue'

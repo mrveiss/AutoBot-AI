@@ -59,6 +59,8 @@ import yaml
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint._comment_syntax import strip_trailing_comment
+
 _SCANNED_SUFFIXES = (".yml", ".yaml", ".sh", ".py")
 _DPKG_LIST = re.compile(r"\bdpkg\s+-l\b")
 #: A dpkg *listing query*, not any mention of dpkg. `fuser /var/lib/dpkg/lock`
@@ -86,13 +88,9 @@ _DPKG_STATUS_TRUTH = {
 #: Lines where "does dpkg KNOW this package" is the correct question. Keyed by
 #: exact text rather than line number, so the exemption travels with the line and
 #: dies when the line changes -- see `test_every_exemption_still_exists`.
-_KNOWLEDGE_IS_THE_RIGHT_QUESTION = {
-    'if dpkg -l "${pkg}" &>/dev/null 2>&1; then': (
-        "install.sh's purge loop: `apt-get purge` SHOULD run for a package in `rc` state, "
-        "so dpkg's knowledge is the right test and anchoring on `^ii` would skip exactly "
-        "the packages the loop exists to clean up"
-    ),
-}
+#: Empty since #18653: install.sh's purge loop (the one entry) moved to
+#: scripts/uninstall.sh, which asks dpkg-query for ` installed$` state instead.
+_KNOWLEDGE_IS_THE_RIGHT_QUESTION: dict[str, str] = {}
 
 
 #: Memoized by root (#17411). Widening to `.py` made these enumerations rglob
@@ -203,11 +201,14 @@ def _code_lines_using_dpkg_list(root: pathlib.Path | None = None) -> List[Tuple[
             )
             continue
         for number, line in enumerate(text.splitlines(), start=1):
-            match = _DPKG_LIST.search(line)
+            # #17941: was `line.find("#") < match.start()`, which is positional
+            # and not quote-aware -- `echo "a # b" && dpkg -l` has a `#` before
+            # the match that is data, so the real invocation was skipped. The
+            # shared stripper tracks quote state, so the comment is removed for
+            # the reason it is a comment.
+            code = strip_trailing_comment(line, ("#",), escapes=True)
+            match = _DPKG_LIST.search(code)
             if not match:
-                continue
-            comment = line.find("#")
-            if comment != -1 and comment < match.start():
                 continue
             # Prose naming the command rather than running it. A YAML `msg:`
             # block is not a comment, so the position check above does not see
@@ -270,13 +271,18 @@ DPKG_LIST_CALL_SITES = declare(
 )
 
 #: 6 today: the four rewritten by #17387 (postgresql, grafana, redis,
-#: disable-idle-nginx) plus check-system-updates' ESM version lookup and
-#: decommission-node's `^ii`-anchored check. Floor 4 rather than 3: at 3 the
+#: disable-idle-nginx), check-system-updates' ESM version lookup,
+#: and decommission-node's `^ii`-anchored check; #19661 folded the two Grafana
+#: presence checks #19329 added into the one install. Floor 4 rather than 3: at 3 the
 #: window was exactly the growth allowance, so a single removal reddened it.
 DPKG_REGISTRATIONS = declare(
     "dpkg-ansible-registrations",
     discover=_dpkg_registrations,
-    floor=4,
+    # Re-pinned MID-window 2026-10-04 (#17356): `_reach.verify_floor` now refuses a floor in
+    # the bottom tenth of `growth`, because that is zero tolerance dressed as an allowance.
+    # Re-measured by the mechanism itself, not carried across (#15928); the arithmetic is in
+    # the commit message, which cannot drift from the tree it describes.
+    floor=5,
     growth=3,
     what="ansible tasks registering the result of a dpkg query (#17387)",
 )

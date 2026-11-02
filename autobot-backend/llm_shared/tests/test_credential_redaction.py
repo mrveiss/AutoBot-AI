@@ -4,8 +4,11 @@
 # Author: mrveiss
 """Tests for credential redaction (GH#9037)."""
 
+from pathlib import Path
+
 import pytest
 
+from autobot_shared.secret_redaction import REDACTED_PLACEHOLDER, redact_nested
 from llm_shared.credential_redaction import (
     SENSITIVE_KEYS,
     redact_api_key,
@@ -16,10 +19,10 @@ from llm_shared.credential_redaction import (
 
 
 def test_redact_api_key():
-    """Test API key redaction."""
-    assert redact_api_key("sk-1234567890abcdef") == "sk-1...cdef"
-    assert redact_api_key("short") == "***"
-    assert redact_api_key("") == "***"
+    """No part of a key survives, whatever its length (#18205)."""
+    assert redact_api_key("sk-1234567890abcdef") == REDACTED_PLACEHOLDER
+    assert redact_api_key("short") == REDACTED_PLACEHOLDER
+    assert redact_api_key("") == REDACTED_PLACEHOLDER
 
 
 def test_redact_string():
@@ -28,6 +31,9 @@ def test_redact_string():
     redacted = redact_string(text)
     assert "sk-1234567890abcdefghij" not in redacted
     assert "Using API key" in redacted
+    # #18205: neither end of the key is revealed.
+    assert "sk-1" not in redacted and "ghij" not in redacted
+    assert REDACTED_PLACEHOLDER in redacted
 
 
 def test_redact_dict_simple():
@@ -201,3 +207,95 @@ def test_a_sensitive_key_is_redacted(key: str) -> None:
 def test_an_ordinary_key_keeps_its_value(key: str) -> None:
     """The union widens the sensitive set, so guard the false-positive side too."""
     assert redact_dict({key: "plain-value"})[key] == "plain-value"
+
+
+def test_redact_dict_still_masks_a_count_of_a_credential_noun() -> None:
+    # origin/main masked max_tokens here (normalized substring match); only the template
+    # export unmasks a count (#17337 AC2: nothing leaves the masked set).
+    assert redact_dict({"max_tokens": 4096, "retries": 3}) == {"max_tokens": REDACTED_PLACEHOLDER, "retries": 3}
+
+
+# ---------------------------------------------------------------------------
+# #18205: redact_dict is a thin composition over redact_nested. A credential is masked with the
+# fixed-width placeholder (no fragment of the secret), and no caller's masked set shrinks.
+# ---------------------------------------------------------------------------
+
+_SECRET = "sk-" + "Zq7" * 8  # pragma: allowlist secret
+_CORPUS = Path(__file__).resolve().parents[3] / "autobot_shared" / "redaction_corpus_17336.txt"
+_JWT = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijklmnop"  # pragma: allowlist secret
+
+
+def test_a_credential_string_is_masked_with_the_fixed_width_placeholder_not_a_fragment() -> None:
+    out = redact_dict({"api_key": _SECRET, "nested": {"password": "hunter2hunter2"}, "rows": [{"token": _SECRET}]})
+    assert out == {
+        "api_key": REDACTED_PLACEHOLDER,
+        "nested": {"password": REDACTED_PLACEHOLDER},
+        "rows": [{"token": REDACTED_PLACEHOLDER}],
+    }
+    assert _SECRET[:4] not in str(out) and _SECRET[-4:] not in str(out)
+
+
+def test_redact_dict_still_scans_the_content_of_a_non_credential_string() -> None:
+    """replay_service relies on this: a key pasted into prose, and the 32+ character generic pattern."""
+    generic = "a1B2" * 9  # 36 alphanumerics, low entropy: only API_KEY_PATTERNS catches it
+    out = redact_dict({"note": f"use {_SECRET} here", "blob": generic, "model": "gpt-4"})
+    assert _SECRET not in out["note"] and "use " in out["note"]
+    assert out["blob"] != generic
+    assert out["model"] == "gpt-4"
+
+
+def test_redact_dict_recurses_into_tuples_and_sets_the_old_walk_skipped() -> None:
+    out = redact_dict({"rows": ({"api_key": _SECRET},), "s": {"x"}})
+    assert out["rows"] == ({"api_key": REDACTED_PLACEHOLDER},)
+    assert out["s"] == ["x"]
+
+
+def test_redact_nested_count_rule_is_an_explicit_keyword() -> None:
+    assert redact_nested({"max_tokens": 4096}) == {"max_tokens": 4096}
+    assert redact_nested({"max_tokens": 4096}, exempt_counts=False) == {"max_tokens": REDACTED_PLACEHOLDER}
+    plain = "hello"
+    assert redact_nested({"a": plain}, extra_scan=str.upper) == {"a": "HELLO"}
+    assert redact_nested({"api_key": plain}, extra_scan=str.upper) == {"api_key": REDACTED_PLACEHOLDER}
+
+
+@pytest.mark.parametrize("name", ["webhook_secret_url", "api_key_url", "token_url", "auth_url", "oauth_token_endpoint"])
+def test_redact_dict_masks_every_credential_named_url_whole_where_redact_nested_scrubs_an_endpoint(name) -> None:
+    """The no-shrink layer: base masked these whole, so the URL (a webhook path IS the secret) never comes back."""
+    url = "https://hooks.example.com/services/T0/B0/AbCdEfGh"
+    assert redact_dict({name: url}) == {name: REDACTED_PLACEHOLDER}
+    assert redact_nested({"token_url": url}) == {"token_url": url}
+
+
+_BASE_MASKED = Path(__file__).with_name("redact_dict_base_masked_names_f0c9745f32.txt")
+_HOOK_URL = "https://hooks.example.com/services/T0/B0/AbCdEfGh"  # a webhook whose path IS the secret
+_ENDPOINT_URL = "https://auth.example.com/oauth/token"
+
+
+def _base_masked_names() -> list:
+    """Names base (f0c9745f32, before #18205) masked: pinned DATA, so vocabulary drift cannot move the 'before'."""
+    lines = _BASE_MASKED.read_text(encoding="utf-8").splitlines()
+    return [ln for ln in lines if ln and not ln.startswith("#")]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [1, 4.5, "4821", _JWT, True, _SECRET, _HOOK_URL, _ENDPOINT_URL],
+    ids=lambda v: type(v).__name__ + str(v)[:12],
+)
+def test_no_name_leaves_redact_dicts_masked_set(value) -> None:
+    """#17336 per-caller method, end to end: masked on main (value changed) and unmasked now is empty."""
+    names = _CORPUS.read_text(encoding="utf-8").split()
+    assert len(names) > 3000
+    base_masked = _base_masked_names()
+    assert len(base_masked) > 2000 and set(base_masked) <= set(names)
+    gone = [n for n in base_masked if redact_dict({n: value})[n] == value]
+    assert gone == [], gone[:20]
+    leaked = [
+        n
+        for n in names
+        if isinstance(value, str)
+        and len(value) > 8
+        and redact_dict({n: value})[n] != value
+        and value[:4] in str(redact_dict({n: value})[n])
+    ]
+    assert leaked == [], leaked[:20]

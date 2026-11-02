@@ -93,7 +93,7 @@
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 import { useLoadingState } from '@/composables/useLoadingState'
 import { useChatTranslation } from '@/composables/chat/useChatTranslation'
 

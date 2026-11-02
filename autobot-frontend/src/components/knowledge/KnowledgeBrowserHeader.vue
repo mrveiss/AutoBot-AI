@@ -1,11 +1,11 @@
 <template>
-  <div class="browser-header">
+  <PageHeader class="browser-header">
     <!-- Category Filter Tabs -->
     <div class="category-tabs">
       <BaseButton
         v-for="cat in categories"
         :key="cat.value ?? 'all'"
-        :variant="selectedCategory === cat.value ? 'primary' : 'outline-solid'"
+        :variant="selectedCategory === cat.value ? 'primary' : 'outline'"
         size="sm"
         @click="$emit('select-category', cat.value)"
         class="category-tab"
@@ -37,7 +37,7 @@
         <Icon name="times" />
       </BaseButton>
     </div>
-  </div>
+  </PageHeader>
 </template>
 
 <script setup lang="ts">
@@ -55,7 +55,7 @@
 
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton, PageHeader } from '@autobot/ui'
 
 interface CategoryOption {
   value: string | null
@@ -82,15 +82,9 @@ defineEmits<Emits>()
 
 <style scoped>
 /* Issue #704: Migrated to CSS design tokens */
-.browser-header {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-4);
-  padding: var(--spacing-4) var(--spacing-6);
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-default);
-  align-items: center;
-  justify-content: space-between;
+/* A toolbar-only kit PageHeader (#17563): it owns the padding, wrap and bottom border. */
+.browser-header .search-bar {
+  margin-left: auto;
 }
 
 .category-tabs {
@@ -110,8 +104,9 @@ defineEmits<Emits>()
   transition: all var(--duration-200) var(--ease-in-out);
 }
 
-.category-tab i {
-  font-size: var(--text-sm);
+.category-tab .icon {
+  width: var(--text-sm);
+  height: var(--text-sm);
 }
 
 .category-count {
@@ -142,9 +137,10 @@ defineEmits<Emits>()
   flex: 1;
 }
 
-.search-bar i {
+.search-bar .icon {
   color: var(--text-tertiary);
-  font-size: var(--text-sm);
+  width: var(--text-sm);
+  height: var(--text-sm);
 }
 
 .search-input {

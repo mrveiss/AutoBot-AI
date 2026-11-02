@@ -8,7 +8,7 @@
 -e ../autobot_shared
 
 # NPU/AI
-torch>=2.14.0
+torch  # version from constraints/shared.txt (#19330)
 -c ../constraints/shared.txt  # single source of truth for shared versions (#10524)
 numpy  # version from constraints/shared.txt
 # #15671: bare, and the only statement of this worker's openvino extras
@@ -30,14 +30,14 @@ openvino  # version from constraints/shared.txt (#15408)
 # `autobot-infrastructure/autobot-npu-worker/docker/requirements-npu.txt`
 # already states for the same worker; fastapi's is a security floor (it
 # requires starlette >=0.52.1, the O(n^2) Range-header DoS).
-fastapi>=0.141.1
-uvicorn[standard]>=0.53.0
+fastapi  # version from constraints/shared.txt (#18060)
+uvicorn[standard]>=0.54.0
 
 # Model tooling (#15671), moved here from the same inline `name:` list.
 # pillow carries the floor `autobot-backend/requirements.txt` states for it
 # (SECURITY UPDATE - OOB write fix); the role installed it unpinned, so a fresh
 # provision could land below that fix.
-pillow>=12.3.0
+pillow>=13.0.0
 # transformers is deliberately BARE, unlike every other manifest in this repo,
 # which states `>=5.16.1`. `optimum[openvino]` below pulls `optimum-intel`,
 # whose newest release (2.1.0) requires `transformers<5.6,>=4.51` -- so

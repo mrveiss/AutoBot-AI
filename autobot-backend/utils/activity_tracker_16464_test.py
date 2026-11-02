@@ -29,29 +29,14 @@ import uuid
 import pytest
 
 from models.activities import DesktopActivityModel
+from testkit.fake_async_session import FakeAsyncSession
 from utils.activity_tracker import track_desktop_activity
-
-
-class _CapturingSession:
-    """Captures what would be persisted, so the row can be inspected."""
-
-    def __init__(self) -> None:
-        self.added: list[object] = []
-
-    def add(self, obj: object) -> None:
-        self.added.append(obj)
-
-    async def commit(self) -> None:
-        return None
-
-    async def refresh(self, _obj: object) -> None:
-        return None
 
 
 @pytest.mark.asyncio
 async def test_the_tracker_can_construct_its_row_at_all() -> None:
     """The defect: this raised TypeError on `metadata=` before touching the DB."""
-    db = _CapturingSession()
+    db = FakeAsyncSession()
 
     await track_desktop_activity(db=db, user_id=uuid.uuid4(), action="click")
 
@@ -67,7 +52,7 @@ async def test_metadata_lands_in_extra_data() -> None:
     renaming the kwarg to something else the model happens to accept would pass
     a no-exception check.
     """
-    db = _CapturingSession()
+    db = FakeAsyncSession()
 
     await track_desktop_activity(db=db, user_id=uuid.uuid4(), action="type", metadata={"app": "terminal"})
 
@@ -88,7 +73,7 @@ async def test_the_model_has_no_metadata_column_to_write_to() -> None:
 @pytest.mark.asyncio
 async def test_omitted_metadata_becomes_an_empty_dict_not_none() -> None:
     """The column is non-optional in the model, so None would be a second bug."""
-    db = _CapturingSession()
+    db = FakeAsyncSession()
 
     await track_desktop_activity(db=db, user_id=uuid.uuid4(), action="move")
 

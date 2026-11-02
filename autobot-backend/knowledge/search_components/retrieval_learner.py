@@ -34,6 +34,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.ttl_constants import TTL_30_DAYS
+from constants.user_scope_constants import GLOBAL_USER
 
 logger = get_logger(__name__)
 
@@ -55,8 +56,7 @@ _XRANGE_BATCH = 100
 _CURSOR_HASH_KEY = "rag:rl:cursors"
 # Hash prefix for distilled patterns (Issue #3240: namespaced by user_id).
 _PATTERN_KEY_PREFIX = "rag:retrieval_patterns:"
-# Sentinel used when no authenticated user is available (global/system scope).
-GLOBAL_USER = "__global__"
+# GLOBAL_USER (no-user scope sentinel) is owned by constants.user_scope_constants (#18094).
 
 # Maximum seconds to wait when acquiring an async Redis client.  Bounds the
 # tenacity retry loop inside get_redis_client so a Redis outage cannot hang the

@@ -36,6 +36,7 @@ from typing import Any
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
+from constants.rag_graph_constants import RAG_SCORE_THRESHOLD
 
 logger = get_logger(__name__)
 
@@ -117,7 +118,7 @@ class Layer1EssentialStory:
             from memory.essential_story import EssentialStoryGenerator
 
             model_name: str | None = context.get("model_name")
-            return await EssentialStoryGenerator().generate(model_name)
+            return await EssentialStoryGenerator().generate(model_name, principal=context.get("principal"))  # #16665
         except Exception:
             logger.warning("Layer1EssentialStory.render failed", exc_info=True)
             return ""
@@ -193,6 +194,11 @@ class Layer2OnDemand:
             memory_graph: Any = context.get("memory_graph")
             if not memory_graph:
                 return ""
+            owner = context.get("owner")
+            if owner is None:
+                # #18825: no authenticated owner for this turn -> no graph facts. Never unscoped.
+                logger.debug("Layer2OnDemand skipped: no owner scope in context")
+                return ""
 
             candidates = _UPPER_TOKEN_RE.findall(user_message)
             if not candidates:
@@ -208,7 +214,7 @@ class Layer2OnDemand:
 
             parts: list[str] = []
             for candidate in unique[:5]:  # cap at 5 lookups
-                entities = await memory_graph.search_entities(query=candidate, limit=3)
+                entities = await memory_graph.search_entities(query=candidate, limit=3, owner=owner)
                 for ent in entities:
                     name = ent.get("name", "")
                     facts = _entity_facts(ent)
@@ -252,8 +258,9 @@ class Layer3DeepSearch:
                 query=user_message,
                 conversation_history=[],
                 top_k=5,
-                score_threshold=0.3,
+                score_threshold=RAG_SCORE_THRESHOLD,
                 force_retrieval=True,
+                principal=context.get("principal"),  # #16664: None raises, caught below -- never unscoped
             )
             if not knowledge_context:
                 return ""
@@ -409,6 +416,8 @@ class TieredContextBuilder:
         memory_graph: Any | None = None,
         knowledge_service: Any | None = None,
         goal_ancestry: list | None = None,
+        principal: Any | None = None,
+        owner: Any | None = None,
     ) -> str:
         """Build the tiered context string.
 
@@ -419,11 +428,14 @@ class TieredContextBuilder:
             goal_ancestry: Optional root-first list of goal-like dicts
                            (``title``, ``level``) from GoalService.get_ancestors().
                            When present, L4 GoalAncestry is appended. GH#6469.
+            principal: KB principal (or SYSTEM_SCOPE) L3 retrieves as (#16664); None makes L3 fail closed.
+            owner: OwnerScope of the turn's principal (#18825). L2 reads the memory
+                   graph only within it; None disables L2 (fails closed).
         """
         if not TIERED_CONTEXT_ENABLED:
             return ""
 
-        base_ctx: dict = {"model_name": model_name}
+        base_ctx: dict = {"model_name": model_name, "principal": principal}
 
         # ------------------------------------------------------------------
         # Always: L0 + L1
@@ -446,6 +458,7 @@ class TieredContextBuilder:
                 **base_ctx,
                 "user_message": user_message,
                 "memory_graph": memory_graph,
+                "owner": owner,
             }
             l2_text = await l2.render(l2_ctx)
             if l2_text:

@@ -41,12 +41,13 @@ import re
 from pathlib import Path
 
 import pytest
+import yaml
 
 #: The record this guard enforces. It lives in its own module because this file
 #: reached the 600-line ceiling (#5060); the split is along data/assertions
 #: rather than at an arbitrary line, and appends now land in a small data file
 #: instead of colliding inside a long test.
-from repo_tests._glob_declared_uncovered import GLOB_DECLARED_UNCOVERED
+from repo_tests._glob_declared_uncovered import GLOB_DECLARED_UNCOVERED, GLOB_RUN_BY_A_DEDICATED_WORKFLOW
 
 #: The two modules whose own text must never enter the scanned population: this
 #: guard and the record it imports. Both hold quoted glob strings that are the
@@ -60,7 +61,9 @@ from repo_tests._glob_declared_uncovered import GLOB_DECLARED_UNCOVERED
 #: (#5060); it needed adding here the moment it became a second file, and the
 #: guard caught that on the first run rather than letting the record quietly
 #: become unfalsifiable.
-_SELF_AND_ITS_RECORD = frozenset({Path(__file__).name, "_glob_declared_uncovered.py"})
+_SELF_AND_ITS_RECORD = frozenset(
+    {Path(__file__).name, "_glob_declared_uncovered.py", "glob_declared_detector_15900_test.py"}
+)
 from repo_tests._paths import repo_root
 from repo_tests.python_filter_covers_its_guards_test import _filter_patterns, _is_covered
 
@@ -94,7 +97,7 @@ def _is_path_like(candidate: str) -> bool:
     the string must look like a suffix glob (`*.yml`, `?.min.js`). A bracket
     class is accepted only inside a path that already has a slash.
     """
-    if not any(ch in candidate for ch in "*?["):
+    if not any(ch in candidate for ch in "*?[") or not _PATHSPEC.fullmatch(candidate):
         return False
     if "[" in candidate and "/" not in candidate and not _SUFFIX_GLOB.match(candidate):
         return False
@@ -114,11 +117,23 @@ def _is_path_like(candidate: str) -> bool:
         if any(part in {".", ".."} for part in candidate.split("/")):
             return False
         return (REPO_ROOT / head).is_dir()
-    return bool(_SUFFIX_GLOB.match(candidate))
+    return bool(_SUFFIX_GLOB.match(candidate) or _NAMED_GLOB.match(candidate))
 
+
+#: The characters a pathspec is made of, and at most one path component's length (#18800). Prose
+#: with a `*` and a `/` (an error message naming `autobot-*` and `--color-error/-success`) otherwise
+#: reached `Path.is_dir()`, which raises ENAMETOOLONG before Python 3.12 and silently says no after.
+_PATHSPEC = re.compile(r"[A-Za-z0-9_.*?\[\]/-]{1,255}")
 
 #: `*.yml`, `?.min.js`, `*requirements*.txt` — a leading glob and a dotted suffix.
 _SUFFIX_GLOB = re.compile(r"^[*?][A-Za-z0-9_.*-]*[.][A-Za-z0-9]+$")
+
+#: `*Dockerfile*`, `Dockerfile*`, `*Containerfile`, `Makefile.*` (#19575). A glob over a well-known
+#: extensionless file name has no dotted suffix, so `_SUFFIX_GLOB` cannot see it. The name is a
+#: whitelist rather than "any word": a dotless shape alone would accept prose such as `note*`, and
+#: a bare `*` is every file, not a declared read. One optional leading wildcard, then a fixed name,
+#: then one character class: no alternation can re-split the input, so matching stays linear (#15998).
+_NAMED_GLOB = re.compile(r"^[*?]?(?:Dockerfile|Containerfile|Makefile|Jenkinsfile)[A-Za-z0-9_.*?-]*$")
 
 
 #: Floor on guards PARSED, not on declarations found. A findings floor is
@@ -187,12 +202,158 @@ def test_every_uncovered_glob_declaration_is_recorded() -> None:
     patterns = _filter_patterns()
     uncovered = {g for g in declarations if not _is_covered(_probe_path(g), patterns)}
 
-    unrecorded = sorted(uncovered - set(GLOB_DECLARED_UNCOVERED))
+    # Two records, and the difference matters: `GLOB_DECLARED_UNCOVERED` is accepted DEBT,
+    # `GLOB_RUN_BY_A_DEDICATED_WORKFLOW` is coverage by the other route this guard's own rule
+    # names -- "a cheaper route runs that guard on its own trigger". Membership of the second
+    # is worth something only because `test_a_dedicated_workflow_entry_really_runs_that_guard`
+    # below verifies the named workflow fires on that tree AND invokes the guard; without that
+    # check it would be an exemption, which the record's own header forbids.
+    unrecorded = sorted(uncovered - set(GLOB_DECLARED_UNCOVERED) - set(GLOB_RUN_BY_A_DEDICATED_WORKFLOW))
     assert not unrecorded, (
         "these guards declare a glob into a tree the python filter does not cover, and the "
         "dependency is recorded nowhere — so the guard silently does not run when that tree "
         "changes (#15900):\n  " + "\n  ".join(f"{g}  <- {', '.join(sorted(declarations[g]))}" for g in unrecorded)
     )
+
+
+def workflow_triggers(document: dict) -> dict:
+    """A workflow's ``on:`` block.
+
+    PyYAML reads a bare ``on`` key as the BOOLEAN ``True`` (YAML 1.1's
+    yes/no/on/off), so ``document["on"]`` is ``KeyError`` on every GitHub Actions
+    file written the normal way. Both spellings are accepted rather than one, because
+    a quoted ``"on":`` is also legal and the difference is invisible in the diff.
+    """
+    for key in (True, "on"):
+        value = document.get(key)
+        if value:
+            return value
+    return {}
+
+
+def run_step_bodies(document: dict) -> list[str]:
+    """Every ``run:`` script in the workflow -- what the job will actually EXECUTE.
+
+    Parsed from the YAML rather than grepped out of the file, and this is the whole
+    point of the function. A comment naming a guard, a `name:` that quotes it, or a
+    path listed in prose all satisfy a text search while running nothing; twice in one
+    day a check keyed on text was satisfied by a sentence that merely resembled the
+    thing it was looking for. Only a `run:` value is evidence.
+    """
+    bodies: list[str] = []
+    for job in (document.get("jobs") or {}).values():
+        for step in (job or {}).get("steps") or []:
+            script = (step or {}).get("run")
+            if isinstance(script, str):
+                bodies.append(script)
+    return bodies
+
+
+def test_a_dedicated_workflow_entry_really_runs_that_guard() -> None:
+    """The second record is VERIFIED, not asserted (#17930).
+
+    `_glob_declared_uncovered.py`'s rule has always had two exits: an entry leaves when
+    the filter covers its tree, "or when a cheaper route runs that guard on its own
+    trigger". The second exit had no mechanism, so taking it meant writing a sentence --
+    and a record whose entries are sentences is the exemption its own header forbids.
+
+    Three facts, each independently checkable, and all three have to hold:
+
+      * the named workflow EXISTS;
+      * its `pull_request` `paths:` fire on the tree the glob names -- checked with the
+        same matcher the python filter is checked with, so the two cannot drift;
+      * a `run:` step in it INVOKES each guard recorded against the glob.
+
+    Plus the staleness direction, because a record that cannot go stale is not checked:
+    an entry whose glob the python filter now covers, or that no guard declares any
+    more, must be deleted rather than left as decoration.
+    """
+    declarations, _ = _declared()
+    patterns = _filter_patterns()
+
+    for glob, (recorded, workflow, reason) in GLOB_RUN_BY_A_DEDICATED_WORKFLOW.items():
+        assert len(reason) > 25, f"{glob}: reason too thin to act on -- {reason!r}"
+
+        discovered = declarations.get(glob, set())
+        assert discovered, f"{glob}: recorded, but no guard declares it any more -- delete the entry"
+        assert recorded == discovered, (
+            f"{glob}: the record names {sorted(recorded)} but the guards declaring it are "
+            f"{sorted(discovered)}. A workflow verified against the wrong guard list proves "
+            f"nothing about the guards actually declaring this glob"
+        )
+        assert not _is_covered(_probe_path(glob), patterns), (
+            f"{glob}: the python filter reaches this tree now, so the dedicated workflow is no "
+            f"longer the reason it is covered -- delete this entry"
+        )
+
+        path = REPO_ROOT / workflow
+        assert path.is_file(), (
+            f"{glob}: {workflow} does not exist, so nothing runs " f"{sorted(recorded)} when that tree changes"
+        )
+        document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        triggers = workflow_triggers(document)
+        paths = [str(entry) for entry in (triggers.get("pull_request") or {}).get("paths") or []]
+        assert paths, (
+            f"{glob}: {workflow} has no `pull_request:` `paths:` filter. Without one it either "
+            f"never runs on a pull request or runs on all of them -- neither is the targeted "
+            f"trigger this entry claims"
+        )
+        assert _is_covered(_probe_path(glob), paths), (
+            f"{glob}: {workflow}'s pull_request paths {paths} do not fire on that tree, so a "
+            f"change confined to it runs neither the python suite nor this workflow -- which is "
+            f"the exact bypass this record exists to rule out"
+        )
+
+        bodies = run_step_bodies(document)
+        for guard in sorted(recorded):
+            assert any(guard in body for body in bodies), (
+                f"{glob}: no `run:` step in {workflow} invokes {guard}. The workflow fires on the "
+                f"right paths and then does not run the guard, which reads as coverage and is not"
+            )
+
+
+def test_a_workflow_that_only_MENTIONS_the_guard_does_not_count() -> None:
+    """The control for the check above, which is otherwise satisfied by prose.
+
+    Every string here names the guard somewhere a text search would find it -- a step
+    name, an `env:` value, a comment that YAML discards -- and none of them runs it.
+    Without this, `run_step_bodies` could be reduced to reading the file and the
+    verification would still pass.
+    """
+    guard = "repo_tests/docs_liquid_tags_are_defined_17930_test.py"
+    document = yaml.safe_load(
+        "name: looks-right\n"
+        "'on':\n"
+        "  pull_request:\n"
+        "    paths: ['docs/**/*.md']\n"
+        "jobs:\n"
+        "  j:\n"
+        "    steps:\n"
+        f"      # runs {guard}\n"
+        f"      - name: Run {guard}\n"
+        f"        env:\n"
+        f"          GUARD: {guard}\n"
+        "        uses: ./.github/actions/setup-python-ci\n"
+    )
+    assert not any(guard in body for body in run_step_bodies(document)), (
+        "a step that merely NAMES the guard was read as running it -- the detector is keyed on "
+        "text somewhere in the file rather than on a `run:` script"
+    )
+    # The contrast, so "ignore mentions" cannot degenerate into ignoring everything.
+    real = yaml.safe_load(f"jobs:\n  j:\n    steps:\n      - run: python3 -m pytest {guard} -q\n")
+    assert any(guard in body for body in run_step_bodies(real)), "a real `run:` step was not seen"
+
+
+def test_the_trigger_block_is_read_through_yamls_boolean_on_key() -> None:
+    """`on:` parses as `True`, and a lookup by the string silently finds nothing.
+
+    A helper that returned `{}` here would make every path assertion above vacuous while
+    the test still passed -- the failure is invisible precisely because it looks clean.
+    """
+    document = yaml.safe_load("on:\n  pull_request:\n    paths: ['docs/**/*.md']\n")
+    assert "on" not in document, "PyYAML no longer folds a bare `on` key to True; simplify the helper"
+    assert workflow_triggers(document).get("pull_request", {}).get("paths") == ["docs/**/*.md"]
+    assert workflow_triggers(yaml.safe_load("'on':\n  pull_request:\n    paths: ['x']\n"))
 
 
 def test_the_record_only_shrinks() -> None:
@@ -262,44 +423,6 @@ def test_the_detector_ignores_what_is_not_a_glob_into_this_tree(source: str) -> 
     assert glob_declarations_in(source) == set()
 
 
-@pytest.mark.parametrize(
-    "declaration",
-    ['x = "*.toml"', 'x = "scripts/?.sh"', 'x = ".github/workflows/*.yml"', 'x = "*requirements*.txt"'],
-    ids=["root-suffix", "question-mark", "path-with-star", "embedded-star"],
-)
-def test_the_detector_accepts_every_supported_glob_form(declaration: str) -> None:
-    """Root-relative and `?`-bearing forms, which the first version required a slash and `*` for.
-
-    The review's illustrative `"config/?.yml"` is replaced by `"scripts/?.sh"`:
-    a path whose first segment is not a real directory is prose, not a read, and
-    this repository has no `config/`. Using it would have asserted the detector
-    accepts a shape it correctly rejects.
-    """
-    assert glob_declarations_in(declaration), f"missed: {declaration}"
-
-
-@pytest.mark.parametrize(
-    "source",
-    [
-        "x: list[Path] = []",
-        'x = os.environ["HOME"]',
-        'x = "[Unit]"',
-        'x = "string[]"',
-        'x = "github-actions[bot]"',
-        'x = "[A-Za-z_][A-Za-z0-9_]*"',
-    ],
-    ids=["annotation", "subscript", "ini-section", "ts-type", "bot-name", "regex"],
-)
-def test_the_detector_rejects_python_syntax_that_merely_contains_brackets(source: str) -> None:
-    """The reason `?` and `[` could not simply be added to the character class.
-
-    A naive widening reported all six of these as guard dependencies — 44
-    "uncovered" entries, mostly Python source. Brackets are subscripts and type
-    annotations far more often than they are pathspecs.
-    """
-    assert glob_declarations_in(source) == set()
-
-
 def test_the_record_cannot_rediscover_itself() -> None:
     """This module is outside its own sweep, so its keys are not declarations.
 
@@ -325,48 +448,6 @@ def test_the_detector_rejects_paths_that_leave_the_repository(source: str) -> No
     component scan cannot be limited to the first segment.
     """
     assert glob_declarations_in(source) == set()
-
-
-def test_the_declaration_pattern_does_not_backtrack_exponentially() -> None:
-    """CodeQL flagged `_QUOTED_GLOB` as exponential, and it was (#15998 review).
-
-    A separator could be matched by the literal `/` or by a class that also
-    contained `/`, and the alternatives multiply. Measured before the fix: 0.13 ms
-    at 12 repetitions of `*/`, 573 ms at 24 — roughly x4 per two repetitions.
-
-    Asserted as a TIME BUDGET rather than by inspecting the pattern, because the
-    property is about matching behaviour and a future edit could reintroduce the
-    ambiguity with different characters. Generous enough not to flake on a loaded
-    runner; the failing case took half a second at N=24 and would take minutes at
-    the N used here.
-    """
-    import time
-
-    # N=26, not larger. The ambiguous pattern takes ~2.3s here and fails this
-    # assertion cleanly; at N=40 it never returns and the mutation HANGS the
-    # suite instead of failing it. A test that hangs is worse than one that
-    # fails — it reports nothing and blocks the runner.
-    pathological = '"' + "*/" * 26 + "!"
-    started = time.perf_counter()
-    _QUOTED_GLOB.search(pathological)
-    elapsed = time.perf_counter() - started
-
-    assert elapsed < 1.0, f"the declaration pattern took {elapsed:.1f}s on a pathological input"
-
-
-def test_the_pattern_still_matches_every_declaration_form() -> None:
-    """The contrast: a pattern that matches nothing also cannot backtrack.
-
-    Without this, "fixed the ReDoS" is satisfied by breaking the detector, and
-    the record would silently stop discovering anything.
-    """
-    for source, expected in (
-        ('x = "*.toml"', {"*.toml"}),
-        ('x = ".github/workflows/*.yml"', {".github/workflows/*.yml"}),
-        ('x = "scripts/?.sh"', {"scripts/?.sh"}),
-        ('x = "*requirements*.txt"', {"*requirements*.txt"}),
-    ):
-        assert glob_declarations_in(source) == expected, source
 
 
 def test_a_glob_inside_a_string_literal_is_not_a_declaration() -> None:

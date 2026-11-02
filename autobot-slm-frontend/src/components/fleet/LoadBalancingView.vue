@@ -3,6 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
+import { BaseAlert, BaseSwitch, PollingPausedAlert, useToast } from '@autobot/ui'
 /**
  * LoadBalancingView - NPU Worker Load Balancing Visualization
  *
@@ -15,8 +16,10 @@
  * Related to Issue #590 (NPU Dashboard Improvements).
  */
 
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useFleetStore } from '@/stores/fleet'
+import { throwIfFailed, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { createLogger } from '@/utils/debugUtils'
 import type {
   NPULoadBalancingConfig,
@@ -27,6 +30,8 @@ import type {
 const logger = createLogger('LoadBalancingView')
 
 const fleetStore = useFleetStore()
+const { t } = useI18n()
+const { showToast } = useToast()
 
 // ============================================================
 // State
@@ -35,9 +40,8 @@ const fleetStore = useFleetStore()
 const loading = ref(false)
 const saving = ref(false)
 const error = ref<string | null>(null)
-const notification = ref<string | null>(null)
 const autoRebalance = ref(false)
-const refreshIntervalId = ref<ReturnType<typeof setInterval> | null>(null)
+const REFRESH_INTERVAL_MS = 10_000
 
 const selectedStrategy = ref<NPULoadBalancingConfig['strategy']>('round-robin')
 
@@ -136,22 +140,14 @@ function utilizationColor(utilization: number): string {
   return 'bg-green-500'
 }
 
-/**
- * Show a temporary notification message.
- */
-function showNotification(message: string): void {
-  notification.value = message
-  setTimeout(() => {
-    notification.value = null
-  }, 4000)
-}
-
 // ============================================================
 // Actions
 // ============================================================
 
 /**
  * Load all data: fleet metrics, load balancing config, worker configs.
+ * The poller's tick follows the dashboard (nodes) read: only fetchNodes throws, the store's
+ * NPU fetches swallow their errors, so an NPU-only outage does not pause the poller.
  */
 async function refreshData(): Promise<void> {
   loading.value = true
@@ -175,7 +171,7 @@ async function refreshData(): Promise<void> {
       nodeMetrics.map(m => fleetStore.fetchNpuWorkerConfig(m.node_id))
     )
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Failed to load data'
+    const msg = e instanceof Error ? e.message : t('fleet.loadBalancingView.failedToLoadData')
     error.value = msg
     logger.error('refreshData failed:', msg)
   } finally {
@@ -196,10 +192,10 @@ async function saveStrategy(): Promise<void> {
       modelAffinity: currentConfig.value?.modelAffinity ?? {},
     }
     await fleetStore.updateNpuLoadBalancing(config)
-    showNotification('Load balancing strategy updated successfully.')
+    showToast(t('fleet.loadBalancingView.strategyUpdated'), 'success')
     logger.info('Strategy updated to', selectedStrategy.value)
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Failed to save strategy'
+    const msg = e instanceof Error ? e.message : t('fleet.loadBalancingView.failedToSaveStrategy')
     error.value = msg
     logger.error('saveStrategy failed:', msg)
   } finally {
@@ -216,10 +212,10 @@ async function rebalanceNow(): Promise<void> {
 
   try {
     await fleetStore.fetchNpuFleetMetrics()
-    showNotification('Fleet metrics refreshed. Load distribution updated.')
+    showToast(t('fleet.loadBalancingView.metricsRefreshed'), 'success')
     logger.info('Manual rebalance triggered')
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Rebalance failed'
+    const msg = e instanceof Error ? e.message : t('fleet.loadBalancingView.rebalanceFailed')
     error.value = msg
     logger.error('rebalanceNow failed:', msg)
   } finally {
@@ -240,60 +236,30 @@ const autoRebalanceRecommendation = computed(() => {
   const spread = maxUtil - minUtil
 
   if (spread > 40) {
-    return `High utilization spread (${spread.toFixed(0)}%). Consider switching to "least-loaded" strategy.`
+    return t('fleet.loadBalancingView.highUtilizationSpread', { spread: spread.toFixed(0) })
   }
   if (spread > 20) {
-    return `Moderate utilization spread (${spread.toFixed(0)}%). Current strategy may be adequate.`
+    return t('fleet.loadBalancingView.moderateUtilizationSpread', { spread: spread.toFixed(0) })
   }
-  return 'Load is well distributed. No action needed.'
+  return t('fleet.loadBalancingView.loadWellDistributed')
 })
 
 // ============================================================
 // Lifecycle
 // ============================================================
 
-onMounted(() => {
-  refreshData()
-  refreshIntervalId.value = setInterval(refreshData, 10_000)
-})
+// #19482: the shared dashboard policy (stop on unmount and after repeated failures, paused alert)
+const refreshPoller = useDashboardPoller(throwIfFailed(refreshData, error), REFRESH_INTERVAL_MS)
 
-onBeforeUnmount(() => {
-  if (refreshIntervalId.value !== null) {
-    clearInterval(refreshIntervalId.value)
-    refreshIntervalId.value = null
-  }
-})
+onMounted(() => refreshPoller.start(''))
 </script>
 
 <template>
   <div class="space-y-6">
-    <!-- Notification Banner -->
-    <Transition
-      enter-active-class="transition-all duration-300 ease-out"
-      enter-from-class="opacity-0 -translate-y-2"
-      enter-to-class="opacity-100 translate-y-0"
-      leave-active-class="transition-all duration-200 ease-in"
-      leave-from-class="opacity-100 translate-y-0"
-      leave-to-class="opacity-0 -translate-y-2"
-    >
-      <div
-        v-if="notification"
-        class="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm flex items-center gap-2"
-      >
-        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        {{ notification }}
-      </div>
-    </Transition>
+    <PollingPausedAlert :poller="refreshPoller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" @retry="refreshPoller.start('')" />
 
     <!-- Error Banner -->
-    <div
-      v-if="error"
-      class="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm"
-    >
-      {{ error }}
-    </div>
+    <BaseAlert v-if="error" variant="error" :message="error" />
 
     <!-- ============================================================ -->
     <!-- Strategy Configuration                                        -->
@@ -486,15 +452,7 @@ onBeforeUnmount(() => {
 
         <!-- Auto-rebalance toggle -->
         <label class="flex items-center gap-2 cursor-pointer select-none">
-          <div class="relative">
-            <input
-              type="checkbox"
-              v-model="autoRebalance"
-              class="sr-only peer"
-            />
-            <div class="w-9 h-5 bg-gray-200 peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:bg-primary-600 transition-colors" />
-            <div class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform peer-checked:translate-x-4" />
-          </div>
+          <BaseSwitch v-model="autoRebalance" size="sm" :label="$t('fleet.loadBalancingView.autoRebalance')" />
           <span class="text-sm text-gray-700">{{ $t('fleet.loadBalancingView.autoRebalance') }}</span>
         </label>
       </div>
@@ -508,15 +466,13 @@ onBeforeUnmount(() => {
         leave-from-class="opacity-100 max-h-20"
         leave-to-class="opacity-0 max-h-0"
       >
-        <div
+        <BaseAlert
           v-if="autoRebalanceRecommendation"
-          class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700 flex items-start gap-2"
-        >
-          <svg class="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span>{{ autoRebalanceRecommendation }}</span>
-        </div>
+          variant="info"
+          size="compact"
+          class="mt-4"
+          :message="autoRebalanceRecommendation"
+        />
       </Transition>
     </div>
 

@@ -1,10 +1,10 @@
 <template>
-  <BasePanel variant="bordered" size="md">
+  <BaseCard scrollable variant="bordered" size="md">
     <template #header>
       <h3><Icon name="chart-bar" /> {{ $t('manpage.integrationStatus.title') }}</h3>
       <BaseButton
         size="sm"
-        variant="outline-solid"
+        variant="outline"
         @click="$emit('refresh')"
         :disabled="loading"
       >
@@ -74,10 +74,11 @@
       <Icon name="spinner" class="animate-spin" />
       {{ $t('manpage.integrationStatus.loadingStatus') }}
     </div>
-  </BasePanel>
+  </BaseCard>
 </template>
 
 <script setup lang="ts">
+import { BaseButton, BaseCard } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -91,8 +92,6 @@
  */
 
 import Icon from '@/components/ui/Icon.vue'
-import BasePanel from '@/components/base/BasePanel.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
 import { formatDate } from '@/utils/formatHelpers'
 
 interface IntegrationStatus {
@@ -142,18 +141,20 @@ defineEmits<Emits>()
   border-left: 4px solid var(--color-info);
 }
 
-.not-integrated i {
+.not-integrated .icon {
   color: var(--color-info);
-  font-size: var(--text-2xl);
+  width: var(--text-2xl);
+  height: var(--text-2xl);
 }
 
 .error-state {
   border-left: 4px solid var(--color-error);
 }
 
-.error-state i {
+.error-state .icon {
   color: var(--color-error);
-  font-size: var(--text-2xl);
+  width: var(--text-2xl);
+  height: var(--text-2xl);
 }
 
 .integration-stats {
@@ -193,7 +194,7 @@ defineEmits<Emits>()
   margin-bottom: var(--spacing-5);
 }
 
-.integration-date i {
+.integration-date .icon {
   margin-right: var(--spacing-2);
 }
 
@@ -227,7 +228,8 @@ defineEmits<Emits>()
   font-style: italic;
 }
 
-.loading i {
-  font-size: 1.2rem;
+.loading .icon {
+  width: 1.2rem;
+  height: 1.2rem;
 }
 </style>

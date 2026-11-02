@@ -20,9 +20,12 @@ import uvicorn
 # sys.path, so this script raised ModuleNotFoundError on its own import block
 # before doing any work. Add the directory the way the other operator entry
 # points in this tree do (#14129).
-_BACKEND_DIR = Path(__file__).resolve().parents[4] / "autobot-backend"
-if str(_BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(_BACKEND_DIR))
+# A backend tool (#18289): it also puts the repository root on the path (for `autobot_shared`), so it
+# runs from any directory with no PYTHONPATH.
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 
 # Import the application factory
 from app_factory import create_app  # noqa: E402

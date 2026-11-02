@@ -46,7 +46,7 @@ logger = get_logger(__name__)
 # 6-tier model mapping (#2553) — all defaults from SSOT constants.
 
 # Routing tier — orchestrator only, no tool use
-ROUTING_TIER_MODEL = config.routing_model
+ROUTING_TIER_MODEL = config.routing_model or config.llm.orchestrator_model  # #15502: never ""
 # Classification tier — intent detection
 CLASSIFICATION_TIER_MODEL = config.classification_model
 # Light processing tier — extraction, formatting, lightweight tasks
@@ -56,7 +56,7 @@ INSTRUCTION_TIER_MODEL = config.instruction_model
 # System/uncensored tier — system commands, security tasks
 SYSTEM_TIER_MODEL = config.system_model
 # Quality tier — user-facing chat, research, code analysis
-QUALITY_TIER_MODEL = config.misc.default_llm_model or config.default_agent_model
+QUALITY_TIER_MODEL = config.misc.default_llm_model or config.default_agent_model or config.llm.default_model
 
 router = APIRouter()
 
@@ -175,7 +175,7 @@ DEFAULT_AGENT_CONFIGS = {
     "kb_librarian": {
         "name": "Knowledge Base Librarian",
         "description": "Manages knowledge base operations including document ingestion, search, and retrieval. Invoked by AsyncChatWorkflow when knowledge patterns detected ('according to', 'based on documents'). Uses LlamaIndex for indexing.",
-        "default_model": LIGHT_TIER_MODEL,
+        "default_model": INSTRUCTION_TIER_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 2,
@@ -227,7 +227,7 @@ DEFAULT_AGENT_CONFIGS = {
     "knowledge_extraction": {
         "name": "Knowledge Extraction Agent",
         "description": "Extracts structured entities and relationships from unstructured text. Invoked by kb_librarian during document ingestion. Feeds data to graph_entity_extractor for knowledge graphs.",
-        "default_model": LIGHT_TIER_MODEL,
+        "default_model": INSTRUCTION_TIER_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 2,
@@ -244,7 +244,7 @@ DEFAULT_AGENT_CONFIGS = {
     "knowledge_retrieval": {
         "name": "Knowledge Retrieval Agent",
         "description": "Fast semantic search using vector embeddings. Invoked by AgentRouter for knowledge queries. Primary agent for KNOWLEDGE_PATTERNS, often paired with RAG for synthesis.",
-        "default_model": LIGHT_TIER_MODEL,
+        "default_model": INSTRUCTION_TIER_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 2,

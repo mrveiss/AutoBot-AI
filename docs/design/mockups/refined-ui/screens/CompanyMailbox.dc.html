@@ -1,0 +1,645 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Company mailbox</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.sub2{font-size:12.5px;color:var(--muted)}
+.av{width:32px;height:32px;border-radius:99px;border:var(--bw) solid var(--tile-b);background:var(--tile);display:grid;place-items:center;font-weight:600;font-size:12px;flex:none;box-sizing:border-box;color:var(--text)}
+.th .btn.dng{color:var(--alert-text);border-color:var(--danger-tile-b)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.hint{margin:0;font-size:12px;color:var(--muted)}
+.ibtn{width:32px;height:32px;border-radius:6px;border:var(--bw) solid transparent;background:transparent;display:inline-grid;place-items:center;cursor:pointer;color:var(--text);padding:0;flex:none}
+.ibtn:hover{background:var(--surface2);border-color:var(--border)}
+.inp{height:34px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);border-radius:6px;font:inherit;font-size:13px;padding:0 10px;box-sizing:border-box;width:100%}
+textarea.inp{height:auto;padding:8px 10px;line-height:1.55;resize:vertical}
+.mail{display:grid;grid-template-columns:232px minmax(300px,360px) minmax(0,1fr);height:700px;position:relative}
+.mcol{border-right:var(--bw) solid var(--line);display:flex;flex-direction:column;min-height:0;min-width:0}
+.mcol:last-of-type{border-right:0}
+.scr{overflow-y:auto;min-height:0;flex:1 1 auto}
+.fold{display:flex;align-items:center;gap:10px;width:100%;padding:7px 10px;border:0;border-left:3px solid transparent;border-radius:6px;background:transparent;color:var(--text2);font:inherit;font-size:13.5px;cursor:pointer;text-align:left;box-sizing:border-box}
+.fold:hover{background:var(--surface2);color:var(--text)}
+.fold.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.fold .n{margin-left:auto;font-size:12px;font-weight:600;color:var(--text2)}
+.fold .who{display:block;font-size:11.5px;font-weight:400;color:var(--muted)}
+.mrow{display:flex;gap:8px;align-items:flex-start;padding:10px 12px;border-bottom:var(--bw) solid var(--line);border-left:3px solid transparent}
+.mrow:hover{background:var(--surface2)}
+.mrow.cur{background:var(--surface2);border-left-color:var(--accent)}
+.mmain{flex:1 1 auto;min-width:0;border:0;background:transparent;padding:0;text-align:left;font:inherit;color:var(--text);cursor:pointer;display:flex;flex-direction:column;gap:3px}
+.mmain .fr{display:flex;align-items:center;gap:6px;font-size:13.5px;min-width:0}
+.mmain .fr b{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mrow.unread .fr b,.mrow.unread .sj{font-weight:700}
+.sj{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sn{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tm{margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap;flex:none}
+.udot{width:8px;height:8px;border-radius:99px;background:var(--accent);border:1px solid var(--stroke);flex:none;box-sizing:border-box}
+.adr{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;padding:1px 6px;border-radius:4px;border:var(--bw) solid var(--border);color:var(--text2);background:var(--surface);white-space:nowrap}
+.agt{font-size:10.5px;font-weight:600;padding:1px 5px;border-radius:4px;border:var(--bw) solid var(--border);color:var(--text2);background:var(--tile);flex:none}
+.att{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border:var(--bw) solid var(--border);border-radius:8px;background:var(--surface2);font:inherit;font-size:12.5px;color:var(--text);cursor:pointer}
+.msgc{border:var(--bw) solid var(--border);border-radius:8px;background:var(--surface)}
+.draftb{border:var(--bw) dashed var(--muted);border-radius:8px;background:var(--surface);padding:12px 14px;white-space:pre-wrap;font:inherit;font-size:13px;line-height:1.55;margin:0}
+.sentb{border:var(--bw) solid var(--border);border-radius:8px;background:var(--surface2);padding:12px 14px;white-space:pre-wrap;font:inherit;font-size:13px;line-height:1.55;margin:0;color:var(--text2)}
+.gate{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 9px 4px 7px;border-radius:5px;border:var(--pill-b);white-space:nowrap}
+.note{margin:0;display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;border:var(--bw) dashed var(--border);background:var(--surface2);font-size:12.5px;color:var(--text2)}
+.cmp{position:absolute;right:16px;bottom:16px;width:520px;max-width:calc(100% - 32px);background:var(--surface);border:var(--bw) solid var(--stroke);border-radius:10px;display:flex;flex-direction:column;z-index:5}
+.rc{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:6px 12px;border-bottom:var(--bw) solid var(--line);font-size:13px}
+.rc label{color:var(--muted);width:52px;flex:none}
+.rc input,.rc select{border:0;flex:1 1 160px;min-width:120px;height:30px;background:transparent;color:var(--text);font:inherit;font-size:13px}
+.cbody{border:0;resize:vertical;min-height:130px;padding:10px 12px;background:var(--surface);color:var(--text);font:inherit;font-size:13.5px;line-height:1.55;box-sizing:border-box;width:100%}
+.toast{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);z-index:7;display:flex;align-items:center;gap:12px;padding:9px 10px 9px 14px;border-radius:8px;background:var(--primary);color:var(--on-primary);font-size:13px;white-space:nowrap}
+.toast button{border:0;background:transparent;color:var(--on-primary);font:inherit;font-weight:600;text-decoration:underline;cursor:pointer;padding:2px 4px}
+@media (max-width:1100px){.mail{grid-template-columns:200px minmax(0,1fr)}.mail>.mcol:nth-of-type(3){display:none}}
+.th[data-ui="minimal"] .adv{display:none !important}
+.th[data-ui="minimal"] .adv-only-full{display:none !important}
+.th .only-min{display:none !important}
+.th[data-ui="minimal"] .only-min{display:flex !important}
+.th[data-ui="minimal"] .only-min.blk{display:block !important}
+.uimode{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border);margin-right:8px}
+.uimode .seg{height:28px;font-size:12px}
+.uitog{height:40px;padding:0 10px;margin:0 2px;border-radius:8px;border:var(--bw) solid transparent;background:transparent;color:var(--text2);font:inherit;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;cursor:pointer}.uitog:hover{background:var(--surface2);color:var(--text)}.uitog.on{background:var(--surface2);color:var(--text);font-weight:600;border-color:var(--accent)}
+.minnote{align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.linkbtn{border:0;background:transparent;padding:0;font:inherit;font-size:12.5px;font-weight:600;color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer;min-height:24px}
+.linkbtn:hover{color:var(--link-h)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.th{--tooltip-delay:500ms;--tooltip-hide-delay:100ms;--tooltip-offset:8px;--tooltip-max:280px}
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{position:absolute;left:50%;pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease-out var(--tooltip-hide-delay),visibility 0s linear calc(var(--tooltip-hide-delay) + 120ms);z-index:50}
+[data-tip]::after{content:attr(data-tip);bottom:calc(100% + var(--tooltip-offset));transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:var(--tooltip-max);padding:6px 10px;border-radius:6px;background:var(--primary);color:var(--on-primary);border:var(--bw) solid var(--primary);font:500 12.5px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}
+[data-tip]::before{content:"";bottom:calc(100% + var(--tooltip-offset) - 4px);width:8px;height:8px;margin-left:-4px;background:var(--primary);transform:rotate(45deg)}
+[data-tip]:hover::before,[data-tip]:hover::after{opacity:1;visibility:visible;transition-delay:var(--tooltip-delay),var(--tooltip-delay)}
+[data-tip]:focus-visible::before,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s,0s}
+[data-tip-pos="bottom"]::after{bottom:auto;top:calc(100% + var(--tooltip-offset))}
+[data-tip-pos="bottom"]::before{bottom:auto;top:calc(100% + var(--tooltip-offset) - 4px)}
+[data-tip-pos="right"]::after{left:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="right"]::before{left:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+[data-tip-pos="left"]::after{left:auto;right:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="left"]::before{left:auto;right:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+@media (prefers-reduced-motion: reduce){[data-tip]::before,[data-tip]::after{transition:none}}
+@media (hover: none){[data-tip]::before,[data-tip]::after{display:none}}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" data-ui="{{ui}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html" class="on" aria-current="page">Company OS</a>
+    <a href="Analytics.dc.html" class="adv">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <span class="sr" role="status" aria-live="polite">{{uiAnnounce}}</span>
+    <a href="Secrets.dc.html" class="icon adv" aria-label="Secrets" data-tip="Secrets" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" data-tip="Preferences" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg></a>
+    <button type="button" class="uitog {{uiTogCls}}" onClick="{{toggleUi}}" aria-pressed="{{uiMinPressed}}" data-tip="Minimal interface — hide advanced features" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button>
+    <a href="AdminUsers.dc.html" class="icon adv" aria-label="Platform admin, opens the SLM console" data-tip="Platform admin — opens the SLM console ↗" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <a href="Preferences.dc.html" aria-label="Profile settings" data-tip="Profile settings" data-tip-pos="left" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer; display: grid; place-items: center; text-decoration: none">JD</a>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+
+    <aside class="sub" aria-label="Company OS" style="flex: 1 1 220px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+      <button type="button" data-tip="Switch company" data-tip-pos="bottom" style="margin: 0 0 6px; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: 8px; border: var(--bw) solid var(--border); background: var(--surface2); font: inherit; font-size: 14px; font-weight: 600; color: var(--text); cursor: pointer; text-align: left">
+        <span style="width: 26px; height: 26px; border-radius: 6px; background: var(--brand-bg); color: var(--brand-fg); display: grid; place-items: center; font-size: 12px">AL</span><span style="flex-grow: 1; display: flex; flex-direction: column; line-height: 1.2">AutoBot Labs<span style="font-size: 11.5px; font-weight: 400; color: var(--muted)">Company OS</span></span><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>
+      <p class="sect">Overview</p>
+      <a href="CompanyOS.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5" class="i3"/><rect x="13" y="3" width="8" height="5" rx="1.5" class="i1"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5" class="i2"/></svg>Dashboard</a>
+      <a href="MyPlace.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9H4z"/><circle cx="12" cy="14" r="2.5" class="i2"/></svg>My place</a>
+      <a href="ReviewInbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 13h5l1 2h4l1-2h5"/></svg>My Reviews</a>
+      <a href="Approvals.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Approvals<span class="pill warn" data-tip="3 approvals waiting on you" data-tip-pos="right" style="margin-left: auto">3</span></a>
+      <a href="Activity.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18l5-6 4 3 7-9"/></svg>Activity</a>
+      <a href="RunSupervision.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M10 9l4 2-4 2z" class="i2"/><path d="M8 21h8"/></svg>Run supervision</a>
+      <a href="OperationHistory.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v5h5"/><path d="M12 8v4l3 2"/></svg>Operation history</a>
+      <a href="AgentLedger.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2" class="it2"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>Agent ledger</a>
+      <a href="CeoChat.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-4 4v-4H4z" class="it3"/></svg>CEO Chat</a>
+      <a href="CompanyMailbox.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6" class="it2"/></svg>Mailbox</a>
+      <p class="sect">Work</p>
+      <a href="Backlog.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Backlog</a>
+      <a href="Boards.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1" class="it1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1" class="it2"/></svg>Boards</a>
+      <a href="Portfolios.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2" class="it2"/><path d="M9 7V5h6v2M3 12h18"/></svg>Portfolios</a>
+      <a href="Timeline.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h9M8 12h12M4 18h7"/></svg>Timeline</a>
+      <a href="Goals.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4" class="it3"/></svg>Goals</a>
+      <a href="Automation.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L5 14h6l-1 8 8-12h-6z" class="it2"/></svg>Automation</a>
+      <a href="ProcessCanvas.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="6" height="5" rx="1" class="it2"/><rect x="15" y="15" width="6" height="5" rx="1"/><path d="M9 6.5h4a2 2 0 0 1 2 2V15"/></svg>Process canvas</a>
+      <a href="Routines.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>Routines</a>
+      <a href="TranscriberProjects.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" class="it3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Transcriber</a>
+      <p class="sect">Organization</p>
+      <a href="OrgChart.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="5" rx="1" class="it2"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-4h12v4"/></svg>Org Chart</a>
+      <a href="Members.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0"/></svg>Members</a>
+      <a href="Teams.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="3"/><circle cx="16" cy="9" r="3" class="i2"/><path d="M2 20a6 6 0 0 1 12 0M10 20a6 6 0 0 1 12 0"/></svg>Teams</a>
+      <a href="Roles.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M14 10h4M14 14h3"/></svg>Roles</a>
+      <a href="Handbook.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z" class="it2"/><path d="M5 17a3 3 0 0 1 3-3h10M9 8h5"/></svg>Handbook</a>
+      <a href="Costs.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it2"/><path d="M12 7v10"/></svg>Costs &amp; Budget</a>
+      <a href="BusinessIntelligence.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><path d="M5 16l4-5 4 3 6-8" /><circle cx="19" cy="6" r="1.6" class="i2"/></svg>Business intelligence</a>
+      <a href="HeartbeatMonitor.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-4 4 8 2-4h6"/></svg>Heartbeat</a>
+      <a href="Portability.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12h8M13 9l3 3-3 3"/><rect x="4" y="4" width="16" height="16" rx="2"/></svg>Portability</a>
+      <a href="CompanySecrets.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4"/><path d="M12 12h9M18 12v3"/></svg>Secrets</a>
+      <a href="CompanySettings.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>Company settings</a>
+      <div class="only-min minnote" style="margin: 16px 10px 0; padding-top: 12px; border-top: var(--bw) solid var(--line)"><span>Showing essentials</span><button type="button" class="linkbtn" onClick="{{showAll}}">Show all features</button></div>
+    </aside>
+
+    <main style="flex: 999 1 520px; min-width: 0; box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 40px; display: flex; flex-direction: column; gap: 20px">
+      <header style="display: flex; flex-wrap: wrap; gap: 14px; align-items: center">
+        <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 360px; min-width: 260px">
+          <span class="sub2"><a href="CompanyOS.dc.html" style="color: var(--muted); text-decoration: none">Company OS</a> / <a href="CeoChat.dc.html" style="color: var(--muted); text-decoration: none">CEO Chat</a></span>
+          <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em">Company mailbox</h1>
+          <p class="sub2" style="margin: 0">Email sent to AutoBot Labs addresses. Each address has a handler; agents draft replies, and the autonomy gate decides which drafts wait for a person.</p>
+        </div>
+        <a href="#mb-handlers" class="btn"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3.5" class="it1"/><path d="M3 20a6 6 0 0 1 12 0M16 8h5M16 12h5M18 16h3"/></svg>Manage handlers</a>
+        <button type="button" class="btn pri" onClick="{{openCompose}}"><svg class="ic sonp" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19l1-4L16 5l3 3L9 18z"/></svg>Compose</button>
+      </header>
+
+      <section class="card" aria-label="Company mailbox" style="overflow: hidden">
+        <div class="mail">
+          <div class="mcol" style="background: var(--surface)">
+            <nav aria-label="Mailbox addresses" class="scr" style="padding: 12px 8px; display: flex; flex-direction: column; gap: 1px">
+              <sc-for list="{{views}}" as="v" hint-placeholder-count="2">
+                <button type="button" class="fold {{v.cls}}" aria-current="{{v.cur}}" onClick="{{v.pick}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" class="{{v.sw}}"/><path d="M4 13h5l1 2h4l1-2h5"/></svg><span style="min-width: 0">{{v.name}}</span><span class="n" data-tip="{{v.tip}}" data-tip-pos="right">{{v.count}}</span></button>
+              </sc-for>
+              <p class="sect">Addresses</p>
+              <sc-for list="{{addrNav}}" as="a" hint-placeholder-count="5">
+                <button type="button" class="fold {{a.cls}}" aria-current="{{a.cur}}" onClick="{{a.pick}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" class="iw"/><path d="M3 7l9 6 9-6"/></svg><span style="min-width: 0; overflow: hidden"><span class="mono" style="font-size: 12.5px">{{a.example}}</span><span class="who">{{a.who}}</span></span><span class="n">{{a.count}}</span></button>
+              </sc-for>
+            </nav>
+            <div style="padding: 10px 12px; border-top: var(--bw) solid var(--line); display: flex; align-items: center; gap: 8px">
+              <span class="dot d-ok" aria-hidden="true"></span>
+              <span class="sub2" style="font-size: 11.5px" tabindex="0" data-tip="Inbound mail is checked every 2 minutes" data-tip-pos="right">Synced 10:54 · <span class="mono">example-org.example</span></span>
+            </div>
+          </div>
+
+          <div class="mcol">
+            <div style="padding: 12px; border-bottom: var(--bw) solid var(--line)">
+              <label for="cm-q" class="sr">Search company mail</label>
+              <input id="cm-q" class="inp" type="search" placeholder="Search company mail" value="{{q}}" onInput="{{onQ}}">
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; min-height: 40px; box-sizing: border-box; border-bottom: var(--bw) solid var(--line); background: var(--surface2)">
+              <span style="font-size: 13px; font-weight: 600">{{viewName}}</span>
+              <span class="sub2" style="margin-left: auto">{{visCount}}</span>
+            </div>
+            <div class="scr" role="list" aria-label="Threads">
+              <sc-for list="{{rows}}" as="r" hint-placeholder-count="5">
+                <div role="listitem" class="mrow {{r.cls}}">
+                  <button type="button" class="mmain" aria-current="{{r.current}}" onClick="{{r.open}}">
+                    <span class="fr">
+                      <sc-if value="{{r.unread}}" hint-placeholder-val="{{ true }}"><span class="udot"></span><span class="sr">Unread. </span></sc-if>
+                      <b>{{r.from}}</b>
+                      <sc-if value="{{r.ext}}" hint-placeholder-val="{{ false }}"><span class="agt" data-tip="Sender is outside example-org.example" data-tip-pos="right">external</span></sc-if>
+                      <span class="tm mono">{{r.time}}</span>
+                    </span>
+                    <span class="sj">{{r.subject}}</span>
+                    <span class="sn">{{r.snippet}}</span>
+                    <span style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center; margin-top: 2px">
+                      <span class="adr">{{r.example}}</span>
+                      <span class="pill {{r.stCls}}" style="font-size: 10.5px; padding: 1px 6px">{{r.stText}}</span>
+                    </span>
+                  </button>
+                </div>
+              </sc-for>
+              <sc-if value="{{listEmpty}}" hint-placeholder-val="{{ false }}">
+                <div style="padding: 40px 20px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center">
+                  <svg class="ic" width="64" height="64" viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="12" width="36" height="26" rx="4" class="it1"/><path d="M6 14l18 12 18-12"/></svg>
+                  <strong style="font-size: 14px">No threads here</strong>
+                  <span class="sub2" style="max-width: 240px">Nothing matches this address or search. Clear the search or pick All addresses.</span>
+                  <button type="button" class="btn sm" onClick="{{clearView}}">Show all mail</button>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+
+          <div class="mcol" style="background: var(--surface)">
+            <div style="display: flex; align-items: center; gap: 4px; padding: 8px 12px; border-bottom: var(--bw) solid var(--line); flex-wrap: wrap">
+              <button type="button" class="btn sm" onClick="{{openCompose}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 8L5 12l5 4M5 12h9a5 5 0 0 1 5 5v1"/></svg>Reply yourself</button>
+              <button type="button" class="btn sm" onClick="{{rd.reassign}}">Reassign</button>
+              <span style="flex-grow: 1"></span>
+              <button type="button" class="ibtn" aria-label="Archive thread" data-tip="Archive thread" data-tip-pos="left" onClick="{{rd.archive}}"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="4" rx="1" class="it2"/><path d="M5 9v10h14V9M10 13h4"/></svg></button>
+            </div>
+            <div class="scr" style="padding: 16px 18px 24px; display: flex; flex-direction: column; gap: 14px">
+              <div style="display: flex; flex-direction: column; gap: 6px">
+                <h2 style="margin: 0; font-size: 18px; font-weight: 600; line-height: 1.3">{{rd.subject}}</h2>
+                <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 12.5px; color: var(--text2)">
+                  <span>to</span><span class="adr">{{rd.toAddr}}</span><span>· handled by</span><b style="font-weight: 600; color: var(--text)">{{rd.handler}}</b><span class="pill {{rd.handlerCls}}" style="font-size: 10.5px; padding: 1px 6px" data-tip="{{rd.handlerTip}}" tabindex="0">{{rd.handlerKind}}</span>
+                </div>
+              </div>
+
+              <sc-if value="{{rd.quarantine}}" hint-placeholder-val="{{ false }}">
+                <p class="note" role="note" style="border-style: solid; background: var(--warn-bg); color: var(--warn-fg)"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it2"/><path d="M12 8v5M12 16v.5"/></svg><span style="flex: 1 1 240px"><b>Partly redacted.</b> {{rd.qText}}</span></p>
+              </sc-if>
+
+              <div class="msgc">
+                <div style="padding: 12px; display: flex; flex-direction: column; gap: 10px">
+                  <div style="display: flex; gap: 10px; align-items: center">
+                    <span class="av">{{rd.ini}}</span>
+                    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+                      <span style="font-size: 13.5px"><b style="font-weight: 600">{{rd.from}}</b> <span class="sub2 mono" style="font-size: 12px">&lt;{{rd.addr}}&gt;</span></span>
+                      <span class="sub2" style="font-size: 12px">{{rd.extText}}</span>
+                    </div>
+                    <span class="sub2 mono" style="font-size: 12px">{{rd.time}}</span>
+                  </div>
+                  <sc-for list="{{rd.body}}" as="p" hint-placeholder-count="3"><p style="margin: 0; font-size: 13.5px; line-height: 1.6">{{p.t}}</p></sc-for>
+                  <sc-if value="{{rd.hasAtt}}" hint-placeholder-val="{{ false }}">
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; padding-top: 4px">
+                      <sc-for list="{{rd.att}}" as="f" hint-placeholder-count="1"><button type="button" class="att"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" class="iw"/><path d="M14 3v4h4"/></svg><span style="font-weight: 500">{{f.name}}</span><span class="sub2" style="font-size: 11.5px">{{f.size}}</span></button></sc-for>
+                    </div>
+                  </sc-if>
+                </div>
+              </div>
+
+              <sc-if value="{{rd.hasDraft}}" hint-placeholder-val="{{ true }}">
+                <section aria-label="Agent reply" style="display: flex; flex-direction: column; gap: 8px">
+                  <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+                    <strong style="font-size: 13.5px">{{rd.dTitle}}</strong>
+                    <span class="sub2">by <b style="font-weight: 600; color: var(--text)">{{rd.dAgent}}</b></span>
+                    <span class="pill {{rd.dTierCls}} adv" tabindex="0" data-tip="Risk tier — how much harm a mistaken send could do" data-tip-pos="left" style="margin-left: auto">{{rd.dTier}}</span>
+                  </div>
+                  <span class="gate {{rd.gateCls}}" tabindex="0" data-tip="{{rd.gateTip}}" style="align-self: flex-start"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="iw"/><path d="M9 12l2 2 4-4"/></svg>Autonomy gate · {{rd.gateText}}</span>
+
+                  <sc-if value="{{rd.showPending}}" hint-placeholder-val="{{ true }}">
+                    <span class="pill warn" style="align-self: flex-start">Draft · not sent</span>
+                    <pre class="draftb">{{rd.dBody}}</pre>
+                    <span class="sub2 adv" style="font-size: 12px">{{rd.dWhy}}</span>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                      <button type="button" class="btn pri sm" onClick="{{rd.approve}}"><svg class="ic sonp" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Approve and send</button>
+                      <button type="button" class="btn sm" onClick="{{rd.edit}}">Edit</button>
+                      <button type="button" class="btn sm" onClick="{{rd.discard}}">Discard draft</button>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{rd.showEdit}}" hint-placeholder-val="{{ false }}">
+                    <label for="cm-edit" class="sr">Edit reply</label>
+                    <textarea id="cm-edit" class="inp" rows="7" value="{{rd.dBody}}" onInput="{{rd.onEdit}}"></textarea>
+                    <span class="sub2" style="font-size: 12px">Your edits are sent as your approval. The gate still applies.</span>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                      <button type="button" class="btn pri sm" onClick="{{rd.approve}}">Send edited reply</button>
+                      <button type="button" class="btn sm" onClick="{{rd.cancelEdit}}">Cancel</button>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{rd.showSent}}" hint-placeholder-val="{{ false }}">
+                    <pre class="sentb">{{rd.dBody}}</pre>
+                    <p class="note" role="status"><span class="pill ok">Sent</span>{{rd.sentText}}</p>
+                  </sc-if>
+                  <sc-if value="{{rd.showGone}}" hint-placeholder-val="{{ false }}">
+                    <p class="note" role="status"><span class="pill idle">Discarded</span>Nothing was sent on this thread.<button type="button" class="btn sm" style="margin-left: auto" onClick="{{rd.restore}}">Restore draft</button></p>
+                  </sc-if>
+                </section>
+              </sc-if>
+              <sc-if value="{{rd.noDraft}}" hint-placeholder-val="{{ false }}">
+                <p class="note"><span class="pill idle">No agent draft</span>{{rd.noDraftText}}</p>
+              </sc-if>
+            </div>
+          </div>
+
+          <sc-if value="{{cmpOpen}}" hint-placeholder-val="{{ false }}">
+            <div class="cmp" role="dialog" aria-modal="false" aria-labelledby="cm-cmp-t">
+              <div style="display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 14px; background: var(--surface2); border-bottom: var(--bw) solid var(--line); border-radius: 10px 10px 0 0">
+                <strong id="cm-cmp-t" style="font-size: 13.5px; flex: 1">New message</strong>
+                <button type="button" class="ibtn" aria-label="Close compose" data-tip="Close · Esc" data-tip-pos="left" onClick="{{closeCompose}}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+              </div>
+              <div class="rc"><label for="cm-from">From</label><select id="cm-from" class="mono"><option>hello@example.com</option><option>ops@example.com</option><option>security@example.com</option><option>docs@example.com</option><option>ceo@example.com</option></select></div>
+              <div class="rc"><label for="cm-to">To</label><input id="cm-to" type="text" autocomplete="off" placeholder="name@domain, separate with commas" value="{{cmp.to}}" onInput="{{cmp.onTo}}"></div>
+              <div class="rc"><label for="cm-subj">Subject</label><input id="cm-subj" type="text" value="{{cmp.subject}}" onInput="{{cmp.onSubject}}" style="font-weight: 600"></div>
+              <label for="cm-body" class="sr">Message body</label>
+              <textarea id="cm-body" class="cbody" placeholder="Write your message…" value="{{cmp.body}}" onInput="{{cmp.onBody}}"></textarea>
+              <div style="padding: 8px 12px; display: flex; align-items: center; gap: 8px; border-top: var(--bw) solid var(--line); font-size: 12.5px; flex-wrap: wrap">
+                <span class="pill {{cmp.cls}}" tabindex="0" data-tip="Shown before you send. You are sending as yourself, so no approval is needed.">{{cmp.tag}}</span><span style="color: var(--text2)">{{cmp.text}}</span>
+              </div>
+              <sc-if value="{{cmp.hasErr}}" hint-placeholder-val="{{ false }}">
+                <p role="alert" style="margin: 0; padding: 0 12px 8px; font-size: 12.5px; color: var(--alert-text); font-weight: 500">{{cmp.err}}</p>
+              </sc-if>
+              <div style="display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-top: var(--bw) solid var(--line)">
+                <button type="button" class="btn pri sm" onClick="{{cmp.send}}">Send</button>
+                <span style="flex: 1"></span>
+                <button type="button" class="btn sm" onClick="{{closeCompose}}">Discard</button>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{hasToast}}" hint-placeholder-val="{{ false }}">
+            <div class="toast"><span>{{toastText}}</span><sc-if value="{{canUndo}}" hint-placeholder-val="{{ false }}"><button type="button" onClick="{{undo}}">Undo</button></sc-if><button type="button" onClick="{{dismiss}}">Dismiss</button></div>
+          </sc-if>
+          <div class="sr" role="status" aria-live="polite">{{toastText}}</div>
+        </div>
+      </section>
+
+      <section class="card" id="mb-handlers" aria-labelledby="mb-h">
+        <div class="ch">
+          <h2 id="mb-h">Addresses and handlers</h2>
+          <span class="sub2">Who reads each address, who drafts replies, and what the gate allows</span>
+          <button type="button" class="btn sm"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add address</button>
+        </div>
+        <div style="overflow-x: auto">
+          <table style="border-collapse: collapse; width: 100%">
+            <thead><tr><th scope="col">Address</th><th scope="col">Handled by</th><th scope="col">Drafts replies</th><th scope="col"><span tabindex="0" data-tip="Decides whether an agent's reply sends on its own or waits for a person" data-tip-pos="bottom">Autonomy gate</span></th><th scope="col" class="adv">Escalates to</th><th scope="col" style="text-align: right">Actions</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">hello@example.com</td><td><span class="pill info" data-tip="Holder is an AI agent">Agent</span> <span class="mono">research-agent</span></td><td class="mono">research-agent</td><td><span class="pill ok">Auto-send allowed: internal</span> <span class="pill warn">Needs approval: external recipient</span></td><td class="adv">Jane Doe</td><td style="text-align: right"><button type="button" class="btn sm">Change handler</button></td></tr>
+              <tr><td class="mono">ops@example.com</td><td><span class="pill info" data-tip="Holder is an AI agent">Agent</span> <span class="mono">devops-engineer</span></td><td class="mono">devops-engineer</td><td><span class="pill ok">Auto-send allowed: internal</span> <span class="pill warn">Needs approval: external recipient</span></td><td class="adv">Alex Smith</td><td style="text-align: right"><button type="button" class="btn sm">Change handler</button></td></tr>
+              <tr><td class="mono">security@example.com</td><td><span class="pill ok" data-tip="Holder is a person">Person</span> Alex Smith</td><td class="mono">code-reviewer</td><td><span class="pill warn" tabindex="0" data-tip="Every reply from this address waits for Alex Smith, internal or not">Needs approval: every reply</span></td><td class="adv">Jane Doe</td><td style="text-align: right"><button type="button" class="btn sm">Change handler</button></td></tr>
+              <tr><td class="mono">docs@example.com</td><td><span class="pill info" data-tip="Holder is an AI agent">Agent</span> <span class="mono">documentation-engineer</span></td><td class="mono">documentation-engineer</td><td><span class="pill ok">Auto-send allowed: internal</span> <span class="pill warn">Needs approval: external recipient</span></td><td class="adv">Alex Smith</td><td style="text-align: right"><button type="button" class="btn sm">Change handler</button></td></tr>
+              <tr><td class="mono" style="border-bottom: 0">ceo@example.com</td><td style="border-bottom: 0"><span class="pill ok" data-tip="Holder is a person">Person</span> Jane Doe</td><td style="border-bottom: 0"><span class="sub2">No agent drafts</span></td><td style="border-bottom: 0"><span class="pill idle" tabindex="0" data-tip="Only Jane Doe writes from this address">Person only</span></td><td class="adv" style="border-bottom: 0">—</td><td style="text-align: right; border-bottom: 0"><button type="button" class="btn sm">Change handler</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="hint" style="padding: 10px 16px 14px; border-top: var(--bw) solid var(--line)">Internal means an address at <span class="mono">example-org.example</span>. Mailbox credentials live in <a href="CompanySecrets.dc.html">Secrets</a>; approvals land in <a href="Approvals.dc.html">Approvals</a> like any other agent action.</p>
+      </section>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"ui":{"editor":"enum","options":["full","minimal"],"default":"full"},"$preview":{"width":1440,"height":1400}}'>
+const DOMAIN = '@example-org.example';
+const ADDRS = [
+  { id: 'hello', who: 'research-agent' },
+  { id: 'ops', who: 'devops-engineer' },
+  { id: 'security', who: 'Alex Smith' },
+  { id: 'docs', who: 'documentation-engineer' },
+  { id: 'ceo', who: 'Jane Doe' }
+];
+const HANDLER = {
+  hello: ['research-agent', 'Agent', 'info', 'An AI agent reads and triages this address'],
+  ops: ['devops-engineer', 'Agent', 'info', 'An AI agent reads and triages this address'],
+  security: ['Alex Smith', 'Person', 'ok', 'A person handles this address; code-reviewer drafts replies for her'],
+  docs: ['documentation-engineer', 'Agent', 'info', 'An AI agent reads and triages this address'],
+  ceo: ['Jane Doe', 'Person', 'ok', 'Only a person writes from this address']
+};
+const GATE = {
+  ext: ['Needs approval: external recipient', 'warn', 'The recipient is outside example-org.example, so the reply waits for a person to approve it'],
+  every: ['Needs approval: every reply', 'warn', 'Replies from security@ always wait for Alex Smith'],
+  int: ['Auto-send allowed: internal', 'ok', 'The recipient is inside example-org.example, so the agent may send without approval']
+};
+const TIER_CLS = { SAFE: 'ok', MODERATE: 'warn', HIGH: 'bad' };
+const THREADS = [
+  { id: 't1', box: 'hello', from: 'Riley Stone', addr: 'riley.stone@example.com', ext: true, time: '10:52', unread: true,
+    subject: 'Quote request: on-premise assistant for 40 staff',
+    snippet: 'We print for 30 clients and want an assistant that never sends our files to the cloud.',
+    body: ['Hello, we are a print house in Example City with 40 staff. We would like an assistant that answers questions about our job archive and never sends our files to the cloud.', 'Could you send a rough quote and say what hardware we would need? We hope to decide before the end of October.'],
+    att: [['requirements-rigaprint.pdf', '220 KB']],
+    draft: { agent: 'research-agent', tier: 'MODERATE', gate: 'ext', init: 'pending',
+      why: 'Drafted from the hello@ playbook and the hardware notes in Knowledge. Pricing is not included; Jane Doe quotes in person.',
+      body: 'Hello Riley,\n\nThank you for writing. AutoBot runs entirely on your own hardware, so your job archive never leaves the building.\n\nFor 40 staff, a single server with one mid-range GPU is usually enough. I have passed your requirements to Jane Doe, who will send a quote by Friday.\n\nresearch-agent, for AutoBot Labs' } },
+  { id: 't2', box: 'ops', from: 'Alex Smith', addr: 'asmith@example.com', ext: false, time: '10:41', unread: false,
+    subject: 'node-05 window: Thursday 22:00 confirmed?',
+    snippet: 'Can you confirm the rota for Thursday so I can sign off the change?',
+    body: ['Can you confirm the rota for the Thursday 22:00 window on node-05 and node-06 so I can sign off the change?'],
+    draft: { agent: 'devops-engineer', tier: 'SAFE', gate: 'int', init: 'auto', sentText: 'Sent automatically at 10:43 by devops-engineer. Internal recipient, so no approval was needed.',
+      why: '', body: 'Confirmed. I drain the NPU queue at 21:45, upgrade at 22:00 and post status in this thread after the smoke benchmark. Rollback stays on the pinned 0.9.3 image.\n\ndevops-engineer' } },
+  { id: 't3', box: 'security', from: 'Kai Lindqvist', addr: 'kai@example.com', ext: true, time: '09:58', unread: true,
+    subject: 'Possible path traversal in the file browser upload',
+    snippet: 'Report attached. I have not published anything and can wait 90 days.',
+    quarantine: 'Two links and an attached script were removed before any agent read this message. The original is kept for Alex Smith.',
+    body: ['Hi, while testing a self-hosted AutoBot instance I found that the file browser upload accepts a crafted file name that writes outside the target folder.', 'Steps and a proof of concept are in the attached report. I have not published anything and can wait 90 days for a fix.'],
+    att: [['report-path-traversal.pdf', '148 KB']],
+    draft: { agent: 'code-reviewer', tier: 'HIGH', gate: 'every', init: 'pending',
+      why: 'security@ is handled by Alex Smith, so every reply waits for her. The recipient is also external.',
+      body: 'Hello Kai,\n\nThank you for the report and for holding publication. We have reproduced the issue and opened a private fix. We will write again with a release date within 7 days.\n\nAlex Smith, AutoBot Labs' } },
+  { id: 't4', box: 'docs', from: 'Sam Lee', addr: 'slee@example.com', ext: false, time: '09:20', unread: false,
+    subject: 'Release notes for 0.9.4: review before Friday',
+    snippet: 'Can you add the worker rollout and the session reconnect fix?',
+    body: ['Can you add the worker rollout and the session reconnect fix to the 0.9.4 release notes? I would like to review them before Friday.'],
+    draft: { agent: 'documentation-engineer', tier: 'SAFE', gate: 'int', init: 'auto', sentText: 'Sent automatically at 09:24 by documentation-engineer. Internal recipient, so no approval was needed.',
+      why: '', body: 'Added both. The draft is in Knowledge under Release notes / 0.9.4. I marked the two new sections so you can find them quickly.\n\ndocumentation-engineer' } },
+  { id: 't5', box: 'ceo', from: 'Baltic Cloud billing', addr: 'billing@example.com', ext: true, time: 'Yesterday', unread: false,
+    subject: 'Invoice INV-2026-1014: 1,240.00 EUR due 25 Oct',
+    snippet: 'Your invoice for September GPU hours is ready.',
+    body: ['Your invoice INV-2026-1014 for September GPU hours is ready.', 'Amount due: 1,240.00 EUR by 25 October 2026.'],
+    att: [['INV-2026-1014.pdf', '64 KB']],
+    noDraft: 'ceo@ is handled by Jane Doe. No agent drafts replies from this address.' }
+];
+const ini = (n) => n.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+    try { const u = window.localStorage.getItem('autobot-ui-mode'); if (u === 'full' || u === 'minimal') this.setState({ ui: u }); } catch (e) {}
+  }
+  setUi(id) {
+    try { window.localStorage.setItem('autobot-ui-mode', id); } catch (e) {}
+    this.setState({ ui: id, uiAnnounce: id === 'minimal' ? 'Minimal interface on. Advanced features hidden.' : 'Full interface on. All features shown.' });
+  }
+  setStatus(id, val) {
+    const st = this.state || {};
+    this.setState({ status: Object.assign({}, st.status || {}, { [id]: val }), editing: false });
+  }
+  flash(text, undoId, undoVal) {
+    this.setState({ toast: text, undoId: undoId || '', undoVal: undoVal || '' });
+  }
+  statusOf(t) {
+    const s = (this.state || {}).status || {};
+    if (!t.draft) return 'none';
+    return s[t.id] || t.draft.init;
+  }
+  rowState(t) {
+    const s = this.statusOf(t);
+    if (s === 'pending') return ['Needs approval', 'warn'];
+    if (s === 'auto') return ['Auto-sent', 'idle'];
+    if (s === 'sent') return ['Approved · sent', 'ok'];
+    if (s === 'gone') return ['Draft discarded', 'idle'];
+    return ['Person handles', 'idle'];
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const ui = st.ui || this.props.ui || 'full';
+    const defs = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+    const view = st.view || 'all';
+    const q = (st.q || '').toLowerCase();
+    const read = st.read || {};
+    const sel = st.sel || 't1';
+    const edits = st.edits || {};
+    const isUnread = (t) => t.unread && !read[t.id];
+    const inView = (t, v) => v === 'all' ? true : v === 'pending' ? this.statusOf(t) === 'pending' : t.box === v;
+    const list = THREADS.filter((t) => inView(t, view) && (!q || (t.subject + ' ' + t.from + ' ' + t.snippet).toLowerCase().indexOf(q) >= 0));
+    const pick = (v) => () => this.setState({ view: v });
+    const nPending = THREADS.filter((t) => this.statusOf(t) === 'pending').length;
+    const views = [
+      { id: 'all', name: 'All addresses', count: String(THREADS.filter(isUnread).length), tip: 'Unread threads across all addresses', sw: 'it1' },
+      { id: 'pending', name: 'Needs approval', count: String(nPending), tip: 'Agent drafts waiting for a person', sw: 'it2' }
+    ].map((v) => ({ name: v.name, count: v.count, tip: v.tip, sw: v.sw, cls: view === v.id ? 'on' : '', cur: view === v.id ? 'page' : 'false', pick: pick(v.id) }));
+    const addrNav = ADDRS.map((a) => {
+      const n = THREADS.filter((t) => t.box === a.id && isUnread(t)).length;
+      return { local: a.id + '@', who: a.who, count: n ? String(n) : '', cls: view === a.id ? 'on' : '', cur: view === a.id ? 'page' : 'false', pick: pick(a.id) };
+    });
+    const rows = list.map((t) => {
+      const rs = this.rowState(t);
+      return {
+        from: t.from, time: t.time, subject: t.subject, snippet: t.snippet, ext: t.ext, unread: isUnread(t),
+        local: t.box + '@', stText: rs[0], stCls: rs[1],
+        cls: (t.id === sel ? 'cur ' : '') + (isUnread(t) ? 'unread' : ''),
+        current: t.id === sel ? 'true' : 'false',
+        open: () => this.setState({ sel: t.id, editing: false, read: Object.assign({}, read, { [t.id]: true }) })
+      };
+    });
+    const t = THREADS.filter((x) => x.id === sel)[0] || THREADS[0];
+    const h = HANDLER[t.box];
+    const s = this.statusOf(t);
+    const d = t.draft;
+    const g = d ? GATE[d.gate] : GATE.int;
+    const dBody = d ? (edits[t.id] !== undefined ? edits[t.id] : d.body) : '';
+    const rd = {
+      subject: t.subject, toAddr: t.box + DOMAIN, handler: h[0], handlerKind: h[1], handlerCls: h[2], handlerTip: h[3],
+      from: t.from, addr: t.addr, ini: ini(t.from), time: t.time,
+      extText: t.ext ? 'External sender' : 'Internal sender',
+      quarantine: !!t.quarantine, qText: t.quarantine || '',
+      body: t.body.map((p) => ({ t: p })), hasAtt: !!t.att, att: (t.att || []).map((a) => ({ name: a[0], size: a[1] })),
+      hasDraft: !!d, noDraft: !d, noDraftText: t.noDraft || '',
+      dTitle: s === 'auto' ? 'Agent reply' : 'Suggested reply',
+      dAgent: d ? d.agent : '', dTier: d ? d.tier : '', dTierCls: d ? TIER_CLS[d.tier] : 'idle',
+      gateText: g[0], gateCls: g[1], gateTip: g[2], dWhy: d ? d.why : '', dBody: dBody,
+      showPending: s === 'pending' && !st.editing, showEdit: s === 'pending' && !!st.editing,
+      showSent: s === 'sent' || s === 'auto', showGone: s === 'gone',
+      sentText: s === 'auto' ? (d ? d.sentText : '') : 'Approved by you at 10:58 and sent to ' + t.addr + '.',
+      approve: () => { this.setStatus(t.id, 'sent'); this.flash('Reply sent to ' + t.addr); },
+      edit: () => this.setState({ editing: true }),
+      cancelEdit: () => this.setState({ editing: false }),
+      onEdit: (e) => this.setState({ edits: Object.assign({}, edits, { [t.id]: e.target.value }) }),
+      discard: () => { this.setStatus(t.id, 'gone'); this.flash('Draft discarded', t.id, 'pending'); },
+      restore: () => this.setStatus(t.id, 'pending'),
+      reassign: () => this.flash('Choose a new handler in Addresses and handlers below'),
+      archive: () => this.flash('Thread archived')
+    };
+    const cTo = st.cTo || '';
+    const rcpts = cTo.split(',').map((x) => x.trim()).filter((x) => x);
+    const anyExt = rcpts.some((x) => x.slice(-DOMAIN.length).toLowerCase() !== DOMAIN);
+    const cmp = {
+      to: cTo, subject: st.cSubj || '', body: st.cBody || '',
+      cls: !rcpts.length ? 'idle' : anyExt ? 'warn' : 'ok',
+      tag: !rcpts.length ? 'No recipient yet' : anyExt ? 'External recipient' : 'Internal only',
+      text: !rcpts.length ? 'Add who this goes to.' : anyExt ? 'Leaves example-org.example. Check the recipient before you send.' : 'Stays inside example-org.example.',
+      hasErr: !!st.cErr, err: st.cErr || '',
+      onTo: (e) => this.setState({ cTo: e.target.value, cErr: '' }),
+      onSubject: (e) => this.setState({ cSubj: e.target.value }),
+      onBody: (e) => this.setState({ cBody: e.target.value }),
+      send: () => {
+        if (!rcpts.length) { this.setState({ cErr: 'Add at least one recipient, for example name@example.com.' }); return; }
+        this.setState({ cmpOpen: false, cTo: '', cSubj: '', cBody: '', cErr: '' });
+        this.flash('Message sent to ' + rcpts.join(', '));
+      }
+    };
+    return {
+      theme: cur,
+      ui: ui,
+      uiAnnounce: st.uiAnnounce || '',
+      showAll: () => this.setUi('full'),
+      toggleUi: () => this.setUi(ui === 'minimal' ? 'full' : 'minimal'),
+      uiMinPressed: ui === 'minimal' ? 'true' : 'false',
+      uiTogCls: ui === 'minimal' ? 'on' : '',
+      themes: defs.map(([id, label]) => ({
+        label: label,
+        cls: id === cur ? 'on' : '',
+        pressed: id === cur ? 'true' : 'false',
+        pick: () => { try { window.localStorage.setItem('autobot-theme', id); } catch (e) {} this.setState({ theme: id }); }
+      })),
+      views: views,
+      addrNav: addrNav,
+      q: st.q || '',
+      onQ: (e) => this.setState({ q: e.target.value }),
+      viewName: view === 'all' ? 'All addresses' : view === 'pending' ? 'Needs approval' : view + DOMAIN,
+      visCount: list.length === 1 ? '1 thread' : list.length + ' threads',
+      rows: rows,
+      listEmpty: list.length === 0,
+      clearView: () => this.setState({ view: 'all', q: '' }),
+      rd: rd,
+      cmp: cmp,
+      cmpOpen: !!st.cmpOpen,
+      openCompose: () => this.setState({ cmpOpen: true }),
+      closeCompose: () => this.setState({ cmpOpen: false, cErr: '' }),
+      hasToast: !!st.toast,
+      toastText: st.toast || '',
+      canUndo: !!st.undoId,
+      undo: () => { if (st.undoId) this.setStatus(st.undoId, st.undoVal); this.setState({ toast: '', undoId: '' }); },
+      dismiss: () => this.setState({ toast: '', undoId: '' })
+    };
+  }
+}
+</script>
+</body>
+</html>

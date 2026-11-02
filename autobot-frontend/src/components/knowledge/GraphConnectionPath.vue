@@ -336,7 +336,7 @@ async function executeFindPath(): Promise<void> {
   margin: var(--spacing-0);
 }
 
-.path-header h4 i {
+.path-header h4 .icon {
   color: var(--color-primary);
 }
 
@@ -375,7 +375,7 @@ async function executeFindPath(): Promise<void> {
   margin-bottom: var(--spacing-sm);
 }
 
-.form-group label i {
+.form-group label .icon {
   color: var(--text-tertiary);
 }
 
@@ -565,8 +565,8 @@ async function executeFindPath(): Promise<void> {
   border-radius: var(--radius-md);
 }
 
-.chain-node.start i,
-.chain-node.end i {
+.chain-node.start .icon,
+.chain-node.end .icon {
   color: var(--color-primary);
 }
 
@@ -593,11 +593,11 @@ async function executeFindPath(): Promise<void> {
   color: var(--text-secondary);
 }
 
-.chain-edge i {
+.chain-edge .icon {
   color: var(--color-primary);
 }
 
-.chain-edge.incoming i {
+.chain-edge.incoming .icon {
   color: var(--color-warning);
 }
 
@@ -616,8 +616,8 @@ async function executeFindPath(): Promise<void> {
   color: var(--text-secondary);
 }
 
-.empty-result i {
-  font-size: 2rem;
+.empty-result .icon {
+  width: 2rem; height: 2rem;
   margin-bottom: var(--spacing-md);
   color: var(--text-tertiary);
 }

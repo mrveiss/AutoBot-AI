@@ -334,11 +334,12 @@ async def main():
 
     try:
         # Initialize Knowledge Base V2
-        from knowledge_base import KnowledgeBase
+        from knowledge_factory import get_knowledge_base_async
 
         logger.info("\n1. Initializing Knowledge Base V2...")
-        kb_v2 = KnowledgeBase()
-        await kb_v2.initialize()
+        kb_v2 = await get_knowledge_base_async()
+        if kb_v2 is None:
+            raise RuntimeError("Knowledge base unavailable: initialization failed or retry cooldown active")
 
         if not kb_v2.initialized:
             logger.error("✗ Knowledge Base V2 initialization failed")

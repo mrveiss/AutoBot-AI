@@ -136,7 +136,13 @@ def test_run_subprocess_without_timeout_is_unaffected(tmp_path):
 
     async def _go():
         return await executor._run_subprocess(
-            cmd=["/bin/sh", "-c", "echo hello-14524"],
+            # #19475: a real run ends with a PLAY RECAP; without one the exit proof
+            # (ansible_run_failure) rightly reports failure, which is not this test's subject.
+            cmd=[
+                "/bin/sh",
+                "-c",
+                "echo hello-14524; echo 'PLAY RECAP ***'; echo 'localhost : ok=1 changed=0 unreachable=0 failed=0'",
+            ],
             env=dict(os.environ),
             progress_callback=None,
         )
@@ -387,10 +393,10 @@ def test_run_git_kills_a_hung_git_via_the_process_group(monkeypatch, tmp_path):
         return await executor._run_git(tmp_path, "fetch", "origin")
 
     started = time.monotonic()
-    returncode = asyncio.run(_go())
+    failure = asyncio.run(_go())
     elapsed = time.monotonic() - started
 
-    assert returncode == -1, "a killed git command must report a non-zero, non-crash returncode"
+    assert "timed out" in failure, "a killed git command must report why, not crash"
     assert elapsed < 5, f"a timed-out git command must return promptly, took {elapsed:.1f}s"
 
     for _ in range(100):
@@ -422,18 +428,17 @@ def _executor_with_fake_code_source(tmp_path: Path) -> "playbook_executor.Playbo
 def test_update_code_source_returns_true_when_no_git_dir_present():
     """Dev-mode / no code_source checkout: nothing to sync is success, not failure."""
     executor = playbook_executor.PlaybookExecutor(ansible_dir=Path("/nonexistent/ansible"))
-    assert asyncio.run(executor._update_code_source()) is True
+    assert asyncio.run(executor._update_code_source()) is None
 
 
 def test_update_code_source_returns_true_when_every_git_step_succeeds(tmp_path):
     """Discriminates against a pre-#14524-round-3 regression: `_update_code_source`
-    used to return `None` (discarded at the call site) -- `is True`, not
-    merely falsy, proves this is the NEW, real boolean contract.
+    returns no failure reason (#20089: None, not a stored flag).
     """
     executor = _executor_with_fake_code_source(tmp_path)
 
     async def _ok(*_args, **_kwargs):
-        return 0
+        return None
 
     async def _noop_log(*_args, **_kwargs):
         return None
@@ -441,7 +446,7 @@ def test_update_code_source_returns_true_when_every_git_step_succeeds(tmp_path):
     executor._run_git = _ok
     executor._log_updated_head_commit = _noop_log
 
-    assert asyncio.run(executor._update_code_source()) is True
+    assert asyncio.run(executor._update_code_source()) is None
 
 
 def test_update_code_source_returns_false_when_fetch_fails(tmp_path):
@@ -454,11 +459,11 @@ def test_update_code_source_returns_false_when_fetch_fails(tmp_path):
     executor = _executor_with_fake_code_source(tmp_path)
 
     async def _run_git(_code_source_dir, *args, **_kwargs):
-        return 0 if args[0] == "checkout" else 1  # fetch (and reset) fail
+        return None if args[0] == "checkout" else "git failed"  # fetch (and reset) fail
 
     executor._run_git = _run_git
 
-    assert asyncio.run(executor._update_code_source()) is False
+    assert asyncio.run(executor._update_code_source())
 
 
 def test_update_code_source_fetches_with_prune(tmp_path):
@@ -472,7 +477,7 @@ def test_update_code_source_fetches_with_prune(tmp_path):
 
     async def _run_git(_code_source_dir, *args, **_kwargs):
         calls.append(args)
-        return 0
+        return None
 
     async def _noop_log(*_args, **_kwargs):
         return None
@@ -480,7 +485,7 @@ def test_update_code_source_fetches_with_prune(tmp_path):
     executor._run_git = _run_git
     executor._log_updated_head_commit = _noop_log
 
-    assert asyncio.run(executor._update_code_source()) is True
+    assert asyncio.run(executor._update_code_source()) is None
     assert ("fetch", "--prune", "origin") in calls
     assert ("fetch", "origin") not in calls
 
@@ -493,7 +498,7 @@ def test_update_code_source_returns_false_when_only_checkout_fails(tmp_path):
     executor = _executor_with_fake_code_source(tmp_path)
 
     async def _run_git(_code_source_dir, *args, **_kwargs):
-        return 1 if args[0] == "checkout" else 0
+        return "git checkout failed" if args[0] == "checkout" else None
 
     async def _noop_log(*_args, **_kwargs):
         return None
@@ -501,7 +506,7 @@ def test_update_code_source_returns_false_when_only_checkout_fails(tmp_path):
     executor._run_git = _run_git
     executor._log_updated_head_commit = _noop_log
 
-    assert asyncio.run(executor._update_code_source()) is False
+    assert asyncio.run(executor._update_code_source())
 
 
 def test_execute_playbook_refuses_detached_run_on_sync_failure():
@@ -521,7 +526,7 @@ def test_execute_playbook_refuses_detached_run_on_sync_failure():
     executor = playbook_executor.PlaybookExecutor()
 
     async def _sync_failed():
-        return False
+        return "git fetch exited 1: x"
 
     executor._update_code_source = _sync_failed
 
@@ -545,7 +550,7 @@ def test_execute_playbook_continues_non_detached_despite_sync_failure():
     executor = playbook_executor.PlaybookExecutor()
 
     async def _sync_failed():
-        return False
+        return "git fetch exited 1: x"
 
     executor._update_code_source = _sync_failed
 

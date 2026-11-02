@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseAlert, PollingPausedAlert } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -11,31 +12,29 @@
  * Issue #752 - Comprehensive performance monitoring.
  */
 
-import { onMounted, onUnmounted, computed } from 'vue'
+import { onMounted, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { formatDuration } from '@/utils/formatHelpers'
 import { usePerformanceMonitoring } from '@/composables/usePerformanceMonitoring'
-import { formatDateTime } from '@/composables/useTimezone'
+import { injectPerformanceMonitoring } from '@/composables/monitoringPollContext'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 
+// #19851: PerformanceView owns the poll and shows the paused notice; this view only
+// polls (and shows its own notice) when rendered without that layout.
+const { state: performance, ownsPoll } = injectPerformanceMonitoring(() => usePerformanceMonitoring())
 const {
   overview,
   loading,
   error,
-  fetchOverview,
-} = usePerformanceMonitoring()
+  startPolling,
+  poller,
+} = performance
 
-let refreshTimer: ReturnType<typeof setInterval> | null = null
-const REFRESH_INTERVAL = 30000
+const { t } = useI18n()
 
+// #19482: the composable's poller carries the shared dashboard policy (30s default)
 onMounted(() => {
-  fetchOverview()
-  refreshTimer = setInterval(fetchOverview, REFRESH_INTERVAL)
-})
-
-onUnmounted(() => {
-  if (refreshTimer) {
-    clearInterval(refreshTimer)
-    refreshTimer = null
-  }
+  if (ownsPoll) startPolling()
 })
 
 const avgLatency = computed(() => overview.value?.avg_latency_ms ?? 0)
@@ -91,20 +90,14 @@ function statusBadgeClass(status: string): string {
  * Format duration for display.
  */
 
-function formatDate(dateStr: string): string {
-  return formatDateTime(dateStr)
-}
 </script>
 
 <template>
   <div class="p-6">
+    <PollingPausedAlert v-if="ownsPoll" :poller="poller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" class="mb-4" @retry="poller.start('')" />
+
     <!-- Error Banner -->
-    <div
-      v-if="error"
-      class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm"
-    >
-      {{ error }}
-    </div>
+    <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />
 
     <!-- Refresh Bar -->
     <div class="flex items-center justify-between mb-6">
@@ -113,7 +106,7 @@ function formatDate(dateStr: string): string {
         <span v-if="activeSlos > 0" class="ml-4">{{ $t('performance.performanceOverview.value0ActiveSLOs', { value0: activeSlos }) }}</span>
       </div>
       <button
-        @click="fetchOverview"
+        @click="poller.start('')"
         :disabled="loading"
         class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
       >
@@ -238,7 +231,7 @@ function formatDate(dateStr: string): string {
                 {{ trace.source_node_id ?? '-' }}
               </td>
               <td class="px-4 py-2 text-sm text-gray-500 whitespace-nowrap">
-                {{ formatDate(trace.created_at) }}
+                {{ formatFleetDateTime(trace.created_at) }}
               </td>
             </tr>
           </tbody>

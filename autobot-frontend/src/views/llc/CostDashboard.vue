@@ -182,8 +182,13 @@
               <tr v-for="bucket in group.buckets" :key="bucket.key">
                 <td>{{ bucket.label }}</td>
                 <td class="num-cell">
-                  {{ bucket.per_month }}
-                  <span v-if="bucket.currencies.length">{{ bucket.currencies.join(' / ') }}</span>
+                  <template v-if="bucket.is_mixed_currency">
+                    <div v-for="entry in bucket.per_currency" :key="entry.currency">{{ $t('llc.cost.currencyAmount', { amount: entry.per_month, currency: entry.currency }) }}</div>
+                  </template>
+                  <template v-else>
+                    {{ bucket.per_month }}
+                    <span v-if="bucket.currencies.length">{{ bucket.currencies.join(' / ') }}</span>
+                  </template>
                 </td>
                 <!-- Coverage sits beside every total, never behind a tooltip: a
                      partial figure presented alone reads as a complete one. -->
@@ -289,9 +294,10 @@ import { ref, computed, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
-import { formatDate as fmtDate } from '@/utils/formatHelpers'
+import { createDateFormatter } from '@/utils/formatHelpers'
 import { BaseModal } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
+import type { components } from '@/types/generated/api'
 
 const logger = createLogger('CostDashboard')
 const api = useApiClient()
@@ -349,16 +355,7 @@ const costEvents = ref<CostEvent[]>([])
  * is excluded from the sum and counted in `not_costable` — never folded in as
  * zero, which would make a partial total indistinguishable from a complete one.
  */
-interface RollupBucket {
-  key: string
-  label: string
-  per_month: string
-  costed: number
-  not_costable: number
-  total_steps: number
-  is_complete: boolean
-  currencies: string[]
-}
+type RollupBucket = components['schemas']['RollupBucketOut']
 const rollupByRole = ref<RollupBucket[]>([])
 const rollupByTool = ref<RollupBucket[]>([])
 /** The request did not answer — distinct from answering "nothing is mapped". */
@@ -499,9 +496,7 @@ const dailyBars = computed(() => {
   }))
 })
 
-function formatDate(iso: string | null | undefined): string {
-  return iso ? fmtDate(iso) : ''
-}
+const formatDate = createDateFormatter({ kind: 'date', invalidText: '' })
 
 /** A token count for display, or an em dash when the split is not recorded. */
 function tokenCell(value: number | null | undefined): string {
@@ -587,7 +582,7 @@ async function fetchStepRollup() {
   if (!companyId.value) return
   rollupFailed.value = false
   try {
-    const data = await api.get<{ by_role?: RollupBucket[]; by_tool?: RollupBucket[] }>(
+    const data = await api.get<components['schemas']['StepRollupResponse']>(
       `/api/llc/costs/step-rollup?company_id=${companyId.value}`,
     )
     // Validated before it is rendered: a payload of the wrong shape reaching
@@ -647,7 +642,7 @@ onMounted(async () => {
 }
 
 .view-title {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 600;
   margin: 0;
 }
@@ -658,7 +653,7 @@ onMounted(async () => {
   color: var(--text-primary);
   border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
@@ -692,13 +687,13 @@ onMounted(async () => {
 }
 
 .card-sub {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   word-break: break-all;
 }
 
 .section-title {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   margin: 0 0 0.75rem;
 }
@@ -721,7 +716,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .budget-agent {
@@ -784,7 +779,7 @@ onMounted(async () => {
 
 .shadow-cost {
   color: var(--text-secondary);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   margin-left: 0.25rem;
 }
 
@@ -834,7 +829,7 @@ onMounted(async () => {
   background: transparent;
   border: none;
   cursor: pointer;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   transition: background 0.15s, color 0.15s;
 }
@@ -856,7 +851,7 @@ onMounted(async () => {
   padding: 0.45rem 0.6rem;
   background: var(--bg-elevated);
   border-right: 1px solid var(--border-default);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -866,7 +861,7 @@ onMounted(async () => {
   border-radius: 0.375rem;
   background: var(--bg-surface);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   width: 100%;
 }
 
@@ -876,7 +871,7 @@ onMounted(async () => {
 }
 
 .field-hint {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   margin: 0;
 }
@@ -900,7 +895,7 @@ onMounted(async () => {
   color: var(--text-on-primary);
   border: none;
   border-radius: 0.375rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   cursor: pointer;
   font-weight: 500;
 }
@@ -916,7 +911,7 @@ onMounted(async () => {
   color: var(--text-primary);
   border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
@@ -970,11 +965,11 @@ onMounted(async () => {
   border-radius: 0.375rem;
   background: var(--bg-surface);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .date-sep {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -987,7 +982,7 @@ onMounted(async () => {
 .cost-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .cost-table th {

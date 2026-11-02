@@ -11,10 +11,10 @@ definitions in the web UI.  Each .md file uses YAML frontmatter
 prompt.
 """
 
-import re
 from pathlib import Path
 from typing import Any, Dict, List
 
+from autobot_shared.frontmatter import split_frontmatter, strip_frontmatter
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import CategoryDefaults
 
@@ -92,11 +92,11 @@ def _parse_frontmatter(content: str) -> Dict[str, Any]:
         "model": None,
     }
 
-    match = re.match(r"^---\s*\n(.*?)\n---", content, re.DOTALL)
-    if not match:
+    raw, _ = split_frontmatter(content)
+    if raw is None:
         return result
 
-    for line in match.group(1).split("\n"):
+    for line in raw.split("\n"):
         if ":" not in line:
             continue
         key, value = line.split(":", 1)
@@ -119,8 +119,7 @@ def _parse_frontmatter(content: str) -> Dict[str, Any]:
 
 def _extract_system_prompt_excerpt(content: str, max_chars: int = 300) -> str:
     """Return the first ``max_chars`` of the body after frontmatter (#1794)."""
-    match = re.match(r"^---\s*\n.*?\n---\s*\n?", content, re.DOTALL)
-    body = content[match.end() :].strip() if match else content.strip()
+    body = strip_frontmatter(content).strip()
     if len(body) > max_chars:
         return body[:max_chars] + "…"
     return body
@@ -202,7 +201,6 @@ class SpecializedAgentService:
         }
 
         if include_full_prompt:
-            match = re.match(r"^---\s*\n.*?\n---\s*\n?", content, re.DOTALL)
-            agent["system_prompt"] = content[match.end() :].strip() if match else content.strip()
+            agent["system_prompt"] = strip_frontmatter(content).strip()
 
         return agent

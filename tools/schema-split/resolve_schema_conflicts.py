@@ -17,9 +17,14 @@ When run with no arguments, scans autobot-backend/api/schemas_*.py for conflicts
 """
 
 import ast
+import logging
+import os
 import re
 import sys
-import os
+
+from schema_rules import API_DIR
+
+logger = logging.getLogger(__name__)
 
 CONFLICT_RE = re.compile(
     r"<<<<<<< [^\n]+\n(.*?)\n=======\n(.*?)\n>>>>>>> [^\n]+\n",
@@ -45,37 +50,44 @@ def resolve_file(path: str, dry_run: bool = False) -> bool:
     try:
         ast.parse(resolved)
     except SyntaxError as exc:
-        print(
+        logger.error(
             f"ERROR: {path}: conflict resolution produced invalid Python "
             f"at line {exc.lineno}: {exc.msg}\n"
             "  Likely cause: a docstring was split across a conflict boundary.\n"
-            "  Resolve manually: check that each class docstring is complete on both sides.",
-            file=sys.stderr,
+            "  Resolve manually: check that each class docstring is complete on both sides."
         )
         return False
 
     if dry_run:
         conflict_count = len(CONFLICT_RE.findall(original))
-        print(f"Would resolve {conflict_count} conflict(s) in {path} (AST OK)")
+        logger.info(f"Would resolve {conflict_count} conflict(s) in {path} (AST OK)")
         return True
 
     with open(path, "w", encoding="utf-8") as f:
         f.write(resolved)
 
     conflict_count = len(CONFLICT_RE.findall(original))
-    print(f"Resolved {conflict_count} conflict(s) in {path}")
+    logger.info(f"Resolved {conflict_count} conflict(s) in {path}")
     return True
 
 
 def _schema_files() -> list[str]:
-    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    api_dir = os.path.join(repo_root, "autobot-backend", "api")
     return sorted(
-        os.path.join(api_dir, f) for f in os.listdir(api_dir) if f.startswith("schemas_") and f.endswith(".py")
+        os.path.join(API_DIR, f) for f in os.listdir(API_DIR) if f.startswith("schemas_") and f.endswith(".py")
     )
 
 
+def _configure_logging() -> None:
+    """Info to stdout and errors to stderr, matching the original stream split."""
+    out = logging.StreamHandler(sys.stdout)
+    out.addFilter(lambda rec: rec.levelno < logging.WARNING)
+    err = logging.StreamHandler(sys.stderr)
+    err.setLevel(logging.WARNING)
+    logging.basicConfig(level=logging.INFO, format="%(message)s", handlers=[out, err])
+
+
 def main() -> None:
+    _configure_logging()
     args = sys.argv[1:]
     dry_run = "--check" in args
     args = [a for a in args if a != "--check"]

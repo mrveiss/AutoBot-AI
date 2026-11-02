@@ -20,10 +20,8 @@
 
 # --- #12378: browser-automation panel (aspirational, no backend) ---
 /api/browser/automation/run
-/api/browser/close
 /api/browser/execute
 /api/browser/launch
-/api/browser/session/{p}
 /api/browser/type
 
 # --- #12378: dev-speedup panel (aspirational, no backend) ---
@@ -51,9 +49,7 @@
 # `/api/knowledge_base/verification/{fact_id}/approve`: the caller approves a
 # research SOURCE (posts {source_url, title}, no fact_id), not a pending fact.
 /api/multimodal/health
-/api/service-monitor/resources
 /api/knowledge/verification/approve
-/api/knowledge_base/documents/{p}
 /api/knowledge_base/documents/{p}/similar
 
 # --- #12364: analytics/code-intelligence redesign, deferred ---
@@ -61,16 +57,8 @@
 /api/code-intelligence/batch-analyze
 /api/code-intelligence/compare
 /api/code-intelligence/history
-/api/code-intelligence/quality-score
 /api/code-intelligence/trends
 
-# --- #12381: extraction false positive, not a live call ---
-# autobot-frontend/src/services/CacheService.ts:49 — `/api/user/profile` is a
-# key in the cache-TTL `strategies` lookup map (`getTTLForEndpoint()` does
-# `endpoint.includes(pattern)` against the REAL fetch URL elsewhere), not an
-# actual fetch call itself. Matches the "base-URL constants and cache-key
-# maps" false-positive class documented in the #12326 comment thread.
-/api/user/profile
 # #12432: the 3 sub-router parametrized WS routes previously baselined here
 # (advanced-control/ws/monitoring, advanced-control/ws/desktop/{p},
 # overseer/ws/{p}) now resolve correctly — the WS enumeration walks

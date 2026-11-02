@@ -14,8 +14,8 @@ import asyncio
 import pytest
 
 from services.resilience.fallback_manager import (
-    FallbackChain,
     FallbackManager,
+    ServiceFallbackChain,
 )
 
 
@@ -24,7 +24,7 @@ class TestFallbackChain:
 
     def test_single_fallback_success(self):
         """Test single fallback succeeds."""
-        chain = FallbackChain("search")
+        chain = ServiceFallbackChain("search")
         chain.add("primary", lambda: {"results": []})
 
         result = chain.execute()
@@ -32,7 +32,7 @@ class TestFallbackChain:
 
     def test_primary_fails_uses_secondary(self):
         """Test that secondary fallback is used when primary fails."""
-        chain = FallbackChain("search")
+        chain = ServiceFallbackChain("search")
         chain.add("primary", lambda: (_ for _ in ()).throw(RuntimeError("Primary down")))
         chain.add("secondary", lambda: {"cached": True})
 
@@ -41,7 +41,7 @@ class TestFallbackChain:
 
     def test_all_fallbacks_fail_raises_error(self):
         """Test that error is raised when all fallbacks fail."""
-        chain = FallbackChain("search")
+        chain = ServiceFallbackChain("search")
         chain.add("primary", lambda: (_ for _ in ()).throw(RuntimeError("Primary down")))
         chain.add("secondary", lambda: (_ for _ in ()).throw(RuntimeError("Secondary down")))
 
@@ -50,7 +50,7 @@ class TestFallbackChain:
 
     def test_fallback_chain_with_args(self):
         """Test fallback chain with arguments."""
-        chain = FallbackChain("fetch_user")
+        chain = ServiceFallbackChain("fetch_user")
         chain.add("db", lambda uid: {"id": uid, "cached": False})
         chain.add("cache", lambda uid: {"id": uid, "cached": True})
 
@@ -69,7 +69,7 @@ class TestFallbackChain:
             calls.append("secondary")
             return "secondary_result"
 
-        chain = FallbackChain("fetch")
+        chain = ServiceFallbackChain("fetch")
         chain.add("primary", primary)
         chain.add("secondary", secondary)
 
@@ -79,7 +79,7 @@ class TestFallbackChain:
 
     def test_fallback_chain_statistics(self):
         """Test fallback chain statistics."""
-        chain = FallbackChain("fetch")
+        chain = ServiceFallbackChain("fetch")
         chain.add("primary", lambda: (_ for _ in ()).throw(RuntimeError()))
         chain.add("secondary", lambda: "result")
 
@@ -99,7 +99,7 @@ class TestFallbackChain:
             await asyncio.sleep(0.01)
             return "async_result"
 
-        chain = FallbackChain("async_fetch")
+        chain = ServiceFallbackChain("async_fetch")
         chain.add("primary", primary, is_async=True)
         chain.add("secondary", secondary, is_async=True)
 
@@ -117,7 +117,7 @@ class TestFallbackChain:
             await asyncio.sleep(0.01)
             return "async_result"
 
-        chain = FallbackChain("mixed")
+        chain = ServiceFallbackChain("mixed")
         chain.add("primary", lambda: (_ for _ in ()).throw(RuntimeError()))
         chain.add("secondary", sync_fallback)
         chain.add("tertiary", async_fallback, is_async=True)

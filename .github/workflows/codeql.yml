@@ -24,9 +24,7 @@
 # Default setup vs. this workflow (owner decision, #16283): default setup is
 # OFF, reporting `not-configured` from the code-scanning API. This workflow is
 # the only source of python, javascript-typescript and actions analyses now.
-# Advanced-setup uploads have landed for all three languages on Dev_new_gui
-# and on PR refs; main hasn't been pushed to since the switch, so it will
-# pick up uploads on its next push.
+# Advanced-setup uploads run for all three languages on main and on PR refs.
 
 name: CodeQL Analysis
 
@@ -34,6 +32,10 @@ on:
   push:
     branches: [release, main]
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [release, main]
     paths:
       # python
@@ -83,6 +85,11 @@ permissions:
 
 jobs:
   changes:
+    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and
+    # every `always()` aggregate below reads `needs.changes.result`.
+    # Gating it makes those read `skipped` and exit 1, so a REQUIRED
+    # context would report FAILED on every draft -- worse than no gate.
+    # Gate the expensive jobs, never the cheap thing others read.
     name: Detect changed languages
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -128,7 +135,7 @@ jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
     needs: changes
-    if: needs.changes.outputs.languages != '[]'
+    if: ${{ (needs.changes.outputs.languages != '[]') && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -145,13 +152,13 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@1c5b675653bb5c22dbe9b12b556ec555138e09fd  # v4.38.1
+        uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee  # v4.39.0
         with:
           languages: ${{ matrix.language }}
           config-file: ./.github/codeql/codeql-config.yml
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@1c5b675653bb5c22dbe9b12b556ec555138e09fd  # v4.38.1
+        uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee  # v4.39.0
         with:
           category: "/language:${{ matrix.language }}"
           upload: ${{ inputs.upload || 'always' }}

@@ -59,6 +59,7 @@ from ..services.project_disposal import dispose
 from ..services.sprint_autoclose import SprintAutoCloseService
 from ..services.sprint_planning import SprintNotFound, SprintPlanningService
 from ..services.timeline import compute_critical_path, duration_days
+from ._common import actor_id
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["llc-sprints"])
@@ -235,7 +236,7 @@ class SprintResponse(BaseModel):
 
 class SprintCloseRequest(BaseModel):
     approval_id: uuid.UUID
-    decided_by: uuid.UUID
+    decided_by: Optional[uuid.UUID] = None  # deprecated and ignored: the decider is the authenticated caller
 
 
 # ------------------------------------------------------------------ Portfolio routes
@@ -322,9 +323,9 @@ async def _project_source_summary(code_source_id: Optional[str]) -> Optional[Cod
     """Resolve a CodeSource to a summary DTO; returns None when id is absent or source missing."""
     if not code_source_id:
         return None
-    from api.codebase_analytics.source_storage import get_source  # noqa: PLC0415 — lazy to avoid heavy __init__
+    from api.codebase_analytics.source_storage import get_source_or_none_if_unreadable  # noqa: PLC0415
 
-    src = await get_source(code_source_id)
+    src = await get_source_or_none_if_unreadable(code_source_id)
     if not src:
         return None
     return CodeSourceSummary(
@@ -921,16 +922,14 @@ async def close_sprint(
     sprint_id: uuid.UUID,
     body: SprintCloseRequest,
     session: AsyncSession = Depends(get_session),
-    _current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> LLCSprint:
-    """Manual sprint close trigger — board only, requires an APPROVED approval.
+    """Close a sprint whose SPRINT_CLOSE approval is APPROVED but not yet applied.
 
-    Flow:
-      1. Caller must first request a SPRINT_CLOSE approval via ApprovalService
-         (or let the scheduler do it automatically).
-      2. Board approves the approval record.
-      3. This endpoint is called with the approval_id to execute the close.
+    Deciding the approval closes the sprint itself (#8214), so after a decision this answers 400
+    (the sprint no longer has that approval pending). It remains for an approval granted before
+    deciding applied the close.
     """
     # IDOR guard (#10148): verify the sprint belongs to the caller's org before closing.
     _sprint_check = (await session.execute(select(LLCSprint).where(LLCSprint.id == sprint_id))).scalar_one_or_none()
@@ -938,12 +937,10 @@ async def close_sprint(
         raise HTTPException(status_code=404, detail="Sprint not found")
     try:
         sprint = await _autoclose_svc.execute_close(
-            session,
-            sprint_id=sprint_id,
-            approval_id=body.approval_id,
-            decided_by=body.decided_by,
+            session, sprint_id=sprint_id, approval_id=body.approval_id, decided_by=actor_id(current_user)
         )
         await session.commit()
+        _autoclose_svc.schedule_closed_sprint_summary(sprint_id)  # after the commit, off the request (#8214)
         await session.refresh(sprint)
         return sprint
     except (ApprovalNotFoundError, ApprovalStateError) as exc:

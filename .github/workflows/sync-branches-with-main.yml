@@ -1,0 +1,149 @@
+# Keep every branch 0 behind main, at zero CI cost (#19548)
+#
+# ONE mechanism. On every push to main, a periodic catch-up and on demand, this
+# merges origin/main into EVERY open same-repo PR branch into main (drafts too).
+# A branch with no open PR is left alone (maintainer decision on #20261, reversing
+# #19548's "all branches" for those): merging into one whose PR had closed made it
+# look ahead of main forever with nothing of its own. It replaces two
+# workflows: auto-update-pr-branches.yml (#14022, one `update-branch` per main
+# push, which could not keep ~48 PRs current) and
+# auto-merge-base-into-parked-branches.yml (#15306, PR-less branches every 6h).
+# The logic is pipeline-scripts/branch_sync.py; every decision it makes is a pure
+# function in branch_sync_core.py, pinned in repo_tests/branch_sync_19548_test.py.
+#
+# TWO TOKENS, EACH FOR ONE JOB, NO FALLBACK (owner decision on #19548, 2026-10-26).
+# - git push: AUTOBOT_PUSH_TOKEN ONLY. A GITHUB_TOKEN push is refused by GitHub
+#   when its commits change .github/workflows/*, which left every branch behind a
+#   workflow change on main stuck until its author's next push. The job FAILS at
+#   its first step when the secret is missing or empty; there is no
+#   `AUTOBOT_PUSH_TOKEN || GITHUB_TOKEN` fallback (forbidden by #19542). The PAT
+#   reaches each `git push` only, as a `-c http.https://github.com/.extraheader`
+#   on that one command's argv: it is never written to .git/config, never a
+#   remote URL, and the script removes it from its own environment before the
+#   first git call, so no other git command inherits it. Fetches carry no
+#   credential (the checkout persists none). The raw token and its base64 header
+#   form are both `::add-mask::`ed before the script starts.
+# - REST (list PRs, labels, comments): GITHUB_TOKEN, scoped by `permissions:`
+#   below to this repository and this run. The PAT is wider than these calls need.
+#
+# ZERO CI PER SYNC: a PAT push WOULD start workflow runs, so every sync merge is
+# `--no-ff` (a branch with no commits of its own would otherwise fast-forward to
+# main's head and push a commit without the marker) and its message ends with
+# ` [skip ci]` (branch_sync_core.merge_message). GitHub skips `push` and
+# `pull_request` workflows for such a head commit. A branch already 0 behind is
+# skipped as "already up to date": no merge, no push.
+#
+# WHAT A `[skip ci]` HEAD MEANS FOR A PR. Its required checks are not run, so they
+# stay "expected" (pending), never green or red, until a new head commit runs them.
+# - A merge train runs full CI on its OWN merge commit, so a synced PR that lands
+#   through a train needs nothing more. The train branch itself (`train-*`) is never
+#   synced: a `[skip ci]` head would supersede the train's own run and leave it with
+#   no suite, so the train's builder merges main into it with CI (#19724).
+# - A PR merged on its own (not through a train) needs a fresh author push to its
+#   branch, or a re-run of its checks, before the required checks can report.
+# #14022's one-per-push serialization and #12823's `approve-refreshed-runs` job
+# stay gone: there is no run to reset mid-flight and none to approve.
+#
+# WORKFLOW-FILE MERGES ARE PUSHED. The script still diffs the branch head against
+# the merge result and names any .github/workflows/* path in the run log. Only a
+# push GitHub actually REFUSES (the token lacks the `workflow` scope) gets the
+# `sync-needs-workflow-token` label and one comment; a PR-less branch is named in
+# the run summary. A later successful sync clears the label.
+#
+# MERGE, NEVER REBASE, NEVER FORCE (#15306). These branches are checked out in
+# live sessions' worktrees; rewriting history orphans their HEADs. A plain push
+# that fails because the branch moved is "head-moved": skipped, retried next run.
+# A conflict is aborted and labelled `sync-conflict`, never resolved -- conflicts
+# are information. Labels clear on the first run that finds the branch 0 behind.
+
+name: Sync branches with main
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    # Catch-up for branches skipped as head-moved, and for a missed push event.
+    # Every push to main already runs a full sync, so this only needs to be
+    # frequent enough to bound how long a skipped branch waits.
+    - cron: '41 */3 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Report what would change without pushing, labelling or commenting'
+        type: boolean
+        default: false
+
+# One at a time: two runs would race on the same branches. `cancel-in-progress:
+# false` because a run that is mid-push must finish; cancelling it would leave
+# some branches merged and others not, with no record of which (#15306). A pushed
+# main queues behind the running sync, and the queued run syncs to the newer main.
+concurrency:
+  group: sync-branches-with-main
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  sync:
+    # ubuntu-latest, NOT the singleton self-hosted runner (#13401): this job keeps
+    # branches mergeable, so it must not queue behind the runner contention it
+    # would be needed to recover from. It needs git and REST, nothing local.
+    runs-on: ubuntu-latest
+    # ~48 PRs plus ~100 PR-less branches, one local merge each from a single clone;
+    # the retired parked-branch job used 60 for the PR-less set alone.
+    timeout-minutes: 60
+    # Pushes come from the PAT, so GITHUB_TOKEN needs only to read the clone and to
+    # list PRs, label and comment. Never run from a branch: dispatch can pick a ref.
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      pull-requests: write
+      # Creating the two sync labels the first time goes through the issues API.
+      issues: write
+
+    steps:
+      - name: Require AUTOBOT_PUSH_TOKEN
+        env:
+          PUSH_TOKEN: ${{ secrets.AUTOBOT_PUSH_TOKEN }}
+        run: |
+          if [ -z "${PUSH_TOKEN}" ]; then
+            echo "::error::AUTOBOT_PUSH_TOKEN is not set or empty. The branch sync pushes with it and nothing else (#19548, #19542): there is no GITHUB_TOKEN fallback. An owner adds it under Settings > Secrets and variables > Actions, with the repo and workflow scopes."
+            exit 1
+          fi
+
+      - name: Check out main, full history and every branch
+        uses: actions/checkout@v7
+        with:
+          # The default branch, never a PR's code: the script that runs is main's.
+          ref: main
+          # Every branch and the full graph: the merges are real merges and the
+          # behind-count needs the ancestry. A shallow clone silently reports
+          # wrong behind-counts (#15306).
+          fetch-depth: 0
+          # No credential is persisted; the PAT reaches each `git push` argv only.
+          persist-credentials: false
+
+      - name: Merge main into every branch that is behind
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Read and removed from the environment by the script before any git call;
+          # it reaches `git push` only, as a per-command extraheader (see header).
+          AUTOBOT_PUSH_TOKEN: ${{ secrets.AUTOBOT_PUSH_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          # The shared git runner's per-call timeout (default 30s, sized for probes).
+          # A merge or push on a full clone of this repository needs more.
+          AUTOBOT_GIT_PROBE_TIMEOUT_SECONDS: '600'
+        run: |
+          set -uo pipefail
+          # Mask the token and the base64 header the script builds from it, so
+          # neither can appear in this log even if git echoed its argv.
+          echo "::add-mask::${AUTOBOT_PUSH_TOKEN}"
+          echo "::add-mask::$(printf 'x-access-token:%s' "${AUTOBOT_PUSH_TOKEN}" | base64 -w0)"
+          # The merge commits need an identity; the runner has none (#15306).
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          args=(--base main)
+          if [ "${DRY_RUN:-false}" = "true" ]; then args+=(--dry-run); fi
+          python3 pipeline-scripts/branch_sync.py "${args[@]}"

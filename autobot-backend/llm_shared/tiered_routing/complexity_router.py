@@ -18,7 +18,7 @@ from autobot_shared.ssot_config import config as ssot_config
 from ..models import LLMRequest, LLMResponse
 from ..optimization.model_inspector import inspect_model
 from .complexity_scorer import TaskComplexityScorer
-from .tier_config import ComplexityResult, TierConfig, TierMetrics
+from .tier_config import ComplexityResult, TierConfig, TierMetrics, disabled_route
 
 logger = get_logger(__name__)
 
@@ -46,12 +46,7 @@ class ComplexityRouter:
         expected_output_tokens: int | None = None,
     ) -> Tuple[str, ComplexityResult]:
         if not self.config.enabled:
-            return self.config.models.complex, ComplexityResult(
-                score=0.0,
-                factors={},
-                tier="complex",
-                reasoning="Tiered routing disabled",
-            )
+            return disabled_route(self.config)
 
         result = self.scorer.score(messages)
 

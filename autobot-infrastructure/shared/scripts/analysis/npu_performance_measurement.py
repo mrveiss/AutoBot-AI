@@ -22,14 +22,21 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-# Add AutoBot to path
-sys.path.append(str(Path(__file__).parent.parent.parent))
+# A backend tool (#18288): it deliberately drives backend internals. It puts the backend and the
+# repository root (for `autobot_shared`) on its own path, so it runs from any directory with no
+# PYTHONPATH; the backend's Python dependencies must be installed.
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 
 from ai_hardware_accelerator import HardwareDevice
 from constants.network_constants import NetworkConstants
 from npu_semantic_search import get_npu_search_engine
+
 # #14518: there is no `utils.logging_manager` on this script's path or
 # anywhere in the repo; the canonical logger factory is the shared one.
+from autobot_shared.embedding_model import raise_if_embedding_refused
 from autobot_shared.logging_manager import get_llm_logger
 
 logger = get_llm_logger("npu_performance_measurement")
@@ -190,12 +197,12 @@ class NPUPerformanceMeasurement:
 
             for _i in range(5):
                 start_time = time.time()
-                chunker._compute_sentence_embeddings([test_text])
+                chunker.embed_sentences_sync([test_text])
                 elapsed = (time.time() - start_time) * 1000
                 cpu_results["single_text_times"].append(elapsed)
 
             cpu_results["batch_times"] = self._run_batch_embedding_test(
-                chunker._compute_sentence_embeddings,
+                chunker.embed_sentences_sync,
                 [1, 5, 10, 25, 50],
             )
 
@@ -221,20 +228,20 @@ class NPUPerformanceMeasurement:
             from utils.semantic_chunker import get_semantic_chunker
 
             chunker = get_semantic_chunker()
-            await chunker._initialize_model()
+            await chunker.load_embedding_model()
 
             test_text = "This is a test sentence for GPU embedding performance."
 
             for _i in range(5):
                 start_time = time.time()
-                await chunker._compute_sentence_embeddings_async([test_text])
+                await chunker.embed_sentences([test_text])
                 elapsed = (time.time() - start_time) * 1000
                 gpu_results["single_text_times"].append(elapsed)
 
             for batch_size in [1, 5, 10, 25, 50, 100]:
                 batch_texts = [f"Test sentence number {i} for GPU batch processing." for i in range(batch_size)]
                 start_time = time.time()
-                await chunker._compute_sentence_embeddings_async(batch_texts)
+                await chunker.embed_sentences(batch_texts)
                 elapsed = (time.time() - start_time) * 1000
                 gpu_results["batch_times"][str(batch_size)] = {
                     "total_time_ms": elapsed,
@@ -593,6 +600,7 @@ class NPUPerformanceMeasurement:
                     enable_npu_acceleration=config["enable_npu"],
                     force_device=force_device,
                 )
+                raise_if_embedding_refused(metrics)
                 elapsed = (time.time() - start_time) * 1000
 
                 config_results.append(

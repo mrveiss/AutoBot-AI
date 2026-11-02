@@ -23,18 +23,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 from api._code_source_paths import _confined_repo_path, _similar_path_parent
+from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
+from autobot_shared.security.upload_filename_policy import TARBALL_EXTENSIONS, is_safe_file
 from autobot_shared.time_utils import utc_timestamp
-from models.database import (
-    CodeSource,
-    CodeStatus,
-    Node,
-    NodeCodeVersion,
-    NodeRole,
-    RoleStatus,
-    Setting,
-)
+from models.database import CodeStatus, Node, NodeCodeSource, NodeCodeVersion, NodeRole, RoleStatus, Setting
 from services.auth import get_current_user
 from services.database import get_db
+from services.ssh_utils import ssh_destination_args
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/code-source", tags=["code-source"])
@@ -60,7 +55,7 @@ class CodeSourceAssign(BaseModel):
     """Assign code-source to a node."""
 
     node_id: str
-    repo_path: str = "/opt/autobot"
+    repo_path: str = FLEET_INSTALL_ROOT
     branch: str = "main"
 
 
@@ -91,7 +86,7 @@ async def get_active_code_source(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> CodeSourceResponse | None:
     """Get the active code source configuration."""
-    result = await db.execute(select(CodeSource).where(CodeSource.is_active.is_(True)))
+    result = await db.execute(select(NodeCodeSource).where(NodeCodeSource.is_active.is_(True)))
     source = result.scalar_one_or_none()
 
     if not source:
@@ -113,18 +108,18 @@ async def get_active_code_source(
     )
 
 
-async def _upsert_code_source(db: AsyncSession, data: CodeSourceAssign) -> CodeSource:
+async def _upsert_code_source(db: AsyncSession, data: CodeSourceAssign) -> NodeCodeSource:
     """Deactivate existing sources and create/update the target source.
 
     Helper for assign_code_source (#829).
     """
     # Deactivate any existing code-source
-    existing_result = await db.execute(select(CodeSource).where(CodeSource.is_active.is_(True)))
+    existing_result = await db.execute(select(NodeCodeSource).where(NodeCodeSource.is_active.is_(True)))
     for existing in existing_result.scalars().all():
         existing.is_active = False
 
     # Check if this node already has a code-source record
-    source_result = await db.execute(select(CodeSource).where(CodeSource.node_id == data.node_id))
+    source_result = await db.execute(select(NodeCodeSource).where(NodeCodeSource.node_id == data.node_id))
     source = source_result.scalar_one_or_none()
 
     if source:
@@ -132,7 +127,7 @@ async def _upsert_code_source(db: AsyncSession, data: CodeSourceAssign) -> CodeS
         source.repo_path = data.repo_path
         source.branch = data.branch
     else:
-        source = CodeSource(
+        source = NodeCodeSource(
             node_id=data.node_id,
             repo_path=data.repo_path,
             branch=data.branch,
@@ -177,6 +172,12 @@ def _is_local_node(node: Node) -> bool:
     return is_local_ip(node.ip_address)
 
 
+def _node_ssh_cmd(node: Node, remote_cmd: str) -> list:
+    """The ssh argv for one remote command on *node*; the destination is validated (#18366)."""
+    opts = ["-o", "ConnectTimeout=10", "-o", "StrictHostKeyChecking=accept-new"]
+    return ["ssh", *opts, *ssh_destination_args(node.ssh_user, node.ip_address), remote_cmd]
+
+
 async def _find_similar_paths(node: Node, target_path: str) -> str | None:
     """Find paths similar to target (case-insensitive match).
 
@@ -197,15 +198,7 @@ async def _find_similar_paths(node: Node, target_path: str) -> str | None:
             logger.debug("Failed to search for similar paths locally: %s", e)
         return None
 
-    ssh_cmd = [
-        "ssh",
-        "-o",
-        "ConnectTimeout=10",
-        "-o",
-        "StrictHostKeyChecking=accept-new",
-        f"{node.ssh_user}@{node.ip_address}",
-        f"test -d {parent_dir} && ls -1 {parent_dir} 2>/dev/null || true",
-    ]
+    ssh_cmd = _node_ssh_cmd(node, f"test -d {parent_dir} && ls -1 {parent_dir} 2>/dev/null || true")
 
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -246,15 +239,7 @@ async def _validate_repo_path(node: Node, repo_path: str) -> None:
         error_detail = f"Repository path does not exist on source node: {repo_path}"
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_detail)
 
-    ssh_cmd = [
-        "ssh",
-        "-o",
-        "ConnectTimeout=10",
-        "-o",
-        "StrictHostKeyChecking=accept-new",
-        f"{node.ssh_user}@{node.ip_address}",
-        f"test -d {repo_path} && echo exists",
-    ]
+    ssh_cmd = _node_ssh_cmd(node, f"test -d {repo_path} && echo exists")
 
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -330,7 +315,7 @@ async def remove_code_source(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> dict:
     """Remove the active code-source assignment."""
-    result = await db.execute(select(CodeSource).where(CodeSource.is_active.is_(True)))
+    result = await db.execute(select(NodeCodeSource).where(NodeCodeSource.is_active.is_(True)))
     source = result.scalar_one_or_none()
 
     if not source:
@@ -504,9 +489,9 @@ async def notify_new_commit(
     """
     # Verify this is from an active code-source
     source_result = await db.execute(
-        select(CodeSource).where(
-            CodeSource.node_id == notification.node_id,
-            CodeSource.is_active.is_(True),
+        select(NodeCodeSource).where(
+            NodeCodeSource.node_id == notification.node_id,
+            NodeCodeSource.is_active.is_(True),
         )
     )
     source = source_result.scalar_one_or_none()
@@ -558,7 +543,7 @@ async def notify_new_commit(
 # Phase 5 (#926): per-role version tracking + air-gapped upload
 # =============================================================================
 
-_CACHE_BASE = os.environ.get("AUTOBOT_CODE_CACHE_DIR", "/opt/autobot/cache")
+_CACHE_BASE = os.environ.get("AUTOBOT_CODE_CACHE_DIR", f"{FLEET_INSTALL_ROOT}/cache")
 
 
 class NodeCodeVersionResponse(BaseModel):
@@ -692,11 +677,8 @@ async def upload_package(
     Issue #1088: Refactored with _extract_package_to_cache and
     _mark_role_nodes_outdated helpers.
     """
-    if not package.filename or not package.filename.endswith((".tar.gz", ".tgz")):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Package must be a .tar.gz or .tgz file",
-        )
+    if not is_safe_file(package.filename or "", TARBALL_EXTENSIONS):  # #19088
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Package must be a .tar.gz or .tgz file")
 
     data = await package.read()
     cache_path = await _extract_package_to_cache(data, role_name, commit_hash)

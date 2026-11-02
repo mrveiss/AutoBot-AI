@@ -7,11 +7,12 @@
 from typing import Protocol
 
 from autobot_shared.logging_manager import get_logger
+from services.mesh_brain.neighbor_store import decode_neighbors
 
 logger = get_logger(__name__)
 
 
-class MeshDB(Protocol):
+class EdgeFeed(Protocol):
     """Protocol for mesh database operations."""
 
     async def fetch_edges(self, min_weight: float) -> list[dict]: ...
@@ -20,7 +21,7 @@ class MeshDB(Protocol):
 class MeshEdgeSync:
     """Syncs high-weight edges from PostgreSQL to Redis sorted sets."""
 
-    def __init__(self, db: MeshDB, redis, min_weight: float = 0.5) -> None:
+    def __init__(self, db: EdgeFeed, redis, min_weight: float = 0.5) -> None:
         self.db = db
         self.redis = redis
         self.min_weight = min_weight
@@ -75,10 +76,10 @@ class MeshEdgeSync:
         node_id: str,
         min_weight: float = 0.0,
         limit: int = 20,
-    ):
-        """Get neighbors from Redis sorted set (fast path)."""
+    ) -> list[tuple[str, float]]:
+        """Get neighbors from Redis sorted set (fast path); ``NeighborStore`` contract plus ``limit``."""
         key = f"mesh:edges:{node_id}"
-        return await self.redis.zrangebyscore(
+        raw = await self.redis.zrangebyscore(
             key,
             min=min_weight,
             max="+inf",
@@ -86,3 +87,4 @@ class MeshEdgeSync:
             num=limit,
             withscores=True,
         )
+        return decode_neighbors(raw)

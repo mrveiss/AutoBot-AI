@@ -19,11 +19,11 @@ import uuid
 from datetime import datetime, timezone
 from typing import Dict, List
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
+from api.batch_dispatch import dispatch_batch
 from api.schemas_workflows import (
     APIBatchRequest,
-    APIBatchResponse,
     BatchChatInitResponse,
     BatchJob,
     BatchJobCreate,
@@ -207,6 +207,78 @@ async def list_batch_jobs(
     return BatchJobList(jobs=jobs, total_count=total_count, status_counts=status_counts)
 
 
+@router.get("/status", response_model=BatchStatusResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_batch_status",
+    error_code_prefix="BATCH_JOBS",
+)
+async def get_batch_status(current_user: dict = Depends(get_current_user)):
+    """Get batch processing service status (authenticated: its shadowing removal must not open it, #18720)."""
+    return {
+        "status": "healthy",
+        "service": "batch_processor",
+        "capabilities": ["batch_load", "chat_init"],
+        "max_batch_size": 10,
+        "timeout": 30,
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+    }
+
+
+@router.get("/chat-init", response_model=BatchChatInitResponse)
+@router.post("/chat-init", response_model=BatchChatInitResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="batch_chat_initialization",
+    error_code_prefix="BATCH_JOBS",
+)
+async def batch_chat_initialization(request: Request, current_user: dict = Depends(get_current_user)):
+    """
+    Optimized endpoint for chat interface initialization.
+    Returns all data needed to start the chat in one request.
+    Supports both GET and POST methods.
+
+    ``request`` lets the helpers below reach live app state (#13558); it adds
+    no field to the request or response schema.
+    """
+    import time
+
+    start_time = time.time()
+    logger.info("Starting batch chat initialization...")
+
+    try:
+        results = await asyncio.gather(
+            get_chat_sessions(request.app),
+            get_system_health(),
+            get_service_health_legacy(),
+            get_settings(request.app),
+            return_exceptions=True,
+        )
+
+        chat_sessions = results[0] if not isinstance(results[0], Exception) else {"sessions": []}
+        system_health = results[1] if not isinstance(results[1], Exception) else {"status": "unknown"}
+        service_health = results[2] if not isinstance(results[2], Exception) else {"status": "unknown"}
+        settings = results[3] if not isinstance(results[3], Exception) else {}
+
+        response = {
+            "chat_sessions": chat_sessions,
+            "system_health": system_health,
+            "service_health": service_health,
+            "settings": settings,
+            "timing": {"total_ms": (time.time() - start_time) * 1000},
+        }
+
+        logger.info(
+            "Batch chat init completed in %.2fms",
+            (time.time() - start_time) * 1000,
+        )
+        return response
+
+    except Exception as e:
+        logger.error("Batch chat initialization failed: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @router.get("/{job_id}", response_model=BatchJob)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -328,8 +400,9 @@ async def run_batch_job_now(
 
     # Issue #12439: local import — tasks.batch_job_tasks pulls in the full
     # tasks/__init__.py registration chain; deferring it to call-time keeps
-    # this module's own import surface light (matches the existing
-    # fast_app_factory_fix local-import pattern used elsewhere in this file).
+    # this module's own import surface light. The precedent this comment cited
+    # until #13558 -- a "local-import pattern used elsewhere in this file" --
+    # was three imports of a module deleted in #567: the same break repeated.
     from tasks.batch_job_tasks import run_batch_job
 
     run_batch_job.delay(job_id)
@@ -731,15 +804,6 @@ async def probe_batch_jobs(request) -> ComponentHealth:
 # =============================================================================
 
 
-def _find_route_handler(app, endpoint: str, method: str):
-    """Find matching route handler for given endpoint and method"""
-    for route in app.routes:
-        if hasattr(route, "path") and route.path == endpoint:
-            if method in route.methods:
-                return route.endpoint
-    return None
-
-
 def _process_session_file(filename: str, chats_directory: str):
     """Process a single session file and return session metadata"""
     if not (filename.startswith("chat_") and filename.endswith(".json")):
@@ -762,133 +826,23 @@ def _process_session_file(filename: str, chats_directory: str):
         return None
 
 
-@router.get("/status", response_model=BatchStatusResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_batch_status",
-    error_code_prefix="BATCH_JOBS",
-)
-async def get_batch_status():
-    """Get batch processing service status"""
-    return {
-        "status": "healthy",
-        "service": "batch_processor",
-        "capabilities": ["batch_load", "chat_init"],
-        "max_batch_size": 10,
-        "timeout": 30,
-        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-    }
-
-
 @router.post("/load", response_model=BatchLoadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="batch_load",
     error_code_prefix="BATCH_JOBS",
 )
-async def batch_load(batch_request: APIBatchRequest):
-    """Execute multiple API calls in parallel and return combined results."""
-    import time
+async def batch_load(batch_request: APIBatchRequest, request: Request, current_user: dict = Depends(get_current_user)):
+    """Run several allow-listed GETs in one call, each dispatched through the ASGI app (#18765).
 
-    from fast_app_factory_fix import app
-
-    responses = {}
-    errors = {}
-    timing = {}
-
-    async def execute_request(req: Dict):
-        endpoint = req.get("endpoint", "")
-        method = req.get("method", "GET").upper()
-        params = req.get("params", {})
-
-        start_time = time.time()
-
-        try:
-            route_handler = _find_route_handler(app, endpoint, method)
-
-            if route_handler:
-                if method == "GET":
-                    response = await route_handler(**params)
-                else:
-                    response = await route_handler(params)
-
-                responses[endpoint] = response
-                timing[endpoint] = time.time() - start_time
-                return
-
-            errors[endpoint] = f"Endpoint {endpoint} not found"
-            timing[endpoint] = time.time() - start_time
-
-        except Exception as e:
-            logger.error(
-                "Error in batch request for %s: %s",
-                endpoint,
-                e,
-            )
-            errors[endpoint] = str(e)
-            timing[endpoint] = time.time() - start_time
-
-    tasks = [execute_request(req) for req in batch_request.requests]
-    await asyncio.gather(*tasks, return_exceptions=True)
-
-    return APIBatchResponse(responses=responses, errors=errors, timing=timing)
-
-
-@router.get("/chat-init", response_model=BatchChatInitResponse)
-@router.post("/chat-init", response_model=BatchChatInitResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="batch_chat_initialization",
-    error_code_prefix="BATCH_JOBS",
-)
-async def batch_chat_initialization():
+    Every sub-request carries the caller's own credentials, so the target route's dependencies
+    (including admin gates) run and its own status lands in its result slot.
     """
-    Optimized endpoint for chat interface initialization.
-    Returns all data needed to start the chat in one request.
-    Supports both GET and POST methods.
-    """
-    import time
-
-    start_time = time.time()
-    logger.info("Starting batch chat initialization...")
-
-    try:
-        results = await asyncio.gather(
-            get_chat_sessions(),
-            get_system_health(),
-            get_service_health_legacy(),
-            get_settings(),
-            return_exceptions=True,
-        )
-
-        chat_sessions = results[0] if not isinstance(results[0], Exception) else {"sessions": []}
-        system_health = results[1] if not isinstance(results[1], Exception) else {"status": "unknown"}
-        service_health = results[2] if not isinstance(results[2], Exception) else {"status": "unknown"}
-        settings = results[3] if not isinstance(results[3], Exception) else {}
-
-        response = {
-            "chat_sessions": chat_sessions,
-            "system_health": system_health,
-            "service_health": service_health,
-            "settings": settings,
-            "timing": {"total_ms": (time.time() - start_time) * 1000},
-        }
-
-        logger.info(
-            "Batch chat init completed in %.2fms",
-            (time.time() - start_time) * 1000,
-        )
-        return response
-
-    except Exception as e:
-        logger.error("Batch chat initialization failed: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
+    return BatchLoadResponse(results=await dispatch_batch(request, batch_request.requests))
 
 
-async def get_chat_sessions():
-    """Get chat sessions list using async file operations"""
-    from fast_app_factory_fix import app
-
+async def get_chat_sessions(app):
+    """Get chat sessions list; `app` is passed in, not imported (#13558)."""
     if hasattr(app.state, "chat_history_manager") and app.state.chat_history_manager:
         try:
             sessions = await asyncio.to_thread(
@@ -945,11 +899,9 @@ async def get_service_health_legacy():
     }
 
 
-async def get_settings():
-    """Get user settings"""
+async def get_settings(app):
+    """Get user settings; `app` is passed in, not imported (#13558)."""
     try:
-        from fast_app_factory_fix import app
-
         if hasattr(app.state, "settings"):
             return app.state.settings
 

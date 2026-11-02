@@ -102,6 +102,7 @@ import {
   useServiceMessages,
   type ServiceMessageEntry
 } from '@/composables/useServiceMessages'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const { t } = useI18n()
 const {
@@ -144,9 +145,7 @@ function togglePolling() {
 
 function loadChain(id: string) { fetchChain(id) }
 
-function formatTime(iso: string): string {
-  try { return new Date(iso).toLocaleTimeString() } catch { return iso }
-}
+const formatTime = createDateFormatter({ kind: 'time' })
 
 function formatFull(iso: string): string {
   try { return new Date(iso).toLocaleString() } catch { return iso }
@@ -179,7 +178,7 @@ onMounted(() => refresh())
 .smt-dot.t-notification { background:var(--timeline-notification); }
 .smt-info { flex:1; min-width:0; }
 .smt-route { display:flex; align-items:center; gap:var(--spacing-1); font-size: var(--text-sm); font-weight:500; color:var(--text-primary); }
-.smt-route i { font-size: var(--text-xs); color:var(--text-secondary); }
+.smt-route .icon { width: var(--text-xs); height: var(--text-xs); color:var(--text-secondary); }
 .smt-meta { font-size: var(--text-xs); color:var(--text-muted); margin-top:var(--spacing-0-5); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .smt-badge { font-size: var(--text-xs); padding:var(--spacing-px) var(--spacing-1-5); border-radius: var(--radius-default); font-weight:500; margin-left:auto; }
 .smt-badge.t-task { background:rgba(74,144,217,.2); color:var(--timeline-task); } .smt-badge.t-result { background:rgba(76,175,80,.2); color:var(--timeline-result); }

@@ -169,7 +169,7 @@ These conflicts drive the default fleet layout:
 | **Node.js** | — |
 | **System packages** | `build-essential libssl-dev ffmpeg libsndfile1 libsndfile1-dev portaudio19-dev tesseract-ocr libtesseract-dev nginx` |
 | **External deps** | Redis :6379, PostgreSQL :5432, Ollama :11434, ChromaDB :8000 |
-| **Ansible playbook** | `deploy-backend.yml` |
+| **Ansible playbook** | `playbooks/deploy_role.yml` |
 | **Source path** | `autobot-backend/` |
 | **Post-sync** | `pip install -r requirements.txt && alembic upgrade head` |
 | **Key Python packages** | FastAPI, Uvicorn, Celery, SQLAlchemy, Alembic, OpenAI, Anthropic, ChromaDB client, sentence-transformers, torch, LangChain 0.3.x, LlamaIndex 0.10.x |
@@ -191,7 +191,7 @@ These conflicts drive the default fleet layout:
 | **Node.js** | — |
 | **System packages** | — (shared with `backend`) |
 | **External deps** | Redis :6379 (broker + result backend), PostgreSQL :5432 |
-| **Ansible playbook** | `deploy-backend.yml` (deployed alongside backend) |
+| **Ansible playbook** | `playbooks/deploy_role.yml` (deployed alongside backend) |
 | **Source path** | `autobot-backend/` (same source as backend) |
 | **Redis databases** | broker: db 1, result backend: db 2 |
 | **Notes** | Shares venv with `backend`. Can be separated to dedicated worker node if `.20` becomes overloaded. |
@@ -213,7 +213,7 @@ These conflicts drive the default fleet layout:
 | **Node.js** | 20.x |
 | **System packages** | `nodejs nginx build-essential curl gnupg ca-certificates` |
 | **External deps** | Backend API :8443 |
-| **Ansible playbook** | `deploy-frontend.yml` |
+| **Ansible playbook** | `playbooks/deploy_role.yml` |
 | **Source path** | `autobot-frontend/` |
 | **Build command** | `npm install && npm run build` |
 | **Notes** | dist/ may be root-owned after Ansible deploy — fix: `sudo chown -R autobot:autobot /opt/autobot/autobot-frontend/`. Never `npm run dev` on production nodes. |
@@ -237,7 +237,7 @@ These conflicts drive the default fleet layout:
 | **Ansible playbook** | `setup-npu-worker.yml` |
 | **Source path** | `autobot-npu-worker/` |
 | **Post-sync** | `pip install -r requirements.txt` |
-| **Key Python packages** | FastAPI, Uvicorn, openvino>=2026.4.0, numpy, pillow, transformers, optimum[openvino] |
+| **Key Python packages** | FastAPI, Uvicorn, openvino>=2026.4.1, numpy, pillow, transformers, optimum[openvino] |
 | **Special hardware** | Intel NPU device (optional, falls back to CPU) |
 | **Degraded without** | GPU inference offloading — backend falls back to local Ollama |
 
@@ -352,7 +352,7 @@ These conflicts drive the default fleet layout:
 | **External deps** | — |
 | **Ansible playbook** | `playbooks/deploy_role.yml` |
 | **Source path** | — (binary install from ollama.ai) |
-| **CPU models** | nomic-embed-text, llama3.2:1b, llama3.2:latest, gemma2:2b |
+| **CPU models** | nomic-embed-text, llama3.2:1b, gemma2:2b |
 | **Concurrency** | max_loaded=2, num_parallel=2, keep_alive=5m |
 | **Degraded without** | Local CPU inference — system falls back to cloud providers (OpenAI, Anthropic, Mistral) |
 | **Notes** | Cloud providers (OpenAI, Anthropic, Mistral) are alternative LLM backends — local LLM nodes are optional if cloud is configured. |
@@ -405,9 +405,9 @@ These conflicts drive the default fleet layout:
 | **TLS** | Configurable via `AUTOBOT_REDIS_TLS_ENABLED` |
 | **Redis database IDs** | 0=main+RediSearch, 1=metrics, 2=prompts, 3=agents, 4=cache, 6=sessions, 8=chat_history, 15=testing |
 | **Celery databases** | broker=db1, result_backend=db2 (from `celery_app.py`) |
-| **PostgreSQL databases** | `autobot` (backend user management — only when `AUTOBOT_DEPLOYMENT_MODE != single_user`) |
+| **PostgreSQL databases** | `autobot` (backend user management — always, in every `AUTOBOT_USER_MODE`; #10636) |
 | **PostgreSQL credentials** | `/etc/autobot/db-credentials.env` (prefix: `AUTOBOT_DB_`) |
-| **Notes** | Always use `from autobot_shared.redis_client import get_redis_client` — never direct connection. PostgreSQL co-hosted here for backend user management; not needed in `single_user` deployment mode. |
+| **Notes** | Always use `from autobot_shared.redis_client import get_redis_client` — never direct connection. PostgreSQL co-hosted here for backend user management, which every `AUTOBOT_USER_MODE` needs (#10636). |
 
 ---
 
@@ -425,7 +425,7 @@ These conflicts drive the default fleet layout:
 | **Node.js** | — |
 | **System packages** | `python3 python3-venv` |
 | **External deps** | — |
-| **Ansible playbook** | `deploy-shared.yml` |
+| **Ansible playbook** | `playbooks/deploy_role.yml` |
 | **Source path** | `autobot_shared/` |
 | **Post-sync** | `pip install -e .` |
 | **Notes** | Must be deployed before any other Python service. Provides `get_redis_client()`, `ssot_config`, and shared utilities. |
@@ -447,7 +447,7 @@ These conflicts drive the default fleet layout:
 | **Node.js** | — |
 | **System packages** | `python3 python3-venv prometheus-node-exporter` |
 | **External deps** | SLM backend HTTPS (resolved from config, not hardcoded) |
-| **Ansible playbook** | `deploy-slm-agent.yml` |
+| **Ansible playbook** | `playbooks/deploy-slm-agent.yml` |
 | **Source path** | `autobot-slm-backend/slm/agent/` |
 | **Post-sync** | `pip install aiohttp psutil` |
 | **Heartbeat interval** | 30 seconds |
@@ -509,7 +509,7 @@ These conflicts drive the default fleet layout:
 frontend (.21)
   └── backend (.20) :8443
         ├── redis (.23) :6379
-        ├── postgresql (.23) :5432  [user mgmt; only when AUTOBOT_DEPLOYMENT_MODE != single_user]
+        ├── postgresql (.23) :5432  [user mgmt; always (#10636)]
         ├── autobot-llm-gpu :11434
         ├── ai-stack (.24) :8080
         │     ├── chromadb :8000
@@ -610,8 +610,8 @@ Provisioned by: `playbooks/deploy_role.yml` (postgresql role)
 |----------|-------|---------|
 | `autobot` | `autobot` | Backend user management (users, teams, orgs, API keys, audit) |
 
-**Only active when** `AUTOBOT_DEPLOYMENT_MODE != single_user`.
-Set `AUTOBOT_DEPLOYMENT_MODE=single_company` (or higher) to enable.
+**Always active**: every `AUTOBOT_USER_MODE` (`single_company`, `multi_company`, `provider`) is
+PostgreSQL-backed (#10636). `AUTOBOT_DEPLOYMENT_MODE` is the topology setting, not tenancy.
 Schema applied by: `alembic upgrade head` inside the backend venv
 Credentials file: `/etc/autobot/db-credentials.env` (prefix `AUTOBOT_DB_`)
 

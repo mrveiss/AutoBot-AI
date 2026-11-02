@@ -53,6 +53,7 @@ import re
 from pathlib import Path
 
 from repo_tests._paths import repo_root
+from repo_tests._ratchet_base import added_entries, base_table
 
 from tools.lint._scan_helpers import tracked_paths
 
@@ -82,6 +83,11 @@ _SHRINK_GUARD_CEILING = 100
 _EXCLUDED_META_FLOORS = frozenset(
     {
         "repo_tests/guard_reach_meta_test.py",
+        # Where `MIN_GUARDS_EXAMINED` now lives: `guard_reach_meta_test.py` reached the
+        # 600-line ceiling and its census constants moved out (#17818/#17870). The #16147
+        # ruling attaches to the floor, not to the file holding it, so relocating it must not
+        # reopen the decision -- hence the entry rather than a migration.
+        "repo_tests/_guard_reach_census.py",
         "repo_tests/sys_modules_module_scope_restoration_test.py",
         "repo_tests/reach_floor_migration_test.py",
     }
@@ -131,10 +137,7 @@ GRANDFATHERED = frozenset(
     }
 )
 
-#: GRANDFATHERED as last recorded -- a mirrored second copy (same #16147 AC4
-#: shape `guard_reach_meta_test.py` uses). Without this, ADDING an entry to
-#: GRANDFATHERED silences a new unmigrated floor and no test fails.
-_GRANDFATHERED_BASELINE = frozenset(GRANDFATHERED)
+_THIS_FILE = "repo_tests/reach_floor_migration_test.py"
 
 
 def _candidate_floor_names(source: str) -> list[str]:
@@ -238,7 +241,7 @@ def test_no_new_hand_rolled_floor_remains_unmigrated() -> None:
         + "\n  ".join(f"{rel}: {found[rel]}" for rel in new)
         + "\n\nMigrate with declare(...), re-measuring the population with a throwaway script "
         "-- never carry the old constant across (#15928). If an open PR touches the file, add "
-        "it to GRANDFATHERED and _GRANDFATHERED_BASELINE instead, naming the collision."
+        "it to GRANDFATHERED instead, naming the collision."
     )
 
 
@@ -256,26 +259,17 @@ def test_the_grandfathered_list_has_not_gone_stale() -> None:
     )
 
 
-def _grown(current: frozenset[str]) -> list[str]:
-    return sorted(current - _GRANDFATHERED_BASELINE)
-
-
 def test_the_grandfathered_list_never_grows_silently() -> None:
-    """Same #16147 AC4 shape as `guard_reach_meta_test.py`: shrinks only, compared as a SET."""
-    grown = _grown(GRANDFATHERED)
+    """Same #16147 AC4 shape as `guard_reach_meta_test.py`: a SET against the base commit (#19704)."""
+    grown = added_entries(GRANDFATHERED, base_table(repo_root(), (_THIS_FILE,), "GRANDFATHERED"))
     assert not grown, (
-        "GRANDFATHERED gained entries missing from _GRANDFATHERED_BASELINE -- a newly "
-        "un-migrated floor needs migrating, not exempting silently:\n  " + "\n  ".join(grown)
-    )
-    unmirrored = sorted(_GRANDFATHERED_BASELINE - GRANDFATHERED)
-    assert not unmirrored, (
-        "entries removed from GRANDFATHERED but not from _GRANDFATHERED_BASELINE -- mirror the "
-        "shrink, or a migrated floor's exemption can quietly return:\n  " + "\n  ".join(unmirrored)
+        "GRANDFATHERED gained entries against the base commit -- a newly un-migrated floor "
+        "needs migrating, not exempting silently:\n  " + "\n  ".join(grown)
     )
 
 
 def test_the_growth_check_finds_an_added_entry() -> None:
     """Known positive: the check must see an addition before its silence means anything."""
-    assert _grown(GRANDFATHERED | {"repo_tests/planted_unmigrated_floor_test.py"}) == [
+    assert added_entries(GRANDFATHERED | {"repo_tests/planted_unmigrated_floor_test.py"}, GRANDFATHERED) == [
         "repo_tests/planted_unmigrated_floor_test.py"
     ]

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { defineAsyncComponent } from 'vue'
 import TruncationNotice from './TruncationNotice.vue'
+import { useShowMore, BaseButton } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import DependencyTreemap from '@/components/charts/DependencyTreemap.vue'
@@ -84,7 +85,10 @@ interface Props {
   callGraphError: string
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
+
+// #12741: the notice under a capped list is its "show more" control.
+const { visible, shown, showMore } = useShowMore(10, () => props.dependencyData)
 
 const emit = defineEmits<{
   'load-dependency-data': []
@@ -113,7 +117,7 @@ const emit = defineEmits<{
     <div v-else-if="dependencyError" class="charts-error">
       <Icon name="exclamation-triangle" />
       <span>{{ dependencyError }}</span>
-      <button @click="emit('load-dependency-data')" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
+      <BaseButton variant="link" size="sm" @click="emit('load-dependency-data')">{{ $t('analytics.codebase.actions.retry') }}</BaseButton>
     </div>
 
     <div v-else-if="dependencyData" class="dependency-grid">
@@ -172,7 +176,7 @@ const emit = defineEmits<{
         </div>
         <div class="circular-deps-list">
           <div
-            v-for="(cycle, index) in dependencyData.circular_dependencies.slice(0, 10)"
+            v-for="(cycle, index) in visible('circular', dependencyData.circular_dependencies)"
             :key="index"
             class="circular-dep-item"
           >
@@ -180,9 +184,7 @@ const emit = defineEmits<{
             <span>{{ Array.isArray(cycle) ? cycle.join(' ↔ ') : (cycle.modules || []).join(' ↔ ') }}</span>
           </div>
         </div>
-        <div v-if="dependencyData.circular_dependencies.length > 10" class="show-more">
-          <span class="muted">and {{ dependencyData.circular_dependencies.length - 10 }} more...</span>
-        </div>
+        <TruncationNotice :shown="shown('circular', dependencyData.circular_dependencies.length)" :total="dependencyData.circular_dependencies.length" :step="10" @show-more="showMore('circular')" />
       </div>
 
       <!-- Top External Dependencies Table -->
@@ -190,17 +192,16 @@ const emit = defineEmits<{
         <h4><Icon name="cube" /> {{ $t('analytics.codebase.dependencies.topExternal') }}</h4>
         <div class="deps-table-content">
           <div
-            v-for="(dep, index) in dependencyData.external_dependencies.slice(0, 20)"
+            v-for="(dep, index) in visible('external', dependencyData.external_dependencies, 20)"
             :key="index"
             class="dep-row"
           >
             <span class="dep-name">{{ dep.package }}</span>
-            <span class="dep-count">{{ dep.usage_count }} imports</span>
+            <span class="dep-count">{{ $t('analytics.codebase.shared.imports', { count: dep.usage_count }, dep.usage_count ?? 0) }}</span>
           </div>
-          <TruncationNotice
-            :shown="Math.min(20, dependencyData.external_dependencies.length)"
-            :total="dependencyData.external_dependencies.length"
-          />
+          <TruncationNotice :shown="shown('external', dependencyData.external_dependencies.length, 20)" :total="dependencyData.external_dependencies.length" :step="20" @show-more="showMore('external', 20)" />
+          <!-- The server returns the top 50 packages; the summary holds the real count. -->
+          <TruncationNotice v-if="(dependencyData.summary?.external_dependency_count ?? 0) > dependencyData.external_dependencies.length" :shown="dependencyData.external_dependencies.length" :total="dependencyData.summary?.external_dependency_count ?? 0" server-limited />
         </div>
       </div>
     </div>
@@ -211,9 +212,9 @@ const emit = defineEmits<{
       :message="$t('analytics.codebase.dependencies.noData')"
     >
       <template #actions>
-        <button @click="emit('load-dependency-data')" class="btn-primary" :disabled="dependencyLoading">
+        <BaseButton variant="success" @click="emit('load-dependency-data')" :disabled="dependencyLoading">
           <Icon name="project-diagram" /> {{ $t('analytics.codebase.dependencies.analyze') }}
-        </button>
+        </BaseButton>
       </template>
     </EmptyState>
   </div>
@@ -232,7 +233,7 @@ const emit = defineEmits<{
     <div v-if="importTreeError" class="section-error">
       <Icon name="exclamation-triangle" />
       <span>{{ importTreeError }}</span>
-      <button @click="emit('load-import-tree')" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
+      <BaseButton variant="link" size="sm" @click="emit('load-import-tree')">{{ $t('analytics.codebase.actions.retry') }}</BaseButton>
     </div>
 
     <!-- Import Tree Content with Suspense -->
@@ -266,9 +267,9 @@ const emit = defineEmits<{
       variant="info"
     >
       <template #actions>
-        <button @click="emit('load-import-tree')" class="btn-primary" :disabled="importTreeLoading">
+        <BaseButton variant="success" @click="emit('load-import-tree')" :disabled="importTreeLoading">
           <Icon name="sitemap" /> {{ $t('analytics.codebase.importTree.analyze') }}
-        </button>
+        </BaseButton>
       </template>
     </EmptyState>
   </div>
@@ -287,7 +288,7 @@ const emit = defineEmits<{
     <div v-if="callGraphError" class="section-error">
       <Icon name="exclamation-triangle" />
       <span>{{ callGraphError }}</span>
-      <button @click="emit('load-call-graph')" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
+      <BaseButton variant="link" size="sm" @click="emit('load-call-graph')">{{ $t('analytics.codebase.actions.retry') }}</BaseButton>
     </div>
 
     <!-- Call Graph Content with Suspense -->
@@ -323,9 +324,9 @@ const emit = defineEmits<{
       variant="info"
     >
       <template #actions>
-        <button @click="emit('load-call-graph')" class="btn-primary" :disabled="callGraphLoading">
+        <BaseButton variant="success" @click="emit('load-call-graph')" :disabled="callGraphLoading">
           <Icon name="project-diagram" /> {{ $t('analytics.codebase.callGraph.analyze') }}
-        </button>
+        </BaseButton>
       </template>
     </EmptyState>
   </div>
@@ -334,46 +335,6 @@ const emit = defineEmits<{
 <style scoped src="@/design-system/styles/panel-dependencies-charts-shared.css"></style>
 
 <style scoped>
-/* Shared button styles */
-.btn-primary {
-  padding: var(--spacing-2-5) var(--spacing-5);
-  border: none;
-  border-radius: var(--radius-lg);
-  font-weight: var(--font-semibold);
-  cursor: pointer;
-  transition: var(--transition-all);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  background: var(--chart-green);
-  color: var(--text-on-success);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--color-success-dark);
-  transform: translateY(-1px);
-}
-
-.btn-primary:disabled {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  cursor: not-allowed;
-  transform: none;
-}
-
-.btn-link {
-  background: none;
-  border: none;
-  color: var(--chart-blue);
-  cursor: pointer;
-  text-decoration: underline;
-  font-size: 0.9em;
-}
-
-.btn-link:hover {
-  color: var(--color-info-dark);
-}
-
 .refresh-btn {
   background: var(--bg-tertiary);
   border: 1px solid var(--bg-hover);
@@ -438,19 +399,6 @@ const emit = defineEmits<{
   background: rgba(30, 41, 59, 0.5);
   border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
-}
-
-.show-more {
-  text-align: center;
-  padding: var(--spacing-3);
-  background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-  margin-top: var(--spacing-2);
-}
-
-.muted {
-  color: var(--text-tertiary);
-  font-style: italic;
 }
 
 /* Loading Skeleton */

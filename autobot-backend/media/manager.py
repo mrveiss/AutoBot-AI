@@ -12,7 +12,6 @@ from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
-from media.audio.pipeline import AudioPipeline
 from media.core.pipeline import MediaPipeline
 from media.core.types import MediaInput, MediaType, ProcessingResult
 from media.document.pipeline import DocumentPipeline
@@ -35,7 +34,6 @@ class MediaPipelineManager:
         """Initialize all media pipelines."""
         self.pipelines: Dict[str, MediaPipeline] = {
             "image": ImagePipeline(),
-            "audio": AudioPipeline(),
             "video": VideoPipeline(),
             "document": DocumentPipeline(),
             "link": LinkPipeline(),

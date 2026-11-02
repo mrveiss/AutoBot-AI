@@ -68,51 +68,52 @@
       <p>{{ $t('plugins.capabilities.noAuditEntries') }}</p>
     </div>
 
-    <div v-else class="audit-table-container">
-      <table class="audit-table">
-        <thead>
-          <tr>
-            <th>{{ $t('plugins.capabilities.timestamp') }}</th>
-            <th>{{ $t('plugins.capabilities.plugin') }}</th>
-            <th>{{ $t('plugins.capabilities.capability') }}</th>
-            <th>{{ $t('plugins.capabilities.operation') }}</th>
-            <th>{{ $t('plugins.capabilities.status') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="(entry, index) in filteredEntries"
-            :key="index"
-            :class="{ denied: !entry.granted }"
-          >
-            <td class="timestamp">{{ formatTimestamp(entry.timestamp) }}</td>
-            <td class="plugin-name">{{ entry.plugin_name }}</td>
-            <td class="capability">
-              <code>{{ entry.capability }}</code>
-            </td>
-            <td class="operation">{{ entry.operation }}</td>
-            <td class="status">
-              <span :class="['status-badge', entry.granted ? 'granted' : 'denied']">
-                {{ entry.granted ? $t('plugins.capabilities.granted') : $t('plugins.capabilities.denied') }}
-              </span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <div v-else>
+      <BaseTable
+        :columns="auditColumns"
+        :rows="auditRows"
+        :row-variant="auditVariant"
+        size="compact"
+        :aria-label="$t('plugins.capabilities.auditLogTitle')"
+      >
+        <template #cell-granted="{ row }">
+          <BaseBadge size="sm" :variant="row.granted ? 'success' : 'error'">
+            {{ row.granted ? $t('plugins.capabilities.granted') : $t('plugins.capabilities.denied') }}
+          </BaseBadge>
+        </template>
+      </BaseTable>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { usePlugins, type AuditLogEntry } from '@/composables/usePlugins'
+import { useI18n } from 'vue-i18n'
+import { BaseBadge, BaseTable, type BaseTableColumn, type TableRow, type TableRowVariant } from '@autobot/ui'
+import { usePlugins, type PluginAuditEntry } from '@/composables/usePlugins'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const { getAuditLog } = usePlugins()
+const { t } = useI18n()
 
 const loading = ref(false)
 const error = ref<string | null>(null)
-const entries = ref<AuditLogEntry[]>([])
+const entries = ref<PluginAuditEntry[]>([])
 const filterPluginName = ref('')
+
+// #17562: the audit log is the kit table; the status cell is a kit badge.
+const auditColumns = computed<BaseTableColumn[]>(() => [
+  { key: 'when', label: t('plugins.capabilities.timestamp'), monospace: true },
+  { key: 'plugin_name', label: t('plugins.capabilities.plugin') },
+  { key: 'capability', label: t('plugins.capabilities.capability'), monospace: true },
+  { key: 'operation', label: t('plugins.capabilities.operation') },
+  { key: 'granted', label: t('plugins.capabilities.status') },
+])
+const auditRows = computed(() =>
+  filteredEntries.value.map((entry, index) => ({ ...entry, id: index, when: formatTimestamp(entry.timestamp) })),
+)
+// #19640: a denied row is what an audit reader scans for.
+const auditVariant = (row: TableRow): TableRowVariant | undefined => (row.granted ? undefined : 'error')
 
 const filteredEntries = computed(() => {
   if (!filterPluginName.value) {
@@ -137,14 +138,7 @@ async function fetchAuditLog() {
   }
 }
 
-function formatTimestamp(timestamp: string): string {
-  try {
-    const date = new Date(timestamp)
-    return date.toLocaleString()
-  } catch {
-    return timestamp
-  }
-}
+const formatTimestamp = createDateFormatter()
 
 onMounted(() => {
   fetchAuditLog()
@@ -168,7 +162,7 @@ onMounted(() => {
 
 .audit-header h2 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -185,7 +179,7 @@ onMounted(() => {
   border-radius: var(--radius-md);
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   min-width: 200px;
 }
 
@@ -252,7 +246,7 @@ onMounted(() => {
   background-color: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: var(--radius-md);
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .error-banner svg {
@@ -275,92 +269,5 @@ onMounted(() => {
   height: var(--spacing-12);
   margin-bottom: 1rem;
   opacity: 0.5;
-}
-
-.audit-table-container {
-  overflow-x: auto;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-}
-
-.audit-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.audit-table th {
-  background-color: var(--color-background-secondary);
-  color: var(--text-secondary);
-  font-weight: 600;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 0.75rem 1rem;
-  text-align: left;
-  border-bottom: 1px solid var(--border-default);
-}
-
-.audit-table td {
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--border-default);
-  color: var(--text-primary);
-  font-size: 0.875rem;
-}
-
-.audit-table tr:last-child td {
-  border-bottom: none;
-}
-
-.audit-table tr:hover {
-  background-color: var(--color-background-hover);
-}
-
-.audit-table tr.denied {
-  background-color: rgba(239, 68, 68, 0.05);
-}
-
-.audit-table tr.denied:hover {
-  background-color: rgba(239, 68, 68, 0.1);
-}
-
-.timestamp {
-  font-family: monospace;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-
-.plugin-name {
-  font-weight: 500;
-}
-
-.capability code {
-  background-color: var(--color-background-secondary);
-  padding: 0.25rem 0.5rem;
-  border-radius: var(--radius-default);
-  font-size: 0.8125rem;
-  font-family: monospace;
-}
-
-.operation {
-  color: var(--text-secondary);
-}
-
-.status-badge {
-  display: inline-block;
-  padding: 0.25rem 0.75rem;
-  border-radius: var(--radius-xl);
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.status-badge.granted {
-  background-color: rgba(16, 185, 129, 0.1);
-  color: #10b981;
-}
-
-.status-badge.denied {
-  background-color: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
 }
 </style>

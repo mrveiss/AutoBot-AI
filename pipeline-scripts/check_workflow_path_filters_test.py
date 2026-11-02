@@ -227,13 +227,13 @@ def test_dropping_the_shared_tree_from_a_dorny_filter_fails(tmp_path: Path, mark
     root = _sandbox(tmp_path)
     _edit(
         root / VGT,
-        f"            {marker}:\n              - 'autobot",
-        f"            {marker}:\n              - 'REMOVED-MARKER-{marker}'\n              - 'autobot",
+        f"        {marker}:\n          - 'autobot",
+        f"        {marker}:\n          - 'REMOVED-MARKER-{marker}'\n          - 'autobot",
     )
     # Now delete only this filter's shared entry, leaving the sibling's intact.
     text = (root / VGT).read_text(encoding="utf-8")
     head, _, tail = text.partition(f"'REMOVED-MARKER-{marker}'\n")
-    tail = tail.replace(f"              - '{SHARED}'\n", "", 1)
+    tail = tail.replace(f"          - '{SHARED}'\n", "", 1)
     (root / VGT).write_text(head + tail, encoding="utf-8")
     result = _run(root)
     assert result.returncode == 1, result.stdout
@@ -252,19 +252,41 @@ def test_dropping_the_shared_tree_from_the_push_trigger_fails(tmp_path: Path) ->
 def test_a_renamed_dorny_filter_key_fails_rather_than_exempting_silently(tmp_path: Path) -> None:
     """A restructure must strand the declaration loudly, not skip past it."""
     root = _sandbox(tmp_path)
-    _edit(root / VGT, "            slm_types:\n", "            slm_types_v2:\n")
+    _edit(root / VGT, "        slm_types:\n", "        slm_types_v2:\n")
     result = _run(root)
     assert result.returncode == 1, result.stdout
     assert "the table is stale" in result.stdout
 
 
-def test_a_workflow_with_no_dorny_step_is_fatal_not_a_pass(tmp_path: Path) -> None:
-    """ "Could not find the filters" and "the filters were fine" are opposite facts."""
+def test_a_workflow_with_no_filter_source_is_fatal_not_a_pass(tmp_path: Path) -> None:
+    """ "Could not find the filters" and "the filters were fine" are opposite facts.
+
+    Neither shape is present: the `changes` job calls some other workflow, so
+    the registered file has no dorny step and no `_changes.yml` call (#15360).
+    """
     root = _sandbox(tmp_path)
-    _edit(root / VGT, "      - uses: dorny/paths-filter@", "      - uses: not-dorny/other@")
+    _edit(root / VGT, "uses: ./.github/workflows/_changes.yml", "uses: ./.github/workflows/other.yml")
     result = _run(root)
     assert result.returncode != 0
-    assert "has no dorny/paths-filter step" in (result.stdout + result.stderr)
+    assert "has no path-filter source" in (result.stdout + result.stderr)
+
+
+def test_an_inline_dorny_step_is_still_a_filter_source(tmp_path: Path) -> None:
+    """The pre-#15360 shape keeps resolving, so the helper reads BOTH shapes."""
+    root = _sandbox(tmp_path)
+    text = (root / VGT).read_text(encoding="utf-8")
+    head, _, rest = text.partition("  changes:\n")
+    block, _, tail = rest.partition("\n  verify-types-run:")
+    filters = block.partition("      filters: |\n")[2]
+    inline = (
+        "    runs-on: ubuntu-latest\n    steps:\n"
+        "      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d\n"
+        "        with:\n          filters: |\n" + "".join("    " + ln + "\n" for ln in filters.splitlines())
+    )
+    (root / VGT).write_text(head + "  changes:\n" + inline + "\n  verify-types-run:" + tail, encoding="utf-8")
+    result = _run(root)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "filter 'types' watches the shared tree" in result.stdout
 
 
 def test_a_canonical_set_naming_no_shared_tree_is_fatal_not_a_pass(tmp_path: Path) -> None:
@@ -286,7 +308,7 @@ def test_two_dorny_steps_are_fatal_not_a_guess(tmp_path: Path) -> None:
     """Returning the first of several blocks would silently check the wrong one."""
     root = _sandbox(tmp_path)
     text = (root / VGT).read_text(encoding="utf-8")
-    marker = "      - uses: dorny/paths-filter@"
+    marker = "uses: ./.github/workflows/_changes.yml"
     assert marker in text
     extra = (
         "  second-filter-job:\n"
@@ -297,11 +319,17 @@ def test_two_dorny_steps_are_fatal_not_a_guess(tmp_path: Path) -> None:
         "          filters: |\n"
         "            other:\n"
         "              - 'x/**'\n"
+        "  third-filter-job:\n"
+        "    uses: ./.github/workflows/_changes.yml\n"
+        "    with:\n"
+        "      filters: |\n"
+        "        other:\n"
+        "          - 'y/**'\n"
     )
     (root / VGT).write_text(text.replace("jobs:\n", "jobs:\n" + extra, 1), encoding="utf-8")
     result = _run(root)
     assert result.returncode != 0
-    assert "dorny/paths-filter steps" in (result.stdout + result.stderr)
+    assert "path-filter sources" in (result.stdout + result.stderr)
 
 
 def test_a_watcher_entry_with_empty_tuples_fails(tmp_path: Path) -> None:

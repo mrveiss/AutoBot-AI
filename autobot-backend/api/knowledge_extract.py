@@ -47,7 +47,7 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from api.schemas_knowledge_web import ExtractRequest, ExtractResponse
+from api.schemas_knowledge_web import ExtractPageRequest, ExtractResponse
 from auth_middleware import get_current_user
 from autobot_shared.logging_manager import get_logger
 from web_fetch import FetchResult, RenderMode, WebFetcher
@@ -62,7 +62,7 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 @router.post("/extract", response_model=ExtractResponse, summary="Extract structured data from a URL via LLM")
-async def extract_url_endpoint(request: ExtractRequest) -> ExtractResponse:
+async def extract_url_endpoint(request: ExtractPageRequest) -> ExtractResponse:
     """Fetch *request.url* and extract structured data matching *request.json_schema*.
 
     The LLM gateway is called with ``structured_output=True`` so the model

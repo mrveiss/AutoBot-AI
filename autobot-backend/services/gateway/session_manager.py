@@ -18,12 +18,12 @@ from autobot_shared.time_utils import now_utc
 from constants.threshold_constants import TimingConstants
 
 from .config import GatewayConfig
-from .types import ChannelType, GatewaySession, SessionStatus
+from .types import ChannelType, GatewaySession, GatewaySessionStatus
 
 logger = get_logger(__name__)
 
 
-class SessionManager:
+class GatewaySessionManager:
     """
     Manages Gateway sessions with isolation per user/channel.
 
@@ -90,7 +90,7 @@ class SessionManager:
             active_sessions = [
                 sid
                 for sid in user_sessions
-                if sid in self._sessions and self._sessions[sid].status == SessionStatus.ACTIVE
+                if sid in self._sessions and self._sessions[sid].status == GatewaySessionStatus.ACTIVE
             ]
 
             if len(active_sessions) >= self.config.max_sessions_per_user:
@@ -129,7 +129,7 @@ class SessionManager:
     async def update_session(
         self,
         session_id: str,
-        status: SessionStatus | None = None,
+        status: GatewaySessionStatus | None = None,
         context: Dict | None = None,
     ) -> bool:
         """
@@ -171,7 +171,7 @@ class SessionManager:
             if not session:
                 return False
 
-            session.status = SessionStatus.CLOSED
+            session.status = GatewaySessionStatus.CLOSED
 
             # Remove from user sessions
             if session.user_id in self._user_sessions:
@@ -226,7 +226,7 @@ class SessionManager:
             sessions_to_close = []
 
             for session_id, session in self._sessions.items():
-                if session.status == SessionStatus.ACTIVE:
+                if session.status == GatewaySessionStatus.ACTIVE:
                     idle_time = now - session.last_activity
                     if idle_time > timeout_delta:
                         sessions_to_close.append(session_id)
@@ -241,8 +241,8 @@ class SessionManager:
     async def get_stats(self) -> Dict:
         """Get session manager statistics."""
         total_sessions = len(self._sessions)
-        active_sessions = sum(1 for s in self._sessions.values() if s.status == SessionStatus.ACTIVE)
-        idle_sessions = sum(1 for s in self._sessions.values() if s.status == SessionStatus.IDLE)
+        active_sessions = sum(1 for s in self._sessions.values() if s.status == GatewaySessionStatus.ACTIVE)
+        idle_sessions = sum(1 for s in self._sessions.values() if s.status == GatewaySessionStatus.IDLE)
 
         return {
             "total_sessions": total_sessions,

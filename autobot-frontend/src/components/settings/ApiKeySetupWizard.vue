@@ -115,31 +115,28 @@
 
     <!-- Footer Actions -->
     <template #actions>
-      <button
+      <BaseButton variant="secondary"
         v-if="currentStep > 1"
-        class="btn-secondary"
         @click="prevStep"
       >
         <Icon name="arrow-left" /> {{ t('settings.apiKeys.back') }}
-      </button>
+      </BaseButton>
       <div class="spacer"></div>
-      <button
+      <BaseButton
         v-if="currentStep < totalSteps"
-        class="btn-primary"
         :disabled="!canProceed"
         @click="nextStep"
       >
         {{ t('settings.apiKeys.next') }} <Icon name="arrow-right" />
-      </button>
-      <button
+      </BaseButton>
+      <BaseButton
         v-if="currentStep === totalSteps"
-        class="btn-primary"
         @click="saveAndClose"
         :disabled="isSaving"
       >
         <i :class="isSaving ? 'fas fa-spinner fa-spin' : 'save'"></i>
         {{ t('settings.apiKeys.save') }}
-      </button>
+      </BaseButton>
     </template>
   </BaseModal>
 </template>
@@ -149,7 +146,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import apiClient from '@/utils/ApiClient'
 
 const logger = createLogger('ApiKeySetupWizard')
@@ -460,7 +457,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 }
 
 .key-badge.required {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-error);
 }
 
@@ -582,33 +579,5 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 
 .spacer {
   flex: 1;
-}
-
-.btn-primary,
-.btn-secondary {
-  padding: var(--spacing-sm) var(--spacing-md);
-  border-radius: var(--radius-md);
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-}
-
-.btn-primary {
-  background: var(--color-primary);
-  color: var(--text-on-primary);
-  border: none;
-}
-
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  background: transparent;
-  border: 1px solid var(--border-default);
-  color: var(--text-primary);
 }
 </style>

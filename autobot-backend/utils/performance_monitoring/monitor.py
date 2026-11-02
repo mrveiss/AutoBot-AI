@@ -34,7 +34,6 @@ from utils.performance_monitoring.collectors import (
     ServiceCollector,
     SystemCollector,
 )
-from utils.performance_monitoring.decorator import set_redis_client
 from utils.performance_monitoring.hardware import HardwareDetector
 from utils.performance_monitoring.types import (
     DEFAULT_COLLECTION_INTERVAL,
@@ -114,9 +113,6 @@ class PerformanceMonitor:
 
             self.redis_client.ping()
             self.logger.info("Redis client initialized for performance metrics")
-
-            # Set redis client for decorator module
-            set_redis_client(self.redis_client)
         except Exception as e:
             self.logger.warning(f"Could not initialize Redis for performance metrics: {e}")
             self.redis_client = None

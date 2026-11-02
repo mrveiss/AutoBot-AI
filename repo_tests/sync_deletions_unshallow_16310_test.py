@@ -128,7 +128,7 @@ def test_ensure_full_history_uses_the_same_cli_the_deletion_plans_use(rel_path: 
     """Never an ad-hoc `git fetch --unshallow` in the playbook itself --
     routed through scripts/sync_deletion_planner.py, the same CLI
     roles/_shared/tasks/sync_deletions.yml calls for diff/bootstrap plans,
-    so there is exactly one place `run_git` is invoked from (#16310)."""
+    so there is exactly one place `run_git_capture` is invoked from (#16310)."""
     tasks = _flatten(_load_tasks(rel_path))
     sync_index = _index_of(tasks, lambda t: sync_task_name in str(t.get("name", "")))
     assert sync_index != -1, f"{rel_path}: sync task {sync_task_name!r} not found"

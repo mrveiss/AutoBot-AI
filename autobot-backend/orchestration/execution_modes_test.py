@@ -12,7 +12,7 @@ Covers:
 - DryRunValidator: valid workflow, broken deps, cycles, bad var refs, unassigned agents
 - DryRunReport.to_dict() serialisation
 - DebugController: resume, skip, stop signals
-- WorkflowExecutor.execute_coordinated_workflow integration for DRY_RUN and DEBUG modes
+- LegacyWorkflowExecutor.execute_coordinated_workflow integration for DRY_RUN and DEBUG modes
 """
 
 import asyncio
@@ -29,7 +29,7 @@ from .execution_modes import (
     ExecutionMode,
     StepPlan,
 )
-from .workflow_executor import WorkflowExecutor
+from .workflow_executor import LegacyWorkflowExecutor
 
 logger = get_logger(__name__)
 
@@ -47,8 +47,8 @@ _NOOP_CALLBACKS = dict(
 )
 
 
-def _make_executor() -> WorkflowExecutor:
-    return WorkflowExecutor(**_NOOP_CALLBACKS)
+def _make_executor() -> LegacyWorkflowExecutor:
+    return LegacyWorkflowExecutor(**_NOOP_CALLBACKS)
 
 
 def _make_steps(n: int = 2) -> list:
@@ -268,7 +268,7 @@ class TestDebugController:
 
 
 # ---------------------------------------------------------------------------
-# WorkflowExecutor integration: DRY_RUN mode
+# LegacyWorkflowExecutor integration: DRY_RUN mode
 # ---------------------------------------------------------------------------
 
 
@@ -341,7 +341,7 @@ class TestWorkflowExecutorDryRun:
 
 
 # ---------------------------------------------------------------------------
-# WorkflowExecutor integration: DEBUG mode
+# LegacyWorkflowExecutor integration: DEBUG mode
 # ---------------------------------------------------------------------------
 
 

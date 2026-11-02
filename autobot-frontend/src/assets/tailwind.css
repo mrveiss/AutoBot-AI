@@ -53,10 +53,12 @@
   --color-autobot-warning-light: var(--color-warning-light);
   --color-autobot-warning-bg: var(--color-warning-bg);
   --color-autobot-error: var(--color-error);
+  --color-autobot-error-solid: var(--color-error-solid);
   --color-autobot-error-hover: var(--color-error-hover);
   --color-autobot-error-light: var(--color-error-light);
   --color-autobot-error-bg: var(--color-error-bg);
   --color-autobot-info: var(--color-info);
+  --color-autobot-info-solid: var(--color-info-solid);
   --color-autobot-info-hover: var(--color-info-hover);
   --color-autobot-info-light: var(--color-info-light);
   --color-autobot-info-bg: var(--color-info-bg);
@@ -88,6 +90,59 @@
   --color-autobot-chart-8: var(--chart-8);
   --color-autobot-chart-9: var(--chart-9);
   --color-autobot-chart-10: var(--chart-10);
+
+  /* Refined UI tokens (#18223). Aliases only; values live in css/design-tokens.css
+     and css/themes/. Names without an existing equivalent; the rest map onto
+     --color-autobot-* above (docs/design/REFINED_TOKEN_MAPPING.md). */
+  --color-autobot-surface2: var(--surface2);
+  --color-autobot-line: var(--line);
+  --color-autobot-accent: var(--accent);
+  --color-autobot-focus: var(--focus);
+  --color-autobot-ink: var(--primary);
+  --color-autobot-ink-hover: var(--primary-h);
+  --color-autobot-on-ink: var(--on-primary);
+  --color-autobot-brand-bg: var(--brand-bg);
+  --color-autobot-brand-fg: var(--brand-fg);
+  --color-autobot-alert-text: var(--alert-text);
+  --color-autobot-bar: var(--bar);
+  --color-autobot-bar-alert: var(--bar-alert);
+  --color-autobot-bar-track: var(--bar-track);
+  --color-autobot-tile: var(--tile);
+  --color-autobot-tile-border: var(--tile-b);
+  --color-autobot-stroke: var(--stroke);
+  --color-autobot-illus-1: var(--i1);
+  --color-autobot-illus-2: var(--i2);
+  --color-autobot-illus-3: var(--i3);
+  --color-autobot-illus-1-tint: var(--i1t);
+  --color-autobot-illus-2-tint: var(--i2t);
+  --color-autobot-illus-3-tint: var(--i3t);
+  --color-autobot-danger-tile: var(--danger-tile);
+  --color-autobot-danger-tile-border: var(--danger-tile-b);
+  --color-autobot-pill-ok-bg: var(--ok-bg);
+  --color-autobot-pill-ok-fg: var(--ok-fg);
+  --color-autobot-pill-warn-bg: var(--warn-bg);
+  --color-autobot-pill-warn-fg: var(--warn-fg);
+  --color-autobot-pill-bad-bg: var(--bad-bg);
+  --color-autobot-pill-bad-fg: var(--bad-fg);
+  --color-autobot-pill-idle-bg: var(--idle-bg);
+  --color-autobot-pill-idle-fg: var(--idle-fg);
+  --color-autobot-pill-info-bg: var(--info-bg);
+  --color-autobot-pill-info-fg: var(--info-fg);
+  --color-autobot-dot-ok: var(--dot-ok);
+  --color-autobot-dot-idle: var(--dot-idle);
+  --color-autobot-dot-warn: var(--dot-warn);
+  --color-autobot-dot-bad: var(--dot-bad);
+
+  --height-topbar: var(--topbar-h);
+  --height-field-sm: var(--field-h-sm);
+  --height-field-md: var(--field-h-md);
+  --height-field-lg: var(--field-h-lg);
+  --width-subnav: var(--subnav-w);
+  --width-subnav-rail: var(--subnav-rail);
+  --width-panel: var(--panel-w);
+  --container-page: var(--content-max);
+  --container-reading: var(--reading-max);
+  --radius-field: var(--field-radius);
 
   --background-color-surface: var(--bg-surface);
   --background-color-elevated: var(--bg-elevated);

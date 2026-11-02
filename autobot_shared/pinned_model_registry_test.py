@@ -24,6 +24,7 @@ from autobot_shared.pinned_model_registry import (
     PinnedModel,
     get_pinned_revision,
     load_verified,
+    pinned_revision_kwargs,
     verify_cached_model,
 )
 
@@ -246,3 +247,60 @@ def test_load_verified_raises_and_returns_nothing_when_verification_fails(monkey
         load_verified(_REPO_ID, lambda revision: loader_calls.append(revision) or "unverified-result")
 
     assert loader_calls == [_REVISION], "the loader itself still runs -- verification happens after loading"
+
+
+# ---------------------------------------------------------------------------
+# pinned_revision_kwargs -- the soft counterpart for caller-supplied names
+# ---------------------------------------------------------------------------
+
+
+def test_pinned_revision_kwargs_pins_a_registered_model():
+    """A dynamic call site still gets the real pin when the name IS registered."""
+    assert pinned_revision_kwargs(_REPO_ID) == {"revision": _REVISION}
+
+
+def test_pinned_revision_kwargs_returns_empty_for_an_unregistered_model():
+    """The honest empty case: no pin invented for a name nobody registered.
+
+    This is the half that must NOT be made to look safe. Returning ``{}`` means
+    the load resolves against the mutable default branch, which is why the
+    three dynamic call sites keep their bandit suppression (#13034).
+    """
+    assert pinned_revision_kwargs("some-org/some-unregistered-model") == {}
+
+
+def test_pinned_revision_kwargs_returns_empty_for_a_local_path():
+    """A local path is not a repo id; nothing is resolved from the Hub for it."""
+    assert pinned_revision_kwargs("/opt/models/local-copy") == {}
+    assert pinned_revision_kwargs("./models/local-copy") == {}
+
+
+def test_pinned_revision_kwargs_never_invents_a_revision_key():
+    """The mutation this exists to catch: a default that is not from the registry.
+
+    A helper that returned ``{"revision": "main"}`` -- or any placeholder --
+    would satisfy bandit while pinning nothing, which is strictly worse than the
+    suppression it replaced. Every value it ever yields must be a registered
+    revision, so the key is absent rather than defaulted.
+    """
+    from autobot_shared.pinned_model_registry import _REGISTRY
+
+    registered = {model.revision for model in _REGISTRY.values()}
+    for name in ("", "main", "llama3:8b", "org/unknown", _REPO_ID):
+        result = pinned_revision_kwargs(name)
+        assert set(result) <= {"revision"}, f"unexpected keys for {name!r}: {sorted(result)}"
+        if result:
+            assert result["revision"] in registered, f"{name!r} produced an unregistered revision"
+
+
+def test_every_registered_model_round_trips_through_both_accessors():
+    """`pinned_revision_kwargs` and `get_pinned_revision` cannot disagree.
+
+    Two entry points onto one registry is exactly the shape where a second
+    source of truth appears. Asserted over the whole registry rather than one
+    entry, so adding a model cannot add a divergence.
+    """
+    from autobot_shared.pinned_model_registry import _REGISTRY
+
+    for repo_id in _REGISTRY:
+        assert pinned_revision_kwargs(repo_id) == {"revision": get_pinned_revision(repo_id)}

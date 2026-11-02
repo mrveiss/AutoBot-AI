@@ -169,6 +169,23 @@ Not every hook's verdict carries the same weight in CI, and the split is deliber
 
 New to the codebase? Start with issues tagged [`good-first-issue`](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aopen+label%3Agood-first-issue).
 
+## Translating AutoBot
+
+No code needed: each language is one JSON file, and every language issue is a [good first issue](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aopen+label%3Agood-first-issue+label%3Ai18n) (umbrella: #18768). English is the source. Any string a language lacks is shown in English, so a partial translation is always safe to merge.
+
+1. **Pick one section.** Open your language's issue, choose one section from its table and comment with the section's name so nobody else takes it. To see what's left:
+
+   ```bash
+   python3 scripts/list_untranslated.py --lang de                     # untranslated count per section
+   python3 scripts/list_untranslated.py --lang de --section workflow  # that section's keys and English text
+   ```
+
+2. **Translate** those keys in `autobot-frontend/src/i18n/locales/<lang>.json`. If a key is missing there, copy it from `en.json`. Keep every key name and every `{placeholder}` exactly as written, and don't edit `en.json`.
+3. **Lower your language's number** in `BASELINE` in `repo_tests/i18n_untranslated_ratchet_test.py` by the strings you translated. If the number is off, CI prints the exact one.
+4. **Open a PR** titled `i18n(<lang>): translate <section>`, with `Refs #<your language's issue>`. If another PR for the same language merged first, rebase; only the `BASELINE` line will conflict.
+
+The SLM console reuses these translations automatically (`scripts/lift_locale_translations.py`). Never edit its locale files by hand.
+
 ---
 
 Questions? Open an issue or start a [Discussion](https://github.com/mrveiss/AutoBot-AI/discussions). Happy hacking.

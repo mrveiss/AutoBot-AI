@@ -23,6 +23,7 @@ import urllib.parse
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Sequence
 
+from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
 from autobot_shared.paths import project_root
 
 # #15238: no `/tmp` here. It is world-writable and shared with every other
@@ -30,7 +31,7 @@ from autobot_shared.paths import project_root
 # there for any endpoint that falls back to this default to read back.
 # Every caller must state the root it actually means; there is no safe
 # universal fallback.
-_DEFAULT_ALLOWED_ROOTS: tuple[str, ...] = ("/opt/autobot",)
+_DEFAULT_ALLOWED_ROOTS: tuple[str, ...] = (FLEET_INSTALL_ROOT,)
 
 #: Call sites that mean "inside the AutoBot project" — the common case for
 #: request handlers analyzing this codebase — import this alongside

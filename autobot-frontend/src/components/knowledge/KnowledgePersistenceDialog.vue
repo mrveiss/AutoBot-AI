@@ -16,7 +16,7 @@
       </div>
 
       <!-- Load Error -->
-      <BaseAlert v-if="loadError" variant="error" :message="loadError" dismissible @dismiss="loadError = null" class="dialog-load-error" />
+      <BaseAlert v-if="loadError" variant="error" :message="loadError" dismissible :dismiss-label="t('ui.alert.dismissAlert')" @dismiss="loadError = null" class="dialog-load-error" />
 
       <!-- Chat Context Info -->
       <div v-if="chatContext" class="context-info">
@@ -142,7 +142,7 @@
         <h4 class="section-title">{{ $t('knowledge.persistence.bulkActionsTitle') }}</h4>
         <div class="bulk-buttons">
           <BaseButton
-            variant="outline-solid"
+            variant="outline"
             @click="selectAll"
             class="bulk-button"
             :aria-label="$t('knowledge.persistence.selectAllAria')"
@@ -150,7 +150,7 @@
             {{ $t('knowledge.persistence.selectAll') }}
           </BaseButton>
           <BaseButton
-            variant="outline-solid"
+            variant="outline"
             @click="deselectAll"
             class="bulk-button"
             :aria-label="$t('knowledge.persistence.deselectAllAria')"
@@ -223,7 +223,7 @@
         v-if="submitError"
         variant="error"
         :message="submitError"
-        dismissible
+        dismissible :dismiss-label="t('ui.alert.dismissAlert')"
         @dismiss="submitError = null"
       />
 
@@ -273,8 +273,7 @@ import { useBatchSelection } from '@/composables/useBatchSelection';
 import { apiService } from '@/services/api';
 import { getApiBase } from '@/config/ssot-config';
 import { formatDateTime as formatDate } from '@/utils/formatHelpers';
-import BaseButton from '@/components/base/BaseButton.vue';
-import BaseAlert from '@/components/ui/BaseAlert.vue';
+import { BaseAlert, BaseButton } from '@autobot/ui';
 import { createLogger } from '@/utils/debugUtils';
 
 type KnowledgeDecision = 'add_to_kb' | 'keep_temporary' | 'delete';
@@ -569,7 +568,7 @@ watch(() => props.visible, (newVal: boolean) => {
 }
 
 .keyword-tag {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: var(--text-on-primary);
   padding: var(--spacing-1) var(--spacing-3);
   border-radius: var(--radius-full);

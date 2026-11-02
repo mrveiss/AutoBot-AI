@@ -16,12 +16,14 @@ from typing import Any, Dict, List
 import aiohttp
 import psutil
 
+from autobot_shared.deployment_profile import try_frontend_url
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 from constants.network_constants import NetworkConstants
+from constants.threshold_constants import CategoryDefaults
 
 config = get_config_manager()
 
@@ -39,7 +41,7 @@ class ValidationSeverity(Enum):
 
 
 @dataclass
-class ValidationResult:
+class SystemTestResult:
     """Individual validation test result"""
 
     component: str
@@ -64,7 +66,7 @@ class SystemValidationReport:
     warnings: int
     overall_health_score: float
     system_ready: bool
-    validation_results: List[ValidationResult]
+    validation_results: List[SystemTestResult]
     recommendations: List[str]
     performance_metrics: Dict[str, Any]
 
@@ -75,7 +77,7 @@ class SystemValidator:
     def __init__(self):
         """Initialize system validator with validation thresholds."""
         self.logger = get_logger(__name__)
-        self.results: List[ValidationResult] = []
+        self.results: List[SystemTestResult] = []
 
         # Validation configuration
         self.timeout_seconds = config.get("validation.timeout_seconds", 30)
@@ -87,10 +89,9 @@ class SystemValidator:
             "error_rate_percent": config.get("validation.thresholds.error_rate_percent", 5.0),
         }
 
-        # Service endpoints
-        self.base_urls = {
+        self.base_urls = {  # service endpoints
             "backend": ssot_config.backend_url,
-            "frontend": ssot_config.frontend_url,
+            "frontend": try_frontend_url(ssot_config),  # None while AUTOBOT_FRONTEND_SERVED_BY is unknown (#19326)
             "ollama": ssot_config.ollama_url,
             "redis": None,  # Special handling for Redis
         }
@@ -106,7 +107,7 @@ class SystemValidator:
         duration_ms: float = 0.0,
     ):
         """Add a validation result"""
-        result = ValidationResult(
+        result = SystemTestResult(
             component=component,
             test_name=test_name,
             severity=severity,
@@ -128,7 +129,7 @@ class SystemValidator:
             return ValidationSeverity.SUCCESS
         return ValidationSeverity.WARNING
 
-    def _get_component_results(self, component: str) -> List[ValidationResult]:
+    def _get_component_results(self, component: str) -> List[SystemTestResult]:
         """Get results for a specific component (Issue #333 - extracted helper)."""
         return [r for r in self.results if r.component == component]
 
@@ -165,13 +166,12 @@ class SystemValidator:
 
     async def _validate_kb_integration(self, component: str) -> None:
         """Validate knowledge base integration (Issue #333 - extracted helper)."""
-        from knowledge_base import KnowledgeBase
+        from knowledge_factory import get_knowledge_base_async
 
         try:
-            kb = KnowledgeBase()
-            await kb.ainit()
+            kb = await get_knowledge_base_async()
 
-            if not kb.index:
+            if kb is None or not kb.index:
                 self._add_result(
                     component,
                     "KB Integration",
@@ -281,7 +281,7 @@ class SystemValidator:
                 "Cache operations failed",
             )
 
-    async def validate_knowledge_base_caching(self) -> List[ValidationResult]:
+    async def validate_knowledge_base_caching(self) -> List[SystemTestResult]:
         """Validate knowledge base caching system"""
         component = "Knowledge Base Cache"
 
@@ -320,7 +320,11 @@ class SystemValidator:
         return self._get_component_results(component)
 
     def _validate_hybrid_search_results(self, component: str, search_results: List, search_time: float) -> None:
-        """Validate hybrid search results (Issue #333 - extracted helper)."""
+        """Validate results of the canonical hybrid search (``HybridSearcher``: BM25 + semantic, RRF).
+
+        Issue #17599: the fused path attaches ``view_contributions`` and ``view_count`` to
+        every result, so their presence is what shows both views were fused.
+        """
         if not search_results:
             self._add_result(
                 component,
@@ -331,22 +335,22 @@ class SystemValidator:
             )
             return
 
-        has_hybrid_scores = any("hybrid_score" in result for result in search_results)
-        has_keyword_scores = any("keyword_score" in result for result in search_results)
+        has_view_contributions = all("view_contributions" in result for result in search_results)
+        has_view_count = all("view_count" in result for result in search_results)
 
-        if has_hybrid_scores and has_keyword_scores:
+        if has_view_contributions and has_view_count:
             severity = self._get_severity_for_response_time(search_time)
             self._add_result(
                 component,
                 "Hybrid Search",
                 severity,
                 True,
-                f"Hybrid search working: {len(search_results)} results with scoring",
+                f"Hybrid search working: {len(search_results)} results with fusion provenance",
                 {
                     "search_time_ms": search_time,
                     "result_count": len(search_results),
-                    "has_hybrid_scores": has_hybrid_scores,
-                    "has_keyword_scores": has_keyword_scores,
+                    "has_view_contributions": has_view_contributions,
+                    "has_view_count": has_view_count,
                 },
                 search_time,
             )
@@ -356,38 +360,8 @@ class SystemValidator:
                 "Hybrid Search",
                 ValidationSeverity.WARNING,
                 True,
-                "Hybrid search working but missing enhanced scoring",
+                "Hybrid search working but missing fusion provenance",
                 {"search_time_ms": search_time, "result_count": len(search_results)},
-            )
-
-    async def _validate_search_explanation(self, component: str, hybrid_engine) -> None:
-        """Validate search explanation (Issue #333 - extracted helper)."""
-        try:
-            explanation = await hybrid_engine.explain_search("test query", top_k=3)
-            if "extracted_keywords" in explanation:
-                self._add_result(
-                    component,
-                    "Search Explanation",
-                    ValidationSeverity.SUCCESS,
-                    True,
-                    "Search explanation functionality working",
-                    {"keywords_count": len(explanation.get("extracted_keywords", []))},
-                )
-            else:
-                self._add_result(
-                    component,
-                    "Search Explanation",
-                    ValidationSeverity.WARNING,
-                    False,
-                    "Search explanation missing keywords",
-                )
-        except Exception as e:
-            self._add_result(
-                component,
-                "Search Explanation",
-                ValidationSeverity.WARNING,
-                False,
-                f"Search explanation error: {str(e)}",
             )
 
     def _validate_system_metrics_result(self, component: str, system_metrics: Dict, collection_time: float) -> None:
@@ -880,24 +854,25 @@ class SystemValidator:
                     f"{service_name} service port inaccessible: {host}:{port}",
                 )
 
-    async def _init_hybrid_search_engine(self, component: str):
+    async def _init_hybrid_search_kb(self, component: str):
         """
-        Initialize KB and hybrid search engine (Issue #620: extracted helper).
+        Initialize the knowledge base whose hybrid-mode search is the hybrid search.
+
+        Issue #17599: validates the one production implementation
+        (``knowledge.search_components.hybrid_search.HybridSearcher``), not a private copy.
 
         Args:
             component: Component name for result logging
 
         Returns:
-            Tuple of (hybrid_engine, init_time_ms) or (None, 0) if failed
+            The initialized KnowledgeBase, or None if unavailable
         """
-        from knowledge_base import KnowledgeBase
-        from utils.hybrid_search import get_hybrid_search_engine
+        from knowledge_factory import get_knowledge_base_async
 
         start_time = time.time()
-        kb = KnowledgeBase()
-        await kb.ainit()
+        kb = await get_knowledge_base_async()
 
-        if not kb.index:
+        if kb is None or not kb.index:
             self._add_result(
                 component,
                 "Prerequisites",
@@ -905,11 +880,9 @@ class SystemValidator:
                 False,
                 "Knowledge base not available for hybrid search testing",
             )
-            return None, 0
+            return None
 
-        hybrid_engine = get_hybrid_search_engine(kb)
         init_time = (time.time() - start_time) * 1000
-
         self._add_result(
             component,
             "Engine Initialization",
@@ -919,64 +892,23 @@ class SystemValidator:
             {"init_time_ms": init_time},
             init_time,
         )
-        return hybrid_engine, init_time
+        return kb
 
-    def _validate_keyword_extraction(self, component: str, hybrid_engine) -> None:
-        """
-        Validate keyword extraction for test queries (Issue #620: extracted helper).
-
-        Args:
-            component: Component name for result logging
-            hybrid_engine: Hybrid search engine instance
-        """
-        test_queries = [
-            "How to implement machine learning algorithms in Python?",
-            "Database design best practices for web applications",
-            "Docker container orchestration with Kubernetes",
-        ]
-
-        for query in test_queries:
-            keywords = hybrid_engine.extract_keywords(query)
-            if keywords and len(keywords) >= 2:
-                self._add_result(
-                    component,
-                    "Keyword Extraction",
-                    ValidationSeverity.SUCCESS,
-                    True,
-                    f"Keywords extracted: {len(keywords)} from query",
-                    {"query": query[:50] + "...", "keywords": keywords},
-                )
-            else:
-                self._add_result(
-                    component,
-                    "Keyword Extraction",
-                    ValidationSeverity.WARNING,
-                    False,
-                    f"Poor keyword extraction: {len(keywords) if keywords else 0} keywords",
-                    {"query": query[:50] + "...", "keywords": keywords},
-                )
-
-    async def validate_hybrid_search(self) -> List[ValidationResult]:
-        """Validate hybrid search functionality"""
+    async def validate_hybrid_search(self) -> List[SystemTestResult]:
+        """Validate hybrid search functionality (the canonical ``HybridSearcher`` via the KB)."""
         component = "Hybrid Search"
 
         try:
-            # Test 1: Hybrid search engine initialization (Issue #620: uses helper)
-            hybrid_engine, _ = await self._init_hybrid_search_engine(component)
-            if not hybrid_engine:
+            kb = await self._init_hybrid_search_kb(component)
+            if not kb:
                 return self._get_component_results(component)
 
-            # Test 2: Keyword extraction (Issue #620: uses helper)
-            self._validate_keyword_extraction(component, hybrid_engine)
-
-            # Test 3: Hybrid search execution (uses helper)
             start_time = time.time()
-            search_results = await hybrid_engine.search("Python programming tutorial", top_k=5)
+            # limit= selects search()'s enhanced path, the only one honouring mode (#17599)
+            response = await kb.search("Python programming tutorial", limit=5, mode=CategoryDefaults.SEARCH_MODE_HYBRID)
+            search_results = response.get("results", []) if isinstance(response, dict) else response
             search_time = (time.time() - start_time) * 1000
             self._validate_hybrid_search_results(component, search_results, search_time)
-
-            # Test 4: Search explanation (uses helper)
-            await self._validate_search_explanation(component, hybrid_engine)
 
         except Exception as e:
             self._add_result(
@@ -1038,7 +970,7 @@ class SystemValidator:
         # Test 5: Metrics summary
         await self._validate_health_summary(component, collector)
 
-    async def validate_monitoring_system(self) -> List[ValidationResult]:
+    async def validate_monitoring_system(self) -> List[SystemTestResult]:
         """Validate monitoring and metrics system."""
         component = "Monitoring System"
 
@@ -1101,7 +1033,7 @@ class SystemValidator:
 
         return self._validate_model_discovery_result(component, models, discovery_time)
 
-    async def validate_model_optimization(self) -> List[ValidationResult]:
+    async def validate_model_optimization(self) -> List[SystemTestResult]:
         """Validate model optimization system"""
         component = "Model Optimization"
 
@@ -1178,7 +1110,7 @@ class SystemValidator:
             ),
         ]
 
-    async def validate_api_endpoints(self) -> List[ValidationResult]:
+    async def validate_api_endpoints(self) -> List[SystemTestResult]:
         """
         Validate all optimization API endpoints.
 
@@ -1203,7 +1135,7 @@ class SystemValidator:
 
         return self._get_component_results(component)
 
-    async def validate_system_resources(self) -> List[ValidationResult]:
+    async def validate_system_resources(self) -> List[SystemTestResult]:
         """Validate system resource availability and performance"""
         component = "System Resources"
 

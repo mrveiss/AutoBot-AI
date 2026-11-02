@@ -14,7 +14,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
-from .types import ConfidenceLevel, ContextType, DecisionType
+from .types import ContextType, DecisionConfidenceLevel, DecisionType
 
 
 @dataclass
@@ -154,7 +154,7 @@ class Decision:
     chosen_action: Dict[str, Any]
     alternative_actions: List[Dict[str, Any]]
     confidence: float
-    confidence_level: ConfidenceLevel
+    confidence_level: DecisionConfidenceLevel
     reasoning: str
     supporting_evidence: List[Dict[str, Any]]
     risk_assessment: Dict[str, Any]

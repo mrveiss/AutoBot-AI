@@ -25,9 +25,16 @@ import uuid
 from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import (
+    get_agent_endpoint_explicit,
+    get_agent_model_explicit,
+    get_agent_provider_explicit,
+)
 from constants.threshold_constants import LLMDefaults
 from llm_shared.models import LLMResponse
+from services.llm_service import get_llm_service
 
+from .base_agent import AgentDeploymentMode
 from .standardized_agent import StandardizedAgent
 
 logger = get_logger(__name__)
@@ -53,6 +60,36 @@ class BaseModalityAgent(StandardizedAgent):
     QUERY_MAX_TOKENS: int = LLMDefaults.SYNTHESIS_MAX_TOKENS
     QUERY_ERROR_MESSAGE: str = "Error processing request. Please try again."
     _LOGGER = logger
+    CAPABILITIES: tuple = ()
+
+    def __init__(
+        self,
+        agent_type: str | None = None,
+        deployment_mode: AgentDeploymentMode = AgentDeploymentMode.LOCAL,
+    ):
+        """Initialize a modality agent with its LLM configuration.
+
+        Issue #6660: accepts the parent's full constructor signature so factory
+        callers (``cls(agent_type, deployment_mode)``) work; the no-arg call
+        sites keep working because ``agent_type`` defaults to ``AGENT_ID``.
+        """
+        super().__init__(agent_type or self.AGENT_ID, deployment_mode)
+        self.llm_interface = get_llm_service()
+        self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
+        self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
+        self.model_name = get_agent_model_explicit(self.AGENT_ID)
+        self.capabilities = list(self.CAPABILITIES)
+        self._register_action_handlers()
+        self._LOGGER.info(
+            "%s Agent initialized: provider=%s, model=%s",
+            self.AGENT_ID.replace("_", " ").title(),
+            self.llm_provider,
+            self.model_name,
+        )
+
+    def _register_action_handlers(self) -> None:
+        """Hook: subclasses register their ``ActionHandler`` map here."""
+        raise NotImplementedError
 
     async def process_query(self, request_text: str, context: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """Process a query using the vLLM-optimised API (Issue #3389)."""
@@ -60,7 +97,7 @@ class BaseModalityAgent(StandardizedAgent):
         try:
             self._LOGGER.info("%s Agent processing: %s...", label, request_text[:50])
             session_id = (context or {}).get("session_id") or str(uuid.uuid4())
-            response = await self.llm_interface.chat_optimized(
+            llm_response = await self.llm_interface.chat_optimized(
                 agent_type=self.AGENT_ID,
                 user_message=request_text,
                 session_id=session_id,
@@ -70,14 +107,14 @@ class BaseModalityAgent(StandardizedAgent):
                 max_tokens=self.QUERY_MAX_TOKENS,
                 top_p=LLMDefaults.DEFAULT_TOP_P,
             )
-            response_text = self._extract_content(response)
+            response_text = self._extract_content(llm_response)
             result = {
                 "status": "success",
                 "response": response_text,
                 "response_text": response_text,
                 "agent_type": self.AGENT_ID,
                 "model_used": self.model_name,
-                "token_usage": self._extract_token_usage(response),
+                "token_usage": self._extract_token_usage(llm_response),
             }
             return await self._after_success(result, context or {}, session_id)
         except Exception as e:

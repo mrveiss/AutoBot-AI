@@ -343,9 +343,10 @@ h5 {
   margin: var(--spacing-0);
 }
 
-h5 i {
+h5 .icon {
   color: var(--color-primary);
-  font-size: var(--text-sm);
+  width: var(--text-sm);
+  height: var(--text-sm);
 }
 
 /* Parent */
@@ -475,9 +476,10 @@ h5 i {
   gap: var(--spacing-md);
 }
 
-.loading-state i,
-.empty-state i {
-  font-size: var(--text-2xl);
+.loading-state .icon,
+.empty-state .icon {
+  width: var(--text-2xl);
+  height: var(--text-2xl);
 }
 
 .error-banner {

@@ -1,0 +1,85 @@
+# Mirror the upstream service-container images CI uses into our own registry.
+# Issue #18160: service containers pulled these anonymously, so a burst of runs
+# exhausted the per-IP pull quota and every shard failed before any test ran.
+#
+# This workflow lands FIRST, on its own: the service blocks cannot pull from the
+# mirror until it has run once on main. The follow-up change for #18160 then points
+# every `services.*.image` at the mirror, pulling with the workflow token, and adds
+# a guard that rejects an anonymous upstream pull.
+#
+# ONE-TIME OWNER SETUP: after the first run, each ghcr.io package created here
+# must be public, or grant this repository read access, otherwise fork PRs
+# (whose token can read public packages only) cannot pull the mirror.
+#
+# The copy is `buildx imagetools create`, which copies the whole manifest list.
+# docker pull/tag/push would keep only the runner's own architecture.
+name: CI Image Mirror
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 4 * * 1'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ci-image-mirror.yml'
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ci-image-mirror
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    name: Mirror ${{ matrix.image.src }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      # The image list lives here and nowhere else.
+      matrix:
+        image:
+          - src: docker.io/library/redis:7-alpine
+            dst: ghcr.io/mrveiss/ci-redis:7-alpine
+          - src: docker.io/library/postgres:16
+            dst: ghcr.io/mrveiss/ci-postgres:16
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Copy the multi-arch manifest
+        env:
+          SRC: ${{ matrix.image.src }}
+          DST: ${{ matrix.image.dst }}
+        run: |
+          docker buildx imagetools create --tag "$DST" "$SRC"
+
+      - name: Record the source digest
+        env:
+          SRC: ${{ matrix.image.src }}
+          DST: ${{ matrix.image.dst }}
+        run: |
+          src_digest="$(docker buildx imagetools inspect "$SRC" --format '{{.Manifest.Digest}}')"
+          dst_digest="$(docker buildx imagetools inspect "$DST" --format '{{.Manifest.Digest}}')"
+          {
+            echo "### Mirrored \`$SRC\`"
+            echo ""
+            echo "| | Reference | Digest |"
+            echo "|---|---|---|"
+            echo "| source | \`$SRC\` | \`$src_digest\` |"
+            echo "| mirror | \`$DST\` | \`$dst_digest\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$src_digest" != "$dst_digest" ]; then
+            echo "::error::mirror digest differs from source for $DST"
+            exit 1
+          fi

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseSpinner } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -168,7 +169,7 @@ onUnmounted(() => {
   <div class="grafana-embed" :class="{ 'fullscreen': isFullscreen }">
     <!-- Loading State -->
     <div v-if="loading" class="loading-overlay">
-      <div class="loading-spinner"></div>
+      <BaseSpinner size="md" />
       <p class="text-sm text-gray-600 mt-2">{{ $t('monitoring.grafanaDashboard.loadingValue0', { value0: dashboardTitle }) }}</p>
     </div>
 
@@ -241,7 +242,7 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 9999;
+  z-index: var(--z-maximum);
   border-radius: 0;
 }
 
@@ -261,20 +262,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   background: var(--slm-gray-50);
-  z-index: 10;
-}
-
-.loading-spinner {
-  width: var(--spacing-12);
-  height: var(--spacing-12);
-  border: 4px solid var(--slm-gray-200);
-  border-top-color: var(--slm-blue-500);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
+  z-index: var(--z-10);
 }
 
 .controls {

@@ -14,18 +14,11 @@ instead of a second, unreliable store.
 
 from __future__ import annotations
 
-import logging
-
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 from models.database import Service
 
-# Plain stdlib logging, deliberately (matches CLAUDE.md's pattern table and
-# autobot_shared/user_management/password_epoch.py's own rationale). This
-# module is real-loaded at conftest collection time by autobot-slm-backend's
-# own `_REAL_SERVICE_MODULES` -- `autobot_shared.logging_manager.get_logger`
-# builds a RotatingFileHandler from config at call time and raises under
-# that harness (the config stack is itself mocked that early).
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _ZERO_TRACKER = {"count": 0, "last_attempt": None, "exhausted": False, "last_cause": None}
 

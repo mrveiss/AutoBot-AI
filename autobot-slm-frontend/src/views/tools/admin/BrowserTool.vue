@@ -3,6 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('BrowserTool')
@@ -14,7 +15,8 @@ const logger = createLogger('BrowserTool')
  */
 
 import { ref, onMounted } from 'vue'
-import { useAutobotApi } from '@/composables/useAutobotApi'
+import { useI18n } from 'vue-i18n'
+import { autobotApiErrorMessage, useAutobotApi } from '@/composables/useAutobotApi'
 import {
   readBrowserVmStatus,
   readFleetMembershipSource,
@@ -22,6 +24,7 @@ import {
 } from '@/utils/browserVmStatus'
 
 const api = useAutobotApi()
+const { t } = useI18n()
 
 // State
 const loading = ref(false)
@@ -65,9 +68,7 @@ async function startBrowser(): Promise<void> {
     await takeScreenshot()
   } catch (e: unknown) {
     // Surface the backend detail (e.g. "URL not in whitelist") when available (#985)
-    const axiosErr = e as { response?: { data?: { detail?: string } }; message?: string }
-    const detail = axiosErr?.response?.data?.detail
-    error.value = detail ?? (e instanceof Error ? e.message : 'Failed to start browser')
+    error.value = autobotApiErrorMessage(e, t('tools.admin.browserTool.startFailed'))
     browserStatus.value = 'disconnected'
   } finally {
     loading.value = false
@@ -90,9 +91,7 @@ async function navigate(): Promise<void> {
     await api.browserNavigate(url.value)
     await takeScreenshot()
   } catch (e: unknown) {
-    const axiosErr = e as { response?: { data?: { detail?: string } }; message?: string }
-    const detail = axiosErr?.response?.data?.detail
-    error.value = detail ?? (e instanceof Error ? e.message : 'Navigation failed')
+    error.value = autobotApiErrorMessage(e, t('tools.admin.browserTool.navigateFailed'))
   } finally {
     loading.value = false
   }
@@ -115,7 +114,7 @@ async function goBack(): Promise<void> {
     await api.browserGoBack('')
     await takeScreenshot()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to go back'
+    error.value = autobotApiErrorMessage(e, t('tools.admin.browserTool.backFailed'))
   }
 }
 
@@ -125,7 +124,7 @@ async function goForward(): Promise<void> {
     await api.browserGoForward('')
     await takeScreenshot()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to go forward'
+    error.value = autobotApiErrorMessage(e, t('tools.admin.browserTool.forwardFailed'))
   }
 }
 
@@ -135,7 +134,7 @@ async function refresh(): Promise<void> {
     await api.browserRefresh('')
     await takeScreenshot()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to refresh'
+    error.value = autobotApiErrorMessage(e, t('tools.admin.browserTool.refreshFailed'))
   }
 }
 
@@ -268,9 +267,7 @@ onMounted(() => {
       </div>
 
       <!-- Error Message -->
-      <div v-if="error" class="m-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-        {{ error }}
-      </div>
+      <BaseAlert v-if="error" variant="error" class="m-4" :message="error" />
 
       <!-- Browser Viewport -->
       <div class="flex-1 bg-gray-900 overflow-auto flex items-center justify-center">

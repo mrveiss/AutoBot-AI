@@ -7,7 +7,7 @@
 System Validation API endpoints for AutoBot optimization suite
 """
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
 from api.schemas_workflows import (
     SystemValidationBenchmarkResponse,
@@ -19,6 +19,7 @@ from api.schemas_workflows import (
     SystemValidationStatusResponse,
 )
 from api.system_health import register_singleton_probe
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from utils.catalog_http_exceptions import raise_catalog_error_simple, raise_server_error
@@ -27,7 +28,7 @@ from utils.system_validator import get_system_validator
 logger = get_logger(__name__)
 
 # Create router
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 register_singleton_probe("system_validation", get_system_validator)

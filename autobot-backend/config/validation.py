@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
 from config.loader import ENV_VAR_MAPPINGS
+from config.model_drift import warn_on_selected_model_drift
 
 logger = logging.getLogger(__name__)
 
@@ -243,17 +244,6 @@ def log_startup_config_summary(raw_config: Dict[str, Any]) -> None:
 class ValidationMixin:
     """Mixin providing configuration validation"""
 
-    def is_feature_enabled(self, feature: str) -> bool:
-        """Check if a feature is enabled.
-
-        ``feature`` is a dot-path into the config with an "enabled" leaf,
-        e.g. "multimodal.vision" -> multimodal.vision.enabled, "npu" ->
-        npu.enabled (#11954: was reading a "features.<feature>" namespace
-        that no default config section ever populated, so every feature
-        silently evaluated to False).
-        """
-        return self.get_nested(f"{feature}.enabled", False)
-
     def get_security_config(self) -> Dict[str, Any]:
         """Get security configuration"""
         return self.get_nested(
@@ -294,6 +284,9 @@ class ValidationMixin:
         # Log override warnings so operators see them at startup.
         for warning in result.warnings:
             logger.warning("Config warning: %s", warning)
+
+        # #15502: report (never rewrite) a config.yaml model that disagrees with the tier map.
+        warn_on_selected_model_drift(raw)
 
         if result.errors:
             for error in result.errors:

@@ -26,6 +26,7 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from autobot_shared.ssot_config import config
+from llm_shared.types import ProviderType
 from services.provider_key_vault import resolve_provider_key
 
 from .openai_compatible import OpenAICompatibleProvider
@@ -40,7 +41,7 @@ class CustomOpenAIProvider(OpenAICompatibleProvider):
     async streaming support without extra dependencies.
     """
 
-    provider_name = "custom_openai"
+    provider_name = ProviderType.CUSTOM_OPENAI.value
 
     def __init__(
         self,

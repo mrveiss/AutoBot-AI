@@ -74,7 +74,7 @@ Base = _db_models.Base
 Node = _db_models.Node
 NodeStatus = _db_models.NodeStatus
 Service = _db_models.Service
-ServiceStatus = _db_models.ServiceStatus
+SystemdState = _db_models.SystemdState
 
 with real_modules_swapped():
     from sqlalchemy import select
@@ -150,12 +150,17 @@ class _JobSessionFactory:
 
 @pytest.fixture
 async def restart_env(monkeypatch):
-    """Real engine, a request-scoped session proxy, and a job session factory."""
+    """Real engine, a request-scoped session proxy, and a job session factory.
+
+    The engine and session factory are built here rather than taken from the
+    canonical factory because this fixture needs a test-local in-memory SQLite
+    database; that is the waiver the two ``canonical: ignore`` comments claim.
+    """
     with real_modules_swapped():
-        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")  # canonical: ignore py-adhoc-db-engine
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
+    maker = async_sessionmaker(engine, expire_on_commit=False)  # canonical: ignore py-adhoc-db-engine
     request_session = _RequestScopedSession(maker())
     job_sessions = _JobSessionFactory(maker)
 
@@ -190,7 +195,7 @@ async def _seed(db, service_names: list) -> None:
             Service(
                 node_id=_NODE_ID,
                 service_name=name,
-                status=ServiceStatus.STOPPED.value,
+                status=SystemdState.STOPPED.value,
                 active_state="inactive",
                 sub_state="dead",
             )
@@ -254,7 +259,7 @@ class TestDeferredSlmRestartOwnsItsSession:
         assert all(opened is not request_session._session for opened in job_sessions.opened)
 
         deferred = await _read_service(maker, "slm-agent")
-        assert deferred.status == ServiceStatus.RUNNING.value
+        assert deferred.status == SystemdState.RUNNING.value
         assert deferred.active_state == "active"
         assert deferred.sub_state == "running"
         assert deferred.last_checked is not None
@@ -270,7 +275,7 @@ class TestDeferredSlmRestartOwnsItsSession:
         assert response.failed_restarts == 0
 
         immediate = await _read_service(maker, "nginx")
-        assert immediate.status == ServiceStatus.RUNNING.value
+        assert immediate.status == SystemdState.RUNNING.value
         assert immediate.last_checked is not None
 
     async def test_no_orm_row_or_session_crosses_the_background_boundary(self, restart_env):
@@ -348,7 +353,7 @@ class TestOneFailureDoesNotDiscardTheRestartsThatSucceeded:
         assert len(job_sessions.opened) == 1
 
         first = await _read_service(maker, "slm-agent")
-        assert first.status == ServiceStatus.RUNNING.value, (
+        assert first.status == SystemdState.RUNNING.value, (
             "the restart that succeeded before the failure was discarded — the commit belongs "
             "inside the per-service loop (#15657)"
         )
@@ -357,8 +362,8 @@ class TestOneFailureDoesNotDiscardTheRestartsThatSucceeded:
         assert first.last_checked is not None
 
         failed = await _read_service(maker, "slm-backend")
-        assert failed.status == ServiceStatus.STOPPED.value
+        assert failed.status == SystemdState.STOPPED.value
 
         third = await _read_service(maker, "slm-admin-ui")
-        assert third.status == ServiceStatus.STOPPED.value, "the batch skipped the failure instead of stopping at it"
+        assert third.status == SystemdState.STOPPED.value, "the batch skipped the failure instead of stopping at it"
         assert third.last_checked is None

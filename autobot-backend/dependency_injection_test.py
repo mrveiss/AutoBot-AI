@@ -13,10 +13,10 @@ import pytest
 
 from config import ConfigManager
 from dependencies import (
-    get_config,
     get_diagnostics,
-    get_knowledge_base,
-    get_orchestrator,
+    provide_config_manager,
+    provide_knowledge_base,
+    provide_orchestrator,
 )
 from diagnostics import Diagnostics
 from knowledge_base import KnowledgeBase
@@ -28,7 +28,7 @@ class TestDependencyInjection:
 
     def test_config_dependency_provider(self):
         """Test that config dependency provider returns the global config"""
-        config = get_config()
+        config = provide_config_manager()
         assert isinstance(config, ConfigManager)
         assert hasattr(config, "get")
         assert hasattr(config, "get_nested")
@@ -81,7 +81,8 @@ class TestDependencyInjection:
         # Verify that default dependencies are created
         assert orchestrator.config_manager is not None
         assert orchestrator.llm_service is not None
-        assert orchestrator.knowledge_base is not None
+        # #18122: no private KnowledgeBase at construction; the canonical one is resolved at first use
+        assert orchestrator.knowledge_base is None
         assert orchestrator.diagnostics is not None
 
         # Verify they are the expected types
@@ -152,7 +153,7 @@ class TestDependencyInjection:
     def test_dependency_providers(self):
         """Test that FastAPI dependency providers work correctly"""
         # Test config provider (this works outside FastAPI context)
-        config = get_config()
+        config = provide_config_manager()
         assert isinstance(config, ConfigManager)
 
         # Note: Other dependency providers require FastAPI request context
@@ -161,11 +162,11 @@ class TestDependencyInjection:
 
         # Test that the provider functions exist and are callable
         assert callable(get_diagnostics)
-        assert callable(get_knowledge_base)
-        assert callable(get_orchestrator)
+        assert callable(provide_knowledge_base)
+        assert callable(provide_orchestrator)
 
         # Test manual dependency creation (simulates FastAPI behavior)
-        config = get_config()
+        config = provide_config_manager()
 
         # Manually call with resolved dependencies (as FastAPI would do)
         from diagnostics import Diagnostics

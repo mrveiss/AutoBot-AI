@@ -11,12 +11,12 @@ llm:
     classification: gemma2:2b
     gemma_classification: gemma2:2b
     # Tier 3: Light Processing — extraction, formatting
-    kb_librarian: phi3:mini
-    knowledge_extraction: phi3:mini
-    knowledge_retrieval: phi3:mini
     json_formatter: phi3:mini
     npu_code_search: phi3:mini
-    # Tier 4: Instruction Following — RAG, entity extraction
+    # Tier 4: Instruction Following — RAG, entity extraction, KB roles (#15502)
+    kb_librarian: mistral:7b-instruct
+    knowledge_extraction: mistral:7b-instruct
+    knowledge_retrieval: mistral:7b-instruct
     rag: mistral:7b-instruct
     graph_entity_extractor: mistral:7b-instruct
     man_page_knowledge_integrator: mistral:7b-instruct

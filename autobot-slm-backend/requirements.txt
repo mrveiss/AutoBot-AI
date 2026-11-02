@@ -23,9 +23,9 @@ aiosqlite>=0.22.1  # matches autobot-backend/requirements.txt's pin
 prometheus-client>=0.26.0
 
 # Web framework
-fastapi>=0.141.1                # SECURITY UPDATE - requires starlette >=1.6.0
-starlette>=1.6.0              # explicit pin — avoids python_multipart __all__ ImportError on older starlette (#8275)
-uvicorn[standard]>=0.53.0
+fastapi  # version from constraints/shared.txt (#18060)
+starlette  # floor from constraints/shared.txt; avoids the python_multipart __all__ ImportError on older releases
+uvicorn[standard]>=0.54.0
 
 # Database - PostgreSQL (Issue #786)
 # Capped below 2.1 (#17445). A fresh venv from this file took SQLAlchemy 2.1.0
@@ -40,8 +40,12 @@ uvicorn[standard]>=0.53.0
 # into a recorded one. Migrating to 2.1.x is its own work and is NOT a
 # base-unblocking change; the tracking issue is on the cap for whoever lifts it.
 # Do not raise this bound without running the SLM suite against 2.1.x first.
-sqlalchemy>=2.0.54,<2.1
-asyncpg>=0.31.0  # Async PostgreSQL driver for SQLAlchemy
+sqlalchemy>=2.0.55,<2.1
+# Dependabot raised this to `>=2.1.0,<2.2` in #17706 and left the paragraph above
+# saying not to. Restored. The cap is not stale: #17445 is OPEN and records the
+# 27 failures 2.1.0 causes in this service. Lifting it needs the SLM suite run
+# against 2.1.x, which is that issue's work, not a dependency bump's.
+asyncpg>=0.32.0  # Async PostgreSQL driver for SQLAlchemy
 # greenlet is declared explicitly, not left to SQLAlchemy (#17432). SQLAlchemy
 # ships it as an `[asyncio]` extra AND, in some releases, under a
 # `platform_machine == "x86_64" or ...` marker -- so whether it arrives depends
@@ -50,16 +54,16 @@ asyncpg>=0.31.0  # Async PostgreSQL driver for SQLAlchemy
 # `main` with `ModuleNotFoundError: No module named 'greenlet'` before the
 # container could start. The async engine is a direct requirement of this
 # service, so it is declared directly rather than inherited conditionally.
-greenlet>=3.1.0  # SQLAlchemy async engine dependency -- see the note above
+greenlet>=3.5.6  # SQLAlchemy async engine dependency -- see the note above
 psycopg2-binary>=2.9.13  # Sync PostgreSQL driver for migrations
 
 # Data validation
-pydantic[email]>=2.13.5
-pydantic-settings>=2.15.0
+pydantic[email]>=2.14.1
+pydantic-settings  # floor from constraints/shared.txt
 typing_extensions>=4.16.0  # For Python 3.8 compatibility
 
 # Authentication
-PyJWT[crypto]>=2.14.0
+PyJWT[crypto]>=2.15.1
 bcrypt>=5.0.0  # Direct bcrypt API — passlib removed (#2669)
 python-multipart>=0.0.32          # SECURITY UPDATE - arbitrary file write fix
 
@@ -68,7 +72,7 @@ redis[asyncio]>=8.1.0
 
 # Async utilities
 aiofiles>=25.1.0
-websockets>=17.1,<18       # Issue #3098: SLM's own independent floor -- SLM's code never imports websockets directly (it arrives transitively through uvicorn[standard]>=0.52.4, which only requires >=13.0), but this is the version already running in SLM production, so it must not be lowered without cause. #16264 briefly lowered this to match autobot-backend/requirements.txt's <16 langgraph-sdk cap after ci.yml's python-shard job (#13300) installed SLM's tests into the SAME venv as the backend and surfaced a floor conflict there -- that was a CI-venv-sharing artifact, not a reason to downgrade SLM production, and #16391 reverted it in favor of a named exemption in pipeline-scripts/check_dependency_floors.py. #16394 gave the SLM suite its own venv, built from this file, so ci.yml's strict floor check is now scoped per venv and that exemption is gone -- do not re-add it; a floor conflict here again means a venv split broke, not that this line should move.
+websockets>=17.3,<18       # Issue #3098: SLM's own independent floor -- SLM's code never imports websockets directly (it arrives transitively through uvicorn[standard]>=0.52.4, which only requires >=13.0), but this is the version already running in SLM production, so it must not be lowered without cause. #16264 briefly lowered this to match autobot-backend/requirements.txt's <16 langgraph-sdk cap after ci.yml's python-shard job (#13300) installed SLM's tests into the SAME venv as the backend and surfaced a floor conflict there -- that was a CI-venv-sharing artifact, not a reason to downgrade SLM production, and #16391 reverted it in favor of a named exemption in pipeline-scripts/check_dependency_floors.py. #16394 gave the SLM suite its own venv, built from this file, so ci.yml's strict floor check is now scoped per venv and that exemption is gone -- do not re-add it; a floor conflict here again means a venv split broke, not that this line should move.
 
 # Ansible integration
 ansible-runner>=2.4.3
@@ -82,19 +86,19 @@ httpx>=0.28.1  # health checks, general async HTTP calls
 # import it (lazily, at call time) — a fresh install was already broken the
 # first time any of those code paths ran; this was just never surfaced
 # until CI started building the app to verify generated types (#13118).
-aiohttp>=3.14.3  # SECURITY UPDATE — matches autobot-backend/requirements.txt pin
+aiohttp>=3.14.5  # SECURITY UPDATE — matches autobot-backend/requirements.txt pin
 
 # System metrics
 psutil>=7.2.2
 
 # SSH connectivity (for connection testing and node management)
-paramiko>=5.0.0
+paramiko>=5.1.0
 
 # Cron expression parsing (Issue #741 - Scheduled updates)
-croniter>=6.2.4
+croniter  # version from constraints/shared.txt
 
 # SSO Integration (Issue #576 Phase 4)
-authlib>=1.8.0  # OAuth2/OIDC client
+authlib>=1.9.1  # OAuth2/OIDC client
 ldap3>=2.9.1  # LDAP/Active Directory
 pysaml2>=7.5.5  # SAML 2.0 Service Provider
 
@@ -102,6 +106,6 @@ pysaml2>=7.5.5  # SAML 2.0 Service Provider
 pyotp>=2.10.0  # TOTP generation and verification
 
 # Security: explicit pins to override vulnerable transitive versions
-cryptography>=50.0.1  # CVE fix — pulled in by PyJWT[crypto] and pysaml2
+cryptography>=50.0.2  # CVE fix — pulled in by PyJWT[crypto] and pysaml2
 # Note: pyopenssl version resolved by pysaml2's dependencies (constraints conflict with >=26.0.0)
-# cryptography>=50.0.1 provides primary security coverage
+# cryptography>=50.0.2 provides primary security coverage

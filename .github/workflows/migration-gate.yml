@@ -29,12 +29,37 @@ on:
       - 'autobot-backend/tests/migrations/**'
       - 'autobot-backend/user_management/models/**'
       - 'autobot-backend/llc/models/**'
+      - 'autobot-backend/llc/services/workspace_lease.py'
+      - 'autobot-backend/llc/services/company.py'
+      - 'autobot-backend/llc/services/company_ceo.py'
+      - 'autobot-backend/llc/services/company_move_lock.py'
+      - 'autobot-backend/llc/services/authz.py'
+      - 'autobot-backend/llc/services/membership_policy.py'
+      - 'autobot-backend/llc/services/membership_service.py'
+      - 'autobot-backend/llc/services/budget.py'
+      - 'autobot-backend/llc/exceptions.py'
+      - 'autobot-backend/llc/scheduler/run_status.py'
       - 'autobot-backend/canvas/models.py'
       - 'autobot-backend/models/**'
       - 'autobot-backend/initialization/lifespan.py'
       - 'autobot-slm-backend/ansible/setup-user-backend.yml'
       - 'autobot-slm-backend/ansible/playbooks/update-all-nodes.yml'
       - '.github/workflows/migration-gate.yml'
+      - 'autobot-backend/services/*secret*.py'
+      - 'autobot-backend/services/credential_*.py'
+      - 'autobot-backend/services/orphan_repair*.py'
+      - 'autobot-backend/services/provider_key_vault.py'
+      - 'autobot-backend/services/__init__.py'
+      - 'autobot-backend/services/approval_gate_service.py'
+      - 'autobot-backend/api/**'
+      - 'autobot_shared/secrets_envelope.py'
+      - 'autobot_shared/status_enums.py'
+      - 'autobot_shared/time_utils.py'
+      - 'autobot_shared/auth/device_capabilities.py'
+      - 'autobot_shared/secrets_vault.py'
+      - 'autobot_shared/legacy_secret_keys.py'
+      - 'autobot_shared/db_errors.py'
+      - '.github/workflows/_changes.yml'
   # NOTE (#11346): no pull_request.paths filter — this workflow ALWAYS runs on PRs
   # so its required-check context ("migration-matrix") always reports a conclusion.
   # A path-filtered required check that never triggers leaves the PR deadlocked on
@@ -42,6 +67,10 @@ on:
   # below; #13862 made the required context a separate reporting job so that
   # "nothing to verify" is stated rather than inferred from a skip.
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [ release, main ]
   # #17490: every trigger above is path-driven, so a break whose cause is not a
   # commit is invisible to all of them. That is not hypothetical -- #17490 was
@@ -65,37 +94,61 @@ concurrency:
 
 permissions:
   contents: read
+  packages: read  # pull the ghcr CI image mirror (#18160)
 
 jobs:
   changes:
+    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and
+    # every `always()` aggregate below reads `needs.changes.result`.
+    # Gating it makes those read `skipped` and exit 1, so a REQUIRED
+    # context would report FAILED on every draft -- worse than no gate.
+    # Gate the expensive jobs, never the cheap thing others read.
     name: Detect changed paths
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      migrations: ${{ steps.filter.outputs.migrations }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
-        id: filter
-        with:
-          # #14054: dorny/paths-filter errors on an event it does not
-          # recognise unless `base` is given, and a failed `changes` job
-          # skips every job that needs it -- i.e. the required context
-          # never reports and the queue deadlocks. Empty on push/PR, so
-          # their existing behaviour is unchanged.
-          base: ${{ github.event.merge_group.base_sha || '' }}
-          filters: |
-            migrations:
-              - 'autobot-backend/migrations/**'
-              - 'autobot-backend/tests/migrations/**'
-              - 'autobot-backend/user_management/models/**'
-              - 'autobot-backend/llc/models/**'
-              - 'autobot-backend/canvas/models.py'
-              - 'autobot-backend/models/**'
-              - 'autobot-backend/initialization/lifespan.py'
-              - 'autobot-slm-backend/ansible/setup-user-backend.yml'
-              - 'autobot-slm-backend/ansible/playbooks/update-all-nodes.yml'
-              - '.github/workflows/migration-gate.yml'
+    uses: ./.github/workflows/_changes.yml
+    with:
+      timeout_minutes: 10
+      # #14054: dorny/paths-filter errors on an event it does not
+      # recognise unless `base` is given, and a failed `changes` job
+      # skips every job that needs it -- i.e. the required context
+      # never reports and the queue deadlocks. Empty on push/PR, so
+      # their existing behaviour is unchanged.
+      merge_group_base: true
+      filters: |
+        migrations:
+          - 'autobot-backend/migrations/**'
+          - 'autobot-backend/tests/migrations/**'
+          - 'autobot-backend/user_management/models/**'
+          - 'autobot-backend/llc/models/**'
+          - 'autobot-backend/llc/services/workspace_lease.py'
+          - 'autobot-backend/llc/services/company.py'
+          - 'autobot-backend/llc/services/company_ceo.py'
+          - 'autobot-backend/llc/services/company_move_lock.py'
+          - 'autobot-backend/llc/services/authz.py'
+          - 'autobot-backend/llc/services/membership_policy.py'
+          - 'autobot-backend/llc/services/membership_service.py'
+          - 'autobot-backend/llc/services/budget.py'
+          - 'autobot-backend/llc/exceptions.py'
+          - 'autobot-backend/llc/scheduler/run_status.py'
+          - 'autobot-backend/canvas/models.py'
+          - 'autobot-backend/models/**'
+          - 'autobot-backend/initialization/lifespan.py'
+          - 'autobot-slm-backend/ansible/setup-user-backend.yml'
+          - 'autobot-slm-backend/ansible/playbooks/update-all-nodes.yml'
+          - '.github/workflows/migration-gate.yml'
+          - 'autobot-backend/services/*secret*.py'
+          - 'autobot-backend/services/credential_*.py'
+          - 'autobot-backend/services/orphan_repair*.py'
+          - 'autobot-backend/services/provider_key_vault.py'
+          - 'autobot-backend/services/__init__.py'
+          - 'autobot-backend/services/approval_gate_service.py'
+          - 'autobot-backend/api/**'
+          - 'autobot_shared/secrets_envelope.py'
+          - 'autobot_shared/status_enums.py'
+          - 'autobot_shared/time_utils.py'
+          - 'autobot_shared/auth/device_capabilities.py'
+          - 'autobot_shared/secrets_vault.py'
+          - 'autobot_shared/legacy_secret_keys.py'
+          - 'autobot_shared/db_errors.py'
 
   migration-tests:
     needs: changes
@@ -118,7 +171,13 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        # Mirror of the upstream image (ci-image-mirror.yml, #18160): anonymous
+        # pulls hit the per-IP quota. The ghcr packages must be public or grant
+        # this repo read access so fork PRs can pull them.
+        image: ghcr.io/mrveiss/ci-postgres:16
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
         env:
           POSTGRES_USER: migtest
           POSTGRES_PASSWORD: migtest
@@ -173,6 +232,14 @@ jobs:
         #
         # starlette is the only other name a static import-graph walk of
         # api/secrets.py reports, and pip already installs it with fastapi.
+        #
+        # #18133: that walk was NOT complete -- it missed cachetools, reached by
+        # api.secrets -> autobot_memory_graph (eager __init__) -> core.py's
+        # `from cachetools import LRUCache`. A fourth eager package __init__, the same
+        # pattern the three above describe. The gate failed on every PR with
+        # ModuleNotFoundError while `migration-tests` is not itself a required context --
+        # but it feeds `migration-matrix`, which IS, so the red propagated and blocked
+        # merges anyway. Added by name, as this hand-picked list intends.
         run: |
           python -m pip install --upgrade pip
           # -c pins these to the versions requirements-ci/storage.txt already
@@ -180,16 +247,20 @@ jobs:
           # sqlalchemy 2.1.0 over the declared ==2.0.54 and this gate ran on a
           # version no other job uses. The names stay listed here because this
           # job installs a hand-picked subset, not the whole file.
-          python -m pip install -c requirements-ci/storage.txt \
-            "alembic>=1.13" "sqlalchemy[asyncio]>=2.0" asyncpg aiosqlite \
-            pydantic pydantic-settings \
+          # croniter: services/trigger_service.py imports it at module level since #18469, and the
+          # migration tests import that module through api.schemas_workflows; without it the
+          # backend conftest stubs the module and TriggerType becomes a MagicMock. Version: constraints.
+          python -m pip install -c requirements-ci/storage.txt -c constraints/shared.txt \
+            "alembic>=1.13" "sqlalchemy[asyncio]>=2.0" asyncpg aiosqlite croniter \
+            pydantic pydantic-settings "email-validator>=2.3.0" \
             bcrypt pyjwt redis httpx aiofiles python-dotenv pyyaml \
-            cryptography fastapi structlog aiohttp prometheus_client \
+            cryptography fastapi structlog aiohttp prometheus_client cachetools \
             pytest pytest-asyncio
 
       - name: Run migration matrix
         env:
           AUTOBOT_MIGRATION_TEST_ADMIN_URL: postgresql+asyncpg://migtest:migtest@127.0.0.1:5432/postgres
+          AUTOBOT_MIGRATION_TEST_REQUIRE_DB: "1"  # #20080: a missing URL fails, never skips
         run: |
           python -m pytest autobot-backend/tests/migrations/ \
             -m migration_gate -v --tb=short -p no:cacheprovider
@@ -224,16 +295,28 @@ jobs:
   #
   # `always()` rather than the repo's usual `!cancelled()` is deliberate:
   # `!cancelled()` would SKIP this job on a cancelled run and re-publish
-  # `skipped` on the required context, which is the bug being fixed. The cost
-  # is that a cancelled run reports this check red rather than absent — the
-  # safer direction for a required gate, and self-clearing on the next run.
+  # `skipped` on the required context, which is the bug being fixed. A cancelled
+  # upstream used to turn this check red; the shared cancel-run-on-cancelled-upstream
+  # action now ends it `cancelled` instead, which is still not green (#17764).
   migration-matrix:
     name: migration-matrix
     needs: [changes, migration-tests]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write  # force-cancel this run when an upstream was cancelled (#17764)
     steps:
+      - name: Check out the shared gate action
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - name: End cancelled, not failed, when an upstream was cancelled (#17764)
+        uses: ./.github/actions/cancel-run-on-cancelled-upstream
+        with:
+          results: ${{ needs.changes.result }} ${{ needs.migration-tests.result }}
       - name: Report migration gate verdict
         env:
           CHANGES_RESULT: ${{ needs.changes.result }}

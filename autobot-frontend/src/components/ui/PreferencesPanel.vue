@@ -12,7 +12,7 @@ Issue #3286: Comprehensive Theming System
   <form class="preferences-panel" @submit.prevent>
     <div class="panel-header">
       <h3 class="panel-title">
-        <Icon name="sliders-h" size="md" />
+        <Icon name="cog" size="md" />
         {{ t('ui.preferences.title') }}
       </h3>
       <button
@@ -89,7 +89,7 @@ Issue #3286: Comprehensive Theming System
             :aria-pressed="accentColor === color.value"
             type="button"
           >
-            <span class="color-preview" :aria-hidden="true"></span>
+            <span class="color-preview" :data-accent="color.value" :aria-hidden="true"></span>
             <span class="color-label">{{ color.label }}</span>
           </button>
         </div>
@@ -129,7 +129,9 @@ Issue #3286: Comprehensive Theming System
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { usePreferences, type FontSize, type AccentColor, type LayoutDensity } from '@/composables/usePreferences'
+import { usePreferences, type FontSize, type LayoutDensity } from '@/composables/usePreferences'
+// #18066: the accent type is owned by useTheme; usePreferences re-exports it.
+import type { AccentColor } from '@/composables/useTheme'
 import { createLogger } from '@/utils/debugUtils'
 import ThemeToggle from '@/components/ui/ThemeToggle.vue'
 import EmberThemeToggle from '@/components/theme/EmberThemeToggle.vue'
@@ -160,12 +162,20 @@ const fontSizeOptions = computed(() => [
 ])
 
 // Accent color options (CSS variables for preview colors)
+// #18066: the eight accents `accents.css` actually defines. This panel used to
+// offer five under a rival attribute, so it and ThemePresetPicker disagreed about
+// both the colour set and where to write it. `emerald` is retired -- it is the
+// same colour this set calls `green` (identical value in accents.css).
 const accentColorOptions = computed(() => [
-  { value: 'teal' as AccentColor, label: t('ui.preferences.teal') },
-  { value: 'emerald' as AccentColor, label: t('ui.preferences.emerald') },
+  { value: 'theme' as AccentColor, label: t('ui.preferences.accentTheme') },
   { value: 'blue' as AccentColor, label: t('ui.preferences.blue') },
+  { value: 'green' as AccentColor, label: t('ui.preferences.green') },
   { value: 'purple' as AccentColor, label: t('ui.preferences.purple') },
-  { value: 'orange' as AccentColor, label: t('ui.preferences.orange') }
+  { value: 'orange' as AccentColor, label: t('ui.preferences.orange') },
+  { value: 'pink' as AccentColor, label: t('ui.preferences.pink') },
+  { value: 'teal' as AccentColor, label: t('ui.preferences.teal') },
+  { value: 'indigo' as AccentColor, label: t('ui.preferences.indigo') },
+  { value: 'red' as AccentColor, label: t('ui.preferences.red') }
 ])
 
 // Layout density options
@@ -257,7 +267,7 @@ function handleReset() {
   margin: var(--spacing-0);
 }
 
-.panel-title i {
+.panel-title .icon {
   color: var(--color-primary);
 }
 
@@ -321,8 +331,9 @@ function handleReset() {
   letter-spacing: 0.05em;
 }
 
-.preference-label i {
-  font-size: var(--font-size-xs);
+.preference-label .icon {
+  width: var(--font-size-xs);
+  height: var(--font-size-xs);
   color: var(--text-tertiary);
 }
 
@@ -419,34 +430,24 @@ function handleReset() {
 }
 
 /* Color preview using data attributes and CSS */
+/* #18066: the swatch carries [data-accent], so accents.css resolves
+   --color-primary to that accent's colour. Previously five rules: three
+   hardcoded hex (flagged by stylelint), one pointed at --color-success,
+   and the teal swatch read --color-primary unscoped -- rendering whatever
+   accent happened to be active rather than teal. */
 .color-preview {
+  background: var(--color-primary);
   width: 32px;
   height: 32px;
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-sm);
 }
 
-.color-btn[data-color="teal"] .color-preview {
-  background: var(--color-primary);
-}
-
-.color-btn[data-color="emerald"] .color-preview {
-  background: var(--color-success);
-}
-
-.color-btn[data-color="blue"] .color-preview {
-  background: #3b82f6;
-}
-
-.color-btn[data-color="purple"] .color-preview {
-  background: #8b5cf6;
-}
-
-.color-btn[data-color="orange"] .color-preview {
-  background: #f97316;
-}
-
 /* Active color preview gets border */
+.color-preview[data-accent="theme"] {
+  background: var(--primary);
+}
+
 .color-btn.active .color-preview {
   border: 2px solid var(--color-primary);
 }

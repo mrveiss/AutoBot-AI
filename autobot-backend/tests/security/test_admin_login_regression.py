@@ -15,15 +15,15 @@ from fastapi import HTTPException
 
 from api.auth import login
 from api.schemas_agent import LoginRequest
-from user_management.config import DeploymentConfig, DeploymentMode, FeatureFlags
+from user_management.config import DeploymentConfig, UserManagementMode, UserModeFeatures
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 
-def _cfg(mode: DeploymentMode) -> DeploymentConfig:
+def _cfg(mode: UserManagementMode) -> DeploymentConfig:
     return DeploymentConfig(
         mode=mode,
-        features=FeatureFlags(),
+        features=UserModeFeatures(),
         postgres_enabled=True,
     )
 
@@ -44,7 +44,7 @@ async def test_wrong_password_rejected_in_single_company_mode():
 
     Postgres-backed deployments always require real credentials.
     """
-    cfg = _cfg(DeploymentMode.SINGLE_COMPANY)
+    cfg = _cfg(UserManagementMode.SINGLE_COMPANY)
 
     async def _fail_auth(*_args, **_kwargs) -> None:
         raise HTTPException(status_code=401, detail="Invalid credentials")

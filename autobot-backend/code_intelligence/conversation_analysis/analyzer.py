@@ -16,20 +16,20 @@ from typing import Any, Dict, List, Tuple
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 
-from .classifiers import IntentClassifier, ResponseClassifier
+from .classifiers import ConversationIntentClassifier, ResponseClassifier
 from .types import (
     SATISFACTION_SIGNALS,
     AnalysisResult,
     Bottleneck,
     BottleneckType,
-    ConversationFlow,
     ConversationMessage,
+    ConversationOptimizationType,
     FlowPattern,
     FlowState,
     IntentCategory,
     Optimization,
-    OptimizationType,
     ResponseType,
+    SessionConversationFlow,
 )
 
 logger = get_logger(__name__)
@@ -65,7 +65,7 @@ class ConversationFlowAnalyzer:
         self.clarification_threshold = clarification_threshold
 
         # Analysis state
-        self._flows: List[ConversationFlow] = []
+        self._flows: List[SessionConversationFlow] = []
         self._patterns: Dict[str, FlowPattern] = {}
         self._bottlenecks: List[Bottleneck] = []
         self._optimizations: List[Optimization] = []
@@ -105,7 +105,7 @@ class ConversationFlowAnalyzer:
         satisfaction_signal = None
 
         if role == "user":
-            intent, _ = IntentClassifier.classify(content)
+            intent, _ = ConversationIntentClassifier.classify(content)
             if intent == IntentCategory.CLARIFICATION:
                 clarification_inc = 1
             if any(word in content.lower() for word in SATISFACTION_SIGNALS):
@@ -228,16 +228,16 @@ class ConversationFlowAnalyzer:
         self,
         messages: List[Dict[str, Any]],
         session_id: str = "unknown",
-    ) -> ConversationFlow:
+    ) -> SessionConversationFlow:
         """
-        Parse a raw conversation into a ConversationFlow. Issue #620.
+        Parse a raw conversation into a SessionConversationFlow. Issue #620.
 
         Args:
             messages: List of message dicts with 'role' and 'content'
             session_id: Session identifier
 
         Returns:
-            Parsed ConversationFlow
+            Parsed SessionConversationFlow
         """
         (
             parsed_messages,
@@ -254,7 +254,7 @@ class ConversationFlowAnalyzer:
         start_time = parsed_messages[0].timestamp if parsed_messages else None
         end_time = parsed_messages[-1].timestamp if parsed_messages else None
 
-        return ConversationFlow(
+        return SessionConversationFlow(
             session_id=session_id,
             messages=parsed_messages,
             start_time=start_time,
@@ -328,14 +328,14 @@ class ConversationFlowAnalyzer:
     def _ingest_conversations(
         self,
         conversations: List[List[Dict[str, Any]]] | None = None,
-        flows: List[ConversationFlow] | None = None,
+        flows: List[SessionConversationFlow] | None = None,
     ) -> None:
         """
         Parse and ingest raw conversations and flows into internal storage.
 
         Args:
             conversations: Raw conversation data (list of message lists)
-            flows: Pre-parsed ConversationFlow objects
+            flows: Pre-parsed SessionConversationFlow objects
 
         Issue #620.
         """
@@ -406,14 +406,14 @@ class ConversationFlowAnalyzer:
     def analyze(
         self,
         conversations: List[List[Dict[str, Any]]] | None = None,
-        flows: List[ConversationFlow] | None = None,
+        flows: List[SessionConversationFlow] | None = None,
     ) -> AnalysisResult:
         """
         Analyze conversation flows and generate insights.
 
         Args:
             conversations: Raw conversation data (list of message lists)
-            flows: Pre-parsed ConversationFlow objects
+            flows: Pre-parsed SessionConversationFlow objects
 
         Returns:
             AnalysisResult with patterns, bottlenecks, and optimizations
@@ -486,7 +486,7 @@ class ConversationFlowAnalyzer:
     def _extract_flow_patterns(self) -> List[FlowPattern]:
         """Extract common flow patterns."""
         # Group flows by intent sequence (as tuple for hashability)
-        sequence_groups: Dict[Tuple[IntentCategory, ...], List[ConversationFlow]] = defaultdict(list)
+        sequence_groups: Dict[Tuple[IntentCategory, ...], List[SessionConversationFlow]] = defaultdict(list)
 
         for flow in self._flows:
             # Use first 5 intents as pattern key
@@ -660,7 +660,7 @@ class ConversationFlowAnalyzer:
         if not frequent:
             return None
         return Optimization(
-            optimization_type=OptimizationType.CACHING,
+            optimization_type=ConversationOptimizationType.CACHING,
             description="Cache responses for frequently occurring conversation patterns",
             impact="high",
             effort="medium",
@@ -683,7 +683,7 @@ class ConversationFlowAnalyzer:
         if not low_success:
             return None
         return Optimization(
-            optimization_type=OptimizationType.PROMPT_IMPROVEMENT,
+            optimization_type=ConversationOptimizationType.PROMPT_IMPROVEMENT,
             description="Improve prompts for low-success conversation patterns",
             impact="high",
             effort="medium",
@@ -706,7 +706,7 @@ class ConversationFlowAnalyzer:
         if any(b.bottleneck_type == BottleneckType.ERROR_LOOP for b in bottlenecks):
             result.append(
                 Optimization(
-                    optimization_type=OptimizationType.ERROR_HANDLING,
+                    optimization_type=ConversationOptimizationType.ERROR_HANDLING,
                     description="Implement robust error recovery mechanisms",
                     impact="high",
                     effort="high",
@@ -718,7 +718,7 @@ class ConversationFlowAnalyzer:
         if any(b.bottleneck_type == BottleneckType.REPEATED_CLARIFICATION for b in bottlenecks):
             result.append(
                 Optimization(
-                    optimization_type=OptimizationType.INTENT_CLASSIFICATION,
+                    optimization_type=ConversationOptimizationType.INTENT_CLASSIFICATION,
                     description="Enhance intent classification accuracy",
                     impact="medium",
                     effort="medium",
@@ -870,7 +870,7 @@ def classify_intent(message: str) -> Tuple[IntentCategory, float]:
     Returns:
         Tuple of (IntentCategory, confidence_score)
     """
-    return IntentClassifier.classify(message)
+    return ConversationIntentClassifier.classify(message)
 
 
 def classify_response(response: str) -> ResponseType:
@@ -903,4 +903,4 @@ def get_bottleneck_types() -> List[str]:
 
 def get_optimization_types() -> List[str]:
     """Get all optimization type names."""
-    return [ot.value for ot in OptimizationType]
+    return [ot.value for ot in ConversationOptimizationType]

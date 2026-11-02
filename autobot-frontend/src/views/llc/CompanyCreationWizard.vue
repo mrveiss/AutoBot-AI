@@ -456,8 +456,8 @@ async function createCompany() {
 
     // Redirect into the new company's PM workspace (LlcCompanyLayout → backlog,
     // boards, sprints, etc. with the sidebar) rather than the sidebar-less
-    // standalone /llc/dashboard, which left all PM features unreachable.
-    await router.push(`/llc/companies/${createdCompany.id}`)
+    // standalone /llc/dashboard. ?welcome=plan shows the planner card (#19938).
+    await router.push({ path: `/llc/companies/${createdCompany.id}`, query: { welcome: 'plan' } })
   } catch (err) {
     logger.error('Failed to create company', err)
     const e = err as { response?: { data?: { detail?: string } }; message?: string }
@@ -516,7 +516,7 @@ async function createCompany() {
   font-weight: 600;
   margin-bottom: var(--spacing-2);
   transition: all var(--duration-300);
-  z-index: 1;
+  z-index: var(--z-raised);
 }
 
 .step-item.active .step-circle {
@@ -548,7 +548,7 @@ async function createCompany() {
   width: 100%;
   height: 2px;
   background: var(--border-color);
-  z-index: 0;
+  z-index: var(--z-0);
 }
 
 .wizard-content {
@@ -878,32 +878,32 @@ async function createCompany() {
 
 /* Template Icon Categories */
 .category-software-team {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--color-primary);
   color: white;
 }
 
 .category-marketing-agency {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: var(--color-error-solid);
   color: white;
 }
 
 .category-consulting-firm {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  background: var(--color-info-solid);
   color: white;
 }
 
 .category-research-lab {
-  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+  background: var(--color-success);
   color: white;
 }
 
 .category-startup {
-  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+  background: var(--color-warning);
   color: white;
 }
 
 .category-custom {
-  background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+  background: var(--bg-tertiary);
   color: white;
 }
 </style>

@@ -11,13 +11,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import BaseBadge from '@/components/base/BaseBadge.vue'
+import { BaseBadge } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import {
   useAdminPricingApi,
   type PricingStatusResponse,
   type RefreshSummary,
 } from '@/composables/useAdminPricingApi'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const { t } = useI18n()
 const { fetchStatus, refreshNow, setOverride, deleteOverride } = useAdminPricingApi()
@@ -31,10 +32,7 @@ const lastSummary = ref<RefreshSummary | null>(null)
 const providers = computed(() => Object.entries(status.value))
 const hasData = computed(() => providers.value.length > 0)
 
-function formatTime(iso: string | null): string {
-  if (!iso) return t('admin.pricing.never')
-  return new Date(iso).toLocaleString()
-}
+const formatTime = createDateFormatter({ emptyText: () => t('admin.pricing.never') })
 
 async function load(): Promise<void> {
   loading.value = true
@@ -167,7 +165,7 @@ onMounted(load)
         <div v-for="[provider, s] in providers" :key="provider" class="card provider-card">
           <div class="card-header">
             <span class="provider-name">{{ provider }}</span>
-            <BaseBadge :variant="s.success ? 'success' : 'danger'" size="sm">
+            <BaseBadge :variant="s.success ? 'success' : 'error'" size="sm">
               {{ s.success ? t('admin.pricing.statusOk') : t('admin.pricing.statusFailed') }}
             </BaseBadge>
           </div>

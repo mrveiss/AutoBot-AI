@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, Mock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from advanced_rag_optimizer import RAGMetrics, SearchResult
+from advanced_rag_optimizer import RAGMetrics, RankedResult
 from api.knowledge_rag import get_rag_service_dependency
 from api.knowledge_rag import router as rag_router
 from auth_middleware import get_current_user
@@ -42,8 +42,8 @@ def _build_rag_test_app(rag_service) -> FastAPI:
     return app
 
 
-def _sample_result(content: str) -> SearchResult:
-    return SearchResult(
+def _sample_result(content: str) -> RankedResult:
+    return RankedResult(
         content=content,
         metadata={"source": "kb"},
         semantic_score=0.9,

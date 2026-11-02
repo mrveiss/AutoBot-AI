@@ -7,9 +7,10 @@
 # under 10 seconds. So the time is instrumentation overhead, not test work, and
 # paying it on every pull request buys nothing a nightly run does not.
 #
-# The split is the same twelve-way pytest-split arrangement the PR gate uses, for
-# the same reason (one job would be ~45 minutes), and it reuses the same
-# durations files. Those were recorded WITHOUT instrumentation, so they describe
+# The split is twelve-way pytest-split, for the same reason the PR gate shards
+# (one job would be ~45 minutes); the PR gate runs eight stable_shard groups
+# since #19527, and instrumentation makes each shard here far slower, so this
+# nightly keeps its own count. It reuses the same durations files. Those were recorded WITHOUT instrumentation, so they describe
 # relative test cost rather than relative coverage cost; the chunks are
 # therefore approximate here. That is acceptable for a nightly job and is why
 # the shard timeout below is generous.
@@ -27,6 +28,7 @@ on:
 
 permissions:
   contents: read
+  packages: read  # pull the ghcr CI image mirror (#18160)
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -47,7 +49,13 @@ jobs:
 
     services:
       redis:
-        image: redis:7-alpine
+        # Mirror of the upstream image (ci-image-mirror.yml, #18160): anonymous
+        # pulls hit the per-IP quota. The ghcr packages must be public or grant
+        # this repo read access so fork PRs can pull them.
+        image: ghcr.io/mrveiss/ci-redis:7-alpine
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
         ports:
           - 6379:6379
         options: >-
@@ -79,6 +87,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2  # #19283: down-only ratchets read the base commit (HEAD^1)
 
       - uses: ./.github/actions/setup-python-suite
 
@@ -104,7 +114,7 @@ jobs:
           # nowhere at all, ever. Named in all four `repo_tests`-carrying invocations
           # together so hook_suites_run_in_ci_test.py's root-set agreement stays true.
           python -m pytest \
-            autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks .claude/skills/claims-audit autobot-infrastructure/shared/tests libs \
+            autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks autobot-infrastructure/shared/scripts/monitoring .claude/skills/claims-audit autobot-infrastructure/shared/tests libs plugins/core-plugins \
             -n auto --dist loadscope \
             --splits 12 --group ${{ matrix.shard }} \
             --durations-path .test_durations \
@@ -136,7 +146,7 @@ jobs:
       # covered the lines it executed, and this suite has standing failures.
       - name: Upload shard coverage data
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: coverage-shard-${{ matrix.shard }}
           path: .coverage.shard-${{ matrix.shard }}

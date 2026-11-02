@@ -1,6 +1,6 @@
 <template>
   <div class="provider-oauth-connect">
-    <div class="auth-mode-toggle">
+    <div v-if="$slots.apikey" class="auth-mode-toggle">
       <button
         :class="['auth-tab', { active: authMode === 'apikey' }]"
         @click="authMode = 'apikey'"
@@ -31,19 +31,48 @@
             {{ t('settings.providerAuth.expiresAt', { date: formatExpiry(status.expires_at) }) }}
           </span>
         </span>
+        <span v-else-if="status.needs_reauth" class="text-sm text-autobot-warning" data-testid="needs-reauth">
+          {{ t('settings.providerAuth.needsReauth', { provider: providerLabel }) }}
+        </span>
         <span v-else class="status-text">{{ t('settings.providerAuth.notConnected') }}</span>
-        <button v-if="status.connected" class="btn-danger-sm" @click="revoke">{{ t('settings.providerAuth.disconnect') }}</button>
+        <template v-if="status.shared && (status.connected || status.needs_reauth)">
+          <!-- #19241: an org-less admin's system connection IS the token every org shares. -->
+          <BaseButton variant="error" size="xs"
+            v-if="canRevokeShared"
+            data-testid="shared-revoke-inline"
+            :disabled="shared.busy.value"
+            @click="revokeSharedHere"
+          >
+            {{ t('settings.providerAuth.shared.revokeButton', { provider: providerLabel }) }}
+          </BaseButton>
+          <span v-else class="status-text" data-testid="shared-superadmin-only">
+            {{ t('settings.providerAuth.shared.superadminOnly', { provider: providerLabel }) }}
+          </span>
+        </template>
+        <BaseButton variant="error" size="xs" v-else-if="status.connected || status.needs_reauth" @click="revoke">{{ t('settings.providerAuth.disconnect') }}</BaseButton>
       </div>
+      <p v-if="revokeWarning" class="error-msg" data-testid="revoke-warning">{{ revokeWarning }}</p>
+      <p v-if="shared.message.value" class="status-text" role="status">{{ shared.message.value }}</p>
 
       <!-- ToS / capability notice -->
-      <p v-if="tosNote" class="tos-notice">{{ tosNote }}</p>
+      <p v-if="tosText" class="tos-notice">{{ tosText }}</p>
+
+      <!-- Operator has not configured this provider: guidance only -->
+      <div v-if="!configured" class="text-sm text-autobot-text-secondary" data-testid="provider-not-configured">
+        <p>{{ t('settings.providerAuth.notConfigured', { provider: providerLabel }) }}</p>
+        <ul v-if="missingSettings.length" class="ml-4 mt-1 text-xs">
+          <li v-for="name in missingSettings" :key="name"><code>{{ name }}</code></li>
+        </ul>
+      </div>
+
+      <template v-else>
 
       <!-- Device-code flow (headless / CLI) -->
-      <div v-if="deviceAuth && !status?.connected" class="device-flow">
-        <button class="btn-secondary" :disabled="busy" @click="startDeviceFlow">
+      <div v-if="useDevice && !status?.connected" class="device-flow">
+        <BaseButton variant="secondary" size="sm" :disabled="busy" @click="startDeviceFlow">
           <span v-if="busy && deviceStep === 'initiating'">{{ t('settings.providerAuth.connecting') }}</span>
           <span v-else>{{ t('settings.providerAuth.connectDeviceCode') }}</span>
-        </button>
+        </BaseButton>
         <div v-if="deviceInstruction" class="device-instruction">
           <i18n-t keypath="settings.providerAuth.deviceInstruction" tag="p">
             <template #url>
@@ -53,22 +82,23 @@
             </template>
           </i18n-t>
           <code class="device-code">{{ deviceInstruction.user_code }}</code>
-          <button class="btn-primary btn-sm" :disabled="busy" @click="pollDeviceFlow">
+          <BaseButton size="sm" :disabled="busy" @click="pollDeviceFlow">
             {{ busy ? t('settings.providerAuth.checking') : t('settings.providerAuth.approvedButton') }}
-          </button>
+          </BaseButton>
         </div>
       </div>
 
       <!-- Standard OAuth redirect (non-headless) -->
-      <div v-else-if="!deviceAuth && !status?.connected" class="oauth-flow">
+      <div v-else-if="!useDevice && !status?.connected" class="oauth-flow">
         <p class="oauth-description">
           {{ t('settings.providerAuth.oauthDescription', { provider: providerLabel }) }}
           {{ t('settings.providerAuth.noApiKeyRequired') }}
         </p>
-        <button class="btn-primary" :disabled="busy" @click="initiateOAuth">
+        <BaseButton size="sm" data-testid="provider-signin" :disabled="busy" @click="initiateOAuth">
           {{ busy ? t('settings.providerAuth.redirecting') : t('settings.providerAuth.signInWith', { provider: providerLabel }) }}
-        </button>
+        </BaseButton>
       </div>
+      </template>
 
       <p v-if="errorMsg" class="error-msg">{{ errorMsg }}</p>
     </div>
@@ -76,9 +106,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { BaseButton } from '@autobot/ui'
+import { ref, computed, onMounted, useSlots } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
+import type { components } from '@/types/generated/api'
+import { useSharedTokenRevoke } from '@/composables/useSharedTokenRevoke'
+import {
+  buildProviderRedirectUri,
+  type ProviderAuthFlow,
+  type ProviderAuthScope,
+} from '@/utils/providerOAuth'
 
 interface DeviceInstruction {
   device_code: string
@@ -93,43 +131,66 @@ interface AuthStatus {
   connected: boolean
   expires_at?: number | null
   auth_kind?: string | null
+  scope?: ProviderAuthScope
+  needs_reauth?: boolean
+  shared?: boolean
 }
 
+type RevokeResult = components['schemas']['ProviderRevokeResult']
+
+// #19241: provider endpoints, client ids and flow availability are server-side;
+// the SPA only receives which flows work and which operator settings are missing.
 const props = withDefaults(defineProps<{
   providerName: string
   providerLabel: string
-  tosNote?: string
-  /** Use device-code flow instead of browser redirect */
-  deviceAuth?: boolean
-  deviceAuthorizationUrl?: string
-  tokenUrl?: string
-  clientId?: string
-  scope?: string
+  scope: ProviderAuthScope
+  flows?: ProviderAuthFlow[]
+  configured?: boolean
+  missingSettings?: string[]
+  /** Superadmin: may revoke the shared token from an org-less System row (#19241). */
+  canRevokeShared?: boolean
 }>(), {
-  tosNote: '',
-  deviceAuth: false,
-  deviceAuthorizationUrl: '',
-  tokenUrl: '',
-  clientId: '',
-  scope: 'openid',
+  flows: () => [],
+  configured: true,
+  missingSettings: () => [],
+  canRevokeShared: false,
 })
 
-const authMode = ref<'apikey' | 'oauth'>('apikey')
+const slots = useSlots()
+// Sections without an API-key slot (per-user accounts) show only sign-in.
+const authMode = ref<'apikey' | 'oauth'>(slots.apikey ? 'apikey' : 'oauth')
 const status = ref<AuthStatus | null>(null)
 const busy = ref(false)
 const errorMsg = ref('')
+const revokeWarning = ref('')
+const shared = useSharedTokenRevoke()
+
+async function revokeSharedHere(): Promise<void> {
+  if (await shared.revokeShared({ name: props.providerName, label: props.providerLabel })) await loadStatus()
+}
 const deviceInstruction = ref<DeviceInstruction | null>(null)
 const deviceStep = ref<'idle' | 'initiating' | 'polling'>('idle')
 
 // #15031: every user-facing string, the error messages included, goes through
 // i18n; `locale` also formats the token expiry in the reader's language.
-const { t, locale } = useI18n()
+const { t, te, locale } = useI18n()
+
+// Redirect is preferred; device code is used only when it is the sole flow.
+const useDevice = computed(() => !props.flows.includes('redirect') && props.flows.includes('device'))
+const tosKey = computed(() => `settings.providerAuth.tos.${props.providerName}`)
+const tosText = computed(() => (te(tosKey.value) ? t(tosKey.value) : ''))
 
 onMounted(loadStatus)
 
+function errText(err: unknown, fallbackKey: string): string {
+  return (err as Error)?.message || t(fallbackKey)
+}
+
 async function loadStatus(): Promise<void> {
   try {
-    status.value = await ApiClient.get(`/api/llm-auth/status/${props.providerName}`)
+    status.value = await ApiClient.get(
+      `/api/llm-auth/status/${props.providerName}?scope=${props.scope}`,
+    )
     if (status.value?.connected) authMode.value = 'oauth'
   } catch {
     status.value = null
@@ -139,12 +200,17 @@ async function loadStatus(): Promise<void> {
 async function revoke(): Promise<void> {
   busy.value = true
   errorMsg.value = ''
+  revokeWarning.value = ''
   try {
-    await ApiClient.delete(`/api/llm-auth/${props.providerName}`)
+    const result: RevokeResult = await ApiClient.delete(`/api/llm-auth/${props.providerName}?scope=${props.scope}`)
+    // #19241: the local delete always happens; a provider-side revoke failure is surfaced, not hidden.
+    revokeWarning.value = result?.provider_revoked === false
+      ? t('settings.providerAuth.providerRevokeFailed', { reason: result.provider_error ?? '' })
+      : ''
     await loadStatus()
-    authMode.value = 'apikey'
+    if (slots.apikey) authMode.value = 'apikey'
   } catch (err: unknown) {
-    errorMsg.value = (err as Error).message ?? t('settings.providerAuth.disconnectFailed')
+    errorMsg.value = errText(err, 'settings.providerAuth.disconnectFailed')
   } finally {
     busy.value = false
   }
@@ -154,33 +220,33 @@ async function initiateOAuth(): Promise<void> {
   busy.value = true
   errorMsg.value = ''
   try {
-    // The backend manages the PKCE verifier + state via the code-exchange endpoint.
-    // For browser-redirect flows the SPA opens the authorize URL directly.
-    // This stub redirects to a provider-specific authorize URL when configured.
-    errorMsg.value = t('settings.providerAuth.redirectNeedsCallback')
-  } finally {
+    const resp: components['schemas']['OAuthAuthorizeResponse'] = await ApiClient.post(
+      '/api/llm-auth/oauth/initiate',
+      {
+        provider_name: props.providerName,
+        redirect_uri: buildProviderRedirectUri(),
+        scope: props.scope,
+      },
+    )
+    window.location.assign(resp.authorize_url)
+  } catch (err: unknown) {
+    errorMsg.value = errText(err, 'settings.providerAuth.initiateFailed')
     busy.value = false
   }
 }
 
 async function startDeviceFlow(): Promise<void> {
-  if (!props.deviceAuthorizationUrl || !props.clientId) {
-    errorMsg.value = t('settings.providerAuth.deviceNotConfigured')
-    return
-  }
   busy.value = true
   deviceStep.value = 'initiating'
   errorMsg.value = ''
   try {
     const resp = await ApiClient.post('/api/llm-auth/device/initiate', {
       provider_name: props.providerName,
-      device_authorization_url: props.deviceAuthorizationUrl,
-      client_id: props.clientId,
       scope: props.scope,
     })
     deviceInstruction.value = resp as DeviceInstruction
   } catch (err: unknown) {
-    errorMsg.value = (err as Error).message ?? t('settings.providerAuth.deviceInitFailed')
+    errorMsg.value = errText(err, 'settings.providerAuth.deviceInitFailed')
   } finally {
     busy.value = false
     deviceStep.value = 'idle'
@@ -188,15 +254,13 @@ async function startDeviceFlow(): Promise<void> {
 }
 
 async function pollDeviceFlow(): Promise<void> {
-  if (!deviceInstruction.value || !props.tokenUrl) return
+  if (!deviceInstruction.value) return
   busy.value = true
   deviceStep.value = 'polling'
   errorMsg.value = ''
   try {
     const resp = await ApiClient.post('/api/llm-auth/device/poll', {
       provider_name: props.providerName,
-      token_url: props.tokenUrl,
-      client_id: props.clientId,
       device_code: deviceInstruction.value.device_code,
     })
     if ((resp as { stored: boolean }).stored) {
@@ -206,7 +270,7 @@ async function pollDeviceFlow(): Promise<void> {
       errorMsg.value = t('settings.providerAuth.stillWaiting')
     }
   } catch (err: unknown) {
-    errorMsg.value = (err as Error).message ?? t('settings.providerAuth.pollFailed')
+    errorMsg.value = errText(err, 'settings.providerAuth.pollFailed')
   } finally {
     busy.value = false
     deviceStep.value = 'idle'
@@ -251,10 +315,6 @@ function formatExpiry(ts: number): string {
 .device-flow, .oauth-flow { display: flex; flex-direction: column; gap: 0.5rem; }
 .device-instruction { padding: 0.75rem; background: var(--bg-surface); border-radius: 6px; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.85rem; }
 .device-code { font-size: 1.4rem; font-weight: 700; letter-spacing: 0.15em; text-align: center; padding: 0.25rem; }
-
-.btn-danger-sm { font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px; border: 1px solid var(--color-error); color: var(--color-error); background: transparent; cursor: pointer; }
-.btn-danger-sm:hover { background: var(--color-error-bg); }
-.btn-sm { font-size: 0.8rem; padding: 0.3rem 0.75rem; }
 
 .error-msg { color: var(--color-error); font-size: 0.8rem; }
 </style>

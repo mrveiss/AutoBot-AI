@@ -22,7 +22,7 @@ from fastapi.responses import JSONResponse
 # Add src to path for imports (works in Docker /app and native /opt/autobot/...)
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
 
-from agents.base_agent import AgentResponse, deserialize_agent_request
+from agents.base_agent import StandardizedAgentResponse, deserialize_agent_request
 from agents.chat_agent import ChatAgent
 from agents.classification_agent import ClassificationAgent
 from agents.rag_agent import get_rag_agent
@@ -221,7 +221,7 @@ async def process_agent_request(agent_type: str, request: Request):
             response = await agent.process_request(agent_request)
         else:
             # Fallback for legacy agents
-            response = AgentResponse(
+            response = StandardizedAgentResponse(
                 request_id=agent_request.request_id,
                 agent_type=agent_type,
                 status="error",
@@ -236,7 +236,7 @@ async def process_agent_request(agent_type: str, request: Request):
         logger.error(traceback.format_exc())
 
         req_id = getattr(agent_request, "request_id", "unknown") if agent_request else "unknown"
-        error_response = AgentResponse(
+        error_response = StandardizedAgentResponse(
             request_id=req_id,
             agent_type=agent_type,
             status="error",
@@ -357,7 +357,9 @@ if __name__ == "__main__":
     ssl_certfile = None
 
     if tls_enabled:
-        cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", "/etc/autobot/certs")
+        # The node's flat cert dir. This image has no autobot_shared, so the default is a copy of
+        # env_registry_tls.DEFAULT_TLS_REMOTE_CERT_DIR pinned by the env-forks guard and #19317's test.
+        cert_dir = os.getenv("AUTOBOT_TLS_REMOTE_CERT_DIR", "/etc/autobot/certs")
         ssl_keyfile = os.path.join(cert_dir, "server-key.pem")
         ssl_certfile = os.path.join(cert_dir, "server-cert.pem")
         port = int(os.getenv("AI_SERVER_TLS_PORT", "8445"))

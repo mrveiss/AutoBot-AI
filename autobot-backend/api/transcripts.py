@@ -9,7 +9,7 @@ Provides WebSocket streaming for AI analysis and per-segment KB push
 endpoints on top of the transcriber recording storage (GH#9044).
 """
 
-from typing import AsyncIterator
+from typing import AsyncIterator, Dict, List
 
 from fastapi import (
     APIRouter,
@@ -33,11 +33,13 @@ from auth_middleware import authenticate_websocket, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.websocket_subprotocol import accept_websocket
+from constants.threshold_constants import CategoryDefaults
 from knowledge import get_knowledge_base
-from llm_shared import LLMRequest, get_provider_registry
+from services.llm_service import get_llm_service
+from services.llm_usage_recording import spend_attribution
 from transcriber.ai.context import build_context
-from transcriber.ai.prompts import get_system_prompt
-from transcriber.deps import can_access, resolve_user_id
+from transcriber.ai.prompts import ANALYSIS_MAX_TOKENS, get_system_prompt
+from transcriber.deps import can_access_transcriber_row, resolve_user_id
 from transcriber.export.segments import build_segment_list
 
 logger = get_logger(__name__)
@@ -45,6 +47,10 @@ router = APIRouter()
 
 # HTTPException status → WebSocket close code (RFC 6455 + app-specific 4xxx)
 _WS_CLOSE_CODES = {404: 4004, 400: 1008}
+
+# The usage record's endpoint label: the mounted route TEMPLATE, braces included on
+# purpose, so spend groups by route; the recording id rides in the record's metadata.
+_ANALYZE_ENDPOINT = "/api/transcripts/{transcript_id}/analyze"
 
 
 async def _load_recording(state: State, transcript_id: str, caller_id: str) -> dict:
@@ -57,7 +63,7 @@ async def _load_recording(state: State, transcript_id: str, caller_id: str) -> d
     except ValueError:
         raise HTTPException(status_code=404, detail="Transcript not found") from None
     rec = await db.get_recording(recording_id)
-    if not rec or not can_access(rec, caller_id):
+    if not rec or not can_access_transcriber_row(rec, caller_id):
         raise HTTPException(status_code=404, detail="Transcript not found")
     return rec
 
@@ -77,40 +83,40 @@ def _validate_analysis_request(request: TranscriptAnalyzeRequest) -> None:
         raise ValueError("Custom analysis requires a custom_prompt")
 
 
-async def _stream_analysis(transcript_content: str, request: TranscriptAnalyzeRequest) -> AsyncIterator[str]:
-    """Stream AI analysis of transcript content using llm_shared.
+def _analysis_messages(transcript_content: str, request: TranscriptAnalyzeRequest) -> List[Dict[str, str]]:
+    """System prompt, optional caller context, then the transcript -- each its own message.
+
+    Security: context is passed as a separate system message boundary instead of
+    being concatenated into the prompt.
+    """
+    system_prompt = get_system_prompt(request.analysis_type.value, custom_question=request.custom_prompt)
+    messages = [{"role": CategoryDefaults.ROLE_SYSTEM, "content": system_prompt}]
+    if request.context:
+        messages.append({"role": CategoryDefaults.ROLE_SYSTEM, "content": f"Context: {request.context}"})
+    messages.append({"role": CategoryDefaults.ROLE_USER, "content": f"Transcript:\n\n{transcript_content}"})
+    return messages
+
+
+async def _stream_analysis(
+    transcript_content: str,
+    request: TranscriptAnalyzeRequest,
+    *,
+    user_id: str | None = None,
+    recording_id: int | None = None,
+) -> AsyncIterator[str]:
+    """Stream AI analysis of transcript content through ``LLMService.stream()``.
 
     Prompts are shared with the transcriber SSE endpoint
     (transcriber/routes/ai.py) via transcriber.ai.prompts so the two
-    analysis surfaces cannot drift.
+    analysis surfaces cannot drift. ``LLMService.stream()`` resolves the
+    provider, falls back on a rate limit, and records the spend against
+    ``user_id`` and the recording (#16924).
     """
     try:
-        system_prompt = get_system_prompt(request.analysis_type.value, custom_question=request.custom_prompt)
-
-        # Security: Pass context as separate system message boundary instead of concatenating
-        messages = [{"role": "system", "content": system_prompt}]
-        if request.context:
-            messages.append({"role": "system", "content": f"Context: {request.context}"})
-        messages.append({"role": "user", "content": f"Transcript:\n\n{transcript_content}"})
-
-        # Create LLM request
-        llm_request = LLMRequest(
-            messages=messages,
-            model=None,  # Use default model from provider
-            stream=True,
-        )
-
-        # Get provider and stream response
-        registry = get_provider_registry()
-        provider = await registry.get_default_provider()
-
-        if not provider:
-            raise HTTPException(status_code=503, detail="No LLM provider available")
-
-        # Stream tokens
-        async for token in provider.stream_completion(llm_request):
+        attribution = spend_attribution(user_id=user_id, endpoint=_ANALYZE_ENDPOINT, recording_id=recording_id)
+        messages = _analysis_messages(transcript_content, request)
+        async for token in get_llm_service().stream(messages, max_tokens=ANALYSIS_MAX_TOKENS, metadata=attribution):
             yield token
-
     except Exception as e:
         # Security: Log full error but only send generic message to client
         logger.error("Analysis streaming failed: %s", e, exc_info=True)
@@ -123,14 +129,15 @@ async def _run_analysis_session(websocket: WebSocket, transcript_id: str, user: 
     request = TranscriptAnalyzeRequest(**data)
     _validate_analysis_request(request)
 
+    user_id = resolve_user_id(user)
     try:
-        content = await _load_transcript_content(websocket.app.state, transcript_id, resolve_user_id(user))
+        content = await _load_transcript_content(websocket.app.state, transcript_id, user_id)
     except HTTPException as exc:
         await websocket.send_json({"error": exc.detail})
         await websocket.close(code=_WS_CLOSE_CODES.get(exc.status_code, 1011))
         return
 
-    async for chunk in _stream_analysis(content, request):
+    async for chunk in _stream_analysis(content, request, user_id=user_id, recording_id=int(transcript_id)):
         if websocket.client_state == WebSocketState.DISCONNECTED:
             break
         await websocket.send_text(chunk)

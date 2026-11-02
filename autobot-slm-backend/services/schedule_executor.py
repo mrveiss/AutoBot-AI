@@ -19,10 +19,9 @@ from croniter import croniter
 from fastapi import HTTPException
 from sqlalchemy import select
 
+from autobot_shared.cron_expression import log_stored_cron_findings
 from models.database import CodeStatus, Node, UpdateSchedule
-from services.code_distributor import get_code_distributor
 from services.database import db_service
-from services.fleet_sync_guard import assert_no_running_sync, fleet_sync_lock
 
 logger = logging.getLogger(__name__)
 
@@ -31,21 +30,23 @@ _executor_running = False
 _executor_task: asyncio.Task | None = None
 
 
-def validate_cron_expression(expression: str) -> bool:
-    """
-    Validate a cron expression syntax.
+async def report_stored_schedules() -> int:
+    """Startup scan: WARN once per stored schedule whose cron the shared validator rejects.
 
-    Args:
-        expression: Cron expression string (e.g., "0 2 * * *")
-
-    Returns:
-        True if valid, False otherwise
+    Report-only (#18449): a stored 6-field cron still computes and fires through
+    croniter exactly as before; the warning names the schedule and
+    ``schedule.invalid_cron`` so the state is visible. Returns the count reported.
     """
+    reported = 0
     try:
-        croniter(expression)
-        return True
-    except (ValueError, KeyError):
-        return False
+        async with db_service.session() as db:
+            result = await db.execute(select(UpdateSchedule))
+            for schedule in result.scalars().all():
+                if not log_stored_cron_findings(logger, "Schedule", schedule.id, schedule.cron_expression):
+                    reported += 1
+    except Exception as e:
+        logger.warning("Stored schedule scan failed: %s", e)
+    return reported
 
 
 def calculate_next_run(expression: str, base: datetime = None) -> datetime:
@@ -146,63 +147,18 @@ def describe_cron_expression(expression: str) -> str:
         return expression
 
 
-async def _get_target_nodes(db, schedule: UpdateSchedule):
-    """
-    Query target nodes based on schedule configuration.
+async def get_schedule_target_nodes(db, schedule: UpdateSchedule) -> list:
+    """The outdated nodes a schedule updates (#665, #19367): the one selection for run-now and the timed run.
 
-    Helper for execute_schedule (Issue #665).
+    Owner decision on #19367: a ``specific`` schedule touches only those of its selected nodes that are
+    outdated, so one with no nodes selected touches none -- never the whole fleet. Any other target
+    type (``all``, and ``tag``, which has no tag filter) updates every outdated node.
     """
-    if schedule.target_type == "all":
-        result = await db.execute(select(Node).where(Node.code_status == CodeStatus.OUTDATED.value))
-    elif schedule.target_type == "specific" and schedule.target_nodes:
-        result = await db.execute(
-            select(Node).where(
-                Node.node_id.in_(schedule.target_nodes),
-                Node.code_status == CodeStatus.OUTDATED.value,
-            )
-        )
-    else:
-        # Default to all outdated nodes
-        result = await db.execute(select(Node).where(Node.code_status == CodeStatus.OUTDATED.value))
+    query = select(Node).where(Node.code_status == CodeStatus.OUTDATED.value)
+    if schedule.target_type == "specific":
+        query = query.where(Node.node_id.in_(schedule.target_nodes or []))
+    result = await db.execute(query)
     return result.scalars().all()
-
-
-async def _sync_single_node(distributor, node: Node, schedule: UpdateSchedule) -> bool:
-    """
-    Sync a single node and return success/failure.
-
-    Helper for execute_schedule (Issue #665).
-    """
-    try:
-        success, message = await distributor.trigger_node_sync(
-            node_id=node.node_id,
-            ip_address=node.ip_address,
-            ssh_user=node.ssh_user or "autobot",
-            ssh_port=node.ssh_port or 22,
-            restart=schedule.restart_after_sync,
-            strategy=schedule.restart_strategy,
-        )
-
-        if not success:
-            logger.warning(
-                "Schedule %s: Node %s sync failed: %s",
-                schedule.name,
-                node.node_id,
-                message,
-            )
-
-        # Brief pause between nodes for rolling strategy
-        await asyncio.sleep(2)
-        return success
-
-    except Exception as e:
-        logger.error(
-            "Schedule %s: Node %s sync error: %s",
-            schedule.name,
-            node.node_id,
-            e,
-        )
-        return False
 
 
 def _format_sync_result(success_count: int, failed_count: int) -> Tuple[bool, str]:
@@ -220,56 +176,38 @@ def _format_sync_result(success_count: int, failed_count: int) -> Tuple[bool, st
         return True, f"Synced {success_count}/{total} nodes ({failed_count} failed)"
 
 
-async def execute_schedule(schedule: UpdateSchedule) -> Tuple[bool, str]:
-    """
-    Execute a single schedule - trigger sync for target nodes.
-
-    Args:
-        schedule: The UpdateSchedule model to execute
-
-    Returns:
-        Tuple of (success, message)
-    """
-    logger.info("Executing schedule: %s (id=%d)", schedule.name, schedule.id)
+async def _queue_job(db, schedule: UpdateSchedule, nodes: list):
+    """The fleet job for ``nodes``, or None when a fleet sync is already running (#1979)."""
+    from api.code_sync import queue_schedule_job
 
     try:
+        return await queue_schedule_job(db, schedule, nodes)
+    except HTTPException:
+        logger.warning("Skipping schedule '%s' — fleet sync already running (#1979)", schedule.name)
+        return None
+
+
+async def execute_schedule(schedule: UpdateSchedule) -> Tuple[bool, str]:
+    """Run a due schedule through the fleet-sync job that run-now and update-all use (#19352).
+
+    One deploy path: ``update-all-nodes.yml`` deploys autobot_shared before the agent and restarts
+    it in the live agent dir. Awaited inline so ``last_run_status`` reports the job's real outcome.
+    """
+    from api.code_sync import _run_fleet_sync_job
+
+    logger.info("Executing schedule: %s (id=%d)", schedule.name, schedule.id)
+    try:
         async with db_service.session() as db:
-            # Guard: prevent overlapping fleet sync jobs (#1979).
-            # Hold fleet_sync_lock while checking so concurrent API requests and
-            # background schedule firings cannot both pass the guard simultaneously.
-            async with fleet_sync_lock:
-                try:
-                    await assert_no_running_sync(db)
-                except HTTPException:
-                    logger.warning(
-                        "Skipping schedule '%s' — fleet sync already running (#1979)",
-                        schedule.name,
-                    )
-                    return False, "Fleet sync already in progress"
-
-            # Determine target nodes based on schedule configuration
-            nodes = await _get_target_nodes(db, schedule)
-
+            nodes = await get_schedule_target_nodes(db, schedule)
             if not nodes:
                 logger.info("Schedule %s has no outdated nodes to sync", schedule.name)
                 return True, "No outdated nodes to sync"
-
-            # Get the code distributor
-            distributor = get_code_distributor()
-
-            # Sync each node
-            success_count = 0
-            failed_count = 0
-
-            for node in nodes:
-                success = await _sync_single_node(distributor, node, schedule)
-                if success:
-                    success_count += 1
-                else:
-                    failed_count += 1
-
-            return _format_sync_result(success_count, failed_count)
-
+            job = await _queue_job(db, schedule, nodes)
+        if job is None:
+            return False, "Fleet sync already in progress"
+        await _run_fleet_sync_job(job)
+        statuses = [n.status for n in job.nodes.values()]
+        return _format_sync_result(statuses.count("success"), len(statuses) - statuses.count("success"))
     except Exception as e:
         logger.error("Schedule %s execution failed: %s", schedule.name, e)
         return False, "Schedule execution failed"
@@ -342,6 +280,7 @@ async def _schedule_executor_loop():
 
     logger.info("Schedule executor started")
     _executor_running = True
+    await report_stored_schedules()
 
     while _executor_running:
         try:

@@ -1,0 +1,94 @@
+# Landing notes on the issues a PR or merge train merged to main references (#19520)
+#
+# Replaces the comment-only notifier of #1601/#1659, which went silent once
+# `main` became the default branch: GitHub now auto-closes a `Closes #N` issue
+# on the merge BEFORE a workflow runs, the old script skipped closed issues,
+# and a train PR's body does not carry its members' Closes/Refs lines.
+#
+# landing-notes: for every Closes/Fixes/Resolves/Refs #N in the merged PR -- or,
+#   for a train (head `train-*`), in each member PR resolved from the train's
+#   own merge commits -- one comment per issue, deduplicated on the hidden
+#   `<!-- landing-note:<merge sha> -->` marker, closed issues included. A closed
+#   issue referenced with a closing keyword gets `needs-ac-evidence`. A member
+#   PR GitHub marks merged when its train lands defers to the train's run.
+# clear-evidence-label: an OWNER/MEMBER/COLLABORATOR's comment holding an AC
+#   evidence table (a markdown table with an `AC` and an `Evidence` header)
+#   removes the label; the script re-checks the author association.
+#
+# Neither job ticks, closes, reopens or edits an issue. The logic and its
+# fixture tests live in pipeline-scripts/landing_notes.py.
+#
+# Fork heads are skipped: a fork PR's GITHUB_TOKEN cannot write issues.
+
+name: Issue landing notes
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+  issue_comment:
+    types: [created]
+
+concurrency:
+  # Never cancel: a half-finished run leaves some issues without their note.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  landing-notes:
+    name: Post landing notes on referenced issues
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Run the script from the trusted default branch, never from the PR's code; a merged
+          # PR's commit is on that branch anyway (CodeQL actions/untrusted-checkout, #19520).
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: |
+            pipeline-scripts
+            .github/actions/upsert-pr-comment
+
+      - name: Post landing notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python3 pipeline-scripts/landing_notes.py merged --event "$GITHUB_EVENT_PATH"
+
+  clear-evidence-label:
+    name: Clear needs-ac-evidence on an AC evidence comment
+    if: >-
+      github.event_name == 'issue_comment' &&
+      !github.event.issue.pull_request &&
+      github.event.comment.user.type != 'Bot' &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
+      contains(github.event.issue.labels.*.name, 'needs-ac-evidence')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            pipeline-scripts
+            .github/actions/upsert-pr-comment
+
+      - name: Remove the label when the comment holds an AC evidence table
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python3 pipeline-scripts/landing_notes.py evidence --event "$GITHUB_EVENT_PATH"

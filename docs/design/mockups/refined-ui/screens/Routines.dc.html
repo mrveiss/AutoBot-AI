@@ -1,0 +1,638 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot Routines</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.sub2{font-size:12.5px;color:var(--muted)}
+.th .btn.dng{color:var(--alert-text);border-color:var(--danger-tile-b)}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+code.cron{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;padding:2px 7px;border-radius:5px;background:var(--surface2);border:var(--bw) solid var(--border)}
+.fld{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600}
+.fld input,.fld select{height:36px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);font:inherit;font-weight:400;font-size:13.5px;padding:0 10px;color:var(--text)}
+.fld input.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.fld small{font-weight:400;color:var(--muted);font-size:12px}
+.acts{display:flex;gap:6px}
+tr.sel td{background:var(--surface2)}
+tr.sel td:first-child{border-left:3px solid var(--accent)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.th[data-ui="minimal"] .adv{display:none !important}
+.th[data-ui="minimal"] .adv-only-full{display:none !important}
+.th .only-min{display:none !important}
+.th[data-ui="minimal"] .only-min{display:flex !important}
+.th[data-ui="minimal"] .only-min.blk{display:block !important}
+.uimode{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border);margin-right:8px}
+.uimode .seg{height:28px;font-size:12px}
+.uitog{height:40px;padding:0 10px;margin:0 2px;border-radius:8px;border:var(--bw) solid transparent;background:transparent;color:var(--text2);font:inherit;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;cursor:pointer}.uitog:hover{background:var(--surface2);color:var(--text)}.uitog.on{background:var(--surface2);color:var(--text);font-weight:600;border-color:var(--accent)}
+.minnote{align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.linkbtn{border:0;background:transparent;padding:0;font:inherit;font-size:12.5px;font-weight:600;color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer;min-height:24px}
+.linkbtn:hover{color:var(--link-h)}
+.sk{display:flex;flex-direction:column;gap:12px;min-width:0}
+.sk-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px;color:var(--text)}
+.sk-lab{font-size:12.5px;font-weight:600;color:var(--text)}
+.sk-row select,.sk-row input[type=date]{height:32px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);font:inherit;font-size:13px;padding:0 8px;color:var(--text);box-sizing:border-box;min-width:0}
+.sk-row select:disabled{opacity:.5;cursor:not-allowed}
+.sk-seg{display:flex;flex-wrap:wrap;gap:2px;padding:3px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border)}
+.sk-b{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.sk-b:hover{color:var(--text)}
+.sk-b.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sk-chip{min-width:46px;height:32px;padding:0 10px;border-radius:99px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer;box-sizing:border-box}
+.sk-chip:hover{color:var(--text);background:var(--surface2)}
+.sk-chip.on{background:var(--primary);border-color:var(--primary);color:var(--on-primary);font-weight:600}
+.sk-chk{display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer}
+.sk-chk input{width:16px;height:16px;accent-color:var(--primary);margin:0}
+.sk-sum{margin:0;font-size:18px;font-weight:600;letter-spacing:-.01em;line-height:1.3;color:var(--text)}
+.sk-runs{display:flex;flex-direction:column;gap:4px}
+.sk-list{margin:0;padding:0 0 0 18px;display:flex;flex-direction:column;gap:2px;font-size:13px}
+.sk-note{margin:0;font-size:12.5px;color:var(--muted)}
+.sk-err{margin:0;font-size:12.5px;font-weight:600;color:var(--alert-text)}
+.sk-adv{display:flex;flex-direction:column;gap:8px;padding-top:10px;border-top:var(--bw) solid var(--line)}
+.sk-cron{height:32px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font-size:13px;padding:0 8px;flex:1 1 180px;min-width:0;box-sizing:border-box}
+.sk-cron[readonly]{background:var(--surface2)}
+.sk-cron[aria-invalid="true"]{border-color:var(--accent);border-width:2px}
+.sk-link{border:0;background:transparent;padding:0;font:inherit;font-size:12.5px;font-weight:600;color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer;min-height:24px;align-self:flex-start}
+.sk-link:hover{color:var(--link-h)}
+.sk-tag{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:99px;border:var(--bw) solid var(--border);background:var(--surface2);font-size:11.5px;font-weight:600;color:var(--text2)}
+.sk-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.th{--tooltip-delay:500ms;--tooltip-hide-delay:100ms;--tooltip-offset:8px;--tooltip-max:280px}
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{position:absolute;left:50%;pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease-out var(--tooltip-hide-delay),visibility 0s linear calc(var(--tooltip-hide-delay) + 120ms);z-index:50}
+[data-tip]::after{content:attr(data-tip);bottom:calc(100% + var(--tooltip-offset));transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:var(--tooltip-max);padding:6px 10px;border-radius:6px;background:var(--primary);color:var(--on-primary);border:var(--bw) solid var(--primary);font:500 12.5px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}
+[data-tip]::before{content:"";bottom:calc(100% + var(--tooltip-offset) - 4px);width:8px;height:8px;margin-left:-4px;background:var(--primary);transform:rotate(45deg)}
+[data-tip]:hover::before,[data-tip]:hover::after{opacity:1;visibility:visible;transition-delay:var(--tooltip-delay),var(--tooltip-delay)}
+[data-tip]:focus-visible::before,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s,0s}
+[data-tip-pos="bottom"]::after{bottom:auto;top:calc(100% + var(--tooltip-offset))}
+[data-tip-pos="bottom"]::before{bottom:auto;top:calc(100% + var(--tooltip-offset) - 4px)}
+[data-tip-pos="right"]::after{left:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="right"]::before{left:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+[data-tip-pos="left"]::after{left:auto;right:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="left"]::before{left:auto;right:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+@media (prefers-reduced-motion: reduce){[data-tip]::before,[data-tip]::after{transition:none}}
+@media (hover: none){[data-tip]::before,[data-tip]::after{display:none}}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" data-ui="{{ui}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html" class="on" aria-current="page">Company OS</a>
+    <a href="Analytics.dc.html" class="adv">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <span class="sr" role="status" aria-live="polite">{{uiAnnounce}}</span>
+    <a href="Secrets.dc.html" class="icon adv" aria-label="Secrets" data-tip="Secrets" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" data-tip="Preferences" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg></a>
+    <button type="button" class="uitog {{uiTogCls}}" onClick="{{toggleUi}}" aria-pressed="{{uiMinPressed}}" data-tip="Minimal interface — hide advanced features" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button>
+    <a href="AdminUsers.dc.html" class="icon adv" aria-label="Platform admin, opens the SLM console" data-tip="Platform admin — opens the SLM console ↗" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <a href="Preferences.dc.html" aria-label="Profile settings" data-tip="Profile settings" data-tip-pos="bottom" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer; display: grid; place-items: center; text-decoration: none">JD</a>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+
+    <aside class="sub" aria-label="Company OS" style="flex: 1 1 220px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+      <button type="button" style="margin: 0 0 6px; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: 8px; border: var(--bw) solid var(--border); background: var(--surface2); font: inherit; font-size: 14px; font-weight: 600; color: var(--text); cursor: pointer; text-align: left">
+        <span style="width: 26px; height: 26px; border-radius: 6px; background: var(--brand-bg); color: var(--brand-fg); display: grid; place-items: center; font-size: 12px">AL</span><span style="flex-grow: 1; display: flex; flex-direction: column; line-height: 1.2">AutoBot Labs<span style="font-size: 11.5px; font-weight: 400; color: var(--muted)">Company OS</span></span><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>
+      <p class="sect">Overview</p>
+      <a href="CompanyOS.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5" class="i3"/><rect x="13" y="3" width="8" height="5" rx="1.5" class="i1"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5" class="i2"/></svg>Dashboard</a>
+      <a href="MyPlace.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9H4z"/><circle cx="12" cy="14" r="2.5" class="i2"/></svg>My place</a>
+      <a href="ReviewInbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 13h5l1 2h4l1-2h5"/></svg>My Reviews</a>
+      <a href="Approvals.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Approvals<span class="pill warn" style="margin-left: auto" data-tip="3 approvals waiting for you" data-tip-pos="right">3</span></a>
+      <a href="Activity.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18l5-6 4 3 7-9"/></svg>Activity</a>
+      <a href="RunSupervision.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M10 9l4 2-4 2z" class="i2"/><path d="M8 21h8"/></svg>Run supervision</a>
+      <a href="OperationHistory.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v5h5"/><path d="M12 8v4l3 2"/></svg>Operation history</a>
+      <a href="AgentLedger.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2" class="it2"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>Agent ledger</a>
+      <a href="CeoChat.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-4 4v-4H4z" class="it3"/></svg>CEO Chat</a>
+      <a href="CompanyMailbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6" class="it2"/></svg>Mailbox</a>
+      <p class="sect">Work</p>
+      <a href="Backlog.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Backlog</a>
+      <a href="Boards.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1" class="it1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1" class="it2"/></svg>Boards</a>
+      <a href="Portfolios.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2" class="it2"/><path d="M9 7V5h6v2M3 12h18"/></svg>Portfolios</a>
+      <a href="Timeline.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h9M8 12h12M4 18h7"/></svg>Timeline</a>
+      <a href="Goals.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4" class="it3"/></svg>Goals</a>
+      <a href="Automation.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L5 14h6l-1 8 8-12h-6z" class="it2"/></svg>Automation</a>
+      <a href="ProcessCanvas.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="6" height="5" rx="1" class="it2"/><rect x="15" y="15" width="6" height="5" rx="1"/><path d="M9 6.5h4a2 2 0 0 1 2 2V15"/></svg>Process canvas</a>
+      <a href="Routines.dc.html" class="on adv" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>Routines</a>
+      <a href="TranscriberProjects.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" class="it3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Transcriber</a>
+      <p class="sect">Organization</p>
+      <a href="OrgChart.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="5" rx="1" class="it2"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-4h12v4"/></svg>Org Chart</a>
+      <a href="Members.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0"/></svg>Members</a>
+      <a href="Teams.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="3"/><circle cx="16" cy="9" r="3" class="i2"/><path d="M2 20a6 6 0 0 1 12 0M10 20a6 6 0 0 1 12 0"/></svg>Teams</a>
+      <a href="Roles.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M14 10h4M14 14h3"/></svg>Roles</a>
+      <a href="Handbook.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z" class="it2"/><path d="M5 17a3 3 0 0 1 3-3h10M9 8h5"/></svg>Handbook</a>
+      <a href="Costs.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it2"/><path d="M12 7v10"/></svg>Costs &amp; Budget</a>
+      <a href="BusinessIntelligence.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><path d="M5 16l4-5 4 3 6-8" /><circle cx="19" cy="6" r="1.6" class="i2"/></svg>Business intelligence</a>
+      <a href="HeartbeatMonitor.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-4 4 8 2-4h6"/></svg>Heartbeat</a>
+      <a href="Portability.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12h8M13 9l3 3-3 3"/><rect x="4" y="4" width="16" height="16" rx="2"/></svg>Portability</a>
+      <a href="CompanySecrets.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4"/><path d="M12 12h9M18 12v3"/></svg>Secrets</a>
+      <a href="CompanySettings.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>Company settings</a>
+      <div class="only-min minnote" style="margin: 16px 10px 0; padding-top: 12px; border-top: var(--bw) solid var(--line)"><span>Showing essentials</span><button type="button" class="linkbtn" onClick="{{showAll}}">Show all features</button></div>
+    </aside>
+
+    <main style="flex: 999 1 520px; min-width: 0; box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 40px; display: flex; flex-direction: column; gap: 20px">
+      <section class="card only-min" role="note" aria-labelledby="advn-h" style="padding: 14px 16px; gap: 12px; align-items: center; flex-wrap: wrap">
+        <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg></span>
+        <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 240px; min-width: 0">
+          <h2 id="advn-h" style="margin: 0; font-size: 14px; font-weight: 600">This is an advanced area</h2>
+          <span class="sub2">It's hidden from navigation while Minimal interface is on.</span>
+        </div>
+        <button type="button" class="btn sm" onClick="{{showAll}}">Show all features</button>
+        <a href="Main.dc.html" class="btn sm">Go to Home</a>
+      </section>
+      <header style="display: flex; flex-wrap: wrap; gap: 14px; align-items: center">
+        <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1">
+          <span class="sub2"><a href="CompanyOS.dc.html" style="color: var(--muted); text-decoration: none">Company OS</a> / Work</span>
+          <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em">Routines</h1>
+          <p class="sub2" style="margin: 0">Scheduled recurring work · 7 routines · 6 active. Each routine runs one process, as that process's owner role.</p>
+        </div>
+        <button type="button" class="btn pri"><svg class="ic sonp" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New Routine</button>
+      </header>
+
+      <section class="card" aria-labelledby="rt">
+        <div class="ch">
+          <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="15" class="i1"/><path d="M24 14v10l7 5"/><path d="M39 12l3-5M42 16h4" class="sacc"/></svg></span>
+          <h2 id="rt">All routines</h2>
+          <span class="sub2">Click a row for run history</span>
+        </div>
+        <div style="overflow-x: auto">
+          <table style="border-collapse: collapse; width: 100%">
+            <thead><tr><th>Name</th><th>Process · owner role · runs as</th><th>Schedule</th><th>Produces</th><th>Status</th><th>Last Fired</th><th>Actions</th></tr></thead>
+            <tbody>
+              <tr class="sel" aria-selected="true"><td><div style="display: flex; flex-direction: column; gap: 2px"><strong style="font-weight: 600">Daily standup digest</strong><span class="sub2" style="font-size: 12px">Summarise yesterday's work items per agent</span></div></td><td><div style="display: flex; flex-direction: column; gap: 2px"><a href="ProcessCanvas.dc.html" data-tip="Open the process on the canvas" style="font-weight: 600; text-decoration: none">Summarise daily work</a><span class="sub2" style="font-size: 12px">owned by Technical Writer · runs as documentation-engineer</span></div></td><td><span style="display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap">Weekdays at 09:00<code class="cron adv" tabindex="0" aria-label="Cron expression 0 9 * * 1-5" data-tip="Cron: 0 9 * * 1-5">cron</code></span></td><td>Create a new work item</td><td><span class="pill ok" data-tip="Active — fires on schedule">Active</span></td><td class="mono">10 Oct 2026, 09:00</td><td><div class="acts"><button type="button" class="btn sm" data-tip="Schedule an immediate run (active routines only)">Run Now</button><button type="button" class="btn sm">Edit</button><button type="button" class="btn sm">Pause</button><button type="button" class="btn sm dng">Archive</button></div></td></tr>
+              <tr><td><div style="display: flex; flex-direction: column; gap: 2px"><strong style="font-weight: 600">Fleet health sweep</strong><span class="sub2" style="font-size: 12px">Ping node-01…06 and report drift</span></div></td><td><div style="display: flex; flex-direction: column; gap: 2px"><a href="ProcessCanvas.dc.html" data-tip="Open the process on the canvas" style="font-weight: 600; text-decoration: none">Check fleet health</a><span class="sub2" style="font-size: 12px">owned by Ops Lead · runs as devops-engineer</span></div></td><td><span style="display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap">Every 30 minutes<code class="cron adv" tabindex="0" aria-label="Cron expression */30 * * * *" data-tip="Cron: */30 * * * *">cron</code></span></td><td>Update a recurring work item</td><td><span class="pill ok" data-tip="Active — fires on schedule">Active</span></td><td class="mono">10 Oct 2026, 10:30</td><td><div class="acts"><span data-tip="A run is already in progress — wait for it to finish" tabindex="0" style="display: inline-flex"><button type="button" class="btn sm" disabled style="pointer-events: none">Running...</button></span><button type="button" class="btn sm">Edit</button><button type="button" class="btn sm">Pause</button><button type="button" class="btn sm dng">Archive</button></div></td></tr>
+              <tr><td><div style="display: flex; flex-direction: column; gap: 2px"><strong style="font-weight: 600">Knowledge base re-index</strong><span class="sub2" style="font-size: 12px">Re-embed changed docs into the vector store</span></div></td><td><div style="display: flex; flex-direction: column; gap: 2px"><a href="ProcessCanvas.dc.html" data-tip="Open the process on the canvas" style="font-weight: 600; text-decoration: none">Re-index knowledge base</a><span class="sub2" style="font-size: 12px">owned by Head of Research · runs as research-agent</span></div></td><td><span style="display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap">Daily at 02:00<code class="cron adv" tabindex="0" aria-label="Cron expression 0 2 * * *" data-tip="Cron: 0 2 * * *">cron</code></span></td><td>Update a recurring work item</td><td><span class="pill ok" data-tip="Active — fires on schedule">Active</span></td><td class="mono">10 Oct 2026, 02:00</td><td><div class="acts"><button type="button" class="btn sm">Run Now</button><button type="button" class="btn sm">Edit</button><button type="button" class="btn sm">Pause</button><button type="button" class="btn sm dng">Archive</button></div></td></tr>
+              <tr><td><div style="display: flex; flex-direction: column; gap: 2px"><strong style="font-weight: 600">Weekly cost report</strong><span class="sub2" style="font-size: 12px">Budget vs spend per agent, sent to CEO</span></div></td><td><div style="display: flex; flex-direction: column; gap: 2px"><a href="ProcessCanvas.dc.html" data-tip="Open the process on the canvas" style="font-weight: 600; text-decoration: none">Send weekly cost report</a><span class="sub2" style="font-size: 12px">owned by Head of Operations · runs as Alex Smith<span class="pill warn" tabindex="0" data-tip="Alex Smith is away. This routine still runs because it is automated, but approvals it raises wait for her." style="margin-left: 6px">Away</span></span></div></td><td><span style="display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap">Mondays at 08:00<code class="cron adv" tabindex="0" aria-label="Cron expression 0 8 * * 1" data-tip="Cron: 0 8 * * 1">cron</code></span></td><td>Create a new work item</td><td><span class="pill ok" data-tip="Active — fires on schedule">Active</span></td><td class="mono">6 Oct 2026, 08:00</td><td><div class="acts"><button type="button" class="btn sm">Run Now</button><button type="button" class="btn sm">Edit</button><button type="button" class="btn sm">Pause</button><button type="button" class="btn sm dng">Archive</button></div></td></tr>
+              <tr><td><div style="display: flex; flex-direction: column; gap: 2px"><strong style="font-weight: 600">Check social media feed</strong><span class="sub2" style="font-size: 12px">Look for new mentions and start a reply</span></div></td><td><div style="display: flex; flex-direction: column; gap: 2px"><a href="ProcessCanvas.dc.html" data-tip="Open the process on the canvas" style="font-weight: 600; text-decoration: none">Check social media feed</a><span class="sub2" style="font-size: 12px">owned by Communications Lead · runs as Alex Smith<span class="pill warn" tabindex="0" data-tip="Alex Smith is away. This routine still runs because it is automated, but approvals it raises wait for her." style="margin-left: 6px">Away</span></span></div></td><td><span style="display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap">Every 2 hours<code class="cron adv" tabindex="0" aria-label="Cron expression 0 */2 * * *" data-tip="Cron: 0 */2 * * *">cron</code></span></td><td>Start the Social media replies workflow</td><td><span class="pill ok" data-tip="Active — fires on schedule">Active</span></td><td class="mono">10 Oct 2026, 10:00</td><td><div class="acts"><button type="button" class="btn sm">Run Now</button><button type="button" class="btn sm">Edit</button><button type="button" class="btn sm">Pause</button><button type="button" class="btn sm dng">Archive</button></div></td></tr>
+              <tr><td><div style="display: flex; flex-direction: column; gap: 2px"><strong style="font-weight: 600">Schedule a social media post</strong><span class="sub2" style="font-size: 12px">Queue the next approved post for publishing</span></div></td><td><div style="display: flex; flex-direction: column; gap: 2px"><a href="ProcessCanvas.dc.html" data-tip="Open the process on the canvas" style="font-weight: 600; text-decoration: none">Schedule a social media post</a><span class="sub2" style="font-size: 12px">owned by Communications Lead · runs as Alex Smith<span class="pill warn" tabindex="0" data-tip="Alex Smith is away. This routine still runs because it is automated, but approvals it raises wait for her." style="margin-left: 6px">Away</span></span></div></td><td><span style="display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap">Weekdays at 09:00<code class="cron adv" tabindex="0" aria-label="Cron expression 0 9 * * 1-5" data-tip="Cron: 0 9 * * 1-5">cron</code></span></td><td>Raise an approval for the post</td><td><span class="pill ok" data-tip="Active — fires on schedule">Active</span></td><td class="mono">10 Oct 2026, 09:00</td><td><div class="acts"><button type="button" class="btn sm">Run Now</button><button type="button" class="btn sm">Edit</button><button type="button" class="btn sm">Pause</button><button type="button" class="btn sm dng">Archive</button></div></td></tr>
+              <tr><td style="border-bottom: 0"><div style="display: flex; flex-direction: column; gap: 2px"><strong style="font-weight: 600">NPU model benchmark</strong><span class="sub2" style="font-size: 12px">OpenVINO INT4 throughput on node-05</span></div></td><td style="border-bottom: 0"><div style="display: flex; flex-direction: column; gap: 2px"><a href="ProcessCanvas.dc.html" data-tip="Open the process on the canvas" style="font-weight: 600; text-decoration: none">Run benchmark</a><span class="sub2" style="font-size: 12px">owned by Performance Lead · runs as performance-engineer</span></div></td><td style="border-bottom: 0"><span style="display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap">Saturdays at 03:00<code class="cron adv" tabindex="0" aria-label="Cron expression 0 3 * * 6" data-tip="Cron: 0 3 * * 6">cron</code></span></td><td style="border-bottom: 0">Create a new work item</td><td style="border-bottom: 0"><span class="pill warn" data-tip="Paused — won't fire until resumed">Paused</span></td><td class="mono" style="border-bottom: 0">27 Sep 2026, 03:00</td><td style="border-bottom: 0"><div class="acts"><span data-tip="Routine is paused — resume it to run now" tabindex="0" style="display: inline-flex"><button type="button" class="btn sm" disabled style="pointer-events: none">Run Now</button></span><button type="button" class="btn sm">Edit</button><button type="button" class="btn sm">Resume</button><button type="button" class="btn sm dng">Archive</button></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; align-items: start">
+
+        <section class="card" aria-labelledby="ed" role="dialog" aria-modal="false" style="border-color: var(--primary)">
+          <div class="ch">
+            <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><rect x="8" y="8" width="26" height="32" rx="3" class="iw"/><path d="M14 16h14M14 22h10M14 28h8"/><path d="M30 34l10-10 4 4-10 10h-4z" class="i3"/></svg></span>
+            <h2 id="ed">Edit Routine</h2>
+            <button type="button" class="btn sm" aria-label="Close" data-tip="Close · Esc" data-tip-pos="left" style="width: 32px; padding: 0; justify-content: center"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+          </div>
+          <form style="padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 14px">
+            <label class="fld">Name<input type="text" value="Daily standup digest" placeholder="Daily standup digest"></label>
+            <label class="fld">Description<input type="text" value="Summarise yesterday's work items per agent"></label>
+            <label class="fld">Process<select><option>Summarise daily work</option><option>Check fleet health</option><option>Re-index knowledge base</option><option>Send weekly cost report</option><option>Run benchmark</option><option>Check social media feed</option><option>Schedule a social media post</option></select><small>Owned by Technical Writer · runs as documentation-engineer. Change the owner role on the process, not here.</small></label>
+            <div role="group" aria-labelledby="sk-ttl" style="display: flex; flex-direction: column; gap: 8px">
+              <span id="sk-ttl" style="font-size: 13px; font-weight: 600">Schedule</span>
+<div class="sk" role="group" aria-label="Schedule">
+  <div class="sk-row"><span class="sk-lab" id="sk-rep">Repeats</span>
+    <div class="sk-seg" role="group" aria-labelledby="sk-rep"><sc-for list="{{sch.modes}}" as="o" hint-placeholder-count="6"><button type="button" class="sk-b {{o.cls}}" aria-pressed="{{o.pressed}}" onClick="{{o.pick}}">{{o.label}}</button></sc-for></div>
+  </div>
+  <sc-if value="{{sch.custom}}" hint-placeholder-val="{{ false }}"><p class="sk-note" role="status"><b>Custom schedule — edit in cron.</b> This schedule cannot be shown as clicks. <button type="button" class="sk-link" onClick="{{sch.openCron}}">Edit as cron</button></p></sc-if>
+  <sc-if value="{{sch.isMin}}" hint-placeholder-val="{{ false }}"><div class="sk-row"><label for="sk-every">Every</label><select id="sk-every" value="{{sch.every}}" onChange="{{sch.onEvery}}"><sc-for list="{{sch.everyOpts}}" as="o" hint-placeholder-count="4"><option value="{{o.v}}">{{o.l}}</option></sc-for></select><span>minutes</span></div></sc-if>
+  <sc-if value="{{sch.isHour}}" hint-placeholder-val="{{ false }}"><div class="sk-row"><label for="sk-hevery">Every</label><select id="sk-hevery" value="{{sch.hevery}}" onChange="{{sch.onHevery}}"><sc-for list="{{sch.heveryOpts}}" as="o" hint-placeholder-count="4"><option value="{{o.v}}">{{o.l}}</option></sc-for></select><span>hours, at minute</span><label class="sk-sr" for="sk-hmin">Minute</label><select id="sk-hmin" value="{{sch.hmin}}" onChange="{{sch.onHmin}}"><sc-for list="{{sch.minOpts}}" as="o" hint-placeholder-count="6"><option value="{{o.v}}">{{o.l}}</option></sc-for></select></div></sc-if>
+  <sc-if value="{{sch.showRange}}" hint-placeholder-val="{{ false }}"><div class="sk-row"><label class="sk-chk"><input type="checkbox" checked="{{sch.rangeOn}}" onClick="{{sch.onRange}}">Only between</label><label class="sk-sr" for="sk-from">From</label><select id="sk-from" value="{{sch.from}}" disabled="{{sch.rangeOff}}" onChange="{{sch.onFrom}}"><sc-for list="{{sch.fromOpts}}" as="o" hint-placeholder-count="6"><option value="{{o.v}}">{{o.l}}</option></sc-for></select><span>and</span><label class="sk-sr" for="sk-to">To</label><select id="sk-to" value="{{sch.to}}" disabled="{{sch.rangeOff}}" onChange="{{sch.onTo}}"><sc-for list="{{sch.toOpts}}" as="o" hint-placeholder-count="6"><option value="{{o.v}}">{{o.l}}</option></sc-for></select></div></sc-if>
+  <sc-if value="{{sch.isMonth}}" hint-placeholder-val="{{ false }}">
+    <div class="sk-row"><div class="sk-seg" role="group" aria-label="Which day of the month"><sc-for list="{{sch.mdChips}}" as="o" hint-placeholder-count="2"><button type="button" class="sk-b {{o.cls}}" aria-pressed="{{o.pressed}}" onClick="{{o.pick}}">{{o.label}}</button></sc-for></div></div>
+    <sc-if value="{{sch.mdDay}}" hint-placeholder-val="{{ true }}"><div class="sk-row"><label for="sk-mday">On day</label><select id="sk-mday" value="{{sch.mday}}" onChange="{{sch.onMday}}"><sc-for list="{{sch.dayOpts}}" as="o" hint-placeholder-count="6"><option value="{{o.v}}">{{o.l}}</option></sc-for></select></div></sc-if>
+    <sc-if value="{{sch.mdNth}}" hint-placeholder-val="{{ false }}"><div class="sk-row"><label for="sk-nth">On the</label><select id="sk-nth" value="{{sch.nth}}" onChange="{{sch.onNth}}"><sc-for list="{{sch.nthOpts}}" as="o" hint-placeholder-count="5"><option value="{{o.v}}">{{o.l}}</option></sc-for></select><label class="sk-sr" for="sk-nthday">Weekday</label><select id="sk-nthday" value="{{sch.nthDay}}" onChange="{{sch.onNthDay}}"><sc-for list="{{sch.nthDayOpts}}" as="o" hint-placeholder-count="7"><option value="{{o.v}}">{{o.l}}</option></sc-for></select></div></sc-if>
+    <sc-if value="{{sch.dayNote}}" hint-placeholder-val="{{ false }}"><p class="sk-note">Months without this day run on the last day.</p></sc-if>
+  </sc-if>
+  <sc-if value="{{sch.isOnce}}" hint-placeholder-val="{{ false }}"><div class="sk-row"><label for="sk-date">Date</label><input id="sk-date" type="date" value="{{sch.date}}" onInput="{{sch.onDate}}"></div></sc-if>
+  <sc-if value="{{sch.showDays}}" hint-placeholder-val="{{ false }}"><div class="sk-row" style="align-items: flex-start"><span class="sk-lab" id="sk-days">{{sch.dayLabel}}</span><div class="sk-row" role="group" aria-labelledby="sk-days" style="gap: 6px"><sc-for list="{{sch.dayChips}}" as="d" hint-placeholder-count="7"><button type="button" class="sk-chip {{d.cls}}" aria-pressed="{{d.pressed}}" aria-label="{{d.aria}}" onClick="{{d.toggle}}">{{d.label}}</button></sc-for></div></div></sc-if>
+  <sc-if value="{{sch.showTime}}" hint-placeholder-val="{{ false }}"><div class="sk-row"><span>At</span><label class="sk-sr" for="sk-h">Hour</label><select id="sk-h" value="{{sch.h}}" onChange="{{sch.onH}}"><sc-for list="{{sch.hourOpts}}" as="o" hint-placeholder-count="6"><option value="{{o.v}}">{{o.l}}</option></sc-for></select><span aria-hidden="true">:</span><label class="sk-sr" for="sk-m">Minute</label><select id="sk-m" value="{{sch.m}}" onChange="{{sch.onM}}"><sc-for list="{{sch.minOpts}}" as="o" hint-placeholder-count="6"><option value="{{o.v}}">{{o.l}}</option></sc-for></select><span class="sk-note">24-hour time</span>
+    <sc-if value="{{sch.isDay}}" hint-placeholder-val="{{ true }}"><label class="sk-chk" style="margin-left: 8px"><input type="checkbox" checked="{{sch.weekdaysOnly}}" onClick="{{sch.onWeekdays}}">Weekdays only</label></sc-if></div></sc-if>
+  <div class="sk-row"><label for="sk-zone">Time zone</label><select id="sk-zone" value="{{sch.zone}}" onChange="{{sch.onZone}}"><sc-for list="{{sch.zoneOpts}}" as="o" hint-placeholder-count="4"><option value="{{o.v}}">{{o.l}}</option></sc-for></select><span class="sk-note">Uses the company time zone.</span></div>
+  <p class="sk-sum" role="status" aria-live="polite">{{sch.summary}}</p>
+  <div class="sk-runs"><span class="sk-lab" id="sk-nx">Next runs</span>
+    <ol aria-labelledby="sk-nx" class="sk-list"><sc-for list="{{sch.runs}}" as="r" hint-placeholder-count="3"><li class="mono">{{r.text}}</li></sc-for></ol>
+    <sc-if value="{{sch.noRuns}}" hint-placeholder-val="{{ false }}"><p class="sk-note">{{sch.runsNote}}</p></sc-if>
+  </div>
+  <div class="adv sk-adv">
+    <button type="button" class="sk-link" aria-expanded="{{sch.advPressed}}" onClick="{{sch.toggleAdv}}">Advanced: saved as</button>
+    <sc-if value="{{sch.advOpen}}" hint-placeholder-val="{{ false }}">
+      <sc-if value="{{sch.showTag}}" hint-placeholder-val="{{ true }}"><div class="sk-row"><span class="sk-tag" tabindex="0" data-tip="Picked automatically. You never need to edit this.">{{sch.savedLabel}}</span></div></sc-if>
+      <sc-if value="{{sch.notEditing}}" hint-placeholder-val="{{ true }}"><sc-for list="{{sch.savedLines}}" as="l" hint-placeholder-count="1"><div class="sk-row"><input class="mono sk-cron" type="text" value="{{l.text}}" readonly="readonly" aria-label="{{l.aria}}" spellcheck="false"></div></sc-for></sc-if>
+      <sc-if value="{{sch.editing}}" hint-placeholder-val="{{ false }}"><div class="sk-row"><label class="sk-sr" for="sk-cron">Cron expression</label><input id="sk-cron" class="mono sk-cron" type="text" value="{{sch.cron}}" aria-invalid="{{sch.invalid}}" onInput="{{sch.onCron}}" autocomplete="off" spellcheck="false"></div></sc-if>
+      <div class="sk-row"><button type="button" class="btn sm" onClick="{{sch.copy}}">{{sch.copyLabel}}</button><button type="button" class="btn sm" onClick="{{sch.toggleEdit}}">{{sch.editLabel}}</button></div>
+      <sc-if value="{{sch.badPlain}}" hint-placeholder-val="{{ false }}"><p class="sk-err" role="alert">This isn't a valid schedule. Example: 0 9 * * 1-5 means weekdays at 09:00.</p></sc-if>
+      <sc-if value="{{sch.badExt}}" hint-placeholder-val="{{ false }}"><p class="sk-err" role="alert">Use the picker for 'last Friday' and similar — cron can't express it.</p></sc-if>
+      <sc-if value="{{sch.hasNote}}" hint-placeholder-val="{{ false }}"><p class="sk-note">{{sch.savedNote}}</p></sc-if>
+      <sc-if value="{{sch.editing}}" hint-placeholder-val="{{ false }}"><p class="sk-note">Standard five-field cron only: minute, hour, day of month, month, weekday. The picker and this field stay in sync.</p></sc-if>
+    </sc-if>
+  </div>
+  <span class="sk-sr" role="status" aria-live="polite">{{sch.live}}</span>
+</div>
+            </div>
+            <label class="fld">Runs as<select disabled><option>documentation-engineer</option></select><small>The holder of the owner role. If the holder changes, the routine follows.</small></label>
+            <label class="fld">On each run<select><option>Create a new work item</option><option>Update a recurring work item</option></select></label>
+            <label class="fld">Work item title<input type="text" value="Standup digest" placeholder="Title for the created work item"></label>
+            <div style="display: flex; justify-content: flex-end; gap: 8px"><button type="button" class="btn">Cancel</button><button type="submit" class="btn pri">Save</button></div>
+          </form>
+        </section>
+
+        <section class="card" aria-labelledby="hi">
+          <div class="ch">
+            <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path d="M8 38h32"/><rect x="11" y="26" width="6" height="12" class="i1"/><rect x="21" y="18" width="6" height="20" class="i3"/><rect x="31" y="22" width="6" height="16" class="i2"/><path d="M9 14l8-4 8 4 12-6"/></svg></span>
+            <h2 id="hi">Run History – Daily standup digest</h2>
+          </div>
+          <div class="row" style="flex-wrap: wrap; font-size: 13px"><span class="pill ok" data-tip="Succeeded — run finished and created its work item">Succeeded</span><span class="mono">10 Oct 2026, 09:00</span><span class="mono sub2 adv" data-tip="Run duration">2m 14s</span><a href="WorkItem.dc.html" style="margin-left: auto; font-weight: 500">created work item</a></div>
+          <div class="row" style="flex-wrap: wrap; font-size: 13px"><span class="pill ok" data-tip="Succeeded — run finished and created its work item">Succeeded</span><span class="mono">9 Oct 2026, 09:00</span><span class="mono sub2 adv" data-tip="Run duration">1m 58s</span><a href="WorkItem.dc.html" style="margin-left: auto; font-weight: 500">created work item</a></div>
+          <div class="row" style="flex-wrap: wrap; font-size: 13px"><span class="pill bad" data-tip="Failed — run stopped with an error; no work item created">Failed</span><span class="mono">8 Oct 2026, 09:00</span><span class="mono sub2 adv" data-tip="Run duration before failure">0m 41s</span></div>
+          <div class="row" style="flex-wrap: wrap; font-size: 13px"><span class="pill ok" data-tip="Completed — run finished and created its work item">Completed</span><span class="mono">7 Oct 2026, 09:00</span><span class="mono sub2 adv">2m 30s</span><a href="WorkItem.dc.html" style="margin-left: auto; font-weight: 500">created work item</a></div>
+          <div class="row" style="flex-wrap: wrap; font-size: 13px"><span class="pill ok" data-tip="Completed — run finished and created its work item">Completed</span><span class="mono">6 Oct 2026, 09:00</span><span class="mono sub2 adv">2m 02s</span><a href="WorkItem.dc.html" style="margin-left: auto; font-weight: 500">created work item</a></div>
+          <div style="margin: 12px 16px 16px; display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 8px; background: var(--surface2); border: var(--bw) dashed var(--border)">
+            <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="14" class="iw"/><path d="M24 16v8l5 3"/><path d="M36 10l4-4M8 40l4-4" class="sacc"/></svg></span>
+            <span style="font-size: 13px; color: var(--text2)">Next run: <span class="mono">Mon 13 Oct 2026, 09:00</span> · weekdays only</span>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"ui":{"editor":"enum","options":["full","minimal"],"default":"full"},"$preview":{"width":1440,"height":1900}}'>
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+    try { const u = window.localStorage.getItem('autobot-ui-mode'); if (u === 'full' || u === 'minimal') this.setState({ ui: u }); } catch (e) {}
+  }
+  setUi(id) {
+    try { window.localStorage.setItem('autobot-ui-mode', id); } catch (e) {}
+    this.setState({ ui: id, uiAnnounce: id === 'minimal' ? 'Minimal interface on. Advanced features hidden.' : 'Full interface on. All features shown.' });
+  }
+  schedBase() {
+    return { mode: 'daily', every: 15, rangeOn: false, from: 8, to: 18, days: [], hevery: 1, hmin: 0, h: 9, m: 0, weekdaysOnly: false, wdays: [1], mdMode: 'day', mday: 1, nth: 1, nthDay: 1, date: '2026-10-13', zone: 'Etc/GMT-3 (UTC+3)' };
+  }
+  schedInit(cron, over) {
+    const r = this.schedParse(cron);
+    const custom = r.ok && !r.p;
+    return { p: Object.assign(this.schedBase(), r.p || {}, over || {}), custom: custom, customCron: custom ? cron : '', cronEdit: false, cronText: null, bad: false, ext: false, advOpen: custom, copied: false };
+  }
+  schedDow(a) {
+    const s = a.filter((x, i) => a.indexOf(x) === i).sort((x, y) => x - y);
+    if (s.length === 0 || s.length === 7) return '*';
+    const out = [];
+    let i = 0;
+    while (i < s.length) {
+      let j = i;
+      while (j + 1 < s.length && s[j + 1] === s[j] + 1) j += 1;
+      if (j - i >= 2) out.push(s[i] + '-' + s[j]); else for (let k = i; k <= j; k += 1) out.push(String(s[k]));
+      i = j + 1;
+    }
+    return out.join(',');
+  }
+  schedCron(p) {
+    const hr = p.rangeOn ? p.from + '-' + (p.to - 1) : '*';
+    if (p.mode === 'min') return '*/' + p.every + ' ' + hr + ' * * ' + this.schedDow(p.days);
+    if (p.mode === 'hour') return p.hmin + ' ' + (p.hevery > 1 ? (p.rangeOn ? hr + '/' + p.hevery : '*/' + p.hevery) : hr) + ' * * ' + this.schedDow(p.days);
+    if (p.mode === 'day') return p.m + ' ' + p.h + ' * * ' + (p.weekdaysOnly ? '1-5' : '*');
+    if (p.mode === 'week') return p.wdays.length ? p.m + ' ' + p.h + ' * * ' + this.schedDow(p.wdays) : null;
+    if (p.mode === 'month') return p.mdMode === 'day' && p.mday <= 28 ? p.m + ' ' + p.h + ' ' + p.mday + ' * *' : null;
+    return null;
+  }
+  schedRunCron(p) {
+    if (p.mode === 'month') return p.mdMode === 'day' ? { cron: p.m + ' ' + p.h + ' ' + (p.mday === 32 ? 31 : p.mday) + ' * *' } : { cron: p.m + ' ' + p.h + ' * * *', nth: { day: p.nthDay, n: p.nth } };
+    if (p.mode === 'once') {
+      const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(p.date || '');
+      return { cron: d ? p.m + ' ' + p.h + ' ' + Number(d[3]) + ' ' + Number(d[2]) + ' *' : null };
+    }
+    return { cron: this.schedCron(p) };
+  }
+  schedSaved(p) {
+    const std = this.schedCron(p);
+    if (std) return { label: 'Standard cron', lines: [std], note: '' };
+    const pad = (n) => (n < 10 ? '0' : '') + n;
+    if (p.mode === 'once') return /^\d{4}-\d{2}-\d{2}$/.test(p.date || '') ? { label: 'One-off run', lines: [p.date + ' ' + pad(p.h) + ':' + pad(p.m)], note: 'Runs once. No repeating cron is saved.' } : null;
+    if (p.mode !== 'month') return null;
+    const DD = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+    const tail = ';BYHOUR=' + p.h + ';BYMINUTE=' + p.m;
+    if (p.mdMode === 'nth') return { label: 'Calendar rule', lines: ['FREQ=MONTHLY;BYDAY=' + (p.nth === 5 ? '-1' : p.nth) + DD[p.nthDay] + tail], note: '' };
+    return { label: 'Calendar rule', lines: ['FREQ=MONTHLY;BYMONTHDAY=' + (p.mday === 32 ? '-1' : p.mday) + tail], note: p.mday < 32 ? 'Months without this day run on the last day.' : '' };
+  }
+  schedExpand(f, lo, hi) {
+    const out = [];
+    const toks = f.split(',');
+    for (let i = 0; i < toks.length; i += 1) {
+      const m = /^(?:\*|(\d+)(?:-(\d+))?)(?:\/(\d+))?$/.exec(toks[i]);
+      if (!m) return null;
+      const step = m[3] ? Number(m[3]) : 1;
+      let a = lo;
+      let b = hi;
+      if (m[1] !== undefined) { a = Number(m[1]); b = m[2] !== undefined ? Number(m[2]) : (m[3] ? hi : a); }
+      if (a < lo || b > hi || a > b || step < 1) return null;
+      for (let x = a; x <= b; x += step) out.push(x);
+    }
+    return out;
+  }
+  schedParse(text) {
+    const parts = String(text || '').trim().split(/\s+/);
+    if (parts.length !== 5) return { ok: false };
+    const mi = parts[0]; const ho = parts[1]; const dom = parts[2]; const mon = parts[3]; const dow = parts[4];
+    const ex = [this.schedExpand(mi, 0, 59), this.schedExpand(ho, 0, 23), this.schedExpand(dom, 1, 31), this.schedExpand(mon, 1, 12)];
+    if (/[#L]/i.test(dow)) return { ok: false, ext: true };
+    const dx = this.schedExpand(dow, 0, 7);
+    if (ex.some((x) => !x) || !dx) return { ok: false };
+    const dset = dx.map((x) => x % 7).filter((x, i, a) => a.indexOf(x) === i).sort((a, b) => a - b);
+    const days = dset.length === 7 ? [] : dset;
+    const num = (x) => /^\d+$/.test(x);
+    const t = num(mi) && num(ho) ? { m: Number(mi), h: Number(ho) } : null;
+    const none = { ok: true, p: null };
+    if (mon === '*' && dom === '*') {
+      const mm = /^\*\/(\d+)$/.exec(mi);
+      const rr = /^(\d+)-(\d+)$/.exec(ho);
+      if (mm && [5, 10, 15, 30].indexOf(Number(mm[1])) >= 0 && (ho === '*' || rr)) {
+        return { ok: true, p: { mode: 'min', every: Number(mm[1]), rangeOn: !!rr, from: rr ? Number(rr[1]) : 8, to: rr ? Number(rr[2]) + 1 : 18, days: days } };
+      }
+      const hh = /^(?:\*|(\d+)-(\d+))(?:\/(\d+))?$/.exec(ho);
+      if (num(mi) && hh) {
+        const k = hh[3] ? Number(hh[3]) : 1;
+        if ([1, 2, 3, 4, 6, 8, 12].indexOf(k) >= 0) return { ok: true, p: { mode: 'hour', hmin: Number(mi), hevery: k, rangeOn: hh[1] !== undefined, from: hh[1] !== undefined ? Number(hh[1]) : 8, to: hh[1] !== undefined ? Number(hh[2]) + 1 : 18, days: days } };
+      }
+      if (t && dow === '*') return { ok: true, p: { mode: 'day', m: t.m, h: t.h, weekdaysOnly: false } };
+      if (t && dow === '1-5') return { ok: true, p: { mode: 'day', m: t.m, h: t.h, weekdaysOnly: true } };
+      if (t) return { ok: true, p: { mode: 'week', m: t.m, h: t.h, wdays: dset } };
+      return none;
+    }
+    if (mon === '*' && num(dom) && dow === '*' && t) return { ok: true, p: { mode: 'month', mdMode: 'day', m: t.m, h: t.h, mday: Number(dom) } };
+    if (num(mon) && num(dom) && dow === '*' && t) {
+      const y = Number(mon) > 10 || (Number(mon) === 10 && Number(dom) >= 12) ? 2026 : 2027;
+      const pad = (n) => (n < 10 ? '0' : '') + n;
+      return { ok: true, p: { mode: 'once', m: t.m, h: t.h, date: y + '-' + pad(Number(mon)) + '-' + pad(Number(dom)) } };
+    }
+    return none;
+  }
+  schedDays(a) {
+    const s = a.filter((x, i) => a.indexOf(x) === i).sort((x, y) => x - y);
+    const L = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    if (s.length === 0 || s.length === 7) return 'day';
+    if (s.join() === '1,2,3,4,5') return 'weekday';
+    const w = [1, 2, 3, 4, 5, 6, 0].filter((d) => s.indexOf(d) >= 0).map((d) => L[d]);
+    return w.length === 1 ? w[0] : w.slice(0, -1).join(', ') + ' and ' + w[w.length - 1];
+  }
+  schedSummary(p) {
+    const pad = (n) => (n < 10 ? '0' : '') + n;
+    const T = pad(p.h) + ':' + pad(p.m);
+    const FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const ORD = ['', 'first', 'second', 'third', 'fourth', 'last'];
+    const zone = p.zone.split(' (')[0] + ' time';
+    const dw = this.schedDays(p.days);
+    const onDays = dw === 'day' ? '' : (dw === 'weekday' ? ', on weekdays' : ', on ' + dw);
+    const range = p.rangeOn ? ' between ' + pad(p.from) + ':00 and ' + pad(p.to === 24 ? 0 : p.to) + ':00' : '';
+    let s = '';
+    if (p.mode === 'min') s = 'Every ' + p.every + ' minutes' + range + onDays;
+    else if (p.mode === 'hour') s = (p.hevery === 1 ? 'Every hour' : 'Every ' + p.hevery + ' hours') + ' at minute ' + pad(p.hmin) + range + onDays;
+    else if (p.mode === 'day') s = (p.weekdaysOnly ? 'Every weekday' : 'Every day') + ' at ' + T;
+    else if (p.mode === 'week') {
+      const w = this.schedDays(p.wdays);
+      const one = p.wdays.length === 1 ? FULL[p.wdays[0]] : w;
+      s = 'Every ' + one + ' at ' + T;
+    } else if (p.mode === 'month') s = p.mdMode === 'day' ? (p.mday === 32 ? 'On the last day of every month at ' + T : 'On day ' + p.mday + ' of every month at ' + T) : 'On the ' + ORD[p.nth] + ' ' + FULL[p.nthDay] + ' of every month at ' + T;
+    else {
+      const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(p.date || '');
+      s = d ? 'Once on ' + this.schedFmt(Date.UTC(Number(d[1]), Number(d[2]) - 1, Number(d[3]), p.h, p.m)).replace(/, \d\d:\d\d$/, '') + ' at ' + T : 'Once';
+    }
+    return s + ', ' + zone;
+  }
+  schedDescribe(text) {
+    const parts = String(text || '').trim().split(/\s+/);
+    if (parts.length !== 5 || !/^\d+$/.test(parts[0]) || !/^\d+$/.test(parts[1])) return '';
+    const pad = (n) => (n < 10 ? '0' : '') + n;
+    let s = 'At ' + pad(Number(parts[1])) + ':' + pad(Number(parts[0]));
+    if (parts[2] !== '*') s += ' on day ' + parts[2] + ' of the month';
+    if (parts[3] !== '*') s += ' in month ' + parts[3];
+    if (parts[4] !== '*') {
+      const dx = this.schedExpand(parts[4], 0, 7);
+      s += ' on ' + (dx ? this.schedDays(dx.map((x) => x % 7)) : parts[4]);
+    }
+    return s;
+  }
+  schedFmt(t) {
+    const d = new Date(t);
+    const pad = (n) => (n < 10 ? '0' : '') + n;
+    const W = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const M = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return W[d.getUTCDay()] + ' ' + d.getUTCDate() + ' ' + M[d.getUTCMonth()] + ' ' + d.getUTCFullYear() + ', ' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes());
+  }
+  schedNext(cron, n, nth) {
+    const NOW = Date.UTC(2026, 9, 12, 10, 0);
+    const parts = String(cron || '').trim().split(/\s+/);
+    if (parts.length !== 5) return [];
+    const mi = this.schedExpand(parts[0], 0, 59);
+    const ho = this.schedExpand(parts[1], 0, 23);
+    const dom = this.schedExpand(parts[2], 1, 31);
+    const mon = this.schedExpand(parts[3], 1, 12);
+    const nthM = nth ? [null, String(nth.day), nth.n === 5 ? undefined : String(nth.n), nth.n === 5 ? 'L' : undefined] : null;
+    const dx = nthM ? [] : this.schedExpand(parts[4], 0, 7);
+    if (!mi || !ho || !dom || !mon || !dx) return [];
+    const dow = dx.map((x) => x % 7);
+    const single = /^\d+$/.test(parts[2]) ? Number(parts[2]) : 0;
+    const both = parts[2] !== '*' && parts[4] !== '*';
+    const out = [];
+    for (let d = 0; d < 800 && out.length < n; d += 1) {
+      const dt = new Date(NOW + d * 86400000);
+      const y = dt.getUTCFullYear(); const mo = dt.getUTCMonth(); const da = dt.getUTCDate(); const wd = dt.getUTCDay();
+      const dim = new Date(Date.UTC(y, mo + 1, 0)).getUTCDate();
+      if (mon.indexOf(mo + 1) < 0) continue;
+      const dm = dom.indexOf(da) >= 0 || (single > dim && da === dim);
+      const wm = nthM ? (wd === Number(nthM[1]) % 7 && (nthM[3] ? da + 7 > dim : Math.ceil(da / 7) === Number(nthM[2]))) : dow.indexOf(wd) >= 0;
+      if (!(both ? (dm || wm) : (dm && wm))) continue;
+      for (let a = 0; a < ho.length; a += 1) {
+        for (let b = 0; b < mi.length; b += 1) {
+          const t = Date.UTC(y, mo, da, ho[a], mi[b]);
+          if (t > NOW && out.length < n) out.push(t);
+        }
+      }
+    }
+    return out;
+  }
+  schedView(sk, save) {
+    const p = sk.p;
+    const pad = (n) => (n < 10 ? '0' : '') + n;
+    const set = (o) => save(Object.assign({}, sk, o));
+    const up = (o) => set({ p: Object.assign({}, p, o), custom: false, bad: false, ext: false, cronText: null, copied: false });
+    const pickNum = (key) => (e) => up({ [key]: Number(e.target.value) });
+    const rng = (a, b, f) => { const o = []; for (let i = a; i <= b; i += 1) o.push({ v: String(i), l: f(i) }); return o; };
+    const std = sk.custom ? sk.customCron : this.schedCron(p);
+    const rc = sk.custom ? { cron: sk.customCron } : this.schedRunCron(p);
+    const sv = sk.custom ? { label: 'Standard cron', lines: [sk.customCron], note: '' } : this.schedSaved(p);
+    const shown = sk.cronEdit && sk.cronText !== null ? sk.cronText : (std || '');
+    const zoneName = p.zone.split(' (')[0] + ' time';
+    let summary = '';
+    let runs = [];
+    if (sk.bad) summary = 'Waiting for a valid schedule';
+    else if (sk.custom) { const d = this.schedDescribe(sk.customCron); summary = d ? d + ', ' + zoneName : 'Custom schedule'; runs = this.schedNext(sk.customCron, 3); }
+    else if (!rc.cron) summary = p.mode === 'week' ? 'Pick at least one day' : 'Pick a date';
+    else { summary = this.schedSummary(p); runs = p.mode === 'once' ? this.schedNext(rc.cron, 40).filter((t) => new Date(t).getUTCFullYear() === Number(String(p.date).slice(0, 4))).slice(0, 1) : this.schedNext(rc.cron, 3, rc.nth); }
+    const mode = sk.custom ? '' : p.mode;
+    const MODES = [['min', 'Every few minutes'], ['hour', 'Hourly'], ['day', 'Daily'], ['week', 'Weekly'], ['month', 'Monthly'], ['once', 'Once']];
+    const dayKey = p.mode === 'week' ? 'wdays' : 'days';
+    const arr = p[dayKey];
+    const DAYS = [[1, 'Mon', 'Monday'], [2, 'Tue', 'Tuesday'], [3, 'Wed', 'Wednesday'], [4, 'Thu', 'Thursday'], [5, 'Fri', 'Friday'], [6, 'Sat', 'Saturday'], [0, 'Sun', 'Sunday']];
+    const hours = rng(0, 23, (i) => pad(i));
+    return {
+      modes: MODES.map((m) => ({ label: m[1], cls: mode === m[0] ? 'on' : '', pressed: mode === m[0] ? 'true' : 'false', pick: () => up({ mode: m[0] }) })),
+      custom: sk.custom, openCron: () => set({ advOpen: true, cronEdit: true, cronText: null }),
+      isMin: mode === 'min', isHour: mode === 'hour', isDay: mode === 'day', isWeek: mode === 'week', isMonth: mode === 'month', isOnce: mode === 'once',
+      showRange: mode === 'min' || mode === 'hour', showDays: mode === 'min' || mode === 'hour' || mode === 'week', showTime: mode === 'day' || mode === 'week' || mode === 'month' || mode === 'once',
+      every: String(p.every), everyOpts: [5, 10, 15, 30].map((x) => ({ v: String(x), l: String(x) })), onEvery: pickNum('every'),
+      hevery: String(p.hevery), heveryOpts: [1, 2, 3, 4, 6, 8, 12].map((x) => ({ v: String(x), l: String(x) })), onHevery: pickNum('hevery'),
+      hmin: String(p.hmin), minOpts: rng(0, 59, (i) => pad(i)), onHmin: pickNum('hmin'),
+      rangeOn: !!p.rangeOn, rangeOff: !p.rangeOn, onRange: () => up({ rangeOn: !p.rangeOn }),
+      from: String(p.from), fromOpts: rng(0, 22, (i) => pad(i) + ':00'), onFrom: (e) => { const v = Number(e.target.value); up({ from: v, to: Math.max(p.to, v + 1) }); },
+      to: String(p.to), toOpts: rng(1, 24, (i) => pad(i === 24 ? 0 : i) + ':00' + (i === 24 ? ' (midnight)' : '')), onTo: (e) => { const v = Number(e.target.value); up({ to: v, from: Math.min(p.from, v - 1) }); },
+      h: String(p.h), hourOpts: hours, onH: pickNum('h'), m: String(p.m), onM: pickNum('m'),
+      weekdaysOnly: !!p.weekdaysOnly, onWeekdays: () => up({ weekdaysOnly: !p.weekdaysOnly }),
+      dayLabel: p.mode === 'week' ? 'Repeat on' : 'Only on these days (none selected means every day)',
+      dayChips: DAYS.map((d) => { const on = arr.indexOf(d[0]) >= 0; return { label: d[1], aria: d[2], cls: on ? 'on' : '', pressed: on ? 'true' : 'false', toggle: () => up({ [dayKey]: on ? arr.filter((x) => x !== d[0]) : arr.concat([d[0]]) }) }; }),
+      mdChips: [['day', 'On day of the month'], ['nth', 'On a weekday of the month']].map((m) => ({ label: m[1], cls: p.mdMode === m[0] ? 'on' : '', pressed: p.mdMode === m[0] ? 'true' : 'false', pick: () => up({ mdMode: m[0] }) })),
+      mdDay: p.mdMode === 'day', mdNth: p.mdMode === 'nth',
+      mday: String(p.mday), dayOpts: rng(1, 31, (i) => String(i)).concat([{ v: '32', l: 'Last day' }]), onMday: pickNum('mday'),
+      dayNote: p.mdMode === 'day' && p.mday >= 29 && p.mday < 32,
+      nth: String(p.nth), nthOpts: [{ v: '1', l: 'first' }, { v: '2', l: 'second' }, { v: '3', l: 'third' }, { v: '4', l: 'fourth' }, { v: '5', l: 'last' }], onNth: pickNum('nth'),
+      nthDay: String(p.nthDay), nthDayOpts: DAYS.map((d) => ({ v: String(d[0]), l: d[2] })), onNthDay: pickNum('nthDay'),
+      date: p.date, onDate: (e) => up({ date: e.target.value }),
+      zone: p.zone, zoneOpts: ['Etc/GMT-3 (UTC+3)', 'Europe/London', 'America/New_York', 'UTC'].map((z) => ({ v: z, l: z })), onZone: (e) => up({ zone: e.target.value }),
+      summary: summary, runs: runs.map((t) => ({ text: this.schedFmt(t) })), noRuns: runs.length === 0 && !sk.bad,
+      runsNote: sk.bad ? 'Fix the cron expression to see the next runs.' : (!rc.cron && !sk.custom ? 'Complete the schedule to see the next runs.' : (p.mode === 'once' && !sk.custom ? 'That date and time have already passed.' : 'No run found in the next two years.')),
+      advOpen: !!sk.advOpen, advPressed: sk.advOpen ? 'true' : 'false', toggleAdv: () => set({ advOpen: !sk.advOpen }),
+      cron: shown, readOnly: !sk.cronEdit, invalid: sk.bad ? 'true' : 'false', bad: !!sk.bad,
+      editLabel: sk.cronEdit ? 'Done editing' : 'Edit as cron',
+      toggleEdit: () => set({ cronEdit: !sk.cronEdit, cronText: null, bad: false, ext: false, advOpen: true }),
+      onCron: (e) => {
+        const text = e.target.value;
+        const r = this.schedParse(text);
+        if (!r.ok) { set({ cronText: text, bad: true, ext: !!r.ext, copied: false }); return; }
+        if (r.p) { set({ cronText: text, bad: false, ext: false, custom: false, p: Object.assign({}, p, r.p), copied: false }); return; }
+        set({ cronText: text, bad: false, ext: false, custom: true, customCron: text.trim(), copied: false });
+      },
+      editing: !!sk.cronEdit, notEditing: !sk.cronEdit, badExt: !!sk.bad && !!sk.ext, badPlain: !!sk.bad && !sk.ext,
+      showTag: !!sv && !sk.cronEdit, savedLabel: sv ? sv.label : '',
+      savedLines: (sv ? sv.lines : []).map((t) => ({ text: t, aria: (sv ? sv.label : '') + ': ' + t })),
+      savedNote: sv ? sv.note : '', hasNote: !!sv && !!sv.note && !sk.cronEdit,
+      copyLabel: sk.copied ? 'Copied' : 'Copy',
+      copy: () => { try { window.navigator.clipboard.writeText(sk.cronEdit ? shown : (sv ? sv.lines.join('\n') : '')); } catch (e) {} set({ copied: true }); },
+      live: summary + (runs.length ? '. Next run ' + this.schedFmt(runs[0]) : '')
+    };
+  }
+  renderVals() {
+    const st = this.state || {};
+    const sch = this.schedView(st.sk || this.schedInit('0 9 * * 1-5'), (n) => this.setState({ sk: n }));
+    const cur = st.theme || this.props.theme || 'light';
+    const ui = st.ui || this.props.ui || 'full';
+    const defs = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+    return {
+      theme: cur,
+      ui: ui,
+      uiAnnounce: st.uiAnnounce || '',
+      sch: sch,
+      showAll: () => this.setUi('full'),
+      toggleUi: () => this.setUi(ui === 'minimal' ? 'full' : 'minimal'),
+      uiMinPressed: ui === 'minimal' ? 'true' : 'false',
+      uiTogCls: ui === 'minimal' ? 'on' : '',
+      themes: defs.map(([id, label]) => ({
+        label: label,
+        cls: id === cur ? 'on' : '',
+        pressed: id === cur ? 'true' : 'false',
+        pick: () => { try { window.localStorage.setItem('autobot-theme', id); } catch (e) {} this.setState({ theme: id }); }
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

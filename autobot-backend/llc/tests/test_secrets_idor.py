@@ -22,10 +22,22 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from testkit.canonical_gate import unauthenticated_canonical_gate
 from user_management.services import TenantContext
 
 _FIXED_USER_ID = uuid.UUID("77777777-7777-7777-7777-777777777777")
 _OTHER_ORG = "99999999-9999-9999-9999-999999999999"
+
+
+def _role(name: str):
+    from llc.models.enums import MembershipRole  # noqa: PLC0415
+
+    return MembershipRole(name)
+
+
+#: Sentinel default: the caller is an admin of their company, as the
+#: same-tenant success cases below assume.
+_ADMIN = "admin"
 
 
 def _make_row(secret_name: str = "db_password", version: int = 1) -> MagicMock:
@@ -38,6 +50,7 @@ def _make_row(secret_name: str = "db_password", version: int = 1) -> MagicMock:
 def _make_client(
     caller_org_id: str,
     is_platform_admin: bool = False,
+    membership=_ADMIN,
 ) -> TestClient:
     from api.user_management.dependencies import get_current_user, require_org_context  # noqa: PLC0415
     from llc.api.secrets import router as secrets_router  # noqa: PLC0415
@@ -50,6 +63,8 @@ def _make_client(
     mock_session.commit = AsyncMock()
     execute_result = MagicMock()
     execute_result.scalar_one.return_value = _make_row()
+    # The membership row require_company_admin reads (None = not a member).
+    execute_result.scalar_one_or_none.return_value = _role(membership) if membership else None
     mock_session.execute = AsyncMock(return_value=execute_result)
 
     async def _fake_session():
@@ -97,30 +112,26 @@ class TestSecretsNoAuth:
         return TestClient(app)
 
     def test_list_secrets_no_token_returns_401(self):
-        with patch("api.user_management.dependencies.get_auth_middleware") as mock_mw:
-            mock_mw.return_value.get_user_from_request.return_value = None
+        with unauthenticated_canonical_gate():
             client = self._make_unauthenticated_client()
             resp = client.get(f"/api/llc/secrets/{_OTHER_ORG}")
         assert resp.status_code == 401
 
     def test_list_secrets_spoofed_header_alone_returns_401(self):
         """The old X-Agent-Company-Id header, with no real auth, no longer works (GH#12147)."""
-        with patch("api.user_management.dependencies.get_auth_middleware") as mock_mw:
-            mock_mw.return_value.get_user_from_request.return_value = None
+        with unauthenticated_canonical_gate():
             client = self._make_unauthenticated_client()
             resp = client.get(f"/api/llc/secrets/{_OTHER_ORG}", headers={"X-Agent-Company-Id": _OTHER_ORG})
         assert resp.status_code == 401
 
     def test_get_secret_no_token_returns_401(self):
-        with patch("api.user_management.dependencies.get_auth_middleware") as mock_mw:
-            mock_mw.return_value.get_user_from_request.return_value = None
+        with unauthenticated_canonical_gate():
             client = self._make_unauthenticated_client()
             resp = client.get(f"/api/llc/secrets/{_OTHER_ORG}/db_password")
         assert resp.status_code == 401
 
     def test_set_secret_no_token_returns_401(self):
-        with patch("api.user_management.dependencies.get_auth_middleware") as mock_mw:
-            mock_mw.return_value.get_user_from_request.return_value = None
+        with unauthenticated_canonical_gate():
             client = self._make_unauthenticated_client()
             resp = client.post(
                 f"/api/llc/secrets/{_OTHER_ORG}",
@@ -129,8 +140,7 @@ class TestSecretsNoAuth:
         assert resp.status_code == 401
 
     def test_revoke_secret_no_token_returns_401(self):
-        with patch("api.user_management.dependencies.get_auth_middleware") as mock_mw:
-            mock_mw.return_value.get_user_from_request.return_value = None
+        with unauthenticated_canonical_gate():
             client = self._make_unauthenticated_client()
             resp = client.delete(f"/api/llc/secrets/{_OTHER_ORG}/db_password", params={"actor": "agent-1"})
         assert resp.status_code == 401
@@ -212,3 +222,68 @@ class TestSecretsIdor:
         client = _make_client(org)
         resp = client.delete(f"/api/llc/secrets/{_OTHER_ORG}/db_password", params={"actor": "agent-1"})
         assert resp.status_code == 404
+
+
+class TestSecretsNeedCompanyAdmin:
+    """A tenant match is not enough: values and mutations need owner/admin."""
+
+    @staticmethod
+    def _calls(org: str):
+        return {
+            "set": lambda c: c.post(f"/api/llc/secrets/{org}", json={"name": "k", "value": "v", "actor": "a"}),
+            "get": lambda c: c.get(f"/api/llc/secrets/{org}/db_password"),
+            "revoke": lambda c: c.delete(f"/api/llc/secrets/{org}/db_password", params={"actor": "a"}),
+        }
+
+    @pytest.mark.parametrize("op", ["set", "get", "revoke"])
+    def test_a_plain_member_is_refused(self, op):
+        org = str(uuid.uuid4())
+        resp = self._calls(org)[op](_make_client(org, membership="member"))
+        assert resp.status_code == 403
+        assert "plaintext-value" not in resp.text
+
+    @pytest.mark.parametrize("op", ["set", "get", "revoke"])
+    def test_a_tenant_user_with_no_membership_is_refused(self, op):
+        org = str(uuid.uuid4())
+        resp = self._calls(org)[op](_make_client(org, membership=None))
+        assert resp.status_code == 403
+
+    @pytest.mark.parametrize("op, expected", [("set", 201), ("get", 200), ("revoke", 204)])
+    def test_an_owner_is_allowed(self, op, expected):
+        org = str(uuid.uuid4())
+        assert self._calls(org)[op](_make_client(org, membership="owner")).status_code == expected
+
+    @pytest.mark.parametrize("op, expected", [("set", 201), ("get", 200), ("revoke", 204)])
+    def test_a_platform_admin_keeps_the_documented_exemption(self, op, expected):
+        org = str(uuid.uuid4())
+        client = _make_client(org, is_platform_admin=True, membership=None)
+        assert self._calls(org)[op](client).status_code == expected
+
+    def test_a_plain_member_may_still_list_names(self):
+        org = str(uuid.uuid4())
+        assert _make_client(org, membership="member").get(f"/api/llc/secrets/{org}").status_code == 200
+
+
+class TestSecretsActorIsTheAuthenticatedCaller:
+    """#20102: the recorded actor is the session user; a client-supplied ``actor`` is ignored."""
+
+    def test_set_and_revoke_ignore_a_forged_or_non_uuid_actor(self):
+        from llc.api.secrets import SecretService  # noqa: PLC0415
+
+        org = str(uuid.uuid4())
+        client = _make_client(org)
+        forged = str(uuid.uuid4())
+        for actor in (forged, "not-a-uuid"):
+            assert (
+                client.post(f"/api/llc/secrets/{org}", json={"name": "k", "value": "v", "actor": actor}).status_code
+                == 201
+            )
+            assert SecretService.set.await_args.kwargs["actor"] == str(_FIXED_USER_ID)
+            assert client.delete(f"/api/llc/secrets/{org}/k", params={"actor": actor}).status_code == 204
+            assert SecretService.revoke.await_args.kwargs["actor"] == str(_FIXED_USER_ID)
+
+    def test_the_actor_field_is_optional_for_new_clients(self):
+        org = str(uuid.uuid4())
+        client = _make_client(org)
+        assert client.post(f"/api/llc/secrets/{org}", json={"name": "k", "value": "v"}).status_code == 201
+        assert client.delete(f"/api/llc/secrets/{org}/k").status_code == 204

@@ -16,7 +16,7 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from auth_middleware import get_auth_middleware
+from auth_middleware import resolve_human_user
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.logging_manager import get_logger
 from security.session_ownership import validate_session_ownership
@@ -26,9 +26,9 @@ logger = get_logger(__name__)
 router = APIRouter(tags=["memory"])
 
 
-def _require_user(request: Request) -> Dict[str, Any]:
-    """Raise 401 if the request carries no authenticated user."""
-    user = get_auth_middleware().get_user_from_request(request)
+async def _require_user(request: Request) -> Dict[str, Any]:
+    """Raise 401 if the request carries no authenticated user, or a revoked JWT (#18688)."""
+    user = await resolve_human_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
     return user
@@ -63,7 +63,7 @@ async def verbatim_search(
         JSON object with ``results`` list, each item having
         ``id``, ``text``, ``score``, and ``metadata`` keys.
     """
-    user = _require_user(request)
+    user = await _require_user(request)
 
     from knowledge.search_filters import extract_user_context_from_request
     from memory.verbatim_store import get_verbatim_store

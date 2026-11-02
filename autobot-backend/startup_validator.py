@@ -67,7 +67,7 @@ def _minimum_python_version() -> Tuple[int, int]:
 
 
 @dataclass
-class ValidationResult:
+class DependencyValidation:
     """Result of dependency validation"""
 
     success: bool
@@ -94,7 +94,7 @@ class StartupValidator:
 
     def __init__(self):
         """Initialize validator with default validation result and dependency lists."""
-        self.result = ValidationResult(success=True)
+        self.result = DependencyValidation(success=True)
 
         # Critical imports that must be available. ``aioredis`` was listed here
         # until #13738; it has not been a dependency since the move to
@@ -144,7 +144,7 @@ class StartupValidator:
             "config": self._validate_configuration,
         }
 
-    async def validate_all(self) -> ValidationResult:
+    async def validate_all(self) -> DependencyValidation:
         """Run comprehensive validation"""
         logger.info("Starting comprehensive startup validation...")
 
@@ -376,13 +376,13 @@ class StartupValidator:
 
 
 # Convenience functions
-async def validate_startup_dependencies() -> ValidationResult:
+async def validate_startup_dependencies() -> DependencyValidation:
     """Main validation function"""
     validator = StartupValidator()
     return await validator.validate_all()
 
 
-def validate_system_requirements() -> ValidationResult:
+def validate_system_requirements() -> DependencyValidation:
     """Check the interpreter floor and free disk space (#13738).
 
     Split out of :meth:`StartupValidator.validate_all` so the boot path can gate
@@ -445,7 +445,7 @@ async def validate_service_health(service_name: str) -> Tuple[bool, str | None]:
 
 # Export key functions
 __all__ = [
-    "ValidationResult",
+    "DependencyValidation",
     "StartupValidator",
     "enforce_system_requirements",
     "validate_system_requirements",

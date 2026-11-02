@@ -15,7 +15,7 @@ import pytest
 from knowledge.pipeline.base import PipelineContext
 from knowledge.pipeline.cognifiers.fact_extractor import FactExtractor
 from knowledge.pipeline.models.chunk import ProcessedChunk
-from knowledge.pipeline.models.fact import AtomicFact
+from knowledge.pipeline.models.fact import PipelineAtomicFact
 
 
 @pytest.fixture
@@ -60,7 +60,7 @@ class TestFactExtractorNLP:
         facts = fact_extractor._nlp_extract(sample_chunks, sample_chunks[0].document_id)
 
         assert len(facts) > 0
-        assert all(isinstance(f, AtomicFact) for f in facts)
+        assert all(isinstance(f, PipelineAtomicFact) for f in facts)
         assert all(f.subject and f.predicate and f.object_ for f in facts)
 
     def test_nlp_extract_confidence_scores(self, fact_extractor, sample_chunks):
@@ -73,14 +73,14 @@ class TestFactExtractorNLP:
     def test_fact_deduplication(self, fact_extractor):
         """Test that identical facts are deduplicated."""
         facts = [
-            AtomicFact(
+            PipelineAtomicFact(
                 subject="AutoBot",
                 predicate="is",
                 object="platform",
                 source_document_id=uuid4(),
                 confidence=0.9,
             ),
-            AtomicFact(
+            PipelineAtomicFact(
                 subject="AutoBot",
                 predicate="is",
                 object="platform",
@@ -120,7 +120,7 @@ class TestFactExtractorAsync:
 
         assert result.facts is not None
         assert isinstance(result.facts, list)
-        assert all(isinstance(f, AtomicFact) for f in result.facts)
+        assert all(isinstance(f, PipelineAtomicFact) for f in result.facts)
 
     @pytest.mark.asyncio
     async def test_process_empty_chunks(self):
@@ -159,7 +159,7 @@ class TestFactTypes:
 
     def test_fact_type_statement(self):
         """Test statement fact type."""
-        fact = AtomicFact(
+        fact = PipelineAtomicFact(
             subject="AutoBot",
             predicate="is",
             object="platform",
@@ -170,7 +170,7 @@ class TestFactTypes:
 
     def test_fact_type_relationship(self):
         """Test relationship fact type."""
-        fact = AtomicFact(
+        fact = PipelineAtomicFact(
             subject="AutoBot",
             predicate="uses",
             object="ChromaDB",
@@ -181,7 +181,7 @@ class TestFactTypes:
 
     def test_fact_as_triple(self):
         """Test fact triple representation."""
-        fact = AtomicFact(
+        fact = PipelineAtomicFact(
             subject="Entity A",
             predicate="relates_to",
             object="Entity B",

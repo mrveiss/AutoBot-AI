@@ -316,9 +316,14 @@ class CommandExecutor:
         if pty is None or not pty.write_input(pty_command.typed_input(command, marker)):
             return self._build_pty_error_result("Failed to write command to PTY")
 
-        return_code, timed_out = await pty_command.await_exit_code(
-            pty, start, marker, timeout, on_timeout=lambda: self._handle_poll_timeout(session, timeout)
-        )
+        try:
+            return_code, timed_out = await pty_command.await_exit_code(
+                pty, start, marker, timeout, on_timeout=lambda: self._handle_poll_timeout(session, timeout)
+            )
+        except asyncio.CancelledError:
+            # The shell outlives this task: without Ctrl+C the command it was waiting on runs on (#17273).
+            self._send_sigint_to_pty(session)
+            raise
         output = pty_command.output_since(pty, start, command, marker)
         if timed_out:
             return self._build_pty_timeout_result(output, timeout)

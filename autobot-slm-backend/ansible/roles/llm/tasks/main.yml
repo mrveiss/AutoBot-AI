@@ -11,21 +11,16 @@
 # Phase 1: GPU Detection
 # -----------------------------------------------------------------
 
-- name: "GPU | Detect NVIDIA GPU via nvidia-smi"
-  ansible.builtin.command:
-    cmd: nvidia-smi --query-gpu=name --format=csv,noheader
-  register: _nvidia_smi_result
-  changed_when: false
-  # (#2872) Intentional: nvidia-smi exits rc != 0 when no GPU is present;
-  # the result drives GPU vs CPU model selection below.
-  failed_when: false
+# (#2872) nvidia-smi exits rc != 0 when no GPU is present; the result drives GPU vs CPU model selection below.
+- name: "GPU | Detect NVIDIA GPU"
+  ansible.builtin.include_tasks: ../../_shared/tasks/detect_nvidia_gpu.yml
   when: llm_has_gpu == "auto"
 
 - name: "GPU | Set GPU fact from detection"
   ansible.builtin.set_fact:
     _llm_gpu_detected: >-
-      {{ _nvidia_smi_result.rc == 0
-         and _nvidia_smi_result.stdout | default('') | length > 0 }}
+      {{ nvidia_smi_probe.rc == 0
+         and nvidia_smi_probe.stdout | default('') | length > 0 }}
   when: llm_has_gpu == "auto"
 
 - name: "GPU | Set GPU fact from override"
@@ -37,8 +32,8 @@
   ansible.builtin.debug:
     msg: >-
       GPU detected: {{ _llm_gpu_detected }}
-      {% if _nvidia_smi_result is defined and _nvidia_smi_result.rc == 0 %}
-      ({{ _nvidia_smi_result.stdout | default('unknown') | trim }})
+      {% if llm_has_gpu == "auto" and nvidia_smi_probe.rc == 0 %}
+      ({{ nvidia_smi_probe.stdout | default('unknown') | trim }})
       {% endif %}
 
 - name: "GPU | Build model list for this node"
@@ -79,6 +74,46 @@
     path: /usr/local/bin/ollama
   register: _ollama_binary
 
+# #18128: presence is not enough. Gating install on the binary existing meant
+# an Ollama already on the box was never upgraded, so the registry refused a
+# manifest it could not read and the role failed pulling a model it ships by
+# default (412, observed on 0.19.0). Compare the version and install when absent
+# OR below the floor; the vendor installer upgrades in place.
+- name: "Install | Read the installed Ollama version (#18128)"
+  ansible.builtin.command:
+    cmd: ollama --version
+  register: _ollama_version_raw
+  changed_when: false
+  failed_when: false
+  when: _ollama_binary.stat.exists
+  check_mode: false
+
+- name: "Install | Parse the installed Ollama version (#18128)"
+  ansible.builtin.set_fact:
+    # `ollama version is 0.19.0` -> `0.19.0`. An unparseable or failed read
+    # this empty, which the condition below treats as "needs installing" and not
+    # as "satisfied" -- a version we could not read must not pass a floor check.
+    _ollama_version: >-
+      {{ (_ollama_version_raw.stdout | default('')
+          | regex_search('[0-9]+\.[0-9]+\.[0-9]+') | default('', true))
+         if (_ollama_binary.stat.exists
+             and (_ollama_version_raw.rc | default(1)) == 0)
+         else '' }}
+
+- name: "Install | Decide whether Ollama must be installed or upgraded (#18128)"
+  ansible.builtin.set_fact:
+    _ollama_needs_install: >-
+      {{ (not _ollama_binary.stat.exists)
+         or (_ollama_version | length == 0)
+         or (_ollama_version is version(llm_ollama_min_version, '<')) }}
+
+- name: "Install | Report the Ollama version decision (#18128)"
+  ansible.builtin.debug:
+    msg: >-
+      Ollama installed={{ _ollama_version | default('(none)', true) }}
+      floor={{ llm_ollama_min_version }}
+      action={{ 'install/upgrade' if _ollama_needs_install else 'keep' }}
+
 # #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
 - name: "Install | Refresh apt cache (best-effort, bounded; #6719)"
   ansible.builtin.command:
@@ -89,7 +124,7 @@
   become: true
   changed_when: false
   failed_when: false
-  when: not _ollama_binary.stat.exists
+  when: _ollama_needs_install
 
 - name: "Install | Install LLM dependencies"
   ansible.builtin.apt:
@@ -98,7 +133,7 @@
       - ca-certificates
       - zstd
     state: present
-  when: not _ollama_binary.stat.exists
+  when: _ollama_needs_install
 
 - name: "Install | Download Ollama installer"
   ansible.builtin.get_url:
@@ -107,15 +142,16 @@
     mode: "0755"
   when:
     - llm_install_ollama | default(true)
-    - not _ollama_binary.stat.exists
+    - _ollama_needs_install
 
 - name: "Install | Install Ollama"
+  # No `creates:` guard (#18128): it skipped when the binary existed, which is
+  # the upgrade case. `_ollama_needs_install` is the idempotence condition now.
   ansible.builtin.shell:
     cmd: /tmp/ollama-install.sh
-    creates: /usr/local/bin/ollama
   when:
     - llm_install_ollama | default(true)
-    - not _ollama_binary.stat.exists
+    - _ollama_needs_install
 
 - name: "Install | Create Ollama data directory"
   ansible.builtin.file:
@@ -159,6 +195,19 @@
 # Phase 4: Model Pulling (conditional on hardware)
 # -----------------------------------------------------------------
 
+# #19862: "All 0 models present" read as success when Apply sent empty lists. This fails rather than
+# warns, unlike the skipped-GPU-tier warning below: there a node still gets its CPU models, here it gets
+# none. llm_pull_models: false is how an operator asks for a node with no models.
+- name: "Models | There is something to pull"
+  ansible.builtin.assert:
+    that:
+      - _llm_models_to_pull | length > 0
+    fail_msg: >-
+      No models to pull for this node (GPU detected: {{ _llm_gpu_detected }}): the model lists that apply
+      to it are empty. Set them, or set llm_pull_models to false to provision this node without models.
+    quiet: true
+  when: llm_pull_models | default(true)
+
 - name: "Models | Pull models appropriate for this node"
   ansible.builtin.command:
     cmd: "ollama pull {{ item }}"
@@ -168,4 +217,65 @@
   register: _model_pull
   changed_when: "'pulling' in (_model_pull.stderr | default(''))"
   failed_when: _model_pull.rc != 0
+  tags: ['llm', 'models']
+
+
+# #15502: a pull that returned 0 is not proof the model is usable. Check presence, and name the
+# tiers this node class does not pull so the skip is visible rather than silent.
+- name: "Models | List the models Ollama holds"
+  ansible.builtin.command:
+    cmd: ollama list
+  become: true
+  register: _llm_installed
+  changed_when: false
+  check_mode: false
+  when: llm_pull_models | default(true)
+  tags: ['llm', 'models']
+
+- name: "Models | Assert every model for this node is present"
+  ansible.builtin.assert:
+    that: _llm_missing | length == 0
+    fail_msg: >-
+      Ollama is missing {{ _llm_missing | length }} model(s) this node should hold:
+      {{ _llm_missing | join(', ') }}. Held: {{ _llm_held | join(', ') }}.
+    success_msg: "All {{ _llm_models_to_pull | length }} models for this node are present."
+  vars:
+    # `ollama list` prints a NAME header row, then `<name>:<tag>  <id>  <size>  <age>`.
+    _llm_held: >-
+      {{ _llm_installed.stdout_lines[1:] | map('regex_replace', '\s.*$', '')
+         | map('regex_replace', ':latest$', '') | list }}
+    _llm_missing: >-
+      {{ _llm_models_to_pull | map('regex_replace', ':latest$', '')
+         | reject('in', _llm_held) | list }}
+  when:
+    - llm_pull_models | default(true)
+    - not ansible_check_mode
+  tags: ['llm', 'models']
+
+- name: "Models | Check every pulled model is the right kind for its role (#19736)"
+  ansible.builtin.include_tasks:
+    file: ../../../_shared/tasks/assert_model_kinds.yml
+    apply:
+      tags: ['llm', 'models']
+  vars:
+    # The one home of the embedding role's model. Set llm_embedding_model only when llm_cpu_models holds a
+    # different embedder, which would otherwise fail this check as a chat model.
+    model_kind_embedding: >-
+      {{ llm_embedding_model | default((lookup('file', role_path ~ '/../agent_config/defaults/main.yml')
+         | from_yaml).ollama_embedding_model) }}
+    model_kind_completion: "{{ _llm_models_to_pull }}"
+  when:
+    - llm_pull_models | default(true)
+    - not ansible_check_mode
+  tags: ['llm', 'models']
+
+- name: "Models | WARNING canonical tiers skipped on this node class"
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: this node is CPU-only, so the GPU-class tier models were NOT pulled and the
+      tiers they serve are unavailable here: {{ llm_gpu_models | join(', ') }}.
+  when:
+    - llm_pull_models | default(true)
+    - not (_llm_gpu_detected | bool)
+    - llm_gpu_models | length > 0
   tags: ['llm', 'models']

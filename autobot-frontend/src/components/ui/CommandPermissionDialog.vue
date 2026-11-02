@@ -130,10 +130,9 @@
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { useModal } from '@/composables/useModal'
-import { useFocusTrap, useFocusRestore } from '@autobot/ui'
+import { useFocusTrap, useFocusRestore, BaseButton } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { useCommandPermissions } from '@/composables/useCommandPermissions'
 
@@ -450,8 +449,9 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
   font-size: var(--font-size-sm);
 }
 
-.warning-message i {
-  font-size: var(--font-size-base);
+.warning-message .icon {
+  width: var(--font-size-base);
+  height: var(--font-size-base);
 }
 
 .command-footer {
@@ -474,8 +474,9 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
   font-size: var(--font-size-xs);
 }
 
-.security-note i {
-  font-size: var(--font-size-sm);
+.security-note .icon {
+  width: var(--font-size-sm);
+  height: var(--font-size-sm);
 }
 
 /* Comment Section Styles */

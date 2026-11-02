@@ -3,6 +3,7 @@
     v-if="visible"
     variant="warning"
     size="sm"
+    tone="solid"
     class="provider-fallback-chip"
     :title="tooltip"
   >

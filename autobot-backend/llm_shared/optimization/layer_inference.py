@@ -23,8 +23,11 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.pinned_model_registry import pinned_revision_kwargs
 
 from ..torch_loader import lazy_torch
+from .meta_eviction import evict_layer_to_meta
+from .taxonomy import Compression, layer_layout_for
 
 if TYPE_CHECKING:
     import torch
@@ -45,15 +48,6 @@ def _get_torch() -> Any:
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-
-#: Valid compression modes understood by LayerInferenceConfig.
-_VALID_COMPRESSIONS = frozenset({"4bit", "8bit", "none"})
-
-#: Architectures that nest transformer blocks under ``transformer.`` and name
-#: their token embedding ``wte``, rather than the LLaMA-style ``model.`` layout.
-#: Shared by the prefix, embedding and head resolvers so they cannot disagree
-#: about which family a model belongs to (#13032).
-_GPT2_STYLE = frozenset({"gpt2", "gptj", "gpt_neo", "gpt_neox"})
 
 
 @dataclass
@@ -82,8 +76,7 @@ class LayerInferenceConfig:
         """Validate all configuration fields."""
         if not self.model_name:
             raise ValueError("model_name must not be empty")
-        if self.compression not in _VALID_COMPRESSIONS:
-            raise ValueError(f"compression must be one of {sorted(_VALID_COMPRESSIONS)}, got '{self.compression}'")
+        Compression.validate(self.compression)
         if self.max_seq_len < 1:
             raise ValueError(f"max_seq_len must be >= 1, got {self.max_seq_len}")
         if self.batch_size < 1:
@@ -185,16 +178,15 @@ class LayerInferenceEngine:
         try:
             from transformers import AutoConfig  # noqa: PLC0415
         except ImportError as exc:
-            raise ImportError(
-                "transformers is required for load_model_config. " "Install with: pip install transformers>=4.40.0"
-            ) from exc
+            msg = "transformers is required for load_model_config; pip install transformers>=4.40.0"
+            raise ImportError(msg) from exc
 
-        kwargs: Dict[str, Any] = {}
+        kwargs: Dict[str, Any] = pinned_revision_kwargs(model_name)
         if self._config.cache_dir:
             kwargs["cache_dir"] = self._config.cache_dir
 
         logger.debug("Loading model config for %s", model_name)
-        # HuggingFace model loaded by name; revision pinning managed operationally.
+        # Pinned when model_name is in the registry; an unregistered id or a local path is not (#13034).
         auto_cfg = AutoConfig.from_pretrained(model_name, **kwargs)  # nosec B615
         cfg_dict: Dict[str, Any] = auto_cfg.to_dict()
         logger.info(
@@ -379,11 +371,10 @@ class LayerInferenceEngine:
         Raises:
             ImportError: If torch is not installed.
         """
-        torch = _get_torch()
-        if torch is None:
+        if _get_torch() is None:
             raise ImportError("PyTorch is required for evict_layer.")
 
-        _move_to_meta(torch, layer)
+        evict_layer_to_meta(layer)
         logger.debug("Evicted layer to meta device")
 
     # ------------------------------------------------------------------
@@ -558,10 +549,10 @@ class LayerInferenceEngine:
 
         Issue #1946: Extracted to keep generate() within the line budget.
         """
-        kwargs: Dict[str, Any] = {"use_fast": True}
+        kwargs: Dict[str, Any] = {"use_fast": True, **pinned_revision_kwargs(self._config.model_name)}
         if self._config.cache_dir:
             kwargs["cache_dir"] = self._config.cache_dir
-        # HuggingFace model loaded by name; revision pinning managed operationally.
+        # Pinned when model_name is in the registry; an unregistered id or a local path is not (#13034).
         return AutoTokenizer.from_pretrained(self._config.model_name, **kwargs)  # nosec B615
 
     def _resolve_checkpoint_path(self) -> str:
@@ -701,10 +692,7 @@ def _layer_prefix_for_arch(model_type: str) -> str:
     Returns:
         Dot-separated prefix including trailing dot, e.g. ``"model.layers."``.
     """
-    if model_type in _GPT2_STYLE:
-        return "transformer.h."
-    # LLaMA, Mistral, Falcon, Qwen, Gemma, Phi, etc.
-    return "model.layers."
+    return layer_layout_for(model_type).layer_prefix
 
 
 def _embedding_name_for_arch(model_type: str) -> str:
@@ -714,9 +702,7 @@ def _embedding_name_for_arch(model_type: str) -> str:
     engine fed raw vocabulary indices into layer 0 as floats, so every
     downstream activation was meaningless.
     """
-    if model_type in _GPT2_STYLE:
-        return "transformer.wte"
-    return "model.embed_tokens"
+    return layer_layout_for(model_type).embedding
 
 
 def _head_name_for_arch(model_type: str) -> str:
@@ -726,7 +712,7 @@ def _head_name_for_arch(model_type: str) -> str:
     the caller reads symmetrically with the embedding and prefix helpers, and so
     an architecture needing something else has one place to change.
     """
-    return "lm_head"
+    return layer_layout_for(model_type).head
 
 
 def _apply_embedding(module: Any, input_ids: "torch.Tensor") -> "torch.Tensor":
@@ -813,62 +799,6 @@ def _set_nested_param(module: Any, torch: Any, key: str, tensor: Any) -> None:
         container.register_parameter(leaf, torch.nn.Parameter(tensor, requires_grad=False))
     else:
         container.register_buffer(leaf, tensor)
-
-
-def _move_to_meta(torch: Any, module: Any) -> None:
-    """Recursively move all parameters and buffers of module to meta device.
-
-    Issue #1946.
-    """
-    meta = torch.device("meta")
-    # remove_duplicate=False so a parameter shared by two submodules is released at
-    # every name it is registered under. The old in-place ``.data`` assignment
-    # reached all aliases through the single deduplicated entry; re-registering
-    # does not, and a missed alias would keep the real tensor — and its memory —
-    # alive, defeating the eviction. The layer is documented as unusable after
-    # eviction, so untying the shared storage here is safe.
-    for param_name, param in list(module.named_parameters(remove_duplicate=False)):
-        if param is not None:
-            _set_parameter(module, torch, param_name, meta, param)
-    for buf_name, buf in list(module.named_buffers()):
-        if buf is not None:
-            _set_buffer(module, torch, buf_name, meta, buf)
-
-
-def _set_parameter(module: Any, torch: Any, name: str, device: Any, param: Any) -> None:
-    """Replace a named parameter with a meta-device empty tensor of the same shape.
-
-    Issue #13162: eviction previously did ``param.data = torch.empty(..., device=meta)``.
-    PyTorch rejects that with ``RuntimeError: Attempted to call variable.set_data(tensor),
-    but variable and tensor have incompatible tensor type`` because a meta tensor carries a
-    different ``TensorImpl`` than a dense one, so ``evict_layer`` raised instead of freeing
-    the layer. Re-registering the parameter — the same shape ``_set_buffer`` already uses
-    for buffers — is the supported way to move one across device types.
-    """
-    parts = name.split(".")
-    container = module
-    for part in parts[:-1]:
-        container = getattr(container, part)
-    container.register_parameter(
-        parts[-1],
-        torch.nn.Parameter(
-            torch.empty(param.shape, dtype=param.dtype, device=device),
-            requires_grad=param.requires_grad,
-        ),
-    )
-
-
-def _set_buffer(module: Any, torch: Any, name: str, device: Any, buf: Any) -> None:
-    """Replace a named buffer with a meta-device empty tensor of the same shape.
-
-    Issue #1946: Handles dotted names (e.g. ``"self_attn.q_proj.bias"``).
-    """
-    parts = name.split(".")
-    container = module
-    for part in parts[:-1]:
-        container = getattr(container, part)
-    leaf = parts[-1]
-    container.register_buffer(leaf, torch.empty(buf.shape, dtype=buf.dtype, device=device))
 
 
 def _greedy_sample(torch: Any, hidden: "torch.Tensor") -> int:

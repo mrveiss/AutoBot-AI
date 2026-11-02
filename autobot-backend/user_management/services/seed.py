@@ -18,10 +18,12 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.password_weakness import check_guessable
 from autobot_shared.ssot_config import get_config
+from autobot_shared.user_management.user_service_errors import DuplicateUserError
 from user_management.models import Role, User
 from user_management.services.base_service import TenantContext
-from user_management.services.user_service import DuplicateUserError, UserService
+from user_management.services.user_service import UserService
 
 logger = get_logger(__name__)
 
@@ -84,6 +86,11 @@ async def seed_default_admin(session: AsyncSession) -> None:
             "Admin seed: admin user or username '%s' already exists — skipping (idempotent).",
             username,
         )
+        return
+
+    reason = check_guessable(password)
+    if reason:  # #16299: no account rather than one anyone can guess. The value is never logged.
+        logger.error("Admin seed: AUTOBOT_ADMIN_PASSWORD was refused, so no admin was created: %s", reason)
         return
 
     admin_role_id = await _find_admin_role_id(session)

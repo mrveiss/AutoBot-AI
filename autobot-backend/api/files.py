@@ -39,6 +39,7 @@ from api.schemas_system import (
 )
 from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_http import require_contained_relative_path
 from autobot_shared.security.path_validator import (
@@ -51,6 +52,13 @@ from constants.error_constants import (
     ERR_FILE_NOT_FOUND,
     ERR_FILE_OR_DIR_NOT_FOUND,
     ERR_PATH_NOT_FOUND,
+)
+from security.upload_filename_policy import (  # noqa: F401 -- re-exported for api.sandbox_files and tests
+    _DANGEROUS_EXTENSIONS,
+    _DANGEROUS_FILENAME_CHARS,
+    _DANGEROUS_FILENAMES,
+    ALLOWED_EXTENSIONS,
+    is_safe_file,
 )
 from security_layer import SecurityLayer
 from utils.io_executor import run_in_file_executor
@@ -111,95 +119,11 @@ router = APIRouter(dependencies=[Depends(ensure_sandbox_root)])
 # Maximum file size (50MB)
 MAX_FILE_SIZE = 50 * 1024 * 1024
 
-# Allowed file extensions for security
-ALLOWED_EXTENSIONS = {
-    # Text and data formats
-    ".txt",
-    ".md",
-    ".json",
-    ".yaml",
-    ".yml",
-    ".xml",
-    ".csv",
-    ".log",
-    ".cfg",
-    ".ini",
-    ".conf",
-    # Code files
-    ".py",
-    ".js",
-    ".ts",
-    ".sh",
-    ".bat",
-    ".sql",
-    # Web files
-    ".html",
-    ".css",
-    # Office document formats (Microsoft)
-    ".pdf",
-    ".doc",
-    ".docx",
-    ".xlsx",
-    ".ppt",
-    ".pptx",
-    # Office document formats (OpenDocument/LibreOffice)
-    ".odt",  # OpenDocument Text (Writer)
-    ".ods",  # OpenDocument Spreadsheet (Calc)
-    ".odp",  # OpenDocument Presentation (Impress)
-    ".odg",  # OpenDocument Graphics (Draw)
-    # Image formats
-    ".png",
-    ".jpg",
-    ".jpeg",
-    ".gif",
-    ".svg",
-    ".ico",
-}
 
 # Performance optimization: O(1) lookup for invalid path characters (Issue #326).
 # Canonical set lives in autobot_shared.security.path_validator (#11844); this
 # alias preserves the public name that api.sandbox_files historically imported.
 INVALID_PATH_CHARACTERS = SANDBOX_INVALID_PATH_CHARACTERS
-
-# Issue #380: Module-level frozenset for dangerous filename characters
-_DANGEROUS_FILENAME_CHARS = frozenset({"<", ">", '"', "|", "?", "*", "\0", "\r", "\n"})
-
-# Issue #398: Module-level sets for is_safe_file validation
-_DANGEROUS_FILENAMES = frozenset(
-    {
-        ".htaccess",
-        ".env",
-        "passwd",
-        "shadow",
-        "config",
-        "web.config",
-        "autoexec.bat",
-        "boot.ini",
-        "hosts",
-        "httpd.conf",
-        "nginx.conf",
-    }
-)
-
-_DANGEROUS_EXTENSIONS = frozenset(
-    {
-        ".exe",
-        ".bat",
-        ".cmd",
-        ".com",
-        ".scr",
-        ".pif",
-        ".vbs",
-        ".js",
-        ".jar",
-        ".app",
-        ".deb",
-        ".rpm",
-        ".dmg",
-        ".pkg",
-        ".msi",
-    }
-)
 
 
 def get_security_layer(request: Request) -> SecurityLayer:
@@ -207,7 +131,7 @@ def get_security_layer(request: Request) -> SecurityLayer:
     return request.app.state.security_layer
 
 
-def _check_file_permission(request: Request, permission: str) -> dict:
+async def _check_file_permission(request: Request, permission: str) -> dict:
     """
     Check file permissions and return user data.
 
@@ -223,7 +147,7 @@ def _check_file_permission(request: Request, permission: str) -> dict:
 
     Issue #620.
     """
-    has_permission, user_data = get_auth_middleware().check_file_permissions(request, permission)
+    has_permission, user_data = await get_auth_middleware().check_file_permissions(request, permission)
     if not has_permission:
         raise HTTPException(
             status_code=403,
@@ -289,46 +213,6 @@ def get_file_info(file_path: Path, relative_path: str) -> FileInfo:
     )
 
 
-def is_safe_file(filename: str) -> bool:
-    """
-    Check if file type is allowed and filename is safe.
-
-    Issue #398: Refactored to use module-level constants.
-    """
-    if not filename:
-        return False
-
-    # Check for dangerous characters (Issue #380: module-level constant)
-    if any(char in filename for char in _DANGEROUS_FILENAME_CHARS):
-        return False
-
-    # An uploaded filename is a bare name, never a path (#13394). Backslash is
-    # checked explicitly because Path.name is platform-dependent — on POSIX
-    # "dir\\evil.py" is one valid component (#13162).
-    if "/" in filename or "\\" in filename or Path(filename).name != filename:
-        return False
-
-    if len(filename) > 255:
-        return False
-
-    extension = Path(filename).suffix.lower()
-    if extension not in ALLOWED_EXTENSIONS:
-        return False
-
-    # Issue #398: Use module-level sets
-    if filename.lower() in _DANGEROUS_FILENAMES:
-        return False
-
-    if extension in _DANGEROUS_EXTENSIONS and extension not in ALLOWED_EXTENSIONS:
-        return False
-
-    # Prevent null bytes and control characters
-    if "\0" in filename or any(ord(c) < 32 for c in filename):
-        return False
-
-    return True
-
-
 def _list_directory_contents(target_path: Path) -> tuple:
     """
     List directory contents with file information.
@@ -380,7 +264,7 @@ async def list_files(request: Request, path: str = ""):
     Args:
         path: Relative path within the sandbox (optional, defaults to root)
     """
-    _check_file_permission(request, "view")
+    await _check_file_permission(request, "view")
     target_path = validate_and_resolve_path(path)
 
     # Issue #358/#718: Use dedicated executor for non-blocking file I/O
@@ -573,7 +457,7 @@ def _log_upload_audit(
     """
     security_layer = get_security_layer(request)
     security_layer.audit_log(
-        "file_upload",
+        "file.upload",
         user_data.get("username", "unknown"),
         "success",
         {
@@ -598,7 +482,7 @@ async def _delete_file_item(target_path: Path, path: str, security_layer, user_d
     await run_in_file_executor(target_path.unlink)
 
     security_layer.audit_log(
-        "file_delete",
+        "file.delete",
         user_data.get("username", "unknown"),
         "success",
         {
@@ -631,7 +515,7 @@ async def _delete_directory_item(
         extra = {"warning": "recursive_delete_performed"}
 
     security_layer.audit_log(
-        "file_delete",
+        "file.delete",
         user_data.get("username", "unknown"),
         "success",
         {
@@ -672,18 +556,18 @@ async def upload_file(
         overwrite: Whether to overwrite existing files
     """
     # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "upload")
+    has_permission, user_data = await get_auth_middleware().check_file_permissions(request, "upload")
     if not has_permission:
         raise HTTPException(status_code=403, detail="Insufficient permissions for file upload")
 
     # Store user data in request state for audit logging
     request.state.user = user_data
 
-    # Read file content
+    if not is_safe_file(file.filename or ""):  # #19088: name/type gate before the body is read
+        raise HTTPException(status_code=400, detail="File type not allowed")
     content = await file.read()
 
-    # Validate file (Issue #281: uses helper)
-    _validate_upload_file(file, content)
+    _validate_upload_file(file, content)  # Issue #281
 
     # Validate and resolve target directory
     target_dir = validate_and_resolve_path(path)
@@ -735,7 +619,7 @@ async def download_file(request: Request, path: str):
         path: File path within the sandbox
     """
     # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "download")
+    has_permission, user_data = await get_auth_middleware().check_file_permissions(request, "download")
     if not has_permission:
         raise HTTPException(status_code=403, detail="Insufficient permissions for file download")
 
@@ -757,7 +641,7 @@ async def download_file(request: Request, path: str):
     # Enhanced audit logging with authenticated user
     security_layer = get_security_layer(request)
     security_layer.audit_log(
-        "file_download",
+        "file.download",
         user_data.get("username", "unknown"),
         "success",
         {
@@ -790,7 +674,7 @@ async def view_file(request: Request, path: str):
         path: File path within the sandbox
     """
     # SECURITY FIX: Use modern auth_middleware instead of deprecated function
-    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "view")
+    has_permission, user_data = await get_auth_middleware().check_file_permissions(request, "view")
     if not has_permission:
         raise HTTPException(status_code=403, detail="Insufficient permissions for file viewing")
 
@@ -824,11 +708,7 @@ async def view_file(request: Request, path: str):
             # File is binary, don't include content
             logger.debug("File is binary, skipping content read: %s", e)
 
-    return {
-        "file_info": file_info,
-        "content": content,
-        "is_text": content is not None,
-    }
+    return {"file_info": file_info, "content": content, "is_text": content is not None}
 
 
 def _log_rename_audit(
@@ -914,7 +794,7 @@ async def rename_file_or_directory(request: Request, path: str = Form(...), new_
         path: Current path of the file/directory
         new_name: New name for the file/directory (not full path, just name)
     """
-    user_data = _check_file_permission(request, "upload")
+    user_data = await _check_file_permission(request, "upload")
 
     if is_invalid_name(new_name):
         raise HTTPException(status_code=400, detail="Invalid file/directory name")
@@ -1004,7 +884,7 @@ async def preview_file(request: Request, path: str):
     Returns:
         Dict with type, url, and content for preview
     """
-    _check_file_permission(request, "view")
+    await _check_file_permission(request, "view")
     target_file = validate_and_resolve_path(path)
 
     # Issue #358/#718: Use dedicated executor for non-blocking file I/O
@@ -1049,7 +929,7 @@ async def delete_file(request: Request, path: str):
     Args:
         path: Path to the file/directory to delete (query parameter)
     """
-    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "delete")
+    has_permission, user_data = await get_auth_middleware().check_file_permissions(request, "delete")
     if not has_permission:
         raise HTTPException(status_code=403, detail="Insufficient permissions for file deletion")
 
@@ -1117,7 +997,7 @@ async def create_directory(request: Request, path: str = Form(...), name: str = 
         path: Parent directory path
         name: New directory name
     """
-    user_data = _check_file_permission(request, "upload")
+    user_data = await _check_file_permission(request, "upload")
 
     if is_invalid_name(name):
         raise HTTPException(status_code=400, detail="Invalid directory name")
@@ -1143,6 +1023,47 @@ async def create_directory(request: Request, path: str = Form(...), name: str = 
     }
 
 
+def build_directory_tree(directory: Path, root: Path) -> list:
+    """Recursively build the file-browser tree under *directory*, paths relative to *root*.
+
+    Sync (run it in the file executor). The one tree walk shared by ``/files/tree``
+    and ``/sandbox/files/tree`` (#18731).
+    """
+    try:
+        items = []
+        for item in sorted(directory.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
+            try:
+                item_info = {
+                    "name": item.name,
+                    "path": str(item.relative_to(root)),
+                    "type": "directory" if item.is_dir() else "file",
+                }
+                if item.is_file():
+                    item_info["size"] = item.stat().st_size
+                    item_info["extension"] = item.suffix.lower() if item.suffix else None
+                else:
+                    item_info["children"] = build_directory_tree(item, root)
+                items.append(item_info)
+            except (OSError, PermissionError) as e:
+                logger.warning("Skipping inaccessible item %s: %s", item, e)
+        return items
+    except Exception as e:
+        logger.error("Error building tree for %s: %s", directory, e)
+        return []
+
+
+def collect_directory_stats(root: Path) -> tuple:
+    """``(total_files, total_directories, total_size)`` under *root*; shared with sandbox_files (#18731)."""
+    total_files = total_directories = total_size = 0
+    for item in root.rglob("*"):
+        if item.is_file():
+            total_files += 1
+            total_size += item.stat().st_size
+        elif item.is_dir():
+            total_directories += 1
+    return total_files, total_directories, total_size
+
+
 @router.get("/tree", response_model=DirectoryTreeResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1152,7 +1073,7 @@ async def create_directory(request: Request, path: str = Form(...), name: str = 
 async def get_directory_tree(request: Request, path: str = ""):
     """Get directory tree structure for file browser"""
     # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "view")
+    has_permission, user_data = await get_auth_middleware().check_file_permissions(request, "view")
     if not has_permission:
         raise HTTPException(
             status_code=403,
@@ -1171,38 +1092,8 @@ async def get_directory_tree(request: Request, path: str = ""):
     if not await run_in_file_executor(target_path.is_dir):
         raise HTTPException(status_code=400, detail="Path is not a directory")
 
-    def build_tree(directory: Path, relative_base: Path) -> dict:
-        """Recursively build directory tree structure (sync, runs in thread)"""
-        try:
-            items = []
-            for item in sorted(directory.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
-                try:
-                    relative_path = str(item.relative_to(SANDBOXED_ROOT))
-                    item_info = {
-                        "name": item.name,
-                        "path": relative_path,
-                        "type": "directory" if item.is_dir() else "file",
-                    }
-
-                    if item.is_file():
-                        item_info["size"] = item.stat().st_size
-                        item_info["extension"] = item.suffix.lower() if item.suffix else None
-                    else:
-                        # Recursively add children for directories
-                        item_info["children"] = build_tree(item, SANDBOXED_ROOT)
-
-                    items.append(item_info)
-                except (OSError, PermissionError) as e:
-                    logger.warning("Skipping inaccessible item %s: %s", item, e)
-                    continue
-
-            return items
-        except Exception as e:
-            logger.error("Error building tree for %s: %s", directory, e)
-            return []
-
     # Issue #358: Run entire recursive tree building in thread to avoid blocking
-    tree_data = await run_in_file_executor(build_tree, target_path, SANDBOXED_ROOT)
+    tree_data = await run_in_file_executor(build_directory_tree, target_path, SANDBOXED_ROOT)
 
     return {"path": path, "tree": tree_data}
 
@@ -1216,7 +1107,7 @@ async def get_directory_tree(request: Request, path: str = ""):
 async def get_file_stats(request: Request):
     """Get file system statistics for the sandbox"""
     # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "view")
+    has_permission, user_data = await get_auth_middleware().check_file_permissions(request, "view")
     if not has_permission:
         raise HTTPException(status_code=403, detail="Insufficient permissions for file statistics")
 
@@ -1224,22 +1115,7 @@ async def get_file_stats(request: Request):
     request.state.user = user_data
 
     # Issue #358: Run stats collection in thread to avoid blocking event loop
-    def _collect_stats_sync():
-        """Sync helper for stats collection to avoid blocking event loop."""
-        total_files = 0
-        total_directories = 0
-        total_size = 0
-
-        for item in SANDBOXED_ROOT.rglob("*"):
-            if item.is_file():
-                total_files += 1
-                total_size += item.stat().st_size
-            elif item.is_dir():
-                total_directories += 1
-
-        return total_files, total_directories, total_size
-
-    total_files, total_directories, total_size = await run_in_file_executor(_collect_stats_sync)
+    total_files, total_directories, total_size = await run_in_file_executor(collect_directory_stats, SANDBOXED_ROOT)
 
     return {
         "sandbox_root": str(SANDBOXED_ROOT),
@@ -1255,7 +1131,7 @@ async def get_file_stats(request: Request):
 # SLM Admin File Browser (Issue #984) ==========================================
 
 _ADMIN_ALLOWED_DIRS = (
-    "/opt/autobot",
+    FLEET_INSTALL_ROOT,
     "/home/autobot",  # noqa: ssot-path
     "/var/log/autobot",
     "/etc/autobot",

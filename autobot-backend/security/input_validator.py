@@ -597,7 +597,7 @@ def validate_research_query(query: str, max_length: int = 500) -> Dict[str, Any]
     return get_input_validator().validate_research_query(query, max_length)
 
 
-def validate_url(url: str) -> Dict[str, Any]:
+def validate_url_report(url: str) -> Dict[str, Any]:
     """Validate a URL"""
     return get_input_validator().validate_url(url)
 

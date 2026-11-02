@@ -26,20 +26,22 @@ Used in multi_company and provider deployment modes.
 """
 
 import asyncio
-import re
 import uuid
 from typing import ClassVar, List
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.db_session import run_after_commit
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.membership_epoch import MembershipEpochBump
+from autobot_shared.slug import url_slug
 from autobot_shared.time_utils import now_utc
+from autobot_shared.user_management.audit_rows import audit_row
 from autobot_shared.user_management.base_service import BaseService, TenantContext
 from autobot_shared.user_management.models.audit import (
-    AuditAction,
-    AuditLog,
     AuditResourceType,
+    IdentityAuditAction,
 )
 from autobot_shared.user_management.models.organization import OrganizationCore
 from autobot_shared.user_management.models.team import Team
@@ -116,7 +118,6 @@ class OrganizationService(BaseService):
         slug: str | None = None,
         description: str | None = None,
         settings: dict | None = None,
-        subscription_tier: str = "free",
         max_users: int = -1,
     ) -> OrganizationCore:
         """
@@ -127,7 +128,6 @@ class OrganizationService(BaseService):
             slug: URL-safe slug (auto-generated if not provided)
             description: Organization description
             settings: Organization settings JSON
-            subscription_tier: Subscription tier (free, pro, enterprise)
             max_users: Maximum users allowed (-1 for unlimited)
 
         Returns:
@@ -139,20 +139,19 @@ class OrganizationService(BaseService):
         self._require_platform_admin()
 
         slug = await self._validate_and_prepare_slug(name, slug)
-        org = self._build_organization_entity(name, slug, description, settings, subscription_tier, max_users)
+        org = self._build_organization_entity(name, slug, description, settings, max_users)
 
         self.session.add(org)
         await self.session.flush()
 
         await self._audit_log(
-            action=AuditAction.ORG_CREATED,
+            action=IdentityAuditAction.ORG_CREATED,
             resource_type=AuditResourceType.ORGANIZATION,
             resource_id=org.id,
             org_id=org.id,
             details={
                 "name": name,
                 "slug": slug,
-                "subscription_tier": subscription_tier,
             },
         )
 
@@ -247,7 +246,6 @@ class OrganizationService(BaseService):
         name: str | None = None,
         description: str | None = None,
         settings: dict | None = None,
-        subscription_tier: str | None = None,
         max_users: int | None = None,
     ) -> OrganizationCore:
         """
@@ -258,7 +256,6 @@ class OrganizationService(BaseService):
             name: New name (optional)
             description: New description (optional)
             settings: New settings (optional)
-            subscription_tier: New subscription tier (optional)
             max_users: New max users (optional)
 
         Returns:
@@ -271,12 +268,12 @@ class OrganizationService(BaseService):
         if not org:
             raise OrganizationNotFoundError(f"Organization {org_id} not found")
 
-        changes = self._apply_organization_updates(org, name, description, settings, subscription_tier, max_users)
+        changes = self._apply_organization_updates(org, name, description, settings, max_users)
         await self.session.flush()
 
         if changes:
             await self._audit_log(
-                action=AuditAction.ORG_UPDATED,
+                action=IdentityAuditAction.ORG_UPDATED,
                 resource_type=AuditResourceType.ORGANIZATION,
                 resource_id=org_id,
                 org_id=org_id,
@@ -306,7 +303,7 @@ class OrganizationService(BaseService):
         await self.session.flush()
 
         await self._audit_log(
-            action=AuditAction.ORG_UPDATED,
+            action=IdentityAuditAction.ORG_UPDATED,
             resource_type=AuditResourceType.ORGANIZATION,
             resource_id=org_id,
             org_id=org_id,
@@ -334,7 +331,8 @@ class OrganizationService(BaseService):
             raise OrganizationNotFoundError(f"Organization {org_id} not found")
 
         if hard_delete:
-            await self.session.delete(org)
+            await self.session.delete(org)  # cascades the org's teams, users and memberships
+            run_after_commit(self.session, MembershipEpochBump(org_id))  # #19670
         else:
             org.deleted_at = now_utc()
             org.is_active = False
@@ -342,7 +340,7 @@ class OrganizationService(BaseService):
         await self.session.flush()
 
         await self._audit_log(
-            action=AuditAction.ORG_DELETED,
+            action=IdentityAuditAction.ORG_DELETED,
             resource_type=AuditResourceType.ORGANIZATION,
             resource_id=org_id,
             org_id=org_id,
@@ -436,7 +434,6 @@ class OrganizationService(BaseService):
             "organization_id": str(org_id),
             "name": org.name,
             "slug": org.slug,
-            "subscription_tier": org.subscription_tier,
             "users": {
                 "current": user_count,
                 "max": org.max_users if org.max_users != -1 else "unlimited",
@@ -483,7 +480,6 @@ class OrganizationService(BaseService):
         slug: str,
         description: str | None,
         settings: dict | None,
-        subscription_tier: str,
         max_users: int,
     ) -> OrganizationCore:
         """
@@ -494,7 +490,6 @@ class OrganizationService(BaseService):
             slug: URL-safe slug
             description: Organization description
             settings: Organization settings JSON
-            subscription_tier: Subscription tier
             max_users: Maximum users allowed
 
         Returns:
@@ -508,7 +503,6 @@ class OrganizationService(BaseService):
             slug=slug,
             description=description,
             settings=settings or {},
-            subscription_tier=subscription_tier,
             max_users=max_users,
             is_active=True,
         )
@@ -519,7 +513,6 @@ class OrganizationService(BaseService):
         name: str | None,
         description: str | None,
         settings: dict | None,
-        subscription_tier: str | None,
         max_users: int | None,
     ) -> dict[str, dict[str, str | int | None]]:
         """
@@ -530,7 +523,6 @@ class OrganizationService(BaseService):
             name: New name (optional)
             description: New description (optional)
             settings: New settings (optional)
-            subscription_tier: New subscription tier (optional)
             max_users: New max users (optional)
 
         Returns:
@@ -551,13 +543,6 @@ class OrganizationService(BaseService):
         if settings is not None:
             org.settings = settings
 
-        if subscription_tier is not None:
-            changes["subscription_tier"] = {
-                "old": org.subscription_tier,
-                "new": subscription_tier,
-            }
-            org.subscription_tier = subscription_tier
-
         if max_users is not None:
             changes["max_users"] = {"old": org.max_users, "new": max_users}
             org.max_users = max_users
@@ -566,15 +551,15 @@ class OrganizationService(BaseService):
         return changes
 
     def _generate_slug(self, name: str) -> str:
-        """Generate URL-safe slug from name."""
-        # Convert to lowercase
-        slug = name.lower()
-        # Replace spaces and special chars with hyphens
-        slug = re.sub(r"[^a-z0-9]+", "-", slug)
-        # Remove leading/trailing hyphens
-        slug = slug.strip("-")
-        # Limit length
-        return slug[:100]
+        """Generate a URL-safe slug from *name* (#18093).
+
+        The rule is `autobot_shared.slug.slugify`, shared with
+        `knowledge/adapters/okf_adapter` and `llc/models/company`. This site gains two
+        behaviours it did not have: an NFKD fold, so "Zurich" rather than "z-rich" for
+        "Zürich", and a strip after truncation, so a cut mid-run no longer leaves a
+        trailing hyphen.
+        """
+        return url_slug(name)  # 100 is slugify's default cap
 
     async def _audit_log(
         self,
@@ -586,13 +571,12 @@ class OrganizationService(BaseService):
         outcome: str = "success",
     ) -> None:
         """Create audit log entry."""
-        audit_entry = AuditLog(
-            id=uuid.uuid4(),
+        audit_entry = audit_row(
             org_id=org_id,
             user_id=self.context.user_id,
             action=action,
             resource_type=resource_type,
-            resource_id=resource_id,
+            resource=resource_id,
             outcome=outcome,
             details=details,
         )

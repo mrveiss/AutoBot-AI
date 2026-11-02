@@ -14,7 +14,10 @@
 import { ref, computed } from 'vue'
 import { useFleetStore } from '@/stores/fleet'
 import type { SLMNode } from '@/types/slm'
+import { BaseAlert, BaseModal } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 const props = defineProps<{
   visible: boolean
   availableNodes: SLMNode[]
@@ -51,7 +54,7 @@ function close(): void {
 
 async function assignRole(): Promise<void> {
   if (!selectedNodeId.value) {
-    error.value = 'Please select a node'
+    error.value = t('fleet.assignNPURoleModal.pleaseSelectANode')
     return
   }
 
@@ -63,7 +66,7 @@ async function assignRole(): Promise<void> {
     emit('assigned')
     close()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to assign NPU role'
+    error.value = e instanceof Error ? e.message : t('fleet.assignNPURoleModal.failedToAssignNpuRole')
   } finally {
     loading.value = false
   }
@@ -71,129 +74,93 @@ async function assignRole(): Promise<void> {
 </script>
 
 <template>
-  <div v-if="visible" class="fixed inset-0 z-50 overflow-y-auto">
-    <!-- Backdrop -->
-    <div
-      class="fixed inset-0 bg-gray-500/50 transition-opacity"
-      @click="close"
-    />
+  <BaseModal
+    :model-value="visible"
+    :title="$t('fleet.assignNPURoleModal.assignNPUWorkerRole')"
+    size="sm"
+    :close-label="$t('ui.modal.closeDialog')"
+    @close="close"
+  >
+    <template #subtitle>
+      {{ $t('fleet.assignNPURoleModal.selectANodeTo') }}
+    </template>
+    <div class="space-y-4">
+      <!-- Error Message -->
+      <BaseAlert v-if="error" variant="error" :message="error" />
 
-    <!-- Modal -->
-    <div class="flex min-h-full items-center justify-center p-4">
-      <div class="relative bg-white rounded-lg shadow-xl max-w-md w-full">
-        <!-- Header -->
-        <div class="px-6 py-4 border-b border-gray-200">
-          <h2 class="text-lg font-semibold text-gray-900">{{ $t('fleet.assignNPURoleModal.assignNPUWorkerRole') }}</h2>
-          <p class="text-sm text-gray-500 mt-1">
-            {{ $t('fleet.assignNPURoleModal.selectANodeTo') }}
-          </p>
-        </div>
-
-        <!-- Content -->
-        <div class="p-6 space-y-4">
-          <!-- Error Message -->
-          <div v-if="error" class="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-            {{ error }}
-          </div>
-
-          <!-- Node Selection -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              {{ $t('fleet.assignNPURoleModal.selectNode') }}
-            </label>
-            <select
-              v-model="selectedNodeId"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            >
-              <option value="">{{ $t('fleet.assignNPURoleModal.selectANode') }}</option>
-              <option
-                v-for="node in eligibleNodes"
-                :key="node.node_id"
-                :value="node.node_id"
-              >
-                {{ node.hostname }} ({{ node.ip_address }})
-              </option>
-            </select>
-          </div>
-
-          <!-- Selected Node Info -->
-          <div v-if="selectedNode" class="bg-gray-50 rounded-lg p-4">
-            <h4 class="text-sm font-medium text-gray-700 mb-2">{{ $t('fleet.assignNPURoleModal.nodeDetails') }}</h4>
-            <dl class="space-y-1 text-sm">
-              <div class="flex justify-between">
-                <dt class="text-gray-500">{{ $t('fleet.assignNPURoleModal.hostname') }}</dt>
-                <dd class="text-gray-900">{{ selectedNode.hostname }}</dd>
-              </div>
-              <div class="flex justify-between">
-                <dt class="text-gray-500">{{ $t('fleet.assignNPURoleModal.iPAddress') }}</dt>
-                <dd class="text-gray-900">{{ selectedNode.ip_address }}</dd>
-              </div>
-              <div class="flex justify-between">
-                <dt class="text-gray-500">{{ $t('fleet.assignNPURoleModal.status') }}</dt>
-                <dd class="text-gray-900">{{ selectedNode.status }}</dd>
-              </div>
-              <div class="flex justify-between">
-                <dt class="text-gray-500">{{ $t('fleet.assignNPURoleModal.currentRoles') }}</dt>
-                <dd class="text-gray-900">
-                  {{ selectedNode.roles.length > 0 ? selectedNode.roles.join(', ') : 'None' }}
-                </dd>
-              </div>
-            </dl>
-          </div>
-
-          <!-- Info Box -->
-          <div class="flex items-start gap-3 p-4 bg-blue-50 rounded-lg">
-            <svg class="w-5 h-5 text-blue-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div class="text-sm text-blue-700">
-              <p class="font-medium">{{ $t('fleet.assignNPURoleModal.autoDetection') }}</p>
-              <p class="mt-1">
-                {{ $t('fleet.assignNPURoleModal.afterAssigningTheRole') }}
-              </p>
-            </div>
-          </div>
-
-          <!-- No Eligible Nodes Warning -->
-          <div v-if="eligibleNodes.length === 0" class="flex items-start gap-3 p-4 bg-yellow-50 rounded-lg">
-            <svg class="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            <div class="text-sm text-yellow-700">
-              <p class="font-medium">{{ $t('fleet.assignNPURoleModal.noEligibleNodes') }}</p>
-              <p class="mt-1">
-                {{ $t('fleet.assignNPURoleModal.allAvailableNodesEither') }}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Footer -->
-        <div class="px-6 py-4 border-t border-gray-200 flex items-center justify-end gap-3">
-          <button
-            @click="close"
-            class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+      <!-- Node Selection -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">
+          {{ $t('fleet.assignNPURoleModal.selectNode') }}
+        </label>
+        <select
+          v-model="selectedNodeId"
+          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+        >
+          <option value="">{{ $t('fleet.assignNPURoleModal.selectANode') }}</option>
+          <option
+            v-for="node in eligibleNodes"
+            :key="node.node_id"
+            :value="node.node_id"
           >
-            {{ $t('fleet.assignNPURoleModal.cancel') }}
-          </button>
-          <button
-            @click="assignRole"
-            :disabled="loading || !selectedNodeId"
-            class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center gap-2"
-          >
-            <svg
-              v-if="loading"
-              class="animate-spin w-4 h-4"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            {{ loading ? $t('fleet.assignNPURoleModal.assigning') : $t('fleet.assignNPURoleModal.assignNPURole') }}
-          </button>
-        </div>
+            {{ node.hostname }} ({{ node.ip_address }})
+          </option>
+        </select>
       </div>
+
+      <!-- Selected Node Info -->
+      <div v-if="selectedNode" class="bg-gray-50 rounded-lg p-4">
+        <h4 class="text-sm font-medium text-gray-700 mb-2">{{ $t('fleet.assignNPURoleModal.nodeDetails') }}</h4>
+        <dl class="space-y-1 text-sm">
+          <div class="flex justify-between">
+            <dt class="text-gray-500">{{ $t('fleet.assignNPURoleModal.hostname') }}</dt>
+            <dd class="text-gray-900">{{ selectedNode.hostname }}</dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-gray-500">{{ $t('fleet.assignNPURoleModal.iPAddress') }}</dt>
+            <dd class="text-gray-900">{{ selectedNode.ip_address }}</dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-gray-500">{{ $t('fleet.assignNPURoleModal.status') }}</dt>
+            <dd class="text-gray-900">{{ selectedNode.status }}</dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-gray-500">{{ $t('fleet.assignNPURoleModal.currentRoles') }}</dt>
+            <dd class="text-gray-900">
+              {{ selectedNode.roles.length > 0 ? selectedNode.roles.join(', ') : 'None' }}
+            </dd>
+          </div>
+        </dl>
+      </div>
+
+      <!-- Info Box -->
+      <BaseAlert variant="info" :title="$t('fleet.assignNPURoleModal.autoDetection')" :message="$t('fleet.assignNPURoleModal.afterAssigningTheRole')" />
+      <!-- No Eligible Nodes Warning -->
+      <BaseAlert v-if="eligibleNodes.length === 0" variant="warning" :title="$t('fleet.assignNPURoleModal.noEligibleNodes')" :message="$t('fleet.assignNPURoleModal.allAvailableNodesEither')" />
     </div>
-  </div>
+    <template #actions>
+      <button
+        @click="close"
+        class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+      >
+        {{ $t('fleet.assignNPURoleModal.cancel') }}
+      </button>
+      <button
+        @click="assignRole"
+        :disabled="loading || !selectedNodeId"
+        class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+      >
+        <svg
+          v-if="loading"
+          class="animate-spin w-4 h-4"
+          fill="none"
+          viewBox="0 0 24 24"
+        >
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+        {{ loading ? $t('fleet.assignNPURoleModal.assigning') : $t('fleet.assignNPURoleModal.assignNPURole') }}
+      </button>
+    </template>
+  </BaseModal>
 </template>

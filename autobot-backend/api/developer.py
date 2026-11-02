@@ -33,7 +33,7 @@ router = APIRouter(dependencies=[Depends(check_admin_permission)])
 logger = get_logger(__name__)
 
 
-class APIRegistry:
+class RuntimeEndpointRegistry:
     """Registry to track all API endpoints across routers"""
 
     def __init__(self):
@@ -88,7 +88,7 @@ class APIRegistry:
 
 
 # Global registry instance
-api_registry = APIRegistry()
+api_registry = RuntimeEndpointRegistry()
 
 
 @router.get("/endpoints", response_model=DeveloperEndpointsResponse)

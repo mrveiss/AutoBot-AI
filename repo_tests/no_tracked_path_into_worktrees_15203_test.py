@@ -34,6 +34,7 @@ from typing import List, Tuple
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_lines
 from tools.lint._scan_helpers import tracked_paths
 
 REPO_ROOT = repo_root()
@@ -81,9 +82,7 @@ def _offenders() -> List[Tuple[str, int, str]]:
             continue
         if ".worktrees" not in text:
             continue
-        for number, line in enumerate(text.splitlines(), start=1):
-            if line.lstrip().startswith("#"):
-                continue
+        for number, line in code_lines(text):
             if not _BUILDS_PATH.search(line) or _SCRATCH.search(line):
                 continue
             found.append((str(path.relative_to(REPO_ROOT)), number, line.strip()))

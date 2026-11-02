@@ -203,17 +203,62 @@ def run_command_utf8(cmd: str | List[str], **kwargs) -> subprocess.CompletedProc
     return subprocess.run(cmd, **kwargs)  # nosec B603  # encoding wrapper; callers own argv safety
 
 
-def strip_ansi_codes(text: str) -> str:
-    """
-    Remove ANSI escape codes from text.
+def strip_ansi_escapes(text: str) -> str:
+    """Remove ESC-introduced ANSI sequences, and nothing else.
 
-    Strips terminal color codes, cursor movements, and other control sequences.
+    Every pattern applied here begins with the ESC byte (0x1B), so no sequence of
+    ordinary characters can match one. That makes this safe on arbitrary text —
+    markdown, man pages, git output, prose — and it is the function to call unless the
+    input is genuinely raw terminal output.
+
+    Whitespace is left alone: trimming is a separate decision from stripping escapes.
 
     Args:
-        text: Text with ANSI codes
+        text: Text that may contain ANSI escape sequences
 
     Returns:
-        Clean text without ANSI codes
+        The text with ESC-introduced sequences removed
+
+    Examples:
+        >>> strip_ansi_escapes('\\x1b[31mRed\\x1b[0m Text')
+        'Red Text'
+        >>> strip_ansi_escapes('see [home](docs/home.md)')
+        'see [home](docs/home.md)'
+    """
+    # Issue #380: pre-compiled. Order matters — the terminated OSC forms must run
+    # before the bare introducer, or the bare pattern would consume their prefix and
+    # leave the payload behind.
+    text = _ANSI_CSI_RE.sub("", text)  # CSI sequences
+    text = _ANSI_OSC_BEL_RE.sub("", text)  # OSC with BEL
+    text = _ANSI_OSC_ST_RE.sub("", text)  # OSC with ST
+    text = _ANSI_OSC_BARE_RE.sub("", text)  # unterminated OSC: keep trailing content
+    text = _ANSI_SET_MODE_RE.sub("", text)  # Set modes
+    return _ANSI_CHARSET_RE.sub("", text)  # Character sets
+
+
+def strip_ansi_codes(text: str) -> str:
+    """Clean raw terminal output: ANSI escapes, ESC-less terminal artifacts, whitespace.
+
+    **Only for raw terminal or PTY output.** On top of :func:`strip_ansi_escapes` this
+    removes two patterns that carry no ESC byte — bracket sequences (``[?2004h``) and a
+    set-title payload (``]0;Title``) — because a PTY read can deliver them after the
+    introducer has already been consumed or lost. Matching without the introducer is
+    what makes them destructive on anything else:
+
+        >>> _ANSI_BRACKET_RE.sub('', 'see [home](docs/home.md)')
+        'see ome](docs/home.md)'
+        >>> _ANSI_BRACKET_RE.sub('', '[HEAD] detached')
+        'EAD] detached'
+
+    A markdown link and a git ref are both corrupted, silently. For text that is not raw
+    terminal output — a man page, tool output rendered as markdown, a code comment — call
+    :func:`strip_ansi_escapes` instead (#18093).
+
+    Args:
+        text: Raw terminal output
+
+    Returns:
+        Clean text, with leading and trailing whitespace removed
 
     Examples:
         >>> strip_ansi_codes('\\x1b[31mRed\\x1b[0m Text')
@@ -221,15 +266,9 @@ def strip_ansi_codes(text: str) -> str:
         >>> strip_ansi_codes('[?2004h]0;Title\\x07Prompt$')
         'Prompt$'
     """
-    # Remove various ANSI escape sequences using pre-compiled patterns (Issue #380)
-    text = _ANSI_CSI_RE.sub("", text)  # CSI sequences
-    text = _ANSI_OSC_BEL_RE.sub("", text)  # OSC with BEL
-    text = _ANSI_OSC_ST_RE.sub("", text)  # OSC with ST
-    text = _ANSI_OSC_BARE_RE.sub("", text)  # unterminated OSC: keep trailing content
-    text = _ANSI_SET_MODE_RE.sub("", text)  # Set modes
-    text = _ANSI_CHARSET_RE.sub("", text)  # Character sets
-    text = _ANSI_BRACKET_RE.sub("", text)  # Bracket sequences
-    text = _ANSI_TITLE_RE.sub("", text)  # Set title
+    text = strip_ansi_escapes(text)
+    text = _ANSI_BRACKET_RE.sub("", text)  # Bracket sequences (no ESC — terminal only)
+    text = _ANSI_TITLE_RE.sub("", text)  # Set title (no ESC — terminal only)
 
     return text.strip()
 

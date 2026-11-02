@@ -20,8 +20,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.user_management.user_service_errors import DuplicateUserError
 from user_management.services.seed import seed_default_admin
-from user_management.services.user_service import DuplicateUserError
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -51,7 +51,7 @@ def _make_session(existing_admin=None, existing_role=None):
     return session
 
 
-def _make_config(password="S3cur3P@ss!", username="admin"):
+def _make_config(password="S3cur3P@ss!-long", username="admin"):  # pragma: allowlist secret
     cfg = MagicMock()
     cfg.auth.admin_password = password
     cfg.auth.admin_username = username
@@ -93,7 +93,7 @@ async def test_seed_creates_admin_when_none_exists():
     mock_svc.create_user.assert_awaited_once()
     call_kwargs = mock_svc.create_user.call_args.kwargs
     assert call_kwargs["is_platform_admin"] is True
-    assert call_kwargs["password"] == "S3cur3P@ss!"
+    assert call_kwargs["password"] == "S3cur3P@ss!-long"  # pragma: allowlist secret
     assert call_kwargs["username"] == "admin"
     assert call_kwargs["role_ids"] == [admin_role.id]
 
@@ -198,3 +198,24 @@ async def test_seed_without_admin_role_still_creates_user():
     # role_ids must be None when the role wasn't found
     assert call_kwargs["role_ids"] is None
     assert call_kwargs["is_platform_admin"] is True
+
+
+@pytest.mark.asyncio
+async def test_seed_refuses_a_guessable_password_and_creates_nobody(caplog):
+    """#16299: no account rather than one anyone can guess, and the value stays out of the log."""
+    session = _make_session()
+    with patch("user_management.services.seed.get_config", return_value=_make_config(password="autobot123")):
+        with patch("user_management.services.seed.UserService") as service:
+            await seed_default_admin(session)
+    service.assert_not_called()
+    assert "was refused" in caplog.text and "autobot123" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_seed_leaves_an_existing_admin_alone_even_with_a_guessable_password(caplog):
+    session = _make_session(existing_admin=MagicMock())
+    with patch("user_management.services.seed.get_config", return_value=_make_config(password="autobot123")):
+        with patch("user_management.services.seed.UserService") as service:
+            await seed_default_admin(session)
+    service.assert_not_called()
+    assert "was refused" not in caplog.text

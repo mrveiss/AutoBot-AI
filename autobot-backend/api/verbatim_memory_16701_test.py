@@ -26,6 +26,7 @@ from fastapi.testclient import TestClient
 from api.verbatim_memory import router as verbatim_router
 from memory.verbatim_store import VerbatimStore
 from security.session_ownership import validate_session_ownership
+from testkit.canonical_gate import canonical_resolver
 
 _STORED = [
     {"id": "a1", "text": "reset the system", "session_id": "s1", "role": "user", "user_id": "user-a"},
@@ -78,7 +79,7 @@ async def test_search_never_returns_another_users_chunks():
     store._collection = _make_collection(_STORED)
 
     with (
-        patch("api.verbatim_memory.get_auth_middleware", return_value=_fake_auth_middleware("user-a")),
+        canonical_resolver("api.verbatim_memory.resolve_human_user", _fake_auth_middleware("user-a")),
         patch("memory.verbatim_store.get_verbatim_store", new=AsyncMock(return_value=store)),
     ):
         result = await verbatim_search(_request_for("user-a"), q="reset", session_id=None, limit=10)
@@ -95,7 +96,7 @@ async def test_search_is_symmetric_for_the_other_user():
     store._collection = _make_collection(_STORED)
 
     with (
-        patch("api.verbatim_memory.get_auth_middleware", return_value=_fake_auth_middleware("user-b")),
+        canonical_resolver("api.verbatim_memory.resolve_human_user", _fake_auth_middleware("user-b")),
         patch("memory.verbatim_store.get_verbatim_store", new=AsyncMock(return_value=store)),
     ):
         result = await verbatim_search(_request_for("user-b"), q="reset", session_id=None, limit=10)
@@ -108,7 +109,7 @@ async def test_search_is_symmetric_for_the_other_user():
 async def test_search_requires_authentication():
     from api.verbatim_memory import verbatim_search
 
-    with patch("api.verbatim_memory.get_auth_middleware", return_value=_fake_auth_middleware(None)):
+    with canonical_resolver("api.verbatim_memory.resolve_human_user", _fake_auth_middleware(None)):
         with pytest.raises(HTTPException) as exc_info:
             await verbatim_search(_request_for("anyone"), q="reset", session_id=None, limit=10)
 

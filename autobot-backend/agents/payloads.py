@@ -9,17 +9,17 @@ Before this module, every _build_*_response / _build_*_payload helper
 invented its own ad-hoc Dict[str, Any] shape with hardcoded "status":
 "success" / "error" strings.  This file provides:
 
-  AgentStatus  — canonical enum replacing those string literals
+  AgentOutcome  — canonical enum replacing those string literals
   BaseAgentPayload — Pydantic base with the fields every payload shares
   Domain payloads — one per agent family, extending the base
 
 Usage pattern (callers keep returning Dict so the public API is unchanged):
 
-    from agents.payloads import AgentStatus, ChatPayload
+    from agents.payloads import AgentOutcome, ChatPayload
 
     def _build_chat_payload(self, response_text: str, response: Any) -> dict:
         return ChatPayload(
-            status=AgentStatus.SUCCESS,
+            status=AgentOutcome.SUCCESS,
             agent_type="chat",
             model_used=self.model_name,
             response=response_text,
@@ -40,7 +40,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 
-class AgentStatus(str, Enum):
+class AgentOutcome(str, Enum):
     """Canonical status values for all agent payloads.
 
     Replaces hardcoded "status": "success" / "error" / "warning" literals
@@ -65,7 +65,7 @@ class BaseAgentPayload(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    status: AgentStatus
+    status: AgentOutcome
     agent_type: str
     model_used: str | None = None
     metadata: dict[str, Any] | None = None

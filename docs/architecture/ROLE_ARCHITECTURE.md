@@ -38,7 +38,7 @@ The `manifest.yml` in each infrastructure directory is the **single source of tr
 | `autobot-slm-agent` | `autobot-slm-backend/slm/agent/`¹ | **all nodes** | all |
 | `autobot_shared` | `autobot_shared/` | all backend nodes | all |
 
-¹ Exception to the one-role-one-top-level-dir rule: the agent's code source lives nested under `autobot-slm-backend/slm/agent/` (not a top-level `autobot-slm-agent/` dir) and is deployed by the `slm_agent` Ansible role from a byte-identical mirror at `autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/`, CI-gated against drift (#1629). See `autobot-infrastructure/autobot-slm-agent/manifest.yml` for the role's infra descriptor.
+¹ Exception to the one-role-one-top-level-dir rule: the agent's code source lives nested under `autobot-slm-backend/slm/agent/` (not a top-level `autobot-slm-agent/` dir) and is deployed by the `slm_agent` Ansible role directly from that tree (production modules only; no mirror copy under the role, #18548). See `autobot-infrastructure/autobot-slm-agent/manifest.yml` for the role's infra descriptor.
 
 ---
 

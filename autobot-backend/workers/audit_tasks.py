@@ -29,6 +29,7 @@ from celery.signals import beat_init, worker_ready
 
 from autobot_shared.git_probe import run_git
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import project_root
 from autobot_shared.time_utils import utc_timestamp
 from celery_app import celery_app
 from services.github_service_credential import (
@@ -253,8 +254,7 @@ def _run(cmd: list[str], cwd: str | None = None, env: dict[str, str] | None = No
 
 
 def _repo_root() -> Path:
-    """Resolve the AutoBot-AI repo root relative to this file."""
-    return Path(__file__).resolve().parent.parent.parent
+    return project_root()  # the one canonical resolver (#18101)
 
 
 def _list_open_issues(label: str | None = None) -> tuple[list[str], bool]:

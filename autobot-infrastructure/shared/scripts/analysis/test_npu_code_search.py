@@ -16,11 +16,16 @@ import sys
 import time
 from pathlib import Path
 
-# Add the project root to Python path
-sys.path.insert(0, str(Path(__file__).parent))
+# A backend tool (#18289): it deliberately drives backend internals. It puts the backend and the
+# repository root (for `autobot_shared`) on its own path, so it runs from any directory with no
+# PYTHONPATH; the backend's Python dependencies must be installed.
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 
-from agents.development_speedup_agent import analyze_codebase, development_speedup
-from agents.npu_code_search_agent import index_project, npu_code_search, search_codebase
+from agents.development_speedup_agent import analyze_codebase, get_development_speedup_agent  # noqa: E402
+from agents.npu_code_search_agent import get_npu_code_search, index_project, search_codebase  # noqa: E402
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -35,7 +40,7 @@ async def test_npu_code_search():
     # Test 1: Check system status
     logger.info("\n1. Checking system status...")
     try:
-        status = await npu_code_search.get_index_status()
+        status = await get_npu_code_search().get_index_status()
         logger.info("   ✅ System operational")
         logger.info(f"   📊 Files indexed: {status.get('total_files_indexed', 0)}")
         logger.info(f"   🔧 NPU available: {status.get('npu_available', False)}")
@@ -91,7 +96,7 @@ async def test_npu_code_search():
         try:
             results = await search_codebase(query=test["query"], search_type=test["type"], max_results=5)
 
-            stats = npu_code_search.get_search_stats()
+            stats = get_npu_code_search().get_search_stats()
             logger.info(f"   {i}. {test['name']}")
             logger.info(f"      🔍 Query: '{test['query']}' ({test['type']})")
             logger.info(f"      📊 Results: {len(results)} found")
@@ -122,7 +127,7 @@ async def test_development_speedup():
     # Test 1: Duplicate detection
     logger.info("\n1. Testing duplicate code detection...")
     try:
-        duplicates = await development_speedup.find_duplicate_code(project_root)
+        duplicates = await get_development_speedup_agent().find_duplicate_code(project_root)
 
         total_duplicates = duplicates.get("total_duplicates", 0)
         potential_savings = duplicates.get("potential_savings", {})
@@ -151,7 +156,7 @@ async def test_development_speedup():
     # Test 2: Pattern analysis
     logger.info("\n2. Testing code pattern analysis...")
     try:
-        patterns = await development_speedup.identify_code_patterns(project_root)
+        patterns = await get_development_speedup_agent().identify_code_patterns(project_root)
 
         total_patterns = patterns.get("total_patterns", 0)
         high_priority = patterns.get("high_priority_issues", 0)
@@ -175,7 +180,7 @@ async def test_development_speedup():
     # Test 3: Import analysis
     logger.info("\n3. Testing import analysis...")
     try:
-        imports = await development_speedup.analyze_imports_and_dependencies(project_root)
+        imports = await get_development_speedup_agent().analyze_imports_and_dependencies(project_root)
 
         most_used = imports.get("most_used_modules", [])
         unused = imports.get("potential_unused_imports", [])
@@ -260,7 +265,7 @@ async def test_performance_comparison():
             results = await search_codebase(query, search_type, max_results=10)
             search_time = time.time() - start_time
 
-            stats = npu_code_search.get_search_stats()
+            stats = get_npu_code_search().get_search_stats()
             total_time += search_time
             if stats.npu_acceleration_used:
                 npu_used_count += 1
@@ -294,7 +299,7 @@ async def test_cache_performance():
 
     # Clear cache first
     try:
-        cache_result = await npu_code_search.clear_cache()
+        cache_result = await get_npu_code_search().clear_cache()
         logger.info(f"   🗑️  Cleared {cache_result.get('keys_deleted', 0)} cache keys")
     except Exception as e:
         logger.warning(f"   ⚠️  Cache clear warning: {e}")
@@ -309,7 +314,7 @@ async def test_cache_performance():
     start_time = time.time()
     results1 = await search_codebase(query, search_type, max_results=10)
     time1 = time.time() - start_time
-    stats1 = npu_code_search.get_search_stats()
+    stats1 = get_npu_code_search().get_search_stats()
 
     logger.info(f"   1st search: {time1*1000:.1f}ms, Cache hit: {stats1.redis_cache_hit}")
 
@@ -317,7 +322,7 @@ async def test_cache_performance():
     start_time = time.time()
     results2 = await search_codebase(query, search_type, max_results=10)
     time2 = time.time() - start_time
-    stats2 = npu_code_search.get_search_stats()
+    stats2 = get_npu_code_search().get_search_stats()
 
     logger.info(f"   2nd search: {time2*1000:.1f}ms, Cache hit: {stats2.redis_cache_hit}")
 

@@ -10,30 +10,27 @@ bridging the FastAPI layer with the TTS/STT backend services.
 """
 
 import asyncio
-import os
-import tempfile
 from collections.abc import AsyncIterator
 from contextlib import aclosing
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel
 
 from api.schemas_agent import VoiceCreateResponse
 from api.schemas_code import (
     VoiceDeleteResponse,
     VoiceListenResponse,
-    VoiceSpeakResponse,
     VoiceTranscribeResponse,
 )
+from api.voice_bundle_helpers import voice_bundle_user_id
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.personality_service import resolve_voice_id
 from services.realtime_mcp_bridge import get_realtime_bridge
-from services.tts_client import get_tts_client
+from services.tts_client import TTSReferenceAudioRejected, get_tts_client
 
 router = APIRouter(
     dependencies=[Depends(check_admin_permission)],
@@ -46,11 +43,6 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 # Realtime MCP tool endpoints (Issue #7343)
 # ---------------------------------------------------------------------------
-
-
-class _RealtimeToolCallRequest(BaseModel):
-    name: str
-    arguments: Dict[str, Any] = {}
 
 
 @realtime_router.get("/realtime/tools")
@@ -70,9 +62,8 @@ async def voice_realtime_list_tools(
     """
     role = current_user.get("role", "user")
     is_admin = is_admin_role(role)  # #12717: superadmin gets the admin realtime bridge
-    user_id = current_user.get("user_id") or current_user.get("sub") or current_user.get("username")
     bridge = await get_realtime_bridge(is_admin=is_admin)
-    tools = await bridge.list_realtime_tools(user_id=str(user_id) if user_id else None, role=role)
+    tools = await bridge.list_realtime_tools(user_id=voice_bundle_user_id(current_user), role=role)
     return {
         "tools": [
             {
@@ -86,43 +77,7 @@ async def voice_realtime_list_tools(
     }
 
 
-@realtime_router.post("/realtime/tools/call")
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="voice_realtime_call_tool",
-    error_code_prefix="VOICE",
-)
-async def voice_realtime_call_tool(
-    body: _RealtimeToolCallRequest,
-    request: Request,
-    current_user: dict = Depends(get_current_user),
-):
-    """Invoke an MCP tool by name and return the result envelope.
-
-    Accepts ``{name, arguments}`` and proxies the call through MCPClient.
-    Errors surface as ``{is_error: true, content: "<message>"}`` so the
-    Realtime model can self-correct verbally without the session crashing.
-    """
-    from fastapi import HTTPException
-
-    is_admin = is_admin_role(current_user.get("role"))  # #12717
-    _id = current_user.get("id")
-    user_id = _id if _id is not None else current_user.get("sub")
-    session_id = request.headers.get("X-Session-Id")
-
-    bridge = await get_realtime_bridge(is_admin=is_admin)
-    allowed_tools = await bridge.list_realtime_tools()
-    allowed_names = {t.name for t in allowed_tools}
-    if body.name not in allowed_names:
-        raise HTTPException(status_code=403, detail="Tool not permitted in active voice bundle")
-
-    result = await bridge.call_tool(
-        body.name,
-        body.arguments,
-        user_id=user_id,
-        session_id=session_id,
-    )
-    return {"is_error": result.is_error, "content": result.content}
+# POST /realtime/tools/call lives in api/realtime_session.py only (#18721): one handler, one scoping.
 
 
 # #13215: chunked audio wire format for the HTTP synthesis routes.
@@ -202,7 +157,33 @@ async def voice_listen_api(request: Request, user_role: str = Form("user")):
         )
 
 
-@router.post("/speak", response_model=VoiceSpeakResponse)
+#: Reports what server-side playback did, so ``play_locally`` can be honest about
+#: an outcome without changing the response BODY (#17779). Values: ``not-requested``,
+#: ``played``, ``failed``, ``unavailable``.
+SERVER_PLAYBACK_HEADER = "X-Server-Playback"
+
+
+async def _play_on_server(request: Request, text: str) -> str:
+    """Speak *text* on the server's own speakers. Returns the header value.
+
+    The optional pyttsx3 ``voice_interface`` is the only thing that can do this,
+    and it is absent whenever that import failed at boot. Absence and failure are
+    both *reported*, not raised: the caller still receives the synthesized audio
+    and can play it itself. Raising here would put the boot accident back in
+    charge of the response, which is the whole defect (#17779).
+    """
+    voice_interface = getattr(request.app.state, "voice_interface", None)
+    if voice_interface is None:
+        logger.warning("#17779: play_locally requested but no local voice interface is loaded")
+        return "unavailable"
+    result = await voice_interface.speak_text(text)
+    if result.get("status") == "success":
+        return "played"
+    logger.warning("#17779: server-side playback failed: %s", result.get("message"))
+    return "failed"
+
+
+@router.post("/speak", response_model=None)  # Returns audio/wav Response — no Pydantic schema (#17779)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="voice_speak_api",
@@ -215,8 +196,19 @@ async def voice_speak_api(
     language: str = Form(""),
     user_role: str = Form("user"),
     stream: bool = Form(False),
+    play_locally: bool = Form(False),
 ):
-    """Converts text to speech and plays it.
+    """Synthesize *text* and return it as ``audio/wav``.
+
+    **One implementation, one shape** (#17779). This route used to choose between
+    returning WAV bytes and returning ``{"message": ...}`` with no audio at all,
+    depending on whether an optional pyttsx3 import had succeeded at boot -- so a
+    client could not know which it would get, and on the JSON branch the audio
+    played on the *server's* speakers instead of being returned.
+
+    Synthesis is now unconditional. ``play_locally=true`` additionally speaks on
+    the server, reported through the ``X-Server-Playback`` header rather than by
+    changing the body, and it cannot be combined with ``stream`` -- see below.
 
     ``stream=true`` returns length-prefixed WAV chunks as they are synthesized
     (#13215); omitting it keeps the whole-utterance ``audio/wav`` contract.
@@ -234,33 +226,29 @@ async def voice_speak_api(
             content={"message": "Permission denied to speak via voice."},
         )
 
-    # Canonical TTS is the pocket-tts worker (always available). The optional
-    # local pyttsx3 voice_interface only does *server-side* playback; when it is
-    # absent, synthesize via the worker and return WAV for the client to play —
-    # instead of a misleading 503 that implies TTS is uninstalled.
-    voice_interface = getattr(request.app.state, "voice_interface", None)
-    if voice_interface is None:
-        # Audit after synthesis — see voice_synthesize_api for why.
-        response = await _synthesized_audio_response(text, voice_id, language, stream)
-        outcome = "accepted" if stream else "success"
-        security_layer.audit_log("voice_speak", user_role, outcome, {"via": "tts_worker", "text_preview": text[:50]})
-        return response
-
-    result = await voice_interface.speak_text(text)
-    if result["status"] == "success":
-        security_layer.audit_log("voice_speak", user_role, "success", {"text_preview": text[:50]})
-        return {"message": "Text spoken successfully."}
-    else:
-        security_layer.audit_log(
-            "voice_speak",
-            user_role,
-            "failure",
-            {"text_preview": text[:50], "reason": result.get("message")},
-        )
+    # Streaming sends bytes to the CALLER as they are produced; server playback
+    # blocks until the whole utterance has been spoken here. Serving both from one
+    # request would make `stream` silently useless, so the combination is refused
+    # rather than quietly degraded. An error body is JSON as every error is; the
+    # SUCCESS shape is audio/wav either way, which is the contract #17779 fixes.
+    if play_locally and stream:
         return JSONResponse(
-            status_code=500,
-            content={"message": f"Text-to-speech failed: {result['message']}"},
+            status_code=400,
+            content={"message": "play_locally cannot be combined with stream; request them separately."},
         )
+
+    # Canonical TTS is the pocket-tts worker, always available and the only
+    # synthesizer this route uses. Audit after synthesis — see voice_synthesize_api.
+    response = await _synthesized_audio_response(text, voice_id, language, stream)
+    playback = await _play_on_server(request, text) if play_locally else "not-requested"
+    response.headers[SERVER_PLAYBACK_HEADER] = playback
+    security_layer.audit_log(
+        "voice_speak",
+        user_role,
+        "accepted" if stream else "success",
+        {"via": "tts_worker", "server_playback": playback, "text_preview": text[:50]},
+    )
+    return response
 
 
 @router.post("/synthesize", response_model=None)  # Returns audio/wav Response — no Pydantic schema
@@ -325,7 +313,10 @@ async def voice_clone_api(
             content={"message": "Permission denied to clone voice."},
         )
 
-    ref_bytes = await reference_audio.read()
+    # Function-local: the media package import chain is not inert (see _whisper_sync).
+    from media.audio.upload_limits import read_capped_audio  # noqa: PLC0415
+
+    ref_bytes = await read_capped_audio(reference_audio)
     tts = get_tts_client()
     wav_bytes = await tts.clone_voice(text, ref_bytes)
     security_layer.audit_log("voice_clone", user_role, "success", {"text_preview": text[:50]})
@@ -365,10 +356,18 @@ async def voice_create_api(
     audio: UploadFile = File(...),
 ):
     """Create a voice profile from reference audio."""
-    audio_bytes = await audio.read()
-    tts = get_tts_client()
-    result = await tts.create_voice(name, audio_bytes, audio.filename or "ref.wav")
-    return result
+    # Function-local: the media package import chain is not inert (see _whisper_sync).
+    from media.audio.reference_wav import UNSUPPORTED_AUDIO_CODE, to_reference_wav  # noqa: PLC0415
+    from media.audio.upload_limits import read_capped_audio  # noqa: PLC0415
+
+    audio_bytes = await to_reference_wav(await read_capped_audio(audio), audio.filename)  # #18477: WAV for libsndfile
+    try:
+        return await get_tts_client().create_voice(name, audio_bytes, "ref.wav")
+    except TTSReferenceAudioRejected as exc:  # the worker could not decode it either: the client's file, not a 500
+        logger.warning("TTS worker rejected the reference audio: %s", exc)
+        raise HTTPException(
+            status_code=422, detail={"code": UNSUPPORTED_AUDIO_CODE, "message": "The audio could not be decoded"}
+        ) from exc
 
 
 @router.delete("/voices/{voice_id}", response_model=VoiceDeleteResponse)
@@ -391,15 +390,6 @@ async def voice_delete_api(voice_id: str):
 # ------------------------------------------------------------------
 
 from voice_processing.hallucination_filter import is_silence_hallucination  # noqa: E402
-
-_MIME_TO_SUFFIX = {
-    "audio/webm": ".webm",
-    "audio/ogg": ".ogg",
-    "audio/wav": ".wav",
-    "audio/x-wav": ".wav",
-    "audio/mpeg": ".mp3",
-    "audio/mp4": ".m4a",
-}
 
 
 def _drop_silence_hallucination(text: str, detected_lang: str, requested_lang: str) -> str:
@@ -425,56 +415,74 @@ def _drop_silence_hallucination(text: str, detected_lang: str, requested_lang: s
     return ""
 
 
-def _whisper_sync(pipe, audio_bytes: bytes, suffix: str, language: str = "") -> dict:
-    """Blocking Whisper inference — call via asyncio.to_thread (#1030).
+class TranscriptionFailed(RuntimeError):
+    """Whisper could not produce a transcript; ``status_code`` and the message reach the caller.
 
-    Args:
-        language: BCP-47 language hint (e.g. "en", "de"). Empty = auto-detect.
+    A failure is not silence: answering 200 with ``text: ""`` made a dead model look like
+    a user who said nothing (#17778).
     """
-    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-        tmp.write(audio_bytes)
-        tmp_path = tmp.name
+
+    def __init__(self, message: str, status_code: int):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def _whisper_sync(pipe, audio_bytes: bytes, mime: str, language: str = "") -> dict:
+    """Blocking Whisper inference for this route — call via asyncio.to_thread (#1030).
+
+    The inference itself is `media.audio.pipeline.transcribe_bytes` (#17780);
+    this function is now only what is SPECIFIC to `/voice/transcribe`:
+
+    * the silence-hallucination filter (#13104), which the media pipeline does
+      not apply and must not start applying by accident;
+    * a confidence floor of 0.0 for empty text, where the media pipeline uses
+      0.5 -- two different promises about what "no words" means;
+    * this route's result field names.
+
+    Those differences are why the consolidation shares the inference and not the
+    result: collapsing them would have changed one feature's contract to match
+    the other's.
+
+    `language` is a BCP-47 hint; empty means auto-detect.
+    """
+    # Imported here, not at module scope: `repo_tests/import_hermeticity_test.py`
+    # requires `api.voice` to import inertly, and reaching the media package at
+    # module level pulls in a chain that writes a temp file during import. The
+    # original code had this import function-local too -- that was a hermeticity
+    # boundary, not laziness, and #17780 briefly mistook it for one.
+    from media.audio.pipeline import transcribe_bytes  # noqa: PLC0415
 
     try:
-        generate_kwargs = {}
-        if language:
-            generate_kwargs["language"] = language
-        output = pipe(
-            tmp_path,
-            return_timestamps=False,
-            generate_kwargs=generate_kwargs or None,
-        )
-        text = output.get("text", "").strip() if isinstance(output, dict) else ""
-        detected_lang = output.get("language", "unknown") if isinstance(output, dict) else "unknown"
-
-        text = _drop_silence_hallucination(text, detected_lang, language)
-        confidence = 0.9 if text else 0.0
-        return {
-            "text": text,
-            "language": detected_lang,
-            "confidence": confidence,
-        }
+        result = transcribe_bytes(pipe, audio_bytes, mime=mime, language=language)
     except Exception as exc:
         logger.warning("Whisper transcription failed: %s", exc)
-        return {"text": "", "language": "unknown", "confidence": 0.0}
-    finally:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
+        raise TranscriptionFailed("Speech transcription failed", 500) from exc
+
+    text = _drop_silence_hallucination(result.text, result.language, language)
+    return {
+        "text": text,
+        "language": result.language,
+        "confidence": 0.9 if text else 0.0,
+    }
+
+
+def _load_and_transcribe(audio_bytes: bytes, content_type: str, language: str) -> dict:
+    """Load Whisper (first use) and transcribe. BLOCKING -- worker thread only (#17778)."""
+    from media.audio.pipeline import get_whisper_pipeline  # noqa: PLC0415 -- see _whisper_sync
+
+    pipe = get_whisper_pipeline()
+    if not pipe:
+        raise TranscriptionFailed("Speech recognition is unavailable: the Whisper model could not be loaded", 503)
+    return _whisper_sync(pipe, audio_bytes, content_type, language)
 
 
 async def _transcribe_with_whisper(audio_bytes: bytes, content_type: str, language: str = "") -> dict:
-    """Run Whisper transcription in a background thread (#1030)."""
-    from media.audio.pipeline import _get_whisper_pipeline
+    """Run Whisper load + transcription in a background thread (#1030, #17778).
 
-    pipe = _get_whisper_pipeline()
-    if not pipe:
-        return {"text": "", "language": "unknown", "confidence": 0.0}
-
+    The first call downloads and loads the model, so the load must not run on the loop.
+    """
     ct = content_type.split(";")[0].strip()
-    suffix = _MIME_TO_SUFFIX.get(ct, ".wav")
-    return await asyncio.to_thread(_whisper_sync, pipe, audio_bytes, suffix, language)
+    return await asyncio.to_thread(_load_and_transcribe, audio_bytes, ct, language)
 
 
 @router.post("/transcribe", response_model=VoiceTranscribeResponse)
@@ -500,14 +508,21 @@ async def voice_transcribe_api(
             content={"text": "", "error": "Permission denied."},
         )
 
-    audio_bytes = await audio.read()
+    # Function-local: the media package import chain is not inert (see _whisper_sync).
+    from media.audio.upload_limits import read_capped_audio  # noqa: PLC0415
+
+    audio_bytes = await read_capped_audio(audio, name_from_mime=audio.content_type or "audio/webm")
     if not audio_bytes:
         return JSONResponse(
             status_code=400,
             content={"text": "", "error": "Empty audio file."},
         )
 
-    result = await _transcribe_with_whisper(audio_bytes, audio.content_type or "audio/webm", language)
+    try:
+        result = await _transcribe_with_whisper(audio_bytes, audio.content_type or "audio/webm", language)
+    except TranscriptionFailed as exc:
+        security_layer.audit_log("voice_transcribe", "user", "failure", {"reason": str(exc)})
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     security_layer.audit_log(
         "voice_transcribe",
         "user",

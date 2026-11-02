@@ -15,7 +15,7 @@ Issue: Extend DAG executor with causal validation and effect tracing.
 This module provides:
 - CausalEffectType: Enum of causal relationship types
 - CausalEffect: A single causal edge (A affects B how?)
-- DependencyType: DATA vs CONTROL vs CAUSAL dependencies
+- StepDependencyType: DATA vs CONTROL vs CAUSAL dependencies
 - CausalMetadata: Attached to workflow steps to declare effects
 - EffectTrace: Tracks state mutations during execution
 - CascadeReport: Analysis of failure propagation
@@ -37,7 +37,7 @@ class CausalEffectType(str, Enum):
     MITIGATES = "mitigates"  # Step A mitigates or recovers from B's failure
 
 
-class DependencyType(str, Enum):
+class StepDependencyType(str, Enum):
     """Types of dependencies between workflow steps."""
 
     DATA = "data"  # Step B consumes output from step A
@@ -87,7 +87,7 @@ class Dependency:
 
     source_step_id: str
     target_step_id: str
-    dep_type: DependencyType
+    dep_type: StepDependencyType
     causal_effect: CausalEffect | None = None
 
     def __str__(self) -> str:

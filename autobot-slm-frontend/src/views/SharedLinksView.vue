@@ -45,7 +45,7 @@
     <!-- Error banner -->
     <div
       v-if="error"
-      class="flex items-center gap-2 px-4 py-3 mb-4 rounded-lg bg-danger-500/10 border border-danger-500/30 text-danger-500"
+      class="flex items-center gap-2 px-4 py-3 mb-4 rounded-lg bg-error-500/10 border border-error-500/30 text-error-500"
       role="alert"
     >
       <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -87,58 +87,39 @@
     </div>
 
     <!-- Links table -->
-    <div v-else class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-      <table class="w-full text-sm">
-        <caption class="sr-only">{{ $t('sharedLinksView.tableCaption') }}</caption>
-        <thead>
-          <tr class="text-left text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
-            <th scope="col" class="px-3 py-2.5 font-semibold">{{ $t('sharedLinksView.colOwner') }}</th>
-            <th scope="col" class="px-3 py-2.5 font-semibold">{{ $t('sharedLinksView.colSession') }}</th>
-            <th scope="col" class="px-3 py-2.5 font-semibold">{{ $t('sharedLinksView.colCreated') }}</th>
-            <th scope="col" class="px-3 py-2.5 font-semibold">{{ $t('sharedLinksView.colExpires') }}</th>
-            <th scope="col" class="px-3 py-2.5 font-semibold">{{ $t('sharedLinksView.colPassword') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="link in links"
-            :key="link.id"
-            class="border-b border-gray-100 dark:border-gray-800 text-gray-800 dark:text-gray-200"
-          >
-            <td class="px-3 py-2.5">{{ link.owner }}</td>
-            <td class="px-3 py-2.5">
-              <code class="text-xs">{{ link.session_id }}</code>
-            </td>
-            <td class="px-3 py-2.5">{{ formatDate(link.created_at) }}</td>
-            <td class="px-3 py-2.5">
-              {{ link.expires_at ? formatDate(link.expires_at) : $t('sharedLinksView.never') }}
-            </td>
-            <td class="px-3 py-2.5">
-              <span
-                class="inline-block px-2 py-0.5 rounded-full text-xs"
-                :class="link.has_password
-                  ? 'bg-success-500/15 text-success-500'
-                  : 'bg-gray-400/15 text-gray-500 dark:text-gray-300'"
-              >
-                {{ link.has_password ? $t('sharedLinksView.protected') : $t('sharedLinksView.open') }}
-              </span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <p class="px-3 py-2.5 text-xs text-right text-gray-400 dark:text-gray-500">
-        {{ $t('sharedLinksView.countHint', { count }) }}
-      </p>
+    <div v-else class="overflow-hidden">
+      <BaseTable
+        :columns="columns"
+        :rows="rows"
+        :caption="$t('sharedLinksView.tableCaption')"
+        size="compact"
+      >
+        <template #cell-session_id="{ value }">
+          <code class="text-xs">{{ value }}</code>
+        </template>
+        <template #cell-has_password="{ value }">
+          <BaseBadge size="sm" :variant="value ? 'success' : 'neutral'">
+            {{ value ? $t('sharedLinksView.protected') : $t('sharedLinksView.open') }}
+          </BaseBadge>
+        </template>
+        <template #footer>
+          <p class="text-xs text-right">{{ $t('sharedLinksView.countHint', { count }) }}</p>
+        </template>
+      </BaseTable>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { BaseBadge, BaseTable, type BaseTableColumn } from '@autobot/ui'
 import { useAutobotApi, type SharedLinkAdminItem } from '@/composables/useAutobotApi'
 import { createLogger } from '@/utils/debugUtils'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('SharedLinksView')
+const { t } = useI18n()
 const api = useAutobotApi()
 
 const links = ref<SharedLinkAdminItem[]>([])
@@ -146,13 +127,22 @@ const count = ref(0)
 const loading = ref(false)
 const error = ref<string | null>(null)
 
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString()
-  } catch {
-    return iso
-  }
-}
+// BaseTable rows are plain records; the API interface carries no index signature.
+const rows = computed(() => links.value.map((link) => ({ ...link })))
+
+const columns = computed<BaseTableColumn[]>(() => [
+  { key: 'owner', label: t('sharedLinksView.colOwner') },
+  { key: 'session_id', label: t('sharedLinksView.colSession') },
+  { key: 'created_at', label: t('sharedLinksView.colCreated'), formatter: (v) => formatDate(String(v)) },
+  {
+    key: 'expires_at',
+    label: t('sharedLinksView.colExpires'),
+    formatter: (v) => (v ? formatDate(String(v)) : t('sharedLinksView.never')),
+  },
+  { key: 'has_password', label: t('sharedLinksView.colPassword') },
+])
+
+const formatDate = createDateFormatter()
 
 async function fetchLinks(): Promise<void> {
   loading.value = true

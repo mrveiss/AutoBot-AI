@@ -311,9 +311,9 @@
         </div>
         <h3>{{ $t('workflow.views.failedToLoad') }}</h3>
         <p>{{ error }}</p>
-        <button @click="refreshAll" class="btn-primary">
+        <BaseButton size="sm" @click="refreshAll">
           <Icon name="redo" /> {{ $t('workflow.views.retry') }}
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Content Sections -->
@@ -367,6 +367,7 @@
             <div class="overview-card">
               <h4><Icon name="bolt" /> {{ $t('workflow.views.quickActions') }}</h4>
               <div class="quick-actions-grid">
+                <PlanBeforeBuildingAction />
                 <button class="quick-action" @click="navigateTo('canvas')">
                   <Icon name="plus-circle" />
                   <span>{{ $t('workflow.views.newWorkflow') }}</span>
@@ -483,14 +484,13 @@
               </div>
 
               <div class="nl-actions">
-                <button
-                  class="btn-primary"
+                <BaseButton size="sm"
                   @click="createFromNaturalLanguage"
                   :disabled="!naturalLanguageInput.trim() || executingWorkflow"
                 >
                   <Icon name="wand-magic-sparkles" />
                   {{ executingWorkflow ? $t('workflow.views.creating') : $t('workflow.views.createWorkflow') }}
-                </button>
+                </BaseButton>
               </div>
             </div>
 
@@ -514,23 +514,24 @@
                   v-for="step in pendingApproval.steps"
                   :key="step.step_id"
                   class="approval-step"
-                  :class="{ 'high-risk': step.risk_level === 'high' || step.risk_level === 'critical' }"
+                  :class="{ 'high-risk': step.risk_tier === 'high' || step.risk_tier === 'critical' }"
                 >
                   <div class="step-header">
                     <span class="step-description">{{ step.description }}</span>
-                    <span class="risk-badge" :class="step.risk_level">{{ step.risk_level }}</span>
+                    <RiskBadge v-if="step.risk_tier" :tier="step.risk_tier" :label="t(`common.riskTier.${step.risk_tier}`)" />
+                    <BaseBadge v-else size="sm" :label="step.risk_level" />
                   </div>
                   <code class="step-command">{{ step.command }}</code>
                 </div>
               </div>
 
               <div class="approval-actions">
-                <button class="btn-success" @click="handleApprovePlan">
+                <BaseButton variant="success" size="sm" @click="handleApprovePlan">
                   <Icon name="check" /> {{ $t('workflow.views.approveAndRun') }}
-                </button>
-                <button class="btn-danger" @click="handleRejectPlan">
+                </BaseButton>
+                <BaseButton variant="error" size="sm" @click="handleRejectPlan">
                   <Icon name="times" /> {{ $t('workflow.views.reject') }}
-                </button>
+                </BaseButton>
               </div>
             </div>
           </div>
@@ -693,13 +694,13 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { workflowIdFromQuery } from '@/composables/workflow/workflowDeepLink';
 import { useI18n } from 'vue-i18n';
+import { BaseBadge, RiskBadge, BaseButton } from '@autobot/ui';
 import { createLogger } from '@/utils/debugUtils';
 import { useNotificationBus } from '@/composables/useNotificationBus';
 import {
-  useWorkflowBuilder,
-  type WorkflowNode,
-  type WorkflowTemplate,
+  useWorkflowBuilder, type WorkflowNode, type WorkflowTemplate,
 } from '@/composables/useWorkflowBuilder';
+import PlanBeforeBuildingAction from '@/components/llc/workflowPlanner/PlanBeforeBuildingAction.vue';
 import type { WorkflowTemplateSummary } from '@/types/workflowTemplates';
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
@@ -1469,7 +1470,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .category-item.active .count:not(.active-badge) {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: white;
 }
 
@@ -2015,42 +2016,6 @@ watch(hasActiveWorkflows, (hasActive) => {
   color: var(--text-primary);
 }
 
-.risk-badge {
-  font-size: var(--text-xs);
-  padding: var(--spacing-0-5) var(--spacing-2);
-  border-radius: var(--radius-xl);
-  text-transform: uppercase;
-}
-
-.risk-badge.low {
-  background: var(--color-success-bg);
-  color: var(--color-success);
-}
-
-/* #14993: a rule for every value the canonical RiskLevel can carry, not only the
-   four the approval flow produces today -- #14956 took the unstyled set from
-   three values to six. */
-.risk-badge.unknown,
-.risk-badge.info,
-.risk-badge.minimal {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-}
-
-.risk-badge.medium,
-.risk-badge.warning,
-.risk-badge.degraded {
-  background: var(--color-warning-bg);
-  color: var(--color-warning);
-}
-
-.risk-badge.high,
-.risk-badge.error,
-.risk-badge.critical {
-  background: var(--color-error-bg);
-  color: var(--color-error);
-}
-
 .step-command {
   display: block;
   padding: var(--spacing-2);
@@ -2207,70 +2172,6 @@ watch(hasActiveWorkflows, (hasActive) => {
   color: var(--text-primary);
   min-width: 40px;
   text-align: right;
-}
-
-/* Buttons */
-.btn-primary {
-  padding: var(--spacing-2-5) var(--spacing-5);
-  background: var(--color-primary);
-  color: var(--text-on-primary);
-  border: none;
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-2);
-  transition: all var(--duration-200);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--color-primary-hover);
-}
-
-.btn-primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-success {
-  padding: var(--spacing-2-5) var(--spacing-5);
-  background: var(--color-success);
-  color: var(--text-on-primary);
-  border: none;
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  transition: all var(--duration-200);
-}
-
-.btn-success:hover {
-  filter: brightness(1.1);
-}
-
-.btn-danger {
-  padding: var(--spacing-2-5) var(--spacing-5);
-  background: var(--color-error);
-  color: var(--text-on-primary);
-  border: none;
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  transition: all var(--duration-200);
-}
-
-.btn-danger:hover {
-  filter: brightness(1.1);
 }
 
 /* Responsive */

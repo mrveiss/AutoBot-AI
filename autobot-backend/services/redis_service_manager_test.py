@@ -48,7 +48,7 @@ class ServiceOperationResult:
         self.timestamp = datetime.now()
 
 
-class ServiceStatus:
+class ManagedServiceStatus:
     def __init__(
         self,
         status: str,
@@ -65,7 +65,7 @@ class ServiceStatus:
         self.last_check = datetime.now()
 
 
-class HealthStatus:
+class ServiceHealthReport:
     def __init__(
         self,
         overall_status: str,
@@ -542,7 +542,7 @@ class TestHealthMonitoring:
         # Mock info for performance metrics
         mock_redis_client.info = AsyncMock(return_value={"used_memory": 128 * 1024 * 1024})  # 128 MB
 
-        health = HealthStatus(
+        health = ServiceHealthReport(
             overall_status="healthy",
             service_running=True,
             connectivity=True,
@@ -573,7 +573,7 @@ class TestHealthMonitoring:
         mock_redis_client.ping = AsyncMock(return_value=True)
         mock_redis_client.info = AsyncMock(return_value={"used_memory": 3500 * 1024 * 1024})  # 3.5 GB - high usage
 
-        health = HealthStatus(
+        health = ServiceHealthReport(
             overall_status="degraded",
             service_running=True,
             connectivity=True,
@@ -603,7 +603,7 @@ class TestHealthMonitoring:
         # Mock connection failure
         mock_redis_client.ping = AsyncMock(side_effect=ConnectionRefusedError("Connection refused"))
 
-        health = HealthStatus(
+        health = ServiceHealthReport(
             overall_status="critical",
             service_running=False,
             connectivity=False,

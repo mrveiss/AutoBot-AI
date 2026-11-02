@@ -299,6 +299,15 @@ _TH_MODULE = "chat_workflow.tool_handler"
 _MCP_DISPATCH_MODULE = "services.mcp_dispatch"
 
 
+@pytest.fixture(autouse=True)
+def _line_one_for_schema_tests():
+    """These tests are about schema retry; the AI-line decision has its own suite (#18430)."""
+    from chat_workflow.tool_handler import _try_mcp_dispatch
+
+    with patch.dict(_try_mcp_dispatch.__globals__, {"enforce_ai_line": AsyncMock(return_value=None)}):
+        yield
+
+
 class TestTryMcpDispatchSchemaRetry:
     """Tests for the schema retry loop inside _try_mcp_dispatch()."""
 
@@ -307,6 +316,7 @@ class TestTryMcpDispatchSchemaRetry:
         tool_meta = {"name": tool_name, "input_schema": schema}
         dispatcher = MagicMock()
         dispatcher._cache_loaded = True
+        dispatcher.ensure_loaded = AsyncMock()
         dispatcher.find_tool = MagicMock(return_value=tool_meta)
         dispatcher.dispatch = AsyncMock(return_value={"success": True, "result": "ok", "bridge": "test"})
         return dispatcher
@@ -415,6 +425,7 @@ class TestTryMcpDispatchSchemaRetry:
         """Unknown tool (not in registry) must return None, not raise."""
         dispatcher = MagicMock()
         dispatcher._cache_loaded = True
+        dispatcher.ensure_loaded = AsyncMock()
         dispatcher.find_tool = MagicMock(return_value=None)
 
         with patch(f"{_MCP_DISPATCH_MODULE}.get_mcp_dispatcher", return_value=dispatcher):
@@ -428,6 +439,7 @@ class TestTryMcpDispatchSchemaRetry:
         tool_meta = {"name": "no_schema_tool"}  # no "input_schema" key
         dispatcher = MagicMock()
         dispatcher._cache_loaded = True
+        dispatcher.ensure_loaded = AsyncMock()
         dispatcher.find_tool = MagicMock(return_value=tool_meta)
         dispatcher.dispatch = AsyncMock(return_value={"success": True, "result": "ok", "bridge": "b"})
 

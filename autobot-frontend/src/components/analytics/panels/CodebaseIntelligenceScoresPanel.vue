@@ -329,7 +329,7 @@
               <span class="metric-value">{{ qualityScore.metrics.security }}</span>
             </div>
           </div>
-          <div class="quality-trend" :class="'trend-' + qualityScore.trend">
+          <div v-if="qualityScore.trend" class="quality-trend" :class="'trend-' + qualityScore.trend">
             <i
               :class="
                 qualityScore.trend === 'improving'
@@ -514,7 +514,7 @@
     </div>
 
     <!-- Analysis History Section (#3073) -->
-    <div v-if="analysisHistory && analysisHistory.length > 0" class="analysis-history-section">
+    <div v-if="ANALYSIS_HISTORY_ENABLED && analysisHistory && analysisHistory.length > 0" class="analysis-history-section">
       <h4>
         <Icon name="history" />
         {{ $t('analytics.codebase.intelligence.analysisHistoryTitle') }}
@@ -557,110 +557,22 @@ import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import HealthScoreGauge from '@/components/analytics/HealthScoreGauge.vue'
+import type {
+  SecurityScoreResult,
+  PerformanceScoreResult,
+  RedisHealthResult,
+  SecurityFindingDetail,
+  PerformanceFindingDetail,
+  RedisOptimization,
+  CodeHealthScore,
+  QualityScore,
+  CodeSuggestion,
+  CodeAnalysisResult,
+} from './codebaseIntelligenceScoresTypes'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
-interface SecurityScoreResult {
-  security_score: number
-  grade: string
-  risk_level: string
-  status_message: string
-  total_findings: number
-  critical_issues: number
-  high_issues: number
-  files_analyzed: number
-  severity_breakdown: Record<string, number>
-  owasp_breakdown: Record<string, number>
-}
-
-interface PerformanceScoreResult {
-  performance_score: number
-  grade: string
-  status_message: string
-  total_issues: number
-  files_analyzed: number
-}
-
-interface RedisHealthResult {
-  redis_health_score: number
-  grade: string
-  status_message: string
-  total_files: number
-  total_issues: number
-  files_with_issues: number
-}
-
-interface SecurityFindingDetail {
-  severity: string
-  vulnerability_type: string
-  description: string
-  file_path: string
-  line?: number
-  recommendation?: string
-  owasp_category?: string
-}
-
-interface PerformanceFindingDetail {
-  severity: string
-  issue_type: string
-  description: string
-  file_path: string
-  line?: number
-  function_name?: string
-  recommendation?: string
-}
-
-interface RedisOptimization {
-  severity: string
-  optimization_type: string
-  description: string
-  file_path: string
-  line?: number
-  category?: string
-  recommendation?: string
-}
-
-interface CodeHealthScore {
-  health_score: number
-  total_files: number
-  issues_count: {
-    critical: number
-    high: number
-    medium: number
-    low: number
-  }
-  coverage_percent: number
-  technical_debt_hours: number
-  timestamp: string
-}
-
-interface QualityScore {
-  overall_score: number
-  metrics: {
-    complexity: number
-    maintainability: number
-    documentation: number
-    testing: number
-    security: number
-  }
-  grade: string
-  trend: 'improving' | 'stable' | 'declining'
-}
-
-interface CodeSuggestion {
-  id: string
-  type: string
-  priority: 'high' | 'medium' | 'low'
-  title: string
-  description: string
-  impact: string
-}
-
-interface CodeAnalysisResult {
-  id: string
-  language: string
-  filename?: string
-  quality_score: number
-  timestamp: string
-}
+// Analysis history returns with its route (#18748): GET /code-intelligence/history is not served.
+const ANALYSIS_HISTORY_ENABLED = false
 
 const props = defineProps<{
   rootPath: string
@@ -748,15 +660,7 @@ function getHealthGrade(score: number): string {
   return 'F'
 }
 
-function formatTimestamp(timestamp: string): string {
-  const date = new Date(timestamp)
-  return date.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
+const formatTimestamp = createDateFormatter({ kind: 'date', intl: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } })
 </script>
 
 <style scoped>

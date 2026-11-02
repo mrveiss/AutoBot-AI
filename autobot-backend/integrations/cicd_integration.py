@@ -18,6 +18,7 @@ from integrations.base import (
     IntegrationHealth,
     IntegrationStatus,
 )
+from knowledge.connectors.egress import instance_host_egress
 
 logger = get_logger(__name__)
 
@@ -48,6 +49,7 @@ class JenkinsIntegration(BaseIntegration):
                 auth=self.auth,
                 timeout=aiohttp.ClientTimeout(total=10),
                 suppress_error_log=True,
+                guard_egress=instance_host_egress(),
             ) as response:
                 if response.status == 200:
                     data = await response.json()
@@ -119,8 +121,7 @@ class JenkinsIntegration(BaseIntegration):
     async def _list_jobs(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """List all Jenkins jobs."""
         data = await get_http_client().get_json(
-            f"{self.base_url}/api/json?tree=jobs[name,url,color]",
-            auth=self.auth,
+            f"{self.base_url}/api/json?tree=jobs[name,url,color]", auth=self.auth, guard_egress=instance_host_egress()
         )
         return {"jobs": data.get("jobs", [])}
 
@@ -129,7 +130,7 @@ class JenkinsIntegration(BaseIntegration):
         job_name = params["job_name"]
         build_number = params["build_number"]
         url = f"{self.base_url}/job/{job_name}/{build_number}/api/json"
-        return await get_http_client().get_json(url, auth=self.auth)
+        return await get_http_client().get_json(url, auth=self.auth, guard_egress=instance_host_egress())
 
     async def _trigger_build(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Trigger Jenkins build."""
@@ -138,7 +139,9 @@ class JenkinsIntegration(BaseIntegration):
         url = f"{self.base_url}/job/{job_name}/buildWithParameters"
         # Not post_json(): Jenkins answers buildWithParameters with an empty
         # 201 body, so decoding JSON here would raise on the success path.
-        async with get_http_client().tracked_request("POST", url, json=build_params, auth=self.auth) as response:
+        async with get_http_client().tracked_request(
+            "POST", url, json=build_params, auth=self.auth, guard_egress=instance_host_egress()
+        ) as response:
             response.raise_for_status()
             return {"status": "triggered", "job_name": job_name}
 
@@ -148,7 +151,9 @@ class JenkinsIntegration(BaseIntegration):
         build_number = params["build_number"]
         url = f"{self.base_url}/job/{job_name}/{build_number}/consoleText"
         # Console output is plain text, so this reads text() rather than json().
-        async with get_http_client().tracked_request("GET", url, auth=self.auth) as response:
+        async with get_http_client().tracked_request(
+            "GET", url, auth=self.auth, guard_egress=instance_host_egress()
+        ) as response:
             response.raise_for_status()
             log = await response.text()
             return {"log": log, "job_name": job_name, "build_number": build_number}
@@ -181,6 +186,7 @@ class GitLabCIIntegration(BaseIntegration):
                 headers=self.headers,
                 timeout=aiohttp.ClientTimeout(total=10),
                 suppress_error_log=True,
+                guard_egress=instance_host_egress(),
             ) as response:
                 if response.status == 200:
                     data = await response.json()
@@ -257,7 +263,7 @@ class GitLabCIIntegration(BaseIntegration):
         """List GitLab pipelines."""
         project_id = params["project_id"]
         url = f"{self.base_url}/api/v4/projects/{project_id}/pipelines"
-        pipelines = await get_http_client().get_json(url, headers=self.headers)
+        pipelines = await get_http_client().get_json(url, headers=self.headers, guard_egress=instance_host_egress())
         return {"pipelines": pipelines}
 
     async def _get_pipeline_status(self, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -265,21 +271,23 @@ class GitLabCIIntegration(BaseIntegration):
         project_id = params["project_id"]
         pipeline_id = params["pipeline_id"]
         url = f"{self.base_url}/api/v4/projects/{project_id}/pipelines/{pipeline_id}"
-        return await get_http_client().get_json(url, headers=self.headers)
+        return await get_http_client().get_json(url, headers=self.headers, guard_egress=instance_host_egress())
 
     async def _trigger_pipeline(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Trigger GitLab pipeline."""
         project_id = params["project_id"]
         ref = params["ref"]
         url = f"{self.base_url}/api/v4/projects/{project_id}/pipeline"
-        return await get_http_client().post_json(url, {"ref": ref}, headers=self.headers)
+        return await get_http_client().post_json(
+            url, {"ref": ref}, headers=self.headers, guard_egress=instance_host_egress()
+        )
 
     async def _list_jobs(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """List GitLab pipeline jobs."""
         project_id = params["project_id"]
         pipeline_id = params["pipeline_id"]
         url = f"{self.base_url}/api/v4/projects/{project_id}/pipelines/{pipeline_id}/jobs"
-        jobs = await get_http_client().get_json(url, headers=self.headers)
+        jobs = await get_http_client().get_json(url, headers=self.headers, guard_egress=instance_host_egress())
         return {"jobs": jobs}
 
 
@@ -310,6 +318,7 @@ class CircleCIIntegration(BaseIntegration):
                 headers=self.headers,
                 timeout=aiohttp.ClientTimeout(total=10),
                 suppress_error_log=True,
+                guard_egress=instance_host_egress(),
             ) as response:
                 if response.status == 200:
                     data = await response.json()
@@ -380,14 +389,14 @@ class CircleCIIntegration(BaseIntegration):
         """List CircleCI pipelines."""
         project_slug = params["project_slug"]
         url = f"{self.base_url}/project/{project_slug}/pipeline"
-        data = await get_http_client().get_json(url, headers=self.headers)
+        data = await get_http_client().get_json(url, headers=self.headers, guard_egress=instance_host_egress())
         return {"pipelines": data.get("items", [])}
 
     async def _get_workflow_status(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Get CircleCI workflow status."""
         workflow_id = params["workflow_id"]
         url = f"{self.base_url}/workflow/{workflow_id}"
-        return await get_http_client().get_json(url, headers=self.headers)
+        return await get_http_client().get_json(url, headers=self.headers, guard_egress=instance_host_egress())
 
     async def _trigger_pipeline(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Trigger CircleCI pipeline."""
@@ -395,4 +404,6 @@ class CircleCIIntegration(BaseIntegration):
         branch = params.get("branch", "main")
         url = f"{self.base_url}/project/{project_slug}/pipeline"
         payload = {"branch": branch}
-        return await get_http_client().post_json(url, payload, headers=self.headers)
+        return await get_http_client().post_json(
+            url, payload, headers=self.headers, guard_egress=instance_host_egress()
+        )

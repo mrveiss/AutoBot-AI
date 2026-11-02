@@ -1,0 +1,101 @@
+/* Copyright 2025-2026 mrveiss
+   SPDX-License-Identifier: Apache-2.0 */
+/**
+ * AutoBot - AI-Powered Automation Platform
+ * Author: mrveiss
+ *
+ * preferences.css - User-preference overrides (#14785)
+ *
+ * Attribute-keyed overrides only; every base value lives in design-tokens.css.
+ * Replaces the override half of the retired styles/theme.css.
+ *
+ * [data-font-size]       -- the type scale, set by usePreferences
+ * [data-layout-density]  -- the density scope, below.
+ */
+
+[data-font-size="small"] {
+  --font-size-xs: 0.6875rem;   /* 11px */
+  --font-size-sm: 0.8125rem;   /* 13px */
+  --font-size-base: 0.9375rem; /* 15px */
+  --font-size-lg: 1.0625rem;   /* 17px */
+  --font-size-xl: 1.1875rem;   /* 19px */
+  --font-size-2xl: 1.375rem;   /* 22px */
+  --font-size-3xl: 1.75rem;    /* 28px */
+}
+
+[data-font-size="large"] {
+  --font-size-xs: 0.8125rem;   /* 13px */
+  --font-size-sm: 0.9375rem;   /* 15px */
+  --font-size-base: 1.0625rem; /* 17px */
+  --font-size-lg: 1.1875rem;   /* 19px */
+  --font-size-xl: 1.3125rem;   /* 21px */
+  --font-size-2xl: 1.625rem;   /* 26px */
+  --font-size-3xl: 2rem;       /* 32px */
+}
+
+/* ----------------------------------------------------------------------------
+   Density scope (#18161, #17564, #18223)
+
+   One entry point, reused rather than forked: the [data-layout-density]
+   attribute that usePreferences already sets on <html>. An attribute selector
+   matches any element, so a region can opt into a density by carrying the
+   same attribute -- no class names are added for it. Components read
+   var(--...) and never learn density exists.
+
+   Every scope below sets the SAME list of tokens. That is required, not
+   tidiness: a derived token such as --spacing-md: var(--spacing-4) is resolved
+   where it is declared (:root), so changing --spacing-unit or --spacing-4 in a
+   subtree does not move it. The derived names are therefore restated here, and
+   a test (themeCascade.test.ts) fails if one scope drops a name.
+
+   #18161: the --spacing-xs..2xl overrides in the retired styles/theme.css never
+   applied, because design-tokens.css declared the same names later at equal
+   specificity. This file loads after it, so they apply now.
+
+   Comfortable is the default and has no block: its values are the :root base
+   tokens in design-tokens.css, so there is no second copy of a number.
+   ---------------------------------------------------------------------------- */
+
+[data-layout-density="compact"] {
+  --spacing-unit: 0.1875rem;
+  --spacing-xs: 0.125rem; /* 2px */
+  --spacing-sm: 0.375rem; /* 6px */
+  --spacing-md: 0.75rem;  /* 12px */
+  --spacing-lg: 1rem;     /* 16px */
+  --spacing-xl: 1.5rem;   /* 24px */
+  --spacing-2xl: 2rem;    /* 32px */
+  --content-padding-x: 0.75rem;
+  --content-padding-y: 1rem;
+  --card-padding: 0.75rem;
+  --tbl-row-h: 32px;
+  --tbl-cell-px: 12px;
+  --tbl-cell-py: 6px;
+  --tbl-head-h: 32px;
+  --table-row-height: 32px;
+  --table-cell-py: 6px;
+}
+
+[data-layout-density="spacious"] {
+  --spacing-unit: 0.375rem;
+  --spacing-xs: 0.375rem; /* 6px */
+  --spacing-sm: 0.75rem;  /* 12px */
+  --spacing-md: 1.5rem;   /* 24px */
+  --spacing-lg: 2rem;     /* 32px */
+  --spacing-xl: 2.5rem;   /* 40px */
+  --spacing-2xl: 4rem;    /* 64px */
+  --content-padding-x: 1.5rem;
+  --content-padding-y: 2rem;
+  --card-padding: 1.5rem;
+  --tbl-row-h: 52px;
+  --tbl-cell-px: 20px;
+  --tbl-cell-py: 14px;
+  --tbl-head-h: 40px;
+  --table-row-height: 52px;
+  --table-cell-py: 14px;
+}
+
+/* Refined table zebra striping (#18223). */
+[data-zebra="on"] {
+  --tbl-zebra: var(--tbl-zebra-bg);
+  --tbl-row-hover: var(--line);
+}

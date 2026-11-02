@@ -9,7 +9,7 @@
  * Issue #8988: User-Selectable Theme System - Custom Theme Presets
  *
  * Provides reactive theme switching capabilities with:
- * - Dark/Light/System theme modes
+ * - Dark/Light/High-contrast/Monochrome/System theme modes (#18223)
  * - Named theme presets (Catppuccin, Solarized, High Contrast, etc.)
  * - Custom accent color presets
  * - LocalStorage persistence
@@ -22,121 +22,34 @@
  */
 
 import { ref, computed, onMounted, getCurrentInstance } from 'vue'
+import { THEME_PRESETS, type ThemePreset } from './themePresets'
 
-/** Available theme options */
-export type Theme = 'dark' | 'light' | 'system'
+/** The built-in themes a `data-theme` attribute can carry (#18223). `contrast`
+ * (high contrast) and `mono` (monochrome) are light-based accessibility and
+ * corporate themes; css/themes/{contrast,mono}.css style them. */
+export const EFFECTIVE_THEMES = ['light', 'dark', 'contrast', 'mono'] as const
+export type EffectiveTheme = (typeof EFFECTIVE_THEMES)[number]
+
+/** Available theme options: the built-ins plus `system`, which follows the OS
+ * between `light` and `dark`. */
+export const THEMES = [...EFFECTIVE_THEMES, 'system'] as const
+export type Theme = (typeof THEMES)[number]
+
+/** The `color-scheme` a theme renders with (native controls, scrollbars). */
+export function colorSchemeFor(theme: EffectiveTheme): 'dark' | 'light' {
+  return theme === 'dark' ? 'dark' : 'light'
+}
 
 /** Available accent color options */
-export type AccentColor = 'blue' | 'green' | 'purple' | 'orange' | 'pink' | 'teal' | 'indigo' | 'red'
+export type AccentColor = 'theme' | 'blue' | 'green' | 'purple' | 'orange' | 'pink' | 'teal' | 'indigo' | 'red'
 
-/** Theme preset options - named combinations of theme + accent + optional density */
-export type ThemePreset =
-  | 'auto' // System preference
-  | 'catppuccin-mocha' // Dark + Purple
-  | 'catppuccin-latte' // Light + Purple
-  | 'solarized-dark' // Dark + Teal
-  | 'solarized-light' // Light + Teal
-  | 'high-contrast-dark' // Dark + Blue (high contrast)
-  | 'high-contrast-light' // Light + Blue (high contrast)
-  | 'brand-dark' // Dark + AutoBot brand color (teal)
-  | 'brand-light' // Light + AutoBot brand color (teal)
-  | 'midnight' // Dark + Indigo
-  | 'sunset' // Light + Orange
-  | 'forest' // Dark + Green
-  | 'rose' // Light + Pink
+/** The accents accents.css defines, at runtime. #18066: this list existed twice
+ * in this module (`validAccents` and `availableAccents`), so a ninth accent had
+ * to be added in two places or picker and validator would disagree. */
+export const ACCENT_COLORS: readonly AccentColor[] = ['theme', 'blue', 'green', 'purple', 'orange', 'pink', 'teal', 'indigo', 'red'] as const
 
-/** Configuration for each theme preset */
-export interface ThemePresetConfig {
-  name: string
-  description: string
-  theme: Theme
-  accentColor: AccentColor
-  highContrast?: boolean
-}
-
-/** Preset configurations */
-export const THEME_PRESETS: Record<ThemePreset, ThemePresetConfig> = {
-  auto: {
-    name: 'Auto',
-    description: 'Follows system preference',
-    theme: 'system',
-    accentColor: 'blue',
-  },
-  'catppuccin-mocha': {
-    name: 'Catppuccin Mocha',
-    description: 'Warm dark theme with purple accents',
-    theme: 'dark',
-    accentColor: 'purple',
-  },
-  'catppuccin-latte': {
-    name: 'Catppuccin Latte',
-    description: 'Soft light theme with purple accents',
-    theme: 'light',
-    accentColor: 'purple',
-  },
-  'solarized-dark': {
-    name: 'Solarized Dark',
-    description: 'Classic dark theme with cyan accents',
-    theme: 'dark',
-    accentColor: 'teal',
-  },
-  'solarized-light': {
-    name: 'Solarized Light',
-    description: 'Classic light theme with cyan accents',
-    theme: 'light',
-    accentColor: 'teal',
-  },
-  'high-contrast-dark': {
-    name: 'High Contrast Dark',
-    description: 'Maximum readability dark theme',
-    theme: 'dark',
-    accentColor: 'blue',
-    highContrast: true,
-  },
-  'high-contrast-light': {
-    name: 'High Contrast Light',
-    description: 'Maximum readability light theme',
-    theme: 'light',
-    accentColor: 'blue',
-    highContrast: true,
-  },
-  'brand-dark': {
-    name: 'AutoBot Dark',
-    description: 'Official AutoBot dark theme',
-    theme: 'dark',
-    accentColor: 'teal',
-  },
-  'brand-light': {
-    name: 'AutoBot Light',
-    description: 'Official AutoBot light theme',
-    theme: 'light',
-    accentColor: 'teal',
-  },
-  midnight: {
-    name: 'Midnight',
-    description: 'Deep blue night theme',
-    theme: 'dark',
-    accentColor: 'indigo',
-  },
-  sunset: {
-    name: 'Sunset',
-    description: 'Warm orange light theme',
-    theme: 'light',
-    accentColor: 'orange',
-  },
-  forest: {
-    name: 'Forest',
-    description: 'Natural green dark theme',
-    theme: 'dark',
-    accentColor: 'green',
-  },
-  rose: {
-    name: 'Rose',
-    description: 'Elegant pink light theme',
-    theme: 'light',
-    accentColor: 'pink',
-  },
-}
+export type { ThemePreset, ThemePresetConfig } from './themePresets'
+export { THEME_PRESETS } from './themePresets'
 
 /** Storage keys for persisting preferences */
 const THEME_STORAGE_KEY = 'autobot-theme'
@@ -144,14 +57,20 @@ const ACCENT_STORAGE_KEY = 'autobot-accent-color'
 const PRESET_STORAGE_KEY = 'autobot-theme-preset'
 
 /** Default values when no preference is set */
-const DEFAULT_THEME: Theme = 'dark'
-const DEFAULT_ACCENT: AccentColor = 'blue'
-const DEFAULT_PRESET: ThemePreset = 'auto'
+// The Refined handoff names Light the default (#18223). Nothing there says to follow the
+// OS on first run, so a fresh install is light; `system` stays selectable.
+const DEFAULT_THEME: Theme = 'light'
+// `theme` = no accent preset: the theme's own primary colour stands (#18223).
+const DEFAULT_ACCENT: AccentColor = 'theme'
+// Stored and sent to the server, 'auto' means "no named preset" (the backend default).
+// In memory no preset is null, and the Auto preset is selected only while system theme +
+// theme accent is what is applied. So a fresh install (light) selects nothing (#18252).
+const NO_NAMED_PRESET: ThemePreset = 'auto'
 
 /** Global reactive state (singleton pattern) */
 const currentTheme = ref<Theme>(DEFAULT_THEME)
 const currentAccent = ref<AccentColor>(DEFAULT_ACCENT)
-const currentPreset = ref<ThemePreset>(DEFAULT_PRESET)
+const currentPreset = ref<ThemePreset | null>(null)
 
 /** Track if theme has been initialized */
 let isInitialized = false
@@ -159,7 +78,7 @@ let isInitialized = false
 /**
  * Determines the effective theme based on current setting and system preference
  */
-function getEffectiveTheme(theme: Theme): 'dark' | 'light' {
+function getEffectiveTheme(theme: Theme): EffectiveTheme {
   if (theme === 'system') {
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   }
@@ -174,13 +93,33 @@ function applyTheme(theme: Theme): void {
   document.documentElement.setAttribute('data-theme', effectiveTheme)
 
   // Also update color-scheme for native elements (scrollbars, form controls)
-  document.documentElement.style.colorScheme = effectiveTheme
+  document.documentElement.style.colorScheme = colorSchemeFor(effectiveTheme)
+
+  syncMetaThemeColor()
+}
+
+/**
+ * Keeps the mobile browser chrome (<meta name="theme-color">) on the active
+ * theme's surface. It reads the resolved token instead of naming a colour, so
+ * all four themes and any deployed one are covered. Moved here from
+ * useUserStore#applyTheme (#18240): this is the only place the theme is applied.
+ */
+function syncMetaThemeColor(): void {
+  const meta = document.querySelector('meta[name="theme-color"]')
+  const surface = getComputedStyle(document.documentElement).getPropertyValue('--bg-secondary').trim()
+  if (meta && surface) meta.setAttribute('content', surface)
 }
 
 /**
  * Applies the accent color to the document root element
  */
 function applyAccentColor(accent: AccentColor): void {
+  // `theme` sets no attribute, so no accents.css rule applies and the theme's own
+  // primary (css/themes/refined-map.css) stands.
+  if (accent === 'theme') {
+    document.documentElement.removeAttribute('data-accent')
+    return
+  }
   document.documentElement.setAttribute('data-accent', accent)
 }
 
@@ -209,9 +148,9 @@ function saveAccentColor(accent: AccentColor): void {
 /**
  * Saves theme preset preference to localStorage
  */
-function savePreset(preset: ThemePreset): void {
+function savePreset(preset: ThemePreset | null): void {
   try {
-    localStorage.setItem(PRESET_STORAGE_KEY, preset)
+    localStorage.setItem(PRESET_STORAGE_KEY, preset ?? NO_NAMED_PRESET)
   } catch {
     // localStorage may be unavailable in some contexts
   }
@@ -223,7 +162,7 @@ function savePreset(preset: ThemePreset): void {
 function loadTheme(): Theme {
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null
-    if (stored && ['dark', 'light', 'system'].includes(stored)) {
+    if (stored && (THEMES as readonly string[]).includes(stored)) {
       return stored
     }
   } catch {
@@ -238,8 +177,7 @@ function loadTheme(): Theme {
 function loadAccentColor(): AccentColor {
   try {
     const stored = localStorage.getItem(ACCENT_STORAGE_KEY) as AccentColor | null
-    const validAccents: AccentColor[] = ['blue', 'green', 'purple', 'orange', 'pink', 'teal', 'indigo', 'red']
-    if (stored && validAccents.includes(stored)) {
+    if (stored && ACCENT_COLORS.includes(stored)) {
       return stored
     }
   } catch {
@@ -260,7 +198,14 @@ function loadPreset(): ThemePreset {
   } catch {
     // localStorage may be unavailable
   }
-  return DEFAULT_PRESET
+  return NO_NAMED_PRESET
+}
+
+/** The preset a stored value selects, given the theme and accent actually applied */
+export function presetFor(stored: ThemePreset, theme: Theme, accent: AccentColor): ThemePreset | null {
+  if (stored !== NO_NAMED_PRESET) return stored
+  const auto = THEME_PRESETS.auto
+  return theme === auto.theme && accent === auto.accentColor ? 'auto' : null
 }
 
 /**
@@ -305,7 +250,7 @@ function applyPreset(preset: ThemePreset): void {
  *   <!-- Use preset picker (recommended) -->
  *   <select v-model="preset" @change="setPreset(preset)">
  *     <option v-for="p in availablePresets" :key="p" :value="p">
- *       {{ THEME_PRESETS[p].name }}
+ *       {{ t(THEME_PRESETS[p].nameKey) }}
  *     </option>
  *   </select>
  *
@@ -338,13 +283,14 @@ export function useTheme() {
     const savedAccent = loadAccentColor()
 
     // If preset is saved, apply it (overrides individual theme/accent)
-    if (savedPreset !== DEFAULT_PRESET) {
+    if (savedPreset !== NO_NAMED_PRESET) {
       currentPreset.value = savedPreset
       applyPreset(savedPreset)
     } else {
       // Otherwise apply individual theme + accent
       currentTheme.value = savedTheme
       currentAccent.value = savedAccent
+      currentPreset.value = presetFor(savedPreset, savedTheme, savedAccent)
       applyTheme(savedTheme)
       applyAccentColor(savedAccent)
     }
@@ -368,9 +314,7 @@ export function useTheme() {
     currentTheme.value = theme
     saveTheme(theme)
     applyTheme(theme)
-    // Clear preset when manually changing theme
-    currentPreset.value = 'auto'
-    savePreset('auto')
+    clearNamedPreset()
   }
 
   /**
@@ -381,9 +325,14 @@ export function useTheme() {
     currentAccent.value = accent
     saveAccentColor(accent)
     applyAccentColor(accent)
-    // Clear preset when manually changing accent
-    currentPreset.value = 'auto'
-    savePreset('auto')
+    clearNamedPreset()
+  }
+
+  /** A manual theme or accent change leaves no named preset; high contrast goes with it */
+  function clearNamedPreset(): void {
+    currentPreset.value = presetFor(NO_NAMED_PRESET, currentTheme.value, currentAccent.value)
+    savePreset(null)
+    document.documentElement.removeAttribute('data-high-contrast')
   }
 
   /**
@@ -416,7 +365,8 @@ export function useTheme() {
   })
 
   /**
-   * Computed: Whether the effective theme is light
+   * Computed: Whether the effective theme is the plain light theme
+   * (contrast and mono are light-based but are not this theme)
    */
   const isLight = computed(() => {
     return getEffectiveTheme(currentTheme.value) === 'light'
@@ -432,21 +382,12 @@ export function useTheme() {
   /**
    * Available theme options for UI dropdowns
    */
-  const availableThemes: Theme[] = ['dark', 'light', 'system']
+  const availableThemes: readonly Theme[] = THEMES
 
   /**
    * Available accent color options for UI dropdowns
    */
-  const availableAccents: AccentColor[] = [
-    'blue',
-    'green',
-    'purple',
-    'orange',
-    'pink',
-    'teal',
-    'indigo',
-    'red',
-  ]
+  const availableAccents: readonly AccentColor[] = ACCENT_COLORS
 
   /**
    * Available theme presets for UI dropdowns
@@ -473,13 +414,58 @@ export function useTheme() {
   const themeLabels: Record<Theme, string> = {
     dark: 'Dark',
     light: 'Light',
+    contrast: 'High contrast',
+    mono: 'Monochrome',
     system: 'System',
+  }
+
+  /**
+   * i18n keys for the theme labels; render sites translate with t() (#14785).
+   * `themeLabels` stays as the untranslated default for non-Vue consumers.
+   */
+  const themeLabelKeys: Record<Theme, string> = {
+    dark: 'ui.themeToggle.dark',
+    light: 'ui.themeToggle.light',
+    contrast: 'ui.themeToggle.highContrast',
+    mono: 'ui.themeToggle.monochrome',
+    system: 'ui.themeToggle.system',
+  }
+
+  /**
+   * i18n keys for the accent labels (shared with the preferences panel)
+   */
+  const accentLabelKeys: Record<AccentColor, string> = {
+    theme: 'ui.preferences.accentTheme',
+    blue: 'ui.preferences.blue',
+    green: 'ui.preferences.green',
+    purple: 'ui.preferences.purple',
+    orange: 'ui.preferences.orange',
+    pink: 'ui.preferences.pink',
+    teal: 'ui.preferences.teal',
+    indigo: 'ui.preferences.indigo',
+    red: 'ui.preferences.red',
+  }
+
+  /**
+   * i18n keys for the accent descriptions (#18255)
+   */
+  const accentDescriptionKeys: Record<AccentColor, string> = {
+    theme: 'ui.themeToggle.accentThemeDescription',
+    blue: 'ui.themeToggle.accentBlueDescription',
+    green: 'ui.themeToggle.accentGreenDescription',
+    purple: 'ui.themeToggle.accentPurpleDescription',
+    orange: 'ui.themeToggle.accentOrangeDescription',
+    pink: 'ui.themeToggle.accentPinkDescription',
+    teal: 'ui.themeToggle.accentTealDescription',
+    indigo: 'ui.themeToggle.accentIndigoDescription',
+    red: 'ui.themeToggle.accentRedDescription',
   }
 
   /**
    * Accent color labels for UI display
    */
   const accentLabels: Record<AccentColor, string> = {
+    theme: 'Theme',
     blue: 'Blue',
     green: 'Green',
     purple: 'Purple',
@@ -488,20 +474,6 @@ export function useTheme() {
     teal: 'Teal',
     indigo: 'Indigo',
     red: 'Red',
-  }
-
-  /**
-   * Accent color descriptions
-   */
-  const accentDescriptions: Record<AccentColor, string> = {
-    blue: 'Electric Blue — Technical Precision',
-    green: 'Emerald — Growth & Success',
-    purple: 'Violet — Creative & Premium',
-    orange: 'Amber — Energy & Innovation',
-    pink: 'Rose — Friendly & Approachable',
-    teal: 'Cyan — Modern & Professional',
-    indigo: 'Deep Blue — Trust & Stability',
-    red: 'Crimson — Bold & Urgent',
   }
 
   // Initialize on mount if in browser context
@@ -561,12 +533,12 @@ export function useTheme() {
 
     /** Theme display labels */
     themeLabels,
+    themeLabelKeys,
+    accentLabelKeys,
+    accentDescriptionKeys,
 
     /** Accent color display labels */
     accentLabels,
-
-    /** Accent color descriptions */
-    accentDescriptions,
 
     /** Preset configurations (for metadata access) */
     THEME_PRESETS,
@@ -583,7 +555,7 @@ export function initializeTheme(): void {
   // Load saved preset first
   const savedPreset = loadPreset()
 
-  if (savedPreset !== DEFAULT_PRESET && savedPreset in THEME_PRESETS) {
+  if (savedPreset !== NO_NAMED_PRESET && savedPreset in THEME_PRESETS) {
     // Apply preset
     const config = THEME_PRESETS[savedPreset]
     currentPreset.value = savedPreset
@@ -600,8 +572,10 @@ export function initializeTheme(): void {
     const savedAccent = loadAccentColor()
     applyTheme(savedTheme)
     applyAccentColor(savedAccent)
+    document.documentElement.removeAttribute('data-high-contrast')
     currentTheme.value = savedTheme
     currentAccent.value = savedAccent
+    currentPreset.value = presetFor(savedPreset, savedTheme, savedAccent)
   }
 
   isInitialized = true

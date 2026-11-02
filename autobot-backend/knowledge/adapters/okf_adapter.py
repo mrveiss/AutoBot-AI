@@ -61,13 +61,14 @@ from __future__ import annotations
 
 import asyncio
 import re
-import unicodedata
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.slug import url_slug
+from knowledge.quarantine import EXPORT_AUDIT_ACTOR, read_every_fact
 
 logger = get_logger(__name__)
 
@@ -134,24 +135,18 @@ _SKIP_KEYS = frozenset(
 def _slugify(text: str) -> str:
     """Convert *text* to an OKF-safe slug.
 
-    Rules: lowercase Unicode -> ASCII transliteration -> keep ``[a-z0-9]`` and
-    spaces -> replace spaces/hyphens with single hyphens -> strip leading/trailing
-    hyphens -> truncate to ``_SLUG_MAX_LEN``.
+    #18093: the rule is `autobot_shared.slug.slugify`, shared with `llc/models/company`
+    and `user_management/organization_service`. The NFKD fold this site had is now the
+    default there, and the trailing-hyphen-after-truncation strip this site LACKED comes
+    with it. "concept" stays here: what an empty slug means is this caller's policy.
 
     Args:
         text: Source text (title or fact_id).
 
     Returns:
-        Slug string matching ``[a-z0-9][a-z0-9-]*``.
+        Slug string matching ``[a-z0-9]([a-z0-9-]*[a-z0-9])?``, or "concept".
     """
-    # Normalise Unicode and transliterate to ASCII
-    nfkd = unicodedata.normalize("NFKD", text)
-    ascii_text = nfkd.encode("ascii", "ignore").decode("ascii")
-    lowered = ascii_text.lower()
-    # Replace any non-alphanumeric character with a hyphen
-    slugged = re.sub(r"[^a-z0-9]+", "-", lowered)
-    slugged = slugged.strip("-")
-    return slugged[:_SLUG_MAX_LEN] or "concept"
+    return url_slug(text, max_length=_SLUG_MAX_LEN) or "concept"
 
 
 def _unique_slug(base_slug: str, taken: set, *, counter_start: int = 2) -> str:
@@ -621,17 +616,16 @@ class OKFAdapter:
         collection: Optional[str] = None,
         limit: Optional[int] = None,
         offset: int = 0,
+        audit_actor: str = EXPORT_AUDIT_ACTOR,
     ) -> Dict[str, Any]:
-        """Export facts from a live KB to an OKF bundle.
+        """Export facts from a live (fully initialised) ``KnowledgeBase`` to an OKF bundle.
 
-        Requires ``self._kb`` to be a fully initialised ``KnowledgeBase``
-        instance.
-
+        Quarantined facts are read too, audited under ``audit_actor`` (the human who asked); their
+        ``collection`` marker lands in the frontmatter (#19163).
         Args:
             output_dir: Target directory for ``.md`` files.
             collection: Optional collection filter (passed to ``get_all_facts``).
-            limit: Maximum number of facts to export.
-            offset: Fact scan offset.
+            limit: Maximum number of facts to export; offset: fact scan offset.
 
         Returns:
             Same dict shape as ``export_to_okf``.
@@ -639,7 +633,7 @@ class OKFAdapter:
         if self._kb is None:
             return {"status": "error", "message": "No KnowledgeBase instance provided"}
 
-        facts = await self._kb.get_all_facts(limit=limit, offset=offset, collection=collection)
+        facts = await read_every_fact(self._kb, audit_actor, limit=limit, offset=offset, collection=collection)
         return await self.export_to_okf(facts, output_dir)
 
     async def import_into_kb(

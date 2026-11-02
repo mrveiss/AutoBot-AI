@@ -22,6 +22,8 @@ Both consumers now derive from this module so they stay in lockstep (#11459):
 
 from __future__ import annotations
 
+import fnmatch
+
 # Exact directory names that are always build/deploy artifacts — never synced,
 # never drift-reported. VCS, Python/JS build caches, virtualenvs, bundler output.
 ARTIFACT_DIRS: frozenset[str] = frozenset(
@@ -100,17 +102,51 @@ SLM_FRONTEND_CURRENT_LINK = "current"
 SLM_FRONTEND_PREVIOUS_LINK = "previous"
 SLM_FRONTEND_LEGACY_DIR = "dist"
 SLM_FRONTEND_LEGACY_PREVIOUS_DIR = "dist.previous"
-_SLM_FRONTEND_RELEASE_NAMES = frozenset(
-    {SLM_FRONTEND_CURRENT_LINK, SLM_FRONTEND_PREVIOUS_LINK, SLM_FRONTEND_LEGACY_DIR}
+_STAGED_RELEASE_PATHS = frozenset(
+    {
+        f"{SLM_FRONTEND_BUILD_PREFIX}*",
+        SLM_FRONTEND_CURRENT_LINK,
+        SLM_FRONTEND_PREVIOUS_LINK,
+        SLM_FRONTEND_LEGACY_DIR,
+        SLM_FRONTEND_LEGACY_PREVIOUS_DIR,
+    }
 )
-SLM_FRONTEND_RELEASE_EXCLUDES = _SLM_FRONTEND_RELEASE_NAMES | frozenset({f"{SLM_FRONTEND_BUILD_PREFIX}*"})
+
+# #19443: the ONE declaration of host-generated top-level paths per component --
+# paths a deploy or the running host PRODUCES and source never has, so the
+# delete-style resolve must never list them as deletions and the drift walk must
+# never count them. Consulted by ``is_host_generated`` / ``host_generated_paths``
+# (drift_checker, full_tree_drift, the rsync chokepoint). A new generated path
+# is added HERE, next to its producer, and nowhere else. Patterns are fnmatch
+# globs against the top-level name. A path retired from source is NOT listed.
+HOST_GENERATED_PATHS: dict[str, frozenset[str]] = {
+    # produced by services/slm_frontend_build.py (staged build-then-swap, #15610; #16717)
+    "autobot-slm-frontend": _STAGED_RELEASE_PATHS,
+    # produced by roles/frontend/tasks/main.yml, the same staged swap (#15603)
+    "autobot-frontend": _STAGED_RELEASE_PATHS,
+    "autobot-backend": frozenset(
+        {
+            # rendered by roles/backend/tasks/main.yml (#9084), read by startup_validation.py
+            ".validation_vars",
+            # written by roles/backend/tasks/main.yml via scripts/build-filtered-requirements.sh (#11134),
+            # plus its GPU variants (-gpu, -gpu-torch, -gpu-faiss; #17243)
+            "filtered-requirements*.txt",
+        }
+    ),
+    # written by roles/ai-stack/tasks/main.yml through the same script (#17242)
+    "autobot-ai-stack": frozenset({"filtered-requirements-ai.txt"}),
+}
 
 
-def is_release_artifact(component: str, top_level_name: str) -> bool:
-    """True when ``top_level_name`` is component's staged-release name/prefix (#16717)."""
-    return component == "autobot-slm-frontend" and (
-        top_level_name in _SLM_FRONTEND_RELEASE_NAMES or top_level_name.startswith(SLM_FRONTEND_BUILD_PREFIX)
-    )
+def host_generated_paths(component: str) -> frozenset[str]:
+    """Host-generated top-level path patterns of *component* (#19443)."""
+    return HOST_GENERATED_PATHS.get(component, frozenset())
+
+
+def is_host_generated(component: str, rel_path: str) -> bool:
+    """True when *rel_path*'s top-level name is host-generated for *component* (#19443)."""
+    top = rel_path.split("/", 1)[0]
+    return any(fnmatch.fnmatchcase(top, pattern) for pattern in host_generated_paths(component))
 
 
 HOST_STATE_EXCLUDES: tuple[str, ...] = (
@@ -144,6 +180,11 @@ def rsync_host_state_args() -> list[str]:
         *(f"--include={pattern}" for pattern in HOST_STATE_REINCLUDES),
         *(f"--exclude={pattern}" for pattern in HOST_STATE_EXCLUDES),
     ]
+
+
+# #19503: -a copies source modes, so a loose source mode would reach every node.
+RSYNC_NEVER_WORLD_WRITABLE = "--chmod=o-w"
+RSYNC_ARCHIVE_ARGS = ("-avz", RSYNC_NEVER_WORLD_WRITABLE)
 
 
 def rsync_artifact_excludes() -> list[str]:

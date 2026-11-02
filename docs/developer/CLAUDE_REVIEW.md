@@ -3,6 +3,22 @@
 > Every claim in this doc (CI status, "done", a check's outcome) follows the
 > **Verification** rule in `CLAUDE.md`: paste the command and its output, never assert.
 
+## PR granularity
+
+- **Batch same-scope issues into one PR by default** — one CI suite per batch, not per issue. Each issue must still be *fully* delivered; partial delivery never closes. Independent or different-risk changes get separate PRs, as does anything too large for one honest review pass. Write **one `Closes #N` per line** — `Closes #A, #B` links only #A.
+- **Finish what you started — append before you open** (owner rule 2026-09-19). Before opening a new PR, check for an open PR the change can be appended to (same scope, risk, owner) and append; fix and land existing PRs before opening new ones; finish started issues before starting new ones.
+- **Issues touching the same file go in ONE PR, solved by ONE agent** (owner rule 2026-09-18). Hub files — registries, ratchet baselines, `.secrets.baseline`, `.github/`, `CLAUDE.md` — are exempt; one agent may split sequentially, the next PR opening after the previous merges. Check the open PRs touching a file before editing it.
+- **A pushed PR ends the tick — never wait on its CI.** Pushing is the sweep point: check every *other* in-flight PR once (approval gate, CI verdict, behind-ness), act on what is green or red, then start the next non-colliding scoped issue immediately. The PR just pushed is re-checked at the next sweep, never polled.
+
+**The PR-granularity rules agree on "fewer PRs" and disagree on the unit.** Resolve in this order:
+
+    same file      -> ONE PR, ONE agent        (strongest: avoids conflicts, not just CI cost)
+    same scope     -> batch into one PR
+    same issue     -> one branch, never split
+    already open   -> append rather than open a new one
+
+When two apply, the **earlier line wins**. Hub files (listed above) are exempt from the file rule.
+
 ## Self-review before pushing: known self-inflicted patterns
 
 Clustered from reviewer-caught defects across the last 20 merged PRs (#16860–#16973). This is
@@ -44,6 +60,62 @@ catching," not "what breaks CI." Run through before pushing:
    what the new gate's own suite already asserts.** If updating a test makes it a second copy of a
    neighbour, it has stopped testing its own subject. Fixture fixes preserve coverage; expectation
    fixes spend it.
+10. **Prose, a branch or a default that no input can reach — read it as a wrong gate, not a
+   wrong message.** A conditional message whose else-branch describes a state the surrounding
+   `when:`/`if` excludes is a *readable* trace of a gate hole: the author of the message knew
+   the state was possible, and the gate says it is not. One of the two is wrong, and it is
+   usually the gate. The repair that feels tidy — delete the unreachable text — destroys the
+   only visible evidence and leaves the hole.
+   `add_apt_repository_idempotent.yml` (#17897): the post-add failure message offered "No source
+   for this repository was previously configured here", while both post-add tasks were gated on
+   `_apt_repo_verdict != 'usable'`. That excludes `MISSING` — the one state with no prior source,
+   and the one state where *nothing had been verified at all*, because the verdict short-circuits
+   to `'usable'` whenever presence is not `PRESENT`. So a fresh install added the repo, verified
+   nothing, and died three steps later on apt's bare "No package matching 'postgresql-16' is
+   available". The dead sentence was visible before any of that was understood.
+   **Check:** for each branch of a conditional message or default, name an input that reaches it.
+   None → inspect the gate. Then pin it: derive the firing states by evaluating the **real**
+   predicate, never from the set the test says *should* fire (that version of the guard passes
+   with the defect reinstated).
+   Related tell — a gate written as the **negation of a neighbouring fact** (`!= 'usable'`,
+   `not preserve_ok`) rather than as the condition it means. Both spellings were true in the
+   MISSING case, so renaming the variable preserved the hole across two revisions. Write the
+   predicate the action means — here, mirroring the add's own condition.
+
+## Pre-handover checklist: before the head goes to the train coordinator (#19285)
+
+About half the PRs handed over on 2026-10-22/23 needed a fix-first round for one of these.
+Check each before sending the PR# and head:
+
+1. **Every guard or test the body claims exists and runs.** Name it by file and test, and
+   confirm it ran in your pre-push or local run (#19257 claimed a smoke-credential guard that
+   did not exist).
+2. **Ceilings are met by splitting, never by trimming.** A file over its size ceiling gets a
+   module or helper extracted; shortening comments, docstrings or log text to fit is a finding
+   (#19208, #19201, and #19360's first head).
+3. **Every cited owner decision is quoted on its issue,** with the date, before the PR cites it
+   (#19216, #19259).
+4. **The whole-tree guards pass on the branch:** symbol forks, isolated-git, file size, reach.
+   Machine-checked: pre-push runs them on every push (`ALWAYS_RUN` in
+   `tools/lint/prepush_selection.py`, #18808), so a green pre-push covers item 4. A new
+   symbol that reuses an existing name (#19205, #19215) is what the symbol-fork ratchet catches.
+
+5. **Local runs respect the shared machine (owner rule, 2026-10-23).** Targeted tests plus the
+   whole-tree set, each run under the `machine:heavy-run` lock with a hold of at most 20
+   minutes; never a full local `repo_tests` suite (CI is the full gate). Train pushes go first,
+   and a hold whose reason says "train push waiting" is released at the next test boundary.
+
+Items 1 and 3 need a reader; 2 is caught when a reviewer diffs the comments; 4 is automatic.
+
+## CodeRabbit and merge trains (#19284)
+
+- **Admission:** a member PR joins a train only once its own CodeRabbit threads are resolved.
+  Its code is reviewed there, once.
+- **Train PRs skip automatic review** (`.coderabbit.yaml` `ignore_title_keywords: ["train("]`).
+  The coordinator reviews the train's own commits (fixes and merge resolutions) and requests
+  `@coderabbitai review` by hand when a fix is substantial. Whole-diff train reviews re-opened
+  approved member code after green CI: train 74 (#19191) took 9 and then 4 threads, each costing
+  a full CI rerun.
 
 ## Code Review Agent Requirements (MANDATORY)
 
@@ -84,7 +156,7 @@ After agents complete:
    - Syntax: `npm run lint` / `python -m black --check`
    - Imports: `python -c 'import <module>'` for each modified file
    - Call sites: grep for removed/renamed functions
-4. **Merge:** each PR to `main` — only with every required check green (see "Red CI Never Merges")
+4. **Merge:** each PR to `main` (approved PRs land via a train, see "Merge trains") — only with every required check green (see "Red CI Never Merges")
 5. **Verify count:** PR count should be 0 after all merges
 
 ---
@@ -252,12 +324,17 @@ After merging all PRs in a batch:
 
 ---
 
+## Merge trains
+
+The trainmaster (PR-coordinator session) alone builds and lands trains: merge commits, never squash, two CI slots, one train worked at a time. Authors send the PR number and head, then stop pushing to a queued head unless asked. CodeRabbit never blocks a first CI run; a relaunch answers open threads first. Full list: [`OWNER_RULES.md`](OWNER_RULES.md).
+
 ## CI Diagnosis
 
 **Before declaring CI "stuck" or attempting to cancel/retrigger:**
 - Confirm whether checks are actually failing vs. queued on a self-hosted runner
 - Default assumption: checks are running normally, not broken
 - Only cancel/retrigger when a check has been in a non-running state for >30 minutes with no activity
+- Never cancel a `train-*` branch's runs or any run under a live `ci-slot` ledger hold (`ledger holds | grep ci-slot`); the trainmaster owns CI priority ([OWNER_RULES.md](OWNER_RULES.md))
 
 **Why:** Sessions wasted time canceling/retriggering smoke tests that were running normally.
 

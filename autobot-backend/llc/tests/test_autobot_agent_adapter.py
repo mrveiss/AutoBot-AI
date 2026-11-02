@@ -63,9 +63,9 @@ if "agents.base_agent" not in sys.modules:
         metadata: dict | None = None
 
     _base_stub.AgentRequest = _AgentRequest
-    _base_stub.AgentResponse = _AgentResponse
+    _base_stub.StandardizedAgentResponse = _AgentResponse
     _base_stub.BaseAgent = object  # duck-typed; stubs don't inherit
-    _base_stub.DeploymentMode = MagicMock()
+    _base_stub.AgentDeploymentMode = MagicMock()
     sys.modules["agents.base_agent"] = _base_stub
 
 # Now the adapter's import resolves correctly.
@@ -85,7 +85,7 @@ from llc.models.enums import LLCRunStatus  # noqa: E402
 
 # Convenience aliases for stub types
 _AgentRequest = sys.modules["agents.base_agent"].AgentRequest
-_AgentResponse = sys.modules["agents.base_agent"].AgentResponse
+_AgentResponse = sys.modules["agents.base_agent"].StandardizedAgentResponse
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -347,7 +347,7 @@ async def test_cancel_no_ghost_run():
 
 @pytest.mark.asyncio
 async def test_error_response_redis_matches_local():
-    """When agent returns AgentResponse(status='error'), Redis-persisted status
+    """When agent returns StandardizedAgentResponse(status='error'), Redis-persisted status
     must be FAILED — same as local _task_to_status() — to avoid divergence."""
     mock_redis = AsyncMock()
     mock_redis.setex = AsyncMock()
@@ -590,11 +590,11 @@ async def test_cleanup_completed_also_removes_logs():
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def test_register_and_get_adapter():
+def test_register_and_get_adapter(monkeypatch):
+    monkeypatch.setattr("llc.adapters.base._registry", {})  # the registry is process-wide
     adapter = AutoBotAgentAdapter({"agent_class": _FAKE_AGENT_PATH})
     register_adapter("_test_fake", adapter)
-    retrieved = get_adapter("_test_fake")
-    assert retrieved is adapter
+    assert get_adapter("_test_fake") is adapter
 
 
 def test_get_adapter_unknown_raises():

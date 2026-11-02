@@ -12,14 +12,11 @@ routing them to AutoBot chat service.
 import secrets
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
 from api.schemas_chat import ChatMessage
-from api.schemas_system import (
-    TelegramBotConfigRequest,
-    TelegramBotConfigResponse,
-)
+from api.schemas_telegram import TelegramBotConfigRequest, TelegramBotConfigResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -34,7 +31,13 @@ from services.telegram_bot_service import (
     save_telegram_bot_token,
     save_telegram_webhook_secret,
 )
-from utils.chat_utils import generate_request_id
+from services.telegram_polling import (
+    INGEST_MODE_POLLING,
+    delete_webhook,
+    get_ingest_mode,
+    save_ingest_mode,
+)
+from utils.chat_utils import chat_history_manager_for, generate_request_id
 
 logger = get_logger(__name__)
 
@@ -147,7 +150,7 @@ You can also just send me a regular message!
     return None  # Unknown command
 
 
-async def _route_to_chat_and_reply(request: Request, unified_message: Any) -> None:
+async def _route_to_chat_and_reply(app: FastAPI, unified_message: Any) -> None:
     """
     Route a normalized Telegram message to AutoBot chat service and send the reply.
 
@@ -156,11 +159,12 @@ async def _route_to_chat_and_reply(request: Request, unified_message: Any) -> No
     - File attachments (MVA-2075)
     - Regular chat messages
 
-    Uses request.app.state to access chat_history_manager and llm_service,
-    matching the same pattern as api/chat.py.
+    Uses app.state to access chat_history_manager and llm_service, matching
+    the same pattern as api/chat.py. Takes the app rather than a request so
+    the webhook and the polling ingest (#19010) share it.
 
     Args:
-        request: FastAPI request (provides access to app.state services)
+        app: FastAPI app (provides access to app.state services)
         unified_message: Normalized message from TelegramAdapter
     """
     # Handle bot commands (MVA-2075)
@@ -188,7 +192,6 @@ async def _route_to_chat_and_reply(request: Request, unified_message: Any) -> No
         # File metadata is already in metadata, can be processed by chat service
 
     from api.chat import process_chat_message
-    from utils.chat_utils import get_chat_history_manager
     from utils.lazy_singleton import lazy_init_singleton
 
     session_id = _get_chat_session_id(unified_message.channel_id)
@@ -217,12 +220,12 @@ async def _route_to_chat_and_reply(request: Request, unified_message: Any) -> No
     )
 
     # Get services from app state (same pattern as chat.py)
-    chat_history_manager = get_chat_history_manager(request)
+    chat_history_manager = chat_history_manager_for(app.state)
 
-    from services.llm_service import LLMService
+    from services.llm_service import get_llm_service
 
-    llm_service = lazy_init_singleton(request.app.state, "llm_service", LLMService)
-    memory_interface = getattr(request.app.state, "memory_interface", None)
+    llm_service = lazy_init_singleton(app.state, "llm_service", get_llm_service)
+    memory_interface = getattr(app.state, "memory_interface", None)
 
     # Generate AI response
     response_data = await process_chat_message(
@@ -250,6 +253,32 @@ async def _route_to_chat_and_reply(request: Request, unified_message: Any) -> No
         unified_message.channel_id,
         session_id,
     )
+
+
+async def process_telegram_update(app: FastAPI, update: Dict[str, Any]) -> None:
+    """Normalize one Telegram update and route it to chat (#19010).
+
+    The single ingest path for both the webhook and the polling ingest: the
+    TelegramAdapter, then ingest governance (bot-self filter / dedup /
+    recursion guard, #14028), then the chat reply.
+    """
+    message = update.get("message")
+    if not message:
+        # Not a message update (could be callback_query, etc.)
+        logger.debug("Telegram update without message, ignoring")
+        return
+
+    # None means the governance stage dropped it; already logged why.
+    unified_message = await gateway_manager.normalize_message({**update, "platform": "telegram"})
+    if unified_message is None:
+        return
+
+    logger.info(
+        "Received Telegram message from user %s in chat %s",
+        unified_message.user_id,
+        unified_message.channel_id,
+    )
+    await _route_to_chat_and_reply(app, unified_message)
 
 
 async def verify_telegram_secret(request: Request) -> None:
@@ -282,7 +311,27 @@ async def verify_telegram_secret(request: Request) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
 
-@router.post("/telegram/webhook", dependencies=[Depends(verify_telegram_secret)])
+async def reject_webhook_in_polling_mode() -> None:
+    """Refuse webhook updates while the stored ingest mode is polling (#19010).
+
+    Selecting polling deletes the Telegram webhook but leaves the stored secret
+    in place (credential cleanup is human-approved, #17038), so a request that
+    still carries it would otherwise inject updates alongside the poller. Runs
+    after ``verify_telegram_secret`` so an unauthenticated caller never learns
+    the ingest mode.
+    """
+    if await get_ingest_mode() == INGEST_MODE_POLLING:
+        logger.warning("Telegram webhook call rejected: ingest mode is polling")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Webhook ingest is disabled",
+        )
+
+
+@router.post(
+    "/telegram/webhook",
+    dependencies=[Depends(verify_telegram_secret), Depends(reject_webhook_in_polling_mode)],
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="telegram_webhook",
@@ -300,7 +349,9 @@ async def telegram_webhook(
 
     Security: Verifies the X-Telegram-Bot-Api-Secret-Token header matches the
     stored secret, enforced by the ``verify_telegram_secret`` route dependency
-    so authentication runs before the request body is parsed.
+    so authentication runs before the request body is parsed. While the ingest
+    mode is polling the route answers 409 (``reject_webhook_in_polling_mode``),
+    so the webhook and the poller are never both live.
 
     Args:
         request: FastAPI request (for header access)
@@ -310,32 +361,7 @@ async def telegram_webhook(
         200 OK to acknowledge receipt
     """
     try:
-        # Extract message from update
-        message = update.get("message")
-        if not message:
-            # Not a message update (could be callback_query, etc.)
-            logger.debug("Telegram update without message, ignoring")
-            return JSONResponse({"status": "ok"})
-
-        # Add platform identifier for gateway
-        raw_message = {**update, "platform": "telegram"}
-
-        # Normalize message via TelegramAdapter, then through ingest governance
-        # (bot-self filter / dedup / recursion guard, #14028). None means the
-        # governance stage dropped it; already logged why.
-        unified_message = await gateway_manager.normalize_message(raw_message)
-        if unified_message is None:
-            return JSONResponse({"status": "ok"})
-
-        logger.info(
-            "Received Telegram message from user %s in chat %s",
-            unified_message.user_id,
-            unified_message.channel_id,
-        )
-
-        # Route to AutoBot chat service
-        await _route_to_chat_and_reply(request, unified_message)
-
+        await process_telegram_update(request.app, update)
         return JSONResponse({"status": "ok"})
 
     except HTTPException:
@@ -360,7 +386,7 @@ async def configure_telegram_bot(
     request: TelegramBotConfigRequest,
 ) -> TelegramBotConfigResponse:
     """
-    Configure Telegram bot token and webhook.
+    Configure Telegram bot token and ingest mode (webhook or polling, #19010).
 
     Requires admin permission.
 
@@ -394,23 +420,13 @@ async def configure_telegram_bot(
         else:
             logger.warning("Telegram getMe() response missing 'id' — ingest self-filter left unconfigured")
 
-        # Set webhook if URL provided
-        webhook_url = None
-        if request.webhook_url:
-            # Generate secure random secret token
-            secret_token = secrets.token_urlsafe(32)
-
-            # Save secret to Redis
-            await save_telegram_webhook_secret(secret_token)
-
-            # Set webhook with secret
-            await service.set_webhook(request.webhook_url, secret_token)
-            webhook_url = request.webhook_url
+        webhook_url = await _apply_ingest_mode(service, request)
 
         return TelegramBotConfigResponse(
             status="success",
             message="Telegram bot configured successfully",
             webhook_url=webhook_url,
+            ingest_mode=request.ingest_mode,
         )
 
     except HTTPException:
@@ -421,6 +437,26 @@ async def configure_telegram_bot(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to configure Telegram bot",
         ) from exc
+
+
+async def _apply_ingest_mode(service: TelegramBotService, request: TelegramBotConfigRequest) -> Optional[str]:
+    """Make the requested ingest mode the only live one; returns the webhook URL set.
+
+    Polling deletes the webhook (Telegram refuses ``getUpdates`` while one is
+    set); webhook mode stops the poller at its next tick via the stored mode.
+    """
+    if request.ingest_mode == INGEST_MODE_POLLING:
+        await delete_webhook(service)
+        await save_ingest_mode(request.ingest_mode)
+        return None
+
+    await save_ingest_mode(request.ingest_mode)
+    if not request.webhook_url:
+        return None
+    secret_token = secrets.token_urlsafe(32)
+    await save_telegram_webhook_secret(secret_token)
+    await service.set_webhook(request.webhook_url, secret_token)
+    return request.webhook_url
 
 
 @router.get(
@@ -465,6 +501,7 @@ async def get_telegram_config() -> TelegramBotConfigResponse:
             status="configured",
             message="Telegram bot is configured",
             webhook_url=webhook_url if webhook_url else None,
+            ingest_mode=await get_ingest_mode(),
         )
 
     except Exception as exc:

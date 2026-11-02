@@ -88,6 +88,6 @@
   # directory. That distinction is the whole point of #14856.
   when: _wrong_node_gate.token in _wrong_node_false_tokens
   vars:
-    remove_dir_path: "/opt/autobot/{{ dir_name }}"
+    remove_dir_path: "{{ autobot.base_dir }}/{{ dir_name }}"
     remove_reason: "wrong node — {{ role_check_fact }} is false on this host"
   tags: ['clean']

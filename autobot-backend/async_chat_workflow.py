@@ -19,11 +19,13 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.threshold_constants import TimingConstants
 from dependency_container import inject_services
+from exceptions import LLMResponseError
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER as _RESEARCH_QUARANTINE_FILTER
 from knowledge.search import map_kb_result_to_dict
-from knowledge_base_factory import get_knowledge_base
-from llm_shared.models import ChatMessage, LLMResponse  # Phase 2D #3185
-from retry_mechanism import RetryConfig, RetryStrategy, with_retry
+from knowledge.search_filters import filter_for_user_id
+from knowledge_base_factory import get_knowledge_base_or_none
+from llm_shared.models import LLMResponse  # Phase 2D #3185
+from retry_mechanism import RetryPolicy, RetryStrategy, with_retry
 
 logger = get_logger(__name__)
 
@@ -34,7 +36,20 @@ SYSTEM_KEYWORDS = {"system", "config", "install", "setup"}
 RESEARCH_KEYWORDS = {"research", "find", "search", "investigate"}
 
 
-class MessageType(Enum):
+# #19649: an error *response* is not retried. ``LLMResponse.error`` is a bare string that
+# does not say transient from permanent, and ``chat()`` has already walked its provider
+# fallback chain, so retrying multiplies spend on a persistent error. Timeouts and
+# connection errors still retry.
+_LLM_CALL_RETRY_POLICY = RetryPolicy(
+    max_attempts=3,
+    base_delay=1.0,
+    max_delay=10.0,
+    strategy=RetryStrategy.EXPONENTIAL_BACKOFF,
+    non_retryable_exceptions=RetryPolicy.non_retryable_exceptions + (LLMResponseError,),
+)
+
+
+class ChatMessageType(Enum):
     """Message classification types"""
 
     GENERAL_QUERY = "general_query"
@@ -83,7 +98,7 @@ class ChatWorkflowResult:
     """Complete workflow result"""
 
     response: str
-    message_type: MessageType
+    message_type: ChatMessageType
     knowledge_status: KnowledgeStatus
     kb_results: List[Dict[str, Any]] = field(default_factory=list)
     sources: List[Dict[str, Any]] = field(default_factory=list)
@@ -130,16 +145,16 @@ class AsyncChatWorkflow:
         self.workflow_messages.append(message)
         logger.info("WORKFLOW MESSAGE (%s): %s", msg_type, content)
 
-    @with_retry(RetryConfig(max_attempts=3, base_delay=1.0, max_delay=5.0, strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
+    @with_retry(RetryPolicy(max_attempts=3, base_delay=1.0, max_delay=5.0, strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
     @inject_services(llm="llm", config="config")
     async def process_chat_message(
-        self, user_message: str, chat_id: str = "default", llm=None, config=None
+        self, user_message: str, chat_id: str = "default", llm=None, config=None, user_id: str | None = None
     ) -> ChatWorkflowResult:
         """
         Process chat message through complete workflow with dependency injection.
 
         Issue #281: Refactored from 152 lines to use extracted helper methods
-        for each workflow stage.
+        for each workflow stage. #16665: ``user_id`` is the user the KB is read as; none means no KB facts.
         """
         self._start_time = time.time()
         self.workflow_messages.clear()
@@ -151,10 +166,10 @@ class AsyncChatWorkflow:
             message_type = await self._workflow_classify(user_message, workflow_steps)
 
             # Stage 2: Knowledge search
-            knowledge_status, kb_results = await self._workflow_knowledge_search(user_message)
+            knowledge_status, kb_results = await self._workflow_knowledge_search(user_message, user_id)
 
             # Stage 3: LLM response generation (grounded with KB results, #10732)
-            llm_response = await self._workflow_llm_generate(user_message, llm, workflow_steps, kb_results)
+            llm_response = await self._workflow_llm_generate(user_message, llm, workflow_steps, kb_results, chat_id)
 
             # Stage 4: Build and return result
             return self._build_success_result(
@@ -181,7 +196,7 @@ class AsyncChatWorkflow:
         )
         await self.add_workflow_message("planning", "📋 Planning my response approach...", step="planning")
 
-    async def _workflow_classify(self, user_message: str, workflow_steps: List[Dict[str, Any]]) -> MessageType:
+    async def _workflow_classify(self, user_message: str, workflow_steps: List[Dict[str, Any]]) -> ChatMessageType:
         """Classify message and log workflow step. Issue #281: Extracted helper."""
         await self.add_workflow_message("debug", "🔍 WORKFLOW: Classifying message type...", step="classification")
         message_type = await self._classify_message(user_message)
@@ -203,10 +218,11 @@ class AsyncChatWorkflow:
     async def _workflow_knowledge_search(
         self,
         query: str,
+        user_id: str | None = None,
     ) -> tuple[KnowledgeStatus, List[Dict[str, Any]]]:
         """Search knowledge base using the canonical KB facade. Issue #10715."""
         await self.add_workflow_message("debug", "🔍 WORKFLOW: Searching knowledge base...", step="knowledge_search")
-        knowledge_status, kb_results = await self._execute_kb_search(query)
+        knowledge_status, kb_results = await self._execute_kb_search(query, user_id)
         await self.add_workflow_message(
             "utility",
             "📚 Knowledge base search completed",
@@ -218,14 +234,19 @@ class AsyncChatWorkflow:
     async def _execute_kb_search(
         self,
         query: str,
+        user_id: str | None = None,
     ) -> tuple[KnowledgeStatus, List[Dict[str, Any]]]:
-        """Call the KB facade and map results; returns (status, results). Issue #10715."""
+        """Call the KB facade and map results; returns (status, results). Issue #10715.
+
+        #16665: results are filtered to what *user_id* may read; no user id yields none.
+        """
         try:
-            kb = await get_knowledge_base()
+            kb = await get_knowledge_base_or_none()
             if kb is None:
                 logger.warning("Knowledge base unavailable; skipping search for query: %.80s", query)
                 return KnowledgeStatus.MISSING, []
             raw: List[Dict[str, Any]] = await kb.search(query=query, top_k=5, filters=_RESEARCH_QUARANTINE_FILTER)
+            raw = await filter_for_user_id(raw or [], kb, user_id)
             if not raw:
                 return KnowledgeStatus.MISSING, []
             results = [map_kb_result_to_dict(r) for r in raw]  # Issue #10740
@@ -240,11 +261,12 @@ class AsyncChatWorkflow:
         llm,
         workflow_steps: List[Dict[str, Any]],
         kb_results: List[Dict[str, Any]] | None = None,
+        chat_id: str | None = None,
     ) -> LLMResponse:
         """Generate LLM response and log workflow step. Issue #281: Extracted helper."""
         await self.add_workflow_message("thought", "🧠 Generating response using LLM...", step="llm_generation")
         await self.add_workflow_message("debug", "🔗 WORKFLOW: Connecting to Ollama...", step="llm_connection")
-        llm_response = await self._generate_llm_response(user_message, llm, kb_results or [])
+        llm_response = await self._generate_llm_response(user_message, llm, kb_results or [], chat_id)
         await self.add_workflow_message(
             "utility",
             "✅ LLM response received",
@@ -267,7 +289,7 @@ class AsyncChatWorkflow:
     def _build_success_result(
         self,
         llm_response: LLMResponse,
-        message_type: MessageType,
+        message_type: ChatMessageType,
         knowledge_status: KnowledgeStatus,
         kb_results: List[Dict[str, Any]],
         workflow_steps: List[Dict[str, Any]],
@@ -303,7 +325,7 @@ class AsyncChatWorkflow:
         processing_time = time.time() - self._start_time
         return ChatWorkflowResult(
             response=(f"I apologize, but I encountered an error while processing your message:" f"{str(error)}"),
-            message_type=MessageType.GENERAL_QUERY,
+            message_type=ChatMessageType.GENERAL_QUERY,
             knowledge_status=KnowledgeStatus.BYPASSED,
             processing_time=processing_time,
             workflow_steps=workflow_steps,
@@ -311,21 +333,21 @@ class AsyncChatWorkflow:
             conversation_id=chat_id,
         )
 
-    async def _classify_message(self, message: str) -> MessageType:
+    async def _classify_message(self, message: str) -> ChatMessageType:
         """Classify message type (simplified implementation)"""
         message_lower = message.lower()
 
         # Simple keyword-based classification
         if any(word in message_lower for word in TERMINAL_KEYWORDS):
-            return MessageType.TERMINAL_TASK
+            return ChatMessageType.TERMINAL_TASK
         elif any(word in message_lower for word in DESKTOP_KEYWORDS):
-            return MessageType.DESKTOP_TASK
+            return ChatMessageType.DESKTOP_TASK
         elif any(word in message_lower for word in SYSTEM_KEYWORDS):
-            return MessageType.SYSTEM_TASK
+            return ChatMessageType.SYSTEM_TASK
         elif any(word in message_lower for word in RESEARCH_KEYWORDS):
-            return MessageType.RESEARCH_NEEDED
+            return ChatMessageType.RESEARCH_NEEDED
         else:
-            return MessageType.GENERAL_QUERY
+            return ChatMessageType.GENERAL_QUERY
 
     @staticmethod
     async def _budget_kb_context(kb_results: List[Dict[str, Any]]) -> str:
@@ -342,9 +364,13 @@ class AsyncChatWorkflow:
         context, _ = await budget_grounded_context(kb_results, model_name=None)
         return context
 
-    @with_retry(RetryConfig(max_attempts=3, base_delay=1.0, max_delay=10.0, strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
+    @with_retry(_LLM_CALL_RETRY_POLICY)
     async def _generate_llm_response(
-        self, user_message: str, llm, kb_results: List[Dict[str, Any]] | None = None
+        self,
+        user_message: str,
+        llm,
+        kb_results: List[Dict[str, Any]] | None = None,
+        chat_id: str | None = None,
     ) -> LLMResponse:
         """Generate LLM response with retry logic. #10732: grounded when kb_results provided."""
         base_system = (
@@ -354,17 +380,19 @@ class AsyncChatWorkflow:
         kb_context = await self._budget_kb_context(kb_results or [])
         system_prompt = f"{kb_context}\n\n{base_system}" if kb_context else base_system
 
-        # Prepare chat messages
+        # LLMService.chat() takes OpenAI-format dicts (#19649)
         messages = [
-            ChatMessage(role="system", content=system_prompt),
-            ChatMessage(role="user", content=user_message),
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
         ]
 
-        # Generate response with timeout
+        # Generate response with timeout; chat() records the spend against chat_id
         response = await asyncio.wait_for(
-            llm.chat_completion(messages, stream=False),
+            llm.chat(messages, conversation_id=chat_id),
             timeout=TimingConstants.SHORT_TIMEOUT,
         )
+        if response.error:
+            raise LLMResponseError(f"LLM chat failed: {response.error}")
 
         return response
 
@@ -392,12 +420,16 @@ get_workflow_manager = lazy_singleton(WorkflowManager)
 
 
 # Convenience function
-async def process_chat_message(user_message: str, chat_id: str = "default") -> ChatWorkflowResult:
+async def process_chat_message_with_timeout(
+    user_message: str, chat_id: str = "default", user_id: str | None = None
+) -> ChatWorkflowResult:
     """Process chat message through async workflow"""
     try:
         # Add timeout protection to prevent hanging - maximum 25 seconds
         workflow = await get_workflow_manager().get_workflow()
-        result = await asyncio.wait_for(workflow.process_chat_message(user_message, chat_id), timeout=25.0)
+        result = await asyncio.wait_for(
+            workflow.process_chat_message(user_message, chat_id, user_id=user_id), timeout=25.0
+        )
         return result
     except asyncio.TimeoutError:
         logger.error(f"Chat workflow timed out after 25 seconds for message: {user_message[:50]}...")
@@ -407,10 +439,9 @@ async def process_chat_message(user_message: str, chat_id: str = "default") -> C
                 f"I apologize, but I'm experiencing a processing delay. Your message was:"
                 f"'{user_message}' (Emergency mode active)"
             ),
-            message_type=MessageType.GENERAL_QUERY,
+            message_type=ChatMessageType.GENERAL_QUERY,
             knowledge_status=KnowledgeStatus.BYPASSED,
             kb_results=[],
-            research_results=None,
             librarian_engaged=False,
             mcp_used=False,
             processing_time=25.0,
@@ -419,10 +450,9 @@ async def process_chat_message(user_message: str, chat_id: str = "default") -> C
         logger.error("Chat workflow error: %s", e)
         return ChatWorkflowResult(
             response=f"I encountered an error processing your message. Error: {str(e)}",
-            message_type=MessageType.GENERAL_QUERY,
+            message_type=ChatMessageType.GENERAL_QUERY,
             knowledge_status=KnowledgeStatus.BYPASSED,
             kb_results=[],
-            research_results=None,
             librarian_engaged=False,
             mcp_used=False,
             processing_time=0.1,

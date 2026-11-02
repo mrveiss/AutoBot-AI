@@ -11,7 +11,7 @@
     <!-- Error banner -->
     <div v-if="globalError" class="error-banner">
       <span>{{ globalError }}</span>
-      <button class="btn-dismiss" @click="globalError = null">✕</button>
+      <BaseButton variant="ghost" size="sm" @click="globalError = null">✕</BaseButton>
     </div>
 
     <div class="portability-sections">
@@ -23,23 +23,21 @@
         <p class="card-desc">{{ t('llc.portability.exportDesc') }}</p>
 
         <div class="export-buttons">
-          <button
-            class="btn-primary"
+          <BaseButton
             :disabled="exportingTemplate || !effectiveCompanyId"
             @click="exportTemplate"
           >
             <span v-if="exportingTemplate" class="spinner" />
             <span v-else>⬇ {{ t('llc.portability.exportTemplate') }}</span>
-          </button>
+          </BaseButton>
 
-          <button
-            class="btn-secondary"
+          <BaseButton variant="secondary"
             :disabled="exportingSnapshot || !effectiveCompanyId"
             @click="exportSnapshot"
           >
             <span v-if="exportingSnapshot" class="spinner" />
             <span v-else>⬇ {{ t('llc.portability.exportSnapshot') }}</span>
-          </button>
+          </BaseButton>
         </div>
 
         <p v-if="!effectiveCompanyId" class="export-hint">
@@ -78,7 +76,7 @@
           <template v-if="importFile">
             <span class="drop-zone-icon">📄</span>
             <span class="drop-zone-label">{{ importFile.name }}</span>
-            <button class="btn-clear-file" @click.stop="clearFile">✕ {{ t('llc.portability.clearFile') }}</button>
+            <BaseButton variant="outline" size="xs" @click.stop="clearFile">✕ {{ t('llc.portability.clearFile') }}</BaseButton>
           </template>
           <template v-else>
             <span class="drop-zone-icon">📁</span>
@@ -88,14 +86,13 @@
 
         <!-- Preview button -->
         <div class="import-actions">
-          <button
-            class="btn-primary"
+          <BaseButton
             :disabled="!importFile || loadingPreview"
             @click="runPreview"
           >
             <span v-if="loadingPreview" class="spinner" />
             <span v-else>🔍 {{ t('llc.portability.previewImport') }}</span>
-          </button>
+          </BaseButton>
         </div>
 
         <!-- Preview results -->
@@ -113,22 +110,13 @@
           <!-- Collisions -->
           <div v-if="importPreview.collisions.length > 0" class="preview-collisions">
             <h5>{{ t('llc.portability.collisionsDetected') }}</h5>
-            <table class="preview-table">
-              <thead>
-                <tr><th>{{ t('llc.portability.colType') }}</th><th>{{ t('llc.portability.colName') }}</th><th>{{ t('llc.portability.colResolution') }}</th></tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="(c, i) in importPreview.collisions"
-                  :key="i"
-                  class="row-collision"
-                >
-                  <td>{{ c.type }}</td>
-                  <td>{{ c.name }}</td>
-                  <td>{{ c.resolution }}</td>
-                </tr>
-              </tbody>
-            </table>
+            <BaseTable
+              :columns="collisionColumns"
+              :rows="collisionRows"
+              :row-variant="() => 'warning'"
+              size="compact"
+              :aria-label="t('llc.portability.collisionsDetected')"
+            />
           </div>
 
           <!-- Will create summary -->
@@ -165,14 +153,13 @@
 
           <!-- Execute button -->
           <div class="execute-actions">
-            <button
-              class="btn-danger"
+            <BaseButton variant="error"
               :disabled="executingImport || secretMappingIncomplete"
               @click="executeImport"
             >
               <span v-if="executingImport" class="spinner" />
               <span v-else>▶ {{ t('llc.portability.executeImport') }}</span>
-            </button>
+            </BaseButton>
             <span v-if="secretMappingIncomplete" class="hint-text">
               {{ t('llc.portability.secretMappingIncomplete') }}
             </span>
@@ -212,6 +199,7 @@
 import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { BaseTable, type BaseTableColumn, BaseButton } from '@autobot/ui'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { getApiBase } from '@/config/ssot-config'
 import { useNotificationBus } from '@/composables/useNotificationBus'
@@ -239,6 +227,14 @@ const importFile = ref<File | null>(null)
 const isDragOver = ref(false)
 const loadingPreview = ref(false)
 const importPreview = ref<ImportPreview | null>(null)
+
+// #17562: the kit table for the import collisions
+const collisionColumns = computed<BaseTableColumn[]>(() => [
+  { key: 'type', label: t('llc.portability.colType') },
+  { key: 'name', label: t('llc.portability.colName') },
+  { key: 'resolution', label: t('llc.portability.colResolution') },
+])
+const collisionRows = computed(() => (importPreview.value?.collisions ?? []).map((c, i) => ({ ...c, id: i })))
 const previewPayload = ref<unknown>(null)
 const secretMapping = ref<Record<string, string>>({})
 const executingImport = ref(false)
@@ -514,14 +510,6 @@ async function executeImport(): Promise<void> {
   color: var(--color-error-text, var(--coportability-error-text));
 }
 
-.btn-dismiss {
-  margin-left: auto;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: inherit;
-}
-
 .portability-sections {
   display: flex;
   flex-direction: column;
@@ -555,63 +543,6 @@ async function executeImport(): Promise<void> {
   margin-bottom: var(--spacing-sm);
 }
 
-.btn-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--color-primary);
-  color: var(--coportability-on-accent);
-  border: none;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-}
-
-.btn-primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-}
-
-.btn-secondary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-danger {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--color-error);
-  color: var(--coportability-on-accent);
-  border: none;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-}
-
-.btn-danger:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
 .export-hint {
   font-size: var(--font-size-xs);
   color: var(--color-text-tertiary, var(--text-secondary));
@@ -630,28 +561,6 @@ async function executeImport(): Promise<void> {
   font-weight: var(--font-weight-semibold);
   margin: 0 0 var(--spacing-sm);
   color: var(--text-primary);
-}
-
-.export-table,
-.preview-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--font-size-sm);
-}
-
-.export-table th,
-.export-table td,
-.preview-table th,
-.preview-table td {
-  text-align: left;
-  padding: var(--spacing-xs) var(--spacing-sm);
-  border-bottom: 1px solid var(--border-default);
-}
-
-.export-table th,
-.preview-table th {
-  font-weight: var(--font-weight-semibold);
-  color: var(--text-secondary);
 }
 
 .download-link {
@@ -699,17 +608,6 @@ async function executeImport(): Promise<void> {
   font-size: var(--font-size-sm);
 }
 
-.btn-clear-file {
-  background: none;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  padding: 2px var(--spacing-xs);
-  cursor: pointer;
-  font-size: var(--font-size-xs);
-  color: var(--text-secondary);
-  margin-top: var(--spacing-xs);
-}
-
 /* Import actions */
 .import-actions {
   display: flex;
@@ -750,10 +648,6 @@ async function executeImport(): Promise<void> {
 
 .preview-collisions {
   margin-bottom: var(--spacing-md);
-}
-
-.row-collision {
-  background: var(--color-warning-bg);
 }
 
 .preview-summary {

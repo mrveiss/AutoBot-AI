@@ -325,26 +325,14 @@
         </BaseButton>
       </div>
 
-      <!-- Input Status Bar -->
-      <div class="input-status-bar">
-        <div class="status-left">
-          <span v-if="isTypingIndicatorVisible" class="typing-indicator">
-            <Icon name="keyboard" />
-            {{ $t('chat.input.typing') }}
-          </span>
-          <span v-if="characterCount > 0" class="character-count" :class="{ 'warning': isNearLimit }">
-            {{ characterCount }}/{{ maxCharacters }}
-          </span>
-        </div>
-
-        <div class="status-right">
-          <span v-if="isVoiceRecording" class="voice-status">
-            <Icon name="circle" class="text-red-500 animate-pulse" />
-            {{ $t('chat.input.recording') }}
-          </span>
-          <span class="keyboard-hint">{{ $t('chat.input.keyboardHint') }}</span>
-        </div>
-      </div>
+      <!-- Input Status Bar, with Stop while a reply streams (#17829) -->
+      <ChatInputStatusBar
+        :typing-visible="isTypingIndicatorVisible"
+        :character-count="characterCount"
+        :max-characters="maxCharacters"
+        :near-limit="isNearLimit"
+        :voice-recording="isVoiceRecording"
+      />
     </div>
 
     <!-- Emoji Picker -->
@@ -464,16 +452,17 @@ import { useI18n } from 'vue-i18n'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import ProgressBar from '@/components/ui/ProgressBar.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton, useToast } from '@autobot/ui'
 import VisionAnalysisModal from './VisionAnalysisModal.vue'
 import PresetManagementModal from './PresetManagementModal.vue'
 import TranslationShortcutPanel from './TranslationShortcutPanel.vue'
+import ChatInputStatusBar from './ChatInputStatusBar.vue'
 import SlashCommandDropdown from './SlashCommandDropdown.vue'
 import McpPromptPicker from './McpPromptPicker.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
 import { getFileIconNameByMimeType } from '@/utils/iconMappings'
 import { createLogger } from '@/utils/debugUtils'
-import { getApiBase } from '@/config/ssot-config'
+import { postConversationUpload, describeUploadError, ensureUploadSession } from '@/utils/conversationFileUpload'
 import type { MultiModalResponse } from '@/utils/VisionMultimodalApiClient'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { useSlashCommands } from '@/composables/useSlashCommands'
@@ -508,6 +497,7 @@ interface UploadItem {
 }
 
 const { t } = useI18n()
+const { showToast } = useToast()
 const logger = createLogger('ChatInput')
 // Issue #1146: unlock AudioContext on first user gesture so TTS can play even
 // when voice output was re-enabled from a previous session via localStorage.
@@ -669,7 +659,6 @@ const canSend = computed(() => {
 })
 
 const characterCount = computed(() => messageText.value.length)
-
 const isNearLimit = computed(() => characterCount.value > maxCharacters * 0.9)
 
 const isTypingIndicatorVisible = computed(() => {
@@ -824,7 +813,7 @@ const handleFileSelect = async (event: Event) => {
   // Validate files
   const validFiles = files.filter(file => {
     if (file.size > maxFileSize) {
-      alert(`File "${file.name}" is too large (max ${formatFileSize(maxFileSize)})`)
+      showToast(t('chat.input.fileTooLarge', { name: file.name, max: formatFileSize(maxFileSize) }), 'warning')
       return false
     }
     return true
@@ -872,7 +861,7 @@ const handleFileSelect = async (event: Event) => {
       attachedFiles.value.push(result.value)
     } else {
       const upload = uploads[index].upload
-      upload.error = result.reason instanceof Error ? result.reason.message : 'Upload failed'
+      upload.error = describeUploadError(result.reason, t)
       upload.status = 'Failed'
     }
   })
@@ -915,7 +904,7 @@ const startVoiceRecording = async () => {
     } catch (err) {
       logger.error('Microphone access denied:', err)
     }
-    alert('Voice input requires Chrome, Edge, or Safari 15+. Transcription is not available in this browser.')
+    showToast(t('chat.input.voiceUnsupported'), 'warning')
     return
   }
 
@@ -947,7 +936,7 @@ const startVoiceRecording = async () => {
     isVoiceRecording.value = false
     _recognition = null
     if (event.error === 'not-allowed') {
-      alert('Microphone access was denied. Please allow microphone access in your browser settings.')
+      showToast(t('chat.input.micDenied'), 'error')
     }
   }
 
@@ -1074,79 +1063,38 @@ const generateId = (): string => {
   return crypto.randomUUID()
 }
 
-// Real file upload implementation
+// Real file upload implementation (transport and bearer: utils/conversationFileUpload.ts, #20133)
 const uploadFile = async (upload: UploadItem, file: File): Promise<void> => {
-  const formData = new FormData()
-  formData.append('file', file)
-
   const startTime = Date.now()
   upload.status = 'Uploading...'
 
   try {
-    await new Promise<string>((resolve, reject) => {
-      const xhr = new XMLHttpRequest()
+    const response = await postConversationUpload(await ensureUploadSession(store, controller), file, (loaded, total) => {
+      upload.current = loaded
+      upload.total = total
+      upload.progress = (loaded / total) * 100
 
-      // Track upload progress
-      xhr.upload.addEventListener('progress', (event) => {
-        if (event.lengthComputable) {
-          upload.current = event.loaded
-          upload.total = event.total
-          upload.progress = (event.loaded / event.total) * 100
+      // Calculate ETA
+      const elapsed = Date.now() - startTime
+      if (elapsed > 0) {
+        const rate = loaded / elapsed // bytes per millisecond
+        const remaining = (total - loaded) / rate / 1000 // seconds
+        upload.eta = remaining > 1 ? remaining : undefined
+      }
 
-          // Calculate ETA
-          const elapsed = Date.now() - startTime
-          if (elapsed > 0) {
-            const rate = event.loaded / elapsed // bytes per millisecond
-            const remaining = (event.total - event.loaded) / rate / 1000 // seconds
-            upload.eta = remaining > 1 ? remaining : undefined
-          }
-
-          upload.status = `Uploading... ${Math.round(upload.progress)}%`
-        }
-      })
-
-      // Handle successful completion
-      xhr.addEventListener('load', () => {
-        if (xhr.status === 200) {
-          upload.status = 'Complete'
-          upload.progress = 100
-
-          try {
-            const response = JSON.parse(xhr.responseText)
-            upload.fileId = response.file_info?.file_id
-            upload.uploadId = response.upload_id
-
-            // Remove from progress after delay
-            setTimeout(() => {
-              const index = uploadProgress.value.findIndex(u => u.id === upload.id)
-              if (index !== -1) uploadProgress.value.splice(index, 1)
-            }, 2000)
-
-            resolve(response.file_info?.file_id || '')
-          } catch {
-            reject(new Error('Invalid response from server'))
-          }
-        } else {
-          reject(new Error(`Upload failed with status: ${xhr.status}`))
-        }
-      })
-
-      // Handle errors
-      xhr.addEventListener('error', () => {
-        reject(new Error('Network error during upload'))
-      })
-
-      xhr.addEventListener('abort', () => {
-        reject(new Error('Upload cancelled'))
-      })
-
-      // Send request
-      const sessionId = store.currentSessionId || 'default'
-      xhr.open('POST', `${getApiBase()}/conversation-files/conversation/${sessionId}/upload`)
-      xhr.send(formData)
+      upload.status = `Uploading... ${Math.round(upload.progress)}%`
     })
+    upload.status = 'Complete'
+    upload.progress = 100
+    upload.fileId = response.file_info?.file_id
+    upload.uploadId = response.upload_id
+    // Remove from progress after delay
+    setTimeout(() => {
+      const index = uploadProgress.value.findIndex(u => u.id === upload.id)
+      if (index !== -1) uploadProgress.value.splice(index, 1)
+    }, 2000)
   } catch (error) {
-    upload.error = error instanceof Error ? error.message : 'Upload failed'
+    upload.error = describeUploadError(error, t)
     upload.status = 'Failed'
     upload.progress = 0
     throw error
@@ -1174,7 +1122,7 @@ const retryUpload = async (uploadId: string) => {
       attachedFiles.value.push(upload.file)
     }
   } catch (error) {
-    upload.error = error instanceof Error ? error.message : 'Retry failed'
+    upload.error = describeUploadError(error, t)
     upload.status = 'Failed'
   }
 }
@@ -1360,7 +1308,7 @@ onUnmounted(() => {
   @apply bg-autobot-bg-tertiary text-autobot-primary;
 }
 
-.knowledge-toggle.active i {
+.knowledge-toggle.active .icon {
   @apply text-autobot-primary;
 }
 
@@ -1381,7 +1329,7 @@ onUnmounted(() => {
   @apply bg-purple-100 text-purple-600;
 }
 
-.overseer-toggle.active i {
+.overseer-toggle.active .icon {
   @apply text-purple-600;
 }
 
@@ -1454,39 +1402,6 @@ onUnmounted(() => {
 
 .queue-count {
   @apply absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center text-xs font-bold;
-}
-
-/* Status Bar */
-.input-status-bar {
-  @apply flex items-center justify-between text-xs text-autobot-text-muted;
-}
-
-.status-left {
-  @apply flex items-center gap-3;
-}
-
-.status-right {
-  @apply flex items-center gap-3;
-}
-
-.typing-indicator {
-  @apply flex items-center gap-1 text-autobot-primary;
-}
-
-.character-count {
-  @apply transition-colors;
-}
-
-.character-count.warning {
-  @apply text-orange-600 font-medium;
-}
-
-.voice-status {
-  @apply flex items-center gap-1 text-red-600;
-}
-
-.keyboard-hint {
-  @apply hidden sm:block;
 }
 
 /* Quick Actions */

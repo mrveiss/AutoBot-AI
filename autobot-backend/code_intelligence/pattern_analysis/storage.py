@@ -13,6 +13,7 @@ import hashlib
 from pathlib import Path
 from typing import Any, Dict, List
 
+from autobot_shared.content_digest import content_digest
 from autobot_shared.logging_manager import get_logger
 from knowledge.backends import get_async_default_client, get_default_client
 
@@ -169,7 +170,7 @@ def _build_single_pattern_data(pattern_type: str, code_content: str, metadata: D
         "pattern_type": pattern_type,
         "file_path": metadata.get("file_path", ""),
         "start_line": metadata.get("start_line", 0),
-        "code_hash": hashlib.sha256(code_content.encode()).hexdigest()[:16],
+        "code_hash": content_digest(code_content, width=16),
         "source_id": metadata.get("source_id", "default"),
     }
 
@@ -258,7 +259,7 @@ def _prepare_pattern_data(pattern: Dict[str, Any]) -> Dict[str, Any]:
         "pattern_type": pattern["pattern_type"],
         "file_path": pattern.get("metadata", {}).get("file_path", ""),
         "start_line": pattern.get("metadata", {}).get("start_line", 0),
-        "code_hash": hashlib.sha256(pattern["code_content"].encode()).hexdigest()[:16],
+        "code_hash": content_digest(pattern["code_content"], width=16),
         "source_id": pattern.get("metadata", {}).get("source_id", "default"),
     }
 

@@ -5,7 +5,7 @@
 - name: Create AutoBot user
   user:
     name: autobot
-    home: /opt/autobot
+    home: "{{ autobot.home_dir }}"
     shell: /bin/bash
     system: true
 
@@ -17,11 +17,11 @@
     group: autobot
     mode: '0755'
   loop:
-    - /opt/autobot/app
-    - /opt/autobot/logs
-    - /opt/autobot/data
-    - /opt/autobot/config
-    - /opt/autobot/venv
+    - "{{ autobot.base_dir }}/app"
+    - "{{ autobot.base_dir }}/logs"
+    - "{{ autobot.base_dir }}/data"
+    - "{{ autobot.base_dir }}/config"
+    - "{{ autobot.base_dir }}/venv"
 
 # #11374: Install the target interpreter BEFORE any venv work. The
 # ensure_venv_version step below removes a wrong-version venv, and the
@@ -41,7 +41,7 @@
     name: python_interpreter
     tasks_from: ensure_venv_version
   vars:
-    venv_path: /opt/autobot/venv
+    venv_path: "{{ autobot.base_dir }}/venv"
     venv_python: python3.14
 
 # #16641: `virtualenv_python:` alone only applies when `virtualenv_command:`
@@ -66,8 +66,8 @@
 
 - name: Install Python dependencies
   pip:
-    requirements: /opt/autobot/app/requirements.txt
-    virtualenv: /opt/autobot/venv
+    requirements: "{{ autobot.base_dir }}/app/requirements.txt"
+    virtualenv: "{{ autobot.base_dir }}/venv"
     virtualenv_command: "{{ python_interpreter_binary }} -m venv"
     # #15684: constraints/shared.txt applied here too, the same shape every
     # other pip site in this venv now uses.
@@ -80,8 +80,9 @@
 - name: Copy AutoBot application files
   synchronize:
     src: "{{ playbook_dir }}/../"
-    dest: /opt/autobot/app/
+    dest: "{{ autobot.base_dir }}/app/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=.git"
       - "--exclude=__pycache__"
       - "--exclude=*.pyc"
@@ -90,10 +91,24 @@
   become_user: autobot
   notify: restart backend services
 
+- name: "Backend | Keep the deployed embedding model (#15502)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/read_deployed_embedding_model.yml
+  vars:
+    deployed_embedding_env_files: ["{{ backend_services_env_dest }}"]
+  tags: ['backend', 'config']
+
+- name: "Backend | Read the encryption key (#19864)"
+  ansible.builtin.include_tasks: ../../backend/tasks/read_encryption_key.yml
+  tags: ['backend', 'config']
+
+- name: "Backend | Resolve the models for this model server (#19731)"
+  ansible.builtin.include_tasks: ../../backend/tasks/resolve_models.yml
+  tags: ['backend', 'config']
+
 - name: Generate environment configuration
   template:
     src: backend.env.j2
-    dest: /opt/autobot/config/backend.env
+    dest: "{{ backend_services_env_dest }}"
     owner: autobot
     group: autobot
     mode: '0640'
@@ -105,23 +120,26 @@
 # nowhere (the role has no templates/ dir); the drifted near-copy at
 # ansible/templates/systemd/ was unreferenced and is deleted. Vars map the
 # canonical template onto this role's install layout.
+# #17856: the unit comes from roles/backend unit_only -- the one template path, which also owns
+# the worker count (role default). This role only maps its own install layout onto the vars.
 - name: Create systemd service files
-  template:
-    src: ../../backend/templates/autobot-backend.service.j2
-    dest: /etc/systemd/system/autobot-backend.service
-    mode: '0644'
+  ansible.builtin.include_role:
+    name: backend
+    tasks_from: unit_only
   vars:
     backend_user: autobot
     backend_group: autobot
-    backend_install_dir: /opt/autobot/app
-    backend_code_dir: /opt/autobot/app
-    backend_log_dir: /opt/autobot/logs
+    backend_install_dir: "{{ autobot.base_dir }}/app"
+    backend_code_dir: "{{ autobot.base_dir }}/app"
+    backend_log_dir: "{{ autobot.base_dir }}/logs"
     backend_host: "0.0.0.0"
     backend_port: 8001
-    backend_workers: 4
-  notify:
-    - reload systemd
-    - restart backend services
+
+- name: Restart backend services when the unit changed
+  ansible.builtin.debug:
+    msg: "systemd unit changed; restarting backend services"
+  changed_when: _backend_units_rendered.changed | default(false)
+  notify: restart backend services
 
 - name: Enable and start backend services
   systemd:

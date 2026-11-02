@@ -16,8 +16,13 @@ name: constraint-drift
 
 on:
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - '**/requirements*.txt'
+      - 'requirements*/*.txt'
       - 'constraints/shared.txt'
       - 'scripts/check_constraint_drift.py'
       - 'scripts/check_websockets_cap.py'
@@ -26,6 +31,7 @@ on:
     branches: [main]
     paths:
       - '**/requirements*.txt'
+      - 'requirements*/*.txt'
       - 'constraints/shared.txt'
       - 'scripts/check_constraint_drift.py'
       - 'scripts/check_websockets_cap.py'
@@ -50,6 +56,7 @@ permissions:
 
 jobs:
   constraint-drift:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

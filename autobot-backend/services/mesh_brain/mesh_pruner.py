@@ -26,7 +26,7 @@ class PruningReport:
     density_warning: bool = False
 
 
-class MeshDB(Protocol):
+class PruningStore(Protocol):
     """Protocol for mesh database operations required by MeshPruner."""
 
     async def decay_edges(self, origins: list[str], not_reinforced_since: datetime, decay_factor: float) -> int: ...
@@ -56,7 +56,7 @@ class MeshPruner:
 
     def __init__(
         self,
-        db: MeshDB,
+        db: PruningStore,
         edge_sync=None,
         decay_days: int = 30,
         decay_factor: float = 0.8,

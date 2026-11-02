@@ -5,9 +5,7 @@
 """
 Tests for the single-sourced markdown chunking helpers (Issue #12663).
 
-Covers the behaviour shared by doc_indexer.py's ``_chunk_markdown`` (service)
-and index_documentation.py's ``chunk_markdown`` (standalone CLI) — both call
-into these helpers for H2/H3 section splitting.
+Covers the H2/H3 section splitting behind doc_indexer.py's ``_chunk_markdown``.
 """
 
 from autobot_shared.doc_chunking import (

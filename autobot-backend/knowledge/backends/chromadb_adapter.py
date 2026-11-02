@@ -26,7 +26,13 @@ from __future__ import annotations
 from typing import Any, List, Sequence
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.time_utils import utc_timestamp
+from knowledge.backends._chroma_args import (
+    collection_provenance,
+    delete_args,
+    get_args,
+    query_args,
+    write_args,
+)
 from knowledge.backends.base import (
     BaseClient,
     BaseCollection,
@@ -63,12 +69,7 @@ class ChromaDBCollection(BaseCollection):
         metadatas: Sequence[Metadata] | None = None,
         embeddings: Sequence[Embedding] | None = None,
     ) -> None:
-        self._raw.add(
-            ids=list(ids),
-            documents=list(documents) if documents is not None else None,
-            metadatas=list(metadatas) if metadatas is not None else None,
-            embeddings=list(embeddings) if embeddings is not None else None,
-        )
+        self._raw.add(**write_args(ids, documents, metadatas, embeddings))
 
     def upsert(
         self,
@@ -78,12 +79,7 @@ class ChromaDBCollection(BaseCollection):
         metadatas: Sequence[Metadata] | None = None,
         embeddings: Sequence[Embedding] | None = None,
     ) -> None:
-        self._raw.upsert(
-            ids=list(ids),
-            documents=list(documents) if documents is not None else None,
-            metadatas=list(metadatas) if metadatas is not None else None,
-            embeddings=list(embeddings) if embeddings is not None else None,
-        )
+        self._raw.upsert(**write_args(ids, documents, metadatas, embeddings))
 
     def update(
         self,
@@ -93,12 +89,7 @@ class ChromaDBCollection(BaseCollection):
         metadatas: Sequence[Metadata] | None = None,
         embeddings: Sequence[Embedding] | None = None,
     ) -> None:
-        self._raw.update(
-            ids=list(ids),
-            documents=list(documents) if documents is not None else None,
-            metadatas=list(metadatas) if metadatas is not None else None,
-            embeddings=list(embeddings) if embeddings is not None else None,
-        )
+        self._raw.update(**write_args(ids, documents, metadatas, embeddings))
 
     def get(
         self,
@@ -110,20 +101,7 @@ class ChromaDBCollection(BaseCollection):
         offset: int | None = None,
         include: Sequence[str] | None = None,
     ) -> dict:
-        kwargs: dict = {}
-        if ids is not None:
-            kwargs["ids"] = list(ids)
-        if where is not None:
-            kwargs["where"] = where
-        if where_document is not None:
-            kwargs["where_document"] = where_document
-        if limit is not None:
-            kwargs["limit"] = limit
-        if offset is not None:
-            kwargs["offset"] = offset
-        if include is not None:
-            kwargs["include"] = list(include)
-        return self._raw.get(**kwargs)
+        return self._raw.get(**get_args(ids, where, where_document, limit, offset, include))
 
     def query(
         self,
@@ -135,17 +113,7 @@ class ChromaDBCollection(BaseCollection):
         where_document: WhereDocument | None = None,
         include: Sequence[str] | None = None,
     ) -> dict:
-        kwargs: dict = {"n_results": n_results}
-        if query_embeddings is not None:
-            kwargs["query_embeddings"] = [list(e) for e in query_embeddings]
-        if query_texts is not None:
-            kwargs["query_texts"] = list(query_texts)
-        if where is not None:
-            kwargs["where"] = where
-        if where_document is not None:
-            kwargs["where_document"] = where_document
-        if include is not None:
-            kwargs["include"] = list(include)
+        kwargs = query_args(query_embeddings, query_texts, n_results, where, where_document, include)
         return self._raw.query(**kwargs)
 
     def delete(
@@ -155,22 +123,25 @@ class ChromaDBCollection(BaseCollection):
         where: Where | None = None,
         where_document: WhereDocument | None = None,
     ) -> None:
-        kwargs: dict = {}
-        if ids is not None:
-            kwargs["ids"] = list(ids)
-        if where is not None:
-            kwargs["where"] = where
-        if where_document is not None:
-            kwargs["where_document"] = where_document
-        if not kwargs:
-            raise ValueError("delete requires ids or where")
-        self._raw.delete(**kwargs)
+        self._raw.delete(**delete_args(ids, where, where_document))
 
     def count(self) -> int:
         return int(self._raw.count())
 
     def peek(self, limit: int = 10) -> dict:
         return self._raw.peek(limit=limit)
+
+    def modify_metadata(self, metadata: Metadata) -> None:
+        """Merge into the existing metadata. ChromaDB refuses ``hnsw:*`` keys on modify (they are fixed at
+        creation and stay in force), so they are left out of the request, not dropped from the collection."""
+        merged = {k: v for k, v in {**self.metadata, **metadata}.items() if not k.startswith("hnsw:")}
+        self._raw.modify(metadata=merged)
+        self.metadata = merged
+
+    @property
+    def configuration(self) -> Any:
+        """ChromaDB's collection configuration, where the HNSW settings stay in force after a modify."""
+        return getattr(self._raw, "configuration", None)
 
 
 class ChromaDBClient(BaseClient):
@@ -193,10 +164,7 @@ class ChromaDBClient(BaseClient):
         embedding_function: Any | None = None,
     ) -> BaseCollection:
 
-        provenance: dict = {"created_at": utc_timestamp()}
-        if metadata:
-            provenance.update(metadata)
-        kwargs: dict = {"name": name, "metadata": provenance}
+        kwargs: dict = {"name": name, "metadata": collection_provenance(metadata)}
         if embedding_function is not None:
             kwargs["embedding_function"] = embedding_function
         return ChromaDBCollection(self._raw.get_or_create_collection(**kwargs))
@@ -215,10 +183,7 @@ class ChromaDBClient(BaseClient):
         embedding_function: Any | None = None,
     ) -> BaseCollection:
 
-        provenance: dict = {"created_at": utc_timestamp()}
-        if metadata:
-            provenance.update(metadata)
-        kwargs: dict = {"name": name, "metadata": provenance}
+        kwargs: dict = {"name": name, "metadata": collection_provenance(metadata)}
         if embedding_function is not None:
             kwargs["embedding_function"] = embedding_function
         try:

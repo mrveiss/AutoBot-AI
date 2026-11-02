@@ -139,6 +139,36 @@ async def test_scrape_url_playwright_render():
     assert captured_render["mode"] == RenderMode.PLAYWRIGHT
 
 
+@pytest.mark.asyncio
+async def test_scrape_url_passes_the_document_profile_by_default():
+    """#18826: the request's profile (default document) is passed to WebFetcher explicitly."""
+    from api.knowledge_scrape import ScrapeRequest, scrape_url
+    from web_fetch.profile import IngestProfile
+
+    fetch = AsyncMock(return_value=_make_fetch_result())
+    with patch("api.knowledge_scrape.WebFetcher.fetch", fetch):
+        await scrape_url(ScrapeRequest(url="https://example.com"))
+    assert fetch.await_args.kwargs["profile"] is IngestProfile.DOCUMENT
+
+
+@pytest.mark.asyncio
+async def test_scrape_url_unimplemented_profile_is_501_and_unknown_is_rejected():
+    """#18826: media/page_copy refuse with 501 before fetching; an unknown value never validates."""
+    from fastapi import HTTPException
+    from pydantic import ValidationError
+
+    from api.knowledge_scrape import ScrapeRequest, scrape_url
+
+    fetch = AsyncMock(return_value=_make_fetch_result())
+    with patch("api.knowledge_scrape.WebFetcher.fetch", fetch):
+        with pytest.raises(HTTPException) as exc_info:
+            await scrape_url(ScrapeRequest(url="https://example.com", profile="media"))
+    assert exc_info.value.status_code == 501
+    fetch.assert_not_awaited()
+    with pytest.raises(ValidationError):
+        ScrapeRequest(url="https://example.com", profile="anything")
+
+
 # ---------------------------------------------------------------------------
 # scrape_url — failure path
 # ---------------------------------------------------------------------------

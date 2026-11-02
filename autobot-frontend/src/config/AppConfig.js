@@ -7,13 +7,13 @@
  * Single source of truth for all frontend configuration needs.
  */
 
+import { HttpError, getEnvPositiveInt } from '@autobot/ui';
 import ServiceDiscovery from './ServiceDiscovery.js';
 import { NetworkConstants } from '../constants/network.ts';
 import { createLogger } from '@/utils/debugUtils';
-import { getApiBase } from '@/config/ssot-config';
+import { getApiBase, getApiTimeout, PORT_DEFAULTS } from '@/config/ssot-config';
 
 const logger = createLogger('AppConfig');
-
 export class AppConfigService {
   constructor() {
     this.serviceDiscovery = new ServiceDiscovery();
@@ -37,28 +37,24 @@ export class AppConfigService {
           port: import.meta.env.VITE_BACKEND_PORT || '8001',
           protocol: import.meta.env.VITE_HTTP_PROTOCOL || 'http'
         },
-        redis: {
-          host: import.meta.env.VITE_REDIS_HOST,
-          port: import.meta.env.VITE_REDIS_PORT || '6379',
-          protocol: 'redis'
-        },
+        // No redis entry (#19232): a browser never dials Redis; the backend owns its URL.
         // DORMANT: VNC browser path replaced by screenshot panel (#1130). Preserved for #5136 re-integration.
         // #16299: no password fields -- the backend authenticates to the real VNC server
         // itself and offers the browser security-type "None" (api/vnc_handshake_bridge.py).
         vnc: {
           desktop: {
             host: import.meta.env.VITE_DESKTOP_VNC_HOST,
-            port: import.meta.env.VITE_DESKTOP_VNC_PORT || '6080',
+            port: import.meta.env.VITE_DESKTOP_VNC_PORT || String(PORT_DEFAULTS.vnc),
             protocol: 'http'
           },
           terminal: {
             host: import.meta.env.VITE_TERMINAL_VNC_HOST,
-            port: import.meta.env.VITE_TERMINAL_VNC_PORT || '6080',
+            port: import.meta.env.VITE_TERMINAL_VNC_PORT || String(PORT_DEFAULTS.vnc),
             protocol: 'http'
           },
           playwright: {
             host: import.meta.env.VITE_PLAYWRIGHT_VNC_HOST,
-            port: import.meta.env.VITE_PLAYWRIGHT_VNC_PORT || '6081',
+            port: import.meta.env.VITE_PLAYWRIGHT_VNC_PORT || String(PORT_DEFAULTS.vnc), // #19327: was 6081, unserved
             protocol: 'http'
           }
         },
@@ -76,7 +72,7 @@ export class AppConfigService {
         },
         playwright: {
           host: import.meta.env.VITE_PLAYWRIGHT_HOST,
-          port: import.meta.env.VITE_PLAYWRIGHT_PORT || '3000',
+          port: import.meta.env.VITE_PLAYWRIGHT_PORT || String(PORT_DEFAULTS.browser), // #19324: was 3000 (Grafana)
           protocol: 'http'
         }
       },
@@ -132,24 +128,24 @@ export class AppConfigService {
       // API Configuration - SINGLE SOURCE OF TRUTH for all timeouts (Issue #598)
       // All timeout values in milliseconds
       api: {
-        // Default timeout for standard API calls (30 seconds)
-        timeout: parseInt(import.meta.env.VITE_API_TIMEOUT || '30000'),
-        retryAttempts: parseInt(import.meta.env.VITE_API_RETRY_ATTEMPTS || '3'),
-        retryDelay: parseInt(import.meta.env.VITE_API_RETRY_DELAY || '1000'),
+        // Default timeout for standard API calls: the SSOT value (#17856 row 6)
+        timeout: getApiTimeout(),
+        retryAttempts: getEnvPositiveInt(import.meta.env, 'VITE_API_RETRY_ATTEMPTS', 3),
+        retryDelay: getEnvPositiveInt(import.meta.env, 'VITE_API_RETRY_DELAY', 1000),
         cacheBustVersion: import.meta.env.VITE_APP_VERSION || Date.now().toString(),
         disableCache: import.meta.env.VITE_DISABLE_CACHE === 'true',
         // Backward compatibility alias (Issue #598: prefer using timeouts.knowledge)
-        knowledgeTimeout: parseInt(import.meta.env.VITE_KNOWLEDGE_TIMEOUT || '300000'),
+        knowledgeTimeout: getEnvPositiveInt(import.meta.env, 'VITE_KNOWLEDGE_TIMEOUT', 300000),
 
         // Operation-specific timeouts (Issue #598: centralized timeout management)
         // These are THE source of truth - all ApiClient implementations MUST use these
         timeouts: {
-          // Standard API operations (30s)
-          default: parseInt(import.meta.env.VITE_API_TIMEOUT || '30000'),
+          // Standard API operations: the SSOT timeout (#17856 row 6)
+          default: getApiTimeout(),
           // Knowledge base / vectorization operations (5 minutes)
-          knowledge: parseInt(import.meta.env.VITE_KNOWLEDGE_TIMEOUT || '300000'),
+          knowledge: getEnvPositiveInt(import.meta.env, 'VITE_KNOWLEDGE_TIMEOUT', 300000),
           // File upload operations (5 minutes)
-          upload: parseInt(import.meta.env.VITE_UPLOAD_TIMEOUT || '300000'),
+          upload: getEnvPositiveInt(import.meta.env, 'VITE_UPLOAD_TIMEOUT', 300000),
           // Health check operations (5 seconds)
           health: 5000,
           // Quick operations (5 seconds)
@@ -397,7 +393,7 @@ export class AppConfigService {
         this.log('Remote configuration endpoint not available, using local defaults');
         this.configLoaded = true; // Mark as loaded to prevent retries
       } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        throw new HttpError(response.status, response.statusText);
       }
     } catch (error) {
       this.log('Failed to load remote configuration, using defaults:', error.message);
@@ -454,7 +450,7 @@ export class AppConfigService {
    * Get timeout for specific operation (Issue #598: SINGLE SOURCE OF TRUTH)
    *
    * Available operations:
-   * - 'default': Standard API calls (30s)
+   * - 'default': Standard API calls (the SSOT timeout, TimeoutConfig.api)
    * - 'knowledge': Vectorization/knowledge base operations (5min)
    * - 'upload': File uploads (5min)
    * - 'health': Health checks (5s)
@@ -535,7 +531,7 @@ export class AppConfigService {
    * Get all service URLs for debugging
    */
   async getAllServiceUrls() {
-    const services = ['backend', 'redis', 'vnc_desktop', 'vnc_terminal', 'vnc_playwright', 'npu_worker', 'ollama', 'playwright'];
+    const services = ['backend', 'vnc_desktop', 'vnc_terminal', 'vnc_playwright', 'npu_worker', 'ollama', 'playwright'];
     const urls = {};
 
     for (const service of services) {

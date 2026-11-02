@@ -74,27 +74,6 @@ async def list_trust_records() -> List[Dict[str, Any]]:
 
 
 @router.get(
-    "/trust/{peer_id:path}",
-    summary="Get trust record for a specific peer",
-    tags=["a2a"],
-)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_trust_record",
-    error_code_prefix="A2A",
-)
-async def get_trust_record(peer_id: str) -> Dict[str, Any]:
-    """
-    Return the full trust record for a specific federated peer.
-
-    Issue #7358 phase 2: If the peer has no prior interaction history,
-    returns a default UNTRUSTED record (score 0.0, zero counters).
-    """
-    record = get_trust_manager().get_record(peer_id)
-    return record.to_dict()
-
-
-@router.get(
     "/trust/{peer_id:path}/audit",
     summary="Get trust level audit log for a peer",
     tags=["a2a"],
@@ -114,3 +93,24 @@ async def get_trust_audit(peer_id: str) -> Dict[str, Any]:
     """
     audit = get_trust_manager().get_audit_log(peer_id)
     return {"peer_id": peer_id, "audit": audit}
+
+
+@router.get(
+    "/trust/{peer_id:path}",
+    summary="Get trust record for a specific peer",
+    tags=["a2a"],
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_trust_record",
+    error_code_prefix="A2A",
+)
+async def get_trust_record(peer_id: str) -> Dict[str, Any]:
+    """
+    Return the full trust record for a specific federated peer.
+
+    Issue #7358 phase 2: If the peer has no prior interaction history,
+    returns a default UNTRUSTED record (score 0.0, zero counters).
+    """
+    record = get_trust_manager().get_record(peer_id)
+    return record.to_dict()

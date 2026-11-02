@@ -49,7 +49,7 @@
             <th
               class="col-timestamp"
               @click="sortBy('timestamp')"
-             
+
               tabindex="0"
               :aria-sort="sortField === 'timestamp' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'"
               :aria-label="$t('audit.logTable.sortByTimestamp')"
@@ -62,7 +62,7 @@
             <th
               class="col-operation"
               @click="sortBy('operation')"
-             
+
               tabindex="0"
               :aria-sort="sortField === 'operation' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'"
               :aria-label="$t('audit.logTable.sortByOperation')"
@@ -143,26 +143,17 @@
       </table>
     </div>
 
-    <!-- Pagination -->
-    <div class="table-pagination">
-      <button
-        class="btn btn-secondary"
-        :disabled="currentPage <= 1"
-        @click="$emit('prev-page')"
-      >
-        <Icon name="chevron-left" />
-        {{ $t('audit.logTable.previous') }}
-      </button>
-      <span class="page-info">{{ $t('audit.logTable.pageOf', { page: currentPage }) }}</span>
-      <button
-        class="btn btn-secondary"
-        :disabled="!hasMore"
-        @click="$emit('next-page')"
-      >
-        {{ $t('audit.logTable.next') }}
-        <Icon name="chevron-right" />
-      </button>
-    </div>
+    <!-- Pagination: kit BasePagination; the parent pages by cursor, so Next follows hasMore (#14780) -->
+    <BasePagination
+      class="table-pagination"
+      :page="currentPage"
+      :has-next="hasMore"
+      :labels="{ previous: $t('audit.logTable.previous'), next: $t('audit.logTable.next') }"
+      :label="$t('audit.logTable.paginationAria')"
+      @update:page="(p) => (p < currentPage ? emit('prev-page') : emit('next-page'))"
+    >
+      <template #summary>{{ $t('audit.logTable.pageOf', { page: currentPage }) }}</template>
+    </BasePagination>
 
     <!-- Detail Modal -->
     <BaseModal
@@ -236,7 +227,7 @@
 <script setup lang="ts">
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BasePagination } from '@autobot/ui'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AuditEntry } from '@/types/audit'
@@ -297,13 +288,9 @@ const hasDetails = computed(() => {
   return Object.keys(selectedEntry.value.details).length > 0
 })
 
-function formatTimestamp(timestamp: string): string {
-  return formatDateTime(timestamp)
-}
+const formatTimestamp = formatDateTime
 
-function formatRelativeTime(timestamp: string): string {
-  return formatTimeAgo(timestamp)
-}
+const formatRelativeTime = formatTimeAgo
 
 function formatOperationName(operation: string): string {
   return operation
@@ -402,7 +389,7 @@ function exportLogs(format: 'json' | 'csv') {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-default);
   box-shadow: var(--shadow-lg);
-  z-index: 10;
+  z-index: var(--z-10);
   min-width: 150px;
 }
 
@@ -643,19 +630,11 @@ th span {
   display: block;
 }
 
+/* The frame around the kit BasePagination; its own layout comes from the kit (#14780). */
 .table-pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: var(--spacing-4);
   padding: var(--spacing-3) var(--spacing-4);
   border-top: 1px solid var(--border-default);
   background: var(--bg-secondary);
-}
-
-.page-info {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
 }
 
 /* Modal Styles */

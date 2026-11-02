@@ -55,6 +55,25 @@ class ApprovalType(str, Enum):
     FINDING_PROMOTION = "finding_promotion"
 
 
+class ApprovalSource(str, Enum):
+    """Which surface raised an approval (#13421).
+
+    The seven pre-existing approval surfaces plus the MCP tool-schema gate (#13414).
+    ``terminal_command`` covers both the chat command card and the command permission
+    dialog -- they share one backend. Stored in ``Approval.source`` (nullable: rows
+    created before #13421, and the LLC company case, carry none).
+    """
+
+    TERMINAL_COMMAND = "terminal_command"
+    AGENT_TOOL = "agent_tool"
+    WORKFLOW_PLAN = "workflow_plan"
+    PLUGIN_CAPABILITY = "plugin_capability"
+    AUTORESEARCH = "autoresearch"
+    SKILL_GOVERNANCE = "skill_governance"
+    COMPANY = "company"
+    MCP_TOOL_SCHEMA = "mcp_tool_schema"
+
+
 class Approval(Base):
     """A human-in-the-loop approval gate request (#1402)."""
 
@@ -107,6 +126,16 @@ class Approval(Base):
     # timezone=True (#17072 CI): the unified table now also receives
     # llc_approvals' tz-aware decided_at values (migration 20260918_094).
     decided_at = Column(DateTime(timezone=True), nullable=True)
+    # One-approval-record columns (#13421 S1). All nullable: rows that predate the
+    # migration (and the LLC case) keep NULL and are never rewritten.
+    source = Column(String(50), nullable=True, index=True)  # ApprovalSource value
+    risk_tier = Column(String(20), nullable=True, index=True)  # autobot_shared.risk_tier.RiskTier value
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    payload_hash = Column(String(64), nullable=True)  # sha256 hex of the proposed payload
+    resume_ref = Column(String(255), nullable=True)  # key the source's resume handler continues from
+    # Username (session ``metadata.owner``, never a user id) of the person whose session raised a
+    # sourced approval; the pending list shows it to that user only (#18413, THREAT_MODEL s2).
+    owner_user = Column(String(255), nullable=True, index=True)
 
     # Relationships
     comments = relationship(

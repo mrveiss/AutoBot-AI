@@ -259,14 +259,20 @@ async def create_workflow_from_chat(request: dict, current_user: dict = Depends(
     Create workflow from natural language chat request.
 
     Issue #390: Now presents plan for approval instead of auto-starting.
+    #13809: that is now the default; auto-start must be asked for explicitly.
     """
     try:
         user_request = request.get("user_request", "")
         session_id = request.get("session_id", "")
-        # Issue #390: Backward compatible - auto_start=True by default
-        # Set require_approval=True to enable plan approval flow
-        auto_start = request.get("auto_start", True)  # Keep backward compatible
-        require_approval = request.get("require_approval", False)  # Opt-in
+        # #13809 (owner ruling 2026-10-03, recorded on the issue): the plan's
+        # commands are now LLM-authored from the user's text, so the default is to
+        # present the plan for approval and start nothing. The #390 default
+        # (auto_start=True, require_approval=False) was set when every step was an
+        # echo. The frontend's only caller already sends requireApproval=true, so
+        # this removes a server/client divergence. Each step also requires
+        # confirmation on its own (manager._steps_from_plan), whatever is passed here.
+        auto_start = request.get("auto_start", False)
+        require_approval = request.get("require_approval", True)
         approval_mode = request.get("approval_mode", "full_plan")
 
         if not user_request or not session_id:
@@ -292,7 +298,8 @@ async def create_workflow_from_chat(request: dict, current_user: dict = Depends(
                     "plan": (plan_approval.to_presentation_dict() if plan_approval else None),
                 }
             else:
-                # Legacy behavior: auto-start immediately (backward compatible default)
+                # Started only when the caller opted out of plan approval (#13809);
+                # each step still waits for confirmation before it runs.
                 await get_workflow_manager().start_workflow_execution(workflow_id)
                 return {
                     "success": True,

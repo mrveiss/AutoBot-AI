@@ -8,18 +8,23 @@ services:
     environment:
       - DISPLAY=:99
       - HEADLESS=false
-      - VNC_SERVER_PASSWORD=${VNC_PASSWORD:-autobot123}
+      - PLAYWRIGHT_PORT=${AUTOBOT_BROWSER_SERVICE_PORT:-9001}  # the fleet's port.browser (#19418)
+      - VNC_SERVER_PASSWORD=${VNC_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets}
       - SCREEN_WIDTH=1920
       - SCREEN_HEIGHT=1080
       - SCREEN_DEPTH=24
       - DEBIAN_FRONTEND=noninteractive
       - TZ=UTC
     volumes:
-      - ./playwright-server.js:/app/server.js
+      # One canonical server + its two local modules (#18549)
+      - ../../../../autobot-browser-worker/playwright-server.js:/app/server.js
+      - ../../../../autobot-browser-worker/session-store.js:/app/session-store.js
+      - ../../../../autobot-browser-worker/element-index.js:/app/element-index.js
     ports:
-      - "3000:3000"    # Playwright API
-      - "5901:5901"    # VNC port (avoiding Kali's default 5900)
-      - "6080:6080"    # noVNC web interface
+      # #17500: loopback unless AUTOBOT_PLAYWRIGHT_BIND_ADDRESS opens it on purpose (or SSH-tunnel in).
+      - "${AUTOBOT_PLAYWRIGHT_BIND_ADDRESS:-127.0.0.1}:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}"    # Playwright API
+      - "${AUTOBOT_PLAYWRIGHT_BIND_ADDRESS:-127.0.0.1}:5901:5901"    # VNC port (avoiding Kali's default 5900)
+      - "${AUTOBOT_PLAYWRIGHT_BIND_ADDRESS:-127.0.0.1}:6080:6080"    # noVNC web interface
     command: >
       bash -c "
         set -e
@@ -105,7 +110,7 @@ services:
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3000/health && curl -f http://localhost:6080/ || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}/health && curl -f http://localhost:6080/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

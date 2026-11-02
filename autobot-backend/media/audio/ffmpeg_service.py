@@ -15,11 +15,17 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
+from autobot_shared.audio_params import STT_CHANNELS, STT_SAMPLE_RATE
+from autobot_shared.env_utils import env_float
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_constants import SecurityConstants
 
 logger = get_logger(__name__)
+
+#: Wall-clock cap on one ffmpeg extraction (#17778): a hostile or corrupt upload can
+#: otherwise keep the process, and the request waiting on it, alive forever.
+FFMPEG_TIMEOUT_SECONDS = env_float("AUTOBOT_FFMPEG_TIMEOUT_SECONDS", 300.0)
 
 # Allowed audio extensions. The "must match upload_security.py" comment this
 # replaces was an invariant nothing enforced — it is now the same object (#13512).
@@ -34,7 +40,49 @@ EXTENSION_TO_FORMAT = {
     ".ogg": "ogg",
     ".flac": "flac",
     ".webm": "webm",
+    # #13615: the allowlist collapsed to one set, so these three are now
+    # admitted everywhere and need a pinned demuxer like the rest -- an
+    # unmapped extension leaves `input_format` None and lets ffmpeg probe,
+    # which is the format-confusion the pinning exists to prevent.
+    #
+    # Names verified against `ffmpeg -h demuxer=<name>`, not guessed:
+    #   matroska -> "matroska,webm"              (shared with .webm)
+    #   avi      -> "avi"
+    #   mov      -> "mov,mp4,m4a,3gp,3g2,mj2"    (shared with .mp4/.m4a)
+    ".mkv": "matroska",
+    ".avi": "avi",
+    ".mov": "mov",
 }
+
+
+async def _kill_and_reap(process: asyncio.subprocess.Process) -> None:
+    """Kill *process* (already gone is fine) and wait for it so no zombie or runaway remains."""
+    try:
+        process.kill()
+    except ProcessLookupError:
+        pass
+    await process.wait()
+
+
+async def _communicate_bounded(process: asyncio.subprocess.Process) -> tuple[bytes, bytes]:
+    """``communicate()`` under :data:`FFMPEG_TIMEOUT_SECONDS`; kill and reap on timeout OR cancel.
+
+    A caller's own deadline cancels this coroutine long before the 300 s cap -- e.g. the
+    ``asyncio.wait_for`` in ``VoiceProcessor.process`` around the multimodal audio decode.
+    Without the ``CancelledError`` branch ffmpeg would keep running (#17778). The Whisper
+    inference that follows runs in a worker thread (``asyncio.to_thread``); a thread cannot
+    be cancelled, so a cancelled request leaves it running to completion while it holds
+    ``_whisper_inference_lock``. That is stated, not bounded: stopping it would need
+    cooperative cancellation inside the transformers pipeline call.
+    """
+    try:
+        return await asyncio.wait_for(process.communicate(), timeout=FFMPEG_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        await _kill_and_reap(process)
+        raise RuntimeError(f"FFmpeg extraction timed out after {FFMPEG_TIMEOUT_SECONDS:.0f}s") from None
+    except asyncio.CancelledError:
+        await _kill_and_reap(process)
+        raise
 
 
 class FFmpegService:
@@ -52,8 +100,9 @@ class FFmpegService:
         self,
         input_path: str,
         output_path: Optional[str] = None,
-        sample_rate: int = 16000,
-        channels: int = 1,
+        sample_rate: int = STT_SAMPLE_RATE,
+        channels: int = STT_CHANNELS,
+        max_duration: Optional[float] = None,
     ) -> str:
         """Extract and normalize audio to WAV format.
 
@@ -66,8 +115,10 @@ class FFmpegService:
         Args:
             input_path: Path to input audio/video file
             output_path: Optional output path (creates temp file if not provided)
-            sample_rate: Target sample rate in Hz (default: 16000)
+            sample_rate: Target sample rate in Hz (default: STT_SAMPLE_RATE)
             channels: Number of audio channels (default: 1 for mono)
+            max_duration: Optional ``-t`` cap in seconds on the decoded output (bounds a
+                decompression bomb); ``None`` keeps the whole stream
 
         Returns:
             Path to normalized WAV file
@@ -141,6 +192,7 @@ class FFmpegService:
                 str(sample_rate),  # Sample rate
                 "-ac",
                 str(channels),  # Mono/stereo
+                *(["-t", f"{max_duration:g}"] if max_duration else []),
                 "-y",  # Overwrite output
                 output_path,
             ]
@@ -155,7 +207,7 @@ class FFmpegService:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await process.communicate()
+            stdout, stderr = await _communicate_bounded(process)
 
             if process.returncode != 0:
                 error_msg = stderr.decode("utf-8", errors="replace")

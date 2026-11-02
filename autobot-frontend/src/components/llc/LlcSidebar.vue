@@ -78,6 +78,7 @@ const links = computed<SidebarLink[]>(() => {
     // All views are company-scoped (/llc/companies/:companyId/…) so the
     // LlcCompanyLayout — and therefore this sidebar — stays mounted (#10750 B3).
     { labelKey: 'nav.llcDashboard', to: { path: `/llc/companies/${id}/dashboard` } },
+    { labelKey: 'nav.llcLedger', to: { path: `/llc/companies/${id}/ledger` } },
     { labelKey: 'nav.llcBacklog', to: { path: `/llc/companies/${id}/backlog` } },
     { labelKey: 'nav.llcBoards', to: { path: `/llc/companies/${id}/boards` } },
     { labelKey: 'nav.llcReviewInbox', to: { path: `/llc/companies/${id}/reviews` } },
@@ -210,7 +211,7 @@ async function onCompanyChange(event: Event): Promise<void> {
 .llc-sidebar-select {
   width: 100%;
   padding: 0.375rem 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   border-radius: var(--radius-md, 8px);
   border: 1px solid var(--border-default);
   background: var(--bg-input);
@@ -218,7 +219,7 @@ async function onCompanyChange(event: Event): Promise<void> {
 }
 
 .llc-sidebar-switch {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--color-accent-text, var(--color-accent));
   text-decoration: none;
 }
@@ -239,7 +240,7 @@ async function onCompanyChange(event: Event): Promise<void> {
   justify-content: space-between;
   gap: 0.5rem;
   padding: 0.4375rem 0.625rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   border-radius: var(--radius-md, 8px);
   border-left: 2px solid transparent;
   color: var(--text-secondary);

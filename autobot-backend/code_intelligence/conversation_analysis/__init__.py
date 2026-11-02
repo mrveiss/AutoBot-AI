@@ -9,8 +9,8 @@ Issue #381: Extracted from conversation_flow_analyzer.py god class refactoring.
 Provides conversation flow analysis capabilities for AutoBot's chat system.
 
 Package Structure:
-- types.py: Enums and data classes (IntentCategory, FlowState, ConversationFlow, etc.)
-- classifiers.py: IntentClassifier, ResponseClassifier
+- types.py: Enums and data classes (IntentCategory, FlowState, SessionConversationFlow, etc.)
+- classifiers.py: ConversationIntentClassifier, ResponseClassifier
 - analyzer.py: ConversationFlowAnalyzer main class and convenience functions
 """
 
@@ -27,7 +27,7 @@ from .analyzer import (
 )
 
 # Re-export classifiers
-from .classifiers import IntentClassifier, ResponseClassifier
+from .classifiers import ConversationIntentClassifier, ResponseClassifier
 
 # Re-export all public types
 from .types import (
@@ -35,14 +35,14 @@ from .types import (
     AnalysisResult,
     Bottleneck,
     BottleneckType,
-    ConversationFlow,
     ConversationMessage,
+    ConversationOptimizationType,
     FlowPattern,
     FlowState,
     IntentCategory,
     Optimization,
-    OptimizationType,
     ResponseType,
+    SessionConversationFlow,
 )
 
 __all__ = [
@@ -51,16 +51,16 @@ __all__ = [
     "FlowState",
     "ResponseType",
     "BottleneckType",
-    "OptimizationType",
+    "ConversationOptimizationType",
     "ConversationMessage",
-    "ConversationFlow",
+    "SessionConversationFlow",
     "FlowPattern",
     "Bottleneck",
     "Optimization",
     "AnalysisResult",
     "SATISFACTION_SIGNALS",
     # Classifiers
-    "IntentClassifier",
+    "ConversationIntentClassifier",
     "ResponseClassifier",
     # Analyzer
     "ConversationFlowAnalyzer",

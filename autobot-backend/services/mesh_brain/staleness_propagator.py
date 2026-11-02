@@ -5,19 +5,11 @@
 """BFS staleness propagation for Neural Mesh knowledge graph (#1994, #2111)."""
 
 from collections import deque
-from typing import Protocol
 
 from autobot_shared.logging_manager import get_logger
+from services.mesh_brain.neighbor_store import NeighborStore, decode_neighbors
 
 logger = get_logger(__name__)
-
-
-class MeshGraph(Protocol):
-    """Protocol for graph traversal operations needed by staleness propagation."""
-
-    async def get_neighbors(self, node_id: str) -> list[tuple[str, float]]:
-        """Return list of (neighbor_id, edge_weight) for the given node."""
-        ...
 
 
 class StalenessResult:
@@ -42,7 +34,7 @@ class StalenessResult:
 
 
 async def propagate_staleness(
-    graph: MeshGraph,
+    graph: NeighborStore,
     changed_doc_id: str,
     max_depth: int = 3,
     decay: float = 0.7,
@@ -115,7 +107,7 @@ async def get_staleness_score(redis, doc_id: str) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Redis-backed MeshGraph adapter
+# Redis-backed NeighborStore adapter
 # ---------------------------------------------------------------------------
 
 _REEMBED_QUEUE_KEY = "mesh:reembed_queue"
@@ -134,15 +126,11 @@ class RedisGraphAdapter:
     def __init__(self, redis) -> None:
         self._redis = redis
 
-    async def get_neighbors(self, node_id: str) -> list[tuple[str, float]]:
-        """Return [(neighbor_id, edge_weight)] from the Redis sorted set.
-
-        Uses ``zrangebyscore`` with the full weight range and returns results
-        in the same format expected by ``propagate_staleness()``.
-        """
+    async def get_neighbors(self, node_id: str, min_weight: float = 0.0) -> list[tuple[str, float]]:
+        """Return [(neighbor_id, edge_weight)] from the Redis sorted set (``NeighborStore`` contract)."""
         key = f"mesh:edges:{node_id}"
-        raw: list[tuple[bytes, float]] = await self._redis.zrangebyscore(key, min=0.0, max="+inf", withscores=True)
-        return [(member.decode() if isinstance(member, bytes) else member, score) for member, score in raw]
+        raw = await self._redis.zrangebyscore(key, min=min_weight, max="+inf", withscores=True)
+        return decode_neighbors(raw)
 
 
 async def enqueue_for_reembedding(redis, node_ids: list[str]) -> int:

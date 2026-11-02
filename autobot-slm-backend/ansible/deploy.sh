@@ -15,7 +15,7 @@ _PROJECT_ROOT="$SCRIPT_DIR"
 while [ "$_PROJECT_ROOT" != "/" ] && [ ! -f "$_PROJECT_ROOT/.env" ]; do
     _PROJECT_ROOT="$(dirname "$_PROJECT_ROOT")"
 done
-source "$_PROJECT_ROOT/autobot-infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
+source "$_PROJECT_ROOT/autobot-infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true; : "${AUTOBOT_AI_STACK_PORT:?ssot-config.sh not loaded — AUTOBOT_AI_STACK_PORT unset}"
 ANSIBLE_DIR="$SCRIPT_DIR"
 INVENTORY_FILE="$ANSIBLE_DIR/inventory/production.yml"
 PLAYBOOK_DIR="$ANSIBLE_DIR/playbooks"
@@ -204,7 +204,7 @@ validate_deployment() {
     fi
 
     # AI/ML services check
-    if curl -s -f "http://${AUTOBOT_AI_STACK_HOST:-localhost}:8080/health" > /dev/null; then
+    if curl -s -f "http://${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT}/health" > /dev/null; then
         success "AI Stack service is healthy"
     else
         warn "AI Stack service health check failed"
@@ -217,7 +217,7 @@ validate_deployment() {
     fi
 
     # Browser service check
-    if curl -s -f "http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:3000/health" > /dev/null; then
+    if curl -s -f "http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT}/health" > /dev/null; then
         success "Browser service is healthy"
     else
         warn "Browser service health check failed"
@@ -234,9 +234,9 @@ show_summary() {
     log "INFO" "  Backend API: http://${AUTOBOT_BACKEND_HOST:-localhost}:8001"
     log "INFO" "  Redis:       redis://${AUTOBOT_REDIS_HOST:-localhost}:6379"
     log "INFO" "  RedisInsight: http://${AUTOBOT_REDIS_HOST:-localhost}:8002"
-    log "INFO" "  AI Stack:    http://${AUTOBOT_AI_STACK_HOST:-localhost}:8080"
+    log "INFO" "  AI Stack:    http://${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT}"
     log "INFO" "  NPU Worker:  http://${AUTOBOT_NPU_WORKER_HOST:-localhost}:8081"
-    log "INFO" "  Browser:     http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:3000"
+    log "INFO" "  Browser:     http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT}"
     log "INFO" "  VNC Server:  vnc://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:5901"
     log "INFO" ""
     log "INFO" "Management:"
@@ -273,16 +273,16 @@ deploy_services() {
     run_playbook "deploy-database.yml" "Database deployment"
     sleep 10  # Wait for database to be ready
 
-    run_playbook "deploy-backend.yml" "Backend deployment"
+    run_playbook "deploy_role.yml" "Backend deployment" "-e role_name=backend -e target_host=backend"  # #19239: one role dispatcher, limited to its group
     sleep 10  # Wait for backend to be ready
 
     run_playbook "deploy-aiml.yml" "AI/ML deployment"
     sleep 10  # Wait for AI services to be ready
 
-    run_playbook "deploy-frontend.yml" "Frontend deployment"
+    run_playbook "deploy_role.yml" "Frontend deployment" "-e role_name=frontend -e target_host=frontend"
     sleep 5   # Wait for frontend to be ready
 
-    run_playbook "deploy-browser.yml" "Browser deployment"
+    run_playbook "deploy_role.yml" "Browser deployment" "-e role_name=browser -e target_host=browser"
 }
 
 migrate_data() {
@@ -343,15 +343,9 @@ restart_services() {
 
 # Rollback functionality
 rollback_deployment() {
-    log "INFO" "🔙 Rolling back deployment..."
-
-    # Stop current services
-    stop_services
-
-    # Run rollback playbook
-    run_playbook "rollback.yml" "Deployment rollback"
-
-    success "Rollback completed"
+    # #19239: no rollback.yml exists; this stopped every service, then failed, leaving the fleet down.
+    # The SLM's rollback runs no playbook yet (#17657); the working path is a known-good forward deploy.
+    error_exit "No rollback playbook exists: deploy a known-good commit through the builtin updater (SLM Code Sync); a real rollback is #17657"
 }
 
 # Dependency patching - Issue #682
@@ -374,7 +368,7 @@ patch_dependencies() {
     if [[ "$dry_run" != "true" ]]; then
         log "INFO" "Running pip-audit to verify CVE remediation..."
         # Verify on backend (primary Python service)
-        ansible backend -i "$INVENTORY_FILE" -m shell -a "source /opt/autobot/venv/bin/activate && pip-audit 2>/dev/null | head -20" --become || true
+        ansible backend -i "$INVENTORY_FILE" -m shell -a "source {{ autobot.base_dir }}/venv/bin/activate && pip-audit 2>/dev/null | head -20" --become || true
     fi
 
     success "Dependency patching completed"

@@ -77,7 +77,7 @@ def _session():
     session = MagicMock()
     session.session_id = "s-1"
     session.conversation_history = []
-    session.metadata = {}
+    session.metadata = {"user_id": "user-a"}  # #18825: L2 reads the graph only within the principal's scope
     return session
 
 
@@ -93,6 +93,7 @@ class TestL2RendersInPrompt:
         assumption about the schema.
         """
         from autobot_memory_graph.entities import EntityOperationsMixin
+        from autobot_memory_graph.owner_scope import OwnerScope
 
         doc = EntityOperationsMixin._build_entity_document(
             None,
@@ -101,6 +102,7 @@ class TestL2RendersInPrompt:
             name="Redis",
             observations=["in-memory store used for sessions"],
             entity_metadata={},
+            owner=OwnerScope.for_user("user-a"),
         )
         graph = MagicMock()
         graph.search_entities = AsyncMock(return_value=[doc])

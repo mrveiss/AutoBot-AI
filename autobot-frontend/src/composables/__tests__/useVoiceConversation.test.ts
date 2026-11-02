@@ -98,6 +98,7 @@ import {
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { usePreferences } from '@/composables/usePreferences'
 import { createLogger } from '@/utils/debugUtils'
+import { _sanitizeForSpeech } from '../useVoiceConversation'
 
 // Same singleton instances the module-scope watch() calls in
 // useVoiceConversation.ts observe.
@@ -191,5 +192,59 @@ describe('useVoiceConversation — endpointing single-knob wiring (#12505)', () 
     expect(_silenceMsToOffsetFrames(DEFAULT_SILENCE_THRESHOLD_MS, 16000)).toBe(100)
     // Never collapses below one frame even for tiny values.
     expect(_silenceMsToOffsetFrames(1, 48000)).toBeGreaterThanOrEqual(1)
+  })
+})
+
+describe('_sanitizeForSpeech removes markup by parsing, not matching (#18065)', () => {
+  // Drives the PRODUCTION function. The first version of these tests re-implemented
+  // the parser locally, so they would have passed even if `_sanitizeForSpeech`
+  // reverted to regex removal or stopped removing scripts — the defect they exist
+  // to prevent. `shapeForSpeech` runs after the sanitiser, so assertions below
+  // check for ABSENCE of markup and presence of words rather than exact equality.
+  const spoken = (t: string): string => _sanitizeForSpeech(t)
+
+  it('keeps prose containing comparison operators', () => {
+    // The regex form turned this into 'math: a  d' — it ate everything between
+    // `<` and the next `>`. Any sentence with a comparison was damaged before TTS.
+    const out = spoken('math: a < b and c > d')
+    expect(out).toContain('b')
+    expect(out).toContain('d')
+  })
+
+  it.each([
+    ['<textarea><script>secret</script></textarea>', 'secret'],
+    ['<xmp><script>y</script></xmp>', 'y'],
+    ['<iframe><script>z</script></iframe>', 'z'],
+  ])('never speaks the contents of a raw-text container: %s', (input, leaked) => {
+    // These parse their contents as TEXT, so there is no script ELEMENT to remove
+    // and `textContent` handed the literal `<script>…</script>` to the voice.
+    const out = spoken(input)
+    expect(out).not.toMatch(/<script/i)
+    expect(out).not.toContain(leaked)
+  })
+
+  it('drops a script body even when the end tag carries whitespace or attributes', () => {
+    // `</script\t\n bar>` is a VALID end tag that `<\/script\s*>` missed, so the
+    // body survived and was spoken.
+    expect(spoken('tricky <script>xyzzy</script\t\n bar> tail')).not.toContain('xyzzy')
+  })
+
+  it.each([
+    ['<style>body{color:red}</style>styled', 'color:red'],
+    ['<!-- a comment > still --> after', 'still'],
+    ['<div title="a>b">attr with gt</div>', 'b">'],
+  ])('never speaks leftovers from %s', (input, leaked) => {
+    expect(spoken(input)).not.toContain(leaked)
+  })
+
+  it('still removes a well-formed script and its body', () => {
+    const out = spoken('Hello <script>alert(1)</script> world')
+    expect(out).not.toContain('alert')
+    expect(out).toContain('Hello')
+  })
+
+  it('CONTROL: leaves text with no markup alone', () => {
+    // Without this, a sanitiser that returned '' would satisfy every assertion above.
+    expect(spoken('plain spoken words')).toContain('plain spoken words')
   })
 })

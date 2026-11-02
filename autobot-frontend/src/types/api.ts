@@ -218,51 +218,6 @@ export interface LLMResponse {
 
 // System Health Types
 
-/**
- * All status values that the backend health endpoint may return.
- * Backend sends: 'healthy', 'unhealthy', 'degraded'.
- * Frontend display layer uses: 'healthy', 'warning', 'error'.
- * Legacy values kept for backward compatibility: 'online', 'offline'.
- */
-export type ServiceHealthStatusValue =
-  | 'healthy'
-  | 'unhealthy'
-  | 'degraded'
-  | 'warning'
-  | 'error'
-  | 'online'
-  | 'offline';
-
-/**
- * One service's health, as the main GUI's status surfaces render it (#15401).
- * Named `ServiceStatus` until #15401 -- the SLM's `ServiceStatus` is a run-state
- * union, a different concept, and keeps the name. `types/system.ts` carried a
- * drifted copy of this row; it now re-exports this one.
- */
-export interface ServiceHealthEntry {
-  name: string;
-  version?: string;
-  status: ServiceHealthStatusValue;
-  statusText?: string;
-  responseTime?: number;
-  lastCheck?: number | string;
-  consecutiveFailures?: number;
-  error?: string;
-  timestamp?: number | string;
-  details?: Record<string, unknown>;
-}
-
-export interface SystemAlert {
-  id: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  title: string;
-  message: string;
-  visible: boolean;
-  statusDetails?: ServiceHealthEntry;
-  timestamp: number;
-  type?: string;
-}
-
 // Workflow Types
 export interface WorkflowApproval {
   workflowId: string;

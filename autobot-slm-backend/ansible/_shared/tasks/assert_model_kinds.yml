@@ -1,0 +1,42 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# #19736: every model pull checked the NAME only, never the KIND, so a chat model sat in the
+# embedding role and every embed call failed (#18834). After a pull, ask the model server what
+# each model can do ("ollama show" -> Capabilities) and fail the install when a model cannot do
+# the job its role needs. A chat model that is not installed is reported, not failed: presence is
+# #19731's check. The embedding model must be there. A model server that cannot be reached at all fails here,
+# since otherwise every model would read ABSENT and the check would pass without asking anything.
+#
+# Caller sets:
+#   model_kind_embedding   -- the embedding role's model id (must have the "embedding" capability)
+#   model_kind_completion  -- list of chat/tool model ids (each must have "completion")
+#   model_kind_cli         -- optional command prefix that runs the ollama CLI
+#                             (default "ollama"; e.g. "docker exec autobot-ollama ollama")
+---
+
+- name: "Models | Ask the model server what each model can do (#19736)"
+  ansible.builtin.script: ../files/check_model_kinds.sh
+  environment:
+    MODEL_CLI: "{{ model_kind_cli | default('ollama') }}"
+    EMBEDDING_MODEL: "{{ model_kind_embedding | default('') }}"
+    COMPLETION_MODELS: "{{ (model_kind_completion | default([])) | join('\n') }}"
+  register: _model_kind_probe
+  changed_when: false
+  failed_when: _model_kind_probe.rc not in [0, 2]
+  become: true
+
+- name: "Models | Report models the server could not describe (#19736)"
+  ansible.builtin.debug:
+    msg: "{{ _model_kind_probe.stdout_lines | select('match', '^ABSENT ') | list }}"
+  when: _model_kind_probe.stdout_lines | select('match', '^ABSENT ') | list | length > 0
+
+- name: "Models | Fail when a model cannot do its role's job (#19736, #19886)"
+  ansible.builtin.fail:
+    msg: >-
+      A model cannot be shown to do its role's job: {{ _model_kind_probe.stdout_lines | join('; ') }}.
+      An embedding role needs an installed model with the "embedding" capability, a chat role one with
+      "completion" (#19736, #18834).
+  when: _model_kind_probe.rc == 2

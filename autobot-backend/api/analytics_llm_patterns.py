@@ -25,10 +25,11 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from redis.exceptions import RedisError
 
 from api.analytics_cost_pricing import estimate_pattern_cost
+from api.analytics_llm_prompt_patterns import PROMPT_PATTERNS
 from api.schemas_agent import (
     LLMPatternsAnalyzeResponse,
     LLMPatternsCacheOpportunitiesResponse,
@@ -45,6 +46,7 @@ from api.schemas_analytics import (
     PromptCategory,
     UsageRecordRequest,
 )
+from auth_middleware import get_current_user
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
@@ -58,7 +60,7 @@ from constants.threshold_constants import CategoryDefaults
 from constants.ttl_constants import TTL_30_DAYS
 
 # Prefix provided by analytics_routers.py registry (#1032)
-router = APIRouter(tags=["llm-patterns", "analytics"])
+router = APIRouter(tags=["llm-patterns", "analytics"], dependencies=[Depends(get_current_user)])
 logger = get_logger(__name__)
 
 
@@ -75,57 +77,6 @@ SIMPLE_PROMPT_CATEGORIES = {
     PromptCategory.CHAT,
     PromptCategory.TRANSLATION,
     PromptCategory.SUMMARIZATION,
-}
-
-
-# Pattern detection rules for prompt categorization
-PROMPT_PATTERNS = {
-    PromptCategory.CODE_GENERATION: [
-        r"generate\s+(?:code|function|class|method)",
-        r"write\s+(?:a\s+)?(?:python|javascript|typescript)",
-        r"create\s+(?:a\s+)?(?:function|class|script)",
-        r"implement\s+",
-        r"code\s+(?:for|that|to)\s+",
-    ],
-    PromptCategory.CODE_REVIEW: [
-        r"review\s+(?:this\s+)?code",
-        r"check\s+(?:for\s+)?(?:bugs|errors|issues)",
-        r"improve\s+(?:this\s+)?code",
-        r"refactor\s+",
-        r"optimize\s+(?:this\s+)?code",
-    ],
-    PromptCategory.DOCUMENTATION: [
-        r"document\s+",
-        r"write\s+(?:a\s+)?docstring",
-        r"add\s+(?:comments|documentation)",
-        r"explain\s+(?:this\s+)?code",
-        r"readme\s+",
-    ],
-    PromptCategory.ANALYSIS: [
-        r"analyze\s+",
-        r"find\s+(?:bugs|issues|problems)",
-        r"debug\s+",
-        r"investigate\s+",
-        r"diagnose\s+",
-    ],
-    PromptCategory.TASK_PLANNING: [
-        r"plan\s+(?:the\s+)?(?:task|project|implementation)",
-        r"break\s+down\s+",
-        r"steps\s+to\s+",
-        r"how\s+(?:should|would)\s+(?:I|we)",
-        r"strategy\s+for\s+",
-    ],
-    PromptCategory.TRANSLATION: [
-        r"translate\s+",
-        r"convert\s+(?:to|from)\s+",
-        r"rewrite\s+in\s+",
-    ],
-    PromptCategory.SUMMARIZATION: [
-        r"summarize\s+",
-        r"summary\s+of\s+",
-        r"tldr\s+",
-        r"brief\s+overview",
-    ],
 }
 
 
@@ -152,20 +103,8 @@ class PromptUsageRecord:
 
 
 @dataclass
-class CacheOpportunity:
-    """Identified caching opportunity"""
-
-    prompt_hash: str
-    prompt_preview: str
-    occurrence_count: int
-    potential_savings: float
-    avg_tokens: int
-    recommendation: str
-
-
-@dataclass
-class OptimizationRecommendation:
-    """Optimization recommendation"""
+class LLMPatternRecommendation:
+    """A saving found in live prompt traffic, keyed to a count of prompts."""
 
     type: OptimizationType
     title: str
@@ -200,7 +139,7 @@ class ModelUsageStats:
 # =============================================================================
 
 
-class LLMPatternAnalyzer(AsyncRedisClientMixin):
+class LLMUsagePatternAnalyzer(AsyncRedisClientMixin):
     """Engine for analyzing LLM usage patterns and identifying optimizations"""
 
     _redis_database = RedisDatabase.MAIN
@@ -828,18 +767,18 @@ import threading
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
-_analyzer: LLMPatternAnalyzer | None = None
+_analyzer: LLMUsagePatternAnalyzer | None = None
 _analyzer_lock = threading.Lock()
 
 
-def get_pattern_analyzer() -> LLMPatternAnalyzer:
+def get_pattern_analyzer() -> LLMUsagePatternAnalyzer:
     """Get or create pattern analyzer singleton (thread-safe)"""
     global _analyzer
     if _analyzer is None:
         with _analyzer_lock:
             # Double-check after acquiring lock
             if _analyzer is None:
-                _analyzer = LLMPatternAnalyzer()
+                _analyzer = LLMUsagePatternAnalyzer()
     return _analyzer
 
 

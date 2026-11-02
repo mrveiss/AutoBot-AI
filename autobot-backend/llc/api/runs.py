@@ -19,12 +19,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_utils import delete_if_value
 from user_management.database import get_async_session
 from user_management.services import TenantContext
 
 from ..adapters import get_adapter_for_agent
 from ..models.heartbeat_run import LLCHeartbeatRun
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/agents", tags=["llc-runs"])
 
@@ -165,14 +169,15 @@ async def cancel_run(
     except Exception:
         pass
 
-    # Release checkout lock
+    # Release the checkout fence -- only while it still names this run's agent, so a
+    # newer checkout of the item (another agent, or a human claim) keeps its fence.
     if run.work_item_id:
         redis = await get_async_redis_client()
         if redis is not None:
             try:
-                await redis.delete(f"llc:checkout:{run.work_item_id}")
-            except Exception:
-                pass
+                await delete_if_value(redis, f"llc:checkout:{run.work_item_id}", str(run.agent_id))
+            except Exception as exc:  # the fence expires on its TTL; the cancel stands
+                logger.warning("Run cancel could not drop checkout fence for %s: %s", run.work_item_id, exc)
 
     await session.commit()
     return _run_to_dict(run)

@@ -1,5 +1,6 @@
 {
   "common": {
+    "appName": "AutoBot",
     "submit": "שלח",
     "cancel": "ביטול",
     "save": "שמור",
@@ -103,7 +104,14 @@
     "exportCsv": "Export as CSV",
     "download": "Download",
     "filterByCategory": "Filter by category",
-    "copied": "Copied"
+    "copied": "Copied",
+    "riskTier": {
+      "low": "נמוך",
+      "medium": "בינוני",
+      "high": "גבוה",
+      "critical": "Critical"
+    },
+    "logsLoadFailed": "טעינת היומנים נכשלה: {error}"
   },
   "nav": {
     "chat": "צ'אט",
@@ -122,15 +130,14 @@
     "customDashboard": "Custom Dashboard",
     "agentRegistry": "Agents",
     "agentActivity": "פעילות סוכן",
-    "mainNavigation": "Main navigation",
+    "mainNavigation": "ניווט ראשי",
     "plugins": "Plugins",
-    "switchLanguage": "Switch language",
     "automation": "Automation",
     "secrets": "Secrets",
-    "skipToContent": "Skip to content",
+    "skipToContent": "דלג לתוכן הראשי",
     "systemStatus": "System Status",
     "services": "Services",
-    "skipToNavigation": "Skip to navigation",
+    "skipToNavigation": "דלג לניווט",
     "openMainMenu": "Open main menu",
     "operations": "פעולות",
     "remoteDesktop": "Remote Desktop",
@@ -201,7 +208,31 @@
     "adminPricing": "תמחור דגמים",
     "adminMcpServers": "שרתוני MCP",
     "adminPermissionScopes": "היקפי הרשאות",
-    "llcRoles": "תפקידים"
+    "llcRoles": "תפקידים",
+    "keywords": {
+      "knowledge": "מסמכים קבצים ספרייה תמלול הערות",
+      "companyOs": "חברה עסק ארגון",
+      "automation": "תהליך עבודה צינור תזמון משימות",
+      "analytics": "מבקרים מדדים סטטיסטיקה תרשימים דוחות",
+      "preferences": "הגדרות אפשרויות שפה ערכת נושא",
+      "budgetPolicies": "עלות הוצאות מגבלות כסף",
+      "systemHealth": "מצב זמינות אבחון ניטור",
+      "vault": "אישורים מפתחות סיסמאות אסימונים כספת"
+    },
+    "homeAria": "דף הבית של AutoBot",
+    "vaultTip": "סודות — מפתחות ופרטי גישה שמורים",
+    "preferencesTip": "העדפות",
+    "platformAdmin": "ניהול הפלטפורמה",
+    "platformAdminAria": "ניהול הפלטפורמה, פותח את מסוף SLM בלשונית חדשה",
+    "platformAdminTip": "ניהול הפלטפורמה — פותח את מסוף SLM ↗",
+    "profileMenu": "תפריט פרופיל",
+    "uiMode": {
+      "label": "מינימלי",
+      "tip": "ממשק מינימלי — הסתרת יכולות מתקדמות",
+      "announceMinimal": "הממשק המינימלי הופעל. יכולות מתקדמות מוסתרות.",
+      "announceFull": "הממשק המלא הופעל. כל היכולות מוצגות."
+    },
+    "llcLedger": "יומן הסוכנים"
   },
   "llcCompanyStatus": {
     "showArchived": "הצג בארכיון",
@@ -658,7 +689,10 @@
         "envVarRecommendations": "Environment Variable Recommendations",
         "sampleHardcodedValues": "Sample Hardcoded Values",
         "noHardcodedValues": "No hardcoded environment values found. Your configuration looks clean!",
-        "noData": "No environment analysis data available."
+        "noData": "No environment analysis data available.",
+        "modelHint": "מודל: {model}",
+        "modelLoading": "טוען…",
+        "modelServerDefault": "ברירת המחדל של השרת"
       },
       "ownership": {
         "title": "Code Ownership Analysis",
@@ -870,21 +904,16 @@
       "duplicateCode": "Duplicate Code",
       "locations": "{count} locations",
       "linesSaveable": "{count} lines saveable",
-      "moreLocations": "+{count} more locations",
-      "showingOfDuplicates": "Showing {shown} of {total} duplicate patterns",
       "regexOpportunities": "Regex Opportunities",
       "current": "Current",
       "suggested": "Suggested",
-      "showingOfOpportunities": "Showing {shown} of {total} opportunities",
       "complexityHotspots": "Complexity Hotspots",
       "location": "Location",
       "cc": "CC",
       "cognitive": "Cognitive",
       "mi": "MI",
       "nesting": "Nesting",
-      "showingOfHotspots": "Showing {shown} of {total} hotspots",
       "refactoringSuggestions": "Refactoring Suggestions",
-      "showingOfSuggestions": "Showing {shown} of {total} suggestions",
       "patternsInChromaDB": "{count} patterns in ChromaDB",
       "clearStoredPatterns": "Clear stored patterns",
       "lastScan": "Last scan",
@@ -1558,14 +1587,12 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "showingOf": "Showing {shown} of {total} {type}",
       "emptyMessage": "No code smells detected"
     },
     "declarations": {
       "title": "Declarations",
       "total": "Total",
       "exported": "Exported",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No declarations found",
       "types": {
         "function": "Function",
@@ -1588,13 +1615,14 @@
       "totalLines": "Total Lines",
       "similar": "similar",
       "lines": "lines",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No duplicate code detected",
       "similarityGroups": {
         "high": "High Similarity",
         "medium": "Medium Similarity",
         "low": "Low Similarity"
-      }
+      },
+      "scanFailed": "סריקת הכפילויות לא רצה, ולכן זו אינה תוצאה. בדוק את מקור הקוד שנבחר והפעל את הסריקה שוב.",
+      "notScanned": "עדיין לא הורצה סריקת כפילויות עבור מקור קוד זה."
     },
     "hardcodes": {
       "title": "ערכים קשיחים",
@@ -1607,7 +1635,6 @@
       "variable": "משתנה",
       "value": "ערך",
       "suggestedEnvVar": "משתנה סביבה מוצע",
-      "showingOf": "מציג {shown} מתוך {total}",
       "emptyMessage": "לא זוהו ערכים קשיחים",
       "severityGroups": {
         "high": "חומרה גבוהה",
@@ -1622,7 +1649,6 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No problems detected",
       "exportMarkdown": "Export Markdown",
       "exportJson": "Export JSON"
@@ -3288,11 +3314,12 @@
       "preservedSuffix": "; {count} preserved"
     },
     "treeNode": {
-      "vectorizeFolderTitle": "Vectorize folder title",
+      "itemsCount": "Items count",
       "retryTitle": "Retry title",
       "unvectorized": "Unvectorized",
-      "itemsCount": "Items count",
-      "vectorizeTitle": "Vectorize title"
+      "vectorizeFolderTitle": "Vectorize folder title",
+      "vectorizeTitle": "Vectorize title",
+      "zeroSize": "0B"
     },
     "memoryOrphan": {
       "title": "Title",
@@ -3579,6 +3606,9 @@
       "errorEnterBoth": "נא להזין ישות מקור וישות יעד.",
       "notInGraph": "ישויות אלה עדיין אינן בגרף הקשרים.",
       "notInGraphHint": "הן קיימות אך אין להן קישורים בגרף, ולכן לא ניתן לאתר חיבור. הרץ מחדש את חילוץ הישויות."
+    },
+    "chromaExplorer": {
+      "subtitle": "עיון וחיפוש באוספי וקטורים"
     }
   },
   "reasoningTrace": {
@@ -3625,6 +3655,8 @@
       "executionStrategies": "Execution Strategies"
     },
     "history": {
+      "durationSeconds": "שנ׳",
+      "durationMinutes": "דק׳",
       "allStatus": "All Status",
       "reRun": "Re-run",
       "passed": "passed",
@@ -3740,7 +3772,8 @@
       "agentsAriaLabel": "Agent capabilities",
       "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
       "resolvingCompany": "פותח את האוטומציה של החברה שלך…",
-      "companyRequired": "בחר חברה כדי לפתוח את האוטומציה."
+      "companyRequired": "בחר חברה כדי לפתוח את האוטומציה.",
+      "planBeforeBuilding": "תכננו לפני הבנייה"
     },
     "runner": {
       "completed": "Completed",
@@ -3953,7 +3986,9 @@
       "loading": "Loading configuration...",
       "emailHint": "Comma-separated email addresses",
       "selectWorkflow": "Workflow",
-      "channelMappingHint": "Select which channels receive notifications for each event type."
+      "channelMappingHint": "Select which channels receive notifications for each event type.",
+      "invalidEmail": "כתובת אימייל לא תקינה: {emails}",
+      "invalidUrl": "פורמט URL לא תקין"
     },
     "modal": {
       "saveWorkflowAriaLabel": "Save workflow",
@@ -4199,7 +4234,7 @@
     "cursorBlink": "Cursor Blink",
     "keyboardHint": "Press Enter to send, Shift+Enter for new line, ↑/↓ for history",
     "reconnect": "Reconnect",
-    "dark": "Dark",
+    "dark": "כהה",
     "underline": "Underline",
     "settings": "Terminal Settings",
     "lines": "Lines:",
@@ -4207,7 +4242,7 @@
     "fontSize": "Font Size",
     "session": "Session:",
     "autobotVMs": "AutoBot VMs",
-    "light": "Light",
+    "light": "בהיר",
     "closeWindow": "Close Window",
     "cursorStyle": "Cursor Style",
     "saveLog": "Save Log",
@@ -4216,7 +4251,45 @@
     "emergencyKillTitle": "Emergency Kill All Processes",
     "infrastructureHosts": "Infrastructure Hosts",
     "resumeAutomation": "Resume Automation",
-    "host": "Host:"
+    "host": "Host:",
+    "automation": {
+      "started": "🚀 תהליך עבודה אוטומטי התחיל: {name}",
+      "stepsPlanned": "📋 תוכננו {count} שלבים. השתמש בכפתור השהיה כדי לקחת שליטה ידנית בכל עת.",
+      "unnamedWorkflow": "תהליך עבודה ללא שם",
+      "executeStep": "בצע: {command}",
+      "paused": "⏸️ האוטומציה הושהתה - שליטה ידנית הופעלה. הקלד פקודות בחופשיות.",
+      "resumed": "▶️ האוטומציה חודשה - ממשיך בביצוע תהליך העבודה.",
+      "aboutToExecute": "🤖 תהליך AI: עומד לבצע \"{command}\"",
+      "stepProgress": "📋 שלב {step}/{total}: {description}",
+      "skipped": "⏭️ דולג: {command}",
+      "manualControlTaken": "👤 נלקחה שליטה ידנית - השלם את השלבים הידניים ולאחר מכן לחץ על המשך כדי להמשיך בתהליך העבודה.",
+      "automated": "🤖 אוטומטי: {command}",
+      "pausedBySystem": "⏸️ תהליך העבודה הושהה על ידי המערכת",
+      "resumedBySystem": "▶️ תהליך העבודה חודש על ידי המערכת",
+      "executing": "🤖 מבצע: {command}",
+      "stepSkippedByUser": "⏭️ שלב {step} דולג על ידי המשתמש",
+      "workflowSaved": "💾 תהליך העבודה נשמר: {name}",
+      "workflowUpdated": "📋 תהליך העבודה עודכן: שלבים מוגדרים: {count}",
+      "manualCommand": "👤 ידני: {command}",
+      "example": {
+        "name": "עדכון מערכת והתקנת חבילות",
+        "updateDesc": "עדכון מאגרי חבילות",
+        "updateExpl": "מעדכן את רשימת החבילות הזמינות מהמאגרים המוגדרים.",
+        "upgradeDesc": "שדרוג חבילות מותקנות",
+        "upgradeExpl": "משדרג את כל החבילות המותקנות לגרסאות האחרונות.",
+        "installDesc": "התקנת כלים חיוניים",
+        "installExpl": "מתקין כלי פיתוח נפוצים.",
+        "verifyDesc": "אימות התקנות",
+        "verifyExpl": "בודק שהכלים הותקנו כראוי."
+      }
+    },
+    "events": {
+      "emergencyKill": "🛑 עצירת חירום: כל התהליכים הופסקו על ידי המשתמש",
+      "emergencyKillFailed": "❌ עצירת החירום נכשלה: {message}",
+      "interrupted": "^C (התהליך נקטע על ידי המשתמש)",
+      "error": "שגיאה: {error}"
+    },
+    "urlCopied": "כתובת ה-URL של הטרמינל הועתקה ללוח!"
   },
   "manpage": {
     "manager": {
@@ -4739,7 +4812,6 @@
   "profile": {
     "confirmNewPassword": "Confirm new password",
     "newPassword": "New password",
-    "themeDark": "Dark",
     "changing": "Changing...",
     "tabGeneral": "General",
     "enableAnimations": "Enable animations",
@@ -4747,7 +4819,6 @@
     "soundNotifications": "Sound notifications",
     "tabSecurity": "Security",
     "voiceProfiles": "Voice Profiles",
-    "theme": "Theme",
     "pwFillAll": "Please fill in all password fields",
     "lastLogin": "Last Login:",
     "tabAppearance": "Appearance & Voice",
@@ -4755,7 +4826,6 @@
     "notifications": "Notifications",
     "emailNotifications": "Email notifications",
     "accountInfo": "Account Information",
-    "appearance": "Appearance",
     "savePreferences": "Save Preferences",
     "role": "Role:",
     "changePassword": "Change Password",
@@ -4765,7 +4835,6 @@
     "preferencesSaved": "Preferences saved!",
     "pwMismatch": "Passwords do not match",
     "fullScreen": "Full-screen",
-    "themeLight": "Light",
     "email": "Email:",
     "interface": "Interface",
     "pwTooShort": "Password must be at least 8 characters",
@@ -4775,30 +4844,38 @@
     "compactMode": "Compact mode",
     "voiceChatDisplay": "Voice Chat Display",
     "closeAria": "Close profile",
-    "themeAuto": "Auto",
     "pwChanged": "Password changed successfully!",
     "username": "Username:",
     "tabDevices": "Tab devices"
   },
   "ui": {
     "themeToggle": {
-      "dark": "Dark",
-      "light": "Light",
+      "accentPurpleDescription": "סגול — יצירתי ואלגנטי",
+      "system": "מערכת",
+      "highContrast": "ניגודיות גבוהה",
+      "monochrome": "מונוכרום",
+      "accentThemeDescription": "ברירת המחדל של ערכת הנושא — הצבע הראשי של ערכת הנושא עצמה",
+      "baseThemeChanged": "ערכת הנושא הבסיסית שונתה ל-{name}",
+      "accentChanged": "צבע ההדגשה שונה ל-{name}",
+      "presetChanged": "הגדרת ערכת הנושא המוכנה שונתה ל-{name}",
+      "dark": "כהה",
+      "light": "בהיר",
       "switchToDark": "Switch to dark mode",
       "theme": "Theme",
       "switchToLight": "Switch to light mode",
       "selectTheme": "Select theme"
     },
     "preferences": {
+      "accentTheme": "ערכת נושא",
       "fontSizeChanged": "Font size changed to {size}",
       "fontSizeOptions": "Font size options",
-      "orange": "Orange",
-      "emerald": "Emerald",
+      "orange": "כתום",
+      "emerald": "אמרלד",
       "setAccentColor": "Set accent color to {color}",
       "resetAll": "Reset all preferences to defaults",
       "reset": "Reset",
       "medium": "Medium",
-      "blue": "Blue",
+      "blue": "כחול",
       "spacious": "Spacious",
       "fontSize": "Font Size",
       "setFontSize": "Set font size to {size}",
@@ -4812,12 +4889,16 @@
       "compact": "Compact",
       "title": "Preferences",
       "accentColor": "Accent Color",
-      "teal": "Teal",
+      "teal": "טורקיז",
       "small": "Small",
-      "purple": "Purple",
+      "purple": "סגול",
       "accentColorChanged": "Accent color changed to {color}",
       "layoutDensityOptions": "Layout density options",
-      "theme": "Theme"
+      "theme": "Theme",
+      "green": "ירוק",
+      "pink": "ורוד",
+      "indigo": "אינדיגו",
+      "red": "אדום"
     },
     "commandPermission": {
       "executionFailed": "הרצת הפקודה נכשלה",
@@ -4844,11 +4925,6 @@
       "feedbackDescription": "Help improve AutoBot by explaining your decision",
       "title": "Command Permission Required",
       "comment": "Comment"
-    },
-    "darkModeToggle": {
-      "toggleDarkMode": "Toggle dark mode",
-      "switchToLight": "Switch to light mode",
-      "switchToDark": "Switch to dark mode"
     },
     "messageStatus": {
       "sending": "Sending",
@@ -4881,18 +4957,6 @@
       "failedToConnect": "Failed to connect to host",
       "cancel": "Cancel",
       "commandToExecute": "Command to Execute"
-    },
-    "dataTable": {
-      "noDataAvailable": "No data available",
-      "noItemsToDisplay": "No items to display",
-      "actions": "Actions",
-      "pageOf": "Page {current} of {total}",
-      "sortBy": "Sort by {column}",
-      "pagination": "Table pagination",
-      "previousPage": "Previous page",
-      "nextPage": "Next page",
-      "dataTable": "Data table",
-      "loading": "Loading data..."
     },
     "systemStatus": {
       "lastCheck": "Last Check:",
@@ -4948,7 +5012,9 @@
     },
     "loadingSpinner": {
       "loading": "Loading…"
-    }
+    },
+    "minimalNote": "מוצג החיוני בלבד · ווידג׳טים טכניים מוסתרים",
+    "minimalNoteAction": "הצגת כל היכולות"
   },
   "collaboration": {
     "participantList": {
@@ -5173,6 +5239,7 @@
       "status": {
         "failed": "Failed",
         "streaming": "Streaming",
+        "waiting_explanation": "ממתין להסבר",
         "explaining": "Explaining",
         "pending": "Pending",
         "completed": "Completed",
@@ -5440,6 +5507,13 @@
       "chatMessage": "Chat message",
       "attachFile": "Attach file",
       "retryUpload": "Retry upload",
+      "uploadError": {
+        "http": "ההעלאה נכשלה (סטטוס {status})",
+        "invalidResponse": "השרת שלח תגובה לא קריאה",
+        "network": "שגיאת רשת במהלך ההעלאה",
+        "cancelled": "ההעלאה בוטלה",
+        "unknown": "ההעלאה נכשלה"
+      },
       "removeFile": "Remove file",
       "overseerLabel": "Overseer",
       "managePresets": "Manage slash command presets",
@@ -5456,7 +5530,10 @@
       "thinkingOffLabel": "thinking Off",
       "thinkingOn": "Thinking on",
       "thinkingOnLabel": "thinking On",
-      "moreActions": "More actions"
+      "moreActions": "More actions",
+      "fileTooLarge": "הקובץ \"{name}\" גדול מדי (מקסימום {max})",
+      "voiceUnsupported": "קלט קולי דורש Chrome,‏ Edge או Safari 15+. התמלול אינו זמין בדפדפן זה.",
+      "micDenied": "הגישה למיקרופון נדחתה. נא לאפשר גישה למיקרופון בהגדרות הדפדפן."
     },
     "visualBrowser": {
       "disconnected": "Disconnected",
@@ -5761,7 +5838,8 @@
       "files": "קבצים",
       "terminal": "טרמינל",
       "browser": "דפדפן",
-      "novnc": "שולחן עבודה מרוחק"
+      "novnc": "שולחן עבודה מרוחק",
+      "ariaLabel": "מקטעי הצ׳אט"
     }
   },
   "serviceMessages": {
@@ -5945,7 +6023,44 @@
       "deleteCredential": "Delete Credential",
       "username": "Username",
       "transferBtn": "Transfer",
-      "sshKeyHint": "Paste your entire private key including BEGIN/END markers"
+      "sshKeyHint": "Paste your entire private key including BEGIN/END markers",
+      "categories": {
+        "api_key": "מפתחות API",
+        "token": "אסימוני גישה",
+        "oauth_refresh_token": "אסימוני רענון OAuth",
+        "connector_oauth_token": "אסימוני מחברים",
+        "password": "סיסמאות",
+        "ssh_key": "מפתחות SSH",
+        "infrastructure_host": "מארחי תשתית",
+        "database_url": "מסדי נתונים",
+        "certificate": "אישורים",
+        "other": "אחר"
+      },
+      "kinds": {
+        "api_key": "מפתח API",
+        "token": "אסימון גישה",
+        "oauth_refresh_token": "אסימון רענון OAuth",
+        "connector_oauth_token": "אסימון מחבר",
+        "password": "סיסמה",
+        "ssh_key": "מפתח SSH",
+        "infrastructure_host": "מארח תשתית",
+        "database_url": "מסד נתונים",
+        "certificate": "אישור",
+        "other": "אחר"
+      },
+      "templates": {
+        "openaiDesc": "גישה ל-API של GPT",
+        "anthropicDesc": "גישה ל-API של Claude",
+        "awsDesc": "שירותי הענן של אמזון",
+        "githubDesc": "אסימון אישי של GitHub",
+        "postgresDesc": "חיבור למסד נתונים",
+        "redisDesc": "חיבור ל-Redis",
+        "sshLabel": "מפתח SSH",
+        "sshDesc": "גישה לשרת",
+        "slackDesc": "אסימון בוט של Slack",
+        "serverLabel": "מארח שרת",
+        "serverDesc": "גישה לשרת SSH/VNC"
+      }
     },
     "threatDashboard": {
       "checking": "Checking...",
@@ -6349,7 +6464,6 @@
       "template": "Template",
       "defaultTitle": "Custom Dashboard",
       "widgetArchitectureDesc": "Interactive system architecture diagram",
-      "shrink": "Shrink",
       "save": "Save",
       "subtitle": "Customizable dashboard with drag-and-drop widgets",
       "widgetWorkflowDesc": "Interactive workflow execution flowcharts",
@@ -6371,7 +6485,6 @@
       "addWidgetTitle": "Add Widget",
       "widgetHeatmap": "Resource Heatmap",
       "saveChanges": "Save Changes",
-      "expand": "Expand",
       "refreshInterval": "Refresh Interval (seconds)",
       "configureWidget": "Configure Widget",
       "metric": "Metric",
@@ -6750,31 +6863,11 @@
   },
   "settings": {
     "webResearch": {
-      "enabledLabel": "Enable web research",
-      "timeoutHint": "Maximum time to wait for search results (5–120 s)",
-      "filterAdultHint": "Filter adult content from search results",
-      "enabledHint": "Allow AutoBot to search the web when answering questions",
-      "maxResultsHint": "Maximum number of search results to retrieve (1–50)",
-      "methodHint": "Choose how web searches are performed",
-      "methodLabel": "Search method",
-      "rateLimitHint": "Limit how many requests are sent in a given time window",
-      "rateLimitLabel": "Rate limiting",
       "methodApiBased": "API-based",
-      "rateLimitRequests": "Requests",
       "title": "Web Research",
-      "confirmationLabel": "Require confirmation",
-      "timeoutLabel": "Timeout (seconds)",
-      "storeInKbHint": "Save research results to the knowledge base",
       "desc": "Configure automated web research behaviour and privacy settings",
-      "confirmationHint": "Ask before performing a web search on your behalf",
-      "anonymizeHint": "Anonymize requests before sending to search engines",
-      "maxResultsLabel": "Max results",
-      "privacyLabel": "Privacy & storage",
-      "rateLimitWindow": "Window (s)",
       "methodBasic": "Basic",
-      "methodAdvanced": "Advanced",
-      "thresholdHint": "Confidence level below which AutoBot triggers an automatic search",
-      "thresholdLabel": "Auto-research threshold"
+      "methodAdvanced": "Advanced"
     },
     "backend": "Backend",
     "apiKeys": {
@@ -6800,29 +6893,21 @@
     },
     "languageHint": "Select your preferred language. The interface will switch immediately if translations are available. AI responses will also use this language.",
     "languageTitle": "Language Preferences",
-    "cachedSettings": "Using cached settings (backend offline)",
     "languageChangeFailed": "Failed to update language",
     "developer": "Developer",
-    "discardChanges": "Discard Changes",
     "voiceDesc": "Configure text-to-speech voice and voice profiles",
-    "save": "Save Settings",
     "languageSelect": "Interface Language",
     "general": "General",
     "language": "Language",
     "appearance": "Appearance",
     "voice": "Voice",
     "logging": "Logging",
-    "cacheApiUnavailable": "Cache API not available",
     "languageChanged": "Language updated successfully",
     "languageDesc": "Choose your preferred language for the interface and AI responses",
-    "loadingSettings": "Loading settings...",
     "prompts": "Prompts",
-    "saving": "Saving...",
-    "panelLoadFailed": "Failed to load settings panel",
     "reset": "Reset to Defaults",
     "appearanceDesc": "Customize the look and feel of your workspace",
     "title": "Settings",
-    "backendOffline": "Backend offline — showing cached settings",
     "connection": {
       "title": "Connection",
       "desc": "Configure backend connection settings",
@@ -6922,11 +7007,35 @@
       "noApiKeyRequired": "אין צורך במפתח API.",
       "redirecting": "מפנה...",
       "disconnectFailed": "הניתוק נכשל",
-      "redirectNeedsCallback": "זרימת OAuth עם הפניה בדפדפן דורשת הגדרת callback בצד השרת. בסביבות ללא ממשק יש להשתמש בקוד מכשיר.",
-      "deviceNotConfigured": "אימות מכשיר אינו מוגדר עבור ספק זה",
       "deviceInitFailed": "הפעלת זרימת המכשיר נכשלה",
       "stillWaiting": "עדיין ממתין לאישור — נסו שוב בעוד רגע.",
       "pollFailed": "הבדיקה נכשלה"
+    },
+    "preferredMode": {
+      "title": "מצב מועדף",
+      "subtitle": "בחרו כמה מ-AutoBot תרצו לראות. אפשר לעבור בכל עת בעזרת הכפתור ״מינימלי״ בסרגל העליון.",
+      "group": "מצב ממשק",
+      "minimal": "מינימלי",
+      "minimalDesc": "רק החיוני — לשיחה, ידע ואישורים יומיומיים.",
+      "full": "מלא",
+      "fullDesc": "הכול, כולל ניתוח נתונים, אוטומציה, ניהול וכלי מפתחים.",
+      "selected": "נבחר",
+      "startIn": "התחלה במצב",
+      "startInDesc": "המצב שבו AutoBot נפתח בעת הכניסה",
+      "startLast": "האחרון שבו השתמשתי",
+      "startMinimal": "מינימלי",
+      "startFull": "מלא",
+      "noteSynced": "נשמר בחשבון שלכם ובמכשיר זה",
+      "noteDirectLinks": "דפים מוסתרים עדיין נפתחים מקישורים ישירים",
+      "noteNeverHidden": "אישורים, שגיאות והתראות אבטחה לעולם אינם מוסתרים"
+    },
+    "additionalThemes": {
+      "title": "ערכות נושא נוספות",
+      "subtitle": "נפרסו על ידי מנהל המערכת באמצעות SLM",
+      "deployed": "נפרס באמצעות SLM · v{version}",
+      "empty": "לא נפרסו ערכות נושא נוספות.",
+      "info": "מנהלי מערכת מתקינים ופורסים ערכות נושא במסוף SLM.",
+      "slmLink": "SLM › הגדרות › ערכות נושא ↗"
     }
   },
   "visualizations": {
@@ -7180,7 +7289,16 @@
     },
     "progress": {}
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "כללי התראה",
+      "overview": "סקירה",
+      "slos": "SLOs",
+      "traces": "עקבות"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "treeView": {
       "noStructure": "No directory structure available",
       "title": "Directory Structure",
@@ -7201,7 +7319,8 @@
       "listView": "List View",
       "refreshAriaLabel": "Refresh files",
       "errorRenamingFile": "Error renaming file",
-      "errorLoadingContents": "Error loading contents"
+      "errorLoadingContents": "Error loading contents",
+      "uploadFailedHint": "נא לבדוק את מגבלות גודל הקובץ ואת דרישות הפורמט"
     },
     "fileTypes": {
       "shell": "Shell Script",
@@ -7411,6 +7530,16 @@
       "detected": "CAPTCHA Detected",
       "openVnc": "Open VNC Desktop",
       "skipSource": "Skip Source",
+      "types": {
+        "recaptcha": "reCAPTCHA",
+        "hcaptcha": "hCaptcha",
+        "cloudflare": "אתגר Cloudflare",
+        "slider": "CAPTCHA מחוון",
+        "imageSelect": "CAPTCHA בחירת תמונות",
+        "text": "CAPTCHA טקסט",
+        "math": "CAPTCHA מתמטי",
+        "unknown": "CAPTCHA לא מוכר"
+      },
       "solved": "I've Solved It"
     }
   },
@@ -7426,10 +7555,6 @@
     },
     "input": {
       "clearInput": "Clear input"
-    },
-    "panel": {
-      "collapse": "Collapse panel",
-      "expand": "Expand panel"
     }
   },
   "voice": {
@@ -7457,7 +7582,11 @@
     "stopListening": "Stop listening",
     "stop": "Stop",
     "confirmDeleteVoiceTitle": "מחיקת פרופיל קול",
-    "tapToEnableAudio": "הקש בכל מקום כדי להפעיל את השמעת האודיו"
+    "tapToEnableAudio": "הקש בכל מקום כדי להפעיל את השמעת האודיו",
+    "speech": {
+      "url": "קישור",
+      "path": "נתיב קובץ"
+    }
   },
   "auth": {
     "login": {
@@ -7965,12 +8094,34 @@
     "newCode": "New Code Agent",
     "newCodeDesc": "Start a code analysis session",
     "newAnalysis": "New Analysis",
-    "newAnalysisDesc": "Start an analysis session"
+    "newAnalysisDesc": "Start an analysis session",
+    "openPage": "פתח את {page}",
+    "types": {
+      "task": "משימה",
+      "research": "מחקר",
+      "code": "קוד",
+      "analysis": "ניתוח",
+      "navigate": "דף"
+    },
+    "hints": {
+      "navigate": "ניווט",
+      "select": "בחירה",
+      "close": "סגירה"
+    }
   },
   "slm": {
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "הפעלת חלון התחזוקה נכשלה",
+      "completeWindowFailed": "השלמת חלון התחזוקה נכשלה",
+      "deleteWindowFailed": "מחיקת חלון התחזוקה נכשלה",
+      "drainNodeFailed": "ריקון הצומת נכשל. נא לנסות שוב.",
+      "resumeNodeFailed": "חידוש הצומת נכשל. נא לנסות שוב.",
+      "saveKeysFailed": "שמירת מפתחות ה-API נכשלה. פרטים נוספים זמינים בקונסולה.",
+      "addNodeFailed": "הוספת הצומת נכשלה"
     }
   },
   "mobile": {
@@ -8482,7 +8633,8 @@
       "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "מידע על כלים אינו זמין כעת — רשימה זו עשויה להיות חלקית.",
       "canvasNoToolsDefined": "לא צורפו כלים לאף תפקיד בחברה זו.",
-      "deepLinkNodeNotFound": "קישור זה מפנה לצומת שלא נמצא כאן. ייתכן שהוא הוסר, או שאין לך גישה אליו."
+      "deepLinkNodeNotFound": "קישור זה מפנה לצומת שלא נמצא כאן. ייתכן שהוא הוסר, או שאין לך גישה אליו.",
+      "viewPlanner": "מתכנן"
     },
     "executorRollup": {
       "title": "סיכום מבצעים",
@@ -8761,6 +8913,236 @@
       "retry": "נסה שוב",
       "loadingItem": "טוען פריט עבודה…",
       "itemLoadFailed": "לא ניתן לטעון את פריט העבודה הזה"
+    },
+    "ledger": {
+      "title": "יומן הסוכנים",
+      "subtitle": "מי עובד על מה בחברה הזו, ומי ממתין.",
+      "tabsAria": "תצוגות היומן",
+      "tabs": {
+        "now": "עובדים כעת",
+        "claims": "תפיסות",
+        "contention": "תחרות",
+        "activity": "פעילות"
+      },
+      "col": {
+        "agent": "סוכן",
+        "kind": "סוג",
+        "status": "מצב",
+        "task": "משימה נוכחית",
+        "detail": "פרטים",
+        "scope": "היקף",
+        "mode": "מצב פעולה",
+        "intent": "כוונה",
+        "expires": "פג תוקף",
+        "renewals": "חידושים"
+      },
+      "busy": "עסוק",
+      "idle": "פנוי",
+      "peerMessages": "הודעות עמיתים ממתינות",
+      "idleSubscribers": "מינויי זמן סרק",
+      "pendingFor": "{n} ממתינות עבור {name}",
+      "sentBy": "מאת {names}",
+      "waitsForIdle": "{who} ממתין עד ש-{target} יתפנה",
+      "heldBy": "מוחזק על ידי {agent}",
+      "waitlistAria": "רשימת המתנה לפי הסדר",
+      "silenceMeansHold": "בקשה אינה שחרור: שתיקה פירושה החזקה, ותפיסה שלא חודשה פגה מעצמה.",
+      "ask": "בקשו מהמחזיק לשחרר",
+      "askAria": "בקשו ממחזיק {scope} לשחרר אותו",
+      "conflicts": "התנגשויות",
+      "recent": "פעילות אחרונה",
+      "conflict": {
+        "release_refused": "שחרור נדחה",
+        "claim_expired": "תפיסה פגה בזמן החזקה",
+        "yield_unanswered": "בקשת ויתור נותרה ללא מענה",
+        "claim_lapsed_during_action": "תפיסה פגה במהלך פעולה"
+      },
+      "empty": {
+        "presence": "אף סוכן לא דיווח",
+        "peerMessages": "אין הודעות ממתינות",
+        "idleSubscribers": "אין מינויי זמן סרק",
+        "claims": "אין תפיסות",
+        "contention": "אין תחרות",
+        "conflicts": "אין התנגשויות",
+        "activity": "אין פעילות אחרונה"
+      },
+      "state": {
+        "loading": "קורא את היומן…",
+        "unavailableTitle": "לא ניתן היה לקרוא את היומן",
+        "unavailableBody": "המאגר {source} לא הגיב. זה לא כמו שאין רשומות.",
+        "errorTitle": "אירעה שגיאה בטעינת הקטע הזה"
+      },
+      "askState": {
+        "sending": "שולח…",
+        "sent": "הבקשה נשלחה — המחזיק מחליט; שתיקה פירושה החזקה.",
+        "tooSoon": "שאלתם על התפיסה הזו לפני רגע; נסו שוב בעוד דקה.",
+        "notFound": "המשימה הזו כבר לא מחזיקה בתפיסה — רעננו כדי לראות מי מחזיק בה כעת.",
+        "unavailable": "לא ניתן היה להגיע ליומן; דבר לא נשלח.",
+        "error": "משהו השתבש ולא ניתן היה לאשר את המסירה. רעננו כדי לראות אם התביעה עדיין מוחזקת."
+      }
+    },
+    "workflowPlanner": {
+      "title": "מתכנן תהליכי עבודה",
+      "plans": "תוכניות",
+      "newPlan": "תוכנית חדשה",
+      "open": "פתיחה",
+      "back": "חזרה לתוכניות",
+      "retry": "ניסיון חוזר",
+      "loading": "טוען תוכניות...",
+      "loadFailed": "לא ניתן לטעון את התוכנית.",
+      "stale": {
+        "plan": "לא ניתן היה לרענן את התוכנית, ולכן המוצג עשוי להיות מיושן. {reason}",
+        "gate": "לא ניתן היה לרענן את בדיקות המוכנות, ולכן רשימת מה שחסר עשויה להיות מיושנת. {reason}",
+        "both": "לא ניתן היה לרענן לא את התוכנית ולא את בדיקות המוכנות שלה, ולכן המוצג עשוי להיות מיושן. {reason}"
+      },
+      "rereadRetry": "טעינת התוכנית מחדש",
+      "saveFailed": "לא ניתן לשמור את השינוי.",
+      "createFailed": "לא ניתן ליצור את התוכנית.",
+      "emptyTitle": "אין עדיין תוכניות",
+      "emptyHint": "התחילו תוכנית כדי למפות תהליך אחד, למדוד אותו ולבחור את המספר האחד לשיפור.",
+      "unavailableTitle": "מתכנן תהליכי העבודה אינו זמין",
+      "unavailableHint": "התכונה כבויה בסביבת העבודה שלכם, ולכן אין עדיין מה להציג כאן.",
+      "statusFlow": "התקדמות התוכנית",
+      "status": {
+        "draft": "טיוטה",
+        "measured": "נמדדה",
+        "labeled": "תויגה",
+        "approved": "אושרה",
+        "converted": "הומרה"
+      },
+      "col": {
+        "name": "תוכנית",
+        "revision": "גרסה",
+        "status": "מצב",
+        "actions": "פעולות"
+      },
+      "form": {
+        "name": "שם התוכנית",
+        "startsAt": "איפה התהליך מתחיל",
+        "endsAt": "איפה התהליך מסתיים",
+        "create": "יצירת תוכנית"
+      },
+      "steps": {
+        "map": "מיפוי",
+        "measure": "מדידה",
+        "oneNumber": "בחירת מספר אחד",
+        "label": "פירוק ותיוג",
+        "convert": "יצירת תהליך עבודה"
+      },
+      "map": {
+        "empty": "עדיין לא מופה דבר",
+        "emptyHint": "הוסיפו קודם את המשתתפים (נתיבים) ואחר כך את הצעדים של כל אחד.",
+        "handoffs": "{count} העברות",
+        "waitNote": "מה ממתין בהעברה הזו?",
+        "laneName": "שם הנתיב",
+        "addLane": "הוספת נתיב",
+        "stepLabel": "צעד",
+        "stepLane": "נתיב הצעד",
+        "addStep": "הוספת צעד"
+      },
+      "source": {
+        "self_reported": "אתם אמרתם",
+        "email": "נבדק מול הדואר",
+        "calendar": "נבדק מול היומן"
+      },
+      "measure": {
+        "hint": "באיזו תדירות כל צעד מתרחש וכמה זמן הוא לוקח?",
+        "needSteps": "מפו קודם לפחות צעד אחד.",
+        "perWeek": "בשבוע",
+        "duration": "משך",
+        "unit": "יחידת משך",
+        "save": "שמירה",
+        "clear": "ניקוי"
+      },
+      "unit": {
+        "minutes": "דקות",
+        "hours": "שעות",
+        "days": "ימים"
+      },
+      "oneNumber": {
+        "hint": "הצעדים שמדדתם, ההמתנות הארוכות ביותר קודם. אתם מחליטים איזה חשוב.",
+        "needMetrics": "מדדו קודם לפחות צעד אחד.",
+        "rate": "{freq} בשבוע, {dur} {unit}",
+        "title": "תנו שם למספר הזה",
+        "returnKind": "מה אתם מקבלים בחזרה",
+        "target": "יעד",
+        "save": "שמירה כמספר האחד שלי"
+      },
+      "returnKind": {
+        "hours_back": "שעות שחזרו",
+        "more_yeses": "יותר כן",
+        "money_sooner": "כסף מהר יותר"
+      },
+      "label": {
+        "needNumber": "בחרו קודם את המספר האחד; הצעד שלו הוא מה שמפרקים כאן.",
+        "subStep": "תת־צעד",
+        "addSubStep": "הוספת תת־צעד",
+        "unlabel": "הסרת תיוג",
+        "edgeCase": "מקרה קצה: {text}",
+        "byHandNote": "אלה נשארים אצל אנשים. הבינה המלאכותית לא פועלת עליהם לעולם.",
+        "acknowledge": "קראתי את רשימת ידני",
+        "acknowledged": "רשימת ידני נקראה"
+      },
+      "labels": {
+        "ai": "בינה מלאכותית",
+        "automation": "אוטומציה",
+        "by_hand": "ידני"
+      },
+      "gate": {
+        "missing": "עדיין חסר",
+        "title": "מוכנים ליצור?",
+        "unknown": "בדיקה נוספת",
+        "state": {
+          "met": "מתקיים",
+          "open": "פתוח",
+          "pending": "טרם נבדק"
+        },
+        "name": {
+          "G1": "המפה תקינה",
+          "G2": "כל שלב נמדד",
+          "G3": "השלב שנבחר פורק לחלקים",
+          "G4": "לכל תת-שלב ומקרה קצה יש תווית",
+          "G5": "רשימת \"ידני\" נקראה וצעדי הבינה המלאכותית מכוסים באישורים",
+          "G6": "בתצוגה המקדימה אין שגיאות",
+          "G7": "אישרתם את התוכנית הזו",
+          "converted": "זרימות העבודה נוצרו"
+        }
+      },
+      "readOnly": "מצב התוכנית הוא: {status}, ולכן שלבים 1 עד 4 הם לקריאה בלבד.",
+      "firstProcess": {
+        "title": "החברה שלך מוכנה",
+        "body": "תכננו את התהליך הראשון שלכם: מפו אותו, מדדו אותו ובחרו את המספר האחד לשיפור.",
+        "plan": "לתכנן את התהליך הראשון שלי",
+        "later": "מאוחר יותר"
+      },
+      "convert": {
+        "notReady": "סיימו קודם את שלבים 1 עד 4. הבדיקות למעלה מראות מה עדיין חסר.",
+        "previewTitle": "מה ייווצר (תצוגה מקדימה, עדיין שום דבר לא קיים)",
+        "createdTitle": "מה נוצר",
+        "counts": "זרימות עבודה: {workflows}. תהליכים: {processes}.",
+        "ownerLane": "אחראי: {lane}",
+        "errors": "שגיאות לתיקון לפני האישור",
+        "warnings": "אזהרות",
+        "documented": "נשמר כטקסט במדריך, לא נבנה:",
+        "failedProposals": "לא ניתן היה להגיש {count} הצעות שורה של בינה מלאכותית. נסו שוב כדי להגיש אותן.",
+        "turnOnNotAvailable": "הפעלת זרימות עבודה עדיין לא זמינה: שום דבר לא מריץ אותן עד אז.",
+        "openWorkflows": "פתיחת זרימות עבודה",
+        "unavailable": "הפעולה אינה זמינה: מתכנן זרימות העבודה כבוי במרחב העבודה שלכם, או שהתוכנית כבר לא קיימת.",
+        "blocked": "עדיין לא מוכן. הבדיקות למעלה מראות מה חסר.",
+        "approvedBy": "אושר על ידי {by} ב-{at}.",
+        "preview": "תצוגה מקדימה של מה שייווצר",
+        "previewAgain": "רענון התצוגה המקדימה",
+        "approve": "אישור",
+        "create": "יצירת זרימות עבודה",
+        "retry": "ניסיון חוזר להצעות שורה של בינה מלאכותית",
+        "approveTitle": "לאשר את התוכנית הזו?",
+        "approveMessage": "אתם מאשרים את התצוגה המקדימה המוצגת. כל עריכה מאוחרת של התוכנית מבטלת את האישור הזה.",
+        "previewFailed": "לא ניתן היה לבנות את התצוגה המקדימה.",
+        "approveFailed": "לא ניתן היה לאשר את התוכנית.",
+        "approveBlocked": "האישור חסום עד שהדברים הבאים ייפתרו:",
+        "approveDetail": "פרט מהשרת: {detail}",
+        "convertFailed": "לא ניתן היה ליצור את זרימות העבודה.",
+        "retryFailed": "לא ניתן היה לנסות שוב את הצעות השורה של הבינה המלאכותית."
+      }
     }
   },
   "code": {
@@ -9166,6 +9548,11 @@
       "subtitle": "אוצר מילים מפורט של הרשאות וחבילות היקף עבור מפתחות API",
       "comingSoonTitle": "בקרוב בגרסה עתידית",
       "comingSoonMessage": "היקפי הרשאות מפורטים — אוצר מילים של הרשאות, חבילות היקף ואכיפת היקף על מפתחות API — אינם זמינים בגרסה זו. עמוד זה יאפשר להגדיר ולהקצות אותם לאחר השקתם."
+    },
+    "layout": {
+      "title": "ניהול",
+      "subtitle": "כלי ניהול לממשק האחורי עבור מנהלים",
+      "ariaLabel": "אזור הניהול"
     }
   },
   "components": {
@@ -9515,7 +9902,164 @@
       "collectionIdPlaceholder": "מזהה אוסף",
       "pushing": "שולח…",
       "confirm": "אישור",
-      "pushFailed": "לא ניתן היה להוסיף הקלטה זו למסד הידע. נסה שוב."
+      "pushFailed": "לא ניתן היה להוסיף הקלטה זו למסד הידע. נסה שוב.",
+      "collectionNotJoined": "נשמר, אך האוסף שציינת לא נמצא — התמלול נמצא במאגר הידע אך לא באוסף הזה."
     }
+  },
+  "systemStatus": {
+    "summary": {
+      "issues": "זוהו בעיות במערכת",
+      "warnings": "אזהרות מערכת",
+      "ok": "כל המערכות פועלות"
+    },
+    "tooltip": {
+      "issues": "לחצו להצגת בעיות המערכת",
+      "warnings": "לחצו להצגת אזהרות המערכת",
+      "ok": "לחצו להצגת מצב המערכת - כל השירותים פועלים"
+    },
+    "aria": {
+      "issues": "מצב המערכת: זוהו בעיות",
+      "warnings": "מצב המערכת: קיימות אזהרות",
+      "ok": "מצב המערכת: כל השירותים פועלים"
+    },
+    "description": {
+      "servicesDown": "שירות {n} מושבת | {n} שירותים מושבתים",
+      "warnings": "אזהרה {n} | {n} אזהרות",
+      "withWarnings": "שירות {n} עם אזהרות | {n} שירותים עם אזהרות",
+      "downAndWarnings": "{down} ו-{warnings}",
+      "ok": "כל השירותים פועלים כרגיל"
+    },
+    "service": {
+      "backend": "API של השרת",
+      "frontend": "ממשק קדמי",
+      "websocket": "WebSocket",
+      "redis": "Redis",
+      "ollama": "Ollama",
+      "npu_worker": "עובד NPU",
+      "browser": "שירות דפדפן",
+      "chromadb": "מחסנית בינה מלאכותית (ChromaDB)",
+      "other": "שירותים אחרים"
+    },
+    "state": {
+      "running": "פועל",
+      "connected": "מחובר",
+      "statusUnknown": "המצב לא ידוע",
+      "connectionFailed": "החיבור נכשל",
+      "timeout": "תם הזמן",
+      "connectionRefused": "החיבור נדחה",
+      "unreachable": "לא נגיש",
+      "unhealthy": "לא תקין",
+      "warning": "אזהרה",
+      "pending": "ממתין",
+      "available": "זמין",
+      "unavailable": "לא זמין",
+      "http": "HTTP {code}"
+    },
+    "probe": {
+      "degraded": "פגוע — בדיקות המצב חרגו מהזמן, השרת מגיב",
+      "degradedAsOf": "פגוע — בדיקות המצב חרגו מהזמן, השרת מגיב — מצב נכון ל-{time}",
+      "unreachable": "לא נגיש — מצב השירותים לא ידוע",
+      "unreachableAsOf": "לא נגיש — מצב השירותים לא ידוע — מצב נכון ל-{time}"
+    },
+    "lastKnown": "{text} (ידוע לאחרונה)"
+  },
+  "schedule": {
+    "title": "תזמון",
+    "repeats": "חזרה",
+    "repeat": {
+      "minutes": "כל כמה דקות",
+      "hourly": "כל שעה",
+      "daily": "יומי",
+      "weekly": "שבועי",
+      "monthly": "חודשי",
+      "once": "פעם אחת"
+    },
+    "every": "כל",
+    "minutesUnit": "דקות",
+    "onlyBetween": "רק בין",
+    "windowFrom": "מ־",
+    "windowTo": "עד",
+    "and": "ו",
+    "onDays": "בימים (אופציונלי)",
+    "daysHintAny": "אם לא נבחר דבר, התזמון חל בכל יום.",
+    "onDaysRequired": "בימים",
+    "atMinute": "בדקה",
+    "at": "בשעה",
+    "hour": "שעה",
+    "minute": "דקה",
+    "weekdaysOnly": "ימי עבודה בלבד",
+    "monthly": {
+      "which": "איזה יום בחודש",
+      "day": "יום בחודש",
+      "lastDay": "היום האחרון",
+      "nth": "יום בשבוע בחודש",
+      "onDay": "ביום",
+      "onThe": "ב־"
+    },
+    "nth": {
+      "1": "הראשון",
+      "2": "השני",
+      "3": "השלישי",
+      "4": "הרביעי",
+      "last": "האחרון"
+    },
+    "weekday": "יום בשבוע",
+    "shortMonths": "חודשים שאין בהם יום זה ירוצו ביום האחרון של החודש.",
+    "date": "תאריך",
+    "timezone": "אזור זמן",
+    "zone": {
+      "company": "שעון החברה",
+      "usesCompany": "משתמש באזור הזמן של החברה."
+    },
+    "summary": {
+      "minutes": "כל {every} דקות",
+      "minutesWeekdays": "כל {every} דקות בימי עבודה",
+      "minutesDays": "כל {every} דקות, בימים: {days}",
+      "minutesWindow": "כל {every} דקות בין {from} ל־{to}",
+      "minutesWindowWeekdays": "כל {every} דקות בין {from} ל־{to} בימי עבודה",
+      "minutesWindowDays": "כל {every} דקות בין {from} ל־{to}, בימים: {days}",
+      "hourly": "כל שעה בדקה {minute}",
+      "daily": "כל יום בשעה {time}",
+      "dailyWeekdays": "כל יום עבודה בשעה {time}",
+      "weekly": "כל שבוע: {days}, בשעה {time}",
+      "monthlyDay": "ביום {day} בכל חודש בשעה {time}",
+      "monthlyLastDay": "ביום האחרון של כל חודש בשעה {time}",
+      "monthlyNth1": "ב{weekday} הראשון של כל חודש בשעה {time}",
+      "monthlyNth2": "ב{weekday} השני של כל חודש בשעה {time}",
+      "monthlyNth3": "ב{weekday} השלישי של כל חודש בשעה {time}",
+      "monthlyNth4": "ב{weekday} הרביעי של כל חודש בשעה {time}",
+      "monthlyNthLast": "ב{weekday} האחרון של כל חודש בשעה {time}",
+      "once": "פעם אחת ב־{date} בשעה {time}",
+      "withZone": "{summary} ({zone})",
+      "custom": "תזמון מותאם אישית"
+    },
+    "customNote": "לא ניתן להציג תזמון זה באמצעות לחיצות.",
+    "editCron": "עריכה כ־cron",
+    "doneEditing": "סיום העריכה",
+    "nextRuns": "ההרצות הבאות",
+    "noRuns": "אין הרצות קרובות.",
+    "previewLoading": "בודק מול השרת...",
+    "previewApprox": "משוער: השרת מאשר את השעות המדויקות בעת השמירה.",
+    "previewUnavailable": "לא ניתן להציג תצוגה מקדימה לתזמון זה.",
+    "advanced": "מתקדם: נשמר כ־",
+    "saved": {
+      "cron": "cron רגיל",
+      "calendar": "כלל לוח שנה",
+      "once": "הרצה חד־פעמית"
+    },
+    "savedAs": "התזמון שנשמר",
+    "savedNote": {
+      "once": "רץ פעם אחת. לא נשמר cron חוזר."
+    },
+    "cronLabel": "ביטוי cron",
+    "cronHint": "cron רגיל בעל חמישה שדות בלבד: דקה, שעה, יום בחודש, חודש, יום בשבוע. הבורר והשדה הזה נשארים מסונכרנים.",
+    "cron_extension_unsupported": "{token} אינו cron רגיל. השתמשו בבורר לתזמונים כמו יום שישי האחרון בחודש.",
+    "invalid_timezone": "אזור הזמן הזה אינו מוכר.",
+    "once_in_past": "התאריך והשעה האלה כבר עברו.",
+    "invalid_rrule": "כלל לוח השנה הזה אינו תקין.",
+    "invalid_cron": "הזינו cron רגיל בעל חמישה שדות, למשל 0 9 * * 1-5.",
+    "invalid_generic": "התזמון הזה אינו תקין.",
+    "conflicting_fields": "תזמון נשמר כ־cron או ככלל לוח שנה או כהרצה חד־פעמית, אף פעם לא כשניהם.",
+    "gatedNote": "היום האחרון, יום בשבוע בחודש, הימים 29 עד 31 והרצות חד־פעמיות יהיו זמינים לאחר עדכון המתזמן."
   }
 }

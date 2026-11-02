@@ -18,7 +18,7 @@ import pytest
 
 from context_aware_decision.models import Decision, DecisionContext
 from context_aware_decision.system import ContextAwareDecisionSystem
-from context_aware_decision.types import ConfidenceLevel, DecisionType
+from context_aware_decision.types import DecisionConfidenceLevel, DecisionType
 
 
 def _make_decision() -> Decision:
@@ -28,7 +28,7 @@ def _make_decision() -> Decision:
         chosen_action={"action": "noop"},
         alternative_actions=[],
         confidence=0.9,
-        confidence_level=ConfidenceLevel.HIGH,
+        confidence_level=DecisionConfidenceLevel.HIGH,
         reasoning="test",
         supporting_evidence=[],
         risk_assessment={},

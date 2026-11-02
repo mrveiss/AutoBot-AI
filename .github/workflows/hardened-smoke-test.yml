@@ -9,6 +9,10 @@ on:
     branches:
       - main
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - main
     # #13388: SAFE — this workflow publishes `hardened-smoke-test`, which is NOT
@@ -42,6 +46,7 @@ concurrency:
 
 jobs:
   hardened-smoke-test:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -52,19 +57,16 @@ jobs:
       - name: Free disk space
         uses: ./.github/actions/free-disk-space
         with:
-          min-free-gb: '15'  # Increased from 10GB due to MVA-2869
+          # The run itself consumes ~17 GB (images, layer cache, service images);
+          # 30 leaves headroom, and the toolchain removal runs only below it (#19527).
+          min-free-gb: '30'
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4
-
-      - name: Cache Docker layers
-        uses: actions/cache@v6
         with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-hardened-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-hardened-
-            ${{ runner.os }}-buildx-
+          # #19527: tearing the builder down cost 30-60s per run on a runner that is
+          # discarded anyway. A persistent self-hosted runner still cleans up.
+          cleanup: ${{ runner.environment == 'self-hosted' }}
 
       - name: Create .env from .env.example
         run: cp .env.example .env
@@ -76,6 +78,10 @@ jobs:
           openssl rand -hex 32 > secrets/slm_admin_password.txt
           openssl rand -hex 32 > secrets/slm_jwt_secret.txt
           chmod 600 secrets/*.txt
+          # Compose file secrets keep the host owner and mode. The SLM image runs as
+          # uid 999 (docker/slm/Dockerfile) and must read its two files; since #19318
+          # an unreadable SLM_ADMIN_PASSWORD_FILE fails the seed instead of being skipped.
+          sudo chown 999:999 secrets/slm_admin_password.txt secrets/slm_jwt_secret.txt
 
       - name: Generate signing secrets (GH#9775)
         run: |
@@ -85,50 +91,14 @@ jobs:
           bash docker/generate-secrets.sh
           cat docker/.env.secrets >> "$GITHUB_ENV"
 
-      - name: Build images with layer cache
-        run: |
-          echo "=== Building backend image ==="
-          docker buildx build \
-            --cache-from type=local,src=/tmp/.buildx-cache \
-            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
-            --file docker/backend/Dockerfile \
-            --tag autobot/backend:latest \
-            --load \
-            .
-          echo "Backend build complete. Disk space:"
-          df -h / | grep -v Filesystem
-
-          echo ""
-          echo "=== Building SLM image ==="
-          docker buildx build \
-            --cache-from type=local,src=/tmp/.buildx-cache \
-            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
-            --file docker/slm/Dockerfile \
-            --tag autobot/slm:latest \
-            --load \
-            .
-          echo "SLM build complete. Disk space:"
-          df -h / | grep -v Filesystem
-
-          echo ""
-          echo "=== Building frontend image ==="
-          docker buildx build \
-            --cache-from type=local,src=/tmp/.buildx-cache \
-            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
-            --file docker/frontend/Dockerfile \
-            --tag autobot/frontend:latest \
-            --load \
-            .
-          echo "Frontend build complete. Disk space:"
-          df -h / | grep -v Filesystem
-
-          echo ""
-          echo "=== Rotating cache ==="
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
-
-          echo "Final disk space:"
-          df -h
+      - name: Build images
+        # Concurrent bake with a per-image layer cache, including the SLM-only GUI
+        # image (#18585), pulling the service images meanwhile (#19527).
+        uses: ./.github/actions/build-smoke-images
+        with:
+          group: hardened
+          cache-key-prefix: buildx-bake-hardened
+          compose-args: -f docker-compose.yml -f docker-compose.hardened.yml --env-file docker/.env.docker
 
       - name: Start services with hardened overlay
         run: |
@@ -219,6 +189,47 @@ jobs:
           echo ""
           curl -v http://localhost/slm/api/health 2>&1 | head -20 || true
 
+      - name: SLM web GUI comes up alone under the slm profile (#18585)
+        # The documented SLM-GUI-first path: the full stack is stopped, then only
+        # autobot-slm-gui and its dependencies start. Proves the SLM-only nginx
+        # config starts with no main backend, and prints the measured memory of
+        # that service set — the figure INSTALL.md quotes.
+        shell: bash
+        run: |
+          set -euo pipefail
+          compose() {
+            docker compose -f docker-compose.yml -f docker-compose.hardened.yml \
+              --env-file docker/.env.docker "$@"
+          }
+          compose down
+          compose --profile slm up -d --no-build autobot-slm-gui
+
+          for attempt in $(seq 1 60); do
+            if curl -s -f http://localhost/slm/ > /dev/null 2>&1 \
+               && curl -s -f http://localhost/slm/api/health > /dev/null 2>&1; then
+              echo "OK SLM GUI and SLM API respond with the slm profile only"
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              echo "FAIL: SLM-only stack not healthy within 600s"
+              compose --profile slm logs
+              exit 1
+            fi
+            sleep 10
+          done
+
+          running=$(compose --profile slm ps --services --status running | sort | tr '\n' ' ')
+          echo "Running services: ${running}"
+          for heavy in autobot-backend autobot-worker autobot-chromadb autobot-frontend; do
+            if [[ " ${running} " == *" ${heavy} "* ]]; then
+              echo "FAIL: ${heavy} started under the SLM-only path"
+              exit 1
+            fi
+          done
+
+          echo "=== Measured memory, SLM-only service set ==="
+          docker stats --no-stream --format '{{.Name}}\t{{.MemUsage}}'
+
       - name: Dump diagnostics for unhealthy containers on failure
         # #14417: #11516 hardcoded this step to autobot-slm, which was the
         # failing container back then. When the failing container was
@@ -247,7 +258,7 @@ jobs:
             -f docker-compose.yml \
             -f docker-compose.hardened.yml \
             --env-file docker/.env.docker \
-            config --services 2>/dev/null)
+            --profile slm config --services 2>/dev/null)
           services=$(echo "$services" | xargs)
 
           if [ -z "$services" ]; then
@@ -340,17 +351,20 @@ jobs:
 
       - name: Upload failure logs
         if: failure()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: hardened-docker-compose-logs
           path: failure-logs.txt
 
       - name: Clean up
         if: always()
+        # --profile slm: the SLM-only step's autobot-slm-gui is a profiled service,
+        # which a plain `down` neither stops nor detaches from its networks (#18581)
         run: |
           docker compose \
             -f docker-compose.yml \
             -f docker-compose.hardened.yml \
             --env-file docker/.env.docker \
+            --profile slm \
             down
           rm -rf secrets/

@@ -14,6 +14,24 @@ land in a small data file instead of colliding inside a long test.
 
 The shrink-only rule travels with the data and is restated below, because a
 reader who lands here from an append will not have seen the guard's docstring.
+
+TWO RECORDS, AND THEY MEAN OPPOSITE THINGS (#17930).
+
+``GLOB_DECLARED_UNCOVERED`` is DEBT: the guard does not run when its tree
+changes, and that is accepted for now. It only ever shrinks.
+
+``GLOB_RUN_BY_A_DEDICATED_WORKFLOW`` is COVERAGE by the other route this file's
+own rule names -- "when a cheaper route runs that guard on its own trigger".
+It is not an exemption and cannot be used as one: every entry is VERIFIED, not
+asserted. ``glob_declared_reads_15900_test`` requires the named workflow to
+exist, to carry a ``pull_request`` ``paths:`` list that actually fires on that
+tree, and to invoke each named guard from a ``run:`` step -- parsed from the
+YAML, so a comment quoting the path satisfies none of it. An entry whose
+workflow stops firing on the tree, or stops running the guard, fails; it does
+not quietly degrade into the first record.
+
+Adding an entry here instead of fixing coverage is therefore not possible
+without also shipping the workflow that provides it.
 """
 
 from __future__ import annotations
@@ -36,17 +54,31 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     ),
     "*.j2": (
         {
+            "repo_tests/operational_docs_name_real_playbooks_19611_test.py",
+            "repo_tests/browser_port_single_home_19324_test.py",
             "repo_tests/nginx_internal_api_key_auth_gate_test.py",
+            "repo_tests/slm_admin_password_one_home_19318_test.py",
             "repo_tests/slm_frontend_publish_contract_test.py",
+            "repo_tests/user_mode_values_19437_test.py",
         },
         "root-relative `*.j2` sweep; the matching files live outside the python filter's trees",
     ),
+    "*.json": (
+        {"repo_tests/user_mode_values_19437_test.py"},
+        "root-relative `*.json` sweep; the matching files live outside the python filter's trees",
+    ),
     "*.md": (
         {
+            "repo_tests/agent_model_tiers_19332_test.py",
+            "repo_tests/deployment_profile_one_source_19315_test.py",
+            "repo_tests/operational_docs_name_real_playbooks_19611_test.py",
             "repo_tests/doc_sync_hook_resolves_indexer_15845_test.py",
             "repo_tests/documented_playbook_invocations_test.py",
             "repo_tests/redis_config_path_is_canonical_17434_test.py",
             "repo_tests/sdk_docs_paths_test.py",
+            "repo_tests/tls_cert_dir_one_home_19317_test.py",
+            "repo_tests/user_docs_stay_consistent_19178_test.py",
+            "repo_tests/user_mode_values_19437_test.py",
         },
         "root-relative `*.md` sweep; the matching files live outside the python filter's trees",
     ),
@@ -55,7 +87,10 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         "root-relative `*.promtool-test.yml` sweep; the matching files live outside the python filter's trees",
     ),
     "*.service": (
-        {"repo_tests/chromadb_bind_not_hardcoded_15317_test.py"},
+        {
+            "repo_tests/browser_port_single_home_19324_test.py",
+            "repo_tests/chromadb_bind_not_hardcoded_15317_test.py",
+        },
         "root-relative `*.service` sweep; the matching files live outside the python filter's trees",
     ),
     "*.service.j2": (
@@ -65,6 +100,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     "*.sh": (
         {
             "repo_tests/ansible_inventory_path_exists_test.py",
+            "repo_tests/browser_port_single_home_19324_test.py",
             "repo_tests/chromadb_bind_not_hardcoded_15317_test.py",
             "repo_tests/deployment_script_scan.py",
             "repo_tests/embedded_python_dependency_declared_test.py",
@@ -72,35 +108,56 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/git_repo_root_calls_are_guarded_17418_test.py",
             "repo_tests/hook_decision_exit_codes_15956_test.py",
             "repo_tests/hooks_path_override_15961_test.py",
+            "repo_tests/install_and_code_sync_modes_19503_test.py",
             "repo_tests/one_git_enumeration_15926_test.py",
+            "repo_tests/operational_docs_name_real_playbooks_19611_test.py",
             "repo_tests/python_filter_covers_tested_shell_wrappers_test.py",
             "repo_tests/redis_password_literal_guard_test.py",
             "repo_tests/shell_lib_test.py",
+            "repo_tests/slm_admin_password_one_home_19318_test.py",
             "repo_tests/slm_frontend_publish_contract_test.py",
             "repo_tests/slm_frontend_shell_publish_test.py",
+            "repo_tests/user_mode_values_19437_test.py",
         },
         "root-relative `*.sh` sweep; the matching files live outside the python filter's trees",
     ),
     "*.ts": (
-        {"repo_tests/slm_frontend_calls_reach_served_routes_test.py"},
+        {
+            "repo_tests/browser_port_single_home_19324_test.py",
+            "repo_tests/duplicate_names_ratchet_14908_test.py",
+            "repo_tests/kit_export_shadow_ratchet_14908_test.py",
+            "repo_tests/slm_frontend_calls_reach_served_routes_test.py",
+            "repo_tests/v_html_sanitiser_guard_19118_test.py",
+        },
         "root-relative `*.ts` sweep; the matching files live outside the python filter's trees",
     ),
     "*.vue": (
         {
             "repo_tests/_hardcoded_colour_detect.py",
+            "repo_tests/_hardcoded_ui_literal_detect.py",
+            "repo_tests/_raw_palette_detect.py",
+            "repo_tests/dead_icon_selector_ratchet_19491_test.py",
+            "repo_tests/icon_rule_sets_font_size_only_19875_test.py",
             "repo_tests/slm_frontend_bare_ui_literals_test.py",
+            "repo_tests/raw_table_ratchet_17562_test.py",
             "repo_tests/slm_frontend_calls_reach_served_routes_test.py",
+            "repo_tests/v_html_sanitiser_guard_19118_test.py",
         },
         "root-relative `*.vue` sweep; the matching files live outside the python filter's trees",
     ),
     "*.yaml": (
         {
+            "repo_tests/browser_port_single_home_19324_test.py",
             "repo_tests/generate_service_keys_export_dir_16348_test.py",
             "repo_tests/git_merge_rejects_pull_only_flags_15938_test.py",
             "repo_tests/hook_suites_run_in_ci_test.py",
             "repo_tests/hooks_path_override_15961_test.py",
             "repo_tests/infra_libs_test_wiring_guard_15051_test.py",
+            "repo_tests/install_and_code_sync_modes_19503_test.py",
+            "repo_tests/one_static_data_copy_18556_test.py",
+            "repo_tests/slm_admin_password_one_home_19318_test.py",
             "repo_tests/slm_frontend_publish_contract_test.py",
+            "repo_tests/user_mode_values_19437_test.py",
         },
         "root-relative `*.yaml` sweep; the matching files live outside the python filter's trees",
     ),
@@ -114,27 +171,39 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/ansible_pip_isolation_test.py",
             "repo_tests/ansible_pip_venv_creation_test.py",
             "repo_tests/ansible_python_interpreter_binary_scope_16750_test.py",
+            "repo_tests/ansible_regex_backslash_scalar_17897_test.py",
             "repo_tests/ansible_shared_tasks_code_source_dir_default_16750_test.py",
+            "repo_tests/browser_port_single_home_19324_test.py",
             "repo_tests/documented_playbook_invocations_test.py",
+            "repo_tests/draft_gate_reaches_aggregators_17957_test.py",
             "repo_tests/frontend_duplicate_typecheck_compile_guard_test.py",
             "repo_tests/git_merge_rejects_pull_only_flags_15938_test.py",
+            "repo_tests/infra_residue_one_home_18558_test.py",
             "repo_tests/hook_suites_run_in_ci_test.py",
             "repo_tests/hooks_path_override_15961_test.py",
             "repo_tests/infra_libs_test_wiring_guard_15051_test.py",
+            "repo_tests/install_and_code_sync_modes_19503_test.py",
             "repo_tests/job_name_names_what_it_runs_test.py",
             "repo_tests/nginx_sites_enabled_link_enforced_16979_test.py",
+            "repo_tests/no_private_copy_of_a_shared_helper_test.py",
+            "repo_tests/one_static_data_copy_18556_test.py",
             "repo_tests/pip_relative_editable_needs_chdir_test.py",
+            "repo_tests/postgres_listen_not_wildcard_19239_test.py",
+            "repo_tests/pull_request_workflows_cannot_push_15362_test.py",
             "repo_tests/python_interpreter_role_rename_test.py",
             "repo_tests/redis_config_path_is_canonical_17434_test.py",
             "repo_tests/required_context_complements_test.py",
+            "repo_tests/slm_admin_password_one_home_19318_test.py",
             "repo_tests/slm_frontend_publish_contract_test.py",
             "repo_tests/sync_deletions_ansible_wiring_16310_test.py",
             "repo_tests/test_agent_venv_isolation_14278.py",
             "repo_tests/test_ci_import_smoke_paths_14252.py",
             "repo_tests/test_deploy_constraint_rewrite_14272.py",
+            "repo_tests/user_mode_values_19437_test.py",
             "repo_tests/workflow_action_version_regression_test.py",
             "repo_tests/workflow_closed_reference_guard_test.py",
             "repo_tests/workflow_concurrency_guard_test.py",
+            "repo_tests/workflow_names_say_company_os_19546_test.py",
         },
         "root-relative `*.yml` sweep; the matching files live outside the python filter's trees",
     ),
@@ -162,7 +231,11 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         "auditable, and they live outside the python filter's trees",
     ),
     "*requirements*.txt": (
-        {"repo_tests/declared_distributions_test.py", "repo_tests/dependabot_requirements_coverage_test.py"},
+        {
+            "repo_tests/declared_distributions_test.py",
+            "repo_tests/dependabot_requirements_coverage_test.py",
+            "repo_tests/landing_page_claims_19279_test.py",
+        },
         "root-relative `*requirements*.txt` sweep; the matching files live outside the python filter's trees",
     ),
     ".github/actions/**": (
@@ -172,6 +245,16 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     ".github/actions/*/action.yml": (
         {"repo_tests/python_version_declaration_drift_test.py"},
         "CI metadata tree; covering it runs twelve shards on almost every pull request (#15900)",
+    ),
+    ".github/actions/build-smoke-images/**": (
+        {"repo_tests/changes_job_equivalence_15360_test.py"},
+        "a docker-paths filter ENTRY the equivalence guard compares as a string (#19527); it reads "
+        "no file under the tree, so no change there can alter its verdict",
+    ),
+    ".github/actions/free-disk-space/**": (
+        {"repo_tests/changes_job_equivalence_15360_test.py"},
+        "a docker-paths filter ENTRY the equivalence guard compares as a string (#19527); it reads "
+        "no file under the tree, so no change there can alter its verdict",
     ),
     ".github/workflows/*.yaml": (
         {
@@ -188,37 +271,29 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         },
         "CI metadata tree; covering it runs twelve shards on almost every pull request (#15900)",
     ),
-    "autobot-frontend/src/*.js": (
-        {"repo_tests/vnc_password_not_in_frontend_source_16299_test.py"},
-        "sweeps the whole frontend source tree for a leaked VNC password env-var reference "
-        "(#16299); `autobot-frontend/` is outside the python filter's trees",
-    ),
-    "autobot-frontend/src/*.ts": (
-        {"repo_tests/vnc_password_not_in_frontend_source_16299_test.py"},
-        "sweeps the whole frontend source tree for a leaked VNC password env-var reference "
-        "(#16299); `autobot-frontend/` is outside the python filter's trees",
-    ),
-    "autobot-frontend/src/*.vue": (
-        {"repo_tests/vnc_password_not_in_frontend_source_16299_test.py"},
-        "sweeps the whole frontend source tree for a leaked VNC password env-var reference "
-        "(#16299); `autobot-frontend/` is outside the python filter's trees",
-    ),
-    "autobot-frontend/src/i18n/locales/*.json": (
-        {"repo_tests/locale_html_entity_leak_test.py"},
-        "scans every main-frontend locale file for an HTML entity leaking through "
-        "{{ $t(...) }} (#17152); `autobot-frontend/src/i18n/` is outside the python filter's "
-        "trees",
-    ),
+    # `autobot-frontend/src/*.{js,ts,vue}` and `autobot-frontend/src/i18n/locales/*.json`
+    # DRAINED (#17885), the same way #17174 drained the SLM locales below: the
+    # frontend file-size ratchet needs `autobot-frontend/src/**` in
+    # .github/filters/python-paths.yml for its 184 literal reads, and that
+    # pattern reaches these four too. So the VNC-password sweep (#16299) and the
+    # locale HTML-entity sweep (#17152) now RUN on a frontend-only change
+    # instead of being skipped -- debt repaid as a side effect, not a new
+    # exemption.
     # `autobot-slm-frontend/src/locales/*.json` DRAINED (#17174): that PR widened
     # .github/filters/python-paths.yml to cover `autobot-slm-frontend/src/locales/**`
     # (for an unrelated secrets-baseline fix in the same tree), so the
     # locale_html_entity_leak_test.py sweep over this specific path is no longer
     # uncovered -- confirmed by reading the filter file directly, not assumed from
     # the guard's own failure message alone.
+    "*docker-compose*.yml": (
+        {"repo_tests/_compose_files.py"},
+        "the one enumeration of every tracked compose file at any depth (#17500); the stacks under "
+        "autobot-infrastructure/ are outside the python filter's trees",
+    ),
     "docker/*.yml": (
-        {"repo_tests/chromadb_bind_not_hardcoded_15317_test.py"},
-        "sweeps compose files for a hardcoded ChromaDB bind address (#15317); `docker/` is "
-        "outside the python filter's trees",
+        {"repo_tests/_compose_files.py"},
+        "the one compose-file enumeration (#17500), shared by the ChromaDB bind (#15317) and "
+        "exposure/credentials guards; `docker/` is outside the python filter's trees",
     ),
     "libs/autobot-sdk-ts/src/resources/*.ts": (
         {"repo_tests/sdk_ts_request_contract_test.py"},
@@ -228,5 +303,28 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     "scripts/lib/*.sh": (
         {"repo_tests/comment_line_number_citations_test.py"},
         "tree `scripts/` is outside the python filter; the per-tree trade #15900 declines to make wholesale",
+    ),
+}
+
+#: Glob declarations the python filter does not cover BECAUSE A DEDICATED,
+#: PATH-GATED WORKFLOW runs the guard instead -- the second branch of the rule
+#: above. Each entry is ``glob -> (guards, workflow, why not the filter)`` and
+#: every part of it is checked against the workflow's parsed YAML, so this
+#: records a route that exists rather than a decision that was made.
+#:
+#: This also only shrinks, by the same logic: an entry leaves when the python
+#: filter covers the tree, when the guard stops declaring the glob, or when the
+#: workflow is retired -- and the third case FAILS rather than lapsing.
+GLOB_RUN_BY_A_DEDICATED_WORKFLOW: dict[str, tuple[set[str], str, str]] = {
+    "docs/**/*.md": (
+        {
+            "repo_tests/doc_model_tags_15219_test.py",
+            "repo_tests/docs_liquid_tags_are_defined_17930_test.py",
+            "repo_tests/kb_populate_one_home_19339_test.py",
+        },
+        ".github/workflows/docs-liquid-tags.yml",
+        "the Liquid-tag guard runs on its own docs-gated job in seconds; covering `docs/**/*.md` "
+        "in the python filter would instead spend the twelve-shard suite on every documentation "
+        "edit, which is the trade this record exists to keep visible (owner decision, #17930)",
     ),
 }

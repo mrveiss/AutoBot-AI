@@ -37,7 +37,7 @@
     <p v-if="!companyId" class="roles-state">{{ t('llcRoles.noCompany') }}</p>
 
     <template v-else>
-      <ErrorBanner v-if="errorMessage" :message="errorMessage" class="roles-error" />
+      <BaseAlert variant="error" v-if="errorMessage" :message="errorMessage" class="roles-error" dismissible :dismiss-label="t('common.dismiss')" />
 
       <p v-if="isLoading" class="roles-state">{{ t('llcRoles.loading') }}</p>
 
@@ -56,7 +56,7 @@
                 @click="selectRole(role.id)"
               >
                 <span class="roles-list-name">{{ role.name }}</span>
-                <BaseBadge v-if="role.is_system" variant="neutral">
+                <BaseBadge size="sm" v-if="role.is_system" variant="neutral">
                   {{ t('llcRoles.systemRole') }}
                 </BaseBadge>
               </button>
@@ -91,7 +91,7 @@
               </p>
               <ul v-else class="roles-chip-list">
                 <li v-for="holder in holders" :key="holder.id" class="roles-chip">
-                  <BaseBadge :variant="holder.ended_at ? 'neutral' : 'success'">
+                  <BaseBadge size="sm" :variant="holder.ended_at ? 'neutral' : 'success'">
                     {{ t(`llcRoles.holderType.${holder.holder_type}`) }}
                   </BaseBadge>
                   <span class="roles-chip-id">{{ holder.holder_id }}</span>
@@ -337,12 +337,8 @@ import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import type { components } from '@/types/generated/api'
 import { createLogger } from '@/utils/debugUtils'
-import BaseButton from '@/components/base/BaseButton.vue'
-import BaseCard from '@/components/base/BaseCard.vue'
-import BaseBadge from '@/components/base/BaseBadge.vue'
 import RoleAttachmentPanel from '@/components/llc/RoleAttachmentPanel.vue'
-import { BaseModal } from '@autobot/ui'
-import ErrorBanner from '@/components/base/ErrorBanner.vue'
+import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseModal } from '@autobot/ui'
 import { describeApiError } from '@/composables/llc/apiErrorMessage'
 
 interface RoleRow {

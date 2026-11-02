@@ -9,10 +9,14 @@
  * Displays active alerts, performance warnings, and optimization recommendations.
  */
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { usePrometheusMetrics } from '@/composables/usePrometheusMetrics'
+import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { PollingPausedAlert } from '@autobot/ui'
+import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
+import { useFleetMetrics } from '@/composables/useFleetMetrics'
 import { createLogger } from '@/utils/debugUtils'
 import { slmApiClient } from '@/utils/ApiClient'
+import { formatCompactRelativeTime } from '@/utils/dateUtils'
 
 const logger = createLogger('AlertsMonitor')
 
@@ -22,7 +26,9 @@ const {
   fetchAlerts,
   fetchRecommendations,
   isLoading,
-} = usePrometheusMetrics({ autoFetch: false })
+} = useFleetMetrics({ autoFetch: false, pollInterval: 0 })
+
+const { t } = useI18n()
 
 const isClearing = ref(false)
 const clearError = ref<string | null>(null)
@@ -32,7 +38,7 @@ const activeTab = ref<'alerts' | 'recommendations'>('alerts')
 const severityFilter = ref<string>('all')
 const acknowledgedAlerts = ref<Set<number>>(new Set())
 
-let refreshInterval: ReturnType<typeof setInterval> | null = null
+const REFRESH_INTERVAL_MS = 30000
 
 // Severity levels
 const severityLevels = ['all', 'critical', 'high', 'warning', 'info']
@@ -107,14 +113,7 @@ function getPriorityBadgeClass(priority: string): string {
 function formatTimestamp(ts: number): string {
   // ts is already in milliseconds (from Date.now() / .getTime())
   const date = new Date(ts)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMins = Math.floor(diffMs / 60000)
-
-  if (diffMins < 1) return 'Just now'
-  if (diffMins < 60) return `${diffMins}m ago`
-  const diffHours = Math.floor(diffMins / 60)
-  if (diffHours < 24) return `${diffHours}h ago`
+  if (Date.now() - date.getTime() < 86400000) return formatCompactRelativeTime(date)
   return date.toLocaleDateString()
 }
 
@@ -156,20 +155,18 @@ async function refresh() {
   await Promise.all([fetchAlerts(), fetchRecommendations()])
 }
 
-onMounted(() => {
-  refresh()
-  refreshInterval = setInterval(refresh, 30000)
-})
+// #19482: the shared dashboard policy (stop on unmount and after repeated failures, paused alert)
+const refreshPoller = useDashboardPoller(async () => {
+  const [alertsLoaded] = await Promise.all([fetchAlerts(), fetchRecommendations()])
+  throwUnlessLoaded(alertsLoaded)
+}, REFRESH_INTERVAL_MS)
 
-onUnmounted(() => {
-  if (refreshInterval) {
-    clearInterval(refreshInterval)
-  }
-})
+onMounted(() => refreshPoller.start(''))
 </script>
 
 <template>
   <div class="p-6">
+    <PollingPausedAlert :poller="refreshPoller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" class="mb-6" @retry="refreshPoller.start('')" />
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <h2 class="text-xl font-bold text-gray-900">{{ $t('monitoring.alertsMonitor.alertsRecommendations') }}</h2>
@@ -184,7 +181,7 @@ onUnmounted(() => {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
           </svg>{{ $t('monitoring.alertsMonitor.clearAllValue0', { value0: alertCounts.total }) }}</button>
         <button
-          @click="refresh"
+          @click="refreshPoller.start('')"
           :disabled="isLoading"
           class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 flex items-center gap-2"
         >

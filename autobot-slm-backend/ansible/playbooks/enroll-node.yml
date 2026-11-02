@@ -28,6 +28,12 @@
   gather_facts: true
   become: true
 
+  # node_major (the Node.js major, #19328) comes from its single definition by
+  # name: a run with a bare `-i "<host>,"` loads no group_vars, the same reason
+  # deploy.yml and enroll-slm-agent.yml load it (#15348).
+  vars_files:
+    - ../inventory/group_vars/all.yml
+
   vars:
     enrollment_timestamp: "{{ ansible_facts['date_time'].iso8601 }}"
     autobot_user: "autobot"
@@ -35,7 +41,7 @@
     autobot_home: "/home/autobot"
     autobot_data_dir: "/var/lib/autobot"
     autobot_log_dir: "/var/log/autobot"
-    autobot_cert_dir: "/etc/autobot/certs"
+    autobot_cert_dir: "{{ autobot_tls_remote_cert_dir | default('/etc/autobot/certs') }}"  # #19366
 
     # Emergency admin user for fallback access when SSH keys fail
     emergency_admin_user: "autobot_admin"
@@ -48,7 +54,7 @@
     role_configs:
       frontend:
         services: ['nginx', 'node']
-        packages: ['nodejs', 'npm', 'nginx']
+        packages: ['nginx']  # Node.js comes from the nodejs role below (#19661)
         ports: [5173, 80, 443]
       npu-worker:
         services: ['npu-service']
@@ -65,7 +71,7 @@
       browser:
         services: ['playwright-service', 'vnc-server']
         packages: ['python3', 'xvfb', 'tigervnc-standalone-server']
-        ports: [3000, 5900]
+        ports: [9001, 5900]
       vnc:
         services: ['vnc-server', 'vnc-websockify']
         # #13069: 'novnc' deliberately absent — the distro package is 1.0.0 (2018)
@@ -230,18 +236,11 @@
         - name: "Setup Node.js for frontend"
           when: node_role == 'frontend'
           block:
-            - name: "Add NodeSource repository"
-              shell: |
-                curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-              args:
-                creates: /etc/apt/sources.list.d/nodesource.list
-
-            - name: "Install Node.js"
-              apt:
+            - name: Install Node.js
+              ansible.builtin.include_role:
                 name: nodejs
-                state: present
-                update_cache: true
-                cache_valid_time: 3600
+                apply:
+                  tags: ['role-setup']
 
         # Redis-specific setup
         - name: "Setup Redis Stack"
@@ -327,14 +326,14 @@
           block:
             - name: "Create git hooks directory"
               file:
-                path: "{{ slm_code_repository | default('${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}') }}/.git/hooks"
+                path: "{{ slm_code_repository | default('${AUTOBOT_PROJECT_ROOT:-' ~ autobot.base_dir ~ '/code_source}') }}/.git/hooks"
                 state: directory
                 mode: '0755'
 
             - name: "Deploy SLM post-commit hook"
               copy:
                 src: "{{ playbook_dir }}/../../../autobot-infrastructure/shared/scripts/hooks/slm-post-commit"
-                dest: "{{ slm_code_repository | default('${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}') }}/.git/hooks/post-commit"
+                dest: "{{ slm_code_repository | default('${AUTOBOT_PROJECT_ROOT:-' ~ autobot.base_dir ~ '/code_source}') }}/.git/hooks/post-commit"
                 mode: '0755'
 
             - name: "Create SLM agent environment file for code-source"

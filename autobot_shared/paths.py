@@ -25,8 +25,12 @@ one implementation rather than two that can drift.
 
 from __future__ import annotations
 
+import functools
+import hashlib
 import os
 import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
+import tempfile
+import warnings
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -144,6 +148,34 @@ def project_root() -> Path:
     the more expensive of the two.
     """
     return resolve_project_root(Path(__file__).resolve())
+
+
+def install_base_dir(when_undeterminable: str | None = None) -> Path:
+    """This process's install base: ``AUTOBOT_BASE_DIR``, else :func:`project_root` (#18094).
+
+    The rule ``ssot_config``'s ``path.base_dir`` follows (its env alias, then this as the default),
+    stated once here so a bootstrap path that cannot import ``ssot_config`` answers the same way
+    instead of restating ``/opt/autobot``.
+
+    *when_undeterminable* is for a caller that runs only on a deployed node and must still answer
+    when :func:`project_root` raises :class:`ProjectRootUndeterminable`: it names its own fallback
+    explicitly (``fleet_constants.FLEET_INSTALL_ROOT``). With none, the raise propagates -- this
+    module still never guesses on anyone's behalf (#14544).
+    """
+    configured = os.environ.get(BASE_DIR_ENV)  # ssot-config-exempt: bootstrap, ssot_config defaults to this
+    if configured:
+        return Path(configured)
+    try:
+        return project_root()
+    except ProjectRootUndeterminable:
+        if when_undeterminable is None:
+            raise
+        return Path(when_undeterminable)
+
+
+def chromadb_data_dir() -> Path:
+    """The local ChromaDB store, ``<project root>/data/chromadb``: the one spelling of that directory (#18143)."""
+    return project_root() / "data" / "chromadb"
 
 
 def resolve_project_root(start: Path) -> Path:
@@ -387,15 +419,70 @@ def git_common_dir(start: Path | str | None = None) -> Path:
     return common_dir.resolve()
 
 
-def shared_cache_path(*parts: str, fallback: Path, start: Path | str | None = None) -> Path:
-    """``git_common_dir()/*parts``, or *fallback* when git is unavailable (#16934).
+#: Points regenerable caches somewhere an operator chose, e.g. a deploy's cache dir (#19553).
+CACHE_DIR_ENV = "AUTOBOT_CACHE_DIR"
+_HERE = Path(__file__).resolve().parent
 
-    For state that must be ONE location across every worktree of a checkout
-    (a lock, a cache keyed to a collection outside any one worktree) but
-    still has to work somewhere with no ``.git`` at all -- a real production
-    install, which :func:`project_root` resolves by ``.env`` instead.
-    """
+
+@functools.lru_cache(maxsize=1)
+def _this_checkout() -> Path | None:
+    """The working tree this code runs from, or None for an install with no ``.git``."""
     try:
-        return git_common_dir(start).joinpath(*parts)
+        return git_repo_root(_HERE).resolve()
     except GitRepoRootUnavailable:
-        return fallback
+        return None
+
+
+def _inside_the_code(path: Path) -> bool:
+    """True when *path* sits in this code's checkout or project tree -- where a cache must never go."""
+    homes = [_this_checkout()]
+    try:
+        homes.append(project_root().resolve())
+    except ProjectRootUndeterminable:
+        pass
+    return any(home is not None and path.is_relative_to(home) for home in homes)
+
+
+def _cache_candidates() -> list[Path]:
+    """Absolute candidates in precedence order; a relative value is ignored, as the XDG spec requires."""
+    xdg = os.environ.get("XDG_CACHE_HOME")
+    raw = [os.environ.get(CACHE_DIR_ENV), xdg and os.path.join(xdg, "autobot"), "~/.cache/autobot"]
+    expanded = [Path(value).expanduser() for value in raw if value]
+    return [path.resolve() for path in expanded if path.is_absolute()]
+
+
+def cache_root() -> Path:
+    """Where regenerable caches live: never inside a checkout or the deployed code (#19553).
+
+    ``AUTOBOT_CACHE_DIR``, else ``$XDG_CACHE_HOME/autobot``, else ``~/.cache/autobot``;
+    a candidate inside this code's checkout or project tree is skipped. The last resort is a
+    temp directory, with a warning: a reboot empties it, so a deploy should set the variable.
+    """
+    for candidate in _cache_candidates():
+        if not _inside_the_code(candidate):
+            return candidate
+    fallback = Path(tempfile.gettempdir()) / "autobot-cache"
+    warnings.warn(f"no cache dir outside the code tree; using {fallback} -- set {CACHE_DIR_ENV}", RuntimeWarning)
+    return fallback
+
+
+@functools.lru_cache(maxsize=None)
+def _checkout_key(start: str) -> str:
+    """One key per checkout (shared by its worktrees) or per install, computed once per process."""
+    try:
+        anchor = git_common_dir(start)
+    except GitRepoRootUnavailable:
+        try:
+            anchor = project_root()
+        except ProjectRootUndeterminable:
+            return "install"
+    return hashlib.sha256(str(anchor.resolve()).encode("utf-8")).hexdigest()[:16]
+
+
+def shared_cache_path(*parts: str, start: Path | str | None = None) -> Path:
+    """``cache_root()/<checkout key>/*parts``: one location per checkout, shared by its worktrees (#16934).
+
+    The key comes from where THIS CODE lives (or *start*), never the process cwd, so a service
+    started from ``/`` and a shell in the checkout agree. Nothing resolves inside the code (#19553).
+    """
+    return cache_root().joinpath(_checkout_key(str(start or _HERE)), *parts)

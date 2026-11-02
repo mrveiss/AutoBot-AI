@@ -45,9 +45,10 @@ SOURCE_ROOTS = ["autobot-backend", "autobot-slm-backend", "autobot_shared"]
 #: relative form is load-bearing (#14484).
 _EXCLUDED_DIR_NAMES = {"tests", "node_modules", "__pycache__", ".venv"}
 
+# #18088: both services' rbac_middleware.py are now re-export shims; the audit write and
+# its counter live once, in the shared module.
 MIDDLEWARES = [
-    "autobot-backend/user_management/middleware/rbac_middleware.py",
-    "autobot-slm-backend/user_management/middleware/rbac_middleware.py",
+    "autobot_shared/user_management/middleware/rbac_middleware.py",
 ]
 
 COUNTER_CALL = "record_audit_write_failure_safely"
@@ -301,8 +302,10 @@ def test_both_known_denial_paths_are_among_the_derived_sites() -> None:
     assert (
         "_emit_permission_denied_audit" in functions
     ), f"the DB-backed denial-audit function is no longer derived, only {sorted(functions)}"
+    # #18263 retired auth_rbac._deny_permission_access (a permission denial now audits through
+    # _emit_permission_denied_audit); require_role's _deny_role_access is the file-backed path left.
     assert (
-        "_deny_permission_access" in functions
+        "_deny_role_access" in functions
     ), f"the file-backed denial-audit function is no longer derived, only {sorted(functions)}"
     assert "audit_log" in callees, f"the file-backed sink is no longer resolved, only {sorted(callees)}"
 
@@ -370,7 +373,7 @@ def test_the_derived_check_would_notice_an_uncounted_sink() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("rel", MIDDLEWARES, ids=["backend", "slm-backend"])
+@pytest.mark.parametrize("rel", MIDDLEWARES, ids=["shared"])
 def test_a_swallowed_permission_denied_audit_is_counted(rel: str) -> None:
     path = REPO_ROOT / rel
     assert path.is_file(), f"{rel} is missing — this guard would pass vacuously"

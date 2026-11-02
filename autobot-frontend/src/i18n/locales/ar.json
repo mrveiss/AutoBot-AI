@@ -1,5 +1,6 @@
 {
   "common": {
+    "appName": "AutoBot",
     "submit": "إرسال",
     "cancel": "إلغاء",
     "save": "حفظ",
@@ -103,7 +104,14 @@
     "exportCsv": "Export as CSV",
     "download": "Download",
     "filterByCategory": "Filter by category",
-    "copied": "Copied"
+    "copied": "Copied",
+    "riskTier": {
+      "low": "منخفض",
+      "medium": "متوسط",
+      "high": "مرتفع",
+      "critical": "Critical"
+    },
+    "logsLoadFailed": "فشل تحميل السجلات: {error}"
   },
   "chat": {
     "sendMessage": "أرسل رسالة...",
@@ -255,6 +263,13 @@
     },
     "input": {
       "retryUpload": "Retry upload",
+      "uploadError": {
+        "http": "فشل الرفع (الحالة {status})",
+        "invalidResponse": "أرسل الخادم استجابة غير مقروءة",
+        "network": "خطأ في الشبكة أثناء الرفع",
+        "cancelled": "تم إلغاء الرفع",
+        "unknown": "فشل الرفع"
+      },
       "filesAttached": "{count} files attached",
       "clearAll": "Clear all",
       "removeFile": "Remove file",
@@ -299,7 +314,10 @@
       "thinkingOffLabel": "thinking Off",
       "thinkingOn": "Thinking on",
       "thinkingOnLabel": "thinking On",
-      "moreActions": "More actions"
+      "moreActions": "More actions",
+      "fileTooLarge": "الملف \"{name}\" كبير جدًا (الحد الأقصى {max})",
+      "voiceUnsupported": "يتطلب الإدخال الصوتي Chrome أو Edge أو Safari 15+. النسخ الصوتي غير متاح في هذا المتصفح.",
+      "micDenied": "تم رفض الوصول إلى الميكروفون. يرجى السماح بالوصول إلى الميكروفون في إعدادات المتصفح."
     },
     "translate": {
       "title": "Translate Text",
@@ -515,6 +533,7 @@
         "pending": "في الانتظار",
         "running": "جارٍ التشغيل",
         "streaming": "Streaming",
+        "waiting_explanation": "في انتظار الشرح",
         "explaining": "Explaining",
         "completed": "مكتمل",
         "failed": "فشل"
@@ -763,7 +782,8 @@
       "files": "الملفات",
       "terminal": "الطرفية",
       "browser": "المتصفح",
-      "novnc": "سطح المكتب البعيد"
+      "novnc": "سطح المكتب البعيد",
+      "ariaLabel": "أقسام المحادثة"
     }
   },
   "settings": {
@@ -776,15 +796,7 @@
     "logging": "السجلات",
     "prompts": "الأوامر",
     "backend": "الخادم",
-    "save": "حفظ الإعدادات",
     "reset": "إعادة الإعدادات الافتراضية",
-    "panelLoadFailed": "فشل تحميل لوحة الإعدادات",
-    "loadingSettings": "جارٍ تحميل الإعدادات...",
-    "backendOffline": "الخادم غير متاح — عرض الإعدادات المؤقتة",
-    "saving": "جارٍ الحفظ...",
-    "discardChanges": "تجاهل التغييرات",
-    "cacheApiUnavailable": "واجهة التخزين المؤقت غير متاحة",
-    "cachedSettings": "استخدام الإعدادات المؤقتة",
     "appearanceDesc": "خصّص مظهر مساحة عملك",
     "voiceDesc": "اضبط صوت تحويل النص إلى كلام",
     "languageDesc": "اختر لغتك المفضلة للواجهة",
@@ -794,31 +806,11 @@
     "languageChanged": "تم تحديث اللغة بنجاح",
     "languageChangeFailed": "فشل تحديث اللغة",
     "webResearch": {
-      "maxResultsHint": "Maximum number of search results to retrieve (1–50)",
       "title": "Web Research",
-      "methodLabel": "Search method",
-      "confirmationLabel": "Require confirmation",
-      "rateLimitRequests": "Requests",
-      "timeoutLabel": "Timeout (seconds)",
-      "enabledLabel": "Enable web research",
       "methodBasic": "Basic",
-      "thresholdLabel": "Auto-research threshold",
       "methodAdvanced": "Advanced",
       "desc": "Configure automated web research behaviour and privacy settings",
-      "rateLimitLabel": "Rate limiting",
-      "methodHint": "Choose how web searches are performed",
-      "maxResultsLabel": "Max results",
-      "confirmationHint": "Ask before performing a web search on your behalf",
-      "methodApiBased": "API-based",
-      "storeInKbHint": "Save research results to the knowledge base",
-      "filterAdultHint": "Filter adult content from search results",
-      "enabledHint": "Allow AutoBot to search the web when answering questions",
-      "privacyLabel": "Privacy & storage",
-      "anonymizeHint": "Anonymize requests before sending to search engines",
-      "timeoutHint": "Maximum time to wait for search results (5–120 s)",
-      "rateLimitWindow": "Window (s)",
-      "thresholdHint": "Confidence level below which AutoBot triggers an automatic search",
-      "rateLimitHint": "Limit how many requests are sent in a given time window"
+      "methodApiBased": "API-based"
     },
     "apiKeys": {
       "enterKey": "Enter API key...",
@@ -940,11 +932,35 @@
       "noApiKeyRequired": "لا يلزم مفتاح API.",
       "redirecting": "جارٍ إعادة التوجيه...",
       "disconnectFailed": "فشل قطع الاتصال",
-      "redirectNeedsCallback": "يتطلب تدفق OAuth بإعادة التوجيه في المتصفح إعداد رد اتصال على الخادم. استخدم رمز الجهاز في البيئات التي لا تحتوي على واجهة.",
-      "deviceNotConfigured": "مصادقة الجهاز غير مهيأة لهذا المزوّد",
       "deviceInitFailed": "فشل بدء تدفق الجهاز",
       "stillWaiting": "لا تزال الموافقة معلّقة — حاول مرة أخرى بعد قليل.",
       "pollFailed": "فشل التحقق"
+    },
+    "preferredMode": {
+      "title": "الوضع المفضّل",
+      "subtitle": "اختر مقدار ما تراه من AutoBot. يمكنك التبديل في أي وقت بزر «الحد الأدنى» في الشريط العلوي.",
+      "group": "وضع الواجهة",
+      "minimal": "الحد الأدنى",
+      "minimalDesc": "الأساسيات فقط — للدردشة والمعرفة والموافقات اليومية.",
+      "full": "كامل",
+      "fullDesc": "كل شيء، بما في ذلك التحليلات والأتمتة والإدارة وأدوات المطورين.",
+      "selected": "محدد",
+      "startIn": "البدء في",
+      "startInDesc": "الوضع الذي يفتح به AutoBot عند تسجيل الدخول",
+      "startLast": "آخر ما استُخدم",
+      "startMinimal": "الحد الأدنى",
+      "startFull": "كامل",
+      "noteSynced": "يُحفظ في حسابك وعلى هذا الجهاز",
+      "noteDirectLinks": "تظل الصفحات المخفية تُفتح من الروابط المباشرة",
+      "noteNeverHidden": "لا تُخفى الموافقات والأخطاء والتنبيهات الأمنية أبدًا"
+    },
+    "additionalThemes": {
+      "title": "سمات إضافية",
+      "subtitle": "ينشرها مسؤولك عبر SLM",
+      "deployed": "منشورة عبر SLM · v{version}",
+      "empty": "لا توجد سمات إضافية منشورة.",
+      "info": "يقوم المسؤولون بتثبيت السمات ونشرها في وحدة تحكم SLM.",
+      "slmLink": "SLM › الإعدادات › السمات ↗"
     }
   },
   "voice": {
@@ -972,7 +988,11 @@
     "confirmDeleteVoice": "Delete voice \"{name}\"?",
     "languageVoicesActive": "{count} language-specific voice(s) configured",
     "confirmDeleteVoiceTitle": "حذف ملف الصوت",
-    "tapToEnableAudio": "انقر في أي مكان لتمكين تشغيل الصوت"
+    "tapToEnableAudio": "انقر في أي مكان لتمكين تشغيل الصوت",
+    "speech": {
+      "url": "رابط",
+      "path": "مسار ملف"
+    }
   },
   "analytics": {
     "title": "التحليلات",
@@ -1292,7 +1312,10 @@
         "envVarRecommendations": "Environment Variable Recommendations",
         "sampleHardcodedValues": "Sample Hardcoded Values",
         "noHardcodedValues": "No hardcoded environment values found. Your configuration looks clean!",
-        "noData": "No environment analysis data available."
+        "noData": "No environment analysis data available.",
+        "modelHint": "النموذج: {model}",
+        "modelLoading": "جارٍ التحميل…",
+        "modelServerDefault": "افتراضي الخادم"
       },
       "ownership": {
         "title": "Code Ownership Analysis",
@@ -1504,21 +1527,16 @@
       "duplicateCode": "Duplicate Code",
       "locations": "{count} locations",
       "linesSaveable": "{count} lines saveable",
-      "moreLocations": "+{count} more locations",
-      "showingOfDuplicates": "Showing {shown} of {total} duplicate patterns",
       "regexOpportunities": "Regex Opportunities",
       "current": "Current",
       "suggested": "Suggested",
-      "showingOfOpportunities": "Showing {shown} of {total} opportunities",
       "complexityHotspots": "Complexity Hotspots",
       "location": "Location",
       "cc": "CC",
       "cognitive": "Cognitive",
       "mi": "MI",
       "nesting": "Nesting",
-      "showingOfHotspots": "Showing {shown} of {total} hotspots",
       "refactoringSuggestions": "Refactoring Suggestions",
-      "showingOfSuggestions": "Showing {shown} of {total} suggestions",
       "patternsInChromaDB": "{count} patterns in ChromaDB",
       "clearStoredPatterns": "Clear stored patterns",
       "lastScan": "Last scan",
@@ -2192,14 +2210,12 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "showingOf": "Showing {shown} of {total} {type}",
       "emptyMessage": "No code smells detected"
     },
     "declarations": {
       "title": "Declarations",
       "total": "Total",
       "exported": "Exported",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No declarations found",
       "types": {
         "function": "Function",
@@ -2222,13 +2238,14 @@
       "totalLines": "Total Lines",
       "similar": "similar",
       "lines": "lines",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No duplicate code detected",
       "similarityGroups": {
         "high": "High Similarity",
         "medium": "Medium Similarity",
         "low": "Low Similarity"
-      }
+      },
+      "scanFailed": "لم يتم تشغيل فحص التكرارات، لذا هذه ليست نتيجة. تحقق من مصدر الشيفرة المحدد وأعد تشغيل الفحص.",
+      "notScanned": "لم يتم تشغيل أي فحص للتكرارات لمصدر الشيفرة هذا بعد."
     },
     "hardcodes": {
       "title": "قيم مشفرة ثابتة",
@@ -2241,7 +2258,6 @@
       "variable": "متغير",
       "value": "قيمة",
       "suggestedEnvVar": "متغير البيئة المقترح",
-      "showingOf": "عرض {shown} من {total}",
       "emptyMessage": "لم يتم اكتشاف قيم مشفرة ثابتة",
       "severityGroups": {
         "high": "خطورة عالية",
@@ -2256,7 +2272,6 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No problems detected",
       "exportMarkdown": "Export Markdown",
       "exportJson": "Export JSON"
@@ -3801,10 +3816,11 @@
     },
     "treeNode": {
       "itemsCount": "Items count",
+      "retryTitle": "Retry title",
       "unvectorized": "Unvectorized",
       "vectorizeFolderTitle": "Vectorize folder title",
-      "retryTitle": "Retry title",
-      "vectorizeTitle": "Vectorize title"
+      "vectorizeTitle": "Vectorize title",
+      "zeroSize": "0B"
     },
     "share": {
       "searching": "Searching...",
@@ -4213,6 +4229,9 @@
       "errorEnterBoth": "يرجى إدخال كيان المصدر وكيان الهدف معًا.",
       "notInGraph": "هذه الكيانات ليست بعد في رسم العلاقات البياني.",
       "notInGraphHint": "إنها موجودة لكن بلا روابط في الرسم البياني، لذا لا يمكن تتبع أي اتصال. أعد تشغيل استخراج الكيانات."
+    },
+    "chromaExplorer": {
+      "subtitle": "تصفح مجموعات المتجهات والبحث فيها"
     }
   },
   "workflow": {
@@ -4223,6 +4242,8 @@
     "stop": "Stop Workflow",
     "status": "Status",
     "history": {
+      "durationSeconds": "ث",
+      "durationMinutes": "د",
       "searchPlaceholder": "Search workflows...",
       "allStatus": "All Status",
       "completed": "مكتمل",
@@ -4338,7 +4359,8 @@
       "agentsAriaLabel": "Agent capabilities",
       "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
       "resolvingCompany": "جارٍ فتح الأتمتة الخاصة بشركتك…",
-      "companyRequired": "اختر شركة لفتح الأتمتة."
+      "companyRequired": "اختر شركة لفتح الأتمتة.",
+      "planBeforeBuilding": "خطط قبل البناء"
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -4646,7 +4668,9 @@
       "channelSlack": "Slack",
       "emailHint": "Comma-separated email addresses",
       "channelWebhook": "Webhook",
-      "sectionDesc": "Configure per-workflow notification routing"
+      "sectionDesc": "Configure per-workflow notification routing",
+      "invalidEmail": "عنوان بريد إلكتروني غير صالح: {emails}",
+      "invalidUrl": "تنسيق URL غير صالح"
     },
     "liveDashboard": {
       "activeExecutions": "Active Executions",
@@ -4782,8 +4806,8 @@
     "settings": "Terminal Settings",
     "fontSize": "Font Size",
     "theme": "Theme",
-    "dark": "Dark",
-    "light": "Light",
+    "dark": "داكن",
+    "light": "فاتح",
     "cursorStyle": "Cursor Style",
     "block": "Block",
     "underline": "Underline",
@@ -4944,7 +4968,45 @@
       "editCommand": "Edit",
       "editCancel": "Cancel",
       "editSave": "Save"
-    }
+    },
+    "automation": {
+      "started": "🚀 بدأ سير العمل الآلي: {name}",
+      "stepsPlanned": "📋 تم تخطيط {count} خطوات. استخدم زر الإيقاف المؤقت لتولي التحكم اليدوي في أي وقت.",
+      "unnamedWorkflow": "سير عمل بدون اسم",
+      "executeStep": "تنفيذ: {command}",
+      "paused": "⏸️ تم إيقاف الأتمتة مؤقتًا - تم تفعيل التحكم اليدوي. اكتب الأوامر بحرية.",
+      "resumed": "▶️ تم استئناف الأتمتة - متابعة تنفيذ سير العمل.",
+      "aboutToExecute": "🤖 سير عمل الذكاء الاصطناعي: على وشك تنفيذ \"{command}\"",
+      "stepProgress": "📋 الخطوة {step}/{total}: {description}",
+      "skipped": "⏭️ تم التخطي: {command}",
+      "manualControlTaken": "👤 تم تولي التحكم اليدوي - أكمل خطواتك اليدوية، ثم انقر على استئناف لمتابعة سير العمل.",
+      "automated": "🤖 آلي: {command}",
+      "pausedBySystem": "⏸️ أوقف النظام سير العمل مؤقتًا",
+      "resumedBySystem": "▶️ استأنف النظام سير العمل",
+      "executing": "🤖 جارٍ التنفيذ: {command}",
+      "stepSkippedByUser": "⏭️ تخطى المستخدم الخطوة {step}",
+      "workflowSaved": "💾 تم حفظ سير العمل: {name}",
+      "workflowUpdated": "📋 تم تحديث سير العمل: الخطوات المهيأة: {count}",
+      "manualCommand": "👤 يدوي: {command}",
+      "example": {
+        "name": "تحديث النظام وتثبيت الحزم",
+        "updateDesc": "تحديث مستودعات الحزم",
+        "updateExpl": "يحدّث قائمة الحزم المتاحة من المستودعات المهيأة.",
+        "upgradeDesc": "ترقية الحزم المثبتة",
+        "upgradeExpl": "يرقّي جميع الحزم المثبتة إلى أحدث إصداراتها.",
+        "installDesc": "تثبيت الأدوات الأساسية",
+        "installExpl": "يثبّت أدوات التطوير الشائعة الاستخدام.",
+        "verifyDesc": "التحقق من التثبيتات",
+        "verifyExpl": "يتحقق من تثبيت الأدوات بشكل صحيح."
+      }
+    },
+    "events": {
+      "emergencyKill": "🛑 إيقاف طارئ: أنهى المستخدم جميع العمليات",
+      "emergencyKillFailed": "❌ فشل الإيقاف الطارئ: {message}",
+      "interrupted": "^C (قاطع المستخدم العملية)",
+      "error": "خطأ: {error}"
+    },
+    "urlCopied": "تم نسخ عنوان URL الخاص بالطرفية إلى الحافظة!"
   },
   "llm": {
     "unavailable": "Unavailable",
@@ -5018,7 +5080,6 @@
     "role": "Role:",
     "lastLogin": "Last Login:",
     "preferences": "Preferences",
-    "theme": "Theme",
     "notifications": "Notifications",
     "emailNotifications": "Email notifications",
     "browserNotifications": "Browser notifications",
@@ -5028,7 +5089,6 @@
     "showTooltips": "Show tooltips",
     "enableAnimations": "Enable animations",
     "savePreferences": "Save Preferences",
-    "appearance": "المظهر",
     "voiceChatDisplay": "Voice Chat Display",
     "fullScreen": "Full-screen",
     "sidePanel": "Side panel",
@@ -5044,9 +5104,6 @@
     "pwTooShort": "Password must be at least 8 characters",
     "pwChanged": "Password changed successfully!",
     "never": "Never",
-    "themeLight": "Light",
-    "themeDark": "Dark",
-    "themeAuto": "Auto",
     "tabDevices": "Tab devices"
   },
   "charts": {
@@ -5719,23 +5776,6 @@
       "postExecutionFailed": "تم تنفيذ الأمر، لكن فشلت خطوة لاحقة. يتم عرض المخرجات؛ قد تكون بعض التحديثات مفقودة.",
       "enterComment": "Please enter a comment before submitting"
     },
-    "darkModeToggle": {
-      "switchToLight": "Switch to light mode",
-      "switchToDark": "Switch to dark mode",
-      "toggleDarkMode": "Toggle dark mode"
-    },
-    "dataTable": {
-      "sortBy": "Sort by {column}",
-      "actions": "إجراءات",
-      "noDataAvailable": "No data available",
-      "noItemsToDisplay": "No items to display",
-      "pageOf": "Page {current} of {total}",
-      "pagination": "Table pagination",
-      "previousPage": "Previous page",
-      "nextPage": "Next page",
-      "dataTable": "Data table",
-      "loading": "Loading data..."
-    },
     "hostSelection": {
       "title": "Select Host",
       "defaultPurpose": "Select a host for this operation",
@@ -5779,6 +5819,7 @@
       "retrySending": "Retry sending"
     },
     "preferences": {
+      "accentTheme": "السمة",
       "title": "Preferences",
       "reset": "إعادة تعيين",
       "resetAll": "Reset all preferences to defaults",
@@ -5791,11 +5832,11 @@
       "accentColor": "Accent Color",
       "accentColorOptions": "Accent color options",
       "setAccentColor": "Set accent color to {color}",
-      "teal": "Teal",
-      "emerald": "Emerald",
-      "blue": "Blue",
-      "purple": "Purple",
-      "orange": "Orange",
+      "teal": "أزرق مخضر",
+      "emerald": "زمردي",
+      "blue": "أزرق",
+      "purple": "بنفسجي",
+      "orange": "برتقالي",
       "layoutDensity": "Layout Density",
       "layoutDensityOptions": "Layout density options",
       "setLayoutDensity": "Set layout density to {density}",
@@ -5806,7 +5847,11 @@
       "accentColorChanged": "Accent color changed to {color}",
       "layoutDensityChanged": "Layout density changed to {density}",
       "preferencesReset": "All preferences reset to defaults",
-      "theme": "Theme"
+      "theme": "Theme",
+      "green": "أخضر",
+      "pink": "وردي",
+      "indigo": "نيلي",
+      "red": "أحمر"
     },
     "progressBar": {
       "timeRemaining": "{time} remaining"
@@ -5829,12 +5874,20 @@
       "dismiss": "Dismiss"
     },
     "themeToggle": {
+      "accentPurpleDescription": "بنفسجي — إبداع وأناقة",
+      "system": "النظام",
+      "highContrast": "تباين عالٍ",
+      "monochrome": "أحادي اللون",
+      "accentThemeDescription": "افتراضي السمة — اللون الأساسي الخاص بالسمة",
+      "baseThemeChanged": "تم تغيير السمة الأساسية إلى {name}",
+      "accentChanged": "تم تغيير لون التمييز إلى {name}",
+      "presetChanged": "تم تغيير إعداد السمة المسبق إلى {name}",
       "theme": "Theme",
       "selectTheme": "Select theme",
       "switchToLight": "Switch to light mode",
       "switchToDark": "Switch to dark mode",
-      "light": "Light",
-      "dark": "Dark"
+      "light": "فاتح",
+      "dark": "داكن"
     },
     "toastContainer": {
       "notifications": "Notifications",
@@ -5854,7 +5907,9 @@
     },
     "loadingSpinner": {
       "loading": "Loading…"
-    }
+    },
+    "minimalNote": "عرض الأساسيات · الأدوات التقنية مخفية",
+    "minimalNoteAction": "عرض جميع الميزات"
   },
   "base": {
     "badge": {
@@ -5868,10 +5923,6 @@
       "actions": "إجراءات",
       "noDataAvailable": "No data available",
       "selectRow": "Select row {row}"
-    },
-    "panel": {
-      "collapse": "Collapse panel",
-      "expand": "Expand panel"
     }
   },
   "views": {
@@ -6087,8 +6138,6 @@
       "createNewDashboard": "Create new dashboard",
       "availableWidgets": "Available Widgets",
       "configure": "Configure",
-      "expand": "Expand",
-      "shrink": "Shrink",
       "remove": "Remove",
       "noWidgets": "No Widgets Added",
       "noWidgetsHint": "Click \"Edit Layout\" to add widgets to your dashboard",
@@ -6275,7 +6324,7 @@
       "subtitle": "Secure Access Portal",
       "usernameLabel": "Username",
       "usernamePlaceholder": "Enter your username",
-      "passwordLabel": "Password",
+      "passwordLabel": "كلمة المرور",
       "passwordPlaceholder": "Enter your password",
       "signIn": "Sign In",
       "footerText": "AutoBot Security Portal - Authenticated Access Required",
@@ -6508,7 +6557,17 @@
       "clickToSolve": "Click to solve in VNC",
       "openVnc": "Open VNC Desktop",
       "solved": "I've Solved It",
-      "skipSource": "Skip Source"
+      "skipSource": "Skip Source",
+      "types": {
+        "recaptcha": "reCAPTCHA",
+        "hcaptcha": "hCaptcha",
+        "cloudflare": "تحدي Cloudflare",
+        "slider": "CAPTCHA بالمنزلق",
+        "imageSelect": "CAPTCHA باختيار الصور",
+        "text": "CAPTCHA نصي",
+        "math": "CAPTCHA رياضي",
+        "unknown": "CAPTCHA غير معروف"
+      }
     }
   },
   "operations": {
@@ -6667,12 +6726,12 @@
       "username": "Username",
       "usernamePlaceholder": "Enter username",
       "authType": "Authentication Type",
-      "authPassword": "Password",
+      "authPassword": "كلمة المرور",
       "authSshKey": "SSH Key",
       "authApiKey": "API Key",
       "authToken": "Token",
       "authCertificate": "Certificate",
-      "password": "Password",
+      "password": "كلمة المرور",
       "passwordPlaceholder": "Enter password",
       "sshKey": "SSH Key / Private Key",
       "sshKeyPlaceholder": "Paste SSH private key here...",
@@ -6729,7 +6788,7 @@
       "expired": "Expired",
       "typeSSH": "SSH Credential",
       "typeAPI": "API Key",
-      "typePassword": "Password",
+      "typePassword": "كلمة المرور",
       "typeToken": "Token",
       "typeCertificate": "Certificate",
       "typeDatabase": "Database",
@@ -6798,7 +6857,44 @@
       "timeHoursAgo": "{count}h ago",
       "timeInHours": "in {count}h",
       "timeDaysAgo": "{count}d ago",
-      "timeInDays": "in {count}d"
+      "timeInDays": "in {count}d",
+      "categories": {
+        "api_key": "مفاتيح API",
+        "token": "رموز الوصول",
+        "oauth_refresh_token": "رموز تحديث OAuth",
+        "connector_oauth_token": "رموز الموصلات",
+        "password": "كلمات المرور",
+        "ssh_key": "مفاتيح SSH",
+        "infrastructure_host": "مضيفو البنية التحتية",
+        "database_url": "قواعد البيانات",
+        "certificate": "الشهادات",
+        "other": "أخرى"
+      },
+      "kinds": {
+        "api_key": "مفتاح API",
+        "token": "رمز وصول",
+        "oauth_refresh_token": "رمز تحديث OAuth",
+        "connector_oauth_token": "رمز موصل",
+        "password": "كلمة المرور",
+        "ssh_key": "مفتاح SSH",
+        "infrastructure_host": "مضيف بنية تحتية",
+        "database_url": "قاعدة بيانات",
+        "certificate": "شهادة",
+        "other": "أخرى"
+      },
+      "templates": {
+        "openaiDesc": "الوصول إلى واجهة GPT",
+        "anthropicDesc": "الوصول إلى واجهة Claude",
+        "awsDesc": "خدمات أمازون السحابية",
+        "githubDesc": "رمز GitHub الشخصي",
+        "postgresDesc": "اتصال بقاعدة البيانات",
+        "redisDesc": "اتصال Redis",
+        "sshLabel": "مفتاح SSH",
+        "sshDesc": "الوصول إلى الخادم",
+        "slackDesc": "رمز بوت Slack",
+        "serverLabel": "مضيف الخادم",
+        "serverDesc": "الوصول إلى خادم SSH/VNC"
+      }
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -7284,7 +7380,16 @@
       "initComplete": "Initialization complete"
     }
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "قواعد التنبيه",
+      "overview": "نظرة عامة",
+      "slos": "أهداف مستوى الخدمة",
+      "traces": "التتبعات"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "browser": {
       "contentsOf": "{path} Contents",
       "refresh": "تحديث",
@@ -7299,7 +7404,8 @@
       "errorDeletingFile": "Error deleting file",
       "errorRenamingFile": "Error renaming file",
       "refreshAriaLabel": "Refresh files",
-      "toggleViewAriaLabel": "Toggle view mode"
+      "toggleViewAriaLabel": "Toggle view mode",
+      "uploadFailedHint": "يرجى التحقق من حدود حجم الملف ومتطلبات التنسيق"
     },
     "header": {
       "title": "File Browser",
@@ -7791,7 +7897,7 @@
     "correlationChain": "Correlation Chain"
   },
   "nav": {
-    "mainNavigation": "Main navigation",
+    "mainNavigation": "التنقل الرئيسي",
     "chat": "Chat",
     "knowledge": "Knowledge",
     "automation": "Automation",
@@ -7810,11 +7916,10 @@
     "customDashboard": "Custom Dashboard",
     "agentRegistry": "Agents",
     "agentActivity": "نشاط الوكيل",
-    "switchLanguage": "Switch language",
     "openMainMenu": "Open main menu",
-    "skipToContent": "Skip to content",
+    "skipToContent": "انتقل إلى المحتوى الرئيسي",
     "services": "Services",
-    "skipToNavigation": "Skip to navigation",
+    "skipToNavigation": "انتقل إلى التنقل",
     "profile": "Profile",
     "systemStatus": "System Status",
     "operations": "العمليات",
@@ -7886,7 +7991,31 @@
     "adminPricing": "تسعير النماذج",
     "adminMcpServers": "خوادم MCP",
     "adminPermissionScopes": "نطاقات الصلاحيات",
-    "llcRoles": "الأدوار"
+    "llcRoles": "الأدوار",
+    "keywords": {
+      "knowledge": "مستندات ملفات مكتبة نسخ ملاحظات",
+      "companyOs": "شركة مؤسسة أعمال منظمة",
+      "automation": "سير عمل خط معالجة جدولة مهام",
+      "analytics": "زوار مقاييس إحصائيات رسوم تقارير",
+      "preferences": "إعدادات خيارات لغة سمة",
+      "budgetPolicies": "تكلفة إنفاق حدود مال",
+      "systemHealth": "حالة توفر تشخيص مراقبة",
+      "vault": "بيانات اعتماد مفاتيح كلمات مرور رموز خزنة"
+    },
+    "homeAria": "الصفحة الرئيسية لـ AutoBot",
+    "vaultTip": "الأسرار — المفاتيح وبيانات الاعتماد المخزَّنة",
+    "preferencesTip": "التفضيلات",
+    "platformAdmin": "إدارة المنصة",
+    "platformAdminAria": "إدارة المنصة، تفتح وحدة تحكم SLM في علامة تبويب جديدة",
+    "platformAdminTip": "إدارة المنصة — تفتح وحدة تحكم SLM ↗",
+    "profileMenu": "قائمة الملف الشخصي",
+    "uiMode": {
+      "label": "الحد الأدنى",
+      "tip": "واجهة الحد الأدنى — إخفاء الميزات المتقدمة",
+      "announceMinimal": "تم تفعيل واجهة الحد الأدنى. الميزات المتقدمة مخفية.",
+      "announceFull": "تم تفعيل الواجهة الكاملة. جميع الميزات معروضة."
+    },
+    "llcLedger": "سجل الوكلاء"
   },
   "llcCompanyStatus": {
     "showArchived": "عرض المؤرشفة",
@@ -7965,12 +8094,34 @@
     "newCode": "New Code Agent",
     "newCodeDesc": "Start a code analysis session",
     "newAnalysis": "New Analysis",
-    "newAnalysisDesc": "Start an analysis session"
+    "newAnalysisDesc": "Start an analysis session",
+    "openPage": "فتح {page}",
+    "types": {
+      "task": "مهمة",
+      "research": "بحث",
+      "code": "كود",
+      "analysis": "تحليل",
+      "navigate": "صفحة"
+    },
+    "hints": {
+      "navigate": "تنقل",
+      "select": "اختيار",
+      "close": "إغلاق"
+    }
   },
   "slm": {
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "فشل تفعيل نافذة الصيانة",
+      "completeWindowFailed": "فشل إكمال نافذة الصيانة",
+      "deleteWindowFailed": "فشل حذف نافذة الصيانة",
+      "drainNodeFailed": "فشل تفريغ العقدة. يرجى المحاولة مرة أخرى.",
+      "resumeNodeFailed": "فشل استئناف العقدة. يرجى المحاولة مرة أخرى.",
+      "saveKeysFailed": "فشل حفظ مفاتيح API. تحقق من وحدة التحكم للحصول على التفاصيل.",
+      "addNodeFailed": "فشلت إضافة العقدة"
     }
   },
   "mobile": {
@@ -8482,7 +8633,8 @@
       "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "معلومات الأدوات غير متاحة حاليًا — قد تكون هذه القائمة غير مكتملة.",
       "canvasNoToolsDefined": "لا توجد أدوات مرفقة بأي دور في هذه الشركة.",
-      "deepLinkNodeNotFound": "تشير هذه الوصلة إلى عقدة تعذر العثور عليها هنا. ربما تمت إزالتها، أو قد لا تملك صلاحية الوصول إليها."
+      "deepLinkNodeNotFound": "تشير هذه الوصلة إلى عقدة تعذر العثور عليها هنا. ربما تمت إزالتها، أو قد لا تملك صلاحية الوصول إليها.",
+      "viewPlanner": "مخطط سير العمل"
     },
     "executorRollup": {
       "title": "ملخص المنفذين",
@@ -8761,6 +8913,236 @@
       "retry": "إعادة المحاولة",
       "loadingItem": "جارٍ تحميل عنصر العمل…",
       "itemLoadFailed": "تعذّر تحميل عنصر العمل هذا"
+    },
+    "ledger": {
+      "title": "سجل الوكلاء",
+      "subtitle": "من يعمل على ماذا في هذه الشركة، ومن ينتظر.",
+      "tabsAria": "طرق عرض السجل",
+      "tabs": {
+        "now": "يعمل الآن",
+        "claims": "الحجوزات",
+        "contention": "التنافس",
+        "activity": "النشاط"
+      },
+      "col": {
+        "agent": "الوكيل",
+        "kind": "النوع",
+        "status": "الحالة",
+        "task": "المهمة الحالية",
+        "detail": "التفاصيل",
+        "scope": "النطاق",
+        "mode": "الوضع",
+        "intent": "الغرض",
+        "expires": "ينتهي",
+        "renewals": "التجديدات"
+      },
+      "busy": "مشغول",
+      "idle": "خامل",
+      "peerMessages": "رسائل الأقران المعلقة",
+      "idleSubscribers": "اشتراكات الخمول",
+      "pendingFor": "{n} معلقة لـ {name}",
+      "sentBy": "من {names}",
+      "waitsForIdle": "{who} ينتظر حتى يصبح {target} خاملاً",
+      "heldBy": "يحتفظ به {agent}",
+      "waitlistAria": "قائمة الانتظار بالترتيب",
+      "silenceMeansHold": "الطلب ليس إفراجاً: الصمت يعني الاحتفاظ، والحجز غير المجدد ينتهي من تلقاء نفسه.",
+      "ask": "اطلب من المالك الإفراج",
+      "askAria": "اطلب من مالك {scope} الإفراج عنه",
+      "conflicts": "التعارضات",
+      "recent": "النشاط الأخير",
+      "conflict": {
+        "release_refused": "رُفض إفراج",
+        "claim_expired": "انتهى حجز أثناء الاحتفاظ به",
+        "yield_unanswered": "بقي طلب تنازل بلا رد",
+        "claim_lapsed_during_action": "انتهى حجز أثناء إجراء"
+      },
+      "empty": {
+        "presence": "لم يبلّغ أي وكيل",
+        "peerMessages": "لا توجد رسائل معلقة",
+        "idleSubscribers": "لا توجد اشتراكات خمول",
+        "claims": "لا توجد حجوزات",
+        "contention": "لا يوجد تنافس",
+        "conflicts": "لا توجد تعارضات",
+        "activity": "لا يوجد نشاط حديث"
+      },
+      "state": {
+        "loading": "جارٍ قراءة السجل…",
+        "unavailableTitle": "تعذّرت قراءة السجل",
+        "unavailableBody": "لم يستجب مخزن {source}. هذا ليس مثل عدم وجود إدخالات.",
+        "errorTitle": "حدث خطأ أثناء تحميل هذا القسم"
+      },
+      "askState": {
+        "sending": "جارٍ الإرسال…",
+        "sent": "أُرسل الطلب — القرار للمالك؛ الصمت يعني الاحتفاظ.",
+        "tooSoon": "سألت عن هذا الحجز للتو؛ حاول مرة أخرى بعد دقيقة.",
+        "notFound": "لم تعد هذه المهمة تحتفظ بالحجز — حدّث الصفحة لترى من يحتفظ به الآن.",
+        "unavailable": "تعذّر الوصول إلى السجل؛ لم يُرسل شيء.",
+        "error": "حدث خطأ ولم يمكن تأكيد التسليم. حدّث الصفحة لمعرفة ما إذا كانت المطالبة لا تزال محجوزة."
+      }
+    },
+    "workflowPlanner": {
+      "title": "مخطط سير العمل",
+      "plans": "الخطط",
+      "newPlan": "خطة جديدة",
+      "open": "فتح",
+      "back": "العودة إلى الخطط",
+      "retry": "إعادة المحاولة",
+      "loading": "جارٍ تحميل الخطط...",
+      "loadFailed": "تعذّر تحميل الخطة.",
+      "stale": {
+        "plan": "تعذّر تحديث هذه الخطة، لذا قد يكون المعروض قديماً. {reason}",
+        "gate": "تعذّر تحديث فحوص الجاهزية، لذا قد تكون قائمة ما ينقص قديمة. {reason}",
+        "both": "تعذّر تحديث الخطة وفحوص الجاهزية معاً، لذا قد يكون المعروض قديماً. {reason}"
+      },
+      "rereadRetry": "إعادة تحميل الخطة",
+      "saveFailed": "تعذّر حفظ التغيير.",
+      "createFailed": "تعذّر إنشاء الخطة.",
+      "emptyTitle": "لا توجد خطط بعد",
+      "emptyHint": "ابدأ خطة لرسم عملية واحدة وقياسها واختيار الرقم الواحد الذي تريد تحسينه.",
+      "unavailableTitle": "مخطط سير العمل غير متاح",
+      "unavailableHint": "هذه الميزة متوقفة في مساحة عملك، لذلك لا يوجد ما يُعرض هنا بعد.",
+      "statusFlow": "تقدّم الخطة",
+      "status": {
+        "draft": "مسودة",
+        "measured": "تم القياس",
+        "labeled": "تم الوسم",
+        "approved": "معتمدة",
+        "converted": "تم التحويل"
+      },
+      "col": {
+        "name": "الخطة",
+        "revision": "المراجعة",
+        "status": "الحالة",
+        "actions": "الإجراءات"
+      },
+      "form": {
+        "name": "اسم الخطة",
+        "startsAt": "أين تبدأ العملية",
+        "endsAt": "أين تنتهي العملية",
+        "create": "إنشاء خطة"
+      },
+      "steps": {
+        "map": "ارسمها",
+        "measure": "قِس",
+        "oneNumber": "اختر رقمًا واحدًا",
+        "label": "قسّم ووسم",
+        "convert": "إنشاء سير عمل"
+      },
+      "map": {
+        "empty": "لم يُرسم شيء بعد",
+        "emptyHint": "أضف أولًا من يشارك (المسارات) ثم خطوات كل منهم.",
+        "handoffs": "{count} عمليات تسليم",
+        "waitNote": "ما الذي ينتظر عند هذا التسليم؟",
+        "laneName": "اسم المسار",
+        "addLane": "إضافة مسار",
+        "stepLabel": "خطوة",
+        "stepLane": "مسار الخطوة",
+        "addStep": "إضافة خطوة"
+      },
+      "source": {
+        "self_reported": "ذكرتَ ذلك",
+        "email": "تم التحقق عبر البريد",
+        "calendar": "تم التحقق عبر التقويم"
+      },
+      "measure": {
+        "hint": "كم مرة تحدث كل خطوة وكم تستغرق؟",
+        "needSteps": "ارسم خطوة واحدة على الأقل أولًا.",
+        "perWeek": "في الأسبوع",
+        "duration": "المدة",
+        "unit": "وحدة المدة",
+        "save": "حفظ",
+        "clear": "مسح"
+      },
+      "unit": {
+        "minutes": "دقائق",
+        "hours": "ساعات",
+        "days": "أيام"
+      },
+      "oneNumber": {
+        "hint": "الخطوات التي قسّتها، الأطول انتظارًا أولًا. أنت تقرر أيها يهم.",
+        "needMetrics": "قِس خطوة واحدة على الأقل أولًا.",
+        "rate": "{freq} في الأسبوع، {dur} {unit}",
+        "title": "سمِّ هذا الرقم",
+        "returnKind": "ما الذي تستعيده",
+        "target": "الهدف",
+        "save": "حفظ كرقمي الواحد"
+      },
+      "returnKind": {
+        "hours_back": "ساعات مستعادة",
+        "more_yeses": "موافقات أكثر",
+        "money_sooner": "مال أسرع"
+      },
+      "label": {
+        "needNumber": "اختر رقمك الواحد أولًا؛ خطوته هي ما تُقسّمه هنا.",
+        "subStep": "خطوة فرعية",
+        "addSubStep": "إضافة خطوة فرعية",
+        "unlabel": "إزالة الوسم",
+        "edgeCase": "حالة حدّية: {text}",
+        "byHandNote": "هذه تبقى للأشخاص. الذكاء الاصطناعي لا يتصرف فيها أبدًا.",
+        "acknowledge": "قرأتُ قائمة اليدوي",
+        "acknowledged": "تمت قراءة قائمة اليدوي"
+      },
+      "labels": {
+        "ai": "ذكاء اصطناعي",
+        "automation": "أتمتة",
+        "by_hand": "يدوي"
+      },
+      "gate": {
+        "missing": "لا يزال ناقصًا",
+        "title": "هل أنت جاهز للإنشاء؟",
+        "unknown": "فحص آخر",
+        "state": {
+          "met": "مستوفى",
+          "open": "مفتوح",
+          "pending": "لم يُفحص بعد"
+        },
+        "name": {
+          "G1": "الخريطة صالحة",
+          "G2": "كل خطوة مقيسة",
+          "G3": "الخطوة المختارة مفصّلة",
+          "G4": "كل خطوة فرعية وحالة حدّية موسومة",
+          "G5": "قُرئت قائمة «يدويًا» وغُطّيت خطوات الذكاء الاصطناعي بموافقات",
+          "G6": "المعاينة بلا أخطاء",
+          "G7": "وافقت على هذه الخطة",
+          "converted": "تم إنشاء سير العمل"
+        }
+      },
+      "readOnly": "حالة هذه الخطة: {status}، لذا فإن الخطوات من 1 إلى 4 للقراءة فقط.",
+      "firstProcess": {
+        "title": "شركتك جاهزة",
+        "body": "خطط لأول عملية لديك: ارسمها وقِسها واختر الرقم الواحد الذي تريد تحسينه.",
+        "plan": "خطط لأول عملية لدي",
+        "later": "لاحقًا"
+      },
+      "convert": {
+        "notReady": "أكمل الخطوات من 1 إلى 4 أولًا. تُظهر الفحوص أعلاه ما يزال ناقصًا.",
+        "previewTitle": "ما الذي سيُنشأ (معاينة، لا شيء موجود بعد)",
+        "createdTitle": "ما الذي أُنشئ",
+        "counts": "سير العمل: {workflows}. العمليات: {processes}.",
+        "ownerLane": "المسؤول: {lane}",
+        "errors": "أخطاء يجب إصلاحها قبل الموافقة",
+        "warnings": "تحذيرات",
+        "documented": "محفوظ كنص دليل ولم يُبنَ:",
+        "failedProposals": "تعذّر تقديم {count} من مقترحات سطور الذكاء الاصطناعي. أعد المحاولة لتقديمها.",
+        "turnOnNotAvailable": "تشغيل سير العمل غير متاح بعد: لا شيء ينفّذ سير العمل هذا حتى ذلك الحين.",
+        "openWorkflows": "فتح سير العمل",
+        "unavailable": "هذا الإجراء غير متاح: مخطط سير العمل معطّل في مساحة عملك، أو لم تعد الخطة موجودة.",
+        "blocked": "لم يصبح جاهزًا بعد. تُظهر الفحوص أعلاه ما هو ناقص.",
+        "approvedBy": "وافق عليها {by} في {at}.",
+        "preview": "معاينة ما سيُنشأ",
+        "previewAgain": "تحديث المعاينة",
+        "approve": "موافقة",
+        "create": "إنشاء سير العمل",
+        "retry": "إعادة محاولة مقترحات سطور الذكاء الاصطناعي",
+        "approveTitle": "هل توافق على هذه الخطة؟",
+        "approveMessage": "أنت توافق على المعاينة المعروضة. أي تعديل لاحق على الخطة يلغي هذه الموافقة.",
+        "previewFailed": "تعذّر إنشاء المعاينة.",
+        "approveFailed": "تعذّرت الموافقة على الخطة.",
+        "approveBlocked": "الموافقة محجوبة إلى أن يتم حل ما يلي:",
+        "approveDetail": "تفاصيل من الخادم: {detail}",
+        "convertFailed": "تعذّر إنشاء سير العمل.",
+        "retryFailed": "تعذّرت إعادة محاولة مقترحات سطور الذكاء الاصطناعي."
+      }
     }
   },
   "code": {
@@ -9166,6 +9548,11 @@
       "subtitle": "مفردات صلاحيات دقيقة وحزم نطاقات لمفاتيح API",
       "comingSoonTitle": "قادم في إصدار لاحق",
       "comingSoonMessage": "نطاقات الصلاحيات الدقيقة — مفردات الصلاحيات، وحزم النطاقات، وإنفاذ نطاقات مفاتيح API — غير متوفرة في هذا الإصدار. ستتيح لك هذه الصفحة تحديدها وتعيينها بمجرد إطلاقها."
+    },
+    "layout": {
+      "title": "الإدارة",
+      "subtitle": "أدوات الواجهة الخلفية للمسؤولين",
+      "ariaLabel": "قسم الإدارة"
     }
   },
   "components": {
@@ -9404,7 +9791,7 @@
     "empty": "No users found.",
     "fieldEmail": "Email",
     "fieldUsername": "Username",
-    "fieldPassword": "Password",
+    "fieldPassword": "كلمة المرور",
     "fieldDisplayName": "Display Name",
     "createUser": "Create User",
     "userLabel": "User:",
@@ -9515,7 +9902,164 @@
       "collectionIdPlaceholder": "معرّف المجموعة",
       "pushing": "جارٍ الإرسال…",
       "confirm": "تأكيد",
-      "pushFailed": "لم نتمكن من إضافة هذا التسجيل إلى قاعدة المعرفة. يُرجى المحاولة مرة أخرى."
+      "pushFailed": "لم نتمكن من إضافة هذا التسجيل إلى قاعدة المعرفة. يُرجى المحاولة مرة أخرى.",
+      "collectionNotJoined": "تم الحفظ، لكن لم يتم العثور على المجموعة المحددة — النص موجود في قاعدة المعرفة وليس في تلك المجموعة."
     }
+  },
+  "systemStatus": {
+    "summary": {
+      "issues": "تم اكتشاف مشكلات في النظام",
+      "warnings": "تحذيرات النظام",
+      "ok": "جميع الأنظمة تعمل"
+    },
+    "tooltip": {
+      "issues": "انقر لعرض مشكلات النظام",
+      "warnings": "انقر لعرض تحذيرات النظام",
+      "ok": "انقر لعرض حالة النظام - جميع الخدمات تعمل"
+    },
+    "aria": {
+      "issues": "حالة النظام: تم اكتشاف مشكلات",
+      "warnings": "حالة النظام: توجد تحذيرات",
+      "ok": "حالة النظام: جميع الخدمات تعمل"
+    },
+    "description": {
+      "servicesDown": "{n} خدمة متوقفة | {n} خدمات متوقفة",
+      "warnings": "{n} تحذير | {n} تحذيرات",
+      "withWarnings": "{n} خدمة بها تحذيرات | {n} خدمات بها تحذيرات",
+      "downAndWarnings": "{down} و{warnings}",
+      "ok": "جميع الخدمات تعمل بشكل طبيعي"
+    },
+    "service": {
+      "backend": "واجهة برمجة الخادم",
+      "frontend": "الواجهة الأمامية",
+      "websocket": "WebSocket",
+      "redis": "Redis",
+      "ollama": "Ollama",
+      "npu_worker": "عامل NPU",
+      "browser": "خدمة المتصفح",
+      "chromadb": "حزمة الذكاء الاصطناعي (ChromaDB)",
+      "other": "خدمات أخرى"
+    },
+    "state": {
+      "running": "قيد التشغيل",
+      "connected": "متصل",
+      "statusUnknown": "الحالة غير معروفة",
+      "connectionFailed": "فشل الاتصال",
+      "timeout": "انتهت المهلة",
+      "connectionRefused": "تم رفض الاتصال",
+      "unreachable": "يتعذر الوصول",
+      "unhealthy": "غير سليم",
+      "warning": "تحذير",
+      "pending": "قيد الانتظار",
+      "available": "متاح",
+      "unavailable": "غير متاح",
+      "http": "HTTP {code}"
+    },
+    "probe": {
+      "degraded": "متدهور — انتهت مهلة فحوصات الحالة، والخادم يستجيب",
+      "degradedAsOf": "متدهور — انتهت مهلة فحوصات الحالة، والخادم يستجيب — الحالة عند {time}",
+      "unreachable": "يتعذر الوصول — حالة الخدمات غير معروفة",
+      "unreachableAsOf": "يتعذر الوصول — حالة الخدمات غير معروفة — الحالة عند {time}"
+    },
+    "lastKnown": "{text} (آخر حالة معروفة)"
+  },
+  "schedule": {
+    "title": "الجدولة",
+    "repeats": "التكرار",
+    "repeat": {
+      "minutes": "كل بضع دقائق",
+      "hourly": "كل ساعة",
+      "daily": "يوميًا",
+      "weekly": "أسبوعيًا",
+      "monthly": "شهريًا",
+      "once": "مرة واحدة"
+    },
+    "every": "كل",
+    "minutesUnit": "دقيقة",
+    "onlyBetween": "فقط بين",
+    "windowFrom": "من",
+    "windowTo": "إلى",
+    "and": "و",
+    "onDays": "في الأيام (اختياري)",
+    "daysHintAny": "عدم تحديد أي يوم يعني كل الأيام.",
+    "onDaysRequired": "في الأيام",
+    "atMinute": "عند الدقيقة",
+    "at": "في الساعة",
+    "hour": "الساعة",
+    "minute": "الدقيقة",
+    "weekdaysOnly": "أيام العمل فقط",
+    "monthly": {
+      "which": "أي يوم من الشهر",
+      "day": "يوم من الشهر",
+      "lastDay": "اليوم الأخير",
+      "nth": "يوم من أيام الأسبوع في الشهر",
+      "onDay": "في اليوم",
+      "onThe": "في"
+    },
+    "nth": {
+      "1": "الأول",
+      "2": "الثاني",
+      "3": "الثالث",
+      "4": "الرابع",
+      "last": "الأخير"
+    },
+    "weekday": "يوم الأسبوع",
+    "shortMonths": "الأشهر التي لا تحتوي هذا اليوم تُنفَّذ في آخر يوم من الشهر.",
+    "date": "التاريخ",
+    "timezone": "المنطقة الزمنية",
+    "zone": {
+      "company": "توقيت الشركة",
+      "usesCompany": "تستخدم المنطقة الزمنية للشركة."
+    },
+    "summary": {
+      "minutes": "كل {every} دقيقة",
+      "minutesWeekdays": "كل {every} دقيقة في أيام العمل",
+      "minutesDays": "كل {every} دقيقة، في أيام: {days}",
+      "minutesWindow": "كل {every} دقيقة بين {from} و{to}",
+      "minutesWindowWeekdays": "كل {every} دقيقة بين {from} و{to} في أيام العمل",
+      "minutesWindowDays": "كل {every} دقيقة بين {from} و{to}، في أيام: {days}",
+      "hourly": "كل ساعة عند الدقيقة {minute}",
+      "daily": "كل يوم في الساعة {time}",
+      "dailyWeekdays": "كل يوم عمل في الساعة {time}",
+      "weekly": "كل أسبوع: {days}، في الساعة {time}",
+      "monthlyDay": "في اليوم {day} من كل شهر في الساعة {time}",
+      "monthlyLastDay": "في آخر يوم من كل شهر في الساعة {time}",
+      "monthlyNth1": "في {weekday} الأول من كل شهر في الساعة {time}",
+      "monthlyNth2": "في {weekday} الثاني من كل شهر في الساعة {time}",
+      "monthlyNth3": "في {weekday} الثالث من كل شهر في الساعة {time}",
+      "monthlyNth4": "في {weekday} الرابع من كل شهر في الساعة {time}",
+      "monthlyNthLast": "في {weekday} الأخير من كل شهر في الساعة {time}",
+      "once": "مرة واحدة في {date} في الساعة {time}",
+      "withZone": "{summary}، {zone}",
+      "custom": "جدولة مخصصة"
+    },
+    "customNote": "لا يمكن عرض هذه الجدولة بالنقرات.",
+    "editCron": "تحرير بصيغة cron",
+    "doneEditing": "إنهاء التحرير",
+    "nextRuns": "عمليات التشغيل القادمة",
+    "noRuns": "لا توجد عمليات تشغيل قادمة.",
+    "previewLoading": "جارٍ التحقق من الخادم...",
+    "previewApprox": "تقريبي: يؤكد الخادم الأوقات الدقيقة عند الحفظ.",
+    "previewUnavailable": "لا يمكن معاينة عمليات التشغيل لهذه الجدولة.",
+    "advanced": "متقدم: تُحفظ بصيغة",
+    "saved": {
+      "cron": "cron قياسي",
+      "calendar": "قاعدة تقويم",
+      "once": "تشغيل لمرة واحدة"
+    },
+    "savedAs": "الجدولة المحفوظة",
+    "savedNote": {
+      "once": "تعمل مرة واحدة. لا يُحفظ أي cron متكرر."
+    },
+    "cronLabel": "تعبير cron",
+    "cronHint": "cron قياسي بخمسة حقول فقط: الدقيقة، الساعة، يوم الشهر، الشهر، يوم الأسبوع. يبقى المحدد وهذا الحقل متزامنين.",
+    "cron_extension_unsupported": "{token} ليس بصيغة cron قياسية. استخدم المحدد لجداول مثل آخر جمعة في الشهر.",
+    "invalid_timezone": "هذه المنطقة الزمنية غير معروفة.",
+    "once_in_past": "هذا التاريخ والوقت قد مضيا بالفعل.",
+    "invalid_rrule": "قاعدة التقويم هذه غير صالحة.",
+    "invalid_cron": "أدخل cron قياسيًا بخمسة حقول، مثل 0 9 * * 1-5.",
+    "invalid_generic": "هذه الجدولة غير صالحة.",
+    "conflicting_fields": "تُحفظ الجدولة إما بصيغة cron أو كقاعدة تقويم أو تشغيل لمرة واحدة، وليس كليهما.",
+    "gatedNote": "سيتوفر اليوم الأخير ويوم الأسبوع من الشهر والأيام من 29 إلى 31 والتشغيل لمرة واحدة بعد تحديث المجدول."
   }
 }

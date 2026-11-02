@@ -1,0 +1,181 @@
+name: llm-optimization-real-torch
+
+# The llm_shared/optimization oracle tests skip when torch is a stub (the default
+# dev/CI shape). This lane installs CPU torch and runs them for real, with
+# AUTOBOT_REQUIRE_REAL_TORCH=1 so a broken install FAILS instead of skipping (#13049).
+# The path set is the import-time closure of the three tests (llm_shared/__init__
+# imports the whole package, which pulls the autobot_shared modules listed below)
+# and is not a backend-python canonical consumer
+# (#12986); it is not a required context, so path-filtering it cannot deadlock a PR.
+
+on:
+  push:
+    branches: [release, main]
+    paths:
+      - "autobot-backend/llm_shared/**"
+      - "autobot_shared/__init__.py"
+      - "autobot_shared/alert_cooldown.py"
+      - "autobot_shared/async_compat.py"
+      - "autobot_shared/auth/__init__.py"
+      - "autobot_shared/auth/jwt_core.py"
+      - "autobot_shared/circuit_breaker.py"
+      - "autobot_shared/coordination/__init__.py"
+      - "autobot_shared/coordination/run_progress.py"
+      - "autobot_shared/credential_gated_registry.py"
+      - "autobot_shared/doc_chunking.py"
+      - "autobot_shared/egress_allowlist.py"
+      - "autobot_shared/env_utils.py"
+      - "autobot_shared/http_client.py"
+      - "autobot_shared/http_client_manager.py"
+      - "autobot_shared/http_egress_guard.py"
+      - "autobot_shared/llm_provider_candidates.py"
+      - "autobot_shared/llm_provider_order.py"
+      - "autobot_shared/logging_manager.py"
+      - "autobot_shared/missing_dep.py"
+      - "autobot_shared/model_taxonomy.py"
+      - "autobot_shared/monitoring/__init__.py"
+      - "autobot_shared/monitoring/prometheus_metrics.py"
+      - "autobot_shared/monitoring/prometheus_query.py"
+      - "autobot_shared/network_constants.py"
+      - "autobot_shared/paths.py"
+      - "autobot_shared/pinned_model_registry.py"
+      - "autobot_shared/rate_limiter.py"
+      - "autobot_shared/redis_client.py"
+      - "autobot_shared/redis_management/__init__.py"
+      - "autobot_shared/redis_management/config.py"
+      - "autobot_shared/redis_management/connection_manager.py"
+      - "autobot_shared/redis_management/database_names.py"
+      - "autobot_shared/redis_management/pool_params.py"
+      - "autobot_shared/redis_management/pool_stats.py"
+      - "autobot_shared/redis_management/statistics.py"
+      - "autobot_shared/redis_management/types.py"
+      - "autobot_shared/retry_mechanism.py"
+      - "autobot_shared/secret_redaction.py"
+      - "autobot_shared/secret_redaction_vocabulary.py"
+      - "autobot_shared/secrets_vault.py"
+      - "autobot_shared/security/__init__.py"
+      - "autobot_shared/security/input_sanitizer.py"
+      - "autobot_shared/security/password_weakness.py"
+      - "autobot_shared/security/path_validator.py"
+      - "autobot_shared/security/redaction.py"
+      - "autobot_shared/security/safe_response.py"
+      - "autobot_shared/security/sql_identifier.py"
+      - "autobot_shared/security/ssrf_guard.py"
+      - "autobot_shared/service_signing.py"
+      - "autobot_shared/singleton_factory.py"
+      - "autobot_shared/ssot_config.py"
+      - "autobot_shared/ssot_constants.py"
+      - "autobot_shared/ssot_tls.py"
+      - "autobot_shared/status_enums.py"
+      - "autobot_shared/stream_logging.py"
+      - "autobot_shared/token_count.py"
+      - "autobot_shared/url_safety.py"
+      - ".github/workflows/llm-optimization-real-torch.yml"
+  pull_request:
+    # ready_for_review is REQUIRED: the job is gated on draft == false, and
+    # marking a PR ready fires ONLY this event (see actionlint.yml).
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "autobot-backend/llm_shared/**"
+      - "autobot_shared/__init__.py"
+      - "autobot_shared/alert_cooldown.py"
+      - "autobot_shared/async_compat.py"
+      - "autobot_shared/auth/__init__.py"
+      - "autobot_shared/auth/jwt_core.py"
+      - "autobot_shared/circuit_breaker.py"
+      - "autobot_shared/coordination/__init__.py"
+      - "autobot_shared/coordination/run_progress.py"
+      - "autobot_shared/credential_gated_registry.py"
+      - "autobot_shared/doc_chunking.py"
+      - "autobot_shared/egress_allowlist.py"
+      - "autobot_shared/env_utils.py"
+      - "autobot_shared/http_client.py"
+      - "autobot_shared/http_client_manager.py"
+      - "autobot_shared/http_egress_guard.py"
+      - "autobot_shared/llm_provider_candidates.py"
+      - "autobot_shared/llm_provider_order.py"
+      - "autobot_shared/logging_manager.py"
+      - "autobot_shared/missing_dep.py"
+      - "autobot_shared/model_taxonomy.py"
+      - "autobot_shared/monitoring/__init__.py"
+      - "autobot_shared/monitoring/prometheus_metrics.py"
+      - "autobot_shared/monitoring/prometheus_query.py"
+      - "autobot_shared/network_constants.py"
+      - "autobot_shared/paths.py"
+      - "autobot_shared/pinned_model_registry.py"
+      - "autobot_shared/rate_limiter.py"
+      - "autobot_shared/redis_client.py"
+      - "autobot_shared/redis_management/__init__.py"
+      - "autobot_shared/redis_management/config.py"
+      - "autobot_shared/redis_management/connection_manager.py"
+      - "autobot_shared/redis_management/database_names.py"
+      - "autobot_shared/redis_management/pool_params.py"
+      - "autobot_shared/redis_management/pool_stats.py"
+      - "autobot_shared/redis_management/statistics.py"
+      - "autobot_shared/redis_management/types.py"
+      - "autobot_shared/retry_mechanism.py"
+      - "autobot_shared/secret_redaction.py"
+      - "autobot_shared/secret_redaction_vocabulary.py"
+      - "autobot_shared/secrets_vault.py"
+      - "autobot_shared/security/__init__.py"
+      - "autobot_shared/security/input_sanitizer.py"
+      - "autobot_shared/security/password_weakness.py"
+      - "autobot_shared/security/path_validator.py"
+      - "autobot_shared/security/redaction.py"
+      - "autobot_shared/security/safe_response.py"
+      - "autobot_shared/security/sql_identifier.py"
+      - "autobot_shared/security/ssrf_guard.py"
+      - "autobot_shared/service_signing.py"
+      - "autobot_shared/singleton_factory.py"
+      - "autobot_shared/ssot_config.py"
+      - "autobot_shared/ssot_constants.py"
+      - "autobot_shared/ssot_tls.py"
+      - "autobot_shared/status_enums.py"
+      - "autobot_shared/stream_logging.py"
+      - "autobot_shared/token_count.py"
+      - "autobot_shared/url_safety.py"
+      - ".github/workflows/llm-optimization-real-torch.yml"
+
+# Least privilege (#15331). Runs tests only; no token writes.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  real-torch:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AUTOBOT_REQUIRE_REAL_TORCH: "1"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false  # the job runs PR code and needs no authenticated git
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+      - name: Install CPU torch at the repo's declared pin
+        run: |
+          # One version, declared once: constraints/shared.txt (#19330).
+          pin="$(grep -m1 -E '^torch==[0-9][^ #]*' constraints/shared.txt | sed -E 's/^(torch==[^ #]+).*/\1/')"
+          test -n "$pin" || { echo "no torch== pin in constraints/shared.txt"; exit 1; }
+          python -m pip install --upgrade pip
+          python -m pip install "$pin" --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
+          python -c "import torch; print('torch', torch.__version__)"
+      - name: Install backend test dependencies
+        run: >
+          python -m pip install --prefer-binary
+          -r requirements-ci/framework.txt
+          -r requirements-ci/utilities.txt
+          -r requirements-ci-test.txt
+      - name: Run the real-torch optimization tests
+        run: >
+          python -m pytest
+          autobot-backend/llm_shared/optimization/meta_eviction_equivalence_test.py
+          autobot-backend/llm_shared/optimization/meta_eviction_test.py
+          autobot-backend/llm_shared/optimization/taxonomy_test.py
+          -q

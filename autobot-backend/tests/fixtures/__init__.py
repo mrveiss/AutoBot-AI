@@ -10,6 +10,7 @@ resolve `from tests.fixtures.mocks import ...` without depending on the
 infrastructure repo path.
 """
 
+from .files import read_text_async, write_text_async
 from .mocks import (
     MockCommandValidator,
     MockKnowledgeBase,
@@ -24,6 +25,8 @@ from .mocks import (
 )
 
 __all__ = [
+    "read_text_async",
+    "write_text_async",
     "MockCommandValidator",
     "MockKnowledgeBase",
     "MockLLMInterface",

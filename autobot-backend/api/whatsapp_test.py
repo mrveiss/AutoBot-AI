@@ -19,8 +19,9 @@ from types import SimpleNamespace
 
 import pytest
 
+from autobot_shared.webhook_signature import verify_webhook_signature
 from initialization.router_registry.integration_routers import INTEGRATION_ROUTER_CONFIGS
-from services.whatsapp_service import flatten_messages, verify_webhook_signature
+from services.whatsapp_service import flatten_messages
 
 
 class TestRouterRegistration:
@@ -241,3 +242,27 @@ class TestRoundTripSignatureOverRealPayload:
         assert verify_webhook_signature(raw, sig, secret) is True
         flat = flatten_messages(json.loads(raw.decode("utf-8")))
         assert len(flat) == 1 and flat[0]["body"] == "yo"
+
+
+class TestWebhookRouteSignatureRejection18464:
+    """#18464: a bad or non-ASCII signature header is a 403 from the route, never a 500."""
+
+    @pytest.mark.parametrize("header", ["sha256=deadbeef", "sha256=é" + "€" * 63, "md5=x"])
+    def test_route_answers_403(self, header):
+        from unittest.mock import AsyncMock, patch
+
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api import whatsapp
+
+        app = FastAPI()
+        app.include_router(whatsapp.router)
+        client = TestClient(app, raise_server_exceptions=False)
+        with patch.object(whatsapp, "get_whatsapp_app_secret", AsyncMock(return_value="app-secret")):  # nosec B105
+            resp = client.post(
+                "/whatsapp/webhook",
+                content=b"{}",
+                headers={"X-Hub-Signature-256": header.encode("utf-8")},
+            )
+        assert resp.status_code == 403

@@ -253,10 +253,10 @@ class TestRouting:
         unclaim = _extract(_UNCLAIM, "unclaimed remainder")
         for project in _declared_projects():
             remainder = _filter(unclaim, project, remainder)
-        assert remainder == [
-            "libs/autobot-ui/src/components/__prepush_fixture__.vue",
-            "libs/autobot-sdk-ts/src/resources/__prepush_fixture__.ts",
-        ]
+        # #17959: libs/autobot-ui is no longer in the remainder -- it is claimed
+        # through the consuming apps (see TestTheKitIsClaimedThroughTheApps).
+        remainder = _filter(_kit_unclaim_expr(), "", remainder)
+        assert remainder == ["libs/autobot-sdk-ts/src/resources/__prepush_fixture__.ts"]
 
     def test_a_changeset_inside_one_project_leaves_no_remainder(self) -> None:
         remainder = single_project_change()
@@ -264,6 +264,59 @@ class TestRouting:
         for project in _declared_projects():
             remainder = _filter(unclaim, project, remainder)
         assert remainder == []
+
+
+_KIT_TREE = re.compile(r'^\s*KIT_TREE="([^"]+)"\s*$', re.MULTILINE)
+_KIT_UNCLAIM = re.compile(
+    r'^\s*frontend_unclaimed=\$\(echo "\$frontend_unclaimed" \| (?P<filter>grep -vE "\^\$\{KIT_TREE\}/"[^)]*)\)\s*$',
+    re.MULTILINE,
+)
+_KIT_CLAIM = re.compile(
+    r'^\s*kit_changed=\$\(echo "\$frontend_changed" \| (?P<filter>grep -E "\^\$\{KIT_TREE\}/"[^)]*)\)\s*$',
+    re.MULTILINE,
+)
+
+
+def _kit_tree() -> str:
+    match = _KIT_TREE.search(_source())
+    assert match, "the hook no longer declares KIT_TREE (#17959) — move this test with it, do not delete it"
+    return match.group(1)
+
+
+def _kit_unclaim_expr() -> str:
+    return f'KIT_TREE="{_kit_tree()}"; ' + _extract(_KIT_UNCLAIM, "kit unclaim")
+
+
+class TestTheKitIsClaimedThroughTheApps:
+    """#17959: a `libs/autobot-ui` change must RUN, not report `COULD NOT RUN`.
+
+    Both apps resolve `@autobot/ui` to the in-tree kit (vite/vitest alias and
+    tsconfig paths), so their vue-tsc and vitest exercise it. The old hook left
+    the kit in the unclaimed remainder, which `could_not_run` reports, so a kit
+    change could only be pushed with AUTOBOT_PREPUSH_ALLOW_UNRUNNABLE.
+    """
+
+    def test_the_kit_tree_is_the_tree_the_apps_alias(self) -> None:
+        assert _kit_tree() == "libs/autobot-ui"
+
+    def test_a_kit_path_is_claimed_and_leaves_the_unclaimed_remainder(self) -> None:
+        paths = example_changeset()
+        claimed = _filter(f'KIT_TREE="{_kit_tree()}"; ' + _extract(_KIT_CLAIM, "kit claim"), "", paths)
+        assert claimed == ["libs/autobot-ui/src/components/__prepush_fixture__.vue"]
+        assert _filter(_kit_unclaim_expr(), "", paths) == [p for p in paths if not p.startswith("libs/autobot-ui/")]
+
+    def test_a_kit_only_changeset_has_no_remainder_so_nothing_is_unrunnable(self) -> None:
+        remainder = ["libs/autobot-ui/src/components/__prepush_fixture__.vue"]
+        for project in _declared_projects():
+            remainder = _filter(_extract(_UNCLAIM, "unclaimed remainder"), project, remainder)
+        assert _filter(_kit_unclaim_expr(), "", remainder) == []
+
+    def test_every_app_runs_for_a_kit_only_change(self) -> None:
+        """The loop must not `continue` past an app whose own tree is untouched."""
+        assert '[ -n "$project_changed" ] || [ -n "$kit_changed" ] || continue' in _source()
+
+    def test_the_kit_change_runs_vitest_through_the_app(self) -> None:
+        assert "vitest related" in _source()
 
 
 class TestNodeModulesUsable:

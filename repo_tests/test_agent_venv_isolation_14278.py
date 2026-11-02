@@ -16,6 +16,7 @@ Provisioning an external node stopped there.
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -85,9 +86,7 @@ def test_the_agent_unit_runs_the_venv_interpreter():
     unit = (_ROLES / "slm_agent" / "templates" / "slm-agent.service.j2").read_text(encoding="utf-8")
     exec_start = next(line for line in unit.splitlines() if line.startswith("ExecStart="))
 
-    defaults = yaml.safe_load(
-        (_ROLES / "slm_agent" / "defaults" / "main.yml").read_text(encoding="utf-8")
-    )
+    defaults = yaml.safe_load((_ROLES / "slm_agent" / "defaults" / "main.yml").read_text(encoding="utf-8"))
     venv_var = "slm_agent_venv"
 
     assert "/usr/bin/python3" not in exec_start
@@ -109,9 +108,7 @@ def test_the_unit_still_sets_pythonpath_for_autobot_shared():
 
 def test_the_venv_path_is_derived_from_the_install_dir():
     """A hardcoded second path would drift from slm_agent_dir."""
-    defaults = yaml.safe_load(
-        (_ROLES / "slm_agent" / "defaults" / "main.yml").read_text(encoding="utf-8")
-    )
+    defaults = yaml.safe_load((_ROLES / "slm_agent" / "defaults" / "main.yml").read_text(encoding="utf-8"))
 
     assert "slm_agent_dir" in str(defaults.get("slm_agent_venv", ""))
 
@@ -131,14 +128,15 @@ def _agent_import_closure() -> set[str]:
     """
     import ast as _ast
 
-    agent_pkg = _ROLES / "slm_agent" / "files" / "slm" / "agent"
+    # The role deploys from the one source tree since #18548 (the Ansible mirror is gone).
+    agent_pkg = _REPO_ROOT / "autobot-slm-backend" / "slm" / "agent"
     shared = _REPO_ROOT / "autobot_shared"
     seen: set[str] = set()
     # Tests never run on the node; their imports are not runtime dependencies.
     queue = [
         p
-        for p in agent_pkg.rglob("*.py")
-        if not (p.name.startswith("test_") or p.name.endswith("_test.py"))
+        for p in agent_pkg.glob("*.py")
+        if not (p.name.startswith("test_") or p.name.endswith("_test.py") or p.name == "conftest.py")
     ]
     visited_files: set[Path] = set()
 
@@ -185,24 +183,27 @@ def _agent_import_closure() -> set[str]:
     return seen
 
 
-# Modules the standard library provides; a venv always has them.
-_STDLIB = {
-    "asyncio", "json", "logging", "os", "platform", "socket", "subprocess", "sys",
-    "time", "typing", "pathlib", "datetime", "dataclasses", "enum", "functools",
-    "hashlib", "re", "shutil", "uuid", "contextlib", "collections", "itertools",
-    "threading", "traceback", "warnings", "base64", "secrets", "signal", "copy",
-    "inspect", "importlib", "math", "random", "string", "textwrap", "urllib", "io",
-    "abc", "glob", "tempfile", "types", "weakref", "struct", "binascii", "errno",
-    "ipaddress", "getpass", "argparse", "configparser", "csv", "gzip", "pickle",
-    "queue", "select", "shlex", "stat", "statistics", "unicodedata", "zlib",
-    "concurrent", "sqlite3", "unittest", "ssl", "http", "email", "html", "xml",
-}
+# Modules the standard library provides; a venv always has them. The interpreter's own
+# list, not a hand-kept set: a hand set missed `decimal` the first time a module on the
+# agent's import path used it (#18228).
+_STDLIB = frozenset(sys.stdlib_module_names)
 
 # Pulled in by a package that IS listed, so a venv gets them transitively.
 _TRANSITIVE = {"pydantic"}
 
 # PyPI distribution names differ from import names for a few packages.
 _IMPORT_TO_DISTRIBUTION = {"yaml": "pyyaml", "pydantic_settings": "pydantic-settings"}
+
+
+def _needs_venv_install(name: str) -> bool:
+    """A top-level import the agent's venv must install: not stdlib, not pulled in transitively."""
+    return name not in _STDLIB and name not in _TRANSITIVE
+
+
+@pytest.mark.parametrize("name, expected", [("decimal", False), ("asyncio", False), ("yaml", True), ("httpx", True)])
+def test_the_stdlib_split_keeps_stdlib_out_and_third_party_in(name, expected):
+    """Contrast pair: a stdlib module never needs installing, a PyPI one always does."""
+    assert _needs_venv_install(name) is expected
 
 
 def test_the_import_closure_was_actually_walked():
@@ -219,17 +220,13 @@ def test_every_third_party_import_the_agent_reaches_is_installed_in_its_venv():
     what the agent actually imports, so a missing runtime dependency was
     invisible to the whole suite.
     """
-    defaults = yaml.safe_load(
-        (_ROLES / "slm_agent" / "defaults" / "main.yml").read_text(encoding="utf-8")
-    )
+    defaults = yaml.safe_load((_ROLES / "slm_agent" / "defaults" / "main.yml").read_text(encoding="utf-8"))
     installed = {str(pkg).lower() for pkg in defaults["slm_agent_python_packages"]}
 
     missing = sorted(
         _IMPORT_TO_DISTRIBUTION.get(name, name)
         for name in _agent_import_closure()
-        if name not in _STDLIB
-        and name not in _TRANSITIVE
-        and _IMPORT_TO_DISTRIBUTION.get(name, name).lower() not in installed
+        if _needs_venv_install(name) and _IMPORT_TO_DISTRIBUTION.get(name, name).lower() not in installed
     )
 
     assert missing == [], f"the agent imports these but the venv would not have them: {missing}"
@@ -238,17 +235,13 @@ def test_every_third_party_import_the_agent_reaches_is_installed_in_its_venv():
 def test_the_code_sync_command_installs_the_same_set_into_the_same_venv():
     """A code-sync that updates a different interpreter than the unit runs, with
     a different package list than provisioning, cannot keep the agent working."""
-    registry = (
-        _REPO_ROOT / "autobot-slm-backend" / "services" / "role_registry.py"
-    ).read_text(encoding="utf-8")
-    match = re.search(r'"post_sync_cmd":\s*\((.*?)\),\n', registry[registry.index("_SLM_AGENT_DIR,"):], re.DOTALL)
+    registry = (_REPO_ROOT / "autobot-slm-backend" / "services" / "role_registry.py").read_text(encoding="utf-8")
+    match = re.search(r'"post_sync_cmd":\s*\((.*?)\),\n', registry[registry.index("_SLM_AGENT_DIR,") :], re.DOTALL)
     assert match, "no post_sync_cmd found for the slm-agent role"
     command = match.group(1)
 
     assert "venv/bin/pip" in command, f"code-sync targets the wrong interpreter: {command}"
 
-    defaults = yaml.safe_load(
-        (_ROLES / "slm_agent" / "defaults" / "main.yml").read_text(encoding="utf-8")
-    )
+    defaults = yaml.safe_load((_ROLES / "slm_agent" / "defaults" / "main.yml").read_text(encoding="utf-8"))
     for package in defaults["slm_agent_python_packages"]:
         assert str(package) in command, f"{package} is provisioned but not installed on code-sync"

@@ -157,6 +157,7 @@ from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.secret_redaction import LOG_MASK
 from autobot_shared.status_enums import CommandRisk
 from autobot_shared.websocket_subprotocol import accept_websocket
 from constants.error_constants import ERR_SESSION_NOT_FOUND
@@ -585,14 +586,13 @@ async def send_terminal_input(
         raise HTTPException(status_code=404, detail="Session not active")
 
     # Send input to the WebSocket connection
-    # This would be implemented through the session manager
     success = await session_manager.send_input(session_id, request.text)
 
     if success:
         return {
             "session_id": session_id,
             "status": "sent",
-            "input": request.text if not request.is_password else "***",
+            "input": request.text if not request.is_password else LOG_MASK,
         }
     else:
         raise HTTPException(status_code=500, detail="Failed to send input")
@@ -761,7 +761,7 @@ async def _init_terminal_handler(
     # Issue #666: Use async Redis client since TerminalLogger uses await with Redis ops
     redis_client = None
     try:
-        from dependencies import get_async_redis_client
+        from autobot_shared.redis_client import get_async_redis_client
 
         redis_client = await get_async_redis_client(database="main")
     except Exception as e:

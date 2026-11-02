@@ -24,9 +24,10 @@ import sys
 import aiohttp
 from aiohttp import web
 
-from autobot_shared import async_compat, env_utils, time_utils
+from autobot_shared import async_compat, env_utils, node_proxy, time_utils
+from autobot_shared.fleet_constants import DEFAULT_HEARTBEAT_INTERVAL
 
-from . import event_buffer
+from . import event_buffer, request_timeouts
 from .health_collector import HealthCollector
 from .heartbeat_payload import build_heartbeat_payload
 from .role_detector import RoleDetector
@@ -96,7 +97,6 @@ def _get_default_admin_url() -> str:
 
 
 DEFAULT_ADMIN_URL = _get_default_admin_url()
-DEFAULT_HEARTBEAT_INTERVAL = 30  # seconds
 # Buffer database path - use /var/lib/slm-agent for systemd compatibility
 # (systemd service has ProtectHome=read-only and ReadWritePaths=/var/lib/slm-agent)
 DEFAULT_BUFFER_DB = os.getenv("SLM_BUFFER_DB", "/var/lib/slm-agent/events.db")
@@ -126,7 +126,7 @@ class SLMAgent:
         # every request via the session default headers. Empty -> the server
         # rejects our heartbeats 401 and the fleet Service table never
         # populates, so warn loudly.
-        self._internal_api_key = os.environ.get("AUTOBOT_INTERNAL_API_KEY", "")
+        self._internal_api_key = node_proxy.internal_api_key()
         if not self._internal_api_key:
             logger.warning("AUTOBOT_INTERNAL_API_KEY not set — heartbeats will be rejected 401 (#11450)")
 
@@ -219,7 +219,7 @@ class SLMAgent:
             async with self._session.post(
                 url,
                 json=payload,
-                timeout=aiohttp.ClientTimeout(total=10),
+                timeout=aiohttp.ClientTimeout(total=request_timeouts.HEARTBEAT_TIMEOUT_SECONDS),
                 ssl=False,  # mTLS pending PKI setup (Issue #725)
             ) as response:
                 if response.status == 200:
@@ -263,8 +263,8 @@ class SLMAgent:
                     await response.text(),
                 )
                 return False
-        except aiohttp.ClientError as e:
-            logger.warning("Failed to send heartbeat: %s", e)
+        except (aiohttp.ClientError, asyncio.TimeoutError, TimeoutError) as e:
+            logger.warning("Failed to send heartbeat: %s", str(e) or type(e).__name__)
             # Offloaded here, not inside `buffer_event`: its other caller is sync.
             # Hot path -- every failed heartbeat writes a row (#17647 review).
             await asyncio.to_thread(self.buffer_event, "heartbeat", payload)
@@ -281,7 +281,7 @@ class SLMAgent:
         code_version = self.version_manager.get_version()
 
         payload = build_heartbeat_payload(
-            health, os_info, code_version, self.role_detector, self._role_definitions_loaded
+            health, os_info, code_version, self.role_detector, self._role_definitions_loaded, self.heartbeat_interval
         )
         return await self._send_heartbeat_request(payload)
 
@@ -319,7 +319,7 @@ class SLMAgent:
             async with self._session.post(
                 url,
                 json=payload,
-                timeout=aiohttp.ClientTimeout(total=30),
+                timeout=aiohttp.ClientTimeout(total=request_timeouts.EVENT_SYNC_TIMEOUT_SECONDS),
                 ssl=False,
             ) as response:
                 if response.status == 200:
@@ -332,8 +332,8 @@ class SLMAgent:
                         response.status,
                         body[:200],
                     )
-        except aiohttp.ClientError as e:
-            logger.warning("Failed to sync events: %s", e)
+        except (aiohttp.ClientError, asyncio.TimeoutError, TimeoutError) as e:
+            logger.warning("Failed to sync events: %s", str(e) or type(e).__name__)
 
     async def run(self, enable_notify_server: bool = False, notify_port: int = DEFAULT_NOTIFY_PORT):
         """Main agent loop."""

@@ -21,9 +21,11 @@ from api.schemas_knowledge import (
     UpdateOrganizationPolicyRequest,
 )
 from auth_middleware import get_current_user
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from knowledge.ownership import VisibilityLevel
+from knowledge.search_filters import parse_fact_metadata
 from knowledge_factory import get_or_create_knowledge_base
 
 logger = get_logger(__name__)
@@ -115,7 +117,7 @@ async def update_organization_policy(
         raise HTTPException(status_code=400, detail="User not associated with an organization")
 
     user_role = current_user.get("role", "")
-    if user_role not in ("admin", "org_admin"):
+    if not (is_admin_role(user_role) or user_role == "org_admin"):
         raise HTTPException(status_code=403, detail="Organization admin role required")
 
     kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
@@ -147,8 +149,6 @@ async def _analyze_organization_facts(kb, fact_ids: list) -> dict:
 
     Helper for get_organization_knowledge_stats() (Issue #679).
     """
-    import json
-
     by_visibility = {}
     by_source = {}
     total_size = 0
@@ -172,7 +172,7 @@ async def _analyze_organization_facts(kb, fact_ids: list) -> dict:
         if metadata_raw:
             if isinstance(metadata_raw, bytes):
                 metadata_raw = metadata_raw.decode("utf-8")
-            metadata = json.loads(metadata_raw)
+            metadata = parse_fact_metadata(fact_id, metadata_raw)  # #18220
 
             # Count by visibility
             visibility = metadata.get("visibility", VisibilityLevel.PRIVATE)
@@ -268,8 +268,6 @@ async def _delete_expired_facts(kb, fact_ids: list, cutoff_date) -> int:
 
     Helper for cleanup_organization_knowledge. Ref: #1088.
     """
-    import json
-
     from autobot_shared.time_utils import parse_utc_iso
 
     deleted_count = 0
@@ -284,7 +282,7 @@ async def _delete_expired_facts(kb, fact_ids: list, cutoff_date) -> int:
 
         if isinstance(metadata_raw, bytes):
             metadata_raw = metadata_raw.decode("utf-8")
-        metadata = json.loads(metadata_raw)
+        metadata = parse_fact_metadata(fact_id, metadata_raw)
 
         created_at_str = metadata.get("created_at")
         if not created_at_str:
@@ -336,7 +334,7 @@ async def cleanup_organization_knowledge(
         raise HTTPException(status_code=400, detail="User not associated with an organization")
 
     user_role = current_user.get("role", "")
-    if user_role not in ("admin", "org_admin"):
+    if not (is_admin_role(user_role) or user_role == "org_admin"):
         raise HTTPException(status_code=403, detail="Organization admin role required")
 
     kb = await get_or_create_knowledge_base(request.app, force_refresh=False)

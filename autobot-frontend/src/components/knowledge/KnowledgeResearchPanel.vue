@@ -23,8 +23,12 @@ import { useUserStore } from '@/stores/useUserStore'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl'
 import { usePollingJob } from '@/composables/usePollingJob'
+import type { Board, SourceCard } from './knowledgeResearchTypes'
 
 const logger = createLogger('KnowledgeResearchPanel')
+
+// Accept returns with its route (#18745); until then its button is hidden and acceptSource sends nothing.
+const ACCEPT_SOURCE_ENABLED = false
 const userStore = useUserStore()
 
 const { t } = useI18n()
@@ -48,10 +52,6 @@ const statusText = ref(t('knowledge.research.statusReady'))
 const errorMsg = ref<string | null>(null)
 
 // Issue #3242: board selector state
-interface Board {
-  board_id: string
-  name: string
-}
 const boards = ref<Board[]>([])
 const selectedBoardId = ref<string>('__global__')
 
@@ -106,16 +106,6 @@ const {
     }
   },
 })
-
-interface SourceCard {
-  url: string
-  title: string
-  snippet: string
-  score: number | null
-  domain: string
-  recommendation: string | null
-  decision: 'accepted' | 'rejected' | null
-}
 
 const sources = ref<SourceCard[]>([])
 
@@ -316,12 +306,11 @@ async function _emitAnnotationFeedback(
 }
 
 async function acceptSource(card: SourceCard): Promise<void> {
+  if (!ACCEPT_SOURCE_ENABLED) return
   card.decision = 'accepted'
   try {
-    await ApiClient.post<Record<string, unknown>>(`${getApiBase()}/knowledge/verification/approve`, {
-      source_url: card.url,
-      title: card.title,
-    })
+    const body = { source_url: card.url, title: card.title }
+    await ApiClient.post<Record<string, unknown>>(`${getApiBase()}/knowledge/verification/approve`, body)
   } catch (e) {
     logger.warn('Accept source API call failed (non-critical):', e)
   }
@@ -524,7 +513,7 @@ onUnmounted(() => {
               </a>
 
               <div class="card-actions" v-if="!card.decision">
-                <button class="btn-accept" @click="acceptSource(card)" :title="$t('knowledge.research.acceptTitle')">
+                <button v-if="ACCEPT_SOURCE_ENABLED" class="btn-accept" @click="acceptSource(card)" :title="$t('knowledge.research.acceptTitle')">
                   <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                   </svg>
@@ -744,7 +733,7 @@ onUnmounted(() => {
 .btn-primary {
   flex-shrink: 0;
   padding: var(--spacing-2) var(--spacing-3);
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: var(--kresearch-on-accent);
   border: none;
   border-radius: var(--radius-md);
@@ -783,7 +772,7 @@ onUnmounted(() => {
 }
 
 .btn-stop:hover {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--kresearch-on-accent);
 }
 
@@ -987,7 +976,7 @@ onUnmounted(() => {
 
 .btn-accept:hover {
   background: var(--color-success);
-  color: var(--kresearch-on-accent);
+  color: var(--text-on-success);
 }
 
 .btn-reject {
@@ -997,7 +986,7 @@ onUnmounted(() => {
 }
 
 .btn-reject:hover {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--kresearch-on-accent);
 }
 

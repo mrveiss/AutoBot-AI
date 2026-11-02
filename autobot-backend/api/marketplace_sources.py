@@ -29,6 +29,7 @@ from api.schemas_workflows import (
 )
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_egress_guard import assert_public_egress
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.time_utils import utc_timestamp
@@ -75,7 +76,7 @@ async def _list_user_sources() -> list[MarketplaceSource]:
     return sources
 
 
-async def list_sources() -> list[MarketplaceSource]:
+async def list_marketplace_sources() -> list[MarketplaceSource]:
     """Return the built-in source plus all user-added sources."""
     return [_builtin_source(), *await _list_user_sources()]
 
@@ -114,7 +115,7 @@ async def list_marketplaces(
     """Issue #6481: list built-in + user-added marketplace sources.
     Authenticated users only — source UUIDs would otherwise be enumerable
     and feed the `/catalog?source_id=` SSRF surface."""
-    return MarketplaceSourcesResponse(sources=await list_sources())
+    return MarketplaceSourcesResponse(sources=await list_marketplace_sources())
 
 
 @router.post(
@@ -192,6 +193,23 @@ async def delete_marketplace(
     logger.info("Removed marketplace source %s", source_id)
 
 
+def _parse_catalog(body: bytes) -> CatalogDocument:
+    """Parse and validate a fetched catalog body; any failure is an HTTP 400."""
+    try:
+        data = json.loads(body)
+        return CatalogDocument.model_validate(data)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Marketplace URL did not return valid JSON: {exc}",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Marketplace catalog schema invalid: {exc}",
+        ) from exc
+
+
 async def _fetch_catalog_document(url: str) -> CatalogDocument:
     """Fetch and validate a catalog JSON document from a remote URL.
 
@@ -222,6 +240,8 @@ async def _fetch_catalog_document(url: str) -> CatalogDocument:
     # carries the original hostname for TLS SNI / virtual hosting; the
     # connector resolution map prevents DNS rebinding between resolve and connect.
     try:
+        # user-supplied URL: public-only, no internal trust. EgressBlockedError is a ValueError -> 400 below.
+        await assert_public_egress(url)
         safe_ip = await resolve_safe_ip_async(host)
     except ValueError as exc:
         raise HTTPException(
@@ -275,19 +295,7 @@ async def _fetch_catalog_document(url: str) -> CatalogDocument:
             detail="Marketplace URL timed out",
         ) from exc
 
-    try:
-        data = json.loads(body)
-        return CatalogDocument.model_validate(data)
-    except json.JSONDecodeError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Marketplace URL did not return valid JSON: {exc}",
-        ) from exc
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Marketplace catalog schema invalid: {exc}",
-        ) from exc
+    return _parse_catalog(body)
 
 
 async def get_source_by_id(source_id: str) -> MarketplaceSource | None:

@@ -14,14 +14,14 @@ AUTOBOT_KB_RETENTION_DAYS is set to a positive integer.
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Dict, List, Tuple
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
 from celery_app import celery_app
-from services.audit.audit import AuditCategory, AuditEvent
-from services.audit.audit import emit as audit_emit
+from services.audit.audit import AuditCategory
+from tasks.retention_audit import emit_deletion_audit
 
 logger = get_logger(__name__)
 
@@ -31,49 +31,11 @@ _KB_RETENTION_DAYS = ssot_config.kb_retention_days
 _FACT_PATTERN = "fact:*"
 
 
-def _emit_deletion_audit(fact_id: str, extra: Dict[str, Any]) -> None:
-    """Fire-and-forget audit event for a KB retention deletion."""
-    audit_emit(
-        AuditEvent(
-            category=AuditCategory.KNOWLEDGE,
-            action="retention_purge",
-            actor_id="system:retention_worker",
-            resource_type="kb_entry",
-            resource_id=fact_id,
-            metadata=extra,
-        )
-    )
-
-
-async def _async_cleanup_expired_kb_entries(retention_days: int, dry_run: bool = False) -> Dict[str, int]:
-    """Remove KB facts older than retention_days.
-
-    Uses KnowledgeBase.delete_fact so vector index side-effects are applied.
-    Idempotent: facts already deleted are silently skipped.
-    """
-    if retention_days <= 0:
-        logger.info("KB retention disabled (retention_days=%d), skipping.", retention_days)
-        return {"deleted_entries": 0, "skipped": 0, "errors": 0}
-
-    from autobot_shared.redis_client import get_redis_client
-    from knowledge import get_knowledge_base
-
-    redis_client = get_redis_client()
-    if not redis_client:
-        logger.warning("Redis client unavailable — skipping KB retention cleanup.")
-        return {"deleted_entries": 0, "skipped": 0, "errors": 0}
-
-    # Compute cutoff as ISO timestamp string for comparison
-    from datetime import timedelta
-
-    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
-
-    deleted_entries = 0
+def _collect_expired_facts(redis_client, cutoff: datetime) -> Tuple[List[Tuple[str, int]], int]:
+    """Scan fact hashes; return ``(fact_id, age_days)`` older than *cutoff* and the skipped count."""
     skipped = 0
-    errors = 0
-
     # Collect candidate fact IDs first (avoid mutating while scanning)
-    candidates = []
+    candidates: List[Tuple[str, int]] = []
     cursor: int = 0
     while True:
         cursor, keys = redis_client.scan(cursor, match=_FACT_PATTERN, count=200)
@@ -102,6 +64,36 @@ async def _async_cleanup_expired_kb_entries(retention_days: int, dry_run: bool =
                 logger.debug("Skipping %s — cannot parse timestamp: %s", key_str, exc)
         if cursor == 0:
             break
+    return candidates, skipped
+
+
+async def _async_cleanup_expired_kb_entries(retention_days: int, dry_run: bool = False) -> Dict[str, int]:
+    """Remove KB facts older than retention_days.
+
+    Uses KnowledgeBase.delete_fact so vector index side-effects are applied.
+    Idempotent: facts already deleted are silently skipped.
+    """
+    if retention_days <= 0:
+        logger.info("KB retention disabled (retention_days=%d), skipping.", retention_days)
+        return {"deleted_entries": 0, "skipped": 0, "errors": 0}
+
+    from autobot_shared.redis_client import get_redis_client
+    from knowledge import get_knowledge_base
+
+    redis_client = get_redis_client()
+    if not redis_client:
+        logger.warning("Redis client unavailable — skipping KB retention cleanup.")
+        return {"deleted_entries": 0, "skipped": 0, "errors": 0}
+
+    # Compute cutoff as ISO timestamp string for comparison
+    from datetime import timedelta
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+
+    deleted_entries = 0
+    errors = 0
+
+    candidates, skipped = _collect_expired_facts(redis_client, cutoff)
 
     if not candidates:
         logger.info("KB retention: no entries older than %d days found.", retention_days)
@@ -117,7 +109,12 @@ async def _async_cleanup_expired_kb_entries(retention_days: int, dry_run: bool =
             else:
                 result = await kb.delete_fact(fact_id, _skip_bm25_refresh=True)
                 if result.get("status") == "success":
-                    _emit_deletion_audit(fact_id, {"age_days": age_days, "retention_days": retention_days})
+                    emit_deletion_audit(
+                        fact_id,
+                        "kb_entry",
+                        {"age_days": age_days, "retention_days": retention_days},
+                        AuditCategory.KNOWLEDGE,
+                    )
                     deleted_entries += 1
                     logger.debug("Deleted KB fact %s (age=%dd)", fact_id, age_days)
                 else:

@@ -21,14 +21,14 @@ Issue #10554: Per-user memory transparency + edit/forget-everywhere + export
 
     <!-- Toolbar -->
     <div class="toolbar">
-      <button class="btn btn-primary" :disabled="loading" @click="loadMemories">
+      <BaseButton :disabled="loading" @click="loadMemories">
         <Icon :name="loading ? 'sync-alt' : 'sync'" :spin="loading" aria-hidden="true" />
         {{ loading ? t('settings.memoryPrivacy.loading') : t('settings.memoryPrivacy.refresh') }}
-      </button>
-      <button class="btn btn-secondary" :disabled="exporting" @click="downloadExport">
+      </BaseButton>
+      <BaseButton variant="secondary" :disabled="exporting" @click="downloadExport">
         <Icon :name="exporting ? 'sync-alt' : 'download'" :spin="exporting" aria-hidden="true" />
         {{ exporting ? t('settings.memoryPrivacy.preparing') : t('settings.memoryPrivacy.exportJson') }}
-      </button>
+      </BaseButton>
     </div>
 
     <!-- Summary bar -->
@@ -63,24 +63,22 @@ Issue #10554: Per-user memory transparency + edit/forget-everywhere + export
           <pre class="provenance-data">{{ JSON.stringify(item.provenance, null, 2) }}</pre>
         </details>
         <div class="item-actions">
-          <button
-            class="btn btn-danger btn-sm"
+          <BaseButton variant="error" size="sm"
             :disabled="deletingIds.has(item.memory_id)"
             @click="forgetItem(item)"
             :aria-label="t('settings.memoryPrivacy.forgetAriaLabel', { store: item.store })"
           >
             <Icon name="trash" aria-hidden="true" />
             {{ t('settings.memoryPrivacy.forget') }}
-          </button>
-          <button
-            class="btn btn-ghost btn-sm"
+          </BaseButton>
+          <BaseButton variant="ghost" size="sm"
             :disabled="deletingIds.has(item.memory_id)"
             @click="forgetEverywhere(item)"
             :aria-label="t('settings.memoryPrivacy.forgetEverywhereAriaLabel', { id: item.memory_id })"
           >
             <Icon name="times-circle" aria-hidden="true" />
             {{ t('settings.memoryPrivacy.forgetEverywhere') }}
-          </button>
+          </BaseButton>
         </div>
       </li>
     </ul>
@@ -90,6 +88,7 @@ Issue #10554: Per-user memory transparency + edit/forget-everywhere + export
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { isHttpError, BaseButton } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { useNotificationBus } from '@/composables/useNotificationBus'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
@@ -203,7 +202,7 @@ async function forgetEverywhere(item: MemoryItem) {
     // #13739: a 409 means this id exists in more than one store, so the backend
     // refuses to guess which one was meant rather than deleting both. The row's
     // own per-store delete is the way out, so say that instead of "failed".
-    const ambiguous = err instanceof Error && err.message.includes('HTTP 409')
+    const ambiguous = isHttpError(err) && err.status === 409
     showToast(
       t(
         ambiguous
@@ -262,7 +261,7 @@ onMounted(loadMemories)
 }
 
 .panel-title {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -271,7 +270,7 @@ onMounted(loadMemories)
 }
 
 .panel-desc {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   margin: 0;
 }
@@ -281,24 +280,6 @@ onMounted(loadMemories)
   gap: var(--spacing-sm, 0.5rem);
   flex-wrap: wrap;
 }
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.45rem 0.9rem;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-primary { background: var(--color-primary); color: var(--mempriv-on-accent); }
-.btn-secondary { background: var(--surface-secondary, var(--mempriv-surface-secondary)); color: var(--text-primary); }
-.btn-danger { background: var(--color-danger); color: var(--mempriv-on-accent); }
-.btn-ghost { background: transparent; color: var(--text-secondary); border-color: var(--border-color); }
-.btn-sm { padding: 0.3rem 0.65rem; font-size: 0.8rem; }
 
 .summary-bar {
   display: flex;
@@ -351,7 +332,7 @@ onMounted(loadMemories)
 .store-tag {
   padding: 0.1rem 0.5rem;
   border-radius: 999px;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   background: var(--color-primary-muted, var(--mempriv-primary-muted));
@@ -359,13 +340,13 @@ onMounted(loadMemories)
 }
 
 .item-ts {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   margin-left: auto;
 }
 
 .item-content {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-primary);
   margin: 0 0 0.5rem;
   word-break: break-word;
@@ -377,7 +358,7 @@ onMounted(loadMemories)
 .provenance { margin-bottom: 0.5rem; }
 .provenance summary { font-size: 0.8rem; cursor: pointer; color: var(--text-secondary); }
 .provenance-data {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   background: var(--surface-tertiary, var(--mempriv-surface-tertiary));
   padding: 0.5rem;
   border-radius: var(--radius-default);

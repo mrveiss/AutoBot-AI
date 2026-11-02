@@ -169,6 +169,21 @@ class TaskStatusManager:
             return None
 
     @classmethod
+    async def get_task_response(cls, task_id: str) -> dict:
+        """The status-poll response for *task_id*, or the ``not_found`` body (#18731).
+
+        The one body behind every ``.../status/{task_id}`` route.
+        """
+        task_status = await cls.get_task(task_id)
+        if not task_status:
+            return {
+                "status": "not_found",
+                "message": f"Task {task_id} not found",
+                "task_id": task_id,
+            }
+        return task_status.to_response_dict()
+
+    @classmethod
     async def _save_to_redis(cls, task_status: TaskStatusRecord) -> bool:
         """
         Save task status to Redis with TTL.

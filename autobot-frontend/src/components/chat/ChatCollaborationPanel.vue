@@ -1,5 +1,8 @@
 <template>
-  <div class="w-80 max-w-80 min-w-80 h-full flex flex-col bg-autobot-bg-card border-l border-autobot-border">
+  <div
+    tabindex="-1" role="complementary" :aria-label="$t('collaboration.panel.title')"
+    class="w-80 max-w-80 min-w-80 h-full flex flex-col bg-autobot-bg-card border-l border-autobot-border"
+  >
     <!-- Header -->
     <div class="flex items-center justify-between p-3 border-b border-autobot-border shrink-0">
       <div class="flex items-center gap-2">

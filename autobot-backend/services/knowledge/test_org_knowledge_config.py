@@ -17,7 +17,7 @@ from services.knowledge.org_knowledge_config import (
     OrgKnowledgeConfig,
     OrgKnowledgeConfigService,
 )
-from tests.helpers.fake_redis import AsyncSimpleFakeRedis
+from tests.helpers._fake_redis import AsyncSimpleFakeRedis
 
 
 def _ssot_stub():

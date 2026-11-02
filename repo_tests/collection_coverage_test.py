@@ -108,6 +108,12 @@ SLM_RUN = {"autobot-slm-backend"}
 #: ``INTENTIONALLY_UNCOLLECTED``: ``autobot-infrastructure`` legitimately
 #: appears in both, the hooks subtree collected and the rest not.
 NARROWLY_COLLECTED = {
+    "plugins/core-plugins": (
+        "backend-run: named explicitly in ci.yml and pytest.ini's testpaths "
+        "(#12979); the generation-plugin suites load their hyphenated plugin "
+        "modules by file path, so no sys.path entry is needed. Resolves the "
+        "#15178 decision (c) that had parked these"
+    ),
     ".claude/skills/claims-audit": (
         "backend-run: named explicitly in ci.yml and pytest.ini's testpaths "
         "(#14986); `.claude/` as a whole is harness territory and does not collect"
@@ -178,15 +184,6 @@ INTENTIONALLY_UNCOLLECTED = {
         "which no longer resolves', described shared/tests/conftest.py -- a tree "
         "this entry no longer covers, and a breakage #15161 had already repaired"
     ),
-    "plugins": (
-        "#15178 -- DECISION (c) PARKED. 2 modules under "
-        "core-plugins/video-generation-plugin/tools/. `plugins/` is named by no "
-        "ci.yml invocation and no pytest.ini testpath, and the plugin directory is "
-        "hyphenated, so it is not an importable package -- both modules reach their "
-        "subject through importlib.util.spec_from_file_location rather than an "
-        "import. Whether dynamically-loaded plugin trees are gated at all is the "
-        "outstanding decision, not a wiring fix; parked until it is taken"
-    ),
 }
 
 #: Per-prefix ceilings on how many tracked test files each exclusion excuses.
@@ -201,7 +198,6 @@ INTENTIONALLY_UNCOLLECTED = {
 _UNCOLLECTED_CEILINGS = {
     "autobot-infrastructure": 51,
     "autobot-npu-worker": 14,
-    "plugins": 2,
 }
 
 #: Floor under the SUBJECT, not the finding. Every count above is derived from

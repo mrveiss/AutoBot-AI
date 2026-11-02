@@ -28,7 +28,7 @@ from llc.adapters.subprocess_support import is_rate_limit_output
 from llc.exceptions import AdapterRunFailed, ProviderRateLimited
 from llc.models.enums import LLCRunStatus
 from llc.scheduler.heartbeat_scheduler import (
-    HeartbeatScheduler,
+    LLCHeartbeatScheduler,
     _dispatch_registry_adapter,
 )
 
@@ -385,15 +385,17 @@ async def test_run_adapter_applies_backoff_for_registry_rate_limit():
     """_run_adapter must apply the GH#8204 backoff path when a registry adapter
     signals RATE_LIMITED (i.e. when _dispatch_registry_adapter raises ProviderRateLimited).
     """
-    scheduler = HeartbeatScheduler()
+    scheduler = LLCHeartbeatScheduler()
     agent = _make_agent()
     redis = _make_redis()
 
     session_mock = AsyncMock()
-    # First execute call: SELECT retry_count + UPDATE to RUNNING.
+    # Execute calls, in order (#19582): SELECT retry_count + agent_id, the per-agent row
+    # lock, then the UPDATE that claims RUNNING -- reported as one row claimed, so the
+    # run is not superseded.
     retry_count_result = MagicMock()
-    retry_count_result.scalar_one_or_none.return_value = 0
-    session_mock.execute = AsyncMock(side_effect=[retry_count_result, None])
+    retry_count_result.first.return_value = MagicMock(retry_count=0, agent_id=_AGENT_ID)
+    session_mock.execute = AsyncMock(side_effect=[retry_count_result, MagicMock(), MagicMock(rowcount=1)])
     session_mock.commit = AsyncMock()
     ctx_mgr_running = MagicMock()
     ctx_mgr_running.__aenter__ = AsyncMock(return_value=session_mock)
@@ -407,12 +409,32 @@ async def test_run_adapter_applies_backoff_for_registry_rate_limit():
     ctx_mgr_rl.__aenter__ = AsyncMock(return_value=rl_session_mock)
     ctx_mgr_rl.__aexit__ = AsyncMock(return_value=False)
 
+    # THIRD session: the rate-limited exit hands the workspace back (#16818). It opens
+    # its own session because the run's status is already written and committed by then.
+    #
+    # It needs a distinct mock for two reasons, and the second is why reusing the second
+    # session failed rather than merely blurring: `execute.call_args` returns the LAST
+    # call, so the lease query overwrote the RATE_LIMITED assertion's subject. And the
+    # result must be a MagicMock -- an AsyncMock's auto-created `.scalars` is itself
+    # async, so `result.scalars()` hands back a coroutine and `.all()` raises
+    # AttributeError. The first session already uses a MagicMock result for that reason.
+    release_result = MagicMock()
+    release_result.scalars.return_value.all.return_value = []
+    release_session_mock = AsyncMock()
+    release_session_mock.execute = AsyncMock(return_value=release_result)
+    release_session_mock.commit = AsyncMock()
+    ctx_mgr_release = MagicMock()
+    ctx_mgr_release.__aenter__ = AsyncMock(return_value=release_session_mock)
+    ctx_mgr_release.__aexit__ = AsyncMock(return_value=False)
+
     call_count = 0
 
     def _session_factory():
         nonlocal call_count
         call_count += 1
-        return ctx_mgr_running if call_count == 1 else ctx_mgr_rl
+        if call_count == 1:
+            return ctx_mgr_running
+        return ctx_mgr_rl if call_count == 2 else ctx_mgr_release
 
     with (
         patch(
@@ -433,5 +455,13 @@ async def test_run_adapter_applies_backoff_for_registry_rate_limit():
     # RATE_LIMITED status must have been written (not FAILED).
     rl_compiled = str(rl_session_mock.execute.call_args[0][0].compile(compile_kwargs={"literal_binds": True}))
     assert LLCRunStatus.RATE_LIMITED.value in rl_compiled
+    # And the workspace must have been handed back on this exit (#16818, #17725 review):
+    # a rate-limited retry is re-dispatched as a NEW run that acquires its own lease, so
+    # holding this one keeps the directory unusable until its deadline.
+    release_session_mock.execute.assert_awaited()
+    release_compiled = str(release_session_mock.execute.call_args[0][0].compile(compile_kwargs={"literal_binds": True}))
+    assert (
+        "llc_workspace_leases" in release_compiled
+    ), f"the rate-limited exit did not touch the lease table: {release_compiled[:120]}"
     # Agent must have been re-queued in Redis.
     redis.zadd.assert_called_once()

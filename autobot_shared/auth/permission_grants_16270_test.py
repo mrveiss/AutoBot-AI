@@ -7,8 +7,8 @@
 - ``chat.use`` and ``chat.history`` are behaviour-preserving. Chat routes are
   login-only today, so every role that can log in holds them.
 - ``teams.*`` and ``webhooks.trigger`` are a policy choice: admin only.
-- ``superadmin`` holds none of them, because it holds no granular permissions
-  by design (#13854).
+- ``superadmin`` holds all of them, because its grants are derived from
+  admin's (#19125, reversing #13854's empty entry).
 """
 
 import pytest
@@ -33,11 +33,11 @@ def test_every_role_that_can_log_in_keeps_chat(role):
 
 def test_team_and_webhook_permissions_are_admin_only():
     holders = {role.value for role, perms in ROLE_PERMISSIONS.items() if _ADMIN_ONLY & set(perms)}
-    assert holders == {Role.ADMIN.value}, f"held beyond admin: {holders}"
+    assert holders == {Role.ADMIN.value, Role.SUPERADMIN.value}, f"held beyond admin: {holders}"
 
 
-def test_superadmin_gains_none_of_them():
-    assert not (_CHAT | _ADMIN_ONLY) & set(ROLE_PERMISSIONS[Role.SUPERADMIN])
+def test_superadmin_inherits_all_of_them():
+    assert (_CHAT | _ADMIN_ONLY) <= set(ROLE_PERMISSIONS[Role.SUPERADMIN])
 
 
 def test_the_roles_listed_here_are_every_role_but_superadmin():

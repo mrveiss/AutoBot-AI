@@ -46,6 +46,7 @@ import { useChatStore, type UserContext, type SessionActivity } from '@/stores/u
 import { createLogger } from '@/utils/debugUtils'
 import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl'
 import { getApiBase } from '@/config/ssot-config'
+import { syncOnlineUsers } from '@/composables/sessionPresenceSync'
 import { apiService, type PendingInvitationResponse } from '@/services/api'
 
 const logger = createLogger('SessionCollaboration')
@@ -201,6 +202,7 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
     })
   }
 
+  const _syncPresence = () => syncOnlineUsers(() => currentSessionId.value, presenceMap.value, _upsertPresence)
   const _handleBroadcastPayload = (senderId: string, payload: Record<string, unknown>): void => {
     const currentUser = getCurrentUser()
     const isOwnMessage = !!currentUser && senderId === currentUser.id
@@ -266,10 +268,12 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
       }
       case 'user_joined':
         _upsertPresence(data.user_id as string, {})
+        void _syncPresence()
         logger.debug(`User ${data.user_id} joined session`)
         break
       case 'user_left':
         presenceMap.value.delete(data.user_id as string)
+        void _syncPresence()
         logger.debug(`User ${data.user_id} left session`)
         break
       case 'user_message':
@@ -369,6 +373,7 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
     presenceSocket = new WebSocket(wsUrl, subprotocols)
     presenceSocket.onopen = () => {
       wsConnected.value = true
+      void _syncPresence()
       logger.debug(`Joined session ${sessionId} for collaboration`)
     }
     presenceSocket.onmessage = _handlePresenceSocketMessage

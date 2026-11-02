@@ -202,10 +202,6 @@ HEADER
                     echo "VITE_API_TIMEOUT=$value" >> "$FRONTEND_ENV"
                     count=$((count + 1))
                     ;;
-                AUTOBOT_LLM_TIMEOUT)
-                    echo "VITE_LLM_TIMEOUT=$value" >> "$FRONTEND_ENV"
-                    count=$((count + 1))
-                    ;;
                 AUTOBOT_API_RETRY_ATTEMPTS)
                     echo "VITE_API_RETRY_ATTEMPTS=$value" >> "$FRONTEND_ENV"
                     count=$((count + 1))
@@ -230,16 +226,6 @@ HEADER
                     ;;
                 AUTOBOT_DEBUG_MODE)
                     echo "VITE_ENABLE_DEBUG=$value" >> "$FRONTEND_ENV"
-                    count=$((count + 1))
-                    ;;
-
-                # LLM settings
-                AUTOBOT_DEFAULT_LLM_MODEL)
-                    echo "VITE_LLM_DEFAULT_MODEL=$value" >> "$FRONTEND_ENV"
-                    count=$((count + 1))
-                    ;;
-                AUTOBOT_EMBEDDING_MODEL)
-                    echo "VITE_LLM_EMBEDDING_MODEL=$value" >> "$FRONTEND_ENV"
                     count=$((count + 1))
                     ;;
 

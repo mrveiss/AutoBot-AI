@@ -229,9 +229,9 @@ const downloadImage = (url: string, index: number) => {
   align-items: center;
   justify-content: center;
   padding: 2rem;
-  border: 1px dashed var(--border-default, #e5e7eb);
+  border: 1px dashed var(--border-default);
   border-radius: 0.5rem;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .placeholder-content {
@@ -256,11 +256,11 @@ const downloadImage = (url: string, index: number) => {
 
 .provider-badge,
 .size-badge {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   padding: 0.125rem 0.5rem;
   border-radius: 9999px;
-  background: var(--color-surface-2, #f3f4f6);
-  color: var(--text-muted, #6b7280);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
   font-weight: 500;
 }
 
@@ -291,11 +291,11 @@ const downloadImage = (url: string, index: number) => {
   border-radius: 0.5rem;
   overflow: hidden;
   aspect-ratio: 1 / 1;
-  background: var(--color-surface-2, #f3f4f6);
+  background: var(--bg-secondary);
 }
 
 .image-wrapper:focus-visible {
-  outline: 2px solid var(--color-primary, #3b82f6);
+  outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
 
@@ -321,7 +321,7 @@ const downloadImage = (url: string, index: number) => {
   color: white;
   opacity: 0;
   transition: opacity 0.2s ease;
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
 }
 
 .image-wrapper:hover .image-overlay,
@@ -336,10 +336,10 @@ const downloadImage = (url: string, index: number) => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: var(--color-surface-2, #f3f4f6);
-  color: var(--text-muted, #6b7280);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
   gap: 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .image-prompt {
@@ -347,7 +347,7 @@ const downloadImage = (url: string, index: number) => {
   align-items: flex-start;
   gap: 0.375rem;
   font-size: 0.8125rem;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
   font-style: italic;
   line-height: 1.4;
   margin: 0;
@@ -364,24 +364,24 @@ const downloadImage = (url: string, index: number) => {
   align-items: center;
   gap: 0.25rem;
   padding: 0.25rem 0.625rem;
-  font-size: 0.75rem;
-  border: 1px solid var(--border-default, #e5e7eb);
+  font-size: var(--text-xs);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  background: var(--bg-surface, #fff);
-  color: var(--text-primary, #374151);
+  background: var(--bg-surface);
+  color: var(--text-primary);
   cursor: pointer;
   transition: background 0.15s;
 }
 
 .action-btn:hover {
-  background: var(--color-surface-2, #f3f4f6);
+  background: var(--bg-secondary);
 }
 
 /* Lightbox */
 .image-lightbox {
   position: fixed;
   inset: 0;
-  z-index: 9999;
+  z-index: var(--z-maximum);
   background: rgba(0, 0, 0, 0.85);
   display: flex;
   align-items: center;
@@ -407,7 +407,7 @@ const downloadImage = (url: string, index: number) => {
 
 .lightbox-caption {
   color: rgba(255, 255, 255, 0.8);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   text-align: center;
   max-width: 60ch;
   margin: 0;
@@ -427,7 +427,7 @@ const downloadImage = (url: string, index: number) => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   transition: background 0.15s;
 }
 
@@ -449,7 +449,7 @@ const downloadImage = (url: string, index: number) => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   transition: background 0.15s;
 }
 

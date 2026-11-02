@@ -22,37 +22,7 @@ from repo_tests.config_router_auth import config_registered_routers, enumerate_c
 #: SHRINK: remove an entry when its router gains a gate or a documented open
 #: posture. Every entry is a finding tracked on #16375, which triages them by
 #: exposure. None of them is an exemption.
-KNOWN_UNGATED: frozenset[str] = frozenset(
-    {
-        "api.analytics_llm_patterns",
-        "api.analytics_pattern_learning",
-        "api.analytics_reporting",
-        "api.anti_pattern",
-        "api.chat_knowledge",
-        "api.code_search",
-        "api.development_speedup",
-        "api.error_monitoring",
-        "api.error_resilience",
-        "api.knowledge_eval",
-        "api.llm_awareness",
-        "api.natural_language_search",
-        "api.phases",
-        "api.project",
-        "api.project_state",
-        "api.prometheus_endpoint",
-        "api.realtime_session",
-        "api.registry",
-        "api.rum",
-        "api.search",
-        "api.self_capabilities",
-        "api.state_tracking",
-        "api.system_validation",
-        "api.validation_dashboard",
-        "routers.code_completion",
-        "routers.feedback",
-        "routers.model_management",
-    }
-)
+KNOWN_UNGATED: frozenset[str] = frozenset()
 
 #: "The list may only SHRINK" is a comment, and a comment cannot fail. These two
 #: make it an assertion (#16375). The equality tests above stop an ungated router
@@ -103,7 +73,7 @@ _EVER_UNGATED: frozenset[str] = frozenset(
 #: Pinned to len(KNOWN_UNGATED). Lower it with every removal; raising it is the
 #: deliberate act the rule exists to make visible. It catches what the set above
 #: cannot: an entry removed once and later put back.
-_MAX_KNOWN_UNGATED = 27
+_MAX_KNOWN_UNGATED = 0
 
 
 #: Config-registered routers this sweep cannot read, pinned so that a new one

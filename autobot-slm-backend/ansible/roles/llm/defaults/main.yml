@@ -12,36 +12,66 @@ llm_models_dir: /var/lib/ollama
 llm_install_ollama: true
 llm_pull_models: true
 
+# Minimum Ollama the model list below needs (#18128).
+#
+# The install tasks ran only when /usr/local/bin/ollama was ABSENT, so an Ollama
+# already on the box was never upgraded. The registry refused a manifest the
+# installed version could not read, and the role failed on a model it ships by
+# default:
+#
+#   ollama pull gemma3:4b
+#   Error: pull model manifest: 412:
+#   The model you are attempting to pull requires a newer version of Ollama.
+#
+# Observed on a node running 0.19.0. The pull failing is the right signal; what
+# was wrong is that no task upstream could fix the cause, on any run, ever.
+#
+# This value is a TRIGGER, not a target. The vendor installer this role fetches
+# installs the current release, so any floor above a node's installed version
+# upgrades it to latest -- the number only decides WHETHER to upgrade. 0.20.0 is
+# the first version above the 0.19.0 observed failing, not a verified claim
+# of gemma3:4b, which is not published anywhere this role can read. Raise it
+# together with the model list. (gemma3:4b is no longer in the list, #15502; the floor stays for
+# the models that still need a recent Ollama.)
+llm_ollama_min_version: "0.20.0"
+
 # GPU detection: "auto" runs nvidia-smi at deploy time.
 # Override with true/false to skip detection.
 llm_has_gpu: "auto"
 
-# AutoBot LLM Model Stack
+# AutoBot LLM Model Stack (#15502)
 #
-# 6 models, ~15 GB total. GPU-accelerated on NVIDIA (RTX 4070+).
+# The canonical local tier models (autobot_shared/ssot_config.py), split by node class.
+# repo_tests/model_tier_single_definition_15502_test.py pins both lists to the tier map, so a
+# tier skipped on a node class is declared here, not accidental. ~22 GB in total.
 #
-# ┌──────────────────┬──────────────────┬────────┬─────────────────────────────────┐
-# │ Tier             │ Model            │ Size   │ Purpose                         │
-# ├──────────────────┼──────────────────┼────────┼─────────────────────────────────┤
-# │ Embeddings       │ nomic-embed-text │ 274 MB │ RAG, vector search, memory      │
-# │ Routing          │ llama3.2:1b      │ 1.3 GB │ Orchestrator task routing       │
-# │ Classification   │ gemma2:2b        │ 1.6 GB │ Intent detection, filtering     │
-# │ Light processing │ phi3:mini        │ 2.2 GB │ Quick tasks, summaries          │
-# │ Main chat        │ gemma3:4b        │ 3.3 GB │ Default conversational LLM      │
-# │ Quality/tools    │ qwen3.5:9b       │ 6.6 GB │ Complex reasoning, tool use     │
-# └──────────────────┴──────────────────┴────────┴─────────────────────────────────┘
+# ┌──────────────────┬─────────────────────┬────────┬───────┬──────────────────────────────┐
+# │ Tier             │ Model               │ Size   │ Class │ Purpose                      │
+# ├──────────────────┼─────────────────────┼────────┼───────┼──────────────────────────────┤
+# │ Embeddings       │ nomic-embed-text    │ 274 MB │ CPU   │ RAG, vector search, memory   │
+# │ Routing          │ llama3.2:1b         │ 1.3 GB │ CPU   │ Orchestrator task routing    │
+# │ Classification   │ gemma2:2b           │ 1.6 GB │ CPU   │ Intent detection, filtering  │
+# │ Light processing │ phi3:mini           │ 2.2 GB │ CPU   │ Quick tasks, summaries       │
+# │ Instruction      │ mistral:7b-instruct │ 4.1 GB │ GPU   │ RAG, entity extraction       │
+# │ System           │ dolphin-llama3:8b   │ 4.7 GB │ GPU   │ System commands, security    │
+# │ Quality/tools    │ qwen3.5:9b          │ 6.6 GB │ GPU   │ Complex reasoning, tool use  │
+# └──────────────────┴─────────────────────┴────────┴───────┴──────────────────────────────┘
+#
+# A CPU-only node pulls only the CPU class, and the role says so out loud: after the pulls it
+# asserts every model it meant to pull is present and warns which tiers it skipped.
 
 # Models requiring GPU for reasonable performance (>= 7B parameters)
 llm_gpu_models:
   - qwen3.5:9b                # Quality/tools tier — default LLM for complex tasks
+  - mistral:7b-instruct       # INSTRUCTION_MODEL tier — RAG, entity extraction
+  - dolphin-llama3:8b         # SYSTEM_MODEL tier — system commands, security
 
 # Lightweight models that run well on CPU (<= 4B parameters)
 llm_cpu_models:
-  - nomic-embed-text          # Embeddings (vectorization, RAG, memory graph)
+  - nomic-embed-text:latest   # Embeddings (vectorization, RAG, memory graph)
   - llama3.2:1b               # Routing tier (orchestrator)
   - gemma2:2b                 # Classification tier (intent detection)
   - phi3:mini                 # Light processing tier
-  - gemma3:4b                 # Main chat tier (default conversational LLM)
 
 # Server settings
 llm_host: "0.0.0.0"

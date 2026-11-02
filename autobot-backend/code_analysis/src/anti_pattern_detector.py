@@ -20,6 +20,7 @@ Each anti-pattern includes:
 """
 
 import ast
+import asyncio
 import re
 import time
 from dataclasses import dataclass, field
@@ -32,6 +33,7 @@ from autobot_shared.env_utils import env_float
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.repo_path import to_repo_relative
 from autobot_shared.status_enums import Severity  # #7253: consolidated onto canonical (#6689)
+from utils.file_categorization import SKIP_DIRS
 
 # Anti-pattern severity → 0-100 integer score. Kept as a module-level helper
 # rather than an enum method so the canonical `Severity` enum stays clean
@@ -91,16 +93,16 @@ logger = get_logger(__name__)
 _COMPLEXITY_BRANCH_TYPES = (ast.If, ast.While, ast.For, ast.ExceptHandler)
 
 # Issue #1183: Module-level defaults extracted from analyze() to reduce function length
+# Directory patterns are "/name/" (whole components of the "/"-prefixed relative
+# path, see _should_skip); the canonical dirs come from SKIP_DIRS (#19339).
 _DEFAULT_EXCLUDE_PATTERNS = [
-    "__pycache__",
-    ".git",
-    "node_modules",
-    ".venv",
-    "venv",
+    *(f"/{name}/" for name in sorted(SKIP_DIRS)),
     "test_",
     "_test.py",
     "tests/",
     "migrations/",
+    "/.github/",  # the old bare ".git" substring also skipped these
+    "/.gitlab/",
 ]
 
 # Issue #1183: Entry-point suffixes extracted from _detect_dead_code() to reduce function length
@@ -124,6 +126,9 @@ _VUE_COMP_CALL_RE = re.compile(
     r"(<[^>]*>)?\s*\(",
 )
 _COMPOSABLE_THRESHOLD = 5
+# #18188: the ONE magic-number threshold -- a number is flagged when it appears AT LEAST
+# this many times (>=). Defined here because Thresholds (types.py) imports this module.
+MAGIC_NUMBER_MIN_OCCURRENCES = 2
 _COMPOSABLE_EXCL_DIRS = frozenset({"composables", "node_modules", ".git", "__pycache__"})
 
 
@@ -209,20 +214,15 @@ class AntiPatternType(Enum):
     # legacy code_intelligence used DATA_CLUMPS — kept as alias for migration.
     DATA_CLUMP = "data_clump"
     DATA_CLUMPS = "data_clumps"  # legacy alias from code_intelligence (GH#6757)
-    PRIMITIVE_OBSESSION = "primitive_obsession"
 
     # --- Couplers ---
     FEATURE_ENVY = "feature_envy"
     CIRCULAR_DEPENDENCY = "circular_dependency"
-    SHOTGUN_SURGERY = "shotgun_surgery"
     MESSAGE_CHAINS = "message_chains"
-    INAPPROPRIATE_INTIMACY = "inappropriate_intimacy"
 
     # --- Dispensables ---
-    SPECULATIVE_GENERALITY = "speculative_generality"
     DEAD_CODE = "dead_code"
     LAZY_CLASS = "lazy_class"
-    REFUSED_BEQUEST = "refused_bequest"
     # DUPLICATE_ABSTRACTION: legacy name from code_intelligence; canonical is
     # DUPLICATE_CLASS_SHAPE (added in #6684).
     DUPLICATE_CLASS_SHAPE = "duplicate_class_shape"
@@ -281,6 +281,33 @@ class AntiPatternInstance:
             "related_entities": self.related_entities,
             "runtime_risk": self.runtime_risk,
         }
+
+
+def _bound_names(target: ast.AST) -> Set[str]:
+    """Names a single assignment target BINDS — not names it merely reads.
+
+    `ast.walk` over a target is wrong here: in `items[Target] = value` the
+    subscript index is a *read* of Target, and treating it as a binding
+    suppressed genuine `Target.attr` findings elsewhere in the method
+    (CodeRabbit). Only a bare `Name`, and the elements of tuple/list
+    destructuring, actually bind. A subscript or attribute target binds nothing
+    new — `obj.attr = v` and `d[k] = v` rebind neither `obj` nor `k`.
+    """
+    if isinstance(target, ast.Name):
+        return {target.id}
+    if isinstance(target, (ast.Tuple, ast.List)):
+        names: Set[str] = set()
+        for element in target.elts:
+            names |= _bound_names(element)
+        return names
+    if isinstance(target, ast.Starred):
+        return _bound_names(target.value)
+    return set()
+
+
+def _read_and_parse(path: Path) -> ast.AST:
+    """Read a source file and parse it, for one `asyncio.to_thread` hop (#7444)."""
+    return ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 
 
 @dataclass
@@ -429,7 +456,7 @@ class AntiPatternDetector:
     DEEP_NESTING_THRESHOLD = 4  # alias for api.code_intelligence compat
     MESSAGE_CHAIN_THRESHOLD = 4  # alias for api.code_intelligence compat
     COMPLEX_CONDITIONAL_THRESHOLD = 3  # alias for api.code_intelligence compat
-    MAGIC_NUMBER_THRESHOLD = 3  # alias for api.code_intelligence compat
+    MAGIC_NUMBER_THRESHOLD = MAGIC_NUMBER_MIN_OCCURRENCES  # alias for api.code_intelligence compat
     FEATURE_ENVY_THRESHOLD = 3
     LAZY_CLASS_METHOD_THRESHOLD = 2
     LAZY_CLASS_LOC_THRESHOLD = 20
@@ -637,7 +664,7 @@ class AntiPatternDetector:
 
         Issue #510: Accepts frozenset for O(1) membership check.
         """
-        path_str = self._path_for_exclusion(file_path, root)
+        path_str = "/" + self._path_for_exclusion(file_path, root).lstrip("/")
         return any(pattern in path_str for pattern in exclude_patterns)
 
     async def _parse_file(self, file_path: str) -> ModuleInfo | None:
@@ -916,18 +943,80 @@ class AntiPatternDetector:
 
         return issues
 
+    def _known_class_names(self) -> Set[str]:
+        """Bare names of every class the parse found, for resolving an envy target."""
+        return {info.name for info in self.classes.values()}
+
+    @staticmethod
+    def _locally_bound(method: ast.FunctionDef) -> Set[str]:
+        """Names the method itself binds: parameters, assignments, loop and with targets.
+
+        A name bound inside the method is a variable, never a class this method
+        could be moved to. `manifest`, `params`, `cb` and `env_entry` were all
+        reported as "classes" before this (#18034).
+        """
+        args = method.args
+        # posonlyargs too: `def m(self, Target, /)` binds Target, and omitting
+        # it let three `Target.attr` reads become a false finding (CodeRabbit).
+        bound = {a.arg for a in (*args.posonlyargs, *args.args, *args.kwonlyargs)}
+        if args.vararg:
+            bound.add(args.vararg.arg)
+        if args.kwarg:
+            bound.add(args.kwarg.arg)
+        for child in ast.walk(method):
+            targets: list = []
+            if isinstance(child, ast.Assign):
+                targets = list(child.targets)
+            elif isinstance(child, ast.AnnAssign):
+                # `Target: object = value` binds Target as surely as `Target = value`.
+                targets = [child.target]
+            elif isinstance(child, (ast.For, ast.AsyncFor)):
+                targets = [child.target]
+            elif isinstance(child, (ast.With, ast.AsyncWith)):
+                targets = [i.optional_vars for i in child.items if i.optional_vars]
+            for target in targets:
+                bound |= _bound_names(target)
+        return bound
+
     def _analyze_feature_envy(self, method: ast.FunctionDef, cls_info: ClassInfo) -> Tuple[str, int, int] | None:
-        """Analyze a method for feature envy"""
+        """Analyze a method for feature envy.
+
+        #18034: this counted ANY name with an attribute access as an "envied
+        class", excluding only the literal `self`. A sample of ten findings was
+        10/10 false positives -- `cls` (the classmethod's own parameter, three
+        times), `np` (a module), and five local variables. `cls` was wrong by
+        construction: inside a `@classmethod`, `cls.` IS how you touch your own
+        class, so every well-written classmethod with three such accesses was a
+        finding and always would be.
+
+        A name is now only reported when it resolves to a class this parse
+        actually found. An unresolvable name yields NO finding -- "I cannot tell
+        which class this is" must not be reported as "move it to `np`".
+        """
         self_refs = 0
         external_refs: Dict[str, int] = {}
+        # `cls` is the method's own class, not a foreign one. Named explicitly
+        # rather than read off the decorator so a plain method using `cls` is
+        # treated the same way.
+        # The class's OWN name counts as itself, not as a foreign class. A
+        # `@staticmethod` reading `CurrentClass.a/.b/.c` has no `self` or `cls`
+        # to compare against, so without this it was reported as envying the
+        # very class it belongs to (CodeRabbit).
+        own_names = {"self", "cls", cls_info.name}
+        # Imported module names (`np`, `os`) need no separate exclusion: a module
+        # is not in `known_classes`, so the resolution check below drops it.
+        skip = self._locally_bound(method)
+        known_classes = self._known_class_names()
 
         for child in ast.walk(method):
             if isinstance(child, ast.Attribute):
                 if isinstance(child.value, ast.Name):
-                    if child.value.id == "self":
+                    if child.value.id in own_names:
                         self_refs += 1
                     else:
                         ref_name = child.value.id
+                        if ref_name in skip or ref_name not in known_classes:
+                            continue
                         external_refs[ref_name] = external_refs.get(ref_name, 0) + 1
 
         # Find the most-referenced external entity
@@ -1862,6 +1951,37 @@ class AntiPatternDetector:
         # Dedupe while preserving order
         return list(dict.fromkeys(refs))
 
+    @staticmethod
+    async def _index_importers(py_files: List[Path], stem_to_importers: Dict[str, Set[str]]) -> None:
+        """Fill ``stem_to_importers`` with the files importing each known stem.
+
+        Extracted from :meth:`_detect_unwired_trackers` (#620 function length).
+
+        #7444: `f.read_text()` ran per file inside an `async def`, blocking the
+        event loop. Pre-existing; the guard surfaced it when this file was
+        touched for #18034. Read and parse share ONE `asyncio.to_thread` hop --
+        `ast.parse` is CPU-bound and was blocking too, so moving only the read
+        would have left most of the stall in place.
+        """
+        for f in py_files:
+            try:
+                tree = await asyncio.to_thread(_read_and_parse, f)
+            except Exception:  # noqa: BLE001 - an unparsable file is skipped, not fatal
+                continue
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        stem = alias.name.split(".")[-1]
+                        if stem in stem_to_importers:
+                            stem_to_importers[stem].add(str(f))
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    stem = node.module.split(".")[-1]
+                    if stem in stem_to_importers:
+                        stem_to_importers[stem].add(str(f))
+                    for alias in node.names:  # names imported FROM the module
+                        if alias.name in stem_to_importers:
+                            stem_to_importers[alias.name].add(str(f))
+
     async def _detect_unwired_trackers(self, root_path: str = ".") -> List[AntiPatternInstance]:
         """Detect Python modules whose header cites an issue tracker but has
         zero production callers (Issue #6871 — Tier 4 of #6836).
@@ -1896,28 +2016,7 @@ class AntiPatternDetector:
             if stem not in stem_to_importers:
                 stem_to_importers[stem] = set()
 
-        # Single pass: parse each file for its imports to build the caller index.
-        for f in py_files:
-            try:
-                content = f.read_text(encoding="utf-8")
-                tree = ast.parse(content, filename=str(f))
-            except Exception:
-                continue
-            for node in ast.walk(tree):
-                if isinstance(node, ast.Import):
-                    for alias in node.names:
-                        imported_stem = alias.name.split(".")[-1]
-                        if imported_stem in stem_to_importers:
-                            stem_to_importers[imported_stem].add(str(f))
-                elif isinstance(node, ast.ImportFrom) and node.module:
-                    imported_stem = node.module.split(".")[-1]
-                    if imported_stem in stem_to_importers:
-                        stem_to_importers[imported_stem].add(str(f))
-                    # also check names imported from the module
-                    for alias in node.names:
-                        name_stem = alias.name
-                        if name_stem in stem_to_importers:
-                            stem_to_importers[name_stem].add(str(f))
+        await self._index_importers(py_files, stem_to_importers)
 
         # Identify candidate files with issue refs AND zero external callers.
         for f in py_files:
