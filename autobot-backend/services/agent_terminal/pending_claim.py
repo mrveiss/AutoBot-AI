@@ -62,8 +62,13 @@ async def claim_pending_slot(redis, session_id: str, command_id: str) -> bool:
     return bool(await redis.set(key, command_id, nx=True, ex=CLAIM_WRITE_TTL))
 
 
-async def hold_pending_slot(redis, session_id: str, command_id: str, ttl: int) -> None:
-    """Keep *command_id*'s claim alive for *ttl* seconds, now its approval is persisted."""
+async def hold_pending_slot(redis, session_id: str, command_id: str | None, ttl: int) -> None:
+    """Keep *command_id*'s claim alive for *ttl* seconds, now its approval is persisted.
+
+    An approval restored from chat history has no command id, so it has no claim to keep.
+    """
+    if not command_id:
+        return
     await redis.eval(RENEW_IF_OWNER_LUA, 1, _claim_key(session_id), command_id, ttl)
 
 

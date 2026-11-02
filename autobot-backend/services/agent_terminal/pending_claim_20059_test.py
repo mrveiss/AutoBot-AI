@@ -200,3 +200,13 @@ async def test_a_denial_through_the_service_frees_the_slot(redis):
     await _queue(svc, first.session)
     await svc._handle_denied_command(first.session, "rm x", first.session.get_pending_command_id(), "high", "u", None)
     assert (await _queue(_service(second, redis), second.session))["status"] == "pending_approval"
+
+
+async def test_a_restored_approval_without_a_command_id_still_writes_its_conversation_pointer(redis):
+    """An approval rebuilt from chat history has no command id; the #13478 pointer must still be written."""
+    worker = _worker(redis)
+    worker.session.conversation_id = "conv-1"
+    worker.session.pending_approval = {"command": "rm x", "risk": CommandRisk.HIGH.value}
+    await worker.manager._persist_session(worker.session)
+    assert await redis.get(f"agent_terminal:approval_conversation:{SID}") == "conv-1"
+    assert await redis.get(_claim_key(SID)) is None
