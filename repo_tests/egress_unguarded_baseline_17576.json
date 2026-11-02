@@ -8,7 +8,7 @@
   "autobot-backend/agents/overseer/overseer_agent.py": 1,
   "autobot-backend/agents/security_scanner_agent.py": 2,
   "autobot-backend/agents/web_researcher.py": 2,
-  "autobot-backend/ai_hardware_accelerator.py": 2,
+  "autobot-backend/ai_hardware_accelerator.py": 1,
   "autobot-backend/api/browser_mcp.py": 2,
   "autobot-backend/api/http_client_mcp.py": 1,
   "autobot-backend/api/monitoring.py": 2,

@@ -18,7 +18,9 @@ from typing import Any, Dict, Iterator, List, Tuple
 
 import aiohttp
 
+from autobot_shared.egress_allowlist import register_internal_origin_provider
 from autobot_shared.http_client import get_http_client
+from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -37,6 +39,17 @@ def _spread(workers: List[Any]) -> List[Any]:
     tied = list(takewhile(lambda w: rank(w) == rank(workers[0]), workers))
     start = next(_request_counter) % len(tied)
     return tied[start:] + tied[:start] + workers[len(tied) :]
+
+
+async def _paired_worker_origins() -> List[str]:
+    """Paired workers are internal origins, or the egress guard would refuse all but the configured one."""
+    from services import npu_worker_manager
+
+    manager = npu_worker_manager._worker_manager
+    return [] if manager is None else [w.config.url for w in await manager.get_healthy_workers_sorted()]
+
+
+register_internal_origin_provider(_paired_worker_origins)
 
 
 async def npu_worker_urls(configured_url: str) -> List[str]:
@@ -68,6 +81,7 @@ async def _post_inference(url: str, request_data: Dict[str, Any], timeout_second
         f"{url}/inference",
         json=request_data,
         timeout=aiohttp.ClientTimeout(total=timeout_seconds),
+        guard_egress=EGRESS_POLICY,
     ) as response:
         if response.status != 200:
             raise RuntimeError(f"NPU Worker HTTP error: {response.status}")

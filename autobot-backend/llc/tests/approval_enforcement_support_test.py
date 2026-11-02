@@ -23,6 +23,7 @@ from llc.services.approval import ApprovalService
 from llc.tests import _e2e_harness as harness
 from models.approval import Approval
 from user_management.models.organization import Organization
+from user_management.models.user import User
 
 _ORG = uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 _BOARD = uuid.UUID("11111111-1111-1111-1111-111111111111")
@@ -184,4 +185,12 @@ async def _member(session_factory, user_id: uuid.UUID, role: str) -> None:  # no
 
     async with session_factory() as session:
         session.add(LLCCompanyMembership(id=uuid.uuid4(), company_id=_ORG, user_id=user_id, role=role))
+        await session.commit()
+
+
+async def _live_member(session_factory, user_id: uuid.UUID, role: str) -> None:  # noqa: ANN001
+    """A membership and the live user behind it; a membership with no user is not an admin."""
+    await _member(session_factory, user_id, role)
+    async with session_factory() as session:
+        session.add(User(id=user_id, org_id=_ORG, email=f"{user_id}@e.test", username=str(user_id), is_active=True))
         await session.commit()

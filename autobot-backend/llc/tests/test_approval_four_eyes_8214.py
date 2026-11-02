@@ -21,6 +21,7 @@ from llc.tests.approval_enforcement_support_test import _edges  # noqa: F401 -- 
 from llc.tests.approval_enforcement_support_test import activity  # noqa: F401 -- fixture
 from llc.tests.approval_enforcement_support_test import session_factory  # noqa: F401 -- fixture
 from llc.tests.approval_enforcement_support_test import _ORG, _board_app, _budget
+from llc.tests.approval_enforcement_support_test import _live_member as _member
 from llc.tests.approval_enforcement_support_test import _member as _membership
 from llc.tests.approval_enforcement_support_test import _post, _rows
 from models.agent_org import AgentOrgNode
@@ -62,14 +63,6 @@ async def _decide_as(session_factory, approval_id, decision, decider):  # noqa: 
             await session.rollback()
             raise
     return approval
-
-
-async def _member(session_factory, user_id: uuid.UUID, role: str) -> None:  # noqa: ANN001
-    """A membership and the live user behind it; a membership with no user is not an admin."""
-    await _membership(session_factory, user_id, role)
-    async with session_factory() as session:
-        session.add(User(id=user_id, org_id=_ORG, email=f"{user_id}@e.test", username=str(user_id), is_active=True))
-        await session.commit()
 
 
 async def _two_admins(session_factory) -> None:  # noqa: ANN001
