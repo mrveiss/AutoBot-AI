@@ -218,6 +218,9 @@
   --z-popover: 1100;
   --z-tooltip: 1200;
   --z-toast: 1300;
+  --z-raised: 1;
+  --z-10: 10;
+  --z-maximum: 10000;
 }
 
 /* ─── Component literal captures (#11858 / #11896 / #11515 Task 4) ─────
