@@ -97,8 +97,10 @@ async def test_assemble_merges_chunks_from_collections(assembler: LLCRAGAssemble
         )
 
     assert isinstance(ctx, LLCContext)
-    # project + agent + company collections, one chunk each, merged in order.
-    assert ctx.sources == ["project:proj1", "agent:agent1", "company:co1"]
+    # project + company collections, one chunk each, merged in order. No agent
+    # leg: nothing writes ``agent:<id>`` (#19579).
+    assert ctx.sources == ["project:proj1", "company:co1"]
+    assert "agent:agent1" not in ctx.sources
     assert [c["content"] for c in ctx.chunks] == [f"doc from {s}" for s in ctx.sources]
 
 
