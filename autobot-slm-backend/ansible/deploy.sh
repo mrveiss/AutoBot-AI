@@ -344,8 +344,8 @@ restart_services() {
 # Rollback functionality
 rollback_deployment() {
     # #19239: no rollback.yml exists; this stopped every service, then failed, leaving the fleet down.
-    # The SLM's rollback runs no playbook yet (#17657); the working path is a known-good forward deploy.
-    error_exit "No rollback playbook exists: deploy a known-good commit through the builtin updater (SLM Code Sync); a real rollback is #17657"
+    # The SLM's rollback runs no playbook yet (#17657). Code Sync deploys only main, so there is no pinned deploy (#20214).
+    error_exit "No rollback playbook exists, and Code Sync deploys only main, so no earlier commit can be deployed yet (#20214, #17657). Fix forward on main."
 }
 
 # Dependency patching - Issue #682
