@@ -136,7 +136,7 @@ def create_session(owner: str, filename: str, total_size: int, max_bytes: int, p
     return session
 
 
-def get_session(upload_id: str, owner: str) -> UploadSession:
+def get_upload_session(upload_id: str, owner: str) -> UploadSession:
     session = _load(upload_id)
     if session.owner != owner:
         raise UploadSessionNotFound(upload_id)
@@ -281,7 +281,7 @@ def expired_sessions() -> List[UploadSession]:
     return [session for session in _all_sessions() if session.expired or session.handoff_lost]
 
 
-def describe(session: UploadSession, chunk_bytes: Optional[int] = None) -> dict:
+def describe_upload(session: UploadSession, chunk_bytes: Optional[int] = None) -> dict:
     """What a client may see; the staging path and the owner stay on the server."""
     return {
         "upload_id": session.id,

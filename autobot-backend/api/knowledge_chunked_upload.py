@@ -40,7 +40,7 @@ def _owner(request: Request) -> str:
 
 def _session(upload_id: str, request: Request) -> uploads.UploadSession:
     try:
-        return uploads.get_session(upload_id, _owner(request))
+        return uploads.get_upload_session(upload_id, _owner(request))
     except uploads.UploadSessionNotFound as exc:
         raise HTTPException(status_code=404, detail="No such upload") from exc
 
@@ -77,20 +77,20 @@ async def create_upload(body: UploadCreate, request: Request, _admin: bool = Dep
         )
     except uploads.UploadRejected as exc:
         raise HTTPException(status_code=413, detail=str(exc)) from exc
-    return uploads.describe(session)
+    return uploads.describe_upload(session)
 
 
 @router.get("/expired")
 async def list_expired_uploads(_admin: bool = Depends(check_admin_permission)) -> dict:
     """Abandoned sessions for a person to review; each still takes up its disk space until cancelled."""
     sessions = await asyncio.to_thread(uploads.expired_sessions)
-    return {"expired": [uploads.describe(session) for session in sessions]}
+    return {"expired": [uploads.describe_upload(session) for session in sessions]}
 
 
 @router.get("/{upload_id}")
 async def get_upload(upload_id: str, request: Request, _admin: bool = Depends(check_admin_permission)) -> dict:
     """Where to resume from, and how the handoff went."""
-    return uploads.describe(_session(upload_id, request))
+    return uploads.describe_upload(_session(upload_id, request))
 
 
 @router.put("/{upload_id}/chunks")
@@ -110,7 +110,7 @@ async def put_chunk(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except uploads.UploadRejected as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return uploads.describe(session)
+    return uploads.describe_upload(session)
 
 
 async def _hand_to_document(kb, request: Request, session: uploads.UploadSession) -> dict:
@@ -175,7 +175,7 @@ async def complete_upload(
     except (uploads.UploadRejected, uploads.UploadBusy) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     background.add_task(_hand_over, kb, request, session)
-    return uploads.describe(session)
+    return uploads.describe_upload(session)
 
 
 @router.delete("/{upload_id}")
