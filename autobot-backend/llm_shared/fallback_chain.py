@@ -18,13 +18,21 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, List, NamedTuple, Optional
 
 from autobot_shared.llm_provider_order import ORDER_ENV_VAR, provider_is_permitted
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 
 logger = get_logger(__name__)
+
+
+class FallbackHop(NamedTuple):
+    """The next model of a chain, and whether the operator wrote the chain it came from (#19753)."""
+
+    model: str
+    provider: Optional[str]
+    operator_configured: bool
 
 
 @dataclass
@@ -35,6 +43,8 @@ class FallbackChain:
     fallback_models: List[str]
     primary_provider: Optional[str] = None
     fallback_providers: Optional[List[str]] = None
+    #: True only for a chain read from ``AUTOBOT_FALLBACK_CHAIN_*``: the operator's consent to its hops.
+    operator_configured: bool = False
 
     def get_next_fallback(self, current_model: str) -> Optional[tuple[str, Optional[str]]]:
         """
@@ -176,6 +186,7 @@ class FallbackChainManager:
                 primary_model=primary_model_key,
                 fallback_models=fallback_models,
                 fallback_providers=fallback_providers if any(fallback_providers) else None,
+                operator_configured=True,
             )
 
             self.register_chain(chain)
@@ -193,7 +204,7 @@ class FallbackChainManager:
         """Get fallback chain for a model."""
         return self._chains.get(model.lower())
 
-    def _first_permitted(self, chain: FallbackChain, current: str) -> Optional[tuple[str, Optional[str]]]:
+    def _first_permitted(self, chain: FallbackChain, current: str) -> Optional[FallbackHop]:
         """Advance through *chain* from *current* to the first permitted hop.
 
         A cross-provider hop is part of the generation path, so a provider the
@@ -218,7 +229,7 @@ class FallbackChainManager:
                 return None
             seen.add(model)
             if provider is None or provider_is_permitted(provider):
-                return model, provider
+                return FallbackHop(model, provider, chain.operator_configured)
             logger.debug(
                 "Fallback hop %s via %s skipped: %s holds that provider out of the chain",
                 model,
@@ -239,6 +250,11 @@ class FallbackChainManager:
         Returns:
             Tuple of (next_model, next_provider) or None if no fallback available.
         """
+        hop = self.get_next_hop(current_model, current_provider)
+        return None if hop is None else (hop.model, hop.provider)
+
+    def get_next_hop(self, current_model: str, current_provider: Optional[str] = None) -> Optional[FallbackHop]:
+        """Like :meth:`get_next_fallback`, plus whether the operator wrote the chain the hop came from (#19753)."""
         # Try exact match first
         chain = self.get_chain(current_model)
         if chain:
@@ -273,4 +289,4 @@ class FallbackChainManager:
 get_fallback_chain_manager = lazy_singleton(FallbackChainManager)
 
 
-__all__ = ["FallbackChain", "FallbackChainManager", "get_fallback_chain_manager"]
+__all__ = ["FallbackChain", "FallbackChainManager", "FallbackHop", "get_fallback_chain_manager"]
