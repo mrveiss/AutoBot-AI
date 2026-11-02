@@ -122,24 +122,8 @@ def _get_membership_service() -> MembershipService:
 
 
 def _to_read(org: Organization) -> CompanyRead:
-    return CompanyRead(
-        id=org.id,
-        name=org.name,
-        slug=org.slug,
-        description=org.description,
-        issue_prefix=org.issue_prefix,
-        issue_counter=org.issue_counter,
-        budget_monthly_cents=org.budget_monthly_cents,
-        spent_monthly_cents=org.spent_monthly_cents,
-        brand_color=org.brand_color,
-        require_approval_for_hires=org.require_approval_for_hires,
-        parent_org_id=org.parent_org_id,
-        llc_status=LLCCompanyStatus(org.llc_status),
-        pause_reason=org.pause_reason,
-        paused_at=org.paused_at,
-        created_at=org.created_at,
-        updated_at=org.updated_at,
-    )
+    """The wire shape of a company: every ``CompanyRead`` field, read off the row (``from_attributes``)."""
+    return CompanyRead.model_validate(org)
 
 
 def _get_service(session: AsyncSession = Depends(get_async_session)) -> CompanyService:
