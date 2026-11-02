@@ -81,4 +81,10 @@ describe('EmptyState', () => {
     expect(actions.exists()).toBe(true)
     expect(actions.text()).toBe('Retry')
   })
+
+  it('adds the compact modifier only when compact is set', () => {
+    // fails if the compact prop stops toggling aui-empty--compact (#14776)
+    expect(mount(EmptyState).classes()).not.toContain('aui-empty--compact')
+    expect(mount(EmptyState, { props: { compact: true } }).classes()).toContain('aui-empty--compact')
+  })
 })

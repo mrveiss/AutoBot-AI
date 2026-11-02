@@ -332,3 +332,10 @@ def test_hook_script_exists_and_is_executable() -> None:
     fresh CI checkout sets working-tree perms from git's tracked mode
     (#14162's pattern, applied to this hook)."""
     assert os.access(HOOK_PATH, os.X_OK), f"{HOOK_PATH} is not executable on disk"
+
+
+def test_real_tree_has_no_kit_fork_and_an_empty_grandfather_list() -> None:
+    """M3.3 exit (#14776): every kit-named SFC in both apps is a wrapper over @autobot/ui."""
+    repo_root = Path(__file__).resolve().parents[4]
+    assert guard.KIT_FORK_GRANDFATHER == {}
+    assert guard.collect_kit_fork_violations(repo_root) == []
