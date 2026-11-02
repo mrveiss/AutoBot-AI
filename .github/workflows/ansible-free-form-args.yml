@@ -1,0 +1,29 @@
+# Every free-form shell block in the Ansible tree parses (#20693). Its own small workflow, because it
+# has to run on any Ansible file, and the role-facts workflow is scoped to far fewer.
+---
+name: ansible-free-form-args
+
+on:
+  pull_request:
+    paths:
+      - 'autobot-slm-backend/ansible/**'
+      - 'tools/lint/check_ansible_free_form_args.py'
+      - 'constraints/ansible-core.txt'
+      - '.github/workflows/ansible-free-form-args.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  free-form-args:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: "Install the fleet's ansible-core"
+        run: python -m pip install --quiet -r constraints/ansible-core.txt
+      - name: "Every free-form block parses (#20693)"
+        run: python tools/lint/check_ansible_free_form_args.py
