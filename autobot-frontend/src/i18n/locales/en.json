@@ -8465,6 +8465,7 @@
     },
     "cost": {
       "title": "Cost Dashboard",
+      "raisePendingApproval": "This company requires board approval to raise a budget limit. Your request was submitted for approval; the limit has not changed.",
       "exportCsv": "Export CSV",
       "selectCompany": "Select a company to view costs.",
       "totalThisMonth": "Total This Month",

@@ -451,6 +451,11 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
             meta.get("require_approval_for_hires", False),
         )
 
+        require_budget_approval = remapping_options.get(
+            "require_approval_for_budget_raises",
+            meta.get("require_approval_for_budget_raises", False),
+        )
+
         org = Organization(
             id=uuid.uuid4(),
             name=meta.get("name", "Imported Company"),
@@ -460,6 +465,7 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
             budget_monthly_cents=meta.get("budget_monthly_cents", 0),
             brand_color=meta.get("brand_color"),
             require_approval_for_hires=require_approval,
+            require_approval_for_budget_raises=require_budget_approval,
             llc_status=LLCCompanyStatus.ONBOARDING.value,
             settings={},
             issue_counter=0,
