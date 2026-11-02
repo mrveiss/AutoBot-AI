@@ -9445,7 +9445,9 @@
       "coverage": {
         "title": "Coverage",
         "body": "Every role, workflow, process and meta skill has a page automatically.",
-        "missing": "Without a recorded description ({n})"
+        "missing": "Without a recorded description ({n})",
+        "unread": "could not be read",
+        "partial": "This list is incomplete: a source above could not be read."
       },
       "unavailable": {
         "title": "Not available yet",

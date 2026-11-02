@@ -26,9 +26,10 @@
           <h2 class="m-0 mb-2 text-base text-autobot-text-primary">{{ t('llc.handbook.coverage.title') }}</h2>
           <p class="m-0 text-autobot-text-secondary">{{ t('llc.handbook.coverage.body') }}</p>
           <ul class="m-0 ps-4">
-            <li v-for="k in kinds" :key="k" data-testid="handbook-coverage-count">{{ t(`llc.handbook.kindPlural.${k}`) }}: {{ countOf(k) }}</li>
+            <li v-for="k in kinds" :key="k" data-testid="handbook-coverage-count">{{ t(`llc.handbook.kindPlural.${k}`) }}: {{ countText(k) }}</li>
           </ul>
           <h3 class="mt-3 mb-1 text-sm text-autobot-text-primary">{{ t('llc.handbook.coverage.missing', { n: missing.length }) }}</h3>
+          <p v-if="missingIsPartial" class="m-0 text-autobot-text-secondary" data-testid="handbook-coverage-partial">{{ t('llc.handbook.coverage.partial') }}</p>
           <ul class="m-0 ps-4" data-testid="handbook-coverage-missing">
             <li v-for="p in missing" :key="`${p.kind}:${p.id}`">
               <button type="button" class="text-autobot-primary" @click="select(p)">{{ p.title }}</button>
@@ -80,6 +81,8 @@ import HandbookPageDetail from '@/components/llc/handbook/HandbookPageDetail.vue
 import { useHandbook, type HandbookPage, type PageKind } from '@/composables/llc/useHandbook'
 
 const kinds: PageKind[] = ['role', 'workflow', 'process', 'metaSkill']
+/** The listing each kind of page is built from: a failed listing means its count is unknown, not zero. */
+const sourceOf = { role: 'roles', workflow: 'workflows', process: 'processes', metaSkill: 'workflows' } as const
 const unavailable = ['chapters', 'explanations', 'onboarding', 'scoping', 'search', 'handoffs']
 
 const { t } = useI18n()
@@ -110,6 +113,9 @@ const shown = computed(() => {
 /** Only roles and processes can carry a description in the model; the other kinds have no such field. */
 const missing = computed(() => handbook.pages.value.filter((p) => (p.kind === 'role' || p.kind === 'process') && !p.description))
 const countOf = (k: PageKind): number => handbook.pages.value.filter((p) => p.kind === k).length
+const countText = (k: PageKind): string | number =>
+  handbook.sources.value[sourceOf[k]] === 'error' ? t('llc.handbook.coverage.unread') : countOf(k)
+const missingIsPartial = computed(() => handbook.sources.value.roles === 'error' || handbook.sources.value.processes === 'error')
 const isSelected = (p: HandbookPage): boolean => selected.value?.kind === p.kind && selected.value?.id === p.id
 
 function select(page: HandbookPage): void {

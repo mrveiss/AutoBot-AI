@@ -142,6 +142,21 @@ describe('HandbookView (#18431)', () => {
     expect(w.findAll('[data-testid="handbook-page-link"]')).toHaveLength(4)
   })
 
+  it('a source that cannot be read leaves its coverage unknown, never counted as zero', async () => {
+    serve({ '/api/llc/company-os/processes': new Error('HTTP 503: model down') })
+    const w = await mountView()
+    const counts = w.findAll('[data-testid="handbook-coverage-count"]').map((c) => c.text())
+    expect(counts).toContain(`${en.llc.handbook.kindPlural.process}: ${en.llc.handbook.coverage.unread}`)
+    expect(counts.join()).not.toContain(`${en.llc.handbook.kindPlural.process}: 0`)
+    expect(w.get('[data-testid="handbook-coverage-partial"]').text()).toBe(en.llc.handbook.coverage.partial)
+  })
+
+  it('with every source read, coverage shows counts and no partial note', async () => {
+    const w = await mountView()
+    expect(w.text()).not.toContain(en.llc.handbook.coverage.unread)
+    expect(w.find('[data-testid="handbook-coverage-partial"]').exists()).toBe(false)
+  })
+
   it('a company with no roles, workflows or processes says it has none', async () => {
     serve({ '/api/llc/roles/c1': [], '/api/llc/company-os/workflows': [], '/api/llc/company-os/processes': [] })
     const w = await mountView()
