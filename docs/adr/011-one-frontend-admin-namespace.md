@@ -96,7 +96,7 @@ The SLM backend keeps its own deployment (`slm` role in ADR-010; its own machine
 
 ### 5. i18n: the SLM tree nests under `admin.*`
 
-#19839 moves every SLM key `<ns>.<rest>` to `admin.<ns>.<rest>` in each of the 11 user-app locales, next to the 5 `admin.*` children that already exist (no top-level name overlaps were measured). The merged values are the lifting rule's current output, so the step is a move, not a retranslation; keys still in English count toward `repo_tests/i18n_untranslated_ratchet_test.py` like any other. Once #19842 deletes the SLM locale directory the generator has no target; its `--check` step goes with `slm-frontend-check.yml`.
+#19839 moves every SLM key `<ns>.<rest>` to `admin.<ns>.<rest>` in each of the 11 user-app locales, next to the 5 `admin.*` children that already exist (no top-level name overlaps were measured). The merged values are the lifting rule's current output, so the step is a move, not a retranslation; keys still in English count toward `scripts/list_untranslated.py` like any other, and a key that moves keeps its translation (`repo_tests/i18n_untranslated_ratchet_test.py`). Once #19842 deletes the SLM locale directory the generator has no target; its `--check` step goes with `slm-frontend-check.yml`.
 
 ### 6. The kit boundary (ADR-008) is unchanged
 

@@ -208,10 +208,9 @@ async def _get_problems_from_chromadb(
     metrics to the selected project's files only.
 
     Issue #6670: When source_id is provided, the codebase_stats document is
-    looked up under the per-source key ``codebase_stats_{source_id}`` first,
-    falling back to the global ``codebase_stats`` document. This matches the
-    write path in chromadb_storage.py:649 and the read pattern already used
-    by sources.py:447-456 and stats.py:222.
+    read from the per-source key ``codebase_stats_{source_id}``, matching the
+    write path in chromadb_storage.py. A source with no document gets no stats,
+    never the global document's, which describes another tree (#20513).
 
     Args:
         source_root: Absolute path used to filter problem file paths.  Pass
@@ -256,18 +255,8 @@ async def _get_problems_from_chromadb(
                     }
                 )
 
-        # Fetch codebase stats — per-source key first, fall back to global (#6670, #1716)
-        stats_results = None
-        if source_id:
-            stats_results = await collection.get(
-                ids=[f"codebase_stats_{source_id}"],
-                include=["metadatas"],
-            )
-        if not stats_results or not stats_results.get("metadatas"):
-            stats_results = await collection.get(
-                ids=["codebase_stats"],
-                include=["metadatas"],
-            )
+        stats_id = f"codebase_stats_{source_id}" if source_id else "codebase_stats"
+        stats_results = await collection.get(ids=[stats_id], include=["metadatas"])
         if stats_results and stats_results.get("metadatas"):
             stats = stats_results["metadatas"][0]
 
