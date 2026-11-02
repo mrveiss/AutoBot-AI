@@ -784,6 +784,16 @@
       "browser": "Navegador",
       "novnc": "Área de trabalho remota",
       "ariaLabel": "Seções do chat"
+    },
+    "attachmentNotice": {
+      "unavailable": "Não foi possível encontrar um arquivo anexado nesta conversa, por isso ele não foi usado.",
+      "too_many": "Somente os primeiros {limit} arquivos anexados foram usados; os demais foram deixados de fora.",
+      "image": "\"{filename}\" é uma imagem e não pode ser lida como texto, por isso não foi usada.",
+      "unsupported": "\"{filename}\" não é um arquivo de texto que o assistente consiga ler, por isso não foi usado.",
+      "unreadable": "Não foi possível ler \"{filename}\", por isso ele não foi usado.",
+      "empty": "\"{filename}\" não tem texto legível, por isso não foi usado.",
+      "truncated": "\"{filename}\" é longo, por isso apenas o início foi usado.",
+      "over_budget": "Os arquivos anexados atingiram o limite de tamanho, por isso \"{filename}\" não foi usado."
     }
   },
   "settings": {
