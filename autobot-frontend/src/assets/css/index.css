@@ -38,6 +38,7 @@
 
 /* Refined contrast + monochrome themes (#18223). Light-based, so after light.css */
 @import './themes/contrast.css';
+@import './themes/contrast-dark.css';
 @import './themes/mono.css';
 
 /* Existing semantic names resolve to the Refined names of the active theme (#18223) */

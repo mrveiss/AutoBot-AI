@@ -531,7 +531,7 @@ async def transfer_conversation_files(request: Request, session_id: str, transfe
             target_path=transfer_request.target_path,
             copy=transfer_request.copy_files,
             tags=transfer_request.tags,
-            user_id=user_data.get("username"),
+            principal=user_data,
         )
 
         _audit_file_operation(

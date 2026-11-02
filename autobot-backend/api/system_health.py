@@ -12,8 +12,8 @@ into a single ``SystemHealth`` response.
 
 Probes MUST be async, accept an optional ``Request`` (so they can reach
 ``request.app.state``), and return :class:`ComponentHealth`. Probes that raise
-or time out are recorded as ``status="down"`` — they MUST NOT crash the
-aggregator.
+are recorded as ``status="down"``, and those that time out as ``"degraded"`` —
+they MUST NOT crash the aggregator.
 """
 
 from __future__ import annotations
@@ -58,8 +58,9 @@ class KnownProbes(str, enum.Enum):
     EMBEDDING_MODEL = "embedding_model"  # #18834
 
 
-# Per-probe timeout. Probes slower than this become ``status="down"`` so a slow
-# component cannot hold the aggregator hostage.
+# Per-probe timeout, so a slow component cannot hold the aggregator hostage. A probe
+# past it becomes ``status="degraded"``: slow is all that is known, and on a busy host one
+# slow probe read as the whole system being down (#20483).
 _PROBE_TIMEOUT_S = 2.0
 
 # Public alias so other health/status endpoints bound their dependency calls
@@ -143,7 +144,7 @@ async def _run_probe(name: str, fn: ProbeFn, request: Request | None) -> Compone
     except asyncio.TimeoutError:
         return ComponentHealth(
             name=name,
-            status="down",
+            status="degraded",
             detail=f"probe timed out after {_PROBE_TIMEOUT_S}s",
             latency_ms=round((time.perf_counter() - started) * 1000, 2),
         )

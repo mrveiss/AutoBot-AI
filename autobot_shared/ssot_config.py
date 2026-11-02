@@ -1250,13 +1250,13 @@ class PathConfig(RedactedSettings):
     logs_dir: str = Field(default="logs", alias="AUTOBOT_LOG_DIR")
     models_dir: str = Field(default="models", alias="AUTOBOT_MODELS_DIR")
     docs_dir: str = Field(default="docs", alias="AUTOBOT_DOCS_DIR")
+    upload_dir: str = Field(default="", alias="AUTOBOT_UPLOAD_DIR")  # #19823: empty is under the transcriber's data
     # #18293: the retired, read-only transcript store -- under base_dir (NOT data_dir), as its writer put it.
     legacy_transcripts_dir: str = Field(default="data/conversation_transcripts", alias="AUTOBOT_LEGACY_TRANSCRIPTS_DIR")
     # On a real deployment, code_source lives at /opt/autobot/code_source, a
     # sibling of autobot-backend/ (NOT inside base_dir) — and the Ansible
-    # template always sets AUTOBOT_CODE_SOURCE explicitly, so this default
-    # only governs the unset case. In a checkout there is no separate
-    # code_source sibling: the checkout root *is* the git repo root, so the
+    # template always sets AUTOBOT_CODE_SOURCE explicitly, so this default only governs the unset case.
+    # In a checkout there is no separate code_source sibling: the checkout root *is* the git repo root, so the
     # default resolves lazily via project_root() (#13149, #14050) to that
     # same checkout instead of the live install.
     code_source_dir: str = Field(default_factory=lambda: str(project_root()), alias="AUTOBOT_CODE_SOURCE")
