@@ -34,7 +34,7 @@ def _redirect_for(sso_auth, base: str, issue_code):
         patch.object(sso_auth, "issue_exchange_code", issue_code),
         patch.object(sso_auth, "RedirectResponse", lambda url, status_code: SimpleNamespace(url=url)),
     ):
-        return asyncio.run(sso_auth._redirect_with_session_code(object()))
+        return asyncio.run(sso_auth._redirect_with_session_code(SimpleNamespace(is_platform_admin=True)))
 
 
 @pytest.mark.parametrize("base", ["/slm", ""])
