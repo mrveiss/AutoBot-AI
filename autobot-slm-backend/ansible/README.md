@@ -126,7 +126,7 @@ Options:
   --stop             Stop AutoBot services
   --restart          Restart AutoBot services
   --health-check     Validate all services are healthy
-  --rollback         Rollback to previous version
+  --rollback         Unavailable: refuses with an error. No builtin rollback or pinned deploy yet (#20214)
   --help             Show this help message
 ```
 
