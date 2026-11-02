@@ -90,6 +90,19 @@ async def _run_post_commit_callbacks(session: AsyncSession) -> None:
         raise PostCommitCallbackError(errors) from errors[0]
 
 
+async def commit_and_run_post_commit(session: AsyncSession) -> None:
+    """Commit now and run the queued post-commit callbacks, for a caller that must see their outcome (#20443).
+
+    ``async_session_scope`` runs the callbacks when its block exits, which for a FastAPI dependency
+    is after the route has answered, so a failing one cannot change the response. A route that must
+    report it commits here instead: the scope's own commit then has nothing to write and its callback
+    list is already drained, so nothing runs twice. Raises what ``session.commit`` raises (the scope
+    rolls back), or ``PostCommitCallbackError`` after the commit stands, with every callback run.
+    """
+    await session.commit()
+    await _run_post_commit_callbacks(session)
+
+
 @contextmanager
 def session_scope(session_factory: Callable[[], Session]) -> Generator[Session, None, None]:
     """Canonical sync session context manager.
