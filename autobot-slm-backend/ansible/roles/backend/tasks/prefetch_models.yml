@@ -6,9 +6,9 @@
 # #19869, #19738: fetch the pinned speech-to-text and code-embedding models into the service user's HuggingFace
 # cache, then confirm they are there. The model ids, revisions and digests live in autobot_shared
 # (ssot_hf_models, pinned_model_registry); nothing here names them. The script retries a failed download,
-# tries every model, and names each failure with the room left. A host that cannot get a model stops
-# (other hosts continue) unless backend_model_check_warn_only is set, as the updater does: it runs with
-# any_errors_fatal and a model already in the cache costs no network, so only a first fetch can fail there.
+# tries every model, and names each failure with the room left. Both models are optional at
+# runtime, so a host that cannot get one warns and carries on, unless backend_model_prefetch_required
+# asks for a stop. backend_prefetch_models: false skips this, for an air-gapped host.
 ---
 - name: "Backend | Fetch the pinned HuggingFace models into the service user's cache (#19869, #19738)"
   ansible.builtin.command:
@@ -36,19 +36,19 @@
   check_mode: false
   tags: ['backend', 'models']
 
-- name: "Backend | Report models that could not be fetched (#19869, #19738)"
+- name: "Backend | Warn about models that could not be fetched (#19869, #19738)"
   ansible.builtin.debug:
-    msg: "{{ _backend_model_cache_check.stdout_lines | select('match', '^FAILED') | list }}"
+    msg: >-
+      A pinned HuggingFace model is not in {{ backend_user }}'s cache, so speech-to-text or code embeddings
+      download it at first use, or fail offline: {{ _backend_model_cache_check.stdout_lines | select('match', '^FAILED') | list }}.
+      The fetch said: {{ _backend_model_prefetch.stdout_lines | default([]) | select('match', '^FAILED') | list }}
   when: _backend_model_cache_check.rc != 0
   tags: ['backend', 'models']
 
-- name: "Backend | Stop this host: a pinned model is missing from the service user's cache (#19869, #19738)"
+- name: "Backend | Stop this host: a required pinned model is missing (#19869, #19738)"
   ansible.builtin.fail:
-    msg: >-
-      A pinned HuggingFace model is not in {{ backend_user }}'s cache and could not be fetched
-      (speech-to-text and code embeddings fail until it is): {{ _backend_model_cache_check.stdout_lines | select('match', '^FAILED') | list }}.
-      The fetch said: {{ _backend_model_prefetch.stdout_lines | default([]) | select('match', '^FAILED') | list }}
+    msg: "backend_model_prefetch_required is set and a pinned model could not be fetched; see the warning above."
   when:
     - _backend_model_cache_check.rc != 0
-    - not (backend_model_check_warn_only | default(false) | bool)
+    - backend_model_prefetch_required | bool
   tags: ['backend', 'models']

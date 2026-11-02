@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import ast
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -179,11 +180,18 @@ def test_the_fetch_and_the_check_run_as_the_service_user_with_the_role_s_retries
     assert not any(model in _text(_ROLE / "tasks" / "prefetch_models.yml") for model in PREFETCHED_HF_MODELS)
 
 
-def test_a_missing_model_fails_the_host_unless_the_updater_asked_to_warn() -> None:
-    stop = _tasks(_ROLE / "tasks" / "prefetch_models.yml")[-1]
-    assert "ansible.builtin.fail" in stop and "_backend_model_cache_check.rc != 0" in stop["when"]
-    assert "not (backend_model_check_warn_only | default(false) | bool)" in stop["when"]
-    assert "select('match', '^FAILED')" in stop["ansible.builtin.fail"]["msg"]
+def test_a_missing_model_warns_and_only_stops_a_host_that_asked_for_it() -> None:
+    warn, stop = _tasks(_ROLE / "tasks" / "prefetch_models.yml")[-2:]
+    assert "ansible.builtin.debug" in warn and "select('match', '^FAILED')" in warn["ansible.builtin.debug"]["msg"]
+    assert "ansible.builtin.fail" in stop and "backend_model_prefetch_required | bool" in stop["when"]
+    defaults = yaml.safe_load((_ROLE / "defaults" / "main.yml").read_text(encoding="utf-8"))
+    assert defaults["backend_model_prefetch_required"] is False and defaults["backend_prefetch_models"] is True
+
+
+def test_an_air_gapped_native_install_can_skip_the_fetch() -> None:
+    main = (_ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")
+    include = main[main.index("include_tasks: prefetch_models.yml") :]
+    assert include.splitlines()[1].strip() == "when: backend_prefetch_models | bool"
 
 
 # --- Docker keeps the cache on a volume and fetches into it -----------------------------------------
@@ -202,8 +210,23 @@ def test_compose_mounts_the_cache_volume_where_the_image_points_hf_home() -> Non
     assert "huggingface_cache" not in str(compose["services"]["autobot-redis"])  # contrast: not everywhere
 
 
-def test_the_entrypoint_fetches_after_migrations_and_can_be_switched_off() -> None:
+def test_the_entrypoint_fetches_in_the_background_and_never_stops_the_container() -> None:
     script = _text(_ROOT / "docker" / "backend" / "entrypoint.sh")
+    block = script[script.index("autobot_shared.model_prefetch") - 40 : script.index('exec "$@"')]
     assert script.index("run_migrations ||") < script.index("autobot_shared.model_prefetch") < script.index('exec "$@"')
-    assert "AUTOBOT_PREFETCH_MODELS" in script and "exit 1" in script[script.index("autobot_shared.model_prefetch") :]
-    assert REGISTRY["AUTOBOT_PREFETCH_MODELS"].default is True
+    assert "exit 1" not in block and ") &" in block and "WARNING" in block
+    assert "AUTOBOT_PREFETCH_MODELS" in script and REGISTRY["AUTOBOT_PREFETCH_MODELS"].default is True
+
+
+def test_a_failed_fetch_in_the_real_shell_does_not_stop_what_follows(tmp_path: Path) -> None:
+    """The entrypoint's own block, run in sh, with a python3 that fails."""
+    script = _text(_ROOT / "docker" / "backend" / "entrypoint.sh")
+    block = script[script.index('case "${AUTOBOT_PREFETCH_MODELS') : script.index('exec "$@"')]
+    fake = tmp_path / "python3"
+    fake.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    fake.chmod(0o755)
+    env = {"PATH": f"{tmp_path}:/usr/bin:/bin"}
+    done = subprocess.run(
+        ["sh", "-c", f"{block}\nwait\necho STARTED\n"], capture_output=True, text=True, env=env, check=False
+    )
+    assert done.returncode == 0 and "STARTED" in done.stdout and "WARNING" in done.stdout
