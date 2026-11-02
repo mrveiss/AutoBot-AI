@@ -49,6 +49,7 @@ from dataclasses import dataclass
 
 from redis.exceptions import RedisError
 
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.membership_epoch import MEMBERSHIP_EPOCH_BUMP_ATTEMPTS, MEMBERSHIP_EPOCH_BUMP_BACKOFF_SECONDS
 from autobot_shared.redis_client import get_async_redis_client
@@ -319,3 +320,37 @@ class PasswordEpochMark:
 
     async def __call__(self) -> int:
         return await record_password_epoch(self.subject, lead_seconds=self.lead_seconds, in_redis=self.in_redis)
+
+
+#: Members whose marker is written at once by :class:`MembersPasswordEpochMark` (env-backed). Bounds the
+#: store's concurrent writes and the tasks alive, whatever the organisation's size (#20443).
+MEMBER_EPOCH_WRITE_CONCURRENCY = env_int_clamped("AUTOBOT_MEMBER_EPOCH_WRITE_CONCURRENCY", 10, 1, 100)
+
+
+@dataclass(frozen=True)
+class MembersPasswordEpochMark:
+    """A queueable post-commit write of one epoch mark per username: an organisation's members (#20443).
+
+    Each member's write is its own :class:`PasswordEpochMark`, so the retry belongs to that member.
+    They run in batches of ``MEMBER_EPOCH_WRITE_CONCURRENCY``, and every one runs even when another
+    fails. When any did, one :class:`PasswordEpochWriteError` names how many (not who: each failed
+    write already logged its subject), which the session scope reports as ``PostCommitCallbackError``
+    with the commit standing. Returns how many were recorded.
+    """
+
+    subjects: tuple[str, ...]
+    lead_seconds: int = 0
+    in_redis: bool = False
+
+    async def __call__(self) -> int:
+        failed = 0
+        for start in range(0, len(self.subjects), MEMBER_EPOCH_WRITE_CONCURRENCY):
+            batch = self.subjects[start : start + MEMBER_EPOCH_WRITE_CONCURRENCY]
+            marks = (PasswordEpochMark(name, self.lead_seconds, self.in_redis)() for name in batch)
+            failed += sum(isinstance(r, BaseException) for r in await asyncio.gather(*marks, return_exceptions=True))
+        if failed:
+            raise PasswordEpochWriteError(
+                f"password epoch not recorded for {failed} of {len(self.subjects)} members: "
+                "their earlier tokens stay valid"
+            )
+        return len(self.subjects)

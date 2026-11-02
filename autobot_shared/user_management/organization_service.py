@@ -46,6 +46,7 @@ from autobot_shared.user_management.models.audit import (
 from autobot_shared.user_management.models.organization import OrganizationCore
 from autobot_shared.user_management.models.team import Team
 from autobot_shared.user_management.models.user import UserCore
+from autobot_shared.user_management.org_member_revocation import queue_member_token_revocation
 
 logger = get_logger(__name__)
 
@@ -158,22 +159,12 @@ class OrganizationService(BaseService):
         logger.info("Created organization: %s (id=%s, slug=%s)", name, org.id, slug)
         return org
 
-    async def get_organization(self, org_id: uuid.UUID) -> OrganizationCore | None:
-        """
-        Get organization by ID.
-
-        Args:
-            org_id: Organization UUID
-
-        Returns:
-            Organization instance or None
-        """
-        result = await self.session.execute(
-            select(self.organization_model)
-            .where(self.organization_model.id == org_id)
-            .where(self.organization_model.deleted_at.is_(None))
-        )
-        return result.scalar_one_or_none()
+    async def get_organization(self, org_id: uuid.UUID, *, include_deleted: bool = False) -> OrganizationCore | None:
+        """Get an organization by ID; None if absent, or soft-deleted unless *include_deleted* (#20443)."""
+        query = select(self.organization_model).where(self.organization_model.id == org_id)
+        if not include_deleted:
+            query = query.where(self.organization_model.deleted_at.is_(None))
+        return (await self.session.execute(query)).scalar_one_or_none()
 
     async def get_organization_by_slug(self, slug: str) -> OrganizationCore | None:
         """
@@ -284,7 +275,10 @@ class OrganizationService(BaseService):
 
     async def deactivate_organization(self, org_id: uuid.UUID) -> bool:
         """
-        Deactivate an organization.
+        Deactivate an organization and, once it commits, void its members' earlier tokens (#20443).
+
+        A member added after this is not covered (see ``org_member_revocation``); reactivating
+        writes nothing, so the old tokens stay void.
 
         Args:
             org_id: Organization ID to deactivate
@@ -301,13 +295,14 @@ class OrganizationService(BaseService):
         org.is_active = False
         org.updated_at = now_utc()
         await self.session.flush()
+        revocation = await queue_member_token_revocation(self.session, self.user_model, org_id)
 
         await self._audit_log(
             action=IdentityAuditAction.ORG_UPDATED,
             resource_type=AuditResourceType.ORGANIZATION,
             resource_id=org_id,
             org_id=org_id,
-            details={"action": "deactivated"},
+            details={"action": "deactivated", **revocation},
         )
 
         logger.info("Deactivated organization: %s", org_id)
@@ -315,7 +310,10 @@ class OrganizationService(BaseService):
 
     async def delete_organization(self, org_id: uuid.UUID, hard_delete: bool = False) -> bool:
         """
-        Delete an organization.
+        Delete an organization and, once it commits, void its members' earlier tokens (#20443).
+
+        The members are read before a hard delete cascades them away. A member added later is not covered.
+        A soft delete repeated on a soft-deleted organisation queues the markers again (a retry, #20443).
 
         Args:
             org_id: Organization ID to delete
@@ -326,15 +324,16 @@ class OrganizationService(BaseService):
         """
         self._require_platform_admin()
 
-        org = await self.get_organization(org_id)
+        org = await self.get_organization(org_id, include_deleted=not hard_delete)
         if not org:
             raise OrganizationNotFoundError(f"Organization {org_id} not found")
 
+        revocation = await queue_member_token_revocation(self.session, self.user_model, org_id)
         if hard_delete:
             await self.session.delete(org)  # cascades the org's teams, users and memberships
             run_after_commit(self.session, MembershipEpochBump(org_id))  # #19670
         else:
-            org.deleted_at = now_utc()
+            org.deleted_at = org.deleted_at or now_utc()
             org.is_active = False
 
         await self.session.flush()
@@ -344,7 +343,7 @@ class OrganizationService(BaseService):
             resource_type=AuditResourceType.ORGANIZATION,
             resource_id=org_id,
             org_id=org_id,
-            details={"hard_delete": hard_delete, "name": org.name},
+            details={"hard_delete": hard_delete, "name": org.name, **revocation},
         )
 
         logger.info("Deleted organization: %s (hard=%s)", org_id, hard_delete)
