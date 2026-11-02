@@ -276,7 +276,7 @@ export class ApiClient extends ApiClientBase<RequestOptions> {
   }
 
   // Uploads go through XHR, which has no shared header path. The routes the main app uploads to
-  // (e.g. /conversation-files/.../upload, gated by check_admin_permission) accept only an
+  // (e.g. /conversation-files/.../upload, gated by ownership in _authorize_file_operation, #20133) accept only an
   // Authorization bearer, X-Session-ID or the internal key, never a cookie, so send the bearer (#19983).
   protected authorizeUpload(xhr: XMLHttpRequest): void {
     const token = this.getAuthToken();
