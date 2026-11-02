@@ -19,6 +19,8 @@ the same quota. Agent-created files are charged to the agent's name for the same
 
 from __future__ import annotations
 
+import asyncio
+from pathlib import Path
 from typing import Dict
 
 from fastapi import HTTPException
@@ -121,3 +123,14 @@ async def resize_within_quota(connection, row, size: int, file_hash: str) -> Non
     cursor = await connection.execute(_RESIZE_SQL, (size, file_hash, file_id, owner, file_id, size, USER_QUOTA_BYTES))
     if cursor.rowcount == 0:
         raise await _refuse(connection, owner)
+
+
+async def abandon(connection, stored_path: Path, remove_bytes: bool = True) -> None:
+    """Roll back a store that failed or was refused, and remove the bytes this call wrote.
+
+    ``remove_bytes`` is False for a deduplicated add: its path is derived from the hash and may be the
+    existing file's, which this call did not store.
+    """
+    await connection.rollback()
+    if remove_bytes and await asyncio.to_thread(stored_path.exists):
+        await asyncio.to_thread(stored_path.unlink)

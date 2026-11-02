@@ -97,16 +97,41 @@ export function describeUploadError(error: unknown, t: Translate): string {
   return t(UPLOAD_ERROR_KEYS[error.code])
 }
 
-/** The typed rejection for a non-200: a recognised server reason (`detail.code` on a 413), else a plain http one. */
+/** The typed rejection for a recognised server reason (`detail.code` on a 413); undefined for anything else. */
+function refusalFor(status: number | undefined, detail: unknown): ConversationUploadError | undefined {
+  if (status !== 413 || !detail || typeof detail !== 'object') return undefined
+  const code = SERVER_REFUSALS[(detail as { code?: string }).code ?? '']
+  return code ? new ConversationUploadError(code, status, detail as UploadRefusal) : undefined
+}
+
+/** The typed rejection for a non-200: a recognised server reason, else a plain http one. */
 function rejectionFor(status: number, responseText: string): ConversationUploadError {
   try {
-    const detail = JSON.parse(responseText)?.detail
-    const code = status === 413 && detail ? SERVER_REFUSALS[detail.code] : undefined
-    if (code) return new ConversationUploadError(code, status, detail as UploadRefusal)
+    const refusal = refusalFor(status, JSON.parse(responseText)?.detail)
+    if (refusal) return refusal
   } catch {
     // an unreadable error body is still an http failure
   }
   return new ConversationUploadError('http', status)
+}
+
+interface CaughtApiError {
+  status?: number
+  details?: { detail?: unknown } | null
+  response?: { status?: number; data?: { detail?: unknown } }
+}
+
+/**
+ * The translated text for a caught API error that carries a recognised 413 refusal (`/files/create`,
+ * `/generate`), whether it is the client's `HttpError` (`status`, `details.detail`) or axios-shaped
+ * (`response.status`, `response.data.detail`); null when it is any other error.
+ */
+export function describeApiRefusal(err: unknown, t: Translate): string | null {
+  if (!err || typeof err !== 'object') return null
+  const caught = err as CaughtApiError
+  const status = caught.status ?? caught.response?.status
+  const refusal = refusalFor(status, caught.details?.detail ?? caught.response?.data?.detail)
+  return refusal ? describeUploadError(refusal, t) : null
 }
 
 /** POST `file` to the conversation's upload route; rejects on a non-200, a bad body, a network error or an abort. */

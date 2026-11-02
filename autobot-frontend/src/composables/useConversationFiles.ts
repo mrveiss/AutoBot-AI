@@ -15,6 +15,8 @@ import { useApiClient } from '@/plugins/api'
 import { useBatchSelection } from './useBatchSelection'
 import { createLogger } from '@/utils/debugUtils'
 import { extractApiErrorMessage } from '@/utils/errorExtract'
+import { describeApiRefusal } from '@/utils/conversationFileUpload'
+import i18n from '@/i18n'
 import { getApiBase } from '@/config/ssot-config'
 import { useLoadingState } from '@/composables/useLoadingState'
 
@@ -324,7 +326,9 @@ export function useConversationFiles(sessionId: string) {
         error.value = 'Failed to create file'
         return false
       } catch (err: unknown) {
-        error.value = extractApiErrorMessage(err, 'Failed to create file')
+        error.value =
+          describeApiRefusal(err, (key, params) => i18n.global.t(key, params ?? {})) ??
+          extractApiErrorMessage(err, 'Failed to create file')
         logger.error('Create file error:', err)
         return false
       }

@@ -36,7 +36,7 @@ from autobot_shared.ssot_config import config
 from config import unified_config_manager
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_1_HOUR
-from conversation_file_quota import UploadRefused, insert_within_quota, resize_within_quota
+from conversation_file_quota import UploadRefused, abandon, file_too_large, insert_within_quota, resize_within_quota
 from conversation_file_route_api import FILE_INFO_COLUMNS, ConversationFileRouteApi
 from conversation_file_upload_info import UploadInfo
 from utils.chat_utils import validate_chat_session_id
@@ -364,7 +364,7 @@ class ConversationFileManager(ConversationFileRouteApi):
                 original_filename=copy_name,
                 mime_type=row["mime_type"],
             )
-        except RuntimeError:
+        except (RuntimeError, UploadRefused):
             raise
         except Exception as e:
             logger.error("Error copying file: %s", e)
@@ -622,10 +622,10 @@ class ConversationFileManager(ConversationFileRouteApi):
             logger.error("Unexpected error invalidating cache: %s", e)
 
     def _validate_file_size(self, file_content: bytes) -> int:
-        """Validate file size and return size in bytes."""
+        """Validate file size and return size in bytes; past the cap is the 413 ``file_too_large`` (#20217)."""
         file_size = len(file_content)
         if file_size > self.MAX_FILE_SIZE:
-            raise ValueError(f"File size ({file_size} bytes) exceeds maximum " f"({self.MAX_FILE_SIZE} bytes)")
+            raise file_too_large(self.MAX_FILE_SIZE)
         return file_size
 
     async def _check_existing_file(self, connection, session_id: str, file_hash: str):
@@ -784,12 +784,6 @@ class ConversationFileManager(ConversationFileRouteApi):
             deduplicated=False,
         )
 
-    async def _abandon_store(self, connection, file_info: UploadInfo) -> None:
-        """Roll back a store that failed or was refused, and remove the bytes already written."""
-        await connection.rollback()
-        if await asyncio.to_thread(file_info.file_path.exists):
-            await asyncio.to_thread(file_info.file_path.unlink)
-
     async def add_file(
         self,
         session_id: str,
@@ -813,13 +807,15 @@ class ConversationFileManager(ConversationFileRouteApi):
             )
 
             connection = await self._get_async_db_connection()
+            deduplicated = False
             try:
                 existing_file = await self._check_existing_file(connection, file_info.session_id, file_info.file_hash)
                 if existing_file:
+                    deduplicated = True
                     return await self._handle_deduplicated_file(connection, existing_file, file_info)
                 return await self._store_new_file(connection, file_info, file_content)
             except Exception as e:
-                await self._abandon_store(connection, file_info)
+                await abandon(connection, file_info.file_path, remove_bytes=not deduplicated)
                 if isinstance(e, UploadRefused):
                     raise  # a refusal (quota, #20217) keeps its 413 and stable code
                 logger.error("Error adding file: %s", e)
