@@ -13,6 +13,7 @@ import OrgTreeNode from './OrgTreeNode.vue'
 import type { OrgNode } from './OrgTreeNode.vue'
 import HireAgentModal from '@/components/llc/HireAgentModal.vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useViewerCanDetach } from '@/composables/llc/useViewerCanDetach'
 import WorkflowCanvas from '@/components/workflow/WorkflowCanvas.vue'
 import type { CanvasNode, CanvasTab } from '@/components/workflow/canvasNode'
 import {
@@ -69,6 +70,7 @@ const router = useRouter()
 // below must tolerate that exactly the same way.
 const route = useRoute() as ReturnType<typeof useRoute> | undefined
 const { companyId, resolveCompanyId } = useLlcCompanyContext()
+const { canDetach } = useViewerCanDetach(api, companyId) // #20682: the server's detach check
 
 const tree = ref<OrgNode[]>([])
 const isLoading = ref(false)
@@ -1473,9 +1475,7 @@ onMounted(() => {
       >
         {{ t('llc.orgChart.roleLensEmpty', { role: roleLens }) }}
       </div>
-      <WorkflowCanvas
-        v-else
-        readonly
+      <WorkflowCanvas v-else readonly :can-detach="canDetach"
         :nodes="lensedCanvasNodes"
         :selected-node-id="selectedNode?.id ?? null"
         :tabs="canvasTabs"

@@ -360,9 +360,7 @@
                      change it. `.stop` keeps the click from also selecting the
                      node, which would navigate to the workflow builder — the
                      mutation itself is OrgChart.vue's job, reached by event. -->
-                <button
-                  type="button"
-                  class="process-detach-btn"
+                <button v-if="canDetach" type="button" class="process-detach-btn"
                   data-testid="process-detach-btn"
                   :aria-label="processDetachLabel(node)"
                   @click.stop="emit('process-detached', nodeText(node, 'role_id'), nodeText(node, 'workflow_id'))"
@@ -388,9 +386,7 @@
                   <span class="tool-role-name">{{ role.role_name }}</span>
                   <!-- #14597: mirrors the org-process detach control — `.stop`
                        keeps the click from also selecting the tool node. -->
-                  <button
-                    type="button"
-                    class="tool-detach-btn"
+                  <button v-if="canDetach" type="button" class="tool-detach-btn"
                     data-testid="tool-detach-btn"
                     :aria-label="toolDetachLabel(node, role)"
                     @click.stop="emit('tool-detached', role.role_id, nodeText(node, 'tool_name'))"
@@ -607,8 +603,9 @@ const props = withDefaults(
     // actually exists in `nodes`. Optional and defaulted to null so every
     // existing mount (WorkflowBuilderView included) is unaffected.
     focusNodeId?: string | null;
+    canDetach?: boolean; // #20682: the server's detach check, read by OrgChart; true keeps other mounts as they were
   }>(),
-  { readonly: false, tabs: () => [], activeTabId: null, focusNodeId: null },
+  { readonly: false, tabs: () => [], activeTabId: null, focusNodeId: null, canDetach: true },
 );
 const emit = defineEmits<{
   (e: 'node-added', node: WorkflowNode): void;
