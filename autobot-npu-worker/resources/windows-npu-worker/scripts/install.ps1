@@ -177,6 +177,10 @@ Write-Info "Upgrading pip..."
 
 # Install requirements
 Write-Info "Installing requirements..."
+. (Join-Path $PSScriptRoot "stage-constraints.ps1")
+if ($sourceDir -ne $InstallPath) {
+    Set-InstalledConstraints -InstallPath $InstallPath -SourceDir $sourceDir
+}
 & $pipExe install -r (Join-Path $InstallPath "requirements.txt")
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Failed to install Python dependencies"
