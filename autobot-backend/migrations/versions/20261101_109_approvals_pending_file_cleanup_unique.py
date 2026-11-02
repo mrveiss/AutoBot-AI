@@ -11,19 +11,19 @@ proposer maps that failure to "already proposed".
 ``NO DATA REWRITE``: this adds an index only. No row or column is touched, and the index is partial,
 so it constrains nothing except pending rows of this one requester and action (the rows the cleanup
 proposer creates; none exist before #20234). If a dev install already holds duplicate pending rows
-the index cannot be built over them: the migration logs that and skips, rather than deleting a
-person's inbox rows. The proposer still handles the collision either way.
+the index cannot be built over them, and the migration FAILS with a message naming the files. It does
+not skip (the index is the only thing that closes the race, and a skipped one is an invariant nobody
+sees missing) and it does not delete (no agent cleans data on its own, #17038). The fix is a person's:
+reject the extra pending proposals in the Approvals inbox, then run the upgrade again. Only dev installs
+can hold duplicates, since the proposer that creates these rows ships in the same change.
 """
 
-import logging
 from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
 
 from migrations.guards import has_index, has_table
-
-logger = logging.getLogger(__name__)
 
 revision: str = "20261101_109"
 down_revision: Union[str, None] = "20261101_108"
@@ -37,10 +37,10 @@ _WHERE = (
     "AND context ->> 'action' = 'conversation_file_cleanup'"
 )
 _DUPLICATES = (
-    "SELECT count(*) FROM (SELECT 1 FROM approvals "
+    "SELECT context ->> 'file_id' AS file_id, count(*) AS pending FROM approvals "
     "WHERE status = 'pending' AND requested_by_agent = 'conversation-file-cleanup' "
     "AND context ->> 'action' = 'conversation_file_cleanup' "
-    "GROUP BY context ->> 'file_id' HAVING count(*) > 1) d"
+    "GROUP BY context ->> 'file_id' HAVING count(*) > 1 ORDER BY file_id LIMIT 20"
 )
 
 
@@ -48,12 +48,14 @@ def upgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name != "postgresql" or not has_table(_TABLE) or has_index(_TABLE, _INDEX):
         return
-    duplicates = bind.execute(sa.text(_DUPLICATES)).scalar()
+    duplicates = bind.execute(sa.text(_DUPLICATES)).all()
     if duplicates:
-        logger.warning(
-            "#20234: %d file(s) hold duplicate pending cleanup proposals; %s not created", duplicates, _INDEX
+        listed = ", ".join(f"{row.file_id} ({row.pending} pending)" for row in duplicates)
+        raise RuntimeError(
+            f"#20234: cannot create {_INDEX}: these conversation files hold several pending cleanup proposals "
+            f"(first 20): {listed}. Nothing was changed. Reject the extra pending proposals in the Approvals "
+            "inbox so each file keeps one, then run the upgrade again."
         )
-        return
     op.create_index(_INDEX, _TABLE, [sa.text("(context ->> 'file_id')")], unique=True, postgresql_where=sa.text(_WHERE))
 
 

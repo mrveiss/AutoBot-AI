@@ -116,6 +116,32 @@ async def pending_cleanup_stats(connection) -> Dict[str, Any]:
     }
 
 
+async def reset_cleanup_attempts(manager, file_id: str) -> bool:
+    """Forget a file's refusals so it can be proposed again; ``True`` when there was a count to forget.
+
+    A person's action (``api/conversation_file_cleanup_admin.py``). It touches only the counter: no bytes,
+    queue row or file record, and the next proposal still waits for an approval.
+    """
+    async with manager._lock:
+        connection = await manager._get_async_db_connection()
+        try:
+            await connection.execute(_ATTEMPTS_DDL)
+            cursor = await connection.execute("DELETE FROM file_cleanup_attempts WHERE file_id = ?", (file_id,))
+            await connection.commit()
+            return cursor.rowcount > 0
+        finally:
+            await connection.close()
+
+
+async def cleanup_status(manager) -> Dict[str, Any]:
+    """:func:`pending_cleanup_stats` on its own connection, for the admin read route."""
+    connection = await manager._get_async_db_connection()
+    try:
+        return await pending_cleanup_stats(connection)
+    finally:
+        await connection.close()
+
+
 async def _record_failure(connection, file_id: str, reason: str) -> None:
     """Count one refused removal; log once when the file reaches the cap and stops being proposed."""
     await connection.execute(_ATTEMPTS_DDL)
