@@ -101,14 +101,6 @@ export interface SharedLinksAdminResponse {
   message: string
 }
 
-export interface RUMMetrics {
-  page_views: number
-  unique_users: number
-  avg_load_time_ms: number
-  error_count: number
-  timestamp: string
-}
-
 export interface VoiceSpeakResponse {
   response?: string
   text?: string

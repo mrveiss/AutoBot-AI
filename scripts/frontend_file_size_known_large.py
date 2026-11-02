@@ -168,7 +168,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/index.ts": 957,
     "autobot-slm-frontend/src/components/AddNodeModal.vue": 1067,  # #14777 batch 2: 1111 -> 1067
     "autobot-slm-frontend/src/components/fleet/NodeLifecyclePanel.vue": 934,
-    "autobot-slm-frontend/src/composables/useAutobotApi.ts": 1904,  # #19217 factory in; #12363 formatter out
+    "autobot-slm-frontend/src/composables/useAutobotApi.ts": 1896,  # #19217 factory in; #12363 formatter out
     "autobot-slm-frontend/src/composables/useCodeSync.ts": 1078,
     "autobot-slm-frontend/src/composables/useOrchestrationManagement.ts": 693,
     "autobot-slm-frontend/src/composables/useSlmApi.ts": 1457,
