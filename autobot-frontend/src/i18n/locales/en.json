@@ -1054,6 +1054,7 @@
     "dashboard": "Dashboard",
     "codebase": {
       "title": "Real-time Codebase Analytics",
+      "sectionLoadFailed": "This section could not be loaded, so this is not a result: {error}",
       "scanRunner": {
         "title": "Scan Progress"
       },
@@ -1638,6 +1639,7 @@
       "clearStoredPatterns": "Clear stored patterns",
       "lastScan": "Last scan",
       "noAnalysis": "No pattern analysis available",
+      "errorTitle": "Pattern analysis could not be loaded",
       "emptyHint": "Click 'Analyze Patterns' to detect duplicates, complexity hotspots, and optimization opportunities.",
       "confirmClear": "Clear all stored patterns from ChromaDB?"
     },

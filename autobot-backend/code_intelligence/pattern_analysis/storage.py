@@ -10,17 +10,14 @@ Provides vector storage for pattern embeddings and similarity search.
 """
 
 import hashlib
-from pathlib import Path
 from typing import Any, Dict, List
 
 from autobot_shared.content_digest import content_digest
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import chromadb_data_dir
 from knowledge.backends import get_async_default_client, get_default_client
 
 logger = get_logger(__name__)
-
-# Module-level project root constant
-_PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 
 # Collection configuration
 CODE_PATTERNS_COLLECTION = "code_patterns"
@@ -43,7 +40,7 @@ def get_pattern_collection():
         ChromaDB collection or None on failure
     """
     try:
-        chroma_path = _PROJECT_ROOT / "data" / "chromadb"
+        chroma_path = chromadb_data_dir()
         chroma_path.mkdir(parents=True, exist_ok=True)
 
         chroma_client = get_default_client(db_path=str(chroma_path), allow_reset=False, anonymized_telemetry=False)
@@ -74,7 +71,7 @@ async def get_pattern_collection_async():
         AsyncChromaCollection wrapper or None on failure
     """
     try:
-        chroma_path = _PROJECT_ROOT / "data" / "chromadb"
+        chroma_path = chromadb_data_dir()
         chroma_path.mkdir(parents=True, exist_ok=True)
 
         async_client = await get_async_default_client(
