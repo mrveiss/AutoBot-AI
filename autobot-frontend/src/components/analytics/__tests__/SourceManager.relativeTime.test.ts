@@ -32,12 +32,13 @@ async function synced(secondsAgo: number, locale = 'en'): Promise<string> {
   fetched = [{ id: 'a', name: 'repo', source_type: 'github', status: 'idle', last_synced: at(secondsAgo) }]
   const i18n = createI18n({ legacy: false, locale, fallbackLocale: 'en', messages: { en } })
   const wrapper = mount(SourceManager, {
-    props: { selectedSourceId: null, visible: true },
+    props: { selectedSourceId: null, visible: false },
     global: { plugins: [i18n] },
     attachTo: document.body
   })
+  await wrapper.setProps({ visible: true }) // the panel loads when it opens
   await flushPromises()
-  const text = wrapper.find('.source-synced').text()
+  const text = document.querySelector('.source-synced')?.textContent ?? '' // the panel is teleported to body
   wrapper.unmount()
   return text
 }
