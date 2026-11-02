@@ -16,7 +16,6 @@ factory-function style and for unit-test assertions.
 """
 
 import os
-from pathlib import Path
 
 from fastapi import APIRouter
 
@@ -26,7 +25,6 @@ from middleware.base import Extension
 logger = get_logger(__name__)
 
 _ENABLED = os.getenv("TRANSCRIBER_ENABLED", "true").lower() == "true"
-_DATA_DIR = Path(os.getenv("TRANSCRIBER_DATA_DIR", "data/transcriber"))
 
 
 def get_transcriber_router() -> APIRouter:
