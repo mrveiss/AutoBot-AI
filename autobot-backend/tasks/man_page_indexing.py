@@ -16,6 +16,7 @@ reads the numbers back out of its stdout. Neither has another caller.
 
 import subprocess  # nosec B404  # used for internal script execution only
 import sys
+from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import infrastructure_dir
@@ -28,7 +29,13 @@ logger = get_logger(__name__)
 #: the repo root under Celery, systemd or a test runner -- and no such directory
 #: exists at the root under any cwd. The script is real; only the path was not.
 #: So the refresh returned its failed dict on every run.
-MAN_PAGE_INDEXER = infrastructure_dir() / "shared" / "scripts" / "utilities" / "index_all_man_pages.py"
+MAN_PAGE_INDEXER = (
+    infrastructure_dir(fallback_root=Path(__file__).resolve().parents[2])
+    / "shared"
+    / "scripts"
+    / "utilities"
+    / "index_all_man_pages.py"
+)
 
 
 def parse_indexing_output(output: str) -> tuple:

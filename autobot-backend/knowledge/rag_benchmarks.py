@@ -30,10 +30,10 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import infrastructure_dir
 from constants.user_scope_constants import GLOBAL_USER
 
-# Add project root and shared infrastructure to path so benchmark_base is importable
+# Project root and shared infrastructure (#20578: from code_source), so benchmark_base is importable
 _repo_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(_repo_root))
-sys.path.insert(0, str(infrastructure_dir() / "shared"))  # #20578: code_source, not beside the install
+sys.path.insert(0, str(infrastructure_dir(fallback_root=_repo_root) / "shared"))
 
 try:
     from tests.benchmarks.benchmark_base import BenchmarkRunner, assert_performance

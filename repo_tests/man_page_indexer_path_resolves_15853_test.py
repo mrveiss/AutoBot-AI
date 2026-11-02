@@ -215,18 +215,19 @@ def _resolved_indexer() -> Path:
     path segments -- read them from the AST instead.
     """
     expression = _indexer_path_expression()
-    assert "PATH.PROJECT_ROOT" in expression, f"MAN_PAGE_INDEXER is not anchored to the project root: {expression}"
+    assert "infrastructure_dir(" in expression, f"MAN_PAGE_INDEXER is not anchored to the tree: {expression}"
     segments = re.findall(r"'([^']+)'|\"([^\"]+)\"", expression)
     parts = [a or b for a, b in segments]
     assert parts, f"no path segments found in {expression}"
-    return REPO_ROOT.joinpath(*parts)
+    # #20578: infrastructure_dir() is the tree's own autobot-infrastructure in a checkout.
+    return REPO_ROOT.joinpath("autobot-infrastructure", *parts)
 
 
 def test_the_indexer_path_is_anchored_to_the_repo_root_not_the_cwd():
     """A cwd-relative path resolves differently under Celery, systemd and pytest."""
     expression = _indexer_path_expression()
 
-    assert "PATH.PROJECT_ROOT" in expression, expression
+    assert "infrastructure_dir(" in expression, expression
     assert not re.search(
         r"^['\"]scripts/", expression
     ), "the indexer is addressed relative to the process working directory"

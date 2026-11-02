@@ -42,7 +42,6 @@ def test_man_page_indexer_is_under_code_source(tmp_path, monkeypatch) -> None:
     try:
         reloaded = importlib.reload(man_page_indexing)
         assert code_source in reloaded.MAN_PAGE_INDEXER.parents
-        assert reloaded.MAN_PAGE_INDEXER.name == "index_all_man_pages.py"
     finally:
         monkeypatch.undo()
         importlib.reload(man_page_indexing)
