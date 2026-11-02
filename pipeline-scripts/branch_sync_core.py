@@ -59,6 +59,10 @@ SYNCED, CURRENT, CONFLICT, WORKFLOW = "synced", "up-to-date", "conflict", "workf
 HEAD_MOVED, FORK, ERROR, UNREACHABLE = "head-moved", "fork-skipped", "error", "unreachable"
 OTHER_BASE, POLICY = "other-base", "excluded-by-policy"
 NO_OPEN_PR = "no-open-pr"
+PUSH_IN_PROGRESS = "push-in-progress"
+
+#: A pre-push hook marks its branch under here while its gate runs (#20260).
+PUSH_MARKER_PREFIX = "refs/push-gate/"
 
 
 def merge_message(branch: str, base: str = "main") -> str:
@@ -180,6 +184,21 @@ def plan_run(pulls: Sequence[Dict[str, Any]], branches: Iterable[str], repositor
     for branch in sorted(set(branches) - claimed):
         plan.skip(_policy_bucket(branch) or NO_OPEN_PR, f"{code(branch)} (no PR)")
     return plan
+
+
+def branches_being_pushed(ls_remote: str, now: float) -> set:
+    """Branches holding a live push marker, from ``git ls-remote`` output (#20260).
+
+    A marker is ``refs/push-gate/<branch>/<expiry epoch>``. An expired one, or one that does not
+    parse, is ignored, so a hook that died cannot hold a branch back for longer than its limit.
+    """
+    live = set()
+    for line in ls_remote.splitlines():
+        ref = line.split("\t")[-1]
+        branch, _, expiry = ref[len(PUSH_MARKER_PREFIX) :].rpartition("/")
+        if ref.startswith(PUSH_MARKER_PREFIX) and branch and expiry.isdigit() and int(expiry) > now:
+            live.add(branch)
+    return live
 
 
 def labels_to_clear(labels: Iterable[str]) -> List[str]:

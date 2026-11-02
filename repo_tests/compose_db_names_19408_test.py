@@ -124,7 +124,7 @@ def _resolve(value: str, env: dict[str, str]) -> str:
 def _connection(env: dict[str, str]) -> dict[str, str]:
     """Role and database each container ends up with under *env*."""
     services = yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))["services"]
-    pg = dict(item.split("=", 1) for item in services["autobot-postgres"]["environment"])
+    pg = dict(item.split("=", 1) for item in services["autobot-slm-postgres"]["environment"])
     slm = _slm_environment(COMPOSE.read_text(encoding="utf-8"))
     resolved = {
         "owner": _resolve(pg["POSTGRES_USER"], env),
@@ -132,9 +132,10 @@ def _connection(env: dict[str, str]) -> dict[str, str]:
         "slm_url": _resolve(slm["SLM_DATABASE_URL"], env),
         "users_url": _resolve(slm["AUTOBOT_USERS_DATABASE_URL"], env),
     }
-    for key in ("slm_url", "users_url"):
+    # #20639: the SLM's own data has its own container; the shared users stay with the main app.
+    for key, host in (("slm_url", "autobot-slm-postgres"), ("users_url", "autobot-postgres")):
         url = urlsplit(resolved[key])
-        assert url.hostname == "autobot-postgres", f"{key} did not resolve: {url.hostname}"
+        assert url.hostname == host, f"{key} did not resolve: {url.hostname}"
         resolved[key] = f"{url.username}{url.path}"
     return resolved
 
@@ -185,6 +186,4 @@ def test_slm_postgres_user_moves_only_the_slm_and_outranks_every_other_name() ->
 def test_the_database_the_slm_reads_is_the_one_postgres_is_told_to_create(env: dict[str, str], database: str) -> None:
     services = yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))["services"]
     pg = dict(item.split("=", 1) for item in services["autobot-postgres"]["environment"])
-    assert _resolve(pg["AUTOBOT_POSTGRES_DB"], env) == database
-    script = (REPO_ROOT / "docker" / "postgres" / "init-databases.sh").read_text(encoding="utf-8")
-    assert 'users_db="${AUTOBOT_POSTGRES_DB:?' in script and 'CREATE DATABASE :"users_db";' in script
+    assert _resolve(pg["POSTGRES_DB"], env) == database
