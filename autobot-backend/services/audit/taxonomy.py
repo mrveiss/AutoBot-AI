@@ -128,6 +128,7 @@ class AuditAction(str, Enum):
     ORG_UPDATE = "org.update"
     ORG_DELETE = "org.delete"
     ORG_SUBSCRIPTION_TIER_DROP = "org.subscription_tier.drop"
+    CLEANUP_ENV_COPIES = "cleanup.env_copies"  # #20567: old .env.*~ copies removed after approval
     ROLE_CREATE = "role.create"
     ROLE_UPDATE = "role.update"
     ROLE_DELETE = "role.delete"

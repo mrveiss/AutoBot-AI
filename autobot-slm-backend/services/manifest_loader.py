@@ -19,7 +19,10 @@ Environment:
     that registry holds ``AUTOBOT_*`` names and carries no ``SLM_*`` entry.
 
     ``SLM_INFRA_BASE_DIR`` -- overrides where ``autobot-infrastructure/`` is
-    read from, default ``$AUTOBOT_BASE_DIR/autobot-infrastructure``. Kept
+    read from. Without it the first that exists wins (#20567): ``<code_source>/autobot-infrastructure``
+    (the copy the SLM updates; the one beside the install was never updated), then
+    ``<base_dir>/autobot-infrastructure`` (a checkout, or a node with no code_source). With none
+    present manifests are unavailable and a warning says so. Kept
     separate from ``AUTOBOT_BASE_DIR`` (#16025) because ``role_registry.py``
     reads that same variable for the unrelated deploy *target* directory
     (``/opt/autobot`` in production); a test or dev host pointing manifests at
@@ -42,12 +45,37 @@ from models.manifest import RoleManifest, UpdatePolicy
 
 logger = logging.getLogger(__name__)
 
-# Base dir where autobot-infrastructure/ lives on the SLM server
-_AUTOBOT_BASE = Path(ssot_config.path.base_dir)
-# #16025: independent override -- see the module docstring for why this is
-# not just AUTOBOT_BASE_DIR / "autobot-infrastructure".
-_INFRA_BASE_OVERRIDE = os.environ.get("SLM_INFRA_BASE_DIR")
-_INFRA_BASE = Path(_INFRA_BASE_OVERRIDE) if _INFRA_BASE_OVERRIDE else (_AUTOBOT_BASE / "autobot-infrastructure")
+INFRA_DIR_NAME = "autobot-infrastructure"
+
+
+def resolve_infra_base(
+    override: str | None = None, code_source: Path | None = None, base_dir: Path | None = None
+) -> Path:
+    """Where role manifests are read from: override, else code_source's copy, else the install's.
+
+    Arguments default to ``SLM_INFRA_BASE_DIR`` and the SSOT paths; they exist so the order can be
+    exercised on real directories. #16025: the override is independent of ``AUTOBOT_BASE_DIR`` -- see
+    the module docstring.
+    """
+    override = override if override is not None else os.environ.get("SLM_INFRA_BASE_DIR")
+    if override:
+        return Path(override)
+    code_source = code_source if code_source is not None else ssot_config.path.code_source_path
+    base_dir = base_dir if base_dir is not None else Path(ssot_config.path.base_dir)
+    candidates = (code_source / INFRA_DIR_NAME, base_dir / INFRA_DIR_NAME)
+    for candidate in candidates:
+        if candidate.is_dir():
+            return candidate
+    logger.warning(
+        "Role manifests are unavailable: no %s found in %s or %s, so pre-flight checks that read them are skipped",
+        INFRA_DIR_NAME,
+        code_source,
+        base_dir,
+    )
+    return candidates[0]
+
+
+_INFRA_BASE = resolve_infra_base()
 
 # Cache TTL in seconds, env-backed rather than a bare literal (#16026): a
 # manifest is an operator-edited file, so the staleness window has to be tunable
