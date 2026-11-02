@@ -20,17 +20,29 @@ from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 from models.command_execution import CommandState
 from services.ai_line_enforcement import TERMINAL_TOOL, LineVerdict, Outcome, enforce_line
+from type_defs.common import Metadata
 from user_management.database import get_async_session_factory
 from user_management.models.user import User
 
 from .approval_handler import ApprovalHandler
 from .models import AgentTerminalSession
+from .pending_claim import claim_pending_slot, release_pending_slot
+from .redis_usability import usable_redis
 
-__all__ = ["Outcome", "decide_command", "permission_refusal", "write_reservation", "resolve_command_line"]
+__all__ = [
+    "Outcome",
+    "claim_pending",
+    "decide_command",
+    "permission_refusal",
+    "resolve_command_line",
+    "settle_pending",
+    "write_reservation",
+]
 
 logger = get_logger(__name__)
 
 PENDING_APPROVAL_REFUSAL = "An earlier command is still waiting for your decision; this one did not run"
+CLAIM_UNAVAILABLE_REFUSAL = "Could not reserve this command for your decision; it did not run"
 
 
 async def _owner_user_id(owner: str | None) -> str | None:
@@ -91,11 +103,41 @@ async def decide_command(
     return is_auto_approved, None
 
 
-async def write_reservation(session: AgentTerminalSession, command, queue) -> None:
+async def claim_pending(session: AgentTerminalSession, redis, command_id: str, command: str, risk) -> Metadata | None:
+    """Refusal response unless this command may become the session's pending approval, else ``None``.
+
+    #19951: without Redis there is no await between the check and the caller's write, so overlapping
+    calls cannot both pass. With Redis the claim decides, across workers as well (#20059).
+    """
+    if session.has_pending_approval():
+        return session.get_permission_denied_response(PENDING_APPROVAL_REFUSAL, command, risk.value)
+    if not usable_redis(redis):
+        return None
+    try:
+        if await claim_pending_slot(redis, session.session_id, command_id):
+            return None
+    except Exception as exc:  # noqa: BLE001 - no claim means no way to rule out a replaced approval
+        logger.error("Could not claim the approval slot of session %s: %s", session.session_id, exc)
+        return session.get_permission_denied_response(CLAIM_UNAVAILABLE_REFUSAL, command, risk.value)
+    return session.get_permission_denied_response(PENDING_APPROVAL_REFUSAL, command, risk.value)
+
+
+async def settle_pending(session: AgentTerminalSession, session_manager) -> None:
+    """The decision has landed: clear the approval, persist that for other workers, free the slot (#20059)."""
+    command_id = session.get_pending_command_id()
+    session.clear_pending_and_resume()
+    redis = session_manager.redis_client
+    if usable_redis(redis):
+        await session_manager._persist_session(session)
+    await release_pending_slot(redis, session.session_id, command_id)
+
+
+async def write_reservation(session: AgentTerminalSession, command, queue, redis=None) -> None:
     """Queue *command*, whose pending approval is already set; a write that fails or is cancelled undoes it.
 
     The write is shielded, because cancelling the await would not stop its worker thread. The row is
-    closed only once the write has finished, so it cannot land pending after the close.
+    closed only once the write has finished, so it cannot land pending after the close. The claim is
+    freed in the background too, because a cancelled caller cannot await it.
     """
     write = asyncio.ensure_future(queue.add_command(command))
     try:
@@ -104,6 +146,10 @@ async def write_reservation(session: AgentTerminalSession, command, queue) -> No
         if (session.pending_approval or {}).get("command_id") == command.command_id:
             session.pending_approval = None
         fire_and_forget(_close_queued_command(queue, command, write), name=f"close-queued-{command.command_id}")
+        fire_and_forget(
+            release_pending_slot(redis, session.session_id, command.command_id),
+            name=f"release-claim-{command.command_id}",
+        )
         raise
 
 

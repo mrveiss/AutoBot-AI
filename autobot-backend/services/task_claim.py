@@ -63,7 +63,7 @@ _CLAIM_KEY_TPL = "task:claim:{task_id}"
 _DEFAULT_TTL = 300  # seconds — covers a full heartbeat run with margin
 
 # Lua: release only if the caller still owns the key.
-_RELEASE_LUA = """
+RELEASE_IF_OWNER_LUA = """
 if redis.call('get', KEYS[1]) == ARGV[1] then
     return redis.call('del', KEYS[1])
 else
@@ -72,7 +72,7 @@ end
 """
 
 # Lua: extend TTL only if the caller still owns the key.
-_RENEW_LUA = """
+RENEW_IF_OWNER_LUA = """
 if redis.call('get', KEYS[1]) == ARGV[1] then
     return redis.call('expire', KEYS[1], ARGV[2])
 else
@@ -129,7 +129,7 @@ async def renew_claim(task_id: str, agent_id: str, ttl: int = _DEFAULT_TTL) -> b
         _emit_audit("task.renew", agent_id, task_id, outcome="redis_unavailable")
         return True  # fail-open
     try:
-        script = redis.register_script(_RENEW_LUA)
+        script = redis.register_script(RENEW_IF_OWNER_LUA)
         result = await script(keys=[_key(task_id)], args=[agent_id, str(ttl)])
         renewed = bool(result)
         if not renewed:
@@ -158,7 +158,7 @@ async def release_claim(task_id: str, agent_id: str) -> bool:
         _emit_audit("task.release", agent_id, task_id, outcome="redis_unavailable")
         return True  # fail-open
     try:
-        script = redis.register_script(_RELEASE_LUA)
+        script = redis.register_script(RELEASE_IF_OWNER_LUA)
         result = await script(keys=[_key(task_id)], args=[agent_id])
         released = bool(result)
         logger.debug(

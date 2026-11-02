@@ -21,6 +21,7 @@ from type_defs.common import Metadata
 
 from .conversation_owner import ConversationNotOwnedError, conversation_owner, verified_conversation_owner
 from .models import AgentSessionState, AgentTerminalSession
+from .pending_claim import drop_pending_slot, hold_pending_slot
 from .redis_usability import usable_redis
 
 logger = get_logger(__name__)
@@ -476,6 +477,7 @@ class SessionManager:
             try:
                 key = f"agent_terminal:session:{session_id}"
                 await self.redis_client.delete(key)
+                await drop_pending_slot(self.redis_client, session_id)
             except Exception as e:
                 logger.error("Failed to remove session from Redis: %s", e)
 
@@ -507,6 +509,8 @@ class SessionManager:
             ttl = APPROVAL_PENDING_SESSION_TTL if session.has_pending_approval() else TTL_1_HOUR
             json_data = json.dumps(session_data)
             await self.redis_client.setex(key, ttl, json_data)
+            if session.has_pending_approval():
+                await hold_pending_slot(self.redis_client, session.session_id, session.get_pending_command_id(), ttl)
 
             # #13478: a companion pointer so the approve path can still find the
             # conversation after the session itself is gone. `get_session` takes
