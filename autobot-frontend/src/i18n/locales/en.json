@@ -3465,6 +3465,7 @@
         "verificationMode": "Verification Mode",
         "autonomous": "Autonomous",
         "collaborative": "Collaborative",
+        "syncNow": "Sync now, so its content is available right away",
         "verificationHint": "Autonomous auto-approves high-quality sources. Collaborative requires manual review.",
         "enabled": "Enabled",
         "nameAndSaveDesc": "Name the connector and save.",

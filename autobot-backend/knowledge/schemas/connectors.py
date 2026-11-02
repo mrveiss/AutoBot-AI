@@ -89,6 +89,7 @@ class ConnectorCreateResponse(BaseModel):
 
     connector_id: str
     config: ConnectorConfigDict
+    sync_started: bool = False
 
 
 class ConnectorsHealthResponse(BaseModel):
@@ -212,6 +213,8 @@ class CreateConnectorRequest(BaseModel):
     enabled: bool = True
     verification_mode: str = "collaborative"
     schedule_cron: str | None = None
+    # Issue #19714: run a first full sync on create, so a new source does not stay empty.
+    sync_now: bool = True
     include_patterns: List[str] = Field(default_factory=list)
     exclude_patterns: List[str] = Field(default_factory=list)
     # Issue #8148: optional per-instance concurrency override (None = class default).
