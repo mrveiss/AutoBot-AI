@@ -13,6 +13,7 @@ Composes all functionality through mixins:
 """
 
 import asyncio
+import functools
 import json
 import os
 from contextlib import aclosing
@@ -35,12 +36,12 @@ from chat_workflow.tool_call_grammar import (
 from constants.api_constants import PATH_OLLAMA_GENERATE
 from constants.model_constants import ModelConfig
 from constants.ttl_constants import TIMEOUT_HTTP_DEFAULT, TTL_24_HOURS
-from llm_shared.providers.reasoning_effort import map_effort_to_provider_params
 from llm_shared.run_credentials import llm_principal_scope_for
 from services.tool_output_filter import cap_unmatched_output, get_tool_output_filter
 from slash_command_handler import get_slash_command_handler
 
 from .conversation import ConversationHandlerMixin
+from .llm_failover import IterationCall, stream_with_failover
 from .llm_handler import LLMHandlerMixin, _emit_after_continuation, _emit_before_continuation
 from .models import (
     LLMIterationContext,
@@ -49,6 +50,7 @@ from .models import (
     build_governed_identity,
     filter_internal_prompts,
 )
+from .reasoning_kwargs import build_reasoning_api_kwargs
 from .session_handler import SessionHandlerMixin
 from .session_role import resolve_auth_role, stamp_verified_identity
 from .thought_markers import detect_content_type, find_last_tag_positions, find_new_segment_start
@@ -103,33 +105,6 @@ def _kb_sources_from_citations(citations: List[Dict[str, Any]]) -> List[Dict[str
         }
         for c in citations
     ]
-
-
-async def _resolve_reasoning_effort(context: Dict[str, Any]) -> str:
-    """Resolve reasoning effort with priority: per-request > user-default > 'auto'.
-
-    Resolution order (#9017):
-      1. context["reasoning_effort"] — per-conversation value from the request
-      2. Redis user:{id}:preferences:reasoning_effort — account-level default
-      3. 'auto' — no extra params, provider decides
-
-    Invalid or missing values are returned as 'auto' (inert).
-    """
-    effort: str | None = context.get("reasoning_effort")
-    if effort:
-        return effort
-
-    user_id: str | None = context.get("user_id")
-    if user_id:
-        try:
-            from api.users import _get_user_preferences_from_redis
-
-            prefs = await _get_user_preferences_from_redis(user_id)
-            return prefs.reasoning_effort
-        except Exception as exc:
-            logger.warning("[#9017] Failed to load user reasoning_effort pref: %s", exc)
-
-    return "auto"
 
 
 # Issue #11538: vision-in-the-loop. OpenManus threads the current screenshot
@@ -2067,7 +2042,7 @@ before summarizing.
         return WorkflowMessage(
             type="error",
             content=f"LLM service error: {status_code}",
-            metadata={"error": True},
+            metadata={"error": True, "status_code": status_code},
         )
 
     async def _stream_and_collect_llm_chunks(
@@ -2420,45 +2395,8 @@ before summarizing.
         llm_response = None
         tool_calls = None
 
-        # Issue #8993: Wire thinking mode from request context for Anthropic models.
-        api_kwargs = None
-        if ctx.context.get("thinking_mode_enabled") and "claude" in ctx.selected_model.lower():
-            budget_tokens = int(ctx.context.get("thinking_budget_tokens", 10000))
-            api_kwargs = {
-                "thinking": {"type": "enabled", "budget_tokens": budget_tokens},
-                "max_tokens": max(budget_tokens + 1000, 8192),
-                "temperature": 1,
-                "betas": ["interleaved-thinking-2025-05-14"],
-            }
-            logger.info(
-                "[#8993] Thinking mode enabled for model=%s budget_tokens=%d",
-                ctx.selected_model,
-                budget_tokens,
-            )
-
-        # #9017: Reasoning effort — per-conversation override > user-default > 'auto'.
-        # Only applied when thinking_mode is NOT already set (avoid double-config).
-        if api_kwargs is None:
-            effort = await _resolve_reasoning_effort(ctx.context)
-            if effort and effort != "auto":
-                effort_params = map_effort_to_provider_params(effort, ctx.selected_model)
-                if effort_params:
-                    thinking_tokens = effort_params.get("thinking_tokens")
-                    if thinking_tokens and "claude" in ctx.selected_model.lower():
-                        api_kwargs = {
-                            "thinking": {"type": "enabled", "budget_tokens": thinking_tokens},
-                            "max_tokens": max(thinking_tokens + 1000, 8192),
-                            "temperature": 1,
-                            "betas": ["interleaved-thinking-2025-05-14"],
-                        }
-                    else:
-                        api_kwargs = effort_params
-                    logger.info(
-                        "[#9017] Reasoning effort=%s applied for model=%s params=%s",
-                        effort,
-                        ctx.selected_model,
-                        list(effort_params),
-                    )
+        # #8993 thinking mode / #9017 reasoning effort (see reasoning_kwargs).
+        api_kwargs = await build_reasoning_api_kwargs(ctx.context, ctx.selected_model)
         # Issue #11538: thread the most recent browser/VNC screenshot (last
         # VISION_TOOL_LOOKBACK_MESSAGES tool results) into this iteration's payload.
         latest_screenshot = _extract_latest_tool_screenshot(ctx.execution_history)
@@ -2466,7 +2404,8 @@ before summarizing.
         # nothing outside it is ever consulted again (#11538 MINOR: retention).
         _prune_stale_screenshots(ctx.execution_history)
 
-        async for item in self._process_single_llm_iteration(
+        open_stream = functools.partial(
+            self._process_single_llm_iteration,
             http_client,
             ctx.ollama_endpoint,
             ctx.selected_model,
@@ -2478,7 +2417,9 @@ before summarizing.
             system_prompt=ctx.system_prompt or "",
             api_kwargs=api_kwargs,
             image_b64=latest_screenshot,
-        ):
+        )
+        # #19753: a provider failure before any output fails over (not-acted guard); see llm_failover.
+        async for item in stream_with_failover(IterationCall(self, ctx, iteration, current_prompt), open_stream):
             if isinstance(item, tuple):
                 llm_response, tool_calls = item
             else:
