@@ -140,8 +140,9 @@ async def upload_conversation_file(
     """Upload a file to a conversation session (Issue #398: refactored)."""
     try:
         user_data = await _authorize_file_operation(request, session_id, "upload", owner_upload=True)
-        content = await validate_and_read_upload_file(file)
         file_manager = _get_required_file_manager(request)
+        quota_left = await file_manager.remaining_upload_quota(user_data.get("username"))
+        content = await validate_and_read_upload_file(file, quota_left)
 
         file_info_dict = await file_manager.upload_file(
             session_id=session_id,
@@ -157,11 +158,7 @@ async def upload_conversation_file(
             "conversation_file_upload",
             user_data,
             session_id,
-            {
-                "filename": file.filename,
-                "file_id": file_info.file_id,
-                "size": len(content),
-            },
+            {"filename": file.filename, "file_id": file_info.file_id, "size": len(content)},
         )
 
         upload_id = f"upload_{datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')}_{secrets.token_hex(4)}"

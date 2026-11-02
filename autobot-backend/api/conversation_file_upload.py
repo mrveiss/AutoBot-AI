@@ -16,40 +16,35 @@ from utils.catalog_http_exceptions import raise_invalid_input
 # Maximum file size (50MB) - consistent with general file API
 MAX_FILE_SIZE = 50 * 1024 * 1024
 
+_CHUNK_BYTES = 1024 * 1024
 
-async def validate_and_read_upload_file(
-    file: UploadFile,
-) -> bytes:
-    """
-    Validate and read uploaded file content.
 
-    Issue #281: Extracted from upload_conversation_file to reduce function
-    length and improve reusability of validation logic.
+async def _read_within(file: UploadFile, limit: int, detail: str) -> bytes:
+    """Read *file* in chunks; HTTP 413 (*detail*) the moment it passes *limit*, so no oversize body is buffered."""
+    chunks: list[bytes] = []
+    total = 0
+    while chunk := await file.read(_CHUNK_BYTES):
+        total += len(chunk)
+        if total > limit:
+            raise HTTPException(status_code=413, detail=detail)
+        chunks.append(chunk)
+    return b"".join(chunks)
 
-    Args:
-        file: Uploaded file object
 
-    Returns:
-        File content as bytes
+async def validate_and_read_upload_file(file: UploadFile, quota_remaining: int | None = None) -> bytes:
+    """Validate the name, then read the body under the size cap and the caller's remaining quota (#20217).
+
+    ``quota_remaining`` is what the uploading user may still store (``None`` = no quota). The stricter of the
+    two limits ends the read early, each with its own message.
 
     Raises:
-        HTTPException: If validation fails (400, 413)
+        HTTPException: 400 for a bad name, 413 for an oversize file or an exhausted quota
     """
-    # Validate filename
     if not file.filename:
         raise_invalid_input("filename", "required")
-
     if not is_safe_file(file.filename):
         raise_invalid_input("filename", f"file type not allowed: {file.filename}")
-
-    # Read file content
-    content = await file.read()
-
-    # Check file size
-    if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=413,
-            detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB",
-        )
-
-    return content
+    if quota_remaining is not None and quota_remaining < MAX_FILE_SIZE:
+        detail = f"Upload quota exceeded: {max(quota_remaining, 0)} bytes of storage left for this user"
+        return await _read_within(file, max(quota_remaining, 0), detail)
+    return await _read_within(file, MAX_FILE_SIZE, f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB")
