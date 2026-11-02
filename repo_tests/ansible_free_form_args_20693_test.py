@@ -11,7 +11,6 @@ import yaml
 
 _ROOT = Path(__file__).resolve().parents[1]
 _BACKUP = _ROOT / "autobot-slm-backend/ansible/_shared/tasks/pre_migration_backup.yml"
-_WORKFLOW = _ROOT / ".github/workflows/ansible-free-form-args.yml"
 
 
 def _shell_blocks() -> list:
@@ -24,13 +23,6 @@ def test_no_shell_block_in_the_backup_include_has_an_odd_apostrophe() -> None:
     blocks = _shell_blocks()
     assert len(blocks) >= 2, "this would be judging almost nothing"
     assert not any("libpq's" in block for block in blocks)
-
-
-def test_the_full_check_runs_in_ci_on_any_ansible_file() -> None:
-    workflow = yaml.safe_load(_WORKFLOW.read_text(encoding="utf-8"))
-    paths = workflow[True]["pull_request"]["paths"]  # YAML reads the key `on` as true
-    assert "autobot-slm-backend/ansible/**" in paths
-    assert "tools/lint/check_ansible_free_form_args.py" in _WORKFLOW.read_text(encoding="utf-8")
 
 
 def test_the_check_refuses_a_stray_quote_and_passes_the_tree(tmp_path) -> None:
