@@ -1,0 +1,57 @@
+# A merge train's members keep their content, read from the content (#20406).
+#
+# Train PR #20271 merged a member with an empty diff: its commits were reachable and the PR read
+# MERGED, while its files were not on main. On a train PR this judges each member at its own merge
+# commit, so a loss stops the train before it lands. When a train lands it checks that what the
+# train changed reached main.
+#
+# Only `train-*` heads from this repo run it. `pull_request`, not `pull_request_target`, and a
+# read-only token. Making `train-content` a required status on main is a branch-protection setting
+# (maintainer), recorded on #20406.
+
+name: train-content-gate
+
+on:
+  pull_request:
+    branches: [ main ]
+    types: [ opened, reopened, synchronize, ready_for_review, closed ]
+
+concurrency:
+  group: train-content-gate-${{ github.event.pull_request.number }}-${{ github.event.action == 'closed' }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  train-content:
+    name: train-content
+    if: >-
+      startsWith(github.head_ref, 'train-') &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.event.action != 'closed' || github.event.pull_request.merged == true)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the full history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.merged == true && github.event.pull_request.merge_commit_sha || github.event.pull_request.head.sha }}
+
+      - name: Every member's content is present at its merge
+        if: github.event.action != 'closed'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          TITLE: ${{ github.event.pull_request.title }}
+          BODY: ${{ github.event.pull_request.body }}
+        run: python3 pipeline-scripts/train_content_gate.py --range "$(git merge-base "$BASE_SHA" "$HEAD_SHA")..$HEAD_SHA" --title="$TITLE" --body="$BODY"
+
+      - name: What the train changed reached main
+        if: github.event.action == 'closed'
+        env:
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: python3 pipeline-scripts/train_content_gate.py --landed "$MERGE_SHA"
