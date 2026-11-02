@@ -253,7 +253,6 @@ stage_cached() {
 # push cannot lose to it at the very end. The expiry is the most the fast gate's two stages can take,
 # so a hook that dies holds nothing longer. Set by API, since a push here would run this hook again.
 # A marker that cannot be written only warns: the push is then as racy as it was before.
-# Kept in a file: a stage's subshell renews the marker after queueing, and the parent's exit clears it.
 PUSH_MARKER_FILE=$(mktemp)
 push_marker_api() {
   timeout 20 gh api "$@" >/dev/null 2>&1
@@ -279,19 +278,24 @@ push_marker_set() {
     warn "could not mark this push on the remote, so the auto-sync can still move the branch during the gate (#20260)"
   fi
 }
-# #20518: one machine-wide queue for heavy work, shared with repo_tests/machine_slot.py. It runs
-# BEFORE any stage timeout, so a push never times out while queued. A dead holder's lock goes with
-# it. Runs at lower priority, so the install always wins. CI has its own runners.
+# #20518: one machine-wide queue for heavy work, shared with repo_tests/machine_slot.py. One slot per
+# push: the hook itself takes it before its first uncached stage, so it runs ahead of any stage timeout
+# and a queued push never times out, and it prints to the terminal rather than a stage's log. Holders
+# run at lower priority, so the install always wins. A dead holder's lock goes with it; each slot file
+# names its holder, so a stuck one can be seen. CI has its own runners.
 machine_slot_wait() {
   [ -z "${CI:-}" ] && [ -z "${AUTOBOT_MACHINE_SLOT_HELD:-}" ] || return 0
-  command -v flock >/dev/null 2>&1 || { warn "flock is missing: this stage did not queue for a machine slot"; return 0; }
-  local dir="${AUTOBOT_MACHINE_SLOT_DIR:-${XDG_RUNTIME_DIR:-/tmp}/autobot-machine-slots}" i start=$SECONDS
+  command -v flock >/dev/null 2>&1 || { warn "flock is missing: this push did not queue for a machine slot"; return 0; }
+  local dir="${AUTOBOT_MACHINE_SLOT_DIR:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/autobot-machine-slots-$(id -u)}"
+  local i start=$SECONDS next=$SECONDS every="${AUTOBOT_MACHINE_SLOT_REPORT:-60}"
   mkdir -p "$dir"
   while :; do
     for ((i = 1; i <= ${AUTOBOT_MACHINE_SLOTS:-4}; i++)); do
-      exec 9>"$dir/slot-$i"
+      exec 9>>"$dir/slot-$i"  # Appending: opening with > would wipe a holder's name.
       if flock -n 9; then
         export AUTOBOT_MACHINE_SLOT_HELD=1
+        : > "$dir/slot-$i"
+        printf '%s pre-push %s\n' "$$" "${branch_name:-}" >&9
         renice -n 10 -p "$BASHPID" >/dev/null 2>&1
         ionice -c 3 -p "$BASHPID" >/dev/null 2>&1
         if [ "$SECONDS" != "$start" ]; then
@@ -303,11 +307,16 @@ machine_slot_wait() {
       fi
     done
     exec 9>&-
+    if [ "$SECONDS" -ge "$next" ]; then
+      log "queued $((SECONDS - start))s for a machine slot, held by: $(cat "$dir"/slot-* 2>/dev/null | tr '\n' ';')"
+      next=$((SECONDS + every))
+    fi
     sleep "${AUTOBOT_MACHINE_SLOT_POLL:-5}"
   done
 }
 # Before a stage's subshell: STAGE_LOG is where it writes.
 stage_begin() {
+  machine_slot_wait
   STAGE_LOG=$(mktemp)
   STAGE_NAMES+=("$1"); STAGE_KEYS+=("$2"); STAGE_LOGS+=("$STAGE_LOG")
 }
@@ -471,7 +480,7 @@ run_fast_guards() {
   fi
   # shellcheck disable=SC2046,SC2086 # word-splitting the file list and xdist args is intended
   # -m "not reach_floor" as every pre-push pytest (#17810): the floors are CI's; the pins are below.
-  guard_output=$(cd "$REPO_ROOT" && timeout "$MAX_BUDGET" "$PYTEST_PYTHON" -m pytest -q -p no:cacheprovider -m "not reach_floor" \
+  guard_output=$(cd "$REPO_ROOT" && exec 9>&- && timeout "$MAX_BUDGET" "$PYTEST_PYTHON" -m pytest -q -p no:cacheprovider -m "not reach_floor" \
     $(pytest_xdist_args) --tb=line $(printf '%s\n' "$guards" | grep -vxF -f <(printf '%s\n' "$missing")) 2>&1) || rc=$?
   # As the full pytest run (#19312 review): an interpreter that cannot import pytest ran nothing.
   if ! "$PYTEST_PYTHON" -c 'import pytest' >/dev/null 2>&1; then
@@ -480,7 +489,7 @@ run_fast_guards() {
   elif [ "$rc" != "0" ]; then fail "fast guards failed:"; failure_excerpt "$guard_output" >&2; EXIT_CODE=1
   else ok "fast guards: $(printf '%s\n' "$guards" | grep -c .) guard file(s) pass"; fi
   rc=0
-  out=$(cd "$REPO_ROOT" && timeout "$MAX_BUDGET" "$PYTEST_PYTHON" scripts/repin_reach_floors.py --check --changed-since origin/main 2>&1) || rc=$?
+  out=$(cd "$REPO_ROOT" && exec 9>&- && timeout "$MAX_BUDGET" "$PYTEST_PYTHON" scripts/repin_reach_floors.py --check --changed-since origin/main 2>&1) || rc=$?
   if [ "$rc" = "124" ]; then
     did_not_run "repin_reach_floors.py --check" "$MAX_BUDGET"
   elif printf '%s\n' "$out" | grep -qE '^(STALE|PIN)'; then
@@ -872,7 +881,6 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     if ! stage_cached "vue-tsc ${project}" "$tsc_key"; then
     stage_begin "vue-tsc ${project}" "$tsc_key"
     (
-      machine_slot_wait
       ! stage_cached "vue-tsc ${project}" "$tsc_key" || exit 0  # the same tree passed while this one queued
     EXIT_CODE=0; STAGE_CLEAN=1
     log "${project}: frontend files changed — running vue-tsc (timeout ${TYPE_CHECK_TIMEOUT}s)"
@@ -991,7 +999,6 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     if [ -n "$all_tests" ] && ! stage_cached "vitest ${project}" "$vitest_key"; then
     stage_begin "vitest ${project}" "$vitest_key"
     (
-      machine_slot_wait
       ! stage_cached "vitest ${project}" "$vitest_key" || exit 0  # the same tree passed while this one queued
     EXIT_CODE=0; STAGE_CLEAN=1
     if [ -n "$all_tests" ] && node_modules_usable "$project_dir"; then
@@ -1040,7 +1047,6 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     if [ -n "$kit_changed" ] && ! stage_cached "vitest related ${project}" "$kit_key"; then
     stage_begin "vitest related ${project}" "$kit_key"
     (
-      machine_slot_wait
       ! stage_cached "vitest related ${project}" "$kit_key" || exit 0  # the same tree passed while this one queued
     EXIT_CODE=0; STAGE_CLEAN=1
     if [ -n "$kit_changed" ] && node_modules_usable "$project_dir"; then
@@ -1119,10 +1125,11 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     # pytest's version is READ, not run as `-m pytest`: every `-m pytest` line here is a test run
     # that must deselect reach_floor (#17810), and a version probe is not one.
     py_env=$("$PYTEST_PYTHON" -VV 2>/dev/null | tr -d '\n'; "$PYTEST_PYTHON" -c 'import pytest; print("pytest", pytest.__version__)' 2>/dev/null | tr -d '\n')
-    fast_key=$(stage_key "fast guards|${PYTEST_PYTHON}|${py_env}" "")
+    # origin/main too: the floor check judges against it, so a pass must not outlive a moved base.
+    fast_key=$(stage_key "fast guards|${PYTEST_PYTHON}|${py_env}|$(git rev-parse -q --verify origin/main)" "")
     if ! stage_cached "fast guards" "$fast_key"; then
       stage_begin "fast guards" "$fast_key"
-      ( EXIT_CODE=0; STAGE_CLEAN=1; machine_slot_wait
+      ( EXIT_CODE=0; STAGE_CLEAN=1
         ! stage_cached "fast guards" "$fast_key" || exit 0  # the same tree passed while this one queued
         run_fast_guards; stage_exit ) </dev/null >"$STAGE_LOG" 2>&1 &
       stage_track $!
@@ -1153,7 +1160,6 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   if [ -n "$all_py_tests" ] && ! stage_cached "pytest" "$pytest_key"; then
   stage_begin "pytest" "$pytest_key"
   (
-    machine_slot_wait
     ! stage_cached "pytest" "$pytest_key" || exit 0  # the same tree passed while this one queued
   EXIT_CODE=0; STAGE_CLEAN=1
     # The selection can outgrow the changeset, so the budget follows it too (#15985).

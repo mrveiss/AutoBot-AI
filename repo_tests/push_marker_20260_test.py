@@ -112,7 +112,7 @@ def test_a_marker_that_cannot_be_written_warns_and_never_blocks(tmp_path: Path) 
 
 
 def test_a_marker_set_in_a_stage_subshell_is_cleared_by_the_parent(tmp_path: Path) -> None:
-    """#20260: the renewal after queueing runs in a subshell, and the parent's exit clears it."""
+    """A marker written from a subshell is still cleared at exit."""
     _, calls = _hook(tmp_path, "(push_marker_set issue-1-a abc); push_marker_clear")
     created = re.search(r"ref=refs/(push-gate/issue-1-a/\d+)", calls)
     assert created and f"git/refs/{created.group(1)}" in calls.split("-X POST")[1]
