@@ -39,7 +39,7 @@ router = APIRouter(prefix="/budget-policies")
 class BudgetPolicyRequest(BaseModel):
     """Request schema for creating/updating a budget policy."""
 
-    scope: str = Field(..., description="Scope: agent, project, task, or tenant")
+    scope: str = Field(..., description="Scope: agent, project, task, tenant, or user (chat requests)")
     scope_id: str = Field(..., description="Resource ID for the scope")
     period: str = Field(..., description="Period: hour, day, or month")
     threshold_usd: float = Field(..., gt=0, description="Hard-stop threshold in USD")

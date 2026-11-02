@@ -6,6 +6,8 @@
  * Issue #2861: Replaces `catch (err: any)` patterns with type-safe extraction.
  */
 
+import i18n from '@/i18n'
+
 interface AxiosLikeError {
   response?: {
     data?: {
@@ -142,4 +144,15 @@ export async function describeFailedResponse(response: Response): Promise<string
   const statusLine = `HTTP ${response.status}: ${response.statusText}`
   const detail = await extractResponseErrorDetail(response)
   return detail ? `${statusLine} — ${detail}` : statusLine
+}
+
+/** A streamed `error` event's chat text: its own translation when it names one (#16845), else the raw error. */
+export function streamErrorText(data: {
+  content?: string
+  message?: string
+  metadata?: { i18n_key?: string; i18n_params?: Record<string, unknown> }
+}): string {
+  const key = data.metadata?.i18n_key
+  if (key) return i18n.global.t(key, data.metadata?.i18n_params ?? {}) as string
+  return `Error: ${data.content || data.message || 'Unknown error'}`
 }

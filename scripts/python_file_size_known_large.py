@@ -148,7 +148,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
     "autobot-backend/chat_workflow/graph.py": 1643,  # train 50: #18993 on main's 1652
     "autobot-backend/chat_workflow/llm_handler.py": 1300,
-    "autobot-backend/chat_workflow/manager.py": 3885,  # #17273: graph turn lifecycle moved to turn_control
+    "autobot-backend/chat_workflow/manager.py": 3880,  # #16845: budget gate before the ollama call
     "autobot-backend/chat_workflow/tool_handler.py": 3617,  # #19950 (MCP approval message moved out)
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
@@ -332,7 +332,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/knowledge/test_doc_indexer.py": 1462,
     "autobot-backend/services/knowledge/test_kb_synthesizer.py": 802,
     "autobot-backend/services/llm_cost_tracker.py": 1166,  # #16230: MODEL_PRICING table removed
-    "autobot-backend/services/llm_service.py": 1199,  # #16845: _track_usage delegated to llm_usage_recording
+    "autobot-backend/services/llm_service.py": 1147,  # #16845: chat budget gate, prompt split out
     "autobot-backend/services/load_balancer.py": 677,
     "autobot-backend/services/nl_database_service.py": 775,
     "autobot-backend/services/notification_service.py": 614,

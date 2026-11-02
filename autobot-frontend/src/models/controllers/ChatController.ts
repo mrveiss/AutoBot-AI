@@ -6,7 +6,7 @@ import { chatRepository } from '@/models/repositories'
 import apiClient from '@/utils/ApiClient'
 import type { ChatSession } from '@/stores/useChatStore'
 import { createLogger } from '@/utils/debugUtils'
-import { extractErrorMessage } from '@/utils/errorExtract'
+import { extractErrorMessage, streamErrorText } from '@/utils/errorExtract'
 import i18n from '@/i18n'
 import type { ChatMessage, ChatMessageDisplayType } from '@/types/api'
 import { requestQueue } from '@/composables/useRequestQueue'
@@ -417,7 +417,7 @@ export class ChatController {
         })
         if (!errorMsgId) return fallbackMessageId
         this.chatStore.updateMessage(errorMsgId, {
-          content: `Error: ${data.content || data.message || 'Unknown error'}`,
+          content: streamErrorText(data),
           status: 'error'
         })
         return fallbackMessageId

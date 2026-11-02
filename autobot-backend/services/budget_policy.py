@@ -49,6 +49,7 @@ def configure_session_factory(factory: async_sessionmaker) -> None:
 SCOPE_AGENT = "agent"
 SCOPE_PROJECT = "project"
 SCOPE_TENANT = "tenant"
+SCOPE_USER = "user"  # #16845: chat budgets name a signed-in user
 SCOPE_TASK = "task"
 
 PERIOD_HOUR = "hour"
@@ -178,18 +179,26 @@ async def delete_policy(policy_id: str) -> bool:
 
 
 async def get_period_spend(agent_id: str, period: str) -> float:
-    """
-    Read accumulated agent spend for the given period from cost tracker Redis keys.
+    """Accumulated agent spend for ``period`` (see :func:`get_namespace_period_spend`)."""
+    return await get_namespace_period_spend(_AGENT_COST_NS, agent_id, period)
 
-    DAY/HOUR -> llm_cost:by_agent:{agent_id}:daily:{YYYY-MM-DD}
+
+async def get_namespace_period_spend(namespace: str, subject_id: str, period: str) -> float:
+    """
+    Read accumulated spend for the given period from cost tracker Redis keys.
+
+    DAY/HOUR -> {namespace}:{subject_id}:daily:{YYYY-MM-DD}
     MONTH    -> sum of daily keys for current calendar month
+
+    ``namespace`` is ``llm_cost:by_agent`` for agents; chat budgets (#16845)
+    read ``by_user`` and ``by_tenant`` through the same period arithmetic.
     """
     r = await _get_redis()
     today = now_utc()
 
     if period in (PERIOD_DAY, PERIOD_HOUR):
         date_str = today.strftime("%Y-%m-%d")
-        val = await r.get(f"{_AGENT_COST_NS}:{agent_id}:daily:{date_str}")
+        val = await r.get(f"{namespace}:{subject_id}:daily:{date_str}")
         return float(val) if val else 0.0
 
     if period == PERIOD_MONTH:
@@ -197,7 +206,7 @@ async def get_period_spend(agent_id: str, period: str) -> float:
         keys: List[str] = []
         cursor = first_day
         while cursor <= today:
-            keys.append(f"{_AGENT_COST_NS}:{agent_id}:daily:{cursor.strftime('%Y-%m-%d')}")
+            keys.append(f"{namespace}:{subject_id}:daily:{cursor.strftime('%Y-%m-%d')}")
             cursor += timedelta(days=1)
         if not keys:
             return 0.0
