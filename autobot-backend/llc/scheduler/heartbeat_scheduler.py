@@ -835,12 +835,11 @@ async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> O
 async def _dispatch_autobot_agent(agent: Dict[str, Any], context: Dict[str, Any]) -> None:
     """Dispatch an in-process AutoBot agent via :class:`AutoBotAgentAdapter`."""
     adapter_config = agent.get("adapter_config") or {}
-    if not adapter_config.get("agent_class"):
-        # No agent_class configured — degraded skip, not a phantom success (GH#9951).
-        raise HeartbeatDispatchSkipped(
-            agent["agent_id"],
-            "no adapter_config.agent_class configured",
-        )
+    # No agent_class configured — degraded skip, not a phantom success (GH#9951).
+    # The same decision the agent lists show (#20519).
+    reason = adapter_block_reason("autobot_agent", adapter_config)
+    if reason is not None:
+        raise HeartbeatDispatchSkipped(agent["agent_id"], reason)
 
     # GH#8502: use run_blocking() so ProviderRateLimited propagates to _run_adapter
     # and triggers exponential-backoff recovery.  _run_adapter is already a

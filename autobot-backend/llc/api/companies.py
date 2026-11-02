@@ -817,7 +817,7 @@ class OrgChartNode(BaseModel):
     # quietly assert every agent is inactive.
     is_active: Optional[bool] = None
     heartbeat_enabled: Optional[bool] = None  # #15907: periodic schedule on/off; None for a person
-    # #20519: whether a run can start, and the dispatcher's reason when not; None for a person.
+    # #20519: run-start per the agent's own row (status, adapter), not pause/budget; None for a person.
     can_run: Optional[bool] = None
     cannot_run_reason: Optional[str] = None
     last_heartbeat: Optional[str]

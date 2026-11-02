@@ -8,10 +8,15 @@ from __future__ import annotations
 
 import uuid
 from types import SimpleNamespace
+from unittest.mock import patch
+
+import pytest
 
 from llc.api.agents import _agent_row
 from llc.api.companies import _compose_agent_node
+from llc.exceptions import HeartbeatDispatchSkipped
 from llc.scheduler.dispatch_gate import adapter_block_reason, run_block_reason
+from llc.scheduler.heartbeat_scheduler import _dispatch_autobot_agent
 
 _NO_CLASS = "no adapter_config.agent_class configured"
 
@@ -68,3 +73,18 @@ def test_org_chart_node_carries_the_same_fact():
     assert (node.can_run, node.cannot_run_reason) == (False, _NO_CLASS)
     ok = _compose_agent_node(_node("Alex"), None, None, 0)
     assert (ok.can_run, ok.cannot_run_reason) == (True, None)
+
+
+@pytest.mark.asyncio
+async def test_in_process_dispatch_skips_with_the_shared_gate_answer():
+    """Dispatch of an autobot_agent asks the one gate the lists ask, and keeps its text."""
+    agent = {"agent_id": "a1", "adapter_type": "autobot_agent", "adapter_config": {}}
+    with pytest.raises(HeartbeatDispatchSkipped) as real:
+        await _dispatch_autobot_agent(agent, {})
+    assert _NO_CLASS in str(real.value)
+    target = "llc.scheduler.heartbeat_scheduler.adapter_block_reason"
+    with patch(target, return_value="shared answer") as gate:
+        with pytest.raises(HeartbeatDispatchSkipped) as shared:
+            await _dispatch_autobot_agent(agent, {})
+    gate.assert_called_once_with("autobot_agent", {})
+    assert "shared answer" in str(shared.value)
