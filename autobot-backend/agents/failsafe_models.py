@@ -10,17 +10,27 @@ from autobot_shared.agent_model_tiers import AGENT_TIERS, TIER_MODELS
 from autobot_shared.ssot_config import AgentConfigurationError
 
 
-def failsafe_secondary_model(primary: str) -> str:
-    """The same model twice is no fallback: both tiers fail together, so that is refused.
+def failsafe_answer(response) -> str:
+    """The text of a response. ``llm.chat`` reports failure in ``error``, it doesn't raise."""
+    if response.error:
+        raise RuntimeError(response.error)
+    return response.content
 
-    Defaults to the tier table rather than raising when unset, because a host updated before its
-    environment is rendered again must not lose the failsafe over a missing fallback setting.
+
+def failsafe_secondary_model(primary: str) -> str:
+    """The stand-in model. The same model twice is no fallback: both tiers fail together.
+
+    Unset, it comes from the tier table, so a host whose environment isn't rendered yet keeps its
+    failsafe, and a host whose primary is set to that same model gets the other tier's. Only two
+    settings naming one model are refused.
     """
-    default = TIER_MODELS[AGENT_TIERS["llm_failsafe_secondary"]]
-    secondary = os.environ.get("AUTOBOT_LLM_FAILSAFE_SECONDARY_MODEL") or default
-    if secondary == primary:
+    explicit = os.environ.get("AUTOBOT_LLM_FAILSAFE_SECONDARY_MODEL")
+    if explicit and explicit == primary:
         raise AgentConfigurationError(
             f"AUTOBOT_LLM_FAILSAFE_MODEL and AUTOBOT_LLM_FAILSAFE_SECONDARY_MODEL are both {primary}: "
             "the failsafe has nothing to fall back to. Set them to different models."
         )
-    return secondary
+    if explicit:
+        return explicit
+    default = TIER_MODELS[AGENT_TIERS["llm_failsafe_secondary"]]
+    return default if default != primary else TIER_MODELS[AGENT_TIERS["llm_failsafe"]]

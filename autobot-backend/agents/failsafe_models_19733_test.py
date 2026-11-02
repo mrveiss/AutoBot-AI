@@ -48,6 +48,11 @@ def test_an_unset_secondary_uses_the_tier(monkeypatch) -> None:
     assert failsafe_secondary_model("m") == TIER_MODELS["light"]
 
 
+def test_a_host_already_on_the_default_secondary_gets_the_other_tier(monkeypatch) -> None:
+    monkeypatch.delenv("AUTOBOT_LLM_FAILSAFE_SECONDARY_MODEL", raising=False)
+    assert failsafe_secondary_model(TIER_MODELS["light"]) == TIER_MODELS["routing"]
+
+
 def test_the_fallback_really_asks_a_different_model() -> None:
     """Both tiers used to call the LLM with no model, so the names were only labels."""
     agent = LLMFailsafeAgent.__new__(LLMFailsafeAgent)
@@ -61,9 +66,9 @@ def test_the_fallback_really_asks_a_different_model() -> None:
     agent._build_llm_response = lambda response, tier, model, *rest, **kw: SimpleNamespace(tier=tier, model=model)
 
     async def chat(_messages, *, model_name, llm_type):
-        if model_name == "first":
-            raise ConnectionError("model not pulled")
-        return SimpleNamespace(content="an answer")
+        if model_name == "first":  # how llm.chat really reports a failure: it doesn't raise
+            return SimpleNamespace(content="", error="model not pulled")
+        return SimpleNamespace(content="an answer", error=None)
 
     service = MagicMock(chat=AsyncMock(side_effect=chat))
     with patch("services.llm_service.get_llm_service", return_value=service):

@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List
 
-from agents.failsafe_models import failsafe_secondary_model
+from agents.failsafe_models import failsafe_answer, failsafe_secondary_model
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
@@ -499,7 +499,7 @@ class LLMFailsafeAgent(StandardizedAgent):
                         llm.chat(messages, model_name=model, llm_type=LLMType.TASK),
                         timeout=self.timeouts[LLMTier.PRIMARY],
                     )
-                    response = response_data.content
+                    response = failsafe_answer(response_data)
                     if response and response.strip():
                         return self._build_llm_response(response, LLMTier.PRIMARY, model, context, start_time)
                 except asyncio.TimeoutError:
@@ -530,7 +530,7 @@ class LLMFailsafeAgent(StandardizedAgent):
                         llm.chat(messages, model_name=model, llm_type=LLMType.TASK),
                         timeout=self.timeouts[LLMTier.SECONDARY],
                     )
-                    response = response_data.content
+                    response = failsafe_answer(response_data)
                     if response and response.strip():
                         return self._build_llm_response(
                             response,
