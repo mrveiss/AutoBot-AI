@@ -33,20 +33,10 @@ from typing import Awaitable, Callable, Optional
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.redis_utils import delete_if_value
+from autobot_shared.redis_utils import delete_if_value, expire_if_value
 
 logger = get_logger(__name__)
 
-# Compare-and-extend in a single round-trip. A plain GET->PEXPIRE pair can be
-# split by a pause between the two calls, letting an expired leader extend a key
-# another worker has already taken.
-_REFRESH_LUA = """
-if redis.call('GET', KEYS[1]) == ARGV[1] then
-    return redis.call('PEXPIRE', KEYS[1], tonumber(ARGV[2]))
-else
-    return 0
-end
-"""
 
 # Lease lifetime, and how often the holder renews it. Refresh must stay well
 # under the TTL so a slow cycle does not drop a lease that is still held.
@@ -97,8 +87,7 @@ class LeaderLease:
             return False
         try:
             if self._is_leader:
-                held = await redis.eval(_REFRESH_LUA, 1, self.key, self.worker_id, str(self.ttl_ms))
-                return bool(held)
+                return await expire_if_value(redis, self.key, self.worker_id, self.ttl_ms)
             acquired = await redis.set(self.key, self.worker_id, nx=True, px=self.ttl_ms)
             return acquired is not None
         except Exception as exc:

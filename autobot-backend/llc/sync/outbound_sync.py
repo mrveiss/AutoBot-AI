@@ -27,6 +27,7 @@ from typing import Any, Dict, Optional
 
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_utils import expire_if_value
 
 logger = logging.getLogger(__name__)
 
@@ -42,16 +43,6 @@ _LEADER_TTL_MS = 30_000  # 30-second lease
 _LEADER_REFRESH_S = 10  # leader refreshes its lease every 10 s
 _LEADER_POLL_S = 15  # non-leaders poll every 15 s
 
-# Atomic compare-and-expire: refresh TTL only if the key still holds our
-# worker_id.  A plain GET→PEXPIRE pair is non-atomic and risks dual-leader
-# under GC pause or network delay.
-_REFRESH_LUA = """
-if redis.call('GET', KEYS[1]) == ARGV[1] then
-    return redis.call('PEXPIRE', KEYS[1], tonumber(ARGV[2]))
-else
-    return 0
-end
-"""
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Field mapping: LLC → external PM
@@ -377,10 +368,7 @@ class LLCOutboundSyncService:
             if self._is_leader:
                 # Atomic refresh via server-side Lua — prevents dual-leader from
                 # a non-atomic GET+PEXPIRE pair splitting under GC pause.
-                result = await redis.eval(  # noqa: S603  (Redis server-side Lua, not Python eval)
-                    _REFRESH_LUA, 1, _LEADER_KEY, self._worker_id, str(_LEADER_TTL_MS)
-                )
-                return bool(result)
+                return await expire_if_value(redis, _LEADER_KEY, self._worker_id, _LEADER_TTL_MS)
             else:
                 result = await redis.set(_LEADER_KEY, self._worker_id, nx=True, px=_LEADER_TTL_MS)
                 return result is not None
