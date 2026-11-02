@@ -50,6 +50,21 @@ DEFAULT_LINE = AiLine.DRAFT_THEN_SEND
 VERIFIED_COMPANY_KEY = "verified_company_id"
 #: ``context`` key holding the AUTHENTICATED user (never the request's ``user_id`` claim): the personal scope.
 VERIFIED_USER_KEY = "verified_user_id"
+#: ``context`` key set by the chat route ONLY when the STRICT session posture (admin, or the recorded owner)
+#: passed for this turn: attached conversation files are read for this turn only then (#20195). Written or removed
+#: on every overlay by ``apply_auth_role``, never left as a client sent it.
+VERIFIED_ATTACHMENT_ACCESS_KEY = "verified_attachment_access"
+#: ``context`` key the workflow sets each turn that carries attached files: file text is untrusted data in the
+#: prompt, so EVERY tool call of that turn waits for a person's approval (#20195). Set from the server's own
+#: check on every turn; a client sending it can only tighten its own turn.
+ATTACHMENT_TURN_KEY = "attachment_turn"
+#: ``context`` key set from the SERVER's durable record that this chat once used an attachment: model output derived
+#: from a file sits in its history, so every tool call of every later turn waits for a person too (#20195). Removed
+#: from whatever a client sent and written only from the record (``chat_workflow.attachment_floor``).
+ATTACHMENT_CHAT_KEY = "attachment_chat"
+#: ``context`` key set from the admin-only SLM setting ``chat.auto_approve_attachment_turns`` (off by default): when
+#: present the two keys above no longer force asking and the normal AI lines apply (#20195). Server-set each turn.
+ATTACHMENT_AUTO_APPROVE_KEY = "attachment_auto_approve"
 
 #: A line is stored under a scope: a company, or -- for a user with no company -- the user alone (#18430).
 SCOPE_COMPANY = "company"
