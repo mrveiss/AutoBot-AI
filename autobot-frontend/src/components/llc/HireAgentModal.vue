@@ -67,6 +67,7 @@
 import { ref } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { isPendingApproval } from '@/utils/pendingApproval'
 import { BaseAlert, BaseModal, BaseSwitch, BaseButton } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import AdapterTypeSelect from './AdapterTypeSelect.vue'
@@ -103,7 +104,7 @@ async function submit(): Promise<void> {
       adapter_type: adapterType.value,
       heartbeat_enabled: heartbeatEnabled.value,
     })
-    if ((result as { status?: string } | null)?.status === 'pending_approval') {
+    if (isPendingApproval(result)) {
       pending.value = true
       return
     }
