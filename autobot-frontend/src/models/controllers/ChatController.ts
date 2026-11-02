@@ -1,16 +1,16 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
-import { useChatStore } from '@/stores/useChatStore'
+import { useChatStore, type ChatSession } from '@/stores/useChatStore'
 import { useAppStore } from '@/stores/useAppStore'
 import { chatRepository } from '@/models/repositories'
 import apiClient from '@/utils/ApiClient'
-import type { ChatSession } from '@/stores/useChatStore'
 import { createLogger } from '@/utils/debugUtils'
 import { extractErrorMessage } from '@/utils/errorExtract'
 import i18n from '@/i18n'
 import type { ChatMessage, ChatMessageDisplayType } from '@/types/api'
 import { requestQueue } from '@/composables/useRequestQueue'
 import { stripBracketTags, stripProtocolTagsForDisplay } from '@/utils/llmProtocolTags'
+import { showAttachmentNotice } from '@/utils/attachmentNotice'
 
 const logger = createLogger('ChatController')
 
@@ -325,7 +325,7 @@ export class ChatController {
     }, ChatController.PREVIEW_THROTTLE_MS)
   }
 
-  private async handleStreamingResponse(response: Response): Promise<void> {
+  async handleStreamingResponse(response: Response): Promise<void> {
     const reader = response.body?.getReader()
     if (!reader) {
       throw new Error('No response stream available')
@@ -400,6 +400,7 @@ export class ChatController {
         logger.debug('Stream ended:', data.type)
         return fallbackMessageId
       }
+      if (data.type === 'attachment_notice') { showAttachmentNotice(data.metadata); return fallbackMessageId } // #20195
       if (data.type === 'segment_complete') {
         logger.debug(`Segment complete: ${data.metadata?.completed_type}`)
         const backendId = data.metadata?.message_id
@@ -979,7 +980,6 @@ export class ChatController {
   async resetCurrentChat(): Promise<void> {
     return this.resetChat()
   }
-
 
   // Enhanced validation helpers
   validateMessage(content: string): { valid: boolean; error?: string } {
