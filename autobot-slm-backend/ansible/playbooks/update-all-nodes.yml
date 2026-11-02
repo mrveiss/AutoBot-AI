@@ -2492,20 +2492,21 @@
       delay: 10
 
     # #20250: the agents reconnect after the restarts above, so read the count once they have had
-    # time to. The summary line right after the restart said "Nodes: 0/2" on a healthy update, and
-    # a node really left offline read the same. Not a failure of this task: the marker below says it.
+    # time to. Only a run that touched the SLM's own host: a per-node update has --limit localhost,<node>
+    # and needn't wait for the whole fleet. Not a failure of this task: the marker below says it.
     - name: Wait for the nodes to report back
       uri:
         url: "https://{{ slm_host }}/slm/api/health"
         validate_certs: false
         status_code: 200
-      register: slm_health
+      register: fleet_nodes_health
       until: >-
-        slm_health.status == 200 and
-        (slm_health.json.nodes_online | default(0) | int) >= (slm_health.json.nodes_total | default(0) | int)
+        fleet_nodes_health.status == 200 and
+        (fleet_nodes_health.json.nodes_online | default(0) | int) >= (fleet_nodes_health.json.nodes_expected_online | default(0) | int)
       retries: "{{ update_nodes_online_retries | default(18) }}"
       delay: "{{ update_nodes_online_delay | default(10) }}"
       failed_when: false
+      when: ansible_limit is not defined or (ansible_limit.split(',') | intersect(groups['slm_server'] | default([]))) | length > 0
 
     - name: Clean up deploy archives
       file:
@@ -2517,9 +2518,11 @@
       debug:
         msg: >-
           NODES OFFLINE AFTER UPDATE:
-          {{ (slm_health.json.nodes_total | default(0) | int) - (slm_health.json.nodes_online | default(0) | int) }}
-          of {{ slm_health.json.nodes_total | default(0) | int }}
-      when: (slm_health.json.nodes_online | default(0) | int) < (slm_health.json.nodes_total | default(0) | int)
+          {{ (fleet_nodes_health.json.nodes_expected_online | default(0) | int) - (fleet_nodes_health.json.nodes_online | default(0) | int) }}
+          of {{ fleet_nodes_health.json.nodes_expected_online | default(0) | int }}
+      when:
+        - fleet_nodes_health.json is defined
+        - (fleet_nodes_health.json.nodes_online | default(0) | int) < (fleet_nodes_health.json.nodes_expected_online | default(0) | int)
 
     - name: Display update summary
       debug:

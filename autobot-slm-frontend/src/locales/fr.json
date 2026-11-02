@@ -256,6 +256,7 @@
     "update": "Mettre à jour"
   },
   "codeSyncView": {
+    "nodesOfflineAfterUpdate": "The last update finished, but {offline} of {total} nodes still haven't reported back. They may need attention.",
     "actions": "Actes",
     "addSchedule": "Add Schedule",
     "advancedDiagnostics": "Advanced / Diagnostics",

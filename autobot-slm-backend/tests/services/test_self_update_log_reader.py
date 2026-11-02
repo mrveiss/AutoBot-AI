@@ -391,7 +391,8 @@ def _finished_log(tmp_path, *extra):
 def test_nodes_left_offline_dont_read_as_a_plain_success_20250(tmp_path) -> None:
     log = _finished_log(tmp_path, 'ok: [h] => {"msg": "NODES OFFLINE AFTER UPDATE: 1 of 2"}')
     verdict = read_self_update_verdict(log)
-    assert verdict.degraded is True
+    assert verdict.degraded is False, "a warning: failing the stage would stop Update All reaching those nodes"
+    assert verdict.nodes_offline == 1 and verdict.nodes_total == 2
     assert "1 of 2 nodes are still offline" in verdict.reason
 
 

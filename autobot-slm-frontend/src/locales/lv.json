@@ -256,6 +256,7 @@
     "update": "Atjaunināt"
   },
   "codeSyncView": {
+    "nodesOfflineAfterUpdate": "The last update finished, but {offline} of {total} nodes still haven't reported back. They may need attention.",
     "actions": "Darbības",
     "addSchedule": "Add Schedule",
     "advancedDiagnostics": "Advanced / Diagnostics",

@@ -114,7 +114,8 @@ class SelfUpdateVerdict:
     #: caller can tell WHICH run this verdict describes. ``None`` when the log
     #: carries no header (a pre-#12776 log, or the "nothing to say" verdicts).
     run_started_at: str | None = None
-    #: #20250: nodes that hadn't reported back when the run finished waiting for them.
+    #: #20250: nodes that hadn't reported back when the run finished waiting for them. A warning, not
+    #: `degraded`: failing the self-update stage would stop Update All from reaching those very nodes.
     nodes_offline: int = 0
     nodes_total: int = 0
 
@@ -131,7 +132,7 @@ class SelfUpdateVerdict:
             return True
         if not self.log_present:
             return False
-        return not self.complete or self.failed_hosts > 0 or self.unreachable_hosts > 0 or self.nodes_offline > 0
+        return not self.complete or self.failed_hosts > 0 or self.unreachable_hosts > 0
 
 
 def _read_tail(path: Path, max_bytes: int = MAX_LOG_BYTES) -> str | None:

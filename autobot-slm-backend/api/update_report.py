@@ -38,6 +38,17 @@ async def _deploy_runs_since(db: AsyncSession, started_at: str | None) -> list[D
     return list(result.scalars().all())
 
 
+@router.get("/update-all/nodes-offline")
+async def get_nodes_offline_after_update(
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
+) -> dict[str, int]:
+    """Nodes the last self-update left offline (#20250): a warning, so the update page says so."""
+    from services.self_update_log_reader import read_self_update_verdict
+
+    verdict = read_self_update_verdict(SELF_UPDATE_LOG_PATH)
+    return {"nodes_offline": verdict.nodes_offline, "nodes_total": verdict.nodes_total}
+
+
 @router.get("/update-all/report")
 async def get_update_report(
     _: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
