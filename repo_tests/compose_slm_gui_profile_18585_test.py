@@ -75,7 +75,10 @@ def test_the_slm_gui_starts_by_default_on_its_own_ports_and_pulls_in_no_platform
     services = _services()
     gui = services["autobot-slm-gui"]
     assert "profiles" not in gui, "#20620: the SLM must be running on a default compose stack"
-    assert gui["ports"] == ["${AUTOBOT_DOCKER_SLM_HTTP_PORT:-8080}:80", "${AUTOBOT_DOCKER_SLM_HTTPS_PORT:-8443}:443"]
+    assert gui["ports"] == [
+        "${AUTOBOT_DOCKER_SLM_BIND_ADDRESS:-127.0.0.1}:${AUTOBOT_DOCKER_SLM_HTTP_PORT:-8080}:80",
+        "${AUTOBOT_DOCKER_SLM_BIND_ADDRESS:-127.0.0.1}:${AUTOBOT_DOCKER_SLM_HTTPS_PORT:-8443}:443",
+    ]
     assert gui["build"]["target"] == "slm-gui"
     deps = _deps(services, "autobot-slm-gui")
     assert "autobot-slm" in deps
@@ -127,8 +130,6 @@ def test_the_slm_gui_switches_to_tls_like_the_frontend() -> None:
     volumes = gui["volumes"]
     assert "${AUTOBOT_DOCKER_SLM_NGINX_CONF:-./docker/nginx/nginx-slm.conf}:/etc/nginx/nginx.conf:ro" in volumes
     assert "./docker/certs:/etc/nginx/certs:ro" in volumes, "the TLS config would find no certificate"
-    assert "${AUTOBOT_DOCKER_SLM_HTTP_PORT:-8080}:80" in gui["ports"]
-    assert "${AUTOBOT_DOCKER_SLM_HTTPS_PORT:-8443}:443" in gui["ports"], "a taken host port must not block start"
 
 
 def test_tls_settings_are_defined_once() -> None:

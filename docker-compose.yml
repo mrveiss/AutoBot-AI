@@ -739,9 +739,10 @@ services:
     container_name: autobot-slm-gui
     restart: unless-stopped
     ports:
-      # #20620: starts by default, on its own ports, because the frontend holds 80 and 443.
-      - "${AUTOBOT_DOCKER_SLM_HTTP_PORT:-8080}:80"
-      - "${AUTOBOT_DOCKER_SLM_HTTPS_PORT:-8443}:443"
+      # #20620: starts by default, on its own ports, because the frontend holds 80 and 443. Local
+      # only by default: without TLS, an admin login would cross the network in plain text.
+      - "${AUTOBOT_DOCKER_SLM_BIND_ADDRESS:-127.0.0.1}:${AUTOBOT_DOCKER_SLM_HTTP_PORT:-8080}:80"
+      - "${AUTOBOT_DOCKER_SLM_BIND_ADDRESS:-127.0.0.1}:${AUTOBOT_DOCKER_SLM_HTTPS_PORT:-8443}:443"
     volumes:
       # nginx config: HTTP-only by default, like autobot-frontend.
       # For TLS: set AUTOBOT_DOCKER_SLM_NGINX_CONF=./docker/nginx/nginx-slm-ssl.conf (#18593)

@@ -86,3 +86,12 @@ register_env_var(
         component="slm",
     )
 )
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DOCKER_SLM_BIND_ADDRESS",
+        type=str,
+        default="127.0.0.1",
+        description="Host address the compose SLM GUI publishes on. Use TLS before opening it to the network (#20620).",
+        component="slm",
+    )
+)

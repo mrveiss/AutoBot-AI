@@ -29,7 +29,7 @@ _VARS = {
 }
 
 
-def _run(tmp_path: Path, state: str, healthy: bool, updating: bool = False) -> list[str]:
+def _run(tmp_path: Path, state: str, healthy: bool, updating: bool = False, pid: int = 100) -> list[str]:
     """One tick; returns the systemctl actions it took (is-active itself is not an action)."""
     bash = shutil.which("bash")
     if bash is None:
@@ -40,6 +40,7 @@ def _run(tmp_path: Path, state: str, healthy: bool, updating: bool = False) -> l
     log.write_text("", encoding="utf-8")
     (bin_dir / "systemctl").write_text(
         f'#!/bin/sh\nif [ "$1" = is-active ]; then echo {state}; exit 0; fi\n'
+        f'if [ "$1" = show ]; then echo {pid}; exit 0; fi\n'
         f'if [ "$1" = list-units ]; then {"echo autobot-selfupdate-1.service" if updating else ":"}; exit 0; fi\n'
         f'echo "$*" >> {log}\n',
         encoding="utf-8",
@@ -78,6 +79,14 @@ def test_a_hung_slm_is_restarted_only_after_the_limit(tmp_path) -> None:
     assert _run(tmp_path, "active", healthy=False) == []
     assert _run(tmp_path, "active", healthy=False) == []
     assert _run(tmp_path, "active", healthy=False) == ["restart --no-block autobot-slm-backend"]
+
+
+def test_a_replacement_process_gets_its_full_allowance(tmp_path) -> None:
+    _run(tmp_path, "active", healthy=False, pid=100)
+    _run(tmp_path, "active", healthy=False, pid=100)
+    assert _run(tmp_path, "active", healthy=False, pid=200) == []
+    assert _run(tmp_path, "active", healthy=False, pid=200) == []
+    assert _run(tmp_path, "active", healthy=False, pid=200) == ["restart --no-block autobot-slm-backend"]
 
 
 def test_recovering_resets_the_count(tmp_path) -> None:

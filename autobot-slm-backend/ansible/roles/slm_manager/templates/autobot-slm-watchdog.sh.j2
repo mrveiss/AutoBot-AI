@@ -47,8 +47,12 @@ if curl -fsS -m {{ slm_watchdog_health_timeout }} -o /dev/null "$health_url"; th
     exit 0
 fi
 
-failures=$(( $(cat "$counter" 2>/dev/null || echo 0) + 1 ))
-echo "$failures" >"$counter"
+# The count belongs to one process: a replacement gets its full allowance to start.
+pid="$(systemctl show -p MainPID --value "$unit" 2>/dev/null)"
+read -r counted_pid failures <"$counter" 2>/dev/null || true
+[ "${counted_pid:-}" = "$pid" ] || failures=0
+failures=$(( ${failures:-0} + 1 ))
+echo "$pid $failures" >"$counter"
 if [ "$failures" -lt "$max_failures" ]; then
     log warning "$unit failed its health check ($failures of $max_failures)"
     exit 0

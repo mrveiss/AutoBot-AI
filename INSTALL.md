@@ -245,7 +245,7 @@ bash docker/generate-secrets.sh
 docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d --build autobot-slm-gui
 ```
 
-The SLM GUI is then at **http://localhost:8080/slm/**. It has its own ports, so it runs alongside the full stack's frontend, and it starts with the full stack too. Change them with `AUTOBOT_DOCKER_SLM_HTTP_PORT` and `AUTOBOT_DOCKER_SLM_HTTPS_PORT` (default 8443).
+The SLM GUI is then at **http://localhost:8080/slm/**. It has its own ports, so it runs alongside the full stack's frontend, and it starts with the full stack too. Change them with `AUTOBOT_DOCKER_SLM_HTTP_PORT` and `AUTOBOT_DOCKER_SLM_HTTPS_PORT` (default 8443). It listens on this machine only by default, because plain HTTP would send the admin login across the network in clear text. To reach it from another machine, select the TLS config below and set `AUTOBOT_DOCKER_SLM_BIND_ADDRESS=0.0.0.0`.
 
 To serve it over HTTPS, put a certificate in `docker/certs/` (`autobot.crt` and `autobot.key`;
 `bash docker/certs/generate-self-signed.sh` makes a self-signed pair for testing) and select
