@@ -9,10 +9,11 @@ A compose node is a container, with no SSH or systemd to reach: the node's id is
 
 import logging
 import os
-from typing import Tuple
+from typing import Iterable, Tuple
 
 import aiohttp
 
+from autobot_shared.egress_allowlist import register_internal_origin_provider
 from autobot_shared.http_egress_guard import assert_egress_policy
 
 logger = logging.getLogger(__name__)
@@ -20,10 +21,17 @@ logger = logging.getLogger(__name__)
 _ACTION_TIMEOUT_SECONDS = 90
 
 
-def is_compose_node(node) -> bool:
-    from services.compose_fleet import _SELF_MANAGED_NODE_IDS
+async def _proxy_origin() -> Iterable[str]:
+    """The proxy's address is private and comes from configuration, so egress policy must know it."""
+    url = os.getenv("AUTOBOT_DOCKER_PROXY_URL", "")
+    return [url] if url else []
 
-    return node.node_id in _SELF_MANAGED_NODE_IDS
+
+def is_compose_node(node) -> bool:
+    """Only a container this stack seeded. The SLM's own node on a native install isn't one."""
+    from services.compose_fleet import _COMPOSE_NODE_SPECS, _compose_nodes_enabled
+
+    return _compose_nodes_enabled() and any(spec["id"] == node.node_id for spec in _COMPOSE_NODE_SPECS)
 
 
 async def run_compose_service_action(node, service_name: str, action: str) -> Tuple[bool, str]:
@@ -32,6 +40,7 @@ async def run_compose_service_action(node, service_name: str, action: str) -> Tu
     headers = {"X-Docker-Proxy-Token": os.getenv("AUTOBOT_DOCKER_PROXY_TOKEN", "")}
     timeout = aiohttp.ClientTimeout(total=_ACTION_TIMEOUT_SECONDS)
     try:
+        register_internal_origin_provider(_proxy_origin)
         await assert_egress_policy(url)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(url, headers=headers, allow_redirects=False) as response:

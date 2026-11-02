@@ -580,7 +580,7 @@ services:
       - ./docker/docker-proxy/proxy.py:/app/proxy.py:ro
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      - AUTOBOT_DOCKER_PROXY_TOKEN=${AUTOBOT_DOCKER_PROXY_TOKEN:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}
+      - AUTOBOT_DOCKER_PROXY_TOKEN=${AUTOBOT_DOCKER_PROXY_TOKEN:-}
       - DOCKER_PROXY_PORT=2375
     read_only: true
     cap_drop:
@@ -627,7 +627,7 @@ services:
       - AUTOBOT_COMPOSE_LEGACY_DB_VARS=${AUTOBOT_DB_USER:+AUTOBOT_DB_USER }${AUTOBOT_DB_NAME:+AUTOBOT_DB_NAME }${AUTOBOT_USERS_DB_NAME:+AUTOBOT_USERS_DB_NAME}
       - SLM_POSTGRES_HOST=autobot-postgres
       - AUTOBOT_DOCKER_PROXY_URL=http://autobot-docker-proxy:2375
-      - AUTOBOT_DOCKER_PROXY_TOKEN=${AUTOBOT_DOCKER_PROXY_TOKEN:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}
+      - AUTOBOT_DOCKER_PROXY_TOKEN=${AUTOBOT_DOCKER_PROXY_TOKEN:-}
       - SLM_ADMIN_PASSWORD=${SLM_ADMIN_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}
       - SLM_DATA_DIR=/app/data
       # Point LoggingManager at the writable slm_logs volume so read_only: true

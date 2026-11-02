@@ -50,8 +50,8 @@ def _ask(method: str, path: str):
 
 @pytest.mark.parametrize("action", ["start", "stop", "restart"])
 def test_listed_actions_reach_docker_on_our_container(action) -> None:
-    status, _, calls = _ask("POST", f"/containers/autobot-redis/{action}")
-    assert status == 200 and ("POST", f"/containers/autobot-redis/{action}") in calls
+    status, _, calls = _ask("POST", f"/containers/autobot-backend/{action}")
+    assert status == 200 and ("POST", f"/containers/autobot-backend/{action}") in calls
 
 
 def test_inspect_gives_only_a_summary_never_the_environment() -> None:
@@ -93,6 +93,12 @@ def test_everything_else_is_refused_before_a_write_reaches_docker(method, path) 
 def test_another_projects_container_is_refused() -> None:
     status, _, calls = _ask("POST", "/containers/other/restart")
     assert status == 404 and ("POST", "/containers/other/restart") not in calls
+
+
+@pytest.mark.parametrize("name", sorted(proxy.NEVER_STOP))
+def test_what_runs_the_slm_can_be_restarted_but_not_stopped(name) -> None:
+    assert _ask("POST", f"/containers/{name}/stop")[0] == 403
+    assert _ask("POST", f"/containers/{name}/restart")[0] == 200
 
 
 def test_the_proxy_does_not_act_on_itself() -> None:

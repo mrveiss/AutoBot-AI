@@ -25,6 +25,8 @@ from urllib.parse import quote
 SOCKET_PATH = os.environ.get("DOCKER_PROXY_SOCKET", "/var/run/docker.sock")
 PROJECT_LABEL = "com.docker.compose.project"
 ACTIONS = {"start", "stop", "restart"}
+#: The SLM and what it needs to run: stopping one from the SLM could leave nobody to start it again.
+NEVER_STOP = {"autobot-slm", "autobot-slm-gui", "autobot-slm-postgres", "autobot-redis"}
 LOG_LINES = 200
 _NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$")
 
@@ -103,6 +105,8 @@ def handle(docker: Docker, project: str, own_name: str, method: str, path: str) 
         return (200, {"logs": body.decode("utf-8", "replace")}) if status == 200 else (502, {"error": "logs failed"})
     if name == own_name:  # it could not answer afterwards, and the SLM would lose its way back
         return 403, {"error": "the proxy does not act on itself"}
+    if action == "stop" and name in NEVER_STOP:
+        return 403, {"error": "this container runs the SLM and can only be restarted"}
     status, _body = docker("POST", f"/containers/{quote(name)}/{action}")
     if status in (204, 304):  # 304: already in that state
         return 200, {"name": name, "action": action}
