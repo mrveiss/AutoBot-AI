@@ -73,7 +73,6 @@ const { t } = useI18n()
 
 // Role ownership map: role_name -> node_id (#1389)
 const roleOwners = ref<Record<string, string>>({})
-const ORCH_INFRA_ROLES = ['autobot_shared', 'slm-agent']
 
 // The Redis panel acts on the node holding the `redis` role, through that role's unit (#16245).
 // #16025 made systemd_service a sequence (a role can own >1 unit); redis owns exactly one.
@@ -393,11 +392,7 @@ function warnIfNothingWillDeploy(unreachable?: string[]): void {
 async function assignRoleToNode(nodeId: string, roleName: string): Promise<void> {
   // Warn if role is already assigned to another node (#1389)
   const currentOwner = roleOwners.value[roleName]
-  if (
-    currentOwner &&
-    currentOwner !== nodeId &&
-    !ORCH_INFRA_ROLES.includes(roleName)
-  ) {
+  if (currentOwner && currentOwner !== nodeId) {
     const ownerLabel = getRoleOwnerLabel(roleName)
     const confirmed = confirm(
       `Role "${roleName}" is currently assigned to ${ownerLabel}. ` +
