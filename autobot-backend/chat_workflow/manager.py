@@ -3844,20 +3844,18 @@ before summarizing.
         self,
         session_id: str,
         decision: Dict[str, Any],
+        auth_scope: dict | None = None,
     ):
-        """Resume a paused graph after command approval interrupt.
-
-        Issue #1043: Called when the user approves or denies a command.
-        The graph resumes from its checkpointed state with the decision.
-        """
+        """Resume a paused graph after a command approval decision (#1043), as the caller (#16845 gate, #19241)."""
         from langgraph.types import Command
 
         from .graph import get_compiled_graph
 
         graph = await get_compiled_graph(self)
-        async with aclosing(stream_graph_turn(self, graph, session_id, Command(resume=decision))) as turn:
-            async for msg in turn:
-                yield msg
+        with llm_principal_scope_for(auth_scope):
+            async with aclosing(stream_graph_turn(self, graph, session_id, Command(resume=decision))) as turn:
+                async for msg in turn:
+                    yield msg
 
     async def shutdown(self):
         """Shutdown the workflow manager and clean up resources."""

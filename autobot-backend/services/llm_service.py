@@ -256,8 +256,8 @@ class LLMService:
         )
         if cached is not None:
             return cached
-        if (refusal := await chat_budget_refusal()) is not None:  # budget gate, before any spend (#16845)
-            return _build_error_response(request, refusal, "budget")
+        if (refusal := await chat_budget_refusal(request)) is not None:  # budget gate, before any spend (#16845)
+            return refusal
 
         # GH#8998: Track attempted models to avoid infinite loops
         attempted_models: List[str] = []
@@ -553,8 +553,8 @@ class LLMService:
                 request_id=request_id,
                 **llm_params,
             )
-            if (refusal := await chat_budget_refusal()) is not None:  # budget gate (#16845)
-                return _build_error_response(request, refusal, "budget")
+            if (refusal := await chat_budget_refusal(request)) is not None:  # budget gate (#16845)
+                return refusal
 
             provider = self._registry.get_provider_by_name("vllm")
             if provider is None:

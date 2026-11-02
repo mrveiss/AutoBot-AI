@@ -33,14 +33,17 @@ from typing import Any, List, Tuple
 
 from fastapi import HTTPException
 
+from autobot_shared.category_defaults import CategoryDefaults
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
 from autobot_shared.time_utils import now_utc
 from constants.ttl_constants import TTL_90_DAYS
+from llm_shared.models import LLMResponse
 from llm_shared.run_credentials import get_llm_principal
 from services.budget_policy import (
     ACTION_ALERT_THEN_PAUSE,
     ACTION_PAUSE,
+    PERIOD_HOUR,
     SCOPE_TENANT,
     SCOPE_USER,
     BudgetPolicy,
@@ -101,6 +104,10 @@ async def _first_hard_stop(scope: str, scope_id: str) -> ChatBudgetExceeded | No
     for policy in await list_policies_for_scope(scope, scope_id):
         if policy.action not in _REFUSING_ACTIONS or policy.threshold_usd <= 0:
             continue
+        if policy.period == PERIOD_HOUR:
+            # No hourly counter exists: ``get_namespace_period_spend`` answers an hour policy with the DAY total,
+            # which would refuse someone under their hourly budget. Skipped until an hourly counter is written.
+            continue
         spend = await get_namespace_period_spend(_SCOPE_NAMESPACES[scope], scope_id, policy.period)
         if spend >= policy.threshold_usd:
             return ChatBudgetExceeded(policy, spend)
@@ -160,17 +167,42 @@ async def enforce_chat_budget(user_id: str | None = None, org_id: str | None = N
         raise exceeded
 
 
-async def chat_budget_refusal() -> str | None:
-    """The refusal message when the caller's budget is exhausted, else None.
+async def chat_budget_refusal(request: Any) -> LLMResponse | None:
+    """An error ``LLMResponse`` marked as a budget refusal when the caller's budget is exhausted, else None.
 
     For callers whose contract is an error *response* rather than an exception
-    (``LLMService.chat``).
+    (``LLMService.chat``). The marker is ``metadata["error_code"]``; recognise it
+    with :func:`is_budget_refusal` / :func:`budget_refusal_reply`, never by the text.
     """
     try:
         await enforce_chat_budget()
     except ChatBudgetExceeded as exc:
-        return exc.message
+        return LLMResponse(
+            content="",
+            model=request.model_name or "",
+            provider="budget",
+            request_id=request.request_id,
+            error=exc.message,
+            metadata={"error_code": CHAT_BUDGET_ERROR_CODE, **_refusal_detail(exc)},
+        )
     return None
+
+
+def _refusal_detail(exc: ChatBudgetExceeded) -> dict[str, Any]:
+    return {"i18n_key": exc.detail["i18n_key"], "i18n_params": exc.detail["i18n_params"]}
+
+
+def is_budget_refusal(response: Any) -> bool:
+    """True for a response built by :func:`chat_budget_refusal`."""
+    return (getattr(response, "metadata", None) or {}).get("error_code") == CHAT_BUDGET_ERROR_CODE
+
+
+def budget_refusal_reply(response: Any) -> dict[str, Any] | None:
+    """The assistant reply dict (with its i18n metadata) for a budget-refusal response, else None."""
+    if not is_budget_refusal(response):
+        return None
+    meta = {k: response.metadata[k] for k in ("error_code", "i18n_key", "i18n_params")}
+    return {"content": response.error, "role": CategoryDefaults.ROLE_ASSISTANT, "metadata": meta}
 
 
 def attributed_user(user_id: str | None) -> str | None:

@@ -148,7 +148,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
     "autobot-backend/chat_workflow/graph.py": 1643,  # train 50: #18993 on main's 1652
     "autobot-backend/chat_workflow/llm_handler.py": 1300,
-    "autobot-backend/chat_workflow/manager.py": 3880,  # #16845: budget gate before the ollama call
+    "autobot-backend/chat_workflow/manager.py": 3878,  # #16845: budget gate before the ollama call
     "autobot-backend/chat_workflow/tool_handler.py": 3617,  # #19950 (MCP approval message moved out)
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
