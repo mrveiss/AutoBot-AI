@@ -160,7 +160,7 @@ def _found(phases: Sequence[Tuple[str, int]]) -> str:
     return ", ".join(f"`{name}`" for name, _ in phases) if phases else "none"
 
 
-def _milestone_item(milestone: Optional[str]) -> Optional[str]:
+def milestone_item(milestone: Optional[str]) -> Optional[str]:
     if goal_number(milestone) is not None:
         return None
     if not milestone:
@@ -168,7 +168,7 @@ def _milestone_item(milestone: Optional[str]) -> Optional[str]:
     return f"a goal milestone `M<n> - ...`: `{milestone}` is not a goal milestone"
 
 
-def _phase_item(milestone: Optional[str], labels: Sequence[str]) -> Optional[str]:
+def phase_item(milestone: Optional[str], labels: Sequence[str]) -> Optional[str]:
     goal = goal_number(milestone)
     phases = phase_labels(labels)
     if goal is None:
@@ -189,7 +189,7 @@ def _parent_item(facts: Facts) -> Optional[str]:
 
 def missing_items(facts: Facts) -> List[str]:
     """Every structure requirement this issue does not meet, in a fixed order."""
-    items = (_milestone_item(facts.milestone), _phase_item(facts.milestone, facts.labels), _parent_item(facts))
+    items = (milestone_item(facts.milestone), phase_item(facts.milestone, facts.labels), _parent_item(facts))
     return [item for item in items if item]
 
 
