@@ -78,7 +78,7 @@ _RECORD_FAILURE_SQL = """
 _STUCK_LISTED = 50
 
 
-def max_attempts() -> int:
+def cleanup_max_attempts() -> int:
     """Refusals after which a file is no longer proposed (``AUTOBOT_CONVERSATION_FILE_CLEANUP_MAX_ATTEMPTS``)."""
     return max(1, int(env("AUTOBOT_CONVERSATION_FILE_CLEANUP_MAX_ATTEMPTS")))
 
@@ -93,7 +93,7 @@ async def list_cleanup_candidates(manager) -> List[Dict[str, Any]]:
     connection = await manager._get_async_db_connection()
     try:
         await connection.execute(_ATTEMPTS_DDL)
-        params = (max_attempts(), f"-{cooldown_seconds()} seconds")
+        params = (cleanup_max_attempts(), f"-{cooldown_seconds()} seconds")
         async with connection.execute(_CANDIDATES_SQL, params) as cursor:
             return [dict(row) for row in await cursor.fetchall()]
     finally:
@@ -105,7 +105,7 @@ async def pending_cleanup_stats(connection) -> Dict[str, Any]:
     await connection.execute(_ATTEMPTS_DDL)
     async with connection.execute(_PENDING_STATS_SQL) as cursor:
         row = await cursor.fetchone()
-    async with connection.execute(_STUCK_SQL, (max_attempts(),)) as cursor:
+    async with connection.execute(_STUCK_SQL, (cleanup_max_attempts(),)) as cursor:
         stuck = [dict(r) for r in await cursor.fetchall()]
     return {
         "pending_cleanup_files": row["files"] or 0,
@@ -122,7 +122,7 @@ async def _record_failure(connection, file_id: str, reason: str) -> None:
     async with connection.execute(_RECORD_FAILURE_SQL, (file_id, reason)) as cursor:
         attempts = (await cursor.fetchone())[0]
     await connection.commit()
-    if attempts >= max_attempts():
+    if attempts >= cleanup_max_attempts():
         logger.warning(
             "Conversation file %s is stuck: removal refused %d time(s), last reason: %s; no longer proposed",
             file_id,
