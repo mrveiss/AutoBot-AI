@@ -302,17 +302,17 @@ function onRawJson(text: string) {
 .field-label {
   font-size: var(--text-sm, 0.875rem);
   font-weight: 600;
-  color: var(--text-primary, #111);
+  color: var(--text-primary);
 }
 
 .required-mark {
-  color: var(--color-error, #ef4444);
+  color: var(--color-error);
   margin-left: 2px;
 }
 
 .field-description {
   font-size: var(--text-xs, 0.75rem);
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   margin: 0;
 }
 
@@ -320,12 +320,12 @@ function onRawJson(text: string) {
 .field-select,
 .field-json {
   width: 100%;
-  background: var(--bg-secondary, #f9fafb);
-  border: 1px solid var(--border-default, #e5e7eb);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md, 0.375rem);
   padding: var(--spacing-xs, 0.25rem) var(--spacing-sm, 0.5rem);
   font-size: var(--text-sm, 0.875rem);
-  color: var(--text-primary, #111);
+  color: var(--text-primary);
   box-sizing: border-box;
 }
 
@@ -333,13 +333,13 @@ function onRawJson(text: string) {
 .field-select:focus,
 .field-json:focus {
   outline: none;
-  border-color: var(--color-primary, #6366f1);
+  border-color: var(--color-primary);
 }
 
 .field-checkbox {
   width: 1rem;
   height: 1rem;
-  accent-color: var(--color-primary, #6366f1);
+  accent-color: var(--color-primary);
   cursor: pointer;
 }
 
@@ -359,26 +359,26 @@ function onRawJson(text: string) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: var(--bg-tertiary, #f3f4f6);
-  border: 1px solid var(--border-default, #e5e7eb);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-default, 0.25rem);
   padding: 2px var(--spacing-1-5, 0.375rem);
   font-size: var(--text-xs, 0.75rem);
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .tag-remove {
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
   padding: 0;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   line-height: 1;
 }
 
 .tag-remove:hover {
-  color: var(--color-error, #ef4444);
+  color: var(--color-error);
 }
 
 .tags-input {
@@ -387,7 +387,7 @@ function onRawJson(text: string) {
 
 .fallback-hint {
   font-size: var(--text-xs, 0.75rem);
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   margin: 0;
   font-style: italic;
 }
@@ -400,7 +400,7 @@ function onRawJson(text: string) {
 
 .json-error {
   font-size: var(--text-sm, 0.875rem);
-  color: var(--color-error, #ef4444);
+  color: var(--color-error);
   margin: 0;
 }
 </style>

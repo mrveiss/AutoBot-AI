@@ -256,7 +256,7 @@ const downloadImage = (url: string, index: number) => {
 
 .provider-badge,
 .size-badge {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   padding: 0.125rem 0.5rem;
   border-radius: 9999px;
   background: var(--bg-secondary);
@@ -321,7 +321,7 @@ const downloadImage = (url: string, index: number) => {
   color: white;
   opacity: 0;
   transition: opacity 0.2s ease;
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
 }
 
 .image-wrapper:hover .image-overlay,
@@ -339,7 +339,7 @@ const downloadImage = (url: string, index: number) => {
   background: var(--bg-secondary);
   color: var(--text-muted);
   gap: 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .image-prompt {
@@ -364,7 +364,7 @@ const downloadImage = (url: string, index: number) => {
   align-items: center;
   gap: 0.25rem;
   padding: 0.25rem 0.625rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   border: 1px solid var(--border-default);
   border-radius: 0.375rem;
   background: var(--bg-surface);
@@ -407,7 +407,7 @@ const downloadImage = (url: string, index: number) => {
 
 .lightbox-caption {
   color: rgba(255, 255, 255, 0.8);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   text-align: center;
   max-width: 60ch;
   margin: 0;
@@ -427,7 +427,7 @@ const downloadImage = (url: string, index: number) => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   transition: background 0.15s;
 }
 
@@ -449,7 +449,7 @@ const downloadImage = (url: string, index: number) => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   transition: background 0.15s;
 }
 
