@@ -58,7 +58,7 @@ def _modules(root: Path) -> list[Path]:
 REACH = declare(
     "file-type-sets-one-home-19339",
     discover=_modules,
-    floor=2566,  # mid-window: population 2701, window (2431, 2701)
+    floor=2676,  # mid-window: population 2811, window (2541, 2811)
     growth=270,  # ~10%: ordinary backend growth between repins must not turn an unrelated PR red
     what="non-test backend modules",
     roots=(_ROOT,),
