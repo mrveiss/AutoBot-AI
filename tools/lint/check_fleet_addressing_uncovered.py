@@ -351,7 +351,6 @@ BASELINE: dict[str, int] = {
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/validate-fixes.cjs": 7,
     "autobot-infrastructure/shared/scripts/bulletproof-frontend/README.md": 2,
     "autobot-infrastructure/shared/scripts/hooks/slm-post-commit": 1,
-    "autobot-infrastructure/shared/scripts/systemd/autobot-frontend.service": 2,
     "autobot-infrastructure/shared/scripts/systemd/slm-admin-ui.service": 1,
     "autobot-infrastructure/shared/scripts/utilities/README-SECURITY.md": 4,
     "autobot-infrastructure/shared/tests/KNOWLEDGE_MANAGER_TESTS_README.md": 1,
