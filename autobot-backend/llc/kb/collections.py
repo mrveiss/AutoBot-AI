@@ -134,7 +134,7 @@ class KbCollectionManager:
             try:
                 original = await kb._async_chroma_client.get_collection(original_name)
             except Exception:
-                logger.warning(
+                logger.debug(  # the usual case: a collection appears only on its first write (#19725)
                     "Collection %s does not exist; nothing to archive",
                     original_name,
                 )

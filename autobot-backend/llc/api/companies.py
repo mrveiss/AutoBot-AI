@@ -194,16 +194,14 @@ async def _assert_may_create_under(
 async def _create_and_commit(
     svc: CompanyService, membership_svc: MembershipService, body: CompanyCreate, user_id: str
 ) -> CompanyRead:
-    """Insert, record the creator as OWNER, ensure the KB collections, THEN commit (GH#12323).
+    """Insert, record the creator as OWNER, THEN commit (GH#12323).
 
-    A failure in any step is rolled back by the route, so no committed-but-unreported row;
-    ``ensure_collection`` is idempotent, so a rollback leaves only reusable empty collections.
+    A failure in any step is rolled back by the route, so no committed-but-unreported row.
+    KB collections appear on their first write, so creating a company makes none (#19725).
     """
     org = await svc.create(body)
     await membership_svc.add_member(svc.session, str(org.id), user_id, MembershipRole.OWNER)
     read = _to_read(org)
-    for suffix in (None, KbCollectionManager.AGENTS_SUFFIX, KbCollectionManager.DECISIONS_SUFFIX):
-        await _kb_manager.ensure_collection(KbCollectionManager.COMPANY_PREFIX, org.id, suffix)
     await svc.session.commit()
     return read
 
