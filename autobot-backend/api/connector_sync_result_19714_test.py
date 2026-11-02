@@ -6,6 +6,7 @@
 
 import json
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -59,7 +60,7 @@ def test_an_edit_racing_the_write_is_retried_on_the_new_record() -> None:
 
 def test_it_gives_up_rather_than_spinning() -> None:
     store = {"k": json.dumps({"name": "n"})}
-    assert result._write_last_sync(_redis(store, conflicts=99), "k", "T") is False
+    assert result._write_last_sync(_redis(store, conflicts=99), "k", "T") is True, "it still exists"
     assert "last_sync_at" not in json.loads(store["k"])
 
 
@@ -74,8 +75,8 @@ class _SyncResult:
         return 0
 
 
-@pytest.mark.asyncio
-async def test_the_sync_never_saves_the_config_holding_the_credentials() -> None:
+async def _finish_a_sync(recorded: bool):
+    """Run the background sync to its end. Returns the record and save mocks, the instance, the history mock."""
     stored = ConnectorConfig(connector_id="c", connector_type="t", name="n", config={}, secret_id="s")
     merged = ConnectorConfig(connector_id="c", connector_type="t", name="n", config={"token": "secret"}, secret_id="s")
     instance = AsyncMock()
@@ -85,10 +86,30 @@ async def test_the_sync_never_saves_the_config_holding_the_credentials() -> None
         patch.object(route, "_cfg_with_credentials", AsyncMock(return_value=merged)),
         patch.object(route, "_load_or_create_instance", AsyncMock(return_value=instance)),
         patch.object(route, "_save_connector", AsyncMock()) as save,
-        patch.object(route, "record_last_sync", AsyncMock()) as record,
-        patch.object(route, "get_redis_client"),
+        patch.object(route, "record_last_sync", AsyncMock(return_value=recorded)) as record,
+        patch.object(route, "_append_history", AsyncMock()) as history,
     ):
         await getattr(route._run_sync_background, "__wrapped__", route._run_sync_background)("c", True)
+    return record, save, instance, history
+
+
+@pytest.mark.asyncio
+async def test_the_sync_never_saves_the_config_holding_the_credentials() -> None:
+    record, save, instance, history = await _finish_a_sync(recorded=True)
     save.assert_not_awaited()
-    record.assert_awaited_once()
-    assert record.await_args.args[1] == _WHEN
+    assert record.await_args.args[:2] == (instance, route._connector_key("c"))
+    history.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_a_connector_deleted_during_the_sync_gets_no_history_row() -> None:
+    _record, _save, _instance, history = await _finish_a_sync(recorded=False)
+    history.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_the_live_instance_reports_the_new_time() -> None:
+    instance = SimpleNamespace(config=SimpleNamespace(last_sync_at=None))
+    with patch.object(result, "get_redis_client", return_value=_redis({"k": json.dumps({"name": "n"})})):
+        assert await result.record_last_sync(instance, "k", SimpleNamespace(completed_at=_WHEN)) is True
+    assert instance.config.last_sync_at == _WHEN

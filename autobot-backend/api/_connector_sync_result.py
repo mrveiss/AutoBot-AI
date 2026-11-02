@@ -11,12 +11,12 @@ a connector deleted during it. So only this field is written, in one transaction
 
 import asyncio
 import json
-from datetime import datetime
 
 from redis.exceptions import WatchError
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.time_utils import now_utc
 
 logger = get_logger(__name__)
 
@@ -41,10 +41,12 @@ def _write_last_sync(redis, key: str, when: str) -> bool:
             except WatchError:
                 continue
     logger.warning("Could not record the last sync on %s: it kept changing", key)
-    return False
+    return True
 
 
-async def record_last_sync(key: str, when: datetime) -> bool:
-    """Set ``last_sync_at`` on the stored connector. False if it's gone or kept changing."""
+async def record_last_sync(instance, key: str, sync_result) -> bool:
+    """Set ``last_sync_at`` on the stored connector and the live instance. False if it was deleted."""
+    when = sync_result.completed_at or now_utc()
+    instance.config.last_sync_at = when  # what the status route reads
     redis = get_redis_client(database="knowledge")
     return await asyncio.to_thread(_write_last_sync, redis, key, when.isoformat())

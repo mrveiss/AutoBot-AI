@@ -374,8 +374,7 @@ async def _run_sync_background(connector_id: str, incremental: bool) -> None:
         await _record_failed_sync(connector_id, started_at, "fetching content")
         sync_result = None
 
-    if sync_result is not None:
-        await record_last_sync(_connector_key(connector_id), sync_result.completed_at or now_utc())
+    if sync_result is not None and await record_last_sync(instance, _connector_key(connector_id), sync_result):
 
         completed_at = sync_result.completed_at
         duration_seconds = None

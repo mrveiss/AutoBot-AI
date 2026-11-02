@@ -56,8 +56,8 @@ watch(() => props.syncActive, (active) => {
 })
 
 watch(isPolling, (active) => {
-  // A job that finished between polls reads as none, and still left a history row.
-  if (!active && jobState.value?.status !== 'running') {
+  // However polling ended, a job may have left a history row: one finished between polls reads as none.
+  if (!active) {
     loadHistory()
   }
 })
