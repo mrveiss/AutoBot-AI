@@ -266,11 +266,18 @@ def strip_ansi_codes(text: str) -> str:
         >>> strip_ansi_codes('[?2004h]0;Title\\x07Prompt$')
         'Prompt$'
     """
+    return strip_ansi_keep_whitespace(text).strip()
+
+
+def strip_ansi_keep_whitespace(text: str) -> str:
+    """:func:`strip_ansi_codes` without the trim, for text appended chunk by chunk (#20453).
+
+    A trim on every chunk removes the line breaks between chunks. Same caveat: only for raw
+    terminal or PTY output.
+    """
     text = strip_ansi_escapes(text)
     text = _ANSI_BRACKET_RE.sub("", text)  # Bracket sequences (no ESC — terminal only)
-    text = _ANSI_TITLE_RE.sub("", text)  # Set title (no ESC — terminal only)
-
-    return text.strip()
+    return _ANSI_TITLE_RE.sub("", text)  # Set title (no ESC — terminal only)
 
 
 # Issue #281: Module-level constants for is_terminal_prompt()
