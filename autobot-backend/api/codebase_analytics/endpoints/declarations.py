@@ -16,53 +16,48 @@ from autobot_shared.logging_manager import get_logger
 from utils.chromadb_client import get_all_paginated
 
 from ..storage import get_code_collection
+from .store_state import index_state, store_unavailable
 
 logger = get_logger(__name__)
 
 router = APIRouter()
 
 
+def _declaration_filter(source_id: str | None) -> dict:
+    """The store filter for declarations: function/class rows, scoped to a source when given."""
+    kinds = {"type": {"$in": ["function", "class"]}}
+    return {"$and": [kinds, {"source_id": source_id}]} if source_id else kinds
+
+
+def _declaration_from_metadata(metadata: dict) -> dict:
+    """One declaration as the panel reads it, from a stored row's metadata."""
+    return {
+        "name": metadata.get("name", ""),
+        "type": metadata.get("type", ""),
+        "file_path": metadata.get("file_path", ""),
+        "line_number": (int(metadata.get("start_line", 0)) if metadata.get("start_line") else 0),
+        "usage_count": 1,
+        "is_exported": True,
+        "parameters": (metadata.get("parameters", "").split(",") if metadata.get("parameters") else []),
+    }
+
+
 def _query_chromadb_declarations(code_collection, source_id: str | None = None) -> tuple:
     """Helper for get_code_declarations (#1088, #1710: per-source filter).
+
+    A store read failure propagates (#17651): it used to be logged and returned
+    as an empty list, which the panel could not tell from "nothing declared".
 
     Returns:
         Tuple of (declarations_list, storage_type_str)
     """
-    all_declarations = []
-    storage_type = "chromadb"
-    try:
-        if source_id:
-            where_filter = {
-                "$and": [
-                    {"type": {"$in": ["function", "class"]}},
-                    {"source_id": source_id},
-                ]
-            }
-        else:
-            where_filter = {"type": {"$in": ["function", "class"]}}
-        results = get_all_paginated(
-            code_collection,
-            where=where_filter,
-            include=["metadatas"],
-        )
-        for metadata in results.get("metadatas", []):
-            decl = {
-                "name": metadata.get("name", ""),
-                "type": metadata.get("type", ""),
-                "file_path": metadata.get("file_path", ""),
-                "line_number": (int(metadata.get("start_line", 0)) if metadata.get("start_line") else 0),
-                "usage_count": 1,
-                "is_exported": True,
-                "parameters": (metadata.get("parameters", "").split(",") if metadata.get("parameters") else []),
-            }
-            all_declarations.append(decl)
-        logger.info("Retrieved %s declarations from ChromaDB", len(all_declarations))
-    except Exception as chroma_error:
-        logger.warning(f"ChromaDB query failed: {chroma_error}, returning empty declarations")
-    return all_declarations, storage_type
+    results = get_all_paginated(code_collection, where=_declaration_filter(source_id), include=["metadatas"])
+    all_declarations = [_declaration_from_metadata(m) for m in results.get("metadatas", [])]
+    logger.info("Retrieved %s declarations from ChromaDB", len(all_declarations))
+    return all_declarations, "chromadb"
 
 
-def _build_declarations_response(all_declarations: list, storage_type: str) -> dict:
+def _build_declarations_response(all_declarations: list, storage_type: str, state: dict | None = None) -> dict:
     """Helper for get_code_declarations. Count types, sort, and build response dict. Ref: #1088."""
     functions = sum(1 for d in all_declarations if d.get("type") == "function")
     classes = sum(1 for d in all_declarations if d.get("type") == "class")
@@ -70,6 +65,7 @@ def _build_declarations_response(all_declarations: list, storage_type: str) -> d
     all_declarations.sort(key=lambda x: x.get("usage_count", 0), reverse=True)
     return {
         "status": "success",
+        **(state or {}),
         "declarations": all_declarations,
         "total_count": len(all_declarations),
         "functions": functions,
@@ -93,12 +89,14 @@ async def get_code_declarations(
     """Get code declarations (#1710: per-source filtering)."""
     code_collection = await asyncio.to_thread(get_code_collection)
     if not code_collection:
-        return JSONResponse(
-            {
-                "status": "no_data",
-                "message": "No codebase data found. Run indexing first.",
-                "declarations": [],
-            }
+        logger.error("declarations: the code index store could not be opened")
+        raise store_unavailable()
+    try:
+        all_declarations, storage_type = await asyncio.to_thread(
+            _query_chromadb_declarations, code_collection, source_id
         )
-    all_declarations, storage_type = await asyncio.to_thread(_query_chromadb_declarations, code_collection, source_id)
-    return JSONResponse(_build_declarations_response(all_declarations, storage_type))
+        state = await asyncio.to_thread(index_state, code_collection, source_id, bool(all_declarations))
+    except Exception as store_error:
+        logger.error("declarations: the code index store read failed: %s", store_error)
+        raise store_unavailable() from store_error
+    return JSONResponse(_build_declarations_response(all_declarations, storage_type, state))
