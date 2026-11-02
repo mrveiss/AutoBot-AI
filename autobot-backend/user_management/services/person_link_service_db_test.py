@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -98,8 +98,8 @@ async def test_a_deleted_user_is_not_brought_back_on_the_next_start(factory) -> 
     await _at_startup(factory)
     async with factory() as session, session.begin():
         link = (await session.execute(select(PersonLink))).scalar_one()
-        user = await session.get(User, link.user_id)
-        link.user_id = None
-        await session.delete(user)
+        user_id, link.user_id = link.user_id, None
+        await session.flush()
+        await session.execute(delete(User).where(User.id == user_id))
     await _at_startup(factory)
     assert await _counts(factory) == (0, 1)
