@@ -484,7 +484,7 @@ async def _ensure_admin_user():
 
     from autobot_shared.user_management.user_service_errors import DuplicateUserError
     from services.admin_password_sync import sync_admin_password_at_startup
-    from services.admin_seed_password import password_for_existing_admin, password_for_new_admin
+    from services.admin_seed_password import RANDOM_ADMIN_NOTICE, password_for_existing_admin, password_for_new_admin
     from user_management.database import get_slm_session
     from user_management.services import TenantContext, UserService
 
@@ -503,7 +503,7 @@ async def _ensure_admin_user():
         password = password_for_new_admin()
         if not password:
             password = secrets.token_urlsafe(16)
-            logger.critical("Initial admin password set — CHANGE IMMEDIATELY")
+            logger.critical(RANDOM_ADMIN_NOTICE)
 
         try:
             await user_service.create_user(

@@ -46,6 +46,13 @@ def _read_password_file(path: str) -> str:
     return value
 
 
+#: The way back when an admin was created with a password nobody was shown (#20527).
+RANDOM_ADMIN_NOTICE = (
+    "The SLM admin was created with a random password that is not shown anywhere. "
+    "To log in, run this on the server: sudo autobot-admin reset-password admin"
+)
+
+
 def password_for_new_admin() -> str:
     """Password to create the admin with: SLM_ADMIN_PASSWORD, else the _FILE secret, else "" (generate one).
 
