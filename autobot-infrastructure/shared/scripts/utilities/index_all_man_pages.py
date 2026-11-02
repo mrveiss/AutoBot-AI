@@ -363,6 +363,7 @@ async def main():
 
         # Index in batches
         total_indexed = await _index_commands_in_batches(kb_v2, all_commands, system_ctx)
+        await kb_v2._get_keyword_searcher().flush_refresh()
 
         # Get final stats
         stats = await kb_v2.get_stats()
