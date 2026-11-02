@@ -20,6 +20,9 @@ import type { components } from '@/types/generated/api'
 
 const logger = createLogger('AuthStore')
 
+/** `detail` of the 403 the SLM backend answers a non-admin session with (services/auth.py). */
+const ADMIN_ONLY_DETAIL = 'This console is for administrators.'
+
 interface User {
   username: string
   isAdmin: boolean
@@ -156,6 +159,22 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
   }
 
+  /**
+   * A 403 on `/auth/me` has two causes: the session is not an admin's (detail
+   * ADMIN_ONLY_DETAIL, services/auth.py), or the request carried an `X-API-Key` to a route
+   * that takes none (middleware/api_key_allow_list.py). Only the first says anything about
+   * the user; the second leaves the stored user alone (#20631).
+   */
+  async function applyForbidden(response: Response): Promise<void> {
+    const body = await response.json().catch(() => null)
+    if (body?.detail !== ADMIN_ONLY_DETAIL) {
+      logger.warn('Forbidden for a reason other than admin-only; keeping session', body?.detail)
+      return
+    }
+    user.value = { username: user.value?.username ?? '', isAdmin: false }
+    writeSlmUser(JSON.stringify(user.value))
+  }
+
   async function fetchCurrentUser(): Promise<void> {
     if (!token.value) return
 
@@ -171,9 +190,7 @@ export const useAuthStore = defineStore('auth', () => {
         return
       }
       if (response.status === 403) {
-        // #20631: refused as not an admin's. A stored user may still say otherwise.
-        user.value = { username: user.value?.username ?? '', isAdmin: false }
-        writeSlmUser(JSON.stringify(user.value))
+        await applyForbidden(response)
         return
       }
       if (!response.ok) {

@@ -352,11 +352,26 @@ describe('authStore — canonical-client transport (#13140)', () => {
       seedSession()
       const store = useAuthStore()
       store.user = { username: 'was-admin', isAdmin: true }
-      mockFetch.mockResolvedValueOnce(jsonResponse({ detail: 'x' }, false, 403))
+      mockFetch.mockResolvedValueOnce(jsonResponse({ detail: 'This console is for administrators.' }, false, 403))
       await store.fetchCurrentUser()
       expect(store.isAdmin).toBe(false)
       expect(sessionStorage.getItem('slm_access_token')).toBe('live-token')
     })
+
+    it.each([{ detail: 'API keys are not accepted on this route' }, null])(
+      'a 403 for another reason (%j) leaves the stored admin alone (#20631)',
+      async (body) => {
+        seedSession()
+        const store = useAuthStore()
+        store.user = { username: 'was-admin', isAdmin: true }
+        mockFetch.mockResolvedValueOnce(
+          body ? jsonResponse(body, false, 403) : ({ ok: false, status: 403, json: async () => { throw new Error('no body') } } as unknown as Response)
+        )
+        await store.fetchCurrentUser()
+        expect(store.isAdmin).toBe(true)
+        expect(sessionStorage.getItem('slm_access_token')).toBe('live-token')
+      }
+    )
 
     it('keeps the session on a network error', async () => {
       seedSession()

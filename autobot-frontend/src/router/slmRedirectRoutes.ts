@@ -12,7 +12,9 @@
  * non-admin to /home. Only an admin reaches `beforeEnter`, which leaves for the SLM.
  *
  * The SLM uses web history (createWebHistory), so targets are plain paths, not `/#/` ones.
- * Wildcards go to the section root: the SLM has no matching deep paths for the old ones.
+ * Wildcards go to the section root, not to the matching deep path: the SLM does have deep paths
+ * (`/tools/terminal`, `/settings/admin/users`), but the old main-app sub-paths are not a one-to-one
+ * map onto them, so only the section is a safe target.
  */
 import type { RouteRecordRaw } from 'vue-router'
 import { getSLMAdminUrl } from '@/config/ssot-config'

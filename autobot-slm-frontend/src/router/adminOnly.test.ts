@@ -5,7 +5,7 @@
 
 /**
  * #20631: the SLM is admin only. Every route record carries `meta.admin` except the
- * three a person must reach before being known to be an admin, and every Monitoring
+ * two a person must reach before being known to be an admin (sign-in and the SSO callback), and every Monitoring
  * tab carries `admin`. The guard then has to send a non-admin somewhere that is not
  * itself flagged, or the navigation loops.
  */
@@ -20,7 +20,7 @@ vi.mock('@/utils/ApiClient', () => ({ default: { get: async () => ({ completed: 
 
 import router from './index'
 
-const OPEN_ROUTES = new Set(['/login', '/sso-callback', '/setup'])
+const OPEN_ROUTES = new Set(['/login', '/sso-callback'])
 
 /** Every record in the table, at any depth, written out with its full path. */
 function walk(records: readonly RouteRecordRaw[], parent = ''): Array<RouteRecordRaw & { fullPath: string }> {
@@ -41,7 +41,7 @@ function tabsWithoutAdmin(source: string): string[] {
 }
 
 describe('the route table (#20631)', () => {
-  it('flags every record but login, SSO and setup', () => {
+  it('flags every record but login and SSO', () => {
     expect(unflagged(router.options.routes)).toEqual([])
   })
 

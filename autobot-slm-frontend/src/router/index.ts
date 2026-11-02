@@ -38,7 +38,7 @@ const router = createRouter({
       path: '/setup',
       name: 'setup',
       component: () => import('@/views/SetupWizardView.vue'),
-      meta: { title: 'Setup Wizard' }
+      meta: { title: 'Setup Wizard', admin: true }
     },
     {
       path: '/',
