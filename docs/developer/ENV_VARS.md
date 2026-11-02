@@ -266,6 +266,11 @@ appears outside the known overlays.
 | `AUTOBOT_LOG_FLOOD_WINDOW_SECONDS` | logging | float | `60.0` | Length of the log-flood suppression window, in seconds. |
 | `AUTOBOT_LOG_VALUE_MAX_CHARS` | security | int | `256` | Longest untrusted value sanitize_log_value() will interpolate into a log line (#13602). Beyond it the value is truncated with an explicit marker, so the subject of a rejected request cannot pad the log store out. A negative value is rejected in favour of the default: disabling the bound would defeat the guard. |
 | `AUTOBOT_LOG_VIEWER_URL` | logging | str | `'http://localhost:5341'` | Base URL of the Seq (or compatible) structured-log viewer. |
+| `AUTOBOT_MACHINE_SLOTS` | testing | int | `4` | How many heavy local runs (hooks, floor checks, big pytest runs) go at once. |
+| `AUTOBOT_MACHINE_SLOT_BIG_RUN` | testing | int | `100` | Tests in a non-xdist pytest run at which it queues for a slot. |
+| `AUTOBOT_MACHINE_SLOT_DIR` | testing | str | `""` | Directory of the slot lock files; empty means the user's runtime directory. |
+| `AUTOBOT_MACHINE_SLOT_HELD` | testing | str | `""` | Set by a holder so its child processes do not queue for a second slot. |
+| `AUTOBOT_MACHINE_SLOT_POLL` | testing | float | `5.0` | Seconds between attempts while queued for a machine slot. |
 | `AUTOBOT_MATRIX_E2EE` | gateway | bool | false | Opt in to end-to-end encryption for the Matrix adapter. Off by default because E2EE needs the optional olm dependency and a persisted device store. |
 | `AUTOBOT_MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S` | backend | int | `3600` | How often to re-broadcast that a node is still at MAX_REMEDIATION_ATTEMPTS. Once exhausted, last_attempt freezes and this refusal is refused again on every reconcile pass forever — unthrottled, that is once per reconcile_interval (services/reconciler.py, #14465). |
 | `AUTOBOT_MAX_CONTINUATION_ITERATIONS` | backend | int | `5` | Maximum multi-step continuation iterations for one chat turn. Read by chat_workflow/limits.py, which both ChatWorkflowManager and graph.py's routing decision source -- graph.py previously hardcoded this bound and ignored the named constant, so raising it had no effect on the LangGraph path (#352, #17468). |
