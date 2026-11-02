@@ -210,3 +210,7 @@ backend_tls_cert_dir: "{{ autobot_tls_remote_cert_dir | default('/etc/autobot/ce
 
 # Feature-router boot mode (#6690, #19395): derived from AUTOBOT_ENVIRONMENT, so this role sets nothing.
 # To override it, set backend_feature_routers_strict per inventory ("1" hard-fails on a broken router).
+
+# #20082: how many times a failed CUDA torch install is retried, and the seconds between tries.
+backend_torch_install_retries: 2
+backend_torch_install_retry_delay: 30
