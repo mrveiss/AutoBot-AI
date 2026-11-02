@@ -1560,13 +1560,12 @@ async def _wire_npu_task_queue() -> None:
     """Wire NPUWorkerManager into the global RedisTaskQueue for per-worker task tracking (#2985).
 
     RedisTaskQueue._worker_loop already calls assign_task_to_worker / release_worker_task
-    behind an ``if self.npu_worker_manager is not None:`` guard, but the attribute was
-    never set to an actual instance — making all tracking code dead (#2944).  This helper
-    runs during Phase 2 (non-critical) so that startup is never blocked by NPU issues.
+    behind a guard on this attribute, which was never set (#2944). Runs in Phase 2 (non-critical).
     """
     logger.info("[ 98%%] NPU Task Queue: Wiring NPUWorkerManager into TaskQueue...")
     try:
         from autobot_shared.redis_client import get_async_redis_client
+        from services.npu_worker_autopair import start_npu_worker_autopair
         from services.npu_worker_manager import get_worker_manager
         from utils.task_queue import get_task_queue
 
@@ -1574,6 +1573,7 @@ async def _wire_npu_task_queue() -> None:
         worker_manager = await get_worker_manager(redis_client=redis_client)
         task_queue = get_task_queue()
         task_queue.npu_worker_manager = worker_manager
+        start_npu_worker_autopair()  # #19706
         logger.info("[ 98%%] NPU Task Queue: NPUWorkerManager wired — per-worker task tracking active")
     except Exception as e:
         logger.warning("NPU task queue wiring failed (per-worker tracking disabled): %s", e)
