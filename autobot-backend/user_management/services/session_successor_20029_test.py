@@ -272,6 +272,15 @@ async def test_a_failed_owner_write_aborts_and_is_audited_failed(factory, mgr, s
 class _Service(SharedUserService):
     user_model = MagicMock()
     handover: Any = None
+    check: Any = None
+
+    async def check_session_reassign(self, user_id):
+        if self.check is not None:
+            self.check(user_id)
+
+    async def reassign_memory(self, user_id, reassign_to):
+        self.memory_moved = True
+        return {"verbatim": 1}
 
     async def reassign_sessions(self, user_id):
         self.handover(user_id)
@@ -379,3 +388,43 @@ async def test_an_unreadable_file_refuses_the_removal_before_any_write(monkeypat
         await ss.reassign_user_sessions(db, uuid.uuid4(), "actor-1", manager, validator)
     assert audit.call_args.kwargs["outcome"] == "denied"
     assert audit.call_args.kwargs["metadata"] == {"unreadable_sessions": ["bad"]}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("hard", [False, True])
+async def test_a_refused_removal_leaves_the_memory_records_where_they_were(hard):
+    """A memory move cannot be undone, so a refusal has to come before it."""
+
+    def refuse(_uid):
+        raise SessionReassignError("no successor")
+
+    svc, user = _lifecycle(lambda uid: None)
+    svc.check = refuse
+    svc.memory_moved = False
+    with pytest.raises(SessionReassignError):
+        await svc.delete_user(user.id, hard_delete=hard, reassign_to=uuid.uuid4())
+    assert svc.memory_moved is False and user.is_active is True and user.deleted_at is None
+
+
+@pytest.mark.asyncio
+async def test_the_check_refuses_as_the_handover_would_and_writes_nothing(factory, mgr, stores):  # noqa: ANN001
+    """No successor and no administrator: the same refusal, with no session file touched."""
+    leaving = await _user(factory, "leaving")
+    mgr.sessions["s1"] = _session("leaving")
+    before = copy.deepcopy(mgr.sessions)
+    async with factory() as db:
+        with pytest.raises(SessionReassignError):
+            await ss.check_user_sessions(db, leaving, "actor", manager=mgr)
+    assert mgr.sessions == before
+    assert [e["outcome"] for e in stores] == ["denied"]
+
+
+@pytest.mark.asyncio
+async def test_the_check_passes_when_the_handover_would_and_moves_nothing(factory, mgr):  # noqa: ANN001
+    leaving = await _user(factory, "leaving")
+    await _user(factory, "root", admin=True)
+    mgr.sessions["s1"] = _session("leaving")
+    before = copy.deepcopy(mgr.sessions)
+    async with factory() as db:
+        await ss.check_user_sessions(db, leaving, "actor", manager=mgr)
+    assert mgr.sessions == before
