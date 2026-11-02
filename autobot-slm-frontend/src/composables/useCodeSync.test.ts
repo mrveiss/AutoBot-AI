@@ -206,6 +206,14 @@ describe('getUpdateAllStatus poll contract through slmApiClient (#12593 / #12420
     expect(result).toBeNull()
   })
 
+  it('returns the unauthenticated sentinel on a 401, never undefined (#20201)', async () => {
+    mockRawRequest.mockResolvedValue(mockResponse(401, { detail: 'unauthorized' }))
+
+    const result = await useCodeSync().getUpdateAllStatus()
+
+    expect(result).toBe('unauthenticated')
+  })
+
   it('returns undefined on a 502 during the SLM self-restart so the caller KEEPS polling', async () => {
     mockRawRequest.mockResolvedValue(mockResponse(502, { detail: 'bad gateway' }))
 

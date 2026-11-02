@@ -87,6 +87,18 @@ _RUN_HEADER = "SELF-UPDATE RUN STARTED"
 _RUN_STARTED = re.compile(rf"^{re.escape(_RUN_HEADER)}\s+(?P<ts>\S+)", re.MULTILINE)
 
 
+# #19770: a log with no PLAY RECAP means three different things.
+STATE_NO_LOG = "no_log"
+STATE_COMPLETE = "complete"
+STATE_RUNNING = "running"
+STATE_ENDED_WITHOUT_RECAP = "ended_without_recap"
+STATE_UNKNOWN = "unknown"
+
+# Last run each no-recap state was reported for, so a status endpoint polled
+# every ~15 s says it once per run rather than once per poll (5,350 lines, #19770).
+_reported_runs: dict[str, str] = {}
+
+
 @dataclass
 class SelfUpdateVerdict:
     """What the last self-update run actually did."""
@@ -113,6 +125,24 @@ class SelfUpdateVerdict:
     #: caller can tell WHICH run this verdict describes. ``None`` when the log
     #: carries no header (a pre-#12776 log, or the "nothing to say" verdicts).
     run_started_at: str | None = None
+    #: #19770: whether the detached run's process is alive, as measured by the
+    #: caller (see ``services.deploy_activity.read_deploy_activity``). ``None``
+    #: means it could not be measured, which is NOT the same as "ended": a log
+    #: with no recap is only "cut short" once the run is known to be gone.
+    run_alive: bool | None = None
+
+    @property
+    def state(self) -> str:
+        """``complete``, ``running``, ``ended_without_recap``, ``unknown`` or ``no_log``."""
+        if not self.log_present:
+            return STATE_NO_LOG
+        if self.complete:
+            return STATE_COMPLETE
+        if self.run_alive is True:
+            return STATE_RUNNING
+        if self.run_alive is False:
+            return STATE_ENDED_WITHOUT_RECAP
+        return STATE_UNKNOWN
 
     @property
     def degraded(self) -> bool:
@@ -229,7 +259,9 @@ def _run_is_at_or_after(run_started_at: str | None, not_before: str | None) -> b
     return started >= fired
 
 
-def read_self_update_verdict(log_path: Path, not_before: str | None = None) -> SelfUpdateVerdict:
+def read_self_update_verdict(
+    log_path: Path, not_before: str | None = None, run_alive: bool | None = None
+) -> SelfUpdateVerdict:
     """Parse *log_path* and report whether the last self-update run completed.
 
     Never raises: a status endpoint must not fail because a log is missing or
@@ -243,6 +275,11 @@ def read_self_update_verdict(log_path: Path, not_before: str | None = None) -> S
     yet" instead. A stale verdict is worse than none here, because it is
     indistinguishable from a fresh one — that is what made an operator attribute
     a previous run's failure to the run they had just triggered.
+
+    *run_alive* (#19770) is whether the detached run's process is still alive, as
+    measured by the caller. A log with no recap is "running" when True, "did not
+    finish" only when False, and "unknown" when ``None`` (not measured) — never
+    "cut short" on a signal that could not measure.
     """
     source = _read_log_text(log_path)
     if source.unreadable:
@@ -281,11 +318,31 @@ def read_self_update_verdict(log_path: Path, not_before: str | None = None) -> S
         from_rotated_log=from_rotated,
         rotated_log_mtime=source.rotated_age,
         run_started_at=run_started_at,
+        run_alive=run_alive,
     )
     verdict.reason = _describe(verdict)
-    if verdict.degraded:
-        logger.error("self-update verdict: %s", verdict.reason)
+    _log_verdict(verdict)
     return verdict
+
+
+def _log_verdict(v: SelfUpdateVerdict) -> None:
+    """Log *v* at a level that matches what is actually known (#19770).
+
+    A run in progress is DEBUG; "unknown" is a WARNING and "did not finish" an
+    ERROR, each once per run. Other degraded verdicts keep logging at ERROR.
+    """
+    levels = {STATE_RUNNING: logger.debug, STATE_UNKNOWN: logger.warning, STATE_ENDED_WITHOUT_RECAP: logger.error}
+    emit = levels.get(v.state)
+    if emit is None:
+        if v.degraded:
+            logger.error("self-update verdict: %s", v.reason)
+        return
+    run_key = v.run_started_at or "unstamped:" + ";".join(v.plays_seen)
+    if v.state != STATE_RUNNING:
+        if _reported_runs.get(v.state) == run_key:
+            return
+        _reported_runs[v.state] = run_key
+    emit("self-update verdict: %s", v.reason)
 
 
 def _describe(v: SelfUpdateVerdict) -> str:
@@ -304,6 +361,13 @@ def _describe(v: SelfUpdateVerdict) -> str:
         suffix = f"{stamp} (from the rotated log; no self-update has run since)"
     if not v.complete:
         seen = ", ".join(v.plays_seen) if v.plays_seen else "none"
+        if v.state == STATE_RUNNING:
+            return f"self-update run in progress (plays started: {seen}){suffix}"
+        if v.state == STATE_UNKNOWN:
+            return (
+                f"self-update run state unknown — no PLAY RECAP in the log (plays started: {seen}) "
+                f"and whether the run is still alive could not be determined{suffix}"
+            )
         return (
             f"self-update run did not finish — no PLAY RECAP in the log "
             f"(plays started: {seen}). The run was cut short; later plays did not execute.{suffix}"
@@ -315,4 +379,11 @@ def _describe(v: SelfUpdateVerdict) -> str:
     return f"self-update completed ({len(v.plays_seen)} plays, no failures){suffix}"
 
 
-__all__ = ["SelfUpdateVerdict", "read_self_update_verdict", "MAX_LOG_BYTES"]
+__all__ = [
+    "SelfUpdateVerdict",
+    "STATE_RUNNING",
+    "STATE_UNKNOWN",
+    "STATE_ENDED_WITHOUT_RECAP",
+    "read_self_update_verdict",
+    "MAX_LOG_BYTES",
+]

@@ -16,9 +16,8 @@ import { BaseAlert } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import {
   useCodeSync,
-  isSelfUpdateReconnecting,
-  classifyUpdateAllPollError,
   SLM_SELF_UPDATE_STAGE,
+  UPDATE_ALL_UNAUTHENTICATED,
   type PendingNode,
   type SyncOptions,
   type UpdateSchedule,
@@ -30,6 +29,9 @@ import {
   type FleetSyncJobStatus,
 } from '@/composables/useCodeSync'
 import { createLogger } from '@/utils/debugUtils'
+import { buildLoginUrl } from '@/utils/loginRedirect'
+import { useUpdateAllPoll } from '@/composables/useUpdateAllPoll'
+import UpdateAllPollBanner from '@/components/UpdateAllPollBanner.vue'
 import { formatFleetDateTime } from '@/composables/useTimezone'
 import { getCommitHashDisplay, getCommitUrl } from '@/utils/commitHashUtils'
 import ScheduleModal from '@/components/ScheduleModal.vue'
@@ -142,13 +144,25 @@ let fleetSyncPollTimer: ReturnType<typeof setTimeout> | null = null
 // One-click update-all state (#9971)
 // =============================================================================
 const updateAllJob = ref<UpdateAllJob | null>(null)
-const updateAllPolling = ref(false)
-// F1: track consecutive transient errors to bound backoff
-const updateAllTransientErrors = ref(0)
-const UPDATE_ALL_MAX_TRANSIENT_ERRORS = 90  // ~3 min at 2s intervals
-const UPDATE_ALL_LOST_CONTACT_ERRORS = 30   // ~1 min before "lost contact" banner
-const updateAllLostContact = ref(false)
-let updateAllPollTimer: ReturnType<typeof setTimeout> | null = null
+// Polling state, its give-up/auth end states and the banner flags live in the composable (#20201).
+const {
+  transientErrors: updateAllTransientErrors,
+  lostContact: updateAllLostContact,
+  gaveUp: updateAllGaveUp,
+  authFailed: updateAllAuthFailed,
+  reconnecting: updateAllReconnecting,
+  schedule: _scheduleUpdateAllPoll,
+  stop: _stopUpdateAllPoll,
+  recheck: handleRecheckUpdateAll,
+  clearFlags: _clearUpdateAllFlags,
+} = useUpdateAllPoll(
+  updateAllJob,
+  () => codeSync.getUpdateAllStatus(),
+  async () => {
+    // Refresh status / pending nodes once the pipeline finishes
+    await Promise.all([codeSync.fetchStatus(), codeSync.fetchPendingNodes()])
+  },
+)
 const showAdvanced = ref(false)
 const expandedStageLogs = ref<Set<string>>(new Set())
 
@@ -241,14 +255,6 @@ const updateAllIsRunning = computed(() => {
   const s = updateAllJob.value?.status
   return s === 'pending' || s === 'running'
 })
-
-// #12593: reconnecting affordance during the stage-3 (slm_self_update) window,
-// when the SLM control plane restarts itself and polling fails transiently.
-// Derives from the last-known running stage + transient-error count, so it
-// resets to false automatically as soon as a poll succeeds again.
-const updateAllReconnecting = computed(() =>
-  isSelfUpdateReconnecting(updateAllJob.value, updateAllTransientErrors.value),
-)
 
 // #12593: auto-expand stage-3 logs while reconnecting so the backend
 // "service will restart" message is visible during the restart window.
@@ -794,80 +800,13 @@ watch(showAdvanced, (open) => {
 // One-click update-all methods (#9971)
 // =============================================================================
 
-function _stopUpdateAllPoll(): void {
-  if (updateAllPollTimer) {
-    clearTimeout(updateAllPollTimer)
-    updateAllPollTimer = null
-  }
-  updateAllPolling.value = false
-}
-
-/**
- * F1: Resilient polling loop.
- *   - null   = 404, no job → stop
- *   - undefined = transient error (network/5xx) → keep polling with bounded backoff
- *   - UpdateAllJob = update UI, decide whether to continue
- */
-function _scheduleUpdateAllPoll(): void {
-  if (updateAllPolling.value) return
-  updateAllPolling.value = true
-  updateAllTransientErrors.value = 0
-
-  const poll = async () => {
-    const result = await codeSync.getUpdateAllStatus()
-
-    if (result === undefined) {
-      // Transient error (SLM restart in progress)
-      updateAllTransientErrors.value += 1
-      const decision = classifyUpdateAllPollError(
-        updateAllTransientErrors.value,
-        UPDATE_ALL_LOST_CONTACT_ERRORS,
-        UPDATE_ALL_MAX_TRANSIENT_ERRORS,
-      )
-      if (decision === 'giveup') {
-        // Gave up — show "lost contact" banner, re-enable CTA
-        updateAllLostContact.value = true
-        updateAllPolling.value = false
-        updateAllPollTimer = null
-        return
-      }
-      if (decision === 'lost-contact') {
-        updateAllLostContact.value = true
-      }
-      // Keep polling (backoff: 2s). During stage-3, updateAllReconnecting is
-      // already true (transient errors >= 1) so the reconnecting affordance
-      // shows immediately without waiting for the lost-contact threshold.
-      updateAllPollTimer = setTimeout(poll, 2000)
-      return
-    }
-
-    // Successful contact — clear lost-contact banner if it was showing
-    updateAllLostContact.value = false
-    updateAllTransientErrors.value = 0
-
-    if (result === null) {
-      // True 404: no job ever started → stop polling
-      _stopUpdateAllPoll()
-      return
-    }
-
-    updateAllJob.value = result
-    if (result.status === 'running' || result.status === 'pending') {
-      updateAllPollTimer = setTimeout(poll, 2000)
-    } else {
-      updateAllPolling.value = false
-      updateAllPollTimer = null
-      // Refresh status / pending nodes once pipeline finishes
-      await Promise.all([codeSync.fetchStatus(), codeSync.fetchPendingNodes()])
-    }
-  }
-
-  updateAllPollTimer = setTimeout(poll, 1000)
+function goToLogin(): void {
+  window.location.href = buildLoginUrl(window.location)
 }
 
 async function handleUpdateAll(): Promise<void> {
   codeSync.clearError()
-  updateAllLostContact.value = false
+  _clearUpdateAllFlags()
   const job = await codeSync.startUpdateAll()
   if (job) {
     updateAllJob.value = job
@@ -878,7 +817,7 @@ async function handleUpdateAll(): Promise<void> {
 // Resume polling if a job is already running when the view mounts
 async function _checkExistingUpdateAllJob(): Promise<void> {
   const result = await codeSync.getUpdateAllStatus()
-  if (result === undefined || result === null) {
+  if (result === undefined || result === null || result === UPDATE_ALL_UNAUTHENTICATED) {
     return
   }
   updateAllJob.value = result
@@ -1132,34 +1071,17 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- #12593: reconnecting / lost-contact banner. Shows IMMEDIATELY (spinner)
-         during the stage-3 self-restart window; escalates to a static warning
-         with a retry CTA only once polling has lost contact / given up. -->
-    <BaseAlert
-      v-if="updateAllLostContact || updateAllReconnecting"
-      variant="warning"
-      class="mb-6"
-      :icon="!updateAllReconnecting || updateAllLostContact"
-    >
-      <template #title>
-        <svg v-if="updateAllReconnecting && !updateAllLostContact" class="w-4 h-4 animate-spin inline-block mr-1.5 align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-        </svg>
-        {{ $t('codeSyncView.sLMManagerRestarting') }}
-      </template>
-      <span v-if="updateAllReconnecting && !updateAllLostContact">
-        {{ $t('codeSyncView.pipelineReconnectingAttempt', { attempt: updateAllTransientErrors }) }}
-      </span>
-      <span v-else>{{ $t('codeSyncView.codeSyncedSuccessfullyBackend') }}</span>
-      <template v-if="updateAllLostContact" #actions>
-        <button
-          @click="updateAllLostContact = false; handleUpdateAll()"
-          class="btn btn-secondary text-sm shrink-0"
-        >
-          {{ $t('codeSyncView.updateAll') }}
-        </button>
-      </template>
-    </BaseAlert>
+    <!-- #12593/#20201: reconnecting / lost-contact / gave-up / session-expired banner -->
+    <UpdateAllPollBanner
+      :reconnecting="updateAllReconnecting"
+      :lost-contact="updateAllLostContact"
+      :gave-up="updateAllGaveUp"
+      :auth-failed="updateAllAuthFailed"
+      :attempt="updateAllTransientErrors"
+      @login="goToLogin"
+      @recheck="handleRecheckUpdateAll"
+      @update="_clearUpdateAllFlags(); handleUpdateAll()"
+    />
 
     <!-- Status Banner -->
     <div class="card p-5 mb-6">

@@ -47,7 +47,8 @@ def _load_reader():
             sys.modules["autobot_shared.logging_manager"] = saved
 
 
-read_self_update_verdict = _load_reader().read_self_update_verdict
+_reader = _load_reader()
+read_self_update_verdict = _reader.read_self_update_verdict
 
 _COMPLETE = """\
 PLAY [Play 1 - Prepare] ********************************************************
@@ -99,7 +100,7 @@ def test_complete_run_is_not_degraded(tmp_path):
 
 
 def test_run_that_died_after_play_one_is_degraded(tmp_path):
-    v = read_self_update_verdict(_write(tmp_path, _TRUNCATED))
+    v = read_self_update_verdict(_write(tmp_path, _TRUNCATED), run_alive=False)
 
     assert v.log_present
     assert v.complete is False
@@ -379,3 +380,68 @@ def test_an_unbound_caller_still_gets_the_last_verdict(tmp_path):
     assert v.complete is True
     assert v.run_started_at == "2026-08-29T11:36:00+00:00"
     assert "run started 2026-08-29T11:36:00+00:00" in (v.reason or "")
+
+
+# --- #19770: no recap is three different things, told apart by liveness --------
+
+
+@pytest.fixture
+def reader_log(monkeypatch):
+    """The module's logger, replaced so levels can be asserted (the real one is stubbed here)."""
+    from unittest.mock import MagicMock
+
+    log = MagicMock()
+    monkeypatch.setattr(_reader, "logger", log)
+    _reader._reported_runs.clear()
+    return log
+
+
+def test_no_recap_while_the_run_is_alive_is_running_and_below_error(tmp_path, reader_log):
+    v = read_self_update_verdict(_write(tmp_path, _TRUNCATED), run_alive=True)
+
+    assert v.state == "running"
+    assert "in progress" in v.reason and "Play 1 - Prepare" in v.reason
+    assert "did not finish" not in v.reason and "cut short" not in v.reason
+    reader_log.error.assert_not_called()
+    reader_log.warning.assert_not_called()
+
+
+def test_no_recap_after_the_run_ended_is_one_error_per_run_across_polls(tmp_path, reader_log):
+    log = _write(tmp_path, _TRUNCATED)
+
+    first = read_self_update_verdict(log, run_alive=False)
+    second = read_self_update_verdict(log, run_alive=False)
+
+    assert first.state == second.state == "ended_without_recap"
+    assert "did not finish" in first.reason
+    assert reader_log.error.call_count == 1
+
+
+def test_a_new_run_that_ended_without_a_recap_is_reported_again(tmp_path, reader_log):
+    stamped = "SELF-UPDATE RUN STARTED {ts}\n" + _TRUNCATED
+    read_self_update_verdict(_write(tmp_path, stamped.format(ts="2026-10-27T11:00:00+00:00")), run_alive=False)
+    read_self_update_verdict(_write(tmp_path, stamped.format(ts="2026-10-28T11:00:00+00:00")), run_alive=False)
+
+    assert reader_log.error.call_count == 2
+
+
+def test_unmeasured_liveness_is_unknown_never_cut_short(tmp_path, reader_log):
+    v = read_self_update_verdict(_write(tmp_path, _TRUNCATED))
+
+    assert v.run_alive is None and v.state == "unknown"
+    assert "unknown" in v.reason
+    assert "cut short" not in v.reason and "did not finish" not in v.reason
+    assert v.degraded is True, "an unmeasured run must still not read as success"
+    reader_log.error.assert_not_called()
+
+
+def test_a_running_verdict_stays_degraded_and_incomplete_for_existing_callers(tmp_path, reader_log):
+    v = read_self_update_verdict(_write(tmp_path, _TRUNCATED), run_alive=True)
+
+    assert v.complete is False and v.degraded is True
+
+
+def test_a_complete_log_ignores_liveness(tmp_path, reader_log):
+    v = read_self_update_verdict(_write(tmp_path, _COMPLETE), run_alive=True)
+
+    assert v.state == "complete" and v.complete is True and v.degraded is False
