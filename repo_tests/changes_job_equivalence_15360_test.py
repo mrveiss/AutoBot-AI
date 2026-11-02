@@ -233,6 +233,7 @@ ALLOWED_ADDITIONS = {
             f"{WORKFLOWS}/co-located-smoke.yml",
             # #17500, #18729: both guards read the secrets generator, so editing it must run the suite.
             "docker/generate-secrets.sh",
+            "docker/write-redis-acl.sh",  # #17500
             "docker/postgres/init-databases.sh",
             # #19178: user_docs_stay_consistent_19178_test.py reads docs/README.md.
             "docs/README.md",
