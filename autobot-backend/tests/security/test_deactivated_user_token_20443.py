@@ -20,8 +20,6 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from starlette.requests import Request
 
-from autobot_shared.auth.interactive_principal import LOGIN_TOKEN_TYPE
-from autobot_shared.auth.jwt_core import encode_jwt
 from autobot_shared.db_session import (
     POST_COMMIT_CALLBACKS,
     PostCommitCallbackError,
@@ -38,36 +36,13 @@ from autobot_shared.user_management.password_epoch import (
 )
 from autobot_shared.user_management.user_service import UserService
 from testkit.fake_async_session import FakeAsyncSession
-from tests.security._credential_harness import PLATFORM_SECRET, real_middleware
+from tests.security._credential_harness import real_middleware
+from tests.security._revocation_harness import assert_refused as _assert_refused
+from tests.security._revocation_harness import token_request as _token_request
 
 
 class _Bound(UserService):
     user_model = MagicMock()
-
-
-@pytest.fixture
-def epochs():
-    """The real epoch rule over an in-memory store."""
-    store: dict[str, int] = {}
-
-    async def get_epoch(subject):
-        return store.get(subject)
-
-    async def set_epoch(subject, *, now=None):
-        store[subject] = int(time.time()) if now is None else now
-        return store[subject]
-
-    password_epoch.use_epoch_store(get_epoch=get_epoch, set_epoch=set_epoch)
-    yield store
-    password_epoch.reset_epoch_store()
-
-
-@pytest.fixture
-def get_current_user(real_auth_middleware, monkeypatch):
-    middleware = real_middleware(real_auth_middleware, enable_auth=True)
-    monkeypatch.setattr(real_auth_middleware, "get_auth_middleware", lambda: middleware)
-    monkeypatch.setattr(real_auth_middleware, "verify_internal_api_key", lambda _provided: False)
-    return real_auth_middleware.get_current_user
 
 
 def _user(**state):
@@ -87,22 +62,6 @@ def _service(user):
 async def _commit(service) -> None:
     """The commit succeeded: run what the session queued for after it."""
     await _run_post_commit_callbacks(service.session)
-
-
-def _token_request(age_seconds: int = 60, username: str = "alice") -> Request:
-    claims = {"username": username, "role": "user", "token_type": LOGIN_TOKEN_TYPE}
-    claims["iat"] = int(time.time()) - age_seconds
-    token = encode_jwt(claims, secret=PLATFORM_SECRET, expiry_hours=24)
-    headers = [(b"authorization", f"Bearer {token}".encode())]
-    scope = {"type": "http", "method": "GET", "path": "/api/chat", "query_string": b"", "headers": headers}
-    return Request({**scope, "client": ("testclient", 5), "app": FastAPI()})
-
-
-async def _assert_refused(get_current_user, request) -> HTTPException:
-    with pytest.raises(HTTPException) as denied:
-        await get_current_user(request)
-    assert denied.value.status_code == 401
-    return denied.value
 
 
 @pytest.mark.asyncio
