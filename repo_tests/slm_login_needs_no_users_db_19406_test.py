@@ -11,13 +11,14 @@ so this keeps the boundary on every PR: a login or startup path that imports the
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
 SLM = repo_root() / "autobot-slm-backend"
 USERS_DB_ACCESS = re.compile(r"\bget_autobot_(?:db|session|session_maker|engine)\b")
 ALLOWED = {"user_management/database.py", "api/autobot_users.py", "api/autobot_teams.py"}
-MIN_FILES_EXAMINED = 200
 
 
 def _is_test(relative: str) -> bool:
@@ -29,6 +30,22 @@ def users_db_readers(sources: dict[str, str]) -> set[str]:
     return {path for path, text in sources.items() if USERS_DB_ACCESS.search(text)}
 
 
+def _source_paths(root: Path) -> list[str]:
+    """Non-test SLM python, relative to the SLM directory."""
+    base = root / SLM.name
+    return sorted(name for name in (p.relative_to(base).as_posix() for p in base.rglob("*.py")) if not _is_test(name))
+
+
+REACH = declare(
+    "slm-users-db-scan",
+    discover=_source_paths,
+    floor=259,
+    what="non-test SLM python source",
+    roots=(SLM.name,),
+    growth=100,
+)
+
+
 def _sources() -> dict[str, str]:
     paths = {path.relative_to(SLM).as_posix(): path for path in SLM.rglob("*.py")}
     return {name: path.read_text(encoding="utf-8") for name, path in paths.items() if not _is_test(name)}
@@ -36,7 +53,7 @@ def _sources() -> dict[str, str]:
 
 def test_only_the_user_routers_reach_autobot_users() -> None:
     sources = _sources()
-    assert len(sources) >= MIN_FILES_EXAMINED, f"examined only {len(sources)} files"
+    REACH.completed(list(sources))
     assert users_db_readers(sources) == ALLOWED
 
 

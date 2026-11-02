@@ -17,8 +17,9 @@ from pathlib import Path
 
 import pytest
 import yaml
+from repo_tests._paths import repo_root
 
-_ROOT = Path(__file__).resolve().parents[1]
+_ROOT = repo_root()
 _SCRIPT = _ROOT / "docker" / "postgres" / "copy-slm-databases.sh"
 _BIN = Path("/usr/lib/postgresql/16/bin")
 _USER = "autobot"

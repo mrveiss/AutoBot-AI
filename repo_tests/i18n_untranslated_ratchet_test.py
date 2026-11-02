@@ -58,16 +58,16 @@ from __future__ import annotations
 import json
 import sys
 from collections import Counter
-from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_text
 
 from scripts.list_untranslated import LOCALES, MIN_MEANINGFUL_LENGTH, flatten, is_meaningful, load, untranslated_keys
 
 _LOCALES = LOCALES
 
-_ROOT = Path(__file__).resolve().parents[1]
+_ROOT = repo_root()
 _CODES = sorted(path.stem for path in _LOCALES.glob("*.json") if path.stem != "en")
 
 # The ONE definition of "untranslated" lives in scripts/list_untranslated.py, which
