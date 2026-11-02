@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shlex
 import signal
 from dataclasses import dataclass
 
@@ -61,9 +62,14 @@ async def _reap(process: asyncio.subprocess.Process) -> None:
 
 
 async def run_bounded(command: str, *, cwd: str, timeout_s: float, max_output_bytes: int) -> BoundedResult:
-    """Run *command* in a shell in *cwd*, killing its process group after *timeout_s*."""
-    process = await asyncio.create_subprocess_shell(
-        command,
+    """Run *command* in *cwd* with no shell, killing its process group after *timeout_s*.
+
+    The words come from ``shlex.split`` and the first one is what runs, so ``;``, ``$()``
+    and quotes in an argument are plain text, never interpreted. A command that does not
+    parse raises ``ValueError``.
+    """
+    process = await asyncio.create_subprocess_exec(
+        *shlex.split(command),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         cwd=cwd,

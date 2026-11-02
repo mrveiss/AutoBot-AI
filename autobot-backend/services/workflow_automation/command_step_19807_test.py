@@ -239,7 +239,7 @@ async def test_a_timeout_is_exit_124_with_a_stderr_that_says_so(tmp_path):
 async def test_a_timeout_kills_the_child_not_only_the_shell(tmp_path):
     pid_file = tmp_path / "pid"
     run = await run_bounded(
-        f"echo $$ > {pid_file}; sleep 60; true", cwd=str(tmp_path), timeout_s=1, max_output_bytes=1000
+        f"sh -c 'echo $$ > {pid_file}; sleep 60; true'", cwd=str(tmp_path), timeout_s=1, max_output_bytes=1000
     )
     assert run.timed_out is True
     with pytest.raises(ProcessLookupError):
@@ -248,7 +248,7 @@ async def test_a_timeout_kills_the_child_not_only_the_shell(tmp_path):
 
 @pytest.mark.asyncio
 async def test_output_is_capped_per_stream(tmp_path):
-    run = await run_bounded("yes | head -c 100000", cwd=str(tmp_path), timeout_s=10, max_output_bytes=1000)
+    run = await run_bounded("sh -c 'yes | head -c 100000'", cwd=str(tmp_path), timeout_s=10, max_output_bytes=1000)
     assert len(run.stdout) == 1000 and run.truncated is True and run.return_code == 0
 
 
@@ -410,6 +410,13 @@ async def test_disabled_command_security_refuses_the_step(layer):
         "find . -exec id ;",
         "date -f /etc/passwd",
         "/bin/ls",
+        "echo 'a;b'",
+        'echo "\'" ; cat /etc/passwd ; echo "\'"',
+        "echo \"'$(id)'\"",
+        "date -f/etc/shadow",
+        "date --file=/etc/shadow",
+        "date -uf /etc/shadow",
+        "hostname -F /etc/shadow",
     ],
 )
 async def test_an_unattended_run_refuses_what_is_not_on_the_allowlist(layer, command):
@@ -427,7 +434,7 @@ async def _refused_with_nothing_run_for(command: str):
     return failed.value
 
 
-@pytest.mark.parametrize("command", ["echo hi", "pwd", "ls", "echo 'a;b'", "date +%Y"])
+@pytest.mark.parametrize("command", ["echo hi", "pwd", "ls", "date +%Y"])
 def test_the_allowlist_admits_inert_commands(command):
     from unattended_commands import unattended_refusal
 
@@ -446,7 +453,7 @@ async def test_the_child_inherits_no_backend_environment(tmp_path, monkeypatch):
 @pytest.mark.asyncio
 async def test_a_backgrounded_process_does_not_outlive_the_step(tmp_path):
     pid_file = tmp_path / "bg.pid"
-    await run_bounded(f"sleep 60 & echo $! > {pid_file}", cwd=str(tmp_path), timeout_s=2, max_output_bytes=1000)
+    await run_bounded(f"sh -c 'sleep 60 & echo $! > {pid_file}'", cwd=str(tmp_path), timeout_s=2, max_output_bytes=1000)
     for _ in range(50):  # SIGKILL is delivered asynchronously
         if _is_gone(pid_file):
             break
@@ -482,3 +489,42 @@ def test_every_allowlisted_command_is_safe_in_the_classifier_too():
     from unattended_commands import UNATTENDED_ALLOWED_COMMANDS
 
     assert UNATTENDED_ALLOWED_COMMANDS <= SAFE_COMMANDS
+
+
+@pytest.mark.asyncio
+async def test_no_shell_interprets_metacharacters_in_an_argument(tmp_path):
+    marker = tmp_path / "ran"
+    run = await run_bounded(
+        f"echo 'a;touch {marker}' \"$(touch {marker})\" `touch {marker}`",
+        cwd=str(tmp_path),
+        timeout_s=10,
+        max_output_bytes=1000,
+    )
+    assert run.return_code == 0
+    assert not marker.exists(), "a shell interpreted ; or $() in an argument"
+    assert run.stdout.decode("utf-8").startswith("a;touch ") and "$(touch" in run.stdout.decode("utf-8")
+
+
+def test_a_command_step_always_requires_confirmation_however_it_is_built():
+    from services.workflow_serializer import WorkflowSerializer
+
+    from .models import WorkflowStep
+
+    built = WorkflowStep(step_id="s", command="echo hi", description="d", requires_confirmation=False)
+    imported = WorkflowSerializer._dict_to_step(
+        {"step_id": "s", "command": "echo hi", "description": "d", "requires_confirmation": False}
+    )
+    assert built.requires_confirmation is True and imported.requires_confirmation is True
+
+
+@pytest.mark.parametrize("role", ["user", "operator", None])
+def test_import_and_clone_need_an_administrator(role):
+    from api import workflow_export
+
+    app = FastAPI()
+    app.include_router(workflow_export.router)
+    app.dependency_overrides[get_current_user] = lambda: {"user_id": "u-1", "role": role}
+    client = TestClient(app, raise_server_exceptions=False)
+    doc = {"export_document": {}, "session_id": "s"}
+    assert client.post("/import", json=doc).status_code == 403
+    assert client.post("/share/abc/clone", json={"session_id": "s"}).status_code == 403

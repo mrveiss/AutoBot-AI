@@ -33,23 +33,29 @@ UNATTENDED_ALLOWED_COMMANDS: frozenset[str] = frozenset(
     {"echo", "pwd", "whoami", "hostname", "uname", "uptime", "date", "id", "ls"}
 )
 
-#: Characters that chain, substitute, redirect or continue a command. Refused anywhere
-#: outside single quotes, where the shell treats them literally.
+#: Characters that chain, substitute, redirect, quote-escape or continue a command. Refused anywhere in the
+#: text, quoted or not: a quote span is not a safe place, and an unattended run has no shell to need them
+#: (``run_bounded`` executes the parsed words directly).
 _SHELL_META = re.compile(r"[;&|<>$`\\\n\r(){}]")
-_SINGLE_QUOTED = re.compile(r"'[^']*'")
 
 #: Arguments that make a command run another program, whichever command carries them.
 _EXEC_STYLE_ARGS: frozenset[str] = frozenset(
     {"-exec", "-execdir", "-ok", "-okdir", "--exec", "--eval", "--to-command", "--checkpoint-action"}
 )
-#: Per-command arguments that read a file or change state (``date -f FILE``, ``date -s``).
-_COMMAND_SPECIFIC_ARGS: dict[str, frozenset[str]] = {"date": frozenset({"-f", "--file", "-s", "--set"})}
+#: Per-command arguments that read a named file or change state, matched by prefix so ``-f/etc/x`` and
+#: ``--file=/etc/x`` are caught as well as ``-f /etc/x``. ``date``: -f/--file read dates from a file,
+#: -r/--reference read a file's mtime, -s/--set change the clock; a short cluster such as ``-uf`` counts.
+#: ``hostname``: -F/--file read a name from a file. The other allowlisted commands take no file-reading flag.
+_COMMAND_SPECIFIC_ARGS: dict[str, re.Pattern[str]] = {
+    "date": re.compile(r"^(-[A-Za-z]*[fsr]|--(file|reference|set))"),
+    "hostname": re.compile(r"^(-[A-Za-z]*F|--file)"),
+}
 
 
 def unattended_refusal(command: str) -> str | None:
     """Why an unattended caller may not run *command*, or None. The reason never quotes the command."""
-    if _SHELL_META.search(_SINGLE_QUOTED.sub("", command)):
-        return "it chains, substitutes, redirects or continues over lines"
+    if _SHELL_META.search(command):
+        return "it chains, substitutes, redirects, escapes or continues over lines"
     try:
         words = shlex.split(command)
     except ValueError:
@@ -58,7 +64,7 @@ def unattended_refusal(command: str) -> str | None:
         return "it is empty"
     if words[0] not in UNATTENDED_ALLOWED_COMMANDS:
         return "its command is not on the unattended allowlist"
-    banned = _EXEC_STYLE_ARGS | _COMMAND_SPECIFIC_ARGS.get(words[0], frozenset())
-    if banned.intersection(words[1:]):
+    specific = _COMMAND_SPECIFIC_ARGS.get(words[0])
+    if _EXEC_STYLE_ARGS.intersection(words[1:]) or (specific and any(specific.match(w) for w in words[1:])):
         return "it carries an argument that executes code or reads a file"
     return None

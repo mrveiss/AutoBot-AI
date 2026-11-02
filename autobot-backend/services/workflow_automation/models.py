@@ -153,6 +153,11 @@ class WorkflowStep:
     # Issue #2397: Step-level configuration dict for vision and future step types.
     step_config: Metadata | None = None
 
+    def __post_init__(self) -> None:
+        """Issue #19807: a command step always needs confirmation, whoever built it (route, import, clone, store)."""
+        if self.step_type == "command_execution":
+            self.requires_confirmation = True
+
     # === Issue #372: Feature Envy Reduction Methods ===
 
     def to_status_dict(self) -> Metadata:
