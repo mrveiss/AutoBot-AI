@@ -35,3 +35,49 @@ register_env_var(
         range=(60, 604800),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_WORKFLOW_COMMAND_TIMEOUT_S",
+        type=int,
+        default=300,
+        description=(
+            "Seconds a workflow command step may run before its whole process group is killed "
+            "and the step fails with exit code 124 (#19807). Raising it lets long builds finish; "
+            "lowering it kills stuck commands sooner (services/workflow_automation/command_step.py)."
+        ),
+        component="terminal",
+        range=(1, 3600),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_WORKFLOW_COMMAND_MAX_OUTPUT_BYTES",
+        type=int,
+        default=1048576,
+        description=(
+            "Bytes of stdout, and separately of stderr, a workflow command step keeps; the rest is "
+            "read and discarded and the step result is marked truncated (#19807). Raising it keeps "
+            "more of a chatty command's output in memory and in the step result "
+            "(services/workflow_automation/command_step.py)."
+        ),
+        component="terminal",
+        range=(1024, 104857600),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_WORKFLOW_COMMAND_CWD",
+        type=str,
+        default="",
+        description=(
+            "Directory workflow command steps run in (#19807). Empty means a dedicated "
+            "'autobot-workflow-commands' directory under the system temp directory, created on "
+            "first use, so a step does not start inside the application tree "
+            "(services/workflow_automation/command_step.py)."
+        ),
+        component="terminal",
+    )
+)
