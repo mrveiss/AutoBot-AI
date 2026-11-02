@@ -796,15 +796,6 @@ export function useAutobotApi() {
     return response
   }
 
-  // No route updates a rule (#18736 decides): delete and re-create it instead.
-  async function updatePermissionRule(
-    id: string,
-    data: Partial<PermissionRule>
-  ): Promise<PermissionRule> {
-    const response = await client.patch<PermissionRule>(`/permissions/rules/${id}`, data)
-    return response
-  }
-
   async function deletePermissionRule(rule: Pick<PermissionRule, 'tool' | 'pattern'>): Promise<void> {
     await client.delete('/permissions/rules', { body: rule })
   }
@@ -831,18 +822,6 @@ export function useAutobotApi() {
     }))
   }
 
-  async function getPromptTemplate(id: string): Promise<PromptTemplate> {
-    const response = await client.get<PromptTemplate>(`/prompts/${id}`)
-    return response
-  }
-
-  async function createPromptTemplate(
-    template: Omit<PromptTemplate, 'id' | 'modified_at'>
-  ): Promise<PromptTemplate> {
-    const response = await client.post<PromptTemplate>('/prompts', template)
-    return response
-  }
-
   async function updatePromptTemplate(
     id: string,
     data: Partial<PromptTemplate>
@@ -850,10 +829,6 @@ export function useAutobotApi() {
     // Backend exposes PUT /api/prompts/:id (also POST) — PATCH is not supported (Issue #11555)
     const response = await client.put<PromptTemplate>(`/prompts/${id}`, data)
     return response
-  }
-
-  async function deletePromptTemplate(id: string): Promise<void> {
-    await client.delete(`/prompts/${id}`)
   }
 
   async function revertPromptToDefault(id: string): Promise<PromptTemplate> {
@@ -964,11 +939,6 @@ export function useAutobotApi() {
     return response
   }
 
-  async function updateAgent(id: string, data: Partial<Agent>): Promise<Agent> {
-    const response = await client.patch<Agent>(`/agents/${id}`, data)
-    return response
-  }
-
   async function getAvailableAgents(): Promise<Record<string, unknown>[]> {
     const response = await client.get<Record<string, unknown>[]>('/agent/agents/available')
     return response
@@ -997,19 +967,6 @@ export function useAutobotApi() {
   // =============================================================================
   // RUM (Real User Monitoring) API
   // =============================================================================
-
-  async function getRUMMetrics(options?: {
-    start?: string
-    end?: string
-    interval?: string
-  }): Promise<RUMMetrics[]> {
-    const params = new URLSearchParams()
-    if (options?.start) params.append('start', options.start)
-    if (options?.end) params.append('end', options.end)
-    if (options?.interval) params.append('interval', options.interval)
-    const response = await client.get<{ metrics: RUMMetrics[] }>(`/rum/metrics?${params}`)
-    return response.metrics
-  }
 
   // =============================================================================
   // Voice API
@@ -1146,25 +1103,6 @@ export function useAutobotApi() {
   // =============================================================================
   // Logs API (for viewing, not forwarding)
   // =============================================================================
-
-  async function getLogs(options?: {
-    source?: string
-    level?: string
-    search?: string
-    limit?: number
-    offset?: number
-  }): Promise<Array<{ timestamp: string; level: string; message: string; source: string }>> {
-    const params = new URLSearchParams()
-    if (options?.source) params.append('source', options.source)
-    if (options?.level) params.append('level', options.level)
-    if (options?.search) params.append('search', options.search)
-    if (options?.limit) params.append('limit', options.limit.toString())
-    if (options?.offset) params.append('offset', options.offset.toString())
-    const response = await client.get<{
-      logs: Array<{ timestamp: string; level: string; message: string; source: string }>
-    }>(`/logs?${params}`)
-    return response.logs
-  }
 
   // =============================================================================
   // System Monitoring API
@@ -1842,14 +1780,10 @@ export function useAutobotApi() {
     // Permissions
     getPermissionRules,
     createPermissionRule,
-    updatePermissionRule,
     deletePermissionRule,
     // Prompts
     getPromptTemplates,
-    getPromptTemplate,
-    createPromptTemplate,
     updatePromptTemplate,
-    deletePromptTemplate,
     revertPromptToDefault,
     // Files
     listFiles,
@@ -1870,14 +1804,12 @@ export function useAutobotApi() {
     // Agents (Issue #835)
     getAgent,
     getAgents,
-    updateAgent,
     getAvailableAgents,
     getAgentsStatus,
     pauseAgent,
     resumeAgent,
     executeAgentGoal,
     // RUM
-    getRUMMetrics,
     // Shared Chat Links (GH#8996)
     getSharedLinksAdmin,
     // Voice (Issue #835)
@@ -1899,7 +1831,6 @@ export function useAutobotApi() {
     repairOrphan,
     getAuditLogs,
     // Logs
-    getLogs,
     // System
     getSystemHealth,
     getSystemMetrics,
