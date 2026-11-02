@@ -39,7 +39,8 @@ describe('useWorkflowBuilder workflow socket notices (#17677)', () => {
   });
 
   it('step_confirmation_required toasts the wait, refreshes the workflow and answers nothing', async () => {
-    useWorkflowBuilder();
+    const { currentWorkflow } = useWorkflowBuilder();
+    currentWorkflow.value = { workflow_id: 'wf-1' } as never;
     send({
       type: 'step_confirmation_required',
       workflow_id: 'wf-1',
@@ -50,6 +51,32 @@ describe('useWorkflowBuilder workflow socket notices (#17677)', () => {
     expect(toast).toHaveBeenCalledWith('workflow.builder.stepAwaitingApproval|Restart service', 'warning');
     expect(getUrls()).toContain('workflow_status/wf-1');
     expect(http.post).not.toHaveBeenCalled();
+  });
+
+  it('a notice for another workflow does not fetch or replace the displayed one', async () => {
+    const { currentWorkflow } = useWorkflowBuilder();
+    currentWorkflow.value = { workflow_id: 'wf-1' } as never;
+    send({ type: 'step_rejected_by_judge', workflow_id: 'wf-2', step_id: 's', reason: 'x' });
+    await flush();
+    expect(getUrls()).not.toContain('workflow_status');
+    expect(currentWorkflow.value?.workflow_id).toBe('wf-1');
+  });
+
+  it('a response arriving after the user switched workflows is dropped', async () => {
+    let release!: (v: unknown) => void;
+    http.get.mockImplementation((url: string) =>
+      String(url).includes('workflow_status')
+        ? new Promise((r) => { release = r; })
+        : Promise.resolve({ workflows: [] }),
+    );
+    const { currentWorkflow } = useWorkflowBuilder();
+    currentWorkflow.value = { workflow_id: 'wf-1' } as never;
+    send({ type: 'step_rejected_by_judge', workflow_id: 'wf-1', step_id: 's', reason: 'x' });
+    await flush();
+    currentWorkflow.value = { workflow_id: 'wf-2' } as never;
+    release({ workflow: { workflow_id: 'wf-1', stale: true } });
+    await flush();
+    expect(currentWorkflow.value?.workflow_id).toBe('wf-2');
   });
 
   it('step_rejected_by_judge toasts the reason', () => {

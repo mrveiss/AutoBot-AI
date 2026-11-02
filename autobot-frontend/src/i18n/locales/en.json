@@ -4655,7 +4655,7 @@
       "stepApproved": "Step approved",
       "stepAwaitingApproval": "Step waiting for your approval: {step}",
       "stepRejectedByJudge": "Step refused before it ran: {reason}",
-      "controlRefused": "Pause/resume refused: only an administrator or the workflow's owner may control it",
+      "controlRefused": "Refused: only an administrator or the workflow's owner may control it",
       "stepSkipped": "Step skipped",
       "rerunNotFound": "Could not find workflow to re-run",
       "rerunning": "Re-running \"{name}\"",

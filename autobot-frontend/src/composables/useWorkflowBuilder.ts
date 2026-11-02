@@ -21,7 +21,7 @@ import type { ApiResponse } from '@/types/api';
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
 import type { WorkflowTemplateDetail } from '@/types/workflowTemplates';
 import { useWebSocket } from '@/composables/useWebSocket';
-import { useWorkflowSocketNotices } from '@/composables/useWorkflowSocketNotices';
+import { refreshIfDisplayed, useWorkflowSocketNotices } from '@/composables/useWorkflowSocketNotices';
 import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl';
 import { useLoadingState } from '@/composables/useLoadingState';
 
@@ -1152,7 +1152,7 @@ export function useWorkflowBuilder() {
   function onWorkflowNotice(data: Record<string, unknown>): void {
     const workflowId = showWorkflowNotice(data);
     if (data.type === 'automation_control_refused') return;
-    if (workflowId) void getWorkflowStatus(workflowId); // the step's new status lives on the workflow
+    if (workflowId) void refreshIfDisplayed(currentWorkflow, workflowId, (id) => apiClient.getWorkflowStatus(id)); // the step's new status lives on the workflow
     loadActiveWorkflows();
   }
 
