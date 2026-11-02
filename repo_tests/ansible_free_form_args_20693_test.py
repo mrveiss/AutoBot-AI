@@ -4,12 +4,11 @@
 # Author: mrveiss
 """#20693: a stray quote in a shell comment refused a whole include, and every update stopped before migrating."""
 
-from pathlib import Path
-
 import pytest
 import yaml
+from repo_tests._paths import repo_root
 
-_ROOT = Path(__file__).resolve().parents[1]
+_ROOT = repo_root()
 _BACKUP = _ROOT / "autobot-slm-backend/ansible/_shared/tasks/pre_migration_backup.yml"
 
 
