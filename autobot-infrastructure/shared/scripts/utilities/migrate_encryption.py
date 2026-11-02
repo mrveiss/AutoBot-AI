@@ -19,7 +19,6 @@ import logging
 import os
 import shutil
 import sys
-from autobot_shared.ssot_config import config as ssot_config
 from datetime import datetime
 from pathlib import Path
 
@@ -35,6 +34,7 @@ for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):  # the backend, and `
         sys.path.insert(0, str(_root))
 
 # Import AutoBot modules after path setup
+from autobot_shared.ssot_config import config as ssot_config  # noqa: E402
 from chat_history import ChatHistoryManager  # noqa: E402
 
 from config import config as global_config_manager  # noqa: E402

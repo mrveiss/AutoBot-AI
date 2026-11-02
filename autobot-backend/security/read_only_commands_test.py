@@ -104,7 +104,7 @@ def test_these_only_read(command):
         "cat ~/.ssh/config",
         "cat .ssh/known_hosts",
         "find .ssh",
-        "ls /home/someone/.ssh",
+        "ls /home/user/.ssh",
         "git show HEAD:id_rsa",
         "git show origin/main:secrets.yaml",
         "cat config/.env.local",
