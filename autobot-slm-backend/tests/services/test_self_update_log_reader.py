@@ -445,3 +445,11 @@ def test_a_complete_log_ignores_liveness(tmp_path, reader_log):
     v = read_self_update_verdict(_write(tmp_path, _COMPLETE), run_alive=True)
 
     assert v.state == "complete" and v.complete is True and v.degraded is False
+
+
+def test_a_flapping_liveness_signal_does_not_repeat_the_error(tmp_path, reader_log):
+    """#19770: unknown between two "ended" readings of one run is still one ERROR."""
+    log = _write(tmp_path, _TRUNCATED)
+    for alive in (False, None, False, None, False):
+        read_self_update_verdict(log, run_alive=alive)
+    assert reader_log.error.call_count == 1

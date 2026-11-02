@@ -5247,7 +5247,7 @@ def _completion_is_newer_than(completed_at: Optional[str], since: Optional[str])
     return done > fired
 
 
-def _rotated_completion_time() -> Optional[str]:
+def _rotated_completion_time(run_alive: Optional[bool] = None) -> Optional[str]:
     """When the last verdict came from the ROTATED log, when that log was rotated.
 
     Returns None when the verdict came from the live log (the normal case) or
@@ -5268,7 +5268,7 @@ def _rotated_completion_time() -> Optional[str]:
         from services.playbook_executor import SELF_UPDATE_LOG_PATH
         from services.self_update_log_reader import read_self_update_verdict
 
-        verdict = read_self_update_verdict(SELF_UPDATE_LOG_PATH)
+        verdict = read_self_update_verdict(SELF_UPDATE_LOG_PATH, run_alive=run_alive)
         if getattr(verdict, "from_rotated_log", False) is not True:
             return None
         # Only a run that reached its recap is a completion. `complete` is a real
@@ -5344,7 +5344,7 @@ async def _reconcile_self_update_stage(
     # probe_role_delivery and `/status` already gates on. Resolving this stage
     # on the weaker check would let a degraded self-update be reported as
     # resolved and then deploy to the fleet on the strength of it.
-    verdict = _read_last_self_update_verdict(stage.started_at)
+    verdict = _read_last_self_update_verdict(stage.started_at, run_alive=(await read_deploy_activity()).in_progress)
     if verdict.degraded:
         # Carry the reason into the stage: the count alone gave an operator
         # nothing to act on.

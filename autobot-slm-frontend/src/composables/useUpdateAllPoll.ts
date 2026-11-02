@@ -10,7 +10,7 @@
  * again) and giving up (stop claiming to reconnect, offer a re-check).
  */
 
-import { computed, ref, type Ref } from 'vue'
+import { computed, ref, type Ref, onScopeDispose } from 'vue'
 import {
   classifyUpdateAllPollError,
   isSelfUpdateReconnecting,
@@ -109,6 +109,8 @@ export function useUpdateAllPoll(
     clearFlags()
     schedule()
   }
+
+  onScopeDispose(stop)  // An in-flight poll must not reschedule after unmount.
 
   return { polling, transientErrors, lostContact, gaveUp, authFailed, reconnecting, schedule, stop, recheck, clearFlags }
 }
