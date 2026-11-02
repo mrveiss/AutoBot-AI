@@ -28,7 +28,8 @@ llm:
     enhanced_system_commands: dolphin-llama3:8b
     interactive_terminal: dolphin-llama3:8b
     security_scanner: dolphin-llama3:8b
-    llm_failsafe: dolphin-llama3:8b
+    llm_failsafe: llama3.2:1b
+    llm_failsafe_secondary: phi3:mini
     # Tier 6: Quality — user-facing chat, research, code
     chat: qwen3.5:9b
     research: qwen3.5:9b

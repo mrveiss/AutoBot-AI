@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List
 
+from agents.failsafe_models import failsafe_secondary_model
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
@@ -106,9 +107,8 @@ class LLMFailsafeAgent(StandardizedAgent):
         # Performance tracking
         self.tier_stats = {tier: {"requests": 0, "failures": 0, "avg_time": 0.0} for tier in LLMTier}
 
-        # Configuration - use explicit model from SSOT config
         self.primary_models = [self.model_name]
-        self.secondary_models = [self.model_name]
+        self.secondary_models = [failsafe_secondary_model(self.model_name)]
 
         # Timeout settings (in seconds)
         self.timeouts = {
@@ -496,7 +496,7 @@ class LLMFailsafeAgent(StandardizedAgent):
                 try:
                     messages = self._create_structured_messages(prompt, context)
                     response_data = await asyncio.wait_for(
-                        llm.chat(messages, llm_type=LLMType.TASK),
+                        llm.chat(messages, model_name=model, llm_type=LLMType.TASK),
                         timeout=self.timeouts[LLMTier.PRIMARY],
                     )
                     response = response_data.content
@@ -527,7 +527,7 @@ class LLMFailsafeAgent(StandardizedAgent):
                 try:
                     messages = [{"role": "user", "content": simplified_prompt}]
                     response_data = await asyncio.wait_for(
-                        llm.chat(messages, llm_type=LLMType.TASK),
+                        llm.chat(messages, model_name=model, llm_type=LLMType.TASK),
                         timeout=self.timeouts[LLMTier.SECONDARY],
                     )
                     response = response_data.content
