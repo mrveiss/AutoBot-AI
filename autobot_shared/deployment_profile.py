@@ -24,6 +24,8 @@ import logging  # stdlib: this module stays dependency-free (imported by ssot_co
 import os
 from typing import Any, Mapping, Optional
 
+from autobot_shared.ssot_role_mirrors import FEATURE_ROUTERS_STRICT_DEFAULT, FEATURE_ROUTERS_STRICT_PRODUCTION
+
 logger = logging.getLogger(__name__)
 
 #: Canonical name of the deployment environment (production / development / test / ...).
@@ -147,6 +149,21 @@ def environment_name(environ: Optional[Mapping[str, str]] = None) -> str:
 def is_non_production(name: Optional[str]) -> bool:
     """True only for an allow-listed non-production name; every other value is production."""
     return resolve_environment(name, None) in NON_PRODUCTION_ENVIRONMENTS
+
+
+def feature_routers_strict_default(environ: Optional[Mapping[str, str]] = None) -> str:
+    """The boot mode an environment implies (#19395); an unnamed one stays strict.
+
+    Only a NAMED environment counts: :data:`DEFAULT_PROFILE` is production, so resolving an unset
+    name would quietly turn dev checkouts and CI lenient, and a broken router would stop failing them.
+    """
+    env = _env(environ)
+    canonical, alias = env.get(ENVIRONMENT_VAR), env.get(ENVIRONMENT_ALIAS_VAR)
+    if not (canonical or "").strip() and not (alias or "").strip():
+        return FEATURE_ROUTERS_STRICT_DEFAULT
+    if resolve_environment(canonical, alias) in NON_PRODUCTION_ENVIRONMENTS:
+        return FEATURE_ROUTERS_STRICT_DEFAULT
+    return FEATURE_ROUTERS_STRICT_PRODUCTION
 
 
 def deployment_mode(environ: Optional[Mapping[str, str]] = None) -> str:
