@@ -16,10 +16,10 @@ from llc.adapters.claude_code_subscription_adapter import ClaudeCodeSubscription
 from llc.models.enums import LLCRunStatus
 
 
-def _init(api_key_source) -> dict:
+def _init(source) -> dict:
     event = {"type": "system", "subtype": "init", "session_id": "s", "model": "claude-sonnet-4-6", "tools": ["Bash"]}
-    if api_key_source is not None:
-        event["apiKeySource"] = api_key_source
+    if source is not None:
+        event["apiKeySource"] = source
     return event
 
 

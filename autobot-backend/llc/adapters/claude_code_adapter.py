@@ -440,10 +440,10 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         # stdout file (GH#9992).
         stderr_file: Optional[str] = state.get("stderr_file") if state else None
         stderr_tail = read_output_tail(stderr_file) if stderr_file else ""
-        # #20202: an oversized result line can start before the tail, so read its own text too.
-        # Only that field, not the wider read, whose tool output can mention rate limits in passing.
-        result_text = str(result_event.get("result") or "") if result_event else ""
-        if is_rate_limit_output(tail) or is_rate_limit_output(stderr_tail) or is_rate_limit_output(result_text):
+        # event_text is the wide re-read when an oversized result line needed one: a marker
+        # near the start of that line, or an error event before it, is outside the 4 KB tail.
+        # Tool output in it cannot match: JSONL events count only through their error fields.
+        if is_rate_limit_output(tail) or is_rate_limit_output(event_text) or is_rate_limit_output(stderr_tail):
             logger.warning(
                 "ClaudeCodeAdapter: rate-limit markers in output/stderr for run %s — signalling RATE_LIMITED",
                 run_id,
