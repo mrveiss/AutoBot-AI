@@ -254,7 +254,7 @@ jobs:
           # `set -e`. User and database come from the container, where compose set them.
           rows="" why="the SLM registered no fleet nodes"
           for _ in $(seq 1 12); do
-            rows="$(docker compose --env-file docker/.env.docker exec -T autobot-postgres \
+            rows="$(docker compose --env-file docker/.env.docker exec -T autobot-slm-postgres \
               sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tA -F " " -c "SELECT node_id, ip_address FROM nodes ORDER BY node_id"' \
               2>/dev/null)" || rows=""
             if [ -n "$rows" ]; then why="$(compare_nodes "$rows")" && { why=""; break; }; fi
