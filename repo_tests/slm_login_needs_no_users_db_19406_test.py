@@ -41,7 +41,6 @@ REACH = declare(
     discover=_source_paths,
     floor=259,
     what="non-test SLM python source",
-    roots=(SLM.name,),
     growth=100,
 )
 
