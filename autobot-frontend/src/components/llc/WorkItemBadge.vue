@@ -53,7 +53,7 @@ const colorClass = computed(() =>
 }
 .wib--xs { font-size: 0.6rem; padding: 0.1rem 0.35rem; }
 .wib--sm { font-size: 0.65rem; padding: 0.1rem 0.4rem; }
-.wib--md { font-size: 0.75rem; padding: 0.125rem 0.5rem; }
+.wib--md { font-size: var(--text-xs); padding: 0.125rem 0.5rem; }
 
 .wib-dot {
   display: inline-block;
