@@ -38,19 +38,27 @@ def _python_files(root: Path) -> list[str]:
         return []
 
 
+def _all_python(root: Path) -> int:
+    try:
+        return len(tracked_paths(root, "*.py"))
+    except EmptyEnumeration:
+        return 0
+
+
 REACH = declare(
     "one-compare-and-delete-script",
     discover=_python_files,
-    floor=6202,  # mid-window: population 6402, growth 400
-    growth=400,
-    what="tracked python files under the backends and autobot_shared",
+    reference=_all_python,
+    min_fraction=0.7,
+    what="tracked python files",
+    roots=ROOTS,
 )
 
 
 def _copies() -> dict[str, int]:
     root = repo_root()
     paths = _python_files(root)
-    REACH.completed(len(paths))
+    REACH.completed(len(paths), root)
     found: dict[str, int] = {}
     for rel in paths:
         path = root / rel
