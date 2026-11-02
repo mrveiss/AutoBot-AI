@@ -36,6 +36,7 @@ from services.inventory_builder import (
 from services.playbook_output_stream import PIPE_LINE_LIMIT, iter_pipe_lines
 from services.process_group import KILL_GRACE_S, kill_process_group
 from services.provision_progress import TaskProgressTracker
+from services.rollback_target import deploy_ref_vars
 from services.unit_names import validate_unit_extra_vars
 
 logger = logging.getLogger(__name__)
@@ -1227,10 +1228,9 @@ class PlaybookExecutor:
         stage_dir = self._stage_dir_for_run(detach)
         effective_inventory, dynamic_inv_path = await self._select_inventory(inventory_path, stage_dir)
 
-        # Merge stored SLM secrets so standalone re-deploys get the wizard's secrets (#3519); the caller's
-        # keys are written !unsafe, the secrets are not (#19005).
-        merged_extra_vars: Dict[str, str] = {**await fetch_deploy_secrets(), **(extra_vars or {})}
-        extra_vars_file = self._stage_extra_vars(merged_extra_vars, stage_dir, tuple(extra_vars or ()))
+        # Stored SLM secrets (#3519) + a rollback's deploy ref (#20214); only the caller's keys are !unsafe (#19005).
+        merged = {**await fetch_deploy_secrets(), **await deploy_ref_vars(playbook_name), **(extra_vars or {})}
+        extra_vars_file = self._stage_extra_vars(merged, stage_dir, tuple(extra_vars or ()))
 
         cmd = self._build_ansible_command(
             playbook_path,

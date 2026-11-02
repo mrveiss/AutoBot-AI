@@ -48,6 +48,8 @@ class SyncNodeContext:
 # Code cache directory
 from autobot_shared.git_probe import start_git
 
+#: Bound on the checkout that puts a detached code_source back on its branch (#20214).
+BRANCH_CHECKOUT_TIMEOUT_S = float(os.environ.get("SLM_BRANCH_CHECKOUT_TIMEOUT_S", "60"))
 CODE_CACHE_DIR = Path(os.environ.get("SLM_CODE_CACHE", "/var/lib/slm/code-cache"))
 
 SSH_KEY_PATH = config.path.ssh_key_path  # canonical inter-node key (#12429)
@@ -416,8 +418,13 @@ class SyncOrchestrator:
         return is_local_ip(node_ip)
 
     async def _git_pull_local(self, repo_path: str, branch: str) -> Tuple[bool, str]:
-        """Run git pull origin <branch> in a local repo. Helper for #1194."""
+        """Run git pull origin <branch> in a local repo. Helper for #1194.
+
+        A rollback leaves code_source on the chosen commit, detached (#20214); a pull cannot run from
+        there, so it is put back on the branch first. A no-op when it is already on one.
+        """
         try:
+            await self._return_to_branch(repo_path, branch)
             proc = await start_git("-C", repo_path, "pull", "origin", branch, stderr=asyncio.subprocess.STDOUT)
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
             output = stdout.decode("utf-8", errors="replace")
@@ -431,6 +438,23 @@ class SyncOrchestrator:
         except Exception as e:
             logger.error("git pull error in %s: %s", repo_path, e)
             return False, "git pull failed"
+
+    async def _return_to_branch(self, repo_path: str, branch: str) -> None:
+        """Check out *branch* when the repo's HEAD is detached; the tree is clean (the executor resets it)."""
+        head = await start_git(
+            "-C",
+            repo_path,
+            "symbolic-ref",
+            "-q",
+            "HEAD",
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        if await asyncio.wait_for(head.wait(), timeout=10) == 0:
+            return
+        logger.info("code_source HEAD is detached; checking out %s before the pull (#20214)", branch)
+        proc = await start_git("-C", repo_path, "checkout", branch, stderr=asyncio.subprocess.STDOUT)
+        await asyncio.wait_for(proc.communicate(), timeout=BRANCH_CHECKOUT_TIMEOUT_S)
 
     async def _get_local_git_commit(self, repo_path: str) -> str | None:
         """Get git HEAD commit from a local repo without SSH. Helper for #1194."""

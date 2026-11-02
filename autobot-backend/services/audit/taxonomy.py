@@ -133,6 +133,7 @@ class AuditAction(str, Enum):
     ROLE_DELETE = "role.delete"
     API_KEY_USE = "api_key.use"  # pragma: allowlist secret -- an action name, not a key
     SECURITY_SUSPICIOUS_ACTIVITY = "security.suspicious_activity"
+    CODE_ROLLBACK = "code.rollback"  # #20214: the SLM updater deploys an earlier commit the operator chose
 
 
 class ComplianceEventType(str, Enum):

@@ -50,6 +50,7 @@ _KNOWN_WRITERS: dict[str, str] = {
     "autobot-backend/a2a/trust_score.py": "trust_audit (SQLite), a domain history table -- #18285",
     "autobot-backend/security/enterprise/compliance_manager.py": "encrypted JSONL files, wired through the service in #18286",
     "autobot-slm-backend/api/security.py": "SLM slm_node_audit_logs, a separate table",
+    "autobot-slm-backend/services/rollback_audit.py": "audit_logs via audit_row (D1): the SLM rollback request, #20214",
     # Not an audit record: code-audit daemon state sharing the `audit:` prefix (D4, needs a key move).
     "autobot-backend/workers/audit_tasks.py": "daemon state, D4 pending a key move",
 }
