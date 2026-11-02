@@ -152,11 +152,3 @@ for _name, _provider in (
         "credentials belong in the secrets service.",
         "image_generation",
     )
-
-_register(
-    "AUTOBOT_NPU_WORKER_AUTOPAIR_INTERVAL_S",
-    int,
-    60,
-    "Seconds between passes that pair NPU workers on nodes the SLM assigned the role (#19706). Minimum 5.",
-    "npu",
-)
