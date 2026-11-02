@@ -84,6 +84,8 @@ export interface ValidationReport {
     quality_indicators: { validation_score: number; error_rate: number; recent_changes: number }
   }
   trends: ValidationTrends
+  /** False when no stored history backs the trend series (#20523); they are then empty, never invented. */
+  trends_available: boolean
   recommendations: ValidationRecommendation[]
   alerts: ValidationAlert[]
 }
