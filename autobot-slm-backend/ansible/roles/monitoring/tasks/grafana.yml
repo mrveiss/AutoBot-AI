@@ -88,7 +88,7 @@
 
 - name: Deploy AutoBot dashboards
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../../../autobot-infrastructure/shared/config/grafana/dashboards/"
+    src: "{{ role_path }}/../../../../autobot-infrastructure/shared/config/grafana/dashboards/"
     dest: /var/lib/grafana/dashboards/
     owner: root
     group: grafana
