@@ -18,7 +18,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
 from chat_history import ChatHistoryManager
 from constants.path_constants import PATH
-from utils.encoding_utils import is_terminal_prompt, strip_ansi_codes
+from utils.encoding_utils import is_terminal_prompt, strip_ansi_codes, strip_ansi_keep_whitespace
 
 logger = get_logger(__name__)
 
@@ -145,7 +145,7 @@ class TerminalChatIntegrator:
 
         try:
             # Strip ANSI escape codes before writing to transcript
-            clean_content = strip_ansi_codes(content)
+            clean_content = strip_ansi_keep_whitespace(content)
             if not clean_content:
                 return False
 
