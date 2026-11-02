@@ -206,7 +206,7 @@
 # node_modules/@autobot/* unlinked (or dangling at an old libs revision) so the
 # install below does NOT recreate the file: symlinks — vite then externalises
 # @autobot/ui to a bare specifier and the app white-pages at runtime. Remove the
-# @autobot scope first so `npm install` re-creates every file: workspace symlink
+# @autobot scope first so the install re-creates every file: workspace symlink
 # against the freshly-synced libs/ + autobot-plugins/ trees.
 - name: "Frontend | Remove stale @autobot workspace symlinks so npm relinks file: deps (#12112)"
   ansible.builtin.file:
@@ -217,9 +217,12 @@
   when: package_json_path.stat.exists
   tags: ['frontend', 'npm']
 
+# #20517: npm ci, the same install the updater runs: `npm install` rewrote the deployed
+# package-lock.json, which the Full-Tree Drift Check then reported as drift. esbuild is
+# declared in package.json and pinned in the lockfile, so this installs it too.
 - name: "Frontend | Install npm dependencies"
   ansible.builtin.command:
-    cmd: npm install --legacy-peer-deps
+    cmd: npm ci --ignore-scripts
     chdir: "{{ frontend_install_dir }}/autobot-frontend"
   become: true
   become_user: "{{ frontend_user }}"
@@ -228,16 +231,6 @@
   when: package_json_path.stat.exists
   register: _npm_install
   changed_when: _npm_install.rc == 0
-  tags: ['frontend', 'npm']
-
-- name: "Frontend | Install esbuild (required by vite/rolldown)"
-  ansible.builtin.command:
-    cmd: npm install esbuild --legacy-peer-deps
-    chdir: "{{ frontend_install_dir }}/autobot-frontend"
-  become: true
-  become_user: "{{ frontend_user }}"
-  when: package_json_path.stat.exists
-  changed_when: true
   tags: ['frontend', 'npm']
 
 # #10084: Vite bakes VITE_* into the bundle at BUILD time from .env* files in
