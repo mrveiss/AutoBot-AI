@@ -516,8 +516,8 @@ class TestCliAvailabilityGate:
         fake_adapter._required_cli = "claude"
 
         with (
-            patch(f"{_HBS}.get_adapter", return_value=fake_adapter),
-            patch(f"{_HBS}.is_subprocess_adapter", return_value=True),
+            patch("llc.scheduler.dispatch_gate.get_adapter", return_value=fake_adapter),
+            patch("llc.scheduler.dispatch_gate.is_subprocess_adapter", return_value=True),
             patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
             pytest.raises(HeartbeatDispatchSkipped),
         ):
@@ -533,8 +533,8 @@ class TestCliAvailabilityGate:
         fake_adapter._required_cli = "claude"
 
         with (
-            patch(f"{_HBS}.get_adapter", return_value=fake_adapter),
-            patch(f"{_HBS}.is_subprocess_adapter", return_value=True),
+            patch("llc.scheduler.dispatch_gate.get_adapter", return_value=fake_adapter),
+            patch("llc.scheduler.dispatch_gate.is_subprocess_adapter", return_value=True),
             patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
         ):
             await _dispatch_adapter(agent, {})
@@ -553,8 +553,8 @@ class TestCliAvailabilityGate:
         fake_adapter = MagicMock()
 
         with (
-            patch(f"{_HBS}.get_adapter", return_value=fake_adapter),
-            patch(f"{_HBS}.is_subprocess_adapter", return_value=False),
+            patch("llc.scheduler.dispatch_gate.get_adapter", return_value=fake_adapter),
+            patch("llc.scheduler.dispatch_gate.is_subprocess_adapter", return_value=False),
             patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
         ):
             await _dispatch_adapter(agent, {})
@@ -569,8 +569,8 @@ class TestCliAvailabilityGate:
         fake_adapter._required_cli = "gh"
 
         with (
-            patch(f"{_HBS}.get_adapter", return_value=fake_adapter),
-            patch(f"{_HBS}.is_subprocess_adapter", return_value=True),
+            patch("llc.scheduler.dispatch_gate.get_adapter", return_value=fake_adapter),
+            patch("llc.scheduler.dispatch_gate.is_subprocess_adapter", return_value=True),
             patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
             pytest.raises(HeartbeatDispatchSkipped),
         ):
