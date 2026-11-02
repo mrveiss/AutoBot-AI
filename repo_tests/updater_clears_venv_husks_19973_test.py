@@ -41,3 +41,44 @@ def test_every_marker_capable_pip_install_is_preceded_by_the_repair() -> None:
 def test_contrast_a_pip_task_without_the_repair_is_caught() -> None:
     bare = [{"command": {"cmd": "/x/autobot-backend/venv/bin/pip install -r r.txt"}}]
     assert not _repairs_before_pip(bare, "autobot-backend")
+
+
+def _husk_and_pip(tasks: list[dict], venv: str) -> tuple[dict, dict]:
+    husk = next(
+        task
+        for task in tasks
+        if "clear_venv_husks.yml" in str(task.get("ansible.builtin.include_tasks", ""))
+        and f"/{venv}/venv" in str(task.get("vars", ""))
+    )
+    pip = next(task for task in tasks if f"/{venv}/venv/bin/pip install" in str(task.get("command") or {}))
+    return husk, pip
+
+
+def _mismatches(husk: dict, pip: dict) -> list[str]:
+    """What lets a run reach pip without the repair: a pip tag or a condition the include lacks (#19986)."""
+    wanted = set(pip.get("tags") or [])
+    found = []
+    if not wanted <= set(husk.get("tags") or []):
+        found.append("tags")
+    if not wanted <= set(husk["ansible.builtin.include_tasks"]["apply"].get("tags") or []):
+        found.append("apply tags")
+    if husk.get("when") != pip.get("when"):
+        found.append("when")
+    return found
+
+
+def test_a_tagged_run_cannot_reach_pip_without_the_repair() -> None:
+    tasks = _tasks()
+    for venv in _MARKER_CAPABLE:
+        assert _mismatches(*_husk_and_pip(tasks, venv)) == [], venv
+
+
+def test_contrast_each_mismatch_is_caught() -> None:
+    pip = {"tags": ["slm", "slm-backend", "deps"], "when": "x"}
+    include = {"apply": {"tags": ["slm", "slm-backend", "deps"]}}
+    good = {"tags": pip["tags"], "when": "x", "ansible.builtin.include_tasks": include}
+    assert _mismatches(good, pip) == []
+    assert _mismatches({**good, "tags": ["slm", "deps"]}, pip) == ["tags"]  # the shape #19986 found
+    short = {"apply": {"tags": ["slm", "deps"]}}
+    assert _mismatches({**good, "ansible.builtin.include_tasks": short}, pip) == ["apply tags"]
+    assert _mismatches({**good, "when": "y"}, pip) == ["when"]
