@@ -150,3 +150,20 @@ register_env_var(
         component="testing",
     )
 )
+
+# --- machine-wide queue for heavy local work (#20518, repo_tests/machine_slot.py) ---
+for _name, _type, _default, _description in (
+    ("AUTOBOT_MACHINE_SLOTS", int, 4, "How many heavy local runs (hooks, floor checks, big pytest runs) go at once."),
+    ("AUTOBOT_MACHINE_SLOT_POLL", float, 5.0, "Seconds between attempts while queued for a machine slot."),
+    (
+        "AUTOBOT_MACHINE_SLOT_DIR",
+        str,
+        "",
+        "Directory of the slot lock files; empty means the user's runtime directory.",
+    ),
+    ("AUTOBOT_MACHINE_SLOT_HELD", str, "", "Set by a holder so its child processes do not queue for a second slot."),
+    ("AUTOBOT_MACHINE_SLOT_BIG_RUN", int, 100, "Tests in a non-xdist pytest run at which it queues for a slot."),
+):
+    register_env_var(
+        EnvVarSpec(name=_name, type=_type, default=_default, description=_description, component="testing")
+    )
