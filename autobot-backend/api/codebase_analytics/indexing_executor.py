@@ -17,15 +17,38 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Issue #1341: Subprocess timeout and watchdog configuration
 # ---------------------------------------------------------------------------
-_SUBPROCESS_HARD_TIMEOUT = 1800  # 30 minutes max for entire subprocess
-_SUBPROCESS_PROGRESS_TIMEOUT = 300  # 5 min without progress = stale
-_SUBPROCESS_WATCHDOG_INTERVAL = 30  # Check progress every 30 seconds
+
+
+def _bounded_seconds(name: str, raw: str, default: int, low: int, high: int) -> int:
+    """Read a watchdog limit, clamping and logging rather than failing at import (#18057)."""
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning("Invalid %s %r, using default %d", name, raw, default)
+        return default
+    bounded = max(low, min(value, high))
+    if bounded != value:
+        logger.warning("%s=%d is outside %d-%d, using %d", name, value, low, high, bounded)
+    return bounded
+
+
+# Issue #18057: env-backed, so a run reaching a limit is a config change, not a release.
+_SUBPROCESS_HARD_TIMEOUT = _bounded_seconds(
+    "AUTOBOT_INDEXING_HARD_TIMEOUT", config.indexing_hard_timeout, 1800, 60, 86400
+)
+_SUBPROCESS_PROGRESS_TIMEOUT = _bounded_seconds(
+    "AUTOBOT_INDEXING_PROGRESS_TIMEOUT", config.indexing_progress_timeout, 300, 30, 14400
+)
+_SUBPROCESS_WATCHDOG_INTERVAL = _bounded_seconds(
+    "AUTOBOT_INDEXING_WATCHDOG_INTERVAL", config.indexing_watchdog_interval, 30, 1, 300
+)
 
 # ---------------------------------------------------------------------------
 # Dedicated Indexing Thread Pool (#2364: Prevent thread starvation on large repos)
