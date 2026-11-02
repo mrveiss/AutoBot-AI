@@ -12,7 +12,7 @@
  */
 
 import { ref, watch, onMounted, onUnmounted, computed, type DeepReadonly } from 'vue'
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, createLogger } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import {
   useCodeSync,
@@ -29,7 +29,6 @@ import {
   type ComponentSyncJobStatus,
   type FleetSyncJobStatus,
 } from '@/composables/useCodeSync'
-import { createLogger } from '@/utils/debugUtils'
 import { formatFleetDateTime } from '@/composables/useTimezone'
 import { getCommitHashDisplay, getCommitUrl } from '@/utils/commitHashUtils'
 import ScheduleModal from '@/components/ScheduleModal.vue'

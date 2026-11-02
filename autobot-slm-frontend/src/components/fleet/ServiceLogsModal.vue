@@ -12,9 +12,8 @@
  */
 
 import { ref, watch } from 'vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, createLogger } from '@autobot/ui'
 import { useSlmApi } from '@/composables/useSlmApi'
-import { createLogger } from '@/utils/debugUtils'
 
 const props = withDefaults(
   defineProps<{

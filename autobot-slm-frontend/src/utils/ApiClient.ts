@@ -22,7 +22,6 @@
  *  - `getContract`, typed by the generated contract (#16292).
  */
 
-import { createLogger } from '@/utils/debugUtils'
 import { getSlmApiBase } from '@/config/ssot-config'
 import { clearSlmSession, readSlmToken } from '@/utils/authStorage'
 import { buildLoginUrl, isLoginPathname } from '@/utils/loginRedirect'
@@ -35,6 +34,7 @@ import {
   type GetPath,
   type GetResponse,
   type TransportRequestOptions,
+  createLogger,
 } from '@autobot/ui'
 import type { paths } from '@/types/generated/api'
 

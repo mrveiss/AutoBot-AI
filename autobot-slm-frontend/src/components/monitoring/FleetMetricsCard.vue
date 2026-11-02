@@ -10,7 +10,7 @@
 
 import { computed } from 'vue'
 import type { FleetMetricsDetailed } from '@/composables/useFleetMetrics'
-import { createDateFormatter } from '@/utils/formatHelpers'
+import { createDateFormatter } from '@autobot/ui'
 
 interface Props {
   metrics: FleetMetricsDetailed | null

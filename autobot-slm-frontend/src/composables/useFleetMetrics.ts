@@ -17,11 +17,10 @@
 
 import { ref, onMounted } from 'vue'
 import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
-import { createLogger } from '@/utils/debugUtils'
 import { slmApiClient } from '@/utils/ApiClient'
 import { POLLED_READ_MAX_RETRIES } from '@/constants/api-timeouts'
 import type { GPUNodeStatus } from '@/types/slm'
-import { HttpError, useMetricsSummary } from '@autobot/ui'
+import { HttpError, useMetricsSummary, createLogger } from '@autobot/ui'
 // Types and the pure summary helper live in fleetMetricsModel.ts (#18225).
 import { summariseGpus } from './fleetMetricsModel'
 import type {

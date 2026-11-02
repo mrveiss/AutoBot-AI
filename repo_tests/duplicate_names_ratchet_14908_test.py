@@ -14,8 +14,8 @@ stories and generated files are not scanned, as in the sibling guard.
 
 **(b) Util filenames.** The same relative path under both apps' ``src/utils`` where BOTH files
 are real implementations. A file that only imports and re-exports ``@autobot/ui`` is the fix,
-not the defect, so it is not counted: ``debugUtils.ts`` and ``formatHelpers.ts`` in the SLM
-are such files today.
+not the defect, so it is not counted. The SLM had two such files (``debugUtils.ts``,
+``formatHelpers.ts``); they are gone, every SLM caller imports the kit directly.
 
 **Two numbers, each exact and down-only against the base** (#19283). Each type pin counts
 names (a name declared in three places is one), so lowering it means a name stopped being
@@ -65,9 +65,9 @@ UTIL_EXCEPTIONS = {
         "consolidation PR (maintainer decision 2026-10-28, waits for the PR holding the SLM copy)"
     ),
 }
-# formatHelpers.ts is the other expected duplicate. It is NOT counted today because the SLM's copy
-# is already a thin re-export of the kit; if it regrows an implementation this guard counts it,
-# and it must then be added above with its reason until the formatters PR removes the main copy.
+# formatHelpers.ts and debugUtils.ts are no longer duplicates: the SLM copies were removed (#14908)
+# and the SLM imports the kit directly. If an SLM copy regrows with an implementation this guard
+# counts it, and it must then be added above with its reason.
 
 
 def _ts_files(root: Path) -> list[Path]:
