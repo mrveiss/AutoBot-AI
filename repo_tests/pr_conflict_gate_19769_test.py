@@ -19,6 +19,9 @@ _SCRIPTS = repo_root() / "pipeline-scripts"
 REPO = "owner/repo"
 SHA = "b" * 40
 OWN_RUN = 500
+TIP = "c" * 40
+CURRENT_MERGE = "d" * 40
+OLD_MERGE = "e" * 40
 
 
 def _load(name: str):
@@ -46,6 +49,11 @@ class FakeApi:
         if method == "GET" and "/pulls/" in path:
             self.gets += 1
             return 200, self.pulls[min(self.gets - 1, len(self.pulls) - 1)]
+        if method == "GET" and "/git/ref/heads/" in path:
+            return 200, {"object": {"sha": TIP}}
+        if method == "GET" and "/commits/" in path:
+            first = TIP if path.endswith(CURRENT_MERGE) else "f" * 40
+            return 200, {"parents": [{"sha": first}, {"sha": SHA}]}
         if method == "POST" and path.endswith("/cancel"):
             self.posts.append(path)
             return 202, {}
@@ -59,8 +67,25 @@ class FakeApi:
         return 201
 
 
-def _pull(mergeable: Optional[bool], state: str) -> Dict[str, Any]:
-    return {"head": {"sha": SHA, "repo": {"full_name": REPO}}, "mergeable": mergeable, "mergeable_state": state}
+def _pull(mergeable: Optional[bool], state: str, merge: str = CURRENT_MERGE) -> Dict[str, Any]:
+    return {
+        "base": {"ref": "main"},
+        "head": {"sha": SHA, "repo": {"full_name": REPO}},
+        "mergeable": mergeable,
+        "mergeable_state": state,
+        "merge_commit_sha": merge,
+    }
+
+
+class _UnsettledApi(FakeApi):
+    """Three PRs that never settle, whichever number is asked for."""
+
+    def __init__(self) -> None:
+        super().__init__([_pull(None, "unknown")])
+
+
+def _check(api: FakeApi, sleep: Any = lambda _s: None) -> Optional[Any]:
+    return gate.sweep(api, [7], OWN_RUN, "", sleep=sleep)[0].get(7)
 
 
 def test_conflicting_cancels_runs_and_fails_status_excluding_own_run() -> None:
@@ -71,7 +96,7 @@ def test_conflicting_cancels_runs_and_fails_status_excluding_own_run() -> None:
         {"id": OWN_RUN, "status": "in_progress"},
     ]
     api = FakeApi([_pull(False, "dirty")], runs)
-    verdict = gate.check_pull(api, 7, OWN_RUN, "", sleep=lambda _s: None)
+    verdict = _check(api)
     assert verdict.kind == core.CONFLICTING
     assert api.posts == [f"/repos/{REPO}/actions/runs/1/cancel", f"/repos/{REPO}/actions/runs/2/cancel"]
     assert api.statuses == [(SHA, "failure", "no-merge-conflicts", "merge conflict with main: merge main and push")]
@@ -79,7 +104,7 @@ def test_conflicting_cancels_runs_and_fails_status_excluding_own_run() -> None:
 
 def test_mergeable_is_success_and_cancels_nothing() -> None:
     api = FakeApi([_pull(True, "clean")], [{"id": 1, "status": "in_progress"}])
-    verdict = gate.check_pull(api, 7, OWN_RUN, "", sleep=lambda _s: None)
+    verdict = _check(api)
     assert verdict.kind == core.MERGEABLE
     assert api.posts == []
     assert api.statuses[0][1] == "success"
@@ -88,7 +113,7 @@ def test_mergeable_is_success_and_cancels_nothing() -> None:
 def test_unknown_after_retries_is_pending_never_success() -> None:
     api = FakeApi([_pull(None, "unknown")], [{"id": 1, "status": "in_progress"}])
     sleeps: List[float] = []
-    verdict = gate.check_pull(api, 7, OWN_RUN, "", sleep=sleeps.append)
+    verdict = _check(api, sleeps.append)
     assert verdict.kind == core.UNKNOWN
     assert api.gets == gate.UNKNOWN_MAX_ATTEMPTS
     assert len(sleeps) == gate.UNKNOWN_MAX_ATTEMPTS - 1
@@ -100,9 +125,45 @@ def test_unknown_after_retries_is_pending_never_success() -> None:
 
 def test_unknown_then_resolved_stops_retrying() -> None:
     api = FakeApi([_pull(None, "unknown"), _pull(False, "dirty")])
-    verdict = gate.check_pull(api, 7, OWN_RUN, "", sleep=lambda _s: None)
+    verdict = _check(api)
     assert verdict.kind == core.CONFLICTING
     assert api.gets == 2
+
+
+def test_true_off_an_older_test_merge_is_never_green() -> None:
+    api = FakeApi([_pull(True, "blocked", OLD_MERGE)])
+    verdict = _check(api)
+    assert verdict.kind == core.UNKNOWN
+    assert api.gets == gate.UNKNOWN_MAX_ATTEMPTS
+    assert [s[1] for s in api.statuses] == ["pending"]
+
+
+def test_the_stale_true_that_turned_green_now_fails_once_github_catches_up() -> None:
+    api = FakeApi([_pull(True, "blocked", OLD_MERGE), _pull(False, "dirty")], [{"id": 1, "status": "queued"}])
+    verdict = _check(api)
+    assert verdict.kind == core.CONFLICTING
+    assert [s[1] for s in api.statuses] == ["failure"]
+    assert api.posts == [f"/repos/{REPO}/actions/runs/1/cancel"]
+
+
+def test_true_with_no_test_merge_to_show_is_not_green() -> None:
+    api = FakeApi([_pull(True, "clean", "")])
+    assert _check(api).kind == core.UNKNOWN
+
+
+def test_is_current_needs_both_parents_in_order() -> None:
+    assert core.is_current([TIP, SHA], TIP, SHA)
+    assert not core.is_current(["f" * 40, SHA], TIP, SHA)
+    assert not core.is_current([TIP, "f" * 40], TIP, SHA)
+    assert not core.is_current([SHA, TIP], TIP, SHA)
+    assert not core.is_current([], TIP, SHA)
+
+
+def test_one_wait_covers_every_unsettled_pr() -> None:
+    sleeps: List[float] = []
+    verdicts, failures = gate.sweep(_UnsettledApi(), [1, 2, 3], OWN_RUN, "", sleep=sleeps.append)
+    assert failures == 0 and len(verdicts) == 3
+    assert len(sleeps) == gate.UNKNOWN_MAX_ATTEMPTS - 1
 
 
 def test_classify_malformed_body_is_unknown() -> None:
@@ -187,7 +248,7 @@ def test_fork_pr_on_the_pull_request_path_gets_no_status() -> None:
     pull = _pull(False, "dirty")
     pull["head"]["repo"] = {"full_name": "fork/repo"}
     api = FakeApi([pull], [{"id": 1, "status": "queued"}])
-    assert gate.check_pull(api, 7, OWN_RUN, "", sleep=lambda _s: None) is None
+    assert _check(api) is None
     assert api.statuses == [] and api.posts == []
 
 
