@@ -7,16 +7,22 @@
 The SLM is the first thing a user installs and its admin owns the first login, so the limit
 must slow a guesser without becoming a way to lock the real admin out. Design:
 
-* **Per client IP** (``anonymous`` tier, strict): one source guessing many names. A refused
-  attempt is *not* charged to the username bucket, so one source can never push a username
-  over its limit by itself -- locking a name out takes many distinct, un-refused sources.
-* **Per username** (``authenticated`` tier, looser than the IP bucket): many sources guessing
-  one name. The same shape as the LDAP limiter in ``api/sso_auth.py`` (keyed
-  ``username:<name>``) but looser, so a single attacker cannot reach it.
+* **Per client IP** (``anonymous`` tier, strict): charged on every attempt, so one source
+  guessing many names is slowed whatever it guesses.
+* **Per username** (``authenticated`` tier, looser): charged only for a *failed* password, and
+  only after the password has been checked. Charging every attempt let a few addresses lock
+  the real admin out of their own correct password. A username over its failed-attempt limit
+  refuses only a *wrong* password (429, the same bucket Retry-After); a correct password from
+  an address under its IP limit is never refused by it.
+  What this leaves an attacker: the password is verified on every attempt (bcrypt, the same
+  work for 401 and 429, so timing does not separate them), hence a locked name still answers
+  "right" vs "wrong" -- distributed guessing is held by the per-IP bucket, not by the username
+  bucket. The username bucket's job is to stop being a free oracle on audit and to make a
+  sustained many-source attack visible (refusals are audited). Refused attempts are not
+  recorded, so the lock lifts on its own.
 * **Unknown client address** (no connection info at all -- an omitted ``X-Forwarded-For``
   never causes this, the TCP peer is always known): there is no address to key on, so these
-  share one bucket in the ``privileged`` tier. They are still held by the username bucket,
-  so a client cannot escape the limit by being anonymous, and the shared bucket is large
+  share one bucket in the ``privileged`` tier. The shared bucket is large
   enough that unknown clients do not lock each other out in normal use.
 * **Way back in**: the shared limiter is a sliding window and refused attempts are not
   recorded, so every lock lifts by itself -- within a minute of the attack stopping, within
@@ -61,42 +67,74 @@ def _fail_open_total(*limiters: RateLimiter) -> int:
     return sum(limiter.fail_open_count for limiter in limiters)
 
 
-async def retry_after_if_refused(
+def _user_key(username: str) -> str:
+    return f"username:{username.strip().lower()}"
+
+
+async def _charge_ip_bucket(client_ip: str | None, ip_limiter: RateLimiter, unknown_ip_limiter: RateLimiter):
+    """Charge the per-address bucket for this attempt; ``(wait, key)`` when it is over, else ``None``."""
+    limiter, key = (ip_limiter, f"ip:{client_ip}") if client_ip else (unknown_ip_limiter, "ip:unknown")
+    if await limiter.acquire(key):
+        return None
+    return await limiter.get_retry_after_seconds(key), key
+
+
+async def _username_wait(username: str, username_limiter: RateLimiter) -> int | None:
+    """Peek (``is_allowed`` never records) the failed-attempt bucket; the wait when it is over."""
+    key = _user_key(username)
+    if await username_limiter.is_allowed(key):
+        return None
+    return await username_limiter.get_retry_after_seconds(key)
+
+
+def _log_fail_open(before: int, limiters: tuple[RateLimiter, ...]) -> None:
+    failed_open = _fail_open_total(*limiters) - before
+    if failed_open:
+        logger.error(
+            "Login rate limiter FAILED OPEN: Redis unavailable or erroring, login allowed unthrottled "
+            "(this attempt: %d, since start: %d)",
+            failed_open,
+            _fail_open_total(*limiters),
+        )
+
+
+async def enforce_login_rate_limit(
+    audit_db: AsyncSession,
     client_ip: str | None,
     username: str,
     *,
     ip_limiter: RateLimiter = _ip_limiter,
     username_limiter: RateLimiter = _username_limiter,
     unknown_ip_limiter: RateLimiter = _unknown_ip_limiter,
-) -> tuple[int, str] | None:
-    """Return ``(seconds to wait, refused bucket key)`` when over a limit, else ``None``."""
-    before = _fail_open_total(ip_limiter, username_limiter, unknown_ip_limiter)
-    result = await _check_buckets(client_ip, username, ip_limiter, username_limiter, unknown_ip_limiter)
-    failed_open = _fail_open_total(ip_limiter, username_limiter, unknown_ip_limiter) - before
-    if failed_open:
-        logger.error(
-            "Login rate limiter FAILED OPEN: Redis unavailable or erroring, login allowed unthrottled "
-            "(this attempt: %d, since start: %d)",
-            failed_open,
-            _fail_open_total(ip_limiter, username_limiter, unknown_ip_limiter),
-        )
-    return result
+) -> int | None:
+    """Charge the address bucket and raise 429 when it is over (audited once per bucket per window).
+
+    Returns the seconds to wait when the *username* is over its failed-attempt limit, else ``None``.
+    That is not a refusal yet: the caller checks the password first and calls
+    ``refuse_locked_username`` only for a wrong one, so a correct password is never turned away.
+    """
+    limiters = (ip_limiter, username_limiter, unknown_ip_limiter)
+    before = _fail_open_total(*limiters)
+    refused = await _charge_ip_bucket(client_ip, ip_limiter, unknown_ip_limiter)
+    locked_wait = None if refused else await _username_wait(username, username_limiter)
+    _log_fail_open(before, limiters)
+    if refused:
+        await _refuse(audit_db, client_ip, username, refused[0], refused[1])
+    return locked_wait
 
 
-async def _check_buckets(
-    client_ip: str | None,
-    username: str,
-    ip_limiter: RateLimiter,
-    username_limiter: RateLimiter,
-    unknown_ip_limiter: RateLimiter,
-) -> tuple[int, str] | None:
-    limiter, ip_key = (ip_limiter, f"ip:{client_ip}") if client_ip else (unknown_ip_limiter, "ip:unknown")
-    if not await limiter.acquire(ip_key):
-        return await limiter.get_retry_after_seconds(ip_key), ip_key
-    user_key = f"username:{username.strip().lower()}"
-    if not await username_limiter.acquire(user_key):
-        return await username_limiter.get_retry_after_seconds(user_key), user_key
-    return None
+async def record_failed_login(username: str, *, username_limiter: RateLimiter = _username_limiter) -> None:
+    """Charge the username bucket for one wrong password (a success never calls this)."""
+    before = _fail_open_total(username_limiter)
+    await username_limiter.record(_user_key(username))
+    _log_fail_open(before, (username_limiter,))
+
+
+async def refuse_locked_username(
+    audit_db: AsyncSession, client_ip: str | None, username: str, retry_after: int
+) -> None:
+    """Raise 429 for a wrong password on a username that is over its failed-attempt limit."""
+    await _refuse(audit_db, client_ip, username, retry_after, _user_key(username))
 
 
 def _audit_decision(bucket: str, now: float) -> tuple[bool, int]:
@@ -117,17 +155,8 @@ def _audit_decision(bucket: str, now: float) -> tuple[bool, int]:
     return True, suppressed
 
 
-async def enforce_login_rate_limit(
-    audit_db: AsyncSession,
-    client_ip: str | None,
-    username: str,
-    **limiters: RateLimiter,
-) -> None:
-    """Raise 429 (with ``Retry-After``) when over a limit; audit the first refusal per bucket per window."""
-    refused = await retry_after_if_refused(client_ip, username, **limiters)
-    if refused is None:
-        return
-    retry_after, bucket = refused
+async def _refuse(audit_db: AsyncSession, client_ip: str | None, username: str, retry_after: int, bucket: str):
+    """Raise 429 (with ``Retry-After``); audit the first refusal per bucket per window."""
     write_row, suppressed = _audit_decision(bucket, time.monotonic())
     logger.warning(
         "Login rate limit exceeded (audited=%s, refusals not audited in this window=%d)",

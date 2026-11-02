@@ -5,7 +5,8 @@
 """POST /api/auth/login is rate limited per IP and per username (#20600).
 
 The limiter is the shared ``RateLimiter``; here it is replaced by a counting stand-in so the
-tests exercise this module's bucket logic (keys, both buckets charged, refusal audited), not
+tests exercise this module's bucket logic (keys, address bucket per attempt,
+username bucket per failure, refusal audited), not
 Redis. Limits and the real limiter's configuration are not exercised.
 """
 
@@ -26,11 +27,18 @@ class _CountingLimiter:
     def __init__(self, limit: int) -> None:
         self.limit = limit
         self.seen: Counter = Counter()
+        self.failed: Counter = Counter()
         self.fail_open_count = 0
 
     async def acquire(self, key: str) -> bool:
         self.seen[key] += 1
         return self.seen[key] <= self.limit
+
+    async def is_allowed(self, key: str) -> bool:
+        return self.failed[key] < self.limit
+
+    async def record(self, key: str) -> None:
+        self.failed[key] += 1
 
     async def get_retry_after_seconds(self, key: str) -> int:
         return 42
@@ -86,16 +94,12 @@ async def test_over_the_limit_refuses_with_429_retry_after_and_an_audited_failur
 
 
 @pytest.mark.asyncio
-async def test_a_username_bucket_does_not_block_another_username(module) -> None:
-    from fastapi import HTTPException
-
-    # Different IPs, so only the username bucket can be the one exhausted.
+async def test_a_username_bucket_does_not_lock_another_username(module) -> None:
     limiters = {"ip_limiter": _CountingLimiter(100), "username_limiter": _CountingLimiter(1)}
     db = MagicMock(commit=AsyncMock())
-    await module.enforce_login_rate_limit(db, "192.0.2.1", "alice", **limiters)
-    with pytest.raises(HTTPException):
-        await module.enforce_login_rate_limit(db, "192.0.2.2", "alice", **limiters)
-    await module.enforce_login_rate_limit(db, "192.0.2.3", "bob", **limiters)
+    await module.record_failed_login("alice", username_limiter=limiters["username_limiter"])
+    assert await module.enforce_login_rate_limit(db, "192.0.2.2", "alice", **limiters) == 42
+    assert await module.enforce_login_rate_limit(db, "192.0.2.3", "bob", **limiters) is None
 
 
 @pytest.mark.asyncio
@@ -112,13 +116,10 @@ async def test_an_ip_bucket_does_not_block_another_ip(module) -> None:
 
 @pytest.mark.asyncio
 async def test_username_case_and_padding_share_one_bucket(module) -> None:
-    from fastapi import HTTPException
-
     limiters = {"ip_limiter": _CountingLimiter(100), "username_limiter": _CountingLimiter(1)}
     db = MagicMock(commit=AsyncMock())
-    await module.enforce_login_rate_limit(db, "192.0.2.1", "Alice", **limiters)
-    with pytest.raises(HTTPException):
-        await module.enforce_login_rate_limit(db, "192.0.2.2", " alice ", **limiters)
+    await module.record_failed_login("Alice", username_limiter=limiters["username_limiter"])
+    assert await module.enforce_login_rate_limit(db, "192.0.2.2", " alice ", **limiters) == 42
 
 
 def test_the_module_carries_no_limit_numbers() -> None:
@@ -159,8 +160,8 @@ async def test_one_client_does_not_lock_out_another_behind_the_slm_nginx(module)
 
 
 @pytest.mark.asyncio
-async def test_a_refused_ip_does_not_charge_the_username_bucket(module) -> None:
-    """One attacker IP exhausted on its own cannot lock a real user's name out (#20600)."""
+async def test_enforcing_never_charges_the_username_bucket(module) -> None:
+    """Only a failed password charges it: attempts (incl. successful ones) and refused IPs do not."""
     from fastapi import HTTPException
 
     limiters = {"ip_limiter": _CountingLimiter(1), "username_limiter": _CountingLimiter(2)}
@@ -169,15 +170,46 @@ async def test_a_refused_ip_does_not_charge_the_username_bucket(module) -> None:
     for _ in range(10):
         with pytest.raises(HTTPException):
             await module.enforce_login_rate_limit(db, "192.0.2.66", "admin", **limiters)
-    assert limiters["username_limiter"].seen["username:admin"] == 1
-    # The real admin, from another address, is still let in.
-    await module.enforce_login_rate_limit(db, "198.51.100.1", "admin", **limiters)
+    assert limiters["username_limiter"].failed["username:admin"] == 0
+    assert limiters["username_limiter"].seen["username:admin"] == 0
 
 
 @pytest.mark.asyncio
-async def test_unknown_addresses_share_a_loose_bucket_and_are_still_held_by_the_username(module) -> None:
+async def test_failures_from_other_addresses_do_not_keep_the_real_admin_out(module) -> None:
+    """Four addresses burn the failed budget; the right password from a clean address is not refused."""
+    limiters = {"ip_limiter": _CountingLimiter(100), "username_limiter": _CountingLimiter(8)}
+    db = MagicMock(commit=AsyncMock())
+    for i in range(4):
+        for _ in range(5):
+            await module.enforce_login_rate_limit(db, f"203.0.113.{i}", "admin", **limiters)
+            await module.record_failed_login("admin", username_limiter=limiters["username_limiter"])
+    locked = await module.enforce_login_rate_limit(db, "198.51.100.1", "admin", **limiters)
+    assert locked is not None  # the name is over its limit...
+    # ...but the endpoint (right password) never calls refuse_locked_username: no exception here,
+    # and a success records nothing.
+    assert limiters["username_limiter"].failed["username:admin"] == 20
+    module.audit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_wrong_password_over_the_username_limit_is_refused_with_429(module) -> None:
     from fastapi import HTTPException
 
+    limiters = {"ip_limiter": _CountingLimiter(100), "username_limiter": _CountingLimiter(2)}
+    db = MagicMock(commit=AsyncMock())
+    for _ in range(2):
+        assert await module.enforce_login_rate_limit(db, "192.0.2.1", "admin", **limiters) is None
+        await module.record_failed_login("admin", username_limiter=limiters["username_limiter"])
+    locked = await module.enforce_login_rate_limit(db, "192.0.2.9", "admin", **limiters)
+    with pytest.raises(HTTPException) as err:
+        await module.refuse_locked_username(db, "192.0.2.9", "admin", locked)
+    assert err.value.status_code == 429
+    assert err.value.headers["Retry-After"] == "42"
+    assert module.audit.await_args.kwargs["response_status"] == 429
+
+
+@pytest.mark.asyncio
+async def test_unknown_addresses_share_a_loose_bucket(module) -> None:
     unknown = _CountingLimiter(100)
     limiters = {
         "ip_limiter": _CountingLimiter(1),
@@ -189,11 +221,6 @@ async def test_unknown_addresses_share_a_loose_bucket_and_are_still_held_by_the_
         await module.enforce_login_rate_limit(db, None, name, **limiters)
     assert limiters["ip_limiter"].seen == Counter()
     assert unknown.seen["ip:unknown"] == 3
-    # Having no address does not escape the per-username limit.
-    await module.enforce_login_rate_limit(db, None, "victim", **limiters)
-    await module.enforce_login_rate_limit(db, None, "victim", **limiters)
-    with pytest.raises(HTTPException):
-        await module.enforce_login_rate_limit(db, None, "victim", **limiters)
 
 
 @pytest.mark.asyncio
