@@ -40,14 +40,20 @@ def _bounded_seconds(name: str, raw: str, default: int, low: int, high: int) -> 
 
 
 # Issue #18057: env-backed, so a run reaching a limit is a config change, not a release.
+# Read through ``config.misc``: top-level access raises on an empty ``*_timeout`` value.
 _SUBPROCESS_HARD_TIMEOUT = _bounded_seconds(
-    "AUTOBOT_INDEXING_HARD_TIMEOUT", config.indexing_hard_timeout, 1800, 60, 86400
+    "AUTOBOT_INDEXING_HARD_TIMEOUT", config.misc.indexing_hard_timeout, 1800, 60, 86400
 )
 _SUBPROCESS_PROGRESS_TIMEOUT = _bounded_seconds(
-    "AUTOBOT_INDEXING_PROGRESS_TIMEOUT", config.indexing_progress_timeout, 300, 30, 14400
+    "AUTOBOT_INDEXING_PROGRESS_TIMEOUT", config.misc.indexing_progress_timeout, 300, 30, 14400
 )
+# An interval above the progress limit would check too rarely to enforce that limit.
 _SUBPROCESS_WATCHDOG_INTERVAL = _bounded_seconds(
-    "AUTOBOT_INDEXING_WATCHDOG_INTERVAL", config.indexing_watchdog_interval, 30, 1, 300
+    "AUTOBOT_INDEXING_WATCHDOG_INTERVAL",
+    config.misc.indexing_watchdog_interval,
+    30,
+    1,
+    min(300, _SUBPROCESS_PROGRESS_TIMEOUT),
 )
 
 # ---------------------------------------------------------------------------

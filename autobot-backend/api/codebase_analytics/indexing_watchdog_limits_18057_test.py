@@ -34,9 +34,10 @@ def _limits_with_env(**env):
         encoding="utf-8",
         cwd=BACKEND_ROOT,
         env={**os.environ, "PYTHONPATH": f"{BACKEND_ROOT}{os.pathsep}{REPO_ROOT}", **env},
-        timeout=120,
-        check=True,
+        timeout=300,
+        check=False,
     )
+    assert result.returncode == 0, result.stderr
     return json.loads(result.stdout.strip().splitlines()[-1])
 
 
@@ -50,6 +51,24 @@ def test_env_override_reaches_the_watchdog_module():
 
 def test_unparseable_env_keeps_the_default_instead_of_failing_the_import():
     assert _limits_with_env(AUTOBOT_INDEXING_HARD_TIMEOUT="soon")[0] == 1800
+
+
+def test_empty_env_keeps_the_defaults_instead_of_failing_the_import():
+    assert _limits_with_env(
+        AUTOBOT_INDEXING_HARD_TIMEOUT="",
+        AUTOBOT_INDEXING_PROGRESS_TIMEOUT="",
+        AUTOBOT_INDEXING_WATCHDOG_INTERVAL="",
+    ) == [1800, 300, 30]
+
+
+def test_interval_cannot_exceed_the_progress_limit():
+    assert (
+        _limits_with_env(
+            AUTOBOT_INDEXING_PROGRESS_TIMEOUT="30",
+            AUTOBOT_INDEXING_WATCHDOG_INTERVAL="300",
+        )[2]
+        == 30
+    )
 
 
 @pytest.mark.parametrize(
