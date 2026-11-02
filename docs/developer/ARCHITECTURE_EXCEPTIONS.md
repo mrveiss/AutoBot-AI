@@ -595,3 +595,18 @@ registration (`_shared/tasks/register_node_credentials.yml`).
 | `docker/backend/Dockerfile`, `docker/slm/Dockerfile` | 183 and 103 lines | They share a `FROM`, but their package lists, requirement filters and health checks differ. A base image would need its own build and publish step. |
 
 **Keep in sync:** nothing. If two of these come to differ only by a name, extract them and drop the row.
+
+---
+
+## NPU Worker Pairing — Backend Resource, Not the SLM Node Registry
+
+**File:** `autobot-backend/api/npu_workers.py` (`/api/npu/workers*`)
+**Diverges from:** one fleet inventory in SLM `/api/nodes`
+**Issue:** #18735
+
+**Reason:** An NPU worker registers, pairs, unpairs and is tested through the backend, while SLM
+enrolls fleet nodes. Moving pairing would change its credential flow and need redirects for
+installed workers, with no user-visible gain. Maintainer decision: keep it in the backend.
+
+**Sync cadence:** None; these are separate resources. Reopen this decision if SLM needs to manage
+NPU worker credentials itself.
