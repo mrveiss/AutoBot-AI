@@ -61,6 +61,7 @@ class AuditAction(str, Enum):
     SESSION_CREATE = "session.create"
     SESSION_DELETE = "session.delete"
     SESSION_EXPORT = "session.export"
+    SESSION_OWNER_ASSIGN = "session.owner_assign"
     KNOWLEDGE_ADD = "knowledge.add"
     KNOWLEDGE_REMOVE = "knowledge.remove"
     KNOWLEDGE_QUARANTINE_READ = "knowledge.quarantine.read"  # #19163: an opt-out read of the research quarantine
