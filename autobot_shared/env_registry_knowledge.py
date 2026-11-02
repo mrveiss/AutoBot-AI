@@ -396,3 +396,57 @@ register_env_var(
         range=(0.1, 60.0),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_UPLOAD_CHUNK_MB",
+        type=int,
+        default=8,
+        description="Largest chunk of a resumable upload, in MB; must fit the web server's body limit (#19713).",
+        component="knowledge",
+        range=(1, 512),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_UPLOAD_MAX_TOTAL_MB",
+        type=int,
+        default=8192,
+        description="Largest whole file a resumable upload accepts, in MB (#19713).",
+        component="knowledge",
+        range=(1, 1048576),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_UPLOAD_DOCUMENT_MAX_MB",
+        type=int,
+        default=200,
+        description="Largest document a resumable upload accepts, in MB; extraction reads it into memory (#19713).",
+        component="knowledge",
+        range=(1, 4096),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_UPLOAD_SESSION_TTL_HOURS",
+        type=int,
+        default=48,
+        description="Hours before an unfinished upload stops taking chunks and is listed for review (#19713).",
+        component="knowledge",
+        range=(1, 8760),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_UPLOAD_STAGING_DIR",
+        type=str,
+        default="",
+        description="Where resumable uploads are staged; empty: uploads-staging under the data directory (#19713).",
+        component="knowledge",
+    )
+)

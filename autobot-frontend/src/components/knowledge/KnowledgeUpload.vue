@@ -190,7 +190,7 @@
               ref="fileInput"
               type="file"
               multiple
-              :accept="KNOWLEDGE_UPLOAD_ACCEPT"
+              :accept="uploadAccept"
               @change="handleFileSelect"
               style="display: none"
             />
@@ -424,6 +424,7 @@ import { resetFormFields } from '@/utils/formHelpers'
 import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
 import { KNOWLEDGE_UPLOAD_ACCEPT, KNOWLEDGE_UPLOAD_EXTENSIONS } from '@/constants/knowledgeUpload'
 import { useKnowledgeUploadLimit } from '@/composables/knowledge/useKnowledgeUploadLimit'
+import { useChunkedUpload } from '@/composables/knowledge/useChunkedUpload'
 import { useUploadProgress } from '@/composables/useUploadProgress'
 import { useExpansion } from '@/composables/useExpansion'
 import { useTransientError } from '@/composables/useTransientError'
@@ -458,6 +459,7 @@ const store = useKnowledgeStore()
 const controller = useKnowledgeController()
 const { getFileIcon } = useKnowledgeIcons()
 const { maxMb, loadLimit, exceedsLimit } = useKnowledgeUploadLimit()
+const { loadLimits, uploadInChunks, isMedia, uploadAccept, maxBytesFor } = useChunkedUpload(KNOWLEDGE_UPLOAD_ACCEPT)
 const {
   progress: uploadProgress,
   startProgress,
@@ -726,14 +728,15 @@ async function addFiles(files: File[]): Promise<void> {
 
   for (const file of files) {
     // Validate file size
-    if (exceedsLimit(file.size)) {
-      showError(t('knowledge.upload.errorFileTooLarge', { name: file.name, max: maxMb.value }))
+    const maxBytes = maxBytesFor(file.name)
+    if (maxBytes ? file.size > maxBytes : exceedsLimit(file.size)) {
+      showError(t('knowledge.upload.errorFileTooLarge', { name: file.name, max: maxBytes ? Math.floor(maxBytes / 1048576) : maxMb.value }))
       continue
     }
 
     // Validate file type
     const ext = getFileExtension(file.name).toLowerCase()
-    if (!KNOWLEDGE_UPLOAD_EXTENSIONS.includes(ext)) {
+    if (!isMedia(file.name) && !KNOWLEDGE_UPLOAD_EXTENSIONS.includes(ext)) {
       showError(t('knowledge.upload.errorUnsupportedFormat', { name: file.name }))
       continue
     }
@@ -843,16 +846,12 @@ async function uploadFiles(): Promise<void> {
         // Determine category (use override or auto-detected or default)
         const category = fileEntry.category || fileItem.suggestedCategory || 'Uploads'
 
-        // Simulate progress updates
-        const progressInterval = setInterval(() => {
-          if (fileItem.progress < 90) {
-            fileItem.progress += 10
-          }
-        }, 100)
-
-        await controller.addFileDocument(fileItem.file, category, tags)
-
-        clearInterval(progressInterval)
+        const target = isMedia(fileItem.file.name) ? 'transcript' : 'document' // #19713
+        if (target === 'transcript' || exceedsLimit(fileItem.file.size)) {
+          await uploadInChunks(fileItem.file, { target, category, tags }, (percent) => { fileItem.progress = percent })
+        } else {
+          await controller.addFileDocument(fileItem.file, category, tags)
+        }
         fileItem.progress = 100
         fileItem.status = 'completed'
         uploadedCount++
@@ -963,6 +962,7 @@ function generateId(): string {
 onMounted(() => {
   controller.loadCategories()
   loadLimit()
+  loadLimits()
 })
 </script>
 
