@@ -32,7 +32,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/agents/knowledge_extraction_agent.py": 766,
     "autobot-backend/agents/knowledge_manager.py": 1130,
     "autobot-backend/agents/knowledge_manager_test.py": 807,
-    "autobot-backend/agents/llm_failsafe_agent.py": 815,
+    "autobot-backend/agents/llm_failsafe_agent.py": 814,
     "autobot-backend/agents/machine_aware_system_knowledge_manager.py": 848,
     "autobot-backend/agents/man_page_knowledge_integrator.py": 696,
     "autobot-backend/agents/npu_code_search_agent.py": 1334,  # #16173: extracted helpers
