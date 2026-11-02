@@ -31,9 +31,13 @@ def users_db_readers(sources: dict[str, str]) -> set[str]:
 
 
 def _source_paths(root: Path) -> list[str]:
-    """Non-test SLM python, relative to the SLM directory."""
+    """Non-test SLM python, relative to the repository root as a reach declaration's scope is."""
     base = root / SLM.name
-    return sorted(name for name in (p.relative_to(base).as_posix() for p in base.rglob("*.py")) if not _is_test(name))
+    return sorted(
+        path.relative_to(root).as_posix()
+        for path in base.rglob("*.py")
+        if not _is_test(path.relative_to(base).as_posix())
+    )
 
 
 REACH = declare(
@@ -41,7 +45,7 @@ REACH = declare(
     discover=_source_paths,
     floor=259,
     what="non-test SLM python source",
-    growth=100,
+    roots=(SLM.name,),
 )
 
 
