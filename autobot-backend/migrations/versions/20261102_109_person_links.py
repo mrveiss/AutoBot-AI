@@ -20,7 +20,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from migrations.guards import has_table
 
 revision: str = "20261102_109"
-down_revision: Union[str, None] = "20261101_108"
+down_revision: Union[str, None] = "20261101_109"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -41,4 +41,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_table("person_links")
+    if has_table("person_links"):
+        op.drop_table("person_links")
