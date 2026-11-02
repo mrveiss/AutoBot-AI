@@ -422,7 +422,7 @@ run_fast_guards() {
   elif [ "$rc" != "0" ]; then fail "fast guards failed:"; failure_excerpt "$guard_output" >&2; EXIT_CODE=1
   else ok "fast guards: $(printf '%s\n' "$guards" | grep -c .) guard file(s) pass"; fi
   rc=0
-  out=$(cd "$REPO_ROOT" && timeout "$MAX_BUDGET" "$PYTEST_PYTHON" scripts/repin_reach_floors.py --check 2>&1) || rc=$?
+  out=$(cd "$REPO_ROOT" && timeout "$MAX_BUDGET" "$PYTEST_PYTHON" scripts/repin_reach_floors.py --check --changed-since origin/main 2>&1) || rc=$?
   if [ "$rc" = "124" ]; then
     did_not_run "repin_reach_floors.py --check" "$MAX_BUDGET"
   elif printf '%s\n' "$out" | grep -qE '^(STALE|PIN)'; then
@@ -434,12 +434,16 @@ run_fast_guards() {
     printf '%s\n' "$out" | tail -20 >&2
     EXIT_CODE=1
   elif [ "$rc" = "2" ]; then
-    # Not a failure (the modules need CI's deps), but those floors went unmeasured: say which,
+    # Not a failure (packages CI puts on its path or installs), but those floors went unmeasured: say which,
     # and never cache this stage as a pass -- it did not verify everything it names.
     STAGE_CLEAN=0
     warn "reach floors NOT measured for some guards: $(printf '%s\n' "$out" | grep -m1 '^ERROR:' || echo 'exit 2 without its ERROR line')"
     ok "reach floors: nothing stale among the guards that imported"
   else ok "reach floors: repin_reach_floors.py --check reports nothing stale"; fi
+  # #20050: stale from growth on main, in a guard this push left alone. A train's audit repins these.
+  if printf '%s\n' "$out" | grep -q '^BASE-STALE'; then
+    warn "reach floors stale on main, not blocking this push: $(printf '%s\n' "$out" | grep -c '^BASE-STALE')"
+  fi
 }
 # #18406: vitest prints a "Test Files" summary whenever it ran at least one test file,
 # pass or fail. A non-zero exit WITHOUT it means vitest died before collecting
