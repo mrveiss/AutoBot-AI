@@ -113,6 +113,7 @@ class SessionOwnershipValidator:
         org_id: str | None = None,
         team_id: str | None = None,
         force: bool = False,
+        previous_owner: str | None = None,
     ) -> bool:
         """
         Associate a chat session with its owner and org/team context.
@@ -124,17 +125,15 @@ class SessionOwnershipValidator:
             team_id: Team ID for team-scoped sessions (#684)
             force: Reassign an already-owned session (#14012). A deliberate
                 transfer must say so; the default refuses.
+            previous_owner: Who held it, when the ownership key may have expired.
 
         Returns:
             True if successful, False if the session already has a different
             owner and *force* was not set.
         """
         try:
-            # #14012: this used to be an unconditional set, so any writer could
-            # silently take a session over — and then pass every ownership check
-            # on it. An authorization record that any caller can overwrite is not
-            # an authorization record. Refreshing one's own ownership (the TTL
-            # refresh path) is still allowed.
+            # #14012: an unconditional set let any writer take a session over and pass every
+            # ownership check on it. Refreshing one's own ownership (TTL refresh) is still allowed.
             existing = await self.get_session_owner(session_id)
             if existing and existing != username and not force:
                 logger.warning(
@@ -145,9 +144,10 @@ class SessionOwnershipValidator:
                 )
                 return False
 
-            # Store ownership mapping
             ownership_key = self._get_ownership_key(session_id)
             await self.redis.set(ownership_key, username, ex=self.ownership_ttl)
+            for previous in {existing, previous_owner} - {None, username}:  # #20029: their list stops showing it
+                await self.redis.srem(self._get_user_sessions_key(previous), session_id)
 
             # Add to user's session set
             user_sessions_key = self._get_user_sessions_key(username)
