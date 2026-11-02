@@ -76,6 +76,11 @@ def _assistant_turns(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return [m for m in messages if m.get("sender") == "assistant"]
 
 
+def _turn_ctx() -> SimpleNamespace:
+    """The fields the iteration reads off its context; no attachments requested, so the prompt is unchanged (#20195)."""
+    return SimpleNamespace(initial_prompt="hello", session_id="s1", context={}, selected_model=None)
+
+
 class TestStreamingDropsEveryChunk:
     """Establishes the precondition: streamed chunks never reach workflow_messages."""
 
@@ -101,7 +106,7 @@ class TestStreamingDropsEveryChunk:
                     yield streaming_msg.to_workflow_message()
                 yield (REPLY, False)
 
-        ctx = SimpleNamespace(initial_prompt="hello")
+        ctx = _turn_ctx()
         messages, llm_response, should_continue = await graph_mod._run_llm_iteration(_FakeManager(), ctx, 1, [], None)
 
         assert messages == []  # every chunk dropped — nothing left to persist
@@ -139,9 +144,7 @@ class TestStreamedReplyIsReadableAfterReload:
                     yield streaming_msg.to_workflow_message()
                 yield (REPLY, False)
 
-        messages, llm_response, _ = await graph_mod._run_llm_iteration(
-            _FakeManager(), SimpleNamespace(initial_prompt="hello"), 1, [], None
-        )
+        messages, llm_response, _ = await graph_mod._run_llm_iteration(_FakeManager(), _turn_ctx(), 1, [], None)
         wf_messages = [
             SimpleNamespace(type=m.get("type", "response"), content=m.get("content", ""), metadata=m.get("metadata"))
             for m in messages
