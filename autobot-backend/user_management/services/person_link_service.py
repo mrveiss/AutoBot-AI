@@ -105,12 +105,18 @@ async def link_first_slm_admin(session: AsyncSession, person: SlmPerson | None) 
     return True
 
 
-async def link_first_slm_admin_at_startup(session: AsyncSession) -> None:
-    """An unreachable SLM must not stop the main app starting; seeding still runs."""
+async def link_first_slm_admin_at_startup() -> None:
+    """Its own transaction: all of the link or none of it, and a failure can't touch seeding's session.
+
+    An unreachable SLM must not stop the main app starting; seeding still runs.
+    """
+    from user_management.database import get_async_session_factory
     from user_management.services.person_copy_sync import start_person_copy_sync
 
     start_person_copy_sync()
     try:
-        await link_first_slm_admin(session, await fetch_first_slm_admin())
+        person = await fetch_first_slm_admin()
+        async with get_async_session_factory()() as session, session.begin():
+            await link_first_slm_admin(session, person)
     except Exception as exc:
-        logger.warning("Person link: could not link the SLM's first admin: %s", exc)
+        logger.warning("Person link: could not link the SLM's first admin: %s", type(exc).__name__)
