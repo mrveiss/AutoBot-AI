@@ -140,6 +140,9 @@ FAMILIES = {
 }
 
 
+WRITE_THEN_OUTCOME = {"secret.update", "secret.delete"}
+
+
 class TestRecordLandsInTheAuditStore:
     """(a) every operation family writes one record to the store."""
 
@@ -147,7 +150,9 @@ class TestRecordLandsInTheAuditStore:
     def test_success_record_is_stored(self, client, store, operation):
         response = FAMILIES[operation](client)
         assert response.status_code in (200, 201), response.text
-        assert store.actions() == [(operation, "success")]
+        # #20557: an irreversible update or delete records before the write and again with its outcome.
+        records = 2 if operation in WRITE_THEN_OUTCOME else 1
+        assert store.actions() == [(operation, "success")] * records
         event = store.events[0]
         assert event.actor_id == "user-42"
         assert event.category.name == "SECURITY"
@@ -315,4 +320,4 @@ class TestTheOldLocalFunctionRecordedNothing:
 
     def test_the_route_now_reaches_the_store(self, client, store):
         _delete(client)
-        assert len(store.events) == 1
+        assert [e.metadata["details"].get("phase") for e in store.events] == ["before_write", "completed"]
