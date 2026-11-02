@@ -28,15 +28,6 @@ register_env_var(
         component="slm",
     )
 )
-register_env_var(
-    EnvVarSpec(
-        name="SLM_UPDATE_PROGRESS_STALL_SECONDS",
-        type=int,
-        default=600,
-        description="Seconds a live self-update's log may stay still before the page reports it as quiet (#20254).",
-        component="slm",
-    )
-)
 
 register_env_var(
     EnvVarSpec(
@@ -594,3 +585,13 @@ register_env_var(
 # Node-health vars live in a sibling for room (#19292); importing it here
 # registers them whenever this module loads.
 from autobot_shared import env_registry_slm_health  # noqa: E402,F401
+
+register_env_var(
+    EnvVarSpec(
+        name="SLM_STALE_COMPONENTS_SCAN_TIMEOUT_SECONDS",
+        type=int,
+        default=300,
+        description="Seconds /code-sync/status waits on a drift scan before serving the last result (#20250).",
+        component="slm",
+    )
+)

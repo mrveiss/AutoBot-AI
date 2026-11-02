@@ -8828,6 +8828,11 @@ export interface components {
              */
             stale_components: string[];
             /**
+             * Stale Scan Unknown
+             * @default false
+             */
+            stale_scan_unknown: boolean;
+            /**
              * Total Nodes
              * @default 0
              */

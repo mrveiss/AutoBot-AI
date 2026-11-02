@@ -3265,6 +3265,11 @@
             "title": "Stale Components",
             "type": "array"
           },
+          "stale_scan_unknown": {
+            "default": false,
+            "title": "Stale Scan Unknown",
+            "type": "boolean"
+          },
           "total_nodes": {
             "default": 0,
             "title": "Total Nodes",

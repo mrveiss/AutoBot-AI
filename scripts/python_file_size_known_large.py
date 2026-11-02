@@ -75,7 +75,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/chat.py": 2666,  # #18316: delete delegates to the canonical path
     "autobot-backend/api/chat_sessions.py": 1859,  # #18293: legacy transcripts only ever proposed
     "autobot-backend/api/code_intelligence.py": 2145,
-    "autobot-backend/api/code_search.py": 828,
+    "autobot-backend/api/code_search.py": 786,
     "autobot-backend/api/codebase_analytics/analyzers.py": 1684,
     "autobot-backend/api/codebase_analytics/api_endpoint_scanner.py": 1444,
     "autobot-backend/api/codebase_analytics/chromadb_storage.py": 1389,  # #18055: split to problem_storage.py
@@ -412,7 +412,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/workflow_scheduler.py": 1070,
     "autobot-npu-worker/npu_worker_pool_test.py": 1010,
     "autobot-slm-backend/api/code_source.py": 701,
-    "autobot-slm-backend/api/code_sync.py": 5782,  # #19352, #19367 (was 5803)
+    "autobot-slm-backend/api/code_sync.py": 5780,  # #19352, #19367 (was 5803)
     "autobot-slm-backend/api/errors.py": 866,
     "autobot-slm-backend/api/infrastructure.py": 722,
     "autobot-slm-backend/api/monitoring.py": 1087,
