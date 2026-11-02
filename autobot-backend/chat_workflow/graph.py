@@ -23,9 +23,7 @@ Architecture:
     - RLM reflection evaluates response quality before persisting
 """
 
-import hashlib
-import json
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 from langchain_core.runnables import RunnableConfig
 
@@ -33,7 +31,13 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
 from chat_workflow import limits
 from chat_workflow.approval_binding import ai_line_calls_shown, bind_decision
+from chat_workflow.attachment_context import attachment_prompt, stream_notices, without_block
 from chat_workflow.checkpointer_connection import describe_connection, describe_error, get_checkpointer_connection
+from chat_workflow.tool_loop_fingerprint import (  # noqa: F401 -- re-exported: graph._detect_tool_call_loop
+    _LOOP_DETECTION_WINDOW,
+    _detect_tool_call_loop,
+    _fingerprint_tool_call,
+)
 
 try:
     from langgraph.checkpoint.redis.aio import AsyncRedisSaver
@@ -51,9 +55,6 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 # Tool-call loop detection constants (#3254)
 # ---------------------------------------------------------------------------
-
-# Number of identical-fingerprint iterations required to declare a loop.
-_LOOP_DETECTION_WINDOW: int = 3
 
 # Maximum consecutive loop events before the graph halts tool execution.
 _LOOP_ABORT_THRESHOLD: int = 2
@@ -133,78 +134,6 @@ class ChatState(TypedDict, total=False):
 
     # Error tracking
     error: str | None
-
-
-# ---------------------------------------------------------------------------
-# Tool-call loop detection helpers (#3254)
-# ---------------------------------------------------------------------------
-
-
-def _fingerprint_tool_call(tool_call: Dict[str, Any]) -> str:
-    """Return a stable string fingerprint for one tool call.
-
-    The fingerprint is built from the tool name plus a SHA-1 digest of the
-    canonically sorted JSON-serialised params dict.  Using a digest (rather
-    than the raw params string) keeps fingerprints constant-length and avoids
-    false negatives caused by key-ordering differences.
-
-    Issue #3254: content-aware detection — two calls are considered identical
-    when *both* the tool name and the arguments are the same.
-
-    Args:
-        tool_call: A parsed tool-call dict with at least a "name" key and an
-                   optional "params" key (dict or scalar).
-
-    Returns:
-        A short string of the form ``"<name>:<hex_digest>"``.
-    """
-    name = tool_call.get("name", "")
-    params = tool_call.get("params", {})
-    try:
-        canonical = json.dumps(params, sort_keys=True, ensure_ascii=False)
-    except (TypeError, ValueError):
-        canonical = str(params)
-    digest = hashlib.sha1(canonical.encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
-    return f"{name}:{digest}"
-
-
-def _detect_tool_call_loop(
-    new_fingerprints: List[str],
-    history: List[str],
-    window: int = _LOOP_DETECTION_WINDOW,
-) -> Tuple[bool, List[str]]:
-    """Detect whether the current iteration is a repetition of recent ones.
-
-    A loop is declared when the last ``window - 1`` entries in ``history``
-    are all identical to the current set of fingerprints.  This requires at
-    least ``window`` consecutive identical iterations before triggering.
-
-    Issue #3254: content-aware (not just count-based) — two iterations are
-    considered identical only when they produce *the same tool calls in the
-    same order*.
-
-    Args:
-        new_fingerprints: Fingerprint strings for the current iteration's
-                          tool calls (one entry per tool call).
-        history:          Accumulated per-iteration fingerprint strings from
-                          previous iterations (each entry is one iteration's
-                          comma-joined fingerprints).
-        window:           How many identical consecutive iterations trigger
-                          the loop alarm (default: ``_LOOP_DETECTION_WINDOW``).
-
-    Returns:
-        ``(is_loop, updated_history)`` where ``updated_history`` has the new
-        iteration's fingerprint appended.
-    """
-    current_key = ",".join(new_fingerprints)
-    updated = (list(history) + [current_key])[-window:]
-
-    if len(updated) < window:
-        return False, updated
-
-    recent = updated[-(window):]
-    is_loop = len(set(recent)) == 1 and recent[0] != ""
-    return is_loop, updated
 
 
 # ---------------------------------------------------------------------------
@@ -314,7 +243,9 @@ async def prepare_llm(state: ChatState, config: RunnableConfig) -> dict:
     manager = config["configurable"]["manager"]
 
     session = await manager.get_or_create_session(state["session_id"])
-    llm_params = await manager._prepare_llm_workflow_params(session, state["user_message"], state.get("context", {}))
+    updated_context = dict(state.get("context", {}) or {})  # #20195: the seam stamps INTO this; the node returns it
+    llm_params = await manager._prepare_llm_workflow_params(session, state["user_message"], updated_context)
+    stream_notices(llm_params, config["configurable"].get("stream_callback"))  # #20195: streamed, not persisted
     ctx = manager._create_llm_iteration_context(
         llm_params,
         state["session_id"],
@@ -328,7 +259,6 @@ async def prepare_llm(state: ChatState, config: RunnableConfig) -> dict:
     # into ctx.context. Without this, the ctx built above — which DOES carry
     # the flag via _create_llm_iteration_context — is discarded, and the
     # response-metadata cost badge sees it only on the non-graph path.
-    updated_context = dict(state.get("context", {}) or {})
     updated_context["lightweight_mode_used"] = llm_params.get("lightweight_mode_used", False)
 
     return {
@@ -336,7 +266,7 @@ async def prepare_llm(state: ChatState, config: RunnableConfig) -> dict:
             "ollama_endpoint": ctx.ollama_endpoint,
             "selected_model": ctx.selected_model,
             "system_prompt": ctx.system_prompt,
-            "initial_prompt": ctx.initial_prompt,
+            "initial_prompt": without_block(llm_params),  # #20195: file text never rides the Redis checkpoint
         },
         "used_knowledge": ctx.used_knowledge,
         "rag_citations": [c for c in (ctx.rag_citations or [])],
@@ -471,7 +401,7 @@ async def _run_llm_iteration(manager, ctx, iteration, messages, stream_cb):
 
     async for item in manager._run_continuation_loop_iteration(
         http_client,
-        ctx.initial_prompt,
+        await attachment_prompt(manager, ctx),  # #20195: file text re-resolved per call, never checkpointed
         iteration,
         ctx,
     ):
@@ -528,7 +458,7 @@ async def _run_llm_iteration_plan(manager, ctx, iteration, messages, stream_cb):
 
     async for item in manager._run_llm_iteration_plan_only(
         http_client,
-        ctx.initial_prompt,
+        await attachment_prompt(manager, ctx),  # #20195: file text re-resolved per call, never checkpointed
         iteration,
         ctx,
     ):
@@ -650,6 +580,21 @@ async def _generate_response_planned(
     }
 
 
+async def _emit_agent_execute_hook(session_id, iteration) -> None:
+    """Fire ON_AGENT_EXECUTE before an LLM iteration (generate_response, Issue #3278)."""
+    try:
+        from autobot_shared.plugin_sdk import Hook, HookRegistry
+
+        await HookRegistry().call_hook(
+            Hook.ON_AGENT_EXECUTE.value,
+            session_id=session_id,
+            iteration=iteration,
+            agent_type="chat_workflow",
+        )
+    except Exception as _hook_exc:  # noqa: BLE001
+        logger.debug("Plugin hook ON_AGENT_EXECUTE failed (non-fatal): %s", _hook_exc)
+
+
 async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
     """Run one LLM iteration: call LLM, stream response, parse tool calls.
 
@@ -681,24 +626,13 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
         step_id=step_name,
     )
 
-    # Issue #3278: notify plugins before LLM execution.
-    try:
-        from autobot_shared.plugin_sdk import Hook, HookRegistry
+    await _emit_agent_execute_hook(session_id, iteration)  # Issue #3278
 
-        await HookRegistry().call_hook(
-            Hook.ON_AGENT_EXECUTE.value,
-            session_id=session_id,
-            iteration=iteration,
-            agent_type="chat_workflow",
-        )
-    except Exception as _hook_exc:  # noqa: BLE001
-        logger.debug("Plugin hook ON_AGENT_EXECUTE failed (non-fatal): %s", _hook_exc)
-
-    # GH#11202: flag-gated plan-only path. OFF (default) falls through to the
-    # unchanged inline-dispatch path below — zero behavior change when off.
+    # GH#11202 flag-gated plan-only path; #20195: attachment turns (and that chat's later turns) take it whatever
+    # the flag, so a person can answer each call. Otherwise OFF falls through to the unchanged inline path.
     from chat_workflow.session_role import CHAT_APPROVAL_GATE_ENABLED
 
-    if CHAT_APPROVAL_GATE_ENABLED:
+    if CHAT_APPROVAL_GATE_ENABLED or ctx.approve_every_call:
         return await _generate_response_planned(
             state, manager, ctx, iteration, messages, stream_cb, step_name, _cot_start
         )
@@ -717,32 +651,10 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
             output_summary="LLM error: Request failed",
             session_id=session_id,
         )
-        # Issue #3278: notify plugins on agent error.
-        try:
-            from autobot_shared.plugin_sdk import Hook, HookRegistry
-
-            await HookRegistry().call_hook(
-                Hook.ON_AGENT_ERROR.value,
-                session_id=session_id,
-                iteration=iteration,
-                error=str(exc),
-            )
-        except Exception as _hook_exc:  # noqa: BLE001
-            logger.debug("Plugin hook ON_AGENT_ERROR failed (non-fatal): %s", _hook_exc)
+        await _emit_planned_agent_error_hooks(session_id, iteration, exc)  # Issue #3278
         return {"error": str(exc), "workflow_messages": messages}
 
-    # Issue #3278: notify plugins after successful LLM execution.
-    try:
-        from autobot_shared.plugin_sdk import Hook, HookRegistry
-
-        await HookRegistry().call_hook(
-            Hook.ON_AGENT_COMPLETE.value,
-            session_id=session_id,
-            iteration=iteration,
-            response=llm_response or "",
-        )
-    except Exception as _hook_exc:  # noqa: BLE001
-        logger.debug("Plugin hook ON_AGENT_COMPLETE failed (non-fatal): %s", _hook_exc)
+    await _emit_planned_agent_complete_hook(session_id, iteration, llm_response or "")  # Issue #3278
 
     # Issue #13295 (review B3): append unconditionally — see the matching
     # comment in _generate_response_planned for why a skipped append here
