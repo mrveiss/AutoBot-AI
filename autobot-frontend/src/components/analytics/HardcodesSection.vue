@@ -18,6 +18,11 @@
       <Icon name="spinner" :spin="true" />
       <span>{{ $t('analytics.codebase.actions.loading') }}</span>
     </div>
+    <EmptyState
+      v-else-if="error"
+      icon="exclamation-triangle"
+      :message="$t('analytics.codebase.sectionLoadFailed', { error })"
+    />
     <div v-else-if="hardcodes && hardcodes.length > 0" class="section-content">
       <!-- Summary Cards -->
       <div class="summary-cards">
@@ -135,6 +140,8 @@ interface Props {
    * message so users don't misread a running scan as "no results".
    */
   loading?: boolean
+  /** A failed load is not "no hardcoded values detected" -- show it as a failure. */
+  error?: string
 }
 
 const props = defineProps<Props>()

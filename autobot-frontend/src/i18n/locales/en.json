@@ -1054,6 +1054,7 @@
     "dashboard": "Dashboard",
     "codebase": {
       "title": "Real-time Codebase Analytics",
+      "sectionLoadFailed": "This section could not be loaded, so this is not a result: {error}",
       "scanRunner": {
         "title": "Scan Progress"
       },

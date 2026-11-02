@@ -152,13 +152,13 @@
 
       <!-- Issue #1579: Problems Report extracted to ProblemsReportSection -->
       <ProblemsReportSection
-        :problems="problemsReport"
+        :problems="problemsReport" :error="problemsError"
         @export="(fmt: string) => exportSection('problems', fmt as 'md' | 'json')"
       />
 
       <!-- Code Intelligence: Anti-Pattern / Code Smells Report (#1469, #184) -->
       <CodeSmellsSection
-        :smells="codeSmellsForPanel"
+        :smells="codeSmellsForPanel" :error="problemsError"
         :code-health-score="codeHealthScore"
         @export="(fmt: string) => exportSection('code-smells', fmt as 'md' | 'json')"
       />
@@ -189,14 +189,13 @@
 
       <!-- Function Declarations (#1469, #184) -->
       <DeclarationsSection
-        :declarations="declarationsForPanel"
-        :loading="loadingProgress.declarations"
+        :declarations="declarationsForPanel" :error="declarationsError" :loading="loadingProgress.declarations"
         @export="(fmt: string) => exportSection('declarations', fmt as 'md' | 'json')"
       />
 
       <!-- Hardcoded Values (#5277: wire orphan data flow) -->
       <HardcodesSection
-        :hardcodes="hardcodeAnalysis"
+        :hardcodes="hardcodeAnalysis" :error="hardcodesError"
         :loading="loadingProgress.hardcodes"
         @export="(fmt: string) => exportSection('hardcodes', fmt as 'md' | 'json')"
       />
@@ -579,6 +578,7 @@ const {
   duplicateScanState,
   declarationAnalysis,
   hardcodeAnalysis,
+  problemsError, declarationsError, hardcodesError,
   loadingProgress,
   chartData,
   chartDataLoading,
