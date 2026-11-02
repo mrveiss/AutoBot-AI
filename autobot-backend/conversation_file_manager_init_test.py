@@ -303,7 +303,7 @@ class TestIdempotentInitialization:
         )
         table_count = rows[0][0]
 
-        # Expected: 6 schema tables (5 + chat_attachment_marks, #20195) + 1 schema_migrations table
+        # Expected: 6 schema tables (5 + chat_attachment_marks, #20195), file_cleanup_attempts (#20234) and schema_migrations
         assert table_count == 8, f"Should have exactly 8 tables, found {table_count}"
         logger.info(f"✓ Table count correct: {table_count}")
 
