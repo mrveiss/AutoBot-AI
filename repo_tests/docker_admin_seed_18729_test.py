@@ -41,6 +41,7 @@ def _run_generator(tmp: Path) -> tuple[str, dict[str, str]]:
         pytest.skip("bash and openssl are needed to run generate-secrets.sh")
     script = tmp / "generate-secrets.sh"
     shutil.copy(_GENERATOR, script)
+    shutil.copy(_GENERATOR.parent / "write-redis-acl.sh", tmp)
     # #17793: generate-secrets refuses a DB password when docker cannot say no Postgres volume
     # exists; a stub docker that lists no volumes stands for a fresh host.
     bin_dir = tmp / "bin"
