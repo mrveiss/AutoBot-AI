@@ -258,14 +258,14 @@ onMounted(async () => {
 }
 
 .selector-title {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .selector-subtitle {
   margin-top: 0.25rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -288,14 +288,14 @@ onMounted(async () => {
 }
 
 .selector-unavailable-title {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .selector-unavailable-desc {
   max-width: 32rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -304,7 +304,7 @@ onMounted(async () => {
   border-radius: var(--radius-md);
   background: var(--color-danger-bg);
   color: var(--color-error);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .selector-retry {
@@ -430,7 +430,7 @@ onMounted(async () => {
 
 .selector-create {
   color: var(--color-accent-text, var(--color-accent, var(--coselector-accent)));
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   text-decoration: none;
 }
