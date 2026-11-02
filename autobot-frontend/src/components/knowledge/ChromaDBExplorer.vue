@@ -418,6 +418,63 @@ onMounted(loadCollections)
 </script>
 
 <style scoped>
+/* ChromaCollectionList carries no styles of its own (#12730). */
+.collections-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-2);
+}
+
+:deep(.collection-item) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--spacing-3);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+  transition: all var(--duration-150) ease;
+  margin-bottom: var(--spacing-1);
+}
+
+:deep(.collection-item:hover) {
+  background: var(--bg-tertiary);
+  border-color: var(--border-default);
+}
+
+:deep(.collection-item.active) {
+  background: var(--color-info-bg);
+  border-color: var(--color-info);
+  color: var(--color-info);
+}
+
+:deep(.collection-info) {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+  flex: 1;
+}
+
+:deep(.collection-name) {
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+:deep(.collection-count) {
+  font-size: var(--text-xs);
+  opacity: 0.7;
+}
+
+:deep(.collection-item svg) {
+  width: var(--spacing-4);
+  height: var(--spacing-4);
+  flex-shrink: 0;
+}
+
 /* Issue #8999: ChromaDB Explorer Design */
 
 .chroma-explorer {

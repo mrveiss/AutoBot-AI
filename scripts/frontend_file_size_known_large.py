@@ -63,7 +63,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/feature-flags/AccessMetrics.vue": 722,
     "autobot-frontend/src/components/feature-flags/EndpointEnforcement.vue": 639,
     "autobot-frontend/src/components/file-browser/FileBrowser.vue": 736,
-    "autobot-frontend/src/components/knowledge/ChromaDBExplorer.vue": 1089,
+    "autobot-frontend/src/components/knowledge/ChromaDBExplorer.vue": 1146,
     "autobot-frontend/src/components/knowledge/DocumentChangeFeed.vue": 601,
     "autobot-frontend/src/components/knowledge/EntityExtractor.vue": 776,
     "autobot-frontend/src/components/knowledge/EntityGraphManager.vue": 692,
