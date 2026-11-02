@@ -38,7 +38,6 @@ Limits come from the SSOT tiers (``rate_limit_*_rpm`` / ``_rph``); this module c
 
 from __future__ import annotations
 
-import logging
 import time
 
 from fastapi import HTTPException, status
@@ -46,9 +45,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.security import create_audit_log
 from autobot_shared.env_utils import env_float, env_int
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.rate_limiter import RateLimiter
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 AUDIT_WINDOW_SECONDS: float = env_float("SLM_LOGIN_AUDIT_WINDOW_SECONDS", 300.0)
 AUDIT_MAX_ROWS_PER_WINDOW: int = env_int("SLM_LOGIN_AUDIT_MAX_ROWS_PER_WINDOW", 100)
