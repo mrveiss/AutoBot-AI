@@ -517,7 +517,7 @@ folder cannot read as a clean 0.
 - **Not independently re-derived.** Rule 3 asks for a second enumeration; this ratchet has only the
   detector's, so its count is as good as the regex. The fixtures in the test file are its positive
   and negative controls.
-- **A branch doesn't repin (#19673):** the pre-push gate asks only when the branch changed a guard beyond its `floor=` lines. Merge trains repin the rest on their merged tree.
+- **A branch doesn't repin (#19673):** the pre-push gate asks only when the branch changed a guard beyond its `floor=` lines. Merge trains still enforce every floor (`AUTOBOT_REACH_AUDIT=1`, train heads only) and repin the rest on their merged tree, so a branch hand-lowering a `floor=` is judged there, not locally.
 - **Re-pinning the floor:** `python scripts/repin_reach_floors.py` after the tree grows or shrinks
   past the window.
 

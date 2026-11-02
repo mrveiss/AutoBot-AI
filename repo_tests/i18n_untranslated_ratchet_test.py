@@ -57,6 +57,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -117,11 +118,18 @@ def lost_translations(
 ) -> list[str]:
     """Keys whose translation at the base is gone, leaving out keys `en.json` added or reworded.
 
-    A key renamed in `en.json` keeps its text, so a new key carrying the text of a translated key
-    that went away is that key moved, and owes the translation it had.
+    A key renamed in `en.json` keeps its text, so a new key is that key moved, and owes the translation
+    it had, when exactly one key went away with that text and no older key still holds it. Anything less
+    certain would refuse an unrelated PR for a string that merely reads the same.
     """
     translated_at_base = set(base_english) - set(_untranslated_keys(base_english, base_locale))
-    moved_texts = {base_english[key] for key in translated_at_base - set(english)}
+    vanished = Counter(text for key, text in base_english.items() if key not in english)
+    still_held = {text for key, text in english.items() if key in base_english}
+    moved_texts = {
+        base_english[key]
+        for key in translated_at_base - set(english)
+        if vanished[base_english[key]] == 1 and base_english[key] not in still_held
+    }
     return sorted(
         key
         for key in _untranslated_keys(english, locale)
@@ -169,6 +177,10 @@ def test_the_guard_finds_a_loss_and_allows_new_english_only_keys() -> None:
     assert lost_translations(base_en, base_fr, {"b": old}, {}) == ["b"], "a moved key keeps what it owes"
     assert lost_translations(base_en, base_fr, {"b": old}, {"b": "Une phrase assez longue"}) == []
     assert lost_translations(base_en, base_fr, {"a": old, "b": old}, base_fr) == [], "new key, same text: not a move"
+    both = {"a": old, "c": old}
+    fr_both = {"a": "Une phrase assez longue", "c": "Une phrase assez longue"}
+    assert lost_translations(both, fr_both, {"c": old, "b": old}, {"c": "Une phrase assez longue"}) == []
+    assert lost_translations(both, fr_both, {"b": old}, {}) == [], "two keys went: which one moved is unknown"
 
 
 def test_a_missing_base_catalogue_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
