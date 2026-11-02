@@ -3,13 +3,13 @@
 <!-- Author: mrveiss -->
 <template>
   <div v-if="isAdmin">
-    <section v-if="pending.length > 0" class="stuck-cleanup" data-testid="removal-proposals">
-      <p class="stuck-title">{{ $t('llc.approvals.removals.title', { count: pending.length }) }}</p>
-      <p class="stuck-hint">{{ $t('llc.approvals.removals.hint') }}</p>
-      <ul class="stuck-list">
-        <li v-for="item in pending" :key="item.id">
-          <span class="stuck-file">{{ item.title }}</span>
-          <span class="stuck-reason">{{ item.description }}</span>
+    <section v-if="pending.length > 0" class="p-3 mb-3 border rounded-md" data-testid="removal-proposals">
+      <p class="font-semibold">{{ $t('llc.approvals.removals.title', { count: pending.length }) }}</p>
+      <p class="text-sm text-secondary mb-2">{{ $t('llc.approvals.removals.hint') }}</p>
+      <ul>
+        <li v-for="item in pending" :key="item.id" class="flex items-center gap-3 py-1">
+          <span class="font-mono">{{ item.title }}</span>
+          <span class="flex-1 text-secondary">{{ item.description }}</span>
           <BaseButton size="sm" :disabled="deciding.has(item.id)" @click="decide(item.id, 'approve')">
             {{ $t('llc.approvals.removals.approve') }}
           </BaseButton>
@@ -19,15 +19,15 @@
         </li>
       </ul>
     </section>
-    <section v-if="status && status.stuck_cleanup_files > 0" class="stuck-cleanup" data-testid="stuck-files">
-      <p class="stuck-title">
+    <section v-if="status && status.stuck_cleanup_files > 0" class="p-3 mb-3 border rounded-md" data-testid="stuck-files">
+      <p class="font-semibold">
         {{ $t('llc.approvals.stuckCleanup.title', { count: status.stuck_cleanup_files, size: formatBytes(status.stuck_cleanup_bytes) }) }}
       </p>
-      <p class="stuck-hint">{{ $t('llc.approvals.stuckCleanup.hint') }}</p>
-      <ul class="stuck-list">
-        <li v-for="file in status.stuck_cleanup" :key="file.file_id">
-          <span class="stuck-file">{{ file.file_id }}</span>
-          <span class="stuck-reason">{{ file.last_reason }} ({{ file.failed_attempts }})</span>
+      <p class="text-sm text-secondary mb-2">{{ $t('llc.approvals.stuckCleanup.hint') }}</p>
+      <ul>
+        <li v-for="file in status.stuck_cleanup" :key="file.file_id" class="flex items-center gap-3 py-1">
+          <span class="font-mono">{{ file.file_id }}</span>
+          <span class="flex-1 text-secondary">{{ file.last_reason }} ({{ file.failed_attempts }})</span>
           <BaseButton size="sm" :disabled="resetting.has(file.file_id)" @click="reset(file.file_id)">
             {{ $t('llc.approvals.stuckCleanup.reset') }}
           </BaseButton>
@@ -66,7 +66,8 @@ const deciding = ref(new Set<string>())
 
 async function load() {
   try {
-    status.value = await api.get<CleanupStatus>('/api/conversation-files/cleanup/status')
+    const current: CleanupStatus = await api.get('/api/conversation-files/cleanup/status')
+    status.value = current
     isAdmin.value = true
   } catch (err) {
     // 401/403 for a non-admin: the panel stays hidden and asks for nothing more.
@@ -74,7 +75,7 @@ async function load() {
     return
   }
   try {
-    const rows = await api.get<Proposal[]>('/api/approval-gates/pending')
+    const rows: Proposal[] = await api.get('/api/approval-gates/pending')
     pending.value = rows.filter((row) => row.approval_type === 'destructive_action')
   } catch (err) {
     logger.error('Failed to load pending removal proposals', err)
@@ -91,7 +92,7 @@ function track(set: typeof resetting, id: string, on: boolean) {
 async function decide(id: string, verb: 'approve' | 'reject') {
   track(deciding, id, true)
   try {
-    await api.post<unknown>(`/api/approval-gates/${id}/${verb}`, {})
+    await api.post(`/api/approval-gates/${id}/${verb}`, {})
     await load()
   } catch (err) {
     logger.error('Decision failed', err)
@@ -104,7 +105,7 @@ async function decide(id: string, verb: 'approve' | 'reject') {
 async function reset(fileId: string) {
   track(resetting, fileId, true)
   try {
-    await api.post<unknown>(`/api/conversation-files/cleanup/${fileId}/reset`, {})
+    await api.post(`/api/conversation-files/cleanup/${fileId}/reset`, {})
     showToast(t('llc.approvals.stuckCleanup.resetDone'), 'success')
     await load()
   } catch (err) {
@@ -117,13 +118,3 @@ async function reset(fileId: string) {
 
 onMounted(load)
 </script>
-
-<style scoped>
-.stuck-cleanup { padding: var(--spacing-3, 12px); border: 1px solid var(--border-default); border-radius: var(--radius-md, 6px); margin-bottom: var(--spacing-3, 12px); }
-.stuck-title { font-weight: 600; margin: 0; }
-.stuck-hint { color: var(--text-secondary); margin: 4px 0 8px; }
-.stuck-list { list-style: none; padding: 0; margin: 0; }
-.stuck-list li { display: flex; gap: var(--spacing-3, 12px); align-items: center; padding: 4px 0; }
-.stuck-file { font-family: var(--font-mono, monospace); }
-.stuck-reason { color: var(--text-secondary); flex: 1; }
-</style>
