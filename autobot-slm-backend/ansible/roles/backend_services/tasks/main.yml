@@ -79,7 +79,7 @@
 
 - name: Copy AutoBot application files
   synchronize:
-    src: "{{ playbook_dir }}/../"
+    src: "{{ role_path }}/../../"
     dest: "{{ autobot.base_dir }}/app/"
     rsync_opts:
       - "--chmod=o-w"  # #19503
