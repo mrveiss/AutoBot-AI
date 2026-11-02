@@ -20,8 +20,8 @@ export type ThemePreset =
   | 'catppuccin-latte' // Light + Purple
   | 'solarized-dark' // Dark + Teal
   | 'solarized-light' // Light + Teal
-  | 'high-contrast-dark' // Dark + Blue (high contrast)
-  | 'high-contrast-light' // Light + Blue (high contrast)
+  | 'high-contrast-dark' // High contrast dark theme
+  | 'high-contrast-light' // High contrast theme
   | 'brand-dark' // Dark + AutoBot brand color (teal)
   | 'brand-light' // Light + AutoBot brand color (teal)
   | 'midnight' // Dark + Indigo
@@ -37,7 +37,6 @@ export interface ThemePresetConfig {
   descriptionKey: string
   theme: Theme
   accentColor: AccentColor
-  highContrast?: boolean
 }
 
 /** Preset configurations */
@@ -75,16 +74,14 @@ export const THEME_PRESETS: Record<ThemePreset, ThemePresetConfig> = {
   'high-contrast-dark': {
     nameKey: 'ui.themePresets.names.high-contrast-dark',
     descriptionKey: 'ui.themePresets.descriptions.high-contrast-dark',
-    theme: 'dark',
-    accentColor: 'blue',
-    highContrast: true,
+    theme: 'contrast-dark',
+    accentColor: 'theme',
   },
   'high-contrast-light': {
     nameKey: 'ui.themePresets.names.high-contrast-light',
     descriptionKey: 'ui.themePresets.descriptions.high-contrast-light',
-    theme: 'light',
-    accentColor: 'blue',
-    highContrast: true,
+    theme: 'contrast',
+    accentColor: 'theme',
   },
   'brand-dark': {
     nameKey: 'ui.themePresets.names.brand-dark',
