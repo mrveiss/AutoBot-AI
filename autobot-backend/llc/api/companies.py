@@ -1596,7 +1596,7 @@ async def export_template(
     # Issue #12233: tenant authz — exporting another tenant's structure is a
     # cross-tenant data leak; caller's org must match company_id unless admin.
     assert_company_access(ctx, company_id)  # shared guard (#12238)
-    payload = await svc.export_template(company_id)
+    payload = await svc.export_template(company_id, actor=str(_current_user.get("id") or "system"))
     filename = f"company_{company_id}_template.json"
     return JSONResponse(
         content=payload,
@@ -1619,7 +1619,7 @@ async def export_snapshot(
     # Issue #12233: tenant authz — a full-state snapshot of another tenant is a
     # cross-tenant data leak; caller's org must match company_id unless admin.
     assert_company_access(ctx, company_id)  # shared guard (#12238)
-    payload = await svc.export_snapshot(company_id)
+    payload = await svc.export_snapshot(company_id, actor=str(_current_user.get("id") or "system"))
     filename = f"company_{company_id}_snapshot.json"
     return JSONResponse(
         content=payload,

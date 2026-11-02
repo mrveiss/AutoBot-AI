@@ -19,13 +19,13 @@ from autobot_shared.redis_client import get_async_redis_client
 from llc.adapters import adapter_unavailable_reason, registered_adapter_types
 from llc.models.enums import ActivityEventType, LLCCompanyStatus
 from llc.models.export import LLCExportArtifact
-from llc.models.goal import LLCGoal
 from llc.services.portability_ceo import mint_agent_ids, settle_imported_ceo
 from llc.services.portability_export import PortabilityExportMixin, _scrub_adapter_config
 from llc.services.portability_import import _PLACEHOLDER_RE, PortabilityImportMixin
 from user_management.models.organization import Organization
 
 from .activity_log import LLCActivityLogService
+from .actor import resolve_actor
 from .base import LLCServiceBase
 
 logger = get_logger(__name__)
@@ -351,18 +351,24 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
         )
         self.session.add(artifact)
 
-        if self.activity_log:
-            event_type = (
-                ActivityEventType.COMPANY_EXPORT_TEMPLATE
-                if export_kind == "template"
-                else ActivityEventType.COMPANY_EXPORT_SNAPSHOT
-            )
-            await self.activity_log.append(
-                session=self.session,
-                company_id=company_id,
-                event_type=event_type,
-                after={"artifact_id": str(artifact_id), "storage_path": storage_path},
-            )
+        event_type = (
+            ActivityEventType.COMPANY_EXPORT_TEMPLATE
+            if export_kind == "template"
+            else ActivityEventType.COMPANY_EXPORT_SNAPSHOT
+        )
+        who = resolve_actor(user_id=actor)
+        await self.activity_log.record(
+            self.session,
+            company_id=str(company_id),
+            actor_type=who.type,
+            actor_id=who.id,
+            metadata=who.metadata(),
+            event_type=event_type,
+            entity_type="company",
+            entity_id=str(company_id),
+            # The artifact id and where it sits, never the exported payload.
+            after={"artifact_id": str(artifact_id), "storage_path": storage_path},
+        )
 
         return artifact_id
 
@@ -388,15 +394,6 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
                 text("SELECT name FROM agent_org_nodes WHERE name = ANY(:names)").bindparams(names=names)
             )
         return [r[0] for r in rows]
-
-    async def _goal_titles_exist(self, titles: List[str], company_id: Optional[uuid.UUID] = None) -> List[str]:
-        if not titles:
-            return []
-        q = select(LLCGoal.title).where(LLCGoal.title.in_(titles))
-        if company_id is not None:
-            q = q.where(LLCGoal.company_id == str(company_id))
-        result = await self.session.execute(q)
-        return [r[0] for r in result]
 
     # ------------------------------------------------------------------
     # Private helpers — entity creation

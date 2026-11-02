@@ -8,6 +8,7 @@ via LLCServiceBase.activity_log — never write to llc_activity_log directly.
 Append-only guarantee: this service exposes no update() or delete() methods.
 """
 
+import asyncio
 import json
 import logging
 import uuid
@@ -15,17 +16,50 @@ from datetime import datetime, timezone
 from typing import Any
 
 import sqlalchemy as sa
+from sqlalchemy import event
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from autobot_shared.redis_client import get_async_redis_client
 
 from ..models.activity import ActorType, LLCActivityLog
 from ..models.enums import ActivityEventType
+from .actor import ActivityRecordError, require_actor_id
 
 logger = logging.getLogger(__name__)
 
 _PUBSUB_CHANNEL_PREFIX = "llc:activity"
+#: ``session.info`` key: rows written in the open transaction whose live event waits for its commit.
+_ACTIVITY_PENDING_KEY = "llc_activity_pending_publish"
+_ACTIVITY_HOOKED_KEY = "llc_activity_publish_hooked"
+#: Strong references so a publish task is not collected before it runs.
+_publish_tasks: set["asyncio.Task[None]"] = set()
+
+
+def _spawn_publish(service: "LLCActivityLogService", company_id: str, payload: dict[str, Any]) -> None:
+    task = asyncio.get_running_loop().create_task(service._deliver(company_id, payload))
+    _publish_tasks.add(task)
+    task.add_done_callback(_publish_tasks.discard)
+
+
+def _send_committed_activity(sync_session: Session) -> None:
+    """``after_commit``: publish each row that is now durable; a row since expunged is skipped.
+
+    This event also fires when a SAVEPOINT is released, and that row can still be rolled back.
+    """
+    if sync_session.in_nested_transaction():
+        return
+    for service, company_id, entry, payload in sync_session.info.pop(_ACTIVITY_PENDING_KEY, []):
+        if sa_inspect(entry).persistent:
+            _spawn_publish(service, company_id, payload)
+
+
+def _drop_undone(sync_session: Session) -> None:
+    """``after_rollback`` (a SAVEPOINT's too): keep only rows still in the session; the rest were undone."""
+    pending = sync_session.info.get(_ACTIVITY_PENDING_KEY, [])
+    pending[:] = [item for item in pending if sa_inspect(item[2]).persistent]
 
 
 class ActivityLogQuery:
@@ -105,53 +139,65 @@ class LLCActivityLogService:
             after: State snapshot after the change (defaults to empty dict).
             metadata: Arbitrary extra context (optional).
 
+        The live event is published after the caller's transaction commits and never for a
+        rolled-back one (see :meth:`_publish_after_commit`).
+
         Returns:
             The persisted LLCActivityLog row (id and occurred_at populated).
+
+        Raises:
+            ValueError: ``actor_id`` is not a UUID -- the caller's input, checked before any write.
+            ActivityRecordError: the row could not be built or flushed (a bad company or entity id,
+                a failed flush). Deliberately not a ``ValueError``, which a route reads as the
+                caller's error; every service's audit write fails the same way.
         """
+        require_actor_id(actor_id)
+        try:
+            entry = self._build_entry(
+                company_id, actor_type, actor_id, event_type, entity_type, entity_id, before, after, metadata
+            )
+            session.add(entry)
+            await session.flush()
+        except Exception as exc:
+            raise ActivityRecordError(f"activity record failed: {exc}") from exc
+
+        await self._publish_after_commit(session, company_id, entry)
+        return entry
+
+    @staticmethod
+    def _parse_uuid(value: Any, label: str) -> uuid.UUID:
+        try:
+            return uuid.UUID(value) if isinstance(value, str) else value
+        except ValueError as exc:
+            raise ValueError(f"Invalid {label} UUID: {value!r}") from exc
+
+    def _build_entry(
+        self,
+        company_id: str,
+        actor_type: "ActorType | str",
+        actor_id: str | None,
+        event_type: "ActivityEventType | str",
+        entity_type: str,
+        entity_id: str,
+        before: dict[str, Any] | None,
+        after: dict[str, Any] | None,
+        metadata: dict[str, Any] | None,
+    ) -> LLCActivityLog:
         actor_type_str = actor_type.value if isinstance(actor_type, ActorType) else actor_type
-        action_str = event_type.value if isinstance(event_type, ActivityEventType) else event_type
-
-        actor_agent_id: uuid.UUID | None = None
-        actor_user_id: uuid.UUID | None = None
-
-        if actor_id is not None:
-            try:
-                parsed_actor = uuid.UUID(actor_id) if isinstance(actor_id, str) else actor_id
-            except ValueError as exc:
-                raise ValueError(f"Invalid actor_id UUID: {actor_id!r}") from exc
-            if actor_type_str == ActorType.AGENT.value:
-                actor_agent_id = parsed_actor
-            elif actor_type_str == ActorType.USER.value:
-                actor_user_id = parsed_actor
-
-        try:
-            company_uuid = uuid.UUID(company_id) if isinstance(company_id, str) else company_id
-        except ValueError as exc:
-            raise ValueError(f"Invalid company_id UUID: {company_id!r}") from exc
-        try:
-            entity_uuid = uuid.UUID(entity_id) if isinstance(entity_id, str) else entity_id
-        except ValueError as exc:
-            raise ValueError(f"Invalid entity_id UUID: {entity_id!r}") from exc
-
-        entry = LLCActivityLog(
-            company_id=company_uuid,
+        actor = self._parse_uuid(actor_id, "actor_id") if actor_id is not None else None
+        return LLCActivityLog(
+            company_id=self._parse_uuid(company_id, "company_id"),
             actor_type=actor_type_str,
-            actor_agent_id=actor_agent_id,
-            actor_user_id=actor_user_id,
+            actor_agent_id=actor if actor_type_str == ActorType.AGENT.value else None,
+            actor_user_id=actor if actor_type_str == ActorType.USER.value else None,
             entity_type=entity_type,
-            entity_id=entity_uuid,
-            action=action_str,
+            entity_id=self._parse_uuid(entity_id, "entity_id"),
+            action=event_type.value if isinstance(event_type, ActivityEventType) else event_type,
             before_state=before,
             after_state=after or {},
             log_metadata=metadata,
             occurred_at=datetime.now(tz=timezone.utc),
         )
-
-        session.add(entry)
-        await session.flush()
-
-        await self._publish(company_id, entry)
-        return entry
 
     async def record_bulk(
         self,
@@ -162,9 +208,8 @@ class LLCActivityLogService:
 
         Each dict in ``entries`` must match the record() kwarg signature.
         All rows share the caller-owned session and transaction. Each call to
-        record() flushes and publishes independently; a rollback on the outer
-        transaction after record_bulk() returns may result in phantom Redis
-        events for already-published entries.
+        record() flushes independently; every live event waits for the commit, so a
+        rollback after record_bulk() returns publishes none of them.
 
         Returns:
             List of persisted LLCActivityLog rows in insertion order.
@@ -249,16 +294,9 @@ class LLCActivityLogService:
             total=total,
         )
 
-    async def _publish(self, company_id: str, entry: LLCActivityLog) -> None:
-        """Publish to Redis pub/sub channel llc:activity:{company_id}.
-
-        Failures are logged but never raised — publishing must not break writes.
-        Note: publish happens after flush but before the caller's commit; a
-        rollback on the outer transaction will leave a phantom event on the
-        channel. Subscribers must treat events as hints and requery on doubt.
-        """
-        channel = f"{_PUBSUB_CHANNEL_PREFIX}:{company_id}"
-        payload = {
+    @staticmethod
+    def _event_payload(entry: LLCActivityLog) -> dict[str, Any]:
+        return {
             "id": str(entry.id),
             "company_id": str(entry.company_id),
             "actor_type": entry.actor_type,
@@ -269,6 +307,39 @@ class LLCActivityLogService:
             "action": entry.action,
             "occurred_at": entry.occurred_at.isoformat(),
         }
+
+    async def _publish_after_commit(self, session: AsyncSession, company_id: str, entry: LLCActivityLog) -> None:
+        """Publish the live event once the caller's transaction commits; never for a rollback.
+
+        The payload is captured now, while the row is loaded. The event is queued on the session
+        and sent from its ``after_commit`` hook, which fires for any commit (``llc`` sessions are
+        opened with ``get_session`` or ``get_async_session_factory()`` and committed by the caller,
+        not through ``async_session_scope``, so ``run_after_commit`` has no list to queue on).
+        A rollback clears the queue. An object that is not a real SQLAlchemy session has no
+        commit to follow, so the event goes out at once, best-effort as always.
+        """
+        sync = getattr(session, "sync_session", None)
+        if not isinstance(sync, Session):
+            await self._publish(company_id, entry)
+            return
+        if not sync.info.get(_ACTIVITY_HOOKED_KEY):
+            event.listen(sync, "after_commit", _send_committed_activity)
+            event.listen(sync, "after_rollback", _drop_undone)
+            sync.info[_ACTIVITY_HOOKED_KEY] = True
+        sync.info.setdefault(_ACTIVITY_PENDING_KEY, []).append((self, company_id, entry, self._event_payload(entry)))
+
+    async def _publish(self, company_id: str, entry: LLCActivityLog) -> None:
+        """Publish *entry* now: see :meth:`_deliver`."""
+        await self._deliver(company_id, self._event_payload(entry))
+
+    async def _deliver(self, company_id: str, payload: dict[str, Any]) -> None:
+        """Publish to /ws/live and Redis pub/sub channel llc:activity:{company_id}.
+
+        Failures are logged but never raised -- publishing must not break writes. Called only
+        after the commit (:meth:`_publish_after_commit`), so a rolled-back write publishes nothing.
+        Subscribers should still treat events as hints: the commit can succeed and the publish fail.
+        """
+        channel = f"{_PUBSUB_CHANNEL_PREFIX}:{company_id}"
         # In-process fan-out to /ws/live subscribers on the valid channel
         # company:{id} (the raw-Redis channel below is not bridged into
         # LiveEventManager, so the CompanyDashboard feed needs this).

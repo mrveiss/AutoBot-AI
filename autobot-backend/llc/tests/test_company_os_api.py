@@ -22,6 +22,7 @@ from api.user_management.dependencies import get_current_user, require_org_conte
 from llc.api.company_os import router as company_os_router
 from llc.api.company_os_skills import router as skills_router
 from llc.deps import get_session
+from llc.models.activity import LLCActivityLog
 from llc.models.company_os import LLCProcess, LLCRoleSkill, LLCWorkflowNode, LLCWorkflowTransition
 from llc.models.enums import MembershipRole
 from llc.models.membership import LLCCompanyMembership
@@ -39,6 +40,7 @@ COMPANY_A, COMPANY_B = uuid.uuid4(), uuid.uuid4()
 ADMIN_A, ADMIN_B, MEMBER_A = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
 PREFIX = "/api/llc/company-os"
 _TABLES = [
+    LLCActivityLog.__table__,
     Role.__table__,
     Workflow.__table__,
     LLCProcess.__table__,

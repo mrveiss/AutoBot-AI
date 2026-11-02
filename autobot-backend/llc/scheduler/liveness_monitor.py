@@ -12,7 +12,10 @@ For each stuck run:
   3. Deletes the Redis checkout lock llc:checkout:{work_item_id} while it names the agent
   4. Sets the work item status = blocked
   5. Creates a recovery work item (type=bug) assigned to the agent's manager
-  6. Writes an activity log entry
+  6. Writes an activity log entry (first of all, in fact: see ``_recover``)
+
+Each run recovers inside its own SAVEPOINT. A failure, the audit write included, undoes that
+run alone and is logged; the other runs in the scan, and the transaction they share, are untouched.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -26,10 +29,12 @@ from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import delete_if_value
 from user_management.database import get_async_session_factory
 
+from ..models.activity import ActorType
 from ..models.enums import ActivityEventType, WorkItemStatus, WorkItemType
 from ..models.heartbeat_run import LLCHeartbeatRun
 from ..models.work_item import LLCWorkItem
 from ..services.activity_log import LLCActivityLogService
+from ..services.actor import audit
 from ..services.work_item_service import WorkItemService
 from .base import PollLoopScheduler
 from .dispatch_gate import agent_ref_block_reason
@@ -51,7 +56,7 @@ class LivenessMonitor(PollLoopScheduler):
         poll_interval: int = _POLL_INTERVAL_SECONDS,
     ) -> None:
         super().__init__(poll_interval)
-        self._activity_log = activity_log
+        self._activity_log = activity_log or LLCActivityLogService()
 
     def start(self) -> None:
         """Start the background polling loop."""
@@ -67,12 +72,14 @@ class LivenessMonitor(PollLoopScheduler):
         async with factory() as session:
             stuck = await self._find_stuck_runs(session)
             for run in stuck:
+                run_id = run.id  # read while loaded: the rollback below expires the run it undoes
                 try:
-                    await self._recover(session, run)
-                    await session.commit()
+                    async with session.begin_nested():
+                        await self._recover(session, run)
                 except Exception:
-                    logger.exception("Recovery failed for run %s — rolling back", run.id)
-                    await session.rollback()
+                    logger.exception("Recovery failed for run %s — rolled back to its savepoint", run_id)
+                    continue
+                await session.commit()  # a failed commit fails the scan; the loop logs it and retries
 
     async def _find_stuck_runs(self, session: AsyncSession) -> list:
         """Return all runs where status=running and started_at is too old."""
@@ -119,6 +126,10 @@ class LivenessMonitor(PollLoopScheduler):
         run.finished_at = datetime.now(tz=timezone.utc)
         session.add(run)
 
+        # Step 6, first: the audit row shares the transaction, so a failed write must fail the
+        # recovery BEFORE the adapter is cancelled and the Redis fence dropped, which cannot be undone.
+        await self._log_activity(session, run, company_id, agent_id)
+
         # Step 2: Call adapter.cancel() — best-effort, swallow all errors
         await self._cancel_adapter(agent_id, run_id)
 
@@ -133,9 +144,6 @@ class LivenessMonitor(PollLoopScheduler):
 
         # Step 5: Create recovery work item
         await self._create_recovery_item(session, run, work_item, company_id, agent_id)
-
-        # Step 6: Write activity log entry
-        await self._log_activity(session, run, company_id, agent_id)
 
     async def _cancel_adapter(self, agent_id: str, run_id: str) -> None:
         try:
@@ -220,21 +228,18 @@ class LivenessMonitor(PollLoopScheduler):
         company_id: str,
         agent_id: str,
     ) -> None:
-        if self._activity_log is None:
-            return
-        try:
-            await self._activity_log.record(
-                session=session,
-                company_id=company_id,
-                actor_id="liveness_monitor",
-                event_type=ActivityEventType.HEARTBEAT_FAILED,
-                entity_type="heartbeat_run",
-                entity_id=str(run.id),
-                after={"status": "timed_out"},
-                metadata={"agent_id": agent_id, "reason": "liveness_timeout"},
-            )
-        except Exception:
-            logger.debug("activity_log.record failed for run %s (swallowed)", run.id)
+        await audit(
+            self._activity_log,
+            session,
+            company_id=company_id,
+            actor_type=ActorType.SYSTEM,
+            actor_id=None,
+            event_type=ActivityEventType.HEARTBEAT_FAILED,
+            entity_type="heartbeat_run",
+            entity_id=str(run.id),
+            after={"status": "timed_out"},
+            metadata={"agent_id": str(agent_id), "reason": "liveness_timeout"},
+        )
 
 
 def run_id_label(run_id: str) -> str:

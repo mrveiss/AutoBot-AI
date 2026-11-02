@@ -236,10 +236,10 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llc/adapters/tests/test_claude_code_adapter.py": 602,
     "autobot-backend/llc/api/companies.py": 1627,
     "autobot-backend/llc/api/roles.py": 713,
-    "autobot-backend/llc/api/sprints.py": 1220,
+    "autobot-backend/llc/api/sprints.py": 1221,
     "autobot-backend/llc/api/work_items.py": 1303,  # #19582: comment wake moved into the service
     "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 994,  # #19240 (run key moved out)
-    "autobot-backend/llc/services/template.py": 643,
+    "autobot-backend/llc/services/template.py": 642,
     "autobot-backend/llc/services/work_item_service.py": 1023,  # #20102: completion effects moved out
     "autobot-backend/llc/tests/conftest.py": 832,
     "autobot-backend/llc/tests/test_autobot_agent_adapter.py": 663,

@@ -103,9 +103,7 @@ class RoleService(LLCServiceBase):
         actor: Optional[str],
         after: Optional[Dict[str, Any]],
     ) -> None:
-        """Emit one activity-log event, or nothing if the DI slot is unpopulated."""
-        if not self.activity_log:
-            return
+        """Emit one activity-log event in the caller's transaction."""
         await self.activity_log.record(
             session=session,
             company_id=str(role.org_id),

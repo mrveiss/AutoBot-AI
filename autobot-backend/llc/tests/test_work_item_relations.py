@@ -9,6 +9,7 @@ import pytest
 
 from llc.models.enums import WorkItemRelationType, WorkItemStatus
 from llc.models.work_item import LLCWorkItem, LLCWorkItemRelation
+from llc.services.activity_log import LLCActivityLogService
 from llc.services.work_item_relations import RelationConflict, WorkItemRelationService
 from llc.services.work_item_service import InvalidTransition, WorkItemService
 
@@ -46,7 +47,7 @@ def _rel(
 
 @pytest.fixture
 def svc():
-    return WorkItemRelationService()
+    return WorkItemRelationService(activity_log=AsyncMock(spec=LLCActivityLogService))
 
 
 # ---------------------------------------------------------------------------

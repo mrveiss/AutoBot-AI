@@ -68,8 +68,6 @@ class CompanyToolService(LLCServiceBase):
         actor: Optional[uuid.UUID],
         after: Optional[Dict[str, Any]],
     ) -> None:
-        if not self.activity_log:
-            return
         await self.activity_log.record(
             session=session,
             company_id=str(overlay.company_id),

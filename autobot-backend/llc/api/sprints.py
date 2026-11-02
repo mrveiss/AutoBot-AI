@@ -935,9 +935,10 @@ async def close_sprint(
     _sprint_check = (await session.execute(select(LLCSprint).where(LLCSprint.id == sprint_id))).scalar_one_or_none()
     if _sprint_check is None or str(_sprint_check.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Sprint not found")
+    caller = actor_id(current_user)
     try:
         sprint = await _autoclose_svc.execute_close(
-            session, sprint_id=sprint_id, approval_id=body.approval_id, decided_by=actor_id(current_user)
+            session, sprint_id=sprint_id, approval_id=body.approval_id, decided_by=caller, actor_user_id=str(caller)
         )
         await session.commit()
         _autoclose_svc.schedule_closed_sprint_summary(sprint_id)  # after the commit, off the request (#8214)
