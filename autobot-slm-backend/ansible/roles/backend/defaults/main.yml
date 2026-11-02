@@ -213,3 +213,8 @@ backend_tls_cert_dir: "{{ autobot_tls_remote_cert_dir | default('/etc/autobot/ce
 # a managed backend start degraded when a feature router fails to import (logged at ERROR, published
 # to the router health endpoint) instead of refusing to start. Set "1" per inventory to hard-fail.
 backend_feature_routers_strict: "0"
+
+# #19869, #19738: the pinned speech-to-text and code-embedding models fetched at install. How many times a
+# failed download is retried and the seconds between tries.
+backend_model_prefetch_retries: 3
+backend_model_prefetch_retry_delay: 30

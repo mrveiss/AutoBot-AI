@@ -1237,6 +1237,9 @@
       - restart backend
       - restart celery
 
+  - name: "Backend | Pre-fetch the pinned HuggingFace models (#19869, #19738)"
+    ansible.builtin.include_tasks: prefetch_models.yml
+
   # ==========================================================
   # PostgreSQL for User Management (Issue #2953)
   # AutoBot always runs full user management (#10713); every supported user mode

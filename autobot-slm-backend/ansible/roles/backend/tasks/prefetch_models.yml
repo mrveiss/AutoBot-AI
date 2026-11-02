@@ -1,0 +1,54 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# #19869, #19738: fetch the pinned speech-to-text and code-embedding models into the service user's HuggingFace
+# cache, then confirm they are there. The model ids, revisions and digests live in autobot_shared
+# (ssot_hf_models, pinned_model_registry); nothing here names them. The script retries a failed download,
+# tries every model, and names each failure with the room left. A host that cannot get a model stops
+# (other hosts continue) unless backend_model_check_warn_only is set, as the updater does: it runs with
+# any_errors_fatal and a model already in the cache costs no network, so only a first fetch can fail there.
+---
+- name: "Backend | Fetch the pinned HuggingFace models into the service user's cache (#19869, #19738)"
+  ansible.builtin.command:
+    cmd: >-
+      {{ backend_code_dir }}/venv/bin/python -m autobot_shared.model_prefetch
+      --retries {{ backend_model_prefetch_retries }} --delay {{ backend_model_prefetch_retry_delay }}
+  become_user: "{{ backend_user }}"
+  environment:
+    PYTHONPATH: "{{ backend_install_dir | dirname }}"
+  register: _backend_model_prefetch
+  changed_when: false
+  failed_when: false
+  timeout: 1800  # about a gigabyte of weights between the two; retries and their delays count inside this
+  tags: ['backend', 'models']
+
+- name: "Backend | Confirm the pinned HuggingFace models are in the service user's cache (#19869, #19738)"
+  ansible.builtin.command:
+    cmd: "{{ backend_code_dir }}/venv/bin/python -m autobot_shared.model_prefetch --check"
+  become_user: "{{ backend_user }}"
+  environment:
+    PYTHONPATH: "{{ backend_install_dir | dirname }}"
+  register: _backend_model_cache_check
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags: ['backend', 'models']
+
+- name: "Backend | Report models that could not be fetched (#19869, #19738)"
+  ansible.builtin.debug:
+    msg: "{{ _backend_model_cache_check.stdout_lines | select('match', '^FAILED') | list }}"
+  when: _backend_model_cache_check.rc != 0
+  tags: ['backend', 'models']
+
+- name: "Backend | Stop this host: a pinned model is missing from the service user's cache (#19869, #19738)"
+  ansible.builtin.fail:
+    msg: >-
+      A pinned HuggingFace model is not in {{ backend_user }}'s cache and could not be fetched
+      (speech-to-text and code embeddings fail until it is): {{ _backend_model_cache_check.stdout_lines | select('match', '^FAILED') | list }}.
+      The fetch said: {{ _backend_model_prefetch.stdout_lines | default([]) | select('match', '^FAILED') | list }}
+  when:
+    - _backend_model_cache_check.rc != 0
+    - not (backend_model_check_warn_only | default(false) | bool)
+  tags: ['backend', 'models']
