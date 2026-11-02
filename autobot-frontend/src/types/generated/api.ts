@@ -4834,45 +4834,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/upload/limit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Upload Limit
-         * @description The largest knowledge file the upload route accepts; the same permission as uploading.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Successful Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["KnowledgeUploadLimitResponse"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/knowledge_base/upload": {
         parameters: {
             query?: never;
@@ -6177,6 +6138,26 @@ export interface paths {
          *     llm_model, prompt_template, ran_at, duration_ms.
          */
         get: operations["get_synthesis_log_api_knowledge_base_synthesis_log_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/upload/limit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Upload Limit
+         * @description The largest knowledge file the upload route accepts; the same permission as uploading.
+         */
+        get: operations["get_upload_limit_api_knowledge_base_upload_limit_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -82850,6 +82831,8 @@ export interface components {
         KnowledgeUploadLimitResponse: {
             /** Max Mb */
             max_mb: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * KnowledgeVerificationApproveResponse
@@ -116204,6 +116187,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_upload_limit_api_knowledge_base_upload_limit_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeUploadLimitResponse"];
                 };
             };
         };
