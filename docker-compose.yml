@@ -233,9 +233,8 @@ services:
     environment:
       # #19316: no AUTOBOT_DEPLOYMENT_MODE -- unset is auto-detect, docker_local in a container.
       - AUTOBOT_ENVIRONMENT=production
-      # #19319: production profile (FEATURE_ROUTERS_STRICT_PRODUCTION, autobot_shared/ssot_role_mirrors.py):
-      # a feature router that fails to import is logged and skipped instead of aborting startup.
-      - AUTOBOT_FEATURE_ROUTERS_STRICT=0
+      # #19395: this environment also selects the lenient feature-router boot mode
+      # (deployment_profile.feature_routers_strict_default).
       # #14081/#14110 security review: with no AUTOBOT_BASE_DIR set, the
       # canonical secrets-store/JWT-key/project-state location
       # (ssot_config.path.data_path) resolved to /opt/autobot/data — the
