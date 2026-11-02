@@ -487,11 +487,8 @@ export function usePatternAnalysis() {
     })
   }
 
-  /**
-   * Get quick pattern summary from cache (Issue #208 optimization)
-   * Uses cached data from ChromaDB instead of re-analyzing
-   */
-  const getCachedSummary = async (): Promise<boolean> => {
+  /** Cached summary from ChromaDB (#208); `raise` for callers with no fallback to report a failed read (#17651). */
+  const getCachedSummary = async (raise = false): Promise<boolean> => {
     try {
       const data = await apiClient.get<Record<string, unknown>>(
         '/api/analytics/codebase/patterns/cached-summary',
@@ -521,7 +518,8 @@ export function usePatternAnalysis() {
       }
       return false
     } catch (e: unknown) {
-      logger.debug('Cached summary not available:', extractErrorMessage(e, 'unknown'))
+      if (raise) throw e
+      logger.warn('Cached summary read failed, running the full analysis:', extractErrorMessage(e, 'unknown'))
       return false
     }
   }
@@ -709,6 +707,7 @@ export function usePatternAnalysis() {
       storageStats.value = null
       return true
     }).catch((e: unknown) => {
+      error.value = extractErrorMessage(e, 'Clearing the stored patterns failed')
       logger.error('Clear storage failed:', e)
       return false
     })
@@ -728,6 +727,7 @@ export function usePatternAnalysis() {
       }
       return null
     }).catch((e: unknown) => {
+      error.value = extractErrorMessage(e, 'Report fetch failed')
       logger.error('Report fetch failed:', e)
       return null
     })
@@ -763,13 +763,11 @@ export function usePatternAnalysis() {
     error.value = null
     return wrap(async () => {
       // Load summary and stats in parallel from cache
-      const [hasCachedSummary] = await Promise.all([
-        getCachedSummary(),
-        getStorageStats()
-      ])
+      const [hasCachedSummary] = await Promise.all([getCachedSummary(true), getStorageStats()])
 
       return hasCachedSummary
     }).catch((e: unknown) => {
+      error.value = extractErrorMessage(e, 'Failed to load cached pattern data')
       logger.error('Failed to load cached data:', e)
       return false
     })
