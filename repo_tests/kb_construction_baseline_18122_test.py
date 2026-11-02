@@ -177,7 +177,7 @@ REACH = declare(
     "kb-construction-18122-scan",
     discover=_population,
     # Mid-window from REACH.window(): population 3595, window [3295, 3595], pinned 3445.
-    floor=3566,  # mid-window: population 3716, window (3416, 3716)
+    floor=3688,  # mid-window: population 3838, window (3538, 3838)
     what="non-test python source",
     roots=_SEARCH_ROOTS,
     growth=300,
