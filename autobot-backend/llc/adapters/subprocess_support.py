@@ -36,6 +36,7 @@ from autobot_shared.logging_manager import get_logger
 from ..config import AGENT_API_BASE_URL, AGENT_API_KEY_PLACEHOLDER
 from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
+from .rate_limit_markers import _RL_KEYWORDS, is_rate_limit_output
 
 _logger = get_logger(__name__)
 
@@ -51,39 +52,6 @@ _logger = get_logger(__name__)
 # (see psutil._pslinux.boot_time), so it is never caught by ``except
 # psutil.Error`` alone. Every create_time() call site must catch both.
 _CREATE_TIME_ERRORS: tuple[type[BaseException], ...] = (psutil.Error, RuntimeError)
-
-# Keywords that identify a provider rate-limit or quota error in CLI output or
-# exception messages.  Shared by subprocess adapters (output-file scan) and
-# AutoBotAgentAdapter (exception message matching).  GH#9773.
-_RL_KEYWORDS: frozenset[str] = frozenset(
-    {
-        "rate_limit_error",
-        "rate limit",
-        "too many requests",
-        "quota",
-        "overloaded",
-        "capacity_error",
-        "429",
-        "529",
-    }
-)
-
-
-def is_rate_limit_output(text: str | None) -> bool:
-    """Return True if *text* contains a provider rate-limit signal.
-
-    Must only be applied to error text or failure-tail content — never to
-    healthy transcripts.  When C1's ``final_result_event`` gate is in place,
-    this function only sees tails where the final JSONL result event is absent
-    (process killed mid-stream) or has ``is_error`` true / a non-success
-    subtype, so false-positive reclassification of successful runs is
-    structurally impossible.
-    """
-    if not text:
-        return False
-    lower = text.lower()
-    return any(kw in lower for kw in _RL_KEYWORDS)
-
 
 # Maximum bytes read from the tail of a subprocess output file when scanning
 # for rate-limit markers.  Limits memory use for large output files; the

@@ -1610,9 +1610,9 @@ class CodeSyncStatusResponse(BaseModel):
     outdated_nodes: int = 0
     total_nodes: int = 0
     # #11820: components deployed on this box whose files drift from code_source.
-    # Non-empty means a managed component is stale even if node code_version
-    # matches latest — so consumers must not report "up to date" while this is set.
+    # Non-empty: stale even if node code_version matches latest, so never report "up to date".
     stale_components: list[str] = []
+    stale_scan_unknown: bool = False  # #20250: the scan gave no answer, so stale_components proves nothing
     # #15323: per-component "stale"/"healthy"/"unknown" — does the RUNNING
     # service's loaded code match what stale_components already knows is on
     # disk? Distinct question: a component can have zero file drift and still

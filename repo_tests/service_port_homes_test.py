@@ -388,7 +388,9 @@ def test_an_unreadable_discovered_file_fails_the_sweep(tmp_path: Path) -> None:
 
 def test_a_retired_number_has_no_home() -> None:
     assert _homes(6081) == set(), "6081 is served by no host; nothing may state it"
-    found = forbidden_sites(6081, {"autobot-frontend/src/config/x.ts": "port: getEnvNumber('P', 6081),\n"})
+    found = forbidden_sites(
+        6081, {"autobot-frontend/src/config/x.ts": "port: getEnvPositiveInt(import.meta.env, 'P', 6081),\n"}
+    )
     assert found == ["autobot-frontend/src/config/x.ts:1: 6081 -- read PortConfig.vnc"]
 
 

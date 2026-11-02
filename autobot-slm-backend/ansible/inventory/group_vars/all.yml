@@ -315,6 +315,10 @@ node_major: "22"
 # The NodeSource base URL has one home, read by every play (env-backed like the shell SSOT, #19662).
 nodesource_base_url: "{{ lookup('env', 'AUTOBOT_NODESOURCE_BASE_URL') | default('https://deb.nodesource.com', true) }}"
 
+# #19805: where a GPU host gets torch. The version pair stays in constraints/shared.txt; every build of
+# that pair must exist on this index. Override for a GPU or driver this CUDA does not suit.
+backend_torch_cuda_index_url: "{{ lookup('env', 'AUTOBOT_TORCH_CUDA_INDEX_URL') | default('https://download.pytorch.org/whl/cu130', true) }}"
+
 # Package repositories
 repositories:
   # Add Redis repository

@@ -1287,6 +1287,7 @@
         tasks_from: env_only
       when: "'backend' in group_names"
       vars:
+        backend_model_check_warn_only: true  # #19731: this play is any_errors_fatal
         backend_env_dest: "{{ autobot.base_dir }}/autobot-backend/.env"
         backend_env_owner: autobot
         backend_env_group: autobot

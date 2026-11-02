@@ -120,39 +120,39 @@ async function submit(): Promise<void> {
   flex-direction: column;
   gap: 0.375rem;
   font-size: 0.8125rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   margin-bottom: 0.875rem;
 }
 .handoff-select,
 .handoff-notes {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   padding: 0.5rem;
-  border: 1px solid var(--border-default, #e5e7eb);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md, 8px);
-  background: var(--bg-input, #fff);
-  color: var(--text-primary, #111827);
+  background: var(--bg-input);
+  color: var(--text-primary);
 }
 .handoff-error {
   font-size: 0.8125rem;
-  color: var(--color-error, #cb3326);
+  color: var(--color-error);
   margin: 0;
 }
 .handoff-cancel,
 .handoff-confirm {
   padding: 0.5rem 0.875rem;
   border-radius: var(--radius-md, 8px);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 .handoff-confirm {
-  background: var(--color-accent, #c4651a);
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
 }
 .handoff-confirm:disabled {
   opacity: 0.5;
 }
 .handoff-cancel {
-  border: 1px solid var(--border-default, #e5e7eb);
-  color: var(--text-secondary, #6b7280);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
 }
 </style>

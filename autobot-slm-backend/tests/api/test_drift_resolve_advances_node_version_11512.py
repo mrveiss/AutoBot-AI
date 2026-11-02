@@ -190,6 +190,18 @@ def test_advances_when_fully_synced():
     update_mock.assert_awaited_once_with("slm-node-1")
 
 
+def test_does_not_advance_when_the_scan_gave_no_answer():
+    """#20250: a scan past its limit is unknown, and a node must not be recorded as current on it."""
+    with (
+        patch.object(_CS, "_compute_stale_components", AsyncMock(side_effect=RuntimeError("no answer"))),
+        patch.object(_CS, "_get_local_slm_node_id", AsyncMock(return_value="slm-node-1")),
+        patch.object(_CS, "_update_fleet_node_version", AsyncMock()) as update_mock,
+    ):
+        _run(_CS._advance_node_version_if_fully_synced("autobot-slm-backend"))
+
+    update_mock.assert_not_awaited()
+
+
 def test_does_not_advance_when_sibling_component_still_stale():
     """A single component resolving clean must NOT mark a partially-stale
     node current — the safer variant required by #11512 (a sibling component,

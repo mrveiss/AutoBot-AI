@@ -482,6 +482,10 @@
       deployed_embedding_env_files: ["{{ autobot_backend_env_file }}", "{{ backend_code_dir | default(backend_install_dir) }}/.env"]
     tags: ['backend', 'config']
 
+  - name: "Backend | Resolve the models for this model server (#19731)"
+    ansible.builtin.include_tasks: resolve_models.yml
+    tags: ['backend', 'config', 'env']
+
   - name: "Backend | Deploy /etc/autobot/autobot-backend.env"
     ansible.builtin.template:
       src: backend.env.j2
@@ -1113,6 +1117,8 @@
   - name: "Backend | Install CUDA torch requirements (requirements-gpu-torch.txt) (#15162)"
     ansible.builtin.pip:
       requirements: "{{ backend_code_dir }}/filtered-requirements-gpu-torch.txt"
+      # #19805: `==2.14.1` also matches an installed +cpu build, so without --upgrade pip keeps it.
+      extra_args: "--upgrade --index-url {{ backend_torch_cuda_index_url }}"
       virtualenv: "{{ backend_code_dir }}/venv"
       # #16641: see "Upgrade pip" above.
       virtualenv_command: "python3.14 -m venv"

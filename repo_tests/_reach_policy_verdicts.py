@@ -23,6 +23,12 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "Workflow files are a subset of tracked YAML (#20191); compose, ansible and filter files grow "
         "at their own rate, so a share of all YAML would sink with nothing wrong.",
     ),
+    "operational-docs-playbook-references-19611": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Playbook references in operational docs and scripts, not files: docs grow at their own rate, so a share "
+        "of any file count would sink with nothing wrong.",
+    ),
     "chunk-identity-single-home-18142": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

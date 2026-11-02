@@ -30,7 +30,6 @@ vi.mock('@/utils/ApiClient', async (importOriginal) =>
 )
 vi.mock('@/config/ssot-config', () => ({
   getBackendUrl: () => BACKEND,
-  getEnvPositiveInt: (_key: string, fallback: number) => fallback,
 }))
 
 import { useSkills, useSkillGovernance } from './useSkills'

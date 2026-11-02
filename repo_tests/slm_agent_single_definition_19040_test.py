@@ -50,7 +50,7 @@ def _candidates(root: Path) -> list[str]:
 REACH = declare(
     "slm-agent-single-definition-19040",
     discover=_candidates,
-    floor=8281,  # mid-window: population 8481, window (8081, 8481)
+    floor=8284,  # mid-window: population 8484, window (8084, 8484)
     growth=400,
     what="tracked .py/.yml/.yaml/.j2 files",
 )

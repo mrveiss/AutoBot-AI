@@ -19,7 +19,6 @@ vi.mock('@/utils/ApiClient', async (importOriginal) =>
 )
 vi.mock('@/config/ssot-config', () => ({
   getBackendUrl: () => '/autobot-api',
-  getEnvPositiveInt: (_key: string, fallback: number) => fallback,
 }))
 
 import {

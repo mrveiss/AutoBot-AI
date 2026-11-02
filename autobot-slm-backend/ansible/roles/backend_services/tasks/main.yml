@@ -101,6 +101,10 @@
   ansible.builtin.include_tasks: ../../backend/tasks/read_encryption_key.yml
   tags: ['backend', 'config']
 
+- name: "Backend | Resolve the models for this model server (#19731)"
+  ansible.builtin.include_tasks: ../../backend/tasks/resolve_models.yml
+  tags: ['backend', 'config']
+
 - name: Generate environment configuration
   template:
     src: backend.env.j2

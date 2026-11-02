@@ -437,6 +437,11 @@ class TestFastGate:
         done = _guards(tmp_path, repin="print('STALE x'); raise SystemExit(1)")
         assert "reach floors are stale" in done.stderr and "crashed" not in done.stderr
 
+    def test_a_floor_stale_only_on_the_base_warns_and_does_not_block(self, tmp_path: Path) -> None:
+        done = _guards(tmp_path, repin="print('BASE-STALE x: grew on main')")
+        assert "exit=0" in done.stdout, done.stderr
+        assert "reach floors stale on main, not blocking this push: 1" in done.stderr
+
     def test_a_repin_stale_line_blocks(self, tmp_path: Path) -> None:
         done = _guards(tmp_path, repin="print('STALE x')")
         assert "exit=1" in done.stdout and "reach floors are stale" in done.stderr

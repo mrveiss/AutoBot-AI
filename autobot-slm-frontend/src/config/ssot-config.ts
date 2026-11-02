@@ -10,6 +10,8 @@
  * All values support VITE_* environment variable overrides (#3049).
  */
 
+import { getEnvPositiveInt } from '@autobot/ui'
+
 export interface SLMConfig {
   httpProtocol: 'http' | 'https'
   apiBaseUrl: string
@@ -57,23 +59,6 @@ function getEnv(key: string, defaultValue: string): string {
   return String(value)
 }
 
-/**
- * Read a numeric `VITE_*` environment variable as a positive integer.
- *
- * The one numeric env reader in the SLM (#19614). Every caller is a timeout, a
- * count, a limit or a port, where 0 or a negative value is a misconfiguration,
- * not a request, so unset, empty, non-numeric, zero and negative values all
- * fall back to `defaultValue`.
- */
-export function getEnvPositiveInt(key: string, defaultValue: number): number {
-  const value = import.meta.env[key]
-  if (value === undefined || value === null || value === '') {
-    return defaultValue
-  }
-  const parsed = parseInt(String(value), 10)
-  return Number.isNaN(parsed) || parsed <= 0 ? defaultValue : parsed
-}
-
 // Detect protocol from browser context
 const isSecure = typeof window !== 'undefined' && window.location.protocol === 'https:'
 
@@ -110,23 +95,24 @@ const config: SLMConfig = {
   wsBaseUrl: import.meta.env.VITE_WS_URL || getWsBaseUrl(),
   vm,
   port: {
-    backend: getEnvPositiveInt('VITE_BACKEND_PORT', 8001),
-    frontend: getEnvPositiveInt('VITE_FRONTEND_PORT', 5173),
+    backend: getEnvPositiveInt(import.meta.env, 'VITE_BACKEND_PORT', 8001),
+    frontend: getEnvPositiveInt(import.meta.env, 'VITE_FRONTEND_PORT', 5173),
     // #20058: nginx's port on a nginx host, else the dev port
     frontendServed: getEnvPositiveInt(
+      import.meta.env,
       'VITE_FRONTEND_SERVED_PORT',
-      getEnvPositiveInt('VITE_FRONTEND_PORT', 5173),
+      getEnvPositiveInt(import.meta.env, 'VITE_FRONTEND_PORT', 5173),
     ),
-    slmApi: getEnvPositiveInt('VITE_SLM_PORT', 8000),
-    grafana: getEnvPositiveInt('VITE_GRAFANA_PORT', 3000),
-    prometheus: getEnvPositiveInt('VITE_PROMETHEUS_PORT', 9090),
-    redis: getEnvPositiveInt('VITE_REDIS_PORT', 6379),
-    vnc: getEnvPositiveInt('VITE_DESKTOP_VNC_PORT', 6080), // DORMANT: VNC replaced by screenshot panel (#1130); see #5136
-    ollama: getEnvPositiveInt('VITE_OLLAMA_PORT', 11434),
-    elasticsearch: getEnvPositiveInt('VITE_ELASTICSEARCH_PORT', 9200),
-    tlsFrontend: getEnvPositiveInt('VITE_TLS_FRONTEND_PORT', 443),
-    tlsBackend: getEnvPositiveInt('VITE_TLS_BACKEND_PORT', 8443),
-    tlsRedis: getEnvPositiveInt('VITE_TLS_REDIS_PORT', 6380),
+    slmApi: getEnvPositiveInt(import.meta.env, 'VITE_SLM_PORT', 8000),
+    grafana: getEnvPositiveInt(import.meta.env, 'VITE_GRAFANA_PORT', 3000),
+    prometheus: getEnvPositiveInt(import.meta.env, 'VITE_PROMETHEUS_PORT', 9090),
+    redis: getEnvPositiveInt(import.meta.env, 'VITE_REDIS_PORT', 6379),
+    vnc: getEnvPositiveInt(import.meta.env, 'VITE_DESKTOP_VNC_PORT', 6080), // DORMANT: VNC replaced by screenshot panel (#1130); see #5136
+    ollama: getEnvPositiveInt(import.meta.env, 'VITE_OLLAMA_PORT', 11434),
+    elasticsearch: getEnvPositiveInt(import.meta.env, 'VITE_ELASTICSEARCH_PORT', 9200),
+    tlsFrontend: getEnvPositiveInt(import.meta.env, 'VITE_TLS_FRONTEND_PORT', 443),
+    tlsBackend: getEnvPositiveInt(import.meta.env, 'VITE_TLS_BACKEND_PORT', 8443),
+    tlsRedis: getEnvPositiveInt(import.meta.env, 'VITE_TLS_REDIS_PORT', 6380),
   },
 }
 
