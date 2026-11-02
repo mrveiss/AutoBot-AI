@@ -74,9 +74,11 @@ _KNOWN_UNSCOPED_FALLBACKS: frozenset[str] = frozenset(
         "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:634",
         "autobot-backend/tasks/analytics_tasks.py:38",
         "autobot-backend/api/codebase_analytics/chromadb_storage.py:616",
-        "autobot-backend/api/codebase_analytics/endpoints/stats.py:220",
-        "autobot-backend/api/codebase_analytics/endpoints/stats.py:280",
-        "autobot-backend/api/codebase_analytics/endpoints/stats.py:464",
+        "autobot-backend/api/codebase_analytics/endpoints/stats.py:221",
+        "autobot-backend/api/codebase_analytics/endpoints/stats.py:281",
+        "autobot-backend/api/codebase_analytics/endpoints/stats.py:465",
+        "autobot-backend/api/codebase_analytics/endpoints/declarations.py:29",
+        "autobot-backend/api/codebase_analytics/endpoints/store_state.py:35",
     }
 )
 
@@ -91,7 +93,11 @@ _KNOWN_UNSCOPED_FALLBACKS: frozenset[str] = frozenset(
 #: own fix, ``_path_checkpoint_key``. A raised pin normally means somebody
 #: parked a leak; this one means somebody could finally see them. Any future
 #: rise needs the same distinction stated, or it is the former.
-_MAX_KNOWN_UNSCOPED_FALLBACKS = 15
+#:
+#: 15 -> 17, under #17651: `declarations.py` moved an existing unscoped read into this spelling, so the
+#: detector can see it. `store_state.py` is a new read, but it returns only whether any row exists, no
+#: row content. The verdict on both stays on #17761.
+_MAX_KNOWN_UNSCOPED_FALLBACKS = 17
 
 
 #: Scan entry points must resolve their root through the source-aware resolver.
