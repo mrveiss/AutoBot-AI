@@ -421,7 +421,7 @@ async function executeDelete(id: string): Promise<void> {
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-md);
-  z-index: 1;
+  z-index: var(--z-raised);
 }
 
 .delete-confirm-card {
