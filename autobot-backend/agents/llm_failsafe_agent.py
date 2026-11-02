@@ -19,11 +19,10 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List
 
-from agents.failsafe_models import failsafe_answer, failsafe_secondary_model
+from agents.failsafe_models import failsafe_answer, failsafe_primary_model, failsafe_secondary_model
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
-    get_agent_model_explicit,
     get_agent_provider_explicit,
 )
 from llm_shared.types import LLMType
@@ -87,7 +86,7 @@ class LLMFailsafeAgent(StandardizedAgent):
         # Use explicit SSOT config - raises AgentConfigurationError if not set
         self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
         self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
-        self.model_name = get_agent_model_explicit(self.AGENT_ID)
+        self.model_name = failsafe_primary_model()
 
         self.logger.info(
             "LLM Failsafe Agent initialized with provider=%s, endpoint=%s, model=%s",

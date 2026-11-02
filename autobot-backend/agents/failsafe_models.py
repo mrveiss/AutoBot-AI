@@ -17,6 +17,13 @@ def failsafe_answer(response) -> str:
     return response.content
 
 
+def failsafe_primary_model() -> str:
+    """The first model to try. Unset, it comes from the tier table: the failsafe is what runs when
+    configuration has gone wrong, so a missing setting mustn't stop it starting."""
+    explicit = (os.environ.get("AUTOBOT_LLM_FAILSAFE_MODEL") or "").strip()
+    return explicit or TIER_MODELS[AGENT_TIERS["llm_failsafe"]]
+
+
 def failsafe_secondary_model(primary: str) -> str:
     """The stand-in model. The same model twice is no fallback: both tiers fail together.
 
@@ -24,7 +31,7 @@ def failsafe_secondary_model(primary: str) -> str:
     failsafe, and a host whose primary is set to that same model gets the other tier's. Only two
     settings naming one model are refused.
     """
-    explicit = os.environ.get("AUTOBOT_LLM_FAILSAFE_SECONDARY_MODEL")
+    explicit = (os.environ.get("AUTOBOT_LLM_FAILSAFE_SECONDARY_MODEL") or "").strip()
     if explicit and explicit == primary:
         raise AgentConfigurationError(
             f"AUTOBOT_LLM_FAILSAFE_MODEL and AUTOBOT_LLM_FAILSAFE_SECONDARY_MODEL are both {primary}: "

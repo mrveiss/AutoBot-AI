@@ -77,10 +77,6 @@ ai_classification_model: "gemma2:2b"
 ai_sentiment_analysis_model: "gemma2:2b"
 # System tier (dolphin-llama3:8b)
 ai_system_commands_model: "dolphin-llama3:8b"
-# The failsafe: the routing and light tiers, which every install pulls (#19733). ai_api_server.py creates
-# ClassificationAgent, which reaches the failsafe, so this service needs them. Tier guard: #19332's test.
-ai_llm_failsafe_model: "llama3.2:1b"
-ai_llm_failsafe_secondary_model: "phi3:mini"
 
 # #13870: which role owns /etc/systemd/system/autobot-chromadb.service.
 #

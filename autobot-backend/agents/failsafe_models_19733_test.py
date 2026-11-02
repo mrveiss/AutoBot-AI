@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import yaml
 
-from agents.failsafe_models import failsafe_secondary_model
+from agents.failsafe_models import failsafe_primary_model, failsafe_secondary_model
 from agents.llm_failsafe_agent import LLMFailsafeAgent, LLMTier
 from autobot_shared.agent_model_tiers import AGENT_TIERS, TIER_MODELS
 from autobot_shared.ssot_config import AgentConfigurationError
@@ -44,11 +44,31 @@ def test_the_ai_stack_service_gets_what_the_failsafe_needs() -> None:
     expected = {
         "PROVIDER": "ollama",
         "ENDPOINT": "{{ ai_chat_endpoint }}",
-        "MODEL": "{{ ai_llm_failsafe_model }}",
-        "SECONDARY_MODEL": "{{ ai_llm_failsafe_secondary_model }}",
     }
     for key, value in expected.items():
         assert re.search(rf"^AUTOBOT_LLM_FAILSAFE_{key}={re.escape(value)}$", text, re.M), key
+
+
+def test_the_failsafe_starts_with_no_model_setting(monkeypatch) -> None:
+    """The ai-stack service states no failsafe model; the tier table supplies it, so it can't disagree."""
+    monkeypatch.delenv("AUTOBOT_LLM_FAILSAFE_MODEL", raising=False)
+    monkeypatch.delenv("AUTOBOT_LLM_FAILSAFE_SECONDARY_MODEL", raising=False)
+    primary = failsafe_primary_model()
+    assert primary == TIER_MODELS[AGENT_TIERS["llm_failsafe"]]
+    assert failsafe_secondary_model(primary) == TIER_MODELS[AGENT_TIERS["llm_failsafe_secondary"]]
+
+
+def test_a_blank_setting_counts_as_unset(monkeypatch) -> None:
+    monkeypatch.setenv("AUTOBOT_LLM_FAILSAFE_MODEL", "   ")
+    monkeypatch.setenv("AUTOBOT_LLM_FAILSAFE_SECONDARY_MODEL", "   ")
+    primary = failsafe_primary_model()
+    assert primary == TIER_MODELS[AGENT_TIERS["llm_failsafe"]]
+    assert failsafe_secondary_model(primary) == TIER_MODELS[AGENT_TIERS["llm_failsafe_secondary"]]
+
+
+def test_a_host_can_still_name_the_model(monkeypatch) -> None:
+    monkeypatch.setenv("AUTOBOT_LLM_FAILSAFE_MODEL", "chosen:1b")
+    assert failsafe_primary_model() == "chosen:1b"
 
 
 def test_the_same_model_twice_is_refused(monkeypatch) -> None:
