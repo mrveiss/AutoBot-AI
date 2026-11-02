@@ -170,6 +170,12 @@ export const useAuthStore = defineStore('auth', () => {
         logout()
         return
       }
+      if (response.status === 403) {
+        // #20631: refused as not an admin's. A stored user may still say otherwise.
+        user.value = { username: user.value?.username ?? '', isAdmin: false }
+        writeSlmUser(JSON.stringify(user.value))
+        return
+      }
       if (!response.ok) {
         // 503 (revocation store unavailable), other 5xx: keep the session.
         logger.warn('Could not fetch current user; keeping session', response.status)

@@ -348,6 +348,16 @@ describe('authStore — canonical-client transport (#13140)', () => {
       expect(await store.checkAuth()).toBe(true)
     })
 
+    it('a 403 means not an admin, whatever the stored user says, and keeps the session (#20631)', async () => {
+      seedSession()
+      const store = useAuthStore()
+      store.user = { username: 'was-admin', isAdmin: true }
+      mockFetch.mockResolvedValueOnce(jsonResponse({ detail: 'x' }, false, 403))
+      await store.fetchCurrentUser()
+      expect(store.isAdmin).toBe(false)
+      expect(sessionStorage.getItem('slm_access_token')).toBe('live-token')
+    })
+
     it('keeps the session on a network error', async () => {
       seedSession()
       mockFetch.mockRejectedValueOnce(new Error('network down'))

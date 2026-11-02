@@ -16,37 +16,38 @@ export const monitoringChildren: RouteRecordRaw[] = [
   {
     path: '',
     name: 'monitoring-default',
-    redirect: '/monitoring/system'
+    redirect: '/monitoring/system',
+    meta: { admin: true },
   },
   {
     path: 'system',
     name: 'monitoring-system',
     component: () => import('@/views/monitoring/SystemMonitor.vue'),
-    meta: { title: 'System Monitor', parent: 'monitoring' }
+    meta: { title: 'System Monitor', parent: 'monitoring', admin: true }
   },
   {
     path: 'logs',
     name: 'monitoring-logs',
     component: () => import('@/views/monitoring/LogViewer.vue'),
-    meta: { title: 'Log Viewer', parent: 'monitoring' }
+    meta: { title: 'Log Viewer', parent: 'monitoring', admin: true }
   },
   {
     path: 'dashboards',
     name: 'monitoring-dashboards',
     component: () => import('@/views/monitoring/GrafanaDashboards.vue'),
-    meta: { title: 'Grafana Dashboards', parent: 'monitoring' }
+    meta: { title: 'Grafana Dashboards', parent: 'monitoring', admin: true }
   },
   {
     path: 'alerts',
     name: 'monitoring-alerts',
     component: () => import('@/views/monitoring/AlertsMonitor.vue'),
-    meta: { title: 'Alerts', parent: 'monitoring' }
+    meta: { title: 'Alerts', parent: 'monitoring', admin: true }
   },
   {
     path: 'errors',
     name: 'monitoring-errors',
     component: () => import('@/views/monitoring/ErrorMonitor.vue'),
-    meta: { title: 'Error Monitoring', parent: 'monitoring' }
+    meta: { title: 'Error Monitoring', parent: 'monitoring', admin: true }
   },
   // Admin monitoring (migrated from main AutoBot frontend - Issue #729)
   {
@@ -82,37 +83,37 @@ export const monitoringChildren: RouteRecordRaw[] = [
   {
     path: 'performance',
     component: () => import('@/views/PerformanceView.vue'),
-    meta: { title: 'Performance', parent: 'monitoring' },
+    meta: { title: 'Performance', parent: 'monitoring', admin: true },
     children: [
       {
         path: '',
         name: 'monitoring-performance',
         redirect: '/monitoring/performance/overview',
-        meta: { title: 'Performance' }
+        meta: { title: 'Performance', admin: true }
       },
       {
         path: 'overview',
         name: 'monitoring-performance-overview',
         component: () => import('@/views/performance/PerformanceOverview.vue'),
-        meta: { title: 'Performance Overview', parent: 'monitoring' }
+        meta: { title: 'Performance Overview', parent: 'monitoring', admin: true }
       },
       {
         path: 'traces',
         name: 'monitoring-performance-traces',
         component: () => import('@/views/performance/TracingView.vue'),
-        meta: { title: 'Distributed Traces', parent: 'monitoring' }
+        meta: { title: 'Distributed Traces', parent: 'monitoring', admin: true }
       },
       {
         path: 'slos',
         name: 'monitoring-performance-slos',
         component: () => import('@/views/performance/SLODashboard.vue'),
-        meta: { title: 'SLO Dashboard', parent: 'monitoring' }
+        meta: { title: 'SLO Dashboard', parent: 'monitoring', admin: true }
       },
       {
         path: 'alerts',
         name: 'monitoring-performance-alerts',
         component: () => import('@/views/performance/AlertRulesView.vue'),
-        meta: { title: 'Alert Rules', parent: 'monitoring' }
+        meta: { title: 'Alert Rules', parent: 'monitoring', admin: true }
       },
     ]
   },
