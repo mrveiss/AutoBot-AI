@@ -77,6 +77,12 @@ async def test_a_refusal_is_a_failure_that_says_so() -> None:
 
 
 @pytest.mark.asyncio
+async def test_docker_not_answering_says_what_to_check() -> None:
+    (ok, message), _ = await _run(status=503)
+    assert ok is False and "Check that Docker is running" in message
+
+
+@pytest.mark.asyncio
 async def test_an_unreachable_proxy_is_a_failure_not_an_exception() -> None:
     (ok, message), _ = await _run(error=OSError("no route"))
     assert ok is False and "could not be reached" in message

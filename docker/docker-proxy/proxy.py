@@ -115,6 +115,14 @@ def handle(docker: Docker, project: str, own_name: str, method: str, path: str) 
     return 502, {"error": f"docker answered {status}"}
 
 
+def _handled(docker: Docker, project: str, own_name: str, method: str, path: str) -> "tuple[int, dict]":
+    """Docker being stopped is an answer, not a dropped connection."""
+    try:
+        return handle(docker, project, own_name, method, path)
+    except OSError:
+        return 503, {"error": "Docker isn't answering"}
+
+
 def authorized(expected: str, header: Optional[str]) -> bool:
     return bool(expected) and bool(header) and hmac.compare_digest(expected.encode(), header.encode())
 
@@ -125,7 +133,7 @@ def make_handler(token: str, project: str, own_name: str, docker: Docker = call_
             if not authorized(token, self.headers.get("X-Docker-Proxy-Token")):
                 status, payload = 401, {"error": "token required"}
             else:
-                status, payload = handle(docker, project, own_name, self.command, self.path)
+                status, payload = _handled(docker, project, own_name, self.command, self.path)
             body = json.dumps(payload).encode("utf-8")
             self.send_response(status)
             self.send_header("Content-Type", "application/json")

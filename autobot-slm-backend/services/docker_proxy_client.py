@@ -50,9 +50,15 @@ async def run_compose_service_action(node, service_name: str, action: str) -> Tu
                     logger.info("Container %s %s completed", node.node_id, action)
                     return True, f"Service {service_name} {action} completed"
                 logger.error("Docker proxy refused %s on %s: HTTP %s", action, node.node_id, response.status)
+                if response.status == 503:
+                    return False, f"Failed to {action} service: Docker isn't answering. Check that Docker is running."
                 if response.status == 401:
                     return False, f"Failed to {action} service: the Docker proxy token is missing or doesn't match"
                 return False, f"Failed to {action} service: the Docker proxy answered {response.status}"
     except Exception as exc:
         logger.error("Docker proxy unreachable for %s on %s: %s", action, node.node_id, exc)
-        return False, f"Failed to {action} service: the Docker proxy could not be reached"
+        return (
+            False,
+            f"Failed to {action} service: the Docker proxy could not be reached. "
+            "Check that Docker and autobot-docker-proxy are running.",
+        )

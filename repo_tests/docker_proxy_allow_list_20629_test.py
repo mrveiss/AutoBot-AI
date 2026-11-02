@@ -121,6 +121,13 @@ def test_a_container_id_doesnt_skip_the_protection() -> None:
     assert proxy.handle(reports(f"/{own}"), "stack", own, "POST", "/containers/a1b2c3d4e5f6/restart")[0] == 403
 
 
+def test_docker_being_down_is_a_clear_answer() -> None:
+    def down(_method, _path):
+        raise ConnectionRefusedError()
+
+    assert proxy._handled(down, "stack", "x", "POST", "/containers/autobot-backend/restart")[0] == 503
+
+
 def test_the_proxy_does_not_act_on_itself() -> None:
     assert _ask("POST", "/containers/autobot-docker-proxy/stop")[0] == 403
 
