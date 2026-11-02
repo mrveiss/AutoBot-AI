@@ -35,6 +35,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from redis.exceptions import RedisError
 
 from api._connector_auth_validation import validated_connector_auth
+from api._connector_sync_result import record_last_sync
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -374,8 +375,7 @@ async def _run_sync_background(connector_id: str, incremental: bool) -> None:
         sync_result = None
 
     if sync_result is not None:
-        cfg.last_sync_at = sync_result.completed_at or now_utc()
-        await _save_connector(cfg)
+        await record_last_sync(_connector_key(connector_id), sync_result.completed_at or now_utc())
 
         completed_at = sync_result.completed_at
         duration_seconds = None
