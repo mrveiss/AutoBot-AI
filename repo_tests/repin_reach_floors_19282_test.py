@@ -187,3 +187,16 @@ def test_an_import_failure_names_its_reason(monkeypatch, capsys) -> None:
     _main(monkeypatch, [], {"g": "Traceback\nModuleNotFoundError: No module named 'x'"}, "--check")
     err = capsys.readouterr().err
     assert "g: ModuleNotFoundError: No module named 'x'" in err and "train audit" in err
+
+
+def _diff(*lines: str) -> str:
+    return "\n".join(("--- a/x", "+++ b/x", "@@ -1 +1 @@", *lines))
+
+
+def test_a_floor_only_change_doesnt_make_a_guard_the_branchs_19673() -> None:
+    from scripts.repin_reach_floors import only_floor_lines
+
+    assert only_floor_lines(_diff("-    floor=10,  # mid-window: population 20", "+    floor=12,"))
+    assert not only_floor_lines(_diff("-    floor=10,", "+    floor=12,", "+    growth=9,")), "a real change counts"
+    assert not only_floor_lines(_diff("+def discover(): ...")), "a real change counts"
+    assert not only_floor_lines(""), "no change isn't a floor-only change"

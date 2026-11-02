@@ -134,7 +134,7 @@ async def put_time_config(
         "NTP server list (JSON array)",
     )
     await db.commit()
-    logger.info("Time config updated: tz=%s ntp=%s", config.timezone, config.ntp_servers)
+    logger.info("Time config updated")  # #20485: names what changed, never the values
     return config
 
 
@@ -180,8 +180,7 @@ async def sync_time(
             extra_vars=extra_vars,
         )
         logger.info(
-            "Time sync complete: tz=%s nodes=%d success=%s",
-            timezone,
+            "Time sync complete: nodes=%d success=%s",
             node_count,
             play_result.get("success"),
         )
