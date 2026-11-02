@@ -125,12 +125,11 @@ describe('the menu offers only actions that genuinely exist today (#14603/#14612
     expect(menu(w).findAll('[role="menuitem"]')).toHaveLength(3)
   })
 
-  it('never offers delete on a readonly canvas', async () => {
+  it('offers no menu at all on a readonly canvas, so no delete either (#14749)', async () => {
     const w = mountCanvas({ nodes: [step('n1', 10, 10)], readonly: true })
     await node(w, 'n1').trigger('contextmenu', { clientX: 10, clientY: 10 })
 
-    expect(menuItem(w, 'delete').exists()).toBe(false)
-    expect(menuItem(w, 'select').exists()).toBe(true)
+    expect(menu(w).exists()).toBe(false)
   })
 })
 
@@ -145,7 +144,7 @@ describe("the menu's action set mirrors the card's own controls, never a second 
     await cardCanvas.find('[data-testid="process-detach-btn"]').trigger('click')
     const cardPayload = cardCanvas.emitted('process-detached')?.at(0)
 
-    const menuCanvas = mountCanvas({ nodes, readonly: true })
+    const menuCanvas = mountCanvas({ nodes })
     await node(menuCanvas, nodes[0].id).trigger('contextmenu', { clientX: 10, clientY: 10 })
     await menuItem(menuCanvas, 'detach-process').trigger('click')
     const menuPayload = menuCanvas.emitted('process-detached')?.at(0)
@@ -173,7 +172,7 @@ describe("the menu's action set mirrors the card's own controls, never a second 
       p.join(':'),
     )
 
-    const menuCanvas = mountCanvas({ nodes, readonly: true })
+    const menuCanvas = mountCanvas({ nodes })
     await node(menuCanvas, nodes[0].id).trigger('contextmenu', { clientX: 10, clientY: 10 })
     expect(menuItem(menuCanvas, 'detach-tool-role-1').exists()).toBe(true)
     expect(menuItem(menuCanvas, 'detach-tool-role-2').exists()).toBe(true)
