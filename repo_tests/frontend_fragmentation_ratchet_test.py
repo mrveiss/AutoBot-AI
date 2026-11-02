@@ -88,7 +88,7 @@ BASELINE = {
     # `.vue` components carrying their own <style> rules. Target is a small
     # number of shared stylesheets, not 381 components each with a private
     # copy of the design system.
-    "components_declaring_styles": 362,  # #19903 AC2: the main app ToastContainer retired into the kit (363 -> 362); #19532: the retired main-GUI SettingsPanel (365 -> 364); #19217: the retired main-app web research editors (366 -> 365); #14780 OrgChart drawer: 367 -> 366 (the slide transition CSS left for BaseDrawer); #14778: -1, the local BaseInput fork retired into the kit (on main's 368); #18849: -1, the local BaseButton fork retired into the kit; #18819: -2 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-2);  #14776: the local BaseBadge fork left for the kit (376 -> 375), then the local BaseCard + BasePanel (375 -> 373); #18240: App.vue's scoped <style> went with the header split (lowered from 379).; #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit
+    "components_declaring_styles": 361,  # #14776: the main-app EmptyState fork retired into the kit adapter (362 -> 361); #19903 AC2: the main app ToastContainer retired into the kit (363 -> 362); #19532: the retired main-GUI SettingsPanel (365 -> 364); #19217: the retired main-app web research editors (366 -> 365); #14780 OrgChart drawer: 367 -> 366 (the slide transition CSS left for BaseDrawer); #14778: -1, the local BaseInput fork retired into the kit (on main's 368); #18849: -1, the local BaseButton fork retired into the kit; #18819: -2 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-2);  #14776: the local BaseBadge fork left for the kit (376 -> 375), then the local BaseCard + BasePanel (375 -> 373); #18240: App.vue's scoped <style> went with the header split (lowered from 379).; #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit
     # Earlier #17020: Terminal.vue removed (dead, zero live callers)
     # Distinct class names declared anywhere in the frontend.
     #
@@ -100,7 +100,7 @@ BASELINE = {
     # cross-referencing sibling admin views) -- this pair is documented above
     # as measuring page SIZE, not duplication, and is interim until #15455
     # replaces them with a real duplication measure.
-    "distinct_class_names": 5356,  # #19725: 4 fewer counted, the moved list uses :deep(); #19904 batch 2
+    "distinct_class_names": 5355,  # #19725: the moved list uses :deep(); #14776: EmptyState fork retired into
     # replaced by the shared kit SkipLink (lowered from 5615). Earlier: #17020,
     # Terminal.vue removed -- pure deletion of dead code, lowered, not held.
     # #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit (5611 -> 5594).
@@ -139,7 +139,7 @@ FAMILY_BASELINE = {
     "form": 26,  # #19217: the retired main-app web research editors (27 -> 26)
     "action": 27,
     "modal": 25,
-    "empty": 22,  # #14778: DataTable empty-cell left (23 -> 22)
+    "empty": 21,  # #14776: the main-app EmptyState fork retired into the kit adapter (22 -> 21); #14778: DataTable empty-cell left (23 -> 22)
     "error": 30,  # #18819: -5 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);
     "section": 23,
     "summary": 27,
