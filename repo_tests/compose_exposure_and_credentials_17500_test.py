@@ -15,6 +15,7 @@ variable is one docker/generate-secrets.sh writes, so the documented first run s
 
 from __future__ import annotations
 
+import hashlib
 import re
 import shutil
 import subprocess
@@ -231,6 +232,7 @@ def _generator_in(stack: Path, volumes: str | None, secrets: str = "") -> subpro
         pytest.skip("bash and openssl are needed to run generate-secrets.sh")
     (stack / "docker").mkdir(parents=True)
     shutil.copy(_GENERATOR, stack / "docker" / "generate-secrets.sh")
+    shutil.copy(_GENERATOR.parent / "write-redis-acl.sh", stack / "docker" / "write-redis-acl.sh")
     (stack / "docker" / ".env.secrets").write_text(secrets, encoding="utf-8")
     bin_dir = stack / "bin"
     bin_dir.mkdir()
@@ -320,3 +322,45 @@ def test_each_smoke_job_exports_exactly_the_credentials_compose_requires() -> No
         exported = smoke_exported_credentials((_ROOT / rel).read_text(encoding="utf-8"))
         assert exported == required, f"{rel} exports {sorted(exported)}, compose requires {sorted(required)}"
     assert smoke_exported_credentials("          for key in A_PASSWORD B_SECRET; do\n") == {"A_PASSWORD", "B_SECRET"}
+
+
+def _main_compose() -> str:
+    return (_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+
+
+def test_redis_authenticates_from_an_acl_file_and_no_password_is_on_its_command_line() -> None:
+    compose = _main_compose()
+    assert "--aclfile /run/secrets/redis_acl" in compose
+    assert "--requirepass" not in compose
+
+
+def test_redis_is_healthy_only_when_it_refuses_a_client_with_no_password() -> None:
+    assert "redis-cli ping 2>&1 | grep -q NOAUTH" in _main_compose()
+
+
+def test_every_service_pointed_at_redis_has_the_password() -> None:
+    compose = _main_compose()
+    hosts = compose.count("AUTOBOT_REDIS_HOST=autobot-redis")
+    assert hosts >= 4, "the detector is reading the wrong thing"
+    assert compose.count("AUTOBOT_REDIS_PASSWORD=${AUTOBOT_REDIS_PASSWORD:?") == hosts
+
+
+def test_the_generated_acl_holds_the_hash_and_not_the_password(tmp_path: Path) -> None:
+    out = _generator_in(tmp_path / "stack", "other_postgres_data")
+    assert out.returncode == 0, out.stderr
+    docker_dir = tmp_path / "stack" / "docker"
+    secrets = (docker_dir / ".env.secrets").read_text(encoding="utf-8")
+    password = re.search(r"^AUTOBOT_REDIS_PASSWORD=(.+)$", secrets, re.M).group(1)
+    expected = hashlib.sha256(password.encode()).hexdigest()
+    acl = (docker_dir / ".redis-users.acl").read_text(encoding="utf-8")
+    assert acl == f"user default on #{expected} ~* &* +@all\n"
+    assert password not in acl
+    assert password not in out.stdout
+
+
+def test_a_rerun_keeps_the_password_and_the_acl(tmp_path: Path) -> None:
+    existing = "AUTOBOT_DB_PASSWORD=d\nAUTOBOT_REDIS_PASSWORD=kept\n"
+    out = _generator_in(tmp_path / "stack", "stack_postgres_data", existing)
+    assert out.returncode == 0, out.stderr
+    acl = (tmp_path / "stack" / "docker" / ".redis-users.acl").read_text(encoding="utf-8")
+    assert hashlib.sha256(b"kept").hexdigest() in acl
