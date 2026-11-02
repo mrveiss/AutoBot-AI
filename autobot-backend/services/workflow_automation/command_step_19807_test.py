@@ -172,3 +172,26 @@ def test_the_creators_role_is_recorded_on_the_workflow(monkeypatch, path, body):
     client, created = _client(monkeypatch, {"user_id": "u-1", "role": "operator"})
     assert client.post(path, json=body).status_code == 200
     assert created[0]["creator_role"] == "operator"
+
+
+def test_create_from_chat_reports_a_missing_field_as_400_not_500(monkeypatch):
+    client, created = _client(monkeypatch, {"user_id": "u-1", "role": "operator"})
+    response = client.post("/create_from_chat", json={"user_request": "", "session_id": "s"})
+    assert response.status_code == 400
+    assert created == []
+
+
+@pytest.mark.asyncio
+async def test_the_filter_savings_failure_log_does_not_carry_the_command(monkeypatch, caplog):
+    import logging
+
+    from services import tool_output_filter
+
+    async def _broken():
+        raise RuntimeError("redis down")
+
+    monkeypatch.setattr("autobot_shared.redis_client.get_async_redis_client", _broken)
+    with caplog.at_level(logging.DEBUG, logger=tool_output_filter.logger.name):
+        await tool_output_filter.record_filter_savings(f"echo {SECRET}", 10)
+    assert "record_filter_savings: failed" in caplog.text
+    assert SECRET not in caplog.text

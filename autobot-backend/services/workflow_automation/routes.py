@@ -317,6 +317,8 @@ async def create_workflow_from_chat(request: dict, current_user: dict = Depends(
                 "message": "Could not create workflow from chat request",
             }
 
+    except HTTPException:
+        raise  # the 400 above is a client error, not a 500
     except Exception as e:
         logger.error("Failed to create workflow from chat: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
