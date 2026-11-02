@@ -115,7 +115,7 @@ if ! $BRANCHES_ONLY; then
                     echo "  WOULD REMOVE  ${dir_name}  (issue #${issue_number} is closed, branch: ${branch_name:-unknown})"
                 else
                     echo "  REMOVING      ${dir_name}  (issue #${issue_number} is closed)"
-                    if git -C "$REPO_ROOT" worktree remove --force "$worktree_path" 2>/dev/null; then
+                    if git -C "$REPO_ROOT" worktree remove "$worktree_path" 2>/dev/null; then
                         # Delete local branch if it exists
                         if [ -n "$branch_name" ]; then
                             git -C "$REPO_ROOT" branch -D "$branch_name" 2>/dev/null && \
@@ -131,13 +131,18 @@ if ! $BRANCHES_ONLY; then
                                     echo "    Deleted remote branch: ${branch_name}" || true
                             fi
                         fi
+                        wt_removed=$((wt_removed + 1))
                     else
-                        echo "    WARNING: git worktree remove failed; attempting manual cleanup"
-                        rm -rf "$worktree_path"
-                        git -C "$REPO_ROOT" worktree prune
+                        # No --force and no rm -rf (owner rule 9): a tree git refuses to
+                        # remove (dirty, locked) is unfinished work. Report it and leave it.
+                        echo "    KEPT ${dir_name} -- git worktree remove refused (dirty or locked); left in place"
+                        wt_skipped=$((wt_skipped + 1))
+                        errors=$((errors + 1))
                     fi
                 fi
-                wt_removed=$((wt_removed + 1))
+                if $DRY_RUN; then
+                    wt_removed=$((wt_removed + 1))
+                fi
             else
                 echo "  KEEP          ${dir_name}  (issue #${issue_number} is ${issue_state})"
                 wt_skipped=$((wt_skipped + 1))

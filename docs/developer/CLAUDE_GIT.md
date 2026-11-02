@@ -48,8 +48,8 @@ Three rules, each from a real collision:
 **Backing out cleanly** if you claimed someone's tree — never `--force`:
 
 ```bash
-git reset --soft HEAD~1        # drops YOUR empty claim commit, leaves their work untouched
-git worktree unlock <path>     # restore the state you found
+ledger release worktree <dir>  # drops YOUR ledger claim, leaves their work untouched
+git worktree unlock <path>     # restore the lock state you found
 ```
 
 **Worktree Creation:**
@@ -63,7 +63,7 @@ cd .worktrees/issue-XXXX && git branch --unset-upstream
 # Commit and push from here. Do NOT switch branches.
 ```
 
-**Before `--force-with-lease`,** confirm the remote already contains your commit:
+**A pushed branch takes merges, never a rebase and force-push.** Merge main into it (`git pull`, then `git merge origin/main`). Force-pushing needs explicit user confirmation (Branch Safety); if the user asks, first confirm the remote already contains your commit:
 
 ```bash
 git merge-base --is-ancestor <your-sha> origin/issue-XXXX && echo "safe to force"
@@ -72,7 +72,7 @@ git merge-base --is-ancestor <your-sha> origin/issue-XXXX && echo "safe to force
 The `sync-branches-with-main` workflow (#19548) merges main into every open PR's branch
 on each push to main, and leaves a branch with no open PR alone (#20261), so "my local is behind my own branch" is normal. Force-pushing
 over it discards the bot's merge: `git pull` (a fast-forward) first. A PR labelled
-`sync-conflict` or `sync-needs-workflow-token` was not synced; merge main yourself.
+`sync-conflict` or `sync-needs-workflow-token` was not synced; merge main yourself. A conflict on a PR not in a train, queued or not, is resolved by the author merging main (the one allowed push to a queued head), and the trainmaster checks what changed. In a train being built, the trainmaster fixes it in the train or asks the author. On a PR carried by a running train, it is left alone until landing. A PR with a conflict does not run CI until the conflict is solved.
 
 ---
 
@@ -133,7 +133,7 @@ deliberate, evidenced act — not cleanup.
 **Never run without explicit user confirmation:**
 - `git reset --hard` — discards uncommitted work permanently
 - `git push --force` / `git push -f` — rewrites remote history
-- `git branch -D` — permanent unless reflog exists
+- `git branch -D` — permanent unless reflog exists (except a branch whose PR shows MERGED, see below)
 - `git clean -fd` — unrecoverable
 - Any operation touching `release` or `master` directly
 
@@ -141,8 +141,8 @@ deliberate, evidenced act — not cleanup.
 1. `git status` + `git diff --stat` — confirm exactly what will be affected
 2. State operation and scope in one sentence before executing
 3. For branch deletions: verify merged via `git branch -r --merged origin/main`.
-   This is **ancestor-based and deliberately conservative** — under a squash merge it reports
-   a landed branch as unmerged, which fails safe. It is *not* evidence that work is stranded:
+   This is **ancestor-based and deliberately conservative** — a branch whose commits were squashed
+   (a solo PR, older history) reports as unmerged, which fails safe. It is *not* evidence that work is stranded:
    confirm that with `gh pr list --head <branch> --state all` before concluding anything was
    lost, and delete with `-D` once the PR shows MERGED.
 
@@ -152,21 +152,18 @@ deliberate, evidenced act — not cleanup.
 
 ## Branching Discipline (Issue #4113)
 
-**Protected (blocked by pre-commit hook):** `release`, `master`
+**Protected (blocked by pre-commit hook):** `release`, `master`. Never commit from the main checkout either: it stays on `main`, read-only.
 
-**Allowed:** `main`, `issue-*`, `hotfix-*`, and any other feature branch (the hook only blocks the protected names, so trainmaster `train-*` branches are fine), plus worktree branches matching those
+**Allowed:** `issue-*`, `hotfix-*`, and any other feature branch (the hook only blocks the protected names, so trainmaster `train-*` branches are fine), in a worktree
 
 **Workflow:**
-1. `git checkout -b issue-XXXX origin/main`
+1. `git worktree add .worktrees/issue-XXXX -b issue-XXXX origin/main`
 2. Commit on feature branch
 3. `git push -u origin issue-XXXX`
 4. Open PR: `issue-XXXX` → `main` (NOT directly to release)
 
 **If you see "COMMIT BLOCKED":**
-```bash
-git checkout issue-XXXX  # or: git checkout -b issue-XXXX origin/main
-git add -A && git commit -m "..."
-```
+Move the work to a worktree on a feature branch (`git worktree add .worktrees/issue-XXXX -b issue-XXXX origin/main`) and commit there; never switch branches in a shared checkout.
 
 ---
 
@@ -211,4 +208,4 @@ Before pushing, check for diverged remote:
 git status && git log --oneline origin/<branch>..HEAD
 ```
 
-If push rejected: fetch, rebase (`git rebase origin/<branch>`), resolve conflicts, then push. If rebase fails with conflicts you cannot resolve cleanly, stop and report — do NOT force-push and lose upstream changes.
+If push rejected: fetch, merge (`git merge origin/<branch>`), resolve conflicts, then push. If the merge has conflicts you cannot resolve cleanly, stop and report — do NOT rebase or force-push and lose upstream changes.

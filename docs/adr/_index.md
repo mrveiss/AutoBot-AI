@@ -23,4 +23,5 @@ aliases:
 | [008-frontend-shared-code-boundary](008-frontend-shared-code-boundary.md) | Shared FE code is drawn at backend knowledge; one client per (app, backend) |
 | [009-canonical-browser-interface](009-canonical-browser-interface.md) | One canonical browser interface, with execution backends behind it |
 | [010-role-separation-count-agnostic-placement](010-role-separation-count-agnostic-placement.md) | Roles are the invariant; host count is a deployment choice (supersedes 001) |
-| [011-one-frontend-admin-namespace](011-one-frontend-admin-namespace.md) | One app: the SLM console becomes the role-gated `/admin` section; the SLM backend stays remote behind `/slm/api` |
+| [011-one-frontend-admin-namespace](011-one-frontend-admin-namespace.md) | Rejected (see ADR-012). One app: the SLM console becomes the role-gated `/admin` section; the SLM backend stays remote behind `/slm/api` |
+| [012-slm-first-and-separate](012-slm-first-and-separate.md) | The SLM is installed first, stays separate, owns the first login, and works while the main app is down |

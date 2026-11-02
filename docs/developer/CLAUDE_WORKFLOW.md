@@ -44,10 +44,9 @@ paths here are for *reading and changing* the deployment, not for running it.
 - **Primary playbook:** `autobot-slm-backend/ansible/playbooks/update-all-nodes.yml`
 - **Node enrollment:** `autobot-slm-backend/ansible/playbooks/enroll-node.yml`
 - **NPU worker role:** `autobot-slm-backend/ansible/roles/npu-worker/`
-- **Manual sync (dev only):** `autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh`
 - **Ownership:** All deployed files owned by `autobot:autobot`
 - Never SSH into nodes for manual changes not captured in Ansible
-- Test playbook changes with `--check` (dry run) before applying
+- Playbook changes ship in a PR and reach hosts only through the builtin updater: no hand-run `ansible-playbook` or sync script, `--check` included
 
 ---
 
@@ -74,13 +73,12 @@ git push origin --delete <branch-name> 2>/dev/null || true   # usually already g
 git worktree prune
 ```
 
-**Use `-D`, never `-d`.** A squash merge rewrites the commits, so the branch is never an
-ancestor of the base and `git branch -d` refuses with "not fully merged" — silently aborting
+**Use `-D`, never `-d`.** Merge trains keep commits (rule 4), but a solo squash or older history can leave the branch off the base's ancestry, and then `git branch -d` refuses with "not fully merged" — silently aborting
 the cleanup. Confirm the merge from the PR (`gh pr view N --json state,mergedAt`), never from
 `git branch --merged`, then delete with `-D`. Remove the worktree *before* the branch; a
 branch cannot be deleted while a worktree has it checked out.
 
-Bulk: `scripts/cleanup-worktrees.sh --dry-run` then `scripts/cleanup-worktrees.sh`
+Bulk: `scripts/cleanup-worktrees.sh --dry-run` then `scripts/cleanup-worktrees.sh`; it removes without `--force`, and a tree git refuses to remove is reported and left
 
 **Pre-flight checks:** [`CLAUDE_GIT.md`](CLAUDE_GIT.md) "Pre-Flight Checklist" is the
 canonical list. Steps 1-4 are universal and apply inside your own worktree; steps 5-8 apply
@@ -90,22 +88,19 @@ only when dispatching agents or starting batch work.
 
 ## Session Lifecycle
 
-Sessions terminate before their PRs merge, so a session cannot clean up after
-its own merge. Responsibility is inverted: **each session cleans up its
-predecessors at start and leaves a machine-readable handoff at end.** Full
+Sessions can terminate before their PRs merge. **Each session leaves a machine-readable handoff at end and never sweeps another's worktrees** ([OWNER_RULES.md](OWNER_RULES.md) rules 8, 9). Full
 protocol lives in the `session-lifecycle` skill, which also carries the handoff
 schema. **`.session/` is gitignored (#17479)** — handoffs are local working notes,
 never committed, because they name branches, worktrees and PR state that is false
 the moment the work moves.
 
 **Start of session** (before any task work):
-1. `git fetch --prune`, then remove worktrees + local branches already merged
-   into `origin/main` (inherited cleanup).
+1. `git fetch --prune`, then inventory worktrees (`git worktree list`, `ledger who worktree`). Never sweep: dispose only of a worktree you own whose PR shows MERGED. An orphan (owner session gone) is taken over: finish its work, then reuse it.
 2. Create your **own** isolated worktree — never two sessions in one checkout:
    `git worktree add .worktrees/issue-XXXX -b issue-XXXX origin/main`.
 3. Read predecessor handoffs in `.session/` **on this machine** — they are
    local-only and will not be present in a fresh clone. If a branch is unmerged,
-   decide to continue it (rebase onto base first) or start fresh — never
+   decide to continue it (merge base first) or start fresh — never
    duplicate its work blind. Step 1's sweep reaps handoffs whose branch is gone
    (#13848), so every file still there names a live branch. A handoff the sweep
    reports as `STRANDED` is unlanded work with no branch left: **file an issue
@@ -114,19 +109,19 @@ the moment the work moves.
 
 **End of session** (mandatory — also when blocked):
 1. Leave nothing uncommitted; WIP gets a `wip:` commit and a handoff note.
-2. Rebase onto latest base, re-run the relevant gates, grep for conflict
+2. Merge latest base, re-run the relevant gates, grep for conflict
    markers (`^<<<<<<< `) before the final push.
 3. Push and open/update the PR.
 4. Write `.session/HANDOFF-<branch>.md` (see schema). **Do not commit it** —
    the path is gitignored. Anything a future reader must not lose belongs in the
    issue or the PR body, not in a local note.
-5. Remove scratch only — **not** your own unmerged worktree.
+5. Release your ledger claims (`ledger release worktree <dir>`) and remove your worktrees with plain `git worktree remove` (never `--force`) once all work is pushed (rule 9); a tree that refuses to go is reported and left.
 
 **Who disposes of a worktree:** whoever observes the merge. If your PR merges while you are
 still running, clean up in the same breath as the merge (worktree, local branch, remote
 branch) — a merged PR whose worktree still exists is an unfinished merge. If the session ends
-first, the next session's start protocol is the backstop. Neither ever removes a worktree
-whose work has not landed, and neither touches another session's tree.
+first, an orphan is taken over by the next session, which finishes its work and then disposes of it. Nobody removes a worktree
+whose work has not landed, and nobody touches another live session's tree.
 
 LICENSE/NOTICE/SPDX headers are read-only during a session — flag concerns,
 never edit.
@@ -137,7 +132,7 @@ never edit.
 
 - **Never** `git stash` — the stack is shared repo-wide, see [`CLAUDE_GIT.md`](CLAUDE_GIT.md#never-stash-14078)
 - Do NOT switch branches unless explicitly requested
-- When pushing, use `git pull --rebase`
+- When pushing, `git pull` (fast-forward) or merge; never rebase or force-push a pushed branch
 - "commit" = YOUR changes only; "commit all" = everything in grouped chunks
 - Prefer incremental `Edit` over full file `Write` for files >50 lines
 
@@ -148,7 +143,7 @@ per-domain modules (`schemas_agent.py`, `schemas_analytics.py`, `schemas_termina
 concurrently.
 
 Two batches appending to the **same** domain module still conflict — that is a git limitation
-with concurrent appends, not a code conflict. Serialize those, or resolve deterministically:
+with concurrent appends, not a code conflict. Per the same-file rule in [`CLAUDE_REVIEW.md`](CLAUDE_REVIEW.md#pr-granularity) they may overlap; reconcile deterministically:
 
 ```bash
 # Step 1: take origin/main as the authoritative base
@@ -231,7 +226,7 @@ Subagents cannot autonomously acquire Bash permission. Run batch file-manipulati
 
 **PR cadence — batch the scope, never block on CI.**
 
-A CI suite costs the same ~10-20 min on the singleton runner whether the PR carries one
+A CI suite costs the same ~10-20 min on the self-hosted runner whether the PR carries one
 issue or five, so the default unit of delivery is a *batch*, and a running suite is never
 a reason to stop working.
 
@@ -245,8 +240,7 @@ a reason to stop working.
   rest hostage, or when the diff is past what one review pass can honestly cover.
 - **On push, sweep the others once** — approval gate, CI verdict, behind-ness across every
   other open PR (`gh pr list --state open`) — merge/close what is ready, then pick the next
-  issue. Non-colliding = different files from every in-flight PR
-  (`gh pr view <n> --json files`); a colliding issue is deferred, not reordered.
+  issue. Overlap on a file is not a reason to defer: same-file rule in [`CLAUDE_REVIEW.md`](CLAUDE_REVIEW.md#pr-granularity).
 - **Never busy-poll.** The PR just pushed is not re-read until the next push-time sweep.
   Its checks finish while the next batch is being built.
 
@@ -255,7 +249,7 @@ attempted, and the base SHA), any decision taken under a `Decision` heading, and
 stopped in if the session dies. The issue is the only record that survives a lost worktree or
 a different machine.
 
-**Always close the issue after implementation.** PRs targeting `main` will NOT auto-close issues — verify with `gh issue view`.
+**`Closes #N` auto-closes the issue on merge** ([OWNER_RULES.md](OWNER_RULES.md) rule 10): write `Closes` only when every AC is delivered, otherwise `Refs`, and verify with `gh issue view`.
 
 **CI diagnosis** and **posting comments correctly**: see [`CLAUDE_REVIEW.md`](CLAUDE_REVIEW.md)
 — it owns both. In short: queued checks on the self-hosted runner are not failures, and a
@@ -323,7 +317,7 @@ comment body is literal markdown, never raw JSON or a file path.
 
 Run these gates before creating a PR or merging any branch. Gates are ordered by cost — cheapest first.
 
-**Shortcut — the pre-push step: run before every push, not just once before opening the PR.** A push that turns out red costs the full 8.9-minute suite before you find out (#15932); this is the same confirmation, available locally in a fraction of that time, every time you push rather than only at the start.
+**No preflight by hand (owner rule 2026-10-25, [OWNER_RULES.md](OWNER_RULES.md) rule 23).** Push and let CI run; run only the test you changed. The commands below are reference for what the checks do, not a per-push step; the commit and pre-push hooks still run.
 
 ```bash
 scripts/pr-preflight.sh --issue N [--body pr.md] [--message msg.txt]
@@ -354,7 +348,7 @@ normal state seconds after a push.
 
 It reuses the *same* logic CI does rather than approximating it: the same `awk` extraction as `pr-template-check.yml` (so a heading that is present but placeholder-only fails locally exactly as it does in CI), the same keyword regex as `pr-issue-validation.yml`, and black/isort/flake8/bandit with the same flags as `code-quality.yml` — including bandit's absent severity floor, which is stricter than the medium-and-up filter used elsewhere. It also catches backticks in a commit message (the shell executes them when the message is passed via `-m`), authorship trailers, conflict markers, and fleet IPs.
 
-It also runs (or explains why it did not) each of the ten required status checks the `Main` ruleset gates `main` on. Every check is path-filtered by default, using the same `.github/filters/*.yml` set its own workflow uses, so a diff outside those paths gets the identical "nothing to check" verdict locally that it would in CI. `--full` bypasses that filter and forces every check to actually run, and is also what turns on `api-wiring` (it builds the whole backend app to dump its OpenAPI schema, so it stays behind `--full` even on a relevant diff). Two checks are out of reach either way: `migration-matrix` needs a live PostgreSQL (set `AUTOBOT_MIGRATION_TEST_ADMIN_URL` to enable it), and `smoke-test` needs a Docker daemon plus three image builds and a running compose stack — reported SKIPPED with that reason rather than approximated (#15933). The gates below remain the reference; this runs the mechanical ones early.
+It also runs (or explains why it did not) each of the required status checks branch protection gates `main` on (11 contexts, read with `gh api repos/{owner}/{repo}/branches/main/protection --jq '.required_status_checks.contexts'`; the `Main` ruleset itself holds only deletion and non-fast-forward rules). Every check is path-filtered by default, using the same `.github/filters/*.yml` set its own workflow uses, so a diff outside those paths gets the identical "nothing to check" verdict locally that it would in CI. `--full` bypasses that filter and forces every check to actually run, and is also what turns on `api-wiring` (it builds the whole backend app to dump its OpenAPI schema, so it stays behind `--full` even on a relevant diff). Two checks are out of reach either way: `migration-matrix` needs a live PostgreSQL (set `AUTOBOT_MIGRATION_TEST_ADMIN_URL` to enable it), and `smoke-test` needs a Docker daemon plus three image builds and a running compose stack — reported SKIPPED with that reason rather than approximated (#15933). The gates below remain the reference; this runs the mechanical ones early.
 
 **Match CI's interpreter first (#13573).** CI runs Python **3.14**. A box's default `python3` is often older, and every local gate silently uses it:
 
@@ -439,7 +433,7 @@ python -m py_compile <changed_files>
 python -c 'import <module>' for each modified file
 
 # Frontend
-npx tsc --noEmit -p autobot-vue/tsconfig.app.json
+npx tsc --noEmit -p autobot-frontend/tsconfig.app.json
 ```
 
 ### Gate 2: Call-Site Impact
@@ -447,8 +441,8 @@ npx tsc --noEmit -p autobot-vue/tsconfig.app.json
 For every function removed or renamed, grep all callers and verify none are broken:
 
 ```bash
-grep -r "old_function_name" --include="*.py" src/
-grep -r "oldFunctionName" --include="*.ts" --include="*.vue" autobot-vue/src/
+grep -r "old_function_name" --include="*.py" autobot-backend/ autobot_shared/
+grep -r "oldFunctionName" --include="*.ts" --include="*.vue" autobot-frontend/src/
 ```
 
 ### Gate 3: Targeted Tests
@@ -456,7 +450,7 @@ grep -r "oldFunctionName" --include="*.ts" --include="*.vue" autobot-vue/src/
 Run tests only for changed files to keep validation fast:
 
 ```bash
-python -m pytest tests/$(dirname <changed_file>) -x -q
+python -m pytest <the changed test file> -x -q   # a file, never a directory or the full suite
 ```
 
 ### Gate 4: Linting
@@ -470,7 +464,7 @@ make format-check
 bash scripts/format.sh --check
 # For a specific file:
 bash scripts/format.sh path/to/file.py
-npm run lint --prefix autobot-vue 2>&1 | grep "error"
+npm run lint --prefix autobot-frontend 2>&1 | grep "error"
 ```
 
 Direct invocations like `python -m black <file>` from a Python<3.12 host

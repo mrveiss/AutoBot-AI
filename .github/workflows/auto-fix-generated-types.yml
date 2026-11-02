@@ -3,8 +3,8 @@
 # force every author to hand-run `npm run gen:types` against a py3.14 backend
 # (the deployed/dev boxes may run a different Python and produce a schema that
 # never matches the gate), this job regenerates api.ts in the SAME py3.14
-# environment the gate uses and commits it back to the PR branch — self-healing
-# the recurring drift (#10817). Runs on GitHub-hosted runners so it never
+# environment the gate uses. It no longer commits the result back to the PR branch
+# (#15362, see `permissions` below). Runs on GitHub-hosted runners so it never
 # competes with the self-hosted runner.
 #
 # #14368: autobot-slm-frontend carries the identical drift risk (verified by
