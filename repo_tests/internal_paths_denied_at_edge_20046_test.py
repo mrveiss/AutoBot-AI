@@ -77,6 +77,7 @@ REACH = declare(
     what="tracked text files that proxy a public /api location, each checked for the internal-path deny",
     floor=13,  # mid-window; repinned by scripts/repin_reach_floors.py
     growth=4,
+    roots=("autobot-infrastructure", "autobot-slm-backend", "docker"),
 )
 
 _KEY_INJECTING = "autobot-slm-backend/ansible/roles/slm_manager/templates/autobot-slm.conf.j2"
