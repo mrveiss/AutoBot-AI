@@ -97222,6 +97222,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+            /** Value */
+            value?: string | null;
             /**
              * Credentials
              * @description New sensitive auth fields, for a bridged secret
@@ -150919,6 +150921,7 @@ export interface operations {
         parameters: {
             query?: {
                 chat_id?: string | null;
+                confirm_dependents?: boolean;
             };
             header?: never;
             path: {
