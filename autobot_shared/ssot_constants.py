@@ -67,11 +67,9 @@ ERR_INVALID_TOKEN = "Invalid token"  # nosec B105  # user-facing error message s
 # ============================================================================
 
 from autobot_shared.category_defaults import CategoryDefaults  # noqa: F401 -- split out (#19335)
+from autobot_shared.paths import infrastructure_dir  # #20578
 from autobot_shared.ssot_config import CLASSIFICATION_MODEL as SSOT_CLASSIFICATION_MODEL
-from autobot_shared.ssot_config import (
-    DEFAULT_EMBEDDING_MODEL,
-    DEFAULT_LLM_MODEL,
-)
+from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL, DEFAULT_LLM_MODEL
 from autobot_shared.ssot_config import INSTRUCTION_MODEL as SSOT_INSTRUCTION_MODEL
 from autobot_shared.ssot_config import LIGHT_PROCESSING_MODEL as SSOT_LIGHT_PROCESSING_MODEL
 from autobot_shared.ssot_config import PROJECT_ROOT as CANONICAL_PROJECT_ROOT
@@ -331,7 +329,7 @@ class PathConstants:
     """Centralized path constants"""
 
     PROJECT_ROOT: Path = CANONICAL_PROJECT_ROOT  # #13149: was Path(__file__).parent.parent
-    CONFIG_DIR: Path = PROJECT_ROOT / "autobot-infrastructure" / "shared" / "config"  # #14892: was "infrastructure"
+    CONFIG_DIR: Path = infrastructure_dir(fallback_root=CANONICAL_PROJECT_ROOT) / "shared" / "config"  # #20578
     DATA_DIR: Path = PROJECT_ROOT / "data"
     LOGS_DIR: Path = PROJECT_ROOT / "logs"
     DOCS_DIR: Path = PROJECT_ROOT / "docs"
