@@ -56,6 +56,7 @@ not read as the good state.
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -114,12 +115,18 @@ def test_a_key_a_locale_does_not_carry_is_counted_as_untranslated() -> None:
 def lost_translations(
     base_english: dict[str, str], base_locale: dict[str, str], english: dict[str, str], locale: dict[str, str]
 ) -> list[str]:
-    """Keys translated at the base that aren't now, leaving out keys `en.json` added or reworded."""
+    """Keys whose translation at the base is gone, leaving out keys `en.json` added or reworded.
+
+    A key renamed in `en.json` keeps its text, so a new key carrying the text of a translated key
+    that went away is that key moved, and owes the translation it had.
+    """
     translated_at_base = set(base_english) - set(_untranslated_keys(base_english, base_locale))
+    moved_texts = {base_english[key] for key in translated_at_base - set(english)}
     return sorted(
         key
         for key in _untranslated_keys(english, locale)
-        if key in translated_at_base and base_english[key] == english[key]
+        if (key in translated_at_base and base_english[key] == english[key])
+        or (key not in base_english and english[key] in moved_texts)
     )
 
 
@@ -130,9 +137,19 @@ def _at_base(code: str) -> dict[str, str]:
     return flatten(json.loads(text))
 
 
+def _english_at_base() -> dict[str, str]:
+    """Refuses a missing catalogue: with nothing to compare against, every locale would pass unjudged."""
+    english = _at_base("en")
+    assert len(english) > 5000, (
+        f"only {len(english)} English keys at the base: the locale directory moved or the flatten stopped "
+        "reaching the catalogue, so nothing here would be judged"
+    )
+    return english
+
+
 @pytest.mark.parametrize("code", _CODES)
 def test_a_translation_is_never_lost(code: str) -> None:
-    lost = lost_translations(_at_base("en"), _at_base(code), _load("en"), _load(code))
+    lost = lost_translations(_english_at_base(), _at_base(code), _load("en"), _load(code))
     assert not lost, (
         f"{code}: {len(lost)} strings had a translation at the base and don't now, for example {lost[:5]} "
         "(#14209). A new key goes into en.json alone (owner, 2026-10-18; #12732); never copy English "
@@ -149,6 +166,16 @@ def test_the_guard_finds_a_loss_and_allows_new_english_only_keys() -> None:
     assert lost_translations(base_en, base_fr, {"a": old, "b": "Another long enough sentence"}, base_fr) == []
     assert lost_translations(base_en, base_fr, {"a": "A reworded sentence long enough"}, base_fr) == []
     assert lost_translations(base_en, {}, base_en, {}) == [], "already untranslated at the base stays allowed"
+    assert lost_translations(base_en, base_fr, {"b": old}, {}) == ["b"], "a moved key keeps what it owes"
+    assert lost_translations(base_en, base_fr, {"b": old}, {"b": "Une phrase assez longue"}) == []
+    assert lost_translations(base_en, base_fr, {"a": old, "b": old}, base_fr) == [], "new key, same text: not a move"
+
+
+def test_a_missing_base_catalogue_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A moved locale directory reads as no file at the base, which must not pass with nothing judged."""
+    monkeypatch.setattr(sys.modules[__name__], "base_text", lambda _root, _path: None)
+    with pytest.raises(AssertionError, match="nothing here would be judged"):
+        _english_at_base()
 
 
 def test_the_locales_this_guard_judges_are_found() -> None:
