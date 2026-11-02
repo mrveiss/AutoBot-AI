@@ -88,7 +88,7 @@ def _sources(root: Path) -> list[Path]:
 REACH = declare(
     "frontend-http-transports",
     discover=_sources,
-    floor=1037,
+    floor=1078,  # mid-window: population 1128, window (1028, 1128)
     growth=100,  # ~9%: ordinary GUI growth between repins must not turn an unrelated PR red
     what="non-test GUI source files",
     roots=tuple(f"{app}/src" for app in PINS),
