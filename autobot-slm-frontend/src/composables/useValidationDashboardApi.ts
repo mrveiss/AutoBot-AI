@@ -78,7 +78,7 @@ export interface ValidationReport {
   phase_details: ValidationPhase[]
   progression_status: { can_progress: boolean; next_available: string[]; blocked_phases: string[] }
   metrics: {
-    completion_statistics: { average_completion: number; min_completion: number; max_completion: number; phases_above_50: number; phases_above_90: number }
+    completion_statistics: { average_completion: number | null; min_completion: number | null; max_completion: number | null; phases_above_50: number; phases_above_90: number }
     system_maturity: { overall_score: number; development_stage: string; capability_ratio: number }
     progression_metrics: { eligible_for_progression: boolean; progression_velocity: number; blocks_count: number; available_count: number }
     quality_indicators: { validation_score: number; error_rate: number; recent_changes: number }

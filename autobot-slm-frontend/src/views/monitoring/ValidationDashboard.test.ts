@@ -110,6 +110,14 @@ describe('ValidationDashboard', () => {
     expect(unscored?.text()).not.toContain('0.0%')
   })
 
+  it('says the completion figures are not scored, never 0%, when every phase is unscored', async () => {
+    const none = { average_completion: null, min_completion: null, max_completion: null, phases_above_50: 0, phases_above_90: 0 }
+    serve({ report: { ...report, metrics: { ...report.metrics, completion_statistics: none } } })
+    const w = await mountView()
+    expect(w.text()).toContain(L.phases.notScored)
+    expect(w.text()).not.toContain('NaN')
+  })
+
   it('says trend history is not available, with no series, when the report flags it', async () => {
     serve({ report: { ...report, trends_available: false, trends: { maturity_trend: [], phase_completion_trend: [], capability_growth: [] } } })
     const w = await mountView()

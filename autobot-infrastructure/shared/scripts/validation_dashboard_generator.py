@@ -130,6 +130,7 @@ _DASHBOARD_HTML_TEMPLATE = """
                 </div>
 
                 <h3>Maturity Trend</h3>
+                {trend_note}
                 <div class="chart-container">
                     <canvas id="maturityChart"></canvas>
                 </div>
@@ -314,9 +315,10 @@ class ValidationDashboardGenerator:
 
         metrics = {
             "completion_statistics": {
-                "average_completion": sum(completion_scores) / len(completion_scores),
-                "min_completion": min(completion_scores),
-                "max_completion": max(completion_scores),
+                # #20655: with every phase unscored there is no figure, and None says so; 0 would read as measured.
+                "average_completion": sum(completion_scores) / len(completion_scores) if completion_scores else None,
+                "min_completion": min(completion_scores, default=None),
+                "max_completion": max(completion_scores, default=None),
                 "phases_above_50": len([s for s in completion_scores if s >= 50.0]),
                 "phases_above_90": len([s for s in completion_scores if s >= 90.0]),
             },
@@ -713,6 +715,8 @@ class ValidationDashboardGenerator:
             "recommendations_html": (self._generate_recommendations_html(recommendations)),
             "maturity_labels": json.dumps([p["timestamp"][-8:-3] for p in trends]),
             "maturity_data": json.dumps([p["value"] for p in trends]),
+            # #20523: the empty chart says why it is empty
+            "trend_note": "" if report_data["trends_available"] else "<p>No stored trend history is available yet.</p>",
             "refresh_timeout": self.refresh_interval * 1000,
         }
 

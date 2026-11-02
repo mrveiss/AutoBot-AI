@@ -73,9 +73,62 @@ async def test_an_unscored_phase_is_neither_complete_nor_failing() -> None:
 
 
 @pytest.mark.asyncio
-async def test_all_phases_unscored_counts_none_as_complete_or_failing() -> None:
+async def test_a_canned_all_unscored_report_counts_none_as_complete_or_failing() -> None:
     summary = (await _metrics_for([_phase("a", None), _phase("b", None)]))["metrics"]["phase_summary"]
     assert (summary["completed_phases"], summary["phases_not_started"], summary["phases_unscored"]) == (0, 0, 2)
+
+
+def _real_generator(scores: list[float | None]):
+    """The real generator class on real-shaped validator results; only gathering them is stubbed."""
+    generator_class = _load_generator_class()
+    gen = generator_class.__new__(generator_class)
+    results = {
+        # phase_score.py leaves `completion_percentage` ABSENT on an unscored phase, not None (#17089)
+        "phases": {
+            f"phase_{i}": {
+                "complete": False,
+                "status": "incomplete",
+                **({} if score is None else {"completion_percentage": score}),
+            }
+            for i, score in enumerate(scores)
+        },
+        "overall_assessment": {"structural_presence_score": 50.0, "development_stage": "integration"},
+    }
+    gen._gather_validation_data = AsyncMock(
+        return_value=(results, gen._get_default_state_summary(), gen._get_default_progression_status())
+    )
+    return gen
+
+
+@pytest.mark.asyncio
+async def test_the_real_generator_reports_no_figure_when_every_phase_is_unscored() -> None:
+    report = await _real_generator([None, None]).generate_real_time_report()
+    stats = report["metrics"]["completion_statistics"]
+    assert (stats["average_completion"], stats["min_completion"], stats["max_completion"]) == (None, None, None)
+    assert (stats["phases_above_50"], stats["phases_above_90"]) == (0, 0)
+
+
+@pytest.mark.asyncio
+async def test_the_real_generator_still_averages_the_scored_phases() -> None:
+    report = await _real_generator([100.0, None, 50.0]).generate_real_time_report()
+    stats = report["metrics"]["completion_statistics"]
+    assert (stats["average_completion"], stats["min_completion"], stats["max_completion"]) == (75.0, 50.0, 100.0)
+
+
+@pytest.mark.asyncio
+async def test_the_metrics_route_answers_on_the_real_generator_when_every_phase_is_unscored() -> None:
+    with patch.object(vd, "get_dashboard_generator", return_value=_real_generator([None, None])):
+        result = await vd.get_dashboard_metrics()
+    assert result["status"] == "success"
+    assert result["metrics"]["phase_summary"]["phases_unscored"] == 2
+
+
+@pytest.mark.asyncio
+async def test_the_html_dashboard_says_its_empty_chart_has_no_history() -> None:
+    gen = _real_generator([None, 50.0])
+    gen.refresh_interval = 30  # __init__ is skipped: it builds the validator and state tracker
+    html = gen._create_dashboard_html(await gen.generate_real_time_report())
+    assert "No stored trend history is available yet." in html
 
 
 @pytest.mark.asyncio
