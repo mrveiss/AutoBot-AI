@@ -31,7 +31,6 @@ describe('useTheme', () => {
     // Reset localStorage before each test
     localStorage.clear()
     // Reset document attributes
-    document.documentElement.removeAttribute('data-high-contrast')
     document.documentElement.removeAttribute('data-theme')
     document.documentElement.removeAttribute('data-accent')
     document.documentElement.style.colorScheme = ''
@@ -55,6 +54,15 @@ describe('useTheme', () => {
       setTheme('light')
       expect(document.documentElement.getAttribute('data-theme')).toBe('light')
       expect(document.documentElement.style.colorScheme).toBe('light')
+    })
+
+    it('should apply the contrast-dark theme with the dark colour scheme (#18253)', () => {
+      const { setTheme, effectiveTheme, isLight } = useTheme()
+      setTheme('contrast-dark')
+      expect(document.documentElement.getAttribute('data-theme')).toBe('contrast-dark')
+      expect(document.documentElement.style.colorScheme).toBe('dark')
+      expect(effectiveTheme.value).toBe('contrast-dark')
+      expect(isLight.value).toBe(false)
     })
 
     it.each(['contrast', 'mono'] as const)('should apply the %s theme to document', (name) => {
@@ -164,7 +172,7 @@ describe('useTheme', () => {
   describe('available options', () => {
     it('should provide available theme options', () => {
       const { availableThemes } = useTheme()
-      expect(availableThemes).toEqual(['light', 'dark', 'contrast', 'mono', 'system'])
+      expect(availableThemes).toEqual(['light', 'dark', 'contrast', 'contrast-dark', 'mono', 'system'])
     })
 
     it('should provide available accent options', () => {
@@ -188,6 +196,7 @@ describe('useTheme', () => {
       expect(themeLabels.light).toBe('Light')
       expect(themeLabels.system).toBe('System')
       expect(themeLabels.contrast).toBe('High contrast')
+      expect(themeLabels['contrast-dark']).toBe('High contrast dark')
       expect(themeLabels.mono).toBe('Monochrome')
     })
 
@@ -238,23 +247,31 @@ describe('useTheme', () => {
       expect(preset.value).toBe('midnight')
     })
 
-    it('a manual theme change after a high-contrast preset leaves no preset and no high contrast', () => {
-      const { setPreset, setTheme, preset } = useTheme()
-      setPreset('high-contrast-dark')
-      expect(document.documentElement.getAttribute('data-high-contrast')).toBe('true')
-      setTheme('light')
-      expect(preset.value).toBeNull()
-      expect(localStorage.getItem('autobot-theme-preset')).toBe('auto')
+    it.each([
+      ['high-contrast-dark', 'contrast-dark'],
+      ['high-contrast-light', 'contrast'],
+    ] as const)('the %s preset applies data-theme %s and no legacy attribute (#18253)', (name, applied) => {
+      const { setPreset } = useTheme()
+      setPreset(name)
+      expect(document.documentElement.getAttribute('data-theme')).toBe(applied)
       expect(document.documentElement.hasAttribute('data-high-contrast')).toBe(false)
     })
 
-    it('a manual accent change after a high-contrast preset leaves no preset and no high contrast', () => {
+    it('a manual theme change after a high-contrast preset leaves no preset', () => {
+      const { setPreset, setTheme, preset } = useTheme()
+      setPreset('high-contrast-dark')
+      setTheme('light')
+      expect(preset.value).toBeNull()
+      expect(localStorage.getItem('autobot-theme-preset')).toBe('auto')
+      expect(document.documentElement.getAttribute('data-theme')).toBe('light')
+    })
+
+    it('a manual accent change after a high-contrast preset leaves no preset', () => {
       const { setPreset, setAccentColor, preset } = useTheme()
       setPreset('high-contrast-light')
       setAccentColor('green')
       expect(preset.value).toBeNull()
       expect(localStorage.getItem('autobot-theme-preset')).toBe('auto')
-      expect(document.documentElement.hasAttribute('data-high-contrast')).toBe(false)
     })
 
     it('initializeTheme applies a stored named preset before mount', async () => {
@@ -263,8 +280,9 @@ describe('useTheme', () => {
       module.initializeTheme()
       const { preset, theme } = module.useTheme()
       expect(preset.value).toBe('high-contrast-dark')
-      expect(theme.value).toBe('dark')
-      expect(document.documentElement.getAttribute('data-high-contrast')).toBe('true')
+      expect(theme.value).toBe('contrast-dark')
+      expect(document.documentElement.getAttribute('data-theme')).toBe('contrast-dark')
+      expect(document.documentElement.hasAttribute('data-high-contrast')).toBe(false)
     })
 
     it('choosing system theme with the theme accent is the Auto preset', () => {
