@@ -20855,6 +20855,7 @@ export interface paths {
          *     Returns:
          *     - has_active_job: Whether an indexing job is currently running
          *     - task_id: The current job's task ID (if running)
+         *     - source_id: The source it indexes: one job runs at a time across all sources (#20491)
          *     - status: Current job status
          *     - progress: Current progress details
          */
