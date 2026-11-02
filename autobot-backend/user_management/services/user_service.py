@@ -4,10 +4,9 @@
 # Author: mrveiss
 """This backend's ``UserService`` — the implementation lives in autobot_shared (#15068).
 
-Not a re-export: this module binds the backend's concrete ``User`` and supplies
-the two hooks only this backend has the means for — its own session store and
-memory-ownership transfer. The SLM binds the same shared class with neither.
-Error classes are imported from ``autobot_shared.user_management.user_service_errors``.
+Not a re-export: it binds the backend's concrete ``User`` and supplies the hooks only this backend has the
+means for: its session store, memory-ownership transfer and chat-session handover (#20029). The SLM binds the
+same shared class with none. Error classes are in ``autobot_shared.user_management.user_service_errors``.
 """
 
 import uuid
@@ -38,3 +37,9 @@ class UserService(SharedUserService):
         from memory.ownership_reassign import reassign_user_memory  # noqa: PLC0415
 
         return await reassign_user_memory(str(user_id), str(reassign_to))
+
+    async def reassign_sessions(self, user_id: uuid.UUID) -> dict[str, Any]:
+        """Hand the user's chat sessions to a successor, or refuse the removal (#20029)."""
+        from user_management.services.session_successor import reassign_user_sessions  # noqa: PLC0415
+
+        return await reassign_user_sessions(self.session, user_id, str(self.context.user_id or "system"))
