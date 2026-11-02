@@ -19,7 +19,7 @@ from autobot_shared.auth.interactive_principal import is_purpose_bound, is_servi
 from autobot_shared.auth.revocation_unavailable import REVOCATION_UNAVAILABLE_DETAIL
 from autobot_shared.time_utils import utc_timestamp
 from autobot_shared.websocket_subprotocol import accept_websocket, negotiated_subprotocol, resolve_ws_token
-from services.auth import auth_service
+from services.auth import auth_service, is_admin_session
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ws", tags=["websocket"])
@@ -129,6 +129,9 @@ async def _authenticate_websocket_token(websocket: WebSocket) -> dict | None:
     # #18338: a session or the backend's service token -- never a token minted for another
     # purpose, such as the MFA-pending temp token issued before the second factor.
     if payload and is_purpose_bound(payload) and not is_service_token(payload):
+        payload = None
+    # #20628: admins only, as on every other route. The backend's service token is not a person.
+    if payload and not is_service_token(payload) and not is_admin_session(payload):
         payload = None
 
     if not payload:
