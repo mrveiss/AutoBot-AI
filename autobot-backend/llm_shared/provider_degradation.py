@@ -163,16 +163,19 @@ class ProviderDegradationStore:
         model: Optional[str] = None,
         *,
         cause: DegradationCause = DegradationCause.TRANSIENT,
+        ttl_seconds: Optional[int] = None,
     ) -> None:
         """Mark *provider* (optionally *model*) degraded.
 
         ``cause=TRANSIENT`` (default) expires after the configured TTL and
         is retried — today's exact behaviour, unchanged. ``cause=NEEDS_REAUTH``
         never expires on its own; only :meth:`clear` removes it (#15022).
+        ``ttl_seconds`` replaces the transient window for a quota hold that lasts
+        until the provider's reset (#19753); it never applies to ``NEEDS_REAUTH``.
         """
         key = _make_key(provider, model)
         reauth = cause is DegradationCause.NEEDS_REAUTH
-        ttl = None if reauth else _DEGRADATION_TTL_SECONDS
+        ttl = None if reauth else (ttl_seconds or _DEGRADATION_TTL_SECONDS)
         value = f"{cause.value}@{time.time_ns()}" if reauth else cause.value  # id: see _delete_if_equal
         if reauth:
             self._seen[key] = value
@@ -184,7 +187,7 @@ class ProviderDegradationStore:
         except Exception:
             logger.debug("degradation: Redis unavailable — using in-process fallback for %s", key, exc_info=True)
             confirmed = False
-        self._remember(key, cause, redis_confirmed=confirmed)
+        self._remember(key, cause, redis_confirmed=confirmed, ttl=ttl)
 
         if reauth:
             self._alert_needs_reauth(provider, model)
@@ -261,12 +264,12 @@ class ProviderDegradationStore:
 
         return await get_async_redis_client()
 
-    def _remember(self, key: str, cause: DegradationCause, *, redis_confirmed: bool) -> None:
+    def _remember(self, key: str, cause: DegradationCause, *, redis_confirmed: bool, ttl: Optional[int]) -> None:
         """Keep the in-process copy of a mark: the outage answer, and the replay source if Redis missed it."""
         reauth = cause is DegradationCause.NEEDS_REAUTH
         if redis_confirmed and not reauth:
             return  # a confirmed transient mark needs no local copy
-        self._local[key] = (cause, None if reauth else time.monotonic() + _DEGRADATION_TTL_SECONDS)
+        self._local[key] = (cause, None if reauth else time.monotonic() + (ttl or _DEGRADATION_TTL_SECONDS))
         if reauth:
             self._pending_clear.pop(key, None)
             if not redis_confirmed:
