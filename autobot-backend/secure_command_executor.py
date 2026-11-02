@@ -977,16 +977,16 @@ class SecureCommandExecutor(CommandResultBuilders):
             command: The shell command to execute
             force_approval: Force user approval regardless of risk level
             tool: Tool name for permission matching (default: "Bash")
-            policy: Limits for an unattended caller (#19807). It bounds the child,
-                refuses a command that needs approval, and redacts the command
-                wherever it is logged or kept in history.
+            policy: Limits for an unattended caller (#19807): allowlist, child bounds,
+                refusal instead of approval, and redaction wherever the command is recorded.
 
         Returns:
             Dictionary containing execution results and security info
         """
         shown = command if policy is None else policy.show(command)
-        permission_action, rule_info = await self.check_permission_rules(command, tool)
-        permission_action, rule_info = self._policy_permission(permission_action, rule_info, policy)
+        if blocked := self._unattended_block(command, policy):
+            return blocked
+        permission_action, rule_info = await self._permission_for(command, tool, policy)
 
         if permission_action == "deny":
             return self._build_permission_deny_result(shown, rule_info)

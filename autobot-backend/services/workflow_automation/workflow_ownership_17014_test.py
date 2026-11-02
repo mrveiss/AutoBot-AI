@@ -32,7 +32,11 @@ from .ws_endpoint import may_control
 ALICE = {"username": "alice", "user_id": "u-alice", "role": "user"}
 BOB = {"username": "bob", "user_id": "u-bob", "role": "user"}
 ADMIN = {"username": "root", "user_id": "u-root", "role": "admin"}
-OPERATOR = {"username": "alice", "user_id": "u-alice", "role": "operator"}  # holds allow_shell_execute (#19807)
+OPERATOR = {
+    "username": "alice",
+    "user_id": "u-alice",
+    "role": "admin",
+}  # only an administrator creates command workflows (#19807)
 
 
 def _workflow(owner_id: str | None, workflow_id: str = "wf-1") -> ActiveWorkflow:

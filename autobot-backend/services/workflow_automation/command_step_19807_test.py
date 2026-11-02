@@ -10,10 +10,12 @@ command step "succeeded" and ran nothing. These tests drive the real
 stood in for, so the recording sites can be inspected.
 """
 
+import asyncio
 import os
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -25,6 +27,7 @@ from sqlalchemy.ext.compiler import compiles
 from starlette.testclient import TestClient
 
 from auth_middleware import get_current_user
+from command_run_policy import CommandRunPolicy
 from security_layer import SecurityLayer
 from user_management.models import Role, User, UserRole
 from user_management.models.base import Base
@@ -104,11 +107,6 @@ async def layer(monkeypatch, tmp_path):
             await engine.dispose()
 
 
-def _write_big_file(path) -> None:
-    """A file whose lines hold the secret, large enough that the filter tees it."""
-    path.write_text((SECRET + " " + "x" * 40 + "\n") * 4000, encoding="utf-8")
-
-
 def _assert_tee_is_clean(tee) -> None:
     """The tee directory holds something, and neither a name nor a body carries the secret."""
     written = list(tee.iterdir()) if tee.exists() else []
@@ -164,12 +162,15 @@ async def _refused_with_nothing_run(**kwargs):
 
 
 @pytest.mark.asyncio
-async def test_a_plain_database_user_is_refused_by_the_permission_check(layer):
-    """A non-admin account is issued the ``user`` role, which lacks allow_shell_execute."""
+async def test_a_plain_database_user_is_refused_as_not_an_administrator(layer):
+    """A non-admin account is issued the ``user`` role; the step requires an administrator, with auth on or off."""
     plain = uuid.uuid4()
     await _seed(layer.db, plain, is_platform_admin=False)
     failure = await _refused_with_nothing_run(user=str(plain))
-    assert "shell execution privileges" in failure.result["stderr"]
+    assert "administrator" in failure.result["stderr"]
+    layer.enable_auth = False  # check_permission would now pass every role; the admin rule must not
+    await _refused_with_nothing_run(user=str(plain))
+    assert any("not_admin" in str(row) for row in layer.audit), "the refusal was not audited with its trigger"
 
 
 @pytest.mark.asyncio
@@ -225,12 +226,13 @@ async def test_a_secret_value_reaches_no_record_and_no_result(layer):
 
 
 @pytest.mark.asyncio
-async def test_a_timeout_fails_the_step_with_exit_124(layer, monkeypatch):
-    monkeypatch.setattr(command_step, "WORKFLOW_COMMAND_TIMEOUT_S", 1)
-    with pytest.raises(CommandStepFailed) as failed:
-        await _run("tail -f /dev/null")
-    assert failed.value.result["exit_code"] == 124
-    assert "timed out" in failed.value.result["stderr"]
+async def test_a_timeout_is_exit_124_with_a_stderr_that_says_so(tmp_path):
+    from utils.command_utils import execute_shell_command
+
+    policy = CommandRunPolicy(timeout_s=1, max_output_bytes=1000, cwd=str(tmp_path))
+    result = await execute_shell_command("sleep 60", policy)
+    assert result["return_code"] == 124 and result["status"] == "error"
+    assert "timed out" in result["stderr"]
 
 
 @pytest.mark.asyncio
@@ -288,12 +290,12 @@ def test_a_user_without_shell_permission_cannot_create_a_workflow(monkeypatch, p
 
 @pytest.mark.parametrize("path,body", [_CREATE, _CHAT])
 def test_a_user_who_may_run_commands_can_create_a_workflow(monkeypatch, path, body):
-    client, created = _client(monkeypatch, {"user_id": "u-1", "role": "operator"})
+    client, created = _client(monkeypatch, {"user_id": "u-1", "role": "admin"})
     assert client.post(path, json=body).status_code == 200
 
 
 def test_create_from_chat_reports_a_missing_field_as_400_not_500(monkeypatch):
-    client, created = _client(monkeypatch, {"user_id": "u-1", "role": "operator"})
+    client, created = _client(monkeypatch, {"user_id": "u-1", "role": "admin"})
     response = client.post("/create_from_chat", json={"user_request": "", "session_id": "s"})
     assert response.status_code == 400
     assert created == []
@@ -316,12 +318,16 @@ async def test_the_filter_savings_failure_log_does_not_carry_the_command(monkeyp
 
 
 @pytest.mark.asyncio
-async def test_a_chained_command_with_a_secret_reaches_no_history_or_audit_row(layer):
-    result = await _run(f"echo {SECRET} && echo done")
+async def test_a_reason_quoting_a_secret_reaches_no_history_or_audit_row(layer):
+    result = await _run(f"echo {SECRET}")
     assert result["exit_code"] == 0
     rows = str(layer.audit) + str(layer.command_executor.command_history)
-    assert "Chained command" in rows, "the chained-reason path was not exercised"
     assert SECRET not in rows
+    # Chained commands are refused before assessment under a policy, so reach the reason builder directly.
+    policy = command_step.build_policy(_mask)
+    _risk, reasons = layer.command_executor._assess_for(f"echo a && echo {SECRET}", policy)
+    assert any("Chained command" in reason for reason in reasons), "the chained-reason path was not exercised"
+    assert SECRET not in str(reasons)
 
 
 @pytest.mark.asyncio
@@ -330,9 +336,7 @@ async def test_no_unredacted_output_or_name_reaches_the_tee_directory(layer, mon
 
     tee = tmp_path / "tee"
     monkeypatch.setattr(tool_output_filter, "_TEE_DIR", tee)
-    big = tmp_path / "big.txt"
-    _write_big_file(big)
-    result = await _run("cat big.txt")
+    result = await _run(f"echo {SECRET} {'x' * 30000}")
     assert result["exit_code"] == 0
     _assert_tee_is_clean(tee)
 
@@ -354,13 +358,13 @@ async def test_approval_memory_does_not_count_under_a_policy(layer):
 
 
 @pytest.mark.asyncio
-async def test_an_explicit_permission_rule_still_allows(layer):
-    run = AsyncMock(return_value={"stdout": "ok", "stderr": "", "return_code": 0, "status": "success"})
+async def test_an_explicit_allow_rule_does_not_lift_a_command_off_the_allowlist(layer):
     with _rule(layer, "allow", {"action": "allow", "pattern": "frobnicate*"}):
-        with patch("secure_command_executor.execute_shell_command", new=run):
-            result = await _run("frobnicate-19807 --now")
-    run.assert_called_once()
-    assert result["stdout"] == "ok"
+        with patch("secure_command_executor.execute_shell_command", new=AsyncMock()) as ran:
+            with pytest.raises(CommandStepFailed) as failed:
+                await _run("frobnicate-19807 --now")
+    ran.assert_not_called()
+    assert failed.value.result["refused"] is True
 
 
 @pytest.mark.asyncio
@@ -382,3 +386,99 @@ async def test_disabled_command_security_refuses_the_step(layer):
     ran.assert_not_called()
     assert failed.value.result["refused"] is True
     assert "security is disabled" in failed.value.result["stderr"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "command",
+    [
+        "rm -rf /tmp/x",
+        "echo a && echo b",
+        "echo a; echo b",
+        "echo a | cat",
+        'python -c "print(1)"',
+        "env",
+        "printenv",
+        "cat /etc/passwd",
+        "echo $(id)",
+        "echo `id`",
+        "echo $HOME",
+        "echo a\necho b",
+        "echo a > out.txt",
+        "echo a >> out.txt",
+        "ls | tee out.txt",
+        "find . -exec id ;",
+        "date -f /etc/passwd",
+        "/bin/ls",
+    ],
+)
+async def test_an_unattended_run_refuses_what_is_not_on_the_allowlist(layer, command):
+    failure = await _refused_with_nothing_run_for(command)
+    assert command not in failure.result["stderr"], "a refusal must not quote the command"
+
+
+async def _refused_with_nothing_run_for(command: str):
+    with patch("secure_command_executor.execute_shell_command", new=AsyncMock()) as ran:
+        with patch("security_layer.execute_shell_command", new=AsyncMock(), create=True):
+            with pytest.raises(CommandStepFailed) as failed:
+                await _run(command)
+    ran.assert_not_called()
+    assert failed.value.result["refused"] is True and failed.value.result["exit_code"] != 0
+    return failed.value
+
+
+@pytest.mark.parametrize("command", ["echo hi", "pwd", "ls", "echo 'a;b'", "date +%Y"])
+def test_the_allowlist_admits_inert_commands(command):
+    from unattended_commands import unattended_refusal
+
+    assert unattended_refusal(command) is None
+
+
+@pytest.mark.asyncio
+async def test_the_child_inherits_no_backend_environment(tmp_path, monkeypatch):
+    monkeypatch.setenv("AUTOBOT_BACKEND_SECRET_19807", "backend-only-value")  # pragma: allowlist secret
+    run = await run_bounded("env", cwd=str(tmp_path), timeout_s=10, max_output_bytes=100000)
+    seen = run.stdout.decode("utf-8")
+    assert "AUTOBOT_BACKEND_SECRET_19807" not in seen and "backend-only-value" not in seen
+    assert f"HOME={tmp_path}" in seen and "PATH=" in seen
+
+
+@pytest.mark.asyncio
+async def test_a_backgrounded_process_does_not_outlive_the_step(tmp_path):
+    pid_file = tmp_path / "bg.pid"
+    await run_bounded(f"sleep 60 & echo $! > {pid_file}", cwd=str(tmp_path), timeout_s=2, max_output_bytes=1000)
+    for _ in range(50):  # SIGKILL is delivered asynchronously
+        if _is_gone(pid_file):
+            break
+        await asyncio.sleep(0.1)
+    assert _is_gone(pid_file)
+
+
+def _is_gone(pid_file) -> bool:
+    """Whether the recorded process is gone or only a zombie awaiting reaping."""
+    try:
+        state = Path(f"/proc/{int(pid_file.read_text(encoding='utf-8'))}/stat").read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return True
+    return state.rsplit(")", 1)[1].split()[0] == "Z"
+
+
+@pytest.mark.parametrize("role", ["user", "operator", "run_jwt", None])
+def test_only_an_administrator_may_create_a_workflow(monkeypatch, role):
+    client, created = _client(monkeypatch, {"user_id": "u-1", "role": role})
+    assert client.post(*[_CREATE[0]], json=_CREATE[1]).status_code == 403
+    assert created == []
+
+
+def test_the_creator_cannot_remove_the_confirmation_gate(monkeypatch):
+    client, created = _client(monkeypatch, {"user_id": "u-1", "role": "admin"})
+    body = {**_CREATE[1], "steps": [{"command": "echo hi", "description": "d", "requires_confirmation": False}]}
+    assert client.post(_CREATE[0], json=body).status_code == 200
+    assert all(step.requires_confirmation for step in created[0]["steps"])
+
+
+def test_every_allowlisted_command_is_safe_in_the_classifier_too():
+    from security.command_patterns import SAFE_COMMANDS
+    from unattended_commands import UNATTENDED_ALLOWED_COMMANDS
+
+    assert UNATTENDED_ALLOWED_COMMANDS <= SAFE_COMMANDS

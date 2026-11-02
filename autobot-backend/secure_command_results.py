@@ -180,9 +180,9 @@ class CommandResultBuilders:
         risk, reasons = self.assess_command_risk(command)
         return risk, reasons if policy is None else [policy.show(reason) for reason in reasons]
 
-    @staticmethod
-    def _policy_permission(action: str | None, rule_info: Dict[str, Any] | None, policy: CommandRunPolicy | None):
-        """Under a policy, approval memory is not a permission: only an explicit rule allows (#19807)."""
+    async def _permission_for(self, command: str, tool: str, policy: CommandRunPolicy | None):
+        """Permission-rule verdict for *command*; under a policy, approval memory is not a permission (#19807)."""
+        action, rule_info = await self.check_permission_rules(command, tool)
         if policy is not None and action == "allow" and (rule_info or {}).get("from_memory"):
             return None, None
         return action, rule_info
@@ -204,3 +204,10 @@ class CommandResultBuilders:
             "status": "error",
             "security": {"enabled": False, "blocked": True},
         }
+
+    def _unattended_block(self, command: str, policy: CommandRunPolicy | None) -> Dict[str, Any] | None:
+        """A blocked result when an unattended run may not execute *command*; no rule or verdict lifts it (#19807)."""
+        why = None if policy is None else policy.refusal(command)
+        return (
+            None if why is None else self._build_blocked_result(CommandRisk.FORBIDDEN, [why], f"Command refused: {why}")
+        )

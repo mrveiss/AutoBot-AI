@@ -24,6 +24,7 @@ from typing import Callable, FrozenSet
 
 from fastapi import HTTPException
 
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.env_utils import env_int, env_str
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secret_redaction import REDACTED_PLACEHOLDER, redact_text
@@ -61,8 +62,10 @@ class CommandStepFailed(RuntimeError):
 def require_command_permission(user: dict | None) -> None:
     """Raise 403 unless *user* may run shell commands, as the terminal requires."""
     role = (user or {}).get("role")
-    if not role or not get_security_layer().check_permission(role, SHELL_PERMISSION):
-        raise HTTPException(status_code=403, detail="Running workflow commands requires shell execution permission")
+    # Administrator first and unconditionally: check_permission passes every role when enable_auth is off.
+    # A run-scoped token carries role "run_jwt" and is refused here too.
+    if not is_admin_role(role) or not get_security_layer().check_permission(role, SHELL_PERMISSION):
+        raise HTTPException(status_code=403, detail="Running workflow commands requires an administrator")
 
 
 async def current_role(owner_id: str) -> str | None:
@@ -136,8 +139,14 @@ def _failure(raw: Metadata, result: Metadata) -> CommandStepFailed:
     return CommandStepFailed(f"Command exited with code {result['exit_code']}: {result['stderr']}", result)
 
 
-def _refused(message: str) -> CommandStepFailed:
-    """A step refused before anything ran; the exit code is never 0."""
+def _refused(message: str, user: str | None, trigger: str) -> CommandStepFailed:
+    """A step refused before the security layer ran; audited with its trigger, never exit 0."""
+    get_security_layer().audit_log(
+        action="command_execution_refused",
+        user=user or "unknown",
+        outcome="denied",
+        details={"trigger": trigger, "source": "workflow_step"},
+    )
     return CommandStepFailed(
         f"Command refused: {message}",
         {"refused": True, "exit_code": 1, "stdout": "", "stderr": message, "command": REDACTED_PLACEHOLDER},
@@ -145,16 +154,18 @@ def _refused(message: str) -> CommandStepFailed:
 
 
 async def _resolve_role(user: str | None) -> str:
-    """The owner's current role, or a refusal when there is none or the store cannot answer."""
+    """The owner's current role, or a refusal when there is none, it is not admin, or the store cannot answer."""
     if not user:
-        raise _refused("the workflow records no creator to run it as")
+        raise _refused("the workflow records no creator to run it as", user, "no_owner")
     try:
         role = await current_role(user)
     except Exception as exc:
         logger.error("Workflow command refused: the account store could not answer (%s)", type(exc).__name__)
-        raise _refused("the creator's account could not be verified") from exc
+        raise _refused("the creator's account could not be verified", user, "store_unavailable") from exc
     if not role:
-        raise _refused("the creator no longer holds an active account")
+        raise _refused("the creator no longer holds an active account", user, "account_inactive")
+    if not is_admin_role(role):  # independent of enable_auth, which makes every permission check pass
+        raise _refused("only an administrator account may run workflow commands", user, "not_admin")
     return role
 
 

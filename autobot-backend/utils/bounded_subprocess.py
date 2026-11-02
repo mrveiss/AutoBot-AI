@@ -16,6 +16,15 @@ import signal
 from dataclasses import dataclass
 
 _READ_CHUNK = 65536
+#: The only variables a child inherits from the backend; everything else (keys, DSNs, tokens) is withheld.
+CHILD_ENV_PASSTHROUGH: tuple[str, ...] = ("PATH", "LANG", "LC_ALL", "TZ")
+
+
+def child_env(cwd: str) -> dict[str, str]:
+    """A minimal explicit environment for a child: the passthrough names, and HOME set to *cwd*."""
+    env = {name: os.environ[name] for name in CHILD_ENV_PASSTHROUGH if name in os.environ}
+    env["HOME"] = cwd
+    return env
 
 
 @dataclass(frozen=True)
@@ -44,12 +53,11 @@ async def _drain(stream: asyncio.StreamReader, limit: int) -> tuple[bytes, bool]
 
 async def _reap(process: asyncio.subprocess.Process) -> None:
     """Kill the child's process group if it is still running, then collect it."""
-    if process.returncode is None:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass  # the group already exited between the check and the kill
-        await process.wait()
+    try:
+        os.killpg(process.pid, signal.SIGKILL)  # always: a backgrounded process outlives its shell
+    except ProcessLookupError:
+        pass  # the whole group already exited
+    await process.wait()
 
 
 async def run_bounded(command: str, *, cwd: str, timeout_s: float, max_output_bytes: int) -> BoundedResult:
@@ -59,6 +67,7 @@ async def run_bounded(command: str, *, cwd: str, timeout_s: float, max_output_by
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         cwd=cwd,
+        env=child_env(cwd),
         start_new_session=True,
     )
     try:

@@ -16,6 +16,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
+from unattended_commands import unattended_refusal
+
 
 def _keep(text: str) -> str:
     """The default redactor: leave the text as it is."""
@@ -38,6 +40,10 @@ class CommandRunPolicy:
     refuse_approval: bool = True
     redact: Callable[[str], str] = _keep
     redact_output: Callable[[str], str] = _keep
+
+    def refusal(self, command: str) -> str | None:
+        """Why this unattended run may not execute *command* (``unattended_commands``), or None."""
+        return unattended_refusal(command)
 
     def show_output(self, output: str) -> str:
         """The form of command *output* that may reach disk or a log."""

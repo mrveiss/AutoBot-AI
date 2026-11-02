@@ -63,7 +63,7 @@ async def create_workflow(
                 command=step.command,
                 description=step.description,
                 explanation=step.explanation,
-                requires_confirmation=step.requires_confirmation,
+                requires_confirmation=True,  # #19807: the creator cannot remove the human gate from a command step
                 risk_level=step.risk_level,
                 dependencies=step.dependencies,
             )
