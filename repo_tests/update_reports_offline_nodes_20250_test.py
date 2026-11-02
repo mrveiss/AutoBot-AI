@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from jinja2 import Environment
+from jinja2 import Environment, StrictUndefined
 
 _PLAYBOOK = (
     Path(__file__).resolve().parents[1] / "autobot-slm-backend" / "ansible" / "playbooks" / "update-all-nodes.yml"
@@ -52,6 +52,15 @@ def _holds(expression: str, **values: object) -> bool:
 def test_only_a_run_touching_the_slm_host_counts_the_fleet(limit: str | None, counted: bool) -> None:
     values = {"slm_manager_inventory_host": "SLM"} | ({"ansible_limit": limit} if limit else {})
     assert _holds(_task(_SNAPSHOT)["when"], **values) is counted
+
+
+def test_an_inventory_without_group_vars_skips_the_count_rather_than_stopping() -> None:
+    """A temp inventory doesn't load group_vars/all.yml, so the name can be undefined."""
+    env = Environment(undefined=StrictUndefined)
+    rendered = env.from_string(f"{{% if {_task(_SNAPSHOT)['when']} %}}yes{{% endif %}}").render(
+        ansible_limit="localhost,x"
+    )
+    assert rendered == ""
 
 
 def test_the_snapshot_comes_before_any_restart_and_cannot_stop_the_update() -> None:

@@ -331,7 +331,7 @@
         status_code: 200
       register: fleet_nodes_before
       failed_when: false
-      when: ansible_limit is not defined or slm_manager_inventory_host in ansible_limit.split(',')
+      when: ansible_limit is not defined or (slm_manager_inventory_host | default('')) in ansible_limit.split(',')
 
     - name: "[PRE-FLIGHT] Notify SLM of new commit"
       uri:
