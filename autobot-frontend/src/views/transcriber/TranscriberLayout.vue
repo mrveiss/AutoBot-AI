@@ -33,7 +33,7 @@ const isAdmin = computed(() => userStore.isAdmin)
     </header>
 
     <section
-      v-if="settingsOpen"
+      v-if="isAdmin && settingsOpen"
       class="transcriber-layout-settings"
       :aria-label="t('transcriber.layout.settingsHeading')"
     >
