@@ -23,7 +23,7 @@ from pathlib import Path as PathLib
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query, Request
 
 from api.knowledge_lint_chunks import _fetch_all_chunks  # noqa: F401 -- stays importable from here (#16707)
-from api.quarantine_read_audit import audit_admin_quarantine_read, request_actor
+from api.quarantine_read_audit import audit_admin_quarantine_read, request_actor, request_person
 from api.schemas_knowledge import (
     BackupRequest,
     BulkCategoryUpdateRequest,
@@ -1740,7 +1740,7 @@ async def restore_backup(
     Issue #744: Requires admin authentication.
 
     Request body:
-    - backup_file: Path to backup file (required)
+    - backup_file: The backup's filename, from the backups list (required)
     - overwrite_existing: Overwrite existing facts (default: False)
     - skip_duplicates: Skip duplicate facts (default: True)
     - restore_embeddings: Restore vector embeddings (default: True)
@@ -1775,6 +1775,7 @@ async def restore_backup(
         skip_duplicates=request.skip_duplicates,
         restore_embeddings=request.restore_embeddings,
         dry_run=request.dry_run,
+        audit_actor=await (request_actor if request.dry_run else request_person)(req),
     )
 
     return result
@@ -1843,11 +1844,11 @@ async def delete_backup(
     Issue #744: Requires admin authentication.
 
     Request body:
-    - backup_file: Path to backup file to delete (required)
+    - backup_file: The filename of the backup to delete, from the backups list (required)
 
     Returns:
     - status: success or error
-    - deleted_file: Path of deleted backup file
+    - deleted_file: Filename of the deleted backup file
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
@@ -1857,8 +1858,7 @@ async def delete_backup(
         )
 
     logger.info("Delete backup request: file=%s", request.backup_file)
-
-    result = await kb.delete_backup(backup_file=request.backup_file)
+    result = await kb.delete_backup(backup_file=request.backup_file, audit_actor=await request_person(req))
 
     return result
 
