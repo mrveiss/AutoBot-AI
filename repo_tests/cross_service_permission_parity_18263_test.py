@@ -18,6 +18,12 @@ So this proves token decoding and gate wiring agree, NOT each service's DB grant
 (middleware -> UserService -> scoped query); that is #18363. The shared query itself
 is exercised on real SQLite in ``role_permission_query_test``.
 
+The SLM is an admin-only server panel (#20628): its ``get_current_user`` refuses every non-admin
+session with 403 before the shared gate runs, and that refusal is not a gate denial. So the two
+services share the gate only for admin-session roles (``is_admin_role``); parity is compared on those
+rows, the SLM's non-admin rows are asserted to be 403 on their own, and the "every denial audited"
+rule applies to the gate's denials (every backend row, the SLM's admin-session rows).
+
 API-key narrowing is not in this table: the backend accepts no user API keys
 (``api_key_scopes_are_enforced_16040_test``), so there is no backend row to compare.
 """
@@ -29,6 +35,8 @@ import sys
 
 import pytest
 from repo_tests._paths import repo_root
+
+from autobot_shared.auth.permissions import is_admin_role
 
 _ROOT = repo_root()
 
@@ -151,16 +159,47 @@ def _rows(table: dict) -> dict:
     return {k: v for k, v in table.items() if k != "__audited__"}
 
 
+def _admin_session(row: str) -> bool:
+    """Whether the SLM lets this row's role past its admin-only refusal (#20628) to the shared gate."""
+    return is_admin_role(row.split("|", 1)[0])
+
+
+def _shared(table: dict) -> dict:
+    return {k: v for k, v in _rows(table).items() if _admin_session(k)}
+
+
+def _differing(backend: dict, slm: dict) -> list:
+    return sorted(k for k in backend if backend[k] != slm.get(k))
+
+
 def test_both_services_give_identical_verdicts(verdicts):
-    backend, slm = _rows(verdicts["backend"]), _rows(verdicts["slm"])
-    differing = sorted(k for k in backend if backend[k] != slm.get(k))
+    backend, slm = _shared(verdicts["backend"]), _shared(verdicts["slm"])
+    assert len(backend) > 100, "FIX THE SWEEP: too few admin-session rows to compare"
     assert backend.keys() == slm.keys()
+    differing = _differing(backend, slm)
     assert differing == [], f"{len(differing)} rows differ, e.g. {[(k, backend[k], slm[k]) for k in differing[:5]]}"
 
 
+def test_a_differing_admin_row_fails_the_comparison(verdicts):
+    """Control: the comparison is not vacuous -- flipping one shared row is caught."""
+    backend, slm = _shared(verdicts["backend"]), _shared(verdicts["slm"])
+    row = next(iter(slm))
+    slm[row] = "403" if slm[row] == "allow" else "allow"
+    assert _differing(backend, slm) == [row]
+
+
+def test_the_slm_refuses_every_non_admin_role_on_every_permission(verdicts):
+    """#20628: an admin-only panel. The floor keeps an empty or admin-only table from passing."""
+    refused = {k: v for k, v in _rows(verdicts["slm"]).items() if not _admin_session(k)}
+    assert len(refused) > 500, f"FIX THE SWEEP: only {len(refused)} non-admin rows"
+    assert {v for v in refused.values()} == {"403"}, sorted(k for k, v in refused.items() if v != "403")[:5]
+
+
 def test_every_denial_is_audited_in_both_services(verdicts):
+    """The gate audits its denials: all backend rows, and the SLM rows that reach the gate (not its admin-only refusal)."""
     for service, table in verdicts.items():
-        denials = sum(1 for v in _rows(table).values() if v == "403")
+        rows = _rows(table) if service == "backend" else _shared(table)
+        denials = sum(1 for v in rows.values() if v == "403")
         assert table["__audited__"] == denials, f"{service}: {denials} denials, {table['__audited__']} audited"
 
 
@@ -172,18 +211,23 @@ def test_the_table_is_a_real_mix_not_a_uniform_answer(verdicts):
 
 
 @pytest.mark.parametrize(
-    ("row", "expected"),
+    ("row", "backend_expected", "slm_expected"),
     [
-        ("user|no-db|no-org|chat.use", "allow"),
-        ("user|no-db|no-org|admin.system", "403"),
-        ("readonly|db|no-org|knowledge.write", "allow"),  # system-role DB grant, platform-wide (#18259)
-        ("user|db|no-org|admin.system", "403"),  # a company-role grant does not leave its company (#18338)
-        ("user|db|org|admin.system", "allow"),  # ... and applies inside it
-        ("user|no-db|org|admin.system", "403"),  # no user_id, no DB lookup
-        ("Admin|no-db|no-org|chat.use", "403"),  # strict role reading
-        ("superadmin|no-db|no-org|admin.system", "allow"),  # #19125: superadmin holds admin's set
+        ("user|no-db|no-org|chat.use", "allow", "403"),  # the SLM refuses a non-admin session (#20628)
+        ("user|no-db|no-org|admin.system", "403", "403"),
+        (
+            "readonly|db|no-org|knowledge.write",
+            "allow",
+            "403",
+        ),  # system-role DB grant, platform-wide (#18259); SLM: #20628
+        ("user|db|no-org|admin.system", "403", "403"),  # a company-role grant does not leave its company (#18338)
+        ("user|db|org|admin.system", "allow", "403"),  # ... and applies inside it; SLM: #20628
+        ("user|no-db|org|admin.system", "403", "403"),  # no user_id, no DB lookup
+        ("Admin|no-db|no-org|chat.use", "403", "403"),  # strict role reading
+        ("superadmin|no-db|no-org|admin.system", "allow", "allow"),  # #19125: superadmin holds admin's set
     ],
 )
-def test_pinned_rows(verdicts, row, expected):
+def test_pinned_rows(verdicts, row, backend_expected, slm_expected):
+    expected = {"backend": backend_expected, "slm": slm_expected}
     for service, table in verdicts.items():
-        assert table[row] == expected, f"{service}: {row} -> {table[row]}, expected {expected}"
+        assert table[row] == expected[service], f"{service}: {row} -> {table[row]}, expected {expected[service]}"
