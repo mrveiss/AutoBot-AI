@@ -82,6 +82,10 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         },
         "root-relative `*.md` sweep; the matching files live outside the python filter's trees",
     ),
+    "*.ps1": (
+        {"repo_tests/windows_install_constraints_resolve_19681_test.py"},
+        "the Windows installer scripts; they live outside the python filter's paths",
+    ),
     "*.promtool-test.yml": (
         {"repo_tests/promtool_rules_test.py"},
         "root-relative `*.promtool-test.yml` sweep; the matching files live outside the python filter's trees",
@@ -173,6 +177,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/ansible_python_interpreter_binary_scope_16750_test.py",
             "repo_tests/ansible_regex_backslash_scalar_17897_test.py",
             "repo_tests/ansible_shared_tasks_code_source_dir_default_16750_test.py",
+            "repo_tests/backend_env_leaves_no_secret_copies_20517_test.py",
             "repo_tests/browser_port_single_home_19324_test.py",
             "repo_tests/documented_playbook_invocations_test.py",
             "repo_tests/draft_gate_reaches_aggregators_17957_test.py",
