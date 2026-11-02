@@ -113,7 +113,7 @@ _GATED_MODEL_PREFIXES = (
 )
 
 HF_TOKEN: Optional[str] = os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN")
-TTS_MODEL_ID: str = os.getenv("TTS_MODEL_ID", "liquid-ai/kani-tts-2")
+TTS_MODEL_ID: str = os.getenv("TTS_MODEL_ID", "kyutai/pocket-tts")
 
 
 def _check_cache_writable(models_dir: Path) -> None:
@@ -217,7 +217,8 @@ def _load_model():
         # (#11718) — this is the real "loaded model != configured model" signal.
         _voice_cloning_loaded = getattr(_model, "has_voice_cloning", True)
         logger.info(
-            "Pocket TTS model loaded (sample_rate=%d, voice_cloning=%s)",
+            "Pocket TTS model loaded: %s (sample_rate=%d, voice_cloning=%s)",
+            TTS_MODEL_ID,
             _model.sample_rate,
             _voice_cloning_loaded,
         )

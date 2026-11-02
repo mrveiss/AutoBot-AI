@@ -16,10 +16,11 @@ tts_voices_dir: /var/lib/autobot/voices
 tts_host: "0.0.0.0"
 tts_port: 8083  # Issue #3431: 8082 is WSL2/Hyper-V reserved (Windows NPU worker)
 
-# Model (#10566): the Pocket TTS model that supplies BUILTIN_VOICES. This is a
-# gated HuggingFace model (liquid-ai/ namespace) — downloading it requires
-# tts_hf_token. Override to point at a mirror or an ungated alternative.
-tts_model_id: "liquid-ai/kani-tts-2"
+# Model (#10566, #19734): names what the engine runs. Pocket TTS's load_model() takes no model id and
+# loads its own Kyutai checkpoints, so this does not choose a model. It is a label for logs and health,
+# and its namespace decides whether a token is demanded. Without a token the engine falls back to its
+# public weights, so this namespace is not treated as gated.
+tts_model_id: "kyutai/pocket-tts"
 
 # Pre-download the model into tts_models_dir at provision time (#10566) so the
 # built-in voices are available immediately instead of failing on first start
