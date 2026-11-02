@@ -69,7 +69,7 @@ onMounted(() => rollback.loadCandidates())
 </script>
 
 <template>
-  <BaseCard :title="$t('codeRollback.title')" :subtitle="$t('codeRollback.description')">
+  <BaseCard v-if="rollback.enabled.value" :title="$t('codeRollback.title')" :subtitle="$t('codeRollback.description')">
     <BaseAlert v-if="failureText" variant="error" size="compact" class="mb-3" :message="failureText" />
     <p v-if="!rollback.loading.value && options.length === 0 && !failureText" class="text-sm text-gray-500">
       {{ $t('codeRollback.empty') }}
@@ -112,6 +112,12 @@ onMounted(() => rollback.loadCandidates())
           <li>{{ $t('codeRollback.stepMigrations') }}</li>
           <li>{{ $t('codeRollback.stepLatest') }}</li>
         </ul>
+        <p class="mt-3 text-sm">
+          <span class="font-medium">{{ $t('codeRollback.checkedLabel') }}</span> {{ $t('codeRollback.checked') }}
+        </p>
+        <p class="mt-1 text-sm">
+          <span class="font-medium">{{ $t('codeRollback.notCheckedLabel') }}</span> {{ $t('codeRollback.notChecked') }}
+        </p>
       </template>
       <template v-else>
         <BaseAlert variant="error" size="compact" :message="rollback.preview.value?.refusal ?? $t('codeRollback.requestFailed')" />

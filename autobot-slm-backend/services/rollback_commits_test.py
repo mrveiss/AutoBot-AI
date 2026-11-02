@@ -13,7 +13,12 @@ from pathlib import Path
 import pytest
 
 from autobot_shared.paths import scrubbed_git_env
-from services.rollback_commits import RollbackRefused, list_candidates, resolve_target
+from services.rollback_commits import (
+    ROLLBACK_SUPPORT_PATH,
+    RollbackRefused,
+    list_candidates,
+    resolve_target,
+)
 
 _GIT_ENV = {
     "GIT_AUTHOR_NAME": "t",
@@ -36,9 +41,14 @@ def _git(repo: Path, *args: str) -> str:
     return out.stdout.strip()
 
 
-def _commit(repo: Path, name: str, subject: str) -> str:
+def _commit(repo: Path, name: str, subject: str, support: bool = True) -> str:
     (repo / name).write_text(subject, encoding="utf-8")
     _git(repo, "add", name)
+    if support:  # a commit that ships the module that reads the rollback ref out of the resume plan
+        target = repo / ROLLBACK_SUPPORT_PATH
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("# reads deploy_ref\n", encoding="utf-8")
+        _git(repo, "add", ROLLBACK_SUPPORT_PATH)
     _git(repo, "commit", "-q", "-m", subject)
     return _git(repo, "rev-parse", "HEAD")
 
@@ -49,6 +59,7 @@ def repo(tmp_path: Path) -> dict:
     root = tmp_path / "code_source"
     root.mkdir()
     _git(root, "init", "-q", "-b", "main")
+    old = _commit(root, "o.txt", "before rollback support", support=False)
     first = _commit(root, "a.txt", "first change")
     second = _commit(root, "b.txt", "second change")
     third = _commit(root, "c.txt", "third change")
@@ -56,7 +67,7 @@ def repo(tmp_path: Path) -> dict:
     _git(root, "checkout", "-q", "-b", "side", first)
     side = _commit(root, "d.txt", "never reviewed into main")
     _git(root, "checkout", "-q", "main")
-    return {"path": str(root), "first": first, "second": second, "third": third, "side": side, "root": root}
+    return {"path": str(root), "old": old, "first": first, "second": second, "third": third, "side": side, "root": root}
 
 
 async def test_candidates_are_the_ancestors_of_the_remote_head_with_dates_and_subjects(repo):
@@ -115,3 +126,14 @@ async def test_junk_and_option_like_input_is_refused_before_git_runs(repo, junk)
 async def test_a_branch_name_that_is_not_a_safe_ref_is_refused(repo):
     with pytest.raises(RollbackRefused):
         await resolve_target(repo["path"], "origin", "--main", repo["second"])
+
+
+async def test_a_commit_that_predates_rollback_support_is_not_offered(repo):
+    commits = await list_candidates(repo["path"], "origin", "main")
+    assert repo["old"] not in [c.commit for c in commits]
+    assert [c.subject for c in commits][-1] == "first change"
+
+
+async def test_a_commit_that_predates_rollback_support_is_refused_plainly(repo):
+    with pytest.raises(RollbackRefused, match="predates rollback support"):
+        await resolve_target(repo["path"], "origin", "main", repo["old"])

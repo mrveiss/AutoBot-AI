@@ -109,6 +109,8 @@ describe('CodeRollbackPanel', () => {
     expect(modal.text()).toContain('Roll back to this version?')
     expect(modal.text()).toContain('Add the maintenance page')
     expect(modal.text()).toContain('Never undo a database migration')
+    expect(modal.text()).toContain('Checked: two databases')
+    expect(modal.text()).toContain('Not checked: SQLite stores, Redis, ChromaDB')
     const confirm = modal.findAll('button').find((b) => b.text() === 'Roll back')!
     await confirm.trigger('click')
     await flushPromises()
@@ -152,5 +154,13 @@ describe('CodeRollbackPanel', () => {
     const wrapper = await mountPanel({}, true)
     expect(wrapper.find('select').attributes('disabled')).toBeDefined()
     expect(wrapper.find('button').attributes('disabled')).toBeDefined()
+  })
+
+  it('shows nothing at all while the server says rollback is not enabled', async () => {
+    const wrapper = await mountPanel({
+      'GET /code-sync/rollback/candidates': () => response(403, { detail: 'Rollback is not enabled on this SLM' }),
+    })
+    expect(wrapper.find('select').exists()).toBe(false)
+    expect(wrapper.text()).toBe('')
   })
 })

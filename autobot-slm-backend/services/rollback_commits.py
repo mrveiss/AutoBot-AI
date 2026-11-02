@@ -13,6 +13,7 @@ the remote head before anything else runs.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 
 from autobot_shared.env_utils import env_int_clamped
@@ -29,6 +30,11 @@ ROLLBACK_CANDIDATE_LIMIT = env_int_clamped("SLM_ROLLBACK_CANDIDATE_LIMIT", 50, 1
 _FIELD_SEP = "\x1f"
 _LOG_FORMAT = f"%H{_FIELD_SEP}%cI{_FIELD_SEP}%s"
 _NOT_AN_ANCESTOR = 1
+
+#: The module that reads a rollback's ref out of the resume plan after the SLM restarts onto the target.
+#: A commit without it cannot finish a rollback: it restarts, ignores the ref, and updates the fleet to ``main``.
+ROLLBACK_SUPPORT_PATH = "autobot-slm-backend/services/rollback_target.py"
+PREDATES_ROLLBACK = "This version predates rollback support, so it cannot be rolled back to."
 
 
 class RollbackRefused(Exception):
@@ -67,6 +73,14 @@ def _parse_log(output: str) -> list[CommitInfo]:
     return commits
 
 
+async def supports_rollback(repo: str, commit: str) -> bool:
+    """True when ``commit`` ships the code that carries a rollback across the SLM's restart."""
+    if not is_full_sha(commit):
+        return False
+    _, rc = await run_git_capture(repo, "cat-file", "-e", f"{commit}:{ROLLBACK_SUPPORT_PATH}")
+    return rc == 0
+
+
 async def list_candidates(
     repo: str, remote: str, branch: str, limit: int = ROLLBACK_CANDIDATE_LIMIT
 ) -> list[CommitInfo]:
@@ -75,7 +89,9 @@ async def list_candidates(
     stdout, rc = await run_git_capture(repo, "log", f"--max-count={int(limit)}", f"--format={_LOG_FORMAT}", ref)
     if rc != 0:
         raise RollbackRefused("The commit history could not be read from the code source.")
-    return _parse_log(stdout)
+    commits = _parse_log(stdout)
+    flags = await asyncio.gather(*(supports_rollback(repo, c.commit) for c in commits))
+    return [c for c, ok in zip(commits, flags) if ok]
 
 
 async def describe_commit(repo: str, commit: str) -> CommitInfo | None:
@@ -104,6 +120,8 @@ async def resolve_target(repo: str, remote: str, branch: str, commit: object) ->
         raise RollbackRefused(f"That commit is not part of {branch}'s history, so it cannot be deployed.")
     if rc != 0:
         raise RollbackRefused("Whether that commit belongs to the branch history could not be determined.")
+    if not await supports_rollback(repo, commit):
+        raise RollbackRefused(PREDATES_ROLLBACK)
     info = await describe_commit(repo, commit)
     if info is None:
         raise RollbackRefused("The chosen commit could not be read from the code source.")

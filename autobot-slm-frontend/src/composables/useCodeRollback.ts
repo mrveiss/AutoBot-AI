@@ -39,6 +39,8 @@ async function readDetail(response: Response): Promise<string | null> {
 export function useCodeRollback() {
   const candidates = ref<RollbackCandidates | null>(null)
   const preview = ref<RollbackPreview | null>(null)
+  /** False when the server says rollback is not enabled (403): the page then shows no panel at all. */
+  const enabled = ref(true)
   const loading = ref(false)
   const checking = ref(false)
   const starting = ref(false)
@@ -53,6 +55,10 @@ export function useCodeRollback() {
     failed.value = false
     try {
       const response = await slmApiClient.rawRequest('/code-sync/rollback/candidates', { method: 'GET' })
+      if (response.status === 403) {
+        enabled.value = false
+        return
+      }
       if (!response.ok) {
         error.value = await readDetail(response)
         failed.value = true
@@ -127,5 +133,5 @@ export function useCodeRollback() {
     failed.value = false
   }
 
-  return { candidates, preview, loading, checking, starting, error, failed, loadCandidates, loadPreview, start, reset }
+  return { candidates, preview, enabled, loading, checking, starting, error, failed, loadCandidates, loadPreview, start, reset }
 }

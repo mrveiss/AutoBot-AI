@@ -40,6 +40,7 @@ from api import code_sync as cs  # noqa: E402
 from models.rollback_schemas import RollbackRequest  # noqa: E402
 from services import code_rollback as svc  # noqa: E402
 from services import rollback_audit  # noqa: E402
+from services.rollback_commits import ROLLBACK_SUPPORT_PATH  # noqa: E402
 from services.rollback_migrations import BLOCKED, CLEAR, MigrationCheck  # noqa: E402
 
 _GIT_ENV = {
@@ -65,9 +66,14 @@ def _git(repo: Path, *args: str) -> str:
     return out.stdout.strip()
 
 
-def _commit(repo: Path, name: str) -> str:
+def _commit(repo: Path, name: str, support: bool = True) -> str:
     (repo / name).write_text(name, encoding="utf-8")
     _git(repo, "add", name)
+    if support:
+        module = repo / ROLLBACK_SUPPORT_PATH
+        module.parent.mkdir(parents=True, exist_ok=True)
+        module.write_text("# reads deploy_ref\n", encoding="utf-8")
+        _git(repo, "add", ROLLBACK_SUPPORT_PATH)
     _git(repo, "commit", "-q", "-m", f"change {name}")
     return _git(repo, "rev-parse", "HEAD")
 
@@ -78,6 +84,7 @@ def world(tmp_path, monkeypatch):
     root = tmp_path / "code_source"
     root.mkdir()
     _git(root, "init", "-q", "-b", "main")
+    old = _commit(root, "o", support=False)
     first, second, third = (_commit(root, n) for n in ("a", "b", "c"))
     _git(root, "update-ref", "refs/remotes/origin/main", third)
     _git(root, "checkout", "-q", "-b", "side", first)
@@ -86,6 +93,7 @@ def world(tmp_path, monkeypatch):
     monkeypatch.setattr(cs, "_get_tracker_for_db", AsyncMock(return_value=tracker))
     monkeypatch.setattr(cs, "_get_slm_deployed_commit", AsyncMock(return_value=DEPLOYED))
     events: list = []
+    monkeypatch.setattr(api_rb, "verify_internal_api_key", lambda key: False)
 
     async def _audit(**kw):
         events.append(("audit", kw["outcome"], kw["phase"], kw.get("reason")))
@@ -100,11 +108,15 @@ def world(tmp_path, monkeypatch):
     clear = [MigrationCheck("SLM", CLEAR, message="ok"), MigrationCheck("backend", CLEAR, message="ok")]
     check = AsyncMock(return_value=clear)
     monkeypatch.setattr(svc, "check_migrations", check)
-    return SimpleNamespace(first=first, second=second, third=third, side=side, events=events, check=check)
+    return SimpleNamespace(old=old, first=first, second=second, third=third, side=side, events=events, check=check)
 
 
-async def _post(commit: str):
-    return await api_rb.start_rollback(RollbackRequest(commit=commit), None, USER)
+def _request(key: str | None = None):
+    return SimpleNamespace(headers={"X-Internal-API-Key": key} if key else {})
+
+
+async def _post(commit: str, request=None, user=USER):
+    return await api_rb.start_rollback(RollbackRequest(commit=commit), request or _request(), None, user)
 
 
 async def test_picker_lists_ancestors_with_dates_and_subjects_and_marks_nothing_pickable_outside_main(world):
@@ -236,3 +248,46 @@ def test_the_routes_ride_the_code_sync_router_so_they_carry_its_include_level_au
 
 def test_audit_outcomes_are_only_the_four_allowed_ones():
     assert rollback_audit.OUTCOMES == {"success", "denied", "failed", "error"}
+
+
+async def test_the_internal_service_key_cannot_roll_back(world, monkeypatch):
+    monkeypatch.setattr(api_rb, "verify_internal_api_key", lambda key: key == "the-key")
+    with pytest.raises(HTTPException) as err:
+        await _post(world.second, request=_request("the-key"))
+    assert err.value.status_code == 403 and "person" in err.value.detail
+    assert world.events == []
+
+
+async def test_a_token_that_names_nobody_cannot_roll_back(world):
+    with pytest.raises(HTTPException) as err:
+        await _post(world.second, user={})
+    assert err.value.status_code == 403 and world.events == []
+
+
+async def test_a_denied_row_never_stores_the_clients_text(world, monkeypatch):
+    seen = []
+
+    async def _audit(**kw):
+        seen.append(kw)
+
+    monkeypatch.setattr(rollback_audit, "record_rollback", _audit)
+    with pytest.raises(HTTPException):
+        await _post("<script>alert(1)</script>")
+    assert seen and seen[0]["commit"] is None
+    assert "script" not in repr(seen)
+
+
+async def test_a_commit_that_predates_rollback_support_is_refused_with_a_plain_reason(world):
+    with pytest.raises(HTTPException) as err:
+        await _post(world.old)
+    assert err.value.status_code == 400 and "predates rollback support" in err.value.detail
+
+
+def test_the_routes_answer_403_while_rollback_is_off(monkeypatch):
+    monkeypatch.delenv("SLM_ROLLBACK_ENABLED", raising=False)
+    with pytest.raises(HTTPException) as err:
+        api_rb.require_rollback_enabled()
+    assert err.value.status_code == 403 and "not enabled" in err.value.detail
+    monkeypatch.setenv("SLM_ROLLBACK_ENABLED", "true")
+    api_rb.require_rollback_enabled()
+    assert any(d.dependency is api_rb.require_rollback_enabled for d in api_rb.router.dependencies)

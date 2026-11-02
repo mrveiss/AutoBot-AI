@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from autobot_shared.env_registry import env
 from autobot_shared.logging_manager import get_logger
 from services import rollback_audit
 from services.rollback_commits import CommitInfo, RollbackRefused, resolve_target
@@ -31,6 +32,12 @@ from services.rollback_migrations import CLEAR, MigrationCheck, check_migrations
 from services.rollback_target import rollback_scope
 
 logger = get_logger(__name__)
+
+
+def rollback_enabled() -> bool:
+    """``SLM_ROLLBACK_ENABLED``: off until a host test has run a rollback and the Update Everything back."""
+    return bool(env("SLM_ROLLBACK_ENABLED"))
+
 
 _SUCCESS_STATUSES = frozenset({"completed", "already_current", "partial"})
 
@@ -108,6 +115,27 @@ async def _run_stages(cs, job, db_service_ref, target: CommitInfo) -> None:
     await cs._run_fleet_stage_or_already_current(job, outdated, target.commit)
 
 
+async def _verify_fleet_at_target(job, db_service_ref, target: CommitInfo) -> None:
+    """A job that reports completed has every node on the target; otherwise it is failed, naming the count.
+
+    ``code_version`` is written from the commit code_source was on when the node's run ended, so a node the
+    playbook deployed from ``main`` reads as ``main`` here. Only runs in the process that ran the job: a run
+    cut by the SLM's restart ends in the resumed process, which does not make this check.
+    """
+    if job.status != "completed":
+        return
+    from sqlalchemy import select
+
+    from models.database import Node
+
+    async with db_service_ref.session() as db:
+        result = await db.execute(select(Node.node_id).where(Node.code_version != target.commit))
+        off_target = list(result.scalars().all())
+    if off_target:
+        job.status = "failed"
+        job.failure_reason = f"{len(off_target)} node(s) are not on {target.short} after the rollback reported done"
+
+
 async def _record_end(actor: str | None, target: CommitInfo, job) -> None:
     """The final audit entry, when the run ended in this process. Never raises: the run is over."""
     if job.status in _SUCCESS_STATUSES:
@@ -137,6 +165,7 @@ def orchestrator(target: CommitInfo, actor: str | None):
         with rollback_scope(target.commit):
             try:
                 await _run_stages(cs, job, db_service_ref, target)
+                await _verify_fleet_at_target(job, db_service_ref, target)
             except Exception:
                 await _record_error(actor, target)
                 raise

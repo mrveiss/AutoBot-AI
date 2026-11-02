@@ -151,3 +151,50 @@ def test_a_clear_path_is_allowed():
 
 def test_rolling_back_to_what_is_already_deployed_is_refused():
     assert "already runs that commit" in _preflight(TARGET.commit, CLEAR, CLEAR).refusal
+
+
+class _Rows:
+    def __init__(self, ids):
+        self._ids = ids
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self._ids
+
+
+def _db_with_off_target(ids):
+    ref = MagicMock()
+    session = MagicMock()
+    session.execute = AsyncMock(return_value=_Rows(ids))
+    ref.session.return_value.__aenter__ = AsyncMock(return_value=session)
+    ref.session.return_value.__aexit__ = AsyncMock(return_value=False)
+    return ref
+
+
+async def test_a_completed_job_with_a_node_off_the_target_is_failed():
+    job = SimpleNamespace(status="completed", failure_reason=None)
+    await cr._verify_fleet_at_target(job, _db_with_off_target(["n1", "n2"]), TARGET)
+    assert job.status == "failed" and "2 node(s)" in job.failure_reason
+
+
+async def test_a_completed_job_with_every_node_on_the_target_stays_completed():
+    job = SimpleNamespace(status="completed", failure_reason=None)
+    await cr._verify_fleet_at_target(job, _db_with_off_target([]), TARGET)
+    assert job.status == "completed"
+
+
+async def test_other_job_states_are_not_second_guessed():
+    job = SimpleNamespace(status="partial", failure_reason=None)
+    db = _db_with_off_target(["n1"])
+    await cr._verify_fleet_at_target(job, db, TARGET)
+    assert job.status == "partial"
+    db.session.assert_not_called()
+
+
+def test_rollback_is_off_unless_the_setting_turns_it_on(monkeypatch):
+    monkeypatch.delenv("SLM_ROLLBACK_ENABLED", raising=False)
+    assert cr.rollback_enabled() is False
+    monkeypatch.setenv("SLM_ROLLBACK_ENABLED", "true")
+    assert cr.rollback_enabled() is True
