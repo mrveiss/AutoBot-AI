@@ -60,6 +60,7 @@ from ..services.sprint_autoclose import SprintAutoCloseService
 from ..services.sprint_planning import SprintNotFound, SprintPlanningService
 from ..services.timeline import compute_critical_path, duration_days
 from ._common import actor_id
+from .sprint_access import require_sprint_in_org
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["llc-sprints"])
@@ -931,10 +932,7 @@ async def close_sprint(
     (the sprint no longer has that approval pending). It remains for an approval granted before
     deciding applied the close.
     """
-    # IDOR guard (#10148): verify the sprint belongs to the caller's org before closing.
-    _sprint_check = (await session.execute(select(LLCSprint).where(LLCSprint.id == sprint_id))).scalar_one_or_none()
-    if _sprint_check is None or str(_sprint_check.company_id) != str(ctx.org_id):
-        raise HTTPException(status_code=404, detail="Sprint not found")
+    await require_sprint_in_org(session, sprint_id, ctx.org_id)
     caller = actor_id(current_user)
     try:
         sprint = await _autoclose_svc.execute_close(
