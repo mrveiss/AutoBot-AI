@@ -1,0 +1,30 @@
+# A PR carries the milestone and phase label of the issue it serves (#20516).
+# The event payload is enough, so this runs no code from the PR beyond this repo's checkout and needs no token.
+name: PR structure
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review, labeled, unlabeled, milestoned, demilestoned]
+
+permissions:
+  contents: read
+
+jobs:
+  pr-structure:
+    name: PR has its milestone and phase
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            pipeline-scripts
+            autobot_shared
+            .github/actions/upsert-pr-comment
+
+      - name: Check the milestone and phase label
+        run: python3 pipeline-scripts/pr_structure.py
