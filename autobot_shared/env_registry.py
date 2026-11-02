@@ -146,7 +146,7 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_CHATS_DIRECTORY",
         type=str,
-        default="data/chats",
+        default="",
         description="Filesystem path where chat session files are stored.",
         component="chat",
     )
@@ -388,7 +388,7 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_REDIS_HOST",
         type=str,
-        default="localhost",
+        default="127.0.0.1",
         description="Redis server hostname or IP address.",
         component="redis",
     )
