@@ -51,13 +51,13 @@ def check_tree(root: Path) -> Tuple[int, List[str]]:
     examined, refused = 0, []
     for path in sorted(p for p in root.rglob("*") if p.suffix in (".yml", ".yaml")):
         try:
-            document = yaml.safe_load(path.read_text(encoding="utf-8"))
+            documents = list(yaml.safe_load_all(path.read_text(encoding="utf-8")))
         except yaml.constructor.ConstructorError:
             continue  # vault or other tags the safe loader doesn't know; not shell blocks
         except yaml.YAMLError as exc:
             refused.append(f"{path}: not valid YAML: {str(exc).splitlines()[0]}")
             continue
-        for name, text in blocks_in(document):
+        for name, text in blocks_in(documents):
             examined += 1
             if not parses(text):
                 refused.append(
