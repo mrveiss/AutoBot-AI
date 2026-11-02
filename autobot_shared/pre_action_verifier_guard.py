@@ -41,6 +41,7 @@ from typing import Any
 
 from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.spend_recording import report_spend
 from autobot_shared.ssot_constants import CategoryDefaults
 from autobot_shared.time_utils import now_utc
 from autobot_shared.tool_catalogue import (
@@ -66,6 +67,9 @@ from autobot_shared.verifier_degradation import (
 from autobot_shared.verifier_prompt import _build_verifier_prompt  # noqa: F401  (re-export, #17306)
 
 logger = get_logger(__name__)
+
+# Where the verifier's spend is attributed (#19650).
+VERIFIER_SPEND_SITE = "pre_action_verifier"
 
 # ---------------------------------------------------------------------------
 # Module-level threshold constants (all env-configurable, never hardcoded)
@@ -340,6 +344,7 @@ async def _call_verifier_once(
         )
         return VerifierObservation.failed(VerifierDegradation.CALL_FAILED, f"Verifier LLM error: {exc!r}")
 
+    await report_spend(response, site=VERIFIER_SPEND_SITE, metadata=request.metadata)
     return VerifierObservation.from_reply(
         response.content or "",
         provider_used=provider.provider_name,
