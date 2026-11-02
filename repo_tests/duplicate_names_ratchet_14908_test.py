@@ -212,7 +212,7 @@ TYPE_FILES_REACH = declare(
 UTIL_FILES_REACH = declare(
     "duplicate-util-filenames-scanned-14908",
     discover=_util_files,
-    floor=56,  # mid-window: population 61, window (51, 61)
+    floor=61,  # mid-window: population 66, window (56, 66)
     growth=10,
     what="non-test util files in both apps compared by filename",
     roots=_UTILS,
