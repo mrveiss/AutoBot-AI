@@ -843,18 +843,11 @@ const handleExportSection = (section: string, fmt: 'md' | 'json') =>
 // #2258: Bridge code-intel scans into the data-fetcher scan orchestrator.
 // loadCachedAnalyticsData uses lighter cached loaders; runAllAnalysisScans
 // uses full re-fetch triggers after indexing completes.
-// #2390: Include all code-intel scans so every panel populates on page visit
+// #20491: opening the page starts no scan, so only loaders that read stored results run here.
 const codeIntelExtraScans = (): ScanDefinition[] => [
-  { id: 'configDuplicates', label: t('analytics.codebase.scans.configDuplicates'), run: async () => { await loadConfigDuplicates() } },
-  { id: 'apiEndpoints', label: t('analytics.codebase.scans.apiEndpoints'), run: async () => { await loadApiEndpointAnalysis() } },
   { id: 'bugPrediction', label: t('analytics.codebase.scans.bugPrediction'), run: async () => { await loadCachedBugPrediction() } },
   { id: 'security', label: t('analytics.codebase.scans.security'), run: async () => { await loadCachedSecurityScore() } },
-  { id: 'performance', label: t('analytics.codebase.scans.performance'), run: async () => { await loadPerformanceScore() } },
-  { id: 'redis', label: t('analytics.codebase.scans.redis'), run: async () => { await loadRedisHealth() } },
-  { id: 'environment', label: t('analytics.codebase.scans.environment'), run: async () => { await loadEnvironmentAnalysis() } },
-  { id: 'ownership', label: t('analytics.codebase.scans.ownership'), run: async () => { await loadOwnershipAnalysis() } },
   { id: 'crossLanguage', label: t('analytics.codebase.scans.crossLanguage'), run: async () => { await getCrossLanguageAnalysis() } },
-  { id: 'codeIntelligence', label: t('analytics.codebase.scans.codeIntelligence'), run: async () => { await runCodeIntelligenceAnalysis() } },
 ]
 
 const codeIntelFullScans = (): ScanDefinition[] => [
