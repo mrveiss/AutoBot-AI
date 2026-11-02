@@ -20,6 +20,7 @@ from constants.error_constants import ERR_WORKFLOW_NOT_FOUND
 from services.notification_service import NotificationConfig
 
 from .approval_support import execute_approval_outcome, validate_approval_request
+from .command_step import require_command_permission
 from .manager import WorkflowAutomationManager
 from .models import (
     AutomatedWorkflowRequest,
@@ -54,6 +55,7 @@ async def create_workflow(
     current_user: dict = Depends(get_current_user),
 ):
     """Create new automated workflow"""
+    require_command_permission(current_user)  # #19807: its steps run shell commands
     try:
         workflow_steps = [
             WorkflowStep(
@@ -77,6 +79,7 @@ async def create_workflow(
             session_id=request.session_id,
             automation_mode=automation_mode,
             owner_id=caller_id(current_user),
+            creator_role=current_user.get("role"),
         )
 
         return {
@@ -261,6 +264,7 @@ async def create_workflow_from_chat(request: dict, current_user: dict = Depends(
     Issue #390: Now presents plan for approval instead of auto-starting.
     #13809: that is now the default; auto-start must be asked for explicitly.
     """
+    require_command_permission(current_user)  # #19807: its steps run shell commands
     try:
         user_request = request.get("user_request", "")
         session_id = request.get("session_id", "")
@@ -279,7 +283,7 @@ async def create_workflow_from_chat(request: dict, current_user: dict = Depends(
             raise HTTPException(status_code=400, detail="user_request and session_id are required")
 
         workflow_id = await get_workflow_manager().create_workflow_from_chat_request(
-            user_request, session_id, owner_id=caller_id(current_user)
+            user_request, session_id, owner_id=caller_id(current_user), creator_role=current_user.get("role")
         )
 
         if workflow_id:

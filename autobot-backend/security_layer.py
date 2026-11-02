@@ -15,27 +15,25 @@ and audit logging (command executor, approval workflow — folded in per #10666 
 import asyncio
 import datetime
 from datetime import timezone
-from functools import lru_cache
 from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
-from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role, role_value
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.monitoring.metrics.audit import record_audit_write_failure_safely
 from autobot_shared.status_enums import CommandRisk
+from command_run_policy import CommandRunPolicy
 from config import get_config_manager
 from secure_command_executor import CommandSecurityPolicy, SecureCommandExecutor
+from security_layer_roles import DEPRECATED_PRIVILEGED_ROLES, _normalise_role, canonical_role_permissions
 from services.audit.audit import emit_security, query_filtered
 from services.audit.taxonomy import AuditCategory, AuditFilter
+from utils.command_utils import execute_shell_command
 
 logger = get_logger(__name__)
 
 #: ``resource_type`` of every audit event this layer records, so its own view
 #: (``get_audit_entries``) reads back exactly what it wrote (#17225 D6).
 SECURITY_LAYER_SOURCE = "security_layer"
-
-# Performance optimization: O(1) lookup for deprecated privileged roles (Issue #326)
-DEPRECATED_PRIVILEGED_ROLES = {"god", "superuser", "root"}
 
 # Performance optimization: O(1) lookup for security checks (Issue #326)
 HIGH_RISK_COMMAND_RISKS = {CommandRisk.HIGH, CommandRisk.MODERATE}
@@ -57,58 +55,6 @@ def _to_layer_entry(event: Dict[str, Any]) -> Dict[str, Any]:
 async def _layer_entries(flt: AuditFilter, limit: int) -> List[Dict[str, Any]]:
     """Newest-first entries matching *flt*, in the layer's entry shape."""
     return [_to_layer_entry(e) for e in await query_filtered(flt, limit=limit)]
-
-
-def _normalise_role(user_role: str) -> str:
-    """Canonical spelling of a role, for every lookup that keys on one (#13820).
-
-    Deprecated privileged aliases resolve to ``admin`` here too. ``check_permission``
-    already downgrades them via ``_handle_deprecated_role``, but the approval gate
-    did not — so ``god`` cleared the shell-execution check through the downgrade
-    and then found an empty permission list in ``_should_force_approval``, where no
-    approval branch could fire. A HIGH-risk command therefore ran unapproved.
-    Pre-existing; fixed here because this change makes the two gates share a
-    resolver, and leaving one of them out is what created the gap in the first
-    place. The audit entry stays with ``_handle_deprecated_role`` so a downgrade is
-    still logged exactly once.
-
-    Takes the role string via ``role_value`` so a ``Role`` **member** normalises
-    to its value rather than to ``"role.admin"`` (#14944).
-    """
-    normalised = role_value(user_role).strip().lower()
-    return Role.ADMIN.value if normalised in DEPRECATED_PRIVILEGED_ROLES else normalised
-
-
-@lru_cache(maxsize=64)
-def canonical_role_permissions(user_role: str) -> List[str]:
-    """Permission values ``user_role`` holds in ``ROLE_PERMISSIONS`` (#13820).
-
-    Case-insensitive, because every other role check in this codebase is and a
-    role arriving as ``"Admin"`` must not resolve to nothing. ``check_permission``
-    normalises once for *all* its sources, so this and the configured/default
-    lookups always agree on who a role is — a normalisation applied to one source
-    of three creates a second identity that holds some grants and not others.
-
-    ``superadmin`` (#13854) resolves to admin's grants: its ``ROLE_PERMISSIONS``
-    entry is derived from admin's (#19125, owner decision 2026-10-21), and every
-    path agrees because one mapping says so.
-
-    An unrecognised role yields ``[]`` — no grant, and no exception either.
-
-    A ``Role`` member resolves the same as its value (#14944); it previously
-    stringified to ``"role.admin"`` and yielded ``[]``. Note this function is
-    ``lru_cache``d and a member does NOT share a cache entry with its value
-    (``lru_cache`` fast-paths exact ``str`` only), so the two were cached
-    separately and the wrong answer was deterministic, not call-order dependent.
-    """
-    normalised = role_value(user_role).strip().lower()
-    if not normalised:
-        return []
-    try:
-        role = Role(normalised)
-    except ValueError:
-        return []
-    return [p.value if isinstance(p, Permission) else str(p) for p in ROLE_PERMISSIONS.get(role, [])]
 
 
 class SecurityLayer:
@@ -578,8 +524,10 @@ class SecurityLayer:
             details={"command": command, "role": user_role, "force_approval": force_approval},
         )
 
-    async def _execute_basic_command(self, command: str) -> Dict[str, Any]:
+    async def _execute_basic_command(self, command: str, policy: CommandRunPolicy | None = None) -> Dict[str, Any]:
         """Execute command without security controls (fallback mode). Issue #620."""
+        if policy is not None:
+            return {**await execute_shell_command(command, policy), "security": {"enabled": False}}
         process = await asyncio.create_subprocess_shell(
             command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
@@ -601,29 +549,37 @@ class SecurityLayer:
             details={"command": command, "return_code": result["return_code"], "security": result.get("security", {})},
         )
 
-    async def execute_command(self, command: str, user: str, user_role: str) -> Dict[str, Any]:
+    async def execute_command(
+        self, command: str, user: str, user_role: str, policy: CommandRunPolicy | None = None
+    ) -> Dict[str, Any]:
         """Execute a command with security checks and audit logging.
 
         Args:
             command: Command to execute
             user: Username executing the command
             user_role: Role of the user
+            policy: Limits for an unattended caller (#19807): timeout, output cap,
+                working directory, refuse-instead-of-wait for approval, and the
+                redactor applied to every place the command is recorded.
 
         Returns:
             Execution result with security information
         """
+        shown = command if policy is None else policy.show(command)
         if not self.check_permission(user_role, "allow_shell_execute"):
-            return self._create_permission_denied_result(command, user, user_role)
+            return self._create_permission_denied_result(shown, user, user_role)
 
         force_approval = self._should_force_approval(command, user_role)
-        self._log_command_attempt(command, user, user_role, force_approval)
+        self._log_command_attempt(shown, user, user_role, force_approval)
 
         if self.enable_command_security:
-            result = await self.command_executor.run_shell_command(command, force_approval=force_approval)
+            result = await self.command_executor.run_shell_command(
+                command, force_approval=force_approval, policy=policy
+            )
         else:
-            result = await self._execute_basic_command(command)
+            result = await self._execute_basic_command(command, policy)
 
-        self._log_command_complete(command, user, result)
+        self._log_command_complete(shown, user, result)
         return result
 
     # =========================================================================

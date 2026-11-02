@@ -32,13 +32,13 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable, Dict, FrozenSet
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.secret_redaction import REDACTED_PLACEHOLDER
 from constants.threshold_constants import TimingConstants
 from monitoring.prometheus_metrics import get_metrics_manager
 from orchestration.success_criteria import SuccessCriteriaEvaluator
 from services.workflow_secret_service import get_workflow_secret_service
 from type_defs.common import Metadata
 
+from .command_step import run_command_step, secret_value_redactor
 from .models import (
     ActiveWorkflow,
     PlanApprovalMode,
@@ -506,7 +506,7 @@ class WorkflowExecutor:
         """
         logger.error("Step execution failed: %s", error)
         current_step.status = WorkflowStepStatus.FAILED
-        current_step.execution_result = {"error": str(error)}
+        current_step.execution_result = {"error": str(error), **getattr(error, "result", {})}
 
         self._record_step_metric("failed", current_step.step_type)
 
@@ -603,7 +603,7 @@ class WorkflowExecutor:
         else:
             # Issue #2159: Wrap execution in per-step timeout enforcer
             result = await self._timeout_enforcer.run_with_timeout(
-                coro=self._execute_command(workflow.session_id, resolved_command),
+                coro=self._execute_command(workflow, resolved_command, secret_value_redactor(owner_id, resolved_names)),
                 step_id=step_id,
                 timeout_seconds=current_step.timeout_seconds,
                 limits=self.limits,
@@ -669,25 +669,16 @@ class WorkflowExecutor:
             await asyncio.sleep(TimingConstants.STANDARD_DELAY)
             await self.process_next_step(workflow, workflows)
 
-    async def _execute_command(self, session_id: str, command: str) -> Metadata:
-        """Execute command via terminal session.
+    async def _execute_command(
+        self, workflow: ActiveWorkflow, command: str, value_redactor: Callable[[str], str]
+    ) -> Metadata:
+        """Run a command step through the security layer (#19807).
 
-        Note: *command* received here has already had ${secrets.NAME} tokens
-        resolved by the caller.  Do NOT log the command — it may contain live
-        credential values. (Issue #2153)
+        *command* has had ${secrets.NAME} resolved: never log or return it. (#2153)
         """
-        # Integrates with the terminal WebSocket system when wired up; simulated for now.
-        logger.info("Executing workflow step (session=%s)", session_id)
-
-        await asyncio.sleep(TimingConstants.STANDARD_DELAY)
-
-        return {
-            "command": REDACTED_PLACEHOLDER,
-            "exit_code": 0,
-            "stdout": "Simulated output",
-            "stderr": "",
-            "execution_time": 1.0,
-        }
+        return await run_command_step(
+            command, user=workflow.owner_id, role=workflow.creator_role, value_redactor=value_redactor
+        )
 
     def _record_workflow_completion_metrics(
         self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]
