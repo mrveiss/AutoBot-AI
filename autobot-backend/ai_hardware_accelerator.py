@@ -37,6 +37,7 @@ from constants.threshold_constants import (
 )
 from knowledge.search import map_kb_result_to_dict  # Issue #10740 shared mapper
 from llm_shared.torch_loader import lazy_torch
+from services.npu_worker_routing import npu_worker_urls, post_inference_with_failover
 
 if TYPE_CHECKING:
     import torch as _torch_type  # noqa: F401
@@ -269,8 +270,9 @@ class AIHardwareAccelerator:
             # Use singleton HTTP client for connection pooling
             http_client = get_http_client()
             # NPU worker may be absent — keep probe failures at DEBUG (#9767).
+            urls = await npu_worker_urls(self.npu_worker_url)  # #19706: the worker requests go to first
             async with await http_client.get(
-                f"{self.npu_worker_url}/health",
+                f"{urls[0]}/health",
                 timeout=aiohttp.ClientTimeout(total=5),
                 suppress_error_log=True,
             ) as response:
@@ -564,21 +566,7 @@ class AIHardwareAccelerator:
             "timeout_seconds": task.timeout_seconds,
         }
 
-        # Use singleton HTTP client for connection pooling
-        http_client = get_http_client()
-        async with await http_client.post(
-            f"{self.npu_worker_url}/inference",
-            json=request_data,
-            timeout=aiohttp.ClientTimeout(total=task.timeout_seconds),
-        ) as response:
-            if response.status == 200:
-                result_data = await response.json()
-                if result_data.get("status") == "completed":
-                    return result_data.get("result", {})
-                else:
-                    raise Exception(f"NPU processing failed: {result_data.get('error')}")
-            else:
-                raise Exception(f"NPU Worker HTTP error: {response.status}")
+        return await post_inference_with_failover(self.npu_worker_url, request_data, task.timeout_seconds)
 
     def _get_optimal_npu_model(self, task: ProcessingTask) -> str:
         """Get optimal NPU model for task."""
