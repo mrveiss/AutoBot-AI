@@ -85,6 +85,12 @@ def _load_helpers_from_roles():
     compose_stub._SELF_MANAGED_NODE_IDS = set()
     sys.modules["services.compose_fleet"] = compose_stub
 
+    # #19706: FleetHealthResponse names this model, so it has to be a real one
+    class _RoleNodeHealth(pydantic.BaseModel):
+        role: str
+
+    sys.modules["services.role_nodes"] = MagicMock(RoleNodeHealth=_RoleNodeHealth)
+
     spec = importlib.util.spec_from_file_location("_roles_fh_test", roles_py)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

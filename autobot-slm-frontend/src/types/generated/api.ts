@@ -9615,6 +9615,11 @@ export interface components {
             optional_down: string[];
             /** Required Down */
             required_down: string[];
+            /**
+             * Roles With Nodes Down
+             * @default []
+             */
+            roles_with_nodes_down?: components["schemas"]["RoleNodeHealth"][];
         } & {
             [key: string]: unknown;
         };
@@ -12454,6 +12459,18 @@ export interface components {
             roles: components["schemas"]["RoleInfo"][];
         } & {
             [key: string]: unknown;
+        };
+        /**
+         * RoleNodeHealth
+         * @description A multi-node role with at least one of its nodes down.
+         */
+        RoleNodeHealth: {
+            /** Nodes Down */
+            nodes_down: string[];
+            /** Nodes Up */
+            nodes_up: string[];
+            /** Role */
+            role: string;
         };
         /**
          * RolePurgeRequest

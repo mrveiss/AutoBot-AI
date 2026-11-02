@@ -339,9 +339,9 @@ export function useSlmApi() {
     return response.data.roles
   }
 
-  async function getRoleOwners(): Promise<Record<string, string>> {
-    const response = await client.get<{ owners: Record<string, string> }>('/roles/owners')
-    return response.data.owners
+  async function getRoleOwners(): Promise<Record<string, string>> { // #19706: a multi-node role has no one owner
+    const { owners, multi_node_roles: multi } = (await client.get<{ owners: Record<string, string[]>; multi_node_roles: string[] }>('/roles/owners')).data
+    return Object.fromEntries(Object.entries(owners).filter(([role]) => !multi.includes(role)).map(([role, nodes]) => [role, nodes[0]]))
   }
 
   // Deployments

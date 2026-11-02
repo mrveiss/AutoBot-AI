@@ -428,6 +428,7 @@ _INFRA_ROLES = [
     },
     {
         "name": "autobot_shared",
+        "multi_node": True,
         "display_name": "Shared Library",
         "sync_type": SyncType.PACKAGE.value,
         "source_paths": ["autobot_shared/"],
@@ -447,6 +448,7 @@ _INFRA_ROLES = [
     },
     {
         "name": "slm-agent",
+        "multi_node": True,
         "display_name": "SLM Agent",
         "sync_type": SyncType.COMPONENT.value,
         "source_paths": ["autobot-slm-backend/slm/agent/"],
@@ -632,8 +634,8 @@ async def list_roles(db: AsyncSession) -> List[Role]:
     return list(result.scalars().all())
 
 
-# Infra roles allowed on multiple nodes simultaneously (#1389)
-MULTI_NODE_ROLES = {"autobot_shared", "slm-agent"}
+# Roles allowed on several nodes at once: the role's own "multi_node" flag (#1389, #19706).
+MULTI_NODE_ROLES = frozenset(r["name"] for r in DEFAULT_ROLES if r.get("multi_node"))
 
 # Control-plane roles (#12083): the slm_server group in _SLM_ROLES, already brought
 # current by update-all's slm_self_update stage (its Ansible run targets
@@ -652,7 +654,7 @@ async def check_role_uniqueness(
     """Check if a role is already assigned to another node (#1389).
 
     Returns the node_id that currently owns the role, or None if available.
-    Infra roles (autobot_shared, slm-agent) are exempt.
+    Roles flagged multi_node are exempt.
     """
     if role_name in MULTI_NODE_ROLES:
         return None
@@ -666,23 +668,7 @@ async def check_role_uniqueness(
             NodeRole.status.in_(["active", "installed", "not_installed"]),
         )
     )
-    return result.scalar_one_or_none()
-
-
-async def get_role_owners(db: AsyncSession) -> Dict[str, str]:
-    """Return mapping of role_name -> node_id for all assigned roles (#1389).
-
-    Only includes non-infra roles with active/installed status.
-    """
-    from models.database import NodeRole
-
-    result = await db.execute(
-        select(NodeRole.role_name, NodeRole.node_id).where(
-            NodeRole.role_name.notin_(list(MULTI_NODE_ROLES)),
-            NodeRole.status.in_(["active", "installed", "not_installed"]),
-        )
-    )
-    return {row.role_name: row.node_id for row in result.all()}
+    return result.scalars().first()
 
 
 async def get_role_definitions() -> List[Dict]:

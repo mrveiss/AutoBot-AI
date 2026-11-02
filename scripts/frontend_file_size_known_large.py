@@ -179,7 +179,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-frontend/src/views/DeploymentsView.vue": 1614,  # #18819 + #14777: 1703 -> 1623; #20003: -> 1614
     "autobot-slm-frontend/src/views/FleetOverview.vue": 708,  # #14780: 786 -> 708
     "autobot-slm-frontend/src/views/MaintenanceView.vue": 790,  # #14777 batch 2: 817 -> 794; #20003: -> 790
-    "autobot-slm-frontend/src/views/OrchestrationView.vue": 2189,
+    "autobot-slm-frontend/src/views/OrchestrationView.vue": 2184,
     "autobot-slm-frontend/src/views/ReplicationView.vue": 699,  # #18819 + #14777: 731 -> 706
     "autobot-slm-frontend/src/views/SecurityView.vue": 1368,  # #14780 BasePagination: 1386 -> 1374
     "autobot-slm-frontend/src/views/SetupWizardView.vue": 1790,
