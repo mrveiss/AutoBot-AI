@@ -90,9 +90,7 @@ TYPE_NAME_ALLOWLIST = {
 # Kit component forks that predate the guard (#14776). SHRINK-ONLY: each is
 # retired by the slice named in the Refined UI step-3 plan, and the entry is
 # then removed here (a stale entry fails the hook). Never add to this dict.
-KIT_FORK_GRANDFATHER = {
-    "EmptyState": "autobot-frontend/src/components/ui/EmptyState.vue",
-}
+KIT_FORK_GRANDFATHER: dict[str, str] = {}
 KIT_COMPONENTS_DIR = "libs/autobot-ui/src/components"
 KIT_PACKAGE = "@autobot/ui"
 
