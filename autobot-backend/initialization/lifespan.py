@@ -552,7 +552,6 @@ async def _init_transcriber_db(app: FastAPI) -> None:
     injection layer (``transcriber.deps.get_transcriber_db_from_request``).
     """
     import os
-    from pathlib import Path as _Path
 
     enabled = os.getenv("TRANSCRIBER_ENABLED", "true").lower() == "true"
     if not enabled:
@@ -560,19 +559,17 @@ async def _init_transcriber_db(app: FastAPI) -> None:
         return
     try:
         from transcriber.database import Database
+        from transcriber.upload_security import get_upload_base_dir, transcriber_data_dir
 
-        # Resolve to an absolute path: ``create_recording`` rejects relative
-        # filepaths, and relying on cwd is fragile across launch contexts
-        # (GH#12310 — every upload 500'd because the default was relative).
-        data_dir = _Path(os.getenv("TRANSCRIBER_DATA_DIR", "data/transcriber")).resolve()
+        data_dir = transcriber_data_dir()
         data_dir.mkdir(parents=True, exist_ok=True)
-        (data_dir / "uploads").mkdir(exist_ok=True)
+        upload_dir = get_upload_base_dir()  # the one the path guard allows (#19823)
         (data_dir / "processed").mkdir(exist_ok=True)
         (data_dir / "exports").mkdir(exist_ok=True)
         db = Database(str(data_dir / "transcriber.db"))
         await db.connect()
         app.state.transcriber_db = db
-        app.state.transcriber_upload_dir = str(data_dir / "uploads")
+        app.state.transcriber_upload_dir = str(upload_dir)
         app.state.transcriber_export_dir = str(data_dir / "exports")
         logger.info("Transcriber DB initialized")
     except Exception as _tc_err:
