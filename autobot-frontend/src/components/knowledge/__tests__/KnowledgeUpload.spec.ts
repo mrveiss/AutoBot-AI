@@ -25,7 +25,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { mount, type VueWrapper } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createTestingPinia } from '@pinia/testing'
 import { nextTick } from 'vue'
 
@@ -44,6 +44,11 @@ vi.mock('vue-i18n', () => ({
 // Controllers / composables replaced with lightweight stubs
 vi.mock('@/models/controllers', () => ({
   useKnowledgeController: vi.fn()
+}))
+
+// #19712: the limit comes from the backend; this one is what the size tests below measure against.
+vi.mock('@/utils/ApiClient', () => ({
+  default: { get: () => Promise.resolve({ max_mb: 10 }) }
 }))
 
 vi.mock('@/composables/knowledge/useKnowledgeIcons', () => ({
@@ -297,6 +302,7 @@ describe('KnowledgeUpload — file upload section', () => {
 
   it('sets an error alert when a file exceeds the 10 MB limit', async () => {
     const wrapper = mountKnowledgeUpload(controllerMock, progressMock)
+    await flushPromises()
 
     // 10 MB + 1 byte
     await selectFiles(wrapper, [makeFile('big.txt', 10 * 1024 * 1024 + 1)])
@@ -309,6 +315,7 @@ describe('KnowledgeUpload — file upload section', () => {
 
   it('accepts a file exactly at the 10 MB limit', async () => {
     const wrapper = mountKnowledgeUpload(controllerMock, progressMock)
+    await flushPromises()
 
     await selectFiles(wrapper, [makeFile('exact.txt', 10 * 1024 * 1024)])
 
