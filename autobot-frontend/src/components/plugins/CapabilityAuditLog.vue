@@ -162,7 +162,7 @@ onMounted(() => {
 
 .audit-header h2 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -179,7 +179,7 @@ onMounted(() => {
   border-radius: var(--radius-md);
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   min-width: 200px;
 }
 

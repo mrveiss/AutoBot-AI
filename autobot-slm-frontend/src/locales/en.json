@@ -1522,6 +1522,204 @@
       "pendingFor": "{n} pending for {name}",
       "sentBy": "from {names}",
       "waitsForIdle": "{who} waits for {target} to go idle"
+    },
+    "validationDashboard": {
+      "title": "Validation dashboard",
+      "subtitle": "System validation status from the main backend: phases, metrics, alerts and recommendations.",
+      "refresh": "Refresh",
+      "generate": "Rebuild HTML dashboard",
+      "generateStarted": "The HTML dashboard is rebuilding in the background. This screen does not show it; the backend serves it on its own dashboard page.",
+      "generateFailed": "The dashboard rebuild did not start.",
+      "loading": "Reading the validation report...",
+      "unavailableTitle": "Validation reporting is not available",
+      "unavailableBody": "The backend answered that its validation report generator is not available. Check that the generator is installed on the backend, then refresh.",
+      "errorTitle": "The validation report could not be read",
+      "errorBody": "The validation report request failed.",
+      "emptyTitle": "No validation phases reported",
+      "emptyBody": "The backend answered, but its report lists no phases yet.",
+      "percent": "{value}%",
+      "yes": "Yes",
+      "no": "No",
+      "outOf": "{done} of {total}",
+      "seconds": "{n} s",
+      "days": "{n} days",
+      "health": {
+        "excellent": "Excellent",
+        "good": "Good",
+        "fair": "Fair",
+        "needs_attention": "Needs attention"
+      },
+      "overview": {
+        "title": "Overview",
+        "measures": "The headline figure measures:",
+        "readAt": "Read {time}"
+      },
+      "stat": {
+        "maturity": "Overall maturity",
+        "health": "System health",
+        "phases": "Phases complete",
+        "capabilities": "Active capabilities",
+        "averageCompletion": "Average completion",
+        "minCompletion": "Lowest completion",
+        "maxCompletion": "Highest completion",
+        "above50": "Phases at 50% or more",
+        "above90": "Phases at 90% or more",
+        "stage": "Development stage",
+        "validationScore": "Validation score",
+        "errorRate": "Error rate",
+        "recentChanges": "Recent changes",
+        "velocity": "Progression velocity",
+        "canProgress": "Can progress",
+        "blocked": "Blocked phases",
+        "refreshInterval": "Dashboard refresh interval",
+        "retention": "Data retention"
+      },
+      "phases": {
+        "title": "Phases",
+        "empty": "No phases reported",
+        "notScored": "Not scored",
+        "col": {
+          "phase": "Phase",
+          "status": "Status",
+          "completion": "Completion",
+          "requirements": "Requirements met",
+          "missing": "Missing",
+          "verifiedBy": "Verified by"
+        }
+      },
+      "alerts": {
+        "title": "Alerts ({n})",
+        "empty": "No alerts: the report raised none.",
+        "level": {
+          "critical": "Critical",
+          "warning": "Warning",
+          "info": "Info"
+        }
+      },
+      "recommendations": {
+        "title": "Recommendations ({n})",
+        "empty": "No recommendations: the report made none.",
+        "action": "Next step: {action}",
+        "urgency": {
+          "high": "High",
+          "medium": "Medium",
+          "low": "Low",
+          "info": "Info"
+        }
+      },
+      "trends": {
+        "title": "Trends",
+        "note": "The backend builds these series from a fixed placeholder formula, not from stored history, so they show shape only and are not measurements.",
+        "empty": "The backend sent no trend series",
+        "col": {
+          "series": "Series",
+          "points": "Points",
+          "first": "First",
+          "latest": "Latest"
+        },
+        "series": {
+          "maturity_trend": "Maturity",
+          "phase_completion_trend": "Completed phases",
+          "capability_growth": "Capabilities"
+        }
+      }
+    },
+    "rum": {
+      "title": "Real user monitoring",
+      "subtitle": "What browsers have reported to the main backend: errors, performance and interaction events, and their sessions.",
+      "refresh": "Refresh",
+      "dismiss": "Dismiss",
+      "loading": "Reading real user monitoring...",
+      "errorTitle": "Real user monitoring could not be read",
+      "errorBody": "The real user monitoring status request failed.",
+      "detailFailedTitle": "The collected data could not be read",
+      "detailFailedBody": "The real user monitoring export request failed.",
+      "emptyOnTitle": "Collecting, nothing received yet",
+      "emptyOnBody": "Collection is on and the backend holds no events or sessions yet.",
+      "emptyOffTitle": "Collection is off and nothing is held",
+      "emptyOffBody": "The backend holds no events or sessions. Turn collection on to receive them.",
+      "yes": "Yes",
+      "no": "No",
+      "collection": {
+        "title": "Collection",
+        "switch": "Collect browser events",
+        "on": "On",
+        "off": "Off",
+        "memoryNote": "Events are held in the backend's memory, so a backend restart empties them. Turning collection off keeps what is already held until it is cleared.",
+        "enabledOk": "Collection is on.",
+        "disabledOk": "Collection is off.",
+        "enableFailed": "Collection could not be turned on.",
+        "disableFailed": "Collection could not be turned off."
+      },
+      "stat": {
+        "total_events": "Events held",
+        "total_sessions": "Sessions held",
+        "active_sessions": "Active sessions (last 30 minutes)",
+        "events_today": "Events today"
+      },
+      "settings": {
+        "title": "Collection settings",
+        "label": {
+          "enabled": "Enabled",
+          "error_tracking": "Error tracking",
+          "performance_monitoring": "Performance monitoring",
+          "interaction_tracking": "Interaction tracking",
+          "session_recording": "Session recording",
+          "sample_rate": "Sample rate (%)",
+          "max_events_per_session": "Max events per session",
+          "debug_mode": "Debug mode",
+          "log_to_backend": "Log to backend",
+          "log_level": "Log level"
+        }
+      },
+      "clear": {
+        "title": "Clear collected data",
+        "body": "Removes every event and session the backend holds. This cannot be undone.",
+        "button": "Clear collected data",
+        "confirmTitle": "Clear collected data?",
+        "confirmBody": "This permanently removes {events} events and {sessions} sessions. It cannot be undone.",
+        "confirm": "Clear",
+        "cancel": "Cancel",
+        "done": "Cleared {events} events and {sessions} sessions.",
+        "failed": "The collected data could not be cleared."
+      },
+      "types": {
+        "title": "Events by type",
+        "empty": "No events",
+        "col": {
+          "type": "Type",
+          "count": "Events"
+        }
+      },
+      "sessions": {
+        "title": "Sessions",
+        "empty": "No sessions",
+        "col": {
+          "id": "Session",
+          "url": "First page",
+          "agent": "Browser",
+          "events": "Events",
+          "started": "Started",
+          "last": "Last activity"
+        }
+      },
+      "events": {
+        "title": "Latest events",
+        "empty": "No events",
+        "shown": "Showing the latest {shown} of {total} events held.",
+        "col": {
+          "at": "Received",
+          "type": "Type",
+          "url": "Page",
+          "session": "Session"
+        }
+      },
+      "page": {
+        "previous": "Previous",
+        "next": "Next",
+        "label": "Latest events pages",
+        "summary": "Page {page} of {count}"
+      }
     }
   },
   "monitoringView": {
@@ -1539,7 +1737,9 @@
       "errors": "Errors",
       "backendHealth": "Backend Health",
       "performance": "Performance",
-      "agentLedger": "Agent ledger"
+      "agentLedger": "Agent ledger",
+      "validation": "Validation",
+      "rum": "Real user monitoring"
     }
   },
   "orchestration": {
