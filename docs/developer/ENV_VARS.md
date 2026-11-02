@@ -66,7 +66,7 @@ appears outside the known overlays.
 | `AUTOBOT_AUDIT_DURABLE_TIMEOUT_SECONDS` | knowledge | float | `5.0` | Seconds the awaited audit insert of a knowledge-base admin or superadmin read may take before the write counts as failed and the read is refused with 503; the threat analysis and the Redis projection of that event run in the background and are not bounded by it; read by services/audit/audit.py (#19860). Range: 0.1–60.0. |
 | `AUTOBOT_AUDIT_FILING_STATUS_TTL_S` | backend | int | `2592000` | Seconds the audit worker's filing-health record survives in Redis. Refreshed on every run and at worker startup, so this only has to outlive the longest gap between runs (the claims audit is weekly); it exists so a record left by a worker that has since stopped does not keep answering for one that no longer exists (#13570). |
 | `AUTOBOT_AUDIT_MAX_DEFERRED` | backend | int | `10000` | Ceiling on audit records held in the deferred queue when the sink is unavailable. Beyond it the oldest are dropped, bounding memory rather than letting an outage grow it without limit. |
-| `AUTOBOT_BACKEND_HOST` | backend | str | `'10.0.0.1'` | Hostname or IP address of the AutoBot backend service. |
+| `AUTOBOT_BACKEND_HOST` | backend | str | `'127.0.0.1'` | Hostname or IP address of the AutoBot backend service. |
 | `AUTOBOT_BACKEND_PORT` | backend | str | `'8001'` | TCP port of the AutoBot backend service. |
 | `AUTOBOT_BACKEND_URL` | backend | str | `'http://10.255.255.254:8001'` | Full base URL of the AutoBot backend service (overrides HOST+PORT). |
 | `AUTOBOT_BATCH_LOAD_CONCURRENCY` | backend | int | `5` | How many sub-requests of one POST /api/batch-jobs/load call run at once (api/batch_dispatch.py, #18765). The batch as a whole is bounded by ceil(max_requests / concurrency) * per-sub-request timeout. Clamped to 1..20. Range: 1–20. |
@@ -82,7 +82,7 @@ appears outside the known overlays.
 | `AUTOBOT_CHANNEL_STREAM_KEY_PREFIX` | events | str | `'autobot:events:channel:'` | Redis key prefix for per-channel live-event replay streams. |
 | `AUTOBOT_CHANNEL_STREAM_MAX_ENTRIES` | events | int | `1000` | Events retained per channel for reconnect replay. A client whose last_event_id has fallen outside this window is told to resync rather than handed a partial history. Range: 1–1000000. |
 | `AUTOBOT_CHANNEL_STREAM_TTL_SECONDS` | events | int | `86400` | Idle expiry for a per-channel replay stream, so session and chat channels do not accumulate. Range: 60–2592000. |
-| `AUTOBOT_CHATS_DIRECTORY` | chat | str | `'data/chats'` | Filesystem path where chat session files are stored. |
+| `AUTOBOT_CHATS_DIRECTORY` | chat | str | `""` | Filesystem path where chat session files are stored. |
 | `AUTOBOT_CHAT_ATTACHMENT_EXTRACT_TIMEOUT_SECONDS` | backend | int | `30` | Seconds one attached file may take to yield its text (chat_workflow/limits.py, #20195). Past it the file is reported unreadable and the turn goes on. Minimum 1. Range: 1–None. |
 | `AUTOBOT_CHAT_ATTACHMENT_EXTRACT_WORKERS` | backend | int | `2` | Threads that may extract attached-file text at once (chat_workflow/limits.py, #20195). A thread past its deadline keeps its slot until it finishes; with none free a file is reported unreadable, never queued. Minimum 1. Range: 1–None. |
 | `AUTOBOT_CHAT_ATTACHMENT_MAX_CHARS_PER_FILE` | backend | int | `20000` | Characters of one attached file's text that reach the chat prompt (chat_workflow/limits.py, #20195). The rest is cut and the user is told. Minimum 1. Range: 1–None. |
@@ -377,7 +377,7 @@ appears outside the known overlays.
 | `AUTOBOT_REDIS_DB_ANALYTICS` | redis | int | *(none)* | Redis DB number for analytics data; unset uses redis-databases.yaml (#19232). Range: 0–15. |
 | `AUTOBOT_REDIS_DB_KNOWLEDGE` | redis | int | *(none)* | Redis DB number for knowledge-base vectors; unset uses redis-databases.yaml (#19232). Range: 0–15. |
 | `AUTOBOT_REDIS_DB_MAIN` | redis | int | *(none)* | Redis DB number for primary application data; unset uses redis-databases.yaml (#19232). Range: 0–15. |
-| `AUTOBOT_REDIS_HOST` | redis | str | `'localhost'` | Redis server hostname or IP address. |
+| `AUTOBOT_REDIS_HOST` | redis | str | `'127.0.0.1'` | Redis server hostname or IP address. |
 | `AUTOBOT_REDIS_PASSWORD` | redis | str | *(none)* | Redis AUTH password (omit or leave blank for unauthenticated servers). |
 | `AUTOBOT_REDIS_PORT` | redis | int | `6379` | Redis server TCP port (plain connection). Range: 1–65535. |
 | `AUTOBOT_REDIS_SCAN_COUNT` | knowledge | int | `1000` | COUNT hint for every pattern walk through autobot_shared/redis_scan.py: keys the server examines per SCAN call. redis-py defaults to 10, which turns a 1500-key keyspace into ~150 round trips per walk (#18999). Range: 10–100000. |
