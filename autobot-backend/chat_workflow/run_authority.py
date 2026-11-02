@@ -39,13 +39,18 @@ class Inheritance:
 
     authority: Authority = TOP
     work_item_id: str | None = None
+    approve_every_call: bool = False  # #20195: the parent's turn carries attached files; every child call asks
 
     @classmethod
     def of(cls, parent_ctx: Any) -> Inheritance:
         """The inheritance a run started from *parent_ctx* receives. No parent means nothing is inherited."""
         if parent_ctx is None:
             return cls()
-        return cls(authority=authority_of(parent_ctx), work_item_id=getattr(parent_ctx, "work_item_id", None))
+        return cls(
+            authority=authority_of(parent_ctx),
+            work_item_id=getattr(parent_ctx, "work_item_id", None),
+            approve_every_call=bool(getattr(parent_ctx, "approve_every_call", False)),
+        )
 
 
 #: Nothing inherited: a delegation started with no parent run.
