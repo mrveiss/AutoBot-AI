@@ -19,7 +19,7 @@ name: NPM Package Tests
 
 on:
   push:
-    branches: [release, main, develop]
+    branches: [release, main]
     paths:
       - '.mcp/**'
       - 'autobot-browser-worker/**'
@@ -32,7 +32,7 @@ on:
     # draft == false, and marking a PR ready fires ONLY this event. Without
     # it a required context stays `skipped` and the PR can never merge.
     types: [opened, synchronize, reopened, ready_for_review]
-    branches: [release, main, develop]
+    branches: [release, main]
     # SAFE under #13388: "NPM Package Tests" is not one of the required contexts
     # on main, so this workflow may skip its run entirely. The job-level
     # self-skip below exists so the check still reports a conclusion when the

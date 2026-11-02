@@ -248,6 +248,7 @@ ALLOWED_ADDITIONS = {
             "docs/llc/_index.md",
             # #19459: the disaster-recovery guard reads the runbook for the units it names.
             "docs/operations/disaster-recovery.md",
+            ".github/workflows/dependabot-close-stale.yml",
             # #19611: the playbook-reference guard reads this guide for its declared exemption.
             "docs/guides/slm-docker-ansible-deployment.md",
             # #19279: the landing-page guard reads the page for the libraries and placeholders it renders.
