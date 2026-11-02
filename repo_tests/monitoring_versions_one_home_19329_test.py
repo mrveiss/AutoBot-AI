@@ -95,7 +95,10 @@ def home() -> dict[str, str]:
 
 
 def test_the_home_holds_the_decided_versions() -> None:
-    assert home() == {"prometheus": "2.53.0", "grafana": "11.1.0"}, "maintainer decision 2026-10-26 (#19329)"
+    assert home() == {
+        "prometheus": "2.53.0",
+        "grafana": "11.6.16",
+    }, "maintainer decisions 2026-10-26, #19804; was (#19329)"
 
 
 def test_every_statement_is_a_pinned_copy_equal_to_the_home() -> None:

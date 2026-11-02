@@ -32,7 +32,7 @@ services:
       retries: 3
 
   grafana:
-    image: grafana/grafana:11.1.0
+    image: grafana/grafana:11.6.16
     container_name: autobot-grafana-logs
     ports:
       - "${AUTOBOT_LOKI_BIND_ADDRESS:-127.0.0.1}:3001:3000"  # Different port to avoid conflicts
