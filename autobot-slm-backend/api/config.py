@@ -174,7 +174,7 @@ async def set_global_default(
     await db.commit()
     await db.refresh(config)
 
-    logger.info("Global config '%s' set to '%s'", key, request.value)
+    logger.info("Global config '%s' set", key)
 
     return NodeConfigResponse(
         id=config.id,
@@ -337,7 +337,7 @@ async def set_node_config_key(
     await db.commit()
     await db.refresh(config)
 
-    logger.info("Node %s config '%s' set to '%s'", node_id, key, request.value)
+    logger.info("Node %s config '%s' set", node_id, key)
 
     return NodeConfigResponse(
         id=config.id,
