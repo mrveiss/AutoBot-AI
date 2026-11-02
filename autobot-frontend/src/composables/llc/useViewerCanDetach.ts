@@ -26,7 +26,11 @@ export function mayDetach(viewerRole: string | null | undefined): boolean {
 }
 
 interface MembersApi {
-  get: <T>(url: string) => Promise<T>
+  get: (url: string) => Promise<unknown>
+}
+
+interface MemberStanding {
+  viewer_role?: string | null
 }
 
 export function useViewerCanDetach(api: MembersApi, companyId: Ref<string | null | undefined>) {
@@ -38,7 +42,7 @@ export function useViewerCanDetach(api: MembersApi, companyId: Ref<string | null
     canDetach.value = false
     if (!id) return
     try {
-      const rows = await api.get<{ viewer_role?: string | null }[]>(`/api/llc/companies/${id}/members`)
+      const rows = (await api.get(`/api/llc/companies/${id}/members`)) as MemberStanding[]
       if (mine === seq) canDetach.value = mayDetach(rows[0]?.viewer_role)
     } catch (err) {
       logger.error('Failed to read the viewer standing', err)
