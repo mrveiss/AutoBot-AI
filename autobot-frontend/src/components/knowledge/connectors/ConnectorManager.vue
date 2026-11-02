@@ -17,7 +17,7 @@ import type {
 import ConnectorStatusCard from './ConnectorStatusCard.vue'
 import ConnectorConfigModal from './ConnectorConfigModal.vue'
 import ConnectorHistoryPanel from './ConnectorHistoryPanel.vue'
-import { BaseModal, BaseButton } from '@autobot/ui'
+import { BaseAlert, BaseModal, BaseButton } from '@autobot/ui'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
@@ -34,6 +34,7 @@ const editingConnector = ref<ConnectorConfig | null>(null)
 
 // History modal state
 const showHistoryModal = ref(false)
+const syncNotStarted = ref(false)
 const historyConnectorId = ref<string | null>(null)
 const historyItems = ref<SyncResult[]>([])
 const historyLoading = ref(false)
@@ -87,6 +88,7 @@ function openEdit(id: string) {
 }
 
 async function handleSync(id: string) {
+  syncNotStarted.value = false
   try {
     const result = await knowledgeRepository.syncConnector(id)
     // syncConnector only acks start; real sync result appears in history. (#5204/#5207)
@@ -100,6 +102,7 @@ async function handleSync(id: string) {
     await refreshConnectorStatus(id)
   } catch (error) {
     logger.error('Sync failed for %s: %s', id, error)
+    syncNotStarted.value = true // #20556: a refused sync, for one, must not look like nothing happened
   } finally {
     // Reset the card's syncing spinner
     const card = cardRefs.value[id]
@@ -178,6 +181,7 @@ onMounted(() => {
 
 <template>
   <div class="connector-manager">
+    <BaseAlert v-if="syncNotStarted" variant="warning" :message="t('knowledge.connectors.syncNotStarted')" />
     <!-- Header -->
     <div class="manager-header">
       <div class="header-left">

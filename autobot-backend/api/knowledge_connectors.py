@@ -45,6 +45,7 @@ from knowledge.connectors.credential_store import get_credential_store
 from knowledge.connectors.models import ConnectorConfig
 from knowledge.connectors.registry import ConnectorRegistry
 from knowledge.connectors.scheduler import get_connector_scheduler
+from knowledge.connectors.sync_lease import connector_sync_running, one_sync_per_connector
 from knowledge.schemas.connectors import (
     ConnectorCreateResponse,
     ConnectorDetailResponse,
@@ -334,6 +335,7 @@ async def _load_or_create_instance(cfg: ConnectorConfig):
     return instance
 
 
+@one_sync_per_connector  # #20556
 async def _run_sync_background(connector_id: str, incremental: bool) -> None:
     """Background task: run sync and persist result + last_sync_at."""
     cfg = await _load_connector(connector_id)
@@ -382,9 +384,7 @@ async def _run_sync_background(connector_id: str, incremental: bool) -> None:
         await _append_history(connector_id, history_entry)
 
 
-# ---------------------------------------------------------------------------
-# API endpoints
-# ---------------------------------------------------------------------------
+# --- API endpoints ---
 
 
 @router.get("/knowledge_base/connector_types", response_model=ConnectorTypesResponse)
@@ -733,6 +733,8 @@ async def trigger_sync(
     cfg = await _load_connector(connector_id)
     if cfg is None:
         raise HTTPException(status_code=404, detail=ERR_CONNECTOR_NOT_FOUND)
+    if await connector_sync_running(connector_id):
+        raise HTTPException(status_code=409, detail="This connector is already syncing")
     background_tasks.add_task(_run_sync_background, connector_id, incremental)
     logger.info("Triggered sync for connector %s (incremental=%s)", connector_id, incremental)
     return {
@@ -817,9 +819,7 @@ async def get_connector_job(connector_id: str):
     }
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers (kept short per function-length policy)
-# ---------------------------------------------------------------------------
+# --- Internal helpers (kept short per function-length policy) ---
 
 
 async def _get_status_for_config(cfg: ConnectorConfig) -> Dict[str, Any]:

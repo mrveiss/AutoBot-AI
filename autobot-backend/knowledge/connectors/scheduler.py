@@ -24,6 +24,7 @@ from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_scan import scan_keys
+from knowledge.connectors.sync_lease import ConnectorSyncBusy, connector_sync_lease
 
 logger = get_logger(__name__)
 
@@ -304,7 +305,8 @@ class ConnectorScheduler:
         logger.info("Scheduler triggering sync for connector %s", connector_id)
         started_at = time.monotonic()
         try:
-            result = await connector.sync(incremental=True)
+            async with connector_sync_lease(connector_id):
+                result = await connector.sync(incremental=True)
             logger.info(
                 "Scheduled sync complete: connector=%s status=%s added=%d updated=%d deleted=%d errors=%d",
                 connector_id,
@@ -314,6 +316,8 @@ class ConnectorScheduler:
                 result.deleted,
                 len(result.errors),
             )
+        except ConnectorSyncBusy:
+            logger.info("Scheduled sync skipped: connector %s already has a sync running", connector_id)
         except Exception as exc:
             elapsed = time.monotonic() - started_at
             logger.error("Scheduled sync failed: connector=%s elapsed=%.1fs error=%s", connector_id, elapsed, exc)

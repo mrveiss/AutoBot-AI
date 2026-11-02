@@ -3185,6 +3185,7 @@
       "reasonUnknown": "raison non communiquée"
     },
     "connectors": {
+      "syncNotStarted": "The sync didn't start. This connector may already be syncing; try again when it finishes.",
       "title": "Connecteurs source",
       "addConnector": "Ajouter un connecteur",
       "loadingConnectors": "Chargement des connecteurs...",
