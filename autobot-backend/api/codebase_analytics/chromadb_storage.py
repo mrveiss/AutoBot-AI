@@ -10,12 +10,12 @@ Issue #2013: Decomposed from scanner.py god module.
 
 import asyncio
 import json
-from pathlib import Path
 from typing import Dict, List
 
 from api.codebase_analytics.source_scope import require_source_id
 from autobot_shared.env_utils import blank_to_none
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import chromadb_data_dir
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import decode_redis_value
 from autobot_shared.ssot_config import config
@@ -392,7 +392,7 @@ async def _recreate_chromadb_collection(task_id: str, source_id: str | None = No
     """
     from knowledge.backends import get_async_default_client
 
-    chroma_path = str(Path(__file__).parent.parent.parent.parent / "data" / "chromadb")
+    chroma_path = str(chromadb_data_dir())
     collection_name = "autobot_code"
     collection_meta = {"description": "Codebase analytics: functions, classes, problems, duplicates"}
 
