@@ -5,8 +5,11 @@
 // concept. The frontend analogue of `autobot_shared/store_authority.py`.
 //
 // It lives in code, not in a document, so it is reachable from the import site
-// and readable by the canonical-check rules (autobot-frontend/scripts/canonical)
-// that enforce it. Where this file and any document disagree, this file wins.
+// and readable by the canonical-check rules (autobot-frontend/scripts/canonical).
+// The harness does not enforce this table: its rules check kit file names and
+// import specifiers against frozen baselines and inline waivers.
+// `designSystemOwner()` enforces declared ownership, when a caller invokes it.
+// Where this file and any document disagree, this file wins.
 //
 // Rules, mirroring store_authority:
 //   1. Every concept names its owner, or says in `note` why it has none yet.
@@ -84,7 +87,7 @@ export const AUTHORITY = Object.freeze({
 /** The owning module for `concept`. Throws on a concept the table does not know
  *  and on one with no declared owner -- a silent pass is the defect this prevents. */
 export function designSystemOwner(concept) {
-  const entry = AUTHORITY[concept];
+  const entry = Object.hasOwn(AUTHORITY, concept) ? AUTHORITY[concept] : undefined;
   if (!entry) {
     throw new Error(`design-system concept ${JSON.stringify(concept)} is not declared in AUTHORITY (add it, with an owner or a note)`);
   }

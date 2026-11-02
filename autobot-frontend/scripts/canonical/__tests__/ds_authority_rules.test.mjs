@@ -48,6 +48,38 @@ describe("ds-noncanonical-primitive-import (#17571)", () => {
   });
 });
 
+describe("ds-noncanonical-primitive-import matcher (#17571)", () => {
+  const lines = (text) => imports.findHits(text).map((h) => h.idx + 1);
+
+  it("TRIPS on an import split across lines, reported at the specifier line", () => {
+    expect(lines("import {\n  A,\n} from\n  './BaseCard.vue'\n")).toEqual([3]);
+    expect(lines("import BaseCard\n  from './BaseCard.vue'")).toEqual([2]);
+  });
+
+  it("honours the per-line waiver on a multi-line import's specifier line", () => {
+    expect(lines("import {\n  A,\n} from './BaseCard.vue' // canonical: ignore ds-noncanonical-primitive-import")).toEqual([]);
+  });
+
+  it("ignores // and /* */ comments, trailing and multi-line", () => {
+    expect(lines("// import X from './BaseCard.vue'")).toEqual([]);
+    expect(lines("const a = 1 // import X from './BaseCard.vue'")).toEqual([]);
+    expect(lines("/*\n import X from './BaseCard.vue'\n*/")).toEqual([]);
+    expect(lines("/* a */ import X from './BaseCard.vue'")).toEqual([1]);
+  });
+
+  it("does not treat // inside a string as a comment", () => {
+    expect(lines("const u = 'http://x.test'; import X from './BaseCard.vue'")).toEqual([1]);
+    expect(lines('const u = "https://x.test/a"\nimport X from "./BaseCard.vue"')).toEqual([2]);
+  });
+});
+
+describe("a file that cannot be read is never a clean pass (#17571)", () => {
+  it("both rules rethrow, so main().catch exits 2", async () => {
+    await expect(imports.check(fx("missing", "x.ts"))).rejects.toThrow(/ENOENT/);
+    await expect(second.check(fx("missing", "BaseButton.vue"))).rejects.toThrow(/ENOENT/);
+  });
+});
+
 describe("the baselines are frozen and tight (#17571)", () => {
   it("the whole tree is clean against both baselines -- main stays green", async () => {
     const files = await collectTargetFiles([second, imports]);
@@ -87,6 +119,8 @@ describe("the design-system authority registry (#17571)", () => {
 
   it("fails loudly on an unknown concept and on one with no owner yet", () => {
     expect(() => designSystemOwner("carousel")).toThrow(/not declared/);
+    expect(() => designSystemOwner("toString")).toThrow(/not declared in AUTHORITY/);
+    expect(() => designSystemOwner("constructor")).toThrow(/not declared in AUTHORITY/);
     expect(() => designSystemOwner("graph-renderer")).toThrow(/no canonical owner/);
     expect(designSystemOwner("button")).toBe("libs/autobot-ui/src/components/BaseButton.vue");
   });

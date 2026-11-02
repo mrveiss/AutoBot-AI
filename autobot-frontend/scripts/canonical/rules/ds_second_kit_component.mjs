@@ -1,5 +1,6 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
+import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 
 import { makeDiagnostic } from "../diagnostic.mjs";
@@ -24,13 +25,9 @@ export async function check(filePath) {
   if (!kitComponentFiles().has(name)) return [];
   const rel = relPath(filePath);
   if (readBaseline("ds_second_kit_component.txt").has(rel)) return [];
-  const { readFile } = await import("node:fs/promises");
-  let text = "";
-  try {
-    text = await readFile(filePath, "utf-8");
-  } catch {
-    return [];
-  }
+  // A read that throws is rethrown (main().catch exits 2): returning [] would let a
+  // run exit 0 without having inspected the file.
+  const text = await readFile(filePath, "utf-8");
   if (LINE_WAIVER.test(text)) return [];
   return [
     makeDiagnostic({

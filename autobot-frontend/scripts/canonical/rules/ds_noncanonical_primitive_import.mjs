@@ -20,30 +20,85 @@ export const FIX_HINT =
 
 const LINE_WAIVER = /canonical:\s*ignore\s+ds-noncanonical-primitive-import\b/;
 //: `import X from '...'`, `import { X } from '...'` and `import('...')` forms; only the specifier matters.
-const SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*)(["'])([^"']+\.vue)\1/g;
+//: Run over the whole file (`\s` spans newlines), so a multi-line import is seen.
+const SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*)(["'])([^"'\n]+\.vue)\1/g;
 
-/** Every non-kit import of a kit-named component in `text`. */
+/** `text` with every JS comment blanked to spaces (newlines kept, so offsets and
+ *  line numbers survive). Quoted strings are walked, so `'http://x'` is not a comment. */
+export function blankComments(text) {
+  const token = /\/\/|\/\*|["'`]/g;
+  let out = "";
+  let kept = 0;
+  for (let m = token.exec(text); m; m = token.exec(text)) {
+    if (m[0].length === 1) {
+      token.lastIndex = skipString(text, m.index);
+      continue;
+    }
+    const end = m[0] === "//" ? lineEnd(text, m.index) : endOfBlock(text, m.index);
+    out += text.slice(kept, m.index) + text.slice(m.index, end).replace(/[^\r\n]/g, " ");
+    kept = end;
+    token.lastIndex = end;
+  }
+  return out + text.slice(kept);
+}
+
+const lineEnd = (text, from) => {
+  const nl = text.indexOf("\n", from);
+  return nl < 0 ? text.length : nl;
+};
+
+const endOfBlock = (text, from) => {
+  const close = text.indexOf("*/", from + 2);
+  return close < 0 ? text.length : close + 2;
+};
+
+/** Index just past the string opened at `start`; ' and " stop at a line end, ` does not. */
+function skipString(text, start) {
+  const quote = text[start];
+  for (let k = start + 1; k < text.length; k += 1) {
+    if (text[k] === "\\") k += 1;
+    else if (text[k] === quote) return k + 1;
+    else if (text[k] === "\n" && quote !== "`") return k;
+  }
+  return text.length;
+}
+
+/** Every non-kit import of a kit-named component in `text`, split across lines or not. */
 export function findHits(text) {
   const kit = kitComponentFiles();
+  const lines = text.split(/\r?\n/);
+  const starts = lineStarts(text);
   const hits = [];
-  text.split(/\r?\n/).forEach((line, idx) => {
-    if (LINE_WAIVER.test(line)) return;
-    for (const m of line.matchAll(SPECIFIER)) {
-      const spec = m[2];
-      if (spec.startsWith(KIT_IMPORT_SPECIFIER)) continue;
-      if (kit.has(basename(spec))) hits.push({ idx, col: m.index, line });
-    }
-  });
+  for (const m of blankComments(text).matchAll(SPECIFIER)) {
+    const spec = m[2];
+    if (spec.startsWith(KIT_IMPORT_SPECIFIER) || !kit.has(basename(spec))) continue;
+    const idx = lineOf(starts, m.index);
+    if (LINE_WAIVER.test(lines[idx])) continue;
+    hits.push({ idx, col: m.index - starts[idx], line: lines[idx] });
+  }
   return hits;
 }
 
-export async function check(filePath) {
-  let text;
-  try {
-    text = await readFile(filePath, "utf-8");
-  } catch {
-    return [];
+function lineStarts(text) {
+  const starts = [0];
+  for (let k = 0; k < text.length; k += 1) if (text[k] === "\n") starts.push(k + 1);
+  return starts;
+}
+
+const lineOf = (starts, offset) => {
+  let lo = 0;
+  for (let hi = starts.length - 1; lo < hi; ) {
+    const mid = (lo + hi + 1) >> 1;
+    if (starts[mid] <= offset) lo = mid;
+    else hi = mid - 1;
   }
+  return lo;
+};
+
+export async function check(filePath) {
+  // A read that throws is rethrown (main().catch exits 2): returning [] would let a
+  // run exit 0 without having inspected the file.
+  const text = await readFile(filePath, "utf-8");
   const hits = findHits(text);
   const allowed = readBaseline("ds_noncanonical_primitive_import.txt").get(relPath(filePath)) ?? 0;
   return hits.slice(allowed).map(({ idx, col, line }) =>
