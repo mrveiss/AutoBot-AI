@@ -47,6 +47,7 @@ from fastapi import (
 )
 
 from api.knowledge_office_upload import OFFICE_EXTENSIONS, extract_office_upload, verified_upload_extension
+from api.knowledge_upload_limit import router as upload_limit_router
 from api.schemas_knowledge import (
     AddFactsRequest,
     AddUrlRequest,
@@ -109,6 +110,7 @@ from knowledge.schemas.stats import (
     KnowledgeMainCategoriesResponse,
     KnowledgeStatsBasic,
 )
+from knowledge.upload_limit import MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_MB, reject_oversize_file, reject_oversize_request
 from knowledge.upload_pages import clean_upload_text
 from knowledge.upload_rejections import (
     UploadRejection,
@@ -131,9 +133,6 @@ from utils.path_validation import contains_path_traversal
 # =============================================================================
 
 
-# File upload constants (Issue #549 Code Review)
-MAX_FILE_SIZE_MB = 10
-MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 ALLOWED_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".json", ".csv", ".html"} | OFFICE_EXTENSIONS  # #16775
 
 # Import RAG Agent for enhanced search capabilities
@@ -1197,6 +1196,7 @@ async def upload_file_to_knowledge(
         autobot_kb_degradation_total.labels(endpoint="upload", reason="kb_uninit").inc()
         raise InternalError("Knowledge base not initialized")
 
+    reject_oversize_request(req.headers)
     form = await req.form()
     file = form.get("file")
     if not file or not hasattr(file, "read"):
@@ -1204,10 +1204,9 @@ async def upload_file_to_knowledge(
 
     filename = getattr(file, "filename", None) or ""
     require_safe_kb_name(filename)  # #19088: name and type gate BEFORE the body is read
+    reject_oversize_file(getattr(file, "size", None))
     file_content = await file.read()
-
-    # Validate file upload BEFORE processing (Issue #549 Code Review: Security)
-    _validate_file_upload(filename, len(file_content))
+    _validate_file_upload(filename, len(file_content))  # #549: BEFORE processing
 
     title = form.get("title", "") or filename
     category = form.get("category", "uploads")
@@ -3055,6 +3054,7 @@ async def set_org_model_config(
 from api.knowledge_maintenance import router as maintenance_router
 
 router.include_router(maintenance_router)
+router.include_router(upload_limit_router)
 
 # ===== CONSOLIDATED KNOWLEDGE ROUTERS (Issue #708) =====
 # These routers were previously registered separately in feature_routers.py

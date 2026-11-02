@@ -1,0 +1,116 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""Which NPU workers a request may go to, and in what order (#19706).
+
+The worker registry (``NPUWorkerManager``) knows every paired worker and its health. Requests
+used to go to one configured URL whatever the registry said, so a second worker got no traffic.
+
+Moving a failed POST to the next worker can run the same job twice, for instance after a timeout
+on a worker that is still computing. That costs compute only: embedding, transcription and
+inference return their result and change nothing outside the worker's own cache and counters.
+"""
+
+import time
+from itertools import count, takewhile
+from typing import Any, Dict, Iterator, List, Tuple
+
+import aiohttp
+
+from autobot_shared.egress_allowlist import register_internal_origin_provider
+from autobot_shared.http_client import get_http_client
+from autobot_shared.http_egress_guard import EGRESS_POLICY
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
+
+_request_counter = count()
+
+
+def _spread(workers: List[Any]) -> List[Any]:
+    """Take turns among the workers tied for first place, so equal workers share the traffic."""
+    if not workers:
+        return workers
+
+    def rank(worker: Any) -> tuple:
+        return (worker.status.status, worker.config.priority, worker.status.current_load)
+
+    tied = list(takewhile(lambda w: rank(w) == rank(workers[0]), workers))
+    start = next(_request_counter) % len(tied)
+    return tied[start:] + tied[:start] + workers[len(tied) :]
+
+
+async def _paired_worker_origins() -> List[str]:
+    """Paired workers are internal origins, or the egress guard would refuse all but the configured one."""
+    from services import npu_worker_manager
+
+    manager = npu_worker_manager._worker_manager
+    return [] if manager is None else [w.config.url for w in await manager.get_healthy_workers_sorted()]
+
+
+register_internal_origin_provider(_paired_worker_origins)
+
+
+async def npu_worker_urls(configured_url: str) -> List[str]:
+    """Healthy paired workers in dispatch order, then the configured URL.
+
+    Only the registry this process already runs is read. Starting one here would start its
+    health monitors in every process that embeds text, so such a process keeps using the
+    configured URL. A registry failure must not stop a request the configured URL could serve.
+    """
+    from services import npu_worker_manager
+
+    configured_url = configured_url.rstrip("/")
+    manager = npu_worker_manager._worker_manager
+    if manager is None:
+        return [configured_url]
+    try:
+        workers = await manager.get_healthy_workers_sorted()
+    except Exception as exc:
+        logger.warning("NPU worker registry unreadable, using the configured URL: %s", exc)
+        return [configured_url]
+    urls = [w.config.url.rstrip("/") for w in _spread(workers)]
+    return urls if configured_url in urls else [*urls, configured_url]
+
+
+async def _post_inference(url: str, request_data: Dict[str, Any], timeout_seconds: float) -> Dict[str, Any]:
+    """Run one inference on one worker."""
+    http_client = get_http_client()
+    async with await http_client.post(
+        f"{url}/inference",
+        json=request_data,
+        timeout=aiohttp.ClientTimeout(total=timeout_seconds),
+        guard_egress=EGRESS_POLICY,
+    ) as response:
+        if response.status != 200:
+            raise RuntimeError(f"NPU Worker HTTP error: {response.status}")
+        result_data = await response.json()
+    if result_data.get("status") != "completed":
+        raise RuntimeError(f"NPU processing failed: {result_data.get('error')}")
+    return result_data.get("result", {})
+
+
+def worker_attempts(urls: List[str], total_seconds: float) -> Iterator[Tuple[str, float]]:
+    """Each worker with the time left, so a hung worker cannot multiply the caller's timeout."""
+    deadline = time.monotonic() + total_seconds
+    for url in urls:
+        left = deadline - time.monotonic()
+        if left <= 0:
+            logger.warning("NPU request ran out of time before trying %s", url)
+            return
+        yield url, left
+
+
+async def post_inference_with_failover(
+    configured_url: str, request_data: Dict[str, Any], timeout_seconds: float
+) -> Dict[str, Any]:
+    """Run an inference on the first worker that completes it; raise the last error if none does."""
+    last_error: Exception = TimeoutError("NPU inference ran out of time")
+    for url, left in worker_attempts(await npu_worker_urls(configured_url), timeout_seconds):
+        try:
+            return await _post_inference(url, request_data, left)
+        except Exception as exc:
+            logger.warning("NPU worker %s failed: %s", url, exc)
+            last_error = exc
+    raise last_error
