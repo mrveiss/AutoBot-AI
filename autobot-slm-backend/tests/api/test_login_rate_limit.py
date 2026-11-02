@@ -26,6 +26,7 @@ class _CountingLimiter:
     def __init__(self, limit: int) -> None:
         self.limit = limit
         self.seen: Counter = Counter()
+        self.fail_open_count = 0
 
     async def acquire(self, key: str) -> bool:
         self.seen[key] += 1
@@ -123,7 +124,7 @@ async def test_username_case_and_padding_share_one_bucket(module) -> None:
 def test_the_module_carries_no_limit_numbers() -> None:
     text = (_BACKEND / "api" / "login_rate_limit.py").read_text(encoding="utf-8")
     assert "requests_per_minute" not in text and "requests_per_hour" not in text
-    assert text.count('default_tier="anonymous"') == 2
+    assert text.count('default_tier="') == 3
 
 
 def _nginx_request(peer: str, forwarded_for: str):
@@ -155,3 +156,90 @@ async def test_one_client_does_not_lock_out_another_behind_the_slm_nginx(module)
     with pytest.raises(HTTPException):
         await module.enforce_login_rate_limit(db, first, "alice2", **limiters)
     await module.enforce_login_rate_limit(db, second, "bob", **limiters)
+
+
+@pytest.mark.asyncio
+async def test_a_refused_ip_does_not_charge_the_username_bucket(module) -> None:
+    """One attacker IP exhausted on its own cannot lock a real user's name out (#20600)."""
+    from fastapi import HTTPException
+
+    limiters = {"ip_limiter": _CountingLimiter(1), "username_limiter": _CountingLimiter(2)}
+    db = MagicMock(commit=AsyncMock())
+    await module.enforce_login_rate_limit(db, "192.0.2.66", "admin", **limiters)
+    for _ in range(10):
+        with pytest.raises(HTTPException):
+            await module.enforce_login_rate_limit(db, "192.0.2.66", "admin", **limiters)
+    assert limiters["username_limiter"].seen["username:admin"] == 1
+    # The real admin, from another address, is still let in.
+    await module.enforce_login_rate_limit(db, "198.51.100.1", "admin", **limiters)
+
+
+@pytest.mark.asyncio
+async def test_unknown_addresses_share_a_loose_bucket_and_are_still_held_by_the_username(module) -> None:
+    from fastapi import HTTPException
+
+    unknown = _CountingLimiter(100)
+    limiters = {
+        "ip_limiter": _CountingLimiter(1),
+        "username_limiter": _CountingLimiter(2),
+        "unknown_ip_limiter": unknown,
+    }
+    db = MagicMock(commit=AsyncMock())
+    for name in ("a", "b", "c"):  # unknown clients do not lock each other out
+        await module.enforce_login_rate_limit(db, None, name, **limiters)
+    assert limiters["ip_limiter"].seen == Counter()
+    assert unknown.seen["ip:unknown"] == 3
+    # Having no address does not escape the per-username limit.
+    await module.enforce_login_rate_limit(db, None, "victim", **limiters)
+    await module.enforce_login_rate_limit(db, None, "victim", **limiters)
+    with pytest.raises(HTTPException):
+        await module.enforce_login_rate_limit(db, None, "victim", **limiters)
+
+
+@pytest.mark.asyncio
+async def test_fail_open_is_logged_loudly_and_login_still_allowed(module, caplog) -> None:
+    class _FailOpen(_CountingLimiter):
+        async def acquire(self, key: str) -> bool:
+            self.fail_open_count += 1
+            return True
+
+    limiters = {"ip_limiter": _FailOpen(1), "username_limiter": _FailOpen(1)}
+    db = MagicMock(commit=AsyncMock())
+    with caplog.at_level("ERROR"):
+        await module.enforce_login_rate_limit(db, "192.0.2.1", "alice", **limiters)
+    assert any("FAILED OPEN" in r.message and r.levelname == "ERROR" for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_audit_rows_are_bounded_in_a_flood(module, monkeypatch) -> None:
+    from fastapi import HTTPException
+
+    limiters = {"ip_limiter": _CountingLimiter(0), "username_limiter": _CountingLimiter(100)}
+    db = MagicMock(commit=AsyncMock())
+    for _ in range(50):
+        with pytest.raises(HTTPException):
+            await module.enforce_login_rate_limit(db, "192.0.2.1", "alice", **limiters)
+    assert module.audit.await_count == 1  # first refusal per bucket per window
+
+    monkeypatch.setattr(module, "AUDIT_MAX_ROWS_PER_WINDOW", 3)
+    for i in range(20):  # many distinct buckets: the global cap holds
+        with pytest.raises(HTTPException):
+            await module.enforce_login_rate_limit(db, f"203.0.113.{i}", "alice", **limiters)
+    assert module.audit.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_a_bucket_is_audited_again_in_the_next_window(module, monkeypatch) -> None:
+    from fastapi import HTTPException
+
+    clock = [1000.0]
+    monkeypatch.setattr(module.time, "monotonic", lambda: clock[0])
+    limiters = {"ip_limiter": _CountingLimiter(0), "username_limiter": _CountingLimiter(100)}
+    db = MagicMock(commit=AsyncMock())
+    for _ in range(3):
+        with pytest.raises(HTTPException):
+            await module.enforce_login_rate_limit(db, "192.0.2.1", "alice", **limiters)
+    clock[0] += module.AUDIT_WINDOW_SECONDS + 1
+    with pytest.raises(HTTPException):
+        await module.enforce_login_rate_limit(db, "192.0.2.1", "alice", **limiters)
+    assert module.audit.await_count == 2

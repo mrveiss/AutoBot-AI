@@ -4,29 +4,61 @@
 # Author: mrveiss
 """Rate limit for ``POST /api/auth/login`` (#20600).
 
-Two buckets, both checked on every attempt: one per client IP (a single source guessing many
-names) and one per username (many sources guessing one name). They are separate keys of the
-shared ``RateLimiter`` that ``api/sso_auth.py`` uses, so a bucket for one username never blocks
-another and neither blocks a different IP. The limits are the shared limiter's ``anonymous``
-tier, read from the SSOT config (``rate_limit_anon_rpm`` / ``rate_limit_anon_rph``) -- this
-module carries no numbers of its own. A refusal is audited as a failed ``auth.login``, as a bad
-password is.
+The SLM is the first thing a user installs and its admin owns the first login, so the limit
+must slow a guesser without becoming a way to lock the real admin out. Design:
+
+* **Per client IP** (``anonymous`` tier, strict): one source guessing many names. A refused
+  attempt is *not* charged to the username bucket, so one source can never push a username
+  over its limit by itself -- locking a name out takes many distinct, un-refused sources.
+* **Per username** (``authenticated`` tier, looser than the IP bucket): many sources guessing
+  one name. The same shape as the LDAP limiter in ``api/sso_auth.py`` (keyed
+  ``username:<name>``) but looser, so a single attacker cannot reach it.
+* **Unknown client address** (no connection info at all -- an omitted ``X-Forwarded-For``
+  never causes this, the TCP peer is always known): there is no address to key on, so these
+  share one bucket in the ``privileged`` tier. They are still held by the username bucket,
+  so a client cannot escape the limit by being anonymous, and the shared bucket is large
+  enough that unknown clients do not lock each other out in normal use.
+* **Way back in**: the shared limiter is a sliding window and refused attempts are not
+  recorded, so every lock lifts by itself -- within a minute of the attack stopping, within
+  the hour window at worst. ``Retry-After`` carries the exact wait. There is no admin reset
+  command; clearing the ``autobot:rl:slm_login_*`` keys in Redis lifts a lock at once.
+* **Redis down**: the limiter fails open (the SLM must let people in), but every such
+  attempt is logged at ERROR and counted (``fail_open_count`` on each limiter).
+* **Audit**: at most one ``auth.login`` row per bucket per window (plus a global cap), the
+  rest only counted in the log, so a flood cannot grow the audit table without bound.
+
+Limits come from the SSOT tiers (``rate_limit_*_rpm`` / ``_rph``); this module carries none.
 """
 
 from __future__ import annotations
 
 import logging
+import time
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.security import create_audit_log
+from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
+AUDIT_WINDOW_SECONDS: float = env_float("SLM_LOGIN_AUDIT_WINDOW_SECONDS", 300.0)
+AUDIT_MAX_ROWS_PER_WINDOW: int = env_int("SLM_LOGIN_AUDIT_MAX_ROWS_PER_WINDOW", 100)
+_AUDIT_MAX_TRACKED_BUCKETS = env_int("SLM_LOGIN_AUDIT_MAX_TRACKED_BUCKETS", 10000)
+
 _ip_limiter = RateLimiter(scope_prefix="slm_login_ip", default_tier="anonymous")
-_username_limiter = RateLimiter(scope_prefix="slm_login_user", default_tier="anonymous")
+_unknown_ip_limiter = RateLimiter(scope_prefix="slm_login_noip", default_tier="privileged")
+_username_limiter = RateLimiter(scope_prefix="slm_login_user", default_tier="authenticated")
+
+# bucket key -> (window start, refusals counted since the last audited one)
+_audit_state: dict[str, tuple[float, int]] = {}
+_global_window: list = [0.0, 0]  # [window start, rows written]
+
+
+def _fail_open_total(*limiters: RateLimiter) -> int:
+    return sum(limiter.fail_open_count for limiter in limiters)
 
 
 async def retry_after_if_refused(
@@ -35,24 +67,54 @@ async def retry_after_if_refused(
     *,
     ip_limiter: RateLimiter = _ip_limiter,
     username_limiter: RateLimiter = _username_limiter,
-) -> int | None:
-    """Return the seconds to wait when this attempt is over a limit, else ``None``.
+    unknown_ip_limiter: RateLimiter = _unknown_ip_limiter,
+) -> tuple[int, str] | None:
+    """Return ``(seconds to wait, refused bucket key)`` when over a limit, else ``None``."""
+    before = _fail_open_total(ip_limiter, username_limiter, unknown_ip_limiter)
+    result = await _check_buckets(client_ip, username, ip_limiter, username_limiter, unknown_ip_limiter)
+    failed_open = _fail_open_total(ip_limiter, username_limiter, unknown_ip_limiter) - before
+    if failed_open:
+        logger.error(
+            "Login rate limiter FAILED OPEN: Redis unavailable or erroring, login allowed unthrottled "
+            "(this attempt: %d, since start: %d)",
+            failed_open,
+            _fail_open_total(ip_limiter, username_limiter, unknown_ip_limiter),
+        )
+    return result
 
-    Both buckets are always charged, so an attacker cannot probe one bucket for free by
-    exhausting the other first.
-    """
-    ip_key = f"ip:{client_ip or 'unknown'}"
+
+async def _check_buckets(
+    client_ip: str | None,
+    username: str,
+    ip_limiter: RateLimiter,
+    username_limiter: RateLimiter,
+    unknown_ip_limiter: RateLimiter,
+) -> tuple[int, str] | None:
+    limiter, ip_key = (ip_limiter, f"ip:{client_ip}") if client_ip else (unknown_ip_limiter, "ip:unknown")
+    if not await limiter.acquire(ip_key):
+        return await limiter.get_retry_after_seconds(ip_key), ip_key
     user_key = f"username:{username.strip().lower()}"
-    ip_ok = await ip_limiter.acquire(ip_key)
-    user_ok = await username_limiter.acquire(user_key)
-    if ip_ok and user_ok:
-        return None
-    waits = []
-    if not ip_ok:
-        waits.append(await ip_limiter.get_retry_after_seconds(ip_key))
-    if not user_ok:
-        waits.append(await username_limiter.get_retry_after_seconds(user_key))
-    return max(waits)
+    if not await username_limiter.acquire(user_key):
+        return await username_limiter.get_retry_after_seconds(user_key), user_key
+    return None
+
+
+def _audit_decision(bucket: str, now: float) -> tuple[bool, int]:
+    """Return ``(write an audit row, refusals suppressed since the last row)`` for *bucket*."""
+    if now - _global_window[0] >= AUDIT_WINDOW_SECONDS:
+        _global_window[:] = [now, 0]
+    start, suppressed = _audit_state.get(bucket, (None, 0))
+    if start is not None and now - start < AUDIT_WINDOW_SECONDS:
+        _audit_state[bucket] = (start, suppressed + 1)
+        return False, suppressed + 1
+    if len(_audit_state) >= _AUDIT_MAX_TRACKED_BUCKETS:
+        for key in [k for k, (t, _) in _audit_state.items() if now - t >= AUDIT_WINDOW_SECONDS]:
+            del _audit_state[key]
+    if _global_window[1] >= AUDIT_MAX_ROWS_PER_WINDOW or len(_audit_state) >= _AUDIT_MAX_TRACKED_BUCKETS:
+        return False, suppressed
+    _audit_state[bucket] = (now, 0)
+    _global_window[1] += 1
+    return True, suppressed
 
 
 async def enforce_login_rate_limit(
@@ -61,11 +123,28 @@ async def enforce_login_rate_limit(
     username: str,
     **limiters: RateLimiter,
 ) -> None:
-    """Raise 429 (with ``Retry-After``) and audit the refusal when the attempt is over a limit."""
-    retry_after = await retry_after_if_refused(client_ip, username, **limiters)
-    if retry_after is None:
+    """Raise 429 (with ``Retry-After``) when over a limit; audit the first refusal per bucket per window."""
+    refused = await retry_after_if_refused(client_ip, username, **limiters)
+    if refused is None:
         return
-    logger.warning("Login rate limit exceeded", extra={"retry_after": retry_after})
+    retry_after, bucket = refused
+    write_row, suppressed = _audit_decision(bucket, time.monotonic())
+    logger.warning(
+        "Login rate limit exceeded (audited=%s, refusals not audited in this window=%d)",
+        write_row,
+        suppressed,
+        extra={"retry_after": retry_after},
+    )
+    if write_row:
+        await _audit_refusal(audit_db, client_ip, username)
+    raise HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail="Too many requests. Please try again later.",
+        headers={"Retry-After": str(retry_after)},
+    )
+
+
+async def _audit_refusal(audit_db: AsyncSession, client_ip: str | None, username: str) -> None:
     await create_audit_log(
         audit_db,
         category="authentication",
@@ -81,8 +160,3 @@ async def enforce_login_rate_limit(
         error_message="Rate limit exceeded",
     )
     await audit_db.commit()
-    raise HTTPException(
-        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-        detail="Too many requests. Please try again later.",
-        headers={"Retry-After": str(retry_after)},
-    )
