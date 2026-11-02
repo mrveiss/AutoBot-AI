@@ -209,16 +209,12 @@ class SprintKbSummarizer:
 
         try:
             kb = await get_knowledge_base()
-            col = await kb._async_chroma_client.get_collection(collection_name)
+            # #19725: a sprint with no KB writes has no collection, and that's an empty sprint, not a failure.
+            col = await kb._async_chroma_client.get_collection_or_none(collection_name)
+            if col is None:
+                return []
             raw = await col.get(include=["documents", "metadatas", "embeddings"])
         except Exception as exc:
-            exc_msg = str(exc).lower()
-            if "not found" in exc_msg or "does not exist" in exc_msg:
-                logger.info(
-                    "Collection %s does not exist; treating as empty",
-                    collection_name,
-                )
-                return []
             logger.error(
                 "Failed to fetch documents from %s: %s — archive will be skipped",
                 collection_name,
