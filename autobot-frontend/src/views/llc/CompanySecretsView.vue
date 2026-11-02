@@ -234,7 +234,7 @@ onMounted(() => void loadSecrets())
 }
 
 .view-title {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -261,7 +261,7 @@ onMounted(() => void loadSecrets())
 .secrets-grid {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .secrets-grid th {
@@ -289,14 +289,14 @@ onMounted(() => void loadSecrets())
 }
 
 .secret-actor {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
 .status-badge {
   display: inline-block;
   padding: 0.125rem 0.5rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   border-radius: 999px;
 }
@@ -318,7 +318,7 @@ onMounted(() => void loadSecrets())
 
 .btn-primary {
   padding: 0.4375rem 0.875rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   border: none;
   border-radius: var(--radius-md);
@@ -355,7 +355,7 @@ onMounted(() => void loadSecrets())
 .btn-close {
   border: none;
   background: none;
-  font-size: 1rem;
+  font-size: var(--text-base);
   cursor: pointer;
   color: var(--text-muted);
 }
@@ -403,7 +403,7 @@ onMounted(() => void loadSecrets())
 
 .field input {
   padding: 0.4375rem 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 400;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-default);
@@ -418,7 +418,7 @@ onMounted(() => void loadSecrets())
 
 .field-hint {
   font-weight: 400;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 

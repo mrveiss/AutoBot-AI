@@ -206,7 +206,7 @@ const DURATION_OPTIONS = { style: 'msCompound' } as const
 }
 
 .task-description {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-1, oklch(0.2 0 0));
   margin: 0;
@@ -225,7 +225,7 @@ const DURATION_OPTIONS = { style: 'msCompound' } as const
   gap: 0.375rem;
   padding: 0.25rem 0.75rem;
   border-radius: 0.375rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
@@ -276,7 +276,7 @@ const DURATION_OPTIONS = { style: 'msCompound' } as const
 }
 
 .metadata-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -319,7 +319,7 @@ const DURATION_OPTIONS = { style: 'msCompound' } as const
 }
 
 .section-header h4 {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   margin: 0;
   color: var(--text-1, oklch(0.2 0 0));
@@ -344,7 +344,7 @@ const DURATION_OPTIONS = { style: 'msCompound' } as const
   background-color: oklch(1 0 0);
   border-radius: 0.25rem;
   font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .abstention-reason strong {
@@ -358,7 +358,7 @@ const DURATION_OPTIONS = { style: 'msCompound' } as const
   background-color: oklch(1 0 0);
   border-radius: 0.25rem;
   font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-2, oklch(0.3 0 0));
   overflow-x: auto;
 }
@@ -383,7 +383,7 @@ const DURATION_OPTIONS = { style: 'msCompound' } as const
   padding: 0.5rem 0.75rem;
   border: 1px solid oklch(0.75 0.06 240);
   border-radius: 0.25rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-family: inherit;
   resize: vertical;
   background-color: oklch(1 0 0);
@@ -397,7 +397,7 @@ const DURATION_OPTIONS = { style: 'msCompound' } as const
 .steering-btn {
   padding: 0.5rem 1rem;
   border-radius: 0.25rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   background-color: oklch(0.5 0.12 240);
   color: oklch(1 0 0);
