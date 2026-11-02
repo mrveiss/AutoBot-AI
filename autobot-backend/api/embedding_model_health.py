@@ -96,6 +96,8 @@ async def _embedding_model_health_probe(request: Request | None = None) -> Compo
     _schedule_refresh(model)
     measured = _last_probe.get(model)
     data["embedding_measured"] = measured is not None
+    if measured:  # so a caller can tell a measurement from a cached one (#20447)
+        data["embedding_measured_age_s"] = round(time.monotonic() - measured[0], 3)
     if measured and measured[1] is not None:
         return ComponentHealth(
             name=KnownProbes.EMBEDDING_MODEL,

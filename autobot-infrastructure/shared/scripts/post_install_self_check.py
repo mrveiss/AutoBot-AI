@@ -41,7 +41,9 @@ EMBEDDING_PROBE = "embedding_model"
 CHAT_ERROR_REPLY = "I encountered an error processing your message"
 REQUEST_TIMEOUT_S = 180
 KIND_SCRIPT_TIMEOUT_S = 300
-EMBEDDING_WAIT_S = 120
+#: A cached measurement is refused, so this waits out the backend's probe cache: its default 300 s
+#: time to live, plus its 60 s timeout. Straight after a restart there's nothing cached and it's quick.
+EMBEDDING_WAIT_S = 420
 EMBEDDING_POLL_S = 5
 FAILING_KINDS = ("WRONG-KIND", "MISSING-EMBEDDING", "SHOW-FAILED", "UNKNOWN", "UNREACHABLE")
 
@@ -62,14 +64,15 @@ class Result:
     got: str = ""
 
 
-def _request(url: str, payload: Optional[dict] = None, token: str = "", method: str = "") -> Tuple[int, str]:
+def _request(
+    url: str, payload: Optional[dict] = None, token: str = "", method: str = "", cafile: Optional[str] = None
+) -> Tuple[int, str]:
     """(status, body); a refused connection or a timeout is status 0, never an exception."""
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
     data = None if payload is None else json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=data, headers=headers, method=method or None)  # nosec B310
-    cafile = os.environ.get("SELF_CHECK_CA_FILE") or None
     context = ssl.create_default_context(cafile=cafile) if url.startswith("https:") else None
     try:
         with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT_S, context=context) as reply:  # nosec B310
@@ -92,58 +95,61 @@ def _json(status: int, body: str, what: str) -> dict:
     return parsed
 
 
-def login(base: str, username: str, password: str) -> str:
+def login(base: str, username: str, password: str, cafile: Optional[str] = None) -> str:
     """The self-check account's token, through the login a browser uses."""
     if not username or not password:
         raise ProbeFailed("the self-check account's credentials", "none in the environment")
-    status, body = _request(f"{base}/api/auth/login", {"username": username, "password": password})
+    status, body = _request(f"{base}/api/auth/login", {"username": username, "password": password}, cafile=cafile)
     token = _json(status, body, "login").get("access_token") or json.loads(body).get("token")
     if not token:
         raise ProbeFailed("a token from login", "a reply with none")
     return token
 
 
-def probe_chat(base: str, token: str, _env: Mapping[str, str]) -> None:
+def probe_chat(base: str, token: str, env: Mapping[str, str]) -> None:
     """The default chat model answers a fixed prompt, in a session of its own that is deleted afterwards."""
-    status, body = _request(f"{base}/api/chat/sessions", {"title": "self-check"}, token)
+    cafile = env.get("SELF_CHECK_CA_FILE") or None
+    status, body = _request(f"{base}/api/chat/sessions", {"title": "self-check"}, token, cafile=cafile)
     session_id = (_json(status, body, "session create").get("data") or {}).get("id")
     if not session_id:
         raise ProbeFailed("a session id", body[:300])
     try:
-        status, body = _request(f"{base}/api/chat", {"content": CHAT_PROMPT, "session_id": session_id}, token)
+        status, body = _request(f"{base}/api/chat", {"content": CHAT_PROMPT, "session_id": session_id}, token, cafile=cafile)
         content = str((_json(status, body, "chat").get("data") or {}).get("content", "")).strip()
         if not content or content.startswith(CHAT_ERROR_REPLY):
             raise ProbeFailed("a real answer from chat", body[:300])
     except ProbeFailed as chat_failure:
         try:
-            _delete_session(base, token, session_id)
+            _delete_session(base, token, session_id, cafile)
         except ProbeFailed as leftover:  # the chat failure is the finding; the leftover is added to it
             chat_failure.got += f"; also: {leftover.got}"
         raise
-    _delete_session(base, token, session_id)
+    _delete_session(base, token, session_id, cafile)
 
 
-def _delete_session(base: str, token: str, session_id: str) -> None:
-    status, body = _request(f"{base}/api/chat/sessions/{session_id}", None, token, method="DELETE")
+def _delete_session(base: str, token: str, session_id: str, cafile: Optional[str]) -> None:
+    status, body = _request(f"{base}/api/chat/sessions/{session_id}", None, token, method="DELETE", cafile=cafile)
     if status != 200:
         raise ProbeFailed("the self-check's chat session deleted", f"HTTP {status}: {body[:300]}")
 
 
-def probe_embeddings(base: str, _token: str, _env: Mapping[str, str], sleep: Callable[[float], None] = time.sleep) -> None:
+def probe_embeddings(base: str, _token: str, env: Mapping[str, str], sleep: Callable[[float], None] = time.sleep) -> None:
     """The backend's own probe has embedded for real, read from the public health route, whose ``probes`` carry it."""
-    deadline = time.monotonic() + EMBEDDING_WAIT_S
+    started = time.monotonic()
+    deadline = started + EMBEDDING_WAIT_S
     while True:
-        status, body = _request(f"{base}/api/system/health")
+        status, body = _request(f"{base}/api/system/health", cafile=env.get("SELF_CHECK_CA_FILE") or None)
         probes = _json(status, body, "health").get("probes") or []
         component = next((p for p in probes if isinstance(p, dict) and p.get("name") == EMBEDDING_PROBE), None)
         if component is None:
             raise ProbeFailed(f"a {EMBEDDING_PROBE} health probe", "none in the reply")
         if component.get("status") != "ok":
             raise ProbeFailed("the embedding model to embed", str(component.get("detail")))
-        if (component.get("data") or {}).get("embedding_measured"):
+        age = (component.get("data") or {}).get("embedding_measured_age_s")
+        if age is not None and age <= time.monotonic() - started:  # measured since this check began
             return
         if time.monotonic() >= deadline:
-            raise ProbeFailed("a measured embedding", f"none within {EMBEDDING_WAIT_S}s")
+            raise ProbeFailed("an embedding measured during this check", f"none within {EMBEDDING_WAIT_S}s")
         sleep(EMBEDDING_POLL_S)
 
 
@@ -208,17 +214,23 @@ def main(env: Mapping[str, str] = os.environ, probes: Optional[dict] = None) -> 
     try:
         if not base:
             raise ProbeFailed("SELF_CHECK_BASE_URL", "unset")
-        token = login(base, env.get("SELF_CHECK_USERNAME", ""), env.get("SELF_CHECK_PASSWORD", ""))
+        cafile = env.get("SELF_CHECK_CA_FILE") or None
+        token = login(base, env.get("SELF_CHECK_USERNAME", ""), env.get("SELF_CHECK_PASSWORD", ""), cafile)
         results = run_probes(base, token, env, probes)
     except ProbeFailed as exc:
         results = [Result("login", False, exc.expected, exc.got)]
-    if env.get("SELF_CHECK_REPORT"):
-        write_report(env["SELF_CHECK_REPORT"], env.get("SELF_CHECK_COMMIT", ""), results)
     for r in results:
         sys.stdout.write(f"{'PASS' if r.passed else 'FAIL'} {r.probe}" + ("" if r.passed else f": expected {r.expected}; got {r.got}") + "\n")
     if not results:
         sys.stdout.write("FAIL no probe ran, so nothing was examined\n")
-    return 0 if results and all(r.passed for r in results) else 1
+    passed = bool(results) and all(r.passed for r in results)
+    if env.get("SELF_CHECK_REPORT"):
+        try:  # the outcomes are already out; losing the file must not read as a pass
+            write_report(env["SELF_CHECK_REPORT"], env.get("SELF_CHECK_COMMIT", ""), results)
+        except OSError as exc:
+            sys.stdout.write(f"FAIL report: could not write it: {exc}\n")
+            passed = False
+    return 0 if passed else 1
 
 
 if __name__ == "__main__":

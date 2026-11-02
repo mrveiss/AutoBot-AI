@@ -37,7 +37,11 @@ def _health(probe: dict | None) -> tuple:
     return 200, {"status": "ok", "components": {"backend": "ok", "embedding_model": "ok"}, "probes": probes}
 
 
-_MEASURED = {"name": "embedding_model", "status": "ok", "data": {"embedding_measured": True}}
+_MEASURED = {
+    "name": "embedding_model",
+    "status": "ok",
+    "data": {"embedding_measured": True, "embedding_measured_age_s": 0},
+}
 
 
 def _healthy() -> dict:
@@ -167,6 +171,44 @@ def test_an_embedding_never_measured_fails_rather_than_passing_unexamined(stack,
     monkeypatch.setattr(check, "EMBEDDING_WAIT_S", 0)
     assert check.main(_env(base, tmp_path)) == 1
     assert "measured" in _failed(tmp_path)["embeddings"]["expected"]
+
+
+def test_a_measurement_cached_from_before_this_check_is_not_a_pass(stack, tmp_path: Path, monkeypatch) -> None:
+    """The cache can say "ok" for minutes after embedding started failing."""
+    base, replies, _ = stack
+    replies["/api/system/health"] = _health(
+        {
+            "name": "embedding_model",
+            "status": "ok",
+            "data": {"embedding_measured": True, "embedding_measured_age_s": 200},
+        }
+    )
+    monkeypatch.setattr(check, "EMBEDDING_WAIT_S", 0)
+    assert check.main(_env(base, tmp_path)) == 1
+    assert "during this check" in _failed(tmp_path)["embeddings"]["expected"]
+
+
+def test_the_ca_file_comes_from_the_environment_it_was_given(stack, tmp_path: Path, monkeypatch) -> None:
+    base, _, _ = stack
+    used = []
+    real = check._request
+
+    def spy(*args, **kwargs):
+        used.append(kwargs.get("cafile"))
+        return real(*args, **{**kwargs, "cafile": None})
+
+    monkeypatch.setattr(check, "_request", spy)
+    monkeypatch.delenv("SELF_CHECK_CA_FILE", raising=False)
+    assert check.main({**_env(base, tmp_path), "SELF_CHECK_CA_FILE": "/given/ca.pem"}) == 0
+    assert used and set(used) == {"/given/ca.pem"}
+
+
+def test_an_unwritable_report_still_prints_the_outcomes_and_fails(stack, tmp_path: Path, capsys) -> None:
+    base, _, _ = stack
+    env = {**_env(base, tmp_path), "SELF_CHECK_REPORT": str(tmp_path / "missing" / "report.json")}
+    assert check.main(env) == 1
+    out = capsys.readouterr().out
+    assert "PASS chat" in out and "FAIL report" in out
 
 
 def test_the_chat_fallback_reply_is_not_an_answer(stack, tmp_path: Path) -> None:
