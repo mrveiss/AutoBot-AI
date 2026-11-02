@@ -7,7 +7,8 @@
 Agents never change a line. The proposer (``services.ai_line_change_proposal``) files an approval
 whose context names this action; nothing is written until a PERSON approves it, and on approval
 this handler is the only caller of ``llc.services.ai_lines.record_approved_line``. It REFUSES, with a
-durable comment, when:
+durable comment, on the list below; the checks on who decides also run before the decision commits, so a
+refused decider leaves the request pending. It refuses when:
 
 * the approval carries no scope, or a malformed key or line;
 * the approval was not decided by a person who is an owner or admin of THAT company -- the
@@ -81,6 +82,12 @@ async def _scope_and_review(
     )
 
 
+async def _review_decider(approval: "Approval", session: "AsyncSession") -> bool:
+    """True for a flagged self-approval; raises when this decider may not decide the change."""
+    _scope, self_approval = await _scope_and_review(approval, session, verified_decider(approval))
+    return self_approval
+
+
 async def execute_line_change(approval: "Approval", session: "AsyncSession") -> None:
     """Apply the approved line. Raises (recorded by the dispatcher) when it must not."""
     ctx = approval.context or {}
@@ -105,4 +112,6 @@ async def execute_line_change(approval: "Approval", session: "AsyncSession") -> 
 
 def register_ai_line_change_action() -> None:
     """Register the handler; called when the approval-gates router loads, before any approve()."""
-    register_post_approval_action(ACTION, execute_line_change, proposed_by=PROPOSED_BY, server_only=True)
+    register_post_approval_action(
+        ACTION, execute_line_change, proposed_by=PROPOSED_BY, server_only=True, review=_review_decider
+    )

@@ -23,8 +23,14 @@
           </select>
         </template>
       </BaseFormField>
+      <div v-if="!loadingProjects && projectsFailed" class="flex flex-col items-start gap-2">
+        <BaseAlert variant="error" :message="t('llc.backlog.projectsLoadFailed')" />
+        <BaseButton variant="outline" size="sm" data-testid="retry-projects" @click="emit('retry-projects')">
+          {{ t('common.retry') }}
+        </BaseButton>
+      </div>
       <BaseAlert
-        v-if="!loadingProjects && projects.length === 0"
+        v-else-if="!loadingProjects && projects.length === 0"
         variant="error"
         :message="t('llc.backlog.noProjectsHint')"
       />
@@ -71,6 +77,7 @@
             <span v-else>✨ {{ t('llc.backlog.suggestAcs') }}</span>
           </BaseButton>
         </div>
+        <BaseAlert v-if="suggestFailed" variant="error" :message="t('llc.backlog.suggestAcsFailed')" />
         <div v-if="suggestedACs.length > 0" class="flex flex-col gap-1.5 p-2 rounded-md border border-autobot-border bg-autobot-bg-card">
           <label
             v-for="(ac, i) in suggestedACs"
@@ -114,9 +121,14 @@ const props = defineProps<{
   companyId: string
   projects: ProjectOpt[]
   loadingProjects: boolean
+  projectsFailed?: boolean
   defaultProjectId: string
 }>()
-const emit = defineEmits<{ (e: 'close'): void; (e: 'created', item: WorkItem): void }>()
+const emit = defineEmits<{
+  (e: 'close'): void
+  (e: 'created', item: WorkItem): void
+  (e: 'retry-projects'): void
+}>()
 
 const logger = createLogger('BacklogCreateModal')
 const api = useApiClient()
@@ -132,6 +144,7 @@ const newItem = ref(blankItem(props.defaultProjectId))
 const isCreating = ref(false)
 const createError = ref('')
 const isSuggestingAC = ref(false)
+const suggestFailed = ref(false)
 const suggestedACs = ref<{ text: string; selected: boolean }[]>([])
 
 // BaseInput speaks strings; the API wants a number or null.
@@ -142,12 +155,19 @@ const storyPoints = computed({
 
 const canCreate = computed(() => !!newItem.value.title && !!newItem.value.project_id && !isCreating.value)
 
-// Prefill from the backlog's project filter each time the form opens, so a
-// project listed after the form is already open can still be the default.
+// Prefill from the backlog's project filter each time the form opens: a Cancel
+// keeps the form's state, and the earlier choice must not outlive it.
 watch(
-  () => [props.modelValue, props.projects.length] as const,
-  ([open]) => {
-    if (open && !newItem.value.project_id) newItem.value.project_id = props.defaultProjectId
+  () => props.modelValue,
+  (open) => {
+    if (open) newItem.value.project_id = props.defaultProjectId
+  },
+)
+// A project listed after the form is already open can still be the default.
+watch(
+  () => props.projects.length,
+  () => {
+    if (props.modelValue && !newItem.value.project_id) newItem.value.project_id = props.defaultProjectId
   },
 )
 
@@ -157,6 +177,7 @@ watch(
 async function suggestAC() {
   if (!newItem.value.title) return
   isSuggestingAC.value = true
+  suggestFailed.value = false
   try {
     const res = await api.post<{ suggestions: string[] }>(`/api/llc/work-items/suggest-ac`, {
       title: newItem.value.title,
@@ -166,6 +187,7 @@ async function suggestAC() {
   } catch (err) {
     logger.error('AC suggestion failed', err)
     suggestedACs.value = []
+    suggestFailed.value = true
   } finally {
     isSuggestingAC.value = false
   }

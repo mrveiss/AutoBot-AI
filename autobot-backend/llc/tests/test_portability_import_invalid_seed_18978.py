@@ -44,3 +44,29 @@ async def test_an_invalid_seed_type_or_priority_is_a_validation_error_and_rolls_
         await svc.execute_import(_template(**bad))
     savepoint.rollback.assert_awaited_once()
     savepoint.commit.assert_not_awaited()
+
+
+async def _seed_placement(*names: object) -> tuple[list, dict, list]:
+    items = [{"is_seed": True, "title": f"s{i}", "project_id": name} for i, name in enumerate(names)]
+    place = AsyncMock(return_value=uuid.uuid4())
+    created, skipped, warnings = {"work_items": []}, {"work_items": []}, []
+    with patch.object(PortabilityService, "_import_work_item", new=place):
+        await PortabilityService(session=MagicMock())._import_seed_items(
+            {"work_items": items}, uuid.uuid4(), {"p1": "dest-1", "p2": "dest-2"}, created, skipped, warnings
+        )
+    return [call.args[2] for call in place.await_args_list], skipped, warnings
+
+
+@pytest.mark.asyncio
+async def test_a_seed_goes_to_the_project_it_names_and_one_naming_none_to_the_first() -> None:
+    placed, skipped, warnings = await _seed_placement("p2", None)
+    assert placed == ["dest-2", "dest-1"]
+    assert (skipped["work_items"], warnings) == ([], [])
+
+
+@pytest.mark.asyncio
+async def test_a_seed_naming_a_project_that_was_not_imported_is_skipped_not_moved() -> None:
+    placed, skipped, warnings = await _seed_placement("gone")
+    assert placed == []
+    assert skipped["work_items"] == ["s0"]
+    assert warnings == ["Work item 's0' skipped: the project it names was not imported"]

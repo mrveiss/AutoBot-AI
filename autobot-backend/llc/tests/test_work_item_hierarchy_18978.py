@@ -32,6 +32,7 @@ from llc.services.work_item_hierarchy import (
     ProjectRequired,
     count_items_without_project,
     find_hierarchy_violations,
+    parent_if_allowed,
 )
 from llc.services.work_item_service import WorkItemService
 from llc.tests import _e2e_harness as harness
@@ -370,3 +371,10 @@ async def test_recovery_for_a_stuck_item_with_no_project_falls_back_to_the_compa
     old = await _legacy(session, T.TASK)
     bug = await _recovery_bug(session, old)
     assert str(bug.project_id) == older
+
+
+async def test_a_system_made_item_keeps_a_projectless_parent_when_it_brings_a_project(session):
+    old_pbi = await _legacy(session, T.PBI)
+    get = WorkItemService().get
+    assert await parent_if_allowed(session, get, COMPANY, T.TASK, str(old_pbi.id), PROJECT) == str(old_pbi.id)
+    assert await parent_if_allowed(session, get, COMPANY, T.TASK, str(old_pbi.id)) is None

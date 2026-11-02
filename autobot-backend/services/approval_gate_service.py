@@ -24,6 +24,7 @@ from autobot_shared.time_utils import now_utc
 from models.approval import Approval, ApprovalComment, ApprovalStatus, TaskApprovalLink
 from services.approval_execution import (
     resume_decided_approval,
+    review_decision,
     run_post_approval_actions,
     set_verified_decider,
 )
@@ -128,9 +129,10 @@ class ApprovalGateService:
         ``decider_id`` is the authenticated person's user id (#18430); handlers that care who decided compare it,
         never ``decided_by`` (a display name).
 
-        The transition itself commits first; ``run_post_approval_actions``
-        cannot fail the approval decision, only what happens after it.
+        A decider the action refuses raises here and the approval stays pending (#18978). The transition then
+        commits first; ``run_post_approval_actions`` cannot fail the approval decision, only what happens after it.
         """
+        await self._review_decider(approval_id, decider_id)
         approval = await self._transition(
             approval_id,
             ApprovalStatus.APPROVED,
@@ -464,6 +466,15 @@ class ApprovalGateService:
         approval = await self._get_or_raise(approval_id)
         await self.session.refresh(approval)
         return approval
+
+    async def _review_decider(self, approval_id: uuid.UUID, decider_id: uuid.UUID | None) -> None:
+        """The action's check on who decides, in the transaction the transition commits: its locks hold until then."""
+        approval = await self._get_or_raise(approval_id)
+        try:
+            await review_decision(approval, self.session, decider_id)
+        except Exception:
+            await self.session.rollback()
+            raise
 
     async def _transition(
         self,

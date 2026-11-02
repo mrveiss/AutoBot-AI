@@ -119,3 +119,13 @@ def test_no_migration_drops_it_on_an_update() -> None:
 
 def test_the_application_does_not_map_the_column() -> None:
     assert "subscription_tier" not in Organization.__table__.columns
+
+
+@pytest.mark.asyncio
+async def test_the_decider_check_runs_before_the_decision_commits() -> None:
+    """Registered as the action's review, so a refused decider leaves the proposal pending rather than approved."""
+    action.register_tier_column_action()
+    approval = _approval(_ADMIN, _ADMIN)
+    approval.context = {"action": action.ACTION}
+    with pytest.raises(ValueError):
+        await approval_execution.review_decision(approval, _session(admins=(_ADMIN, _OTHER)), _ADMIN)

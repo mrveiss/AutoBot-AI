@@ -181,20 +181,21 @@ class PortabilityImportMixin:
         skipped: Dict[str, Any],
         warnings: List[str],
     ) -> None:
-        """Import the template's seed items, each into the project it names or else the first imported one.
+        """Import the template's seed items, each into the project it names; one naming none goes to the first.
 
-        Every work item needs a project; a template with none cannot place its seeds, and says so.
+        Every work item needs a project, so a seed that cannot be placed is skipped, and the import says so. One
+        whose named project was not imported is never moved to an unrelated project.
         """
         fallback = next(iter(project_ids.values()), None)
         for item in template.get("work_items", []):
             if not item.get("is_seed"):
                 continue
-            project_id = project_ids.get(str(item.get("project_id"))) or fallback
+            named = item.get("project_id")
+            project_id = project_ids.get(str(named)) if named else fallback
             if project_id is None:
+                reason = "the project it names was not imported" if named else "the template has no project for it"
                 skipped["work_items"].append(item.get("title", ""))
-                warnings.append(
-                    f"Work item {item.get('title', '')!r} skipped: the template has no project to place it in"
-                )
+                warnings.append(f"Work item {item.get('title', '')!r} skipped: {reason}")
                 continue
             item_id = await self._import_work_item(item, company_id, project_id)
             created_entities["work_items"].append(str(item_id))

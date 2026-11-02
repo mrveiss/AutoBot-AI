@@ -187,12 +187,14 @@ class LivenessMonitor(PollLoopScheduler):
         svc = WorkItemService()
         # #18978: the Bug follows the stuck item's parent only where the hierarchy rules allow it
         # (a stuck Subtask's parent is a Task) and always sits in the stuck item's project.
+        project_id = await _recovery_project(session, work_item, company_id)
         parent_id = await parent_if_allowed(
             session,
             svc.get,
             company_id,
             WorkItemType.BUG,
             str(work_item.parent_id) if work_item and work_item.parent_id else None,
+            project_id,
         )
         try:
             await svc.create(
@@ -204,7 +206,7 @@ class LivenessMonitor(PollLoopScheduler):
                 # Resolve manager via company hierarchy -- default to None (board-visible)
                 assignee_agent_id=await self._resolve_manager(session, company_id, agent_id),
                 parent_id=parent_id,
-                project_id=await _recovery_project(session, work_item, company_id),
+                project_id=project_id,
                 goal_id=str(work_item.goal_id) if work_item and work_item.goal_id else None,
             )
         except HierarchyViolation as exc:

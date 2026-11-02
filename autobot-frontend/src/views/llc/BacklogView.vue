@@ -129,8 +129,10 @@
       :company-id="companyId"
       :projects="projects"
       :loading-projects="isLoadingProjects"
+      :projects-failed="projectsFailed"
       :default-project-id="projectFilterId"
       @close="showCreateForm = false"
+      @retry-projects="loadProjects"
       @created="onItemCreated"
     />
 
@@ -187,6 +189,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
+import { useAssignableProjects } from '@/composables/llc/useAssignableProjects'
 import { createLogger } from '@/utils/debugUtils'
 import WorkItemDetail from './WorkItemDetail.vue'
 import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
@@ -223,13 +226,11 @@ const showBulkAssign = ref(false)
 const isBulkAssigning = ref(false)
 const bulkSprintId = ref('')
 
-interface ProjectOpt { id: string; name: string; lifecycle_state: string }
 interface SprintOpt { id: string; name: string; status: string }
 
-const projects = ref<ProjectOpt[]>([])
+const { projects, isLoadingProjects, projectsFailed, loadProjects } = useAssignableProjects(companyId)
 const sprints = ref<SprintOpt[]>([])
 const selectedProjectId = ref('')
-const isLoadingProjects = ref(false)
 const isLoadingSprints = ref(false)
 
 const filteredItems = computed(() => {
@@ -315,28 +316,15 @@ function openCreateForm() {
   if (projects.value.length === 0) loadProjects()
 }
 
-function onItemCreated(item: WorkItem) {
-  items.value.unshift(item)
+// Refetched, not prepended: the form can pick any project and the list is filtered by the server.
+function onItemCreated() {
   showCreateForm.value = false
+  fetchBacklog()
 }
 
 // Cascade picker for bulk sprint assignment: pick a Project, then a Sprint from
 // that project. Only assignable (non-archived) projects and (open) sprints are
 // offered so a user never needs to paste a raw Sprint UUID (#10853).
-async function loadProjects() {
-  isLoadingProjects.value = true
-  try {
-    const result = await api.get<ProjectOpt[]>(`/api/llc/companies/${companyId.value}/projects`)
-    projects.value = (result ?? []).filter(
-      p => p.lifecycle_state !== 'archived' && p.lifecycle_state !== 'disposed',
-    )
-  } catch (err) {
-    logger.error('Failed to load projects', err)
-  } finally {
-    isLoadingProjects.value = false
-  }
-}
-
 async function onProjectSelect(projectId: string) {
   selectedProjectId.value = projectId
   bulkSprintId.value = ''

@@ -6,7 +6,7 @@
 
 import uuid
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -15,6 +15,12 @@ from llc.services.work_item_service import InvalidTransition, WorkItemService
 
 _ME, _OTHER = uuid.uuid4(), uuid.uuid4()
 _NOW = datetime(2026, 11, 1, tzinfo=timezone.utc)
+
+
+@pytest.fixture(autouse=True)
+def _no_redis():
+    with patch("llc.services.work_item_own_task.get_async_redis_client", new=AsyncMock(return_value=None)):
+        yield
 
 
 def _item(status: WorkItemStatus, *, created_by=None, assignee=None, reviewer=None) -> MagicMock:
@@ -95,3 +101,51 @@ async def test_the_reviewer_finishes_it() -> None:
     item = _item(WorkItemStatus.IN_REVIEW, created_by=_OTHER)
     item.reviewer_user_id = _ME
     assert (await _move(item, WorkItemStatus.DONE, _ME)).status == WorkItemStatus.DONE
+
+
+@pytest.mark.parametrize(
+    ("new_status", "field", "value"),
+    [(WorkItemStatus.READY, "assignee_user_id", "user:{}"), (WorkItemStatus.DONE, "assignee_agent_id", "{}")],
+)
+async def test_the_fence_goes_with_the_checkout_and_only_while_it_names_the_holder(new_status, field, value) -> None:
+    holder = uuid.uuid4()
+    item = _item(WorkItemStatus.IN_PROGRESS, created_by=holder if field == "assignee_user_id" else None)
+    item.assignee_user_id, item.assignee_agent_id = None, None
+    setattr(item, field, holder)
+    redis = MagicMock()
+    with (
+        patch("llc.services.work_item_own_task.get_async_redis_client", new=AsyncMock(return_value=redis)),
+        patch("llc.services.work_item_own_task.delete_if_value", new=AsyncMock()) as release,
+    ):
+        await _move(item, new_status, holder if field == "assignee_user_id" else None)
+    assert item.checkout_locked_at is None
+    release.assert_awaited_once_with(redis, f"llc:checkout:{item.id}", value.format(holder))
+
+
+async def test_a_move_that_keeps_the_checkout_keeps_the_fence() -> None:
+    me = uuid.uuid4()
+    item = _item(WorkItemStatus.READY, assignee=me)
+    with patch("llc.services.work_item_own_task.delete_if_value", new=AsyncMock()) as release:
+        await _move(item, WorkItemStatus.IN_PROGRESS, me)
+    release.assert_not_awaited()
+    assert item.checkout_locked_at == _NOW
+
+
+@pytest.mark.asyncio
+async def test_the_gated_done_path_drops_the_fence_too() -> None:
+    agent = uuid.uuid4()
+    item = _item(WorkItemStatus.IN_REVIEW)
+    item.assignee_user_id, item.assignee_agent_id = None, agent
+    session = MagicMock(flush=AsyncMock())
+    session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: item))
+    redis = MagicMock()
+    with (
+        patch("llc.services.work_item_own_task.get_async_redis_client", new=AsyncMock(return_value=redis)),
+        patch("llc.services.work_item_own_task.delete_if_value", new=AsyncMock()) as release,
+        patch("llc.services.work_item_service.audit", new=AsyncMock()),
+        patch.object(WorkItemService, "_trigger_artifact_ingest", new=AsyncMock()),
+    ):
+        await WorkItemService(activity_log=MagicMock()).transition_to_done(
+            session, str(item.id), str(item.company_id), actor_user_id=str(uuid.uuid4()), is_board_override=True
+        )
+    release.assert_awaited_once_with(redis, f"llc:checkout:{item.id}", str(agent))

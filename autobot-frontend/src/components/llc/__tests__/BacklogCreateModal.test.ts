@@ -129,4 +129,41 @@ describe('BacklogCreateModal (#18978)', () => {
     expect(createButton(w).attributes('disabled')).toBeDefined()
     expect(post).not.toHaveBeenCalled()
   })
+
+  it('reopening after Cancel takes the current filter, not the earlier choice', async () => {
+    const w = mountForm({ defaultProjectId: 'p-1' })
+    await w.find('select').setValue('p-2')
+    await w.setProps({ modelValue: false })
+    await w.setProps({ defaultProjectId: 'p-1', modelValue: true })
+    expect((w.find('select').element as HTMLSelectElement).value).toBe('p-1')
+  })
+
+  it('keeps a choice made in the open form when the project list arrives late', async () => {
+    const w = mountForm({ projects: PROJECTS.slice(0, 1) })
+    await w.find('select').setValue('p-1')
+    await w.setProps({ projects: PROJECTS, defaultProjectId: 'p-2' })
+    expect((w.find('select').element as HTMLSelectElement).value).toBe('p-1')
+  })
+
+  it('tells a failed suggestion request apart from an empty answer', async () => {
+    const w = mountForm()
+    await w.find('input[type="text"]').setValue('T')
+    const suggest = w.findAll('button').find((b) => b.text().includes('llc.backlog.suggestAcs'))!
+    post.mockResolvedValueOnce({ suggestions: [] })
+    await suggest.trigger('click')
+    await flushPromises()
+    expect(w.text()).not.toContain('llc.backlog.suggestAcsFailed')
+    post.mockRejectedValueOnce(new Error('down'))
+    await suggest.trigger('click')
+    await flushPromises()
+    expect(w.text()).toContain('llc.backlog.suggestAcsFailed')
+  })
+
+  it('shows a load failure with a retry, not the no-project hint', async () => {
+    const w = mountForm({ projects: [], projectsFailed: true })
+    expect(w.text()).toContain('llc.backlog.projectsLoadFailed')
+    expect(w.text()).not.toContain('llc.backlog.noProjectsHint')
+    await w.find('[data-testid="retry-projects"]').trigger('click')
+    expect(w.emitted('retry-projects')).toHaveLength(1)
+  })
 })

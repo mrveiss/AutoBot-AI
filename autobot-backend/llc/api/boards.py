@@ -355,4 +355,4 @@ async def move_item(
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=404, detail="Internal server error")
 
-    return _work_item_summary(updated_item)
+    return _work_item_summary(updated_item, body.column_id)

@@ -5,6 +5,7 @@
 
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useNotificationBus } from '@/composables/useNotificationBus'
 import { BaseAlert, BaseButton } from '@autobot/ui'
 import { useApiClient } from '@/plugins/api'
 import { useLiveEvents } from '@/composables/useLiveEvents'
@@ -39,6 +40,7 @@ const api = useApiClient()
 const router = useRouter()
 const live = useLiveEvents()
 const { t } = useI18n()
+const { showToast } = useNotificationBus()
 const { confirm } = useConfirmDialog()
 const { resolveCompanyId } = useLlcCompanyContext()
 
@@ -105,6 +107,7 @@ async function quickApprove(approvalId: string) {
     data.value.approvals = data.value.approvals.filter(a => a.id !== approvalId)
   } catch (err: unknown) {
     logger.error('Quick approve failed', err)
+    showToast(t('llcBrowser.approvals.decideError'), 'error')
   }
 }
 

@@ -60,7 +60,7 @@ from .work_item_actor_role import (  # noqa: F401 -- resolve_actor_role is re-ex
 from .work_item_approval_categories import validated_approval_categories as _validated_approval_categories
 from .work_item_completion_effects import release_workspace_for_task
 from .work_item_hierarchy import reparent, validate_create
-from .work_item_own_task import InvalidTransition, is_own_task, refuse_past_reviewer, stamp_status
+from .work_item_own_task import InvalidTransition, is_own_task, refuse_past_reviewer, stamp_and_release
 from .work_item_relations import WorkItemRelationService
 
 logger = logging.getLogger(__name__)
@@ -791,7 +791,7 @@ class WorkItemService(LLCServiceBase):
             if await svc.has_unresolved_blockers(session, work_item_id, cid):
                 raise InvalidTransition("Cannot move to in_progress: item has unresolved blocked_by relations")
 
-        stamp_status(item, new_status, datetime.now(timezone.utc), own=own)
+        await stamp_and_release(item, new_status, datetime.now(timezone.utc), own=own)
         item.version += 1
         await session.flush()
 
@@ -878,11 +878,7 @@ class WorkItemService(LLCServiceBase):
                     "No HandoffService available to initiate handoff."
                 )
 
-        now = datetime.now(timezone.utc)
-        item.status = WorkItemStatus.DONE
-        item.completed_at = now
-        item.checkout_run_id = None
-        item.checkout_locked_at = None
+        await stamp_and_release(item, WorkItemStatus.DONE, datetime.now(timezone.utc))
         item.version += 1
         await session.flush()
 

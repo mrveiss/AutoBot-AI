@@ -158,13 +158,18 @@ async def validate_create(
 
 
 async def parent_if_allowed(
-    session: AsyncSession, get: ItemGetter, company_id: str, item_type, parent_id: Optional[str]
+    session: AsyncSession,
+    get: ItemGetter,
+    company_id: str,
+    item_type,
+    parent_id: Optional[str],
+    project_id: Optional[str] = None,
 ) -> Optional[str]:
-    """*parent_id* when a new *item_type* may sit under it, else None (for system-made items)."""
+    """*parent_id* when a new *item_type* in *project_id* may sit under it, else None (for system-made items)."""
     if parent_id is None:
         return None
     try:
-        await validate_create(session, get, company_id, item_type, parent_id, None)
+        await validate_create(session, get, company_id, item_type, parent_id, project_id)
     except HierarchyViolation:
         return None
     return parent_id

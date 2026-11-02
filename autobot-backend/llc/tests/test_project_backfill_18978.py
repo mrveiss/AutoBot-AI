@@ -33,12 +33,18 @@ from llc.services.project_backfill import DEFAULT_PROJECT_NAME, preview_project_
 from llc.tests import _e2e_harness as harness
 from models.approval import Approval, ApprovalComment, TaskApprovalLink
 from user_management.models.base import Base
+from user_management.models.user import User
 from user_management.services import TenantContext
 
 COMPANY, OTHER = uuid.uuid4(), uuid.uuid4()
 OWNER, ADMIN2, MEMBER = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
 PROJECT = uuid.uuid4()
 PERSON = {"auth_method": "session"}
+
+
+def _person(user: uuid.UUID) -> User:
+    """The live user behind a membership; four-eyes counts only members who still exist."""
+    return User(id=user, org_id=COMPANY, email=f"{user}@e.test", username=str(user), is_active=True)
 
 
 @pytest_asyncio.fixture
@@ -57,6 +63,7 @@ async def factory():
     async with maker() as session:
         for user, role in ((OWNER, MembershipRole.OWNER), (MEMBER, MembershipRole.MEMBER)):
             session.add(LLCCompanyMembership(id=uuid.uuid4(), company_id=COMPANY, user_id=user, role=role.value))
+            session.add(_person(user))
         session.add(LLCProject(id=PROJECT, company_id=COMPANY, name="Real"))
         await session.commit()
     yield maker
@@ -96,6 +103,7 @@ async def _add_admin(factory, user=ADMIN2):
         session.add(
             LLCCompanyMembership(id=uuid.uuid4(), company_id=COMPANY, user_id=user, role=MembershipRole.ADMIN.value)
         )
+        session.add(_person(user))
         await session.commit()
 
 
@@ -222,11 +230,27 @@ async def test_four_eyes_the_requester_cannot_decide_their_own_request_with_two_
     await _add_admin(factory)
     ids = await _seed(factory)
     approval_id = _request(_client(factory, OWNER)).json()["approval_id"]
-    _decide(_client(factory, OWNER), approval_id)  # the decision is recorded ...
-    assert await _project_of(factory, ids["lone"]) is None  # ... but nothing moved
+    assert _decide(_client(factory, OWNER), approval_id).status_code == 409
+    assert await _project_of(factory, ids["lone"]) is None
     async with factory() as session:
-        comments = (await session.execute(sa.select(ApprovalComment))).scalars().all()
-    assert any("did not complete" in c.body for c in comments)
+        approval = await session.get(Approval, uuid.UUID(approval_id))
+    assert approval.status == "pending"  # still open for the other admin ...
+    assert _decide(_client(factory, ADMIN2), approval_id).status_code == 200
+    assert await _project_of(factory, ids["pbi"]) == PROJECT  # ... whose approval applies it
+
+
+@pytest.mark.asyncio
+async def test_a_second_request_refreshes_what_the_reviewer_reads(factory):
+    await _seed(factory)
+    client = _client(factory, OWNER)
+    approval_id = _request(client).json()["approval_id"]
+    await _item(factory, T.TASK)  # one more item with no project since the first request
+    second = _request(client).json()
+    assert second["approval_id"] == approval_id
+    async with factory() as session:
+        approval = await session.get(Approval, uuid.UUID(approval_id))
+    assert approval.context["preview"]["missing"] == 4
+    assert approval.description.startswith("4 work item(s) have no project")
 
 
 @pytest.mark.asyncio

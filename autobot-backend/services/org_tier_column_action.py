@@ -84,7 +84,9 @@ async def execute_tier_column_drop(approval: "Approval", session: "AsyncSession"
 
 def register_tier_column_action() -> None:
     """Idempotent: re-registering just replaces the same key with an equal handler."""
-    register_post_approval_action(ACTION, execute_tier_column_drop, proposed_by=PROPOSED_BY, server_only=True)
+    register_post_approval_action(
+        ACTION, execute_tier_column_drop, proposed_by=PROPOSED_BY, server_only=True, review=_is_self_approval
+    )
 
 
 __all__ = ["ACTION", "PROPOSED_BY", "column_present", "execute_tier_column_drop", "register_tier_column_action"]

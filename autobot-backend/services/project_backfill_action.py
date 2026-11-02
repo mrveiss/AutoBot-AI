@@ -8,7 +8,8 @@ Nothing is written until a PERSON approves. The proposer (``services.project_bac
 approval whose context names this action and the company; on approval this handler recounts the company's
 rows (it never trusts the preview a person looked at) and performs the backfill in
 ``llc.services.project_backfill``. It REFUSES when the decider is not an owner or admin of that company, or
-when the requester decided their own request while the company has two or more owners/admins (four eyes).
+when the requester decided their own request while the company has two or more owners/admins (four eyes); that
+check also runs before the decision commits, so a refused decider leaves the request pending.
 A second run finds nothing to do and writes an audit row saying so.
 """
 
@@ -34,13 +35,18 @@ ACTION = "llc.project_backfill"
 PROPOSED_BY = "services.project_backfill_proposal"
 
 
+async def _review_decider(approval: "Approval", session: "AsyncSession") -> bool:
+    """True for a flagged self-approval; raises when this decider may not decide the backfill."""
+    decider = verified_decider(approval)  # the authenticated person's id, never parsed from a username
+    await require_company_admin(session, approval.company_id, decider)
+    return await require_four_eyes(approval, session, decider, what="a project backfill")
+
+
 async def execute_project_backfill(approval: "Approval", session: "AsyncSession") -> None:
     """Apply the approved backfill to the approval's company. Raises (recorded by the dispatcher) when it must not."""
     if approval.status != ApprovalStatus.APPROVED.value or approval.company_id is None:
         raise ValueError("not an approved, company-scoped project backfill")
-    decider = verified_decider(approval)  # the authenticated person's id, never parsed from a username
-    await require_company_admin(session, approval.company_id, decider)
-    self_approval = await require_four_eyes(approval, session, decider, what="a project backfill")
+    self_approval = await _review_decider(approval, session)
     counts = await apply_project_backfill(session, approval.company_id)
     note = " (self-approved)" if self_approval else ""
     body = (
@@ -61,4 +67,6 @@ async def execute_project_backfill(approval: "Approval", session: "AsyncSession"
 
 def register_project_backfill_action() -> None:
     """Register the handler; called when the approval routers load, before any approve()."""
-    register_post_approval_action(ACTION, execute_project_backfill, proposed_by=PROPOSED_BY, server_only=True)
+    register_post_approval_action(
+        ACTION, execute_project_backfill, proposed_by=PROPOSED_BY, server_only=True, review=_review_decider
+    )

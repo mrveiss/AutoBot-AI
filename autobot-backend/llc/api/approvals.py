@@ -231,8 +231,8 @@ async def decide_approval(
     if body.decision == ApprovalStatus.APPROVED:
         # #18430: this route decided an approval without ever running what it proposed. Same dispatcher as
         # the generic route, but ONLY for the AI-line change and the project backfill (#18978: both server-only,
-        # both refuse a non-admin decider): approvals here are self-created with arbitrary payloads, and running
-        # any registered action from one is the #17161 class.
+        # and svc.decide above already refused a decider they do not allow): approvals here are self-created
+        # with arbitrary payloads, and running any registered action from one is the #17161 class.
         set_verified_decider(approval, decided_by)  # the verified caller (ctx.user_id), see _verified_decider
         await run_post_approval_actions(
             approval, session, only=frozenset({LINE_CHANGE_ACTION, PROJECT_BACKFILL_ACTION})
