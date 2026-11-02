@@ -128,6 +128,9 @@ class AuditAction(str, Enum):
     ORG_UPDATE = "org.update"
     ORG_DELETE = "org.delete"
     ORG_SUBSCRIPTION_TIER_DROP = "org.subscription_tier.drop"
+    NODE_SSH_PASSWORD_DELETE = (
+        "node.ssh_password.delete"  # nosec B105  # pragma: allowlist secret -- #20046: an action name
+    )
     ROLE_CREATE = "role.create"
     ROLE_UPDATE = "role.update"
     ROLE_DELETE = "role.delete"
