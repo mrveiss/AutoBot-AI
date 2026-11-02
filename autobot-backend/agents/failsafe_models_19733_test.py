@@ -37,6 +37,14 @@ def test_the_backend_template_derives_them_from_the_tier_variables() -> None:
     assert re.search(r"^AUTOBOT_LLM_FAILSAFE_SECONDARY_MODEL=\{\{ backend_light_model\b", text, re.M)
 
 
+def test_the_ai_stack_service_gets_what_the_failsafe_needs() -> None:
+    """Its server creates ClassificationAgent, which raises without these."""
+    template = _ROOT / "autobot-slm-backend" / "ansible" / "roles" / "ai-stack" / "templates" / "ai-stack.env.j2"
+    text = template.read_text(encoding="utf-8")
+    for key in ("PROVIDER", "ENDPOINT", "MODEL", "SECONDARY_MODEL"):
+        assert re.search(rf"^AUTOBOT_LLM_FAILSAFE_{key}=", text, re.M), key
+
+
 def test_the_same_model_twice_is_refused(monkeypatch) -> None:
     monkeypatch.setenv("AUTOBOT_LLM_FAILSAFE_SECONDARY_MODEL", "m")
     with pytest.raises(AgentConfigurationError):
