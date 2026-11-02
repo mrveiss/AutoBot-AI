@@ -124,7 +124,7 @@ async def _record_end(actor: str | None, target: CommitInfo, job) -> None:
             phase=rollback_audit.PHASE_FINISHED,
             job_status=job.status,
         )
-    except rollback_audit.AuditUnavailable:
+    except rollback_audit.RollbackAuditUnavailable:
         pass  # already logged by the writer; the job status is the record of how it ended
 
 
@@ -150,5 +150,5 @@ async def _record_error(actor: str | None, target: CommitInfo) -> None:
         await rollback_audit.record_rollback(
             actor=actor, commit=target.commit, outcome=rollback_audit.ERROR, phase=rollback_audit.PHASE_FINISHED
         )
-    except rollback_audit.AuditUnavailable:
+    except rollback_audit.RollbackAuditUnavailable:
         pass

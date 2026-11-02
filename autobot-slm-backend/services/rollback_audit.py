@@ -34,12 +34,12 @@ PHASE_REQUESTED = "requested"
 PHASE_FINISHED = "finished"
 
 
-class AuditUnavailable(Exception):
+class RollbackAuditUnavailable(Exception):
     """The entry could not be made durable."""
 
 
 async def record_rollback(*, actor: str | None, commit: str | None, outcome: str, phase: str, **details: Any) -> None:
-    """Commit one audit entry; raises ``AuditUnavailable`` when it cannot be stored."""
+    """Commit one audit entry; raises ``RollbackAuditUnavailable`` when it cannot be stored."""
     if outcome not in OUTCOMES:
         raise ValueError(f"unknown audit outcome: {outcome!r}")
     from autobot_shared.user_management.audit_rows import audit_row
@@ -59,4 +59,4 @@ async def record_rollback(*, actor: str | None, commit: str | None, outcome: str
             )
     except Exception as exc:
         logger.error("rollback: audit entry could not be stored (%s)", type(exc).__name__)
-        raise AuditUnavailable(type(exc).__name__) from exc
+        raise RollbackAuditUnavailable(type(exc).__name__) from exc

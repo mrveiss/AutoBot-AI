@@ -112,7 +112,7 @@ async def _refuse(user: dict, commit: str, reason: str, code: int) -> HTTPExcept
             phase=rollback_audit.PHASE_REQUESTED,
             reason=reason,
         )
-    except rollback_audit.AuditUnavailable:
+    except rollback_audit.RollbackAuditUnavailable:
         pass
     return HTTPException(status_code=code, detail=reason)
 
@@ -124,7 +124,7 @@ async def _start_after_audit(user: dict, result: Preflight) -> cs.UpdateAllJob:
         await rollback_audit.record_rollback(
             actor=_actor(user), commit=commit, outcome=rollback_audit.SUCCESS, phase=rollback_audit.PHASE_REQUESTED
         )
-    except rollback_audit.AuditUnavailable as exc:
+    except rollback_audit.RollbackAuditUnavailable as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=_AUDIT_DOWN) from exc
     try:
         async with cs._update_all_start_lock:

@@ -201,7 +201,9 @@ async def test_the_audit_entry_is_written_before_the_run_starts(world):
 
 
 async def test_if_the_audit_trail_cannot_record_the_request_nothing_runs(world, monkeypatch):
-    monkeypatch.setattr(rollback_audit, "record_rollback", AsyncMock(side_effect=rollback_audit.AuditUnavailable("x")))
+    monkeypatch.setattr(
+        rollback_audit, "record_rollback", AsyncMock(side_effect=rollback_audit.RollbackAuditUnavailable("x"))
+    )
     with pytest.raises(HTTPException) as err:
         await _post(world.second)
     assert err.value.status_code == 503
