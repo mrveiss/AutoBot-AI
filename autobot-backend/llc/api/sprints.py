@@ -48,7 +48,6 @@ from llc.deps import get_session
 from llc.deps import load_owned_project as _load_owned_project
 from user_management.services import TenantContext
 
-from ..kb.collections import KbCollectionManager
 from ..models.enums import ApprovalType, SprintStatus, WorkItemRelationType, WorkItemStatus
 from ..models.sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint
 from ..models.work_item import LLCWorkItem, LLCWorkItemRelation
@@ -66,7 +65,6 @@ router = APIRouter(tags=["llc-sprints"])
 
 _approval_svc = ApprovalService()
 _autoclose_svc = SprintAutoCloseService(approval_service=_approval_svc)
-_kb_manager = KbCollectionManager()
 
 
 # ------------------------------------------------------------------ Schemas
@@ -589,7 +587,6 @@ async def create_project(
     session.add(project)
     await session.commit()
     await session.refresh(project)
-    await _kb_manager.ensure_collection(KbCollectionManager.PROJECT_PREFIX, project.id)
     return project
 
 
@@ -844,7 +841,6 @@ async def create_sprint(
     session.add(sprint)
     await session.commit()
     await session.refresh(sprint)
-    await _kb_manager.ensure_collection(KbCollectionManager.SPRINT_PREFIX, sprint.id)
     return sprint
 
 
