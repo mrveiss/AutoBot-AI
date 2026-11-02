@@ -14,6 +14,8 @@ import importlib.util
 
 from repo_tests._paths import repo_root
 
+from autobot_shared.isolated_git import git, make_repo
+
 _SPEC = importlib.util.spec_from_file_location("repin_reach_floors", repo_root() / "scripts" / "repin_reach_floors.py")
 repin = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(repin)
@@ -130,3 +132,58 @@ def test_ci_enforces_staleness_on_merge_trains() -> None:
         and f"{REACH_AUDIT_ENV}=1" in str(s.get("run", ""))
     ]
     assert wired, f"ci.yml's python-shard job no longer sets {REACH_AUDIT_ENV}=1 on train-* heads"
+
+
+# ---------------------------------------- #20050: a floor stale on the base, a branch that did not cause it
+
+
+def _base_stale(monkeypatch, tmp_path, changed):
+    guard = tmp_path / "repo_tests" / "g_test.py"
+    guard.parent.mkdir()
+    guard.write_text("", encoding="utf-8")
+    monkeypatch.setattr(repin, "_ROOT", tmp_path)
+    monkeypatch.setattr(repin, "_source_file", lambda _r: guard)
+    monkeypatch.setattr(repin, "_changed_files", lambda _ref: changed)
+    return _main(monkeypatch, [_Reach("a", True)], {}, "--check", "--changed-since", "origin/main")
+
+
+def test_a_floor_stale_from_the_base_does_not_fail_a_branch_that_left_it_alone(monkeypatch, tmp_path, capsys) -> None:
+    assert _base_stale(monkeypatch, tmp_path, {"docs/x.md"}) == 0
+    assert capsys.readouterr().out.startswith("BASE-STALE a:")
+
+
+def test_a_branch_that_touched_the_guard_still_answers_for_its_floor(monkeypatch, tmp_path, capsys) -> None:
+    assert _base_stale(monkeypatch, tmp_path, {"repo_tests/g_test.py"}) == 1
+    assert capsys.readouterr().out.startswith("STALE a:")
+
+
+def test_when_git_cannot_say_what_changed_the_floor_still_blocks(monkeypatch, tmp_path, capsys) -> None:
+    assert _base_stale(monkeypatch, tmp_path, None) == 1
+    assert capsys.readouterr().out.startswith("STALE a:")
+
+
+def test_without_the_option_every_stale_floor_still_fails(monkeypatch, capsys) -> None:
+    assert _main(monkeypatch, [_Reach("a", True)], {}, "--check") == 1
+    assert capsys.readouterr().out.startswith("STALE a:")
+
+
+def test_changed_files_reads_the_branchs_own_diff_from_real_git(monkeypatch, tmp_path) -> None:
+    make_repo(tmp_path, default_branch="main")
+    (tmp_path / "a.txt").write_text("a", encoding="utf-8")
+    git(tmp_path, "add", "."), git(tmp_path, "commit", "-qm", "one")
+    git(tmp_path, "switch", "-qc", "branch")
+    (tmp_path / "mine.txt").write_text("b", encoding="utf-8")
+    git(tmp_path, "add", "."), git(tmp_path, "commit", "-qm", "two")
+    git(tmp_path, "switch", "-q", "main")
+    (tmp_path / "main_only.txt").write_text("c", encoding="utf-8")
+    git(tmp_path, "add", "."), git(tmp_path, "commit", "-qm", "three")
+    git(tmp_path, "switch", "-q", "branch")
+    monkeypatch.setattr(repin, "_ROOT", tmp_path)
+    assert repin._changed_files("main") == {"mine.txt"}
+    assert repin._changed_files("no-such-ref") is None
+
+
+def test_an_import_failure_names_its_reason(monkeypatch, capsys) -> None:
+    _main(monkeypatch, [], {"g": "Traceback\nModuleNotFoundError: No module named 'x'"}, "--check")
+    err = capsys.readouterr().err
+    assert "g: ModuleNotFoundError: No module named 'x'" in err and "train audit" in err
