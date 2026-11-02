@@ -442,6 +442,7 @@
                 <span>{{ $t('chat.approval.approve') }}</span>
               </BaseButton>
               <BaseButton
+                v-if="!isGraphApproval(message.metadata)"
                 variant="outline"
                 size="sm"
                 @click="promptForComment((message.metadata as any).terminal_session_id as string)"
@@ -590,6 +591,7 @@ import VideoCell from '@/components/artifact-cells/VideoCell.vue'
 import { formatFileSize, formatTime } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { useCommandApproval } from '@/composables/useCommandApproval'
+import { isGraphApproval, useApprovalRouting } from '@/composables/useGraphApproval'
 import { sanitizeChatHtml } from '@/utils/sanitize'
 
 const logger = createLogger('ChatMessages')
@@ -638,31 +640,8 @@ const {
   getRiskClass,
 } = useCommandApproval()
 
-/**
- * Thin wrapper: calls the composable's approveCommand with the store's
- * message-update callback wired in.
- */
-const approveCommand = (
-  terminal_session_id: string,
-  approved: boolean,
-  comment?: string,
-  command_id?: string,
-  commandInfo?: { command: string; risk_level: string }
-) => {
-  const onMessageUpdate = (sessionId: string, status: string, updateComment?: string) => {
-    const targetMessage = store.currentMessages.find(
-      msg => msg.metadata?.terminal_session_id === sessionId &&
-             msg.metadata?.requires_approval === true
-    )
-    if (targetMessage && targetMessage.metadata) {
-      targetMessage.metadata.approval_status = status
-      targetMessage.metadata.approval_comment = updateComment
-    } else {
-      logger.warn('Could not find message to update approval status')
-    }
-  }
-  return _approveCommand(terminal_session_id, approved, comment, command_id, onMessageUpdate, commandInfo)
-}
+/** A graph-interrupt card posts to /chats/{id}/resume; any other card keeps the terminal route (#20195). */
+const approveCommand = useApprovalRouting(_approveCommand)
 
 // Refs
 const messagesContainer = ref<HTMLElement>()

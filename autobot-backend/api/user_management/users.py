@@ -41,7 +41,11 @@ from api.user_management.dependencies import (
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.user_management.revocation_outcome import RENAME_REVOCATION_INCOMPLETE_MESSAGE, commit_or_503
-from autobot_shared.user_management.user_service_errors import DuplicateUserError, UserNotFoundError
+from autobot_shared.user_management.user_service_errors import (
+    DuplicateUserError,
+    SessionReassignError,
+    UserNotFoundError,
+)
 from user_management.schemas import (
     UserCreate,
     UserListResponse,
@@ -309,6 +313,8 @@ async def delete_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User {user_id} not found",
         )
+    except SessionReassignError as exc:  # #20029: refused, so no session is left without an owner
+        raise HTTPException(status_code=exc.status_code, detail=str(exc))
 
 
 # -------------------------------------------------------------------------
@@ -363,6 +369,8 @@ async def deactivate_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User {user_id} not found",
         )
+    except SessionReassignError as exc:  # #20029
+        raise HTTPException(status_code=exc.status_code, detail=str(exc))
 
 
 # Password Management: split into api/user_management/password_change.py (#15743) --
