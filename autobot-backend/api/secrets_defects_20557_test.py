@@ -166,6 +166,51 @@ def test_the_record_is_written_before_the_delete(real_audit, monkeypatch) -> Non
     assert _VAULT_KEY not in vault.store
 
 
+def _trail(monkeypatch) -> AsyncMock:
+    ops = AsyncMock()
+    monkeypatch.setattr(secrets_module, "audit_secret_op", ops)
+    return ops
+
+
+def _outcome(ops: AsyncMock) -> tuple:
+    """The result and details of the last record: (result, details)."""
+    call = ops.await_args
+    return (call.args[3] if len(call.args) > 3 else "success", call.kwargs)
+
+
+def test_a_completed_delete_records_its_outcome_after_the_intent(client_and_vault, monkeypatch) -> None:  # noqa: F811
+    client, _vault = _with_dependents(client_and_vault, monkeypatch, [])
+    ops = _trail(monkeypatch)
+
+    assert client.delete(f"/api/secrets/{_SECRET_ID}").status_code == 200
+
+    assert ops.await_args_list[0].kwargs["phase"] == "before_write"
+    assert _outcome(ops) == ("success", {"phase": "completed"})
+
+
+def test_a_refused_delete_records_the_refusal_not_a_completion(client_and_vault, monkeypatch) -> None:  # noqa: F811
+    client, vault = _with_dependents(client_and_vault, monkeypatch, [("service", "scheduler")])
+    ops = _trail(monkeypatch)
+
+    assert client.delete(f"/api/secrets/{_SECRET_ID}").status_code == 409
+
+    assert _outcome(ops) == ("denied", {"reason": "has_dependents"})
+    assert _VAULT_KEY in vault.store
+
+
+def test_a_completed_rotate_records_its_outcome_after_the_intent(client_and_vault, monkeypatch) -> None:  # noqa: F811
+    client, _vault = _with_dependents(client_and_vault, monkeypatch, [])
+    ops = _trail(monkeypatch)
+    secrets_module.secrets_manager.update_secret.return_value = SimpleNamespace(
+        model_dump=lambda mode: {"id": "legacy-1", "name": "same"}
+    )
+
+    assert client.put("/api/secrets/legacy-1", json={"value": "new"}).status_code == 200
+
+    assert ops.await_args_list[0].kwargs["phase"] == "before_write"
+    assert _outcome(ops) == ("success", {"phase": "completed"})
+
+
 def test_best_effort_operations_still_survive_a_down_audit_store(real_audit, monkeypatch) -> None:
     """A metadata-only update is not a credential rotation: its record stays best-effort."""
     client, _vault = real_audit

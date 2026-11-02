@@ -960,8 +960,7 @@ async def update_secret(
             await audit_secret_op("UPDATE", secret_id, http_request, "failed", reason="not_found")
             raise HTTPException(status_code=404, detail="Secret not found")
 
-        if not rotating:
-            await audit_secret_op("UPDATE", secret_id, http_request)
+        await audit_secret_op("UPDATE", secret_id, http_request, phase="completed")  # #20557: the outcome
         return JSONResponse(
             status_code=200,
             content={
@@ -1027,14 +1026,14 @@ async def delete_secret(
             session_id=None,
             outcome="success",
         )
-        return JSONResponse(
-            status_code=200,
-            content={"status": "success", "message": "Secret deleted successfully"},
-        )
+        await audit_secret_op("DELETE", secret_id, http_request, phase="completed")  # #20557: the outcome
+        return JSONResponse(status_code=200, content={"status": "success", "message": "Secret deleted successfully"})
     except PermissionError:
         await audit_secret_op("DELETE", secret_id, http_request, "denied", reason="permission_denied")
         raise HTTPException(status_code=403, detail="Internal server error")
-    except HTTPException:
+    except HTTPException as exc:
+        if exc.status_code == 409:  # #20557: a refusal must not read as a bare intent in the trail
+            await audit_secret_op("DELETE", secret_id, http_request, "denied", reason="has_dependents")
         raise
     except Exception as e:
         await audit_secret_op("DELETE", secret_id, http_request, "failed", reason=type(e).__name__)
