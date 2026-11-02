@@ -47,7 +47,13 @@ def _holds(expression: str, **values: object) -> bool:
 
 @pytest.mark.parametrize(
     "limit,counted",
-    [(None, True), ("localhost,SLM", True), ("localhost,SLM,other", True), ("localhost,other", False)],
+    [
+        (None, True),
+        ("localhost,SLM", True),
+        ("localhost,SLM,other", True),
+        ("localhost,other", False),
+        ("some_group", True),
+    ],
 )
 def test_only_a_run_touching_the_slm_host_counts_the_fleet(limit: str | None, counted: bool) -> None:
     values = {"slm_manager_inventory_host": "SLM"} | ({"ansible_limit": limit} if limit else {})
@@ -76,8 +82,8 @@ def test_the_snapshot_comes_before_any_restart_and_cannot_stop_the_update() -> N
 def test_the_wait_is_for_the_nodes_online_before_the_update(before: int, now: int, done: bool) -> None:
     """A node already down isn't in `before`, so it costs no wait and isn't reported."""
     values = {
-        "fleet_nodes_before": {"json": {"nodes_online": before}},
-        "fleet_nodes_health": {"status": 200, "json": {"nodes_online": now}},
+        "fleet_nodes_before": {"json": {"nodes_online": before, "database": "healthy"}},
+        "fleet_nodes_health": {"status": 200, "json": {"nodes_online": now, "database": "healthy"}},
     }
     assert _holds(_task(_WAIT)["until"], **values) is done
     report = _task(_REPORT)["when"]
@@ -88,3 +94,17 @@ def test_no_snapshot_means_no_wait_and_no_report() -> None:
     assert _holds(_task(_WAIT)["when"], fleet_nodes_before={}) is False
     assert _holds(_task(_REPORT)["when"][0], fleet_nodes_before={}) is False
     assert _task(_WAIT)["register"] != "slm_health", "a skipped task's result would overwrite the health check"
+
+
+def test_an_unhealthy_database_is_no_count_to_judge_against() -> None:
+    """/health answers 200 with 0 nodes then, so it must neither hide nor invent an offline node."""
+    down = {"json": {"nodes_online": 0, "database": "unhealthy"}}
+    up = {"json": {"nodes_online": 3, "database": "healthy"}}
+    assert _holds(_task(_WAIT)["when"], fleet_nodes_before=down) is False
+    report = _task(_REPORT)["when"]
+    assert not all(_holds(line, fleet_nodes_before=up, fleet_nodes_health=down) for line in report)
+    said = _task("Say when the nodes could not be counted")["when"]
+    assert _holds(said, fleet_nodes_before=down, fleet_nodes_health={}) is True
+    assert _holds(said, fleet_nodes_before=up, fleet_nodes_health=down) is True
+    assert _holds(said, fleet_nodes_before=up, fleet_nodes_health=up) is False
+    assert _holds(said, fleet_nodes_before={}) is False

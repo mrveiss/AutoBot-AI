@@ -322,8 +322,9 @@
       register: deploy_commit_subject
       changed_when: false
 
-    # #20250: Play 3 waits for this many nodes. Only a run that touches the SLM's own host: a per-node
-    # update has --limit localhost,<node> and needn't wait for the whole fleet.
+    # #20250: Play 3 waits for this many nodes. A per-node update has --limit localhost,<node> and
+    # needn't wait for the whole fleet. Any other limit counts, a group name included: it can't be
+    # told from a host here, and a wait of at most 3 minutes beats reporting nothing.
     - name: "[PRE-FLIGHT] Count the nodes online before the update"
       uri:
         url: "https://{{ slm_host }}/slm/api/health"
@@ -331,7 +332,10 @@
         status_code: 200
       register: fleet_nodes_before
       failed_when: false
-      when: ansible_limit is not defined or (slm_manager_inventory_host | default('')) in ansible_limit.split(',')
+      when: >-
+        ansible_limit is not defined
+        or (slm_manager_inventory_host | default('')) in ansible_limit.split(',')
+        or not ('localhost' in ansible_limit.split(',') and (ansible_limit.split(',') | length) == 2)
 
     - name: "[PRE-FLIGHT] Notify SLM of new commit"
       uri:
@@ -2517,7 +2521,8 @@
       retries: "{{ update_nodes_online_retries | default(18) }}"
       delay: "{{ update_nodes_online_delay | default(10) }}"
       failed_when: false
-      when: fleet_nodes_before.json is defined
+      # /health answers 200 with 0 nodes when its database is down, which is no count to judge against.
+      when: fleet_nodes_before.json is defined and fleet_nodes_before.json.database == 'healthy'
 
     - name: Clean up deploy archives
       file:
@@ -2533,8 +2538,17 @@
           of {{ fleet_nodes_before.json.nodes_online | default(0) | int }}
       when:
         - fleet_nodes_before.json is defined
+        - fleet_nodes_before.json.database == 'healthy'
         - fleet_nodes_health.json is defined
+        - fleet_nodes_health.json.database == 'healthy'
         - (fleet_nodes_health.json.nodes_online | default(0) | int) < (fleet_nodes_before.json.nodes_online | default(0) | int)
+
+    - name: Say when the nodes could not be counted
+      debug:
+        msg: "Could not compare the nodes online before and after this update: the SLM's database wasn't healthy"
+      when: >-
+        fleet_nodes_before.json is defined and
+        (fleet_nodes_before.json.database != 'healthy' or fleet_nodes_health.json.database | default('') != 'healthy')
 
     - name: Display update summary
       debug:
