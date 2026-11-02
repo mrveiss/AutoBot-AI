@@ -11,7 +11,7 @@ does the part that can be justified: for every key whose English source appears
 **verbatim** in `autobot-frontend`'s locales, it takes that app's existing
 translation; everything else keeps the English source, which is exactly what the
 main app's own locales do for an untranslated key and what
-`repo_tests/i18n_untranslated_ratchet_test.py` exists to count and shrink.
+`scripts/list_untranslated.py` reports as the backlog.
 
 THE LIFTING RULE, and its two refusals, because a wrong translation is worse
 than a visible English one:

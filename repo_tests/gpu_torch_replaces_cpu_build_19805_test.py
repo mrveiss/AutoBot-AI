@@ -89,3 +89,13 @@ def test_contrast_without_the_flags_pip_keeps_the_cpu_build(tmp_path: Path) -> N
 
 def test_a_cuda_build_already_installed_is_left_alone(tmp_path: Path) -> None:
     assert _installed_after(tmp_path, _task_flags(), "2.14.1+cu130", "2.14.1+cu130") == "2.14.1+cu130"
+
+
+def test_a_failed_install_retries_then_stops_naming_the_room_left() -> None:
+    """#20082: `ignore_errors` only defers the failure to the task that names it."""
+    tasks = list(_walk(yaml.safe_load((repo_root() / _ROLE / "tasks/main.yml").read_text(encoding="utf-8"))))
+    at = next(i for i, t in enumerate(tasks) if str(t.get("name", "")).startswith(_TASK))
+    install, disk, stop = tasks[at], tasks[at + 1], tasks[at + 2]
+    assert install["until"] == "_gpu_torch_install is succeeded" and install["retries"]
+    assert "df -h" in str(disk) and disk["failed_when"] is False
+    assert stop["when"] == "_gpu_torch_install is failed" and "_gpu_torch_disk" in stop["ansible.builtin.fail"]["msg"]
