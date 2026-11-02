@@ -298,8 +298,8 @@ async def delete_company(
     try:
         await svc.delete(company_id)
         await svc.session.commit()
-        # #13920: drop the three collections create_company's ensure_collection
-        # loop makes (base, agents, decisions). Derived from the same constants
+        # #13920: drop the three collections a company's writes can make
+        # (base, agents, decisions). Derived from the same constants
         # rather than restated, so a fourth suffix cannot be created and then
         # silently never cleaned up.
         for suffix in (None, KbCollectionManager.AGENTS_SUFFIX, KbCollectionManager.DECISIONS_SUFFIX):
