@@ -341,6 +341,12 @@ def test_errors_map_to_their_status() -> None:
 
 
 @pytest.mark.asyncio
+async def test_a_chats_directory_not_created_yet_holds_no_sessions() -> None:
+    """A host where nobody has chatted can still delete or deactivate a user."""
+    assert await ss.owned_sessions(FakeManager({}), "ana") == ([], [])
+
+
+@pytest.mark.asyncio
 async def test_an_unreadable_file_is_reported_not_silently_skipped(monkeypatch) -> None:
     """Its owner can't be known, and a later user with this name could inherit it."""
 
