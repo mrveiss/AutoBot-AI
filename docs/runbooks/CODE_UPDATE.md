@@ -67,11 +67,57 @@ scripts from the code-source checkout, never from an install-level copy.
 
 ## Going back to an earlier commit
 
-The updater has no action for deploying a commit you choose; tracked in #20214. A resync that
-fails rolls its own component back automatically. To undo a bad change, revert it on `main` through
-a pull request, then run the update.
+> **Off by default, pending a host test.** Rollback is switched by `SLM_ROLLBACK_ENABLED` (default
+> off). While it is off the page shows no rollback panel and the rollback routes answer 403 "not
+> enabled". Turn it on only for the host test: roll back to a supported earlier commit, then run
+> Update Everything and confirm the nodes are on the latest again.
 
----
+The updater can deploy an earlier commit of `main`. Use it to undo a bad change quickly; the
+lasting fix is still a revert merged through a pull request.
+
+1. In the SLM web UI open **Maintenance > Updates > Code Sync**. In **Roll back to an earlier
+   version**, pick a version from the list. Each line is a date and a subject; you never type a
+   commit id. Only commits that are part of `main`'s history are offered, and only those new enough to carry
+   rollback support: a version that predates it cannot finish a rollback (it would restart, ignore
+   the target and update the fleet to `main`), so it is not listed and is refused if asked for.
+2. Choose **Review rollback**. The SLM checks the choice again on the server and checks both
+   databases (the SLM database and the backend database) for a migration in the way. A migration
+   is in the way when the database has applied one that the chosen commit does not have. In that
+   case the rollback is **refused** and the message names the database and the migration. If the
+   SLM cannot read a database or the commit's migrations it also refuses: not knowing is not a
+   pass. The updater never runs a migration downgrade, because a downgrade loses data.
+   **Checked: two databases.** **Not checked:** SQLite stores, Redis, ChromaDB, file formats and
+   the tables the application creates on startup. If the chosen version reads any of those
+   differently, the rollback does not detect it.
+3. Read what the rollback will do and choose **Roll back**. It needs the same permission as
+   Update Everything and a named person (the internal service key is refused), is refused while any update is running, and is recorded in the audit trail
+   (`code.rollback`) before it starts.
+
+A rollback runs as the same job as Update Everything and shows in the same progress view: it
+fetches, updates this SLM server to the chosen commit (the service restarts, and the job resumes
+after the restart exactly as Update Everything does), then updates every fleet node that is on a
+different commit. The update pull stage is skipped.
+
+**What the page shows afterwards.** The SLM keeps recording the latest commit of `main`, so every
+node that was rolled back reads **outdated** against it and appears under the nodes that are
+behind. That is the truth, not a fault. Nothing re-applies the latest by itself: the next code sync
+of a node deploys `main` again.
+
+**Returning to the latest.** Run **Update Everything**. It moves forward from the rolled-back
+commit as it does from any other.
+
+**Known limit.** While a rollback is between the SLM's restart and the end of the job, a
+`update-all-nodes.yml` run started by anything else (for example syncing one node by hand) is
+also held to the rollback's commit, because the restarted service reads the target from the saved
+resume plan, which cannot tell the runs apart. The plan is deleted when the job ends and ignored
+after two hours. Start no other sync while a rollback runs.
+
+**After the run.** When the job finishes in the process that started it, the SLM checks that every
+node is on the chosen commit and fails the job if one is not. A run that spans the SLM's restart is
+not re-checked; read the node list on the Code Sync tab.
+
+**Not covered.** A rollback does not undo database changes (see above), and it does not restore
+data. It is refused when this SLM already runs the chosen commit.
 
 ## Recovery when the SLM dashboard itself is unreachable (#15462)
 
@@ -170,7 +216,8 @@ the other.
 ## Related
 
 - `docs/architecture/UPDATE_FLOWS.md` — flow diagrams for all update channels
-- `update-all-nodes.yml` — the playbook the updater runs; not for running by hand
+- `update-all-nodes.yml` — the playbook the updater runs; not for running by hand. A rollback passes it `deploy_ref` (the chosen commit) and `deploy_is_rollback` (#20214)
+- `autobot-slm-backend/services/code_rollback.py` — the rollback path (#20214)
 - `docs/runbooks/SYSTEM_UPDATE.md` — OS package updates (separate from code)
 - `autobot-slm-backend/static/recovery.html` — backend-served recovery page (#15462)
 - `autobot-slm-backend/services/local_admin_socket.py` — credential-free local self-update socket (#15728)

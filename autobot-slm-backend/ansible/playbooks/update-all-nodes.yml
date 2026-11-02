@@ -55,6 +55,11 @@
     # `autobot.services` stops carrying unrendered templates (#15731).
     git_repo_root: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}"
     deploy_ref: "main"
+    # #20214: a rollback sets this and a full commit id as `deploy_ref` (services/rollback_target.py). The id
+    # was validated as an ancestor of the branch head before it got here, so the branch allow-list does not
+    # apply; and the commit is NOT announced to /code-source/notify below, which would record it as the
+    # latest commit and make every node read as current at an old commit.
+    deploy_is_rollback: false
     allowed_branches:
       - main
       - release
@@ -148,6 +153,7 @@
           Override: -e skip_branch_check=true
       when:
         - not skip_branch_check | bool
+        - not deploy_is_rollback | bool
         - deploy_ref not in allowed_branches
 
     - name: "[PRE-FLIGHT] Create deploy archive directory"
@@ -337,6 +343,7 @@
         validate_certs: false
         status_code: [200, 404]
       ignore_errors: true
+      when: not deploy_is_rollback | bool
 
 # =============================================================================
 # PLAY 1: Update SLM Server First

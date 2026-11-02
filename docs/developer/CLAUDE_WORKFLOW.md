@@ -41,6 +41,7 @@ cannot do something, fix that gap (issue + PR) rather than routing around it. Th
 paths here are for *reading and changing* the deployment, not for running it.
 
 - **Code flow:** GitHub repo → SLM Manager pulls latest → Ansible deploys to fleet nodes
+- **Going back:** a chosen earlier commit of `main` is deployed through the same updater (Code Sync > Roll back to an earlier version), never by hand — see `docs/runbooks/CODE_UPDATE.md`
 - **Primary playbook:** `autobot-slm-backend/ansible/playbooks/update-all-nodes.yml`
 - **Node enrollment:** `autobot-slm-backend/ansible/playbooks/enroll-node.yml`
 - **NPU worker role:** `autobot-slm-backend/ansible/roles/npu-worker/`

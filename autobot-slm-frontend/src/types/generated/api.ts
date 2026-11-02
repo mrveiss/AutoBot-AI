@@ -1478,6 +1478,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/code-sync/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Rollback
+         * @description Deploy the chosen earlier commit. Refused while an update runs or when a migration is in the way.
+         */
+        post: operations["start_rollback_api_code_sync_rollback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/code-sync/rollback/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rollback Candidates
+         * @description The newest commits of the tracked branch, with dates and subjects, for the picker.
+         */
+        get: operations["rollback_candidates_api_code_sync_rollback_candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/code-sync/rollback/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rollback Preview
+         * @description Validate one commit and say whether a database migration is in the way.
+         */
+        get: operations["rollback_preview_api_code_sync_rollback_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/code-sync/schedules": {
         parameters: {
             query?: never;
@@ -12544,6 +12604,88 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * RollbackCandidates
+         * @description The picker's contents: ancestors of the branch head, newest first.
+         */
+        RollbackCandidates: {
+            /** Branch */
+            branch: string;
+            /** Commits */
+            commits: components["schemas"]["RollbackCommit"][];
+            /** Deployed Commit */
+            deployed_commit?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RollbackCommit
+         * @description One commit the operator may roll back to.
+         */
+        RollbackCommit: {
+            /** Commit */
+            commit: string;
+            /** Date */
+            date: string;
+            /**
+             * Is Deployed
+             * @default false
+             */
+            is_deployed: boolean;
+            /** Short */
+            short: string;
+            /** Subject */
+            subject: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RollbackDatabaseCheck
+         * @description Whether a database migration is in the way, for one database.
+         */
+        RollbackDatabaseCheck: {
+            /** Database */
+            database: string;
+            /** In The Way */
+            in_the_way?: string[];
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /** Status */
+            status: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RollbackPreview
+         * @description What the confirmation step shows before anything runs.
+         */
+        RollbackPreview: {
+            /** Allowed */
+            allowed: boolean;
+            /** Checks */
+            checks: components["schemas"]["RollbackDatabaseCheck"][];
+            commit: components["schemas"]["RollbackCommit"];
+            /** Refusal */
+            refusal?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RollbackRequest
+         * @description The commit the operator picked from the list; validated again server-side.
+         */
+        RollbackRequest: {
+            /**
+             * Commit
+             * @description Full commit id from the candidates list
+             */
+            commit: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * RolesUpdateRequest
          * @description Request to update node roles.
          */
@@ -17675,6 +17817,105 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_rollback_api_code_sync_rollback_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RollbackRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateAllJob"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rollback_candidates_api_code_sync_rollback_candidates_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollbackCandidates"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rollback_preview_api_code_sync_rollback_preview_get: {
+        parameters: {
+            query: {
+                commit: string;
+            };
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollbackPreview"];
                 };
             };
             /** @description Validation Error */

@@ -17,6 +17,7 @@ from .autobot_users import router as autobot_users_router
 from .blue_green import router as blue_green_router
 from .browser import router as browser_router
 from .capability_profile import router as capability_profile_router
+from .code_rollback import router as code_rollback_router
 from .code_sync import router as code_sync_router
 from .config import node_config_router
 from .config import router as config_router
@@ -87,6 +88,7 @@ nodes_router.include_router(capability_profile_router)
 nodes_router.include_router(node_post_sync_router)
 code_sync_router.include_router(post_sync_runs_router)
 code_sync_router.include_router(update_report_router)
+code_sync_router.include_router(code_rollback_router)  # #20214: rollback to a chosen commit
 
 __all__ = [
     "agents_router",

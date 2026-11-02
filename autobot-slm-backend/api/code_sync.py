@@ -5647,8 +5647,8 @@ def _retire_stale_job(existing: UpdateAllJob) -> None:
     existing.completed_at = utc_timestamp()
 
 
-async def _start_update_all_locked() -> UpdateAllJob:
-    """Decide, retire, and start — serialised by `_update_all_start_lock`."""
+async def _start_update_all_locked(orchestrate=None) -> UpdateAllJob:
+    """Decide, retire, and start (serialised by the start lock); `orchestrate` replaces the forward run (#20214)."""
     global _update_all_task
 
     existing = _get_update_all_job()
@@ -5702,7 +5702,7 @@ async def _start_update_all_locked() -> UpdateAllJob:
     async def _run() -> None:
         global _update_all_task
         try:
-            await _run_update_all_orchestration(job, _db_svc)
+            await (orchestrate or _run_update_all_orchestration)(job, _db_svc)
         except Exception as exc:
             logger.error("update-all orchestration unhandled error: %s", exc, exc_info=True)
             job.status = "failed"
