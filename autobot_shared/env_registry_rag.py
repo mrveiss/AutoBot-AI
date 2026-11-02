@@ -1,11 +1,12 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
-"""RAG, KB-ingest and LLM-call budget AUTOBOT_* environment variable registrations (#18141, #18826, #16924).
+"""RAG, KB-ingest, LLM-call budget and LLM failover AUTOBOT_* environment variable registrations (#18141, #18826,
+#16924, #19753).
 
 Sibling of ``env_registry_ai.py`` (which sits at the 600-line ceiling), imported by
 ``env_registry`` itself like every split module, so registration happens whenever it loads.
-The LLM-call budgets (transcript-analysis output tokens, the spend-record wait) are the
-ai-component overflow that would otherwise belong in ``env_registry_ai.py``.
+The LLM-call budgets (transcript-analysis output tokens, the spend-record wait) and the quota-hold
+windows of LLM failover are the ai-component overflow that would otherwise belong in ``env_registry_ai.py``.
 """
 
 from __future__ import annotations
@@ -131,5 +132,34 @@ register_env_var(
         ),
         component="ai",
         range=(0.1, 120.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLM_QUOTA_HOLD_DEFAULT_SECONDS",
+        type=int,
+        default=3600,
+        description=(
+            "How long a model stays held out after a plan/quota/billing failure when the provider "
+            "did not say when it resets (llm_shared/failover_policy.py, #19753). A transient provider "
+            "error is skipped for AUTOBOT_PROVIDER_DEGRADATION_TTL_SECONDS instead."
+        ),
+        component="ai",
+        range=(1, 604800),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLM_QUOTA_HOLD_MAX_SECONDS",
+        type=int,
+        default=86400,
+        description=(
+            "Upper bound on a quota hold, including a reset time the provider stated, so a bogus "
+            "reset cannot park a model forever (llm_shared/failover_policy.py, #19753)."
+        ),
+        component="ai",
+        range=(1, 2592000),
     )
 )
