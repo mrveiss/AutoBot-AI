@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.auth.permissions import Permission
+from autobot_shared.user_management.revocation_outcome import RENAME_REVOCATION_INCOMPLETE_MESSAGE, commit_or_503
 from autobot_shared.user_management.user_service_errors import UserNotFoundError
 from services.auth import require_permission
 from user_management.database import get_autobot_db
@@ -118,10 +119,12 @@ async def update_autobot_user(
             avatar_url=updates.avatar_url,
             preferences=updates.preferences,
         )
-        return UserResponse.model_validate(user)
+        response = UserResponse.model_validate(user)
     except Exception as e:
         logger.error("Failed to update AutoBot user: %s", e)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error") from e
+    await commit_or_503(db, RENAME_REVOCATION_INCOMPLETE_MESSAGE)  # outside the try, whose except answers 404
+    return response
 
 
 @router.post("/{user_id}/change-password", status_code=status.HTTP_200_OK)
@@ -164,3 +167,5 @@ async def delete_autobot_user(
     except Exception as e:
         logger.error("Failed to delete AutoBot user: %s", e)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error") from e
+
+    await commit_or_503(db)  # a failed revocation is answered, not only logged (#20443)
