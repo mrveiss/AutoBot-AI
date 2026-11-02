@@ -20,8 +20,8 @@ from __future__ import annotations
 import json
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.redis_utils import delete_if_value, expire_if_value
 from constants.ttl_constants import TTL_5_MINUTES
-from services.task_claim import RELEASE_IF_OWNER_LUA, RENEW_IF_OWNER_LUA
 
 from .redis_usability import usable_redis
 
@@ -58,7 +58,7 @@ async def claim_pending_slot(redis, session_id: str, command_id: str) -> bool:
     if not await _is_abandoned(redis, session_id, holder):
         return False
     logger.warning("Taking over the abandoned approval claim of session %s", session_id)
-    await redis.eval(RELEASE_IF_OWNER_LUA, 1, key, holder)
+    await delete_if_value(redis, key, holder)
     return bool(await redis.set(key, command_id, nx=True, ex=CLAIM_WRITE_TTL))
 
 
@@ -69,7 +69,7 @@ async def hold_pending_slot(redis, session_id: str, command_id: str | None, ttl:
     """
     if not command_id:
         return
-    await redis.eval(RENEW_IF_OWNER_LUA, 1, _claim_key(session_id), command_id, ttl)
+    await expire_if_value(redis, _claim_key(session_id), command_id, ttl * 1000)
 
 
 async def release_pending_slot(redis, session_id: str, command_id: str | None) -> None:
@@ -77,7 +77,7 @@ async def release_pending_slot(redis, session_id: str, command_id: str | None) -
     if not command_id or not usable_redis(redis):
         return
     try:
-        await redis.eval(RELEASE_IF_OWNER_LUA, 1, _claim_key(session_id), command_id)
+        await delete_if_value(redis, _claim_key(session_id), command_id)
     except Exception as exc:  # noqa: BLE001 - the decision has landed; a lost release must not undo it
         logger.error("Could not release the approval claim of session %s: %s", session_id, exc)
 
