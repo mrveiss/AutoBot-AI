@@ -23,8 +23,6 @@ from pydantic import BaseModel, Field, field_validator
 from autobot_shared.risk_tier import presented_risk_tier_value
 from type_defs.common import Metadata
 
-from .vision_step_handler import VISION_STEP_TYPES
-
 
 class WorkflowStepStatus(Enum):
     """Status of a workflow step"""
@@ -162,6 +160,9 @@ class WorkflowStep:
         (``_resolve_and_run_step``), so an unknown type still runs ``command``. Vision steps call the
         vision API with ``step_config`` and run no command; their flag stays the creator's choice.
         """
+        # Here, not at the top: gen_frontend_types.py loads this file alone, with no package around it.
+        from .vision_step_handler import VISION_STEP_TYPES
+
         if self.step_type not in VISION_STEP_TYPES:
             self.requires_confirmation = True
 
