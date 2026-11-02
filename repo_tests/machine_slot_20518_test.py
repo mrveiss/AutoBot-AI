@@ -57,15 +57,56 @@ def test_contrast_a_free_slot_does_not_wait(start, tmp_path: Path) -> None:
     assert "GOT" in out
 
 
-def test_the_hook_queues_before_any_stage_timeout_and_rechecks_the_cache() -> None:
-    """Each stage: wait, then a pass another push of this tree recorded, then the timed work."""
-    stages = re.findall(r"machine_slot_wait\n\s*! stage_cached \"([^\"]+)\"", _HOOK)
-    assert sorted(stages) == sorted(set(re.findall(r'stage_begin "([^"]+)"', _HOOK)))
+def test_one_slot_per_push_taken_before_any_stage_and_the_cache_rechecked() -> None:
+    assert re.search(r"^stage_begin\(\) \{\n  machine_slot_wait\n", _HOOK, re.MULTILINE)
+    assert _HOOK.count("machine_slot_wait\n") == 1
+    stages = set(re.findall(r'stage_begin "([^"]+)"', _HOOK))
+    assert stages and set(re.findall(r'! stage_cached "([^"]+)"', _HOOK)) == stages
+
+
+def test_a_queued_push_prints_while_it_waits_and_names_the_holder(tmp_path: Path) -> None:
+    (tmp_path / "slot-1").write_text("4242 pre-push issue-9-x\n", encoding="utf-8")
+    held = os.open(tmp_path / "slot-1", os.O_WRONLY)
+    fcntl.flock(held, fcntl.LOCK_EX)
+    env = {**_env(tmp_path), "AUTOBOT_MACHINE_SLOT_REPORT": "1"}
+    fn = re.search(r"^machine_slot_wait\(\) \{\n(?:.*\n)*?\}$", _HOOK, re.MULTILINE).group(0)
+    script = f'log() {{ echo "$*"; }}; warn() {{ echo "$*"; }}\n{fn}\nmachine_slot_wait; echo GOT\n'
+    waiter = subprocess.Popen(["bash", "-c", script], env=env, stdout=subprocess.PIPE, text=True)
+    time.sleep(1.5)
+    os.close(held)
+    out, _ = waiter.communicate(timeout=30)
+    assert "queued" in out and "4242 pre-push issue-9-x" in out and "GOT" in out
+    assert "pre-push" in (tmp_path / "slot-1").read_text(encoding="utf-8")
+
+
+def test_the_hook_and_python_build_the_same_default_path(tmp_path: Path) -> None:
+    env = {k: v for k, v in os.environ.items() if k not in _ENV_DROP + ("AUTOBOT_MACHINE_SLOT_DIR",)}
+    env.update(XDG_RUNTIME_DIR=str(tmp_path), PATH=os.environ["PATH"])
+    code = "from repo_tests.machine_slot import _slot_paths; print(_slot_paths()[0].parent)"
+    python = subprocess.run(
+        [sys.executable, "-c", code], env=env, cwd=_ROOT, capture_output=True, text=True, check=True
+    )
+    fn = re.search(r"^machine_slot_wait\(\) \{\n(?:.*\n)*?\}$", _HOOK, re.MULTILINE).group(0)
+    bash = subprocess.run(
+        ["bash", "-c", f'log() {{ :; }}; warn() {{ :; }}\n{fn}\nmachine_slot_wait; ls -d "$XDG_RUNTIME_DIR"/*'],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert bash.stdout.strip() == python.stdout.strip()
+
+
+def test_the_cache_key_follows_the_base() -> None:
+    assert re.search(r'fast_key=\$\(stage_key "fast guards[^\n]*rev-parse -q --verify origin/main', _HOOK)
 
 
 def test_the_floor_check_imports_with_the_paths_pytest_uses() -> None:
+    """Without these paths 14 guard modules failed to import and no pass was ever recorded."""
     sys.path.insert(0, str(_ROOT / "scripts"))
     import repin_reach_floors  # noqa: PLC0415
 
     roots = repin_reach_floors.import_roots()
-    assert "autobot-backend" in roots and "libs/autobot-sdk-python" in roots
+    assert (_ROOT / "libs/autobot-sdk-python/autobot_sdk").is_dir() and "libs/autobot-sdk-python" in roots
+    assert (_ROOT / "autobot-backend/config").is_dir() and "autobot-backend" in roots
+    assert "sys.path[1:1]" in (_ROOT / "scripts/repin_reach_floors.py").read_text(encoding="utf-8")

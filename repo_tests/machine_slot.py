@@ -30,8 +30,9 @@ _held: Optional[int] = None
 
 
 def _slot_paths() -> list[Path]:
-    runtime = os.getenv("XDG_RUNTIME_DIR") or tempfile.gettempdir()
-    root = Path(os.getenv("AUTOBOT_MACHINE_SLOT_DIR") or Path(runtime) / "autobot-machine-slots")
+    # The same path the hook builds, down to the fallbacks, or the two would queue apart.
+    runtime = os.getenv("XDG_RUNTIME_DIR") or os.getenv("TMPDIR") or tempfile.gettempdir()
+    root = Path(os.getenv("AUTOBOT_MACHINE_SLOT_DIR") or Path(runtime) / f"autobot-machine-slots-{os.getuid()}")
     root.mkdir(parents=True, exist_ok=True)
     return [root / f"slot-{i}" for i in range(1, env_int("AUTOBOT_MACHINE_SLOTS", 4) + 1)]
 
@@ -43,6 +44,8 @@ def _try_take(path: Path) -> Optional[int]:
     except BlockingIOError:
         os.close(fd)
         return None
+    os.ftruncate(fd, 0)
+    os.write(fd, f"{os.getpid()} {sys.argv[0]}\n".encode("utf-8"))
     return fd
 
 
