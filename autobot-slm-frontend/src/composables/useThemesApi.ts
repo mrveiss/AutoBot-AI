@@ -31,11 +31,6 @@ export interface InstalledTheme {
   supports: string[]
 }
 
-export interface UninstallResponse {
-  status: string
-  id: string
-}
-
 /**
  * True when the main app could not be reached: the proxy's 502/503/504, or a request that never
  * got an answer: a network failure (fetch's TypeError) or the client's timeout. Any other error is
@@ -63,8 +58,8 @@ export function useThemesApi() {
   }
 
   /** Admin only. */
-  function uninstall(id: string): Promise<UninstallResponse> {
-    return client.delete<UninstallResponse>(`/themes/${encodeURIComponent(id)}`)
+  async function uninstall(id: string): Promise<void> {
+    await client.delete(`/themes/${encodeURIComponent(id)}`)
   }
 
   return { list, install, uninstall }
