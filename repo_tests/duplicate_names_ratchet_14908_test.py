@@ -203,7 +203,7 @@ def _util_files(root: Path) -> list[str]:
 TYPE_FILES_REACH = declare(
     "duplicate-type-names-ts-files-scanned-14908",
     discover=_type_files,
-    floor=519,  # mid-window: population 544, window (494, 544)
+    floor=540,  # mid-window: population 565, window (515, 565)
     growth=50,
     what="non-test .ts files in both apps and the kit scanned for repeated type names",
     roots=(*_APPS, _KIT),

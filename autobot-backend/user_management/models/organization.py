@@ -87,6 +87,12 @@ class Organization(OrganizationCore):
         default=False,
         nullable=False,
     )
+    # Raising an agent's budget limit needs a board approval instead of applying at once (#8214).
+    require_approval_for_budget_raises: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
 
     # LLC lifecycle status — stored as string, validated by LLCCompanyStatus enum
     llc_status: Mapped[str] = mapped_column(
