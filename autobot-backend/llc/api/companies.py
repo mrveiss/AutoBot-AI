@@ -61,6 +61,7 @@ from llc.models.enums import (
     WorkItemStatus,
 )
 from llc.models.membership import LLCCompanyMembership
+from llc.scheduler.dispatch_gate import run_block_reason
 from llc.services.authz import NotAuthorisedError, may_attach_under
 from llc.services.backlog import BacklogService
 from llc.services.company import (
@@ -816,6 +817,9 @@ class OrgChartNode(BaseModel):
     # quietly assert every agent is inactive.
     is_active: Optional[bool] = None
     heartbeat_enabled: Optional[bool] = None  # #15907: periodic schedule on/off; None for a person
+    # #20519: whether a run can start, and the dispatcher's reason when not; None for a person.
+    can_run: Optional[bool] = None
+    cannot_run_reason: Optional[str] = None
     last_heartbeat: Optional[str]
     budget_spent: float
     budget_total: float
@@ -1000,16 +1004,10 @@ def _compose_agent_node(
     """Compose one agent's ``OrgChartNode`` from its hierarchy row, its budget
     row (if any), and its latest heartbeat run (if any) (#14184).
 
-    Extracted verbatim out of ``get_org_chart``'s per-row loop — a pure move,
-    the precedent being the already-extracted human branch,
-    ``_compose_human_nodes``. No field's source expression changed: every
-    right-hand side below is byte-for-byte the same expression that used to
-    sit inline in the loop (budget resolution now lives in
-    ``_resolve_agent_budget``), and the existing org-chart test suite
-    (``test_llc_org_chart.py``, ``test_org_chart_enrichment.py``) exercises
-    every one of them unchanged as the behaviour-preservation evidence.
+    Extracted from ``get_org_chart``'s per-row loop; the org-chart tests cover every field.
     """
     b_spent, b_total = _resolve_agent_budget(budget)
+    block_reason = run_block_reason(row.status, row.adapter_type, row.adapter_config)
     return OrgChartNode(
         id=row.agent_id,
         node_id=str(row.id),  # AgentOrgNode UUID PK (assignment keyspace, #10032)
@@ -1025,6 +1023,8 @@ def _compose_agent_node(
         adapter_type=row.adapter_type or "",
         is_human=False,
         heartbeat_enabled=row.heartbeat_enabled,
+        can_run=block_reason is None,
+        cannot_run_reason=block_reason,
         # Liveness: latest run is picked by created_at; a just-queued run
         # may have no started_at, so fall back to created_at.
         last_heartbeat=(

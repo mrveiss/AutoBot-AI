@@ -48,7 +48,6 @@ from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
 
 from ..adapters import AdapterRunStatus, AutoBotAgentAdapter, get_adapter
-from ..adapters.subprocess_base import is_subprocess_adapter
 from ..config import AGENT_API_BASE_URL
 from ..exceptions import (
     AdapterRunFailed,
@@ -67,7 +66,7 @@ from ..services.work_item_queue import has_pending_work
 # Aliased to the name `_run_adapter` already calls (#17726). Renaming the call
 # site would put that unrelated 82-line function in scope for the function-length
 # guard, and refactoring it is not this change.
-from .dispatch_gate import dispatch_block_reason, require_dispatchable
+from .dispatch_gate import adapter_block_reason, dispatch_block_reason, require_dispatchable
 from .replay_recording import record_run_for_replay as _record_run_for_replay
 from .run_context import enrich_run_context
 from .run_key import ADAPTER_MAX_WAIT_SECONDS
@@ -823,24 +822,12 @@ async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> O
         await _dispatch_autobot_agent(agent, context)
         return None
 
-    try:
-        adapter = get_adapter(adapter_type)
-    except KeyError:
-        # GH#9951: signal a skip (not a phantom COMPLETED) so the run is
-        # recorded as SKIPPED and last_heartbeat_at is not advanced.
-        raise HeartbeatDispatchSkipped(
-            agent["agent_id"], f"no LLC adapter registered for type {adapter_type!r}"
-        ) from None
-
-    # GH#9793: skip dispatch when the required CLI binary can't be resolved
-    # (PATH, configured override, or common install locations — GH#12478).
-    # Converts every-heartbeat FAILED runs into a clean degraded state (GH#9951).
-    if is_subprocess_adapter(adapter) and not adapter.is_cli_available():  # type: ignore[union-attr]
-        message = adapter.cli_not_found_message()  # type: ignore[union-attr]
-        # GH#12478: this is a genuine deployment misconfiguration, not routine
-        # degraded-agent noise — warn so it's visible without polling run history.
-        logger.warning("Heartbeat dispatch skipped for agent %s: %s", agent["agent_id"], message)
-        raise HeartbeatDispatchSkipped(agent["agent_id"], message)
+    # #20519: the same adapter check the agent lists show (GH#9951, GH#9793, GH#12478).
+    reason = adapter_block_reason(adapter_type, agent.get("adapter_config"))
+    if reason is not None:
+        logger.warning("Heartbeat dispatch skipped for agent %s: %s", agent["agent_id"], reason)
+        raise HeartbeatDispatchSkipped(agent["agent_id"], reason)
+    adapter = get_adapter(adapter_type)
 
     return await _dispatch_registry_adapter(adapter, agent, context)
 
