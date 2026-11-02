@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
@@ -17,6 +17,7 @@ class UploadCreate(BaseModel):
     target: Literal["document", "transcript"]
     title: str = Field(default="", max_length=500)
     category: str = Field(default="uploads", max_length=100)
-    tags: list[str] = Field(default_factory=list, max_length=20)
-    whisper_model: str = Field(default="base", max_length=20)
-    language: str | None = Field(default=None, max_length=10)
+    tags: list[Annotated[str, Field(max_length=50)]] = Field(default_factory=list, max_length=20)
+    whisper_model: str = Field(default="base", pattern=r"^[a-z0-9._-]{1,20}$")
+    language: str | None = Field(default=None, pattern=r"^[a-z]{2,3}(-[A-Za-z]{2,4})?$")
+    sha256: str | None = Field(default=None, pattern=r"^[0-9a-fA-F]{64}$")

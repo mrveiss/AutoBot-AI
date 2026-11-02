@@ -6,8 +6,11 @@
 
 from __future__ import annotations
 
+import asyncio
+import errno
 import hashlib
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -48,6 +51,7 @@ async def _send_all(session: uploads.UploadSession) -> uploads.UploadSession:
 async def test_n_chunks_stage_the_whole_file_with_its_size_and_checksum() -> None:
     session = await uploads.begin_handoff(await _send_all(_session()))
     assert _staged_bytes(session) == _DATA and uploads.staged_path(session).suffix == ".mp4"
+    await asyncio.to_thread(uploads.verify_checksum, session)
     assert session.sha256 == hashlib.sha256(_DATA).hexdigest()
 
 
@@ -179,3 +183,68 @@ def test_cancelling_removes_what_was_staged() -> None:
 def test_what_a_client_sees_holds_no_path_or_owner() -> None:
     shown = uploads.describe_upload(_session())
     assert "owner" not in shown and not any("/" in str(value) for value in shown.values())
+
+
+@pytest.mark.asyncio
+async def test_a_declared_checksum_that_doesnt_match_fails_the_handoff() -> None:
+    session = uploads.create_session("alice", "t.mp4", len(_DATA), uploads.MAX_TOTAL_BYTES, {"sha256": "0" * 64})
+    session = await uploads.begin_handoff(await _send_all(session))
+    with pytest.raises(uploads.UploadRejected, match="checksum_mismatch"):
+        await asyncio.to_thread(uploads.verify_checksum, session)
+
+
+def test_one_person_cant_hold_more_than_the_limit(monkeypatch) -> None:
+    monkeypatch.setattr(uploads, "MAX_OPEN_PER_OWNER", 1)
+    _session()
+    with pytest.raises(uploads.UploadNoSpace):
+        _session()
+    uploads.create_session("bob", "b.mp4", 10, uploads.MAX_TOTAL_BYTES, {})
+
+
+def test_sessions_cant_promise_more_than_the_budget(monkeypatch) -> None:
+    monkeypatch.setattr(uploads, "MAX_STAGED_BYTES", 150)
+    uploads.create_session("alice", "a.mp4", 100, uploads.MAX_TOTAL_BYTES, {})
+    with pytest.raises(uploads.UploadNoSpace):
+        uploads.create_session("bob", "b.mp4", 100, uploads.MAX_TOTAL_BYTES, {})
+
+
+def test_a_disk_without_room_is_refused_at_the_start(monkeypatch) -> None:
+    monkeypatch.setattr(uploads.shutil, "disk_usage", lambda _path: SimpleNamespace(free=5))
+    with pytest.raises(uploads.UploadNoSpace):
+        uploads.create_session("alice", "a.mp4", 100, uploads.MAX_TOTAL_BYTES, {})
+
+
+@pytest.mark.asyncio
+async def test_a_full_disk_mid_chunk_is_named_and_keeps_nothing(monkeypatch) -> None:
+    session = _session()
+
+    async def full():
+        yield b"x"
+        raise OSError(errno.ENOSPC, "No space left")
+
+    with pytest.raises(uploads.UploadNoSpace):
+        await uploads.write_chunk(session, 0, full())
+    assert uploads.staged_path(session).stat().st_size == 0
+
+
+@pytest.mark.asyncio
+async def test_a_failed_session_expires_and_a_listed_one_can_be_removed_by_an_admin(monkeypatch) -> None:
+    session = await uploads.begin_handoff(await _send_all(_session()))
+    uploads.record_handoff_failure(session, "upload.handoff_failed")
+    with pytest.raises(uploads.UploadRejected, match="review list"):
+        uploads.remove_listed_session(session.id)
+    monkeypatch.setattr(uploads, "SESSION_TTL_S", 0)
+    time.sleep(0.01)
+    assert [s.id for s in uploads.expired_sessions()] == [session.id]
+    uploads.remove_listed_session(session.id)
+    with pytest.raises(uploads.UploadSessionNotFound):
+        uploads.get_upload_session(session.id, "alice")
+
+
+def test_a_session_being_handed_over_cant_be_removed_as_abandoned(monkeypatch) -> None:
+    session = _session()
+    session.state, session.handoff_started_at = "handing_off", time.time()
+    uploads._save(session)
+    assert not session.expired
+    with pytest.raises(uploads.UploadRejected):
+        uploads.remove_listed_session(session.id)

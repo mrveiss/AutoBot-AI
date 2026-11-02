@@ -89,7 +89,7 @@ def test_a_failed_handoff_says_why_and_can_be_tried_again(client) -> None:
     ):
         client.post(f"{_URL}/{upload['upload_id']}/complete")
     failed = client.get(f"{_URL}/{upload['upload_id']}").json()
-    assert failed["state"] == "failed" and failed["error"] == "RuntimeError", "no internals in the reason"
+    assert failed["state"] == "failed" and failed["error"] == "upload.handoff_failed", "a code, no internals"
     with (
         patch("api.knowledge.get_or_create_knowledge_base", AsyncMock(return_value=object())),
         patch(
@@ -138,3 +138,26 @@ def test_every_route_needs_the_admin_permission() -> None:
     for candidate in route.router.routes:
         calls = [dep.call for dep in candidate.dependant.dependencies]
         assert check_admin_permission in calls, candidate.path
+
+
+def test_a_full_store_answers_507_with_a_code(client, monkeypatch) -> None:
+    monkeypatch.setattr(uploads, "MAX_STAGED_BYTES", 1)
+    reply = client.post(_URL, json={"filename": "t.mp4", "total_size": 10, "target": "transcript"})
+    assert reply.status_code == 507 and reply.json()["detail"]["code"] == "upload.no_space"
+
+
+def test_an_admin_can_remove_a_listed_session_and_it_is_audited(client, monkeypatch) -> None:
+    upload = _create(client)
+    other = {"x-user": "another-admin"}
+    assert client.delete(f"{_URL}/expired/{upload['upload_id']}", headers=other).status_code == 409, "not listed yet"
+    monkeypatch.setattr(uploads, "SESSION_TTL_S", -1)
+    with patch.object(route, "audit_record") as audit:
+        assert client.delete(f"{_URL}/expired/{upload['upload_id']}", headers=other).status_code == 200
+    assert audit.call_args.kwargs["user_id"] == "another-admin"
+    assert audit.call_args.kwargs["resource_id"] == upload["upload_id"]
+
+
+def test_a_chunk_for_a_cancelled_upload_answers_404(client) -> None:
+    upload = _create(client)
+    assert client.delete(f"{_URL}/{upload['upload_id']}").status_code == 200
+    assert client.put(f"{_URL}/{upload['upload_id']}/chunks", params={"offset": 0}, content=b"x").status_code == 404

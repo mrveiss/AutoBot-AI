@@ -491,6 +491,8 @@ appears outside the known overlays.
 | `AUTOBOT_UPLOAD_CHUNK_MB` | knowledge | int | `8` | Largest chunk of a resumable upload, in MB; must fit the web server's body limit (#19713). Range: 1–512. |
 | `AUTOBOT_UPLOAD_DIR` | backend | str | `""` | Transcriber uploads, the only base the path guard allows; empty: <TRANSCRIBER_DATA_DIR>/uploads. |
 | `AUTOBOT_UPLOAD_DOCUMENT_MAX_MB` | knowledge | int | `200` | Largest document a resumable upload accepts, in MB; extraction reads it into memory (#19713). Range: 1–4096. |
+| `AUTOBOT_UPLOAD_MAX_OPEN_PER_OWNER` | knowledge | int | `5` | Unfinished resumable uploads one person may hold (#19713). Range: 1–1000. |
+| `AUTOBOT_UPLOAD_MAX_STAGED_MB` | knowledge | int | `32768` | Total size all unfinished resumable uploads may promise, in MB (#19713). Range: 1–10485760. |
 | `AUTOBOT_UPLOAD_MAX_TOTAL_MB` | knowledge | int | `8192` | Largest whole file a resumable upload accepts, in MB (#19713). Range: 1–1048576. |
 | `AUTOBOT_UPLOAD_SESSION_TTL_HOURS` | knowledge | int | `48` | Hours before an unfinished upload stops taking chunks and is listed for review (#19713). Range: 1–8760. |
 | `AUTOBOT_UPLOAD_STAGING_DIR` | knowledge | str | `""` | Where resumable uploads are staged; empty: uploads-staging under the data directory (#19713). |

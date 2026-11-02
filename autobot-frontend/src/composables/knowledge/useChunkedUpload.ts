@@ -14,6 +14,7 @@ import { computed, ref } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import { useI18n } from 'vue-i18n'
 
 const logger = createLogger('useChunkedUpload')
 
@@ -41,6 +42,24 @@ export interface ChunkedUploadFields {
   tags?: string[]
 }
 
+/** An answer from the server that retrying won't change; `code` is what the person is told. */
+export class UploadRefused extends Error {
+  constructor(readonly code: string) {
+    super(code)
+  }
+}
+
+const REASON_KEYS: Record<string, string> = {
+  'upload.no_space': 'noSpace',
+  'upload.too_large': 'tooLarge',
+  'upload.busy': 'busy',
+  'upload.checksum_mismatch': 'checksum',
+  'upload.keeps_failing': 'keepsFailing',
+  'upload.still_processing': 'stillProcessing',
+}
+
+const CHUNK_TIMEOUT_MS = 120_000
+const HANDOFF_WATCH_MS = 6 * 60 * 60 * 1000
 const RETRY_DELAY_MS = 2000
 const MAX_RETRIES = 30
 const POLL_DELAY_MS = 3000
@@ -69,6 +88,11 @@ function remember(key: string, id: string | null): void {
   }
 }
 
+async function refusalFrom(response: Response): Promise<UploadRefused> {
+  const body = await response.json().catch(() => ({}))
+  return new UploadRefused(body.detail?.code || 'upload.refused')
+}
+
 async function sessionFor(file: File, fields: ChunkedUploadFields): Promise<UploadState> {
   const known = remembered(resumeKey(file))
   if (known) {
@@ -78,60 +102,82 @@ async function sessionFor(file: File, fields: ChunkedUploadFields): Promise<Uplo
       remember(resumeKey(file), null) // gone, or expired away: start again
     }
   }
-  const created: UploadState = await apiClient.post(uploadsUrl(), {
-    filename: file.name,
-    total_size: file.size,
-    ...fields,
+  const response = await apiClient.rawRequest(uploadsUrl(), {
+    method: 'POST',
+    body: { filename: file.name, total_size: file.size, ...fields },
   })
+  if (!response.ok) throw await refusalFrom(response)
+  const created: UploadState = await response.json()
   remember(resumeKey(file), created.upload_id)
   return created
 }
 
-/** Where to go next: the server's offset after a chunk is taken, or after it refused or lost one. */
-async function sendChunk(id: string, file: File, offset: number, size: number): Promise<number> {
+/** Plain http has no WebCrypto; the server then relies on the chunk's length and the connection. */
+async function checksumHeader(chunk: Blob): Promise<Record<string, string>> {
+  if (!globalThis.crypto?.subtle) return {}
+  const digest = await crypto.subtle.digest('SHA-256', await chunk.arrayBuffer())
+  const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
+  return { 'X-Chunk-SHA256': hex }
+}
+
+/** Where to go next: the server's offset after a chunk is taken, or after it lost or refused one. */
+async function sendChunk(id: string, file: File, offset: number, size: number, signal: AbortSignal): Promise<number> {
+  const chunk = file.slice(offset, offset + size)
   const response = await apiClient.rawRequest(`${uploadsUrl()}/${id}/chunks?offset=${offset}`, {
     method: 'PUT',
-    body: file.slice(offset, offset + size),
-    headers: { 'Content-Type': 'application/octet-stream' },
+    body: chunk,
+    headers: { 'Content-Type': 'application/octet-stream', ...(await checksumHeader(chunk)) },
+    timeout: CHUNK_TIMEOUT_MS,
+    signal,
   })
   if (response.ok) return ((await response.json()) as UploadState).received
   if (response.status === 409 || response.status >= 500) {
+    if (response.status === 507) throw await refusalFrom(response)
     const state: UploadState = await apiClient.get(`${uploadsUrl()}/${id}`)
     return state.received
   }
-  const body = await response.json().catch(() => ({}))
-  throw new Error(body.detail || `Upload refused (${response.status})`)
+  throw await refusalFrom(response)
 }
 
-async function sendAll(state: UploadState, file: File, onProgress: (percent: number) => void): Promise<void> {
+async function sendAll(
+  state: UploadState,
+  file: File,
+  onProgress: (percent: number) => void,
+  signal: AbortSignal,
+): Promise<void> {
   let offset = state.received
   let failures = 0
   while (offset < file.size) {
+    if (signal.aborted) throw new UploadRefused('upload.cancelled')
     try {
-      const next = await sendChunk(state.upload_id, file, offset, state.chunk_bytes)
+      const next = await sendChunk(state.upload_id, file, offset, state.chunk_bytes, signal)
       failures = next > offset ? 0 : failures + 1
       offset = next
       onProgress(Math.floor((offset / file.size) * 100))
     } catch (error) {
-      if (!(error instanceof TypeError)) throw error // a network failure is a TypeError; the rest are answers
-      failures += 1
+      if (error instanceof UploadRefused) throw error
+      failures += 1 // a dropped connection or a timeout: ask again, and carry on from the server's offset
     }
-    if (failures > MAX_RETRIES) throw new Error('The upload keeps failing; try again to resume it')
+    if (failures > MAX_RETRIES) throw new UploadRefused('upload.keeps_failing')
     if (failures > 0) await wait(RETRY_DELAY_MS)
   }
 }
 
-async function handOver(id: string): Promise<UploadState> {
+async function handOver(id: string, signal: AbortSignal): Promise<UploadState> {
   await apiClient.post(`${uploadsUrl()}/${id}/complete`, {})
-  for (;;) {
+  const giveUpAt = Date.now() + HANDOFF_WATCH_MS
+  while (Date.now() < giveUpAt && !signal.aborted) {
     const state: UploadState = await apiClient.get(`${uploadsUrl()}/${id}`)
     if (state.state === 'done') return state
-    if (state.state === 'failed') throw new Error(state.error || 'The file could not be processed')
+    if (state.state === 'failed') throw new UploadRefused(state.error || 'upload.handoff_failed')
     await wait(POLL_DELAY_MS)
   }
+  throw new UploadRefused('upload.still_processing') // it goes on running on the server; this tab stops watching
 }
 
 export function useChunkedUpload(documentAccept = '') {
+  const { t } = useI18n()
+  const running = new Map<string, AbortController>()
   const limits = ref<UploadLimits | null>(null)
 
   async function loadLimits(): Promise<void> {
@@ -160,12 +206,33 @@ export function useChunkedUpload(documentAccept = '') {
     fields: ChunkedUploadFields,
     onProgress: (percent: number) => void = () => {},
   ): Promise<UploadState> {
-    const state = await sessionFor(file, fields)
-    await sendAll(state, file, onProgress)
-    const done = await handOver(state.upload_id)
-    remember(resumeKey(file), null)
-    return done
+    const controller = new AbortController()
+    running.set(resumeKey(file), controller)
+    try {
+      const state = await sessionFor(file, fields)
+      await sendAll(state, file, onProgress, controller.signal)
+      const done = await handOver(state.upload_id, controller.signal)
+      remember(resumeKey(file), null)
+      return done
+    } catch (error) {
+      if (!(error instanceof UploadRefused)) throw error
+      const reason = REASON_KEYS[error.code] ?? 'failed'
+      throw new Error(t(`knowledge.upload.chunked.${reason}`))
+    } finally {
+      running.delete(resumeKey(file))
+    }
   }
 
-  return { loadLimits, uploadInChunks, isMedia, uploadAccept, maxBytesFor }
+  /** The person gave up on this file: stop sending, and free what was staged. */
+  async function cancelUpload(file: File): Promise<void> {
+    running.get(resumeKey(file))?.abort()
+    const id = remembered(resumeKey(file))
+    if (!id) return
+    remember(resumeKey(file), null)
+    await apiClient.rawRequest(`${uploadsUrl()}/${id}`, { method: 'DELETE' }).catch((error: unknown) => {
+      logger.warn('Could not cancel the upload; it stays on the review list', error)
+    })
+  }
+
+  return { loadLimits, uploadInChunks, cancelUpload, isMedia, uploadAccept, maxBytesFor }
 }

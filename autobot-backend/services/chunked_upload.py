@@ -14,6 +14,7 @@ is listed for review; nothing here deletes one except the person cancelling it o
 from __future__ import annotations
 
 import asyncio
+import errno
 import fcntl
 import hashlib
 import json
@@ -34,6 +35,8 @@ _MB = 1024 * 1024
 CHUNK_BYTES = env_int_clamped("AUTOBOT_UPLOAD_CHUNK_MB", 8, 1, 512) * _MB
 MAX_TOTAL_BYTES = env_int_clamped("AUTOBOT_UPLOAD_MAX_TOTAL_MB", 8192, 1, 1048576) * _MB
 SESSION_TTL_S = env_int_clamped("AUTOBOT_UPLOAD_SESSION_TTL_HOURS", 48, 1, 8760) * 3600
+MAX_OPEN_PER_OWNER = env_int_clamped("AUTOBOT_UPLOAD_MAX_OPEN_PER_OWNER", 5, 1, 1000)
+MAX_STAGED_BYTES = env_int_clamped("AUTOBOT_UPLOAD_MAX_STAGED_MB", 32768, 1, 10485760) * _MB
 _READ_BYTES = _MB
 _META = "session.json"
 _LOCK = "session.lock"
@@ -53,6 +56,10 @@ class UploadOffsetMismatch(Exception):
 
 class UploadRejected(Exception):
     """The chunk or session breaks a rule; nothing was kept."""
+
+
+class UploadNoSpace(Exception):
+    """Accepting this would pass a storage limit, or the disk is full; nothing was kept."""
 
 
 class UploadBusy(Exception):
@@ -76,7 +83,11 @@ class UploadSession:
 
     @property
     def expired(self) -> bool:
-        return self.state == "receiving" and time.time() - self.created_at > SESSION_TTL_S
+        """Past its time: it takes no more chunks, and is listed for a person to remove."""
+        if self.state == "handing_off":
+            return False
+        since = self.handoff_started_at or self.created_at
+        return time.time() - since > SESSION_TTL_S
 
     @property
     def handoff_lost(self) -> bool:
@@ -124,15 +135,37 @@ def _load(upload_id: str) -> UploadSession:
     return UploadSession(**json.loads(raw))
 
 
+def _holds_a_file(session: UploadSession) -> bool:
+    return session.state != "done"
+
+
+def _check_room(owner: str, total_size: int) -> None:
+    """Counts what open sessions may still grow to, so several can't each promise the same disk."""
+    held = [session for session in _all_sessions() if _holds_a_file(session)]
+    if sum(session.owner == owner for session in held) >= MAX_OPEN_PER_OWNER:
+        raise UploadNoSpace(f"at most {MAX_OPEN_PER_OWNER} unfinished uploads per person")
+    promised = sum(session.total_size for session in held)
+    if promised + total_size > MAX_STAGED_BYTES:
+        raise UploadNoSpace("the staging budget is used up by other uploads")
+    root = staging_root()
+    still_to_come = sum(session.total_size - session.received for session in held)
+    if shutil.disk_usage(root).free < still_to_come + total_size:
+        raise UploadNoSpace("not enough free disk for this upload")
+
+
 def create_session(owner: str, filename: str, total_size: int, max_bytes: int, params: dict) -> UploadSession:
     """Start a session; the caller has already judged the filename for what it is being uploaded for."""
     if total_size <= 0 or total_size > min(max_bytes, MAX_TOTAL_BYTES):
         raise UploadRejected(f"size must be between 1 byte and {min(max_bytes, MAX_TOTAL_BYTES)} bytes")
-    session = UploadSession(str(uuid.uuid4()), owner, filename, total_size, time.time(), params=params)
-    directory = _directory(session.id)
-    directory.mkdir(parents=True, mode=0o700)
-    staged_path(session).touch(mode=0o600)
-    _save(session)
+    root = staging_root()
+    root.mkdir(parents=True, exist_ok=True)
+    with open(root / ".create.lock", "a", encoding="utf-8") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)  # two creates can't both take the last of the room
+        _check_room(owner, total_size)
+        session = UploadSession(str(uuid.uuid4()), owner, filename, total_size, time.time(), params=params)
+        _directory(session.id).mkdir(mode=0o700)
+        staged_path(session).touch(mode=0o600)
+        _save(session)
     return session
 
 
@@ -191,6 +224,12 @@ def _open_at(path: Path, offset: int):
     return handle
 
 
+def _flush_to_disk(handle) -> None:
+    """`received` is a promise that the bytes survive a crash, so they reach the disk first."""
+    handle.flush()
+    os.fsync(handle.fileno())
+
+
 def _cut_back(handle, offset: int) -> None:
     handle.flush()
     handle.truncate(offset)
@@ -210,9 +249,11 @@ async def write_chunk(
                 raise UploadRejected("the chunk's checksum doesn't match, so it wasn't kept")
             if not written:
                 raise UploadRejected("the chunk is empty")
-            await asyncio.to_thread(handle.flush)
-        except BaseException:  # a dropped connection too: only whole chunks count
+            await asyncio.to_thread(_flush_to_disk, handle)
+        except BaseException as exc:  # a dropped connection too: only whole chunks count
             _cut_back(handle, offset)  # not awaited: a cancelled request must still cut back
+            if isinstance(exc, OSError) and exc.errno == errno.ENOSPC:
+                raise UploadNoSpace("the disk is full") from exc
             raise
         finally:
             handle.close()
@@ -230,17 +271,24 @@ def _sha256_of(path: Path) -> str:
 
 
 async def begin_handoff(session: UploadSession) -> UploadSession:
-    """All bytes arrived: fix the file's checksum and mark it, so two requests can't both hand it over."""
+    """All bytes arrived: mark it, so two requests can't both hand it over."""
     with _Locked(session.id):
         session = await asyncio.to_thread(_load, session.id)
         if session.state not in ("receiving", "failed") and not session.handoff_lost:
             raise UploadRejected(f"this upload is {session.state}")
         if session.received != session.total_size:
             raise UploadOffsetMismatch(session.received)
-        session.sha256 = await asyncio.to_thread(_sha256_of, staged_path(session))
         session.state, session.error, session.handoff_started_at = "handing_off", "", time.time()
         await asyncio.to_thread(_save, session)
         return session
+
+
+def verify_checksum(session: UploadSession) -> None:
+    """Hashes the whole file, so it runs in the handoff, after the response. Blocking: call it in a thread."""
+    session.sha256 = _sha256_of(staged_path(session))
+    declared = session.params.get("sha256") or ""
+    if declared and declared.lower() != session.sha256:
+        raise UploadRejected("upload.checksum_mismatch")
 
 
 def record_handoff(session: UploadSession, result: dict) -> None:
@@ -262,7 +310,16 @@ def cancel_session(session: UploadSession) -> None:
         current = _load(session.id)
         if current.state == "handing_off" and not current.handoff_lost:
             raise UploadRejected("this upload is being handed over")
-    shutil.rmtree(_directory(session.id))
+        shutil.rmtree(_directory(session.id))
+
+
+def remove_listed_session(upload_id: str) -> UploadSession:
+    """An admin frees someone else's session, but only one the review list shows."""
+    session = _load(upload_id)
+    if not (session.expired or session.handoff_lost):
+        raise UploadRejected("only a session on the review list can be removed")
+    cancel_session(session)
+    return session
 
 
 def _all_sessions() -> Iterator[UploadSession]:
@@ -270,6 +327,8 @@ def _all_sessions() -> Iterator[UploadSession]:
     if not root.is_dir():
         return
     for directory in root.iterdir():
+        if not directory.is_dir():
+            continue
         try:
             yield _load(directory.name)
         except (UploadSessionNotFound, ValueError, TypeError):

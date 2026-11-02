@@ -450,3 +450,25 @@ register_env_var(
         component="knowledge",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_UPLOAD_MAX_OPEN_PER_OWNER",
+        type=int,
+        default=5,
+        description="Unfinished resumable uploads one person may hold (#19713).",
+        component="knowledge",
+        range=(1, 1000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_UPLOAD_MAX_STAGED_MB",
+        type=int,
+        default=32768,
+        description="Total size all unfinished resumable uploads may promise, in MB (#19713).",
+        component="knowledge",
+        range=(1, 10485760),
+    )
+)

@@ -459,7 +459,7 @@ const store = useKnowledgeStore()
 const controller = useKnowledgeController()
 const { getFileIcon } = useKnowledgeIcons()
 const { maxMb, loadLimit, exceedsLimit } = useKnowledgeUploadLimit()
-const { loadLimits, uploadInChunks, isMedia, uploadAccept, maxBytesFor } = useChunkedUpload(KNOWLEDGE_UPLOAD_ACCEPT)
+const { loadLimits, uploadInChunks, cancelUpload, isMedia, uploadAccept, maxBytesFor } = useChunkedUpload(KNOWLEDGE_UPLOAD_ACCEPT)
 const {
   progress: uploadProgress,
   startProgress,
@@ -798,9 +798,8 @@ function readFileAsText(file: File): Promise<string> {
 
 function removeFile(index: number): void {
   const file = selectedFiles.value[index]
-  if (file && isFileExpanded(file.id)) {
-    collapseAllFiles()
-  }
+  if (file && isFileExpanded(file.id)) collapseAllFiles()
+  if (file) void cancelUpload(file.file)
   selectedFiles.value.splice(index, 1)
 }
 

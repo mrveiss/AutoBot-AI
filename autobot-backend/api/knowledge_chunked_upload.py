@@ -23,11 +23,17 @@ from autobot_shared.ssot_constants import SecurityConstants
 from knowledge.schemas.chunked_upload import UploadCreate
 from security.upload_filename_policy import require_safe_upload
 from services import chunked_upload as uploads
+from services.audit.audit import AuditAction, audit_record
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/uploads")
 
 DOCUMENT_MAX_BYTES = env_int_clamped("AUTOBOT_UPLOAD_DOCUMENT_MAX_MB", 200, 1, 4096) * 1024 * 1024
+
+
+def _refusal(status: int, code: str, exc: Exception) -> HTTPException:
+    """A stable code for the client to word; the message is for the log and API readers."""
+    return HTTPException(status_code=status, detail={"code": code, "message": str(exc)})
 
 
 def _owner(request: Request) -> str:
@@ -75,8 +81,10 @@ async def create_upload(body: UploadCreate, request: Request, _admin: bool = Dep
         session = await asyncio.to_thread(
             uploads.create_session, _owner(request), body.filename, body.total_size, _max_bytes(body), params
         )
+    except uploads.UploadNoSpace as exc:
+        raise _refusal(507, "upload.no_space", exc) from exc
     except uploads.UploadRejected as exc:
-        raise HTTPException(status_code=413, detail=str(exc)) from exc
+        raise _refusal(413, "upload.too_large", exc) from exc
     return uploads.describe_upload(session)
 
 
@@ -85,6 +93,30 @@ async def list_expired_uploads(_admin: bool = Depends(check_admin_permission)) -
     """Abandoned sessions for a person to review; each still takes up its disk space until cancelled."""
     sessions = await asyncio.to_thread(uploads.expired_sessions)
     return {"expired": [uploads.describe_upload(session) for session in sessions]}
+
+
+@router.delete("/expired/{upload_id}")
+async def remove_expired_upload(
+    upload_id: str, request: Request, _admin: bool = Depends(check_admin_permission)
+) -> dict:
+    """An admin frees an abandoned upload from the review list: a person's decision, recorded."""
+    try:
+        session = await asyncio.to_thread(uploads.remove_listed_session, upload_id)
+    except uploads.UploadSessionNotFound as exc:
+        raise HTTPException(status_code=404, detail="No such upload") from exc
+    except (uploads.UploadRejected, uploads.UploadBusy) as exc:
+        raise _refusal(409, "upload.not_removable", exc) from exc
+    audit_record(
+        user_id=_owner(request),
+        action=AuditAction.KNOWLEDGE_REMOVE,
+        resource_type="upload_session",
+        resource_id=upload_id,
+        ip_address=request.client.host if request.client else "unknown",
+        session_id=None,
+        outcome="success",
+    )
+    logger.info("Upload %s (%s bytes) removed from the review list", upload_id, session.total_size)
+    return {"upload_id": upload_id, "removed": True}
 
 
 @router.get("/{upload_id}")
@@ -107,9 +139,13 @@ async def put_chunk(
     except uploads.UploadOffsetMismatch as exc:
         raise HTTPException(status_code=409, detail={"received": exc.received}) from exc
     except uploads.UploadBusy as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise _refusal(409, "upload.busy", exc) from exc
+    except uploads.UploadNoSpace as exc:
+        raise _refusal(507, "upload.no_space", exc) from exc
     except uploads.UploadRejected as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise _refusal(422, "upload.refused", exc) from exc
+    except (uploads.UploadSessionNotFound, FileNotFoundError) as exc:  # cancelled while this chunk arrived
+        raise HTTPException(status_code=404, detail="No such upload") from exc
     return uploads.describe_upload(session)
 
 
@@ -140,16 +176,26 @@ async def _hand_to_transcript(kb, session: uploads.UploadSession) -> dict:
     return {"document_id": reply.document_id, "word_count": reply.word_count}
 
 
+def _failure_code(exc: Exception) -> str:
+    """Stored and shown to the person, so it's a code, never an exception's text."""
+    code = getattr(exc, "code", None)
+    if code is not None:
+        return str(getattr(code, "value", code))
+    if isinstance(exc, uploads.UploadRejected):
+        return str(exc)
+    return "upload.handoff_failed"
+
+
 async def _hand_over(kb, request: Request, session: uploads.UploadSession) -> None:
     try:
+        await asyncio.to_thread(uploads.verify_checksum, session)
         if session.params["target"] == "document":
             result = await _hand_to_document(kb, request, session)
         else:
             result = await _hand_to_transcript(kb, session)
     except Exception as exc:  # recorded for the person polling; the file stays for another try
         logger.exception("Upload %s could not be handed over", session.id)
-        detail = getattr(exc, "detail", None) or getattr(exc, "message", None) or type(exc).__name__
-        uploads.record_handoff_failure(session, str(detail))
+        uploads.record_handoff_failure(session, _failure_code(exc))
         return
     uploads.record_handoff(session, result)
 
