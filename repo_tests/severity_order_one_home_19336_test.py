@@ -13,15 +13,16 @@ has ``hint``, which ``Severity`` deliberately lacks).
 A copy comes back as a literal that orders the ``Severity`` vocabulary itself: a tuple/list made
 only of severity words (three or more), or a dict mapping three or more of them to integer ranks.
 
-The six orderings #19336 listed are gone; the sweep then measured 43 more (24 after the analytics endpoints and sort-key sites batch) hand-written severity
-sequences across the backends (the class's remainder, listed and sampled on #19336). ``PIN`` holds that count
-exactly and only goes down against the base: each follow-up batch lowers it by what it converts.
+The detector reads a literal, so a score weight or another vocabulary that shares the words looks
+like a copy. Each of those is recorded in ``NOT_AN_ORDER`` with its reason, and ``PIN`` stops the
+table growing. Anything else the detector finds is a copy to convert.
 """
 
 from __future__ import annotations
 
 import ast
 import re
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -37,8 +38,23 @@ _TEST = re.compile(r"(^|/)(tests?/|test_[^/]*\.py$|[^/]*_test\.py$|conftest\.py$
 _WORDS = frozenset(member.value for member in Severity)
 _THIS = "repo_tests/severity_order_one_home_19336_test.py"
 
-#: Hand-written severity sequences still in the tree (measured at #19336). Down-only, exact.
-PIN = {"severity_order_copies": 24}
+#: Total of ``NOT_AN_ORDER``. Down-only against the base, so the table cannot grow.
+PIN = {"not_an_order": 23}
+
+#: Literals that share the severity words and do not order severity: path -> how many, and why.
+NOT_AN_ORDER = {
+    "autobot-backend/api/analytics_debt.py": 1,  # an ROI impact score
+    "autobot-backend/api/sandbox.py": 1,  # sandbox security levels
+    "autobot-backend/code_analysis/src/code_quality_dashboard.py": 7,  # weights added to a score (their size matters) and effort hours
+    "autobot-backend/code_analysis/src/patch_generator.py": 2,  # a weight added to a score (its size matters) and a risk penalty
+    "autobot-backend/code_analysis/src/performance_analyzer.py": 1,  # debt score weights
+    "autobot-backend/code_intelligence/shared/scoring.py": 3,  # issue counts in calibration examples
+    "autobot-backend/llc/agent_tools.py": 1,  # a task priority enum
+    "autobot-backend/llm_shared/providers/reasoning_effort.py": 3,  # LLM effort levels
+    "autobot-backend/security/enterprise/security_policy_manager.py": 1,  # violation count thresholds
+    "autobot-backend/services/confounder_control_analyzer.py": 2,  # complexity and priority bins
+    "autobot-backend/skills/builtin/code_review.py": 1,  # choices for a config field; nothing compares by this list
+}
 
 
 def _modules(root: Path) -> list[Path]:
@@ -96,22 +112,41 @@ def order_copies(source: str, rel: str) -> list[str]:
     return [f"{rel}:{n.lineno}: a hand-written severity order" for n in ast.walk(tree) if _is_ordering(n)]
 
 
+def unrecorded(found: list[str], recorded: dict[str, int]) -> dict[str, int]:
+    """Files with more *found* literals than *recorded*: each extra one is a copy."""
+    counts = Counter(hit.split(":", 1)[0] for hit in found)
+    return {rel: n for rel, n in counts.items() if n > recorded.get(rel, 0)}
+
+
+def stale(found: list[str], recorded: dict[str, int]) -> dict[str, int]:
+    """Entries of *recorded* that claim more literals than *found* holds."""
+    counts = Counter(hit.split(":", 1)[0] for hit in found)
+    return {rel: n for rel, n in recorded.items() if n > counts[rel]}
+
+
 def test_no_new_hand_written_severity_order() -> None:
     root = repo_root()
     files = REACH.examined(root)
     found = [h for p in files for h in order_copies(p.read_text(encoding="utf-8"), p.relative_to(root).as_posix())]
     REACH.completed(files)
-    pinned = PIN["severity_order_copies"]
-    assert (
-        len(found) <= pinned
-    ), f"sort or filter by Severity.rank / Severity.rank_of (#19336); new copies among: {found}"
-    assert len(found) == pinned, f"{len(found)} hand-written severity orders, pin says {pinned}: lower PIN in this PR"
+    assert not unrecorded(found, NOT_AN_ORDER), f"sort or filter by Severity.rank / Severity.rank_of (#19336): {found}"
+    assert not stale(found, NOT_AN_ORDER), "lower or remove these NOT_AN_ORDER entries"
 
 
 def test_the_pin_was_not_raised_against_the_base() -> None:
     base = base_table(repo_root(), (_THIS,), "PIN")
     if base:
-        assert PIN["severity_order_copies"] <= base["severity_order_copies"], "the pin only goes down (#19336)"
+        assert PIN["not_an_order"] <= base[next(iter(base))], "the pin only goes down (#19336)"
+
+
+def test_the_pin_is_the_size_of_the_table() -> None:
+    assert sum(NOT_AN_ORDER.values()) == PIN["not_an_order"], "a new exemption must raise the pin, which fails"
+
+
+def test_a_planted_copy_and_a_lost_literal_are_both_reported() -> None:
+    assert unrecorded(["new.py:1: a hand-written severity order"], {}) == {"new.py": 1}
+    assert stale([], {"gone.py": 1}) == {"gone.py": 1}
+    assert not unrecorded(["kept.py:1: x"], {"kept.py": 1}) and not stale(["kept.py:1: x"], {"kept.py": 1})
 
 
 def test_the_home_ranks_in_declaration_order() -> None:
