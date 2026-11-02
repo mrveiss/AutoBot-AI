@@ -1376,8 +1376,7 @@
       mode: "0600"
       owner: "{{ backend_user }}"
       group: "{{ backend_group }}"
-      backup: true
-    tags: ['backend', 'config']
+    tags: ['backend', 'config']  # No backup: true (#20517): each render left another copy of the secrets
 
   # MVA-1633: Verify .env file exists (will be read by service on restart)
   - name: "Backend | Verify .env file readable (MVA-1633)"
