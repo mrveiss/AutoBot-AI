@@ -176,14 +176,14 @@ onMounted(listBoards)
 }
 
 .browser-title {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
 }
 
 .browser-count {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -236,14 +236,14 @@ onMounted(listBoards)
 }
 
 .card-name {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
 }
 
 .card-meta {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   margin: 0;
 }
@@ -283,7 +283,7 @@ onMounted(listBoards)
 }
 
 .field-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;

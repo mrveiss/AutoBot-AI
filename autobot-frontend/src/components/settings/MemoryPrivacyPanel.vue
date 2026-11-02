@@ -261,7 +261,7 @@ onMounted(loadMemories)
 }
 
 .panel-title {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -270,7 +270,7 @@ onMounted(loadMemories)
 }
 
 .panel-desc {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   margin: 0;
 }
@@ -332,7 +332,7 @@ onMounted(loadMemories)
 .store-tag {
   padding: 0.1rem 0.5rem;
   border-radius: 999px;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   background: var(--color-primary-muted, var(--mempriv-primary-muted));
@@ -340,13 +340,13 @@ onMounted(loadMemories)
 }
 
 .item-ts {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   margin-left: auto;
 }
 
 .item-content {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-primary);
   margin: 0 0 0.5rem;
   word-break: break-word;
@@ -358,7 +358,7 @@ onMounted(loadMemories)
 .provenance { margin-bottom: 0.5rem; }
 .provenance summary { font-size: 0.8rem; cursor: pointer; color: var(--text-secondary); }
 .provenance-data {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   background: var(--surface-tertiary, var(--mempriv-surface-tertiary));
   padding: 0.5rem;
   border-radius: var(--radius-default);

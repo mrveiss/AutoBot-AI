@@ -51,7 +51,6 @@ _AUTH_MODULE = re.compile(r"^from ([a-z_.]*(?:auth|security|permission|rbac)[a-z
 #: Exported names that match `_AUTH_MODULE` but do not gate a request. Path and
 #: crypto helpers live in the same modules and would otherwise read as auth --
 #: `validate_path` protects a filesystem argument, not an identity.
-#:
 #: This list exists because "derive the vocabulary" is necessary and not
 #: sufficient: derivation gets the NAMES from the tree, and purpose still has to
 #: be decided. Each entry is a decision, so each is recorded rather than filtered
@@ -73,6 +72,7 @@ NOT_A_GATE: frozenset[str] = frozenset(
         "hash_password",
         "role_value",
         "router",
+        "scan_chat_message",  # a content safety scan (#19786), not an identity check
         "security_scanner_agent",
         "validate_config_against_schema",
         "validate_path",
@@ -532,7 +532,7 @@ def classify(root: Path, alias: str, module: str, vocabulary: set[str], seen: fr
     # reach a known primitive, before asking which mechanism gates the routes.
     # Without this, a gate is invisible whenever it is spelled locally or lives
     # behind an import path that does not contain an auth-ish word (#15745).
-    local = vocabulary | _local_gates(tree, vocabulary) | _imported_gates(tree, root, vocabulary)
+    local = (vocabulary | _local_gates(tree, vocabulary) | _imported_gates(tree, root, vocabulary)) - NOT_A_GATE
 
     # What this module MOUNTS, and whether it also registers routes itself. Both
     # are asked, because a module can do both and the two need different verdicts
