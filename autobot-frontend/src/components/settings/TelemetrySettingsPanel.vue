@@ -184,7 +184,7 @@ function announceChange(message: string): void {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  font-size: var(--font-size-lg);
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   margin: var(--spacing-0);
@@ -223,7 +223,7 @@ function announceChange(message: string): void {
 
 .preference-hint {
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   margin-bottom: var(--spacing-md);
   line-height: 1.5;
 }
@@ -282,7 +282,7 @@ input:checked + .toggle-slider:before {
 }
 
 .toggle-label {
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
 }
@@ -323,7 +323,7 @@ input:checked + .toggle-slider:before {
 }
 
 .disclosure-content h4 {
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
   margin: var(--spacing-md) 0 var(--spacing-sm) 0;
@@ -333,7 +333,7 @@ input:checked + .toggle-slider:before {
   margin: var(--spacing-sm) 0;
   padding-left: var(--spacing-lg);
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   line-height: 1.6;
 }
 
@@ -346,7 +346,7 @@ input:checked + .toggle-slider:before {
   padding: var(--spacing-sm);
   background: var(--bg-secondary);
   border-left: 3px solid var(--color-info);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   border-radius: var(--radius-sm);
 }

@@ -83,12 +83,12 @@ onMounted(() => {
 
 .status-title {
   margin: 0;
-  font-size: var(--font-size-lg);
+  font-size: var(--text-lg);
 }
 
 .status-desc {
   margin: 0;
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -106,13 +106,13 @@ onMounted(() => {
 }
 
 .status-item dt {
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
 .status-item dd {
   margin: 0;
-  font-size: var(--font-size-lg);
+  font-size: var(--text-lg);
   font-weight: 600;
 }
 
