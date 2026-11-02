@@ -509,7 +509,7 @@ const formatTime = createDateFormatter({ kind: 'time', locale: 'en-US', intl: { 
 
 .action-btn.primary {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border-color: transparent;
 }
 

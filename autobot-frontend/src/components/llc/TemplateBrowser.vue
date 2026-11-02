@@ -376,7 +376,7 @@ onMounted(() => {
 
 .filter-btn.active {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border-color: var(--color-primary);
 }
 
@@ -593,7 +593,7 @@ onMounted(() => {
 .btn-select.selected {
   background: var(--color-primary);
   border-color: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
 }
 
 /* Preview Panel */
@@ -786,7 +786,7 @@ onMounted(() => {
 .btn-primary {
   flex: 1;
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .btn-primary:hover {

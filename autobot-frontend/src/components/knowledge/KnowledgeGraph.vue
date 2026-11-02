@@ -1319,7 +1319,7 @@ watch(layoutMode, () => {
 
 .action-btn.primary {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border-color: transparent;
 }
 
@@ -1715,7 +1715,7 @@ watch(layoutMode, () => {
   align-items: center;
   padding: var(--spacing-md);
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .panel-header h4 {

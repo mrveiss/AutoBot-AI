@@ -230,6 +230,7 @@ _DECLARED_SCOPES = {
     "autobot-has-no-pro-tier-in-user-text": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "dead-icon-selector-vue-files": ("autobot-frontend/src",),
     "icon-font-size-rule-vue-files": ("autobot-frontend/src",),
+    "primary-fill-white-label-files": ("autobot-frontend/src",),
     "kit-shadow-ts-files-scanned-14908": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "duplicate-type-names-ts-files-scanned-14908": (
         "autobot-frontend/src",

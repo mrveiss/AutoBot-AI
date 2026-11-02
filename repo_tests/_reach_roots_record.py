@@ -302,6 +302,7 @@ REACH_ROOTS = {
         "scripts",
         "tools",
     ),
+    "repo_tests/primary_fill_label_reads_text_on_primary_20425_test.py": ("autobot-frontend/src",),
     "repo_tests/provenance_accessor_17527_test.py": ("autobot-backend",),
     "repo_tests/provider_key_env_reads_route_through_vault_18094_test.py": (
         "autobot-backend",

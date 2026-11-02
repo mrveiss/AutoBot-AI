@@ -199,7 +199,7 @@ function getStrategyIcon(strategy: string): string {
 .strategy-card { display: flex; gap: var(--spacing-3); padding: var(--spacing-3-5); background: var(--bg-tertiary); border: 1px solid transparent; border-radius: var(--radius-lg); transition: all 0.2s; }
 .strategy-card.active { border-color: var(--color-primary); background: var(--color-primary-bg); }
 .strategy-icon { width: 36px; height: 36px; border-radius: var(--radius-lg); background: var(--bg-secondary); display: flex; align-items: center; justify-content: center; color: var(--text-secondary); flex-shrink: 0; }
-.strategy-card.active .strategy-icon { background: var(--color-primary); color: white; }
+.strategy-card.active .strategy-icon { background: var(--color-primary); color: var(--text-on-primary); }
 .strategy-name { display: block; font-size: var(--text-sm); font-weight: 500; color: var(--text-primary); margin-bottom: var(--spacing-1); }
 .strategy-desc { margin: var(--spacing-0) var(--spacing-0) var(--spacing-1-5); font-size: var(--text-xs); color: var(--text-secondary); line-height: 1.4; }
 .strategy-best { font-size: var(--text-xs); color: var(--text-muted); font-style: italic; }
@@ -212,7 +212,7 @@ function getStrategyIcon(strategy: string): string {
 .node-circle { width: 40px; height: 40px; border-radius: 50%; background: var(--bg-tertiary); display: flex; align-items: center; justify-content: center; font-size: var(--text-sm); font-weight: 600; color: var(--text-tertiary); border: 2px solid var(--border-default); }
 .viz-step.completed .node-circle { background: var(--color-success); color: white; border-color: var(--color-success); }
 .viz-step.failed .node-circle { background: var(--color-error-solid); color: white; border-color: var(--color-error); }
-.viz-step.executing .node-circle { background: var(--color-primary); color: white; border-color: var(--color-primary); }
+.viz-step.executing .node-circle { background: var(--color-primary); color: var(--text-on-primary); border-color: var(--color-primary); }
 .node-label { font-size: var(--text-xs); color: var(--text-secondary); text-align: center; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .viz-connector { width: 40px; height: 2px; background: var(--border-default); margin-top: var(--spacing-5); }
 .viz-connector.completed { background: var(--color-success); }

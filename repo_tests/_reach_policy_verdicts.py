@@ -77,6 +77,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "One frontend tree's `.vue` files, against all tracked `.vue` including the other frontend and the kit.",
     ),
+    "primary-fill-white-label-files": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "One frontend tree's `.vue` and `.css` files, against all tracked ones incl. the other frontend and kit.",
+    ),
     "deployment-mode-detector-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

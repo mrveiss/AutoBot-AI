@@ -119,7 +119,7 @@
               @click="runTemplate"
               :disabled="!runDialog.url.trim() || isRunning"
               class="px-3 py-2 text-sm rounded-lg font-medium transition-colors"
-              style="background: var(--color-primary); color: #fff"
+              style="background: var(--color-primary); color: var(--text-on-primary)"
             >
               <Icon :name="isRunning ? 'spinner' : 'play'" :class="isRunning ? 'animate-spin mr-1' : 'mr-1'" />
               {{ isRunning ? $t('browser.scrapeTemplates.running') : $t('browser.scrapeTemplates.runButton') }}

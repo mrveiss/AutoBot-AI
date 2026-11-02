@@ -551,7 +551,7 @@ onMounted(() => {
   background: var(--color-primary);
   border-radius: var(--radius-lg);
   padding: var(--spacing-5);
-  color: white;
+  color: var(--text-on-primary);
   min-width: 150px;
   text-align: center;
 }
@@ -860,7 +860,7 @@ onMounted(() => {
 
 .metric-icon { flex-shrink: 0; }
 
-.resource-type.llm_tokens { background: var(--color-primary); color: white; }
+.resource-type.llm_tokens { background: var(--color-primary); color: var(--text-on-primary); }
 .resource-type.agent_tasks { background: var(--color-info-solid); color: white; }
 .resource-type.cache { background: var(--color-success); color: white; }
 
