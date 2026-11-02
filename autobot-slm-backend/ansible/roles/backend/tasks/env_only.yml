@@ -71,6 +71,5 @@
     mode: "0600"
     owner: "{{ backend_env_owner }}"
     group: "{{ backend_env_group }}"
-    backup: true
   become: true
   tags: ['backend', 'env']
