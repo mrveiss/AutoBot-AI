@@ -35,12 +35,18 @@
     </div>
 
     <!-- Error State -->
-    <div v-if="!analyzing && !wasInterrupted && error" class="error-state">
-      <Icon name="exclamation-triangle" /> {{ error }}
-      <button @click="reset" class="retry-btn">
-        <Icon name="redo" /> {{ $t('analytics.patterns.reset') }}
-      </button>
-    </div>
+    <EmptyState
+      v-if="!analyzing && !wasInterrupted && error"
+      icon="exclamation-triangle"
+      :title="$t('analytics.patterns.errorTitle')"
+      :message="error"
+    >
+      <template #actions>
+        <button @click="reset" class="retry-btn">
+          <Icon name="redo" /> {{ $t('analytics.patterns.reset') }}
+        </button>
+      </template>
+    </EmptyState>
 
     <!-- Results (shown alongside progress bar when partial results arrive) -->
     <div v-if="hasResults" class="section-content">
@@ -239,16 +245,18 @@
     </div>
 
     <!-- Empty State -->
-    <div v-if="!analyzing && !wasInterrupted && !error && !hasResults" class="empty-state">
-      <Icon name="puzzle-piece" />
-      <p>{{ $t('analytics.patterns.noAnalysis') }}</p>
-      <p class="empty-hint">{{ $t('analytics.patterns.emptyHint') }}</p>
-    </div>
+    <EmptyState
+      v-if="!analyzing && !wasInterrupted && !error && !hasResults"
+      icon="puzzle-piece"
+      :title="$t('analytics.patterns.noAnalysis')"
+      :message="$t('analytics.patterns.emptyHint')"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
 import { useShowMore } from '@autobot/ui'
 import TruncationNotice from './TruncationNotice.vue'
 import { watch, onMounted, reactive } from 'vue'
@@ -505,9 +513,7 @@ defineExpose({
   cursor: not-allowed;
 }
 
-.loading-state,
-.error-state,
-.empty-state {
+.loading-state {
   padding: var(--spacing-5);
   text-align: center;
   color: var(--text-secondary);
@@ -537,10 +543,6 @@ defineExpose({
 .files-progress {
   font-size: var(--text-xs);
   color: var(--text-secondary);
-}
-
-.error-state {
-  color: var(--color-error);
 }
 
 .interrupted-state {
@@ -927,23 +929,6 @@ defineExpose({
 .analysis-time {
   margin-left: var(--spacing-2);
   color: var(--color-success);
-}
-
-/* Empty State */
-.empty-state {
-  padding: var(--spacing-10) var(--spacing-5);
-}
-
-.empty-state i {
-  font-size: var(--text-4xl);
-  margin-bottom: var(--spacing-4);
-  opacity: 0.5;
-}
-
-.empty-hint {
-  font-size: var(--text-sm);
-  max-width: 400px;
-  margin: var(--spacing-2) auto 0;
 }
 
 /* Responsive */
