@@ -228,7 +228,7 @@
 # not this file, so `ansible_requirements_parity_test` failed #18105 on a shard. One
 # declaration now -- the manifest -- read here instead of restated.
 #
-# Read from the CONTROLLER via playbook_dir, the same anchor
+# Read from the CONTROLLER via role_path, whose depth is fixed (#20509), the same anchor
 # `_shared/tasks/stage_shared_manifests.yml` uses for `constraints/shared.txt`; the
 # component manifest is not synced to the node, so it cannot be read from there.
 #
@@ -238,7 +238,7 @@
 - name: "TTS Worker | Read the torch requirement from the component manifest (#18127)"
   ansible.builtin.set_fact:
     _tts_torch_requirement: >-
-      {{ lookup('file', playbook_dir ~ '/../../../autobot-tts-worker/requirements.txt')
+      {{ lookup('file', role_path ~ '/../../../../autobot-tts-worker/requirements.txt')
          | regex_search('^torch(?![A-Za-z0-9_.-])[^\s#]*', multiline=True) }}
   tags: ['tts', 'packages']
 

@@ -17,6 +17,7 @@ export const THEME_ICONS: Record<Theme, IconName> = {
   dark: 'moon',
   light: 'sun',
   contrast: 'eye',
+  'contrast-dark': 'eye',
   mono: 'circle',
   system: 'desktop',
 }
