@@ -43,6 +43,7 @@ from typing import Any, Iterable, Mapping, Optional
 from sqlalchemy import select
 
 from autobot_shared.ai_lines import (
+    CONVERSATION_TOOLS,
     SCOPE_COMPANY,
     VERIFIED_COMPANY_KEY,
     VERIFIED_USER_KEY,
@@ -180,6 +181,16 @@ async def resolve_action_line(
     )
 
 
+def turn_requires_approval(tool_name: str, ctx: Any) -> bool:
+    """Whether the turn itself puts *tool_name* behind a person's approval (#20195).
+
+    A turn that carries attached files holds untrusted text in its prompt, so every tool call of it needs a
+    yes, reads included. The two conversation tools stay free: gating them would stall the answer itself. This
+    is the existing ``role_requires_approval`` floor of ``resolve_line`` (a stored ``never`` still refuses).
+    """
+    return bool(getattr(ctx, "approve_every_call", False)) and tool_name not in CONVERSATION_TOOLS
+
+
 async def call_needs_approval(tool_call: Mapping[str, Any], ctx: Any) -> bool:
     """Plan-time projection for the chat graph's interrupt: any line stricter than line 1 (GH#11202).
 
@@ -192,6 +203,7 @@ async def call_needs_approval(tool_call: Mapping[str, Any], ctx: Any) -> bool:
         (getattr(ctx, "context", None) or {}).get(VERIFIED_COMPANY_KEY),
         user_id=(getattr(ctx, "context", None) or {}).get(VERIFIED_USER_KEY),
         declared_categories=getattr(ctx, "requires_approval_before", None) or (),
+        role_requires_approval=turn_requires_approval(tool_call.get("name", ""), ctx),
     )
     return resolution.line is not AiLine.AUTONOMOUS
 
@@ -283,7 +295,7 @@ async def _file_hold(
         )
 
 
-async def _report(verdict: LineVerdict, requested_by: str, surface: str) -> None:
+async def _report(verdict: LineVerdict, requested_by: str, surface: str, floor_waived: bool = False) -> None:
     """Line 1 'then report', and the trail for refusals and holds. Best effort; never blocks the action."""
     try:
         await audit_log(
@@ -291,7 +303,12 @@ async def _report(verdict: LineVerdict, requested_by: str, surface: str) -> None
             result="success",
             user_id=requested_by,
             resource=verdict.resolution.key,
-            details={"surface": surface, "source": verdict.resolution.source, "approval_id": verdict.approval_id},
+            details={
+                "surface": surface,
+                "source": verdict.resolution.source,
+                "approval_id": verdict.approval_id,
+                **({"attachment_floor_waived": True} if floor_waived else {}),  # #20195: ran on the admin's setting
+            },
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("AI line report for %s was not recorded: %s", verdict.resolution.key, exc)
@@ -309,8 +326,11 @@ async def enforce_line(
     role_requires_approval: bool = False,
     hold_in_approvals: bool = True,
     approved_fingerprints: frozenset[str] = frozenset(),
+    floor_waived: bool = False,
 ) -> LineVerdict:
     """Decide and apply the line for one agent action: line 1 RUN (reported), 2 HOLD, 3 REFUSE.
+
+    ``floor_waived``: the admin setting lifted the attachment floor for this call (#20195); the report says so.
 
     ``hold_in_approvals=False`` is for a surface that holds the action in its own live queue (the terminal):
     the decision is still made here, the hold is not duplicated. ``approved_fingerprints`` are the
@@ -333,7 +353,7 @@ async def enforce_line(
         verdict = await _hold(
             resolution, params or {}, resolve_scope(company_id, user_id), requested_by, surface, hold_in_approvals
         )
-    await _report(verdict, requested_by, surface)
+    await _report(verdict, requested_by, surface, floor_waived)
     return verdict
 
 
