@@ -201,8 +201,13 @@ class BudgetService(LLCServiceBase):
         tokens_out: int,
         model: str,
         work_item_id: Optional[str] = None,
+        bill_dollars: bool = True,
     ) -> Decimal:
         """Record token cost for an agent and enforce budget limits (GH#8215, GH#8997).
+
+        ``bill_dollars=False`` is a run on a subscription login (#20266): it spent tokens, not
+        dollars. Its event row and ``tokens_spent`` are recorded, but the event's cost is 0, so
+        ``budget_spent`` is untouched and no dollar limit can be crossed; a token limit still holds.
 
         Also writes one ``company_os_cost_events`` row (#16016), tied to ``work_item_id``
         when given. Raises ``WorkItemNotInCompany`` if that item is not in ``company_id``.
@@ -219,7 +224,7 @@ class BudgetService(LLCServiceBase):
         Raises BudgetExhausted if spending exceeds the active budget mode limit,
         and UnpricedModel if the model is neither local nor in the live catalogue.
         """
-        cost = _cost_of(model, agent_id, tokens_in, tokens_out)
+        cost = _cost_of(model, agent_id, tokens_in, tokens_out) if bill_dollars else Decimal("0")
 
         total_tokens = tokens_in + tokens_out
         await _record_event(session, agent_id, company_id, work_item_id, (model, tokens_in, tokens_out, cost))
@@ -299,7 +304,7 @@ class BudgetService(LLCServiceBase):
                 raise BudgetExhausted(agent_id=agent_id, spent=tokens_spent, limit=token_limit)
             if token_limit > 0 and tokens_spent / token_limit >= threshold:
                 await self._emit_alert(agent_id, tokens_spent, token_limit)
-        else:
+        elif bill_dollars:
             # Default DOLLARS mode
             if spent > limit:
                 raise BudgetExhausted(agent_id=agent_id, spent=float(spent), limit=float(limit))

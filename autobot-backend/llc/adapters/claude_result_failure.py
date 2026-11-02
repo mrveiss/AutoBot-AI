@@ -13,10 +13,13 @@ from __future__ import annotations
 
 import json
 
+from .base import BILLING_API, BILLING_SUBSCRIPTION
 from .subprocess_support import final_result_event
 
 # Upper bound for the fallback read of a result line larger than the scan tail.
 _WIDE_TAIL_BYTES = 1024 * 1024
+# The init event is the stream's first line; it is a few KB at most.
+_INIT_HEAD_BYTES = 256 * 1024
 
 _AUTH_FAILED_ERROR_CODE = "authentication_failed"
 # 401 only. 403 is deliberately not treated as auth: this CLI's own output does not
@@ -48,6 +51,31 @@ def resolve_result_event(output_file: str, tail: str) -> tuple[dict | None, str]
         return event, tail
     wide = read_wide_tail(output_file)
     return final_result_event(wide), wide
+
+
+def run_billing(output_file: str) -> str | None:
+    """How the CLI authenticated this run, from the ``system``/``init`` event (#20266).
+
+    The init event is the first line of the stream and carries ``apiKeySource``:
+    ``"none"`` when the CLI holds no API key (it is on a login), else where the key
+    came from. ``None`` when the event or field is missing: unknown is not subscription.
+    """
+    try:
+        with open(output_file, "rb") as fh:
+            head = fh.read(_INIT_HEAD_BYTES).decode("utf-8", errors="replace")
+    except OSError:
+        return None
+    for line in head.splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(event, dict) and event.get("type") == "system" and event.get("subtype") == "init":
+            source = event.get("apiKeySource")
+            if not isinstance(source, str):
+                return None
+            return BILLING_SUBSCRIPTION if source == "none" else BILLING_API
+    return None
 
 
 def is_failed_result_event(result_event: dict | None) -> bool:

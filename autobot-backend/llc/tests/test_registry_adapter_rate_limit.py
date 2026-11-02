@@ -374,6 +374,24 @@ class TestDispatchRegistryAdapterRateLimitTranslation:
         ):
             await _dispatch_registry_adapter(adapter, agent, {})  # must not raise
 
+    async def test_failed_run_still_charges_the_tokens_it_spent(self):
+        """A turn-limit run spent real tokens: the budget sees them before the run fails (#20202)."""
+        agent = _make_agent()
+        adapter = _make_adapter_returning(LLCRunStatus.FAILED)
+        spent = AdapterRunStatus(status=LLCRunStatus.FAILED, error="turn limit", tokens_in=120, tokens_out=30)
+        adapter.status = AsyncMock(return_value=spent)
+        ingest = AsyncMock()
+
+        with (
+            patch("llc.scheduler.heartbeat_scheduler._issue_run_key", AsyncMock(return_value=(None, None))),
+            patch("llc.scheduler.heartbeat_scheduler._revoke_run_key", AsyncMock()),
+            patch("llc.scheduler.heartbeat_scheduler._ingest_adapter_usage", ingest),
+        ):
+            with pytest.raises(AdapterRunFailed):
+                await _dispatch_registry_adapter(adapter, agent, {})
+
+        ingest.assert_awaited_once_with(agent, spent)
+
 
 # ---------------------------------------------------------------------------
 # 7. End-to-end: RATE_LIMITED status -> ProviderRateLimited -> backoff

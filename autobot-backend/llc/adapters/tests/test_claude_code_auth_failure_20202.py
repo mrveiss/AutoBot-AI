@@ -133,6 +133,23 @@ async def test_rate_limited_error_result_stays_rate_limited(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_rate_limit_at_the_start_of_an_oversized_result_line_is_seen(tmp_path) -> None:
+    limited = dict(_RESULT_AUTH, result="rate_limit_error: too many requests " + "x" * 9000)
+    result = await _final_status(tmp_path, [limited])
+    assert result.status == LLCRunStatus.RATE_LIMITED
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_quoted_in_tool_output_of_a_long_run_stays_failed(tmp_path) -> None:
+    tool = {
+        "type": "user",
+        "message": {"content": [{"type": "tool_result", "content": "rate_limit_error " + "y" * 9000}]},
+    }
+    result = await _final_status(tmp_path, [tool, dict(_RESULT_AUTH, result="other " + "z" * 9000)])
+    assert (result.status, result.error) == (LLCRunStatus.FAILED, ERROR_RESULT_REASON)
+
+
+@pytest.mark.asyncio
 async def test_auth_failure_through_subscription_adapter(tmp_path) -> None:
     result = await _final_status(tmp_path, [_ASSISTANT_AUTH, _RESULT_AUTH], ClaudeCodeSubscriptionAdapter())
     assert (result.status, result.error) == (LLCRunStatus.FAILED, AUTH_FAILED_REASON)
