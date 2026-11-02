@@ -89,6 +89,23 @@ def wire_llm_service(app: FastAPI) -> None:
         logger.exception("LLM service NOT wired onto app.state; chat resolves it per request (#18689)")
 
 
+def wire_llm_spend_recorder() -> None:
+    """Register the canonical spend recorder for the shared-layer call sites (#19650).
+
+    ``autobot_shared`` and ``llm_shared`` cannot import ``services``, so the
+    router's Claude escalation and the pre-action verifier report spend through
+    a hook, and this is the one place that installs it. Without it they warn
+    once per site and record nothing.
+    """
+    try:
+        from autobot_shared.spend_recording import register_spend_recorder
+        from services.llm_usage_recording import record_response_usage
+
+        register_spend_recorder(record_response_usage)
+    except Exception:
+        logger.exception("LLM spend recorder NOT registered; router escalation and verifier spend go unrecorded")
+
+
 async def start_background_workers(app: FastAPI) -> None:
     """Wire the shared LLM service, then start every lifetime worker, in one call from the lifespan.
 
@@ -98,6 +115,7 @@ async def start_background_workers(app: FastAPI) -> None:
     worker at all, which is how #17548 happened.
     """
     wire_llm_service(app)
+    wire_llm_spend_recorder()
     await start_doc_sync_queue_worker(app)
     await start_vector_reconciler(app)
     await start_telegram_poller(app)
@@ -138,4 +156,5 @@ __all__ = [
     "start_telegram_poller",
     "start_vector_reconciler",
     "wire_llm_service",
+    "wire_llm_spend_recorder",
 ]
