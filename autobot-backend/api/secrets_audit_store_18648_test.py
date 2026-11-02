@@ -162,6 +162,7 @@ class TestRecordLandsInTheAuditStore:
         assert client.get("/api/secrets/").status_code == 500
         assert store.actions() == [
             ("secret.access", "failed"),
+            ("secret.delete", "success"),  # #20557: the record written before the write
             ("secret.delete", "denied"),
         ]
 
@@ -223,7 +224,7 @@ class TestAnUnreachableStoreNeverFailsTheOperation:
 
         failing = AsyncMock(side_effect=LoggerDown(f"cannot reach {KNOWN_VALUE}"))
         with patch("api.secrets_audit.audit_log", failing), caplog.at_level(logging.DEBUG):
-            response = _delete(client)
+            response = _list(client)
         assert response.status_code == 200
         assert "LoggerDown" in caplog.text
         assert KNOWN_VALUE not in caplog.text
@@ -273,10 +274,18 @@ class TestHandlerErrorLogsCarryTheClassNameOnly:
 class TestAnUnrecordedWriteIsReported:
     """AuditLogger.log reports a failed write by returning False, not by raising."""
 
-    def test_a_false_return_is_logged_and_the_operation_completes(self, client, caplog):
+    def test_a_false_return_is_logged_and_a_best_effort_operation_completes(self, client, caplog):
+        with patch("api.secrets_audit.audit_log", AsyncMock(return_value=False)), caplog.at_level(logging.DEBUG):
+            response = _list(client)
+        assert response.status_code == 200
+        assert "did not record LIST" in caplog.text
+
+    def test_a_false_return_stops_a_credential_delete(self, client, caplog):
+        """#20557: a delete is irreversible, so its record is written first and is not best-effort."""
         with patch("api.secrets_audit.audit_log", AsyncMock(return_value=False)), caplog.at_level(logging.DEBUG):
             response = _delete(client)
-        assert response.status_code == 200
+        assert response.status_code == 503
+        client.manager.delete_secret.assert_not_called()
         assert "did not record DELETE" in caplog.text
 
 
