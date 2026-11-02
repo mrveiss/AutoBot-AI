@@ -25,7 +25,7 @@ def test_no_shell_block_in_the_backup_include_has_an_odd_apostrophe() -> None:
 
 
 def test_the_check_refuses_a_stray_quote_and_passes_the_tree(tmp_path) -> None:
-    pytest.importorskip("ansible")
+    pytest.importorskip("ansible.parsing.splitter")
     import sys
 
     sys.path.insert(0, str(_ROOT / "tools/lint"))

@@ -24,10 +24,10 @@ jobs:
     if: github.event.pull_request.draft == false
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
+      # The runner's python3, as ansible-role-facts-test.yml does: this ansible-core predates .python-version.
       - name: "Install the fleet's ansible-core"
-        run: python -m pip install --quiet -r constraints/ansible-core.txt
+        run: |
+          python3 -m venv "${RUNNER_TEMP}/ansible-venv"
+          "${RUNNER_TEMP}/ansible-venv/bin/pip" install --quiet -r constraints/ansible-core.txt
       - name: "Every free-form block parses (#20693)"
-        run: python tools/lint/check_ansible_free_form_args.py
+        run: '"${RUNNER_TEMP}/ansible-venv/bin/python" tools/lint/check_ansible_free_form_args.py'
