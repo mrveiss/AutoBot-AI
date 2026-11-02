@@ -5,7 +5,7 @@
         <Icon name="spinner" class="animate-spin" />
         {{ $t('analytics.indexing.inProgress') }}
       </div>
-      <div v-if="currentJobId" class="job-id">{{ $t('analytics.indexing.jobId') }} {{ currentJobId.substring(0, 8) }}...</div>
+      <div v-if="currentJobId" class="job-id">{{ $t('analytics.indexing.jobId') }} {{ currentJobId }}</div>
     </div>
 
     <!-- Phase Progress -->
