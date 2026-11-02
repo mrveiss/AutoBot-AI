@@ -23,7 +23,7 @@ from autobot_shared.ssot_constants import SecurityConstants
 from knowledge.schemas.chunked_upload import UploadCreate
 from security.upload_filename_policy import require_safe_upload
 from services import chunked_upload as uploads
-from services.audit.audit import AuditAction, audit_record
+from services.audit_logger import audit_log
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/uploads")
@@ -99,23 +99,27 @@ async def list_expired_uploads(_admin: bool = Depends(check_admin_permission)) -
 async def remove_expired_upload(
     upload_id: str, request: Request, _admin: bool = Depends(check_admin_permission)
 ) -> dict:
-    """An admin frees an abandoned upload from the review list: a person's decision, recorded."""
+    """An admin frees an abandoned upload from the review list: a person's decision, on the record first."""
+    admin = _owner(request)
+
+    async def record(session: uploads.UploadSession) -> bool:
+        return await audit_log(
+            "knowledge.upload_session.remove",
+            user_id=admin,
+            ip_address=request.client.host if request.client else "unknown",
+            resource=upload_id,
+            details={"owner": session.owner, "filename": session.filename, "total_size": session.total_size},
+            durable=True,
+        )
+
     try:
-        session = await asyncio.to_thread(uploads.remove_listed_session, upload_id)
+        await uploads.remove_listed_session(upload_id, record)
     except uploads.UploadSessionNotFound as exc:
         raise HTTPException(status_code=404, detail="No such upload") from exc
+    except uploads.UploadAuditFailed as exc:
+        raise _refusal(503, "upload.audit_unavailable", exc) from exc
     except (uploads.UploadRejected, uploads.UploadBusy) as exc:
         raise _refusal(409, "upload.not_removable", exc) from exc
-    audit_record(
-        user_id=_owner(request),
-        action=AuditAction.KNOWLEDGE_REMOVE,
-        resource_type="upload_session",
-        resource_id=upload_id,
-        ip_address=request.client.host if request.client else "unknown",
-        session_id=None,
-        outcome="success",
-    )
-    logger.info("Upload %s (%s bytes) removed from the review list", upload_id, session.total_size)
     return {"upload_id": upload_id, "removed": True}
 
 

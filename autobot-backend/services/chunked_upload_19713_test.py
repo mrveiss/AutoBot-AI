@@ -11,6 +11,7 @@ import errno
 import hashlib
 import time
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -231,20 +232,49 @@ async def test_a_full_disk_mid_chunk_is_named_and_keeps_nothing(monkeypatch) -> 
 async def test_a_failed_session_expires_and_a_listed_one_can_be_removed_by_an_admin(monkeypatch) -> None:
     session = await uploads.begin_handoff(await _send_all(_session()))
     uploads.record_handoff_failure(session, "upload.handoff_failed")
+    record = AsyncMock(return_value=True)
     with pytest.raises(uploads.UploadRejected, match="review list"):
-        uploads.remove_listed_session(session.id)
+        await uploads.remove_listed_session(session.id, record)
+    record.assert_not_awaited()
     monkeypatch.setattr(uploads, "SESSION_TTL_S", 0)
     time.sleep(0.01)
     assert [s.id for s in uploads.expired_sessions()] == [session.id]
-    uploads.remove_listed_session(session.id)
+    await uploads.remove_listed_session(session.id, record)
+    record.assert_awaited_once()
     with pytest.raises(uploads.UploadSessionNotFound):
         uploads.get_upload_session(session.id, "alice")
 
 
-def test_a_session_being_handed_over_cant_be_removed_as_abandoned(monkeypatch) -> None:
+@pytest.mark.asyncio
+async def test_a_session_being_handed_over_cant_be_removed_as_abandoned() -> None:
     session = _session()
     session.state, session.handoff_started_at = "handing_off", time.time()
     uploads._save(session)
     assert not session.expired
     with pytest.raises(uploads.UploadRejected):
-        uploads.remove_listed_session(session.id)
+        await uploads.remove_listed_session(session.id, AsyncMock(return_value=True))
+
+
+@pytest.mark.asyncio
+async def test_a_removal_that_cant_be_recorded_removes_nothing(monkeypatch) -> None:
+    session = _session()
+    monkeypatch.setattr(uploads, "SESSION_TTL_S", 0)
+    time.sleep(0.01)
+    with pytest.raises(uploads.UploadAuditFailed):
+        await uploads.remove_listed_session(session.id, AsyncMock(return_value=False))
+    assert uploads.staged_path(session).exists()
+
+
+@pytest.mark.asyncio
+async def test_the_record_is_written_before_the_bytes_go(monkeypatch) -> None:
+    session = _session()
+    monkeypatch.setattr(uploads, "SESSION_TTL_S", 0)
+    time.sleep(0.01)
+    seen = []
+
+    async def record(_session) -> bool:
+        seen.append(uploads.staged_path(session).exists())
+        return True
+
+    await uploads.remove_listed_session(session.id, record)
+    assert seen == [True]

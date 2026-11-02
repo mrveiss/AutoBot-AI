@@ -24,7 +24,7 @@ import time
 import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import AsyncIterable, Iterator, List, Optional
+from typing import AsyncIterable, Awaitable, Callable, Iterator, List, Optional
 
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
@@ -60,6 +60,10 @@ class UploadRejected(Exception):
 
 class UploadNoSpace(Exception):
     """Accepting this would pass a storage limit, or the disk is full; nothing was kept."""
+
+
+class UploadAuditFailed(Exception):
+    """A removal must be on the record first, and this one could not be."""
 
 
 class UploadBusy(Exception):
@@ -313,12 +317,18 @@ def cancel_session(session: UploadSession) -> None:
         shutil.rmtree(_directory(session.id))
 
 
-def remove_listed_session(upload_id: str) -> UploadSession:
-    """An admin frees someone else's session, but only one the review list shows."""
-    session = _load(upload_id)
-    if not (session.expired or session.handoff_lost):
-        raise UploadRejected("only a session on the review list can be removed")
-    cancel_session(session)
+async def remove_listed_session(upload_id: str, record: Callable[[UploadSession], Awaitable[bool]]) -> UploadSession:
+    """An admin frees someone else's session, but only one the review list shows, and only once on the record.
+
+    All under the session's lock, so a session can't change or be taken between the check and the removal.
+    """
+    with _Locked(upload_id):
+        session = await asyncio.to_thread(_load, upload_id)
+        if not (session.expired or session.handoff_lost):
+            raise UploadRejected("only a session on the review list can be removed")
+        if not await record(session):
+            raise UploadAuditFailed("the removal couldn't be recorded, so nothing was removed")
+        await asyncio.to_thread(shutil.rmtree, _directory(upload_id))
     return session
 
 

@@ -151,10 +151,17 @@ def test_an_admin_can_remove_a_listed_session_and_it_is_audited(client, monkeypa
     other = {"x-user": "another-admin"}
     assert client.delete(f"{_URL}/expired/{upload['upload_id']}", headers=other).status_code == 409, "not listed yet"
     monkeypatch.setattr(uploads, "SESSION_TTL_S", -1)
-    with patch.object(route, "audit_record") as audit:
+    durable = AsyncMock(return_value=False)
+    with patch.object(route, "audit_log", durable):
+        assert client.delete(f"{_URL}/expired/{upload['upload_id']}", headers=other).status_code == 503
+    assert client.get(f"{_URL}/{upload['upload_id']}").status_code == 200, "no record, so nothing was removed"
+    durable.return_value = True
+    with patch.object(route, "audit_log", durable):
         assert client.delete(f"{_URL}/expired/{upload['upload_id']}", headers=other).status_code == 200
-    assert audit.call_args.kwargs["user_id"] == "another-admin"
-    assert audit.call_args.kwargs["resource_id"] == upload["upload_id"]
+    kwargs = durable.await_args.kwargs
+    assert kwargs["durable"] is True and kwargs["user_id"] == "another-admin"
+    assert kwargs["resource"] == upload["upload_id"]
+    assert client.get(f"{_URL}/{upload['upload_id']}").status_code == 404
 
 
 def test_a_chunk_for_a_cancelled_upload_answers_404(client) -> None:
