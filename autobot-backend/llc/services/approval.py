@@ -30,6 +30,7 @@ from ..models.enums import ActivityEventType, ApprovalStatus, ApprovalType
 from .approval_hooks import (
     ApprovalHookError,
     record_approval_event,
+    review_decider,
     run_post_commit_hook,
     run_post_decision_hook,
     validate_payload,
@@ -159,7 +160,8 @@ class ApprovalService(LLCServiceBase):
             ApprovalNotFoundError: approval_id does not exist.
             ApprovalStateError: approval is not in PENDING state, or decision
                 value is not APPROVED/REJECTED.
-            ApprovalHookError: the approved action cannot be applied (GH#8214); nothing is
+            ApprovalHookError: the approved action cannot be applied, or the decider asked for it while another
+                owner/admin exists (GH#8214); nothing is
                 recorded, and the caller must roll back.
         """
         if decision not in (ApprovalStatus.APPROVED, ApprovalStatus.REJECTED):
@@ -186,6 +188,7 @@ class ApprovalService(LLCServiceBase):
         approval.decided_at = datetime.now(timezone.utc)
         await session.flush()
         # Same transaction as the status change: a hook that raises leaves the approval pending.
+        self_approval = await review_decider(session, approval, decision, decided_by)  # four eyes (#8214)
         applied = await run_post_decision_hook(session, approval, decision, decided_by)
         await record_approval_event(
             session,
@@ -193,7 +196,7 @@ class ApprovalService(LLCServiceBase):
             _DECISION_EVENT[decision],
             actor_user_id=decided_by,
             before={"status": ApprovalStatus.PENDING.value},
-            after={"status": decision.value, "applied": applied},
+            after={"status": decision.value, "applied": applied, "self_approval": self_approval},
         )
         await wake_for_decided_approval(session, approval, decision.value)  # #19582: wake the requester
         logger.info(
