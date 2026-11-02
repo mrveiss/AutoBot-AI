@@ -28,6 +28,7 @@ from repo_tests._hardcoded_colour_detect import (
     REACH_IMPORTANT_FILES,
     REACH_STYLE_BLOCKS,
     SLM_KEY_PREFIX,
+    VENDOR_SELECTORS,
     _colour_scanned_files,
     _important_scanned_files,
     _is_colour,
@@ -238,6 +239,46 @@ class TestTheImportantDetectorWorks:
         assert _scan_important(tmp_path) == {"a.vue": 1}
 
 
+class TestTheVendorExemptionIsNarrow:
+    """#17567: the vendor exemption excuses vendor selectors and nothing else."""
+
+    def _count(self, tmp_path, css):
+        (tmp_path / "a.vue").write_text(f"<style>{css}</style>", encoding="utf-8")
+        return _scan_important(tmp_path).get("a.vue", 0)
+
+    def test_a_vendor_selector_is_not_counted(self, tmp_path):
+        assert self._count(tmp_path, ":deep(.apexcharts-tooltip) { color: red !important; }") == 0
+        assert self._count(tmp_path, ".t :deep(.xterm-viewport) { overflow: auto !important; }") == 0
+
+    def test_a_non_vendor_selector_is_still_counted(self, tmp_path):
+        css = (
+            ".apexcharts-tooltip { color: red !important; }\n"
+            ".apexcharts { color: red !important; }\n"
+            ".my-xtermish { color: red !important; }\n"
+            ".card { color: red !important; }"
+        )
+        assert self._count(tmp_path, css) == 3
+
+    def test_a_mixed_selector_list_is_counted(self, tmp_path):
+        assert self._count(tmp_path, ".apexcharts-tooltip, .card { color: red !important; }") == 1
+        assert self._count(tmp_path, ".card, .xterm-viewport { color: red !important; }") == 1
+
+    def test_a_list_of_only_vendor_selectors_is_not_counted(self, tmp_path):
+        assert self._count(tmp_path, ".apexcharts-tooltip, :deep(.xterm-rows) { color: red !important; }") == 0
+        assert self._count(tmp_path, ":is(.apexcharts-a, .apexcharts-b) { color: red !important; }") == 0
+
+    def test_a_new_non_vendor_important_trips_the_ratchet(self, tmp_path):
+        d = tmp_path / "autobot-frontend" / "src" / "views"
+        d.mkdir(parents=True)
+        (d / "New.vue").write_text("<style>.x { top: 0 !important; }</style>", encoding="utf-8")
+        measured = _scan_important_all(tmp_path)
+        assert set(measured) - set(IMPORTANT_DECLARATIONS) == {"views/New.vue"}
+
+    def test_every_vendor_exemption_states_its_reason(self):
+        for _pattern, reason in VENDOR_SELECTORS:
+            assert len(reason) > 10
+
+
 class TestTheImportantPopulationOnlyShrinks:
     def test_the_important_sweep_reaches_the_components(self):
         read = len(_important_scanned_files(repo_root()))
@@ -275,7 +316,8 @@ class TestTheImportantPopulationOnlyShrinks:
             f"pinned count does not match the tree (pinned, now): {grew}. Equality, not a "
             "ceiling -- an unlowered pin leaves headroom for a removed !important to return. "
             "Raise specificity or fix the cascade; !important overrides the design system "
-            "rather than using it."
+            "rather than using it (#17567). A third-party library's injected markup is exempt "
+            "only under a VENDOR_SELECTORS entry with a stated reason."
         )
 
     def test_no_new_file_joins_the_population(self, measured_important):

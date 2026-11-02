@@ -26,7 +26,7 @@ SOCKET_PATH = os.environ.get("DOCKER_PROXY_SOCKET", "/var/run/docker.sock")
 PROJECT_LABEL = "com.docker.compose.project"
 ACTIONS = {"start", "stop", "restart"}
 #: The SLM and what it needs to run: stopping one from the SLM could leave nobody to start it again.
-NEVER_STOP = {"autobot-slm", "autobot-slm-gui", "autobot-postgres", "autobot-redis"}
+NEVER_STOP = {"autobot-slm", "autobot-slm-gui", "autobot-slm-postgres", "autobot-postgres", "autobot-redis"}
 #: How long a client may take to send or read one request, so a stalled one can't hold a thread.
 REQUEST_TIMEOUT_SECONDS = int(os.environ.get("DOCKER_PROXY_REQUEST_TIMEOUT", "30"))
 _NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$")
