@@ -29,7 +29,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/analytics/CodeGenerationDashboard.vue": 1108,
     "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": 1791,
     "autobot-frontend/src/components/analytics/CodeReviewDashboard.vue": 1220,
-    "autobot-frontend/src/components/analytics/CodebaseAnalytics.vue": 1267,
+    "autobot-frontend/src/components/analytics/CodebaseAnalytics.vue": 1260,
     "autobot-frontend/src/components/analytics/CodebaseAnalyticsLanding.vue": 758,
     "autobot-frontend/src/components/analytics/ConversationFlowDashboard.vue": 909,
     "autobot-frontend/src/components/analytics/LLMPatternDashboard.vue": 1080,
@@ -37,20 +37,20 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/analytics/PatternAnalysis.vue": 944,
     "autobot-frontend/src/components/analytics/PerformanceAnalysisDashboard.vue": 1075,
     "autobot-frontend/src/components/analytics/PrecommitHookDashboard.vue": 1097,
-    "autobot-frontend/src/components/analytics/SourceManager.vue": 838,
+    "autobot-frontend/src/components/analytics/SourceManager.vue": 830,
     "autobot-frontend/src/components/analytics/TechnicalDebtDashboard.vue": 1712,
     "autobot-frontend/src/components/analytics/panels/CodebaseBugPredictionPanel.vue": 779,
     "autobot-frontend/src/components/analytics/panels/CodebaseCrossLanguagePanel.vue": 640,
     "autobot-frontend/src/components/analytics/panels/CodebaseIntelligenceScoresPanel.vue": 1325,
     "autobot-frontend/src/components/analytics/panels/CodebaseOwnershipPanel.vue": 1035,
     "autobot-frontend/src/components/audit/AuditLogTable.vue": 737,  # #14780 BasePagination: 758 -> 741
-    "autobot-frontend/src/components/browser/BrowserSessionManager.vue": 647,  # #18849: 654 -> 653
+    "autobot-frontend/src/components/browser/BrowserSessionManager.vue": 641,  # #18849: 654 -> 653
     "autobot-frontend/src/components/charts/BaseChart.vue": 602,
     "autobot-frontend/src/components/charts/FunctionCallGraph.vue": 2153,  # #19906: 2165 -> 2153
     "autobot-frontend/src/components/charts/ImportTreeChart.vue": 1353,  # #19906: 1365 -> 1353
-    "autobot-frontend/src/components/chat/ChatInput.vue": 1631,  # #20133: 1672 -> 1631
+    "autobot-frontend/src/components/chat/ChatInput.vue": 1628,  # #20133: 1672 -> 1631; #20195: -> 1628
     "autobot-frontend/src/components/chat/ChatInterface.vue": 1521,
-    "autobot-frontend/src/components/chat/ChatMessages.vue": 2118,  # #18849: 2119 -> 2118
+    "autobot-frontend/src/components/chat/ChatMessages.vue": 2097,  # #20195: 2118 -> 2097 (approval routing moved out)
     "autobot-frontend/src/components/chat/ChatSidebar.vue": 807,  # #18849: 808 -> 807
     "autobot-frontend/src/components/chat/DocumentationSearchSidebar.vue": 766,
     "autobot-frontend/src/components/chat/VisionAnalysisModal.vue": 702,
@@ -100,7 +100,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/visualizations/AgentActivityVisualization.vue": 936,
     "autobot-frontend/src/components/visualizations/SystemArchitectureDiagram.vue": 1881,
     "autobot-frontend/src/components/visualizations/WorkflowVisualization.vue": 1017,  # #16744: 1020 -> 1019
-    "autobot-frontend/src/components/workflow/PhaseProgressionIndicator.vue": 634,
+    "autobot-frontend/src/components/workflow/PhaseProgressionIndicator.vue": 618,
     "autobot-frontend/src/components/workflow/WorkflowCanvas.vue": 2887,
     "autobot-frontend/src/components/workflow/WorkflowLiveDashboard.vue": 782,
     "autobot-frontend/src/composables/__tests__/useClipboard.test.ts": 696,
@@ -168,7 +168,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/index.ts": 957,
     "autobot-slm-frontend/src/components/AddNodeModal.vue": 1067,  # #14777 batch 2: 1111 -> 1067
     "autobot-slm-frontend/src/components/fleet/NodeLifecyclePanel.vue": 934,
-    "autobot-slm-frontend/src/composables/useAutobotApi.ts": 1973,  # #19217 factory in; #12363 formatter out
+    "autobot-slm-frontend/src/composables/useAutobotApi.ts": 1896,  # #19217 factory in; #12363 formatter out
     "autobot-slm-frontend/src/composables/useCodeSync.ts": 1078,
     "autobot-slm-frontend/src/composables/useOrchestrationManagement.ts": 693,
     "autobot-slm-frontend/src/composables/useSlmApi.ts": 1457,

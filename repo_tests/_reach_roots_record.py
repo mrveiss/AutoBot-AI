@@ -307,6 +307,7 @@ REACH_ROOTS = {
         "scripts",
         "tools",
     ),
+    "repo_tests/primary_fill_label_reads_text_on_primary_20425_test.py": ("autobot-frontend/src",),
     "repo_tests/provenance_accessor_17527_test.py": ("autobot-backend",),
     "repo_tests/provider_key_env_reads_route_through_vault_18094_test.py": (
         "autobot-backend",
@@ -370,6 +371,7 @@ REACH_ROOTS = {
     "repo_tests/sigterm_grace_one_home_19340_test.py": ("autobot-backend/llc",),
     "repo_tests/single_attribute_writer_18240_test.py": ("autobot-frontend/src",),
     "repo_tests/slm_backend_no_embedded_playbook_18606_test.py": ("autobot-slm-backend",),
+    "repo_tests/slm_login_needs_no_users_db_19406_test.py": ("autobot-slm-backend",),
     "repo_tests/slm_node_enum_members_exist_test.py": ("autobot-slm-backend",),
     "repo_tests/ssot_rehardcode_19730_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "repo_tests/store_fact_chokepoint_guard_test.py": ("autobot-backend/", "autobot_shared/"),

@@ -530,7 +530,7 @@ onUnmounted(() => {
 .btn-trigger {
   padding: 0.3rem 0.75rem;
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border: none;
   border-radius: 0.375rem;
   font-size: 0.8rem;
