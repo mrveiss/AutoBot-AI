@@ -90,6 +90,14 @@ CREATE TABLE IF NOT EXISTS file_cleanup_queue (
     CHECK (cleanup_reason IN ('session_ended', 'user_request', 'expired', 'space_limit'))
 );
 
+-- chat_attachment_marks: durable "an attachment turn ran in this chat" fact (#20195).
+-- Keyed by chat id alone: independent of the session record and of file rows, survives file deletion.
+-- Also created idempotently at use by chat_attachment_marks.py, so an install lacking it gains it safely.
+CREATE TABLE IF NOT EXISTS chat_attachment_marks (
+    session_id TEXT PRIMARY KEY,
+    first_marked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- ============================================================================
 -- INDEXES
 -- ============================================================================
@@ -103,6 +111,11 @@ CREATE INDEX IF NOT EXISTS idx_conversation_files_hash
 
 CREATE INDEX IF NOT EXISTS idx_conversation_files_uploaded_at
     ON conversation_files(uploaded_at DESC);
+
+-- Per-owner quota sum (conversation_file_quota.py, #20217): every upload sums one owner's bytes.
+-- IF NOT EXISTS: an existing install gains the index the next time the schema is applied; no row changes.
+CREATE INDEX IF NOT EXISTS idx_conversation_files_uploaded_by
+    ON conversation_files(uploaded_by, is_deleted);
 
 CREATE INDEX IF NOT EXISTS idx_file_metadata_file_id
     ON file_metadata(file_id);

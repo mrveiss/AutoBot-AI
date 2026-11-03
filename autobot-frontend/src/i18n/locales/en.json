@@ -320,6 +320,9 @@
         "invalidResponse": "The server sent an unreadable response",
         "network": "Network error during upload",
         "cancelled": "Upload cancelled",
+        "fileTooLarge": "This file is too large. The maximum size is {maxMb} MB.",
+        "quotaExceeded": "Your storage limit of {limitMb} MB is reached. {liveMb} MB is in use and {remainingMb} MB is left.",
+        "quotaExceededPendingRemoval": "Your storage limit of {limitMb} MB is reached. {liveMb} MB is in use, and {pendingMb} MB of deleted files still count until their removal is approved after human review.",
         "unknown": "Upload failed"
       },
       "filesAttached": "{count} files attached",
@@ -762,6 +765,16 @@
     "lightweightMode": "Lightweight mode",
     "lightweightModeTooltip": "lightweight Mode tooltip",
     "errors": {
+      "budgetExhausted": "Your {period} spending limit for this {scope} (${limit}) has been reached. Chat is unavailable until it resets or an administrator raises the limit.",
+      "budgetScope": {
+        "user": "account",
+        "tenant": "organization"
+      },
+      "budgetPeriod": {
+        "hour": "hourly",
+        "day": "daily",
+        "month": "monthly"
+      },
       "deleteFailed": "Couldn't delete the chat. Please try again.",
       "createFailed": "Failed to create chat: {error}",
       "loadSessionsFailed": "Failed to load chat sessions: {error}",
@@ -786,6 +799,16 @@
       "browser": "Browser",
       "novnc": "Remote Desktop",
       "ariaLabel": "Chat sections"
+    },
+    "attachmentNotice": {
+      "unavailable": "An attached file could not be found in this conversation, so it was not used.",
+      "too_many": "Only the first {limit} attached files were used; the rest were left out.",
+      "image": "\"{filename}\" is an image and cannot be read as text, so it was not used.",
+      "unsupported": "\"{filename}\" is not a text file this assistant can read, so it was not used.",
+      "unreadable": "\"{filename}\" could not be read, so it was not used.",
+      "empty": "\"{filename}\" has no readable text, so it was not used.",
+      "truncated": "\"{filename}\" is long, so only the start of it was used.",
+      "over_budget": "The attached files reached the size limit, so \"{filename}\" was not used."
     }
   },
   "settings": {
@@ -3482,7 +3505,8 @@
         "create": "Create",
         "sqlQueryPlaceholder": "SELECT * FROM documents WHERE updated_at > :last_sync",
         "connectorNamePlaceholder": "My Connector"
-      }
+      },
+      "jobStatusFailed": "Couldn't get this sync's progress. Close and reopen the history to try again."
     },
     "modals": {
       "bulkEdit": {
@@ -4821,7 +4845,9 @@
       "readyTitle": "Phase Validation Ready",
       "readyHint": "Click \"Load Validation Data\" above to fetch phase status from the validation dashboard.",
       "capabilities": "Capabilities",
-      "unknownPhase": "Unknown Phase"
+      "unknownPhase": "Unknown Phase",
+      "notScored": "Not scored",
+      "noneScored": "No phases scored"
     }
   },
   "agent": {
@@ -6891,6 +6917,22 @@
   },
   "security": {
     "secretsManager": {
+      "loadFailed": "The secrets could not be loaded. What is shown may be out of date. Refresh to try again.",
+      "systemVault": {
+        "title": "System vault",
+        "unavailable": "The system vault is unavailable, so its secrets cannot be shown.",
+        "empty": "No system vault secrets.",
+        "newValue": "New value",
+        "rotate": "Rotate",
+        "save": "Save",
+        "cancel": "Cancel",
+        "delete": "Delete",
+        "deleteTitle": "Delete system secret",
+        "deleteMessage": "Delete \"{name}\" from the system vault? Services that read it will stop receiving it.",
+        "failed": "The change could not be confirmed. It may have been refused, or it may have been applied and the response lost. The list has been reloaded; check it before retrying.",
+        "dependentsTitle": "Secret is in use",
+        "dependentsMessage": "\"{name}\" is still used by: {dependents}. Delete it anyway? These will stop receiving it."
+      },
       "sidebarTitle": "Credentials",
       "searchPlaceholder": "Search credentials...",
       "allCredentials": "All Credentials",
@@ -8380,6 +8422,9 @@
     }
   },
   "llc": {
+    "agent": {
+      "cannotRun": "Cannot run"
+    },
     "templates": {
       "searchPlaceholder": "Search templates...",
       "loading": "Loading templates...",
@@ -8470,6 +8515,7 @@
     },
     "cost": {
       "title": "Cost Dashboard",
+      "raisePendingApproval": "This company requires board approval to raise a budget limit. Your request was submitted for approval; the limit has not changed.",
       "exportCsv": "Export CSV",
       "selectCompany": "Select a company to view costs.",
       "totalThisMonth": "Total This Month",
@@ -8565,6 +8611,21 @@
     },
     "approvals": {
       "title": "Approvals Inbox",
+      "removals": {
+        "title": "{count} removal proposal(s) await your decision.",
+        "hint": "Approving permanently removes the named data; rejecting keeps it and the proposal is not repeated.",
+        "approve": "Approve",
+        "reject": "Reject",
+        "decideError": "Could not record the decision."
+      },
+      "stuckCleanup": {
+        "title": "{count} deleted file(s), {size}, are stuck: removal was refused repeatedly and they are no longer proposed.",
+        "hint": "The bytes are still on disk. Reset lets a file be proposed again; removal still needs an approval.",
+        "reset": "Propose again",
+        "resetDone": "The file will be proposed for removal again.",
+        "resetError": "Could not reset this file.",
+        "loadError": "Could not load the file cleanup status. Try again."
+      },
       "tabPending": "Pending",
       "tabHistory": "History",
       "selectCompany": "Select a company to view approvals.",

@@ -39,6 +39,29 @@ describe('useConnectorJob first job', () => {
     expect(isPolling.value).toBe(false)
   })
 
+  it('stops at once when the job request fails, rather than waiting for a job', async () => {
+    get.mockRejectedValue(Object.assign(new Error('boom'), { status: 500 }))
+    const { isPolling, start } = useConnectorJob()
+    start('c')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(isPolling.value).toBe(false)
+    expect(get).toHaveBeenCalledTimes(1)
+  })
+
+  it('a failed request after a running job clears the state, so nothing shows Running', async () => {
+    get
+      .mockResolvedValueOnce({ status: 'running' })
+      .mockRejectedValueOnce(Object.assign(new Error('boom'), { status: 500 }))
+    const { isPolling, jobState, pollFailed, start } = useConnectorJob()
+    start('c')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(jobState.value?.status).toBe('running')
+    await vi.advanceTimersByTimeAsync(POLL_MS)
+    expect(isPolling.value).toBe(false)
+    expect(jobState.value).toBeNull()
+    expect(pollFailed.value).toBe(true)
+  })
+
   it('gives up if no job ever appears', async () => {
     get.mockRejectedValue(notFound)
     const { isPolling, start } = useConnectorJob()

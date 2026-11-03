@@ -482,7 +482,7 @@ onMounted(async () => {
 
 .btn-filter-toggle.active {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border-color: var(--color-primary);
 }
 

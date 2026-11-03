@@ -33,7 +33,7 @@ _HAND_BUILT = re.compile(rf"`[^`\n]*\$\{{[^}}`\n]*\}}\s*{_UNIT}\s+ago\b[^`\n]*`"
 _COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*).*$", re.M)
 
 # Measured on origin/main with this detector; lowered as the held files move to the kit.
-PINS = {"hand_built_ago_strings": 10}
+PINS = {"hand_built_ago_strings": 3}
 
 
 def _sources(src: Path) -> list[Path]:
@@ -76,7 +76,7 @@ def verdict(now: int, pinned: int) -> str | None:
 REACH = declare(
     "frontend-hand-built-relative-time-scan",
     discover=_population,
-    floor=1080,  # mid-window: population 1105, window (1055, 1105)
+    floor=1101,  # mid-window: population 1126, window (1076, 1126)
     growth=50,
     what=".ts/.vue sources in both frontends",
     roots=_ROOTS,

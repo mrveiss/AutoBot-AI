@@ -479,6 +479,28 @@ binding, exact `path:qualname`; a module-level binding's qualname is its name), 
 - `--freeze` writes the baseline from the clusters left after exceptions, so an excepted name
   leaves the baseline in a removals-only diff.
 
+## Recorded exception: widening the UI-literal matcher to `label:` and `zeroText:` (#19885)
+
+A matcher change that brings existing sites into a shrink-only baseline cannot pass the rule
+"the baseline only shrinks". The owner decided on 2026-11-02 to freeze them **once** as a recorded
+exception, rather than leave the fields unwatched.
+
+- **Matcher:** `_SCRIPT_LITERAL` in `repo_tests/_ui_literal_scan.py` now includes `label:` and
+  `zeroText:` beside `message:` and `title:`, under the same rule (capital then lowercase, at least
+  five characters). Scope: `.vue` under both apps; `.ts` files are not scanned by this guard.
+- **True count:** 120 literals in 24 `.vue` files, all `label:` (0 for `zeroText:`). Main GUI 46 in
+  11 files; SLM console 74 in 13 files. The baseline grew by exactly those 120 digests and lost none.
+- **Against the 187 lines in 32 files a plain regex gave:** that regex reproduces exactly (187 / 32),
+  and it is the same population with the shape rule removed. 120 are detected; 66 are `label:` values
+  under five characters or without a lowercase letter (`Info`, `PDF`, `Chat`, `AWS`), which the shared
+  rule does not match for any key; 1 is a `label: '--'` in a template expression, not script. No hit was
+  lost to the script-block restriction. The "about 24" in the issue was the file count (24 matches).
+- **One-time:** this is a one-time freeze. It is not a precedent for freezing a later widening; the
+  baseline shrinks from 120 as each literal moves to `t('...')`, and a NEW `label:` or `zeroText:`
+  literal fails like any other (controls in `TestLabelAndZeroTextFields`).
+- **Second derivation (rule 3):** the rough regex above, over the same files, compared as sets. The
+  script kind is otherwise not independently re-derivable (no JavaScript parser in this suite).
+
 ## Down-only tables are compared with the base, not with a hand total (#19283)
 
 A per-entry table (file-size `KNOWN_LARGE`, the colour and palette baselines) used to carry a
@@ -517,6 +539,7 @@ folder cannot read as a clean 0.
 - **Not independently re-derived.** Rule 3 asks for a second enumeration; this ratchet has only the
   detector's, so its count is as good as the regex. The fixtures in the test file are its positive
   and negative controls.
+- **A branch doesn't repin (#19673):** the pre-push gate asks only when the branch changed a guard beyond its `floor=` lines. Merge trains still enforce every floor (`AUTOBOT_REACH_AUDIT=1`, train heads only) and repin the rest on their merged tree, so a branch hand-lowering a `floor=` is judged there, not locally.
 - **Re-pinning the floor:** `python scripts/repin_reach_floors.py` after the tree grows or shrinks
   past the window.
 

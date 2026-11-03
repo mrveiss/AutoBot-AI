@@ -4142,6 +4142,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/conversation-files/cleanup/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Cleanup Status
+         * @description Deleted files whose bytes still await removal, and those stuck after repeated refusals.
+         */
+        get: operations["get_cleanup_status_api_conversation_files_cleanup_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/conversation-files/cleanup/{file_id}/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Stuck Cleanup
+         * @description Let a stuck file be proposed again; a person's action, audited, and it removes nothing.
+         */
+        post: operations["reset_stuck_cleanup_api_conversation_files_cleanup__file_id__reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/prompts/": {
         parameters: {
             query?: never;
@@ -6138,6 +6178,26 @@ export interface paths {
          *     llm_model, prompt_template, ran_at, duration_ms.
          */
         get: operations["get_synthesis_log_api_knowledge_base_synthesis_log_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/upload/limit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Upload Limit
+         * @description The largest knowledge file the upload route accepts; the same permission as uploading.
+         */
+        get: operations["get_upload_limit_api_knowledge_base_upload_limit_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -20835,6 +20895,7 @@ export interface paths {
          *     Returns:
          *     - has_active_job: Whether an indexing job is currently running
          *     - task_id: The current job's task ID (if running)
+         *     - source_id: The source it indexes: one job runs at a time across all sources (#20491)
          *     - status: Current job status
          *     - progress: Current progress details
          */
@@ -50334,7 +50395,8 @@ export interface paths {
          * Provision Budget
          * @description Provision a default budget row for an agent (GH#9901).
          *
-         *     Returns 201 on creation, 409 if a row already exists.
+         *     Returns 201 on creation, 409 if a row already exists. In a company with ``require_approval_for_budget_raises``
+         *     a first limit above the default is created at the default and the rest is filed as a pending override: 202.
          *     Returns 404 if the agent does not exist in agent_org_nodes, or belongs to
          *     a different tenant (GH#12136). Returns 403 unless the caller is a company
          *     owner/admin or a platform admin (#20422).
@@ -50401,6 +50463,9 @@ export interface paths {
         /**
          * Update Limit
          * @description Update budget limits and mode (GH#8215, GH#8997).
+         *
+         *     A company with ``require_approval_for_budget_raises`` answers 202 with a pending override instead when the
+         *     change raises the enforced limit; nothing changes until the board approves it (#8214).
          */
         patch: operations["update_limit_api_llc_budget__agent_id__limit_patch"];
         trace?: never;
@@ -62523,7 +62588,7 @@ export interface components {
         BudgetPolicyRequest: {
             /**
              * Scope
-             * @description Scope: agent, project, task, or tenant
+             * @description Scope: agent, project, task, tenant, or user (chat requests)
              */
             scope: string;
             /**
@@ -62603,6 +62668,25 @@ export interface components {
             created_at: string;
             /** Updated At */
             updated_at: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * BudgetRaisePending
+         * @description Answer to a limit change that needs the board: the request exists, the limit has not moved (#8214).
+         */
+        BudgetRaisePending: {
+            /**
+             * Status
+             * @default pending_approval
+             */
+            status: string;
+            /** Approval Id */
+            approval_id: string;
+            /** Company Id */
+            company_id: string;
+            /** Agent Id */
+            agent_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -66140,6 +66224,11 @@ export interface components {
              * @default false
              */
             require_approval_for_hires: boolean;
+            /**
+             * Require Approval For Budget Raises
+             * @default false
+             */
+            require_approval_for_budget_raises: boolean;
             /** Parent Org Id */
             parent_org_id?: string | null;
             /** @default onboarding */
@@ -66175,6 +66264,11 @@ export interface components {
              * @default false
              */
             require_approval_for_hires: boolean;
+            /**
+             * Require Approval For Budget Raises
+             * @default false
+             */
+            require_approval_for_budget_raises: boolean;
             /** Parent Org Id */
             parent_org_id?: string | null;
             /**
@@ -66317,6 +66411,8 @@ export interface components {
             brand_color?: string | null;
             /** Require Approval For Hires */
             require_approval_for_hires?: boolean | null;
+            /** Require Approval For Budget Raises */
+            require_approval_for_budget_raises?: boolean | null;
             /** Pause Reason */
             pause_reason?: string | null;
         } & {
@@ -66950,6 +67046,11 @@ export interface components {
             /** Connector Id */
             connector_id: string;
             config: components["schemas"]["ConnectorConfigDict"];
+            /**
+             * Sync Started
+             * @default false
+             */
+            sync_started: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -68355,7 +68456,7 @@ export interface components {
              * Sync Now
              * @default true
              */
-            sync_now?: boolean;
+            sync_now: boolean;
             /** Include Patterns */
             include_patterns?: string[];
             /** Exclude Patterns */
@@ -82777,6 +82878,13 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** KnowledgeUploadLimitResponse */
+        KnowledgeUploadLimitResponse: {
+            /** Max Mb */
+            max_mb: number;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * KnowledgeVerificationApproveResponse
          * @description Response for POST /verification/{fact_id}/approve.
@@ -88811,6 +88919,10 @@ export interface components {
             is_active?: boolean | null;
             /** Heartbeat Enabled */
             heartbeat_enabled?: boolean | null;
+            /** Can Run */
+            can_run?: boolean | null;
+            /** Cannot Run Reason */
+            cannot_run_reason?: string | null;
             /** Last Heartbeat */
             last_heartbeat: string | null;
             /** Budget Spent */
@@ -94047,6 +94159,8 @@ export interface components {
         RemappingOptions: {
             /** Require Approval For Hires */
             require_approval_for_hires?: boolean | null;
+            /** Require Approval For Budget Raises */
+            require_approval_for_budget_raises?: boolean | null;
         } & {
             [key: string]: unknown;
         };
@@ -97227,6 +97341,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+            /** Value */
+            value?: string | null;
             /**
              * Credentials
              * @description New sensitive auth fields, for a bridged secret
@@ -105111,6 +105227,11 @@ export interface components {
             status: string;
             /** Trends */
             trends?: unknown | null;
+            /**
+             * Available
+             * @default false
+             */
+            available: boolean;
             /** Timestamp */
             timestamp: string;
         } & {
@@ -113825,6 +113946,61 @@ export interface operations {
             };
         };
     };
+    get_cleanup_status_api_conversation_files_cleanup_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    reset_stuck_cleanup_api_conversation_files_cleanup__file_id__reset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_prompts_api_prompts__get: {
         parameters: {
             query?: never;
@@ -116128,6 +116304,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_upload_limit_api_knowledge_base_upload_limit_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeUploadLimitResponse"];
                 };
             };
         };
@@ -150924,6 +151120,7 @@ export interface operations {
         parameters: {
             query?: {
                 chat_id?: string | null;
+                confirm_dependents?: boolean;
             };
             header?: never;
             path: {
@@ -174450,7 +174647,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BudgetResponse"];
+                    "application/json": components["schemas"]["BudgetResponse"] | components["schemas"]["BudgetRaisePending"];
                 };
             };
             /** @description Validation Error */
@@ -174554,7 +174751,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BudgetResponse"];
+                    "application/json": components["schemas"]["BudgetResponse"] | components["schemas"]["BudgetRaisePending"];
                 };
             };
             /** @description Validation Error */

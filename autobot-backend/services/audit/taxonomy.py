@@ -61,6 +61,7 @@ class AuditAction(str, Enum):
     SESSION_CREATE = "session.create"
     SESSION_DELETE = "session.delete"
     SESSION_EXPORT = "session.export"
+    SESSION_REASSIGN = "session.reassign"  # #20029: a removed user's chat session handed to a successor
     KNOWLEDGE_ADD = "knowledge.add"
     KNOWLEDGE_REMOVE = "knowledge.remove"
     KNOWLEDGE_BACKUP_DELETE = "knowledge.backup.delete"
@@ -135,6 +136,9 @@ class AuditAction(str, Enum):
     ROLE_DELETE = "role.delete"
     API_KEY_USE = "api_key.use"  # pragma: allowlist secret -- an action name, not a key
     SECURITY_SUSPICIOUS_ACTIVITY = "security.suspicious_activity"
+    CONVERSATION_FILE_CLEANUP = "conversation_file.cleanup"
+    CONVERSATION_FILE_CLEANUP_RESET = "conversation_file.cleanup_reset"
+    BUDGET_CHAT_REFUSED = "budget.chat_refused"  # #20589 chat over a budget
 
 
 class ComplianceEventType(str, Enum):

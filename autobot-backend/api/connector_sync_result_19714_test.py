@@ -60,8 +60,19 @@ def test_an_edit_racing_the_write_is_retried_on_the_new_record() -> None:
 
 def test_it_gives_up_rather_than_spinning() -> None:
     store = {"k": json.dumps({"name": "n"})}
-    assert result._write_last_sync(_redis(store, conflicts=99), "k", "T") is True, "it still exists"
+    assert result._write_last_sync(_redis(store, conflicts=99), "k", "T") is None, "exists, but nothing was written"
     assert "last_sync_at" not in json.loads(store["k"])
+
+
+@pytest.mark.asyncio
+async def test_the_live_instance_is_not_told_a_sync_redis_never_stored() -> None:
+    """Retries exhausted: the connector still exists, but the status route must not show an unsaved time."""
+    store = {"k": json.dumps({"name": "n"})}
+    instance = SimpleNamespace(config=SimpleNamespace(last_sync_at=None))
+    done = SimpleNamespace(completed_at=datetime(2026, 11, 3, tzinfo=timezone.utc))
+    with patch.object(result, "get_redis_client", return_value=_redis(store, conflicts=99)):
+        assert await result.record_last_sync(instance, "k", done) is True, "not deleted"
+    assert instance.config.last_sync_at is None
 
 
 class _SyncResult:
