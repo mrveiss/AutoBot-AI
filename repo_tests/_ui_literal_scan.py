@@ -21,10 +21,15 @@ WHAT COUNTS AS USER-VISIBLE, and the boundary is the whole design:
   component's own prop (`message`, `caption`, `hint`, `tooltip`) is user-visible
   and not seen (review finding on #17395);
 - (#12732 only) a SCRIPT literal: in `<script>`, a string literal in the
-  position `.value = '...'`, `message: '...'`, `title: '...'`, `confirm('...')`,
-  `alert('...')` or `Error('...')` that starts with a capital followed by a
+  position `.value = '...'`, `message: '...'`, `title: '...'`, `label: '...'`,
+  `zeroText: '...'`, `confirm('...')`, `alert('...')` or `Error('...')` that starts with a capital followed by a
   lowercase letter and is at least five characters long. This is a regex over
   the script blocks; it has no second derivation (see the ratchet test).
+  `label:` and `zeroText:` were added by #19885: the keys option lists, tab and stat
+  definitions put visible text under. The same capital-then-lowercase and
+  five-character rule applies, so `label: 'Chat'`, `label: 'PDF'` and
+  `zeroText: '0 B'` are not matched (one rule for every key, not tuned per key).
+  `.ts` files are not scanned by either guard.
 
 WHAT DOES NOT COUNT, listed because an unstated exclusion is how a guard ends up
 measuring nothing:
@@ -92,7 +97,8 @@ _SCRIPT_BODY = re.compile(r"<script\b[^>]*>(.*?)</script\b[^>]*>", re.DOTALL | r
 #: The closing quote is the opening one (backreference), so `alert("Can't connect")` is one
 #: literal; the other two quote characters may occur inside it (#18802).
 _SCRIPT_LITERAL = re.compile(
-    r"""(?:\.value\s*=|message:|title:|confirm\(|alert\(|Error\()\s*([`'"])([A-Z][a-z](?:(?!\1).){3,}?)\1"""
+    r"""(?:\.value\s*=|message:|title:|label:|zeroText:|confirm\(|alert\(|Error\()"""
+    r"""\s*([`'"])([A-Z][a-z](?:\\.|(?!\1).){3,}?)\1"""
 )
 KINDS = ("template-text", "attribute", "script")
 
