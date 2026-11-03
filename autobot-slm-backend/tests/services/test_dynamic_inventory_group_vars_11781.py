@@ -30,6 +30,7 @@ _STUBS = [
     "services.inventory_builder",
     "services.provision_progress",
     "services.unit_names",
+    "services.sync_restart",  # #20743
 ]
 
 
