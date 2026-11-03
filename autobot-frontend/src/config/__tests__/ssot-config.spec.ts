@@ -323,10 +323,10 @@ describe('SSOT Config runtimeHttpProto() — protocol detection', () => {
   };
 
   describe('when window.location.protocol === "https:"', () => {
-    it('backendUrl starts with https://', () => {
+    it('backendUrl is same-origin (proxy mode), never an absolute host:port (#19821)', () => {
       setProtocol('https:');
       const cfg = reloadConfig();
-      expect(cfg.backendUrl).toMatch(/^https:\/\//);
+      expect(cfg.backendUrl).toBe(getBackendUrl());
     });
 
     it('frontendUrl starts with https://', () => {
@@ -399,10 +399,10 @@ describe('SSOT Config runtimeHttpProto() — protocol detection', () => {
   });
 
   describe('when window.location.protocol === "http:"', () => {
-    it('backendUrl starts with http://', () => {
+    it('websocketUrl follows the page protocol and host (#19821)', () => {
       setProtocol('http:');
       const cfg = reloadConfig();
-      expect(cfg.backendUrl).toMatch(/^http:\/\//);
+      expect(cfg.websocketUrl).toBe('ws://test-host.example.com/api/ws');
     });
 
     it('frontendUrl starts with http://', () => {

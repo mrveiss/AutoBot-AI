@@ -474,7 +474,7 @@ function buildConfig(): AutoBotConfig {
     // mixed-content blocks on HTTPS deploys). Sister fix to #6642 (websocketUrl);
     // applied uniformly to every browser-facing URL builder.
     get backendUrl(): string {
-      return `${runtimeHttpProto()}://${vm.main}:${port.backend}`;
+      return getBackendUrl(); // #19821: one origin rule; same-origin proxy unless VITE_API_BASE_URL (#12339)
     },
 
     get frontendUrl(): string {
@@ -493,12 +493,7 @@ function buildConfig(): AutoBotConfig {
      * every URL derived from it.
      */
     get websocketUrl(): string {
-      if (runtimeHttpProto() === 'https') {
-        const host =
-          typeof window !== 'undefined' ? window.location.host : vm.main;
-        return `wss://${host}/api/ws`;
-      }
-      return `ws://${vm.main}:${port.backend}/api/ws`;
+      return `${getBackendWsUrl()}/api/ws`; // #19821: same origin rule as every other backend socket
     },
 
     /**
@@ -510,16 +505,7 @@ function buildConfig(): AutoBotConfig {
      * the first place.
      */
     get liveEventsUrl(): string {
-      // Host/protocol resolution is duplicated from `websocketUrl` rather than
-      // read through `this`: a getter on a contextually-typed object literal
-      // makes `this` awkward to type, and the two must not silently disagree —
-      // so they are kept adjacent and identical apart from the `/live` suffix.
-      if (runtimeHttpProto() === 'https') {
-        const host =
-          typeof window !== 'undefined' ? window.location.host : vm.main;
-        return `wss://${host}/api/ws/live`;
-      }
-      return `ws://${vm.main}:${port.backend}/api/ws/live`;
+      return `${getBackendWsUrl()}/api/ws/live`; // #19821: both sockets resolve through getBackendWsUrl
     },
 
     get aistackUrl(): string {
