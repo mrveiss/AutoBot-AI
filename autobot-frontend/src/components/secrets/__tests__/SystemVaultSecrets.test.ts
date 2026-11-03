@@ -84,14 +84,14 @@ describe('SystemVaultSecrets (#17099)', () => {
     expect(deleteSecret).not.toHaveBeenCalled()
   })
 
-  it('a refused write is reported and does not reload as if it worked', async () => {
+  it('a failed write is reported as unconfirmed and reloads the list to show what is stored', async () => {
     confirm.mockResolvedValue(true)
     deleteSecret.mockRejectedValue(new Error('403'))
     const wrapper = mountList({ available: true, secrets: [entry] })
     await wrapper.find('[data-testid="delete"]').trigger('click')
     await flushPromises()
-    expect(wrapper.text()).toContain('Nothing was modified')
-    expect(wrapper.emitted('changed')).toBeUndefined()
+    expect(wrapper.text()).toContain('could not be confirmed')
+    expect(wrapper.emitted('changed')).toHaveLength(1)
   })
 
   it('a delete refused for dependents lists them in a second confirm, then forces it (#20557)', async () => {
@@ -114,5 +114,18 @@ describe('SystemVaultSecrets (#17099)', () => {
     await wrapper.find('[data-testid="delete"]').trigger('click')
     await flushPromises()
     expect(deleteSecret).toHaveBeenCalledTimes(1)
+    expect(wrapper.emitted('changed')).toBeUndefined()
+  })
+
+  it('deleting one secret keeps the unsaved rotation draft of another', async () => {
+    confirm.mockResolvedValue(true)
+    const other = { id: 'sys-2', name: 'other-key', type: 'api_key' }
+    const wrapper = mountList({ available: true, secrets: [entry, other] })
+    await wrapper.findAll('[data-testid="rotate-start"]')[0].trigger('click')
+    await wrapper.find('input').setValue('draft-value')
+    await wrapper.find('[data-testid="delete"]').trigger('click')
+    await flushPromises()
+    expect(deleteSecret).toHaveBeenCalledWith('sys-2')
+    expect((wrapper.find('input').element as HTMLInputElement).value).toBe('draft-value')
   })
 })

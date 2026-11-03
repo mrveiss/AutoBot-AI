@@ -79,29 +79,32 @@ function cancelRotate() {
   newValue.value = ''
 }
 
-async function run(action: () => Promise<unknown>) {
+/** Run a write on `secretId`; an action resolving `false` was declined, so nothing changed. */
+async function run(secretId: string, action: () => Promise<unknown>) {
   busy.value = true
   failed.value = false
   try {
-    await action()
-    cancelRotate()
+    if ((await action()) === false) return
+    // Only the draft of the secret acted on is dropped; another secret's unsaved value stays.
+    if (rotatingId.value === secretId) cancelRotate()
     emit('changed')
   } catch (error) {
     failed.value = true
     logger.error('System vault write failed:', error)
+    emit('changed') // the outcome is unconfirmed (the response may be lost), so show what is stored
   } finally {
     busy.value = false
   }
 }
 
-const rotate = (secret: SystemVaultEntry) => run(() => secretsApiClient.updateSecret(secret.id, { value: newValue.value }))
+const rotate = (secret: SystemVaultEntry) => run(secret.id, () => secretsApiClient.updateSecret(secret.id, { value: newValue.value }))
 
 async function remove(secret: SystemVaultEntry) {
   const ok = await confirm({
     title: t('security.secretsManager.systemVault.deleteTitle'),
     message: t('security.secretsManager.systemVault.deleteMessage', { name: secret.name })
   })
-  if (ok) await run(() => deleteConfirmingDependents(secret))
+  if (ok) await run(secret.id, () => deleteConfirmingDependents(secret))
 }
 
 interface Dependent {
@@ -128,7 +131,8 @@ async function deleteConfirmingDependents(secret: SystemVaultEntry) {
       title: t('security.secretsManager.systemVault.dependentsTitle'),
       message: t('security.secretsManager.systemVault.dependentsMessage', { name: secret.name, dependents: listed })
     })
-    if (ok) return secretsApiClient.deleteSecret(secret.id, { confirmDependents: true })
+    if (!ok) return false
+    return secretsApiClient.deleteSecret(secret.id, { confirmDependents: true })
   }
 }
 </script>

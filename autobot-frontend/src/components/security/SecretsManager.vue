@@ -116,6 +116,7 @@
         </div>
       </header>
 
+      <BaseAlert v-if="loadFailed" variant="error" :message="t('security.secretsManager.loadFailed')" data-testid="secrets-load-failed" />
       <SystemVaultSecrets :vault="systemVault" @changed="loadSecrets" />
       <!-- Stats Bar -->
       <div class="stats-bar" v-if="stats">
@@ -763,12 +764,12 @@ import { useDebounce } from '@/composables/useDebounce';
 import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger';
 import { useVirtualList } from '@/composables/useVirtualList';
 import { useSecretsInfraApi } from '@/composables/security/useSecretsInfraApi';
-import type { InfraHostsResponse } from '@/composables/security/useSecretsInfraApi';
+import { infraHostToSecret, type InfraHostsResponse } from '@/composables/security/useSecretsInfraApi';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import ShareSecretDialog from '@/components/secrets/ShareSecretDialog.vue';
 import SystemVaultSecrets, { type SystemVaultListing } from '@/components/secrets/SystemVaultSecrets.vue';
-import { BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseModal } from '@autobot/ui'
 import { getCssVar } from '@/composables/useCssVars'
 
 const { t } = useI18n();
@@ -918,6 +919,7 @@ const showExpiredOnly = ref(false);
 const selectedSecretId = ref<string | null>(null);
 const showTemplates = ref(true);
 const systemVault = ref<SystemVaultListing | null>(null);
+const loadFailed = ref(false);
 
 // Modal state
 const showCreateModal = ref(false);
@@ -1099,9 +1101,17 @@ const isFormValid = computed(() => {
 // Methods
 const loadSecrets = async () => {
   loading.value = true;
+  loadFailed.value = false;
   try {
     const [secretsResponse, statsResponse, legacyHostsResponse] = await Promise.all([
-      secretsApiClient.getSecrets({}) as Promise<{ secrets?: Secret[]; system_vault?: SystemVaultListing }>,
+      // The vault listing is applied as soon as the secrets arrive, so a failed stats or legacy-host
+      // request cannot leave a deleted vault secret on screen with its controls.
+      (secretsApiClient.getSecrets({}) as Promise<{ secrets?: Secret[]; system_vault?: SystemVaultListing }>).then(
+        (response) => {
+          systemVault.value = response.system_vault ?? null;
+          return response;
+        }
+      ),
       secretsApiClient.getSecretsStats() as Promise<SecretsStats>,
       // Also fetch legacy hosts for backwards compatibility (will be migrated
       // eventually). #16426: admin-only — skip the call for a non-admin
@@ -1110,31 +1120,10 @@ const loadSecrets = async () => {
       userStore.isAdmin ? fetchInfraHosts() : Promise.resolve<InfraHostsResponse>({ hosts: [] })
     ]);
 
-    const legacyInfraSecrets: Secret[] = (legacyHostsResponse.hosts || []).map((host) => ({
-      id: host.id,
-      name: host.name,
-      type: 'infrastructure_host',
-      scope: host.scope || 'general',
-      chat_id: host.chat_id,
-      description: host.description || `${host.username}@${host.host}:${host.ssh_port}`,
-      tags: host.tags || [],
-      created_at: host.created_at,
-      updated_at: host.updated_at,
-      expires_at: null,
-      metadata: {
-        host: host.host,
-        ssh_port: host.ssh_port,
-        vnc_port: host.vnc_port,
-        username: host.username,
-        auth_type: host.auth_type as 'ssh_key' | 'password',
-        capabilities: host.capabilities as string[] | undefined
-      },
-      _isLegacyHost: true  // Flag for legacy hosts that need different delete API
-    }));
+    const legacyInfraSecrets: Secret[] = (legacyHostsResponse.hosts || []).map(infraHostToSecret);
 
     // (new infra hosts are already in secrets with type=infrastructure_host)
     secrets.value = [...(secretsResponse.secrets || []), ...legacyInfraSecrets];
-    systemVault.value = secretsResponse.system_vault ?? null;
 
     const legacyInfraCount = legacyInfraSecrets.length;
     stats.value = {
@@ -1149,6 +1138,7 @@ const loadSecrets = async () => {
     showTemplates.value = secrets.value.length === 0;
   } catch (error) {
     logger.error('Failed to load secrets:', error);
+    loadFailed.value = true; // a failed load must not read as an empty one
   } finally {
     loading.value = false;
   }
