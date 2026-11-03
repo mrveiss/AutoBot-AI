@@ -58,6 +58,7 @@ from chat_workflow.compose_tool_handler import (
 )
 from chat_workflow.mcp_approval_message import build_mcp_approval_message as _build_mcp_approval_message
 from chat_workflow.tool_call_grammar import TOOL_CALL_PATTERN
+from chat_workflow.tool_call_loop import stamp_call_fingerprint
 from chat_workflow.tool_dispatch_guards import (
     COMMAND_FORCE_APPROVAL_KEY,
     enforce_ai_line,
@@ -3565,14 +3566,11 @@ class ToolHandlerMixin:
     ):
         """Process all tool calls from LLM response.
 
-        Issue #315: Refactored to use helper methods for reduced nesting.
         Issue #654: Added support for 'respond' tool with break_loop pattern.
-        Issue #620: Refactored using Extract Method pattern.
         Issue #2310: Accepts optional ctx for consecutive-invalid-tool tracking.
 
         Yields:
-            WorkflowMessage for each stage of execution
-            Also yields execution_summary at end for Issue #352 continuation loop
+            WorkflowMessage for each stage, then execution_summary (#352)
             Finally yields (break_loop, response_content) tuple if respond tool used
         """
         execution_results = []
@@ -3591,6 +3589,7 @@ class ToolHandlerMixin:
         role = ctx.auth_role if ctx is not None else DEFAULT_AUTH_ROLE
 
         for tool_call in tool_calls:
+            results_before = len(execution_results)
             async for result in self._dispatch_tool_call(
                 tool_call,
                 session_id,
@@ -3608,6 +3607,7 @@ class ToolHandlerMixin:
                     yield result
                     # #19951: a held call has no result, so another model call could only guess at one.
                     held = held or is_held_message(result)
+            stamp_call_fingerprint(execution_results[results_before:], tool_call)  # #19715
             if held:
                 break
 
