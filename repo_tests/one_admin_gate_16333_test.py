@@ -50,6 +50,8 @@ _RECORDED = {
     ("autobot-backend/api/envelope_secrets.py", "key"): 1,
     # Refuses the key (stricter than the gate); it never admits it.
     ("autobot-backend/security/human_admin.py", "key"): 1,
+    # Refuses the key on SYSTEM-vault secret writes (#17731); it never admits it.
+    ("autobot-backend/api/secrets_system_vault.py", "key"): 1,
     # Membership of "admin" in a configured allowed-roles list, decided with is_admin_role.
     ("autobot-backend/services/mcp_external_bridge.py", "literal"): 1,
     # The auth-disabled (dev-only) principal; the human-decision check refuses it (#17042).
