@@ -123,6 +123,8 @@ class SystemctlResult:
 
 # systemctl verbs the executor will put on a remote command line (#18359).
 ALLOWED_SYSTEMCTL_ACTIONS = frozenset({"start", "stop", "restart", "status", "reload"})
+#: The actions that clear a start-limit park first (#20767).
+_RESETS_START_LIMIT = frozenset({"start", "restart"})
 
 
 def systemctl_remote_command(
@@ -143,10 +145,12 @@ def systemctl_remote_command(
     quoted = " ".join(shlex.quote(validate_unit_name(unit)) for unit in units)
     tail = " || true" if tolerate_failure else ""
     flags = " --no-pager" if no_pager else ""
-    if user_scope:
-        return f"systemctl --user {action}{flags} -- {quoted}{tail}"
-    sudo = "sudo -n" if use_noninteractive_sudo else "sudo"
-    return f"{sudo} systemctl {action}{flags} -- {quoted}{tail}"
+    # #20767: a unit parked by its start limit (#4090, #20764) refuses start and restart until the
+    # window passes. Every start or restart clears that first, as the SLM watchdog does; resetting a
+    # unit that isn't failed is a no-op, and the line's exit status stays the action's own.
+    systemctl = "systemctl --user" if user_scope else f"{'sudo -n' if use_noninteractive_sudo else 'sudo'} systemctl"
+    reset = f"{systemctl} reset-failed -- {quoted} 2>/dev/null; " if action in _RESETS_START_LIMIT else ""
+    return f"{reset}{systemctl} {action}{flags} -- {quoted}{tail}"
 
 
 async def run_systemctl_over_ssh(
