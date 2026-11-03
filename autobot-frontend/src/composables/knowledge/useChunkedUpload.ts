@@ -30,6 +30,7 @@ interface UploadState {
   received: number
   total_size: number
   state: string
+  expired: boolean
   error: string
   chunk_bytes: number
   result: { document_id?: string; word_count?: number }
@@ -97,10 +98,12 @@ async function sessionFor(file: File, fields: ChunkedUploadFields): Promise<Uplo
   const known = remembered(resumeKey(file))
   if (known) {
     try {
-      return await apiClient.get(`${uploadsUrl()}/${known}`)
+      const state: UploadState = await apiClient.get(`${uploadsUrl()}/${known}`)
+      if (state.state === 'receiving' && !state.expired) return state
     } catch {
-      remember(resumeKey(file), null) // gone, or expired away: start again
+      // gone: start again
     }
+    remember(resumeKey(file), null) // expired, failed or already done: a new session, never a dead end
   }
   const response = await apiClient.rawRequest(uploadsUrl(), {
     method: 'POST',
@@ -131,6 +134,11 @@ async function sendChunk(id: string, file: File, offset: number, size: number, s
     signal,
   })
   if (response.ok) return ((await response.json()) as UploadState).received
+  if (response.status === 422) {
+    const refusal = await refusalFrom(response)
+    if (refusal.code === 'upload.chunk_checksum') return offset // changed on the way: send it again
+    throw refusal
+  }
   if (response.status === 409 || response.status >= 500) {
     if (response.status === 507) throw await refusalFrom(response)
     const state: UploadState = await apiClient.get(`${uploadsUrl()}/${id}`)

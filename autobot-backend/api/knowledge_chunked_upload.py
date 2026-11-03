@@ -17,10 +17,10 @@ import os
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Request
 
 from auth_middleware import check_admin_permission, get_auth_middleware
-from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import SecurityConstants
 from knowledge.schemas.chunked_upload import UploadCreate
+from knowledge.upload_limit import MAX_FILE_SIZE_BYTES
 from security.upload_filename_policy import require_safe_upload
 from services import chunked_upload as uploads
 from services.audit_logger import audit_log
@@ -28,7 +28,8 @@ from services.audit_logger import audit_log
 logger = get_logger(__name__)
 router = APIRouter(prefix="/uploads")
 
-DOCUMENT_MAX_BYTES = env_int_clamped("AUTOBOT_UPLOAD_DOCUMENT_MAX_MB", 200, 1, 4096) * 1024 * 1024
+#: The one limit on a knowledge document, shared with the single-request route (#19712): extraction reads it whole.
+DOCUMENT_MAX_BYTES = MAX_FILE_SIZE_BYTES
 
 
 def _refusal(status: int, code: str, exc: Exception) -> HTTPException:
@@ -146,6 +147,8 @@ async def put_chunk(
         raise _refusal(409, "upload.busy", exc) from exc
     except uploads.UploadNoSpace as exc:
         raise _refusal(507, "upload.no_space", exc) from exc
+    except uploads.UploadChunkChecksum as exc:
+        raise _refusal(422, "upload.chunk_checksum", exc) from exc  # the client sends that chunk again
     except uploads.UploadRejected as exc:
         raise _refusal(422, "upload.refused", exc) from exc
     except (uploads.UploadSessionNotFound, FileNotFoundError) as exc:  # cancelled while this chunk arrived

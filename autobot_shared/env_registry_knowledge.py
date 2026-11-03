@@ -410,6 +410,21 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_CONVERSATION_FILE_CLEANUP_MAX_ATTEMPTS",
+        type=int,
+        default=3,
+        description=(
+            "How many times an approved removal of a deleted conversation file may be refused (still "
+            "referenced, path outside the store, unlink error) before it is no longer proposed again. "
+            "The file is then reported as stuck in the storage stats and logged, and its bytes stay. "
+            "Raising it retries more; lowering it stops sooner (conversation_file_cleanup.py, #20234)."
+        ),
+        component="conversation_files",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_UPLOAD_MAX_TOTAL_MB",
         type=int,
         default=8192,
@@ -421,14 +436,29 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
-        name="AUTOBOT_UPLOAD_DOCUMENT_MAX_MB",
-        type=int,
-        default=200,
-        description="Largest document a resumable upload accepts, in MB; extraction reads it into memory (#19713).",
+        name="AUTOBOT_KB_BM25_REFRESH_MIN_INTERVAL_S",
+        type=float,
+        default=60.0,
+        description="Least time between BM25 corpus-stats recomputes, each of which reads every fact (#19726).",
         component="knowledge",
-        range=(1, 4096),
+        range=(1.0, 3600.0),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CONVERSATION_FILE_CLEANUP_COOLDOWN_SECONDS",
+        type=int,
+        default=86400,
+        description=(
+            "Seconds after a refused removal of a deleted conversation file before it may be proposed "
+            "again, so a refusal does not raise a new proposal on every file delete. Raising it slows the "
+            "inbox; lowering it retries sooner (conversation_file_cleanup.py, #20234)."
+        ),
+        component="conversation_files",
+    )
+)
+
 
 register_env_var(
     EnvVarSpec(
@@ -470,5 +500,16 @@ register_env_var(
         description="Total size all unfinished resumable uploads may promise, in MB (#19713).",
         component="knowledge",
         range=(1, 10485760),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_KEYWORD_SEARCH_MAX_SCAN",
+        type=int,
+        default=10000,
+        description="Facts one keyword search reads at most; a warning says when it cut one short (#19726).",
+        component="knowledge",
+        range=(100, 1000000),
     )
 )

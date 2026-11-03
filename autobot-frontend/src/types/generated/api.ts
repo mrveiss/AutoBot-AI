@@ -4142,6 +4142,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/conversation-files/cleanup/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Cleanup Status
+         * @description Deleted files whose bytes still await removal, and those stuck after repeated refusals.
+         */
+        get: operations["get_cleanup_status_api_conversation_files_cleanup_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/conversation-files/cleanup/{file_id}/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Stuck Cleanup
+         * @description Let a stuck file be proposed again; a person's action, audited, and it removes nothing.
+         */
+        post: operations["reset_stuck_cleanup_api_conversation_files_cleanup__file_id__reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/prompts/": {
         parameters: {
             query?: never;
@@ -88869,6 +88909,10 @@ export interface components {
             is_active?: boolean | null;
             /** Heartbeat Enabled */
             heartbeat_enabled?: boolean | null;
+            /** Can Run */
+            can_run?: boolean | null;
+            /** Cannot Run Reason */
+            cannot_run_reason?: string | null;
             /** Last Heartbeat */
             last_heartbeat: string | null;
             /** Budget Spent */
@@ -113881,6 +113925,61 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataStorageConversationsSummaryResponse"];
+                };
+            };
+        };
+    };
+    get_cleanup_status_api_conversation_files_cleanup_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    reset_stuck_cleanup_api_conversation_files_cleanup__file_id__reset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -58,6 +58,10 @@ class UploadRejected(Exception):
     """The chunk or session breaks a rule; nothing was kept."""
 
 
+class UploadChunkChecksum(UploadRejected):
+    """The chunk arrived changed; nothing was kept, and sending it again is the remedy."""
+
+
 class UploadNoSpace(Exception):
     """Accepting this would pass a storage limit, or the disk is full; nothing was kept."""
 
@@ -84,13 +88,14 @@ class UploadSession:
     error: str = ""
     params: dict = field(default_factory=dict)
     handoff_started_at: float = 0.0
+    last_chunk_at: float = 0.0
 
     @property
     def expired(self) -> bool:
         """Past its time: it takes no more chunks, and is listed for a person to remove."""
         if self.state == "handing_off":
             return False
-        since = self.handoff_started_at or self.created_at
+        since = self.handoff_started_at or self.last_chunk_at or self.created_at  # idle time, not total
         return time.time() - since > SESSION_TTL_S
 
     @property
@@ -127,7 +132,10 @@ def staged_path(session: UploadSession) -> Path:
 def _save(session: UploadSession) -> None:
     directory = _directory(session.id)
     temp = directory / f"{_META}.tmp"
-    temp.write_text(json.dumps(asdict(session)), encoding="utf-8")
+    with open(temp, "w", encoding="utf-8") as handle:
+        handle.write(json.dumps(asdict(session)))
+        handle.flush()
+        os.fsync(handle.fileno())  # the record of what arrived must survive a crash, as the bytes do
     os.replace(temp, directory / _META)
 
 
@@ -213,8 +221,18 @@ async def _stage(handle, chunks: AsyncIterable[bytes], limit: int) -> tuple[int,
         if written > limit:
             raise UploadRejected(f"a chunk here may hold at most {limit} bytes")
         digest.update(piece)
-        await asyncio.to_thread(handle.write, piece)
+        await _finish_even_if_cancelled(handle.write, piece)
     return written, digest.hexdigest()
+
+
+async def _finish_even_if_cancelled(function, *args) -> None:
+    """A thread can't be stopped, so a cancelled request waits for its write before anything cuts back."""
+    task = asyncio.ensure_future(asyncio.to_thread(function, *args))
+    try:
+        await asyncio.shield(task)
+    except asyncio.CancelledError:
+        await asyncio.gather(task, return_exceptions=True)
+        raise
 
 
 def _cap(session: UploadSession, offset: int) -> int:
@@ -250,10 +268,10 @@ async def write_chunk(
         try:
             written, digest = await _stage(handle, chunks, _cap(session, offset))
             if expected_sha256 and digest != expected_sha256.lower():
-                raise UploadRejected("the chunk's checksum doesn't match, so it wasn't kept")
+                raise UploadChunkChecksum("the chunk's checksum doesn't match, so it wasn't kept")
             if not written:
                 raise UploadRejected("the chunk is empty")
-            await asyncio.to_thread(_flush_to_disk, handle)
+            await _finish_even_if_cancelled(_flush_to_disk, handle)
         except BaseException as exc:  # a dropped connection too: only whole chunks count
             _cut_back(handle, offset)  # not awaited: a cancelled request must still cut back
             if isinstance(exc, OSError) and exc.errno == errno.ENOSPC:
@@ -261,7 +279,7 @@ async def write_chunk(
             raise
         finally:
             handle.close()
-        session.received = offset + written
+        session.received, session.last_chunk_at = offset + written, time.time()
         await asyncio.to_thread(_save, session)
         return session
 

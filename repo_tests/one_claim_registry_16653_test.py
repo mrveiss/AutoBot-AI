@@ -96,6 +96,10 @@ _THE_REGISTRY = "autobot_shared/coordination/work_claims_lua.py"
 #: old stale-entry check only fired when a file lost its LAST primitive, so
 #: going from two to one was invisible in both directions at once.
 _ALLOWED: dict[str, tuple[int, str]] = {
+    "autobot-backend/services/agent_terminal/pending_claim.py": (
+        2,
+        "one pending approval per terminal session (#20059): a slot on a record, not a work claim with subtree overlap",
+    ),
     "autobot_shared/membership_epoch.py": (
         1,
         "#19630 -- a token mint, not a lock: SETNX fills a missing epoch key so concurrent workers "

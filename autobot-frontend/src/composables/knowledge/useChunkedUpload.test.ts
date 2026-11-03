@@ -24,7 +24,7 @@ vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 
 const CHUNK = 4
 const file = new File(['0123456789'], 'talk.mp4', { lastModified: 1 })
-const created = { upload_id: 'u1', received: 0, total_size: 10, state: 'receiving', chunk_bytes: CHUNK }
+const created = { upload_id: 'u1', received: 0, total_size: 10, state: 'receiving', expired: false, chunk_bytes: CHUNK }
 const done = { ...created, received: 10, state: 'done', result: { document_id: 'd' } }
 const ok = (received: number) => ({ ok: true, status: 200, json: async () => ({ received }) })
 const offsets = () =>
@@ -123,5 +123,31 @@ describe('uploadInChunks', () => {
     await useChunkedUpload().cancelUpload(file)
     expect(rawRequest).toHaveBeenCalledWith('/api/knowledge_base/uploads/u1', { method: 'DELETE' })
     expect(sessionStorage.getItem(resumeKey(file))).toBeNull()
+  })
+
+  it('sends a chunk again when it arrived changed', async () => {
+    chunkReply
+      .mockResolvedValueOnce({ ok: false, status: 422, json: async () => ({ detail: { code: 'upload.chunk_checksum' } }) })
+      .mockResolvedValueOnce(ok(4))
+      .mockResolvedValueOnce(ok(8))
+      .mockResolvedValueOnce(ok(10))
+    await useChunkedUpload().uploadInChunks(file, { target: 'transcript' })
+    expect(offsets()).toEqual([0, 0, 4, 8])
+  })
+
+  it.each(['done', 'failed'])('starts a new session rather than reusing a %s one', async (state) => {
+    sessionStorage.setItem(resumeKey(file), 'old')
+    get.mockResolvedValueOnce({ ...created, upload_id: 'old', state, expired: false })
+    chunkReply.mockResolvedValueOnce(ok(4)).mockResolvedValueOnce(ok(8)).mockResolvedValueOnce(ok(10))
+    await useChunkedUpload().uploadInChunks(file, { target: 'transcript' })
+    expect(rawRequest.mock.calls.some(([, options]) => options.method === 'POST')).toBe(true)
+  })
+
+  it('starts a new session rather than reusing an expired one', async () => {
+    sessionStorage.setItem(resumeKey(file), 'old')
+    get.mockResolvedValueOnce({ ...created, upload_id: 'old', expired: true })
+    chunkReply.mockResolvedValueOnce(ok(4)).mockResolvedValueOnce(ok(8)).mockResolvedValueOnce(ok(10))
+    await useChunkedUpload().uploadInChunks(file, { target: 'transcript' })
+    expect(rawRequest.mock.calls.some(([, options]) => options.method === 'POST')).toBe(true)
   })
 })

@@ -278,3 +278,57 @@ async def test_the_record_is_written_before_the_bytes_go(monkeypatch) -> None:
 
     await uploads.remove_listed_session(session.id, record)
     assert seen == [True]
+
+
+@pytest.mark.asyncio
+async def test_a_cancelled_chunk_waits_for_its_write_before_cutting_back(monkeypatch) -> None:
+    """A thread can't be stopped: nothing may cut back or unlock while it still writes."""
+    import threading
+
+    session = _session()
+    started, release, order = threading.Event(), threading.Event(), []
+    real_write = uploads._finish_even_if_cancelled
+
+    def slow_write(handle, piece):
+        started.set()
+        release.wait(5)
+        handle.write(piece)
+        order.append("written")
+
+    async def body():
+        yield _DATA[:100]
+
+    uploads._stage
+
+    async def stage(handle, chunks, limit):
+        async for piece in chunks:
+            await real_write(slow_write, handle, piece)
+        return 100, "x"
+
+    monkeypatch.setattr(uploads, "_stage", stage)
+    original_cut = uploads._cut_back
+    monkeypatch.setattr(
+        uploads, "_cut_back", lambda handle, offset: (order.append("cut"), original_cut(handle, offset))
+    )
+    task = asyncio.create_task(uploads.write_chunk(session, 0, body()))
+    await asyncio.to_thread(started.wait, 5)
+    task.cancel()
+    await asyncio.sleep(0.05)
+    release.set()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert order == ["written", "cut"]
+    assert uploads.staged_path(session).stat().st_size == 0, "and the cut-back leaves nothing of it"
+
+
+def test_the_lifetime_counts_from_the_last_chunk(monkeypatch) -> None:
+    session = _session()
+    session.created_at, session.last_chunk_at = time.time() - 10 * uploads.SESSION_TTL_S, time.time()
+    assert not session.expired
+
+
+def test_a_document_is_held_to_the_one_knowledge_upload_limit() -> None:
+    from api import knowledge_chunked_upload as route
+    from knowledge.upload_limit import MAX_FILE_SIZE_BYTES
+
+    assert route.DOCUMENT_MAX_BYTES == MAX_FILE_SIZE_BYTES
