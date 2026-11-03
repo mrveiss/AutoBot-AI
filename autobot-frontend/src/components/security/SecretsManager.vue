@@ -116,6 +116,7 @@
         </div>
       </header>
 
+      <SystemVaultSecrets :vault="systemVault" @changed="loadSecrets" />
       <!-- Stats Bar -->
       <div class="stats-bar" v-if="stats">
         <div class="stat-item">
@@ -766,6 +767,7 @@ import type { InfraHostsResponse } from '@/composables/security/useSecretsInfraA
 import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import ShareSecretDialog from '@/components/secrets/ShareSecretDialog.vue';
+import SystemVaultSecrets, { type SystemVaultListing } from '@/components/secrets/SystemVaultSecrets.vue';
 import { BaseModal } from '@autobot/ui'
 import { getCssVar } from '@/composables/useCssVars'
 
@@ -915,6 +917,7 @@ const searchQuery = ref('');
 const showExpiredOnly = ref(false);
 const selectedSecretId = ref<string | null>(null);
 const showTemplates = ref(true);
+const systemVault = ref<SystemVaultListing | null>(null);
 
 // Modal state
 const showCreateModal = ref(false);
@@ -1097,9 +1100,8 @@ const isFormValid = computed(() => {
 const loadSecrets = async () => {
   loading.value = true;
   try {
-    // Fetch secrets and stats - infrastructure_host is now a regular secret type
     const [secretsResponse, statsResponse, legacyHostsResponse] = await Promise.all([
-      secretsApiClient.getSecrets({}) as Promise<{ secrets?: Secret[] }>,
+      secretsApiClient.getSecrets({}) as Promise<{ secrets?: Secret[]; system_vault?: SystemVaultListing }>,
       secretsApiClient.getSecretsStats() as Promise<SecretsStats>,
       // Also fetch legacy hosts for backwards compatibility (will be migrated
       // eventually). #16426: admin-only — skip the call for a non-admin
@@ -1108,7 +1110,6 @@ const loadSecrets = async () => {
       userStore.isAdmin ? fetchInfraHosts() : Promise.resolve<InfraHostsResponse>({ hosts: [] })
     ]);
 
-    // Convert legacy infrastructure hosts to secret-like format for unified display
     const legacyInfraSecrets: Secret[] = (legacyHostsResponse.hosts || []).map((host) => ({
       id: host.id,
       name: host.name,
@@ -1131,11 +1132,10 @@ const loadSecrets = async () => {
       _isLegacyHost: true  // Flag for legacy hosts that need different delete API
     }));
 
-    // Merge regular secrets with legacy infrastructure hosts
     // (new infra hosts are already in secrets with type=infrastructure_host)
     secrets.value = [...(secretsResponse.secrets || []), ...legacyInfraSecrets];
+    systemVault.value = secretsResponse.system_vault ?? null;
 
-    // Update stats
     const legacyInfraCount = legacyInfraSecrets.length;
     stats.value = {
       ...statsResponse,
