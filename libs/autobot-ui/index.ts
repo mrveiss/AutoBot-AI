@@ -164,9 +164,7 @@ export {
   formatTimeAgo,
   formatRelativeTime,
   createDateFormatter,
-  formatLocalDate,
   formatLocalTime,
-  formatLocalDateTime,
   DEFAULT_DATE_TIME_INTL
 } from './src/utils/format'
 export type { DateInput, DateFormatterOptions, FormatRelativeTimeOptions } from './src/utils/format'

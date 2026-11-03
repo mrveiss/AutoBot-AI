@@ -9,9 +9,7 @@ import {
   formatTime,
   formatTimeAgo,
   formatRelativeTime,
-  formatLocalDate,
-  formatLocalTime,
-  formatLocalDateTime
+  formatLocalTime
 } from '../format'
 
 const ISO = '2025-10-30T14:30:15Z'
@@ -93,8 +91,8 @@ describe('formatDate / formatDateTime / formatISOString / formatTime (#19905)', 
     expect(text).toMatch(/:15/)
   })
 
-  it('formatISOString returns an unparseable string unchanged', () => {
-    expect(formatISOString('nope')).toBe('nope')
+  it('formatISOString answers an unparseable string with the empty string, like formatDate', () => {
+    expect(formatISOString('nope')).toBe('')
     expect(formatISOString(null)).toBe('')
     expect(formatISOString(ISO)).toBe(new Date(ISO).toLocaleString())
   })
@@ -176,20 +174,20 @@ describe('formatRelativeTime (#19606)', () => {
   })
 })
 
-describe('formatLocalDate / formatLocalTime / formatLocalDateTime (#19905)', () => {
-  it("show exactly what the browser's toLocale…String() shows", () => {
+describe('one answer for a missing or unparseable value (#19905)', () => {
+  it("formatDate, formatISOString and formatLocalTime show what the browser's toLocale…String() shows", () => {
     const at = new Date(ISO)
-    expect(formatLocalDate(at)).toBe(at.toLocaleDateString())
+    expect(formatDate(at)).toBe(at.toLocaleDateString())
+    expect(formatISOString(at)).toBe(at.toLocaleString())
+    expect(formatISOString(ISO)).toBe(at.toLocaleString())
     expect(formatLocalTime(at)).toBe(at.toLocaleTimeString())
-    expect(formatLocalDateTime(at)).toBe(at.toLocaleString())
-    expect(formatLocalDateTime(ISO)).toBe(at.toLocaleString())
   })
 
-  it('give empty text for a missing value and the input for an unparseable one', () => {
-    for (const f of [formatLocalDate, formatLocalTime, formatLocalDateTime]) {
+  it('every fixed formatter answers a missing AND an unparseable value with the empty string', () => {
+    for (const f of [formatDate, formatDateTime, formatISOString, formatLocalTime]) {
       expect(f(undefined)).toBe('')
-      expect(f('')).toBe('')
-      expect(f('not a date')).toBe('not a date')
+      expect(f(null)).toBe('')
+      expect(f('not a date')).toBe('')
     }
   })
 })

@@ -175,7 +175,7 @@
 
 <script setup lang="ts">
 import { BaseButton } from '@autobot/ui'
-import { createDateFormatter, formatLocalDateTime } from '@/utils/formatHelpers'
+import { createDateFormatter, formatISOString } from '@/utils/formatHelpers'
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onUnmounted } from 'vue';
@@ -240,7 +240,7 @@ const formatDate = createDateFormatter({
   intl: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' },
 });
 
-const formatFullDate = formatLocalDateTime;
+const formatFullDate = formatISOString;
 
 const downloadItem = (item: GalleryItem) => {
   if (!item.analysisResult) {

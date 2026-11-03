@@ -134,7 +134,7 @@ import {
   getEventTypeIcon as getEventIcon,
 } from '../constants'
 import CausalChainViewer from './CausalChainViewer.vue'
-import { createDateFormatter, formatLocalDate, formatLocalDateTime } from '@/utils/formatHelpers'
+import { createDateFormatter, formatDate, formatISOString } from '@/utils/formatHelpers'
 
 const props = defineProps<{
   events: TemporalEvent[]
@@ -148,7 +148,7 @@ const formatMarkerDate = createDateFormatter({ kind: 'date', intl: { year: 'nume
 
 /** The event's moment, or its temporal expression when it has no timestamp. */
 function eventTimeText(event: TemporalEvent): string {
-  if (event.timestamp) return formatLocalDateTime(event.timestamp)
+  if (event.timestamp) return formatISOString(event.timestamp)
   return event.temporal_expression ?? t('knowledge.temporal.events.unknownTime')
 }
 
@@ -158,7 +158,7 @@ function dateMarkerText(event: TemporalEvent): string {
 }
 
 function getDateKey(event: TemporalEvent): string {
-  return formatLocalDate(event.timestamp)
+  return formatDate(event.timestamp)
 }
 
 function shouldShowDateMarker(index: number): boolean {

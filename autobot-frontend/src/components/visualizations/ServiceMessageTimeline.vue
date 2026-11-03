@@ -102,7 +102,7 @@ import {
   useServiceMessages,
   type ServiceMessageEntry
 } from '@/composables/useServiceMessages'
-import { createDateFormatter, formatLocalDateTime } from '@/utils/formatHelpers'
+import { createDateFormatter, formatISOString } from '@/utils/formatHelpers'
 
 const { t } = useI18n()
 const {
@@ -147,7 +147,7 @@ function loadChain(id: string) { fetchChain(id) }
 
 const formatTime = createDateFormatter({ kind: 'time' })
 
-const formatFull = formatLocalDateTime
+const formatFull = formatISOString
 
 function formatPayload(c: string): string {
   try { return JSON.stringify(JSON.parse(c), null, 2) } catch { return c }

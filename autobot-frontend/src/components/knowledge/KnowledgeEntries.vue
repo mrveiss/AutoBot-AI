@@ -444,7 +444,7 @@ import ConnectorManager from './connectors/ConnectorManager.vue'
 import BulkActionsToolbar from '@/components/knowledge/BulkActionsToolbar.vue'
 import BulkEditModal from '@/components/knowledge/modals/BulkEditModal.vue'
 import type { BulkEditMode, BulkEditEntry } from '@/components/knowledge/modals/BulkEditModal.vue'
-import { formatDate, formatDateTime, formatLocalDate } from '@/utils/formatHelpers'
+import { formatDate, formatDateTime } from '@/utils/formatHelpers'
 // #9724: the FA-class variant rendered empty SVGs through <Icon :name>
 import { getDocumentTypeIconName as getDocumentTypeIcon } from '@/utils/iconMappings'
 import { useDebounce } from '@/composables/useDebounce'
@@ -709,7 +709,7 @@ const handleExport = (format: ExportFormat) => {
 
 const generateMarkdownExport = (entries: KnowledgeDocument[]): string => {
   const lines: string[] = ['# Knowledge Base Export', '']
-  lines.push(`> Exported on ${formatLocalDate(new Date())}`)
+  lines.push(`> Exported on ${formatDate(new Date())}`)
   lines.push(`> ${entries.length} entries`)
   lines.push('')
 

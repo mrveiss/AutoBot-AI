@@ -62,7 +62,7 @@ import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import type { KnowledgeDocument } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers/index'
 import DocumentChangeFeed from '@/components/knowledge/DocumentChangeFeed.vue'
-import { formatFileSize, formatLocalDateTime } from '@/utils/formatHelpers'
+import { formatFileSize, formatISOString } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { useTransientError } from '@/composables/useTransientError'
 import {
@@ -265,7 +265,7 @@ const exportStats = async () => {
 const generateReport = async () => {
   const report = `
 # Knowledge Base Report
-Generated: ${formatLocalDateTime(new Date())}
+Generated: ${formatISOString(new Date())}
 
 ## Overview
 - Total Documents: ${store.documentCount}

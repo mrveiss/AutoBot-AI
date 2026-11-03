@@ -305,10 +305,13 @@ export function formatDateTime(
   return date.toLocaleString(undefined, styled ? options : { ...DEFAULT_DATE_TIME_INTL, ...options })
 }
 
-/** Format an ISO string with the browser's default locale string; an invalid one is returned as-is. */
-export function formatISOString(isoString: string | undefined | null): string {
-  if (!isoString) return ''
-  return toValidDate(isoString)?.toLocaleString() ?? isoString
+/**
+ * Date and time in the browser's own `toLocaleString()` text. A missing or unparseable value is
+ * `''`, the same as {@link formatDate} and {@link formatDateTime}, so a bad value never reads as
+ * `Invalid Date` (#19905).
+ */
+export function formatISOString(value: DateInput): string {
+  return toValidDate(value)?.toLocaleString() ?? ''
 }
 
 /** Units of {@link formatRelativeTime}, largest first, with their size in seconds. */
@@ -403,11 +406,8 @@ export function createDateFormatter(
 }
 
 /**
- * The browser's own text for a date, a time, or both: what `toLocaleDateString()`,
- * `toLocaleTimeString()` and `toLocaleString()` show, with `''` for a missing value and
- * the input itself for an unparseable one (#19905). A component that wrote
- * `new Date(x).toLocale…String()` calls one of these instead.
+ * The browser's own `toLocaleTimeString()` text, seconds included, with `''` for a missing or
+ * unparseable value (#19905). {@link formatTime} is the `HH:MM` clock; the date and date-time
+ * equivalents are {@link formatDate} and {@link formatISOString}.
  */
-export const formatLocalDate = createDateFormatter({ kind: 'date' })
-export const formatLocalTime = createDateFormatter({ kind: 'time' })
-export const formatLocalDateTime = createDateFormatter()
+export const formatLocalTime = createDateFormatter({ kind: 'time', invalidText: '' })
