@@ -21,6 +21,7 @@ from type_defs.common import Metadata
 
 from .conversation_owner import ConversationNotOwnedError, conversation_owner, verified_conversation_owner
 from .models import AgentSessionState, AgentTerminalSession
+from .pending_claim import drop_pending_slot, hold_pending_slot
 from .redis_usability import usable_redis
 
 logger = get_logger(__name__)
@@ -476,13 +477,14 @@ class SessionManager:
             try:
                 key = f"agent_terminal:session:{session_id}"
                 await self.redis_client.delete(key)
+                await drop_pending_slot(self.redis_client, session_id)
             except Exception as e:
                 logger.error("Failed to remove session from Redis: %s", e)
 
         return True
 
-    async def _persist_session(self, session: AgentTerminalSession) -> None:
-        """Persist session to Redis.
+    async def _persist_session(self, session: AgentTerminalSession) -> bool:
+        """Persist session to Redis; ``False`` if the session record was not written.
 
         #13478: the TTL depends on whether the session is *idle* or *waiting on a
         human*. TTL_1_HOUR garbage-collects abandoned sessions, which is right —
@@ -519,11 +521,15 @@ class SessionManager:
                     APPROVAL_PENDING_SESSION_TTL,
                     session.conversation_id,
                 )
+            if session.has_pending_approval():
+                await hold_pending_slot(self.redis_client, session.session_id, session.get_pending_command_id(), ttl)
 
             logger.debug("Persisted session %s to Redis with key %s (ttl=%ds)", session.session_id, key, ttl)
 
+            return True
         except Exception as e:
             logger.error("Failed to persist session to Redis: %s", e)
+            return False
 
     async def _conversation_for_expired_session(self, session_id: str) -> str | None:
         """The conversation a vanished session was serving, if it had an approval."""
