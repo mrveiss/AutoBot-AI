@@ -157,24 +157,23 @@ def _log_root_key_reason_once(reason: str) -> None:
     logger.error("System vault unavailable in this process: %s", reason)
 
 
-def derive_vault_key(root_key: bytes, vault_id: str) -> bytes:
-    """Derive a vault's 32-byte KEK from the root key via HKDF-SHA256."""
+def _hkdf(root_key: bytes, info: bytes) -> bytes:
+    """The one HKDF-SHA256 derivation every key here uses; *info* is its domain label."""
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
+    return HKDF(algorithm=hashes.SHA256(), length=_KEY_LEN, salt=None, info=info).derive(root_key)
+
+
+def derive_vault_key(root_key: bytes, vault_id: str) -> bytes:
+    """Derive a vault's 32-byte KEK from the root key via HKDF-SHA256."""
     if not vault_id:
         raise ValueError("vault_id must be a non-empty string")
     if len(vault_id) > _MAX_VAULT_ID_LEN:
         raise ValueError(f"vault_id exceeds {_MAX_VAULT_ID_LEN} chars")
 
-    hkdf = HKDF(
-        algorithm=hashes.SHA256(),
-        length=_KEY_LEN,
-        salt=None,
-        # Single variable-length trailing field after a constant prefix → injective.
-        info=_HKDF_INFO_PREFIX + vault_id.encode("utf-8"),
-    )
-    return hkdf.derive(root_key)
+    # Single variable-length trailing field after a constant prefix → injective.
+    return _hkdf(root_key, _HKDF_INFO_PREFIX + vault_id.encode("utf-8"))
 
 
 @dataclass(frozen=True)
@@ -269,10 +268,7 @@ def _field_aad(context: str) -> bytes:
 
 
 def _field_key() -> bytes:
-    from cryptography.hazmat.primitives import hashes
-    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-
-    return HKDF(algorithm=hashes.SHA256(), length=_KEY_LEN, salt=None, info=_FIELD_KEY_INFO).derive(load_root_key())
+    return _hkdf(load_root_key(), _FIELD_KEY_INFO)
 
 
 def seal_field(plaintext: bytes, *, context: str) -> str:

@@ -365,8 +365,8 @@ async def telegram_webhook(
         await process_telegram_update(request.app, update)
         return JSONResponse({"status": "ok"})
 
-    except HTTPException:
-        raise
+    except (HTTPException, PassThroughError):
+        raise  # PassThroughError: an unreadable stored token is a 503 Telegram retries, not a dropped update (#17981)
     except Exception:
         logger.exception("Failed to process Telegram webhook update")
         # Return 200 to prevent Telegram from retrying, no error details to client
@@ -430,7 +430,7 @@ async def configure_telegram_bot(
             ingest_mode=request.ingest_mode,
         )
 
-    except HTTPException:
+    except (HTTPException, PassThroughError):
         raise
     except Exception as exc:
         logger.exception("Failed to configure Telegram bot")
@@ -583,6 +583,8 @@ async def send_telegram_response(
         # not reached from this webhook path), so recording here is what
         # makes the guard real rather than decorative.
         await ingest_governor.record_agent_send(platform="telegram", channel_id=str(chat_id))
+    except PassThroughError:
+        raise  # an unreadable stored token reaches the one 503 handler (#17981)
     except Exception:
         logger.exception("Failed to send Telegram response")
         raise

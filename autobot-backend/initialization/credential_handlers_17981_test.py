@@ -85,3 +85,33 @@ async def test_outbound_sync_records_why_it_failed():
         )
     reason = logged.await_args.args[3]
     assert reason.startswith("credential unreadable: ") and "organization:x:pm" in reason
+
+
+def test_the_webhook_answers_503_when_the_reply_token_is_unreadable():
+    """It used to swallow the error and return 200: the update was dropped and Telegram never retried."""
+    from api import telegram_bot
+
+    app = FastAPI()
+    register_credential_handlers(app)
+    app.include_router(telegram_bot.router, prefix="/api")
+    with (
+        patch.object(telegram_bot, "get_telegram_webhook_secret", AsyncMock(return_value="s3cret")),
+        patch.object(telegram_bot, "get_ingest_mode", AsyncMock(return_value="webhook")),
+        patch.object(telegram_bot, "process_telegram_update", AsyncMock(side_effect=_UNREADABLE)),
+    ):
+        response = TestClient(app, raise_server_exceptions=False).post(
+            "/api/telegram/webhook",
+            json={"update_id": 1, "message": {"message_id": 1, "chat": {"id": 1}, "text": "hi"}},
+            headers={"X-Telegram-Bot-Api-Secret-Token": "s3cret"},
+        )
+    assert response.status_code == 503
+    assert response.json() == {"detail": CREDENTIAL_UNREADABLE}
+
+
+@pytest.mark.asyncio
+async def test_sending_a_reply_does_not_swallow_an_unreadable_token():
+    from api import telegram_bot
+
+    with patch.object(telegram_bot.TelegramBotService, "from_redis", AsyncMock(side_effect=_UNREADABLE)):
+        with pytest.raises(FieldDecryptionError):
+            await telegram_bot.send_telegram_response(chat_id="1", response_text="hi")

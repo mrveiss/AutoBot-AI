@@ -89,3 +89,16 @@ def test_tagged_values_pass_plaintext_through_and_seal_the_rest():
     assert open_tagged(tagged, context="redis:k1") == "s3cret"
     with pytest.raises(FieldDecryptionError):
         open_tagged(tagged, context="redis:k2")
+
+
+def test_the_field_key_is_its_own_domain_not_a_vault_key():
+    """#17981 review: separation must not depend on how vault ids parse."""
+    from autobot_shared import secrets_envelope as env
+
+    root = env.load_root_key()
+    field_key = env._field_key()
+    assert field_key != env.derive_vault_key(root, "field-encryption"), "same key as a vault named like it"
+    assert field_key != env.derive_vault_key(root, "system"), "same key as a real vault KEK"
+    assert len(field_key) == 32
+    blob = encrypt_field("s3cret", context="redis:k1")
+    assert decrypt_field(blob, context="redis:k1") == "s3cret"
