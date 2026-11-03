@@ -20,10 +20,12 @@ infrastructure scripts are tracked on #17981's list until each moves.
 from __future__ import annotations
 
 import ast
+from pathlib import Path
 
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
-from tools.lint._scan_helpers import tracked_paths
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOT = repo_root()
 
@@ -60,9 +62,37 @@ def _cipher_names(source: str) -> set[str]:
     return found
 
 
+def _source_files(root: Path) -> list[str]:
+    try:
+        return tracked_paths(root, "autobot_shared/*.py", exclude=("*_test.py", "test_*.py", "conftest.py"))
+    except EmptyEnumeration:
+        return []
+
+
+def _all_python(root: Path) -> int:
+    try:
+        return len(tracked_paths(root, "autobot_shared/*.py"))
+    except EmptyEnumeration:
+        return 0
+
+
+#: Measured 2026-11-03: 342 of 546 tracked ``autobot_shared`` .py files (63%) are non-test source;
+#: 0.5 leaves room for test growth before the scan is meaningfully narrower.
+REACH = declare(
+    "one-aead-core",
+    discover=_source_files,
+    reference=_all_python,
+    min_fraction=0.5,
+    what="non-test python source in autobot_shared",
+    roots=("autobot_shared",),
+)
+
+
 def _population() -> set[str]:
-    paths = tracked_paths(_ROOT, "autobot_shared/*.py", exclude=("*_test.py", "test_*.py", "conftest.py"))
-    return {p for p in paths if _cipher_names((_ROOT / p).read_text(encoding="utf-8"))}
+    examined = REACH.examined(_ROOT)
+    found = {p for p in examined if _cipher_names((_ROOT / p).read_text(encoding="utf-8"))}
+    REACH.completed(len(examined), _ROOT)
+    return found
 
 
 def test_no_new_cipher_implementation_in_autobot_shared():
