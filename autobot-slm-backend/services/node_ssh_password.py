@@ -192,5 +192,8 @@ async def delete_stored_password(db: AsyncSession, node_id: str, approval_id: uu
         await _audit_best_effort(db, node_id, approval_id, "failed", False)
         raise
     await _audit_best_effort(db, node_id, approval_id, "completed", True)
-    logger.info("Stored SSH password of node %s deleted under approval %s: %s", node_id, approval_id, removed)
+    if removed:
+        logger.info("Stored SSH password of node %s deleted under approval %s", node_id, approval_id)
+    else:
+        logger.info("Node %s had no stored SSH password left to delete (approval %s)", node_id, approval_id)
     return removed
