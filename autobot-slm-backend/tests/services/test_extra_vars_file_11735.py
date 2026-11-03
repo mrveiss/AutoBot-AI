@@ -56,6 +56,7 @@ def _load_playbook_executor():
         "services.inventory_builder": MagicMock(),
         "services.provision_progress": MagicMock(),
         "services.unit_names": MagicMock(),
+        "services.sync_restart": MagicMock(),  # #20743
     }
     return _load_from_file("_pe_11735", "services/playbook_executor.py", extra_stubs=stubs)
 

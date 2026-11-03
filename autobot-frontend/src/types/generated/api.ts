@@ -45763,6 +45763,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/npu/assigned-unpaired-workers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Assigned Unpaired Workers
+         * @description Read only. A person pairs each through POST /npu/workers/pair.
+         */
+        get: operations["list_assigned_unpaired_workers_api_npu_assigned_unpaired_workers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/redis-service/start": {
         parameters: {
             query?: never;
@@ -60379,6 +60399,25 @@ export interface components {
              * @description Category ID to assign fact to
              */
             category_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AssignedWorker
+         * @description A node the SLM assigned npu-worker with no paired worker.
+         */
+        AssignedWorker: {
+            /** Url */
+            url: string;
+            /** Hostname */
+            hostname: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** AssignedWorkersResponse */
+        AssignedWorkersResponse: {
+            /** Workers */
+            workers: components["schemas"]["AssignedWorker"][];
         } & {
             [key: string]: unknown;
         };
@@ -168328,6 +168367,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NPUPoolReloadResponse"];
+                };
+            };
+        };
+    };
+    list_assigned_unpaired_workers_api_npu_assigned_unpaired_workers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignedWorkersResponse"];
                 };
             };
         };
