@@ -177,6 +177,28 @@ a message that names the token to use. Baselines move one way: when a count fall
 entry. The stylelint step is not yet whole-tree: that switch waits until the `<style>` hex
 population reaches zero (#17567).
 
+## Canonical homes (#17571)
+
+Which module owns each design-system concept is declared in code, not here:
+`libs/autobot-ui/src/authority/designSystemAuthority.mjs` (`AUTHORITY`, `designSystemOwner()`).
+It is the source of truth; where this document or any issue disagrees with it, the registry wins.
+`designSystemOwner()` throws for a concept the registry does not list, but only when a caller
+invokes it; no check calls it yet, and the canonical-check harness does not read `AUTHORITY`. An
+entry that is not yet decided says so in a `note` with an issue link, and a deliberate exception
+carries a stated `reason`.
+
+The canonical-check harness (`node autobot-frontend/scripts/canonical_check.mjs --all`, also the
+pre-commit hook and the weekly `canonical-audit.yml`, which fails on a `block`) runs two rules, each
+derived from the kit's component listing rather than from the registry:
+
+| Violation | Rule | Population frozen in |
+|---|---|---|
+| an app component file named like a kit component | `ds-second-kit-component` | `scripts/canonical/baselines/ds_second_kit_component.txt` |
+| a kit-named component imported from a path other than `@autobot/ui` | `ds-noncanonical-primitive-import` | `scripts/canonical/baselines/ds_noncanonical_primitive_import.txt` |
+
+Both baselines only shrink: delete a line in the PR that fixes it (the test fails if an entry no
+longer matches). Their stated boundaries are in each baseline's header.
+
 ---
 
 *Last updated: 2026-05-22 (Issue #7880)*

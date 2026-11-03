@@ -1,14 +1,26 @@
 {
  "autobot-frontend/src/components/admin/NpuWorkerPairConfirmDialog.vue": [
   "11dfc023",
+  "3a4f2d81",
   "6b92e019",
   "869af794",
+  "87eedd49",
   "8d61de85",
+  "ac828535",
   "b890f9bd",
   "d61dbf63",
+  "db83f063",
   "f111403f",
   "f2e8bd6c",
   "f9752a06"
+ ],
+ "autobot-frontend/src/components/agents/AgentAbstentionBadge.vue": [
+  "eab2ec7f"
+ ],
+ "autobot-frontend/src/components/agents/AgentSettingsPanel.vue": [
+  "3761a704",
+  "a2ccf459",
+  "e9230d7e"
  ],
  "autobot-frontend/src/components/agents/AgentTaskDetail.vue": [
   "11948950",
@@ -81,6 +93,11 @@
  ],
  "autobot-frontend/src/components/analytics/CodebaseAnalytics.vue": [
   "1f992944"
+ ],
+ "autobot-frontend/src/components/analytics/CodebaseAnalyticsLanding.vue": [
+  "48320eb4",
+  "6aa3a2eb",
+  "9105bfc7"
  ],
  "autobot-frontend/src/components/analytics/CodebaseOverviewPanel.vue": [
   "485afeef"
@@ -256,7 +273,11 @@
   "fa52d740"
  ],
  "autobot-frontend/src/components/canvas/CanvasExportSheet.vue": [
+  "03f79713",
+  "236f3d0a",
+  "2c33911c",
   "4d29ad26",
+  "54665fe7",
   "628a4680",
   "8d61de85",
   "b13e9b3e",
@@ -269,7 +290,8 @@
   "2bbb0233"
  ],
  "autobot-frontend/src/components/canvas/CanvasSplitLayout.vue": [
-  "17c168d8"
+  "17c168d8",
+  "7e15ed6a"
  ],
  "autobot-frontend/src/components/canvas/CanvasToolPalette.vue": [
   "28f4d145",
@@ -623,8 +645,14 @@
   "9bad67ad"
  ],
  "autobot-frontend/src/components/security/SecretsManager.vue": [
+  "002da5c3",
+  "0d9b3b9c",
+  "21af4372",
+  "2c96a5b8",
+  "7da59ec1",
   "87cdfb2e",
-  "9d4ebd1c"
+  "9d4ebd1c",
+  "e7ffe78a"
  ],
  "autobot-frontend/src/components/security/ThreatIntelligenceDashboard.vue": [
   "9ada260e",
@@ -696,6 +724,11 @@
   "bdc27412",
   "c553bfc5"
  ],
+ "autobot-frontend/src/components/transcriber/ExportMenu.vue": [
+  "22ea305b",
+  "2e7389f6",
+  "dad71c60"
+ ],
  "autobot-frontend/src/components/transcriber/UploadModal.vue": [
   "1d4ef8aa",
   "bb7a1e2b"
@@ -710,6 +743,21 @@
  "autobot-frontend/src/components/visualizations/ServiceMessageTimeline.vue": [
   "60bf428e",
   "9c27a1b0"
+ ],
+ "autobot-frontend/src/components/visualizations/SystemArchitectureDiagram.vue": [
+  "330d6c12",
+  "408302f2",
+  "57777254",
+  "696afc98",
+  "7eb024e1",
+  "97a6d737",
+  "9afc259a",
+  "a32656e5",
+  "a48fc1df",
+  "b4c94cbf",
+  "c0b3786f",
+  "d8f23b3f",
+  "e26ab180"
  ],
  "autobot-frontend/src/components/workflow/PhaseProgressionIndicator.vue": [
   "109e39f2"
@@ -766,6 +814,7 @@
   "0001fa62",
   "020e099d",
   "07421717",
+  "0ded1db4",
   "0efb833b",
   "14964275",
   "18a266f0",
@@ -784,10 +833,12 @@
   "7b7ecf63",
   "850dcd95",
   "8b7b7a86",
+  "a3bc28b1",
   "a527ec27",
   "c666ef19",
   "d49f1946",
   "db1e79d3",
+  "f1c21461",
   "f3d5dbe6",
   "f3d5dbe6",
   "f89c3349"
@@ -864,6 +915,13 @@
   "f1ad3407",
   "fc056ae5"
  ],
+ "autobot-frontend/src/views/llc/BacklogView.vue": [
+  "0f6247c4",
+  "6b76603b",
+  "89964e24",
+  "94675f78",
+  "f43718cd"
+ ],
  "autobot-frontend/src/views/secrets/LlmApiKeysView.vue": [
   "20069636"
  ],
@@ -925,14 +983,59 @@
  "autobot-slm-frontend/src/components/RoleManagementModal.vue": [
   "751623be"
  ],
+ "autobot-slm-frontend/src/components/ScheduleModal.vue": [
+  "1117fec2",
+  "702d66f7",
+  "72e93e05",
+  "a4770987",
+  "ad5d23af",
+  "ff3ca34c"
+ ],
+ "autobot-slm-frontend/src/components/agents/ConfigHistoryTab.vue": [
+  "12e3e4f7",
+  "6d039121"
+ ],
  "autobot-slm-frontend/src/components/agents/ProcessMonitorTab.vue": [
   "b7a9fea0"
  ],
  "autobot-slm-frontend/src/components/fleet/DecommissionModal.vue": [
   "126cfd30"
  ],
+ "autobot-slm-frontend/src/components/fleet/FleetSummary.vue": [
+  "18226a85",
+  "339ae693",
+  "d0b7573d",
+  "d707df35",
+  "ef7c3c59"
+ ],
+ "autobot-slm-frontend/src/components/fleet/NPUWorkersTab.vue": [
+  "01cd5624",
+  "0453fe65",
+  "128f71be",
+  "5b381f3d",
+  "9c6f01e6"
+ ],
+ "autobot-slm-frontend/src/components/fleet/NodeLifecyclePanel.vue": [
+  "3761a704",
+  "3d904c43",
+  "5a98de4b",
+  "7b4f77c0",
+  "94675f78",
+  "9bd29e05",
+  "a2ccf459",
+  "afec0045",
+  "bdf4b8e6",
+  "c75e0d34",
+  "ce904a9e",
+  "e3992707",
+  "f7fd0784"
+ ],
  "autobot-slm-frontend/src/components/fleet/NodeServicesPanel.vue": [
-  "ebf2ee40"
+  "0f221ce9",
+  "66ddc047",
+  "a7a4ec78",
+  "ebf2ee40",
+  "f66d9184"
  ],
  "autobot-slm-frontend/src/components/monitoring/GrafanaDashboard.vue": [
   "640d369f",
@@ -940,6 +1043,11 @@
  ],
  "autobot-slm-frontend/src/components/orchestration/RestartConfirmDialog.vue": [
   "dd2f7d75"
+ ],
+ "autobot-slm-frontend/src/components/skills/GovernanceModeSelector.vue": [
+  "031aeab2",
+  "3894f770",
+  "95014270"
  ],
  "autobot-slm-frontend/src/views/ExternalAgentsView.vue": [
   "a0fae4ce"
@@ -955,14 +1063,55 @@
   "9657932e"
  ],
  "autobot-slm-frontend/src/views/SetupWizardView.vue": [
+  "03bb990c",
+  "29bfda7f",
+  "29bfda7f",
+  "50630940",
+  "7eb024e1",
   "8dae3e12",
-  "efbd2d46"
+  "bdc1bf95",
+  "bfc9544c",
+  "eea0b7bf",
+  "efbd2d46",
+  "f4915392",
+  "f5e34ba9",
+  "fab7f23b"
+ ],
+ "autobot-slm-frontend/src/views/UpdatesView.vue": [
+  "9b9cb641",
+  "bb11c53a"
  ],
  "autobot-slm-frontend/src/views/monitoring/AlertsMonitor.vue": [
   "ee2d5e5c"
  ],
  "autobot-slm-frontend/src/views/monitoring/ErrorMonitor.vue": [
   "0c2ba639"
+ ],
+ "autobot-slm-frontend/src/views/performance/AlertRulesView.vue": [
+  "0af5a7b9",
+  "364e977c",
+  "4255f160",
+  "5ea5bab6",
+  "7cde155f",
+  "94675f78",
+  "a2ccf459",
+  "d589271e",
+  "df2f96a5",
+  "ead4b776",
+  "fb6e56aa",
+  "fc9c4133"
+ ],
+ "autobot-slm-frontend/src/views/performance/SLODashboard.vue": [
+  "0af5a7b9",
+  "0f6d8dc9",
+  "2431e86f",
+  "7cde155f",
+  "dbfe8d07",
+  "fb6e56aa"
+ ],
+ "autobot-slm-frontend/src/views/performance/TracingView.vue": [
+  "3761a704",
+  "daf325fd"
  ],
  "autobot-slm-frontend/src/views/settings/APISettings.vue": [
   "0fd796ca"
@@ -972,6 +1121,11 @@
  ],
  "autobot-slm-frontend/src/views/settings/admin/DataHygieneView.vue": [
   "b714aea6"
+ ],
+ "autobot-slm-frontend/src/views/settings/admin/SSOSettings.vue": [
+  "24abe59a",
+  "64049bb7",
+  "67d7287b"
  ],
  "autobot-slm-frontend/src/views/tools/admin/MCPTool.vue": [
   "742ddc50"
