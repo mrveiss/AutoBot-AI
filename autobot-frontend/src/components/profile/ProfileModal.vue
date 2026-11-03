@@ -442,7 +442,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 
 .option-btn.active {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border-color: var(--color-primary);
 }
 
@@ -472,7 +472,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   margin-top: var(--spacing-4);
   padding: var(--spacing-2) var(--spacing-5);
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
