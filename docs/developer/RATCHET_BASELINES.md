@@ -501,6 +501,16 @@ exception, rather than leave the fields unwatched.
 - **Second derivation (rule 3):** the rough regex above, over the same files, compared as sets. The
   script kind is otherwise not independently re-derivable (no JavaScript parser in this suite).
 
+**Second widening, no freeze (#19885 AC3, 2026-11-03).** The first widening still could not see
+the three sites the issue names: `zeroText: '0B'`, `nullText: '0 B'` in a `.ts` formatter, and
+`label: 'SLOs'`. The matcher now adds the key `nullText:` and two value shapes beside prose: a
+byte size (`0 B`, `1.5 KB`) and an acronym plural (`SLOs`). The scan also reads the formatter
+modules, `src/utils/format*.ts` in both apps, for the script kind. **True count: 0** new sites,
+so the baseline did not change. Second derivation: `git ls-files` plus `grep -P` over 608 files,
+which is a superset scope, since it reads whole files and not just `<script>`. It also found 0,
+and a control string matched. A number with any other unit (`24h`, `3d`) is still not matched:
+`3d` is a view-mode identifier in `KnowledgeGraph.vue`.
+
 ## Down-only tables are compared with the base, not with a hand total (#19283)
 
 A per-entry table (file-size `KNOWN_LARGE`, the colour and palette baselines) used to carry a
