@@ -9,7 +9,7 @@
 interface AxiosLikeError {
   response?: {
     data?: {
-      detail?: string
+      detail?: string | { message?: string }
       message?: string
     }
   }
@@ -27,7 +27,9 @@ function isAxiosLikeError(err: unknown): err is AxiosLikeError {
 export function extractApiErrorMessage(err: unknown, fallback: string): string {
   if (isAxiosLikeError(err)) {
     const detail = err.response?.data?.detail
-    if (detail) return detail
+    if (typeof detail === 'string' && detail) return detail
+    // A structured detail ({code, message, ...}) is read as its message, never returned as the object.
+    if (detail && typeof detail === 'object' && detail.message) return detail.message
     const message = err.response?.data?.message
     if (message) return message
   }
