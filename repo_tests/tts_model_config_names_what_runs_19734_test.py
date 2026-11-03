@@ -41,5 +41,5 @@ def test_worker_and_predownload_load_the_same_way() -> None:
         assert "TTSModel.load_model()" in _read(template), template
 
 
-def test_the_startup_log_names_the_model() -> None:
-    assert "Pocket TTS model loaded: %s" in _read("templates/tts-worker.py.j2")
+def test_the_startup_log_labels_the_configured_id_as_configured() -> None:
+    assert "Pocket TTS model loaded (configured TTS_MODEL_ID=%s" in _read("templates/tts-worker.py.j2")
