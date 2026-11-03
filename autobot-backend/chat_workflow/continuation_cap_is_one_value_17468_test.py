@@ -37,14 +37,14 @@ def _continuing_state(iteration: int) -> dict:
 def test_raising_the_cap_lets_the_route_continue(monkeypatch: pytest.MonkeyPatch) -> None:
     """The defect, stated as a behaviour change the old code could not produce.
 
-    At iteration 5 with a cap of 5 the route must stop. Raise the cap and it
-    must continue. Against the hardcoded `< 5` the second assertion fails --
+    At iteration 5 with a cap of 5 the route must stop continuing (it forces a
+    final answer, #19715). Raise the cap and it must continue. Against the hardcoded `< 5` the second assertion fails --
     which is exactly the bug: the constant moved and this path did not.
     """
     state = _continuing_state(5)
 
     monkeypatch.setattr(limits, "MAX_CONTINUATION_ITERATIONS", 5)
-    assert route_after_execution(state) == "persist_conversation"
+    assert route_after_execution(state) == "force_final_answer"
 
     monkeypatch.setattr(limits, "MAX_CONTINUATION_ITERATIONS", 7)
     assert (
@@ -62,7 +62,7 @@ def test_lowering_the_cap_stops_the_route(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr(limits, "MAX_CONTINUATION_ITERATIONS", 2)
 
     assert (
-        route_after_execution(_continuing_state(3)) == "persist_conversation"
+        route_after_execution(_continuing_state(3)) == "force_final_answer"
     ), "the route ran past a lowered cap -- a safety limit that cannot be tightened"
 
 
