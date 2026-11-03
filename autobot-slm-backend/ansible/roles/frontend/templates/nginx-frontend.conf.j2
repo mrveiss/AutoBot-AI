@@ -165,6 +165,11 @@ server {
         proxy_next_upstream_timeout 10s;
     }
 
+    # #20046: service-to-service only; the SLM and the backend call each other directly, never through this edge.
+    location ^~ /api/internal/ {
+        return 404;
+    }
+
     # Issue #3105: WebSocket proxy for /api/ws/ — must be BEFORE /api/ to take priority.
     # The /api/ block does not set Upgrade/Connection headers, so WebSocket
     # requests to /api/ws/live would fail with 403 if they matched /api/.

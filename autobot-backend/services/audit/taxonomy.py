@@ -61,6 +61,7 @@ class AuditAction(str, Enum):
     SESSION_CREATE = "session.create"
     SESSION_DELETE = "session.delete"
     SESSION_EXPORT = "session.export"
+    SESSION_OWNER_ASSIGN = "session.owner_assign"
     SESSION_REASSIGN = "session.reassign"  # #20029: a removed user's chat session handed to a successor
     KNOWLEDGE_ADD = "knowledge.add"
     KNOWLEDGE_REMOVE = "knowledge.remove"
@@ -131,6 +132,10 @@ class AuditAction(str, Enum):
     ORG_UPDATE = "org.update"
     ORG_DELETE = "org.delete"
     ORG_SUBSCRIPTION_TIER_DROP = "org.subscription_tier.drop"
+    NODE_SSH_PASSWORD_DELETE = (
+        "node.ssh_password.delete"  # nosec B105  # pragma: allowlist secret -- #20046: an action name
+    )
+    CLEANUP_ENV_COPIES = "cleanup.env_copies"  # #20567: old .env.*~ copies removed after approval
     ROLE_CREATE = "role.create"
     ROLE_UPDATE = "role.update"
     ROLE_DELETE = "role.delete"

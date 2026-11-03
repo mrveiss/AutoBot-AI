@@ -144,7 +144,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/autobot_memory_graph/semantic_search.py": 706,
     "autobot-backend/benchmarks/benchmark_belief_state.py": 725,
     "autobot-backend/chat_history/context_overflow.py": 845,
-    "autobot-backend/chat_history/session.py": 923,
+    "autobot-backend/chat_history/session.py": 921,
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
     "autobot-backend/chat_workflow/graph.py": 1459,  # #19715
     "autobot-backend/chat_workflow/llm_handler.py": 1300,
@@ -428,7 +428,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/api/stateful.py": 685,
     "autobot-slm-backend/api/tls.py": 994,
     "autobot-slm-backend/api/updates.py": 1107,
-    "autobot-slm-backend/main.py": 773,  # #19368: admin seed password into services/admin_seed_password.py
+    "autobot-slm-backend/main.py": 772,  # #19368: admin seed password into services/admin_seed_password.py
     "autobot-slm-backend/models/database.py": 1140,
     "autobot-slm-backend/models/schemas.py": 2144,
     "autobot-slm-backend/monitoring/business_intelligence_dashboard.py": 1159,
