@@ -27,7 +27,7 @@ import type {
 } from '@/composables/useCodeSync'
 
 // Controllable poll responses (swapped per-test).
-let getUpdateAllStatusImpl: () => Promise<UpdateAllJob | null | undefined>
+let getUpdateAllStatusImpl: () => Promise<UpdateAllJob | null | undefined | 'unauthenticated'>
 let startUpdateAllImpl: () => Promise<UpdateAllJob | null>
 // #13157: fleet sync job wiring — swapped per-test like the update-all pair.
 let syncFleetImpl: () => Promise<FleetSyncResponse> = () =>
@@ -185,6 +185,67 @@ describe('CodeSyncView reconnecting affordance (#12593)', () => {
     expect(text).not.toContain('attempt 1')
     // The stage-3-specific "reconnecting..." stage label must not appear.
     expect(text).not.toContain(en.codeSyncView.pipelineStageReconnecting)
+  })
+})
+
+/**
+ * #20201 — after polling gives up the page must stop saying it is reconnecting
+ * and offer a re-check; an authentication failure must say to log in again
+ * instead of reporting a control plane restart.
+ */
+describe('CodeSyncView give-up and auth-failure states (#20201)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  // 1 poll at 1s, then one every 2s: the 90th failed poll is the give-up.
+  const GIVE_UP_MS = 1000 + 2000 * 89
+
+  it('stops claiming to reconnect after giving up and offers a status re-check', async () => {
+    const wrapper = await mountAndStartWithTransientError('slm_self_update')
+    await vi.advanceTimersByTimeAsync(GIVE_UP_MS)
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).not.toContain('reconnecting')
+    expect(text).not.toContain(en.codeSyncView.sLMManagerRestarting)
+    expect(text).toContain(en.codeSyncView.pipelineGaveUpTitle)
+    expect(text).toContain('90 status checks')
+
+    // The re-check button polls again; a recovered control plane clears the banner.
+    getUpdateAllStatusImpl = () => Promise.resolve(makeJob('fleet_nodes'))
+    const recheck = wrapper.findAll('button').find((b) => b.text().includes(en.codeSyncView.pipelineRecheckStatus))
+    expect(recheck).toBeTruthy()
+    await recheck!.trigger('click')
+    await vi.advanceTimersByTimeAsync(1000)
+    await flushPromises()
+    expect(wrapper.text()).not.toContain(en.codeSyncView.pipelineGaveUpTitle)
+    wrapper.unmount()
+  })
+
+  it('tells the user to log in again on an auth failure, not that the control plane restarts', async () => {
+    startUpdateAllImpl = () => Promise.resolve(makeJob('slm_self_update'))
+    getUpdateAllStatusImpl = () => Promise.resolve(null)
+    const wrapper = mount(CodeSyncView, {
+      global: { plugins: [i18n], stubs: { ScheduleModal: true, CodeSourceModal: true } },
+    })
+    await flushPromises()
+    getUpdateAllStatusImpl = () => Promise.resolve('unauthenticated')
+    const cta = wrapper.findAll('button').find((b) => b.text().includes(en.codeSyncView.updateAll))
+    await cta!.trigger('click')
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(1000)
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).toContain(en.codeSyncView.pipelineSessionExpiredTitle)
+    expect(text).toContain(en.codeSyncView.pipelineLogInAgain)
+    expect(text).not.toContain('reconnecting')
+    expect(text).not.toContain(en.codeSyncView.sLMManagerRestarting)
+    wrapper.unmount()
   })
 })
 
