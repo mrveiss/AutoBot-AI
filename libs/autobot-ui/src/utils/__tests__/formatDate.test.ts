@@ -8,7 +8,10 @@ import {
   formatISOString,
   formatTime,
   formatTimeAgo,
-  formatRelativeTime
+  formatRelativeTime,
+  formatLocalDate,
+  formatLocalTime,
+  formatLocalDateTime
 } from '../format'
 
 const ISO = '2025-10-30T14:30:15Z'
@@ -170,5 +173,23 @@ describe('formatRelativeTime (#19606)', () => {
     vi.setSystemTime(NOW)
     expect(formatRelativeTime(NOW - 120000, { locale: 'en' })).toBe('2 minutes ago')
     vi.useRealTimers()
+  })
+})
+
+describe('formatLocalDate / formatLocalTime / formatLocalDateTime (#19905)', () => {
+  it("show exactly what the browser's toLocale…String() shows", () => {
+    const at = new Date(ISO)
+    expect(formatLocalDate(at)).toBe(at.toLocaleDateString())
+    expect(formatLocalTime(at)).toBe(at.toLocaleTimeString())
+    expect(formatLocalDateTime(at)).toBe(at.toLocaleString())
+    expect(formatLocalDateTime(ISO)).toBe(at.toLocaleString())
+  })
+
+  it('give empty text for a missing value and the input for an unparseable one', () => {
+    for (const f of [formatLocalDate, formatLocalTime, formatLocalDateTime]) {
+      expect(f(undefined)).toBe('')
+      expect(f('')).toBe('')
+      expect(f('not a date')).toBe('not a date')
+    }
   })
 })

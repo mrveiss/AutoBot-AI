@@ -37,7 +37,7 @@
           v-if="shouldShowDateMarker(index)"
           class="date-marker"
         >
-          <span>{{ formatDateMarker(event) }}</span>
+          <span>{{ dateMarkerText(event) }}</span>
         </div>
 
         <!-- Event Card -->
@@ -66,7 +66,7 @@
               {{ event.event_type }}
             </span>
             <span class="event-time">
-              {{ formatTimestamp(event) }}
+              {{ eventTimeText(event) }}
             </span>
           </div>
 
@@ -134,6 +134,7 @@ import {
   getEventTypeIcon as getEventIcon,
 } from '../constants'
 import CausalChainViewer from './CausalChainViewer.vue'
+import { createDateFormatter, formatLocalDate, formatLocalDateTime } from '@/utils/formatHelpers'
 
 const props = defineProps<{
   events: TemporalEvent[]
@@ -143,29 +144,21 @@ const props = defineProps<{
 const { t } = useI18n()
 const { isExpanded: isEventExpanded, expand: expandEvent, collapseAll: collapseAllEvents } = useExpansion<string>()
 
-function formatTimestamp(event: TemporalEvent): string {
-  if (event.timestamp) {
-    const date = new Date(event.timestamp)
-    return date.toLocaleString()
-  }
+const formatMarkerDate = createDateFormatter({ kind: 'date', intl: { year: 'numeric', month: 'long', day: 'numeric' } })
+
+/** The event's moment, or its temporal expression when it has no timestamp. */
+function eventTimeText(event: TemporalEvent): string {
+  if (event.timestamp) return formatLocalDateTime(event.timestamp)
   return event.temporal_expression ?? t('knowledge.temporal.events.unknownTime')
 }
 
-function formatDateMarker(event: TemporalEvent): string {
-  if (event.timestamp) {
-    const date = new Date(event.timestamp)
-    return date.toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    })
-  }
-  return event.temporal_expression ?? ''
+/** The day heading for an event, or its temporal expression when it has no timestamp. */
+function dateMarkerText(event: TemporalEvent): string {
+  return event.timestamp ? formatMarkerDate(event.timestamp) : (event.temporal_expression ?? '')
 }
 
 function getDateKey(event: TemporalEvent): string {
-  if (!event.timestamp) return ''
-  return new Date(event.timestamp).toLocaleDateString()
+  return formatLocalDate(event.timestamp)
 }
 
 function shouldShowDateMarker(index: number): boolean {

@@ -87,6 +87,7 @@ Issue #10554: Per-user memory transparency + edit/forget-everywhere + export
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { formatLocalDateTime } from '@/utils/formatHelpers'
 import { useI18n } from 'vue-i18n'
 import { isHttpError, BaseButton } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
@@ -134,14 +135,7 @@ const storeCounts = computed(() => {
 // Methods
 // ---------------------------------------------------------------------------
 
-function formatTs(ts: string): string {
-  if (!ts) return ''
-  try {
-    return new Date(ts).toLocaleString()
-  } catch {
-    return ts
-  }
-}
+const formatTs = formatLocalDateTime
 
 async function loadMemories() {
   loading.value = true

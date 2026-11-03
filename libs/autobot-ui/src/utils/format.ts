@@ -401,3 +401,13 @@ export function createDateFormatter(
     return date ? toLocaleText(date, options) : (options.invalidText ?? String(input))
   }
 }
+
+/**
+ * The browser's own text for a date, a time, or both: what `toLocaleDateString()`,
+ * `toLocaleTimeString()` and `toLocaleString()` show, with `''` for a missing value and
+ * the input itself for an unparseable one (#19905). A component that wrote
+ * `new Date(x).toLocale…String()` calls one of these instead.
+ */
+export const formatLocalDate = createDateFormatter({ kind: 'date' })
+export const formatLocalTime = createDateFormatter({ kind: 'time' })
+export const formatLocalDateTime = createDateFormatter()
