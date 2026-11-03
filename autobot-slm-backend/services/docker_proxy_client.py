@@ -15,7 +15,7 @@ import aiohttp
 
 from autobot_shared.egress_allowlist import register_internal_origin_provider
 from autobot_shared.http_client import get_http_client
-from autobot_shared.http_egress_guard import assert_egress_policy
+from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -45,9 +45,8 @@ async def run_compose_service_action(node, service_name: str, action: str) -> Tu
     headers = {"X-Docker-Proxy-Token": os.getenv("AUTOBOT_DOCKER_PROXY_TOKEN", "")}
     timeout = aiohttp.ClientTimeout(total=_ACTION_TIMEOUT_SECONDS)
     try:
-        await assert_egress_policy(url)
         async with get_http_client().tracked_request(
-            "POST", url, headers=headers, timeout=timeout, allow_redirects=False
+            "POST", url, headers=headers, timeout=timeout, allow_redirects=False, guard_egress=EGRESS_POLICY
         ) as response:
             if response.status == 200:
                 logger.info("Container %s %s completed", node.node_id, action)

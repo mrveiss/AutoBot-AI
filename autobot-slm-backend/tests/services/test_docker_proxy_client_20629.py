@@ -30,10 +30,7 @@ def _http(status=None, error=None):
 
 async def _run(status=None, error=None):
     http = _http(status, error)
-    with (
-        patch.object(client, "assert_egress_policy", AsyncMock()),
-        patch.object(client, "get_http_client", return_value=http),
-    ):
+    with patch.object(client, "get_http_client", return_value=http):
         return await client.run_compose_service_action(_NODE, "redis", "restart"), http
 
 
@@ -69,6 +66,7 @@ async def test_the_action_goes_to_the_nodes_container() -> None:
     method, url = http.tracked_request.call_args.args
     assert method == "POST" and url.endswith("/containers/autobot-redis/restart")
     assert http.tracked_request.call_args.kwargs["allow_redirects"] is False
+    assert http.tracked_request.call_args.kwargs["guard_egress"] is client.EGRESS_POLICY
 
 
 @pytest.mark.asyncio
