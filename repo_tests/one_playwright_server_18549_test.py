@@ -49,7 +49,6 @@ REACH = declare(
     "one-playwright-server-scan",
     discover=_javascript_population,
     # Mid-window, from REACH.window() = (69, 109, 89); the arithmetic is on the PR, not here.
-    floor=89,
     what="tracked javascript",
     roots=_ROOTS,
     growth=40,

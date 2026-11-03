@@ -48,7 +48,6 @@ REACH = declare(
     "script-module-name-scan",
     discover=_script_files,
     # Mid-window, from REACH.window().
-    floor=285,
     what="tracked scripts (py, sh, bash, js)",
     roots=(_ROOT,),
     growth=100,

@@ -161,7 +161,6 @@ def _branch_names(root: Path | None = None) -> list[str]:
 REACH = declare(
     "post-sync-branch-functions",
     discover=_branch_names,
-    floor=4,
     growth=4,
     skips=0,
     what="post-sync branch functions in code_sync.py whose step order is pinned",

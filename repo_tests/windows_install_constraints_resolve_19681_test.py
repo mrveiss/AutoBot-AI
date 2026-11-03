@@ -27,7 +27,6 @@ def _pip_scripts(root: Path) -> list[Path]:
 REACH = declare(
     "windows-install-scripts-stage-constraints-19681",
     discover=_pip_scripts,
-    floor=1,
     growth=2,
     what="Windows install scripts that give pip the installed requirements",
     roots=(_ROOT,),

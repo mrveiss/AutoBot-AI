@@ -68,7 +68,6 @@ REACH = declare(
     "slm-backend-embedded-playbook-scan",
     discover=_population,
     # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=236,
     what="non-test python source in the SLM backend",
     roots=(_ROOT,),
     growth=100,

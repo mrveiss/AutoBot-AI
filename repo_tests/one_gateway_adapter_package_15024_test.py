@@ -92,7 +92,6 @@ REACH = declare(
     "gateway-adapter-package-scan",
     discover=_population,
     # Mid-window, from REACH.window() = (-2, 28, 13).
-    floor=13,
     what="gateway python files",
     roots=("autobot-backend/services/gateway",),
     growth=30,

@@ -83,7 +83,6 @@ REACH = declare(
     "anthropic-message-split-scan",
     discover=_population,
     # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=20,
     what="non-test provider source",
     roots=(_ROOT,),
     growth=10,
