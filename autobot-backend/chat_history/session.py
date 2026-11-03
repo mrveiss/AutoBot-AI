@@ -908,6 +908,10 @@ class SessionMixin:
             chat_file = await self._existing_chat_file(session_id)
             if chat_file is None:
                 return None
+            # Inline, so CodeQL sees the containment at the read (the shape in code_sync_paths.py)
+            chat_file, root = os.path.realpath(chat_file), os.path.realpath(self._get_chats_directory())
+            if not chat_file.startswith(root + os.sep):
+                raise ValueError("the chat file resolved outside the chats directory")
             async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
                 file_content = await f.read()
             metadata = self._decrypt_data(file_content).get("metadata", {})
