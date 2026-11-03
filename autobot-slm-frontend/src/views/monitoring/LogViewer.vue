@@ -11,14 +11,12 @@
 
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { PollingPausedAlert } from '@autobot/ui'
+import { PollingPausedAlert, createLogger, createDateFormatter } from '@autobot/ui'
 import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
-import { createLogger } from '@/utils/debugUtils'
 import { getTimezoneOption } from '@/composables/useTimezone'
 import type { AppLogEntry } from '@/types/api-responses'
-import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('LogViewer')
 const { t } = useI18n()

@@ -12,7 +12,7 @@
  */
 
 import { ref, watch, onMounted, onUnmounted, computed, type DeepReadonly } from 'vue'
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, createLogger } from '@autobot/ui'
 import UpdateNodesOfflineAlert from './UpdateNodesOfflineAlert.vue'
 import { useI18n } from 'vue-i18n'
 import {
@@ -29,7 +29,6 @@ import {
   type ComponentSyncJobStatus,
   type FleetSyncJobStatus,
 } from '@/composables/useCodeSync'
-import { createLogger } from '@/utils/debugUtils'
 import { buildLoginUrl } from '@/utils/loginRedirect'
 import { useUpdateAllPoll } from '@/composables/useUpdateAllPoll'
 import UpdateAllPollBanner from '@/components/UpdateAllPollBanner.vue'

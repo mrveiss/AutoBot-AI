@@ -10,12 +10,11 @@
 
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { PollingPausedAlert } from '@autobot/ui'
+import { PollingPausedAlert, createLogger } from '@autobot/ui'
 import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useFleetMetrics } from '@/composables/useFleetMetrics'
 import FleetMetricsCard from '@/components/monitoring/FleetMetricsCard.vue'
 import NodeMetricsGrid from '@/components/monitoring/NodeMetricsGrid.vue'
-import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('MetricsDetailsView')
 

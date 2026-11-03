@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BaseAlert, BaseModal, HttpError } from '@autobot/ui'
+import { BaseAlert, BaseModal, HttpError, createLogger } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -14,7 +14,6 @@ import { BaseAlert, BaseModal, HttpError } from '@autobot/ui'
 
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { createLogger } from '@/utils/debugUtils'
 import { slmApiClient } from '@/utils/ApiClient'
 import { REMOTE_EXEC_TIMEOUT_MS } from '@/constants/api-timeouts'
 import { joinSystemdUnits, parseSystemdUnits } from '@/composables/useRoles'

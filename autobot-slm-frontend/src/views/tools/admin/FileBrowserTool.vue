@@ -3,8 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { BaseAlert } from '@autobot/ui'
-import { formatFileSize } from '@/utils/formatHelpers'
+import { BaseAlert, formatFileSize } from '@autobot/ui'
 /**
  * FileBrowserTool - File Browser Interface
  *

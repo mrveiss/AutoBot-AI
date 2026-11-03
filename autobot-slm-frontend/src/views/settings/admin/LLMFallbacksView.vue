@@ -18,14 +18,13 @@
 
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BaseAlert, PollingPausedAlert } from '@autobot/ui'
+import { BaseAlert, PollingPausedAlert, createLogger } from '@autobot/ui'
 import { throwIfFailed, useDashboardPoller } from '@/composables/useDashboardPoller'
 import {
   useAutobotApi,
   type LLMFallbackChain,
   type LLMActiveFallback,
 } from '@/composables/useAutobotApi'
-import { createLogger } from '@/utils/debugUtils'
 import { formatCompactRelativeTime } from '@/utils/dateUtils'
 
 const logger = createLogger('LLMFallbacksView')

@@ -4,12 +4,11 @@
 // Author: mrveiss
 
 import { ref, computed, onMounted } from 'vue'
-import { BaseAlert, BaseModal, useToast } from '@autobot/ui'
+import { BaseAlert, BaseModal, useToast, createLogger } from '@autobot/ui'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useFleetStore } from '@/stores/fleet'
 import { useSlmApi } from '@/composables/useSlmApi'
-import { createLogger } from '@/utils/debugUtils'
 import { formatFleetDateTime } from '@/composables/useTimezone'
 import type { MaintenanceWindow, MaintenanceWindowCreate } from '@/types/slm'
 const route = useRoute()

@@ -16,7 +16,7 @@
  */
 
 import { ref, type Ref } from 'vue'
-import { createLogger } from '@/utils/debugUtils'
+import { createLogger } from '@autobot/ui'
 
 const logger = createLogger('Accessibility')
 

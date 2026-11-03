@@ -13,8 +13,7 @@
 
 import { ref } from 'vue'
 import { getTimeConfig } from '@/utils/slmSettingsApi'
-import { createLogger } from '@/utils/debugUtils'
-import { createDateFormatter } from '@/utils/formatHelpers'
+import { createLogger, createDateFormatter } from '@autobot/ui'
 
 const logger = createLogger('useTimezone')
 

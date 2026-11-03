@@ -30,7 +30,7 @@
  */
 
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
-import { BaseAlert, PollingPausedAlert } from '@autobot/ui'
+import { BaseAlert, PollingPausedAlert, createLogger } from '@autobot/ui'
 import { useRoute, useRouter } from 'vue-router'
 import { readSlmToken } from '@/utils/authStorage'
 import { useOrchestrationManagement } from '@/composables/useOrchestrationManagement'
@@ -44,7 +44,6 @@ import {
   parseSystemdUnits,
 } from '@/composables/useRoles'
 import { useSlmApi } from '@/composables/useSlmApi'
-import { createLogger } from '@/utils/debugUtils'
 import ServiceStatusBadge from '@/components/orchestration/ServiceStatusBadge.vue'
 import ServiceActionButtons from '@/components/orchestration/ServiceActionButtons.vue'
 import NodeHealthCard from '@/components/orchestration/NodeHealthCard.vue'

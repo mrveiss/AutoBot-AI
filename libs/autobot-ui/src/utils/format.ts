@@ -4,7 +4,8 @@
  * @autobot/ui — byte, uptime, duration and date/time formatting for both apps (#14908, #19905).
  *
  * Each app had its own copy; the SLM one was an exact subset of the user app's, so the
- * shared part lives here once and each app's `utils/formatHelpers.ts` re-exports it.
+ * shared part lives here once. The SLM imports it from the kit; the user app's
+ * `utils/formatHelpers.ts` re-exports it.
  * A timezone is passed per call (`intl: { timeZone }`), so an app that stores one keeps that
  * state itself and the formatting still lives here.
  *

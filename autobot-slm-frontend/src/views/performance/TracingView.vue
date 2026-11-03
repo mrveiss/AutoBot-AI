@@ -12,8 +12,7 @@
  */
 
 import { ref, onMounted, watch } from 'vue'
-import { formatDuration } from '@/utils/formatHelpers'
-import { BaseAlert, usePagination, BasePagination } from '@autobot/ui'
+import { BaseAlert, usePagination, BasePagination, formatDuration } from '@autobot/ui'
 import { usePerformanceMonitoring } from '@/composables/usePerformanceMonitoring'
 import { formatFleetDateTime } from '@/composables/useTimezone'
 import type {

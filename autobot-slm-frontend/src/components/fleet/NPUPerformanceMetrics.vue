@@ -14,9 +14,8 @@
 
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { PollingPausedAlert, BaseSkeleton } from '@autobot/ui'
+import { PollingPausedAlert, BaseSkeleton, formatUptime } from '@autobot/ui'
 import { useDashboardPoller } from '@/composables/useDashboardPoller'
-import { formatUptime } from '@/utils/formatHelpers'
 import type { NPUFleetMetrics, NPUWorkerMetrics } from '@/types/slm'
 import { useFleetStore } from '@/stores/fleet'
 

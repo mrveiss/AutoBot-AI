@@ -15,9 +15,8 @@
  */
 
 import { ref, onMounted } from 'vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, createLogger } from '@autobot/ui'
 import { useSlmApi } from '@/composables/useSlmApi'
-import { createLogger } from '@/utils/debugUtils'
 import slmApiClient from '@/utils/ApiClient'
 import type { SLMNode } from '@/types/slm'
 
