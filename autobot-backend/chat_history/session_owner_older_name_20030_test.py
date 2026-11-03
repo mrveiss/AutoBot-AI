@@ -34,3 +34,20 @@ async def test_no_owner_recorded_reads_none(tmp_path: Path, files: list) -> None
     for name in files:
         _write(tmp_path, name, {})
     assert await _StubManager(str(tmp_path)).get_session_owner("s1") is None
+
+
+def _link_out(tmp_path: Path) -> Path:
+    """A chats directory whose s1 chat file is a link to a file outside it."""
+    chats, outside = tmp_path / "chats", tmp_path / "elsewhere.json"
+    chats.mkdir()
+    outside.write_text(json.dumps({"messages": [], "metadata": {"owner": "mallory"}}), encoding="utf-8")
+    (chats / "s1_chat.json").symlink_to(outside)
+    return chats
+
+
+async def test_a_chat_file_linked_outside_the_chats_directory_is_not_read(tmp_path: Path) -> None:
+    """A link out of the chats directory is refused, not followed (validate_relative_path resolves it)."""
+    from security.session_owner_errors import SessionOwnerUnreadable
+
+    with pytest.raises(SessionOwnerUnreadable):
+        await _StubManager(str(_link_out(tmp_path))).get_session_owner("s1")
