@@ -720,7 +720,7 @@ onUnmounted(() => {
 .timeline-dot.executing {
   background: var(--color-primary);
   border-color: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .timeline-dot.waiting_approval {
