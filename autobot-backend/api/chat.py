@@ -78,11 +78,13 @@ from dependencies import provide_config_manager, provide_knowledge_base
 from exceptions import get_exceptions_lazy
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge.search_filters import filter_for_user_id
+from llm_shared.run_credentials import llm_principal_scope_for
 
 # CRITICAL SECURITY FIX: Import session ownership validation
 from security.chat_message_safety import scan_chat_message
 from security.session_ownership import build_owner_metadata, validate_session_ownership
 from services.ai_stack_client import AIStackError, get_ai_stack_client
+from services.chat_budget_gate import budget_refusal_reply
 from services.llm_service import get_llm_service  # process-wide singleton (#18689)
 from type_defs.common import STREAMING_MESSAGE_TYPES, Metadata
 
@@ -600,17 +602,8 @@ async def _generate_ai_response(
     Issue #9017: reasoning_effort threaded to provider via metadata["api_kwargs"].
     Issue #11585: model/provider threaded into registry resolution.
 
-    Args:
-        llm_service: LLM service instance
-        llm_context: Context messages for LLM
-        session_id: Session ID
-        request_id: Request ID
-        reasoning_effort: Optional effort level; None/'auto' → no change (#9017)
-        model: Optional per-request model override (#11585)
-        provider: Optional per-request provider override (#11585)
-
-    Returns:
-        Tuple of (AI response dict with content and role, LLMResponse object or None)
+    Returns ``(AI response dict, LLMResponse or None)``. A budget refusal (#16845) is returned as the
+    reply so the user reads why; any other error becomes a generic retry message.
     """
     try:
         # #11585: conversation_id lets the registry apply the per-conversation
@@ -627,6 +620,8 @@ async def _generate_ai_response(
             request_id=request_id,
             **extra_kwargs,
         )
+        if (refusal := budget_refusal_reply(response)) is not None:  # the user sees why (#16845)
+            return refusal, None
         if response.error:
             logger.warning("LLM returned error for request %s: %s", request_id, response.error)
             return {
@@ -1031,19 +1026,20 @@ async def send_message(
     # Override via AUTOBOT_CHAT_TIMEOUT env var (seconds, float). Default: 30.0.
     chat_timeout = float(config.chat_timeout)
     try:
-        response_data = await asyncio.wait_for(
-            process_chat_message(
-                message,
-                chat_history_manager,
-                llm_service,
-                memory_interface,
-                knowledge_base,
-                config,
-                request_id,
-                author_id=author_id,
-            ),
-            timeout=chat_timeout,
-        )
+        with llm_principal_scope_for(current_user):  # the budget gate and spend attribution name this user (#16845)
+            response_data = await asyncio.wait_for(
+                process_chat_message(
+                    message,
+                    chat_history_manager,
+                    llm_service,
+                    memory_interface,
+                    knowledge_base,
+                    config,
+                    request_id,
+                    author_id=author_id,
+                ),
+                timeout=chat_timeout,
+            )
     except asyncio.TimeoutError:
         logger.error(
             "[%s] Chat message processing timed out after %.1fs",
@@ -1592,6 +1588,7 @@ async def resume_chat_graph(
             decision,
             request_id,
             await resume_attachment_verdict(chat_workflow_manager, chat_id, current_user, request),  # #20195
+            auth_scope=principal_scope(current_user),  # the budget gate names this user (#16845, #19241)
         )
     )
 

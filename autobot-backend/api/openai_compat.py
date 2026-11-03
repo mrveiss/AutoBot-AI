@@ -48,6 +48,7 @@ from llm_shared.provider_degradation import AllCredentialsNeedReauthError
 from llm_shared.run_credentials import get_llm_principal, llm_principal_scope_for, stream_with_llm_principal
 from llm_shared.tiered_routing.registry import get_active_router
 from llm_shared.tiered_routing.tier_router import get_tiered_router
+from services.chat_budget_gate import enforce_chat_budget
 from services.llm_api_key_service import LLMApiKeyRecord, get_llm_api_key_service
 from services.llm_cost_tracker import get_cost_tracker
 from services.llm_usage_recording import (
@@ -510,6 +511,7 @@ async def chat_completions(
 
 async def _complete_chat(body: ChatCompletionRequest, api_key_record: LLMApiKeyRecord | None) -> Any:
     """Route, call and format one chat completion, under the caller's LLM principal (#19241)."""
+    await enforce_chat_budget()  # 402 when the user's or tenant's budget is exhausted (#16845)
     # Resolve auto-* model aliases to concrete model names via tiered routing (#6592)
     resolved_model = await _resolve_requested_model(body)
 
