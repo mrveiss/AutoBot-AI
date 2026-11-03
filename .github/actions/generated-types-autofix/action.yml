@@ -74,6 +74,10 @@ runs:
       working-directory: autobot-frontend
       run: npx --no-install openapi-typescript ../openapi.json -o src/types/generated/api.ts --additional-properties
 
+    - name: Regenerate workflow.ts from its Python sources (#16568)
+      shell: bash
+      run: python autobot-infrastructure/shared/scripts/gen_frontend_types.py
+
     - name: Set up isolated venv for SLM backend dependencies
       shell: bash
       # #14368: autobot-slm-backend/requirements.txt pins its own
@@ -130,7 +134,7 @@ runs:
       run: |
         rm -f openapi.raw.json openapi.json slm_openapi.raw.json
         rm -rf .venv-slm
-        GENERATED="autobot-frontend/src/types/generated/api.ts autobot-slm-frontend/openapi.json autobot-slm-frontend/src/types/generated/api.ts"
+        GENERATED="autobot-frontend/src/types/generated/api.ts autobot-frontend/src/types/_generated/workflow.ts autobot-slm-frontend/openapi.json autobot-slm-frontend/src/types/generated/api.ts"
         # shellcheck disable=SC2086  # deliberate word splitting over the path list
         if git diff --quiet -- $GENERATED; then
           echo "Generated types already fresh - nothing to report."
