@@ -139,7 +139,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/vnc_mcp.py": 760,
     "autobot-backend/api/websockets.py": 1120,  # #16457: accepts routed through websocket_subprotocol.accept_websocket
     "autobot-backend/api/workflow.py": 1018,
-    "autobot-backend/auth_middleware.py": 1055,  # #16457: bearer parsing moved to websocket_subprotocol.py; #19061
+    "autobot-backend/auth_middleware.py": 1054,  # #16457: bearer parsing moved to websocket_subprotocol.py; #19061
     "autobot-backend/autobot_memory_graph/property_graph.py": 629,
     "autobot-backend/autobot_memory_graph/semantic_search.py": 706,
     "autobot-backend/benchmarks/benchmark_belief_state.py": 725,

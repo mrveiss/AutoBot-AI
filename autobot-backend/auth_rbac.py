@@ -109,6 +109,20 @@ async def check_admin_mcp_tool_permission(request: Request, _admin: bool = Depen
     await check_mcp_tool_permission(request)
 
 
+def audit_role_denied(user_data: dict, allowed_roles: List[str], user_role: str, request: Request) -> None:
+    """Record one refused role check; every admin gate writes the same row (#16333)."""
+    _get_security_layer().audit_log(
+        action="role_denied",
+        user=user_data.get("username", "unknown"),
+        outcome="denied",
+        details={
+            "roles_required": allowed_roles,
+            "user_role": user_role,
+            "endpoint": str(request.url.path),
+        },
+    )
+
+
 def _deny_role_access(user_data: dict, allowed_roles: List[str], user_role: str, request: Request) -> None:
     """
     Log denied role access and raise auth error. Issue #620.
@@ -122,16 +136,7 @@ def _deny_role_access(user_data: dict, allowed_roles: List[str], user_role: str,
     Raises:
         HTTPException via raise_auth_error
     """
-    _get_security_layer().audit_log(
-        action="role_denied",
-        user=user_data.get("username", "unknown"),
-        outcome="denied",
-        details={
-            "roles_required": allowed_roles,
-            "user_role": user_role,
-            "endpoint": str(request.url.path),
-        },
-    )
+    audit_role_denied(user_data, allowed_roles, user_role, request)
     raise_auth_error(
         "AUTH_0003",
         f"One of roles {allowed_roles} required for this operation",
