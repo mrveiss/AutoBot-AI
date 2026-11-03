@@ -72,7 +72,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/batch_jobs.py": 916,
     "autobot-backend/api/browser_mcp.py": 1323,
     "autobot-backend/api/cache_management.py": 692,
-    "autobot-backend/api/chat.py": 2647,  # #20195: 2666 -> 2647 (graph resume stream moved to chat_streaming)
+    "autobot-backend/api/chat.py": 2644,  # #20195: graph resume stream moved to chat_streaming; #16845: 2644
     "autobot-backend/api/chat_sessions.py": 1859,  # #18293: legacy transcripts only ever proposed
     "autobot-backend/api/code_intelligence.py": 2145,
     "autobot-backend/api/code_search.py": 786,
@@ -148,7 +148,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
     "autobot-backend/chat_workflow/graph.py": 1459,  # #19715
     "autobot-backend/chat_workflow/llm_handler.py": 1300,
-    "autobot-backend/chat_workflow/manager.py": 3769,  # #17273: turn_control; #19753: reasoning_kwargs
+    "autobot-backend/chat_workflow/manager.py": 3766,  # #17273: turn_control; #19753: reasoning_kwargs
     "autobot-backend/chat_workflow/tool_handler.py": 3617,  # #11542 dispatch merge + #14068 mirror + #19950
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
@@ -332,7 +332,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/knowledge/test_doc_indexer.py": 1462,
     "autobot-backend/services/knowledge/test_kb_synthesizer.py": 802,
     "autobot-backend/services/llm_cost_tracker.py": 1166,  # #16230: MODEL_PRICING table removed
-    "autobot-backend/services/llm_service.py": 1199,  # #16845: _track_usage delegated to llm_usage_recording
+    "autobot-backend/services/llm_service.py": 1147,  # #16845: usage recording and budget gate moved out
     "autobot-backend/services/load_balancer.py": 677,
     "autobot-backend/services/nl_database_service.py": 772,
     "autobot-backend/services/notification_service.py": 614,
