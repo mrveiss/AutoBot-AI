@@ -21,7 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared import node_proxy
-from autobot_shared.http_egress_guard import assert_egress_policy
+from autobot_shared.http_egress_guard import EgressBlockedError, assert_egress_policy
 from autobot_shared.slm_credential_deletion import (
     ACTION,
     CREDENTIAL_KIND,
@@ -66,13 +66,15 @@ async def propose_password_deletion(node: Node) -> bool:
         return False
     body: dict[str, Any] = {"node_id": node.node_id, "credential_kind": CREDENTIAL_KIND}
     url = f"{base_url}{PROPOSAL_PATH}"
-    await assert_egress_policy(url)  # #17576: the backend's address comes from config, still checked
     try:
+        await assert_egress_policy(url)  # #17576: the backend's address comes from config, still checked
         async with node_proxy.node_client() as client:
             response = await client.post(url, json=body, headers=node_proxy.internal_headers())
         response.raise_for_status()
-    except httpx.HTTPError as exc:
-        if isinstance(exc, httpx.HTTPStatusError):
+    except (httpx.HTTPError, EgressBlockedError) as exc:  # enrollment has committed: this never raises out
+        if isinstance(exc, EgressBlockedError):
+            reason = "the backend's address is refused by the egress policy"
+        elif isinstance(exc, httpx.HTTPStatusError):
             reason = f"backend answered HTTP {exc.response.status_code}"
         else:
             reason = node_proxy.classify_transport_error(exc).reason
@@ -101,14 +103,16 @@ async def _claim_approval(approval_id: uuid.UUID, node_id: str) -> None:
     if not base_url or not node_proxy.internal_api_key():
         raise DeletionRefused(503, "the backend cannot be asked to verify the approval")
     url = f"{base_url}{claim_path(str(approval_id))}"
-    await assert_egress_policy(url)  # #17576
     try:
+        await assert_egress_policy(url)  # #17576
         async with node_proxy.node_client() as client:
             response = await client.post(
                 url,
                 json={"node_id": node_id},
                 headers=node_proxy.internal_headers(),
             )
+    except EgressBlockedError as exc:
+        raise DeletionRefused(503, "the backend's address is refused by the egress policy") from exc
     except httpx.HTTPError as exc:
         reason = node_proxy.classify_transport_error(exc).reason
         raise DeletionRefused(503, f"the backend could not be reached to verify the approval ({reason})")

@@ -447,3 +447,20 @@ async def test_both_calls_to_the_backend_are_checked_against_the_egress_policy(_
 
     source = inspect.getsource(ssh)
     assert source.count("await assert_egress_policy(url)") == 2
+
+
+@pytest.mark.asyncio
+async def test_a_refused_backend_address_never_raises_out_of_the_proposal(_egress_checked, monkeypatch) -> None:
+    """Enrollment has committed the node by now: a refusal is logged and answered False."""
+    from autobot_shared.http_egress_guard import EgressBlockedError
+
+    _egress_checked.side_effect = EgressBlockedError("refused")
+    monkeypatch.setattr(ssh, "key_auth_and_sudo_work", AsyncMock(return_value=True))
+    monkeypatch.setattr(ssh.node_proxy, "resolve_node_url", lambda _url: "https://backend.invalid")
+    monkeypatch.setattr(ssh.node_proxy, "internal_api_key", lambda: _KEY)
+    client = _Client()
+    monkeypatch.setattr(ssh.node_proxy, "node_client", lambda: client)
+    with patch.object(ssh.logger, "error") as error:
+        assert await ssh.propose_password_deletion(_node({"ssh_password": _SECRET})) is False
+    client.post.assert_not_called()
+    assert "egress policy" in str(error.call_args)
