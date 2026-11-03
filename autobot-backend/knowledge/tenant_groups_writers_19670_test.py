@@ -68,6 +68,11 @@ def redis_db():
         patch.object(membership_epoch, "MEMBERSHIP_EPOCH_BUMP_BACKOFF_SECONDS", 0.0),
         # #20443: a delete also revokes the tokens; that store is not this test's subject.
         patch("autobot_shared.user_management.password_epoch.set_password_epoch", AsyncMock(return_value=1)),
+        # #20443: so does an organisation delete, for its members, which this test's mock model cannot be queried for.
+        patch(
+            "autobot_shared.user_management.organization_service.queue_member_token_revocation",
+            AsyncMock(return_value={}),
+        ),
     ):
         yield db
 

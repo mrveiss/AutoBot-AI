@@ -425,7 +425,6 @@ async def create_work_item(
     except ValueError as exc:  # e.g. unknown approval category (GH#11206)
         raise HTTPException(status_code=400, detail=str(exc))
     await session.commit()
-    await _kb_manager.ensure_collection(KbCollectionManager.WORK_ITEM_PREFIX, item.id)
     return await _item_to_dict(item, session)
 
 
