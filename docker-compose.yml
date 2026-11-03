@@ -791,12 +791,11 @@ services:
       autobot-app:
 
   # ---- Optional: SLM web GUI only (#18585) ----
-  # `docker compose --profile slm up -d autobot-slm-gui` brings up the SLM web
+  # `docker compose up -d autobot-slm-gui` brings up the SLM web
   # GUI with only what it needs (secrets-init, redis, postgres, autobot-slm) —
   # not the full platform. It binds port 80 like autobot-frontend: run one or
   # the other. Add the rest of the fleet from the GUI afterwards.
   autobot-slm-gui:
-    profiles: ["slm"]
     build:
       context: .
       dockerfile: docker/frontend/Dockerfile
@@ -805,9 +804,10 @@ services:
     container_name: autobot-slm-gui
     restart: unless-stopped
     ports:
-      - "80:80"
-      # Host port for HTTPS; change it when host port 443 is taken (#18593).
-      - "${AUTOBOT_DOCKER_SLM_HTTPS_PORT:-443}:443"
+      # #20620: starts by default, on its own ports, because the frontend holds 80 and 443. Local
+      # only by default: without TLS, an admin login would cross the network in plain text.
+      - "${AUTOBOT_DOCKER_SLM_BIND_ADDRESS:-127.0.0.1}:${AUTOBOT_DOCKER_SLM_HTTP_PORT:-8080}:80"
+      - "${AUTOBOT_DOCKER_SLM_BIND_ADDRESS:-127.0.0.1}:${AUTOBOT_DOCKER_SLM_HTTPS_PORT:-8443}:443"
     volumes:
       # nginx config: HTTP-only by default, like autobot-frontend.
       # For TLS: set AUTOBOT_DOCKER_SLM_NGINX_CONF=./docker/nginx/nginx-slm-ssl.conf (#18593)
