@@ -1114,6 +1114,7 @@
     become: true
     when: backend_gpu_available | default(false) | bool
 
+  # #20082: a large download can drop or run out of disk. Retry it, and name the room left if it fails.
   - name: "Backend | Install CUDA torch requirements (requirements-gpu-torch.txt) (#15162)"
     ansible.builtin.pip:
       requirements: "{{ backend_code_dir }}/filtered-requirements-gpu-torch.txt"
@@ -1127,6 +1128,26 @@
       PIP_DEFAULT_TIMEOUT: "120"
     timeout: 1800  # CUDA-built torch is large
     when: backend_gpu_available | default(false) | bool
+    register: _gpu_torch_install
+    until: _gpu_torch_install is succeeded
+    retries: "{{ backend_torch_install_retries }}"
+    delay: "{{ backend_torch_install_retry_delay }}"
+    ignore_errors: true
+
+  - name: "Backend | Read the free disk space for a failed CUDA torch install"
+    ansible.builtin.command:
+      cmd: "df -h --output=avail {{ backend_code_dir }}"
+    register: _gpu_torch_disk
+    changed_when: false
+    failed_when: false
+    when: _gpu_torch_install is failed
+
+  - name: "Backend | Stop this host, naming the failed CUDA torch install"
+    ansible.builtin.fail:
+      msg: >-
+        Installing CUDA torch failed after {{ backend_torch_install_retries }} retries.
+        Free space for {{ backend_code_dir }}: {{ _gpu_torch_disk.stdout_lines | default([]) | last | default('unknown') }}.
+    when: _gpu_torch_install is failed
 
   # Install GPU-built faiss whenever a GPU is present, the same gate as CUDA
   # torch above and independent of vLLM (#15163: gpu_vector_search.py's

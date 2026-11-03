@@ -73,6 +73,7 @@ python:
   - 'docker/generate-secrets.sh'
   # #19408: compose_db_names_19408_test.py checks the script creates the users database compose names.
   - 'docker/postgres/init-databases.sh'
+  - 'docker/postgres/copy-slm-databases.sh'
   # #18556: one_static_data_copy_18556_test.py reads the canonical static data files.
   - 'autobot-backend/config/permission_rules.yaml'
   - 'autobot-backend/static/error_messages.yaml'
@@ -397,11 +398,15 @@ python:
   # here, a change confined to this file -- the only change that could add
   # `install-git-hooks.sh` back in -- skips the guard.
   - '.github/workflows/auto-fix-generated-types.yml'
+  # #20564: `dependabot_close_stale_only_test.py` reads this workflow by concrete literal.
+  - '.github/workflows/dependabot-close-stale.yml'
   # #18500: the autofix steps moved into a composite action with a dispatch-only
   # caller; the guards above (and autofix_types_dispatch_18500_test.py) read both.
   - '.github/actions/generated-types-autofix/action.yml'
   - '.github/actions/install-ci-requirements/action.yml'
   - '.github/workflows/dispatch-generated-types.yml'
+  # #16568: workflow_types_gate_16568_test.py reads the required gate workflow by concrete literal.
+  - '.github/workflows/verify-generated-types.yml'
   # #17173: `repo_tests/secrets_baseline_reason_entries.py`'s `SPECIFIC_REASONS`
   # table names files under this tree by concrete literal (baseline keys are
   # (filename, type, hashed_secret) triples) -- the same filter-gap shape as

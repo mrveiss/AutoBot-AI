@@ -218,3 +218,6 @@ backend_prefetch_models: true
 backend_model_prefetch_required: false
 backend_model_prefetch_retries: 3
 backend_model_prefetch_retry_delay: 30
+# #20082: how many times a failed CUDA torch install is retried, and the seconds between tries.
+backend_torch_install_retries: 2
+backend_torch_install_retry_delay: 30

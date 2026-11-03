@@ -345,7 +345,7 @@ onMounted(loadConfig)
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-lg);
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-md);
   font-size: var(--font-size-sm);
