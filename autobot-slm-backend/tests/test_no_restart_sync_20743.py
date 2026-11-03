@@ -22,8 +22,27 @@ import yaml
 
 _ROOT = Path(__file__).resolve().parents[1]
 _ANSIBLE = _ROOT / "ansible"
-_UPDATER_ROLES = ("backend", "ai-stack", "npu-worker", "frontend", "browser", "tts-worker", "postgresql", "redis")
-_UPDATER_ROLES += ("monitoring",)
+
+
+def _updater_roles() -> list:
+    """Every role update-all-nodes.yml includes or imports, read from the playbook (no hand-kept list)."""
+    found: set = set()
+
+    def walk(node):
+        if isinstance(node, dict):
+            for key in ("ansible.builtin.include_role", "include_role", "ansible.builtin.import_role", "import_role"):
+                if isinstance(node.get(key), dict):
+                    found.add(node[key]["name"])
+            for entry in node.get("roles") or []:
+                found.add(entry if isinstance(entry, str) else entry.get("role") or entry.get("name"))
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(yaml.safe_load((_ANSIBLE / "playbooks" / "update-all-nodes.yml").read_text(encoding="utf-8")))
+    return sorted(found)
 
 
 def _load(name: str, rel: str, stubs: tuple = ()):
@@ -76,8 +95,16 @@ def _handlers(role: str) -> list:
 
 
 def test_every_restart_handler_the_updater_can_notify_checks_the_variable() -> None:
-    restarting = [(role, h["name"]) for role in _UPDATER_ROLES for h in _handlers(role) if "restarted" in json.dumps(h)]
-    assert len(restarting) >= 18, "control: the finder sees the restart handlers"
+    roles = _updater_roles()
+    assert {"slm_agent", "slm_manager", "access_control", "ai-stack"} <= set(roles), "control: the playbook is read"
+    restarting = [
+        (role, h["name"])
+        for role in roles
+        if (_ANSIBLE / "roles" / role / "handlers" / "main.yml").is_file()
+        for h in _handlers(role)
+        if "restarted" in json.dumps(h)
+    ]
+    assert len(restarting) >= 25, "control: the finder sees the restart handlers"
     unguarded = [
         (role, name)
         for role, name in restarting
