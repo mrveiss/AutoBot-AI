@@ -34,7 +34,6 @@ export class AppConfigService {
       services: {
         backend: {
           host: getConfig().vm.main,
-          // #19821: from the SSOT config, as ServiceDiscovery reads them -- no literal fallbacks here.
           port: String(getConfig().port.backend),
           protocol: getConfig().httpProtocol
         },
