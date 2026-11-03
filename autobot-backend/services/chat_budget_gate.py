@@ -143,13 +143,13 @@ async def _find_hard_stop(user_id: str, org_id: str) -> ChatBudgetExceeded | Non
 async def _audit_refusal(exc: ChatBudgetExceeded, user_id: str, org_id: str) -> None:
     """Record the refusal in the unified audit log; a failure to audit is logged, never hides the refusal."""
     try:
-        from services.audit.audit import AuditCategory, AuditEvent
+        from services.audit.audit import AuditAction, AuditCategory, AuditEvent
         from services.audit.audit import record as record_unified_event
 
         await record_unified_event(
             AuditEvent(
                 category=AuditCategory.GOVERNANCE,
-                action="budget.chat_refused",
+                action=AuditAction.BUDGET_CHAT_REFUSED,
                 actor_id=user_id or "unknown",
                 resource_type="budget_policy",
                 resource_id=exc.policy.id,
