@@ -12,7 +12,7 @@
 #   ansible-playbook playbooks/update-all-nodes.yml
 #   ansible-playbook playbooks/update-all-nodes.yml -e deploy_ref=release
 #   ansible-playbook playbooks/update-all-nodes.yml -e skip_branch_check=true
-#   ansible-playbook playbooks/update-all-nodes.yml --skip-tags restart   # code-only, no restarts
+#   ansible-playbook playbooks/update-all-nodes.yml --skip-tags restart -e autobot_restart_services=false   # code-only, no restarts (#20743)
 #
 # Tags:
 #   restart              - all service restart tasks (skip for code-only deploys)
@@ -25,11 +25,16 @@
 #   slm-agent            - slm_agent role redeploy (code + secrets + restart) (#11480)
 #   shared               - autobot_shared deploy tasks (all nodes)
 #
-# NOTE (#11480): the slm-agent redeploy imports the slm_agent role, whose restart
-# runs via a handler and whose pip install is tagged `packages` (not `deps`).
-# So `--skip-tags restart` / `--skip-tags deps` do NOT skip the agent restart or
-# its dep install — a code-only push still restarts the agent. Use
-# `--skip-tags slm-agent` to exclude agent redeploy entirely.
+# NOTE (#20743): restarts come from two places, and a sync without restarts has to
+# stop both. Restart TASKS are tagged `restart`. Restart HANDLERS (the agent's
+# `Restart SLM agent` among them, notified by its code, config and secrets) cannot
+# be: Ansible ignores tags on handlers. Each restart handler checks
+# `autobot_restart_services` instead. So a code-only push is
+#   --skip-tags restart -e autobot_restart_services=false
+# which is what code sync passes when "restart after sync" is off
+# (services/sync_restart.py). Every service then keeps running its old code until
+# its next restart. The agent's pip install is tagged `packages` (not `deps`, #11480);
+# use `--skip-tags slm-agent` to exclude the agent redeploy entirely.
 
 # =============================================================================
 # PLAY 0: Pre-flight Git Safety Check & Create Deploy Archives

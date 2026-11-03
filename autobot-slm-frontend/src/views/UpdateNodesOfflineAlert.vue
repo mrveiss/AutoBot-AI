@@ -6,6 +6,7 @@
 /** #20250: an update can succeed and still leave nodes offline; that must not read as plain success. */
 import { onMounted, ref, watch } from 'vue'
 import { slmApiClient } from '@/utils/ApiClient'
+import { formatDateTime } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { BaseAlert } from '@autobot/ui'
 
@@ -23,7 +24,7 @@ async function load(): Promise<void> {
     )
     offline.value = result.nodes_offline
     total.value = result.nodes_total
-    time.value = result.run_started_at ? new Date(result.run_started_at).toLocaleString() : ''
+    time.value = formatDateTime(result.run_started_at)
   } catch (err) {
     logger.warn('Could not read nodes left offline by the last update', err)
   }
