@@ -96,6 +96,7 @@ def world(monkeypatch):
 
     manager = create_autospec(ConversationFileManager, instance=True)  # a method it lacks would fail here (#20225)
     manager.upload_file.side_effect = lambda **kw: _file_info(kw["session_id"], kw["user_id"])
+    manager.remaining_upload_quota.return_value = 1 << 30  # the real manager reads the user's stored bytes (#20217)
     manager.list_files.return_value = {"files": [], "total_files": 0, "total_size": 0}
     app = FastAPI()
     app.include_router(module.router, prefix="/api")
