@@ -59,7 +59,8 @@ async def test_approval_drops_it_and_leaves_a_record(present: bool, said: str) -
         await action.execute_tier_column_drop(_approval(), session)
     assert _dropped(session) and said in session.add.call_args.args[0].body
     session.commit.assert_awaited_once()
-    assert [c.kwargs["result"] for c in audit.await_args_list] == ["started", "success"]
+    assert [c.kwargs["details"]["stage"] for c in audit.await_args_list] == ["started", "done"]
+    assert [c.kwargs["result"] for c in audit.await_args_list] == ["attempted", "success"]
     assert audit.await_args.kwargs["details"]["was_present"] is present
 
 
@@ -82,7 +83,7 @@ async def test_a_failed_drop_records_no_success() -> None:
     session.execute = _fail
     with patch.object(action, "audit_log", AsyncMock()) as audit, pytest.raises(RuntimeError):
         await action.execute_tier_column_drop(_approval(), session)
-    assert [c.kwargs["result"] for c in audit.await_args_list] == ["started"]
+    assert [c.kwargs["details"]["stage"] for c in audit.await_args_list] == ["started"]
 
 
 @pytest.mark.parametrize(
@@ -171,4 +172,4 @@ async def test_the_requester_gets_400_and_the_other_admin_then_succeeds(factory)
     [row] = await _rows(factory, Approval)
     assert row.status == "approved"
     assert [c.body for c in await _rows(factory, ApprovalComment)] == ["Dropped organizations.subscription_tier."]
-    assert [c.kwargs["result"] for c in audit.await_args_list] == ["started", "success"]
+    assert [c.kwargs["result"] for c in audit.await_args_list] == ["attempted", "success"]  # #20445 vocabulary
