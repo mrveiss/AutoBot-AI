@@ -534,6 +534,7 @@ _DECLARED_SCOPES = {
         "autobot-slm-backend",
         "scripts",
     ),
+    "ansible-files-scanned-for-slm-port": ("autobot-slm-backend/ansible",),
 }
 
 
