@@ -79,6 +79,24 @@ _register(
 )
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_DOCKER_PROXY_URL",
+        type=str,
+        default=None,
+        description="Where the SLM reaches the limited Docker proxy on a compose stack (#20629).",
+        component="slm",
+    )
+)
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DOCKER_PROXY_TOKEN",
+        type=str,
+        default=None,
+        description="What the SLM presents to the limited Docker proxy, from docker/generate-secrets.sh (#20629).",
+        component="slm",
+    )
+)
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_DOCKER_SLM_HTTP_PORT",
         type=int,
         default=8080,
@@ -95,7 +113,6 @@ register_env_var(
         component="slm",
     )
 )
-
 register_env_var(
     EnvVarSpec(
         name="SLM_UPDATE_PROGRESS_STALL_SECONDS",
@@ -103,5 +120,16 @@ register_env_var(
         default=600,
         description="Seconds a live self-update's log may stay still before the page reports it as quiet (#20254).",
         component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SLM_REFUSED_SESSION_AUDIT_WINDOW_S",
+        type=int,
+        default=300,
+        description="Seconds between audit records of one person's refused non-admin SLM sessions (#20664).",
+        component="slm",
+        range=(1, 86400),
     )
 )

@@ -50,6 +50,8 @@ export interface UpdateSecretOptions {
 
 export interface DeleteSecretOptions {
   chatId?: string | null;
+  /** Delete although dependents still use the secret; send only after the user has seen them (#20557). */
+  confirmDependents?: boolean;
 }
 
 export interface TransferSecretsOptions {
@@ -163,6 +165,10 @@ class SecretsApiClient {
 
     if (options.chatId || this.currentChatId) {
       params.append('chat_id', (options.chatId || this.currentChatId) as string);
+    }
+
+    if (options.confirmDependents) {
+      params.append('confirm_dependents', 'true');
     }
 
     // Issue #552: Fixed path - removed duplicate /secrets prefix
