@@ -465,23 +465,17 @@ async def share_code_source(source_id: str, request: SourceShareRequest):
 
 
 async def _get_last_indexed(source_id: str) -> str | None:
-    """Read last_indexed timestamp from ChromaDB stats metadata (#1458) -- per-source doc first, then global (#1716)."""
+    """Read a source's last_indexed from its own stats doc (#1458, #1716); none means None (#20513)."""
     try:
         from ..storage import get_code_collection_async
 
         collection = await get_code_collection_async()
         if collection:
-            # Try per-source stats first (#1716), fall back to global
             stats_id = f"codebase_stats_{source_id}"
             results = await collection.get(
                 ids=[stats_id],
                 include=["metadatas"],
             )
-            if not results or not results.get("metadatas"):
-                results = await collection.get(
-                    ids=["codebase_stats"],
-                    include=["metadatas"],
-                )
             if results and results.get("metadatas"):
                 return results["metadatas"][0].get("last_indexed")
     except Exception as exc:

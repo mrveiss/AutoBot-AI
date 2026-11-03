@@ -47,22 +47,21 @@ from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from security.session_ownership import validate_session_ownership
-from security.session_posture import SessionPosture
+from security.session_posture import NotSessionOwner, SessionPosture
 from security.upload_filename_policy import ALLOWED_EXTENSIONS, is_safe_file  # noqa: F401 -- re-exported for tests
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 
-# Every route except the upload is admin-only (#20133). The upload sits on ``router`` itself and is
-# gated by ownership in ``_authorize_file_operation``; the rest hang off ``api_router`` and are
-# included into ``router`` at the foot of this module, so the registry still mounts one ``router``.
+# The owner's file panel (upload, list, download, preview, delete) sits on ``router`` itself and is gated
+# by ownership in ``_authorize_file_operation`` (#20133, #20195); every other route hangs off the
+# admin-only ``api_router``, included into ``router`` at the foot of this module (one ``router`` mounted).
 router = APIRouter()
 api_router = APIRouter(dependencies=[Depends(check_admin_permission)])
 logger = get_logger(__name__)
 
 
-#: Roles whose ownership of the conversation stands in for the global ``files.upload`` grant, on the
-#: upload route only (#20133). ``user`` lacks that grant by design; ``readonly`` and every unknown role
-#: stay refused, and roles that hold it (editor, admin, ...) are decided by RBAC as before.
-_OWNER_UPLOAD_ROLES = frozenset({"user"})
+#: Roles whose ownership of a conversation stands in for a global ``files.<op>`` grant they lack, on the owner routes
+#: only (#20133, #20195): ``user`` lacks upload and delete, ``editor`` lacks delete. ``readonly``/unknown stay refused.
+_OWNER_UPLOAD_ROLES = frozenset({"user", "editor"})
 
 
 def _owner_may_upload(user_data: dict | None) -> bool:
@@ -70,22 +69,24 @@ def _owner_may_upload(user_data: dict | None) -> bool:
 
 
 async def _authorize_file_operation(
-    request: Request, session_id: str, operation: str, owner_upload: bool = False
+    request: Request, session_id: str, operation: str, existing_only: bool = False
 ) -> dict:
     """Authorize file operation and return user data (Issue #398: extracted).
 
-    ``owner_upload`` (the upload, which a ``user`` may call on a conversation they own): ownership
-    replaces the role grant for ``_OWNER_UPLOAD_ROLES``, and a session the ownership gate would create
-    on a write (``legacy_unowned``) is a 404 -- a caller names a conversation they own (#20133).
+    ``existing_only`` (owner routes): ownership replaces the role grant for ``_OWNER_UPLOAD_ROLES``; another
+    user's conversation, an unknown one and one the gate would claim (``legacy_unowned``) are all 404 (#20195).
     """
     has_permission, user_data = await get_auth_middleware().check_file_permissions(request, operation)
     if user_data is None:  # no credential: the upload is no longer behind the admin gate's 401 (#20133)
         raise HTTPException(status_code=401, detail="Authentication required")
-    if not has_permission and not (owner_upload and _owner_may_upload(user_data)):
+    if not has_permission and not (existing_only and _owner_may_upload(user_data)):
         raise HTTPException(status_code=403, detail=f"Insufficient permissions for file {operation}")
     request.state.user = user_data
-    ownership = await validate_session_ownership(session_id, request, posture=SessionPosture.STRICT)
-    if owner_upload and ownership.get("reason") == "legacy_unowned":
+    try:
+        ownership = await validate_session_ownership(session_id, request, posture=SessionPosture.STRICT)
+    except NotSessionOwner as denied:  # #20195: an owner route answers 404 as for an unknown id (no existence leak)
+        raise (HTTPException(status_code=404, detail="Chat session not found") if existing_only else denied) from None
+    if existing_only and ownership.get("reason") == "legacy_unowned":
         raise HTTPException(status_code=404, detail="Chat session not found")
     return user_data
 
@@ -139,7 +140,7 @@ async def upload_conversation_file(
 ):
     """Upload a file to a conversation session (Issue #398: refactored)."""
     try:
-        user_data = await _authorize_file_operation(request, session_id, "upload", owner_upload=True)
+        user_data = await _authorize_file_operation(request, session_id, "upload", existing_only=True)
         content = await validate_and_read_upload_file(file)
         file_manager = _get_required_file_manager(request)
 
@@ -206,7 +207,7 @@ def _build_file_list_response(session_id: str, result: Dict, page: int, page_siz
     )
 
 
-@api_router.get("/conversation/{session_id}/list", response_model=ConversationFileListResponse)
+@router.get("/conversation/{session_id}/list", response_model=ConversationFileListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_conversation_files",
@@ -227,7 +228,7 @@ async def list_conversation_files(request: Request, session_id: str, page: int =
         ConversationFileListResponse with file list
     """
     try:
-        await _authorize_file_operation(request, session_id, "view")
+        await _authorize_file_operation(request, session_id, "view", existing_only=True)
         file_manager = _get_required_file_manager(request)
 
         result = await file_manager.list_files(session_id=session_id, page=page, page_size=page_size)
@@ -290,7 +291,7 @@ def _build_download_response(file_info_dict: Dict, file_path: Path) -> FileRespo
     )
 
 
-@api_router.get("/conversation/{session_id}/download/{file_id}", response_model=None)
+@router.get("/conversation/{session_id}/download/{file_id}", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="download_conversation_file",
@@ -310,7 +311,7 @@ async def download_conversation_file(request: Request, session_id: str, file_id:
         FileResponse with file content
     """
     try:
-        user_data = await _authorize_file_operation(request, session_id, "download")
+        user_data = await _authorize_file_operation(request, session_id, "download", existing_only=True)
         file_manager = _get_required_file_manager(request)
 
         file_info_dict, file_path = await _get_validated_file_info(file_manager, session_id, file_id)
@@ -375,7 +376,7 @@ async def _generate_file_preview(file_info: ConversationFileInfo, file_path: Pat
     return preview_content, preview_type, preview_available
 
 
-@api_router.get("/conversation/{session_id}/preview/{file_id}", response_model=ConversationFilePreviewResponse)
+@router.get("/conversation/{session_id}/preview/{file_id}", response_model=ConversationFilePreviewResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="preview_conversation_file",
@@ -399,25 +400,9 @@ async def preview_conversation_file(request: Request, session_id: str, file_id: 
         404: File not found
         500: Server error
     """
-    # Authenticate and authorize
-    has_permission, user_data = await get_auth_middleware().check_file_permissions(request, "view")
-    if not has_permission:
-        raise HTTPException(status_code=403, detail="Insufficient permissions for file preview")
-
-    request.state.user = user_data
-
     try:
-        # Validate session ownership
-        await validate_session_ownership(session_id, request, posture=SessionPosture.STRICT)
-
-        # Get conversation file manager
-        file_manager = get_conversation_file_manager(request)
-        if not file_manager:
-            logger.error("ConversationFileManager not available")
-            raise HTTPException(
-                status_code=503,
-                detail="File management service temporarily unavailable",
-            )
+        await _authorize_file_operation(request, session_id, "view", existing_only=True)
+        file_manager = _get_required_file_manager(request)
 
         # Get file info
         file_info_dict = await file_manager.get_file_info(session_id, file_id)
@@ -468,7 +453,7 @@ def _build_delete_response(session_id: str, file_id: str) -> JSONResponse:
     )
 
 
-@api_router.delete("/conversation/{session_id}/files/{file_id}", response_model=None)
+@router.delete("/conversation/{session_id}/files/{file_id}", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_conversation_file",
@@ -488,7 +473,7 @@ async def delete_conversation_file(request: Request, session_id: str, file_id: s
         Success message with deleted file info
     """
     try:
-        user_data = await _authorize_file_operation(request, session_id, "delete")
+        user_data = await _authorize_file_operation(request, session_id, "delete", existing_only=True)
         file_manager = _get_required_file_manager(request)
 
         deleted = await file_manager.delete_file(session_id, file_id)

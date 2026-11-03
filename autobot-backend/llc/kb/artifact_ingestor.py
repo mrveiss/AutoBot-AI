@@ -28,7 +28,7 @@ from utils.file_types import TEXT_FILE_EXTENSIONS
 
 from ..models.work_product import LLCWorkProduct
 from ..storage_root import llc_local_storage_root
-from .collections import kb_chroma_client, project_collection
+from .collections import KbCollectionManager, kb_chroma_client, project_collection
 from .write_guard import assert_not_writing_to_ancestor_kb
 
 logger = logging.getLogger(__name__)
@@ -95,12 +95,16 @@ def _split_text(text: str) -> List[str]:
     return chunks
 
 
-async def _upsert_chunks(collection_name: str, product_id: str, chunks: List[str], meta: Dict[str, Any]) -> None:
+async def _upsert_chunks(
+    collection_name: str, project_id: str, product_id: str, chunks: List[str], meta: Dict[str, Any]
+) -> None:
     """Upsert one work product's chunks into its project collection (ArtifactIngestor.ingest)."""
     # #19519: the KB client maps ``:`` to a ChromaDB-valid name; the raw
     # client passes ``project:<id>`` through and ChromaDB rejects it.
     client = await kb_chroma_client()
-    collection = await client.get_or_create_collection(collection_name)
+    collection = await client.get_or_create_collection(
+        collection_name, metadata={"entity_type": KbCollectionManager.PROJECT_PREFIX, "entity_id": project_id}
+    )
     ids = [f"wp:{product_id}:chunk:{i}" for i in range(len(chunks))]
     await collection.upsert(ids=ids, documents=chunks, metadatas=[meta.copy() for _ in chunks])
 
@@ -186,7 +190,7 @@ class ArtifactIngestor:
         }
 
         try:
-            await _upsert_chunks(collection_name, str(product.id), chunks, meta)
+            await _upsert_chunks(collection_name, project_id, str(product.id), chunks, meta)
             logger.info(
                 "ArtifactIngestor: indexed %d chunk(s) for work product %s into %s",
                 len(chunks),

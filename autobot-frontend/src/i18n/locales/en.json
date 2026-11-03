@@ -786,6 +786,16 @@
       "browser": "Browser",
       "novnc": "Remote Desktop",
       "ariaLabel": "Chat sections"
+    },
+    "attachmentNotice": {
+      "unavailable": "An attached file could not be found in this conversation, so it was not used.",
+      "too_many": "Only the first {limit} attached files were used; the rest were left out.",
+      "image": "\"{filename}\" is an image and cannot be read as text, so it was not used.",
+      "unsupported": "\"{filename}\" is not a text file this assistant can read, so it was not used.",
+      "unreadable": "\"{filename}\" could not be read, so it was not used.",
+      "empty": "\"{filename}\" has no readable text, so it was not used.",
+      "truncated": "\"{filename}\" is long, so only the start of it was used.",
+      "over_budget": "The attached files reached the size limit, so \"{filename}\" was not used."
     }
   },
   "settings": {
@@ -8470,6 +8480,7 @@
     },
     "cost": {
       "title": "Cost Dashboard",
+      "raisePendingApproval": "This company requires board approval to raise a budget limit. Your request was submitted for approval; the limit has not changed.",
       "exportCsv": "Export CSV",
       "selectCompany": "Select a company to view costs.",
       "totalThisMonth": "Total This Month",
@@ -8565,6 +8576,21 @@
     },
     "approvals": {
       "title": "Approvals Inbox",
+      "removals": {
+        "title": "{count} removal proposal(s) await your decision.",
+        "hint": "Approving permanently removes the named data; rejecting keeps it and the proposal is not repeated.",
+        "approve": "Approve",
+        "reject": "Reject",
+        "decideError": "Could not record the decision."
+      },
+      "stuckCleanup": {
+        "title": "{count} deleted file(s), {size}, are stuck: removal was refused repeatedly and they are no longer proposed.",
+        "hint": "The bytes are still on disk. Reset lets a file be proposed again; removal still needs an approval.",
+        "reset": "Propose again",
+        "resetDone": "The file will be proposed for removal again.",
+        "resetError": "Could not reset this file.",
+        "loadError": "Could not load the file cleanup status. Try again."
+      },
       "tabPending": "Pending",
       "tabHistory": "History",
       "selectCompany": "Select a company to view approvals.",
