@@ -11,7 +11,7 @@ on:
   # exists; this event cannot occur before then.
   merge_group:
   pull_request:
-    branches: [ release, main, develop ]
+    branches: [ release, main ]
   # #15358: the repo-wide sweep moves here. On a pull request the hooks run
   # against the diff only; whole-tree drift is still caught, nightly, off the
   # critical path. Without this trigger, diff-scoping would silently drop
