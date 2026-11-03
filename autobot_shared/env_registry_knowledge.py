@@ -407,6 +407,20 @@ register_env_var(
         range=(1, 512),
     )
 )
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CONVERSATION_FILE_USER_QUOTA_BYTES",
+        type=int,
+        default=1073741824,
+        description=(
+            "Bytes one user may keep in conversation files (soft-deleted ones count until their bytes are "
+            "removed); an upload past it is refused with HTTP 413 and a stable code "
+            "(conversation_file_quota.py, #20217)."
+        ),
+        component="knowledge",
+        range=(0, 1099511627776),
+    )
+)
 
 register_env_var(
     EnvVarSpec(

@@ -33,6 +33,7 @@ from chat_workflow.tool_call_grammar import (
     normalize_tool_call_text,
     strip_unparsed_tool_tags,
 )
+from chat_workflow.tool_call_loop import framed_tool_output
 from constants.api_constants import PATH_OLLAMA_GENERATE
 from constants.model_constants import ModelConfig
 from constants.ttl_constants import TIMEOUT_HTTP_DEFAULT, TTL_24_HOURS
@@ -1776,9 +1777,6 @@ class ChatWorkflowManager(
         told the result was unavailable, it was told the tool ran fine and
         returned nothing, which makes answering from memory the rational next
         move. Very likely #12508's mechanism.
-
-        Handler names rather than line numbers on purpose — the numbers in the
-        first version of this docstring were already wrong when it was written.
         """
         cmd = result.get("command") or result.get("tool") or "unknown"
         stdout = _as_output_text(result.get("stdout"))
@@ -1802,7 +1800,7 @@ class ChatWorkflowManager(
 
         output_text = _filter_step_output(cmd, output_text, is_shell=bool(result.get("command")))
 
-        return f"**Step {step_num}:** `{cmd}`\n- Status: {status}\n- Output:\n```\n{output_text}\n```"
+        return f"**Step {step_num}:** `{cmd}`\n- Status: {status}\n- Output:{framed_tool_output(output_text)}"
 
     def _build_tools_reminder(self, consecutive_invalid_tool_calls: int) -> str:
         """Build an optional tool-name correction block for continuation prompts. Issue #2735.
