@@ -17,8 +17,10 @@ import type { ConnectorJobState, ConnectorLeaderState, ConnectorHistoryEntry } f
 const logger = createLogger('useConnectorJob')
 
 const POLL_INTERVAL_MS = 5_000
+/** About a minute of polls for a just-started sync to report its job. */
+const FIRST_JOB_WAIT_POLLS = 12
 
-/** Fetch current in-flight job state. Returns null when no job is active (404). */
+/** Fetch current in-flight job state. Returns null when no job is active (404); any other failure throws. */
 export async function fetchConnectorJob(connectorId: string): Promise<ConnectorJobState | null> {
   try {
     return await apiClient.get<ConnectorJobState>(
@@ -29,8 +31,7 @@ export async function fetchConnectorJob(connectorId: string): Promise<ConnectorJ
     if (e?.status === 404 || e?.response?.status === 404) {
       return null
     }
-    logger.error('fetchConnectorJob error', err)
-    return null
+    throw err
   }
 }
 
@@ -63,7 +64,11 @@ export async function fetchSchedulerLeader(): Promise<string | null> {
 export function useConnectorJob() {
   const jobState = ref<ConnectorJobState | null>(null)
   const isPolling = ref(false)
+  /** True when the last progress request failed; the job's state is then unknown, not "running". */
+  const pollFailed = ref(false)
   let timerId: ReturnType<typeof setTimeout> | null = null
+  let seenJob = false
+  let pollsWithoutJob = 0
 
   function _clearTimer() {
     if (timerId !== null) {
@@ -74,10 +79,24 @@ export function useConnectorJob() {
 
   async function _poll(connectorId: string) {
     if (!isPolling.value) return
-    const state = await fetchConnectorJob(connectorId)
+    let state: ConnectorJobState | null
+    try {
+      state = await fetchConnectorJob(connectorId)
+    } catch (err) {
+      // A failed request is not "no job yet": stop here rather than show Running for a minute.
+      logger.error('fetchConnectorJob error', err)
+      jobState.value = null
+      pollFailed.value = true
+      isPolling.value = false
+      return
+    }
     jobState.value = state
 
-    if (state?.status === 'running' && isPolling.value) {
+    // #19714: a sync just started writes its job state after change detection, so an early "no job"
+    // isn't the end of it. Keep asking for a bounded time, until a job has been seen.
+    const waiting = state === null && !seenJob && pollsWithoutJob++ < FIRST_JOB_WAIT_POLLS
+    if (state !== null) seenJob = true
+    if ((state?.status === 'running' || waiting) && isPolling.value) {
       timerId = setTimeout(() => _poll(connectorId), POLL_INTERVAL_MS)
     } else {
       isPolling.value = false
@@ -86,6 +105,9 @@ export function useConnectorJob() {
 
   function start(connectorId: string) {
     _clearTimer()
+    seenJob = false
+    pollsWithoutJob = 0
+    pollFailed.value = false
     isPolling.value = true
     _poll(connectorId)
   }
@@ -100,6 +122,7 @@ export function useConnectorJob() {
   return {
     jobState: readonly(jobState),
     isPolling: readonly(isPolling),
+    pollFailed: readonly(pollFailed),
     start,
     stop,
   }
