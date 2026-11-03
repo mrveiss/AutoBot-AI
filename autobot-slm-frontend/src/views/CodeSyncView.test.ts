@@ -98,6 +98,7 @@ vi.mock('@/composables/useCodeSync', async (importOriginal) => {
 })
 
 import CodeSyncView from './CodeSyncView.vue'
+import UpdateNodesOfflineAlert from './UpdateNodesOfflineAlert.vue'
 
 const i18n = createI18n({ legacy: true, locale: 'en', fallbackLocale: 'en', messages: { en } })
 
@@ -167,6 +168,31 @@ describe('CodeSyncView reconnecting affordance (#12593)', () => {
   afterEach(() => {
     vi.useRealTimers()
   })
+
+  it('hands the update-all poll state to the alert, so it re-reads when the update ends', async () => {
+    startUpdateAllImpl = () => Promise.resolve(makeJob('fleet_nodes'))
+    getUpdateAllStatusImpl = () => Promise.resolve(null)
+    const wrapper = mount(CodeSyncView, {
+      global: { plugins: [i18n], stubs: { ScheduleModal: true, CodeSourceModal: true } },
+    })
+    await flushPromises()
+    const alert = () => wrapper.findComponent(UpdateNodesOfflineAlert)
+    expect(alert().props('updating')).toBe(false)
+    getUpdateAllStatusImpl = () => Promise.resolve(makeJob('fleet_nodes'))
+    const cta = wrapper.findAll('button').find((b) => b.text().includes(en.codeSyncView.updateAll))
+    await cta!.trigger('click')
+    await flushPromises()
+    expect(alert().props('updating')).toBe(true)
+
+    // #20250: the run ends, so updating goes true -> false, the alert's re-read trigger.
+    getUpdateAllStatusImpl = () =>
+      Promise.resolve({ ...makeJob('fleet_nodes'), status: 'completed', completed_at: '2026-01-01T00:05:00Z' })
+    await vi.advanceTimersByTimeAsync(1000)
+    await flushPromises()
+    expect(alert().props('updating')).toBe(false)
+    wrapper.unmount()
+  })
+
 
   it('renders the reconnecting notice + amber banner immediately on a stage-3 transient error', async () => {
     const wrapper = await mountAndStartWithTransientError('slm_self_update')
