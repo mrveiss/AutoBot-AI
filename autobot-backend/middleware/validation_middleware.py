@@ -78,6 +78,7 @@ _BODY_SCAN_EXEMPT_RE: Final[re.Pattern[str]] = re.compile(r"^/api/chats/[^/]+/sa
 # a file upload is not read here at all, so it spools to disk rather than into memory. Add a route
 # only once it enforces a limit of its own.
 _OWN_LIMIT_MULTIPART_RE: Final[re.Pattern[str]] = re.compile(r"^/api/knowledge_base/upload$")
+_CHUNK_ROUTE_RE: Final[re.Pattern[str]] = re.compile(r"^/api/knowledge_base/uploads/[^/]+/chunks$")
 
 # ---------------------------------------------------------------------------
 # Injection-pattern catalog
@@ -133,6 +134,8 @@ def _is_scan_exempt(path: str) -> bool:
 
 def _is_own_limit_upload(request: Request) -> bool:
     """Multipart to a route that enforces its own limit; any other body to it keeps the cap."""
+    if request.method == "PUT" and _CHUNK_ROUTE_RE.match(request.url.path):
+        return True  # raw bytes, streamed to disk, each chunk capped by the route (#19713)
     content_type = request.headers.get("content-type", "").lower()
     return content_type.startswith("multipart/form-data") and bool(_OWN_LIMIT_MULTIPART_RE.match(request.url.path))
 
