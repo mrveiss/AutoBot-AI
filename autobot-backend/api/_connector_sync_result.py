@@ -47,6 +47,8 @@ def _write_last_sync(redis, key: str, when: str) -> bool:
 async def record_last_sync(instance, key: str, sync_result) -> bool:
     """Set ``last_sync_at`` on the stored connector and the live instance. False if it was deleted."""
     when = sync_result.completed_at or now_utc()
-    instance.config.last_sync_at = when  # what the status route reads
     redis = get_redis_client(database="knowledge")
-    return await asyncio.to_thread(_write_last_sync, redis, key, when.isoformat())
+    stored = await asyncio.to_thread(_write_last_sync, redis, key, when.isoformat())
+    if stored:
+        instance.config.last_sync_at = when  # what the status route reads; only once Redis has it
+    return stored

@@ -356,8 +356,8 @@ async def _run_sync_background(connector_id: str, incremental: bool) -> None:
     auth_cls = klass.auth_schema() if klass else None
     try:
         cfg = await _cfg_with_credentials(cfg, auth_cls)
-    except HTTPException as exc:
-        logger.error("Background sync: credential load failed for %s: %s", connector_id, exc.detail)
+    except Exception as exc:
+        logger.error("Background sync: credential load failed for %s: %s", connector_id, exc, exc_info=True)
         await _record_failed_sync(connector_id, started_at, "loading its credentials")
         return
 
