@@ -370,6 +370,12 @@ REACH_ROOTS = {
     "repo_tests/slm_node_enum_members_exist_test.py": ("autobot-slm-backend",),
     "repo_tests/ssot_rehardcode_19730_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "repo_tests/store_fact_chokepoint_guard_test.py": ("autobot-backend/", "autobot_shared/"),
+    "repo_tests/timeout_message_from_constant_18056_test.py": (
+        "autobot-backend",
+        "autobot-infrastructure",
+        "autobot-slm-backend",
+        "autobot_shared",
+    ),
     "repo_tests/tool_effect_single_source_18294_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "repo_tests/torch_pair_one_home_19330_test.py": (
         ".github",

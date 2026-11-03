@@ -70,7 +70,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/api_endpoint_migrations_test.py": 31017,
     "autobot-backend/api/auth.py": 650,
     "autobot-backend/api/batch_jobs.py": 916,
-    "autobot-backend/api/browser_mcp.py": 1323,
+    "autobot-backend/api/browser_mcp.py": 1320,
     "autobot-backend/api/cache_management.py": 692,
     "autobot-backend/api/chat.py": 2647,  # #20195: 2666 -> 2647 (graph resume stream moved to chat_streaming)
     "autobot-backend/api/chat_sessions.py": 1859,  # #18293: legacy transcripts only ever proposed
@@ -81,7 +81,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/chromadb_storage.py": 1389,  # #18055: split to problem_storage.py
     "autobot-backend/api/codebase_analytics/duplicate_detector.py": 1119,
     "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 744,
-    "autobot-backend/api/codebase_analytics/endpoints/environment.py": 698,  # #13602: sanitised traversal log
+    "autobot-backend/api/codebase_analytics/endpoints/environment.py": 695,  # #13602: sanitised traversal log
     "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 817,
     "autobot-backend/api/codebase_analytics/endpoints/report.py": 2262,
     "autobot-backend/api/codebase_analytics/endpoints/stats.py": 659,
@@ -132,7 +132,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/security_assessment.py": 913,
     "autobot-backend/api/settings.py": 881,
     "autobot-backend/api/system.py": 995,
-    "autobot-backend/api/terminal.py": 1294,
+    "autobot-backend/api/terminal.py": 1282,
     "autobot-backend/api/terminal_handlers.py": 1225,
     "autobot-backend/api/validation_dashboard.py": 665,
     "autobot-backend/api/vnc_manager.py": 1651,
