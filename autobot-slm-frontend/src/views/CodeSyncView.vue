@@ -148,7 +148,7 @@ let fleetSyncPollTimer: ReturnType<typeof setTimeout> | null = null
 const updateAllJob = ref<UpdateAllJob | null>(null)
 // Polling state, its give-up/auth end states and the banner flags live in the composable (#20201).
 const {
-  transientErrors: updateAllTransientErrors,
+  polling: updateAllPolling, transientErrors: updateAllTransientErrors,
   lostContact: updateAllLostContact,
   gaveUp: updateAllGaveUp,
   authFailed: updateAllAuthFailed,
