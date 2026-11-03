@@ -195,7 +195,6 @@ def _population(root) -> list[str]:
 REACH = declare(
     "concept-forks-17856-scan",
     discover=_population,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
     what="non-test python source",
     roots=("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     growth=300,

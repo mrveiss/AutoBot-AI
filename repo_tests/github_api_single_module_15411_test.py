@@ -70,7 +70,6 @@ def _source_population(root: Path) -> list[str]:
 REACH = declare(
     "github-api-single-module",
     discover=_source_population,
-    # Mid-window, from REACH.window().
     what="non-test python source",
     roots=("pipeline-scripts", "scripts"),
     growth=20,

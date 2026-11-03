@@ -165,7 +165,6 @@ def _mode_carriers(root: Path) -> list[str]:
 REACH = declare(
     "user-mode-default-carriers-18729",
     discover=_mode_carriers,
-    # Mid-window from REACH.window(): population 15, window (11, 15) -> 13.
     growth=4,
     what="compose files, Docker entrypoints and env templates",
     roots=(".env", "autobot-frontend/", "autobot-slm-backend/", "docker-compose", "docker/"),

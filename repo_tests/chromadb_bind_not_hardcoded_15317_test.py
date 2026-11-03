@@ -254,6 +254,7 @@ def _discover_compose_chromadb_port_sites(root: Path) -> list[tuple[str, str, ob
 CHROMA_LAUNCH_SITES = declare(
     "chromadb-bind-launch-sites",
     discover=_discover_chroma_launch_sites,
+    floor=4,
     growth=2,
     what="files invoking `chroma run ... --host` -- ChromaDB bind launch sites (#15317)",
 )
@@ -264,6 +265,7 @@ CHROMA_LAUNCH_SITES = declare(
 BIND_HOST_OVERRIDE_CANDIDATES = declare(
     "chromadb-bind-host-override-candidates",
     discover=_discover_override_candidate_files,
+    floor=30,
     growth=15,
     what="group_vars/host_vars/role-defaults files scanned for a chromadb_bind_host override (#15317)",
 )
@@ -274,6 +276,7 @@ BIND_HOST_OVERRIDE_CANDIDATES = declare(
 COMPOSE_CHROMADB_SERVICES = declare(
     "chromadb-compose-services",
     discover=_discover_compose_chromadb_services,
+    floor=2,
     growth=2,
     what="compose services that look like ChromaDB (#15317 review round 2)",
 )
@@ -284,6 +287,7 @@ COMPOSE_CHROMADB_SERVICES = declare(
 COMPOSE_CHROMADB_PORT_SITES = declare(
     "chromadb-compose-port-sites",
     discover=_discover_compose_chromadb_port_sites,
+    floor=1,
     growth=2,
     what="ChromaDB service `ports:` entries across compose files (#15317 review round 2)",
 )

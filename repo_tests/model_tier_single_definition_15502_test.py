@@ -243,7 +243,6 @@ def _source_population(root: Path) -> list[str]:
 REACH = declare(
     "model-tier-map-scan",
     discover=_source_population,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
     what="non-test python source",
     roots=("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     growth=300,

@@ -55,7 +55,6 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "infra-backend-import-scan",
     discover=_population,
-    # Mid-window from REACH.window(): population 282, skips 0, growth 30 -> (252, 282, 267).
     what="python modules",
     roots=SCAN_ROOTS,
     growth=30,

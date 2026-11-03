@@ -72,7 +72,6 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "knowledge-metadata-parse-canonical",
     discover=_population,
-    # Mid-window from REACH.window(): population 46, skips 0, growth 10 -> (36, 46, 41).
     what="non-test knowledge_*.py route modules",
     roots=("autobot-backend/api",),
     growth=10,

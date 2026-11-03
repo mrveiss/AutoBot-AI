@@ -71,7 +71,6 @@ def _source_population(root: Path) -> list[str]:
 REACH = declare(
     "anti-pattern-type-emitters",
     discover=_source_population,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
     what="non-test python source in the two detector packages",
     roots=("autobot-backend/code_analysis", "autobot-backend/code_intelligence"),
     growth=30,

@@ -112,7 +112,6 @@ def _population(root) -> list[str]:
 REACH = declare(
     "ansible-concept-forks-17856-scan",
     discover=_population,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
     what="ansible yaml, template and shell files",
     roots=(_ANSIBLE,),
     growth=30,

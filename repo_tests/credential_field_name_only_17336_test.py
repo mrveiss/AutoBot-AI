@@ -74,7 +74,6 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "credential-field-name-only-callers",
     discover=_population,
-    # Mid-window, from REACH.window(); the arithmetic is on the commit, not here.
     what="tracked python in every tree that holds any",
     roots=SCAN_ROOTS,
     growth=300,

@@ -103,6 +103,7 @@ def _files_calling_git_repo_root(root: str | pathlib.Path | None = None) -> tupl
 CALL_SITE_FILES = declare(
     "git-repo-root-call-site-files",
     discover=_files_calling_git_repo_root,
+    floor=5,
     growth=10,
     what="shell files calling `git_repo_root` (#17418)",
 )

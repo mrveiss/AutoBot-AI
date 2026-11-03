@@ -54,7 +54,6 @@ def _migration_test_files(root: Path) -> list[str]:
 REACH = declare(
     "migration-gate-test-import-sweep",
     discover=_migration_test_files,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
     what="tracked migration test modules",
     roots=(_TEST_DIR.as_posix(),),
     growth=6,

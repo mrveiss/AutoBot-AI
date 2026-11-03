@@ -203,10 +203,6 @@ REACH = declare(
     "enum-hand-copy-census",
     discover=_tracked_python,
     # The floor is computed from the base commit (#19676); growth=400 is the maintenance interval.
-    # Re-pinned MID-window 2026-10-04 (#17356): `_reach.verify_floor` now refuses a floor in
-    # the bottom tenth of `growth`, because that is zero tolerance dressed as an allowance.
-    # Re-measured by the mechanism itself, not carried across (#15928); the arithmetic is in
-    # the commit message, which cannot drift from the tree it describes.
     growth=400,
     what="tracked python files",
 )
