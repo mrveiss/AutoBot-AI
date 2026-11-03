@@ -105263,6 +105263,11 @@ export interface components {
             status: string;
             /** Trends */
             trends?: unknown | null;
+            /**
+             * Available
+             * @default false
+             */
+            available: boolean;
             /** Timestamp */
             timestamp: string;
         } & {
