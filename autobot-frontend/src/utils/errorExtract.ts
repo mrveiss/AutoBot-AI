@@ -160,7 +160,7 @@ export function streamErrorText(data: {
 }): string {
   const key = data.metadata?.i18n_key
   if (!key) return `Error: ${data.content || data.message || 'Unknown error'}`
-  const params: Record<string, unknown> = { ...(data.metadata?.i18n_params ?? {}) }
+  const params: Record<string, unknown> = { ...data.metadata?.i18n_params }
   for (const [name, paramKey] of Object.entries(data.metadata?.i18n_param_keys ?? {})) {
     params[name] = i18n.global.t(paramKey)
   }
