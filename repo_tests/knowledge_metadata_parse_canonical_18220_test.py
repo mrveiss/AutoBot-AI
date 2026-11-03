@@ -73,7 +73,7 @@ REACH = declare(
     "knowledge-metadata-parse-canonical",
     discover=_population,
     # Mid-window from REACH.window(): population 46, skips 0, growth 10 -> (36, 46, 41).
-    floor=41,
+    floor=46,  # mid-window: population 51, window (41, 51)
     what="non-test knowledge_*.py route modules",
     roots=("autobot-backend/api",),
     growth=10,
