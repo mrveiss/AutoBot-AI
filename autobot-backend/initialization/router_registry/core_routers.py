@@ -23,6 +23,7 @@ from api.admin_oauth_bundle_strip import router as admin_oauth_bundle_strip_rout
 from api.admin_org_tier_column import router as admin_org_tier_column_router  # #19997
 from api.admin_orphan_repair import router as admin_orphan_repair_router  # #15779, #16927
 from api.admin_orphan_storage import router as admin_orphan_storage_router  # #17038, #17039
+from api.admin_ownerless_chat_sessions import router as admin_ownerless_chat_sessions_router  # #20030
 from api.admin_pricing import router as admin_pricing_router  # GH#6480
 from api.admin_retention_policies import router as admin_retention_policies_router  # MVA-3145, GH#8995
 from api.agent import router as agent_router
@@ -43,6 +44,7 @@ from api.chat_trace import router as chat_trace_router  # #19963
 from api.collaboration import router as collaboration_router
 from api.collaboration_events import router as collaboration_events_router  # #16460
 from api.config_revisions import router as config_revisions_router  # #1404
+from api.conversation_file_cleanup_admin import router as conversation_file_cleanup_router  # #20234
 from api.coordination import router as coordination_router  # #15949
 from api.coordination_issue_claims import router as coordination_issue_claims_router  # #18811
 from api.coordination_issue_claims_credential import router as issue_claims_credential_router  # #18811
@@ -170,6 +172,7 @@ def _get_system_routers() -> list:
         (users_router, "", ["users"], "users"),
         (mobile_devices_router, "/devices", ["devices", "integrations"], "mobile_devices"),  # GH#4463
         (data_storage_router, "", ["data-storage"], "data_storage"),
+        (conversation_file_cleanup_router, "/conversation-files", ["conversation-files"], "conversation_file_cleanup"),
         (prompts_router, "/prompts", ["prompts"], "prompts"),
         (frontend_config_router, "", ["frontend-config"], "frontend_config"),
     ]
@@ -537,6 +540,12 @@ def _get_credential_admin_routers() -> list:
         (admin_oauth_bundle_strip_router, "", ["admin", "oauth-bundle-strip"], "admin_oauth_bundle_strip"),
         (admin_org_tier_column_router, "", ["admin", "org-tier-column"], "admin_org_tier_column"),
         (admin_cleanup_proposals_router, "", ["admin", "cleanup-proposals"], "admin_cleanup_proposals"),
+        (
+            admin_ownerless_chat_sessions_router,
+            "",
+            ["admin", "ownerless-chat-sessions"],
+            "admin_ownerless_chat_sessions",
+        ),
     ]
 
 

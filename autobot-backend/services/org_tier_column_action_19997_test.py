@@ -18,14 +18,15 @@ from user_management.models.organization import Organization
 _ADMIN, _OTHER = uuid.uuid4(), uuid.uuid4()
 
 
-def _session(present: bool = True, admins: int = 2) -> MagicMock:
+def _session(present: bool = True, admins: tuple = (_ADMIN, _OTHER)) -> MagicMock:
     session = MagicMock()
     session.commit = AsyncMock()
     session.statements = []
 
     async def _execute(statement):
         session.statements.append(str(statement))
-        return MagicMock(first=lambda: (1,) if present else None, scalar_one=lambda: admins)
+        rows = MagicMock(all=lambda: list(admins))
+        return MagicMock(first=lambda: (1,) if present else None, scalars=lambda: rows)
 
     session.execute = _execute
     return session
@@ -53,7 +54,8 @@ async def test_approval_drops_it_and_leaves_a_record(present: bool, said: str) -
         await action.execute_tier_column_drop(_approval(), session)
     assert _dropped(session) and said in session.add.call_args.args[0].body
     session.commit.assert_awaited_once()
-    assert [c.kwargs["result"] for c in audit.await_args_list] == ["started", "success"]
+    assert [c.kwargs["details"]["stage"] for c in audit.await_args_list] == ["started", "done"]
+    assert [c.kwargs["result"] for c in audit.await_args_list] == ["attempted", "success"]
     assert audit.await_args.kwargs["details"]["was_present"] is present
 
 
@@ -76,15 +78,20 @@ async def test_a_failed_drop_records_no_success() -> None:
     session.execute = _fail
     with patch.object(action, "audit_log", AsyncMock()) as audit, pytest.raises(RuntimeError):
         await action.execute_tier_column_drop(_approval(), session)
-    assert [c.kwargs["result"] for c in audit.await_args_list] == ["started"]
+    assert [c.kwargs["details"]["stage"] for c in audit.await_args_list] == ["started"]
 
 
 @pytest.mark.parametrize(
     ("decider", "requester", "admins"),
-    [(_ADMIN, _ADMIN, 2), (None, _ADMIN, 1), (_OTHER, "someone", 2)],
-    ids=["self-with-another-admin", "no-verified-decider", "unknown-requester"],
+    [
+        (_ADMIN, _ADMIN, (_ADMIN, _OTHER)),
+        (None, _ADMIN, (_ADMIN,)),
+        (_OTHER, "someone", (_ADMIN, _OTHER)),
+        (_ADMIN, _ADMIN, (_OTHER,)),
+    ],
+    ids=["self-with-another-admin", "no-verified-decider", "unknown-requester", "self-not-the-sole-admin"],
 )
-async def test_a_decider_who_may_not_decide_changes_nothing(decider, requester, admins: int) -> None:
+async def test_a_decider_who_may_not_decide_changes_nothing(decider, requester, admins: tuple) -> None:
     session = _session(admins=admins)
     with patch.object(action, "audit_log", AsyncMock()) as audit, pytest.raises(ValueError):
         await action.execute_tier_column_drop(_approval(decider, requester), session)
@@ -93,7 +100,7 @@ async def test_a_decider_who_may_not_decide_changes_nothing(decider, requester, 
 
 
 async def test_the_only_admin_may_self_approve_and_it_is_flagged() -> None:
-    session = _session(admins=1)
+    session = _session(admins=(_ADMIN,))
     with patch.object(action, "audit_log", AsyncMock()) as audit:
         await action.execute_tier_column_drop(_approval(_ADMIN, _ADMIN), session)
     assert _dropped(session) and "self-approved" in session.add.call_args.args[0].body

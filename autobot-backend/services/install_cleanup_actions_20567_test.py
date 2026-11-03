@@ -21,9 +21,11 @@ _SECRET = "SECRET-VALUE-MUST-NOT-APPEAR"  # pragma: allowlist secret
 
 
 def _session(admins: int = 2) -> MagicMock:
+    """A session whose active platform admins are the requester, plus a second admin when ``admins`` is 2."""
+    ids = [_ADMIN, _OTHER][:admins]
     session = MagicMock()
     session.commit = AsyncMock()
-    session.execute = AsyncMock(return_value=MagicMock(scalar_one=lambda: admins))
+    session.execute = AsyncMock(return_value=MagicMock(scalars=lambda: MagicMock(all=lambda: ids)))
     return session
 
 

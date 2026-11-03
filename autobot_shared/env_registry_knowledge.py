@@ -14,6 +14,17 @@ from autobot_shared.env_registry import EnvVarSpec, register_env_var
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_KB_UPLOAD_MAX_MB",
+        type=int,
+        default=10,
+        description="Largest knowledge file the upload route accepts, in MB; the upload dialog reads it too (#19712).",
+        component="knowledge",
+        range=(1, 1024),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_KB_EMBED_WINDOW_CHARS",
         type=int,
         default=4000,
@@ -383,5 +394,71 @@ register_env_var(
         ),
         component="knowledge",
         range=(0.1, 60.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CONVERSATION_FILE_USER_QUOTA_BYTES",
+        type=int,
+        default=1073741824,
+        description=(
+            "Bytes one user may keep in conversation files (soft-deleted ones count until their bytes are "
+            "removed); an upload past it is refused with HTTP 413 and a stable code "
+            "(conversation_file_quota.py, #20217)."
+        ),
+        component="knowledge",
+        range=(0, 1099511627776),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CONVERSATION_FILE_CLEANUP_MAX_ATTEMPTS",
+        type=int,
+        default=3,
+        description=(
+            "How many times an approved removal of a deleted conversation file may be refused (still "
+            "referenced, path outside the store, unlink error) before it is no longer proposed again. "
+            "The file is then reported as stuck in the storage stats and logged, and its bytes stay. "
+            "Raising it retries more; lowering it stops sooner (conversation_file_cleanup.py, #20234)."
+        ),
+        component="conversation_files",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_BM25_REFRESH_MIN_INTERVAL_S",
+        type=float,
+        default=60.0,
+        description="Least time between BM25 corpus-stats recomputes, each of which reads every fact (#19726).",
+        component="knowledge",
+        range=(1.0, 3600.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CONVERSATION_FILE_CLEANUP_COOLDOWN_SECONDS",
+        type=int,
+        default=86400,
+        description=(
+            "Seconds after a refused removal of a deleted conversation file before it may be proposed "
+            "again, so a refusal does not raise a new proposal on every file delete. Raising it slows the "
+            "inbox; lowering it retries sooner (conversation_file_cleanup.py, #20234)."
+        ),
+        component="conversation_files",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_KEYWORD_SEARCH_MAX_SCAN",
+        type=int,
+        default=10000,
+        description="Facts one keyword search reads at most; a warning says when it cut one short (#19726).",
+        component="knowledge",
+        range=(100, 1000000),
     )
 )

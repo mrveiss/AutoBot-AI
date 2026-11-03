@@ -86,10 +86,14 @@ IN_PROCESS_ADAPTER = "autobot_agent"
 CLASSIFIED_ADAPTERS = CLAUDE_CODE_ADAPTERS | NO_TOOL_FLAG_ADAPTERS | {IN_PROCESS_ADAPTER}
 
 
+def _no_bound_reason(role: str | None) -> str:
+    return f"org role {role!r} has no approved permission bound (#16950)"
+
+
 def org_role_authority(role: str | None) -> Authority:
     """The approved bound for *role*. An unknown or missing role is refused, never run unbounded."""
     if role not in ORG_ROLE_AUTHORITY:
-        raise ValueError(f"org role {role!r} has no approved permission bound (#16950)")
+        raise ValueError(_no_bound_reason(role))
     return ORG_ROLE_AUTHORITY[role]
 
 
@@ -126,8 +130,8 @@ def describe_role_bound(role: str | None, adapter_type: str | None) -> Dict[str,
     adapter = adapter_type or IN_PROCESS_ADAPTER
     try:
         authority = org_role_authority(role)
-    except ValueError as exc:
-        return {"role": role, "adapter": adapter, "runs": False, "reason": str(exc)}
+    except ValueError:  # the text is ours, never the exception's: this view reaches API responses
+        return {"role": role, "adapter": adapter, "runs": False, "reason": _no_bound_reason(role)}
     view: Dict[str, Any] = {
         "role": role,
         "adapter": adapter,

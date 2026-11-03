@@ -385,7 +385,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         """Schedule a background BM25 corpus-stats recompute (#2033).
 
         Called after fact mutations so IDF values stay current.
-        Uses ``asyncio.create_task`` to avoid blocking the caller.
+        Doesn't block the caller, and writes in quick succession share one (#19726).
         Callers performing bulk mutations should skip per-item calls
         and invoke this once after the batch completes (#2079).
         """
@@ -393,8 +393,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         if not hasattr(self, "_get_keyword_searcher"):
             return
         try:
-            searcher = self._get_keyword_searcher()
-            asyncio.create_task(searcher.recompute_corpus_stats())
+            self._get_keyword_searcher().request_refresh()
         except Exception as exc:
             logger.warning("BM25 stats refresh scheduling failed: %s", exc)
 

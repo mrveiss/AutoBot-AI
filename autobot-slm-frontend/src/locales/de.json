@@ -255,6 +255,19 @@
     "selectANode": "Select a node...",
     "update": "Aktualisieren"
   },
+  "updateProgressPanel": {
+    "elapsed": "Running for {minutes} min",
+    "exited": "The update process has stopped without finishing. Check the update report before running it again.",
+    "lastLine": "Last log line: {time}",
+    "note": "The update continues in the background. A long pause does not mean it failed.",
+    "play": "Play: {name}",
+    "quiet": "The log has not moved for a while, but the update process is still running. Some steps are silent for a long time.",
+    "task": "Task: {name}",
+    "title": "Update progress",
+    "unavailable": "Could not read the update's progress just now. Trying again.",
+    "unknown": "Could not tell whether the update process is still running.",
+    "waiting": "Waiting for the update to write its log."
+  },
   "codeSyncView": {
     "actions": "Aktionen",
     "addSchedule": "Add Schedule",
@@ -1550,7 +1563,7 @@
         "needs_attention": "Needs attention"
       },
       "overview": {
-        "title": "Overview",
+        "title": "Übersicht",
         "measures": "The headline figure measures:",
         "readAt": "Read {time}"
       },
@@ -1609,7 +1622,7 @@
       },
       "trends": {
         "title": "Trends",
-        "note": "The backend builds these series from a fixed placeholder formula, not from stored history, so they show shape only and are not measurements.",
+        "note": "No stored trend history is available yet, so the backend sends no trend series.",
         "empty": "The backend sent no trend series",
         "col": {
           "series": "Series",
@@ -1891,7 +1904,7 @@
     "targetPath": "Target Path *",
     "targetPath2": "Target path:",
     "tabFleet": "Fleet Operations",
-    "tabInfrastructure": "Overview",
+    "tabInfrastructure": "Übersicht",
     "tabMigration": "Migration",
     "tabPerNode": "Per-Node Control",
     "tabReplication": "Replication",
@@ -2026,7 +2039,7 @@
     "sLOCompliance": "SLO Compliance:",
     "tabs": {
       "alertRules": "Alarmregeln",
-      "overview": "Overview",
+      "overview": "Übersicht",
       "slos": "SLOs",
       "traces": "Traces"
     }

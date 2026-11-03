@@ -26,12 +26,9 @@ from typing import TYPE_CHECKING
 from autobot_shared.ssot_config import config
 from models.approval import ApprovalComment
 from services.approval_execution import register_post_approval_action
+from services.approval_four_eyes import is_self_approval  # the one four-eyes rule (#19997, #20030)
 from services.audit.taxonomy import AuditAction
 from services.audit_logger import audit_log
-
-# Four eyes is shared with the column drop (#19997); PRs #20445/#20496 move it to a common helper.
-# Until they land this module imports the one copy instead of writing a third.
-from services.org_tier_column_action import _is_self_approval
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -135,7 +132,7 @@ async def execute_env_copies_cleanup(approval: "Approval", session: "AsyncSessio
         _remove_env_copies,
         ".env.*~ copies",
     )
-    self_approval = await _is_self_approval(approval, session)
+    self_approval = await is_self_approval(approval, session, what="the .env.*~ cleanup")
     root = install_root()
     plan = await asyncio.to_thread(planner, root)
     if plan.refused:

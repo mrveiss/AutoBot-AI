@@ -759,7 +759,7 @@ onUnmounted(() => {
 .download-btn {
   padding: var(--spacing-2) var(--spacing-4);
   background-color: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -861,7 +861,7 @@ onUnmounted(() => {
 .type-btn {
   padding: var(--spacing-2) var(--spacing-4);
   background-color: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
