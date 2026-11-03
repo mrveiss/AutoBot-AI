@@ -257,7 +257,9 @@ def rewrap_dek(wrapped: WrappedDek, old_kek: bytes, new_kek: bytes, *, secret_id
 # record or field fails to open. ``field_encryption`` is the facade callers use.
 
 FIELD_FORMAT_PREFIX = "fe1."  # "." is outside the base64url alphabet, so a legacy blob never starts with it
-_FIELD_VAULT_ID = "field-encryption"
+#: Its own HKDF label, not a pseudo vault id under the vault-KEK prefix: the field key's
+#: domain separation must not depend on how vault ids are parsed (#17981 review).
+_FIELD_KEY_INFO = b"autobot-field-encryption:v1"
 
 
 def _field_aad(context: str) -> bytes:
@@ -267,7 +269,10 @@ def _field_aad(context: str) -> bytes:
 
 
 def _field_key() -> bytes:
-    return derive_vault_key(load_root_key(), _FIELD_VAULT_ID)
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
+    return HKDF(algorithm=hashes.SHA256(), length=_KEY_LEN, salt=None, info=_FIELD_KEY_INFO).derive(load_root_key())
 
 
 def seal_field(plaintext: bytes, *, context: str) -> str:

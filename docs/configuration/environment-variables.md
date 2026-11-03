@@ -131,7 +131,7 @@ Proactive per-provider token-bucket rate limiter (Redis-backed, shared across al
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AUTOBOT_ENABLE_ENCRYPTION` | `false` | Enable data encryption |
-| `AUTOBOT_FIELD_ENCRYPTION_KEY` | _(unset)_ | **Legacy, read-only (#17981).** Needed only to read Telegram, WhatsApp, company PM and SSO values sealed before #17981. New values are sealed under a key derived from `AUTOBOT_SECRETS_ROOT_KEY`, bound to where they are stored, and are re-sealed when the product next saves them. |
+| `AUTOBOT_FIELD_ENCRYPTION_KEY` | _(unset)_ | **Legacy, read-only (#17981).** Needed only to read Telegram, WhatsApp, company PM and SSO values sealed before #17981. New values are sealed under a key derived from `AUTOBOT_SECRETS_ROOT_KEY`, bound to where they are stored, and are re-sealed when the product next saves them. **Rotating `AUTOBOT_SECRETS_ROOT_KEY` leaves every such value unreadable until it is re-entered**: rotation re-wraps vault grants only (#20744). |
 | `AUTOBOT_SESSION_TIMEOUT` | `30` | Session timeout in minutes |
 | `AUTOBOT_EMBED_ALLOWED_ORIGINS` | `*` | Comma-separated list of allowed origins for embed widget. Use `*` (default) to allow all origins, or specify domains like `https://example.com,https://app.acme.io` to restrict access (GH#9117) |
 | `AUTOBOT_EMBED_TRUSTED_PROXIES` | `` | Comma-separated list of trusted proxy IPs for X-Forwarded-For validation. Only connections from these IPs will have their X-Forwarded-For header trusted for rate limiting. Leave empty (default) to rate-limit by direct connection IP only. Example: `10.0.1.100,10.0.1.101` (GH#9117) |

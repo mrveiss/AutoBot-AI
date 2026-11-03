@@ -26,6 +26,7 @@ import uuid
 from typing import Any, Dict, Optional
 
 from autobot_shared.async_compat import fire_and_forget
+from autobot_shared.field_encryption import FieldDecryptionError
 from autobot_shared.redis_client import get_async_redis_client
 
 logger = logging.getLogger(__name__)
@@ -485,6 +486,13 @@ class LLCOutboundSyncService:
                 pm_type,
             )
 
+        except FieldDecryptionError as exc:
+            # #17981: one structured line naming where the credential is stored, never the value,
+            # and a sync_failed entry that says why, so the PM status shows it.
+            logger.error(
+                "LLC outbound sync: PM credential unreadable: company=%s event=%s (%s)", company_id, event, exc
+            )
+            await _log_sync_failed(company_id, work_item_id, event, f"credential unreadable: {exc}")
         except Exception as exc:
             logger.exception(
                 "LLC outbound sync failed: company=%s event=%s",

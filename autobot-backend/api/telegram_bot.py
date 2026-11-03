@@ -19,7 +19,7 @@ from api.schemas_chat import ChatMessage
 from api.schemas_telegram import TelegramBotConfigRequest, TelegramBotConfigResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.field_encryption import FieldDecryptionError
+from autobot_shared.error_boundaries.types import PassThroughError
 from autobot_shared.logging_manager import get_logger
 from services.gateway.gateway_manager import GatewayManager
 from services.gateway.ingest_governor import ingest_governor
@@ -291,11 +291,7 @@ async def verify_telegram_secret(request: Request) -> None:
     that arrives while no webhook secret is stored must fail closed with 503
     whatever its body looks like.
     """
-    try:
-        stored_secret = await get_telegram_webhook_secret()
-    except FieldDecryptionError as exc:  # #17981: unreadable is closed, like unset
-        logger.error("Telegram webhook secret unreadable - failing closed: %s", exc)
-        stored_secret = None
+    stored_secret = await get_telegram_webhook_secret()  # unreadable: one 503 from credential_handlers (#17981)
     if not stored_secret:
         logger.error("Telegram webhook secret not configured - failing closed")
         raise HTTPException(
@@ -509,6 +505,8 @@ async def get_telegram_config() -> TelegramBotConfigResponse:
             ingest_mode=await get_ingest_mode(),
         )
 
+    except PassThroughError:
+        raise  # an unreadable stored token: one 503 from credential_handlers, as on the webhook (#17981)
     except Exception as exc:
         logger.exception("Failed to get Telegram bot config")
         raise HTTPException(

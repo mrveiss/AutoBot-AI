@@ -290,10 +290,13 @@ class TestWebhookUnreadableSecret17981:
 
         from api import whatsapp
         from autobot_shared.field_encryption import FieldDecryptionError
+        from initialization.credential_handlers import CREDENTIAL_UNREADABLE, register_credential_handlers
 
         app = FastAPI()
+        register_credential_handlers(app)
         app.include_router(whatsapp.router)
         client = TestClient(app, raise_server_exceptions=False)
         with patch.object(whatsapp, getter, AsyncMock(side_effect=FieldDecryptionError("redis:k: unreadable"))):
             resp = getattr(client, method)(path, **({"content": b"{}"} if method == "post" else {}))
         assert resp.status_code == 503
+        assert resp.json() == {"detail": CREDENTIAL_UNREADABLE}, "one shape for an unreadable credential on every route"

@@ -25,6 +25,7 @@ import binascii
 import logging
 import os
 
+from autobot_shared.error_boundaries.types import PassThroughError
 from autobot_shared.secrets_envelope import (
     FIELD_FORMAT_PREFIX,
     DecryptionError,
@@ -39,8 +40,12 @@ logger = logging.getLogger(__name__)
 _LEGACY_KEY_ENV = "AUTOBOT_FIELD_ENCRYPTION_KEY"
 
 
-class FieldDecryptionError(Exception):
-    """A stored credential could not be read; the message names its context, never its value."""
+class FieldDecryptionError(PassThroughError):
+    """A stored credential could not be read; the message names its context, never its value.
+
+    A ``PassThroughError``, so every route answers it the same way: the app-level handler
+    registered by ``initialization.credential_handlers`` returns one 503 shape (#17981).
+    """
 
 
 def _legacy_key(context: str) -> bytes:

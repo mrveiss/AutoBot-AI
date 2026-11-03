@@ -108,6 +108,7 @@ class TestTelegramWebhookAuthentication:
                 headers={"X-Telegram-Bot-Api-Secret-Token": "anything"},
             )
         assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+        assert response.json()["detail"]["code"] == "CREDENTIAL_UNREADABLE"
 
     @pytest.mark.asyncio
     async def test_telegram_webhook_returns_401_when_header_missing(self, client, valid_telegram_update):

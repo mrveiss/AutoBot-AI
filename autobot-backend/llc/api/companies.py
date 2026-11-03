@@ -637,9 +637,9 @@ async def test_pm_config(
             detail="No PM integration configured for this company",
         )
     try:
-        pm_config = open_pm_config(encrypted_config, company_id)
-    except Exception:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to decrypt PM config")
+        pm_config = open_pm_config(encrypted_config, company_id)  # unreadable: one 503 (credential_handlers, #17981)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Stored PM config is not JSON")
     try:
         health = await _test_pm_connectivity(pm_type, pm_config)
     except Exception as exc:
