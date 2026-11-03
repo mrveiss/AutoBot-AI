@@ -104,6 +104,91 @@ describe('postConversationUpload (#20133)', () => {
   })
 })
 
+describe('a 413 refusal keeps its stable reason (#20217)', () => {
+  const refuse = async (status: number, body: string) => {
+    const p = postConversationUpload('s1', file(), () => {})
+    FakeXhr.last.status = status
+    FakeXhr.last.responseText = body
+    FakeXhr.last.listeners.load()
+    return p.catch((e) => e)
+  }
+  beforeEach(() => vi.stubGlobal('XMLHttpRequest', FakeXhr))
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('maps the quota code and carries the server figures', async () => {
+    const detail = {
+      code: 'conversation_file_quota_exceeded',
+      message: 'x',
+      limit_bytes: 20,
+      live_bytes: 8,
+      pending_removal_bytes: 12,
+      remaining_bytes: 0,
+    }
+    const error = await refuse(413, JSON.stringify({ detail }))
+    expect(error).toMatchObject({
+      code: 'quota_exceeded',
+      status: 413,
+      refusal: { live_bytes: 8, pending_removal_bytes: 12 },
+    })
+  })
+
+  it('maps the file-too-large code', async () => {
+    const detail = { code: 'conversation_file_too_large', max_bytes: 52428800 }
+    expect(await refuse(413, JSON.stringify({ detail }))).toMatchObject({ code: 'file_too_large', status: 413 })
+  })
+
+  it('stays a plain http error for an unknown code, a non-413, a string detail or an unreadable body', async () => {
+    const unknown = JSON.stringify({ detail: { code: 'something_else' } })
+    const quotaOn401 = JSON.stringify({ detail: { code: 'conversation_file_quota_exceeded' } })
+    expect(await refuse(413, unknown)).toMatchObject({ code: 'http', status: 413 })
+    expect(await refuse(401, quotaOn401)).toMatchObject({ code: 'http', status: 401 })
+    expect(await refuse(413, JSON.stringify({ detail: 'File too large' }))).toMatchObject({ code: 'http', status: 413 })
+    expect(await refuse(413, '<html>')).toMatchObject({ code: 'http', status: 413 })
+  })
+})
+
+describe('describeUploadError for server refusals (#20217)', () => {
+  const t = (key: string, params?: Record<string, unknown>) => `${key}|${JSON.stringify(params ?? {})}`
+  const MB = 1024 * 1024
+
+  it('names the maximum for an oversize file', () => {
+    const error = new ConversationUploadError('file_too_large', 413, { max_bytes: 50 * MB })
+    expect(describeUploadError(error, t)).toBe(
+      'chat.input.uploadError.fileTooLarge|{"maxMb":50,"limitMb":0,"liveMb":0,"pendingMb":0,"remainingMb":0}'
+    )
+  })
+
+  it('reports live bytes and the room left when nothing awaits removal', () => {
+    const error = new ConversationUploadError('quota_exceeded', 413, {
+      limit_bytes: 1024 * MB,
+      live_bytes: 1000 * MB,
+      pending_removal_bytes: 0,
+      remaining_bytes: 24 * MB,
+    })
+    expect(describeUploadError(error, t)).toBe(
+      'chat.input.uploadError.quotaExceeded|{"maxMb":0,"limitMb":1024,"liveMb":1000,"pendingMb":0,"remainingMb":24}'
+    )
+  })
+
+  it('uses the human-review wording when deleted bytes still count', () => {
+    const error = new ConversationUploadError('quota_exceeded', 413, {
+      limit_bytes: 1024 * MB,
+      live_bytes: 100 * MB,
+      pending_removal_bytes: 924 * MB,
+      remaining_bytes: 0,
+    })
+    expect(describeUploadError(error, t)).toContain('chat.input.uploadError.quotaExceededPendingRemoval|')
+    expect(describeUploadError(error, t)).toContain('"pendingMb":924')
+  })
+
+  it('every key it can ask for exists in en.json', async () => {
+    const en = (await import('@/i18n/locales/en.json')).default as any
+    for (const key of ['fileTooLarge', 'quotaExceeded', 'quotaExceededPendingRemoval']) {
+      expect(en.chat.input.uploadError[key]).toEqual(expect.any(String))
+    }
+  })
+})
+
 describe('describeUploadError (#20133)', () => {
   const t = (key: string, params?: Record<string, unknown>) => `${key}|${JSON.stringify(params ?? {})}`
 
