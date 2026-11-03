@@ -159,3 +159,4 @@ echo "  (the value is not printed here; read it with: grep '^AUTOBOT_ADMIN_PASSW
 echo ""
 echo "Done. Start the stack with both env files:"
 echo "  docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d"
+echo "SLM, with the default port: http://localhost:8080/slm/ (AUTOBOT_DOCKER_SLM_HTTP_PORT changes it; see INSTALL.md to reach it from another machine)"

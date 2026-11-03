@@ -34,8 +34,6 @@ _GENERATOR = _ROOT / "docker" / "generate-secrets.sh"
 _ALL_INTERFACES = {
     ("docker-compose.yml", "autobot-frontend", "80"): "the web UI entry point; nginx serves users on the LAN",
     ("docker-compose.yml", "autobot-frontend", "443"): "the web UI entry point over TLS",
-    ("docker-compose.yml", "autobot-slm-gui", "80"): "the SLM-only profile's web entry point",
-    ("docker-compose.yml", "autobot-slm-gui", "443"): "the SLM-only profile's web entry point over TLS",
 }
 _LOOPBACK = {"127.0.0.1", "::1", "[::1]", "localhost"}
 #: A bind address variable that defaults to loopback: closed unless an operator opens it on purpose.
