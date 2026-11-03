@@ -4,6 +4,7 @@
 # Browser role handlers
 
 - name: restart vnc
+  when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
   systemd:
     name: autobot-vnc
     state: restarted
@@ -14,6 +15,7 @@
   failed_when: false
 
 - name: restart playwright
+  when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
   systemd:
     name: autobot-playwright
     state: restarted

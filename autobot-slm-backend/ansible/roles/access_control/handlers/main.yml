@@ -10,6 +10,7 @@
     daemon_reload: true
 
 - name: restart access-monitor
+  when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
   systemd:
     name: autobot-access-monitor.timer
     state: restarted

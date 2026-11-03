@@ -21,6 +21,7 @@
   become: true
 
 - name: restart slm backend
+  when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
   ansible.builtin.systemd:
     name: "{{ slm_backend_service }}"
     state: restarted
@@ -31,6 +32,7 @@
   become: true
 
 - name: restart slm self-update socket
+  when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
   ansible.builtin.systemd:
     name: "{{ slm_self_update_socket_service }}.socket"
     state: restarted
@@ -58,12 +60,14 @@
   become: true
 
 - name: restart nginx
+  when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
   ansible.builtin.systemd:
     name: nginx
     state: restarted
   become: true
 
 - name: restart grafana
+  when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
   ansible.builtin.systemd:
     name: grafana-server
     state: restarted

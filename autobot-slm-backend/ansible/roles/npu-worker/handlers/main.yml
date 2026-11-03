@@ -8,6 +8,7 @@
     daemon_reload: true
 
 - name: restart npu-worker
+  when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
   ansible.builtin.systemd:
     name: autobot-npu-worker
     state: restarted

@@ -123,6 +123,7 @@ from services.slm_frontend_build import build_slm_frontend as _build_slm_fronten
 from services.slm_frontend_build import write_slm_deployed_commit_marker as _write_slm_deployed_commit_marker
 from services.ssh_utils import _ssh_key_usable, ssh_remote_path
 from services.sync_orchestrator import get_sync_orchestrator
+from services.sync_restart import no_restart_args
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/code-sync", tags=["code-sync"])
@@ -3065,15 +3066,11 @@ async def _execute_node_playbook(
     # hostname is user-editable and can drift from inventory host names (#921)
     # Issue #1091: Include localhost so Play 0 (archive build) runs
     limit = ["localhost", node.node_id]
-    tags = []
-    if not request.restart:
-        tags.append("!restart")  # Skip restart tasks
-
     playbook_result = await executor.execute_playbook(
         playbook_name="update-all-nodes.yml",
         limit=limit,
-        tags=tags if tags else None,
         progress_callback=progress_callback,
+        **no_restart_args(request.restart),  # #20743
     )
 
     if playbook_result["success"]:
@@ -3461,15 +3458,8 @@ async def _sync_single_node(
         # Use node_id (maps to slm_node_id in Ansible inventory) not hostname (#921)
         # Issue #1091: Include localhost so Play 0 (archive build) runs
         limit = ["localhost", node_state.node_id]
-        tags = []
-        if not restart:
-            tags.append("!restart")  # Skip restart tasks
-
-        # Execute update playbook
         result = await executor.execute_playbook(
-            playbook_name="update-all-nodes.yml",
-            limit=limit,
-            tags=tags if tags else None,
+            playbook_name="update-all-nodes.yml", limit=limit, **no_restart_args(restart)  # #20743
         )
 
         if result["success"]:

@@ -8,16 +8,19 @@
     daemon_reload: true
 
 - name: restart backend
+  when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
   ansible.builtin.systemd:
     name: autobot-backend
     state: restarted
 
 - name: restart celery
+  when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
   ansible.builtin.systemd:
     name: autobot-celery
     state: restarted
 
 - name: restart celery beat
+  when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
   ansible.builtin.systemd:
     name: autobot-celery-beat
     state: restarted

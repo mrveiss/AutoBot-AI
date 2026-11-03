@@ -4,6 +4,7 @@
 # Redis role handlers
 
 - name: restart redis-stack
+  when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
   systemd:
     name: "{{ redis_service_name | default('redis-stack-server') }}"
     state: restarted
@@ -25,12 +26,14 @@
   become: true
 
 - name: Restart redis_exporter
+  when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
   ansible.builtin.systemd:
     name: redis_exporter
     state: restarted
   become: true
 
 - name: restart chromadb
+  when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
   ansible.builtin.systemd:
     name: autobot-chromadb
     state: restarted
