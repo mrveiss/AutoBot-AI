@@ -11,6 +11,7 @@ would still restart services a config change notified.
 
 import importlib.util
 import json
+import os
 import shutil
 import subprocess  # nosec B404 -- runs ansible-playbook on a generated local playbook
 import sys
@@ -166,11 +167,13 @@ def test_real_ansible_deploys_and_restarts_only_when_asked(tmp_path: Path, resta
     """The real semantics, with the exact arguments a sync passes: the handler guard is the one in the roles."""
     (tmp_path / "p.yml").write_text(_PROBE, encoding="utf-8")
     args = _sr.no_restart_args(restart)
-    cmd = ["ansible-playbook", "-i", "localhost,", "-c", "local", str(tmp_path / "p.yml")]
+    ansible = shutil.which("ansible-playbook")  # the one the skip found, wherever it is installed
+    cmd = [ansible, "-i", "localhost,", "-c", "local", str(tmp_path / "p.yml")]
     if args:
         cmd += ["--skip-tags", ",".join(args["skip_tags"])]
         cmd += ["-e", json.dumps(args["extra_vars"])]
-    env = {"ANSIBLE_LOG_PATH": str(tmp_path / "a.log"), "PATH": "/usr/bin:/bin:/usr/local/bin"}
+    path = os.pathsep.join([os.path.dirname(ansible), "/usr/bin", "/bin", "/usr/local/bin"])
+    env = {"ANSIBLE_LOG_PATH": str(tmp_path / "a.log"), "PATH": path}
     out = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=120, check=False).stdout  # nosec B603
     assert "DEPLOYED" in out
     assert ("RESTART-TASK" in out) is restart and ("HANDLER-RESTART" in out) is restart

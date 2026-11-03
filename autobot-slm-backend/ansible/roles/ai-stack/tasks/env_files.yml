@@ -1,0 +1,102 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# The AI Stack's env files, rendered from ai-stack.env.j2. Split out of main.yml
+# (#20724) so the builtin updater re-renders them: code_only.yml includes this
+# file, and main.yml reaches it only through code_only.yml, so there is one copy
+# of these tasks. Before the split, a setting added to the template reached only
+# fresh installs.
+#
+# The Redis credential read is part of this file for the same reason the chroma
+# token read is part of code_only.yml: rendering the env without it would write
+# an empty REDIS_PASSWORD on every update.
+#
+# Handlers (`restart ai-stack`) live in the role, so this file is only usable
+# via include_role/import_role.
+
+- name: "AI Stack | Ensure /etc/autobot dir exists"
+  ansible.builtin.file:
+    path: /etc/autobot
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+  become: true  # code_only is applied from a play with no play-level become
+  tags: ['ai', 'config']
+
+# #16627 (P1b of #13568): the AI stack's Redis client (autobot_shared, via
+# REDIS_* in this env file) authenticates as `default` with the SLM-generated
+# password while the server stays nopass. Adopted only when no password is set,
+# and always with the username -- a password alone is refused by nopass.
+- name: "AI Stack | Read the SLM-generated Redis credential (#16627)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/read_redis_password.yml
+  tags: ['ai', 'config']
+
+- name: "AI Stack | Adopt the SLM-generated Redis credential when none is set (#16627)"
+  ansible.builtin.set_fact:
+    ai_redis_password: "{{ _redis_password_read }}"
+    ai_redis_username: "{{ ai_redis_username | default('', true) or _redis_username_read }}"
+  when:
+    - (_redis_password_read | default('') | trim) | length > 0
+    - (ai_redis_password | default('') | trim) | length == 0
+  no_log: true
+  tags: ['ai', 'config']
+
+# #20724: the updater renders these files on every update now, not only at install.
+# The credential read above is best-effort: a missing or unreadable slm-secrets.env
+# reads empty. With no vault password either, the template would then write the
+# file without REDIS_PASSWORD/REDIS_USERNAME, and the AI stack would lose Redis
+# auth at its next restart. An empty credential is never written over a real one:
+# the run stops on that node and says why.
+- name: "AI Stack | Check whether the env files already carry a Redis password (#20724)"
+  # Fail closed: an absent file is 1 (nothing to protect); a match is 0; anything else -- a file that
+  # exists but can't be read -- is 2, and counts as "may hold one", so the run refuses rather than
+  # render an empty credential over it.
+  ansible.builtin.command:
+    argv: [sh, -c, '[ -e "$1" ] || exit 1; grep -q "^REDIS_PASSWORD=." "$1"', sh, "{{ item }}"]
+  loop:
+    - /etc/autobot/autobot-ai-stack.env
+    - "{{ ai_install_dir }}/.env"
+  register: _ai_env_redis_password_present
+  changed_when: false
+  failed_when: false
+  become: true
+  when: (ai_redis_password | default('') | trim) | length == 0
+  tags: ['ai', 'config']
+
+- name: "AI Stack | Refuse to write an env file without the Redis password it has (#20724)"
+  ansible.builtin.fail:
+    msg: >-
+      An AI Stack env file on this node has a Redis password, or could not be read to
+      tell, but this run has none to render: the SLM's slm-secrets.env could not be read
+      and no vault password is set. Rendering now would remove Redis auth from the AI Stack. Nothing was
+      changed. Restore the SLM's secrets file, then run the update again.
+  when:
+    - (ai_redis_password | default('') | trim) | length == 0
+    - _ai_env_redis_password_present.results | default([]) | selectattr('rc', 'defined')
+      | rejectattr('rc', 'equalto', 1) | list | length > 0
+  tags: ['ai', 'config']
+
+- name: "AI Stack | Deploy /etc/autobot/autobot-ai-stack.env"
+  ansible.builtin.template:
+    src: ai-stack.env.j2
+    dest: /etc/autobot/autobot-ai-stack.env
+    mode: "0640"
+    owner: root
+    group: "{{ ai_group }}"
+  become: true
+  notify: restart ai-stack
+  tags: ['ai', 'config']
+
+- name: "AI Stack | Deploy the install-dir .env"
+  ansible.builtin.template:
+    src: ai-stack.env.j2
+    dest: "{{ ai_install_dir }}/.env"
+    mode: "0600"
+    owner: "{{ ai_user }}"
+    group: "{{ ai_group }}"
+  become: true
+  notify: restart ai-stack
+  tags: ['ai', 'config']

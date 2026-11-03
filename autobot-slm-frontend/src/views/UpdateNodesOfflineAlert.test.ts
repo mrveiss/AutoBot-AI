@@ -9,6 +9,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/locales/en.json'
 import UpdateNodesOfflineAlert from './UpdateNodesOfflineAlert.vue'
+import { formatDateTime } from '@/utils/formatHelpers'
 
 const get = vi.fn()
 vi.mock('@/utils/ApiClient', () => ({ slmApiClient: { get: (...args: unknown[]) => get(...args) } }))
@@ -28,7 +29,7 @@ describe('UpdateNodesOfflineAlert', () => {
     get.mockResolvedValueOnce({ nodes_offline: 1, nodes_total: 2, run_started_at: AT })
     const shown = await text()
     expect(shown).toContain('1 of the 2 nodes')
-    expect(shown).toContain(new Date(AT).toLocaleString())
+    expect(shown).toContain(formatDateTime(AT))
   })
 
   it('asks again when the update ends', async () => {
