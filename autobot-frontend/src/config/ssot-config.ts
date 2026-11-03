@@ -456,7 +456,6 @@ function buildConfig(): AutoBotConfig {
   const deploymentMode = getEnv('VITE_DEPLOYMENT_MODE', 'distributed');
   const environment = getEnv('VITE_ENVIRONMENT', 'development');
   const debug = getEnvBoolean('VITE_DEBUG', false);
-  const httpProtocol = getEnv('VITE_HTTP_PROTOCOL', 'http');
 
   // Build the config object with computed URL getters
   const configObj: AutoBotConfig = {
@@ -468,7 +467,7 @@ function buildConfig(): AutoBotConfig {
     deploymentMode,
     environment,
     debug,
-    httpProtocol,
+    get httpProtocol(): string { return runtimeHttpProto(); }, // #19821: page protocol, as the URL builders (#6795)
 
     // #6795: detect protocol at runtime from window.location instead of
     // build-time VITE_HTTP_PROTOCOL (which defaults to 'http' and produces
