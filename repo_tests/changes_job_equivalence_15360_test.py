@@ -238,6 +238,7 @@ ALLOWED_ADDITIONS = {
             # #17500, #18729: both guards read the secrets generator, so editing it must run the suite.
             "docker/generate-secrets.sh",
             "docker/postgres/init-databases.sh",
+            "docker/docker-proxy/proxy.py",  # #20629
             "docker/postgres/copy-slm-databases.sh",  # #20639
             # #19178: user_docs_stay_consistent_19178_test.py reads docs/README.md.
             "docs/README.md",
