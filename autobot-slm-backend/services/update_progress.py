@@ -54,7 +54,7 @@ def build_update_progress(
 ) -> dict[str, Any]:
     """The run at or after *since*: its play, task, last log line and state. Blocking: reads the log."""
     now = now or datetime.now(timezone.utc)
-    verdict = read_self_update_verdict(log_path, not_before=since)
+    verdict = read_self_update_verdict(log_path, not_before=since, run_alive=run_active)
     if not verdict.log_present or verdict.from_rotated_log:
         return {"state": "waiting", "play": None, "task": None, "last_line_at": None, "elapsed_seconds": None}
     last_line = _log_mtime(log_path)
