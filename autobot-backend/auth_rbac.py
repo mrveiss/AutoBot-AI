@@ -47,7 +47,9 @@ from autobot_shared.auth.permissions import (  # noqa: F401 — re-exported for 
     is_admin_role,
     role_value,
 )
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.repeat_grouping import RepeatGrouper
 from autobot_shared.singleton_factory import lazy_singleton
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error
@@ -109,16 +111,29 @@ async def check_admin_mcp_tool_permission(request: Request, _admin: bool = Depen
     await check_mcp_tool_permission(request)
 
 
+#: One role_denied record per user and route per window; the next record counts the repeats (#16333).
+_DENIALS = RepeatGrouper(env_int_clamped("AUTOBOT_ROLE_DENIED_AUDIT_WINDOW_S", 300, 1, 86400))
+
+
 def audit_role_denied(user_data: dict, allowed_roles: List[str], user_role: str, request: Request) -> None:
-    """Record one refused role check; every admin gate writes the same row (#16333)."""
+    """Record a refused role check; every admin gate writes the same row (#16333).
+
+    Grouped per user and route template, so a non-admin repeating a request can't flood the log.
+    """
+    user = user_data.get("username", "unknown")
+    route = getattr(request.scope.get("route"), "path", None) or str(request.url.path)
+    repeats = _DENIALS.repeats_to_record((user, route))
+    if repeats is None:
+        return
     _get_security_layer().audit_log(
         action="role_denied",
-        user=user_data.get("username", "unknown"),
+        user=user,
         outcome="denied",
         details={
             "roles_required": allowed_roles,
             "user_role": user_role,
             "endpoint": str(request.url.path),
+            "repeats_since_last_record": repeats,
         },
     )
 
