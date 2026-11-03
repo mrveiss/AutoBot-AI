@@ -42,6 +42,7 @@ from services.tool_output_filter import cap_unmatched_output, get_tool_output_fi
 from slash_command_handler import get_slash_command_handler
 
 from .attachment_context import apply_attachments, attachment_notice_messages
+from .budget_refusal import budget_refusal_message
 from .conversation import ConversationHandlerMixin
 from .lightweight_mode import decide_lightweight_mode
 from .llm_failover import IterationCall, stream_with_failover
@@ -2027,17 +2028,7 @@ before summarizing.
         return tool_calls
 
     def _create_llm_service_error(self, status_code: int) -> WorkflowMessage:
-        """
-        Create an error WorkflowMessage for LLM service failures.
-
-        Issue #620: Extracted from _process_single_llm_iteration to reduce function length.
-
-        Args:
-            status_code: HTTP status code from the failed request
-
-        Returns:
-            WorkflowMessage with error details. Issue #620.
-        """
+        """Error WorkflowMessage for an LLM service failure with HTTP ``status_code`` (#620)."""
         logger.error("[ChatWorkflowManager] Ollama request failed: %s", status_code)
         return WorkflowMessage(
             type="error",
@@ -2093,6 +2084,10 @@ before summarizing.
         """
         import aiohttp
 
+        if (refusal := await budget_refusal_message()) is not None:  # budget gate, before any spend (#16845)
+            yield refusal
+            yield (None, None)
+            return
         payload = self._get_llm_request_payload(
             selected_model,
             current_prompt,
@@ -3737,16 +3732,18 @@ before summarizing.
         session_id: str,
         decision: Dict[str, Any],
         attachment_access: bool = False,
+        auth_scope: dict | None = None,
     ):
-        """Resume a paused graph after command approval (#1043); the attachment verdict is replaced (#20195)."""
+        """Resume a paused graph after approval (#1043) as the caller (#16845); attachment verdict fresh (#20195)."""
         from .attachment_context import resume_command
         from .graph import get_compiled_graph
 
         graph = await get_compiled_graph(self)
         resume = await resume_command(graph, session_id, decision, attachment_access)
-        async with aclosing(stream_graph_turn(self, graph, session_id, resume)) as turn:
-            async for msg in turn:
-                yield msg
+        with llm_principal_scope_for(auth_scope):
+            async with aclosing(stream_graph_turn(self, graph, session_id, resume)) as turn:
+                async for msg in turn:
+                    yield msg
 
     async def shutdown(self):
         """Shutdown the workflow manager and clean up resources."""
