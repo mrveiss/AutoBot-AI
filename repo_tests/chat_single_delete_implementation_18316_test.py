@@ -48,7 +48,7 @@ def _api_sources(root: Path) -> list[str]:
 REACH = declare(
     "chat-single-delete-implementation",
     discover=_api_sources,
-    floor=466,  # re-pinned mid-window (train 45): population 450, window [410, 450]
+    floor=465,  # re-pinned mid-window (train 45): population 450, window [410, 450]
     growth=40,
     what="non-test python modules",
     roots=_ROOTS,
