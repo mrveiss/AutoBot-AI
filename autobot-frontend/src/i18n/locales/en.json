@@ -320,6 +320,9 @@
         "invalidResponse": "The server sent an unreadable response",
         "network": "Network error during upload",
         "cancelled": "Upload cancelled",
+        "fileTooLarge": "This file is too large. The maximum size is {maxMb} MB.",
+        "quotaExceeded": "Your storage limit of {limitMb} MB is reached. {liveMb} MB is in use and {remainingMb} MB is left.",
+        "quotaExceededPendingRemoval": "Your storage limit of {limitMb} MB is reached. {liveMb} MB is in use, and {pendingMb} MB of deleted files still count until their removal is approved after human review.",
         "unknown": "Upload failed"
       },
       "filesAttached": "{count} files attached",
@@ -4828,7 +4831,9 @@
       "readyTitle": "Phase Validation Ready",
       "readyHint": "Click \"Load Validation Data\" above to fetch phase status from the validation dashboard.",
       "capabilities": "Capabilities",
-      "unknownPhase": "Unknown Phase"
+      "unknownPhase": "Unknown Phase",
+      "notScored": "Not scored",
+      "noneScored": "No phases scored"
     }
   },
   "agent": {
