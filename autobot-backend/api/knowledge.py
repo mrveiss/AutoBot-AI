@@ -46,6 +46,7 @@ from fastapi import (
     Request,
 )
 
+from api.knowledge_chunked_upload import router as chunked_upload_router
 from api.knowledge_office_upload import OFFICE_EXTENSIONS, extract_office_upload, verified_upload_extension
 from api.knowledge_upload_limit import router as upload_limit_router
 from api.schemas_knowledge import (
@@ -1212,11 +1213,17 @@ async def upload_file_to_knowledge(
     category = form.get("category", "uploads")
     tags = _parse_upload_tags(form.get("tags", "[]"))
 
+    return await ingest_uploaded_document(kb_to_use, req, filename, file_content, title, category, tags)
+
+
+async def ingest_uploaded_document(
+    kb_to_use, req: Request, filename: str, file_content: bytes, title: str, category: str, tags: list
+) -> UploadFileResponse:
+    """Extract, clean and store a document whose bytes have passed the size gate of the way they arrived."""
     content, extracted_doc = await extract_within_deadline(_extract_file_content, filename, file_content)
     if not _has_usable_content(content, extracted_doc):
-        # #13884: distinguish "we could not read it" from "it is empty". A scanned
-        # PDF parses fine and yields nothing, and a generic message left the user
-        # with no way to tell that OCR — not a different file — is what is needed.
+        # #13884: "could not read it" isn't "it is empty". A scanned PDF parses fine and yields nothing,
+        # and a generic message left the user no way to tell that OCR, not another file, is what's needed.
         raise _no_text_rejection(extracted_doc)
 
     # Issue #5064: sanitize against prompt injection; #13708: also the redact_content chokepoint,
@@ -1410,7 +1417,6 @@ async def upload_audio_file(
         whisper_model: Whisper model size (default "base").
         language:      ISO-639-1 language hint (optional).
     """
-    import json as _json
     import os as _os
     import tempfile as _tmp
 
@@ -1439,14 +1445,7 @@ async def upload_audio_file(
     category = form.get("category", "audio")
     whisper_model = form.get("whisper_model", "base")
     language = form.get("language") or None
-    try:
-        raw_tags = form.get("tags", "[]")
-        tags = _json.loads(raw_tags) if isinstance(raw_tags, str) else raw_tags
-        if not isinstance(tags, list):
-            tags = []
-        tags = [str(t)[:50] for t in tags[:20]]
-    except (_json.JSONDecodeError, TypeError):
-        tags = []
+    tags = _parse_upload_tags(form.get("tags", "[]"))
 
     # Write to a temp file so AudioConnector can read it by path
     with _tmp.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
@@ -3055,6 +3054,7 @@ from api.knowledge_maintenance import router as maintenance_router
 
 router.include_router(maintenance_router)
 router.include_router(upload_limit_router)
+router.include_router(chunked_upload_router)
 
 # ===== CONSOLIDATED KNOWLEDGE ROUTERS (Issue #708) =====
 # These routers were previously registered separately in feature_routers.py

@@ -165,6 +165,8 @@ export abstract class ApiClientBase<O extends TransportRequestOptions = Transpor
     if (opts.body instanceof FormData) {
       init.body = opts.body
       delete headers['Content-Type'] // the browser sets the multipart boundary
+    } else if (opts.body instanceof Blob) {
+      init.body = opts.body // raw bytes: JSON would turn them into "{}"
     } else if (opts.body !== undefined) {
       init.body = JSON.stringify(opts.body)
     }
