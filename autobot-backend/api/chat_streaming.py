@@ -154,8 +154,9 @@ async def _stream_graph_resume(
     decision: dict,
     request_id: str,
     attachment_access: bool = False,
+    auth_scope: dict | None = None,
 ):
-    """Stream graph resume after command approval interrupt (#1043).
+    """Stream graph resume after command approval interrupt (#1043), as the caller (#16845 gate, #19241).
 
     ``attachment_access`` is THIS request's STRICT session-posture verdict (#20195): it replaces the one the
     interrupted turn checkpointed, so only an owner or admin who passes now gets file text in the resumed answer.
@@ -165,7 +166,7 @@ async def _stream_graph_resume(
         yield f"data: {json.dumps(evt)}\n\n"
 
         async for msg in chat_workflow_manager.resume_graph(
-            session_id=chat_id, decision=decision, attachment_access=attachment_access
+            session_id=chat_id, decision=decision, attachment_access=attachment_access, auth_scope=auth_scope
         ):
             msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
             yield f"data: {json.dumps(msg_data)}\n\n"
