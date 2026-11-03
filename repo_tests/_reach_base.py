@@ -42,6 +42,7 @@ import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import BaseUnavailable, base_commit
 
 from autobot_shared.paths import scrubbed_git_env
@@ -49,7 +50,7 @@ from autobot_shared.paths import scrubbed_git_env
 if TYPE_CHECKING:
     from repo_tests._reach import Reach
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = repo_root()
 TREE_PREFIX = "autobot-reach-base-"
 #: A base tree left by a killed process is removed on the next first use once it is this old.
 _STALE_AFTER_S = 6 * 3600
