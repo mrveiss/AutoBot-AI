@@ -8,17 +8,18 @@ from __future__ import annotations
 
 import importlib.util
 import json
-from pathlib import Path
 
 import pytest
 import yaml
+from repo_tests._paths import repo_root
 
-_ROOT = Path(__file__).resolve().parents[1]
+_ROOT = repo_root()
 _SPEC = importlib.util.spec_from_file_location("_docker_proxy", _ROOT / "docker" / "docker-proxy" / "proxy.py")
 proxy = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(proxy)
 
 _OURS = {
+    "Id": "c0ffee",
     "Name": "/autobot-redis",
     "Config": {"Labels": {proxy.PROJECT_LABEL: "stack"}, "Image": "i"},
     "State": {"Status": "running", "Health": {"Status": "healthy"}},
@@ -36,7 +37,7 @@ class _Docker:
             return 204, b""
         if "/containers/autobot-" in path:
             name = path.split("/")[2]
-            return 200, json.dumps({**_OURS, "Name": f"/{name}"}).encode()
+            return 200, json.dumps({**_OURS, "Name": f"/{name}", "Id": f"id-{name}"}).encode()
         if "/containers/other/" in path:
             return 200, json.dumps(_THEIRS).encode()
         return 404, b""
@@ -50,7 +51,17 @@ def _ask(method: str, path: str):
 @pytest.mark.parametrize("action", ["start", "stop", "restart"])
 def test_listed_actions_reach_docker_on_our_container(action) -> None:
     status, _, calls = _ask("POST", f"/containers/autobot-backend/{action}")
-    assert status == 200 and ("POST", f"/containers/autobot-backend/{action}") in calls
+    assert status == 200 and ("POST", f"/containers/id-autobot-backend/{action}") in calls
+    assert ("POST", f"/containers/autobot-backend/{action}") not in calls  # the checked id, never the name again
+
+
+def test_a_docker_error_on_inspect_is_a_502_not_a_missing_container() -> None:
+    def failing(_method, _path):
+        return 500, b""
+
+    status, payload = proxy.handle(failing, "stack", "x", "POST", "/containers/autobot-backend/restart")
+    assert status == 502 and "500" in payload["error"]
+    assert proxy.handle(lambda m, p: (404, b""), "stack", "x", "GET", "/containers/autobot-backend")[0] == 404
 
 
 def test_inspect_gives_only_a_summary_never_the_environment() -> None:

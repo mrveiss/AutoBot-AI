@@ -15,6 +15,7 @@ from __future__ import annotations
 import hmac
 import http.client
 import json
+import logging
 import os
 import re
 import socket
@@ -22,13 +23,25 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable, Optional
 from urllib.parse import quote, urlsplit
 
+logger = logging.getLogger("docker-proxy")  # standard library only: this file ships alone in its image
+
 SOCKET_PATH = os.environ.get("DOCKER_PROXY_SOCKET", "/var/run/docker.sock")
 PROJECT_LABEL = "com.docker.compose.project"
 ACTIONS = {"start", "stop", "restart"}
 #: The SLM and what it needs to run: stopping one from the SLM could leave nobody to start it again.
 NEVER_STOP = {"autobot-slm", "autobot-slm-gui", "autobot-slm-postgres", "autobot-postgres", "autobot-redis"}
+
+
 #: How long a client may take to send or read one request, so a stalled one can't hold a thread.
-REQUEST_TIMEOUT_SECONDS = int(os.environ.get("DOCKER_PROXY_REQUEST_TIMEOUT", "30"))
+def _env_seconds(name: str, default: int) -> int:
+    """An env value in seconds; a malformed one falls back rather than stopping the proxy at import."""
+    try:
+        return int(os.environ.get(name, default))
+    except ValueError:
+        return default
+
+
+REQUEST_TIMEOUT_SECONDS = _env_seconds("DOCKER_PROXY_REQUEST_TIMEOUT", 30)
 _NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$")
 
 #: (method, docker path) -> (status, body)
@@ -64,10 +77,21 @@ def own_project(docker: Docker, own_id: str) -> str:
     return project
 
 
+class DockerRefused(Exception):
+    """Docker answered an inspect with something other than 200 or 404: not 'no such container'."""
+
+    def __init__(self, status: int) -> None:
+        super().__init__(f"docker answered {status}")
+        self.status = status
+
+
 def _inspect_ours(docker: Docker, project: str, name: str) -> Optional[dict]:
+    """The container's details if it is in this project; None if absent or not ours."""
     status, body = docker("GET", f"/containers/{quote(name)}/json")
-    if status != 200:
+    if status == 404:
         return None
+    if status != 200:
+        raise DockerRefused(status)
     details = json.loads(body)
     return details if details.get("Config", {}).get("Labels", {}).get(PROJECT_LABEL) == project else None
 
@@ -94,7 +118,11 @@ def handle(docker: Docker, project: str, own_name: str, method: str, path: str) 
         action = verb
     else:
         return 403, {"error": "not allowed"}
-    details = _inspect_ours(docker, project, name)
+    try:
+        details = _inspect_ours(docker, project, name)
+    except DockerRefused as refused:
+        logger.error("inspect of %s: docker answered %s", name, refused.status)
+        return 502, {"error": f"docker answered {refused.status}"}
     if details is None:
         return 404, {"error": "no such container in this stack"}
     if action == "inspect":
@@ -105,7 +133,11 @@ def handle(docker: Docker, project: str, own_name: str, method: str, path: str) 
         return 403, {"error": "the proxy does not act on itself"}
     if action == "stop" and resolved in NEVER_STOP:
         return 403, {"error": "this container runs the SLM and can only be restarted"}
-    status, _body = docker("POST", f"/containers/{quote(name)}/{action}")
+    # The id that was just checked, not the name: the name could name another container by the time of the POST.
+    container_id = details.get("Id")
+    if not container_id:
+        return 502, {"error": "docker did not report the container id"}
+    status, _body = docker("POST", f"/containers/{quote(container_id)}/{action}")
     if status in (204, 304):  # 304: already in that state
         return 200, {"name": name, "action": action}
     return 502, {"error": f"docker answered {status}"}

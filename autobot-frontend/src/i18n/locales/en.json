@@ -765,6 +765,16 @@
     "lightweightMode": "Lightweight mode",
     "lightweightModeTooltip": "lightweight Mode tooltip",
     "errors": {
+      "budgetExhausted": "Your {period} spending limit for this {scope} (${limit}) has been reached. Chat is unavailable until it resets or an administrator raises the limit.",
+      "budgetScope": {
+        "user": "account",
+        "tenant": "organization"
+      },
+      "budgetPeriod": {
+        "hour": "hourly",
+        "day": "daily",
+        "month": "monthly"
+      },
       "deleteFailed": "Couldn't delete the chat. Please try again.",
       "createFailed": "Failed to create chat: {error}",
       "loadSessionsFailed": "Failed to load chat sessions: {error}",
@@ -3480,6 +3490,7 @@
         "verificationMode": "Verification Mode",
         "autonomous": "Autonomous",
         "collaborative": "Collaborative",
+        "syncNow": "Sync now, so its content is available right away",
         "verificationHint": "Autonomous auto-approves high-quality sources. Collaborative requires manual review.",
         "enabled": "Enabled",
         "nameAndSaveDesc": "Name the connector and save.",
@@ -3492,7 +3503,8 @@
         "create": "Create",
         "sqlQueryPlaceholder": "SELECT * FROM documents WHERE updated_at > :last_sync",
         "connectorNamePlaceholder": "My Connector"
-      }
+      },
+      "jobStatusFailed": "Couldn't get this sync's progress. Close and reopen the history to try again."
     },
     "modals": {
       "bulkEdit": {
@@ -6903,6 +6915,22 @@
   },
   "security": {
     "secretsManager": {
+      "loadFailed": "The secrets could not be loaded. What is shown may be out of date. Refresh to try again.",
+      "systemVault": {
+        "title": "System vault",
+        "unavailable": "The system vault is unavailable, so its secrets cannot be shown.",
+        "empty": "No system vault secrets.",
+        "newValue": "New value",
+        "rotate": "Rotate",
+        "save": "Save",
+        "cancel": "Cancel",
+        "delete": "Delete",
+        "deleteTitle": "Delete system secret",
+        "deleteMessage": "Delete \"{name}\" from the system vault? Services that read it will stop receiving it.",
+        "failed": "The change could not be confirmed. It may have been refused, or it may have been applied and the response lost. The list has been reloaded; check it before retrying.",
+        "dependentsTitle": "Secret is in use",
+        "dependentsMessage": "\"{name}\" is still used by: {dependents}. Delete it anyway? These will stop receiving it."
+      },
       "sidebarTitle": "Credentials",
       "searchPlaceholder": "Search credentials...",
       "allCredentials": "All Credentials",

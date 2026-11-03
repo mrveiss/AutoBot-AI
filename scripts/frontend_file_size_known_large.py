@@ -81,12 +81,12 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/knowledge/KnowledgeVerificationQueue.vue": 797,
     "autobot-frontend/src/components/knowledge/SystemKnowledgeManager.vue": 1018,  # #19906: 1034 -> 1018
     "autobot-frontend/src/components/knowledge/WebResearchPanel.vue": 779,
-    "autobot-frontend/src/components/knowledge/connectors/ConnectorConfigModal.vue": 1626,  # #18849: 1627 -> 1626
+    "autobot-frontend/src/components/knowledge/connectors/ConnectorConfigModal.vue": 1624,  # #18849: 1627 -> 1626
     "autobot-frontend/src/components/knowledge/modals/BulkEditModal.vue": 615,  # #18849: 616 -> 615
     "autobot-frontend/src/components/knowledge/modals/CategoryEditModal.vue": 726,  # #18849: 727 -> 726
     "autobot-frontend/src/components/llc/TemplateBrowser.vue": 806,
     "autobot-frontend/src/components/manpage/ManPageManager.vue": 1213,  # #18849: 1214 -> 1213
-    "autobot-frontend/src/components/security/SecretsManager.vue": 2775,
+    "autobot-frontend/src/components/security/SecretsManager.vue": 2765,
     "autobot-frontend/src/components/security/ThreatIntelligenceDashboard.vue": 776,
     "autobot-frontend/src/components/terminal/AdvancedStepConfirmationModal.vue": 615,  # #18849: 616 -> 615
     "autobot-frontend/src/components/terminal/BaseXTerminal.vue": 825,
@@ -169,13 +169,13 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-frontend/src/components/AddNodeModal.vue": 1067,  # #14777 batch 2: 1111 -> 1067
     "autobot-slm-frontend/src/components/fleet/NodeLifecyclePanel.vue": 934,
     "autobot-slm-frontend/src/composables/useAutobotApi.ts": 1896,  # #19217 factory in; #12363 formatter out
-    "autobot-slm-frontend/src/composables/useCodeSync.ts": 1078,
+    "autobot-slm-frontend/src/composables/useCodeSync.ts": 1075,
     "autobot-slm-frontend/src/composables/useOrchestrationManagement.ts": 693,
     "autobot-slm-frontend/src/composables/useSlmApi.ts": 1457,
     "autobot-slm-frontend/src/stores/fleet.ts": 994,
     "autobot-slm-frontend/src/types/slm.ts": 838,
     "autobot-slm-frontend/src/views/AgentsView.vue": 712,
-    "autobot-slm-frontend/src/views/CodeSyncView.vue": 2035,  # #18819: 2080 -> 2069
+    "autobot-slm-frontend/src/views/CodeSyncView.vue": 1957,  # #18819: 2080 -> 2069; #20201: poll loop extracted
     "autobot-slm-frontend/src/views/DeploymentsView.vue": 1614,  # #18819 + #14777: 1703 -> 1623; #20003: -> 1614
     "autobot-slm-frontend/src/views/FleetOverview.vue": 708,  # #14780: 786 -> 708
     "autobot-slm-frontend/src/views/MaintenanceView.vue": 790,  # #14777 batch 2: 817 -> 794; #20003: -> 790

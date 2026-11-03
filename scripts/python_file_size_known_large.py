@@ -72,7 +72,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/batch_jobs.py": 916,
     "autobot-backend/api/browser_mcp.py": 1323,
     "autobot-backend/api/cache_management.py": 692,
-    "autobot-backend/api/chat.py": 2647,  # #20195: 2666 -> 2647 (graph resume stream moved to chat_streaming)
+    "autobot-backend/api/chat.py": 2644,  # #20195: graph resume stream moved to chat_streaming; #16845: 2644
     "autobot-backend/api/chat_sessions.py": 1859,  # #18293: legacy transcripts only ever proposed
     "autobot-backend/api/code_intelligence.py": 2145,
     "autobot-backend/api/code_search.py": 786,
@@ -99,7 +99,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/knowledge_api_integration_test.py": 623,
     "autobot-backend/api/knowledge_categories.py": 674,
     "autobot-backend/api/knowledge_collections.py": 726,
-    "autobot-backend/api/knowledge_connectors.py": 929,
+    "autobot-backend/api/knowledge_connectors.py": 928,
     "autobot-backend/api/knowledge_maintenance.py": 1960,
     "autobot-backend/api/knowledge_mcp.py": 1440,
     "autobot-backend/api/knowledge_population.py": 1238,
@@ -126,9 +126,9 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/schemas_chat.py": 702,
     "autobot-backend/api/schemas_code.py": 3257,
     "autobot-backend/api/schemas_knowledge.py": 5113,
-    "autobot-backend/api/schemas_system.py": 4176,  # #18734: log-forwarding schemas moved out (4345 -> 4176)
+    "autobot-backend/api/schemas_system.py": 4175,  # #18734 4345 -> 4176; #17731 -> 4175
     "autobot-backend/api/schemas_workflows.py": 2823,
-    "autobot-backend/api/secrets.py": 1172,  # #19476 one model_dump serialization (was 1178, #16444)
+    "autobot-backend/api/secrets.py": 1142,  # #20557 (was 1145); #19476; vault writes: secrets_system_vault.py
     "autobot-backend/api/security_assessment.py": 913,
     "autobot-backend/api/settings.py": 881,
     "autobot-backend/api/system.py": 995,
@@ -148,7 +148,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
     "autobot-backend/chat_workflow/graph.py": 1459,  # #19715
     "autobot-backend/chat_workflow/llm_handler.py": 1300,
-    "autobot-backend/chat_workflow/manager.py": 3769,  # #17273: turn_control; #19753: reasoning_kwargs
+    "autobot-backend/chat_workflow/manager.py": 3766,  # #17273: turn_control; #19753: reasoning_kwargs
     "autobot-backend/chat_workflow/tool_handler.py": 3617,  # #11542 dispatch merge + #14068 mirror + #19950
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
@@ -332,7 +332,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/knowledge/test_doc_indexer.py": 1462,
     "autobot-backend/services/knowledge/test_kb_synthesizer.py": 802,
     "autobot-backend/services/llm_cost_tracker.py": 1166,  # #16230: MODEL_PRICING table removed
-    "autobot-backend/services/llm_service.py": 1199,  # #16845: _track_usage delegated to llm_usage_recording
+    "autobot-backend/services/llm_service.py": 1147,  # #16845: usage recording and budget gate moved out
     "autobot-backend/services/load_balancer.py": 677,
     "autobot-backend/services/nl_database_service.py": 772,
     "autobot-backend/services/notification_service.py": 614,
@@ -412,7 +412,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/workflow_scheduler.py": 1070,
     "autobot-npu-worker/npu_worker_pool_test.py": 1010,
     "autobot-slm-backend/api/code_source.py": 701,
-    "autobot-slm-backend/api/code_sync.py": 5780,  # #19352, #19367 (was 5803)
+    "autobot-slm-backend/api/code_sync.py": 5779,  # #19352, #19367 (was 5803)
     "autobot-slm-backend/api/errors.py": 866,
     "autobot-slm-backend/api/infrastructure.py": 722,
     "autobot-slm-backend/api/monitoring.py": 1087,
@@ -471,7 +471,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot_shared/redis_client.py": 674,
     "autobot_shared/redis_management/connection_manager.py": 1290,
     "autobot_shared/security/ssrf_guard_test.py": 633,
-    "autobot_shared/ssot_config.py": 3211,  # splits: #19319 role_mirrors, #15501 hosted_models, #19934 company_os_flags
+    "autobot_shared/ssot_config.py": 3206,  # splits: #19319, #15501, #19934, #18057
     "autobot_shared/ssot_config_test.py": 776,
     "autobot_shared/ssot_constants.py": 861,
     "autobot_shared/user_management/team_service.py": 659,

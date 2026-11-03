@@ -91,7 +91,7 @@ docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -
 | Service | URL |
 |---------|-----|
 | Frontend (user UI) | http://localhost |
-| SLM Admin | http://localhost/slm/ |
+| SLM Admin | http://localhost:8080/slm/ |
 | Backend API (via the frontend proxy) | http://localhost/api |
 | RedisInsight | http://localhost:8001 (host-local only) |
 | Ollama | http://localhost:11434 (only with `--profile ollama`) |
@@ -153,7 +153,7 @@ curl -s http://localhost/api/system/health | jq   # backend, via the frontend pr
 docker compose --env-file docker/.env.docker --env-file docker/.env.secrets logs -f --tail=50
 ```
 
-If you started only the SLM GUI (`--profile slm`), use `curl -s http://localhost/slm/api/health` instead.
+If you started only the SLM GUI (`up -d autobot-slm-gui`), use `curl -s http://localhost:8080/slm/api/health` instead.
 
 ## Troubleshooting Installation
 

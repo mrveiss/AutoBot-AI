@@ -20,22 +20,18 @@ _SPEC.loader.exec_module(client)
 _NODE = SimpleNamespace(node_id="autobot-redis")
 
 
-def _session(status=None, error=None):
+def _http(status=None, error=None):
     response = MagicMock(status=status)
-    post = MagicMock(
+    request = MagicMock(
         __aenter__=AsyncMock(return_value=response, side_effect=error), __aexit__=AsyncMock(return_value=False)
     )
-    session = MagicMock(post=MagicMock(return_value=post))
-    return MagicMock(__aenter__=AsyncMock(return_value=session), __aexit__=AsyncMock(return_value=False)), session
+    return MagicMock(tracked_request=MagicMock(return_value=request))
 
 
 async def _run(status=None, error=None):
-    factory, session = _session(status, error)
-    with (
-        patch.object(client, "assert_egress_policy", AsyncMock()),
-        patch.object(client.aiohttp, "ClientSession", return_value=factory),
-    ):
-        return await client.run_compose_service_action(_NODE, "redis", "restart"), session
+    http = _http(status, error)
+    with patch.object(client, "get_http_client", return_value=http):
+        return await client.run_compose_service_action(_NODE, "redis", "restart"), http
 
 
 def test_a_native_slms_own_node_isnt_a_compose_node() -> None:
@@ -65,9 +61,12 @@ async def test_the_real_egress_guard_allows_the_configured_proxy(monkeypatch) ->
 
 @pytest.mark.asyncio
 async def test_the_action_goes_to_the_nodes_container() -> None:
-    (ok, _), session = await _run(status=200)
+    (ok, _), http = await _run(status=200)
     assert ok is True
-    assert session.post.call_args.args[0].endswith("/containers/autobot-redis/restart")
+    method, url = http.tracked_request.call_args.args
+    assert method == "POST" and url.endswith("/containers/autobot-redis/restart")
+    assert http.tracked_request.call_args.kwargs["allow_redirects"] is False
+    assert http.tracked_request.call_args.kwargs["guard_egress"] is client.EGRESS_POLICY
 
 
 @pytest.mark.asyncio
