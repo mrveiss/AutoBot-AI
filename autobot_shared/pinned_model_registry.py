@@ -194,6 +194,12 @@ def get_pinned_revision(repo_id: str) -> str:
         ) from None
 
 
+def pinned_weight_files(repo_id: str) -> tuple[str, ...]:
+    """The weight filenames *repo_id* is pinned with, so a pre-fetch downloads those and not every format (#19869)."""
+    get_pinned_revision(repo_id)  # the one KeyError, for an unregistered id
+    return tuple(_REGISTRY[repo_id].weight_digests)
+
+
 def pinned_revision_kwargs(model_ref: str) -> dict[str, str]:
     """``{"revision": <pin>}`` when *model_ref* is registered here, else ``{}``.
 
