@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 
 import { makeDiagnostic } from "../diagnostic.mjs";
-import { KIT_IMPORT_SPECIFIER, kitComponentFiles, readBaseline, relPath } from "../kit.mjs";
+import { kitComponentFiles, readBaseline, relPath } from "../kit.mjs";
 
 export const RULE_ID = "ds-noncanonical-primitive-import";
 export const ISSUE = "#17571";
@@ -20,18 +20,27 @@ export const FIX_HINT =
 
 const LINE_WAIVER = /canonical:\s*ignore\s+ds-noncanonical-primitive-import\b/;
 //: `import X from '...'`, `import { X } from '...'` and `import('...')` forms; only the specifier matters.
-//: Run over the whole file (`\s` spans newlines), so a multi-line import is seen.
-const SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*)(["'])([^"'\n]+\.vue)\1/g;
+//: Run over the whole file (`\s` spans newlines), so a multi-line import is seen. It runs over
+//: the text with comments AND string contents blanked, so `from`/`import(` inside a string never
+//: matches; it stops at the opening quote and the specifier is read from the original text.
+const SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*)(["'])/g;
 
 /** `text` with every JS comment blanked to spaces (newlines kept, so offsets and
- *  line numbers survive). Quoted strings are walked, so `'http://x'` is not a comment. */
-export function blankComments(text) {
+ *  line numbers survive). Quoted strings are walked, so `'http://x'` is not a comment.
+ *  With `blankStrings`, string contents are blanked too (the quotes stay). */
+export function blankComments(text, blankStrings = false) {
   const token = /\/\/|\/\*|["'`]/g;
   let out = "";
   let kept = 0;
   for (let m = token.exec(text); m; m = token.exec(text)) {
     if (m[0].length === 1) {
-      token.lastIndex = skipString(text, m.index);
+      const after = skipString(text, m.index);
+      if (blankStrings) {
+        const close = after - 1 > m.index && text[after - 1] === m[0] ? after - 1 : after;
+        out += text.slice(kept, m.index + 1) + text.slice(m.index + 1, close).replace(/[^\r\n]/g, " ");
+        kept = close;
+      }
+      token.lastIndex = after;
       continue;
     }
     const end = m[0] === "//" ? lineEnd(text, m.index) : endOfBlock(text, m.index);
@@ -69,11 +78,12 @@ export function findHits(text) {
   const lines = text.split(/\r?\n/);
   const starts = lineStarts(text);
   const hits = [];
-  for (const m of blankComments(text).matchAll(SPECIFIER)) {
-    const spec = m[2];
-    if (spec.startsWith(KIT_IMPORT_SPECIFIER) || !kit.has(basename(spec))) continue;
+  for (const m of blankComments(text, true).matchAll(SPECIFIER)) {
+    const open = m.index + m[0].length;
+    const spec = text.slice(open, text.indexOf(m[1], open));
+    if (spec.includes("\n") || !spec.endsWith(".vue") || !kit.has(basename(spec))) continue;
     const idx = lineOf(starts, m.index);
-    if (LINE_WAIVER.test(lines[idx])) continue;
+    if (LINE_WAIVER.test(lines[idx]) || LINE_WAIVER.test(lines[lineOf(starts, open)])) continue;
     hits.push({ idx, col: m.index - starts[idx], line: lines[idx] });
   }
   return hits;

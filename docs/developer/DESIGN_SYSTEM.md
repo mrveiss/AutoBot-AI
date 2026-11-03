@@ -182,12 +182,14 @@ population reaches zero (#17567).
 Which module owns each design-system concept is declared in code, not here:
 `libs/autobot-ui/src/authority/designSystemAuthority.mjs` (`AUTHORITY`, `designSystemOwner()`).
 It is the source of truth; where this document or any issue disagrees with it, the registry wins.
-A concept it does not list is an error at the point of use, an entry that is not yet decided
-says so in a `note` with an issue link, and a deliberate exception carries a stated `reason`.
+`designSystemOwner()` throws for a concept the registry does not list, but only when a caller
+invokes it; no check calls it yet, and the canonical-check harness does not read `AUTHORITY`. An
+entry that is not yet decided says so in a `note` with an issue link, and a deliberate exception
+carries a stated `reason`.
 
-The registry is enforced by the canonical-check harness
-(`node autobot-frontend/scripts/canonical_check.mjs --all`, also the pre-commit hook and the weekly
-`canonical-audit.yml`, which fails on a `block`):
+The canonical-check harness (`node autobot-frontend/scripts/canonical_check.mjs --all`, also the
+pre-commit hook and the weekly `canonical-audit.yml`, which fails on a `block`) runs two rules, each
+derived from the kit's component listing rather than from the registry:
 
 | Violation | Rule | Population frozen in |
 |---|---|---|

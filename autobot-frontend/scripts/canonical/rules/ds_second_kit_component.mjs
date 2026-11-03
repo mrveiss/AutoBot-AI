@@ -28,7 +28,7 @@ export async function check(filePath) {
   // A read that throws is rethrown (main().catch exits 2): returning [] would let a
   // run exit 0 without having inspected the file.
   const text = await readFile(filePath, "utf-8");
-  if (LINE_WAIVER.test(text)) return [];
+  if (LINE_WAIVER.test(text.split(/\r?\n/, 1)[0])) return []; // the diagnostic is at line 1, so is its waiver
   return [
     makeDiagnostic({
       ruleId: RULE_ID,
