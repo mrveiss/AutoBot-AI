@@ -1,0 +1,90 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# #20750: propose, and once a human has approved it claim, re-aligning the backend's internal API key
+# to the SLM's. Runs after resolve_internal_api_key.yml, on the backend node, in the builtin updater.
+#
+# The two keys differ in exactly this case, so the backend refuses anything sent with the SLM's key:
+# every call here carries the backend's CURRENT key (the one its loaded env file holds), which the
+# backend accepts. The proposal is the approval-queue record (#17038); nothing is rewritten until a
+# person approves it. An approved one is claimed here (verified, then spent once) and applied by this
+# run: every env file renders the SLM's key, the backend and celery restart, and
+# realign_internal_api_key_verify.yml checks the new key works and reports the outcome.
+#
+# Never an empty credential (#20730's rule): the SLM's key is checked BEFORE the claim, so a run that
+# can't read it neither spends the approval nor renders anything.
+#
+# Caller sets `internal_api_key_loaded_file`, the env file the backend process loads, and
+# `internal_api_key_backend_url`, the backend on the node's own loopback (its port is bound there, #11455).
+---
+
+- name: "Internal key | Propose re-aligning the backend's key to the SLM's (#20750)"
+  ansible.builtin.uri:
+    url: "{{ internal_api_key_backend_url }}/api/internal/slm/credential-proposals"
+    method: POST
+    headers:
+      X-Internal-API-Key: "{{ internal_api_key_by_file[internal_api_key_loaded_file] }}"
+    body_format: json
+    body:
+      action: slm_backend_internal_key_realign
+      node_id: "{{ slm_node_id | default(inventory_hostname) }}"
+    status_code: [201]
+  register: _internal_key_realign_proposal
+  failed_when: false
+  no_log: true  # the request carries a key
+  when:
+    - internal_api_key_mismatch | bool
+    - internal_api_key_loaded_file in internal_api_key_by_file
+
+- name: "Internal key | Say where the realign stands (#20750)"
+  ansible.builtin.debug:
+    msg: >-
+      FINDING #20750: re-aligning this node's backend key to the SLM's is
+      {{ 'awaiting a decision in the Approvals inbox (approval ' ~ _internal_key_realign_proposal.json.approval_id ~ ')'
+         if _internal_key_realign_proposal.json.status | default('') == 'pending'
+         else ('approved; applying it in this run' if _internal_key_realign_proposal.json.status | default('') == 'approved'
+         else 'NOT recorded: the backend did not take the proposal (HTTP ' ~ (_internal_key_realign_proposal.status | default('?')) ~ ')') }}.
+  when: _internal_key_realign_proposal.status is defined
+
+- name: "Internal key | Claim the approved realign (#20750)"
+  ansible.builtin.uri:
+    url: "{{ internal_api_key_backend_url }}/api/internal/slm/credential-approvals/{{ _internal_key_realign_proposal.json.approval_id }}/claim"
+    method: POST
+    headers:
+      X-Internal-API-Key: "{{ internal_api_key_by_file[internal_api_key_loaded_file] }}"
+    body_format: json
+    body:
+      action: slm_backend_internal_key_realign
+      node_id: "{{ slm_node_id | default(inventory_hostname) }}"
+    status_code: [200]
+  register: _internal_key_realign_claim
+  failed_when: false
+  no_log: true
+  when:
+    - _internal_key_realign_proposal.json.status | default('') == 'approved'
+    # The new key only takes effect on restart; a no-restart sync (#20743) leaves the approval for later.
+    - autobot_restart_services | default(true) | bool
+    # Never an empty credential: with no SLM key to render, the approval is not spent.
+    - internal_api_key_canonical | length > 0
+
+- name: "Internal key | WARNING: the approved realign could not be claimed, so nothing changes (#20750)"
+  ansible.builtin.debug:
+    msg: >-
+      FINDING #20750: the approved realign of this node's backend key was refused at claim
+      (HTTP {{ _internal_key_realign_claim.status | default('?') }}), so this run keeps each file's key.
+  when:
+    - _internal_key_realign_claim.status is defined
+    - _internal_key_realign_claim.status != 200
+
+- name: "Internal key | Apply the claimed realign: every env file renders the SLM's key (#20750)"
+  ansible.builtin.set_fact:
+    internal_api_key_by_file: >-
+      {{ dict(internal_api_key_by_file.keys() | zip([internal_api_key_canonical] * (internal_api_key_by_file | length))) }}
+    internal_api_key_resolved: "{{ internal_api_key_canonical }}"
+    internal_api_key_realign_old_key: "{{ internal_api_key_by_file[internal_api_key_loaded_file] }}"
+    internal_api_key_realign_approval_id: "{{ _internal_key_realign_proposal.json.approval_id }}"
+    internal_api_key_realign_applying: true
+  no_log: true
+  when: _internal_key_realign_claim.status | default(0) == 200

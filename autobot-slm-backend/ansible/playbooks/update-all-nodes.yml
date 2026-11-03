@@ -1191,6 +1191,16 @@
       when: "'backend' in group_names"
       tags: [backend, env]
 
+    # #20750: a mismatch is proposed for approval; an approved realign is claimed here and applied by
+    # this run's render, restart and the verify step after "Wait for API to be ready".
+    - name: "[PLAY 2] Backend | Propose or claim re-aligning the internal key (#20750)"
+      ansible.builtin.include_tasks: ../_shared/tasks/realign_internal_api_key_claim.yml
+      vars:
+        internal_api_key_loaded_file: "{{ autobot.base_dir }}/autobot-backend/.env"
+        internal_api_key_backend_url: "http://127.0.0.1:{{ infrastructure.ports.backend }}"  # pragma: allowlist secret -- a URL
+      when: "'backend' in group_names"
+      tags: [backend, env]
+
     # Full user management requires the autobot_app DB password (#10636).
     #
     # GH#12883: this used to read ONLY /etc/autobot/autobot-db-credentials.env.
@@ -1486,6 +1496,15 @@
       retries: 42
       delay: 10
       when: "'backend' in group_names"
+      tags: [backend, restart]
+
+    - name: "[PLAY 2] Backend | Check the re-aligned internal key works, and report it (#20750)"
+      ansible.builtin.include_tasks: ../_shared/tasks/realign_internal_api_key_verify.yml
+      vars:
+        internal_api_key_backend_url: "http://127.0.0.1:{{ infrastructure.ports.backend }}"  # pragma: allowlist secret -- a URL
+      when:
+        - "'backend' in group_names"
+        - internal_api_key_realign_applying | default(false) | bool
       tags: [backend, restart]
 
     # ----- Frontend -----
