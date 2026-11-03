@@ -86,6 +86,7 @@ def _load():
         "services.role_registry",
         "services.ansible_extra_vars",
         "services.unit_names",
+        "services.sync_restart",  # #20743
         "services.role_manifest_shape",
         "services.playbook_output_stream",
         "services.ssh_utils",
