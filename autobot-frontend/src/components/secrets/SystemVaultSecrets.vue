@@ -1,0 +1,138 @@
+<!-- Copyright 2025-2026 mrveiss -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!--
+  SYSTEM-vault secrets (#17099): the entries GET /api/secrets/ returns under
+  `system_vault` for an admin. Metadata only -- the value is never displayed;
+  rotate sends a new one to PUT /api/secrets/{id}, delete calls DELETE.
+-->
+<template>
+  <BaseCard v-if="vault" :title="t('security.secretsManager.systemVault.title')" data-testid="system-vault">
+    <BaseAlert v-if="!vault.available" variant="warning" :message="t('security.secretsManager.systemVault.unavailable')" />
+    <EmptyState v-else-if="!vault.secrets.length" :title="t('security.secretsManager.systemVault.empty')" />
+    <ul v-else>
+      <li v-for="secret in vault.secrets" :key="secret.id" class="flex items-center gap-3 py-2">
+        <span class="font-medium">{{ secret.name }}</span>
+        <BaseBadge :label="secret.type" />
+        <template v-if="rotatingId === secret.id">
+          <BaseInput
+            v-model="newValue"
+            type="password"
+            :placeholder="t('security.secretsManager.systemVault.newValue')"
+          />
+          <BaseButton size="sm" :disabled="!newValue || busy" data-testid="rotate-save" @click="rotate(secret)">
+            {{ t('security.secretsManager.systemVault.save') }}
+          </BaseButton>
+          <BaseButton size="sm" variant="ghost" @click="cancelRotate">
+            {{ t('security.secretsManager.systemVault.cancel') }}
+          </BaseButton>
+        </template>
+        <template v-else>
+          <BaseButton size="sm" variant="outline" data-testid="rotate-start" @click="startRotate(secret.id)">
+            {{ t('security.secretsManager.systemVault.rotate') }}
+          </BaseButton>
+          <BaseButton size="sm" variant="error" data-testid="delete" @click="remove(secret)">
+            {{ t('security.secretsManager.systemVault.delete') }}
+          </BaseButton>
+        </template>
+      </li>
+    </ul>
+    <BaseAlert v-if="failed" variant="error" :message="t('security.secretsManager.systemVault.failed')" />
+  </BaseCard>
+</template>
+
+<script setup lang="ts">
+import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseInput, EmptyState, isHttpError } from '@autobot/ui'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
+import { secretsApiClient } from '@/utils/SecretsApiClient'
+import { createLogger } from '@/utils/debugUtils'
+
+export interface SystemVaultEntry {
+  id: string
+  name: string
+  type: string
+}
+export interface SystemVaultListing {
+  available: boolean
+  secrets: SystemVaultEntry[]
+}
+
+defineProps<{ vault: SystemVaultListing | null }>()
+const emit = defineEmits<{ changed: [] }>()
+
+const { t } = useI18n()
+const { confirm } = useConfirmDialog()
+const logger = createLogger('SystemVaultSecrets')
+const rotatingId = ref<string | null>(null)
+const newValue = ref('')
+const busy = ref(false)
+const failed = ref(false)
+
+function startRotate(id: string) {
+  rotatingId.value = id
+  newValue.value = ''
+}
+
+function cancelRotate() {
+  rotatingId.value = null
+  newValue.value = ''
+}
+
+/** Run a write on `secretId`; an action resolving `false` was declined, so nothing changed. */
+async function run(secretId: string, action: () => Promise<unknown>) {
+  busy.value = true
+  failed.value = false
+  try {
+    if ((await action()) === false) return
+    // Only the draft of the secret acted on is dropped; another secret's unsaved value stays.
+    if (rotatingId.value === secretId) cancelRotate()
+    emit('changed')
+  } catch (error) {
+    failed.value = true
+    logger.error('System vault write failed:', error)
+    emit('changed') // the outcome is unconfirmed (the response may be lost), so show what is stored
+  } finally {
+    busy.value = false
+  }
+}
+
+const rotate = (secret: SystemVaultEntry) => run(secret.id, () => secretsApiClient.updateSecret(secret.id, { value: newValue.value }))
+
+async function remove(secret: SystemVaultEntry) {
+  const ok = await confirm({
+    title: t('security.secretsManager.systemVault.deleteTitle'),
+    message: t('security.secretsManager.systemVault.deleteMessage', { name: secret.name })
+  })
+  if (ok) await run(secret.id, () => deleteConfirmingDependents(secret))
+}
+
+interface Dependent {
+  dependent_kind: string
+  dependent_id: string
+}
+
+/** Dependents the backend refused the delete for (409), or null for any other error (#20557). */
+function dependentsOf(error: unknown): Dependent[] | null {
+  if (!isHttpError(error) || error.status !== 409) return null
+  const detail = error.details?.detail as { code?: string; dependents?: Dependent[] } | undefined
+  return detail?.code === 'secret_has_dependents' ? (detail.dependents ?? []) : null
+}
+
+/** Delete; when dependents still use the secret, list them in a second confirm before forcing it. */
+async function deleteConfirmingDependents(secret: SystemVaultEntry) {
+  try {
+    return await secretsApiClient.deleteSecret(secret.id)
+  } catch (error) {
+    const dependents = dependentsOf(error)
+    if (!dependents) throw error
+    const listed = dependents.map((d) => `${d.dependent_kind}:${d.dependent_id}`).join(', ')
+    const ok = await confirm({
+      title: t('security.secretsManager.systemVault.dependentsTitle'),
+      message: t('security.secretsManager.systemVault.dependentsMessage', { name: secret.name, dependents: listed })
+    })
+    if (!ok) return false
+    return secretsApiClient.deleteSecret(secret.id, { confirmDependents: true })
+  }
+}
+</script>

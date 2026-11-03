@@ -16,6 +16,10 @@
 // pills across both apps map onto. Domain-status enums keep their own types.
 export type { SemanticVariant, SemanticColor } from './src/types/semantic'
 
+// Which module owns each design-system concept (#17571); the canonical-check rules read it.
+export { AUTHORITY, designSystemOwner } from './src/authority/designSystemAuthority.mjs'
+export type { AuthorityEntry } from './src/authority/designSystemAuthority.mjs'
+
 // Contract-typed GET (#16292): read a GET endpoint's response type from each
 // app's own generated `paths`, instead of asserting the shape inline.
 export type { GetPath, JsonOf, GetResponse } from './src/types/contract'
