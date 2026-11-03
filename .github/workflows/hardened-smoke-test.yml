@@ -189,7 +189,7 @@ jobs:
           echo ""
           curl -v http://localhost/slm/api/health 2>&1 | head -20 || true
 
-      - name: SLM web GUI comes up alone under the slm profile (#18585)
+      - name: SLM web GUI comes up alone (#18585)
         # The documented SLM-GUI-first path: the full stack is stopped, then only
         # autobot-slm-gui and its dependencies start. Proves the SLM-only nginx
         # config starts with no main backend, and prints the measured memory of
@@ -202,23 +202,23 @@ jobs:
               --env-file docker/.env.docker "$@"
           }
           compose down
-          compose --profile slm up -d --no-build autobot-slm-gui
+          compose up -d --no-build autobot-slm-gui
 
           for attempt in $(seq 1 60); do
-            if curl -s -f http://localhost/slm/ > /dev/null 2>&1 \
-               && curl -s -f http://localhost/slm/api/health > /dev/null 2>&1; then
-              echo "OK SLM GUI and SLM API respond with the slm profile only"
+            if curl -s -f http://localhost:8080/slm/ > /dev/null 2>&1 \
+               && curl -s -f http://localhost:8080/slm/api/health > /dev/null 2>&1; then
+              echo "OK SLM GUI and SLM API respond with the SLM GUI started alone"
               break
             fi
             if [ "$attempt" -eq 60 ]; then
               echo "FAIL: SLM-only stack not healthy within 600s"
-              compose --profile slm logs
+              compose logs
               exit 1
             fi
             sleep 10
           done
 
-          running=$(compose --profile slm ps --services --status running | sort | tr '\n' ' ')
+          running=$(compose ps --services --status running | sort | tr '\n' ' ')
           echo "Running services: ${running}"
           for heavy in autobot-backend autobot-worker autobot-chromadb autobot-frontend; do
             if [[ " ${running} " == *" ${heavy} "* ]]; then
@@ -258,7 +258,7 @@ jobs:
             -f docker-compose.yml \
             -f docker-compose.hardened.yml \
             --env-file docker/.env.docker \
-            --profile slm config --services 2>/dev/null)
+            config --services 2>/dev/null)
           services=$(echo "$services" | xargs)
 
           if [ -z "$services" ]; then
@@ -358,13 +358,10 @@ jobs:
 
       - name: Clean up
         if: always()
-        # --profile slm: the SLM-only step's autobot-slm-gui is a profiled service,
-        # which a plain `down` neither stops nor detaches from its networks (#18581)
         run: |
           docker compose \
             -f docker-compose.yml \
             -f docker-compose.hardened.yml \
             --env-file docker/.env.docker \
-            --profile slm \
             down
           rm -rf secrets/
