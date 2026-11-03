@@ -202,30 +202,7 @@ def _scan() -> Tuple[Dict[str, Set[str]], Dict[Tuple[str, str], FrozenSet[str]],
 REACH = declare(
     "enum-hand-copy-census",
     discover=_tracked_python,
-    # 5965, NOT the `population - growth` value. The first version of this
-    # declaration used that formula and went red on the very next rebase, when
-    # main gained a handful of files -- which is what "zero tolerance by
-    # construction" means in practice.
-    #
-    # It happened within the hour, on a declaration written by the same author
-    # who had just filed the argument on #17142 that a floor pinned at
-    # `population - growth` is a snapshot rather than a floor. Knowing the rule
-    # did not prevent it; reach_declarations_test did, which is the whole case
-    # for the check being mechanical. Self-reported on #17142 with the figures.
-    #
-    # 5965 is mid-window and buys room for ordinary growth instead of a handful
-    # of files.
-    #
-    # NO MEASURED NUMBERS HERE, deliberately: an earlier version of this comment
-    # cited the population and the window, and both were stale one rebase later.
-    # Prose citing a measurement survives the rebase that changes it -- the
-    # resolver owns the value and nothing owns the sentence. The arithmetic is
-    # in the commit message, which cannot drift from the tree it describes.
-    # Re-pinned MID-window 2026-10-04 (#17356): `_reach.verify_floor` now refuses a floor in
-    # the bottom tenth of `growth`, because that is zero tolerance dressed as an allowance.
-    # Re-measured by the mechanism itself, not carried across (#15928); the arithmetic is in
-    # the commit message, which cannot drift from the tree it describes.
-    floor=7659,  # re-pinned mid-window (train 54): population 7209, window [6809, 7209]
+    # The floor is computed from the base commit (#19676); growth=400 is the maintenance interval.
     growth=400,
     what="tracked python files",
 )

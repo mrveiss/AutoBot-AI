@@ -61,8 +61,6 @@ def _population(root) -> list[str]:
 REACH = declare(
     "doubled-api-prefix-scan",
     discover=_population,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=526,  # mid-window: population 556, window (496, 556)
     what="non-test python source",
     roots=_ROOTS,
     growth=60,

@@ -137,8 +137,6 @@ def _compat_modules(root: Path) -> list[str]:
 REACH = declare(
     "compat-module-needs-importer",
     discover=_compat_modules,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=114,
     what="autobot-backend non-test python modules whose module docstring declares backward compatibility",
     roots=("autobot-backend",),
     growth=20,

@@ -91,12 +91,11 @@ def _production_files(root: Path) -> list[str]:
     return [rel for rel in tracked if _is_production(rel)]
 
 
-#: Bound at the 2567 files measured when the floor was added; since re-pinned mid-window
-#: from REACH.window() as the tree grew (the value below carries its own measurement).
+#: Bound at the 2567 files measured when the floor was added; the floor is now computed from
+#: the base commit (#19676).
 REACH = declare(
     "kb-admin-read-bypass",
     discover=_production_files,
-    floor=3075,  # re-pinned mid-window (train 48): population 2929, window [2729, 2929]
     growth=200,
     skips=0,
     # The scope moves from prose to data (#17844): `declare` renders the same sentence from
