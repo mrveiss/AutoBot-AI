@@ -56,4 +56,19 @@ describe('CompanyDashboardWidget', () => {
     expect(text).toContain('llc.dashboard.liveActivity')
     expect(text).not.toContain('llc.dashboard.recentRuns')
   })
+
+  it('tells same-named agents apart and marks the one the server says cannot run (#20519)', () => {
+    const base = { title: '', status: 'idle' as const, adapter_type: 'autobot_agent', last_heartbeat: null }
+    const agents = [
+      { ...base, id: 'ceo-1', name: 'Alex', title: 'CEO', can_run: false, cannot_run_reason: 'no adapter_config.agent_class configured' },
+      { ...base, id: 'dev-1', name: 'Alex', title: 'Engineer', can_run: true },
+    ]
+    const wrapper = render('company-agents', { agents })
+    expect(wrapper.text()).toContain('Alex \u2014 CEO')
+    expect(wrapper.text()).toContain('Alex \u2014 Engineer')
+    const badges = wrapper.findAll('.aui-badge')
+    expect(badges).toHaveLength(1)
+    expect(badges[0].text()).toBe('llc.agent.cannotRun')
+    expect(badges[0].attributes('title')).toBe('no adapter_config.agent_class configured')
+  })
 })
