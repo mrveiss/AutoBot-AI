@@ -326,7 +326,7 @@ describe('SSOT Config runtimeHttpProto() — protocol detection', () => {
     it('backendUrl is same-origin (proxy mode), never an absolute host:port (#19821)', () => {
       setProtocol('https:');
       const cfg = reloadConfig();
-      expect(cfg.backendUrl).toBe(getBackendUrl());
+      expect(cfg.backendUrl).toBe(''); // no VITE_API_BASE_URL here: same-origin, nothing absolute
     });
 
     it('frontendUrl starts with https://', () => {

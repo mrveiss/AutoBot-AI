@@ -59,15 +59,16 @@ def test_the_templates_agree_on_the_protocol():
 
 _OWN_READ = re.compile(r"(import\.meta\.env\.|getEnv\(\s*['\"])VITE_(BACKEND_HOST|BACKEND_PORT|HTTP_PROTOCOL)\b")
 _LITERAL_FALLBACK = re.compile(r"\|\|\s*['\"](8001|8443)['\"]")
-_ABSOLUTE_ORIGIN = re.compile(r"\$\{[^}]*\}:\$\{[^}]*port\.backend\}")
+_ABSOLUTE_ORIGIN = re.compile(r"\$\{[^}]*\}:\$\{[^}]*(port\.backend|BACKEND_PORT)\}")
 
 #: The canonical home reads the variables; that is what it is for.
 _CANONICAL = frozenset({_SSOT})
 
 #: Files allowed one specific shape, each with its reason. Nothing else may.
 _ALLOWED_ABSOLUTE_ORIGIN = {
-    # Localhost origins for the test mocks (src/test/mocks, src/test/config) under jsdom.
-    "autobot-frontend/src/constants/network.ts": "localhost test-mock origins",
+    # Localhost origins read only by the test mocks (src/test/mocks, src/test/config) under jsdom;
+    # its NetworkConfig class and networkConfig instance have no importer at all.
+    "autobot-frontend/src/constants/network.ts": "localhost test-mock origins; NetworkConfig unused",
     # Story text shown to a reader, not a URL anything requests.
     "autobot-frontend/src/components/browser/BrowserSessionManager.stories.ts": "display text",
 }
@@ -137,6 +138,7 @@ def test_every_allowance_is_still_needed():
         "port: import.meta.env.VITE_BACKEND_PORT || '8001',",
         "const p = getEnv('VITE_HTTP_PROTOCOL', 'http')",
         "return `ws://${cfg.vm.main}:${cfg.port.backend}/api/ws`",
+        "return `ws://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}/api/terminal/ws`",
         "const port = env.PORT || '8443'",
     ],
 )
