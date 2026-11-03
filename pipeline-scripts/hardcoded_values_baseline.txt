@@ -173,7 +173,6 @@
 1|other|autobot-backend/api/state_tracking.py|100
 1|other|autobot-backend/api/task_memory.py|100
 1|other|autobot-backend/api/telegram_bot.py|"user"
-1|other|autobot-backend/api/terminal.py|30
 1|other|autobot-backend/api/terminal_handlers.py|"user"
 1|other|autobot-backend/api/user_management/users.py|50
 1|other|autobot-backend/api/user_management/users.py|offset=0
@@ -566,11 +565,10 @@
 1|other|autobot-backend/utils/path_validation.py|"/opt/autobot/backups/../../../etc/passwd
 1|other|autobot-backend/utils/path_validation.py|"/opt/autobot/backups/kb_backup.json
 1|other|autobot-backend/utils/service_client.py|30
-2|other|autobot-backend/utils/timeout_migration_examples.py|300
+1|other|autobot-backend/utils/timeout_migration_examples.py|300
 2|other|autobot-backend/voice_interface.py|https://alphacephei.com/vosk/models
 1|other|autobot-backend/voice_processing/providers/cloud/assemblyai_provider.py|https://api.assemblyai.com/v2
 1|other|autobot-backend/voice_processing/providers/cloud/deepgram_provider.py|https://api.deepgram.com/v1/listen
-1|other|autobot-backend/voice_processing/providers/lv/late_provider.py|300
 1|other|autobot-backend/voice_processing/realtime/openai_provider.py|https://api.openai.com/v1/realtime/sessions
 1|other|autobot-backend/web_fetch/fetcher.py|https://r.jina.ai/
 1|other|autobot-backend/web_fetch/site_mapper.py|http://www.sitemaps.org/schemas/sitemap/0.9
