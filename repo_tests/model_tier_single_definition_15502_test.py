@@ -244,7 +244,6 @@ REACH = declare(
     "model-tier-map-scan",
     discover=_source_population,
     # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=3221,  # re-pinned mid-window (train 73): population 3250, window [2950, 3250] (#17844)
     what="non-test python source",
     roots=("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     growth=300,
@@ -333,9 +332,6 @@ def _frontend_population(root: Path) -> list[str]:
 REACH_FRONTEND = declare(
     "frontend-model-literal-scan",
     discover=_frontend_population,
-    # Mid-window, from REACH_FRONTEND.window(); the arithmetic is on the PR, not here.
-    # #18242: population 1171 -> window [1071, 1171]; 1080 sat in the bottom band, re-pinned mid-window.
-    floor=1121,
     what="frontend ts and vue source",
     roots=(_FRONTEND_SRC,),
     growth=100,

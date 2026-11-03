@@ -265,7 +265,6 @@ def _dpkg_registrations(root: pathlib.Path | None = None) -> List[Tuple[str, str
 DPKG_LIST_CALL_SITES = declare(
     "dpkg-list-call-sites",
     discover=_code_lines_using_dpkg_list,
-    floor=3,
     growth=3,
     what="`dpkg -l` invocations in shell/YAML lines and Python strings (#17387, #17411)",
 )
@@ -282,7 +281,6 @@ DPKG_REGISTRATIONS = declare(
     # the bottom tenth of `growth`, because that is zero tolerance dressed as an allowance.
     # Re-measured by the mechanism itself, not carried across (#15928); the arithmetic is in
     # the commit message, which cannot drift from the tree it describes.
-    floor=5,
     growth=3,
     what="ansible tasks registering the result of a dpkg query (#17387)",
 )

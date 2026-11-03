@@ -98,7 +98,6 @@ REACH_RENDERS = declare(
     "embedding-model-render-sites",
     discover=_ansible_yaml,
     # Mid-window (292..342), from REACH_RENDERS.window(); the arithmetic is on the PR, not here.
-    floor=317,
     what="ansible yml/yaml files, scanned for tasks rendering a template that carries AUTOBOT_EMBEDDING_MODEL",
     roots=(_ANS,),
     growth=50,

@@ -235,20 +235,14 @@ def _production_files(root: Path) -> list[str]:
     return [rel for rel in tracked if _is_production(rel)]
 
 
-#: FLOOR PINNED 2026-10-19 to 2762 against a measured population of 2887 production files by this
-#: guard's own filter (branch issue-18825-graph-owner-scope; the repo_tests run that reported
-#: "the window against a population of 2887 is [2637, 2887]"). With `growth=250` and `skips=0`
-#: that window is 2637..2887 and 2762 sits mid-window (`_reach` refuses a floor in the bottom 25).
-#: Earlier figure, no longer current: 2555 measured 2026-09-14 (2356 autobot-backend, 195
-#: autobot_shared, 4 infra MCP). The per-root split of 2887 was not recorded in that run. `growth=250`
-#: absorbs ordinary additions, since most feature work adds production modules. That
+#: Production files by this guard's own filter (the floor is computed from the base commit, #19676).
+#: `growth=250` absorbs ordinary additions, since most feature work adds production modules. That
 #: band cannot see a small root vanish, so `test_every_scan_root_is_reached` checks each root
 #: separately. `skips=0`: every discovered file is parsed, and an unparseable one fails the
 #: scan loudly.
 REACH = declare(
     "kb-read-visibility-production-sweep",
     discover=_production_files,
-    floor=2975,  # mid-window: population 3100, window (2850, 3100)
     growth=250,
     skips=0,
     what="production python files",

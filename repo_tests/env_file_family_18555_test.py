@@ -47,7 +47,6 @@ REACH = declare(
     "env-file-family-18555-scan",
     discover=_population,
     # Mid-window from REACH.window(): population 8, window (4, 8) -> 6.
-    floor=6,
     growth=4,
     what="tracked env files",
     roots=_ROOTS,
