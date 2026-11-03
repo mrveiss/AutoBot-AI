@@ -102,7 +102,7 @@ Based on what the source's docs show; the source's approval flow was not establi
 - **A2A:** signed agent cards, trust scores and peer identity (`a2a/`, `api/a2a.py`).
 - **Untrusted content:** `content_firewall.py` screens tool, web, RAG and MCP output, beyond prompt checks.
 - **Third-party connector isolation:** external adapters run as subprocesses over NDJSON (`knowledge/connectors/external_adapter.py`).
-- **Connector credentials:** encrypted through `SecretsService`, with an owner check on load (`knowledge/connectors/credential_store.py:226-283`).
+- **Connector credentials:** encrypted through `SecretsService`, with an owner check on load (`knowledge/connectors/credential_store.py:226-283`). A finished sync may save decrypted credentials (unconfirmed); see #20701.
 
 ### Gaps & Opportunities
 
