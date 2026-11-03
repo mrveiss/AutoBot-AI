@@ -33,6 +33,14 @@ slm_credentials_file: slm-secrets.env
 slm_backend_service: autobot-slm-backend
 slm_backend_host: 127.0.0.1
 slm_backend_port: 8000
+# #20620: the watchdog. Five minutes of failed health checks before restarting a process that is
+# still active, so a slow start isn't killed; a stopped or failed unit is started on the next tick.
+slm_watchdog_interval: 60s
+slm_watchdog_health_timeout: 10
+slm_watchdog_max_health_failures: 5
+# Must match SELF_UPDATE_DETACH_UNIT_PREFIX. A running update holds the watchdog off for this many ticks.
+slm_self_update_unit_prefix: autobot-selfupdate
+slm_watchdog_max_update_ticks: 60
 
 # #14299: every OTHER component role sets its own <component>_redis_host
 # default from the global `redis_host` var (roles/backend, npu-worker,
