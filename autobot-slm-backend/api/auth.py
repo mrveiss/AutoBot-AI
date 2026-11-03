@@ -39,7 +39,7 @@ from models.schemas import (
     TokenRequest,
     TokenResponse,
 )
-from services.auth import auth_service, get_current_user, get_slm_db, require_permission
+from services.auth import ADMIN_ONLY_DETAIL, auth_service, get_current_user, get_slm_db, require_permission
 from services.database import get_db
 from services.token_denylist import revoke_jti
 from user_management.models.sso import SSOProviderType, UserSSOLink
@@ -111,6 +111,27 @@ async def _reject_failed_login(
     )
 
 
+async def _refuse_non_admin(audit_db: AsyncSession, user, client_ip: str) -> None:
+    """Record the refused login and raise 403: the SLM is for admins only (#20628)."""
+    await create_audit_log(
+        audit_db,
+        category="authentication",
+        action="auth.login",
+        user_id=str(user.id),
+        username=user.username,
+        ip_address=client_ip,
+        resource_type="session",
+        description=f"Refused login for '{user.username}': not an administrator",
+        request_method="POST",
+        request_path="/api/auth/login",
+        response_status=403,
+        success=False,
+        error_message=ADMIN_ONLY_DETAIL,
+    )
+    await audit_db.commit()
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ADMIN_ONLY_DETAIL)
+
+
 @router.post(
     "/login",
     response_model=TokenResponse | MfaChallengeResponse,
@@ -139,6 +160,9 @@ async def login(
 
     if not user:
         await _reject_failed_login(audit_db, client_ip, body.username, locked_wait)
+
+    if not user.is_platform_admin:  # #20628: before MFA, so a non-admin gets no challenge either
+        await _refuse_non_admin(audit_db, user, client_ip)
 
     if user.mfa_enabled:
         await create_audit_log(

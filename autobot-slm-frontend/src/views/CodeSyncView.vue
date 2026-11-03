@@ -35,6 +35,7 @@ import { getCommitHashDisplay, getCommitUrl } from '@/utils/commitHashUtils'
 import ScheduleModal from '@/components/ScheduleModal.vue'
 import CodeSourceModal from '@/components/CodeSourceModal.vue'
 import FullTreeDriftPanel from '@/components/FullTreeDriftPanel.vue' // #16310
+import UpdateProgressPanel from '@/components/UpdateProgressPanel.vue' // #20254
 import { useCodeSource } from '@/composables/useCodeSource'
 
 const logger = createLogger('CodeSyncView')
@@ -1071,7 +1072,6 @@ onUnmounted(() => {
           </template>
         </div>
 
-        <!-- Expanded stage logs -->
         <template v-for="stage in updateAllJob.stages" :key="`log-${stage.name}`">
           <div
             v-if="expandedStageLogs.has(stage.name) && stage.log_lines.length > 0"
@@ -1132,9 +1132,9 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <UpdateProgressPanel :active="updateAllIsRunning" :since="updateAllJob?.created_at" class="mb-6" />
     <!-- #12593: reconnecting / lost-contact banner. Shows IMMEDIATELY (spinner)
-         during the stage-3 self-restart window; escalates to a static warning
-         with a retry CTA only once polling has lost contact / given up. -->
+         during the stage-3 self-restart window; a static warning once polling gives up. -->
     <BaseAlert
       v-if="updateAllLostContact || updateAllReconnecting"
       variant="warning"
