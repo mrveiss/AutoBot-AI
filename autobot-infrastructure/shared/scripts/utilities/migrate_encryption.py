@@ -34,6 +34,7 @@ for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):  # the backend, and `
         sys.path.insert(0, str(_root))
 
 # Import AutoBot modules after path setup
+from autobot_shared.ssot_config import config as ssot_config  # noqa: E402
 from chat_history import ChatHistoryManager  # noqa: E402
 
 from config import config as global_config_manager  # noqa: E402
@@ -66,7 +67,7 @@ class ChatEncryptionMigrator:
         data_config = global_config_manager.get("data", {})
         return data_config.get(
             "chats_directory",
-            os.getenv("AUTOBOT_CHATS_DIRECTORY", "data/chats"),
+            ssot_config.misc.chats_directory or "data/chats",
         )
 
     def backup_file(self, file_path: str) -> str:

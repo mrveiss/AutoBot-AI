@@ -28,7 +28,7 @@ from sqlalchemy.orm import InstanceState
 
 from autobot_shared.logging_manager import get_logger
 
-from ..models.enums import ApprovalStatus, HeartbeatInvocationSource
+from ..models.enums import ApprovalStatus, ApprovalType, HeartbeatInvocationSource
 from .mention_parser import new_mentions, parse_mentions
 
 logger = get_logger(__name__)
@@ -100,10 +100,17 @@ async def wake_for_comment(session: AsyncSession, comment: Any) -> List[uuid.UUI
     return ([run_id] if run_id is not None else []) + mentioned
 
 
+def _decided_wake_ref(approval: Any) -> Any:
+    """Who hears a decision: the agent a budget override names, since a person may have asked for it (#8214)."""
+    if approval.approval_type == ApprovalType.BUDGET_OVERRIDE.value:
+        return (approval.context or {}).get("agent_id") or approval.requested_by_agent
+    return approval.requested_by_agent
+
+
 async def wake_for_decided_approval(session: AsyncSession, approval: Any, status: str) -> Optional[uuid.UUID]:
-    """Wake the agent that requested *approval* once it is approved or rejected."""
+    """Wake the agent *approval* concerns once it is approved or rejected."""
     if status not in _DECIDED or approval.company_id is None or not approval.requested_by_agent:
         return None
     context = {"approval_id": str(approval.id), "approval_status": status}
     reason = HeartbeatInvocationSource.APPROVAL_DECIDED
-    return await _wake(session, approval.company_id, approval.requested_by_agent, reason, context)
+    return await _wake(session, approval.company_id, _decided_wake_ref(approval), reason, context)

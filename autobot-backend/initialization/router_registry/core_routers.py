@@ -42,6 +42,7 @@ from api.chat_trace import router as chat_trace_router  # #19963
 from api.collaboration import router as collaboration_router
 from api.collaboration_events import router as collaboration_events_router  # #16460
 from api.config_revisions import router as config_revisions_router  # #1404
+from api.conversation_file_cleanup_admin import router as conversation_file_cleanup_router  # #20234
 from api.coordination import router as coordination_router  # #15949
 from api.coordination_issue_claims import router as coordination_issue_claims_router  # #18811
 from api.coordination_issue_claims_credential import router as issue_claims_credential_router  # #18811
@@ -169,6 +170,7 @@ def _get_system_routers() -> list:
         (users_router, "", ["users"], "users"),
         (mobile_devices_router, "/devices", ["devices", "integrations"], "mobile_devices"),  # GH#4463
         (data_storage_router, "", ["data-storage"], "data_storage"),
+        (conversation_file_cleanup_router, "/conversation-files", ["conversation-files"], "conversation_file_cleanup"),
         (prompts_router, "/prompts", ["prompts"], "prompts"),
         (frontend_config_router, "", ["frontend-config"], "frontend_config"),
     ]
