@@ -77,6 +77,13 @@ export const monitoringChildren: RouteRecordRaw[] = [
     component: () => import('@/views/monitoring/RumMonitor.vue'),
     meta: { title: 'Real User Monitoring', parent: 'monitoring', admin: true }
   },
+  // #19484: this install's own metrics, read from the main backend; admin only like the screens above
+  {
+    path: 'install',
+    name: 'monitoring-install',
+    component: () => import('@/views/monitoring/InstallMetrics.vue'),
+    meta: { title: 'Install metrics', parent: 'monitoring', admin: true }
+  },
   // Issue #752: Performance — moved from standalone /performance into monitoring
   // #19851: the performance sections are children of PerformanceView, which owns the
   // route's one performance poll; the overview reads it instead of polling again.

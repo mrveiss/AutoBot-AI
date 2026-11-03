@@ -1733,6 +1733,105 @@
         "label": "Latest events pages",
         "summary": "Page {page} of {count}"
       }
+    },
+    "installMetrics": {
+      "title": "Install metrics",
+      "subtitle": "This install's own monitoring figures from the main backend: host, services, alerts, recommendations, GPU and NPU. Updated every 15 seconds.",
+      "refresh": "Refresh",
+      "loading": "Reading install metrics...",
+      "unavailableTitle": "The main app is not available",
+      "unavailableBody": "The main backend did not answer any install metrics request. No figures are shown, because any shown now would be out of date. Polling stops after repeated failures; use Refresh to read again.",
+      "sectionFailedTitle": "{section} could not be read",
+      "sectionFailedBody": "The install metrics request failed.",
+      "emptyTitle": "Nothing reported yet",
+      "emptyBody": "The main backend answered and reports no host figures, services, alerts, recommendations or devices.",
+      "notReported": "Not reported",
+      "percent": "{value}%",
+      "celsius": "{n} °C",
+      "watts": "{n} W",
+      "ms": "{n} ms",
+      "hours": "{n} h",
+      "readAt": "Read {time}",
+      "sections": {
+        "dashboard": "Host metrics",
+        "services": "Service health",
+        "alerts": "Alerts",
+        "recommendations": "Recommendations",
+        "gpu": "GPU",
+        "npu": "NPU"
+      },
+      "system": {
+        "title": "Host"
+      },
+      "gpu": {
+        "title": "GPU",
+        "absent": "The main backend reports no GPU on this install."
+      },
+      "npu": {
+        "title": "NPU",
+        "absent": "The main backend reports no NPU on this install."
+      },
+      "stat": {
+        "cpu": "CPU",
+        "memory": "Memory",
+        "disk": "Disk",
+        "processes": "Processes",
+        "overallHealth": "Overall health",
+        "performanceScore": "Performance score",
+        "gpuName": "Device",
+        "gpuUtilization": "Utilization",
+        "gpuMemory": "Memory utilization",
+        "gpuTemperature": "Temperature",
+        "gpuPower": "Power",
+        "npuUtilization": "Utilization",
+        "npuAcceleration": "Acceleration ratio",
+        "npuInferences": "Inferences"
+      },
+      "services": {
+        "title": "Services",
+        "summary": "{healthy} of {total} services healthy, overall {status}",
+        "empty": "The backend reports no services.",
+        "col": {
+          "name": "Service",
+          "status": "وضعیت",
+          "endpoint": "Endpoint",
+          "response": "Response",
+          "score": "Health score",
+          "uptime": "زمان کارکرد"
+        }
+      },
+      "alerts": {
+        "title": "Alerts",
+        "empty": "The backend reports no active alerts."
+      },
+      "recommendations": {
+        "title": "Recommendations",
+        "empty": "The backend has no optimization recommendations.",
+        "action": "Action: {action}"
+      },
+      "status": {
+        "healthy": "سالم",
+        "degraded": "تخریب‌شده",
+        "critical": "Critical",
+        "offline": "Offline"
+      },
+      "health": {
+        "healthy": "healthy",
+        "degraded": "degraded",
+        "critical": "critical",
+        "unknown": "unknown"
+      },
+      "severity": {
+        "critical": "Critical",
+        "high": "بالا",
+        "warning": "هشدار",
+        "info": "اطلاعات"
+      },
+      "priority": {
+        "high": "بالا",
+        "medium": "متوسط",
+        "low": "Low"
+      }
     }
   },
   "monitoringView": {
@@ -1752,7 +1851,8 @@
       "performance": "کارایی",
       "agentLedger": "دفتر عامل‌ها",
       "validation": "Validation",
-      "rum": "Real user monitoring"
+      "rum": "Real user monitoring",
+      "install": "Install metrics"
     }
   },
   "orchestration": {

@@ -44,9 +44,9 @@ async function tabLabels(isAdmin: boolean): Promise<string[]> {
 }
 
 describe('MonitoringView tabs', () => {
-  it('offers an admin every section, the agent ledger, validation and RUM included, labelled from the locale', async () => {
+  it('offers an admin every section, the agent ledger, validation, RUM and install metrics included, labelled from the locale', async () => {
     expect(await tabLabels(true)).toEqual([
-      TABS.system, TABS.logs, TABS.dashboards, TABS.alerts, TABS.errors, TABS.backendHealth, TABS.performance, TABS.agentLedger, TABS.validation, TABS.rum,
+      TABS.system, TABS.logs, TABS.dashboards, TABS.alerts, TABS.errors, TABS.backendHealth, TABS.performance, TABS.agentLedger, TABS.validation, TABS.rum, TABS.install,
     ])
   })
 
