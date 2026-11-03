@@ -1,0 +1,88 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# #20750: the backend's AUTOBOT_INTERNAL_API_KEY, resolved one way for install and update.
+#
+# The SLM sends its own key (slm-secrets.env) on every call into the backend, so that key is the
+# canonical source (#11507). Install took it from there, but every update read the backend's own
+# env file and rendered that back. Once the two differed, the backend kept refusing the SLM:
+# 118 System-vault calls answered 401 over seven days, with nothing visible.
+#
+# One rule now, for both paths:
+#   - no current key on the backend (a fresh install): render the canonical key;
+#   - a current key equal to the canonical one: render it, nothing changes;
+#   - a current key that DIFFERS: keep the backend's key for this run and say so. Replacing a
+#     stored credential needs the owner's approval (#17038), never a silent rewrite; that action
+#     is #20750's second half. The SLM also records the refusal it sees as an admin-visible
+#     finding (services/backend_key_finding.py).
+#
+# The canonical read is on the SLM host, as read_redis_password.yml's is (owner decision
+# 2026-09-13): the SLM runs every playbook, so `delegate_to: localhost` reaches its own file.
+#
+# `internal_api_key_canonical_file` defaults to the SLM's /etc/autobot/slm-secrets.env (tests point it
+# elsewhere). Caller sets `internal_api_key_current_env_files`: the backend env files to read the current key
+# from, first non-empty wins. Sets `autobot_internal_api_key` and `internal_api_key_mismatch`.
+---
+
+- name: "Internal key | Stat the SLM's slm-secrets.env (#12145)"
+  ansible.builtin.stat:
+    path: "{{ internal_api_key_canonical_file | default('/etc/autobot/slm-secrets.env') }}"
+  register: _internal_key_slm_secrets_stat
+  delegate_to: localhost
+  run_once: true
+  become: false  # as read_redis_password.yml: the SLM reads its own file
+
+- name: "Internal key | Read the SLM's AUTOBOT_INTERNAL_API_KEY, the canonical source (#11507, #20750)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -oP '^AUTOBOT_INTERNAL_API_KEY=\K.*'
+      {{ internal_api_key_canonical_file | default('/etc/autobot/slm-secrets.env') | quote }} 2>/dev/null | tail -n 1 || true
+  register: _internal_key_canonical
+  changed_when: false
+  failed_when: false
+  delegate_to: localhost
+  run_once: true
+  become: false  # as read_redis_password.yml: the SLM reads its own file
+  no_log: true
+  # #12145: retry a transient empty read (the file mid-write during a concurrent deploy); stops at
+  # once when the file is absent.
+  until: >-
+    (_internal_key_canonical.stdout | default('') | trim | length > 0)
+    or (not (_internal_key_slm_secrets_stat.stat.exists | default(false)))
+  retries: 5
+  delay: 2
+
+- name: "Internal key | Read the backend's current AUTOBOT_INTERNAL_API_KEY (#20750)"
+  ansible.builtin.shell:
+    cmd: >-
+      for f in {{ internal_api_key_current_env_files | map('quote') | join(' ') }}; do
+      v=$(grep -oP '^AUTOBOT_INTERNAL_API_KEY=\K.*' "$f" 2>/dev/null | tail -n 1);
+      [ -n "$v" ] && { printf '%s' "$v"; exit 0; }; done; true
+  register: _internal_key_current
+  changed_when: false
+  failed_when: false
+  become: true
+  no_log: true
+
+- name: "Internal key | Resolve the key to render (#20750)"
+  ansible.builtin.set_fact:
+    autobot_internal_api_key: >-
+      {{ (_internal_key_current.stdout | default('') | trim)
+         or (_internal_key_canonical.stdout | default('') | trim)
+         or (autobot_internal_api_key | default('')) }}
+    internal_api_key_mismatch: >-
+      {{ (_internal_key_current.stdout | default('') | trim | length > 0)
+         and (_internal_key_canonical.stdout | default('') | trim | length > 0)
+         and (_internal_key_current.stdout | trim) != (_internal_key_canonical.stdout | trim) }}
+  no_log: true
+
+- name: "Internal key | WARNING: the backend's key differs from the SLM's; kept, not rewritten (#20750)"
+  ansible.builtin.debug:
+    msg: >-
+      FINDING #20750: the backend's AUTOBOT_INTERNAL_API_KEY differs from the SLM's, so the backend
+      refuses every SLM call into it (System vault, the voice, personality and memory proxies, VNC
+      registration). This run KEPT the backend's key: re-aligning it is a credential change that
+      needs the owner's approval (#17038). Nothing was rewritten.
+  when: internal_api_key_mismatch | bool
