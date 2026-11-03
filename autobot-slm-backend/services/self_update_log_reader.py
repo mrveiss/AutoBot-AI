@@ -32,6 +32,7 @@ logger = get_logger(__name__)
 _PLAY_HEADER = re.compile(r"^PLAY \[(?P<name>[^\]]*)\]", re.MULTILINE)
 _NODES_OFFLINE = re.compile(r"NODES OFFLINE AFTER UPDATE:\s+(\d+)\s+of\s+(\d+)")  # #20250: update-all-nodes.yml
 _PLAY_RECAP = re.compile(r"^PLAY RECAP", re.MULTILINE)
+TASK_LINE = re.compile(r"^TASK \[(?P<name>.*?)\] \*+\s*$", re.MULTILINE)
 # RECAP lines look like: host : ok=12 changed=3 unreachable=0 failed=0 skipped=1
 _RECAP_COUNTS = re.compile(r"\b(?P<key>failed|unreachable)=(?P<count>\d+)")
 
@@ -118,6 +119,7 @@ class SelfUpdateVerdict:
     #: `degraded`: failing the self-update stage would stop Update All from reaching those very nodes.
     nodes_offline: int = 0
     nodes_total: int = 0
+    last_task: str | None = None  # #20254: raw from the log; a caller showing it redacts it
 
     @property
     def degraded(self) -> bool:
@@ -290,6 +292,7 @@ def read_self_update_verdict(log_path: Path, not_before: str | None = None) -> S
         from_rotated_log=from_rotated,
         rotated_log_mtime=source.rotated_age,
         run_started_at=run_started_at,
+        last_task=tasks[-1].group("name") if (tasks := list(TASK_LINE.finditer(text))) else None,
     )
     verdict.reason = _describe(verdict)
     if verdict.degraded:

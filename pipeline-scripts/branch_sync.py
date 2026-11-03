@@ -106,6 +106,11 @@ class Git:
         listed = self.out("for-each-ref", "--format=%(refname:lstrip=3)", "refs/remotes/origin")
         return [line for line in (listed or "").splitlines() if line]
 
+    def being_pushed(self) -> set:
+        """Branches a pre-push hook is gating right now; asked just before each merge (#20260)."""
+        listed = self.out("ls-remote", "origin", f"{core.PUSH_MARKER_PREFIX}*")
+        return core.branches_being_pushed(listed or "", time.time())
+
     def behind(self, branch: str, base: str) -> Optional[int]:
         count = self.out("rev-list", "--count", f"origin/{branch}..origin/{base}")
         return int(count) if count and count.isdigit() else None
@@ -331,6 +336,10 @@ def run(git: Git, gh: SyncApi, base: str, dry_run: bool) -> Dict[str, List[str]]
     results: Dict[str, List[str]] = {key: list(items) for key, items in plan.skipped.items()}
     syncer = Syncer(git, gh, base, dry_run)
     for target in plan.targets:
+        if target.branch in git.being_pushed():
+            _emit(f"{core.PUSH_IN_PROGRESS:>18}  {target.name}  next run syncs it")
+            results.setdefault(core.PUSH_IN_PROGRESS, []).append(target.name)
+            continue
         outcome, detail = syncer.sync(target)
         _emit(f"{outcome:>18}  {target.name}  {detail}")
         results.setdefault(outcome, []).append(f"{target.name}{' — ' + detail if detail else ''}")
