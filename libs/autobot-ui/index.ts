@@ -167,6 +167,8 @@ export {
   DEFAULT_DATE_TIME_INTL
 } from './src/utils/format'
 export type { DateInput, DateFormatterOptions, FormatRelativeTimeOptions } from './src/utils/format'
+// Saving a file from the browser, the one implementation (#20770).
+export { saveBlob, saveTextFile, saveUrl } from './src/utils/saveFile'
 
 // Scoped console logger (#14908) — canonical LogLevel/log/createLogger; both
 // apps' utils/debugUtils.ts re-export these rather than re-declaring them.

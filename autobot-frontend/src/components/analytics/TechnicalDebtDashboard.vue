@@ -436,7 +436,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import TruncationNotice from './TruncationNotice.vue';
-import { BaseModal, BaseButton } from '@autobot/ui'
+import { BaseModal, BaseButton, saveTextFile } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils';
 import { getCssVar } from '@/composables/useCssVars'
@@ -705,13 +705,7 @@ async function loadTrends(): Promise<void> {
 async function exportReport(): Promise<void> {
   try {
     const markdownContent = await fetchReportBlob();
-    const blob = new Blob([markdownContent], { type: 'text/markdown' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `technical-debt-report-${new Date().toISOString().split('T')[0]}.md`;
-    a.click();
-    window.URL.revokeObjectURL(url);
+    saveTextFile(markdownContent, `technical-debt-report-${new Date().toISOString().split('T')[0]}.md`, 'text/markdown');
   } catch (error) {
     logger.error('Failed to export report:', error);
   }
