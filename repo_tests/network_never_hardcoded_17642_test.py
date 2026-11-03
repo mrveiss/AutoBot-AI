@@ -184,7 +184,7 @@ def _compose_hosts() -> dict[str, int]:
 def test_the_management_network_has_no_built_in_range() -> None:
     subnet = _compose()["networks"]["autobot-mgmt"]["ipam"]["config"][0]["subnet"]
     assert subnet.startswith("${AUTOBOT_DOCKER_MGMT_PREFIX:?") and subnet.endswith("}.0/24"), subnet
-    assert len(_compose_hosts()) == 8
+    assert len(_compose_hosts()) == 9  # +1: autobot-slm-postgres (.18), #20639
     assert "172.30." not in (_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
 
 

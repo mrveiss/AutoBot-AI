@@ -1622,7 +1622,7 @@
       },
       "trends": {
         "title": "Trends",
-        "note": "The backend builds these series from a fixed placeholder formula, not from stored history, so they show shape only and are not measurements.",
+        "note": "No stored trend history is available yet, so the backend sends no trend series.",
         "empty": "The backend sent no trend series",
         "col": {
           "series": "Series",
@@ -2743,6 +2743,9 @@
         "online": "Tiešsaistē",
         "pairNewWorker": "Pair New Worker",
         "pairWorker": "Pair Worker",
+        "assignedNotPaired": "{hostname} has the NPU worker role in the SLM but isn't paired, so it gets no work yet.",
+        "assignedPairFailed": "Could not pair the NPU worker on {hostname}. Check that it is running, then try again.",
+        "assignedReadFailed": "Could not read which nodes have the NPU worker role, so a node waiting to be paired may be missing here.",
         "pairYourFirstWorker": "Pair Your First Worker",
         "platform": "Platform *",
         "port": "Port *",

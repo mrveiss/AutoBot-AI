@@ -400,7 +400,7 @@ onMounted(async () => {
 
 .preview-steps { display: flex; flex-direction: column; gap: var(--spacing-3); }
 .preview-step { display: flex; gap: var(--spacing-3); padding: var(--spacing-3); background: var(--bg-tertiary); border-radius: var(--radius-lg); }
-.step-num { width: 24px; height: 24px; background: var(--color-primary); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); font-weight: 600; flex-shrink: 0; }
+.step-num { width: 24px; height: 24px; background: var(--color-primary); color: var(--text-on-primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); font-weight: 600; flex-shrink: 0; }
 .step-content { flex: 1; min-width: 0; }
 .step-desc { display: block; font-size: var(--text-sm); color: var(--text-primary); margin-bottom: var(--spacing-1); }
 .step-content code { display: block; padding: var(--spacing-1-5) var(--spacing-2); background: var(--bg-primary); border-radius: var(--radius-default); font-size: var(--text-xs); color: var(--text-secondary); overflow-x: auto; }
