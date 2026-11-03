@@ -11,7 +11,7 @@ on:
   # ruleset rule is enabled -- this event does not exist before then.
   merge_group:
   push:
-    branches: [ release, main, develop ]
+    branches: [ release, main ]
     paths:
       - '**/*.py'
       - '**/*.sh'
@@ -84,7 +84,7 @@ on:
     # draft == false, and marking a PR ready fires ONLY this event. Without
     # it a required context stays `skipped` and the PR can never merge.
     types: [opened, synchronize, reopened, ready_for_review]
-    branches: [ release, main, develop ]
+    branches: [ release, main ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
