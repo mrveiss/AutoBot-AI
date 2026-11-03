@@ -5,10 +5,10 @@
 # Core Web Framework
 fastapi  # version from constraints/shared.txt (#18060); SECURITY UPDATE - requires starlette >=0.52.1 (#15661)
 uvicorn[standard]>=0.54.0
-pydantic>=2.5.0
+pydantic>=2.14.2
 
 # Async HTTP Client
-aiohttp>=3.14.3  # GH#8323 + #17304: 3.14.3 is the patched floor every sibling manifest already uses
+aiohttp>=3.14.5  # GH#8323 + #17304: 3.14.3 is the patched floor every sibling manifest already uses
 
 # Redis Client
 redis>=8.1.0
@@ -28,7 +28,7 @@ redis>=8.1.0
 #   - device_type='NPU' for Intel Neural Processing Unit
 #   - device_type='GPU' for Intel integrated/discrete GPU
 #   - device_type='CPU' for fallback
-onnxruntime-openvino>=1.17.0
+onnxruntime-openvino>=1.24.1
 
 # OpenVINO toolkit for device enumeration and advanced features
 # Required for Core().available_devices to detect NPU/GPU/CPU
@@ -39,24 +39,24 @@ openvino  # version from constraints/shared.txt
 # HuggingFace for model downloading and tokenizers
 # #15298: was an unbounded transformers>=4.36.0 -- a fresh resolve could land on any
 # 5.x release, including the one that dropped `resume_download` (#15054). Exact-pinned
-# to 5.16.1 to match requirements-ci/ai-ml.txt's `transformers==5.16.1`, which is this
+# to 5.16.1 to match requirements-ci/ai-ml.txt's `transformers==5.22.1`, which is this
 # tree's convention for a reproducible, already-vetted version rather than an open floor.
 # The three `from_pretrained` calls in app/npu_worker.py (AutoTokenizer x2, AutoModel)
 # pass only `trust_remote_code`, which 5.16.1 still accepts (verified against PyPI
 # metadata, no execution) -- the same read-only method #15054 used.
-transformers==5.16.1
+transformers==5.22.1
 tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a floor above
                           # that is unsatisfiable. Matches the ai-stack and npu-worker-docker
                           # siblings now that #15298 aligned this file's transformers pin with
                           # theirs -- the old 0.15.0 floor existed only to avoid narrowing the
                           # range for this file's formerly older, independent transformers>=4.36.0.
-sentencepiece>=0.1.99
-sentence-transformers>=2.2.0
-einops>=0.7.0
+sentencepiece>=0.2.2
+sentence-transformers>=6.2.0
+einops>=0.8.2
 
 # ONNX model format and export
-onnx>=1.14.0
-onnxscript>=0.1.0
+onnx>=1.23.2
+onnxscript>=0.7.2
 
 # =============================================================================
 # PyTorch (CPU-only for model downloading and ONNX export)
@@ -72,20 +72,20 @@ torch  # version from constraints/shared.txt (#19330); its pin is above the GH#8
 # =============================================================================
 -c ../../../constraints/shared.txt  # single source of truth for shared versions (#10524)
 numpy  # version from constraints/shared.txt
-scikit-learn>=1.3.0
+scikit-learn>=1.9.1
 
 # Structured Logging
 structlog>=26.1.0
 
 # Configuration Management
-pyyaml>=6.0.1
-python-dotenv>=1.0.0
+pyyaml>=6.0.3
+python-dotenv>=1.2.4
 
 # Additional Dependencies
-typing-extensions>=4.8.0
+typing-extensions>=4.16.0
 
 # Network Interface Detection
 netifaces>=0.11.0
 
 # GUI Dependencies (for standalone GUI application)
-PySide6>=6.6.0
+PySide6>=6.12.0
