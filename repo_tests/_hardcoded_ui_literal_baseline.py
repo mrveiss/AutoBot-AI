@@ -20,7 +20,9 @@ English literals it contains, where:
   * attribute: a static (unbound) `placeholder`, `title`, `alt`, `aria-label`,
     `aria-description` or `label` whose value passes the same prose test;
   * script: in `<script>`, matching
-    one of `.value =`, `message:`, `title:`, `confirm(`, `alert(`, `Error(` followed by a
+    one of `.value =`, `message:`, `title:`, `label:`, `zeroText:` (the last two added in
+    #19885; the 120 sites they brought in are a one-time recorded freeze, see
+    RATCHET_BASELINES.md), `confirm(`, `alert(`, `Error(` followed by a
     quoted string starting with a capital then a lower-case letter, closed by the SAME quote
     character it opened with (`_SCRIPT_LITERAL` in `_ui_literal_scan.py`).
 

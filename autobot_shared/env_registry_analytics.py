@@ -63,3 +63,38 @@ register_env_var(
         component="backend",
     )
 )
+
+# --- indexing subprocess watchdog (#18057) ------------------------------------
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_INDEXING_HARD_TIMEOUT",
+        type=int,
+        default=1800,
+        description="Seconds a codebase indexing subprocess may run in total before it is killed.",
+        component="analytics",
+        range=(60, 86400),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_INDEXING_PROGRESS_TIMEOUT",
+        type=int,
+        default=300,
+        description="Seconds a codebase indexing subprocess may show no progress before it is killed.",
+        component="analytics",
+        range=(30, 14400),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_INDEXING_WATCHDOG_INTERVAL",
+        type=int,
+        default=30,
+        description="Seconds between the indexing watchdog's progress checks.",
+        component="analytics",
+        range=(1, 300),
+    )
+)
