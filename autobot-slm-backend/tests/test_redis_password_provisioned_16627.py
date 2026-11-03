@@ -118,7 +118,7 @@ _CONSUMERS = [
     ("roles/backend/tasks/main.yml", "backend_redis_password", "backend_redis_username", "backend.env.j2"),
     ("roles/backend/tasks/env_only.yml", "backend_redis_password", "backend_redis_username", "backend.env.j2"),
     ("roles/redis/tasks/main.yml", "redis_client_password", "redis_username", "Wait for Redis to be ready"),
-    ("roles/ai-stack/tasks/main.yml", "ai_redis_password", "ai_redis_username", "ai-stack.env.j2"),
+    ("roles/ai-stack/tasks/env_files.yml", "ai_redis_password", "ai_redis_username", "ai-stack.env.j2"),  # #20724
 ]
 
 
