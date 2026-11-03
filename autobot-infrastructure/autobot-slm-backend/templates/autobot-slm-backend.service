@@ -11,7 +11,7 @@ WorkingDirectory=/opt/autobot/autobot-slm-backend
 Environment="PATH=/opt/autobot/autobot-slm-backend/venv/bin:/usr/local/bin:/usr/bin:/bin"
 ExecStart=/opt/autobot/autobot-slm-backend/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000
 ExecReload=/bin/kill -HUP $MAINPID
-Restart=on-failure
+Restart=always
 RestartSec=5
 # Issue #4309: Use LogsDirectory= for proper ownership instead of StandardOutput=append
 LogsDirectory=autobot
