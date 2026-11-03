@@ -14,8 +14,9 @@ from pathlib import Path
 import jinja2
 import pytest
 import yaml
+from repo_tests._paths import repo_root
 
-_ROOT = Path(__file__).resolve().parents[1]
+_ROOT = repo_root()
 _ROLE = _ROOT / "autobot-slm-backend" / "ansible" / "roles" / "slm_manager"
 _VARS = {
     "ansible_managed": "test",
