@@ -22,18 +22,24 @@ Environment:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
-import ssl
 import subprocess  # nosec B404  # runs the one model kind script, with a fixed argv
 import sys
 import time
-import urllib.error
-import urllib.request
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, List, Mapping, Optional, Tuple
+
+import requests
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from autobot_shared.http_egress_guard import EgressBlockedError, assert_egress_policy  # noqa: E402
 
 CHAT_PROMPT = "Reply with one short sentence."
 EMBEDDING_PROBE = "embedding_model"
@@ -72,15 +78,19 @@ def _request(
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    data = None if payload is None else json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(url, data=data, headers=headers, method=method or None)  # nosec B310
-    try:  # a CA file that can't be read is a named failure too, not a traceback
-        context = ssl.create_default_context(cafile=cafile) if url.startswith("https:") else None
-        with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT_S, context=context) as reply:  # nosec B310
-            return reply.status, reply.read().decode("utf-8", "replace")
-    except urllib.error.HTTPError as exc:
-        return exc.code, exc.read().decode("utf-8", "replace")
-    except (urllib.error.URLError, OSError) as exc:
+    try:  # a refused address, a CA file that can't be read, a refused connection: a named failure, not a traceback
+        asyncio.run(assert_egress_policy(url))  # rule 8: the install's own front door is an internal origin
+        reply = requests.request(
+            method or ("GET" if payload is None else "POST"),
+            url,
+            json=payload,
+            headers=headers,
+            timeout=REQUEST_TIMEOUT_S,
+            allow_redirects=False,
+            verify=cafile or True,
+        )
+        return reply.status_code, reply.text
+    except (EgressBlockedError, requests.RequestException, OSError) as exc:
         return 0, str(exc)
 
 
