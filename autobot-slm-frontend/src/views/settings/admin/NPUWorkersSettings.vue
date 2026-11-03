@@ -4,9 +4,7 @@
 
 <script setup lang="ts">
 /**
- * NPUWorkersSettings - NPU Worker Management
- *
- * Migrated from main AutoBot frontend for Issue #729.
+ * NPUWorkersSettings - NPU Worker Management (#729).
  * Provides management of distributed NPU workers for AI processing.
  */
 
@@ -16,6 +14,7 @@ import { useAutobotApi, type NPUWorker } from '@/composables/useAutobotApi'
 import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { createLogger } from '@/utils/debugUtils'
 import { BaseAlert, BaseModal, PollingPausedAlert } from '@autobot/ui'
+import NPUAssignedWorkersPanel from './NPUAssignedWorkersPanel.vue'
 
 const logger = createLogger('NPUWorkersSettings')
 
@@ -312,6 +311,7 @@ onMounted(() => {
         </button>
       </div>
 
+      <NPUAssignedWorkersPanel @paired="fetchWorkers" />
       <!-- Stats Grid -->
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div class="p-4 bg-gray-50 rounded-lg text-center">

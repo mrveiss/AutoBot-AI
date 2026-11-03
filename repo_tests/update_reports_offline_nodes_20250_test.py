@@ -4,15 +4,12 @@
 # Author: mrveiss
 """#20250: the update waits for nodes, and its marker matches what the log reader looks for."""
 
-from pathlib import Path
-
 import pytest
 import yaml
 from jinja2 import Environment, StrictUndefined
+from repo_tests._paths import repo_root
 
-_PLAYBOOK = (
-    Path(__file__).resolve().parents[1] / "autobot-slm-backend" / "ansible" / "playbooks" / "update-all-nodes.yml"
-)
+_PLAYBOOK = repo_root() / "autobot-slm-backend" / "ansible" / "playbooks" / "update-all-nodes.yml"
 _SNAPSHOT = "[PRE-FLIGHT] Count the nodes online before the update"
 _WAIT = "Wait for the nodes to report back"
 _REPORT = "Report nodes still offline after the update"
