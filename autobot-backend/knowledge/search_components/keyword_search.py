@@ -10,9 +10,12 @@ Issue #1720: Upgraded keyword scoring to BM25 Okapi (IDF + length normalization)
 Contains keyword-based search functionality using Redis.
 """
 
+import asyncio
 import json
+import time
 from typing import Any, Dict, List, Set
 
+from autobot_shared.env_utils import env_float_clamped, env_int_clamped
 from autobot_shared.logging_manager import get_logger
 
 from .bm25 import BM25Scorer
@@ -23,6 +26,10 @@ logger = get_logger(__name__)
 _CORPUS_STATS_KEY = "bm25:corpus_stats"
 _DEFAULT_TOTAL_DOCS = 1
 _DEFAULT_AVG_LENGTH = 50.0
+#: A recompute reads every fact, so writes in quick succession share one (#19726).
+BM25_REFRESH_MIN_INTERVAL_S = env_float_clamped("AUTOBOT_KB_BM25_REFRESH_MIN_INTERVAL_S", 60.0, 1.0, 3600.0)
+#: Facts one keyword search reads at most: without an index it reads them one by one (#19726).
+KEYWORD_SEARCH_MAX_SCAN = env_int_clamped("AUTOBOT_KB_KEYWORD_SEARCH_MAX_SCAN", 10000, 100, 1000000)
 
 
 class KeywordSearcher:
@@ -41,6 +48,10 @@ class KeywordSearcher:
         """Initialize keyword searcher with Redis client."""
         self.redis_client = redis_client
         self._bm25: BM25Scorer | None = None
+        self._refresh_wanted = False
+        self._refresh_task: asyncio.Task | None = None
+        self._next_refresh = float("-inf")
+        self._flush = asyncio.Event()
 
     # ------------------------------------------------------------------
     # Corpus statistics
@@ -92,15 +103,15 @@ class KeywordSearcher:
         """Discard cached BM25Scorer so the next search reloads from Redis."""
         self._bm25 = None
 
-    async def recompute_corpus_stats(self) -> None:
+    async def recompute_corpus_stats(self) -> bool:
         """
         Scan all ``fact:*`` keys and persist BM25 corpus stats to Redis (#1720).
 
         Call this after facts are added or removed so IDF values stay current.
-        Stats are stored as JSON at ``bm25:corpus_stats``.
+        Stats are stored as JSON at ``bm25:corpus_stats``. Returns whether they were.
         """
         if not self.redis_client:
-            return
+            return False
         try:
             total_docs = 0
             total_length = 0
@@ -144,8 +155,42 @@ class KeywordSearcher:
                 avg_len,
                 len(doc_freq),
             )
+            return True
         except Exception as exc:
             logger.error("Failed to recompute BM25 corpus stats: %s", exc)
+            return False
+
+    def request_refresh(self) -> None:
+        """Ask for a recompute after a write: one runs at a time, at most once per interval (#19726)."""
+        self._refresh_wanted = True
+        if self._refresh_task is None or self._refresh_task.done():
+            self._refresh_task = asyncio.create_task(self._run_refreshes())
+
+    async def _wait_for_next_refresh(self) -> None:
+        """Until the interval has passed, or a flush asks for it now."""
+        delay = self._next_refresh - time.monotonic()
+        if delay > 0:
+            try:
+                await asyncio.wait_for(self._flush.wait(), delay)
+            except TimeoutError:
+                pass
+
+    async def _run_refreshes(self) -> None:
+        while self._refresh_wanted:
+            await self._wait_for_next_refresh()
+            self._refresh_wanted = False
+            succeeded = await self.recompute_corpus_stats()
+            self._next_refresh = time.monotonic() + BM25_REFRESH_MIN_INTERVAL_S
+            if not succeeded and not self._flush.is_set():  # tried again after the interval, unless exiting
+                self._refresh_wanted = True
+
+    async def flush_refresh(self) -> None:
+        """Finish what's running and run what's waiting now, for a process whose loop would cancel it."""
+        if self._refresh_task is None or self._refresh_task.done():
+            return
+        self._flush.set()
+        await asyncio.gather(self._refresh_task, return_exceptions=True)
+        self._flush.clear()
 
     # ------------------------------------------------------------------
     # Batch processing
@@ -206,9 +251,8 @@ class KeywordSearcher:
             results: List[Dict[str, Any]] = []
             cursor = b"0"
             scanned = 0
-            max_scan = 10000
 
-            while scanned < max_scan:
+            while scanned < KEYWORD_SEARCH_MAX_SCAN:
                 cursor, keys = await self.redis_client.scan(cursor=cursor, match="fact:*", count=100)
                 scanned += len(keys)
 
@@ -218,6 +262,8 @@ class KeywordSearcher:
 
                 if cursor == b"0":
                     break
+            else:
+                logger.warning("Keyword search stopped after %d facts; later facts weren't read", scanned)
 
             results.sort(key=lambda x: x["score"], reverse=True)
             return results[:limit]

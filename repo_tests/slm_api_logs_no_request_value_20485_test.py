@@ -21,11 +21,18 @@ _LEVELS = {"debug", "info", "warning", "error", "critical", "exception", "log"}
 _BODY_NAMES = {"request", "body", "payload", "data"}
 
 
+# The settings modules take a body whose every attribute is a submitted setting value.
+# errors.py, llm_config.py and npu.py also log `config.<attr>`, but only numbers, a provider
+# name and a strategy, so they stay under the `.value` rule alone.
+_SETTINGS_MODULES = {"settings.py", "config.py"}
+_VALUE_BODIES = frozenset({"config"})
+
+
 def _is_body_name(name: str) -> bool:
     return name in _BODY_NAMES or name.endswith("_data")
 
 
-def offending_lines(source: str) -> list[int]:
+def offending_lines(source: str, value_bodies: frozenset[str] = frozenset()) -> list[int]:
     """Line numbers of logger calls that pass ``<request-body>.value``."""
     hits: list[int] = []
     for node in ast.walk(ast.parse(source)):
@@ -37,9 +44,8 @@ def offending_lines(source: str) -> list[int]:
             for sub in ast.walk(arg):
                 if (
                     isinstance(sub, ast.Attribute)
-                    and sub.attr == "value"
                     and isinstance(sub.value, ast.Name)
-                    and _is_body_name(sub.value.id)
+                    and (sub.value.id in value_bodies or (sub.attr == "value" and _is_body_name(sub.value.id)))
                 ):
                     hits.append(node.lineno)
     return hits
@@ -51,6 +57,9 @@ def test_detector_flags_a_request_value_and_spares_an_enum():
     assert offending_lines("logger.info('set %s', setting_data.value)") == [1]
     assert offending_lines("logger.info('svc %s', service_type.value)") == []
     assert offending_lines("logger.info('set %s', key)") == []
+    assert offending_lines("logger.info('tz %s', config.timezone)", _VALUE_BODIES) == [1]
+    assert offending_lines("logger.info('tz %s', config.timezone)") == []
+    assert offending_lines("logger.info('peer %s', request.client)", _VALUE_BODIES) == []
 
 
 def test_api_dir_is_scanned():
@@ -60,7 +69,8 @@ def test_api_dir_is_scanned():
 def test_no_slm_api_logger_passes_a_request_value():
     found = {}
     for path in sorted(_API.glob("*.py")):
-        lines = offending_lines(path.read_text(encoding="utf-8"))
+        bodies = _VALUE_BODIES if path.name in _SETTINGS_MODULES else frozenset()
+        lines = offending_lines(path.read_text(encoding="utf-8"), bodies)
         if lines:
             found[path.name] = lines
     assert not found, f"logger call passes a request body .value (may be a credential): {found}"

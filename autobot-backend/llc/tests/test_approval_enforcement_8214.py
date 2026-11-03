@@ -33,6 +33,7 @@ from llc.tests.approval_enforcement_support_test import (  # noqa: F401
     _budget,
     _decide,
     _hire,
+    _live_member,
     _member,
     _post,
     _request,
@@ -57,6 +58,7 @@ async def test_hire_with_the_setting_on_creates_no_agent(session_factory, _edges
 
 @pytest.mark.asyncio
 async def test_approved_hire_activates_the_agent_once(session_factory, _edges) -> None:  # noqa: ANN001
+    await _live_member(session_factory, _BOARD, "owner")  # the sole admin: only they may approve their own request
     approval_id = uuid.UUID((await _hire(session_factory)).json()["approval_id"])
     await _decide(session_factory, approval_id, ApprovalStatus.APPROVED)
     (agent,) = await _rows(session_factory, AgentOrgNode)
@@ -142,6 +144,7 @@ async def test_rejected_sprint_close_does_not_close(session_factory) -> None:  #
 async def test_every_approval_mutation_writes_an_activity_row_with_the_verified_actor(
     session_factory, activity
 ) -> None:  # noqa: ANN001
+    await _live_member(session_factory, _BOARD, "owner")  # the sole admin: only they may approve their own request
     approval_id = uuid.UUID((await _hire(session_factory)).json()["approval_id"])
     await _decide(session_factory, approval_id, ApprovalStatus.APPROVED)
     events = {call[0]: call for call in activity.calls}

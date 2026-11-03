@@ -81,3 +81,16 @@ register_env_var(
         component="terminal",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_APPROVAL_CLAIM_WRITE_TTL_SECONDS",
+        type=int,
+        default=300,
+        description=(
+            "Seconds a terminal session's approval claim lasts before its approval is persisted, "
+            "so a worker dying in that window frees the session by itself (#20059)."
+        ),
+        component="execution",
+    )
+)
