@@ -12,7 +12,8 @@ import asyncio
 import functools
 import uuid
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from contextvars import ContextVar
+from typing import AsyncIterator, Optional
 
 from autobot_shared.leader_lease import DEFAULT_REFRESH_S, DEFAULT_TTL_MS, LeaderLease
 from autobot_shared.logging_manager import get_logger
@@ -32,44 +33,62 @@ class ConnectorSyncUnavailable(Exception):
     """Redis can't be reached, so whether a sync is running can't be told, and none starts."""
 
 
+class ConnectorSyncLeaseLost(Exception):
+    """The running sync no longer holds its lease, so it stops before the next source."""
+
+    def __str__(self) -> str:
+        return "the sync stopped: it no longer holds the connector's sync lease"
+
+
+#: Set while a block holds a lease: the event fires when the lease is lost (#20556).
+_LEASE_LOST: ContextVar[Optional[asyncio.Event]] = ContextVar("connector_sync_lease_lost", default=None)
+
+
+def raise_if_sync_lease_lost() -> None:
+    """For the sync body, between sources: stop once this run's lease is gone, so two runs never overlap."""
+    lost = _LEASE_LOST.get()
+    if lost is not None and lost.is_set():
+        raise ConnectorSyncLeaseLost()
+
+
 def _key(connector_id: str) -> str:
     return f"connector:sync:{connector_id}"
 
 
 async def claim_connector_sync(connector_id: str) -> LeaderLease:
-    """Take the connector's lease now, for a run that may start later. It lapses if never held."""
-    try:
-        redis = await get_async_redis_client(database=_DATABASE)
-        if redis is None:
-            raise ConnectorSyncUnavailable(connector_id)
-        await redis.ping()
-    except ConnectorSyncUnavailable:
-        raise
-    except Exception as exc:
-        raise ConnectorSyncUnavailable(connector_id) from exc
+    """Take the connector's lease now, for a run that may start later. It lapses if never held.
+
+    "Couldn't check" is never "already running": a Redis error on the SET NX is unavailable, not busy.
+    """
     lease = LeaderLease(_key(connector_id), database=_DATABASE, worker_id=uuid.uuid4().hex)
-    if not await lease.update_leadership():
+    state = await lease.hold_or_refresh()
+    if state is None:
+        raise ConnectorSyncUnavailable(connector_id)
+    if not state:
         raise ConnectorSyncBusy(connector_id)
     return lease
 
 
-async def _keep_renewing(lease: LeaderLease) -> None:
-    """Retry a failed renewal while the lease can still be alive: a Redis blip isn't a lost lease.
+async def _keep_renewing(lease: LeaderLease, lost: asyncio.Event) -> None:
+    """Renew until the lease is lost, then fire *lost* so the sync stops before its next source.
 
-    Not ``update_leadership``: it marks the lease lost on one failure, and the next try would then
-    be a SET NX that fails against this run's own key, leaving its TTL to run out.
+    Another owner on the key is a loss at once. A Redis error is retried while the key can still
+    name this run, i.e. until a full TTL has passed since the last renewal.
     """
     loop = asyncio.get_running_loop()
     renewed_at = loop.time()
     while True:
         await asyncio.sleep(DEFAULT_REFRESH_S)
-        if await lease.try_acquire_or_refresh():
+        state = await lease.hold_or_refresh()
+        if state:
             renewed_at = loop.time()
-        elif loop.time() - renewed_at >= DEFAULT_TTL_MS / 1000:
-            logger.error("Lost the sync lease %s mid-run; a second sync could now start", lease.key)
-            return
-        else:
+            continue
+        if state is None and loop.time() - renewed_at < DEFAULT_TTL_MS / 1000:
             logger.warning("Could not renew the sync lease %s; retrying", lease.key)
+            continue
+        logger.error("Lost the sync lease %s mid-run; the sync stops before its next source", lease.key)
+        lost.set()
+        return
 
 
 async def _release(lease: LeaderLease) -> None:
@@ -84,11 +103,15 @@ async def _release(lease: LeaderLease) -> None:
 
 @asynccontextmanager
 async def holding_connector_sync(lease: LeaderLease) -> AsyncIterator[None]:
-    """Keep a claimed lease renewed for the block, then release it."""
-    renewing = asyncio.create_task(_keep_renewing(lease))
+    """Keep a claimed lease renewed for the block, then release it. The block sees a loss via
+    :func:`raise_if_sync_lease_lost`."""
+    lost = asyncio.Event()
+    token = _LEASE_LOST.set(lost)
+    renewing = asyncio.create_task(_keep_renewing(lease, lost))
     try:
         yield
     finally:
+        _LEASE_LOST.reset(token)
         renewing.cancel()
         await asyncio.gather(renewing, return_exceptions=True)
         await _release(lease)

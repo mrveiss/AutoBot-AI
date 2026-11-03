@@ -83,8 +83,10 @@ async def test_the_background_job_is_skipped_while_one_runs(redis) -> None:
 
 @pytest.mark.asyncio
 async def test_without_redis_nothing_starts_and_it_is_not_called_busy() -> None:
+    none = AsyncMock(return_value=None)
     with (
-        patch.object(sync_lease, "get_async_redis_client", AsyncMock(return_value=None)),
+        patch.object(sync_lease, "get_async_redis_client", none),
+        patch("autobot_shared.leader_lease.get_async_redis_client", none),
         pytest.raises(sync_lease.ConnectorSyncUnavailable),
     ):
         async with sync_lease.connector_sync_lease("a"):
@@ -170,7 +172,120 @@ async def test_a_redis_blip_still_extends_the_lease_it_holds(redis, monkeypatch)
 
     monkeypatch.setattr(redis, "eval", flaky_eval)
     _one_refresh_per_tick(monkeypatch)
-    await asyncio.wait_for(sync_lease._keep_renewing(lease), timeout=5)
+    lost = asyncio.Event()
+    await asyncio.wait_for(sync_lease._keep_renewing(lease, lost), timeout=5)
 
-    assert len(evals) == 5, "1 blip, 1 extend, then 3 refusals across one lease lifetime"
+    assert len(evals) == 3, "1 blip, 1 extend, then one refusal: another owner is a loss at once"
+    assert lost.is_set(), "the sync is told, so it stops before its next source"
     assert redis.keys[key] == "another-run", "a lease held by another run is never taken back"
+
+
+@pytest.mark.asyncio
+async def test_redis_errors_keep_the_lease_until_a_full_lifetime_passes(redis, monkeypatch) -> None:
+    """An error is unknown, not lost: the key still names this run until its TTL runs out."""
+    lease = await sync_lease.claim_connector_sync("a")
+
+    async def down(*_args):
+        raise ConnectionError("down")
+
+    monkeypatch.setattr(redis, "eval", down)
+    _one_refresh_per_tick(monkeypatch)
+    lost = asyncio.Event()
+    await asyncio.wait_for(sync_lease._keep_renewing(lease, lost), timeout=5)
+    ticks = sync_lease.DEFAULT_TTL_MS / 1000 / sync_lease.DEFAULT_REFRESH_S
+    assert lost.is_set() and lease.is_leader, "lost only once a lifetime has passed, never on the first error"
+    assert ticks >= 2, "the TTL leaves room for more than one retry"
+
+
+@pytest.mark.asyncio
+async def test_a_redis_error_on_the_claim_is_unavailable_not_busy(redis, monkeypatch) -> None:
+    """'Couldn't check' is not 'already running': the route answers 503 and the scheduler skips, alike."""
+
+    async def fails(*_args, **_kwargs):
+        raise ConnectionError("down")
+
+    monkeypatch.setattr(redis, "set", fails)
+    with pytest.raises(sync_lease.ConnectorSyncUnavailable):
+        await sync_lease.claim_connector_sync("a")
+    job = AsyncMock()
+    assert await sync_lease.one_sync_per_connector(job)("a") is None
+    job.assert_not_awaited()
+
+
+def _three_source_connector(concurrency: int):
+    """A real AbstractConnector sync loop over three sources, with its Redis-backed state stubbed."""
+    from datetime import datetime, timezone
+
+    from knowledge.connectors.base import AbstractConnector
+    from knowledge.connectors.models import ChangeInfo, ConnectorConfig
+
+    class _Three(AbstractConnector):
+        connector_type = "lease-test"
+        max_concurrency = concurrency
+
+        async def test_connection(self):
+            return True
+
+        async def discover_sources(self):
+            return []
+
+        async def fetch_content(self, source_id):
+            return None
+
+        async def detect_changes(self, since=None):
+            when = datetime.now(timezone.utc)
+            return [ChangeInfo(source_id=f"s{i}", change_type="deleted", timestamp=when) for i in range(3)]
+
+    connector = _Three(ConnectorConfig(connector_id="a", connector_type="lease-test", name="a", config={}))
+    for name in ("_read_checkpoint", "_write_checkpoint", "_clear_checkpoint"):
+        setattr(connector, name, AsyncMock(return_value=set()))
+    return connector
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("concurrency, started", [(1, 1), (2, 2)], ids=["sequential", "concurrent"])
+async def test_a_sync_that_lost_its_lease_stops_before_the_next_source(redis, concurrency, started) -> None:
+    """The lease is lost after the first source's progress write: no further source starts."""
+    connector = _three_source_connector(concurrency)
+    lease = await sync_lease.claim_connector_sync("a")
+    async with sync_lease.holding_connector_sync(lease):
+        lost = sync_lease._LEASE_LOST.get()
+
+        async def progress(**state):
+            if state["status"] == "running" and state["sources_done"]:
+                lost.set()
+
+        connector._write_job_state = progress
+        result = await connector.sync(incremental=False)
+    # At most the sources already in flight finish (one per concurrency slot); never all three.
+    assert 1 <= result.sources_done <= started < result.sources_total and result.status == "failed"
+    assert "no longer holds the connector's sync lease" in result.errors[-1]
+
+
+@pytest.mark.asyncio
+async def test_outside_a_held_lease_there_is_nothing_to_lose() -> None:
+    sync_lease.raise_if_sync_lease_lost()
+
+
+@pytest.mark.asyncio
+async def test_a_late_start_after_the_lease_lapsed_does_not_run(redis) -> None:
+    """The route's claim can outlive its TTL before the job starts: no run, and the new owner's key stays."""
+    from api._connector_sync_claim import run_claimed_sync
+
+    lease = await sync_lease.claim_connector_sync("a")
+    redis.keys[sync_lease._key("a")] = "another-run"  # lapsed, and another run claimed it
+    run = AsyncMock()
+    await run_claimed_sync(run, "a", lease, True)
+    run.assert_not_awaited()
+    assert redis.keys[sync_lease._key("a")] == "another-run"
+
+
+@pytest.mark.asyncio
+async def test_a_late_start_that_still_owns_the_lease_runs(redis) -> None:
+    from api._connector_sync_claim import run_claimed_sync
+
+    lease = await sync_lease.claim_connector_sync("a")
+    run = AsyncMock()
+    await run_claimed_sync(run, "a", lease, False)
+    run.assert_awaited_once_with("a", False)
+    assert redis.keys == {}, "released after the run"

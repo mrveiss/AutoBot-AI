@@ -3350,7 +3350,8 @@
       "reasonUnknown": "reason not reported"
     },
     "connectors": {
-      "syncNotStarted": "The sync didn't start. This connector may already be syncing; try again when it finishes.",
+      "syncNotStarted": "The sync of {name} didn't start. It may already be syncing; try again when it finishes.",
+      "syncUnavailable": "The sync of {name} didn't start: whether it is already syncing couldn't be checked. Try again shortly.",
       "title": "Source Connectors",
       "addConnector": "Add Connector",
       "loadingConnectors": "Loading connectors...",
