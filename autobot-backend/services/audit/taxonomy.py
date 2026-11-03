@@ -144,6 +144,11 @@ class AuditAction(str, Enum):
     CONVERSATION_FILE_CLEANUP = "conversation_file.cleanup"
     CONVERSATION_FILE_CLEANUP_RESET = "conversation_file.cleanup_reset"
     BUDGET_CHAT_REFUSED = "budget.chat_refused"  # #20589 chat over a budget
+    # #20750: re-aligning the backend's AUTOBOT_INTERNAL_API_KEY to the SLM's, one record per step.
+    INTERNAL_KEY_REALIGN_PROPOSED = "credential.internal_key.realign_proposed"  # pragma: allowlist secret
+    INTERNAL_KEY_REALIGN_CLAIMED = "credential.internal_key.realign_claimed"  # pragma: allowlist secret
+    INTERNAL_KEY_REALIGN_APPLIED = "credential.internal_key.realign_applied"  # pragma: allowlist secret
+    INTERNAL_KEY_REALIGN_APPLY_FAILED = "credential.internal_key.realign_apply_failed"  # pragma: allowlist secret
 
 
 class ComplianceEventType(str, Enum):

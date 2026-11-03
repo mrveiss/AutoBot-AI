@@ -2,10 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Verify and spend an approval before the SLM deletes a stored SSH password (#20046, #17038).
+"""Verify and spend an approval before a stored credential is changed (#20046, #20750, #17038).
 
-The SLM's delete route is reachable with the shared internal key, which proves a service and nothing
-about a human. So the SLM asks here first, and deletes only when this accepts. What is checked is what
+The side that applies the change (the SLM deleting a stored SSH password, the updater re-aligning the
+backend's internal key) authenticates with the shared internal key, which proves a service and nothing
+about a human. So it asks here first, and changes the credential only when this accepts. What is checked is what
 the database keeps: ``verified_decider`` lives only on the in-memory object of the approving request, so
 it cannot be read back. The durable facts are the status, the decider's name, the decision time, the
 context, and the fact that the only route that approves a platform-general gate (``api.approval_gates``)
@@ -23,7 +24,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import literal
 
-from autobot_shared.slm_credential_deletion import ACTION, CREDENTIAL_KIND
+from autobot_shared.slm_credential_actions import CredentialAction
 from models.approval import Approval, ApprovalStatus
 
 #: ``context`` key that marks an approval as spent.
@@ -34,11 +35,11 @@ _NOT_A_PERSON = frozenset({"", "unknown", "system"})
 
 
 class ClaimRefused(Exception):
-    """The approval does not authorize this deletion; the message says which check failed."""
+    """The approval does not authorize this change; the message says which check failed."""
 
 
-def _refusal(approval: Approval | None, node_id: str) -> str | None:
-    """Why *approval* cannot authorize deleting *node_id*'s password, or ``None`` when it can."""
+def _refusal(approval: Approval | None, action: CredentialAction, node_id: str) -> str | None:
+    """Why *approval* cannot authorize *action* on *node_id*, or ``None`` when it can."""
     if approval is None:
         return "no such approval"
     context = approval.context or {}
@@ -46,9 +47,9 @@ def _refusal(approval: Approval | None, node_id: str) -> str | None:
     checks = (
         (approval.company_id is None, "not a platform-general approval"),
         (approval.status == ApprovalStatus.APPROVED.value, "approval is not approved"),
-        (context.get("action") == ACTION, "approval names another action"),
+        (context.get("action") == action.name, "approval names another action"),
         (context.get("node_id") == node_id, "approval names another node"),
-        (context.get("credential_kind") == CREDENTIAL_KIND, "approval names another credential"),
+        (context.get("credential_kind") == action.credential_kind, "approval names another credential"),
         (decider not in _NOT_A_PERSON and not decider.startswith(_NOT_A_PERSON_PREFIXES), "no human decider"),
         (approval.decided_at is not None, "approval has no decision time"),
         (not context.get(CONSUMED_KEY), "approval already used"),
@@ -56,10 +57,12 @@ def _refusal(approval: Approval | None, node_id: str) -> str | None:
     return next((reason for ok, reason in checks if not ok), None)
 
 
-async def claim_deletion_approval(session: AsyncSession, approval_id: uuid.UUID, node_id: str) -> None:
-    """Accept *approval_id* for *node_id* exactly once; raises :class:`ClaimRefused` otherwise."""
+async def claim_approval(
+    session: AsyncSession, approval_id: uuid.UUID, action: CredentialAction, node_id: str
+) -> Approval:
+    """Accept *approval_id* for *action* on *node_id* exactly once; raises :class:`ClaimRefused` otherwise."""
     approval = await session.get(Approval, approval_id)
-    if reason := _refusal(approval, node_id):
+    if reason := _refusal(approval, action, node_id):
         raise ClaimRefused(reason)
     spent = {CONSUMED_KEY: datetime.now(timezone.utc).isoformat()}
     result = await session.execute(
@@ -70,3 +73,4 @@ async def claim_deletion_approval(session: AsyncSession, approval_id: uuid.UUID,
     if result.rowcount != 1:
         raise ClaimRefused("approval already used")
     await session.commit()
+    return approval

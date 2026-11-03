@@ -19,9 +19,11 @@ from fastapi.testclient import TestClient
 from sqlalchemy.dialects import postgresql
 
 from api import internal_slm_credential_proposals as proposals
-from autobot_shared.slm_credential_deletion import ACTION, claim_path
+from autobot_shared.slm_credential_actions import SSH_PASSWORD_DELETE, claim_path
 from models.approval import ApprovalStatus
-from services import slm_ssh_password_claim as claim
+from services import slm_credential_claim as claim
+
+ACTION = SSH_PASSWORD_DELETE.name
 
 _KEY = "k" * 40  # pragma: allowlist secret
 _ID = uuid.uuid4()
@@ -57,7 +59,7 @@ def _client(session: MagicMock) -> TestClient:
 
 def _claim(client: TestClient, node_id: str = "node-a", headers: dict | None = None):
     headers = {"X-Internal-API-Key": _KEY} if headers is None else headers
-    return client.post(claim_path(str(_ID)), json={"node_id": node_id}, headers=headers)
+    return client.post(claim_path(str(_ID)), json={"action": ACTION, "node_id": node_id}, headers=headers)
 
 
 @pytest.fixture(autouse=True)
@@ -142,7 +144,7 @@ def test_the_claim_needs_the_key() -> None:
 
 async def test_the_spending_update_names_the_unspent_state() -> None:
     session = _session(_approval())
-    await claim.claim_deletion_approval(session, _ID, "node-a")
+    await claim.claim_approval(session, _ID, SSH_PASSWORD_DELETE, "node-a")
     sql = str(session.execute.await_args.args[0].compile(dialect=postgresql.dialect()))
     assert "UPDATE approvals" in sql and "->> " in sql and "IS NULL" in sql and "||" in sql
     assert "consumed_at" in str(session.execute.await_args.args[0].compile(dialect=postgresql.dialect()).params)

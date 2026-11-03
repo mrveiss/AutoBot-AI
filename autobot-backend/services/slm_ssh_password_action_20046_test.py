@@ -13,12 +13,14 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from api import internal_slm_credential_proposals as proposals
-from autobot_shared.slm_credential_deletion import ACTION, PROPOSAL_PATH
+from autobot_shared.slm_credential_actions import PROPOSAL_PATH, SSH_PASSWORD_DELETE
 from models.approval import ApprovalStatus
 from services import approval_execution
 from services import slm_ssh_password_action as action
 from services.approval_gate_service import ApprovalGateService
 from services.audit.taxonomy import AuditAction
+
+ACTION = SSH_PASSWORD_DELETE.name
 
 _KEY = "k" * 40  # pragma: allowlist secret
 _DECIDER = uuid.uuid4()
@@ -124,7 +126,7 @@ def _client(existing: list, created: SimpleNamespace | None = None):
 
 def _post(client: TestClient, service: MagicMock, headers: dict | None = None, node_id: str = "node-a"):
     with patch.object(proposals, "ApprovalGateService", return_value=service):
-        return client.post(PROPOSAL_PATH, json={"node_id": node_id}, headers=headers or {})
+        return client.post(PROPOSAL_PATH, json={"action": ACTION, "node_id": node_id}, headers=headers or {})
 
 
 def test_the_route_refuses_without_the_key(monkeypatch) -> None:

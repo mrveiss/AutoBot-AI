@@ -2,36 +2,51 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Schemas for the SLM stored-credential deletion proposal route (#20046)."""
+"""Schemas for the SLM credential-action routes: propose, claim, report (#20046, #20750)."""
 
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
-
-class SshPasswordDeletionProposal(BaseModel):
-    """What the SLM proposes: a node and a credential kind, never a value."""
-
-    node_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9._-]+$")
-    credential_kind: Literal["ssh_password"] = "ssh_password"  # nosec B105  # pragma: allowlist secret
+#: The actions a proposal may name; autobot_shared.slm_credential_actions.ACTIONS holds their specs.
+CredentialActionName = Literal["slm_node_ssh_password_delete", "slm_backend_internal_key_realign"]
+_NODE_ID = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9._-]+$")
 
 
-class SshPasswordDeletionProposalResponse(BaseModel):
-    """The pending approval, and whether this call created it or found it already pending."""
+class CredentialProposal(BaseModel):
+    """What is proposed: an action and a node, never a credential value."""
+
+    action: CredentialActionName
+    node_id: str = _NODE_ID
+
+
+class CredentialProposalResponse(BaseModel):
+    """The node's open approval for the action, and whether this call created it."""
 
     approval_id: str
     status: str
     created: bool
 
 
-class SshPasswordDeletionClaim(BaseModel):
-    """The SLM names the node it is about to delete a password for; the approval must name the same one."""
+class CredentialClaim(BaseModel):
+    """The applying side names the action and node it is about to change; the approval must name the same."""
 
-    node_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9._-]+$")
+    action: CredentialActionName
+    node_id: str = _NODE_ID
 
 
-class SshPasswordDeletionClaimResponse(BaseModel):
+class CredentialClaimResponse(BaseModel):
     """The approval was valid and is now spent."""
 
     approval_id: str
     node_id: str
+
+
+class CredentialOutcome(BaseModel):
+    """How applying a claimed approval went, for its audit trail and its comment thread."""
+
+    action: CredentialActionName
+    node_id: str = _NODE_ID
+    result: Literal["applied", "apply_failed"]
+    #: What the applying side saw, never a credential value.
+    detail: str = Field(default="", max_length=500)

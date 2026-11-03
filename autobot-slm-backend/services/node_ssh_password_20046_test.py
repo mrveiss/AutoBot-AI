@@ -96,7 +96,7 @@ async def test_a_node_with_a_stored_password_proposes_by_name_never_by_value(mon
     assert await ssh.propose_password_deletion(_node({"ssh_password": _SECRET, "ssh_password_encrypted": True})) is True
     assert client.post.await_count == 1
     kwargs = client.post.await_args.kwargs
-    assert kwargs["json"] == {"node_id": "node-a", "credential_kind": "ssh_password"}
+    assert kwargs["json"] == {"action": "slm_node_ssh_password_delete", "node_id": "node-a"}
     assert kwargs["headers"]["X-Internal-API-Key"] == _KEY
     assert _SECRET not in str(client.post.await_args)
 
@@ -209,8 +209,11 @@ async def test_an_accepted_approval_deletes_only_the_password_fields_and_audits_
     assert phases == ["intent", "completed"]
     assert all(str(_APPROVAL) in str(c.kwargs) and _SECRET not in str(c.kwargs) for c in world.audit.await_args_list)
     url = world.backend.post.await_args.args[0]
-    assert url.endswith(f"/ssh-password-deletion-approvals/{_APPROVAL}/claim")
-    assert world.backend.post.await_args.kwargs["json"] == {"node_id": "node-a"}
+    assert url.endswith(f"/credential-approvals/{_APPROVAL}/claim")
+    assert world.backend.post.await_args.kwargs["json"] == {
+        "action": "slm_node_ssh_password_delete",
+        "node_id": "node-a",
+    }
 
 
 @pytest.mark.parametrize(

@@ -2,14 +2,16 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Internal API: the SLM PROPOSES deleting a node's stored SSH password, and claims the approval (#20046, #17038).
+"""Internal API: a stored credential change is PROPOSED, claimed once approved, and reported (#20046, #20750, #17038).
 
-    POST /api/internal/slm/ssh-password-deletion-proposals                    (X-Internal-API-Key only)
-    POST /api/internal/slm/ssh-password-deletion-approvals/{id}/claim         (X-Internal-API-Key only)
+    POST /api/internal/slm/credential-proposals                      (X-Internal-API-Key only)
+    POST /api/internal/slm/credential-approvals/{id}/claim           (X-Internal-API-Key only)
+    POST /api/internal/slm/credential-approvals/{id}/outcome         (X-Internal-API-Key only)
 
-Creates one PENDING approval naming the node and the credential kind, never the value. A second call for
-a node whose proposal is still pending returns that one. Nothing is deleted here: a human approves it in
-the Approvals inbox, and ``services.slm_ssh_password_action`` then asks the SLM to delete it.
+One route set for every action in ``autobot_shared.slm_credential_actions.ACTIONS``. A proposal names
+the action and the node, never a value; a second call for a node whose approval is still open (pending,
+or approved and unused) returns that one. Nothing changes here: a human approves it in the Approvals
+inbox, the applying side claims it (verified, then spent once), applies the change, and reports.
 """
 
 import uuid
@@ -18,71 +20,109 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_slm_credential_proposals import (
-    SshPasswordDeletionClaim,
-    SshPasswordDeletionClaimResponse,
-    SshPasswordDeletionProposal,
-    SshPasswordDeletionProposalResponse,
+    CredentialClaim,
+    CredentialClaimResponse,
+    CredentialOutcome,
+    CredentialProposal,
+    CredentialProposalResponse,
 )
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
 from autobot_shared.auth.internal_api_key import require_internal_api_key
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.slm_credential_deletion import ACTION, CREDENTIAL_KIND, proposer_id
-from models.approval import Approval, ApprovalStatus, ApprovalType
+from autobot_shared.slm_credential_actions import ACTIONS, INTERNAL_KEY_REALIGN, CredentialAction
+from models.approval import Approval, ApprovalComment, ApprovalStatus, ApprovalType
 from services.approval_gate_service import ApprovalGateService
+from services.slm_credential_claim import CONSUMED_KEY, ClaimRefused, claim_approval
+from services.slm_credential_texts import proposal_text, record_realign_step
+from services.slm_internal_key_realign_action import register_internal_key_realign_action
 from services.slm_ssh_password_action import register_ssh_password_action
-from services.slm_ssh_password_claim import ClaimRefused, claim_deletion_approval
 
 logger = get_logger(__name__)
 
 # get_current_user is the recognised gate; require_internal_api_key narrows it to the service key alone.
 router = APIRouter(prefix="/internal/slm", dependencies=[Depends(require_internal_api_key), Depends(get_current_user)])
 
-# Registered at this router's import time so the executor exists before any approve().
+# Registered at this router's import time so the executors exist before any approve().
 register_ssh_password_action()
+register_internal_key_realign_action()
 
 
-@router.post(
-    "/ssh-password-deletion-proposals",
-    response_model=SshPasswordDeletionProposalResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-async def propose_ssh_password_deletion(
-    body: SshPasswordDeletionProposal, session: AsyncSession = Depends(get_db_session)
-) -> SshPasswordDeletionProposalResponse:
-    """Propose the deletion -- a request, not an execution; one pending proposal per node."""
-    service = ApprovalGateService(session)
-    pending = await service.list_approvals(
-        status=ApprovalStatus.PENDING.value,
-        agent_id=proposer_id(body.node_id),
-        extra_where=(Approval.context["action"].astext == ACTION,),
-        limit=1,
-    )
-    if pending:
-        return SshPasswordDeletionProposalResponse(
-            approval_id=str(pending[0].id), status=pending[0].status, created=False
+async def _open_approval(service: ApprovalGateService, action: CredentialAction, node_id: str) -> Approval | None:
+    """The node's approval for *action* that can still be acted on: pending, or approved and not yet spent."""
+    for state in (ApprovalStatus.PENDING.value, ApprovalStatus.APPROVED.value):
+        found = await service.list_approvals(
+            status=state,
+            agent_id=action.proposer_id(node_id),
+            extra_where=(
+                Approval.context["action"].astext == action.name,
+                Approval.context[CONSUMED_KEY].astext.is_(None),
+            ),
+            limit=1,
         )
+        if found:
+            return found[0]
+    return None
+
+
+@router.post("/credential-proposals", response_model=CredentialProposalResponse, status_code=status.HTTP_201_CREATED)
+async def propose_credential_change(
+    body: CredentialProposal, session: AsyncSession = Depends(get_db_session)
+) -> CredentialProposalResponse:
+    """Propose the change -- a request, not an execution; one open proposal per node and action."""
+    action = ACTIONS[body.action]
+    service = ApprovalGateService(session)
+    if existing := await _open_approval(service, action, body.node_id):
+        return CredentialProposalResponse(approval_id=str(existing.id), status=existing.status, created=False)
+    title, description = proposal_text(action, body.node_id)
     approval = await service.create_approval(
-        title=f"Delete the stored SSH password of node {body.node_id}",
+        title=title,
         approval_type=ApprovalType.DESTRUCTIVE_ACTION.value,
-        description=(
-            f"Node {body.node_id} enrolled and now uses key authentication, so its stored SSH password is no "
-            "longer needed. Approving deletes the stored password for good; rejecting keeps it."
-        ),
-        requested_by_agent=proposer_id(body.node_id),
-        context={"action": ACTION, "node_id": body.node_id, "credential_kind": CREDENTIAL_KIND},
+        description=description,
+        requested_by_agent=action.proposer_id(body.node_id),
+        context={"action": action.name, "node_id": body.node_id, "credential_kind": action.credential_kind},
     )
-    return SshPasswordDeletionProposalResponse(approval_id=str(approval.id), status=approval.status, created=True)
+    if action is INTERNAL_KEY_REALIGN:
+        await record_realign_step("proposed", approval, "success")
+    return CredentialProposalResponse(approval_id=str(approval.id), status=approval.status, created=True)
 
 
-@router.post("/ssh-password-deletion-approvals/{approval_id}/claim", response_model=SshPasswordDeletionClaimResponse)
-async def claim_ssh_password_deletion_approval(
-    approval_id: uuid.UUID, body: SshPasswordDeletionClaim, session: AsyncSession = Depends(get_db_session)
-) -> SshPasswordDeletionClaimResponse:
-    """The SLM's last check before it deletes: this approval is a human's, for this node, and unused -- now spent."""
+@router.post("/credential-approvals/{approval_id}/claim", response_model=CredentialClaimResponse)
+async def claim_credential_approval(
+    approval_id: uuid.UUID, body: CredentialClaim, session: AsyncSession = Depends(get_db_session)
+) -> CredentialClaimResponse:
+    """The applying side's last check: this approval is a human's, for this action and node, and unused -- now spent."""
+    action = ACTIONS[body.action]
     try:
-        await claim_deletion_approval(session, approval_id, body.node_id)
+        approval = await claim_approval(session, approval_id, action, body.node_id)
     except ClaimRefused as refusal:
-        logger.warning("SSH password deletion claim refused for approval %s: %s", approval_id, refusal)
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "the approval does not authorize this deletion")
-    return SshPasswordDeletionClaimResponse(approval_id=str(approval_id), node_id=body.node_id)
+        logger.warning("Credential claim refused for approval %s (%s): %s", approval_id, action.name, refusal)
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "the approval does not authorize this change")
+    if action is INTERNAL_KEY_REALIGN:
+        await record_realign_step("claimed", approval, "success")
+    return CredentialClaimResponse(approval_id=str(approval_id), node_id=body.node_id)
+
+
+@router.post("/credential-approvals/{approval_id}/outcome", status_code=status.HTTP_204_NO_CONTENT)
+async def report_credential_outcome(
+    approval_id: uuid.UUID, body: CredentialOutcome, session: AsyncSession = Depends(get_db_session)
+) -> None:
+    """Record how applying a CLAIMED approval went: an audit entry and a comment on the approval."""
+    action = ACTIONS[body.action]
+    approval = await session.get(Approval, approval_id)
+    context = (approval.context or {}) if approval else {}
+    if (
+        approval is None
+        or context.get("action") != action.name
+        or context.get("node_id") != body.node_id
+        or not context.get(CONSUMED_KEY)
+    ):
+        raise HTTPException(status.HTTP_409_CONFLICT, "no claimed approval for this action and node")
+    applied = body.result == "applied"
+    if action is INTERNAL_KEY_REALIGN:
+        await record_realign_step(
+            "applied" if applied else "apply_failed", approval, "success" if applied else "failed", detail=body.detail
+        )
+    note = "Applied." if applied else f"Applying it failed: {body.detail or 'no detail given'}"
+    session.add(ApprovalComment(approval_id=approval.id, author="system", author_type="system", body=note))
+    await session.commit()
