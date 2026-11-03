@@ -399,6 +399,21 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_PREFETCH_MODELS",
+        type=bool,
+        default=True,
+        description=(
+            "Docker only: whether the backend container's entrypoint fetches the pinned speech-to-text and "
+            "code-embedding models into the model cache volume before starting (docker/backend/entrypoint.sh, "
+            "autobot_shared/model_prefetch.py, #19869, #19738). A model already in the volume costs no network. "
+            "Set false (or 0) for an air-gapped host that places the models itself; a fetch that fails while "
+            "this is on stops the container with a message naming the model and the room left."
+        ),
+        component="backend",
+    )
+)
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_CONVERSATION_FILE_USER_QUOTA_BYTES",
         type=int,
         default=1073741824,

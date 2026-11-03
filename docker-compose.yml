@@ -287,6 +287,7 @@ services:
       - docker/.env.docker
     volumes:
       - backend_data:/app/data
+      - huggingface_cache:/app/huggingface  # #19869: the model cache survives a recreated container
       - backend_logs:/app/logs
       - autobot_secrets:/secrets:ro
       - ./docker/with-secrets.sh:/usr/local/bin/with-secrets.sh:ro
@@ -448,6 +449,7 @@ services:
       - docker/.env.docker
     volumes:
       - backend_data:/app/data
+      - huggingface_cache:/app/huggingface  # #19869: the model cache survives a recreated container
       - backend_logs:/app/logs
       - autobot_secrets:/secrets:ro
       - ./docker/with-secrets.sh:/usr/local/bin/with-secrets.sh:ro
@@ -990,6 +992,7 @@ volumes:
   chroma_data:
   backend_data:
   backend_logs:
+  huggingface_cache:
   slm_data:
   slm_logs:
   ollama_data:
