@@ -27,6 +27,9 @@ on:
       - 'autobot-backend/**/*.py'
       - 'autobot_shared/**/*.py'
       - 'autobot-frontend/src/types/generated/api.ts'
+      # #16568: workflow.ts and its generator, so a source change reaches the same drift report.
+      - 'autobot-frontend/src/types/_generated/**'
+      - 'autobot-infrastructure/shared/scripts/gen_frontend_types.py'
       # #14368: SLM backend changes can alter the OpenAPI schema
       # autobot-slm-frontend's openapi.json + api.ts are generated from.
       # openapi.json (unlike the backend's, which is an ephemeral CI temp

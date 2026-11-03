@@ -252,7 +252,7 @@ function handleViewTimeline(entityName: string): void {
   background: var(--color-primary);
   border: none;
   border-radius: var(--radius-md);
-  color: white;
+  color: var(--text-on-primary);
   cursor: pointer;
 }
 
