@@ -138,6 +138,7 @@ class AuditAction(str, Enum):
     SECURITY_SUSPICIOUS_ACTIVITY = "security.suspicious_activity"
     CONVERSATION_FILE_CLEANUP = "conversation_file.cleanup"
     CONVERSATION_FILE_CLEANUP_RESET = "conversation_file.cleanup_reset"
+    BUDGET_CHAT_REFUSED = "budget.chat_refused"  # #20589 chat over a budget
 
 
 class ComplianceEventType(str, Enum):
