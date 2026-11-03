@@ -43,7 +43,7 @@ def test_repeats_on_one_route_write_one_row(layer):
 def test_the_next_row_counts_what_the_window_absorbed(layer):
     for _ in range(10):
         _deny("bob")
-    key = ("bob", "/admin/items/{item_id}")
+    key = ("bob", "user", "/admin/items/{item_id}")
     at, repeats = auth_rbac._DENIALS._recent[key]
     auth_rbac._DENIALS._recent[key] = (at - 301, repeats)
     _deny("bob")
@@ -56,3 +56,19 @@ def test_each_user_and_each_route_is_recorded(layer):
     _deny("alice")
     _deny("bob", template="/admin/other", path="/admin/other")
     assert layer.audit_log.call_count == 3
+
+
+def test_unmatched_paths_group_under_one_key(layer):
+    """A caller-chosen raw path must not grow the tracker: no route means one constant key."""
+    for item in range(20):
+        request = SimpleNamespace(scope={}, url=SimpleNamespace(path=f"/nowhere/{item}"))
+        auth_rbac.audit_role_denied({"username": "bob"}, ["admin"], "user", request)
+    assert layer.audit_log.call_count == 1
+    assert len(auth_rbac._DENIALS._recent) == 1
+    assert layer.audit_log.call_args.kwargs["details"]["endpoint"] == "/nowhere/0"
+
+
+def test_a_changed_role_is_its_own_record(layer):
+    _deny("bob")
+    auth_rbac.audit_role_denied({"username": "bob"}, ["admin"], "viewer", _request("/admin/items/{item_id}", "/x"))
+    assert layer.audit_log.call_count == 2

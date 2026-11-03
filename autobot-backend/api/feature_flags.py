@@ -51,7 +51,7 @@ router = APIRouter(tags=["admin", "feature-flags"])
 
 
 async def require_admin_role(
-    _admin: bool = Depends(check_admin_permission),
+    _admin: bool = Depends(check_admin_permission),  # first: FastAPI resolves in order, so the gate decides
     current_user: Dict = Depends(get_current_user),
 ) -> Dict:
     """The one admin gate (#16333), returning the admin's identity for the audit trail.

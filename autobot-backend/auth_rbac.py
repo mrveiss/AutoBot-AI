@@ -112,17 +112,19 @@ async def check_admin_mcp_tool_permission(request: Request, _admin: bool = Depen
 
 
 #: One role_denied record per user and route per window; the next record counts the repeats (#16333).
+_UNMATCHED_ROUTE = "<unmatched>"
 _DENIALS = RepeatGrouper(env_int_clamped("AUTOBOT_ROLE_DENIED_AUDIT_WINDOW_S", 300, 1, 86400))
 
 
 def audit_role_denied(user_data: dict, allowed_roles: List[str], user_role: str, request: Request) -> None:
     """Record a refused role check; every admin gate writes the same row (#16333).
 
-    Grouped per user and route template, so a non-admin repeating a request can't flood the log.
+    Grouped per user, role and route template, so a non-admin repeating a request can't flood the log.
+    An unmatched route groups under one constant: the raw path is caller-chosen and would fill the tracker.
     """
     user = user_data.get("username", "unknown")
-    route = getattr(request.scope.get("route"), "path", None) or str(request.url.path)
-    repeats = _DENIALS.repeats_to_record((user, route))
+    route = getattr(request.scope.get("route"), "path", None) or _UNMATCHED_ROUTE
+    repeats = _DENIALS.repeats_to_record((user, user_role, route))
     if repeats is None:
         return
     _get_security_layer().audit_log(

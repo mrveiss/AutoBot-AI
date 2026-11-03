@@ -13,6 +13,7 @@ get an extra record, which is the safe way round.
 
 from __future__ import annotations
 
+import threading
 import time
 from collections.abc import Hashable
 
@@ -27,6 +28,7 @@ class RepeatGrouper:
         self.max_tracked = max_tracked
         # key -> (when its last record was written, repeats since that weren't recorded)
         self._recent: dict[Hashable, tuple[float, int]] = {}
+        self._lock = threading.Lock()  # a sync FastAPI dependency calls this from the threadpool
 
     def _forget_old(self, now: float) -> None:
         for key in [k for k, (at, _) in self._recent.items() if now - at >= self.window_s]:
@@ -34,7 +36,10 @@ class RepeatGrouper:
 
     def repeats_to_record(self, key: Hashable) -> int | None:
         """Repeats since the last record if this one should be written, else None."""
-        now = time.monotonic()
+        with self._lock:
+            return self._decide(key, time.monotonic())
+
+    def _decide(self, key: Hashable, now: float) -> int | None:
         seen = self._recent.get(key)
         if seen and now - seen[0] < self.window_s:
             self._recent[key] = (seen[0], seen[1] + 1)

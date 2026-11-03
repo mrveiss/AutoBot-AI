@@ -28,3 +28,13 @@ def test_the_tracked_set_cant_grow_past_its_cap():
     for number in range(20):
         assert grouper.repeats_to_record(f"person-{number}") == 0
     assert len(grouper._recent) <= 3
+
+
+def test_a_full_tracker_drops_expired_keys_first_and_still_records_a_new_key():
+    grouper = RepeatGrouper(window_s=300, max_tracked=2)
+    assert grouper.repeats_to_record("old") == 0
+    assert grouper.repeats_to_record("live") == 0
+    at, repeats = grouper._recent["old"]
+    grouper._recent["old"] = (at - 301, repeats)
+    assert grouper.repeats_to_record("new") == 0
+    assert set(grouper._recent) == {"live", "new"}
