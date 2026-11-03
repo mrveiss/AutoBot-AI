@@ -47,7 +47,7 @@ _MEASURED = {
 def _healthy() -> dict:
     return {
         "/api/auth/login": (200, {"access_token": "tok"}),
-        "/api/chat/sessions": (200, {"data": {"id": "sess-1"}}),
+        "/api/chat/sessions": (check.SESSION_CREATED, {"data": {"id": "sess-1"}}),
         "/api/chat/sessions/sess-1": (200, {"data": {"session_id": "sess-1"}}),
         "/api/chat": (200, {"data": {"content": "Hello.", "role": "assistant", "session_id": "sess-1"}}),
         "/api/system/health": _health(_MEASURED),
@@ -264,10 +264,10 @@ def test_a_crash_in_the_chat_step_still_deletes_the_session(stack, tmp_path: Pat
     base, replies, _ = stack
     real_json = check._json
 
-    def crash_on_chat(status, body, what):
+    def crash_on_chat(status, body, what, *expected):
         if what == "chat":
             raise KeyError("data")
-        return real_json(status, body, what)
+        return real_json(status, body, what, *expected)
 
     monkeypatch.setattr(check, "_json", crash_on_chat)
     assert check.main(_env(base, tmp_path)) == 1
@@ -327,6 +327,9 @@ def test_the_shapes_this_reads_are_the_backend_s_own() -> None:
     assert '"embedding_measured"' in health
     sessions = (repo_root() / "autobot-backend/api/chat_sessions.py").read_text(encoding="utf-8")
     assert '@router.post("/chat/sessions"' in sessions and '@router.delete("/chat/sessions/{session_id}"' in sessions
+    create = sessions[sessions.index("async def create_session(") :]
+    create = create[: create.index("\n@router.")]
+    assert f"status_code={check.SESSION_CREATED}," in create, "the probe expects the status the create route returns"
 
 
 def test_a_chat_model_in_the_embedding_role_fails_the_kinds_probe(stack, tmp_path: Path) -> None:
@@ -358,3 +361,11 @@ def test_a_run_with_no_probes_is_a_failure(stack, tmp_path: Path) -> None:
     base, _, _ = stack
     assert check.main(_env(base, tmp_path), probes={}) == 1
     assert _report(tmp_path)["passed"] is False
+
+
+def test_a_session_create_answered_200_is_not_taken_as_created(stack, tmp_path: Path) -> None:
+    """Control: the probe checks the create status, so the 201 above is a claim it actually tests."""
+    base, replies, _ = stack
+    replies["/api/chat/sessions"] = (200, {"data": {"id": "sess-1"}})
+    assert check.main(_env(base, tmp_path)) == 1
+    assert "HTTP 201 from session create" in _failed(tmp_path)["chat"]["expected"]

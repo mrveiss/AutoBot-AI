@@ -44,6 +44,8 @@ KIND_SCRIPT_TIMEOUT_S = 300
 #: How long to wait for a measurement until the backend says how long its probe cache can take.
 EMBEDDING_WAIT_S = 120
 EMBEDDING_POLL_S = 5
+#: What POST /api/chat/sessions answers on success: create_session returns status_code=201.
+SESSION_CREATED = 201
 FAILING_KINDS = ("WRONG-KIND", "MISSING-EMBEDDING", "SHOW-FAILED", "UNKNOWN", "UNREACHABLE")
 
 
@@ -82,9 +84,9 @@ def _request(
         return 0, str(exc)
 
 
-def _json(status: int, body: str, what: str) -> dict:
-    if status != 200:
-        raise ProbeFailed(f"HTTP 200 from {what}", f"HTTP {status}: {body[:300]}")
+def _json(status: int, body: str, what: str, expected: int = 200) -> dict:
+    if status != expected:
+        raise ProbeFailed(f"HTTP {expected} from {what}", f"HTTP {status}: {body[:300]}")
     try:
         parsed = json.loads(body)
     except ValueError as exc:
@@ -109,7 +111,7 @@ def probe_chat(base: str, token: str, env: Mapping[str, str]) -> None:
     """The default chat model answers a fixed prompt, in a session of its own that is deleted afterwards."""
     cafile = env.get("SELF_CHECK_CA_FILE") or None
     status, body = _request(f"{base}/api/chat/sessions", {"title": "self-check"}, token, cafile=cafile)
-    session_id = (_json(status, body, "session create").get("data") or {}).get("id")
+    session_id = (_json(status, body, "session create", SESSION_CREATED).get("data") or {}).get("id")
     if not session_id:
         raise ProbeFailed("a session id", body[:300])
     try:
