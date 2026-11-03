@@ -138,18 +138,54 @@ def test_the_findings_never_print_a_key(tmp_path: Path) -> None:
     assert findings and not any(v in line for line in findings for v in (_A, _B, _C))
 
 
-@pytest.mark.parametrize(
-    "rel, dest",
-    [
-        ("roles/backend/tasks/main.yml", "autobot_backend_env_file"),
-        ("roles/backend/tasks/main.yml", "(backend_code_dir | default(backend_install_dir)) ~ '/.env'"),
-        ("roles/backend/tasks/env_only.yml", "backend_env_dest"),
-    ],
-)
-def test_every_backend_env_render_writes_its_own_files_key(rel: str, dest: str) -> None:
-    renders = [t for t in _walk(_yaml(rel)) if (t.get("ansible.builtin.template") or {}).get("src") == "backend.env.j2"]
-    lookups = [str((t.get("vars") or {}).get("internal_api_key_render", "")) for t in renders]
-    assert "{{ " + _LOOKUP.replace("{dest}", dest) + " }}" in lookups, f"{rel}: a render for {dest} without the lookup"
+def _backend_env_renders() -> list[tuple[str, int, dict]]:
+    """(file, task index, task) for EVERY task under ansible/ that templates backend.env.j2."""
+    found = []
+    for path in sorted(_ANSIBLE.rglob("*.yml")):
+        tasks = list(_walk([d for d in yaml.safe_load_all(path.read_text(encoding="utf-8")) if d]))  # multi-doc
+        for index, task in enumerate(tasks):
+            module = task.get("ansible.builtin.template") or task.get("template")
+            if isinstance(module, dict) and str(module.get("src", "")).endswith("backend.env.j2"):
+                found.append((str(path.relative_to(_ANSIBLE)), index, task))
+    return found
+
+
+def test_the_render_scan_finds_every_known_render() -> None:
+    """Control: five renders today, two in the role, env_only, backend_services and deploy-backend-env."""
+    files = sorted(rel for rel, _i, _t in _backend_env_renders())
+    assert files == [
+        "playbooks/deploy-backend-env.yml",
+        "roles/backend/tasks/env_only.yml",
+        "roles/backend/tasks/main.yml",
+        "roles/backend/tasks/main.yml",
+        "roles/backend_services/tasks/main.yml",
+    ], files
+
+
+@pytest.mark.parametrize("rel, index, task", _backend_env_renders(), ids=lambda v: v if isinstance(v, str) else "")
+def test_every_backend_env_render_writes_its_own_files_key(rel: str, index: int, task: dict) -> None:
+    """Any render of backend.env.j2, now or added later, keeps the key its destination already holds."""
+    module = task.get("ansible.builtin.template") or task.get("template")
+    dest = str(module["dest"])
+    lookup = str((task.get("vars") or {}).get("internal_api_key_render", ""))
+    head = "{{ (internal_api_key_by_file | default({})).get("
+    assert lookup.startswith(head), f"{rel}: the render of {dest} doesn't pass its own file's key"
+    key_arg = lookup[len(head) : lookup.index(", internal_api_key_resolved")]
+    for name in ("backend_code_dir", "backend_install_dir", "autobot_backend_env_file", "backend_env_dest"):
+        assert (name in dest) == (name in key_arg), f"{rel}: the lookup names another file than {dest}"
+    if rel != "roles/backend/tasks/env_only.yml":  # its caller, the updater, resolves first (below)
+        tasks = list(_walk(_yaml(rel)))
+        resolves = [i for i, t in enumerate(tasks) if str(t.get("ansible.builtin.include_tasks", "")).endswith(_SHARED)]
+        assert resolves and min(resolves) < index, f"{rel}: renders before the key is resolved"
+
+
+def test_the_updater_resolves_before_it_renders_env_only() -> None:
+    tasks = list(_walk(_yaml("playbooks/update-all-nodes.yml")))
+    resolve = next(i for i, t in enumerate(tasks) if str(t.get("ansible.builtin.include_tasks", "")).endswith(_SHARED))
+    render = next(
+        i for i, t in enumerate(tasks) if (t.get("ansible.builtin.include_role") or {}).get("tasks_from") == "env_only"
+    )
+    assert resolve < render
 
 
 def test_the_template_renders_the_per_file_key() -> None:
