@@ -40,7 +40,7 @@ from tools.lint._scan_helpers import tracked_paths
 _ROOT = repo_root()
 
 _USERS_HOSTS = {pg.USERS_DB_HOST, pg.COMPOSE_DB_HOST}
-_SLM_HOSTS = {pg.SLM_DB_HOST, pg.COMPOSE_DB_HOST}
+_SLM_HOSTS = {pg.SLM_DB_HOST, pg.COMPOSE_SLM_DB_HOST}
 #: Postgres key -> the values the identity table allows for it. AUTOBOT_DB_USER/NAME as
 #: literals exist only in compose files, as deprecated aliases (#19408).
 KEY_VALUES: dict[str, set[str]] = {

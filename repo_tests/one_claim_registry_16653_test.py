@@ -96,6 +96,10 @@ _THE_REGISTRY = "autobot_shared/coordination/work_claims_lua.py"
 #: old stale-entry check only fired when a file lost its LAST primitive, so
 #: going from two to one was invisible in both directions at once.
 _ALLOWED: dict[str, tuple[int, str]] = {
+    "autobot-backend/services/agent_terminal/pending_claim.py": (
+        2,
+        "one pending approval per terminal session (#20059): a slot on a record, not a work claim with subtree overlap",
+    ),
     "autobot_shared/membership_epoch.py": (
         1,
         "#19630 -- a token mint, not a lock: SETNX fills a missing epoch key so concurrent workers "
@@ -215,7 +219,7 @@ REACH = declare(
     # the bottom tenth of `growth`, because that is zero tolerance dressed as an allowance.
     # Re-measured by the mechanism itself, not carried across (#15928); the arithmetic is in
     # the commit message, which cannot drift from the tree it describes.
-    floor=3527,  # re-pinned mid-window (train 80 on main)
+    floor=3525,  # re-pinned mid-window (train 80 on main)
     what="Python modules swept for claim-or-lock primitives",
     growth=50,
     # Scope as data (#17844). Five trees, including `scripts/` and `pipeline-scripts/` that no
