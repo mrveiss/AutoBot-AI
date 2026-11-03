@@ -85,7 +85,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 817,
     "autobot-backend/api/codebase_analytics/endpoints/report.py": 2262,
     "autobot-backend/api/codebase_analytics/endpoints/stats.py": 659,
-    "autobot-backend/api/conversation_files.py": 966,
+    "autobot-backend/api/conversation_files.py": 962,
     "autobot-backend/api/database_mcp.py": 1056,
     "autobot-backend/api/development_speedup.py": 611,
     "autobot-backend/api/enterprise_features.py": 700,
@@ -127,14 +127,14 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/schemas_code.py": 3257,
     "autobot-backend/api/schemas_knowledge.py": 5113,
     "autobot-backend/api/schemas_system.py": 4176,  # #18734: log-forwarding schemas moved out (4345 -> 4176)
-    "autobot-backend/api/schemas_workflows.py": 2824,
+    "autobot-backend/api/schemas_workflows.py": 2823,
     "autobot-backend/api/secrets.py": 1172,  # #19476 one model_dump serialization (was 1178, #16444)
     "autobot-backend/api/security_assessment.py": 913,
     "autobot-backend/api/settings.py": 881,
     "autobot-backend/api/system.py": 995,
     "autobot-backend/api/terminal.py": 1294,
     "autobot-backend/api/terminal_handlers.py": 1225,
-    "autobot-backend/api/validation_dashboard.py": 670,
+    "autobot-backend/api/validation_dashboard.py": 665,
     "autobot-backend/api/vnc_manager.py": 1651,
     "autobot-backend/api/vnc_mcp.py": 760,
     "autobot-backend/api/websockets.py": 1120,  # #16457: accepts routed through websocket_subprotocol.accept_websocket
@@ -146,9 +146,9 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/chat_history/context_overflow.py": 845,
     "autobot-backend/chat_history/session.py": 923,
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
-    "autobot-backend/chat_workflow/graph.py": 1555,  # #20195: 1643 -> 1551 (loop helpers split, hooks reused)
+    "autobot-backend/chat_workflow/graph.py": 1459,  # #19715
     "autobot-backend/chat_workflow/llm_handler.py": 1300,
-    "autobot-backend/chat_workflow/manager.py": 3771,  # #17273: turn_control; #19753: reasoning_kwargs
+    "autobot-backend/chat_workflow/manager.py": 3769,  # #17273: turn_control; #19753: reasoning_kwargs
     "autobot-backend/chat_workflow/tool_handler.py": 3617,  # #11542 dispatch merge + #14068 mirror + #19950
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
@@ -190,7 +190,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/context_aware_decision/decision_engine.py": 815,
     "autobot-backend/context_aware_decision/tests/test_counterfactual_reasoner.py": 663,
     "autobot-backend/context_window_manager.py": 626,
-    "autobot-backend/conversation_file_manager.py": 1207,
+    "autobot-backend/conversation_file_manager.py": 1199,
     "autobot-backend/conversation_file_manager_init_test.py": 729,
     "autobot-backend/desktop_streaming_manager.py": 1419,
     "autobot-backend/enterprise_feature_manager.py": 955,
