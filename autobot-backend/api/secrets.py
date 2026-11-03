@@ -945,7 +945,7 @@ async def update_secret(
         if secret:
             # One serialization for the cache, the file and every response (#19476)
             secret_data = secret.model_dump(mode="json")
-        elif system_data := await rotate_system_vault_secret(secret_id, request.value, owner_id, http_request.headers):
+        elif system_data := await rotate_system_vault_secret(secret_id, request, owner_id, http_request.headers):
             # #17099/#17731: a SYSTEM secret lives in the vault; rotate it there.
             secret_data = system_data
         elif request.credentials:

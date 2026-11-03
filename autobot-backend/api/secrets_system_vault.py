@@ -22,7 +22,7 @@ from typing import Dict
 from fastapi import HTTPException
 from sqlalchemy import select
 
-from api.schemas_system import SecretCreateRequest
+from api.schemas_system import SecretCreateRequest, SecretUpdateRequest
 from autobot_shared.auth.internal_api_key import verify_internal_api_key
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secrets_vault import VaultKind, VaultRef
@@ -32,6 +32,9 @@ from services.envelope_secrets_service import SecretAccessError
 logger = get_logger(__name__)
 
 _SYSTEM_VAULT = VaultRef(VaultKind.SYSTEM)
+
+
+_METADATA_FIELDS = frozenset({"name", "description", "tags", "expires_at", "metadata"})
 
 
 def _as_uuid(secret_id: str) -> uuid.UUID | None:
@@ -118,18 +121,33 @@ async def create_system_vault_secret(request: SecretCreateRequest, owner_id: str
     raise RuntimeError("get_session() yielded no session")  # pragma: no cover -- defensive, generator always yields
 
 
+async def _unavailable_unless_not_system(vault_id: uuid.UUID) -> None:
+    """With no coordinator, a SYSTEM secret is 503 (not 404); any other id stays 'not ours'."""
+    from llc.deps import get_session
+
+    async for session in get_session():
+        if await _is_system_secret(session, vault_id):
+            raise HTTPException(status_code=503, detail="envelope secrets store not configured")
+        return
+
+
 async def rotate_system_vault_secret(
-    secret_id: str, value: str | None, owner_id: str, headers: Mapping[str, str] | None = None
+    secret_id: str, request: SecretUpdateRequest, owner_id: str, headers: Mapping[str, str] | None = None
 ) -> Dict | None:
     """Rotate a SYSTEM-vault secret's value; None when `secret_id` is not one.
 
     A SYSTEM secret has no metadata-only edit, so an update without `value`
-    is refused (ValueError -> 400) rather than silently doing nothing.
+    is refused (ValueError -> 400) rather than silently doing nothing. The same
+    holds for metadata sent with a value: it would be dropped, so it is refused.
     """
     from llc.deps import get_session
 
+    value = request.value
     vault_id, coordinator = _as_uuid(secret_id), _coordinator_or_none()
-    if vault_id is None or coordinator is None:
+    if vault_id is None:
+        return None
+    if coordinator is None:
+        await _unavailable_unless_not_system(vault_id)
         return None
     async for session in get_session():
         if not await _is_system_secret(session, vault_id):
@@ -138,6 +156,8 @@ async def rotate_system_vault_secret(
         user_id, permissions = await _principal(owner_id)
         if not value:
             raise ValueError("value is required to update a system-vault secret")
+        if request.model_fields_set & _METADATA_FIELDS:
+            raise ValueError("a system-vault secret has no editable metadata; send only the value")
         secret = await coordinator.rotate(
             session, user_id=user_id, permissions=permissions, secret_id=vault_id, new_plaintext=value.encode("utf-8")
         )
@@ -177,7 +197,10 @@ async def delete_system_vault_secret(
     from llc.deps import get_session
 
     vault_id, coordinator = _as_uuid(secret_id), _coordinator_or_none()
-    if vault_id is None or coordinator is None:
+    if vault_id is None:
+        return False
+    if coordinator is None:
+        await _unavailable_unless_not_system(vault_id)
         return False
     async for session in get_session():
         if not await _is_system_secret(session, vault_id):
