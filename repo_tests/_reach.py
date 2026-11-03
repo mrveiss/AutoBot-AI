@@ -40,6 +40,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Generic, Sequence, TypeVar
 
+from repo_tests._reach_base import BaseFloor
+
 #: What one ``discover`` returns. ``Reach`` is generic over it so a caller's own element type
 #: survives into ``examined()`` instead of being flattened to ``object`` (#16987). Every guard
 #: doing ``root / rel`` on an ``examined()`` result was correct at runtime and unverifiable
@@ -158,7 +160,7 @@ def tracked_file_count(root: Path) -> int:
 
 
 @dataclass(frozen=True)
-class Reach(Generic[T]):
+class Reach(BaseFloor, Generic[T]):
     """What one guard examines, and the least it may find and still be believed.
 
     ``floor`` is bound to what the sweep **discovered**, never to what it
@@ -168,7 +170,8 @@ class Reach(Generic[T]):
 
     name: str
     discover: Callable[[Path], Sequence[T]]
-    floor: int
+    #: The declared ``floor=``; 0 means "computed from the base commit" (#19676, ``_reach_base``).
+    pinned_floor: int
     what: str
     #: How far the live population may sit **above** ``floor`` before
     #: ``reach_declarations_test`` demands the floor be ratcheted up (#15928).
@@ -333,7 +336,7 @@ class Reach(Generic[T]):
         """Why this floor is stale for the live tree, or None (#19282). A floor-based declaration
         is stale when the tree outgrew its allowance or the floor sits in its window's bottom band;
         a ``min_fraction`` declaration has no recorded constant to go stale."""
-        if self.min_fraction is not None:
+        if self.min_fraction is not None or self.computed:
             return None
         count = len(self.population(root))
         slack = count - self.floor
@@ -561,11 +564,8 @@ def declare(
     # carrying both would be read as whichever one the reader happened to look at, and the
     # absolute fields are exactly what #17142 is removing from the guards that adopt a fraction.
     if min_fraction is None:
-        if floor <= 0:
-            raise ValueError(
-                f"[{name}] declare() needs either a positive floor or a min_fraction; "
-                f"got floor={floor} and no min_fraction. A floor of zero asserts nothing."
-            )
+        if floor < 0:
+            raise ValueError(f"[{name}] floor={floor}: omit it to compute the floor from the base (#19676).")
     else:
         if not 0 < min_fraction <= 1:
             raise ValueError(f"[{name}] min_fraction must be in (0, 1]; got {min_fraction}.")
@@ -587,7 +587,7 @@ def declare(
     reach = Reach(
         name=name,
         discover=discover,
-        floor=floor,
+        pinned_floor=floor,
         what=what,
         growth=growth,
         skips=skips,
