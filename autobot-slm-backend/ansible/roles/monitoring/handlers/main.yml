@@ -11,21 +11,25 @@
     daemon_reload: true
 
 - name: Restart prometheus
+  when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
   ansible.builtin.systemd:
     name: prometheus
     state: restarted
 
 - name: Restart alertmanager
+  when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
   ansible.builtin.systemd:
     name: alertmanager
     state: restarted
 
 - name: Restart grafana
+  when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
   ansible.builtin.systemd:
     name: grafana-server
     state: restarted
 
 - name: Restart node_exporter
+  when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
   ansible.builtin.systemd:
     name: node_exporter
     state: restarted
