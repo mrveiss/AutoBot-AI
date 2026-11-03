@@ -7,7 +7,9 @@
 Maintainer decision: audit these, grouped. One person gets one record per window, and the next record
 says how many refusals came since. The subject comes from a token whose signature has been checked, so
 nobody can make up names to grow this; the tracked set is capped anyway. Per process: each worker groups
-on its own, which bounds the rows by workers, people and windows. Like the permission gate's denials, a
+on its own, which bounds the rows by workers, people and windows. The count is exact below the cap; when
+the tracker is full, the people dropped to make room lose their unreported counts, which is the price of
+bounded memory. Like the permission gate's denials, a
 record that can't be written is logged and counted by the writer and never changes the 403.
 """
 
