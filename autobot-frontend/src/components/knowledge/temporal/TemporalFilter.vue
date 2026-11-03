@@ -240,7 +240,7 @@ h5 .icon {
 .filter-btn.primary {
   background: var(--color-primary);
   border: none;
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .filter-btn.primary:hover {
