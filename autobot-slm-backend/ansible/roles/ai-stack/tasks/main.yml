@@ -300,7 +300,8 @@
 # this role undeliverable in the first place (#12959).
 - name: "AI Stack | Deploy service files"
   ansible.builtin.include_tasks: code_only.yml
-  tags: ['ai', 'deploy']
+  # 'config' too: an include's tags gate its tasks, so `--tags config` reaches env_files.yml (#20724)
+  tags: ['ai', 'deploy', 'config']
 
 - name: Enable and start ChromaDB service
   ansible.builtin.systemd:

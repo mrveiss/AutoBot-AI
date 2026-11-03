@@ -77,3 +77,11 @@ def test_the_finder_sees_a_render() -> None:
     """Control: the empty set above means no render, not a finder that sees nothing."""
     sample = [{"ansible.builtin.template": {"src": "ai-stack.env.j2", "dest": "/x"}}]
     assert _env_renders(sample) == {"/x"}
+
+
+def test_a_config_only_run_still_reaches_the_renders() -> None:
+    """An include's tags gate the tasks under it: `--tags config` must pass both includes to reach env_files."""
+    main = _tasks("main.yml")
+    code_only = _tasks("code_only.yml")
+    assert "config" in main[_index(main, "code_only.yml")]["tags"]
+    assert "config" in code_only[_index(code_only, "env_files.yml")]["tags"]
