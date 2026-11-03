@@ -18,8 +18,9 @@ from typing import Dict, Tuple
 from fastapi import HTTPException, Request, status
 
 from auth_revocation import resolve_human_user_via, token_passes_revocation, with_session_issue_time
+from auth_service_opt_in import admit_opted_in_service, warn_if_key_without_session
 from autobot_shared.auth.interactive_principal import LOGIN_TOKEN_TYPE, is_login_token, is_purpose_bound
-from autobot_shared.auth.internal_api_key import verify_internal_api_key
+from autobot_shared.auth.internal_api_key import verify_internal_api_key  # noqa: F401  (re-exported)
 from autobot_shared.auth.jwt_core import (
     decode_jwt_multi,
     encode_jwt,
@@ -870,9 +871,9 @@ async def get_current_user(request: Request) -> Dict:
     """
     Dependency for FastAPI endpoints to get current authenticated user.
 
-    Issue #1779: Also accepts X-Internal-API-Key header for
-    service-to-service calls (e.g. SLM frontend via nginx proxy).
-    Returns a synthetic admin user dict when the internal key matches.
+    #16333 (owner ruling b): the internal service key is not a user and not an admin. It is
+    admitted only on a route that names its caller with :func:`service_opt_in`, and then as a
+    non-admin service principal. The SLM frontend's proxied calls carry the admin's own token.
 
     SEC-2 #6473: Also accepts a run-scoped JWT (``Bearer <run-jwt>``) so
     MCP bridge workers and long-running tasks can authenticate without a
@@ -886,9 +887,8 @@ async def get_current_user(request: Request) -> Dict:
 
     Raises HTTPException if authentication fails.
     """
-    # Issue #1779: Allow trusted internal services via API key
-    if verify_internal_api_key(request.headers.get("X-Internal-API-Key")):
-        return {"username": "service:slm", "role": "admin", "service": True}
+    if (service := await admit_opted_in_service(request)) is not None:
+        return service
 
     middleware = get_auth_middleware()
 
@@ -937,6 +937,7 @@ async def get_current_user(request: Request) -> Dict:
             )
         return device_user
 
+    warn_if_key_without_session(request)  # only once every other credential has failed
     raise_auth_error("AUTH_0002")
 
 
@@ -946,14 +947,12 @@ async def check_admin_permission(request: Request) -> bool:
 
     Raises HTTPException: 401 if not authenticated, 403 if not admin.
     """
-    # Issue #1145: Allow trusted internal services (e.g. SLM backend) via API key.
-    # The key is set via AUTOBOT_INTERNAL_API_KEY env var on both services.
-    if verify_internal_api_key(request.headers.get("X-Internal-API-Key")):
-        logger.debug("Internal API key auth: granting admin access")
+    if await admit_opted_in_service(request) is not None:  # #16333: the key only where a route names it
         return True
 
     user_data = await resolve_human_user(request)  # #12924, #16411: a pre-password-change JWT is 401
     if not user_data:
+        warn_if_key_without_session(request)
         raise_auth_error("AUTH_0002")
 
     # Issue #744: Require explicit role - no guest fallback for security
