@@ -115,24 +115,15 @@ def test_differing_keys_keep_the_backend_value_and_say_so(tmp_path: Path) -> Non
 
 @pytest.fixture
 def finding(monkeypatch):
-    """The finding writer against a fake session that remembers what it added."""
+    """The finding writer against the shared fake session (#18883): no finding pending, then one."""
     from services import backend_key_finding as mod
+    from testkit.fake_async_session import FakeAsyncSession, FakeResult
 
-    added: list = []
-
-    class _Session:
-        async def execute(self, _query):
-            return MagicMock(scalar=lambda: 1 if added else None)
-
-        def add(self, event):
-            added.append(event)
-
-        async def commit(self):
-            return None
+    session = FakeAsyncSession(results=[FakeResult([]), FakeResult([1])])
 
     class _Ctx:
         async def __aenter__(self):
-            return _Session()
+            return session
 
         async def __aexit__(self, *exc):
             return False
@@ -142,7 +133,7 @@ def finding(monkeypatch):
     monkeypatch.setattr(mod, "NodeEvent", _RecordedEvent)
     monkeypatch.setattr(mod, "EventSeverity", types.SimpleNamespace(ERROR=types.SimpleNamespace(value="error")))
     monkeypatch.setattr(mod, "select", lambda *_a: MagicMock())
-    return mod, added
+    return mod, session
 
 
 class _RecordedEvent(types.SimpleNamespace):
@@ -153,11 +144,11 @@ class _RecordedEvent(types.SimpleNamespace):
 
 @pytest.mark.asyncio
 async def test_the_finding_is_recorded_once_until_resolved(finding) -> None:
-    mod, added = finding
+    mod, session = finding
     await mod.report_backend_refused_internal_key("/api/v2/secrets/system")
     await mod.report_backend_refused_internal_key("/api/v2/secrets/system")
-    assert len(added) == 1, "repeated refusals stand for one finding, not one per call"
-    event = added[0]
+    assert len(session.added) == 1 and session.commits == 1, "repeated refusals are one finding, not one per call"
+    event = session.added[0]
     assert event.event_type == mod.FINDING_EVENT_TYPE and event.severity == "error" and event.resolved is not True
     assert "#20750" in event.message
 
