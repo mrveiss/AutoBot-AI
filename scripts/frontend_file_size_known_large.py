@@ -100,7 +100,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/visualizations/AgentActivityVisualization.vue": 936,
     "autobot-frontend/src/components/visualizations/SystemArchitectureDiagram.vue": 1881,
     "autobot-frontend/src/components/visualizations/WorkflowVisualization.vue": 1017,  # #16744: 1020 -> 1019
-    "autobot-frontend/src/components/workflow/PhaseProgressionIndicator.vue": 634,
+    "autobot-frontend/src/components/workflow/PhaseProgressionIndicator.vue": 618,
     "autobot-frontend/src/components/workflow/WorkflowCanvas.vue": 2887,
     "autobot-frontend/src/components/workflow/WorkflowLiveDashboard.vue": 782,
     "autobot-frontend/src/composables/__tests__/useClipboard.test.ts": 696,
