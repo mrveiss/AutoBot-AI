@@ -51,7 +51,8 @@ async def fetch_first_slm_admin() -> SlmPerson | None:
     await assert_egress_policy(url)
     headers = {"X-Internal-API-Key": internal_api_key() or ""}
     async with session.get(url, headers=headers, allow_redirects=False) as response:
-        if response.status == 404:
+        if response.status == 404:  # logged: a misrouted 404 looks the same, and seeding follows
+            logger.warning("Person link: the SLM answered 404 for its first admin; treating it as none yet")
             return None
         response.raise_for_status()
         data = await response.json()

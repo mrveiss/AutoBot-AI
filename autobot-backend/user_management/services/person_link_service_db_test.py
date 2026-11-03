@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -89,3 +89,17 @@ async def test_a_person_is_linked_to_one_user_only(factory) -> None:
         session.add(PersonLink(slm_user_id=_PERSON.id, user_id=uuid.uuid4()))
         with pytest.raises(IntegrityError):
             await session.flush()
+
+
+@pytest.mark.asyncio
+async def test_a_deleted_user_is_not_brought_back_on_the_next_start(factory) -> None:
+    """The row outlives the user with no user on it, which SQLite here does by hand and the foreign key does for real."""
+    assert next(iter(PersonLink.__table__.c.user_id.foreign_keys)).ondelete == "SET NULL"
+    await _at_startup(factory)
+    async with factory() as session, session.begin():
+        link = (await session.execute(select(PersonLink))).scalar_one()
+        user_id, link.user_id = link.user_id, None
+        await session.flush()
+        await session.execute(delete(User).where(User.id == user_id))
+    await _at_startup(factory)
+    assert await _counts(factory) == (0, 1)
