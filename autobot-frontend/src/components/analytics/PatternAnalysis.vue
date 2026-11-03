@@ -37,10 +37,10 @@
     <!-- Error State -->
     <EmptyState
       v-if="!analyzing && !wasInterrupted && error"
-      icon="exclamation-triangle"
       :title="$t('analytics.patterns.errorTitle')"
-      :message="error"
+      :description="error"
     >
+      <template #icon><Icon name="exclamation-triangle" /></template>
       <template #actions>
         <button @click="reset" class="retry-btn">
           <Icon name="redo" /> {{ $t('analytics.patterns.reset') }}
@@ -247,17 +247,17 @@
     <!-- Empty State -->
     <EmptyState
       v-if="!analyzing && !wasInterrupted && !error && !hasResults"
-      icon="puzzle-piece"
       :title="$t('analytics.patterns.noAnalysis')"
-      :message="$t('analytics.patterns.emptyHint')"
-    />
+      :description="$t('analytics.patterns.emptyHint')"
+    >
+      <template #icon><Icon name="puzzle-piece" /></template>
+    </EmptyState>
   </div>
 </template>
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
-import EmptyState from '@/components/ui/EmptyState.vue'
-import { useShowMore } from '@autobot/ui'
+import { EmptyState, useShowMore } from '@autobot/ui'
 import TruncationNotice from './TruncationNotice.vue'
 import { watch, onMounted, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'

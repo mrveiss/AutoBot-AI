@@ -14,7 +14,7 @@ token, a request body, or an exception message (those can echo a value) -- a
 failure carries its exception class name only.
 """
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 
 from auth_middleware import get_auth_middleware
 from autobot_shared.logging_manager import get_logger
@@ -51,12 +51,18 @@ async def audit_secret_op(
     secret_id: str | None,
     request: Request,
     result: AuditResult = "success",
+    *,
+    required: bool = False,
     **details: str | int,
 ) -> None:
-    """Record one secret operation; an unreachable store never fails it.
+    """Record one secret operation.
 
-    ``details`` must be identifiers or counts (name, scope, reason, count) --
-    never a value. The miss is logged by exception class name only.
+    By default an unreachable store never fails the operation (the miss is
+    logged by exception class name only). ``required=True`` is for the record
+    written BEFORE an irreversible credential delete or rotate (#20557): an
+    unrecorded write raises a 503, so the credential is never destroyed or
+    replaced without the durable paper trail #17038 requires. ``details`` must
+    be identifiers or counts (name, scope, reason, count) -- never a value.
     """
     try:
         recorded = await audit_log(
@@ -67,9 +73,11 @@ async def audit_secret_op(
             resource=secret_log_ref(secret_id) if secret_id else None,
             details=details,
         )
-    except Exception as exc:  # noqa: BLE001 -- the audit store being down must not fail a secret operation
+    except Exception as exc:  # noqa: BLE001 -- a best-effort record must not fail a secret operation
         logger.error("[Secrets Audit] audit store write failed for %s: %s", operation, type(exc).__name__)
-        return
+        recorded = False
     # AuditLogger.log reports a failed write by returning False, not by raising.
     if recorded is False:
         logger.error("[Secrets Audit] audit store did not record %s", operation)
+        if required:
+            raise HTTPException(status_code=503, detail="Audit trail unavailable; nothing was changed")
