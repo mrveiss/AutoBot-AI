@@ -36,6 +36,9 @@ export default defineConfigWithVueTs(
     // (deny.test.ts) and counter-examples (allow.test.ts). Excluded from
     // production lint; verify manually with `npx eslint --no-ignore eslint-tests/`.
     'eslint-tests/**',
+    // #17571: canonical-rule fixtures hold deliberate violations (unused
+    // imports the rule must detect); the rule's own tests read them.
+    'scripts/canonical/__tests__/fixtures/**',
   ]),
 
   pluginVue.configs['flat/essential'],
