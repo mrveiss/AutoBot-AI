@@ -422,12 +422,8 @@ import { formatFileSize } from '@/utils/formatHelpers'
 import { parseTags } from '@/utils/tagHelpers'
 import { resetFormFields } from '@/utils/formHelpers'
 import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
-import {
-  KNOWLEDGE_UPLOAD_ACCEPT,
-  KNOWLEDGE_UPLOAD_EXTENSIONS,
-  KNOWLEDGE_UPLOAD_MAX_BYTES,
-  KNOWLEDGE_UPLOAD_MAX_MB
-} from '@/constants/knowledgeUpload'
+import { KNOWLEDGE_UPLOAD_ACCEPT, KNOWLEDGE_UPLOAD_EXTENSIONS } from '@/constants/knowledgeUpload'
+import { useKnowledgeUploadLimit } from '@/composables/knowledge/useKnowledgeUploadLimit'
 import { useUploadProgress } from '@/composables/useUploadProgress'
 import { useExpansion } from '@/composables/useExpansion'
 import { useTransientError } from '@/composables/useTransientError'
@@ -461,6 +457,7 @@ interface FileItem {
 const store = useKnowledgeStore()
 const controller = useKnowledgeController()
 const { getFileIcon } = useKnowledgeIcons()
+const { maxMb, loadLimit, exceedsLimit } = useKnowledgeUploadLimit()
 const {
   progress: uploadProgress,
   startProgress,
@@ -729,8 +726,8 @@ async function addFiles(files: File[]): Promise<void> {
 
   for (const file of files) {
     // Validate file size
-    if (file.size > KNOWLEDGE_UPLOAD_MAX_BYTES) {
-      showError(t('knowledge.upload.errorFileTooLarge', { name: file.name, max: KNOWLEDGE_UPLOAD_MAX_MB }))
+    if (exceedsLimit(file.size)) {
+      showError(t('knowledge.upload.errorFileTooLarge', { name: file.name, max: maxMb.value }))
       continue
     }
 
@@ -965,6 +962,7 @@ function generateId(): string {
 
 onMounted(() => {
   controller.loadCategories()
+  loadLimit()
 })
 </script>
 

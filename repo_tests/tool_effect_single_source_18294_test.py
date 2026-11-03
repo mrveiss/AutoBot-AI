@@ -123,7 +123,7 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "tool-effect-table-scan",
     discover=_population,
-    floor=3300,  # mid-window: population 3450, window (3150, 3450)
+    floor=3305,  # mid-window: population 3455, window (3155, 3455)
     what="non-test python source",
     roots=("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     growth=300,

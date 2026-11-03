@@ -61,6 +61,7 @@ from llc.models.enums import (
     WorkItemStatus,
 )
 from llc.models.membership import LLCCompanyMembership
+from llc.scheduler.dispatch_gate import run_block_reason
 from llc.services.authz import NotAuthorisedError, may_attach_under
 from llc.services.backlog import BacklogService
 from llc.services.company import (
@@ -122,24 +123,8 @@ def _get_membership_service() -> MembershipService:
 
 
 def _to_read(org: Organization) -> CompanyRead:
-    return CompanyRead(
-        id=org.id,
-        name=org.name,
-        slug=org.slug,
-        description=org.description,
-        issue_prefix=org.issue_prefix,
-        issue_counter=org.issue_counter,
-        budget_monthly_cents=org.budget_monthly_cents,
-        spent_monthly_cents=org.spent_monthly_cents,
-        brand_color=org.brand_color,
-        require_approval_for_hires=org.require_approval_for_hires,
-        parent_org_id=org.parent_org_id,
-        llc_status=LLCCompanyStatus(org.llc_status),
-        pause_reason=org.pause_reason,
-        paused_at=org.paused_at,
-        created_at=org.created_at,
-        updated_at=org.updated_at,
-    )
+    """The wire shape of a company: every ``CompanyRead`` field, read off the row (``from_attributes``)."""
+    return CompanyRead.model_validate(org)
 
 
 def _get_service(session: AsyncSession = Depends(get_async_session)) -> CompanyService:
@@ -210,16 +195,14 @@ async def _assert_may_create_under(
 async def _create_and_commit(
     svc: CompanyService, membership_svc: MembershipService, body: CompanyCreate, user_id: str
 ) -> CompanyRead:
-    """Insert, record the creator as OWNER, ensure the KB collections, THEN commit (GH#12323).
+    """Insert, record the creator as OWNER, THEN commit (GH#12323).
 
-    A failure in any step is rolled back by the route, so no committed-but-unreported row;
-    ``ensure_collection`` is idempotent, so a rollback leaves only reusable empty collections.
+    A failure in any step is rolled back by the route, so no committed-but-unreported row.
+    KB collections appear on their first write, so creating a company makes none (#19725).
     """
     org = await svc.create(body)
     await membership_svc.add_member(svc.session, str(org.id), user_id, MembershipRole.OWNER)
     read = _to_read(org)
-    for suffix in (None, KbCollectionManager.AGENTS_SUFFIX, KbCollectionManager.DECISIONS_SUFFIX):
-        await _kb_manager.ensure_collection(KbCollectionManager.COMPANY_PREFIX, org.id, suffix)
     await svc.session.commit()
     return read
 
@@ -316,8 +299,8 @@ async def delete_company(
     try:
         await svc.delete(company_id)
         await svc.session.commit()
-        # #13920: drop the three collections create_company's ensure_collection
-        # loop makes (base, agents, decisions). Derived from the same constants
+        # #13920: drop the three collections a company's writes can make
+        # (base, agents, decisions). Derived from the same constants
         # rather than restated, so a fourth suffix cannot be created and then
         # silently never cleaned up.
         for suffix in (None, KbCollectionManager.AGENTS_SUFFIX, KbCollectionManager.DECISIONS_SUFFIX):
@@ -816,6 +799,9 @@ class OrgChartNode(BaseModel):
     # quietly assert every agent is inactive.
     is_active: Optional[bool] = None
     heartbeat_enabled: Optional[bool] = None  # #15907: periodic schedule on/off; None for a person
+    # #20519: run-start per the agent's own row (status, adapter), not pause/budget; None for a person.
+    can_run: Optional[bool] = None
+    cannot_run_reason: Optional[str] = None
     last_heartbeat: Optional[str]
     budget_spent: float
     budget_total: float
@@ -1000,16 +986,10 @@ def _compose_agent_node(
     """Compose one agent's ``OrgChartNode`` from its hierarchy row, its budget
     row (if any), and its latest heartbeat run (if any) (#14184).
 
-    Extracted verbatim out of ``get_org_chart``'s per-row loop — a pure move,
-    the precedent being the already-extracted human branch,
-    ``_compose_human_nodes``. No field's source expression changed: every
-    right-hand side below is byte-for-byte the same expression that used to
-    sit inline in the loop (budget resolution now lives in
-    ``_resolve_agent_budget``), and the existing org-chart test suite
-    (``test_llc_org_chart.py``, ``test_org_chart_enrichment.py``) exercises
-    every one of them unchanged as the behaviour-preservation evidence.
+    Extracted from ``get_org_chart``'s per-row loop; the org-chart tests cover every field.
     """
     b_spent, b_total = _resolve_agent_budget(budget)
+    block_reason = run_block_reason(row.status, row.adapter_type, row.adapter_config)
     return OrgChartNode(
         id=row.agent_id,
         node_id=str(row.id),  # AgentOrgNode UUID PK (assignment keyspace, #10032)
@@ -1025,6 +1005,8 @@ def _compose_agent_node(
         adapter_type=row.adapter_type or "",
         is_human=False,
         heartbeat_enabled=row.heartbeat_enabled,
+        can_run=block_reason is None,
+        cannot_run_reason=block_reason,
         # Liveness: latest run is picked by created_at; a just-queued run
         # may have no started_at, so fall back to created_at.
         last_heartbeat=(

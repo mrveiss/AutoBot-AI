@@ -35,10 +35,22 @@ def _load(name: str, relative: str):
     return module
 
 
+_BEFORE = dict(sys.modules)  # what this file loads is put back afterwards, so later test files see their stubs
 _load("models.schemas_node_ssh_password", "models/schemas_node_ssh_password.py")  # `models` is a conftest stub
 route = _load("node_ssh_password_internal_under_20046_test", "api/node_ssh_password_internal.py")
 ssh = sys.modules["services.node_ssh_password"]  # the very module the route imported, so patches reach both
 assert not isinstance(ssh.delete_stored_password, MagicMock), "services.node_ssh_password is a stub"
+for _name in [n for n in sys.modules if n not in _BEFORE]:
+    del sys.modules[_name]
+sys.modules.update(_BEFORE)
+
+
+@pytest.fixture(autouse=True)
+def _egress_checked(monkeypatch):
+    """The real check refuses the test's made-up backend address; whether it is called is pinned below."""
+    check = AsyncMock()
+    monkeypatch.setattr(ssh, "assert_egress_policy", check)
+    return check
 
 
 def _node(extra: dict | None, auth_method: str = "key") -> SimpleNamespace:
@@ -426,3 +438,12 @@ async def test_a_fast_command_still_returns_its_output() -> None:
     module = _load_orchestrator_ssh()
     code, out, _err = await module.spawn_ssh(["echo", "hi"], timeout=5)
     assert (code, out.strip()) == (0, b"hi")
+
+
+@pytest.mark.asyncio
+async def test_both_calls_to_the_backend_are_checked_against_the_egress_policy(_egress_checked) -> None:
+    """#17576 rule 8: an outbound call states its policy; the address comes from config but is still checked."""
+    import inspect
+
+    source = inspect.getsource(ssh)
+    assert source.count("await assert_egress_policy(url)") == 2

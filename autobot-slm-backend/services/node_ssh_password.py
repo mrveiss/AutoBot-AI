@@ -21,6 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared import node_proxy
+from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.slm_credential_deletion import (
     ACTION,
     CREDENTIAL_KIND,
@@ -64,9 +65,11 @@ async def propose_password_deletion(node: Node) -> bool:
         logger.warning("Deletion of node %s's stored SSH password not proposed: backend URL or key unset", node.node_id)
         return False
     body: dict[str, Any] = {"node_id": node.node_id, "credential_kind": CREDENTIAL_KIND}
+    url = f"{base_url}{PROPOSAL_PATH}"
+    await assert_egress_policy(url)  # #17576: the backend's address comes from config, still checked
     try:
         async with node_proxy.node_client() as client:
-            response = await client.post(f"{base_url}{PROPOSAL_PATH}", json=body, headers=node_proxy.internal_headers())
+            response = await client.post(url, json=body, headers=node_proxy.internal_headers())
         response.raise_for_status()
     except httpx.HTTPError as exc:
         if isinstance(exc, httpx.HTTPStatusError):
@@ -97,10 +100,12 @@ async def _claim_approval(approval_id: uuid.UUID, node_id: str) -> None:
     base_url = node_proxy.resolve_node_url(settings.authority_base_url)
     if not base_url or not node_proxy.internal_api_key():
         raise DeletionRefused(503, "the backend cannot be asked to verify the approval")
+    url = f"{base_url}{claim_path(str(approval_id))}"
+    await assert_egress_policy(url)  # #17576
     try:
         async with node_proxy.node_client() as client:
             response = await client.post(
-                f"{base_url}{claim_path(str(approval_id))}",
+                url,
                 json={"node_id": node_id},
                 headers=node_proxy.internal_headers(),
             )

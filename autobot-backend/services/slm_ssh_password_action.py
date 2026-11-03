@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 import aiohttp
 
 from autobot_shared import node_proxy
+from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.slm_credential_deletion import (
     ACTION,
@@ -69,9 +70,12 @@ async def _delete_in_slm(node_id: str, approval_id: str) -> bool | None:
     if not node_proxy.internal_api_key():
         raise RuntimeError("the internal service key is not configured")
     url = f"{_slm_direct_url()}{delete_path(node_id)}"
+    await assert_egress_policy(url)  # #17576
     timeout = aiohttp.ClientTimeout(total=node_proxy.node_timeout())
     async with aiohttp.ClientSession(headers=node_proxy.internal_headers()) as http:
-        async with http.delete(url, params={APPROVAL_QUERY: approval_id}, timeout=timeout) as response:
+        async with http.delete(
+            url, params={APPROVAL_QUERY: approval_id}, timeout=timeout, allow_redirects=False
+        ) as response:
             if response.status == 404:
                 if await _detail(response) != NODE_NOT_FOUND_DETAIL:
                     raise RuntimeError("the SLM route was not found: the call reached the wrong place")

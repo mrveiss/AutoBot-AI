@@ -219,6 +219,9 @@ def test_a_declared_scope_that_the_sweep_does_not_reach_is_refused() -> None:
 #: and that is the point -- the scope is a decision, so it is written twice on purpose.
 _DECLARED_SCOPES = {
     "edge-configs-proxying-api-20046": ("autobot-infrastructure", "autobot-slm-backend", "docker"),
+    "slm-users-db-scan": ("autobot-slm-backend",),
+    "windows-install-scripts-stage-constraints-19681": ("autobot-npu-worker/resources/windows-npu-worker",),
+    "role-source-paths-depth-proof-20509": ("autobot-slm-backend/ansible/roles",),
     "operational-docs-playbook-references-19611": (
         ".claude",
         "autobot-infrastructure",
@@ -231,6 +234,7 @@ _DECLARED_SCOPES = {
     "autobot-has-no-pro-tier-in-user-text": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "dead-icon-selector-vue-files": ("autobot-frontend/src",),
     "icon-font-size-rule-vue-files": ("autobot-frontend/src",),
+    "primary-fill-white-label-files": ("autobot-frontend/src",),
     "kit-shadow-ts-files-scanned-14908": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "duplicate-type-names-ts-files-scanned-14908": (
         "autobot-frontend/src",

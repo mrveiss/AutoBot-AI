@@ -29,6 +29,17 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "Workflow files are a subset of tracked YAML (#20191); compose, ansible and filter files grow "
         "at their own rate, so a share of all YAML would sink with nothing wrong.",
     ),
+    "windows-install-scripts-stage-constraints-19681": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "The Windows install scripts that call pip on the installed requirements: a small named set, "
+        "so a share of any file count means nothing.",
+    ),
+    "role-source-paths-depth-proof-20509": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Ansible YAML under roles, a subset of tracked files that grows at its own rate.",
+    ),
     "operational-docs-playbook-references-19611": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -82,6 +93,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         ABSOLUTE,
         "SUBSET_DRIFTS",
         "One frontend tree's `.vue` files, against all tracked `.vue` including the other frontend and the kit.",
+    ),
+    "primary-fill-white-label-files": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "One frontend tree's `.vue` and `.css` files, against all tracked ones incl. the other frontend and kit.",
     ),
     "deployment-mode-detector-scan": (
         ABSOLUTE,

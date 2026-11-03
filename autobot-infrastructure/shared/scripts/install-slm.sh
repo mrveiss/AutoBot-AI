@@ -306,7 +306,7 @@ install_grafana() {
         echo "deb [signed-by=/usr/share/keyrings/grafana.key] https://apt.grafana.com stable main" \
             > /etc/apt/sources.list.d/grafana.list
         apt-get update -qq
-        apt-get install -y -qq "grafana=${GRAFANA_VERSION:=11.1.0}"
+        apt-get install -y -qq "grafana=${GRAFANA_VERSION:=11.6.16}"
     fi
 
     # Configure Grafana
