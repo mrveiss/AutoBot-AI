@@ -83,7 +83,7 @@ def test_the_resume_route_runs_the_strict_check_and_hands_the_verdict_to_the_gra
 
     seen = {}
 
-    def _stream(manager, chat_id, decision, request_id, attachment_access=False):
+    def _stream(manager, chat_id, decision, request_id, attachment_access=False, auth_scope=None):
         seen["access"] = attachment_access
         return iter(())
 
