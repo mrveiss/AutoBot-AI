@@ -1648,7 +1648,7 @@
       },
       "trends": {
         "title": "Trends",
-        "note": "The backend builds these series from a fixed placeholder formula, not from stored history, so they show shape only and are not measurements.",
+        "note": "No stored trend history is available yet, so the backend sends no trend series.",
         "empty": "The backend sent no trend series",
         "col": {
           "series": "Series",

@@ -1,6 +1,6 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
-// #19983: the main app's upload routes are bearer-gated (check_admin_permission), so ApiClient.uploadFile
+// #19983: the main app's upload routes are bearer-gated (ownership in _authorize_file_operation, #20133), so ApiClient.uploadFile
 // must send the stored JWT through the kit's authorizeUpload hook, and none when there is no token.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
