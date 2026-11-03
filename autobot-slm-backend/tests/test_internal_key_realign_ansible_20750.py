@@ -62,7 +62,7 @@ class _Backend:
         return [(step, key) for step, key, _body in self.calls]
 
 
-def _run(tmp_path: Path, backend: _Backend, canonical: str = _SLM, restart: bool = True, verify: bool = True):
+def _run(tmp_path: Path, backend: _Backend, canonical: str = _SLM, restart: bool = True, verify: bool = True, flags=()):
     """Resolve, then claim; then verify if a realign is being applied. Returns (renders, ok, output)."""
     (tmp_path / "slm-secrets.env").write_text(f"AUTOBOT_INTERNAL_API_KEY={canonical}\n" if canonical else "")
     env_file = tmp_path / "code.env"
@@ -92,6 +92,7 @@ def _run(tmp_path: Path, backend: _Backend, canonical: str = _SLM, restart: bool
         "autobot_restart_services": restart,
     }
     cmd = ["ansible-playbook", "-i", "localhost,", "-c", "local", str(tmp_path / "p.yml"), "-e", json.dumps(extra)]
+    cmd += list(flags)
     env = {"ANSIBLE_LOG_PATH": str(tmp_path / "a.log"), "PATH": "/usr/bin:/bin:/usr/local/bin"}
     proc = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=180, check=False)  # nosec B603
     render = next(
@@ -156,3 +157,14 @@ def test_the_updater_claims_before_it_renders_and_verifies_after_the_backend_is_
     render, ready = at("Regenerate .env"), at("Backend | Wait for API to be ready")
     verify = at("Check the re-aligned internal key works")
     assert resolve < claim < render < ready < verify
+
+
+@pytest.mark.parametrize(
+    "flags", [("--skip-tags", "restart"), ("--skip-tags", "celery")], ids=["no-restart", "no-celery"]
+)
+def test_a_run_that_wont_restart_or_verify_does_not_spend_the_approval(tmp_path: Path, flags) -> None:
+    """Claim -> render -> restart -> verify -> outcome is one unit: no claim when the run skips part of it."""
+    backend = _Backend("approved", accepts={_BACKEND, _SLM})
+    render, ok, _out = _run(tmp_path, backend, verify=False, flags=flags)
+    assert ok and render == _BACKEND
+    assert "claim" not in [step for step, _key in backend.steps()]

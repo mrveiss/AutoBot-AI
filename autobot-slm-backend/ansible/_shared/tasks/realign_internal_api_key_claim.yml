@@ -20,6 +20,18 @@
 # `internal_api_key_backend_url`, the backend on the node's own loopback (its port is bound there, #11455).
 ---
 
+# Claim -> render -> restart (backend and celery) -> verify -> outcome is one unit: an approval is only
+# claimed when this run will also do the rest. A run whose tag selection skips the render, the restart or
+# the verify (`--tags env`, `--skip-tags restart`, `--skip-tags celery`), or a no-restart sync (#20743),
+# leaves the approval unspent for the next full update.
+- name: "Internal key | Will this run render, restart and verify a realign? (#20750)"
+  ansible.builtin.set_fact:
+    internal_api_key_realign_can_apply: >-
+      {{ (autobot_restart_services | default(true) | bool)
+         and (['backend', 'env', 'restart', 'celery'] | intersect(ansible_skip_tags | default([])) | length == 0)
+         and ((['all', 'backend'] | intersect(ansible_run_tags | default(['all'])) | length > 0)
+              or (['env', 'restart'] | difference(ansible_run_tags | default([])) | length == 0)) }}
+
 - name: "Internal key | Propose re-aligning the backend's key to the SLM's (#20750)"
   ansible.builtin.uri:
     url: "{{ internal_api_key_backend_url }}/api/internal/slm/credential-proposals"
@@ -35,6 +47,7 @@
   failed_when: false
   no_log: true  # the request carries a key
   when:
+    - internal_api_key_mismatch is defined
     - internal_api_key_mismatch | bool
     - internal_api_key_loaded_file in internal_api_key_by_file
 
@@ -64,8 +77,8 @@
   no_log: true
   when:
     - _internal_key_realign_proposal.json.status | default('') == 'approved'
-    # The new key only takes effect on restart; a no-restart sync (#20743) leaves the approval for later.
-    - autobot_restart_services | default(true) | bool
+    # The new key only takes effect on restart, and only a verified one is reported: see the unit above.
+    - internal_api_key_realign_can_apply | bool
     # Never an empty credential: with no SLM key to render, the approval is not spent.
     - internal_api_key_canonical | length > 0
 

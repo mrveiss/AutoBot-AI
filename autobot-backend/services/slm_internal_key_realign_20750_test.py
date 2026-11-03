@@ -35,6 +35,7 @@ def _client(existing_by_status: dict | None = None, approval: SimpleNamespace | 
     app = FastAPI()
     app.include_router(routes.router, prefix="/api")
     session = MagicMock(commit=AsyncMock(), get=AsyncMock(return_value=approval))
+    session.execute = AsyncMock(return_value=MagicMock(rowcount=1))  # the one-outcome UPDATE wins
     app.dependency_overrides[routes.get_db_session] = lambda: session
     service = MagicMock()
     by_status = existing_by_status or {}
@@ -163,3 +164,30 @@ def test_the_realign_audit_members_close_the_block() -> None:
         "INTERNAL_KEY_REALIGN_APPLIED",
         "INTERNAL_KEY_REALIGN_APPLY_FAILED",
     ]
+
+
+def test_an_ssh_approval_whose_executor_failed_does_not_block_a_new_proposal(audit) -> None:
+    """#20046's executor runs inside approve(); reusing a failed, unspent approval would block every retry."""
+    stuck = SimpleNamespace(id=uuid.uuid4(), status=ApprovalStatus.APPROVED.value)
+    client, service, _ = _client({ApprovalStatus.APPROVED.value: [stuck]})
+    response = _post(client, service, PROPOSAL_PATH, {"action": SSH_PASSWORD_DELETE.name, "node_id": "node-b"})
+    assert response.json()["created"] is True, "a fresh proposal, so a person can approve the retry"
+    assert SSH_PASSWORD_DELETE.reuse_approved is False and INTERNAL_KEY_REALIGN.reuse_approved is True
+
+
+def test_a_second_outcome_is_refused_not_overwritten(audit) -> None:
+    client, service, session = _client(approval=_approval(consumed_at="2026-11-03T22:01:00+00:00"))
+    session.execute = AsyncMock(return_value=MagicMock(rowcount=0))  # an outcome is already recorded
+    body = {"action": _REALIGN, "node_id": "node-b", "result": "applied"}
+    assert _post(client, service, outcome_path(str(_ID)), body).status_code == 409
+    audit.assert_not_awaited()
+    session.add.assert_not_called()
+
+
+def test_a_reported_detail_is_one_capped_line_of_plain_text(audit) -> None:
+    client, service, session = _client(approval=_approval(consumed_at="2026-11-03T22:01:00+00:00"))
+    body = {"action": _REALIGN, "node_id": "node-b", "result": "apply_failed", "detail": "a\nb\x00\tc " + "x" * 450}
+    assert _post(client, service, outcome_path(str(_ID)), body).status_code == 204
+    kept = audit.await_args.kwargs["details"]["detail"]
+    assert kept.startswith("a b c ") and len(kept) == 300 and "\n" not in kept and "\x00" not in kept
+    assert session.add.call_args.args[0].body == f"Applying it failed: {kept}"

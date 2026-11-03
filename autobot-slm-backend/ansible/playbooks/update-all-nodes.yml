@@ -1183,7 +1183,10 @@
     # key is canonical; a backend whose key differs keeps it, visibly, because changing it needs
     # the owner's approval (#17038). Sets autobot_internal_api_key for the env_only render below.
     - name: "[PLAY 2] Backend | Resolve AUTOBOT_INTERNAL_API_KEY (#10636, #20750)"
-      ansible.builtin.include_tasks: ../_shared/tasks/resolve_internal_api_key.yml
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/resolve_internal_api_key.yml
+        apply:
+          tags: [backend, env]  # a dynamic include's tags don't reach its tasks without apply
       vars:
         internal_api_key_current_env_files:
           - "{{ autobot.base_dir }}/autobot-backend/.env"
@@ -1194,7 +1197,10 @@
     # #20750: a mismatch is proposed for approval; an approved realign is claimed here and applied by
     # this run's render, restart and the verify step after "Wait for API to be ready".
     - name: "[PLAY 2] Backend | Propose or claim re-aligning the internal key (#20750)"
-      ansible.builtin.include_tasks: ../_shared/tasks/realign_internal_api_key_claim.yml
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/realign_internal_api_key_claim.yml
+        apply:
+          tags: [backend, env]
       vars:
         internal_api_key_loaded_file: "{{ autobot.base_dir }}/autobot-backend/.env"
         internal_api_key_backend_url: "http://127.0.0.1:{{ infrastructure.ports.backend }}"  # pragma: allowlist secret -- a URL
@@ -1499,7 +1505,10 @@
       tags: [backend, restart]
 
     - name: "[PLAY 2] Backend | Check the re-aligned internal key works, and report it (#20750)"
-      ansible.builtin.include_tasks: ../_shared/tasks/realign_internal_api_key_verify.yml
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/realign_internal_api_key_verify.yml
+        apply:
+          tags: [backend, restart]
       vars:
         internal_api_key_backend_url: "http://127.0.0.1:{{ infrastructure.ports.backend }}"  # pragma: allowlist secret -- a URL
       when:

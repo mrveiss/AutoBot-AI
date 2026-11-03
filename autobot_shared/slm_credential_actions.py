@@ -34,6 +34,10 @@ class CredentialAction:
     credential_kind: str
     #: ``requested_by_agent`` is ``<prefix>:<node_id>``; with the action it makes a node's proposal findable.
     proposer_prefix: str
+    #: Whether a re-proposal returns an APPROVED, not yet spent approval instead of a new one. True only
+    #: where the applying side claims it later (the realign's next update). An action whose executor runs
+    #: inside approve() must not: if that executor failed, reusing the approval would block every retry.
+    reuse_approved: bool = False
 
     def proposer_id(self, node_id: str) -> str:
         return f"{self.proposer_prefix}:{node_id}"
@@ -48,6 +52,7 @@ INTERNAL_KEY_REALIGN = CredentialAction(
     name="slm_backend_internal_key_realign",
     credential_kind="internal_api_key",  # nosec B106  # pragma: allowlist secret -- a kind label, not a key
     proposer_prefix="slm-update",
+    reuse_approved=True,  # the node's next update claims it
 )
 #: Every action, by its approval ``context["action"]`` name.
 ACTIONS = {action.name: action for action in (SSH_PASSWORD_DELETE, INTERNAL_KEY_REALIGN)}

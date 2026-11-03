@@ -74,3 +74,47 @@ async def claim_approval(
         raise ClaimRefused("approval already used")
     await session.commit()
     return approval
+
+
+#: ``context`` key holding the one terminal outcome an applying side reported (#20750).
+OUTCOME_KEY = "outcome"
+#: The most of a reported detail that is kept: it reaches an audit row and an approval comment.
+_DETAIL_MAX = 300
+
+
+class OutcomeRefused(Exception):
+    """No claimed approval for this action and node, or its outcome is already recorded."""
+
+
+def clean_detail(detail: str) -> str:
+    """A reported detail as plain one-line text, capped: no control characters, newlines or markup runs."""
+    printable = "".join(ch if ch.isprintable() else " " for ch in detail)
+    return " ".join(printable.split())[:_DETAIL_MAX]
+
+
+async def record_outcome(
+    session: AsyncSession, approval_id: uuid.UUID, action: CredentialAction, node_id: str, result: str
+) -> Approval:
+    """Record the ONE terminal outcome of a claimed approval; a second report is refused, never overwritten."""
+    approval = await session.get(Approval, approval_id)
+    context = (approval.context or {}) if approval else {}
+    if (
+        approval is None
+        or context.get("action") != action.name
+        or context.get("node_id") != node_id
+        or not context.get(CONSUMED_KEY)
+    ):
+        raise OutcomeRefused("no claimed approval for this action and node")
+    stamped = {OUTCOME_KEY: result}
+    written = await session.execute(
+        update(Approval)
+        .where(
+            Approval.id == approval_id,
+            Approval.context[CONSUMED_KEY].astext.is_not(None),
+            Approval.context[OUTCOME_KEY].astext.is_(None),
+        )
+        .values(context=Approval.context.concat(literal(stamped, JSONB)))
+    )
+    if written.rowcount != 1:
+        raise OutcomeRefused("the outcome is already recorded")
+    return approval
