@@ -37,6 +37,7 @@ from config import unified_config_manager
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_1_HOUR
 from conversation_file_cleanup import deleted_file_stats, pending_cleanup_stats
+from conversation_file_quota import UploadRefused, abandon, file_too_large, insert_within_quota, resize_within_quota
 from conversation_file_route_api import FILE_INFO_COLUMNS, ConversationFileRouteApi
 from conversation_file_upload_info import UploadInfo
 from utils.chat_utils import validate_chat_session_id
@@ -219,7 +220,7 @@ class ConversationFileManager(ConversationFileRouteApi):
         """
         async with connection.execute(
             """
-            SELECT cf.file_id, cf.original_filename, cf.file_path, cf.mime_type
+            SELECT cf.file_id, cf.original_filename, cf.file_path, cf.mime_type, cf.uploaded_by
             FROM conversation_files cf
             JOIN session_file_associations sfa ON cf.file_id = sfa.file_id
             WHERE cf.file_id = ? AND sfa.session_id = ? AND cf.is_deleted = 0
@@ -309,13 +310,9 @@ class ConversationFileManager(ConversationFileRouteApi):
         encoded = content.encode("utf-8")
         new_hash = self._compute_file_hash(encoded)
 
+        await resize_within_quota(connection, row, len(encoded), new_hash)  # before the write: a refusal writes nothing
         async with aiofiles.open(file_path, "wb") as f:
             await f.write(encoded)
-
-        await connection.execute(
-            "UPDATE conversation_files SET file_size = ?, file_hash = ? WHERE file_id = ?",
-            (len(encoded), new_hash, row["file_id"]),
-        )
         await connection.commit()
         await self._invalidate_session_cache(session_id)
         return {
@@ -331,7 +328,8 @@ class ConversationFileManager(ConversationFileRouteApi):
             try:
                 row = await self._lookup_session_file(connection, session_id, file_id)
                 return await self._write_and_update_file(connection, row, content, session_id)
-            except RuntimeError:
+            except (RuntimeError, UploadRefused):
+                await connection.rollback()
                 raise
             except Exception as e:
                 await connection.rollback()
@@ -368,7 +366,7 @@ class ConversationFileManager(ConversationFileRouteApi):
                 original_filename=copy_name,
                 mime_type=row["mime_type"],
             )
-        except RuntimeError:
+        except (RuntimeError, UploadRefused):
             raise
         except Exception as e:
             logger.error("Error copying file: %s", e)
@@ -626,10 +624,10 @@ class ConversationFileManager(ConversationFileRouteApi):
             logger.error("Unexpected error invalidating cache: %s", e)
 
     def _validate_file_size(self, file_content: bytes) -> int:
-        """Validate file size and return size in bytes."""
+        """Validate file size and return size in bytes; past the cap is the 413 ``file_too_large`` (#20217)."""
         file_size = len(file_content)
         if file_size > self.MAX_FILE_SIZE:
-            raise ValueError(f"File size ({file_size} bytes) exceeds maximum " f"({self.MAX_FILE_SIZE} bytes)")
+            raise file_too_large(self.MAX_FILE_SIZE)
         return file_size
 
     async def _check_existing_file(self, connection, session_id: str, file_hash: str):
@@ -715,16 +713,8 @@ class ConversationFileManager(ConversationFileRouteApi):
             raise RuntimeError(f"Failed to write file to disk: {e}")
 
     async def _insert_file_record(self, connection, file_info: UploadInfo) -> None:
-        """Insert file record into database (Issue #375: uses UploadInfo dataclass)."""
-        await connection.execute(
-            """
-            INSERT INTO conversation_files
-            (file_id, session_id, original_filename, stored_filename,
-             file_path, file_size, file_hash, mime_type, uploaded_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            file_info.to_db_tuple(),
-        )
+        """Insert the file record unless its owner would pass the quota (#20217, #375)."""
+        await insert_within_quota(connection, file_info.to_db_tuple(), file_info.uploaded_by, file_info.file_size)
 
     async def _insert_file_metadata(self, connection, file_id: str, metadata: Dict[str, Any]) -> None:
         """Insert file metadata records into database."""
@@ -819,15 +809,17 @@ class ConversationFileManager(ConversationFileRouteApi):
             )
 
             connection = await self._get_async_db_connection()
+            deduplicated = False
             try:
                 existing_file = await self._check_existing_file(connection, file_info.session_id, file_info.file_hash)
                 if existing_file:
+                    deduplicated = True
                     return await self._handle_deduplicated_file(connection, existing_file, file_info)
                 return await self._store_new_file(connection, file_info, file_content)
             except Exception as e:
-                await connection.rollback()
-                if await asyncio.to_thread(file_info.file_path.exists):
-                    await asyncio.to_thread(file_info.file_path.unlink)
+                await abandon(connection, file_info.file_path, remove_bytes=not deduplicated)
+                if isinstance(e, UploadRefused):
+                    raise  # a refusal (quota, #20217) keeps its 413 and stable code
                 logger.error("Error adding file: %s", e)
                 raise RuntimeError(f"Failed to add file: {e}")
             finally:
