@@ -153,7 +153,7 @@ def test_a_real_guard_whose_discovery_stops_reaching_a_root_fails() -> None:
     mutant = Reach(
         name="self-check::kb-read-visibility-narrowed",
         discover=_narrowed,
-        floor=kb.REACH.floor,
+        pinned_floor=kb.REACH.floor,
         what=kb.REACH.what,
         growth=kb.REACH.growth,
         roots=kb.SCAN_ROOTS,
@@ -170,7 +170,7 @@ def test_a_sweep_reaching_outside_its_declared_scope_fails() -> None:
     reach = Reach(
         name="self-check::under-claimed-scope",
         discover=lambda _root: ["a/x.py", "elsewhere/y.py"],
-        floor=1,
+        pinned_floor=1,
         what="things under a/",
         roots=("a/",),
     )
@@ -200,7 +200,7 @@ def test_a_declared_scope_that_the_sweep_does_not_reach_is_refused() -> None:
     overclaiming = Reach(
         name="self-check::overclaiming-scope",
         discover=lambda _root: ["autobot-backend/api/x.py"],
-        floor=1,
+        pinned_floor=1,
         what="production python files under autobot-backend/, autobot-slm-backend/",
         roots=("autobot-backend/", "autobot-slm-backend/"),
     )
