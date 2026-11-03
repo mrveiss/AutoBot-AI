@@ -37,6 +37,31 @@ export interface SecretsUsageResponse {
   secrets_usage: Record<string, unknown[]>;
 }
 
+/** A legacy infrastructure host shaped as a secret row, flagged so delete uses the legacy API. */
+export function infraHostToSecret(host: InfraHost) {
+  return {
+    id: host.id,
+    name: host.name,
+    type: 'infrastructure_host',
+    scope: host.scope || 'general',
+    chat_id: host.chat_id,
+    description: host.description || `${host.username}@${host.host}:${host.ssh_port}`,
+    tags: host.tags || [],
+    created_at: host.created_at,
+    updated_at: host.updated_at,
+    expires_at: null,
+    metadata: {
+      host: host.host,
+      ssh_port: host.ssh_port,
+      vnc_port: host.vnc_port,
+      username: host.username,
+      auth_type: host.auth_type as 'ssh_key' | 'password',
+      capabilities: host.capabilities as string[] | undefined
+    },
+    _isLegacyHost: true // Flag for legacy hosts that need different delete API
+  };
+}
+
 export function useSecretsInfraApi() {
   /** Fetch legacy infrastructure hosts from the old API. */
   async function fetchInfraHosts(): Promise<InfraHostsResponse> {
