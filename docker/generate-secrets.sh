@@ -140,6 +140,8 @@ ensure_secret AUTOBOT_REDIS_PASSWORD
 # Rewritten each run, so the ACL file always matches the line above.
 AUTOBOT_REDIS_PASSWORD="$(grep '^AUTOBOT_REDIS_PASSWORD=' "$SECRETS_FILE" | cut -d= -f2-)" \
     bash "$(dirname "$0")/write-redis-acl.sh"
+# #20629: what the SLM presents to the limited Docker proxy.
+ensure_secret AUTOBOT_DOCKER_PROXY_TOKEN
 # #17500: the playwright-vnc dev stack's VNC password; it no longer falls back to a fixed one.
 ensure_secret VNC_PASSWORD
 

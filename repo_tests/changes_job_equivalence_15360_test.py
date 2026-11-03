@@ -237,6 +237,7 @@ ALLOWED_ADDITIONS = {
             "docker/generate-secrets.sh",
             "docker/write-redis-acl.sh",  # #17500
             "docker/postgres/init-databases.sh",
+            "docker/docker-proxy/proxy.py",  # #20629
             "docker/postgres/copy-slm-databases.sh",  # #20639
             # #19178: user_docs_stay_consistent_19178_test.py reads docs/README.md.
             "docs/README.md",
