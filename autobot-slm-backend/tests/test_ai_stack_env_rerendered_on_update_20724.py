@@ -115,3 +115,26 @@ def test_an_empty_credential_is_never_rendered_over_a_real_one() -> None:
     assert not _refuses(tasks[refuse], "", [1, 1]), "neither file has one (fresh install): render"
     assert not _refuses(tasks[refuse], "pw-sample", [None, None]), "a credential to render: render"
     assert not _refuses(tasks[refuse], "", [None, None]), "control: skipped checks never refuse"
+    assert _refuses(tasks[refuse], "", [2, 1]), "a file that exists but can't be read: fail closed"
+
+
+def test_the_probe_tells_absent_from_unreadable(tmp_path) -> None:
+    """The task's own argv: absent is 1, a password is 0, a file it can't read is 2 (and refuses, above)."""
+    import os
+    import subprocess  # nosec B404 -- runs the task's own probe on temporary files
+
+    argv = _tasks("env_files.yml")[_named(_tasks("env_files.yml"), "already carry a Redis password")]
+    argv = argv["ansible.builtin.command"]["argv"]
+    has, without, locked = tmp_path / "has.env", tmp_path / "without.env", tmp_path / "locked.env"
+    has.write_text("REDIS_PASSWORD=x\n", encoding="utf-8")
+    without.write_text("OTHER=1\n", encoding="utf-8")
+    locked.write_text("REDIS_PASSWORD=x\n", encoding="utf-8")
+    locked.chmod(0)
+
+    def rc(path) -> int:
+        command = [part if part != "{{ item }}" else str(path) for part in argv]
+        return subprocess.run(command, capture_output=True, check=False).returncode  # nosec B603
+
+    assert (rc(tmp_path / "absent.env"), rc(has), rc(without)) == (1, 0, 1)
+    if os.geteuid() != 0:  # root reads a mode-0 file, so the unreadable case only exists for others
+        assert rc(locked) == 2
