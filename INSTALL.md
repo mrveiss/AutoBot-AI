@@ -259,6 +259,12 @@ AUTOBOT_DOCKER_SLM_NGINX_CONF=./docker/nginx/nginx-slm-ssl.conf \
 The GUI is then at **https://localhost:8443/slm/**. Open that address directly: the plain-HTTP redirect goes to the default HTTPS port, which on a full stack is the frontend. The full stack's frontend switches to TLS the same way, with
 `AUTOBOT_DOCKER_NGINX_CONF=./docker/nginx/nginx-ssl.conf`.
 
+### Upgrading a stack from before the SLM had its own Postgres
+
+Run the same `up` command. A one-time step, `autobot-slm-postgres-copy`, copies the SLM's databases out of `autobot-postgres` before the SLM starts, and leaves the originals where they are. If `autobot-postgres` isn't running it stops and says so, and the SLM waits: start it and run `up` again. After that the SLM no longer needs it to start.
+
+Keep `SLM_DB_NAME` at its current value for this first start: it names the database that gets copied. Compose backups you take yourself need to include the new `slm_postgres_data` volume.
+
 ### Full stack
 
 ```bash

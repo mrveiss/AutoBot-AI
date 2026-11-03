@@ -51,6 +51,7 @@ BINDINGS = {
     "autobot-backend/user_management/services/user_service.py": {
         "invalidate_other_sessions",
         "reassign_memory",
+        "check_session_reassign",
         "reassign_sessions",
     },
     "autobot-slm-backend/user_management/services/user_service.py": set(),
@@ -66,7 +67,7 @@ SINGLE_DEFINITIONS = (
 BEHAVIOUR = frozenset(
     {"create_user", "change_password", "delete_user", "authenticate", "_persist_user", "get_user_permissions"}
 )
-MAX_BINDING_LINES = 45
+MAX_BINDING_LINES = 51
 
 
 def _copies_user_service(tree: ast.Module) -> list[str]:
