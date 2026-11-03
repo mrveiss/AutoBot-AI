@@ -347,7 +347,7 @@ function submitType() {
   border: none;
   border-radius: var(--radius-default);
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   cursor: pointer;
   font-size: var(--text-xs);
 }
