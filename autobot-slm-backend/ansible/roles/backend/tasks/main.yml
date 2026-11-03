@@ -466,6 +466,9 @@
 
   # Issue #2953: Write deployment.mode into config/config.yaml so the backend
   # config loader can read it without relying on env alone.
+    vars:
+      internal_api_key_render: "{{ (internal_api_key_by_file | default({})).get(autobot_backend_env_file, internal_api_key_resolved | default(autobot_internal_api_key)) }}"  # #20750: the file keeps its key
+
   - name: "Backend | Ensure config directory exists"
     ansible.builtin.file:
       path: "{{ backend_code_dir }}/config"
@@ -1369,6 +1372,9 @@
     tags: ['backend', 'config']  # No backup: true (#20517): each render left another copy of the secrets
 
   # MVA-1633: Verify .env file exists (will be read by service on restart)
+    vars:
+      internal_api_key_render: "{{ (internal_api_key_by_file | default({})).get((backend_code_dir | default(backend_install_dir)) ~ '/.env', internal_api_key_resolved | default(autobot_internal_api_key)) }}"  # #20750: the file keeps its key
+
   - name: "Backend | Verify .env file readable (MVA-1633)"
     ansible.builtin.stat:
       path: "{{ backend_code_dir | default(backend_install_dir) }}/.env"

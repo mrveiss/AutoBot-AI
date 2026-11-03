@@ -14,10 +14,12 @@ Monitoring view's error list shows, until someone resolves it.
 Re-aligning the key is not done here. That is an approval-queue action (#20750, PR 2).
 """
 
+import time
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 
+from autobot_shared.env_utils import env_float
 from autobot_shared.logging_manager import get_logger
 from config import settings
 from models.database import EventSeverity, NodeEvent
@@ -27,6 +29,12 @@ logger = get_logger(__name__)
 
 #: The event type of the finding; one unresolved event of this type stands for the whole mismatch.
 FINDING_EVENT_TYPE = "internal_key_refused"
+#: Serialises check-then-insert across SLM workers, so concurrent 401s write one finding (the
+#: fleet_sync_guard pattern; the id matches the issue, as there).
+_FINDING_ADVISORY_LOCK_ID = 20750
+#: A burst of refused calls checks the database once per this many seconds, not once per call.
+FINDING_CHECK_INTERVAL_S = env_float("AUTOBOT_SLM_KEY_FINDING_CHECK_INTERVAL_S", 60.0)
+_last_check = [float("-inf")]
 
 FINDING_MESSAGE = (
     "The backend refused the SLM's internal API key, so the SLM's AUTOBOT_INTERNAL_API_KEY differs "
@@ -38,8 +46,16 @@ FINDING_MESSAGE = (
 
 async def report_backend_refused_internal_key(path: str) -> None:
     """Record the finding once, until resolved. Never raises: the caller's own error stands."""
+    now = time.monotonic()
+    if now - _last_check[0] < FINDING_CHECK_INTERVAL_S:
+        return
+    _last_check[0] = now
     try:
         async with db_service.session() as db:
+            # Held to the commit: a second worker's check waits for this insert, then sees it.
+            await db.execute(
+                text("SELECT pg_advisory_xact_lock(:lock_id)").bindparams(lock_id=_FINDING_ADVISORY_LOCK_ID)
+            )
             pending = await db.execute(
                 select(NodeEvent.id)
                 .where(NodeEvent.node_id == settings.slm_node_id)
