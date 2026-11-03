@@ -64,6 +64,8 @@ export async function fetchSchedulerLeader(): Promise<string | null> {
 export function useConnectorJob() {
   const jobState = ref<ConnectorJobState | null>(null)
   const isPolling = ref(false)
+  /** True when the last progress request failed; the job's state is then unknown, not "running". */
+  const pollFailed = ref(false)
   let timerId: ReturnType<typeof setTimeout> | null = null
   let seenJob = false
   let pollsWithoutJob = 0
@@ -83,6 +85,8 @@ export function useConnectorJob() {
     } catch (err) {
       // A failed request is not "no job yet": stop here rather than show Running for a minute.
       logger.error('fetchConnectorJob error', err)
+      jobState.value = null
+      pollFailed.value = true
       isPolling.value = false
       return
     }
@@ -103,6 +107,7 @@ export function useConnectorJob() {
     _clearTimer()
     seenJob = false
     pollsWithoutJob = 0
+    pollFailed.value = false
     isPolling.value = true
     _poll(connectorId)
   }
@@ -117,6 +122,7 @@ export function useConnectorJob() {
   return {
     jobState: readonly(jobState),
     isPolling: readonly(isPolling),
+    pollFailed: readonly(pollFailed),
     start,
     stop,
   }

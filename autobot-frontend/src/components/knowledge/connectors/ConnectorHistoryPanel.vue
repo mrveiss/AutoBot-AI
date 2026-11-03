@@ -8,7 +8,8 @@
  */
 
 import { ref, computed, onMounted, watch } from 'vue'
-import { BaseBadge } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
+import { BaseAlert, BaseBadge } from '@autobot/ui'
 import { useConnectorJob, fetchConnectorHistory } from '@/composables/knowledge/useConnectorJob'
 import { formatTimeAgo, formatDuration } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
@@ -30,7 +31,8 @@ const history = ref<ConnectorHistoryEntry[]>([])
 const historyLoading = ref(false)
 const expandedRows = ref<Set<number>>(new Set())
 
-const { jobState, isPolling, start: startPoll, stop: stopPoll } = useConnectorJob()
+const { t } = useI18n()
+const { jobState, isPolling, pollFailed, start: startPoll, stop: stopPoll } = useConnectorJob()
 
 let latestHistoryRequest = 0
 
@@ -105,6 +107,8 @@ const DURATION_OPTIONS = { style: 'secondsCompact' } as const
       <h3 class="panel-title">Sync History</h3>
       <button class="close-btn" aria-label="Close" @click="emit('close')">✕</button>
     </div>
+
+    <BaseAlert v-if="pollFailed" variant="error" :message="t('knowledge.connectors.jobStatusFailed')" data-testid="job-status-failed" />
 
     <!-- Live job progress -->
     <div v-if="isPolling || (jobState && jobState.status === 'running')" class="live-job">
