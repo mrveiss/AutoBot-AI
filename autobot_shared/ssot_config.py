@@ -54,6 +54,7 @@ from autobot_shared import postgres_identity as _pg
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.paths import install_base_dir, project_root
 from autobot_shared.secret_redaction import RedactedReprMixin
+from autobot_shared.ssot_codebase_index import CodebaseIndexSettings
 from autobot_shared.ssot_company_os_flags import CompanyOsFeatureFlags
 from autobot_shared.ssot_llm_oauth_config import LlmOAuthConfig
 from autobot_shared.ssot_role_mirrors import (  # #19319: SSOT defaults an Ansible role mirrors
@@ -1384,7 +1385,7 @@ class PathConfig(RedactedSettings):
         return Path(self.management_ssh_key_path)
 
 
-class MiscConfig(RedactedSettings):
+class MiscConfig(RedactedSettings, CodebaseIndexSettings):
     """Miscellaneous/unmapped environment variables.
 
     This class collects all env vars not yet migrated to structured config sections.
@@ -1845,12 +1846,6 @@ class MiscConfig(RedactedSettings):
     celery_broker_url: str = Field(default="", alias="CELERY_BROKER_URL")
     celery_result_backend: str = Field(default="", alias="CELERY_RESULT_BACKEND")
     ci: str = Field(default="", alias="CI")
-    codebase_index_batch_size: int = Field(default=0, alias="CODEBASE_INDEX_BATCH_SIZE")
-    codebase_index_embedding_mode: str = Field(default="precompute", alias="CODEBASE_INDEX_EMBEDDING_MODE")
-    codebase_index_embed_batch_size: int = Field(default=100, alias="CODEBASE_INDEX_EMBED_BATCH_SIZE")
-    codebase_index_incremental: str = Field(default="", alias="CODEBASE_INDEX_INCREMENTAL")
-    codebase_index_parallel_batches: str = Field(default="", alias="CODEBASE_INDEX_PARALLEL_BATCHES")
-    codebase_index_parallel_files: str = Field(default="50", alias="CODEBASE_INDEX_PARALLEL_FILES")
     # #12392: restore pre-#7437 default (True) — "" silently disabled parallel indexing
     codebase_parallel_mode: str = Field(default="true", alias="CODEBASE_PARALLEL_MODE")
     codebase_scan_parallel_files: str = Field(default="50", alias="CODEBASE_SCAN_PARALLEL_FILES")
