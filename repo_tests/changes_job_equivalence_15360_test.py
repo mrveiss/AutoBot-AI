@@ -161,6 +161,8 @@ ALLOWED_ADDITIONS = {
             f"{WORKFLOWS}/_changes.yml",
             f"{WORKFLOWS}/migration-gate.yml",
             f"{WORKFLOWS}/ai-security-review.yml",
+            # #16568: workflow_types_gate_16568_test reads the required generated-types gate.
+            f"{WORKFLOWS}/verify-generated-types.yml",
             # #19503: install_and_code_sync_modes_19503_test reads this shell sync by concrete literal.
             "autobot-slm-frontend/scripts/sync-to-admin.sh",
             # #19503: its rsync guard exempts wiki.yml by concrete literal.
@@ -250,6 +252,7 @@ ALLOWED_ADDITIONS = {
             "docs/llc/_index.md",
             # #19459: the disaster-recovery guard reads the runbook for the units it names.
             "docs/operations/disaster-recovery.md",
+            ".github/workflows/dependabot-close-stale.yml",
             # #19611: the playbook-reference guard reads this guide for its declared exemption.
             "docs/guides/slm-docker-ansible-deployment.md",
             # #19279: the landing-page guard reads the page for the libraries and placeholders it renders.
