@@ -21085,6 +21085,72 @@
         ]
       }
     },
+    "/api/code-sync/update-all/nodes-offline": {
+      "get": {
+        "description": "Nodes the last self-update left offline and still are (#20250), with when that update ran.",
+        "operationId": "get_nodes_offline_after_update_api_code_sync_update_all_nodes_offline_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "title": "Response Get Nodes Offline After Update Api Code Sync Update All Nodes Offline Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Nodes Offline After Update",
+        "tags": [
+          "code-sync"
+        ]
+      }
+    },
     "/api/code-sync/update-all/progress": {
       "get": {
         "description": "What the running self-update is doing, from its own log, across the SLM's restart (#20254).",
