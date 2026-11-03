@@ -23,7 +23,8 @@ logger = get_logger(__name__)
 _MAX_ATTEMPTS = 5
 
 
-def _write_last_sync(redis, key: str, when: str) -> bool:
+def _write_last_sync(redis, key: str, when: str) -> bool | None:
+    """True when written, False when the connector is gone, None when it exists but kept changing."""
     with redis.pipeline() as pipe:
         for _ in range(_MAX_ATTEMPTS):
             try:
@@ -41,7 +42,7 @@ def _write_last_sync(redis, key: str, when: str) -> bool:
             except WatchError:
                 continue
     logger.warning("Could not record the last sync on %s: it kept changing", key)
-    return True
+    return None
 
 
 async def record_last_sync(instance, key: str, sync_result) -> bool:
@@ -49,6 +50,6 @@ async def record_last_sync(instance, key: str, sync_result) -> bool:
     when = sync_result.completed_at or now_utc()
     redis = get_redis_client(database="knowledge")
     stored = await asyncio.to_thread(_write_last_sync, redis, key, when.isoformat())
-    if stored:
+    if stored is True:
         instance.config.last_sync_at = when  # what the status route reads; only once Redis has it
-    return stored
+    return stored is not False
