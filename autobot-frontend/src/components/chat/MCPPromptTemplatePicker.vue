@@ -525,7 +525,7 @@ async function applyTemplate() {
 
 .btn-apply {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border: none;
 }
 

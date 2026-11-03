@@ -361,7 +361,7 @@ function formatRelativeTime(dateStr: string): string {
 
 .btn-primary {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .btn-primary:hover {
