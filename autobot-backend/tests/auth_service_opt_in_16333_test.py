@@ -119,3 +119,20 @@ def test_a_proxied_call_whose_session_does_not_verify_names_the_likely_cause_onc
         client.get("/gated", headers={**KEY, "Authorization": "Bearer unverifiable"})
     hits = [r for r in caplog.records if "JWT secrets may differ" in r.getMessage()]
     assert len(hits) == 1
+
+
+def test_one_request_writes_one_audit_row_however_many_gates_ask(am, key_valid, as_user):
+    """The router's admin gate and the route's own get_current_user both run; the row is written once."""
+    router = APIRouter(dependencies=[Depends(am.check_admin_permission)])
+
+    @router.get("/both")
+    @service_opt_in("test-caller")
+    async def both(current: dict = Depends(am.get_current_user)):
+        return current
+
+    app = FastAPI()
+    app.include_router(router)
+    with as_user(None), patch("services.audit.audit.record_committed", AsyncMock(return_value=True)) as recorded:
+        response = TestClient(app).get("/both", headers=KEY)
+    assert response.status_code == 200 and response.json()["role"] == "service"
+    assert recorded.await_count == 1

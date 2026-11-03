@@ -71,7 +71,6 @@ _PENDING = {
     ("autobot-backend/api/voice_bundle_admin.py", "require_role"): 2,
     ("autobot-backend/api/voice_bundle_user.py", "require_role"): 1,
     # PR C: local checks onto the one predicate and gate.
-    ("autobot-backend/api/settings_config.py", "key"): 1,
     ("autobot-backend/api/redis_mcp/router.py", "literal"): 1,
     ("autobot-backend/security_layer.py", "literal"): 1,
 }

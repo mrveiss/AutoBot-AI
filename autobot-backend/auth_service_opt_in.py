@@ -52,7 +52,11 @@ async def admit_opted_in_service(request: Request) -> Optional[Dict[str, Any]]:
     caller = opted_in_caller(request)
     if caller is None or not _key_presented(request):
         return None
-    return await admit_service(request, caller)
+    admitted = getattr(request.state, "service_admission", None)
+    if admitted is None:  # one request, one audit row, however many dependencies ask
+        admitted = await admit_service(request, caller)
+        request.state.service_admission = admitted
+    return admitted
 
 
 async def admit_service(request: Request, caller: str) -> Dict[str, Any]:
@@ -64,7 +68,7 @@ async def admit_service(request: Request, caller: str) -> Dict[str, Any]:
     """
     if not await _audit_admission(request, caller):
         logger.error(
-            "service-key admission for %s on %s refused: its audit row was not committed", caller, request.url.path
+            "service-key admission for %s on %r refused: its audit row was not committed", caller, request.url.path
         )
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=ADMISSION_NOT_AUDITED)
     return {"username": f"service:{caller}", "role": "service", "service": True}
@@ -107,7 +111,7 @@ def warn_if_key_without_session(request: Request) -> None:
     if not _key_without_session_warned and _key_presented(request):
         _key_without_session_warned = True
         logger.warning(
-            "service key presented on %s without a session the backend can verify: the key is not an admin "
+            "service key presented on %r without a session the backend can verify: the key is not an admin "
             "here (#16333); if this came through the SLM proxy, the SLM and backend JWT secrets may differ",
             request.url.path,
         )
