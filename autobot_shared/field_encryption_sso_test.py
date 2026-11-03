@@ -101,3 +101,17 @@ class TestIsSsoConfigEncrypted:
     def test_returns_true_after_encrypt(self):
         cfg = {"client_secret": "s"}
         assert is_sso_config_encrypted(encrypt_sso_config(cfg, provider_id=_PID)) is True
+
+
+def test_an_sso_value_sealed_by_the_pre_17981_script_still_reads(monkeypatch):
+    """#17981: encrypt_sso_secrets.py used to write enc: + an unbound blob under the old key."""
+    import os
+
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    key = os.urandom(32)
+    monkeypatch.setenv("AUTOBOT_FIELD_ENCRYPTION_KEY", base64.urlsafe_b64encode(key).decode())
+    nonce = os.urandom(12)
+    old = base64.urlsafe_b64encode(nonce + AESGCM(key).encrypt(nonce, b"old-secret", None)).decode()
+    cfg = {"client_secret": _ENCRYPTED_PREFIX + old, "client_id": "abc"}
+    assert decrypt_sso_config(cfg, provider_id=_PID) == {"client_secret": "old-secret", "client_id": "abc"}
