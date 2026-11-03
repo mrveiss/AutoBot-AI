@@ -289,46 +289,6 @@
     "category": "indicators",
     "file": "components/ui/LoadingSpinner.vue"
   },
-  "d360e757": {
-    "id": "icons-d360e757",
-    "category": "icons",
-    "file": "components/examples/AsyncOperationExample.vue"
-  },
-  "cb28b898": {
-    "id": "icons-cb28b898",
-    "category": "icons",
-    "file": "components/examples/AsyncOperationExample.vue"
-  },
-  "7f8196a2": {
-    "id": "icons-7f8196a2",
-    "category": "icons",
-    "file": "components/base/BaseBadge.vue"
-  },
-  "3a42742f": {
-    "id": "graphics-3a42742f",
-    "category": "graphics",
-    "file": "components/icons/IconCommunity.vue"
-  },
-  "a824f01c": {
-    "id": "icons-a824f01c",
-    "category": "icons",
-    "file": "components/icons/IconSupport.vue"
-  },
-  "3b115e4e": {
-    "id": "graphics-3b115e4e",
-    "category": "graphics",
-    "file": "components/icons/IconDocumentation.vue"
-  },
-  "8f77a30f": {
-    "id": "icons-8f77a30f",
-    "category": "icons",
-    "file": "components/icons/IconTooling.vue"
-  },
-  "59ec2fb1": {
-    "id": "graphics-59ec2fb1",
-    "category": "graphics",
-    "file": "components/icons/IconEcosystem.vue"
-  },
   "5e5f6a06": {
     "id": "icons-5e5f6a06",
     "category": "icons",
@@ -388,71 +348,6 @@
     "id": "icons-5dc4c195",
     "category": "icons",
     "file": "components/knowledge/KnowledgeVerificationQueue.vue"
-  },
-  "31a9a74c": {
-    "id": "icons-31a9a74c",
-    "category": "icons",
-    "file": "components/knowledge/WebResearchSettings.vue"
-  },
-  "ded87097": {
-    "id": "icons-ded87097",
-    "category": "icons",
-    "file": "components/knowledge/WebResearchSettings.vue"
-  },
-  "7f3b8727": {
-    "id": "icons-7f3b8727",
-    "category": "icons",
-    "file": "components/knowledge/WebResearchSettings.vue"
-  },
-  "891a8a29": {
-    "id": "icons-891a8a29",
-    "category": "icons",
-    "file": "components/knowledge/WebResearchSettings.vue"
-  },
-  "657aa65a": {
-    "id": "icons-657aa65a",
-    "category": "icons",
-    "file": "components/knowledge/WebResearchSettings.vue"
-  },
-  "2cb04b13": {
-    "id": "icons-2cb04b13",
-    "category": "icons",
-    "file": "components/knowledge/WebResearchSettings.vue"
-  },
-  "77481000": {
-    "id": "icons-77481000",
-    "category": "icons",
-    "file": "components/knowledge/WebResearchSettings.vue"
-  },
-  "2ce1e2be": {
-    "id": "icons-2ce1e2be",
-    "category": "icons",
-    "file": "components/knowledge/WebResearchSettings.vue"
-  },
-  "e64ffab1": {
-    "id": "icons-e64ffab1",
-    "category": "icons",
-    "file": "components/knowledge/WebResearchSettings.vue"
-  },
-  "e66b92b1": {
-    "id": "icons-e66b92b1",
-    "category": "icons",
-    "file": "components/knowledge/WebResearchSettings.vue"
-  },
-  "a9485cea": {
-    "id": "icons-a9485cea",
-    "category": "icons",
-    "file": "components/knowledge/WebResearchSettings.vue"
-  },
-  "90f32366": {
-    "id": "icons-90f32366",
-    "category": "icons",
-    "file": "components/knowledge/WebResearchSettings.vue"
-  },
-  "3f47474a": {
-    "id": "icons-3f47474a",
-    "category": "icons",
-    "file": "components/knowledge/WebResearchSettings.vue"
   },
   "4ede684f": {
     "id": "icons-4ede684f",
