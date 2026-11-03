@@ -85,3 +85,33 @@ def test_a_config_only_run_still_reaches_the_renders() -> None:
     code_only = _tasks("code_only.yml")
     assert "config" in main[_index(main, "code_only.yml")]["tags"]
     assert "config" in code_only[_index(code_only, "env_files.yml")]["tags"]
+
+
+def _named(tasks: list, needle: str) -> int:
+    return next(i for i, t in enumerate(tasks) if needle in t.get("name", ""))
+
+
+def _refuses(task: dict, password: str, rcs: list) -> bool:
+    """Evaluate the refusal's `when` as Ansible would: every condition true."""
+    import jinja2
+
+    results = [{"rc": rc} if rc is not None else {"skipped": True} for rc in rcs]
+    env = jinja2.Environment()
+    variables = {"ai_redis_password": password, "_ai_env_redis_password_present": {"results": results}}
+    return all(env.from_string("{{ " + c + " }}").render(**variables) == "True" for c in task["when"])
+
+
+def test_an_empty_credential_is_never_rendered_over_a_real_one() -> None:
+    """Every update re-renders now, so an unreadable SLM secret must stop the run, not strip Redis auth."""
+    tasks = _tasks("env_files.yml")
+    check, refuse = _named(tasks, "already carry a Redis password"), _named(tasks, "Refuse to write")
+    renders = [
+        i for i, t in enumerate(tasks) if (t.get("ansible.builtin.template") or {}).get("src") == "ai-stack.env.j2"
+    ]
+    assert check < refuse < min(renders)
+    assert set(tasks[check]["loop"]) == _ENV_DESTS, "both rendered files are checked"
+    assert "ansible.builtin.fail" in tasks[refuse]
+    assert _refuses(tasks[refuse], "", [0, 1]), "no credential to render, and a file has one: stop"
+    assert not _refuses(tasks[refuse], "", [1, 1]), "neither file has one (fresh install): render"
+    assert not _refuses(tasks[refuse], "pw-sample", [None, None]), "a credential to render: render"
+    assert not _refuses(tasks[refuse], "", [None, None]), "control: skipped checks never refuse"
