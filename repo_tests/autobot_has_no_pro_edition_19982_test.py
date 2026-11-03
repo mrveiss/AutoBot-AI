@@ -79,7 +79,7 @@ NAME_REACH = declare(
     "autobot-has-no-pro-name",
     discover=_name_population,
     what="tracked non-changelog files",
-    floor=12914,  # mid-window: population 13114, window (12714, 13114)
+    floor=12940,  # mid-window: population 13140, window (12740, 13140)
     growth=400,
 )
 
