@@ -41,7 +41,7 @@ from autobot_shared.auth.internal_api_key import verify_internal_api_key  # noqa
 from autobot_shared.auth.jwt_core import _peek_alg, decode_jwt_or_none, encode_jwt, hash_password
 from autobot_shared.auth.permission_evaluator import evaluate_permission
 from autobot_shared.auth.permission_gate import PermissionGate
-from autobot_shared.auth.permissions import Permission
+from autobot_shared.auth.permissions import Permission, is_admin_role
 from autobot_shared.auth.revocation_unavailable import revocation_unavailable_error
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
@@ -235,7 +235,9 @@ class AuthService:
         return result.scalar_one_or_none()
 
     async def create_token_response(self, user: User) -> TokenResponse:
-        """Create a token response for a user."""
+        """Create a token response for a user. Every SLM session starts here, so only admins get one (#20628)."""
+        if not user.is_platform_admin:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ADMIN_ONLY_DETAIL)
         role = role_for_user(user.is_platform_admin).value
         access_token = self.create_access_token(
             data={"sub": user.username, "admin": user.is_platform_admin, "role": role}
@@ -248,6 +250,15 @@ class AuthService:
 
 
 auth_service = AuthService()
+
+
+#: #20628: the SLM is a server admin panel, for admins only.
+ADMIN_ONLY_DETAIL = "This console is for administrators."
+
+
+def is_admin_session(payload: dict) -> bool:
+    """Whether a decoded token belongs to an admin. A token that doesn't say is not an admin's."""
+    return payload.get("admin") is True or is_admin_role(payload.get("role"))
 
 
 async def get_current_user(
@@ -275,6 +286,10 @@ async def get_current_user(
             detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    # #20628: a session from before this rule, or one the main app minted, may be a non-admin's.
+    if not is_admin_session(payload):
+        logger.warning("get_current_user: refusing a non-admin session for sub=%r", payload.get("sub"))
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ADMIN_ONLY_DETAIL)
 
     return payload
 
