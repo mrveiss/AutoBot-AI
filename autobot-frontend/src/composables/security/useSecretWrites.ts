@@ -59,8 +59,8 @@ export function useSecretWrites() {
       if (!dependents) throw error
       const listed = dependents.map((d) => `${d.dependent_kind}:${d.dependent_id}`).join(', ')
       const ok = await confirm({
-        title: t('security.secretsManager.systemVault.dependentsTitle'),
-        message: t('security.secretsManager.systemVault.dependentsMessage', { name: secret.name, dependents: listed })
+        title: t('security.secretsManager.dependentsTitle'),
+        message: t('security.secretsManager.dependentsMessage', { name: secret.name, dependents: listed })
       })
       if (!ok) return false
       return secretsApiClient.deleteSecret(secret.id, { chatId, confirmDependents: true })

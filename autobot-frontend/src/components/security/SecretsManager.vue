@@ -117,7 +117,7 @@
       </header>
 
       <BaseAlert v-if="loadFailed" variant="error" :message="t('security.secretsManager.loadFailed')" data-testid="secrets-load-failed" />
-      <BaseAlert v-if="writeFailed" variant="error" :message="t('security.secretsManager.writeFailed')" data-testid="secrets-write-failed" />
+      <BaseAlert v-if="writeFailed && !showCreateModal && !showEditModal" variant="error" :message="t('security.secretsManager.writeFailed')" data-testid="secrets-write-failed" />
       <SystemVaultSecrets :vault="systemVault" @changed="loadSecrets" />
       <!-- Stats Bar -->
       <div class="stats-bar" v-if="stats">

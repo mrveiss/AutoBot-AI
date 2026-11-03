@@ -14,13 +14,14 @@ import SecretsManager from '../security/SecretsManager.vue'
 
 const getSecrets = vi.fn()
 const deleteSecret = vi.fn()
+const createSecret = vi.fn()
 const confirm = vi.fn()
 
 vi.mock('@/utils/SecretsApiClient', () => ({
   secretsApiClient: {
     getSecrets: (...args: unknown[]) => getSecrets(...args),
     getSecretsStats: vi.fn().mockResolvedValue({ total: 0, by_type: {}, by_scope: {} }),
-    createSecret: vi.fn(),
+    createSecret: (...args: unknown[]) => createSecret(...args),
     getSecret: vi.fn(),
     updateSecret: vi.fn(),
     deleteSecret: (...args: unknown[]) => deleteSecret(...args),
@@ -53,6 +54,10 @@ const listing = (...ids: string[]) => ({ secrets: ids.map(secret), system_vault:
 
 type ManagerVm = {
   secrets: Array<{ id: string }>
+  openCreateModal: () => void
+  saveSecret: () => Promise<void>
+  secretForm: Record<string, unknown>
+  showCreateModal: boolean
   loadSecrets: () => Promise<void>
   confirmDelete: (s: unknown) => void
   deleteSecret: () => Promise<void>
@@ -84,6 +89,7 @@ describe('SecretsManager writes and reloads (#20732, #20734)', () => {
     setActivePinia(createPinia())
     getSecrets.mockReset().mockResolvedValue(listing('s1'))
     deleteSecret.mockReset()
+    createSecret.mockReset()
     confirm.mockReset()
   })
 
@@ -118,6 +124,21 @@ describe('SecretsManager writes and reloads (#20732, #20734)', () => {
     const loadsBefore = getSecrets.mock.calls.length
     await deleteUserSecret(vm)
     expect(wrapper.get('[data-testid="secrets-write-failed"]').text()).toBe(en.security.secretsManager.writeFailed)
+    expect(getSecrets.mock.calls.length).toBe(loadsBefore + 1)
+  })
+
+  it('a failed save keeps the form and its input open, shows one alert, and reloads the list', async () => {
+    createSecret.mockRejectedValue(new HttpError(500, 'Server Error'))
+    const { wrapper, vm } = await mountManager()
+    const loadsBefore = getSecrets.mock.calls.length
+    vm.openCreateModal()
+    Object.assign(vm.secretForm, { type: 'api_key', name: 'OPENAI_API_KEY', scope: 'general', value: 'sk-test' })
+    await vm.saveSecret()
+    await flushPromises()
+    expect(vm.showCreateModal).toBe(true)
+    expect(vm.secretForm.value).toBe('sk-test')
+    expect(wrapper.get('[data-testid="secret-save-failed"]').text()).toBe(en.security.secretsManager.writeFailed)
+    expect(wrapper.find('[data-testid="secrets-write-failed"]').exists()).toBe(false)
     expect(getSecrets.mock.calls.length).toBe(loadsBefore + 1)
   })
 })
