@@ -564,7 +564,7 @@ frontend_setup() {
 
 service_installation() {
     phase "Phase 6: Service Installation"
-
+    source "${INFRA_ROOT}/autobot-slm-backend/scripts/install-slm-watchdog.sh"
     info "Installing systemd service..."
     cat "${INFRA_ROOT}/autobot-slm-backend/templates/autobot-slm-backend.service" | \
         remote_exec_sudo "cat > /etc/systemd/system/autobot-slm-backend.service"
@@ -574,8 +574,8 @@ service_installation() {
     info "Enabling and starting backend service..."
     remote_exec_sudo "systemctl enable autobot-slm-backend"
     remote_exec_sudo "systemctl restart autobot-slm-backend"
+    install_slm_watchdog  # #20620
     success "Backend service started"
-
     info "Enabling and starting nginx..."
     remote_exec_sudo "systemctl enable nginx"
     remote_exec_sudo "systemctl restart nginx"
