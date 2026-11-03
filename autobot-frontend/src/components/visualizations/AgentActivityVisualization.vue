@@ -214,7 +214,7 @@ import { usePollingJob } from '@/composables/usePollingJob'
 import { useAgentActivityData, type ActivityAgent } from '@/composables/visualizations/useAgentActivityData'
 import { agentActivityFormat } from '@/composables/visualizations/agentActivityFormat'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const router = useRouter()
 
 // Props
@@ -248,7 +248,7 @@ const activeAgentCount = computed(() => {
 
 // #17514: a status nobody reported is not "idle"; the header says so instead of "0 active".
 const statusReported = computed(() => agents.value.some(a => a.status != null))
-const { successText, getAgentIcon, formatAgentType, formatUptime, formatTimeAgo, truncate } = agentActivityFormat(t)
+const { successText, getAgentIcon, formatAgentType, formatUptime, formatTimeAgo, truncate } = agentActivityFormat(t, () => locale.value)
 
 const timeLabels = computed(() => {
   const now = new Date()

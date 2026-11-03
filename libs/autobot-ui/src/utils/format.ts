@@ -361,6 +361,45 @@ export function formatTimeAgo(timestamp: Date | string | number): string {
   return Date.now() - date.getTime() < 60000 ? 'just now' : formatRelativeTime(date, { locale: 'en' })
 }
 
+/** Options for {@link createRecencyFormatter}; a function is read on every call (a locale can change). */
+export interface RecencyFormatterOptions {
+  /** BCP 47 locale for the relative text (default: the browser's). */
+  locale?: string | (() => string)
+  /** `Intl.RelativeTimeFormat` style (default `'long'`). */
+  style?: 'long' | 'short' | 'narrow'
+  /** The largest unit used (default `'year'`). */
+  maxUnit?: Intl.RelativeTimeFormatUnit
+  /** Text for a moment under a minute old, or in the future; when absent, `Intl` words it. */
+  justNow?: string | (() => string)
+  /** At or past this age in milliseconds, `older(date)` is shown instead of relative text. */
+  olderThanMs?: number
+  /** The text for a moment past `olderThanMs` (default: {@link formatDate}). */
+  older?: (date: Date) => string
+  /** Text for a missing or unparseable moment (default `''`). */
+  invalidText?: string
+  /** The reference moment as epoch milliseconds (default `Date.now()`); fixed in tests. */
+  now?: () => number
+}
+
+const read = <T>(v: T | (() => T)): T => (typeof v === 'function' ? (v as () => T)() : v)
+
+/**
+ * Build a "how long ago" formatter (#19606): `just now` under a minute, then
+ * {@link formatRelativeTime} in the app's locale, then a plain date past an optional cutoff.
+ * It replaces a component's own threshold ladder over translated "m ago" / "h ago" keys.
+ */
+export function createRecencyFormatter(options: RecencyFormatterOptions = {}): (input: DateInput) => string {
+  return (input) => {
+    const date = toValidDate(input)
+    if (!date) return options.invalidText ?? ''
+    const age = (options.now?.() ?? Date.now()) - date.getTime()
+    if (options.justNow !== undefined && age < 60000) return read(options.justNow)
+    if (options.olderThanMs !== undefined && age >= options.olderThanMs) return (options.older ?? formatDate)(date)
+    const locale = options.locale === undefined ? undefined : read(options.locale)
+    return formatRelativeTime(date, { locale, style: options.style, maxUnit: options.maxUnit, now: options.now?.() })
+  }
+}
+
 /** Options for {@link createDateFormatter}. */
 export interface DateFormatterOptions {
   /** Which part to show (default `'dateTime'`). */

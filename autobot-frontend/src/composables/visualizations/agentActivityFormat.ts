@@ -9,6 +9,7 @@
  * from i18n; an unmeasured figure reads "not reported", never 0.
  */
 
+import { createRecencyFormatter } from '@autobot/ui'
 import type { ActivityAgent } from '@/composables/visualizations/useAgentActivityData'
 
 type Translate = (key: string, params?: Record<string, unknown>) => string
@@ -21,7 +22,7 @@ const AGENT_ICONS: Record<string, string> = {
   executor: '🚀',
 }
 
-export function agentActivityFormat(t: Translate) {
+export function agentActivityFormat(t: Translate, locale?: () => string) {
   const k = (key: string) => `visualizations.agentActivity.${key}`
 
   function successText(agent: ActivityAgent): string {
@@ -38,12 +39,7 @@ export function agentActivityFormat(t: Translate) {
     return t(k('hours'), { n: Math.floor(seconds / 3600) })
   }
 
-  function formatTimeAgo(timestamp: number): string {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000)
-    if (seconds < 60) return t(k('secondsAgo'), { n: seconds })
-    if (seconds < 3600) return t(k('minutesAgo'), { n: Math.floor(seconds / 60) })
-    return t(k('hoursAgo'), { n: Math.floor(seconds / 3600) })
-  }
+  const formatTimeAgo = createRecencyFormatter({ locale, style: 'narrow', maxUnit: 'hour' })
 
   function truncate(text: string, maxLength: number): string {
     return text.length <= maxLength ? text : text.slice(0, maxLength - 1) + '…'

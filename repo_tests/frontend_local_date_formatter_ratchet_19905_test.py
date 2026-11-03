@@ -63,10 +63,11 @@ _COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*).*$", re.M)
 # Two measures, so the down-only comparison against the base stays meaningful (#20004): the first is
 # the name-only count this guard has always pinned (32 at the base, 24 now); the second is the
 # functions only the behavioural detector finds, a measure that did not exist at the base.
-# Measured on 5b0014f63a plus #20004's migrations.
+# Measured on 5b0014f63a plus #20004's migrations; 23 and 20 down to 13 and 19 when the relative-time
+# formatters moved to the kit's createRecencyFormatter (#19606).
 NAMED = "local_date_formatter_declarations"
 BEHAVIOUR = "local_date_formatter_functions_by_behaviour"
-PINS = {NAMED: 23, BEHAVIOUR: 20}
+PINS = {NAMED: 13, BEHAVIOUR: 19}
 
 
 def _sources(src: Path) -> list[Path]:
