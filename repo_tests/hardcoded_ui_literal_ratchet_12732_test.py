@@ -66,8 +66,9 @@ _PANEL_LITERALS = {
     ("attribute", "Close"),
 }
 _FIX = (
-    "Use t('...') with an English key in en.json (English-only i18n; SLM locales go "
-    "through scripts/lift_locale_translations.py). The untranslated ratchet may rise by "
+    "Use t('...') with an English key in en.json, e.g. `label: t('area.thing.label')` for a "
+    "script `label:` or `zeroText:` literal (#19885); English-only i18n, SLM locales go "
+    "through scripts/lift_locale_translations.py. The untranslated ratchet may rise by "
     "exactly the moved keys (owner ruling, #12732)."
 )
 
@@ -177,6 +178,55 @@ class TestKnownPositive:
         assert _PANEL_LITERALS <= set(literals_in(text))
 
 
+class TestLabelAndZeroTextFields:
+    """`label:` and `zeroText:` in `<script>` (#19885): a positive, a negative and a growth control each."""
+
+    def _script(self, body: str) -> list[str]:
+        return [t for k, t in literals_in(f"<script>{body}</script>") if k == "script"]
+
+    def test_label_positive(self):
+        assert self._script("const o = [{ value: 'a', label: 'Total Nodes' }]") == ["Total Nodes"]
+
+    def test_zero_text_positive(self):
+        assert self._script("const f = { zeroText: 'No data yet' }") == ["No data yet"]
+
+    def test_label_negatives(self):
+        body = "[{ label: t('x.y') }, { label: name }, { label: 'lower case' }, { label: 'PDF' }, { label: 'Chat' }]"
+        assert self._script(body) == []
+
+    def test_zero_text_negatives(self):
+        assert self._script("{ zeroText: t('common.zeroSize') }, { zeroText: '0 B' }, { zeroText: size }") == []
+
+    def test_a_label_key_outside_script_is_not_a_script_literal(self):
+        src = "<template><p>{ label: 'Hello there' }</p></template>"
+        assert [t for k, t in literals_in(src) if k == "script"] == []
+
+    @pytest.mark.parametrize("key", ["label", "zeroText"])
+    def test_the_frozen_baseline_fails_on_a_new_literal(self, measured, key):
+        """Real recorded digests for a real baselined file plus one new literal: the diff names it."""
+        rel = next(f for f in sorted(measured) if any(k == "script" for k, _ in measured[f]))
+        added = ("script", "Brand new words")
+        source = (
+            (repo_root() / rel)
+            .read_text(encoding="utf-8")
+            .replace("<script", f"<script>const _n = {{ {key}: 'Brand new words' }}</script>\n<script", 1)
+        )
+        assert added in literals_in(source)
+        new, stale = identity_diff({rel: HARDCODED_UI_LITERAL_IDS[rel]}, {rel: literals_in(source)})
+        assert new == {rel: [added]} and stale == {}
+
+    @pytest.mark.parametrize("key", ["label", "zeroText"])
+    def test_a_duplicate_new_literal_counts_twice(self, key):
+        body = f"{{ {key}: 'Same words' }}, {{ {key}: 'Same words' }}"
+        pairs = [("script", t) for t in self._script(body)]
+        recorded = {"A.vue": [literal_digest("script", "Same words")]}
+        assert identity_diff(recorded, {"A.vue": pairs})[0] == {"A.vue": [("script", "Same words")]}
+
+    def test_the_known_positive_in_a_real_component(self):
+        text = (repo_root() / "autobot-slm-frontend/src/components/fleet/FleetSummary.vue").read_text(encoding="utf-8")
+        assert ("script", "Total Nodes") in literals_in(text)
+
+
 class TestEachMatcherOnSyntheticSources:
     def _kinds(self, source: str, kind: str) -> list[str]:
         return [t for k, t in literals_in(source) if k == kind]
@@ -223,6 +273,11 @@ class TestEachMatcherOnSyntheticSources:
         """An apostrophe inside double quotes, and double quotes inside single (#18802)."""
         src = "<script>alert(\"Can't connect\"); e.value = 'Say \"hi\" now'; title: `It's ${n}`</script>"
         assert self._kinds(src, "script") == ["Can't connect", 'Say "hi" now', "It's ${n}"]
+
+    def test_script_literal_with_an_escaped_quote_is_recorded(self):
+        """`label: 'Let\\'s go'` is a literal; an escaped quote does not end it or hide it."""
+        src = '<script>const o = { label: \'Let\\\'s go\', zeroText: "Say \\"hi\\" now" }</script>'
+        assert self._kinds(src, "script") == ["Let\\'s go", 'Say \\"hi\\" now']
 
     def test_script_quote_negatives(self):
         """A mismatched pair is not a literal, nor is a lower-case string with an apostrophe."""
