@@ -2,68 +2,105 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""AES-256-GCM field-level encryption for sensitive config blobs (GH#8257).
+"""Field-level encryption for single stored credentials: a facade over ``secrets_envelope`` (#17981).
 
-Environment variable:
-    AUTOBOT_FIELD_ENCRYPTION_KEY — 32-byte key as URL-safe base64 (required for
-    encrypt/decrypt).  Generate with:
-        python -c "import secrets,base64; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())"
+Every value is sealed with the vault's AEAD core under a key derived from
+``AUTOBOT_SECRETS_ROOT_KEY``, and bound to *context*: a stable name for where
+the value is stored, such as ``organization:<id>:pm_config``. A sealed value
+copied to another record or field does not open.
 
-Encrypted format (base64url of: 12-byte nonce || ciphertext || 16-byte tag).
+Values written before #17981 carry no binding and were sealed with
+``AUTOBOT_FIELD_ENCRYPTION_KEY``. They stay readable while that key is set, and
+are sealed in the new format the next time the product itself saves them. No
+code re-seals stored credentials on its own (#17038).
+
+Any read failure raises :class:`FieldDecryptionError` naming the context. It
+never returns an empty value that a caller could save back over the credential.
 """
 
 from __future__ import annotations
 
 import base64
+import binascii
 import logging
 import os
 
+from autobot_shared.secrets_envelope import (
+    FIELD_FORMAT_PREFIX,
+    DecryptionError,
+    UnsupportedFormatError,
+    open_field,
+    open_unbound_legacy,
+    seal_field,
+)
+
 logger = logging.getLogger(__name__)
 
-_KEY_ENV = "AUTOBOT_FIELD_ENCRYPTION_KEY"
-_NONCE_LEN = 12
-_TAG_LEN = 16
+_LEGACY_KEY_ENV = "AUTOBOT_FIELD_ENCRYPTION_KEY"
 
 
-def _load_key() -> bytes:
-    raw = os.environ.get(_KEY_ENV, "")
+class FieldDecryptionError(Exception):
+    """A stored credential could not be read; the message names its context, never its value."""
+
+
+def _legacy_key(context: str) -> bytes:
+    raw = os.environ.get(_LEGACY_KEY_ENV, "")
     if not raw:
-        raise RuntimeError(f"{_KEY_ENV} is not set — cannot encrypt/decrypt sensitive fields")
+        raise FieldDecryptionError(f"{context}: stored in the pre-#17981 format, and {_LEGACY_KEY_ENV} is not set")
     key = base64.urlsafe_b64decode(raw + "==")
     if len(key) != 32:
-        raise RuntimeError(f"{_KEY_ENV} must be 32 bytes (got {len(key)})")
+        raise FieldDecryptionError(f"{context}: {_LEGACY_KEY_ENV} must be 32 bytes (got {len(key)})")
     return key
 
 
-def encrypt_field(plaintext: str) -> str:
-    """Return a base64url-encoded AES-256-GCM ciphertext for *plaintext*."""
-    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-
-    key = _load_key()
-    nonce = os.urandom(_NONCE_LEN)
-    ct = AESGCM(key).encrypt(nonce, plaintext.encode("utf-8"), None)
-    blob = nonce + ct
-    return base64.urlsafe_b64encode(blob).decode("ascii")
+def encrypt_field(plaintext: str, *, context: str) -> str:
+    """Seal *plaintext*, bound to *context*. Raises if the root key is unusable."""
+    return seal_field(plaintext.encode("utf-8"), context=context)
 
 
-def decrypt_field(ciphertext: str) -> str:
-    """Decrypt a base64url-encoded AES-256-GCM blob and return the plaintext."""
-    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+def decrypt_field(ciphertext: str, *, context: str) -> str:
+    """Open a value sealed for *context*, in either format. Fails closed with :class:`FieldDecryptionError`."""
+    try:
+        if ciphertext.startswith(FIELD_FORMAT_PREFIX):
+            return open_field(ciphertext, context=context).decode("utf-8")
+        raw = base64.urlsafe_b64decode(ciphertext + "==")
+        return open_unbound_legacy(_legacy_key(context), raw).decode("utf-8")
+    except FieldDecryptionError:
+        raise
+    except (DecryptionError, UnsupportedFormatError, binascii.Error, ValueError, RuntimeError) as exc:
+        raise FieldDecryptionError(f"{context}: stored value cannot be decrypted ({type(exc).__name__})") from exc
 
-    key = _load_key()
-    blob = base64.urlsafe_b64decode(ciphertext + "==")
-    if len(blob) < _NONCE_LEN + _TAG_LEN:
-        raise ValueError("Encrypted blob is too short")
-    nonce = blob[:_NONCE_LEN]
-    ct = blob[_NONCE_LEN:]
-    plaintext_bytes = AESGCM(key).decrypt(nonce, ct, None)
-    return plaintext_bytes.decode("utf-8")
+
+def is_legacy_ciphertext(ciphertext: str) -> bool:
+    """True for a value sealed before #17981 (no binding); the next save writes the new format."""
+    return not ciphertext.startswith(FIELD_FORMAT_PREFIX)
 
 
 # Sentinel prefix that distinguishes an encrypted value from a plaintext one.
 # Allows backward-compatible reads: if a stored value lacks the prefix it was
 # written before encryption was enabled and is returned as-is.
 _ENCRYPTED_PREFIX = "enc:"
+
+
+def seal_tagged(plaintext: str, *, context: str) -> str:
+    """Seal for a store that also holds plaintext: the result carries the ``enc:`` tag."""
+    return _ENCRYPTED_PREFIX + encrypt_field(plaintext, context=context)
+
+
+def is_plaintext(stored: str) -> bool:
+    """True for a value in a tagged store that was written before encryption (no ``enc:`` tag)."""
+    return not stored.startswith(_ENCRYPTED_PREFIX)
+
+
+def open_tagged(stored: str, *, context: str) -> str:
+    """Read a value written by :func:`seal_tagged`. An untagged (pre-encryption) value is returned as-is.
+
+    A tagged value that cannot be decrypted raises :class:`FieldDecryptionError`.
+    """
+    if is_plaintext(stored):
+        return stored
+    return decrypt_field(stored[len(_ENCRYPTED_PREFIX) :], context=context)
+
 
 # Fields within sso_providers.config that hold credentials and must be
 # encrypted at rest.
@@ -78,7 +115,11 @@ SSO_SENSITIVE_FIELDS: frozenset[str] = frozenset(
 )
 
 
-def encrypt_sso_config(config: dict) -> dict:
+def _sso_context(provider_id: str, field: str) -> str:
+    return f"sso_provider:{provider_id}:{field}"
+
+
+def encrypt_sso_config(config: dict, *, provider_id: str) -> dict:
     """Return a copy of *config* with all sensitive fields encrypted.
 
     Non-sensitive fields are copied verbatim. Already-encrypted values
@@ -88,11 +129,11 @@ def encrypt_sso_config(config: dict) -> dict:
     for field in SSO_SENSITIVE_FIELDS:
         value = out.get(field)
         if value and isinstance(value, str) and not value.startswith(_ENCRYPTED_PREFIX):
-            out[field] = _ENCRYPTED_PREFIX + encrypt_field(value)
+            out[field] = seal_tagged(value, context=_sso_context(provider_id, field))
     return out
 
 
-def decrypt_sso_config(config: dict) -> dict:
+def decrypt_sso_config(config: dict, *, provider_id: str) -> dict:
     """Return a copy of *config* with all encrypted sensitive fields decrypted.
 
     Values that do not carry the ``enc:`` prefix are assumed plaintext (written
@@ -101,8 +142,8 @@ def decrypt_sso_config(config: dict) -> dict:
     out = dict(config)
     for field in SSO_SENSITIVE_FIELDS:
         value = out.get(field)
-        if value and isinstance(value, str) and value.startswith(_ENCRYPTED_PREFIX):
-            out[field] = decrypt_field(value[len(_ENCRYPTED_PREFIX) :])
+        if value and isinstance(value, str):
+            out[field] = open_tagged(value, context=_sso_context(provider_id, field))
     return out
 
 

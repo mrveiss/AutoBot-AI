@@ -266,3 +266,34 @@ class TestWebhookRouteSignatureRejection18464:
                 headers={"X-Hub-Signature-256": header.encode("utf-8")},
             )
         assert resp.status_code == 403
+
+
+class TestWebhookUnreadableSecret17981:
+    """#17981: a stored secret that cannot be decrypted is closed exactly like an unset one (503)."""
+
+    @pytest.mark.parametrize(
+        ("getter", "method", "path"),
+        [
+            ("get_whatsapp_app_secret", "post", "/whatsapp/webhook"),
+            (
+                "get_whatsapp_verify_token",
+                "get",
+                "/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=x&hub.challenge=1",
+            ),
+        ],
+    )
+    def test_route_answers_503(self, getter, method, path):
+        from unittest.mock import AsyncMock, patch
+
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api import whatsapp
+        from autobot_shared.field_encryption import FieldDecryptionError
+
+        app = FastAPI()
+        app.include_router(whatsapp.router)
+        client = TestClient(app, raise_server_exceptions=False)
+        with patch.object(whatsapp, getter, AsyncMock(side_effect=FieldDecryptionError("redis:k: unreadable"))):
+            resp = getattr(client, method)(path, **({"content": b"{}"} if method == "post" else {}))
+        assert resp.status_code == 503

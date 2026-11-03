@@ -32,6 +32,7 @@ from api.schemas_chat import ChatMessage
 from api.schemas_system import WhatsAppConfigRequest, WhatsAppConfigResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.field_encryption import FieldDecryptionError
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.webhook_signature import verify_webhook_signature
 from services.gateway.gateway_manager import GatewayManager
@@ -175,7 +176,11 @@ async def whatsapp_webhook_verify(request: Request) -> PlainTextResponse:
     token = params.get("hub.verify_token")
     challenge = params.get("hub.challenge", "")
 
-    stored_token = await get_whatsapp_verify_token()
+    try:
+        stored_token = await get_whatsapp_verify_token()
+    except FieldDecryptionError as exc:  # #17981: unreadable is closed, like unset
+        logger.error("WhatsApp verify token unreadable - failing closed: %s", exc)
+        stored_token = None
     if not stored_token:
         logger.error("WhatsApp verify token not configured — failing closed")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Webhook not configured")
@@ -206,7 +211,11 @@ async def whatsapp_webhook(request: Request) -> JSONResponse:
     """
     raw_body = await request.body()
 
-    app_secret = await get_whatsapp_app_secret()
+    try:
+        app_secret = await get_whatsapp_app_secret()
+    except FieldDecryptionError as exc:  # #17981: unreadable is closed, like unset
+        logger.error("WhatsApp app secret unreadable - failing closed: %s", exc)
+        app_secret = None
     if not app_secret:
         logger.error("WhatsApp app secret not configured — failing closed")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Webhook not configured")

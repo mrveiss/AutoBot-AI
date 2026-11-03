@@ -117,7 +117,7 @@ def _seal_bytes(key: bytes, plaintext: bytes, aad: bytes) -> tuple[bytes, bytes]
     return nonce, _aesgcm(key).encrypt(nonce, plaintext, aad)
 
 
-def _open_bytes(key: bytes, nonce: bytes, ciphertext: bytes, aad: bytes) -> bytes:
+def _open_bytes(key: bytes, nonce: bytes, ciphertext: bytes, aad: bytes | None) -> bytes:
     """AES-256-GCM decrypt; raise :class:`DecryptionError` on any failure."""
     from cryptography.exceptions import InvalidTag
 
@@ -248,3 +248,50 @@ def rewrap_dek(wrapped: WrappedDek, old_kek: bytes, new_kek: bytes, *, secret_id
     """Re-wrap a grant from *old_kek* to *new_kek* (key rotation; payload untouched)."""
     dek = unwrap_dek(wrapped, old_kek, secret_id=secret_id)
     return wrap_dek(dek, new_kek, wrapped.grantee, secret_id=secret_id)
+
+
+# --- Single-field sealing (#17981) -------------------------------------------
+# One value stored in a column or a key, with no DEK or grant of its own. It uses
+# the same AEAD and root key as the vault, and binds *context*, a stable
+# identifier of where the value is stored, so a sealed value moved to another
+# record or field fails to open. ``field_encryption`` is the facade callers use.
+
+FIELD_FORMAT_PREFIX = "fe1."  # "." is outside the base64url alphabet, so a legacy blob never starts with it
+_FIELD_VAULT_ID = "field-encryption"
+
+
+def _field_aad(context: str) -> bytes:
+    if not context:
+        raise ValueError("context must name where the sealed value is stored")
+    return _aad(b"field-value", context.encode("utf-8"))
+
+
+def _field_key() -> bytes:
+    return derive_vault_key(load_root_key(), _FIELD_VAULT_ID)
+
+
+def seal_field(plaintext: bytes, *, context: str) -> str:
+    """Seal *plaintext* under the root-derived field key, bound to *context*."""
+    nonce, ciphertext = _seal_bytes(_field_key(), plaintext, _field_aad(context))
+    return FIELD_FORMAT_PREFIX + _b64e(nonce + ciphertext)
+
+
+def open_field(blob: str, *, context: str) -> bytes:
+    """Open a :func:`seal_field` blob; :class:`DecryptionError` if it belongs to another *context*."""
+    if not blob.startswith(FIELD_FORMAT_PREFIX):
+        raise UnsupportedFormatError("not a sealed-field blob")
+    raw = _b64d(blob[len(FIELD_FORMAT_PREFIX) :])
+    if len(raw) < _NONCE_LEN + 16:
+        raise DecryptionError("sealed-field blob is too short")
+    return _open_bytes(_field_key(), raw[:_NONCE_LEN], raw[_NONCE_LEN:], _field_aad(context))
+
+
+def open_unbound_legacy(key: bytes, raw: bytes) -> bytes:
+    """Read a value sealed before #17981, i.e. ``nonce || ciphertext`` with no AAD.
+
+    Read-only: nothing seals this format any more. A value read this way is
+    sealed in the new format the next time the product itself saves it.
+    """
+    if len(raw) < _NONCE_LEN + 16:
+        raise DecryptionError("legacy sealed value is too short")
+    return _open_bytes(key, raw[:_NONCE_LEN], raw[_NONCE_LEN:], None)
