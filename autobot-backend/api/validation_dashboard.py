@@ -29,6 +29,7 @@ from api.schemas_workflows import (
     ValidationJudgeStatusResponse,
     ValidationJudgmentResponse,
 )
+from api.validation_dashboard_summary import has_trend_history, summarise_phases
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from type_defs.common import Metadata
@@ -393,14 +394,7 @@ async def get_dashboard_metrics():
             "current_metrics": report["metrics"],
             "alert_count": len(report["alerts"]),
             "recommendation_count": len(report["recommendations"]),
-            "phase_summary": {
-                "total_phases": len(report["phase_details"]),
-                "completed_phases": len([p for p in report["phase_details"] if p["completion_percentage"] >= 95.0]),
-                "phases_in_progress": len(
-                    [p for p in report["phase_details"] if 50.0 <= p["completion_percentage"] < 95.0]
-                ),
-                "phases_not_started": len([p for p in report["phase_details"] if p["completion_percentage"] < 50.0]),
-            },
+            "phase_summary": summarise_phases(report["phase_details"]),
         }
 
         return {
@@ -434,6 +428,7 @@ async def get_trend_data():
         return {
             "status": "success",
             "trends": trend_data,
+            "available": has_trend_history(trend_data),
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
