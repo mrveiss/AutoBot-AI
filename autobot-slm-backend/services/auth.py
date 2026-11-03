@@ -289,6 +289,9 @@ async def get_current_user(
     # #20628: a session from before this rule, or one the main app minted, may be a non-admin's.
     if not is_admin_session(payload):
         logger.warning("get_current_user: refusing a non-admin session for sub=%r", payload.get("sub"))
+        from services.refused_session_audit import note_refused_session  # #20664
+
+        await note_refused_session(payload.get("sub"))
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ADMIN_ONLY_DETAIL)
 
     return payload
