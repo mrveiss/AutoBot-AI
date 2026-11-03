@@ -27,8 +27,18 @@ PROJECT_LABEL = "com.docker.compose.project"
 ACTIONS = {"start", "stop", "restart"}
 #: The SLM and what it needs to run: stopping one from the SLM could leave nobody to start it again.
 NEVER_STOP = {"autobot-slm", "autobot-slm-gui", "autobot-slm-postgres", "autobot-postgres", "autobot-redis"}
+
+
 #: How long a client may take to send or read one request, so a stalled one can't hold a thread.
-REQUEST_TIMEOUT_SECONDS = int(os.environ.get("DOCKER_PROXY_REQUEST_TIMEOUT", "30"))
+def _env_seconds(name: str, default: int) -> int:
+    """An env value in seconds; a malformed one falls back rather than stopping the proxy at import."""
+    try:
+        return int(os.environ.get(name, default))
+    except ValueError:
+        return default
+
+
+REQUEST_TIMEOUT_SECONDS = _env_seconds("DOCKER_PROXY_REQUEST_TIMEOUT", 30)
 _NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$")
 
 #: (method, docker path) -> (status, body)

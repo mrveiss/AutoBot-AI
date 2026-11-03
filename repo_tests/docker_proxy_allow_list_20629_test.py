@@ -8,12 +8,12 @@ from __future__ import annotations
 
 import importlib.util
 import json
-from pathlib import Path
 
 import pytest
 import yaml
+from repo_tests._paths import repo_root
 
-_ROOT = Path(__file__).resolve().parents[1]
+_ROOT = repo_root()
 _SPEC = importlib.util.spec_from_file_location("_docker_proxy", _ROOT / "docker" / "docker-proxy" / "proxy.py")
 proxy = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(proxy)
