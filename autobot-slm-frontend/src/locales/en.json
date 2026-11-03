@@ -269,6 +269,7 @@
     "waiting": "Waiting for the update to write its log."
   },
   "codeSyncView": {
+    "nodesOfflineAfterUpdate": "The update of {time} finished, but {offline} of the {total} nodes online before it are still offline. They may need attention.",
     "actions": "Actions",
     "addSchedule": "Add Schedule",
     "advancedDiagnostics": "Advanced / Diagnostics",
@@ -2850,6 +2851,9 @@
         "online": "Online",
         "pairNewWorker": "Pair New Worker",
         "pairWorker": "Pair Worker",
+        "assignedNotPaired": "{hostname} has the NPU worker role in the SLM but isn't paired, so it gets no work yet.",
+        "assignedPairFailed": "Could not pair the NPU worker on {hostname}. Check that it is running, then try again.",
+        "assignedReadFailed": "Could not read which nodes have the NPU worker role, so a node waiting to be paired may be missing here.",
         "pairYourFirstWorker": "Pair Your First Worker",
         "platform": "Platform *",
         "port": "Port *",
