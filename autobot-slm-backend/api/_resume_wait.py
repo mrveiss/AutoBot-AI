@@ -72,7 +72,7 @@ def resolve_completion_time(activity, since: str | None) -> str | None:
         return None
     if not _completion_is_newer_than(activity.last_completed_play_at, since):
         return None
-    rotated_at = _rotated_completion_time()
+    rotated_at = _rotated_completion_time(run_alive=activity.in_progress)
     if rotated_at is None:
         return activity.last_completed_play_at
     # #14804: the reading came from the rotated log, so the live mtime dates a
