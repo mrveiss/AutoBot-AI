@@ -113,7 +113,6 @@ def _source_population(root: Path) -> list[str]:
 REACH = declare(
     "ssh-restart-executor-scan",
     discover=_source_population,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
     what="non-test slm-backend python source",
     roots=("autobot-slm-backend",),
     growth=100,

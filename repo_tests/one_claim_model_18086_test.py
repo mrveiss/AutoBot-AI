@@ -80,7 +80,6 @@ def _source_population(root: Path) -> list[str]:
 REACH = declare(
     "one-claim-model-scan",
     discover=_source_population,
-    # Mid-window, from REACH.window(): (2696, 2996, 2846).
     what="non-test python source",
     roots=_ROOTS,
     growth=300,

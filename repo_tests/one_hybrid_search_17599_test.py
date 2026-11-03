@@ -65,7 +65,6 @@ def _source_population(root: Path) -> list[str]:
 REACH = declare(
     "one-hybrid-search",
     discover=_source_population,
-    # Mid-window, from REACH.window().
     what="non-test python source",
     roots=("autobot-backend", "autobot_shared"),
     growth=300,

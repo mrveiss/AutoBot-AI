@@ -117,7 +117,6 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "hand-rolled-circuit-breaker-scan",
     discover=_population,
-    # Mid-window, from REACH.window(): population 3209 at eabcae7394 -> (2909, 3209, 3059).
     what="non-test python source",
     roots=SCAN_ROOTS,
     growth=300,

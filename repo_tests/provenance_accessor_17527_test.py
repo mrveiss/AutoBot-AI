@@ -94,7 +94,6 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "provenance-accessor-scan",
     discover=_population,
-    # Mid-window, from REACH.window() at 2,510 files: (2210, 2510, 2360).
     what="non-test python source",
     roots=("autobot-backend",),
     growth=300,

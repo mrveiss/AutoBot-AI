@@ -64,7 +64,6 @@ def _population(root) -> list[str]:
 REACH = declare(
     "optimization-taxonomy-scan",
     discover=_population,
-    # Mid-window, from REACH.window().
     what="non-test python source",
     roots=("autobot-backend/llm_shared/optimization",),
     growth=4,

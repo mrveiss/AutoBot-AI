@@ -51,7 +51,6 @@ def _source_population(root: Path) -> list[str]:
 REACH = declare(
     "session-ownership-validator-scan",
     discover=_source_population,
-    # Mid-window, from REACH.window() = (2697, 2997, 2847).
     what="non-test python source",
     roots=("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     growth=300,

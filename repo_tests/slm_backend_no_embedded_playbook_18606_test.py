@@ -67,7 +67,6 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "slm-backend-embedded-playbook-scan",
     discover=_population,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
     what="non-test python source in the SLM backend",
     roots=(_ROOT,),
     growth=100,

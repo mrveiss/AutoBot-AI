@@ -82,7 +82,6 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "anthropic-message-split-scan",
     discover=_population,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
     what="non-test provider source",
     roots=(_ROOT,),
     growth=10,

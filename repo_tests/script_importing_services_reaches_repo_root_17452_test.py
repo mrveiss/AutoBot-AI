@@ -146,6 +146,7 @@ def _scripts_importing_services(root: pathlib.Path | None = None) -> tuple[str, 
 SERVICE_IMPORTING_SCRIPTS = declare(
     "slm-scripts-importing-services",
     discover=_scripts_importing_services,
+    floor=1,
     growth=20,
     what="scripts importing `services.*`, which pulls in `autobot_shared` (#17452)",
 )
