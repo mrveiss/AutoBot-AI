@@ -18,6 +18,7 @@ import pytest
 from llc.exceptions import HeartbeatDispatchSkipped
 from llc.org_role_authority import (
     ORG_ROLE_AUTHORITY,
+    _no_bound_reason,
     apply_org_role_bound,
     claude_code_bound,
     describe_role_bound,
@@ -79,6 +80,16 @@ class TestAdapters:
         view = describe_role_bound("worker", "plugin_adapter")
 
         assert view["runs"] is False and "no enforcement decision" in view["reason"]
+
+    @pytest.mark.parametrize("role", [None, "", "ceo"])
+    def test_an_unknown_role_reason_is_our_text_never_the_exception(self, role):
+        """#20703: this view reaches the agent list, so no exception text may land in ``reason``."""
+        leak = "exception text that must not reach a response"
+        with patch("llc.org_role_authority.org_role_authority", side_effect=ValueError(leak)):
+            view = describe_role_bound(role, "claude_code")
+
+        assert view["runs"] is False and view["reason"] == _no_bound_reason(role)
+        assert leak not in str(view)
 
     def test_an_unclassified_adapter_is_refused_at_dispatch(self):
         with pytest.raises(HeartbeatDispatchSkipped, match="no enforcement decision"):
