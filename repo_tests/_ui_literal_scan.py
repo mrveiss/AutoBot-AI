@@ -98,7 +98,7 @@ _SCRIPT_BODY = re.compile(r"<script\b[^>]*>(.*?)</script\b[^>]*>", re.DOTALL | r
 #: literal; the other two quote characters may occur inside it (#18802).
 _SCRIPT_LITERAL = re.compile(
     r"""(?:\.value\s*=|message:|title:|label:|zeroText:|confirm\(|alert\(|Error\()"""
-    r"""\s*([`'"])([A-Z][a-z](?:(?!\1).){3,}?)\1"""
+    r"""\s*([`'"])([A-Z][a-z](?:\\.|(?!\1).){3,}?)\1"""
 )
 KINDS = ("template-text", "attribute", "script")
 

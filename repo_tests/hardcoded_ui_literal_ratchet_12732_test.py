@@ -274,6 +274,11 @@ class TestEachMatcherOnSyntheticSources:
         src = "<script>alert(\"Can't connect\"); e.value = 'Say \"hi\" now'; title: `It's ${n}`</script>"
         assert self._kinds(src, "script") == ["Can't connect", 'Say "hi" now', "It's ${n}"]
 
+    def test_script_literal_with_an_escaped_quote_is_recorded(self):
+        """`label: 'Let\\'s go'` is a literal; an escaped quote does not end it or hide it."""
+        src = '<script>const o = { label: \'Let\\\'s go\', zeroText: "Say \\"hi\\" now" }</script>'
+        assert self._kinds(src, "script") == ["Let\\'s go", 'Say \\"hi\\" now']
+
     def test_script_quote_negatives(self):
         """A mismatched pair is not a literal, nor is a lower-case string with an apostrophe."""
         assert self._kinds("<script>alert(\"Unclosed text')</script>", "script") == []
