@@ -6916,6 +6916,7 @@
   "security": {
     "secretsManager": {
       "loadFailed": "The secrets could not be loaded. What is shown may be out of date. Refresh to try again.",
+      "writeFailed": "The change could not be confirmed. It may have been refused, or applied with the response lost. Check the list before retrying.",
       "systemVault": {
         "title": "System vault",
         "unavailable": "The system vault is unavailable, so its secrets cannot be shown.",
@@ -6927,7 +6928,6 @@
         "delete": "Delete",
         "deleteTitle": "Delete system secret",
         "deleteMessage": "Delete \"{name}\" from the system vault? Services that read it will stop receiving it.",
-        "failed": "The change could not be confirmed. It may have been refused, or it may have been applied and the response lost. The list has been reloaded; check it before retrying.",
         "dependentsTitle": "Secret is in use",
         "dependentsMessage": "\"{name}\" is still used by: {dependents}. Delete it anyway? These will stop receiving it."
       },
