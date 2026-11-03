@@ -62628,7 +62628,7 @@ export interface components {
         BudgetPolicyRequest: {
             /**
              * Scope
-             * @description Scope: agent, project, task, or tenant
+             * @description Scope: agent, project, task, tenant, or user (chat requests)
              */
             scope: string;
             /**
