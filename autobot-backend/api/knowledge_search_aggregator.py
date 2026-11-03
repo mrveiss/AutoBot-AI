@@ -656,10 +656,10 @@ async def _get_facts_for_graph(
         raw_facts = result.get("facts", []) if result.get("success") else []
         facts = [{**fact, "metadata": _decode_fact_metadata(fact)} for fact in raw_facts]
     else:
-        # Search for recent facts
-        # Issue #13009: exclude quarantined research facts (#12622).
-        result = await kb.search("*", top_k=max_facts, filters=RESEARCH_QUARANTINE_FILTER)
-        facts = result.get("results", [])
+        # #19727: listed, not a search for "*", which the keyword fallback matches nothing for; quarantine stays out
+        listed = await kb.get_all_facts(limit=max_facts)
+        get_category = lambda fact: (fact.get("metadata") or {}).get("category", CategoryDefaults.GENERAL)  # noqa: E731
+        facts = [{**fact, "id": fact.get("fact_id"), "category": get_category(fact)} for fact in listed]
 
     return await filter_search_results_by_permission(
         facts,
