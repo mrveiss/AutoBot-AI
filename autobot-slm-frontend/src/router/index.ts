@@ -270,6 +270,13 @@ const router = createRouter({
           meta: { title: 'Web Research', parent: 'settings', admin: true }
         },
         {
+          // #20605: theme packages on the main backend; moved from the main app's /slm/themes
+          path: 'admin/themes',
+          name: 'settings-admin-themes',
+          component: () => import('@/views/settings/admin/ThemeManagerSettings.vue'),
+          meta: { title: 'Themes', parent: 'settings', admin: true }
+        },
+        {
           // Consolidated to Fleet Overview /fleet/npu Worker Registry sub-tab
           path: 'admin/npu-workers',
           name: 'settings-admin-npu-workers',

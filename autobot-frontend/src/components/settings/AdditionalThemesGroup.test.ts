@@ -53,6 +53,7 @@ describe('AdditionalThemesGroup', () => {
     const link = wrapper.get('a[target="_blank"]')
     expect(link.attributes('rel')).toContain('noopener')
     expect(link.text()).toBe(en.settings.additionalThemes.slmLink)
+    expect(link.attributes('href')).toMatch(/\/settings\/admin\/themes$/)
   })
 
   it('shows a non-admin an administrator note, not an SLM link, and keeps the badge', async () => {

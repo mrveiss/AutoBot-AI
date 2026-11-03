@@ -35,7 +35,7 @@
 
     <div class="flex flex-wrap items-center gap-3 rounded-lg bg-autobot-info-bg px-3 py-2.5 text-sm text-autobot-info">
       <span class="min-w-48 flex-1">{{ $t('settings.additionalThemes.info') }}</span>
-      <a v-if="userStore.isAdmin" :href="slmSettingsUrl" target="_blank" rel="noopener noreferrer" class="font-semibold underline underline-offset-2" data-testid="additional-themes-slm-link">{{ $t('settings.additionalThemes.slmLink') }}</a>
+      <a v-if="userStore.isAdmin" :href="slmThemesUrl" target="_blank" rel="noopener noreferrer" class="font-semibold underline underline-offset-2" data-testid="additional-themes-slm-link">{{ $t('settings.additionalThemes.slmLink') }}</a>
       <span v-else data-testid="additional-themes-admin-note">{{ $t('settings.additionalThemes.adminManaged') }}</span>
     </div>
   </div>
@@ -59,9 +59,8 @@ const { themeVariant, installedThemes, setThemeVariant } = useThemeVariant()
 const cardClass =
   'flex flex-col items-start gap-1 rounded-lg border p-3 text-start transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-autobot-primary'
 
-// The SLM console has no dedicated Themes screen route yet, so this opens its
-// Settings area, where deployed themes are managed.
-const slmSettingsUrl = computed(() => `${getSLMAdminUrl()}/settings`)
+// Deployed themes are managed in the SLM console's Themes screen (#20605).
+const slmThemesUrl = computed(() => `${getSLMAdminUrl()}/settings/admin/themes`)
 
 async function pick(id: string, name: string): Promise<void> {
   try {
