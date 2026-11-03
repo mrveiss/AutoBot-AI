@@ -185,6 +185,7 @@ async def test_transcriber_ask_sends_the_refusal_as_an_error_event(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_resumed_graph_turn_runs_under_the_principal(monkeypatch):
+    import chat_workflow.attachment_context as attachment_mod
     import chat_workflow.graph as graph_mod
     from chat_workflow import manager as manager_mod
 
@@ -196,6 +197,7 @@ async def test_resumed_graph_turn_runs_under_the_principal(monkeypatch):
 
     monkeypatch.setattr(graph_mod, "get_compiled_graph", AsyncMock(return_value=object()))
     monkeypatch.setattr(manager_mod, "stream_graph_turn", _turn)
+    monkeypatch.setattr(attachment_mod, "resume_command", AsyncMock(return_value=object()))
     out = [
         m
         async for m in manager_mod.ChatWorkflowManager.resume_graph(

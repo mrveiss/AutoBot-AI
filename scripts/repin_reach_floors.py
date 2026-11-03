@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import configparser
 import dataclasses
 import inspect
 import re
@@ -40,8 +41,18 @@ _ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_ROOT))
 
 
+def import_roots() -> list[str]:
+    """The ``pythonpath`` of pytest.ini, the one list of where the guards' modules live."""
+    ini = configparser.ConfigParser(interpolation=None)
+    ini.read(_ROOT / "pytest.ini", encoding="utf-8")
+    return ini["pytest"]["pythonpath"].split()
+
+
 def _declarations() -> tuple[list, dict[str, str]]:
     """(floor-based declarations, {module: import error}) after importing every guard."""
+    # The paths pytest gives these modules: without them 14 could not import, so every local check
+    # exited 2 and the pre-push gate could never record a pass (#20518).
+    sys.path[1:1] = [str(_ROOT / root) for root in import_roots()]
     from repo_tests import reach_declarations_test as meta  # noqa: PLC0415 - imports every guard
 
     failures = dict(getattr(meta, "IMPORT_FAILURES", {}))
@@ -110,8 +121,22 @@ def _repin(reach) -> str:
     return f"PIN   {reach.name}: floor -> {mid} (population {count}) in {path.relative_to(_ROOT)}"
 
 
+_FLOOR_LINE = re.compile(r"^\s*floor=\d+,?\s*(#.*)?$")
+
+
+def only_floor_lines(diff: str) -> bool:
+    """True when a unified diff changes nothing but ``floor=`` lines (#19673)."""
+    changed = [line[1:] for line in diff.splitlines() if line[:1] in "+-" and line[:3] not in ("+++", "---")]
+    return bool(changed) and all(_FLOOR_LINE.match(line) for line in changed)
+
+
 def _changed_files(ref: str) -> set[str] | None:
-    """Repo-relative paths this branch changed since it left *ref*; None if git could not say."""
+    """Paths this branch changed since it left *ref*, not counting a change only to floor pins.
+
+    None if git could not say. A repin alone doesn't make a guard the branch's (#19673): counted, one
+    repin put the file in the diff, the next growth on the base read as this branch's, and the gate
+    demanded another repin. Each of those edits one line every other PR edits too.
+    """
     from autobot_shared.paths import scrubbed_git_env  # noqa: PLC0415 - _ROOT is on the path only from here
 
     done = subprocess.run(
@@ -122,7 +147,21 @@ def _changed_files(ref: str) -> set[str] | None:
         check=False,
         env=scrubbed_git_env(),
     )
-    return set(done.stdout.split()) if done.returncode == 0 else None
+    if done.returncode != 0:
+        return None
+    changed = set(done.stdout.split())
+    for path in sorted(p for p in changed if p.startswith("repo_tests/")):
+        one = subprocess.run(
+            ["git", "diff", "-U0", f"{ref}...HEAD", "--", path],
+            cwd=_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=scrubbed_git_env(),
+        )
+        if one.returncode == 0 and only_floor_lines(one.stdout):
+            changed.discard(path)
+    return changed
 
 
 def _not_this_branch(reach, changed: set[str] | None) -> bool:
@@ -162,6 +201,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--check", action="store_true", help="report stale floors; change nothing")
     parser.add_argument("--changed-since", metavar="REF", help="with --check: judge only guards changed since REF")
     args = parser.parse_args(argv)
+    from repo_tests.machine_slot import acquire  # noqa: PLC0415 - _ROOT is on the path only from here
+
+    acquire()
     declarations, failures = _declarations()
     if failures:
         _report_import_failures(failures)

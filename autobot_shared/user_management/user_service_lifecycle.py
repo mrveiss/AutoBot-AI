@@ -47,9 +47,9 @@ logger = get_logger(__name__)
 class UserLifecycleMixin(UserServiceBase):
     """Password change, activation state and deletion."""
 
-    async def _require_user(self, user_id: uuid.UUID) -> UserCore:
+    async def _require_user(self, user_id: uuid.UUID, *, include_deleted: bool = False) -> UserCore:
         """Return the user, or raise ``UserNotFoundError``."""
-        user = await self.get_user(user_id)
+        user = await self.get_user(user_id, include_deleted=include_deleted)
         if not user:
             raise UserNotFoundError(f"User {user_id} not found")
         return user
@@ -115,12 +115,13 @@ class UserLifecycleMixin(UserServiceBase):
     async def _set_active(self, user_id: uuid.UUID, active: bool) -> bool:
         """Set ``is_active`` and audit it; raises ``UserNotFoundError``."""
         user = await self._require_user(user_id)
+        handover = {} if active else await self.reassign_sessions(user_id)  # before the flip: a refusal changes nothing
         user.is_active = active
         user.updated_at = now_utc()
         await self.session.flush()
         action = IdentityAuditAction.USER_ACTIVATED if active else IdentityAuditAction.USER_DEACTIVATED
         # Reactivation revokes nothing: the tokens from before stay void, the user signs in again (#20443).
-        details = {} if active else self._revoke_tokens_after_commit(user.username)
+        details = {} if active else {**handover, **self._revoke_tokens_after_commit(user.username)}
         await self._audit_log(action, AuditResourceType.USER, user_id, details)
         logger.info("%s user: %s", "Activated" if active else "Deactivated", user_id)
         return True
@@ -178,20 +179,27 @@ class UserLifecycleMixin(UserServiceBase):
         With *reassign_to*, the user's memory records are transferred to that
         user BEFORE the row is deleted (see ``_reassign_before_delete``).
 
+        A soft delete repeated on a soft-deleted user queues the revocation marker again, so a request
+        whose marker write failed (answered 503) can be retried (#20443); a hard delete cannot.
+
         Raises:
             UserNotFoundError: the user does not exist.
         """
-        user = await self._require_user(user_id)
+        user = await self._require_user(user_id, include_deleted=not hard_delete)
         details: dict[str, Any] = {"hard_delete": hard_delete}
         if reassign_to is not None:
+            await self.check_session_reassign(user_id)  # a memory move cannot be undone, so a refusal comes first
             details["reassign_to"] = str(reassign_to)
             details["reassign_counts"] = await self._reassign_before_delete(user_id, reassign_to, hard_delete)
+        details.update(
+            await self.reassign_sessions(user_id)
+        )  # chat sessions never stay with a deleted account (#20029)
 
         if hard_delete:
             await self._queue_membership_epoch_bumps(user)  # the cascade removes the rows this reads
             await self.session.delete(user)
         else:
-            user.deleted_at = now_utc()
+            user.deleted_at = user.deleted_at or now_utc()
             user.is_active = False
         await self.session.flush()
         details.update(self._revoke_tokens_after_commit(user.username))  # after the reassign and the delete

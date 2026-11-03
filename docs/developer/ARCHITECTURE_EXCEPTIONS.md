@@ -593,6 +593,21 @@ registration (`_shared/tasks/register_node_credentials.yml`).
 | Workflow `concurrency:` blocks | 62 workflows, 55 of them 3 lines | GitHub Actions has no way to include a workflow-level `concurrency:` key. |
 | Jobs with their own `setup-python` | 13 workflows call it directly, 4 use `setup-python-suite`; 6 of the 13 install `requirements-ci.txt` | That action builds the test venv, its cache and the system packages, and does not put the venv on `PATH`. These jobs install on the runner's Python, some add packages or tolerate a failed install, so moving them would change what they run on. |
 | `docker/backend/Dockerfile`, `docker/slm/Dockerfile` | 183 and 103 lines | They share a `FROM`, but their package lists, requirement filters and health checks differ. A base image would need its own build and publish step. |
-| `backend-start.sh`, `backend-stop.sh` under `autobot-backend` and `autobot-slm-backend` templates | start 31 and 30 lines, stop 30 and 20 | Service name, port and wait loops differ, and only the backend's stop script waits. Merging them would change what one of them does. |
 
 **Keep in sync:** nothing. If two of these come to differ only by a name, extract them and drop the row.
+
+---
+
+## NPU Worker Pairing — Backend Resource, Not the SLM Node Registry
+
+**File:** `autobot-backend/api/npu_workers.py` (`/api/npu/workers*`)
+**Diverges from:** one fleet inventory in SLM `/api/nodes`
+**Issue:** #18735
+
+**Reason:** The SLM is the control plane for all services, so it sees and controls NPU workers, but
+through the backend's existing routes. Pairing and credentials stay in the backend, because moving
+them would change the worker credential flow and need redirects for installed workers. Maintainer
+decision on the split; the control work is #20625.
+
+**Sync cadence:** None; the SLM calls these routes and keeps no copy of the worker records. Reopen
+this decision if the SLM needs to hold NPU worker credentials itself.
