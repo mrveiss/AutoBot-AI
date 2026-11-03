@@ -12,7 +12,7 @@
 #   ansible-playbook playbooks/update-all-nodes.yml
 #   ansible-playbook playbooks/update-all-nodes.yml -e deploy_ref=release
 #   ansible-playbook playbooks/update-all-nodes.yml -e skip_branch_check=true
-#   ansible-playbook playbooks/update-all-nodes.yml --skip-tags restart   # code-only, no restarts
+#   ansible-playbook playbooks/update-all-nodes.yml --skip-tags restart -e autobot_restart_services=false   # code-only, no restarts (#20743)
 #
 # Tags:
 #   restart              - all service restart tasks (skip for code-only deploys)
@@ -25,11 +25,16 @@
 #   slm-agent            - slm_agent role redeploy (code + secrets + restart) (#11480)
 #   shared               - autobot_shared deploy tasks (all nodes)
 #
-# NOTE (#11480): the slm-agent redeploy imports the slm_agent role, whose restart
-# runs via a handler and whose pip install is tagged `packages` (not `deps`).
-# So `--skip-tags restart` / `--skip-tags deps` do NOT skip the agent restart or
-# its dep install — a code-only push still restarts the agent. Use
-# `--skip-tags slm-agent` to exclude agent redeploy entirely.
+# NOTE (#20743): restarts come from two places, and a sync without restarts has to
+# stop both. Restart TASKS are tagged `restart`. Restart HANDLERS (the agent's
+# `Restart SLM agent` among them, notified by its code, config and secrets) cannot
+# be: Ansible ignores tags on handlers. Each restart handler checks
+# `autobot_restart_services` instead. So a code-only push is
+#   --skip-tags restart -e autobot_restart_services=false
+# which is what code sync passes when "restart after sync" is off
+# (services/sync_restart.py). Every service then keeps running its old code until
+# its next restart. The agent's pip install is tagged `packages` (not `deps`, #11480);
+# use `--skip-tags slm-agent` to exclude the agent redeploy entirely.
 
 # =============================================================================
 # PLAY 0: Pre-flight Git Safety Check & Create Deploy Archives
@@ -321,6 +326,21 @@
       command: git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} log -1 --format='%s'
       register: deploy_commit_subject
       changed_when: false
+
+    # #20250: Play 3 waits for this many nodes. A per-node update has --limit localhost,<node> and
+    # needn't wait for the whole fleet. Any other limit counts, a group name included: it can't be
+    # told from a host here, and a wait of at most 3 minutes beats reporting nothing.
+    - name: "[PRE-FLIGHT] Count the nodes online before the update"
+      uri:
+        url: "https://{{ slm_host }}/slm/api/health"
+        validate_certs: false
+        status_code: 200
+      register: fleet_nodes_before
+      failed_when: false
+      when: >-
+        ansible_limit is not defined
+        or (slm_manager_inventory_host | default('')) in ansible_limit.split(',')
+        or not ('localhost' in ansible_limit.split(',') and (ansible_limit.split(',') | length) == 2)
 
     - name: "[PRE-FLIGHT] Notify SLM of new commit"
       uri:
@@ -2491,10 +2511,49 @@
       retries: 12
       delay: 10
 
+    # #20250: the agents reconnect after the restarts above, so read the count once they have had
+    # time to. Judged against the count before the update, so a node that was already down costs no
+    # wait and isn't blamed on it. Not a failure of this task: the marker below says it.
+    - name: Wait for the nodes to report back
+      uri:
+        url: "https://{{ slm_host }}/slm/api/health"
+        validate_certs: false
+        status_code: 200
+      register: fleet_nodes_health
+      until: >-
+        fleet_nodes_health.status == 200 and
+        (fleet_nodes_health.json.nodes_online | default(0) | int) >= (fleet_nodes_before.json.nodes_online | default(0) | int)
+      retries: "{{ update_nodes_online_retries | default(18) }}"
+      delay: "{{ update_nodes_online_delay | default(10) }}"
+      failed_when: false
+      # /health answers 200 with 0 nodes when its database is down, which is no count to judge against.
+      when: fleet_nodes_before.json is defined and fleet_nodes_before.json.database == 'healthy'
+
     - name: Clean up deploy archives
       file:
         path: /tmp/autobot-deploy
         state: absent
+
+    # Read by services/self_update_log_reader.py, so the update page says so too.
+    - name: Report nodes still offline after the update
+      debug:
+        msg: >-
+          NODES OFFLINE AFTER UPDATE:
+          {{ (fleet_nodes_before.json.nodes_online | default(0) | int) - (fleet_nodes_health.json.nodes_online | default(0) | int) }}
+          of {{ fleet_nodes_before.json.nodes_online | default(0) | int }}
+      when:
+        - fleet_nodes_before.json is defined
+        - fleet_nodes_before.json.database == 'healthy'
+        - fleet_nodes_health.json is defined
+        - fleet_nodes_health.json.database == 'healthy'
+        - (fleet_nodes_health.json.nodes_online | default(0) | int) < (fleet_nodes_before.json.nodes_online | default(0) | int)
+
+    - name: Say when the nodes could not be counted
+      debug:
+        msg: "Could not compare the nodes online before and after this update"
+      when: >-
+        fleet_nodes_before.json is defined and
+        (fleet_nodes_before.json.database != 'healthy' or fleet_nodes_health.json.database | default('') != 'healthy')
 
     - name: Display update summary
       debug:
