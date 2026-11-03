@@ -67,6 +67,7 @@ class AuditAction(str, Enum):
     KNOWLEDGE_REMOVE = "knowledge.remove"
     KNOWLEDGE_BACKUP_DELETE = "knowledge.backup.delete"
     KNOWLEDGE_BACKUP_RESTORE = "knowledge.backup.restore"
+    KNOWLEDGE_UPLOAD_SESSION_REMOVE = "knowledge.upload_session.remove"  # #19713: an admin frees an abandoned upload
     KNOWLEDGE_QUARANTINE_READ = "knowledge.quarantine.read"  # #19163: an opt-out read of the research quarantine
     KNOWLEDGE_ADMIN_READ = "kb.admin_read"  # #16665: an admin's read of any fact through an explicit read API
     API_KEY_CREATE = "api_key.create"  # pragma: allowlist secret -- an action name, not a key
