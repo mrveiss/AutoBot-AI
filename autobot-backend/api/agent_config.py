@@ -537,7 +537,7 @@ DEFAULT_AGENT_CONFIGS = {
     "llm_failsafe": {
         "name": "LLM Failsafe Agent",
         "description": "Multi-tier failsafe system ensuring LLM communication even when primary systems fail. Implements PRIMARY → SECONDARY → BASIC → EMERGENCY fallback tiers. Provides graceful degradation with rule-based and static responses.",
-        "default_model": SYSTEM_TIER_MODEL,
+        "default_model": ROUTING_TIER_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 4,
