@@ -50,7 +50,7 @@ def _modules(root: Path) -> list[Path]:
 REACH = declare(
     "search-mode-copies",
     discover=_modules,
-    floor=2610,  # mid-window: population 2735, window (2485, 2735)
+    floor=2711,  # mid-window: population 2836, window (2586, 2836)
     growth=250,  # ~9%: ordinary backend growth between repins must not turn an unrelated PR red
     what="non-test backend modules",
     roots=(_ROOT,),
