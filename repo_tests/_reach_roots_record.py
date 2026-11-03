@@ -367,6 +367,7 @@ REACH_ROOTS = {
     "repo_tests/sigterm_grace_one_home_19340_test.py": ("autobot-backend/llc",),
     "repo_tests/single_attribute_writer_18240_test.py": ("autobot-frontend/src",),
     "repo_tests/slm_backend_no_embedded_playbook_18606_test.py": ("autobot-slm-backend",),
+    "repo_tests/slm_backend_port_one_name_test.py": ("autobot-slm-backend/ansible",),
     "repo_tests/slm_login_needs_no_users_db_19406_test.py": ("autobot-slm-backend",),
     "repo_tests/slm_node_enum_members_exist_test.py": ("autobot-slm-backend",),
     "repo_tests/ssot_rehardcode_19730_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
