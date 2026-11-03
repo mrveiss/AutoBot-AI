@@ -47,6 +47,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.env_utils import env_float_clamped, env_int_clamped
 from autobot_shared.ssot_config import config
 from models.database import Node, Service, SystemdState
+from services.docker_proxy_client import is_compose_node, run_compose_service_action
 from services.journal_fetch import build_journal_command, fetch_service_journal
 from services.ssh_utils import ssh_destination
 from services.unit_names import validate_unit_name
@@ -233,6 +234,8 @@ async def run_ansible_service_action(
     action: str,
 ) -> Tuple[bool, str]:
     """Run SSH command to control a service via systemctl. Ref: #1088."""
+    if is_compose_node(node):  # #20629: a container has no SSH or systemd
+        return await run_compose_service_action(node, service_name, action)
     ssh_base_cmd = build_service_ssh_base_cmd(node)  # outside the try, as before: a bad node row raises
 
     try:
