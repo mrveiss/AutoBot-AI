@@ -55,6 +55,8 @@ async def test_an_embedding_model_that_embeds_is_ok(monkeypatch):
 
     result = await probe._embedding_model_health_probe()
     assert result.status == "ok" and result.detail is None
+    assert result.data.pop("embedding_measured_age_s") >= 0
+    assert result.data.pop("embedding_refresh_within_s") > 0
     assert result.data == {"embedding_model": "nomic-embed-text:latest", "embedding_measured": True}
 
 
