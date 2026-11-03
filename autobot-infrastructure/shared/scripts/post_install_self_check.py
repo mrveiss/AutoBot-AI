@@ -72,8 +72,8 @@ def _request(
         headers["Authorization"] = f"Bearer {token}"
     data = None if payload is None else json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=data, headers=headers, method=method or None)  # nosec B310
-    context = ssl.create_default_context(cafile=cafile) if url.startswith("https:") else None
-    try:
+    try:  # a CA file that can't be read is a named failure too, not a traceback
+        context = ssl.create_default_context(cafile=cafile) if url.startswith("https:") else None
         with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT_S, context=context) as reply:  # nosec B310
             return reply.status, reply.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as exc:
@@ -117,11 +117,12 @@ def probe_chat(base: str, token: str, env: Mapping[str, str]) -> None:
         content = str((_json(status, body, "chat").get("data") or {}).get("content", "")).strip()
         if not content or content.startswith(CHAT_ERROR_REPLY):
             raise ProbeFailed("a real answer from chat", body[:300])
-    except ProbeFailed as chat_failure:
+    except Exception as chat_failure:  # any failure: the session is still deleted
         try:
             _delete_session(base, token, session_id, cafile)
         except ProbeFailed as leftover:  # the chat failure is the finding; the leftover is added to it
-            chat_failure.got += f"; also: {leftover.got}"
+            if isinstance(chat_failure, ProbeFailed):
+                chat_failure.got += f"; also: {leftover.got}"
         raise
     _delete_session(base, token, session_id, cafile)
 

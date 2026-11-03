@@ -253,6 +253,27 @@ def test_an_unwritable_report_still_prints_the_outcomes_and_fails(stack, tmp_pat
     assert "PASS chat" in out and "FAIL report" in out
 
 
+def test_an_unreadable_ca_file_is_a_named_failure_not_a_traceback(stack, tmp_path: Path) -> None:
+    base, _, _ = stack
+    env = {**_env(base.replace("http:", "https:"), tmp_path), "SELF_CHECK_CA_FILE": str(tmp_path / "missing.pem")}
+    assert check.main(env) == 1
+    assert _failed(tmp_path)["login"]["got"].startswith("HTTP 0")
+
+
+def test_a_crash_in_the_chat_step_still_deletes_the_session(stack, tmp_path: Path, monkeypatch) -> None:
+    base, replies, _ = stack
+    real_json = check._json
+
+    def crash_on_chat(status, body, what):
+        if what == "chat":
+            raise KeyError("data")
+        return real_json(status, body, what)
+
+    monkeypatch.setattr(check, "_json", crash_on_chat)
+    assert check.main(_env(base, tmp_path)) == 1
+    assert ("DELETE", "/api/chat/sessions/sess-1") in replies["calls"]
+
+
 def test_the_chat_fallback_reply_is_not_an_answer(stack, tmp_path: Path) -> None:
     base, replies, _ = stack
     text = f"{check.CHAT_ERROR_REPLY}. Please try again."
