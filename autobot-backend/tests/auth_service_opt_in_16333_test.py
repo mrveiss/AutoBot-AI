@@ -136,3 +136,20 @@ def test_one_request_writes_one_audit_row_however_many_gates_ask(am, key_valid, 
         response = TestClient(app).get("/both", headers=KEY)
     assert response.status_code == 200 and response.json()["role"] == "service"
     assert recorded.await_count == 1
+
+
+def test_a_refused_non_admin_is_audited_by_the_one_gate(client, as_user):
+    """PR B (#16333): routes that used require_role keep their role_denied row on check_admin_permission."""
+    with as_user({"username": "bob", "role": "user"}), patch("auth_rbac.audit_role_denied") as audited:
+        assert client.get("/gated").status_code == 403
+    user, allowed, role, _request = audited.call_args.args
+    assert user["username"] == "bob" and role == "user" and set(allowed) == {"admin", "superadmin"}
+
+
+def test_a_session_with_no_role_is_401_and_a_role_is_recorded_normalised(client, as_user):
+    """PR B (#16333): a role-less session is 401 on the one gate (require_role gave 403); the row's role is lowercased."""
+    with as_user({"username": "nobody", "role": ""}):
+        assert client.get("/gated").status_code == 401
+    with as_user({"username": "bob", "role": "USER"}), patch("auth_rbac.audit_role_denied") as audited:
+        assert client.get("/gated").status_code == 403
+    assert audited.call_args.args[2] == "user"

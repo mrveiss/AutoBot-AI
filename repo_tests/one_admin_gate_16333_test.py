@@ -60,18 +60,6 @@ _RECORDED = {
 
 #: Pending migration. **Only shrinks.**
 _PENDING = {
-    # PR B: onto check_admin_permission.
-    ("autobot-backend/api/admin_event_logs.py", "require_role"): 1,
-    ("autobot-backend/api/admin_oauth_bundle_strip.py", "require_role"): 1,
-    ("autobot-backend/api/admin_org_tier_column.py", "require_role"): 1,
-    ("autobot-backend/api/admin_orphan_repair.py", "require_role"): 1,
-    ("autobot-backend/api/admin_orphan_storage.py", "require_role"): 1,
-    ("autobot-backend/api/admin_pricing.py", "require_role"): 4,
-    ("autobot-backend/api/admin_retention_policies.py", "require_role"): 5,
-    ("autobot-backend/api/chat_shared_links.py", "require_role"): 1,
-    ("autobot-backend/api/mcp_token_admin.py", "require_role"): 3,
-    ("autobot-backend/api/voice_bundle_admin.py", "require_role"): 2,
-    ("autobot-backend/api/voice_bundle_user.py", "require_role"): 1,
     # PR C: local checks onto the one predicate and gate.
     ("autobot-backend/api/redis_mcp/router.py", "literal"): 1,
     ("autobot-backend/security_layer.py", "literal"): 1,

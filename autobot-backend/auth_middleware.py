@@ -27,7 +27,7 @@ from autobot_shared.auth.jwt_core import (
     hash_password,
     verify_password,
 )
-from autobot_shared.auth.permissions import is_admin_role
+from autobot_shared.auth.permissions import ADMIN_ROLES, is_admin_role, role_value
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.principal import resolve_principal_id  # noqa: F401  (re-exported, #13688)
 from autobot_shared.singleton_factory import lazy_singleton
@@ -942,11 +942,7 @@ async def get_current_user(request: Request) -> Dict:
 
 
 async def check_admin_permission(request: Request) -> bool:
-    """
-    FastAPI dependency: True for an admin (``Depends(check_admin_permission)``); a revoked JWT is 401 (#18688).
-
-    Raises HTTPException: 401 if not authenticated, 403 if not admin.
-    """
+    """True for an admin; 401 unauthenticated or revoked (#18688); 403 non-admin, audited as role_denied (#16333)."""
     if await admit_opted_in_service(request) is not None:  # #16333: the key only where a route names it
         return True
 
@@ -960,6 +956,9 @@ async def check_admin_permission(request: Request) -> bool:
     if not user_role:
         raise_auth_error("AUTH_0002", "User role not assigned - access denied")
     if not is_admin_role(user_role):
+        from auth_rbac import audit_role_denied  # noqa: PLC0415  (auth_rbac imports this module)
+
+        audit_role_denied(user_data, sorted(ADMIN_ROLES), role_value(user_role).lower(), request)
         raise_auth_error("AUTH_0003", "Admin permission required for this operation")
 
     return True
