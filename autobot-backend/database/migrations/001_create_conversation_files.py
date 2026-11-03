@@ -267,6 +267,7 @@ class ConversationFilesMigration:
             "idx_conversation_files_session",
             "idx_conversation_files_hash",
             "idx_conversation_files_uploaded_at",
+            "idx_conversation_files_uploaded_by",
             "idx_file_metadata_file_id",
             "idx_session_associations_session",
             "idx_session_associations_file",
