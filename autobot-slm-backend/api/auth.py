@@ -13,6 +13,7 @@ Consolidated from legacy auth.py and slm_auth.py in Issue #1922.
 import logging
 import time
 from datetime import timedelta
+from typing import NoReturn
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -21,6 +22,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from api.login_rate_limit import (
+    enforce_login_rate_limit,
+    record_failed_login,
+    refuse_locked_username,
+)
 from api.security import create_audit_log
 from autobot_shared.auth.jwt_core import _peek_alg, decode_jwt_no_verify_exp
 from autobot_shared.auth.permissions import Permission
@@ -76,6 +82,35 @@ def _create_mfa_challenge(user: User) -> MfaChallengeResponse:
     return MfaChallengeResponse(temp_token=temp_token)
 
 
+async def _reject_failed_login(
+    audit_db: AsyncSession, client_ip: str | None, username: str, locked_wait: int | None
+) -> NoReturn:
+    """Wrong password: 429 when the name is over its failed limit (not recorded again), else record + 401."""
+    if locked_wait is not None:  # over the failed limit AND wrong: refused, not recorded again
+        await refuse_locked_username(audit_db, client_ip, username, locked_wait)
+    await record_failed_login(username)
+    await create_audit_log(
+        audit_db,
+        category="authentication",
+        action="auth.login",
+        username=username,
+        ip_address=client_ip,
+        resource_type="session",
+        description=f"Failed login attempt for '{username}'",
+        request_method="POST",
+        request_path="/api/auth/login",
+        response_status=401,
+        success=False,
+        error_message="Invalid username or password",
+    )
+    await audit_db.commit()
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid username or password",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
 async def _refuse_non_admin(audit_db: AsyncSession, user, client_ip: str) -> None:
     """Record the refused login and raise 403: the SLM is for admins only (#20628)."""
     await create_audit_log(
@@ -113,6 +148,8 @@ async def login(
     Records audit log entry (Issue #998). Consolidated in Issue #1922.
     """
     client_ip = get_client_ip(http_request, trusted_proxies=settings.trusted_proxies)
+    # #20600: the address bucket is charged per attempt; the username bucket only counts failures
+    locked_wait = await enforce_login_rate_limit(audit_db, client_ip, body.username)
     context = TenantContext(is_platform_admin=True)
     user_service = UserService(db, context)
 
@@ -122,26 +159,7 @@ async def login(
     )
 
     if not user:
-        await create_audit_log(
-            audit_db,
-            category="authentication",
-            action="auth.login",
-            username=body.username,
-            ip_address=client_ip,
-            resource_type="session",
-            description=f"Failed login attempt for '{body.username}'",
-            request_method="POST",
-            request_path="/api/auth/login",
-            response_status=401,
-            success=False,
-            error_message="Invalid username or password",
-        )
-        await audit_db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        await _reject_failed_login(audit_db, client_ip, body.username, locked_wait)
 
     if not user.is_platform_admin:  # #20628: before MFA, so a non-admin gets no challenge either
         await _refuse_non_admin(audit_db, user, client_ip)
