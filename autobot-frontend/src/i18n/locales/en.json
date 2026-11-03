@@ -8389,6 +8389,9 @@
     }
   },
   "llc": {
+    "agent": {
+      "cannotRun": "Cannot run"
+    },
     "templates": {
       "searchPlaceholder": "Search templates...",
       "loading": "Loading templates...",
