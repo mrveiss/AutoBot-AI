@@ -23,6 +23,7 @@ from knowledge.schemas.chunked_upload import UploadCreate
 from knowledge.upload_limit import MAX_FILE_SIZE_BYTES
 from security.upload_filename_policy import require_safe_upload
 from services import chunked_upload as uploads
+from services.audit.taxonomy import AuditAction
 from services.audit_logger import audit_log
 
 logger = get_logger(__name__)
@@ -105,7 +106,7 @@ async def remove_expired_upload(
 
     async def record(session: uploads.UploadSession) -> bool:
         return await audit_log(
-            "knowledge.upload_session.remove",
+            AuditAction.KNOWLEDGE_UPLOAD_SESSION_REMOVE.value,
             user_id=admin,
             ip_address=request.client.host if request.client else "unknown",
             resource=upload_id,
