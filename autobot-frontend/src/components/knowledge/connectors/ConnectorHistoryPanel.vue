@@ -32,14 +32,19 @@ const expandedRows = ref<Set<number>>(new Set())
 
 const { jobState, isPolling, start: startPoll, stop: stopPoll } = useConnectorJob()
 
+let latestHistoryRequest = 0
+
 async function loadHistory() {
+  const request = ++latestHistoryRequest
   historyLoading.value = true
   try {
-    history.value = await fetchConnectorHistory(props.connectorId)
+    const entries = await fetchConnectorHistory(props.connectorId)
+    // An older response must not overwrite a newer snapshot (the mount load vs the poll-stop load).
+    if (request === latestHistoryRequest) history.value = entries
   } catch (err) {
     logger.error('Failed to load history', err)
   } finally {
-    historyLoading.value = false
+    if (request === latestHistoryRequest) historyLoading.value = false
   }
 }
 

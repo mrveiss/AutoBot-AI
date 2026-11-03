@@ -20,7 +20,7 @@ const POLL_INTERVAL_MS = 5_000
 /** About a minute of polls for a just-started sync to report its job. */
 const FIRST_JOB_WAIT_POLLS = 12
 
-/** Fetch current in-flight job state. Returns null when no job is active (404). */
+/** Fetch current in-flight job state. Returns null when no job is active (404); any other failure throws. */
 export async function fetchConnectorJob(connectorId: string): Promise<ConnectorJobState | null> {
   try {
     return await apiClient.get<ConnectorJobState>(
@@ -31,8 +31,7 @@ export async function fetchConnectorJob(connectorId: string): Promise<ConnectorJ
     if (e?.status === 404 || e?.response?.status === 404) {
       return null
     }
-    logger.error('fetchConnectorJob error', err)
-    return null
+    throw err
   }
 }
 
@@ -78,7 +77,15 @@ export function useConnectorJob() {
 
   async function _poll(connectorId: string) {
     if (!isPolling.value) return
-    const state = await fetchConnectorJob(connectorId)
+    let state: ConnectorJobState | null
+    try {
+      state = await fetchConnectorJob(connectorId)
+    } catch (err) {
+      // A failed request is not "no job yet": stop here rather than show Running for a minute.
+      logger.error('fetchConnectorJob error', err)
+      isPolling.value = false
+      return
+    }
     jobState.value = state
 
     // #19714: a sync just started writes its job state after change detection, so an early "no job"
