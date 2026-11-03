@@ -51,8 +51,11 @@
 # auth at its next restart. An empty credential is never written over a real one:
 # the run stops on that node and says why.
 - name: "AI Stack | Check whether the env files already carry a Redis password (#20724)"
+  # Fail closed: an absent file is 1 (nothing to protect); a match is 0; anything else -- a file that
+  # exists but can't be read -- is 2, and counts as "may hold one", so the run refuses rather than
+  # render an empty credential over it.
   ansible.builtin.command:
-    argv: [grep, -qs, '^REDIS_PASSWORD=.', "{{ item }}"]
+    argv: [sh, -c, '[ -e "$1" ] || exit 1; grep -q "^REDIS_PASSWORD=." "$1"', sh, "{{ item }}"]
   loop:
     - /etc/autobot/autobot-ai-stack.env
     - "{{ ai_install_dir }}/.env"
@@ -66,14 +69,14 @@
 - name: "AI Stack | Refuse to write an env file without the Redis password it has (#20724)"
   ansible.builtin.fail:
     msg: >-
-      The AI Stack env file on this node has a Redis password, but this run has none
-      to render: the SLM's slm-secrets.env could not be read and no vault password is
-      set. Rendering now would remove Redis auth from the AI Stack. Nothing was
+      An AI Stack env file on this node has a Redis password, or could not be read to
+      tell, but this run has none to render: the SLM's slm-secrets.env could not be read
+      and no vault password is set. Rendering now would remove Redis auth from the AI Stack. Nothing was
       changed. Restore the SLM's secrets file, then run the update again.
   when:
     - (ai_redis_password | default('') | trim) | length == 0
     - _ai_env_redis_password_present.results | default([]) | selectattr('rc', 'defined')
-      | selectattr('rc', 'equalto', 0) | list | length > 0
+      | rejectattr('rc', 'equalto', 1) | list | length > 0
   tags: ['ai', 'config']
 
 - name: "AI Stack | Deploy /etc/autobot/autobot-ai-stack.env"
