@@ -778,29 +778,22 @@ export const routes: RouteRecordRaw[] = [
   // /desktop removed from nav — noVNC is accessible via the Chat tab's noVNC tab.
   // Redirect any bookmarked /desktop URLs to /chat.
   { path: '/desktop', redirect: '/chat' },
-  // Issue #4977: Standalone noVNC view at /slm/tools/novnc (driven by HostSelector)
+  // #20605: remote desktop and the theme manager are SLM screens (tools/novnc, settings/admin/themes).
+  // A bookmark to the old URL goes where the Platform admin shield goes: the SLM console. The old
+  // views (SlmNoVncView, slm/ThemeManagerView) stay until nothing is confirmed to link to them.
   {
     path: '/slm/tools/novnc',
-    name: 'SlmNoVnc',
-    component: () => import('@/views/SlmNoVncView.vue'),
-    meta: {
-      title: 'Remote Desktop',
-      requiresAuth: true,
-      hideFooter: true,
-    },
+    redirect: () => {
+      window.location.href = `${getSLMAdminUrl()}/tools/novnc`
+      return '/chat' // Fallback
+    }
   },
-  // Issue #10472: Admin theme-package management under the /slm route group.
-  // Upload/list/uninstall theme zips; install is admin-gated server-side.
   {
     path: '/slm/themes',
-    name: 'slm-themes',
-    component: () => import('@/views/slm/ThemeManagerView.vue'),
-    meta: {
-      title: 'Theme Manager',
-      requiresAuth: true,
-      // Admin-only operator view, reached via /slm — not in the primary nav rail.
-      hideInNav: true,
-    },
+    redirect: () => {
+      window.location.href = `${getSLMAdminUrl()}/settings/admin/themes`
+      return '/chat' // Fallback
+    }
   },
   // Issue #3502: Custom Dashboard renamed to /home (see home route above)
 

@@ -25,7 +25,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/__tests__/TerminalWindow.test.ts": 627,
     "autobot-frontend/src/components/agents/HeartbeatPanel.vue": 721,
     "autobot-frontend/src/components/analytics/AdvancedAnalytics.vue": 902,  # #18849: 903 -> 902
-    "autobot-frontend/src/components/analytics/CodeEvolutionTimeline.vue": 772,
+    "autobot-frontend/src/components/analytics/CodeEvolutionTimeline.vue": 767,
     "autobot-frontend/src/components/analytics/CodeGenerationDashboard.vue": 1108,
     "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": 1789,
     "autobot-frontend/src/components/analytics/CodeReviewDashboard.vue": 1216,
@@ -38,7 +38,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/analytics/PerformanceAnalysisDashboard.vue": 1075,
     "autobot-frontend/src/components/analytics/PrecommitHookDashboard.vue": 1094,
     "autobot-frontend/src/components/analytics/SourceManager.vue": 830,
-    "autobot-frontend/src/components/analytics/TechnicalDebtDashboard.vue": 1712,
+    "autobot-frontend/src/components/analytics/TechnicalDebtDashboard.vue": 1706,
     "autobot-frontend/src/components/analytics/panels/CodebaseBugPredictionPanel.vue": 779,
     "autobot-frontend/src/components/analytics/panels/CodebaseCrossLanguagePanel.vue": 640,
     "autobot-frontend/src/components/analytics/panels/CodebaseIntelligenceScoresPanel.vue": 1325,
@@ -49,22 +49,21 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/charts/FunctionCallGraph.vue": 2153,  # #19906: 2165 -> 2153
     "autobot-frontend/src/components/charts/ImportTreeChart.vue": 1353,  # #19906: 1365 -> 1353
     "autobot-frontend/src/components/chat/ChatInput.vue": 1628,  # #20133: 1672 -> 1631; #20195: -> 1628
-    "autobot-frontend/src/components/chat/ChatInterface.vue": 1521,
+    "autobot-frontend/src/components/chat/ChatInterface.vue": 1516,
     "autobot-frontend/src/components/chat/ChatMessages.vue": 2097,  # #20195: 2118 -> 2097 (approval routing moved out)
     "autobot-frontend/src/components/chat/ChatSidebar.vue": 807,  # #18849: 808 -> 807
     "autobot-frontend/src/components/chat/DocumentationSearchSidebar.vue": 766,
-    "autobot-frontend/src/components/chat/VisionAnalysisModal.vue": 702,
+    "autobot-frontend/src/components/chat/VisionAnalysisModal.vue": 693,
     "autobot-frontend/src/components/chat/VisualBrowserPanel.vue": 632,
     "autobot-frontend/src/components/chat/VoiceConversationOverlay.vue": 916,
     "autobot-frontend/src/components/chat/VoiceConversationPanel.vue": 649,
-    "autobot-frontend/src/components/desktop/DesktopInterface.vue": 894,
+    "autobot-frontend/src/components/desktop/DesktopInterface.vue": 891,
     "autobot-frontend/src/components/desktop/PopoutChromiumBrowser.vue": 1229,
     "autobot-frontend/src/components/examples/ThemingPatternExample.vue": 603,
     "autobot-frontend/src/components/feature-flags/AccessMetrics.vue": 719,
     "autobot-frontend/src/components/feature-flags/EndpointEnforcement.vue": 639,
-    "autobot-frontend/src/components/file-browser/FileBrowser.vue": 736,
+    "autobot-frontend/src/components/file-browser/FileBrowser.vue": 732,
     "autobot-frontend/src/components/knowledge/ChromaDBExplorer.vue": 1155,
-    "autobot-frontend/src/components/knowledge/DocumentChangeFeed.vue": 601,
     "autobot-frontend/src/components/knowledge/EntityExtractor.vue": 776,
     "autobot-frontend/src/components/knowledge/EntityGraphManager.vue": 692,
     "autobot-frontend/src/components/knowledge/GraphConnectionPath.vue": 701,
@@ -76,7 +75,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/knowledge/KnowledgeHealth.vue": 925,
     "autobot-frontend/src/components/knowledge/KnowledgePersistenceDialog.vue": 891,  # #18819+#18849 one import (-1)
     "autobot-frontend/src/components/knowledge/KnowledgeResearchPanel.vue": 1189,
-    "autobot-frontend/src/components/knowledge/KnowledgeSystemDocs.vue": 863,
+    "autobot-frontend/src/components/knowledge/KnowledgeSystemDocs.vue": 846,
     "autobot-frontend/src/components/knowledge/KnowledgeUpload.vue": 1631,
     "autobot-frontend/src/components/knowledge/KnowledgeVerificationQueue.vue": 797,
     "autobot-frontend/src/components/knowledge/SystemKnowledgeManager.vue": 1018,  # #19906: 1034 -> 1018
@@ -91,14 +90,14 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/terminal/AdvancedStepConfirmationModal.vue": 615,  # #18849: 616 -> 615
     "autobot-frontend/src/components/terminal/BaseXTerminal.vue": 825,
     "autobot-frontend/src/components/terminal/TerminalModals.vue": 742,  # #18849: 743 -> 742
-    "autobot-frontend/src/components/terminal/TerminalWindow.vue": 1612,
+    "autobot-frontend/src/components/terminal/TerminalWindow.vue": 1605,
     "autobot-frontend/src/components/ui/HostSelectionDialog.vue": 924,
     "autobot-frontend/src/components/vision/GUIAutomationControls.vue": 708,
     "autobot-frontend/src/components/vision/MediaGallery.vue": 717,
     "autobot-frontend/src/components/vision/ScreenCaptureViewer.vue": 835,
-    "autobot-frontend/src/components/vision/VideoProcessor.vue": 897,
+    "autobot-frontend/src/components/vision/VideoProcessor.vue": 891,
     "autobot-frontend/src/components/visualizations/AgentActivityVisualization.vue": 936,
-    "autobot-frontend/src/components/visualizations/SystemArchitectureDiagram.vue": 1881,
+    "autobot-frontend/src/components/visualizations/SystemArchitectureDiagram.vue": 1874,
     "autobot-frontend/src/components/visualizations/WorkflowVisualization.vue": 1017,  # #16744: 1020 -> 1019
     "autobot-frontend/src/components/workflow/PhaseProgressionIndicator.vue": 618,
     "autobot-frontend/src/components/workflow/WorkflowCanvas.vue": 2887,
@@ -127,18 +126,18 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/models/controllers/KnowledgeController.ts": 645,
     "autobot-frontend/src/models/repositories/ChatRepository.ts": 674,
     "autobot-frontend/src/models/repositories/KnowledgeRepository.ts": 897,
-    "autobot-frontend/src/router/index.ts": 1385,
+    "autobot-frontend/src/router/index.ts": 1378,  # #20605: 1385 -> 1378
     "autobot-frontend/src/services/GlobalWebSocketService.ts": 905,
     "autobot-frontend/src/services/TerminalService.ts": 1137,
     "autobot-frontend/src/stores/useChatStore.ts": 1176,
     "autobot-frontend/src/stores/useKnowledgeStore.ts": 809,
-    "autobot-frontend/src/utils/RumAgent.ts": 857,
+    "autobot-frontend/src/utils/RumAgent.ts": 852,
     "autobot-frontend/src/utils/VisionMultimodalApiClient.ts": 663,
     "autobot-frontend/src/utils/debugUtils.ts": 620,
     "autobot-frontend/src/views/AdminUsersView.vue": 796,
     "autobot-frontend/src/views/AdvancedControlView.vue": 1049,
     "autobot-frontend/src/views/BudgetPolicies.vue": 879,
-    "autobot-frontend/src/views/BusinessIntelligenceView.vue": 987,  # #20004: 988 -> 987
+    "autobot-frontend/src/views/BusinessIntelligenceView.vue": 982,  # #20004: 988 -> 987
     "autobot-frontend/src/views/CustomDashboard.vue": 878,  # #18242: 1106 -> 884; train-42 review: -5, then -1
     "autobot-frontend/src/views/DevSpeedupView.vue": 644,
     "autobot-frontend/src/views/ErrorMonitoringView.vue": 839,
@@ -154,8 +153,8 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/llc/CompanyCreationWizard.vue": 909,
     "autobot-frontend/src/views/llc/CompanyPortabilityView.vue": 761,
     "autobot-frontend/src/views/llc/CostDashboard.vue": 1012,  # #20123: 1015 -> 1012 (mixed bucket lists each currency)
-    "autobot-frontend/src/views/llc/GanttTimelineView.vue": 817,
-    "autobot-frontend/src/views/llc/HeartbeatMonitor.vue": 805,
+    "autobot-frontend/src/views/llc/GanttTimelineView.vue": 815,
+    "autobot-frontend/src/views/llc/HeartbeatMonitor.vue": 800,
     "autobot-frontend/src/views/llc/OrgChart.vue": 1517,  # #14780: 1527 -> 1522 (kit BaseDrawer)
     "autobot-frontend/src/views/llc/ProjectBrowserView.vue": 1370,  # #18819 1379->1374; #18849 -1; #14778 BaseInput -1
     "autobot-frontend/src/views/llc/RolesView.vue": 1026,  # #18819 1029->1027; #18849 one kit import on the merge (-1)
