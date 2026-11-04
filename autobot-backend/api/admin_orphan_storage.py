@@ -8,7 +8,7 @@ Endpoints:
     GET  /api/admin/orphan-storage                    preview candidates -- read-only
     POST /api/admin/orphan-storage/deletion-requests  PROPOSE one deletion
 
-Access: admin/superadmin (``require_role``). This is preview only, on purpose:
+Access: admin/superadmin (``check_admin_permission``). This is preview only, on purpose:
 deletion is never exposed as a bare admin-gated route here, because the owner's
 rule requires every removal to go through a human-approved review queue
 (#17043). The POST above is that proposal, and it is the only thing this
@@ -36,15 +36,14 @@ from api.schemas_orphan_storage import (
     OrphanStorageProviderStatusResponse,
 )
 from api.user_management.dependencies import get_db_session
-from auth_middleware import get_current_user
-from auth_rbac import require_role
+from auth_middleware import check_admin_permission, get_current_user
 from models.approval import ApprovalType
 from services.approval_gate_service import ApprovalGateService
 from services.orphan_storage import list_all_candidates, registered_providers
 from services.orphan_storage_cleanup_action import ACTION as ORPHAN_STORAGE_DELETE
 from services.orphan_storage_cleanup_action import register_cleanup_action
 
-router = APIRouter(prefix="/admin", dependencies=[Depends(require_role("admin", "superadmin"))])
+router = APIRouter(prefix="/admin", dependencies=[Depends(check_admin_permission)])
 
 # Registered here, at this router's own import time (once, at app startup),
 # rather than as a side effect of importing orphan_clone_detector itself --
