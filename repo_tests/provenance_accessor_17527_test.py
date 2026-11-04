@@ -30,6 +30,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _CANONICAL = "autobot-backend/knowledge/provenance.py"
@@ -75,7 +76,7 @@ def _reads_key(node: ast.AST) -> bool:
 
 
 def _hand_rolled_reads(source: str) -> int:
-    return sum(1 for node in ast.walk(ast.parse(source)) if _reads_key(node))
+    return sum(1 for node in ast.walk(parse_cache.parse(source)) if _reads_key(node))
 
 
 def _is_source_python(rel: str) -> bool:
