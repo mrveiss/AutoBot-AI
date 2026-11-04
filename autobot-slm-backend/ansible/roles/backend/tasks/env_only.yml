@@ -73,3 +73,5 @@
     group: "{{ backend_env_group }}"
   become: true
   tags: ['backend', 'env']
+  vars:
+    internal_api_key_render: "{{ (internal_api_key_by_file | default({})).get(backend_env_dest, internal_api_key_resolved | default(autobot_internal_api_key)) }}"  # #20750: the file keeps its key
