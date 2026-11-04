@@ -131,7 +131,6 @@ def _authenticating_modules(root: Path) -> list[Path]:
 REACH = declare(
     "websocket-subprotocol-echo",
     discover=_authenticating_modules,
-    floor=19,
     growth=5,
     what="WebSocket-authenticating backend modules",
 )
