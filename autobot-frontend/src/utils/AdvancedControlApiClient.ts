@@ -10,7 +10,7 @@
  */
 
 import apiClient from '@/utils/ApiClient';
-import { getConfig, getApiBase } from '@/config/ssot-config';
+import { getApiBase, getBackendWsUrl } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
 import type { ApiResponse } from '@/types/api';
 
@@ -438,18 +438,15 @@ class AdvancedControlApiClient {
    * Get WebSocket URL for real-time system monitoring
    */
   getMonitoringWebSocketUrl(): string {
-    const cfg = getConfig();
-    const wsProtocol = cfg.httpProtocol === 'https' ? 'wss' : 'ws';
-    return `${wsProtocol}://${cfg.vm.main}:${cfg.port.backend}${getApiBase()}/advanced-control/ws/monitoring`;
+    // #19821: same-origin through the proxy, as every other backend socket (getBackendWsUrl).
+    return `${getBackendWsUrl()}${getApiBase()}/advanced-control/ws/monitoring`;
   }
 
   /**
    * Get WebSocket URL for desktop streaming control
    */
   getDesktopWebSocketUrl(sessionId: string): string {
-    const cfg = getConfig();
-    const wsProtocol = cfg.httpProtocol === 'https' ? 'wss' : 'ws';
-    return `${wsProtocol}://${cfg.vm.main}:${cfg.port.backend}${getApiBase()}/advanced-control/ws/desktop/${encodeURIComponent(sessionId)}`;
+    return `${getBackendWsUrl()}${getApiBase()}/advanced-control/ws/desktop/${encodeURIComponent(sessionId)}`;
   }
 }
 
