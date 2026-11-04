@@ -35,7 +35,8 @@
 
     <div class="flex flex-wrap items-center gap-3 rounded-lg bg-autobot-info-bg px-3 py-2.5 text-sm text-autobot-info">
       <span class="min-w-48 flex-1">{{ $t('settings.additionalThemes.info') }}</span>
-      <a :href="slmThemesUrl" target="_blank" rel="noopener noreferrer" class="font-semibold underline underline-offset-2">{{ $t('settings.additionalThemes.slmLink') }}</a>
+      <a v-if="userStore.isAdmin" :href="slmThemesUrl" target="_blank" rel="noopener noreferrer" class="font-semibold underline underline-offset-2" data-testid="additional-themes-slm-link">{{ $t('settings.additionalThemes.slmLink') }}</a>
+      <span v-else data-testid="additional-themes-admin-note">{{ $t('settings.additionalThemes.adminManaged') }}</span>
     </div>
   </div>
 </template>
@@ -46,10 +47,12 @@ import { useI18n } from 'vue-i18n'
 import { BaseBadge, useAnnounce } from '@autobot/ui'
 import { getSLMAdminUrl } from '@/config/ssot-config'
 import { useThemeVariant } from '@/composables/useThemeVariant'
+import { useUserStore } from '@/stores/useUserStore'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('AdditionalThemesGroup')
 const { t } = useI18n()
+const userStore = useUserStore()
 const { announce } = useAnnounce()
 const { themeVariant, installedThemes, setThemeVariant } = useThemeVariant()
 

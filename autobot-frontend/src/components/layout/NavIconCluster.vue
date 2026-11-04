@@ -6,7 +6,7 @@
   Secrets, Preferences, the Minimal/Full toggle, Platform admin. The entries
   come from the nav registry (navIconItems); every icon carries an i18n
   aria-label and a kit tooltip. Platform admin is the SLM console: a new tab,
-  shown only to roles with service.management. Advanced entries carry `.adv`
+  shown only to admins (#20631). Advanced entries carry `.adv`
   so Minimal mode hides them (assets/css/components.css).
 -->
 <template>
@@ -31,7 +31,7 @@ import NavIconLink from '@/components/layout/NavIconLink.vue'
 const userStore = useUserStore()
 
 const allowed = computed(() =>
-  navIconItems.filter((item) => item.requires !== 'serviceManagement' || userStore.hasServiceManagement),
+  navIconItems.filter((item) => item.requires !== 'admin' || userStore.isAdmin),
 )
 const leading = computed(() => allowed.value.filter((item) => !item.afterToggle))
 const trailing = computed(() => allowed.value.filter((item) => item.afterToggle))

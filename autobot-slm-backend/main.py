@@ -617,14 +617,14 @@ install_middleware(app, cors_origins=settings.cors_origins)  # the whole stack, 
 # entirely because the check only ever looked for `app.include_router(...)`.
 
 # Service-management gate (#10198, epic #10193): all other routers require
-# Permission.SERVICE_MANAGEMENT.  Ordinary users (role=user/readonly/analyst/editor)
-# do not have this permission and receive 403.  Admin and Operator do.
+# Permission.SERVICE_MANAGEMENT.  #20631: the SLM is admin only, so the operator role, which
+# holds it, still gets 403: get_current_user, run first by this gate, refuses non-admins.
 _SM = [Depends(require_service_management)]
 
 # #11450: routers that ALSO carry machine-to-machine agent-ingest endpoints
 # (heartbeat/enroll, roles/definitions, code-sync/notify, events/sync). The
 # node agent presents AUTOBOT_INTERNAL_API_KEY (no user JWT), so these mount
-# with a gate that accepts the internal key OR a service.management user —
+# with a gate that accepts the internal key OR an admin session (as _SM above) —
 # preserving #10198's human-surface gate while un-breaking the agent plane.
 _SM_OR_AGENT = [Depends(require_service_management_or_internal)]
 
