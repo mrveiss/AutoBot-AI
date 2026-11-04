@@ -41,7 +41,8 @@ onMounted(async () => {
   window.history.replaceState(window.history.state, '', window.location.pathname)
 
   if (error) {
-    router.push({ name: 'login', query: { error: 'sso_failed' } })
+    // #20631: the backend says why when the account is not an admin's.
+    router.push({ name: 'login', query: { error: error === 'admin_only' ? error : 'sso_failed' } })
     return
   }
 
