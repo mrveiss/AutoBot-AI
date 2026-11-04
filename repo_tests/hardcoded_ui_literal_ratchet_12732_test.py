@@ -44,6 +44,7 @@ from repo_tests._hardcoded_ui_literal_baseline import (
 from repo_tests._hardcoded_ui_literal_detect import (
     APP_TREES,
     REACH_UI_LITERAL_FILES,
+    formatter_files,
     literals_in,
     scan,
     scanned_files,
@@ -195,13 +196,34 @@ class TestLabelAndZeroTextFields:
         assert self._script(body) == []
 
     def test_zero_text_negatives(self):
-        assert self._script("{ zeroText: t('common.zeroSize') }, { zeroText: '0 B' }, { zeroText: size }") == []
+        assert self._script("{ zeroText: t('common.zeroSize') }, { zeroText: size }, { nullText: '—' }") == []
+
+    @pytest.mark.parametrize(
+        ("body", "found"),
+        [
+            ("{ zeroText: '0B' }", "0B"),
+            ("{ nullText: '0 B' }", "0 B"),
+            ("{ label: '1.5 KB' }", "1.5 KB"),
+            ("{ label: '2 GiB' }", "2 GiB"),
+            ("[{ label: 'SLOs' }]", "SLOs"),
+        ],
+    )
+    def test_the_size_and_acronym_plural_shapes_are_seen(self, body, found):
+        """The #19885 sites: a size or an acronym plural is visible text the prose rule cannot see."""
+        assert self._script(body) == [found]
+
+    def test_other_short_shapes_stay_unmatched(self):
+        """A mode id or a time unit (`3d`, `24h`), a bare acronym and a short word are not these shapes."""
+        assert (
+            self._script("m.value = '3d'; [{ label: '24h' }, { label: 'PDF' }, { label: 'Chat' }, { label: 's' }]")
+            == []
+        )
 
     def test_a_label_key_outside_script_is_not_a_script_literal(self):
         src = "<template><p>{ label: 'Hello there' }</p></template>"
         assert [t for k, t in literals_in(src) if k == "script"] == []
 
-    @pytest.mark.parametrize("key", ["label", "zeroText"])
+    @pytest.mark.parametrize("key", ["label", "zeroText", "nullText"])
     def test_the_frozen_baseline_fails_on_a_new_literal(self, measured, key):
         """Real recorded digests for a real baselined file plus one new literal: the diff names it."""
         rel = next(f for f in sorted(measured) if any(k == "script" for k, _ in measured[f]))
@@ -221,6 +243,17 @@ class TestLabelAndZeroTextFields:
         pairs = [("script", t) for t in self._script(body)]
         recorded = {"A.vue": [literal_digest("script", "Same words")]}
         assert identity_diff(recorded, {"A.vue": pairs})[0] == {"A.vue": [("script", "Same words")]}
+
+    def test_the_formatter_modules_are_scanned(self):
+        """The `.ts` formatter that held `nullText: '0 B'` (#19885) is in the scanned set."""
+        assert "autobot-frontend/src/utils/formatHelpers.ts" in formatter_files(repo_root())
+
+    def test_a_planted_size_text_in_a_formatter_is_found(self, tmp_path):
+        """A `.ts` formatter planted with the pre-#19885 shape: `scan` reports it as a script literal."""
+        mod = tmp_path / APP_TREES[0] / "utils" / "formatPlanted.ts"
+        mod.parent.mkdir(parents=True)
+        mod.write_text("export const opts = { nullText: '0 B', zeroText: t('x') }\n", encoding="utf-8")
+        assert scan(tmp_path) == {f"{APP_TREES[0].as_posix()}/utils/formatPlanted.ts": [("script", "0 B")]}
 
     def test_the_known_positive_in_a_real_component(self):
         text = (repo_root() / "autobot-slm-frontend/src/components/fleet/FleetSummary.vue").read_text(encoding="utf-8")
