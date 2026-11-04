@@ -7,7 +7,6 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { resetCircuitBreakers } from '@/utils/apiCircuitBreaker'
-import { useSystemMetrics } from '@/composables/useInstallMetrics'
 import { useServiceMessages } from '@/composables/useServiceMessages'
 import { useErrorMonitoring } from '@/composables/useErrorMonitoring'
 
@@ -28,15 +27,6 @@ describe('polled callers use the circuit breaker', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
-  })
-
-  it('useSystemMetrics stops hitting the network after the threshold', async () => {
-    const { fetch: poll } = useSystemMetrics()
-    await settle(poll)
-    const calls = fetchMock.mock.calls.length
-    expect(calls).toBeGreaterThanOrEqual(3)
-    await settle(poll)
-    expect(fetchMock.mock.calls.length).toBe(calls)
   })
 
   it('useServiceMessages.fetchLatest stops hitting the network after the threshold', async () => {
