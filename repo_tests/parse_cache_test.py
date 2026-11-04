@@ -28,12 +28,17 @@ from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 #: Modules that rewrite parsed trees (``ast.NodeTransformer`` or assigning node
-#: attributes), so a shared tree would carry their edits to the next caller.
+#: attributes), so a shared tree would carry their edits to the next caller. The
+#: last three hand their trees to ``collected_test_model.collectable_tests``,
+#: which sets ``class_decorator_list`` on the nodes it returns.
 TREE_REWRITERS = frozenset(
     {
         "repo_tests/_ratchet_base.py",
         "repo_tests/collected_test_model.py",
         "repo_tests/guard_reach_meta_test.py",
+        "repo_tests/collected_test_model_test.py",
+        "repo_tests/fixed_sleep_then_call_assertion_test.py",
+        "repo_tests/tests_that_return_instead_of_asserting_test.py",
     }
 )
 
@@ -45,8 +50,8 @@ def _population(root: Path) -> list[str]:
         return []
 
 
-#: 834 tracked modules under repo_tests/ when this guard landed. Window
-#: [794, 834]; pinned mid-window. Re-measure with `git ls-files 'repo_tests/*.py'`.
+#: 836 tracked modules under repo_tests/ with this guard and its allowed list.
+#: Window [796, 836]; 814 sits inside it. Re-measure with `git ls-files 'repo_tests/*.py'`.
 REACH = declare(
     "parse-cache-direct-parse-scan",
     discover=_population,

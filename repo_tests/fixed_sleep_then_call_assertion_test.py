@@ -47,8 +47,6 @@ from collections import Counter
 
 from repo_tests.collected_test_model import REPO_ROOT, collectable_tests, own_nodes, parse_module, test_modules
 
-from tools.lint import _parse_cache as parse_cache
-
 _WINDOW_LINES = 8
 #: Measured 2026-09-11 with ``test_modules()``'s own population rules: 2316 test
 #: modules holding 30717 collectable tests. The floors sit just below, so an
@@ -310,7 +308,7 @@ _PLANTED = (
 
 
 def test_the_detector_flags_the_planted_shapes_and_spares_the_rest() -> None:
-    tree = parse_cache.parse(_PLANTED)
+    tree = ast.parse(_PLANTED)
     lines = fixed_sleep_call_assertions(tree)
     flagged = {fn.name for fn in collectable_tests(tree) if any(fn.lineno <= ln <= fn.end_lineno for ln in lines)}
     assert flagged == {"test_flagged_count", "test_flagged_method"}, flagged
@@ -329,7 +327,7 @@ _PLANTED_ANY_ASSERT = (
 
 
 def test_the_wide_detector_honours_the_reasoned_exemption_only() -> None:
-    tree = parse_cache.parse(_PLANTED_ANY_ASSERT)
+    tree = ast.parse(_PLANTED_ANY_ASSERT)
     lines = fixed_sleep_then_any_assert(tree, _PLANTED_ANY_ASSERT.splitlines())
     flagged = {fn.name for fn in collectable_tests(tree) if any(fn.lineno <= ln <= fn.end_lineno for ln in lines)}
     assert flagged == {"test_flagged_plain_assert", "test_flagged_empty_reason"}, flagged
@@ -349,7 +347,7 @@ _PLANTED_NAMED = (
 
 
 def test_the_named_allowlist_flags_an_unlisted_marker_and_a_stale_entry() -> None:
-    tree = parse_cache.parse(_PLANTED_NAMED)
+    tree = ast.parse(_PLANTED_NAMED)
     source_lines = _PLANTED_NAMED.splitlines()
     exempted = [("planted.py", qualname, line) for qualname, line in _exempted_sites(tree, source_lines)]
     named = {

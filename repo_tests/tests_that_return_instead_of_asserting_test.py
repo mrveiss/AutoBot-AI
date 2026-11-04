@@ -130,8 +130,6 @@ from repo_tests.tests_that_return_instead_of_asserting_budgets import (
     _SWALLOWED_ASSERTIONS,
 )
 
-from tools.lint import _parse_cache as parse_cache
-
 # _KNOWN_OFFENDERS and _SWALLOWED_ASSERTIONS -- the two ceilings this guard
 # enforces, each keyed by top-level tree and paired with a population floor --
 # live in tests_that_return_instead_of_asserting_budgets.py (#15590), along
@@ -152,7 +150,7 @@ def offending_returns(source: str) -> list[tuple[str, int]]:
     module. A detector only ever pointed at the real tree cannot be told apart
     from one that has stopped detecting.
     """
-    return _offending_returns(parse_cache.parse(source))
+    return _offending_returns(ast.parse(source))
 
 
 def _offending_returns(tree: ast.Module) -> list[tuple[str, int]]:
