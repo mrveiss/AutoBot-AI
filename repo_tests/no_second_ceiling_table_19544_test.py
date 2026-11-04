@@ -22,6 +22,7 @@ import ast
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 #: The only modules allowed to hold a path->ceiling literal.
@@ -85,7 +86,7 @@ REACH = declare(
 def ceiling_tables(source: str) -> list[tuple[int, frozenset[str]]]:
     """``(line, target names)`` of every assigned dict literal holding 2+ ``"<path>": <int>`` entries."""
     found = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if not isinstance(node, (ast.Assign, ast.AnnAssign)) or not isinstance(node.value, ast.Dict):
             continue
         entries = sum(_is_path_to_int(k, v) for k, v in zip(node.value.keys, node.value.values, strict=True))

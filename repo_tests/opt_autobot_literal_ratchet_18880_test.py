@@ -19,6 +19,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 from repo_tests.opt_autobot_literal_ratchet_18880_baseline import BASELINE
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._comment_syntax import code_lines
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
@@ -36,7 +37,7 @@ _FROZEN_PREFIX = f"{_ANSIBLE}/tests/fixtures/"
 def _docstring_lines(text: str) -> set[int]:
     """1-based line numbers of every module, class and function docstring."""
     lines: set[int] = set()
-    for node in ast.walk(ast.parse(text)):
+    for node in ast.walk(parse_cache.parse(text)):
         if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.body:
             first = node.body[0]
             if (
