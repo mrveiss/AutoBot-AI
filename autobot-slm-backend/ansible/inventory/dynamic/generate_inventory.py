@@ -227,6 +227,7 @@ class AutoBotInventory:
             "aiml": {"hosts": ["autobot-aiml"], "vars": {}},
             "browser": {"hosts": ["autobot-browser"], "vars": {}},
             "backend": {"hosts": ["autobot-host"], "vars": {}},
+            "all": {"vars": {"backend_port": BACKEND_PORT}},
         }
 
     def list_inventory(self) -> str:
