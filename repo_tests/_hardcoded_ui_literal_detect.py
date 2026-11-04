@@ -20,7 +20,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from repo_tests._reach import declare
-from repo_tests._ui_literal_scan import literals_in
+from repo_tests._ui_literal_scan import literals_in, ts_literals
 
 APP_TREES: tuple[Path, ...] = (
     Path("autobot-frontend/src"),
@@ -50,11 +50,30 @@ def scanned_files(root: Path) -> list[str]:
     return sorted(out)
 
 
+#: The `.ts` modules scanned, script kind only (#19885): the formatters, whose option
+#: objects (`nullText:`, `zeroText:`) are where a size or empty-value text was held.
+FORMATTER_GLOB = "utils/format*.ts"
+
+
+def formatter_files(root: Path) -> list[str]:
+    """Repo-relative POSIX paths of every scanned formatter module, sorted."""
+    out = [
+        path.relative_to(root).as_posix()
+        for tree in APP_TREES
+        if (root / tree).is_dir()
+        for path in (root / tree).glob(FORMATTER_GLOB)
+    ]
+    return sorted(rel for rel in out if is_scanned_path(rel))
+
+
 def scan(root: Path) -> dict[str, list[tuple[str, str]]]:
     """Per-file (kind, literal) for every file that has at least one."""
     out: dict[str, list[tuple[str, str]]] = {}
-    for rel in scanned_files(root):
-        found = literals_in((root / rel).read_text(encoding="utf-8", errors="replace"))
+    sources = [(rel, literals_in) for rel in scanned_files(root)] + [
+        (rel, ts_literals) for rel in formatter_files(root)
+    ]
+    for rel, detector in sources:
+        found = detector((root / rel).read_text(encoding="utf-8", errors="replace"))
         if found:
             out[rel] = found
     return out
