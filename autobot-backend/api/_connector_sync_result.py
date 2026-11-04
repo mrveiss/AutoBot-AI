@@ -15,6 +15,7 @@ finishes first must not set an older time over a newer one, which would widen th
 import asyncio
 import json
 from datetime import datetime, timezone
+from typing import Literal
 
 from redis.exceptions import WatchError
 
@@ -45,9 +46,9 @@ def _is_later(when: datetime, current) -> bool:
     return current is None or when > current
 
 
-def _write_last_sync(redis, key: str, when: datetime) -> bool | None:
-    """True when recorded (or a later time already is), False when the connector is gone, None when
-    it exists but kept changing."""
+def _write_last_sync(redis, key: str, when: datetime) -> datetime | Literal[False] | None:
+    """The time Redis holds afterwards: *when*, or a later (or equal) one already stored. False when
+    the connector is gone, None when it exists but kept changing."""
     with redis.pipeline() as pipe:
         for _ in range(_MAX_ATTEMPTS):
             try:
@@ -57,14 +58,15 @@ def _write_last_sync(redis, key: str, when: datetime) -> bool | None:
                     pipe.unwatch()
                     return False
                 record = json.loads(raw)
-                if not _is_later(when, record.get("last_sync_at")):
+                current = _aware(record.get("last_sync_at"))
+                if current is not None and current >= when:
                     pipe.unwatch()
-                    return True
+                    return current
                 record["last_sync_at"] = when.isoformat()
                 pipe.multi()
                 pipe.set(key, json.dumps(record, ensure_ascii=False))
                 pipe.execute()
-                return True
+                return when
             except WatchError:
                 continue
     logger.warning("Could not record the last sync on %s: it kept changing", key)
@@ -84,6 +86,6 @@ async def record_last_sync(instance, key: str, sync_result) -> bool:
         return bool(await asyncio.to_thread(redis.exists, key))
     when = _aware(sync_result.completed_at) or now_utc()
     stored = await asyncio.to_thread(_write_last_sync, redis, key, when)
-    if stored is True and _is_later(when, instance.config.last_sync_at):
-        instance.config.last_sync_at = when  # what the status route reads; only once Redis has it
+    if isinstance(stored, datetime) and _is_later(stored, instance.config.last_sync_at):
+        instance.config.last_sync_at = stored  # what the status route reads: what Redis holds
     return stored is not False

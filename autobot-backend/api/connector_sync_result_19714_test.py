@@ -43,7 +43,7 @@ def _redis(store: dict, conflicts: int = 0) -> MagicMock:
 
 def test_only_the_time_changes_on_the_current_record() -> None:
     store = {"k": json.dumps({"name": "edited during the sync", "config": {"host": "h"}})}
-    assert result._write_last_sync(_redis(store), "k", _WHEN) is True
+    assert result._write_last_sync(_redis(store), "k", _WHEN) == _WHEN
     assert json.loads(store["k"]) == {
         "name": "edited during the sync",
         "config": {"host": "h"},
@@ -59,7 +59,7 @@ def test_a_connector_deleted_during_the_sync_stays_deleted() -> None:
 
 def test_an_edit_racing_the_write_is_retried_on_the_new_record() -> None:
     store = {"k": json.dumps({"name": "n"})}
-    assert result._write_last_sync(_redis(store, conflicts=1), "k", _WHEN) is True
+    assert result._write_last_sync(_redis(store, conflicts=1), "k", _WHEN) == _WHEN
     assert json.loads(store["k"])["last_sync_at"] == _WHEN.isoformat()
 
 
@@ -159,20 +159,20 @@ _EARLIER = datetime(2026, 11, 1, 12, 0)  # naive, as some connectors report it: 
 
 def test_an_earlier_finishing_run_keeps_the_later_stored_time() -> None:
     store = {"k": json.dumps({"name": "n", "last_sync_at": _WHEN.isoformat()})}
-    assert result._write_last_sync(_redis(store), "k", result._aware(_EARLIER)) is True, "the connector still exists"
+    assert result._write_last_sync(_redis(store), "k", result._aware(_EARLIER)) == _WHEN, "it reports the time kept"
     assert json.loads(store["k"])["last_sync_at"] == _WHEN.isoformat()
 
 
 def test_a_later_run_still_moves_the_stored_time_forward() -> None:
     """The control: an older stored time (written by an older format, with a Z) is replaced."""
     store = {"k": json.dumps({"name": "n", "last_sync_at": "2026-11-01T12:00:00Z"})}
-    assert result._write_last_sync(_redis(store), "k", _WHEN) is True
+    assert result._write_last_sync(_redis(store), "k", _WHEN) == _WHEN
     assert json.loads(store["k"])["last_sync_at"] == _WHEN.isoformat()
 
 
 def test_an_unreadable_stored_time_is_replaced() -> None:
     store = {"k": json.dumps({"name": "n", "last_sync_at": "not a time"})}
-    assert result._write_last_sync(_redis(store), "k", _WHEN) is True
+    assert result._write_last_sync(_redis(store), "k", _WHEN) == _WHEN
     assert json.loads(store["k"])["last_sync_at"] == _WHEN.isoformat()
 
 
@@ -187,4 +187,33 @@ async def test_out_of_order_completion_leaves_the_later_time_everywhere() -> Non
             run = SimpleNamespace(completed_at=completed_at, status="success")
             assert await result.record_last_sync(instance, "k", run) is True
     assert json.loads(store["k"])["last_sync_at"] == _WHEN.isoformat()
+    assert instance.config.last_sync_at == _WHEN
+
+
+@pytest.mark.asyncio
+async def test_a_run_behind_the_stored_time_leaves_the_live_value_at_the_stored_one() -> None:
+    """Review of #20801: the stored record and the live instance are separate. A later time already
+    in Redis (from another worker's run) wins over this run's older one on the live value too, so
+    the status route and Redis agree."""
+    store = {"k": json.dumps({"name": "n", "last_sync_at": _WHEN.isoformat()})}
+    instance = SimpleNamespace(config=SimpleNamespace(last_sync_at=None))
+    run = SimpleNamespace(completed_at=_EARLIER, status="success")
+    with patch.object(result, "get_redis_client", return_value=_redis(store)):
+        assert await result.record_last_sync(instance, "k", run) is True
+    assert json.loads(store["k"])["last_sync_at"] == _WHEN.isoformat()
+    assert instance.config.last_sync_at == _WHEN, "the live value disagrees with Redis"
+
+
+@pytest.mark.asyncio
+async def test_an_equal_stored_time_is_kept_and_reported() -> None:
+    """A tie is not later: Redis is left as it is, and the live value takes that same time."""
+    stored = {"name": "n", "last_sync_at": _WHEN.isoformat(), "note": "untouched"}
+    store = {"k": json.dumps(stored)}
+    redis = _redis(store)
+    instance = SimpleNamespace(config=SimpleNamespace(last_sync_at=None))
+    with patch.object(result, "get_redis_client", return_value=redis):
+        run = SimpleNamespace(completed_at=_WHEN, status="success")
+        assert await result.record_last_sync(instance, "k", run) is True
+    redis.pipeline.return_value.set.assert_not_called()
+    assert json.loads(store["k"]) == stored, "a tie rewrote the record"
     assert instance.config.last_sync_at == _WHEN
