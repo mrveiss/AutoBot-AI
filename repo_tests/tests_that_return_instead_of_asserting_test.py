@@ -110,9 +110,9 @@ repository's other baseline guards:
 from __future__ import annotations
 
 import ast
+import functools
 
 import pytest
-
 from repo_tests.collected_test_model import (
     REPO_ROOT,
     collectable_tests,
@@ -188,7 +188,9 @@ def _swallowed_by_tree() -> dict[str, list[str]]:
     return counts
 
 
+@functools.lru_cache(maxsize=1)
 def _offenders_by_tree() -> dict[str, list[str]]:
+    """Memoised (#20814): 2 tests read the same sweep."""
     counts: dict[str, list[str]] = {}
     for module in test_modules():
         relative = module.relative_to(REPO_ROOT)
@@ -205,10 +207,7 @@ def test_the_population_is_present_and_large_enough_to_mean_anything() -> None:
         f"{pytest_option('python_files')} — expected at least {_MIN_MODULES}. "
         "The sweep has stopped matching and would call every tree clean."
     )
-    total = sum(
-        len(collectable_tests(parse_module(module)))
-        for module in modules
-    )
+    total = sum(len(collectable_tests(parse_module(module))) for module in modules)
     assert total >= _MIN_TEST_FUNCTIONS, (
         f"only {total} collectable test functions found across {len(modules)} modules "
         f"— expected at least {_MIN_TEST_FUNCTIONS}; the collector model has drifted "
@@ -219,13 +218,8 @@ def test_the_population_is_present_and_large_enough_to_mean_anything() -> None:
 def test_no_tree_outside_the_known_set_has_a_test_that_returns_a_value() -> None:
     """The hard zero. Eleven clean trees, derived — no list to go stale."""
     offenders = _offenders_by_tree()
-    surprises = {
-        tree: sites for tree, sites in offenders.items() if tree not in _KNOWN_OFFENDERS
-    }
-    detail = "\n".join(
-        f"  {tree}:\n    " + "\n    ".join(sorted(sites))
-        for tree, sites in sorted(surprises.items())
-    )
+    surprises = {tree: sites for tree, sites in offenders.items() if tree not in _KNOWN_OFFENDERS}
+    detail = "\n".join(f"  {tree}:\n    " + "\n    ".join(sorted(sites)) for tree, sites in sorted(surprises.items()))
     assert not surprises, (
         "these tests return a value instead of asserting, in a tree that was "
         f"clean:\n{detail}\n"
@@ -322,15 +316,8 @@ def test_no_test_smothers_its_own_assertions_under_a_swallowing_handler() -> Non
         f"(found, floor): {collapsed}. Fix the sweep; do NOT lower these numbers."
     )
 
-    surprises = {
-        tree: sites
-        for tree, sites in swallowed.items()
-        if tree not in _SWALLOWED_ASSERTIONS
-    }
-    detail = "\n".join(
-        f"  {tree}:\n    " + "\n    ".join(sorted(sites))
-        for tree, sites in sorted(surprises.items())
-    )
+    surprises = {tree: sites for tree, sites in swallowed.items() if tree not in _SWALLOWED_ASSERTIONS}
+    detail = "\n".join(f"  {tree}:\n    " + "\n    ".join(sorted(sites)) for tree, sites in sorted(surprises.items()))
     assert not surprises, (
         "these tests assert inside a `try` whose handler swallows the "
         f"AssertionError, in a tree that was clean:\n{detail}\n"
