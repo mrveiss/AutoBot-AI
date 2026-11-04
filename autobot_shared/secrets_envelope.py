@@ -117,7 +117,7 @@ def _seal_bytes(key: bytes, plaintext: bytes, aad: bytes) -> tuple[bytes, bytes]
     return nonce, _aesgcm(key).encrypt(nonce, plaintext, aad)
 
 
-def _open_bytes(key: bytes, nonce: bytes, ciphertext: bytes, aad: bytes) -> bytes:
+def _open_bytes(key: bytes, nonce: bytes, ciphertext: bytes, aad: bytes | None) -> bytes:
     """AES-256-GCM decrypt; raise :class:`DecryptionError` on any failure."""
     from cryptography.exceptions import InvalidTag
 
@@ -157,24 +157,23 @@ def _log_root_key_reason_once(reason: str) -> None:
     logger.error("System vault unavailable in this process: %s", reason)
 
 
-def derive_vault_key(root_key: bytes, vault_id: str) -> bytes:
-    """Derive a vault's 32-byte KEK from the root key via HKDF-SHA256."""
+def _hkdf(root_key: bytes, info: bytes) -> bytes:
+    """The one HKDF-SHA256 derivation every key here uses; *info* is its domain label."""
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
+    return HKDF(algorithm=hashes.SHA256(), length=_KEY_LEN, salt=None, info=info).derive(root_key)
+
+
+def derive_vault_key(root_key: bytes, vault_id: str) -> bytes:
+    """Derive a vault's 32-byte KEK from the root key via HKDF-SHA256."""
     if not vault_id:
         raise ValueError("vault_id must be a non-empty string")
     if len(vault_id) > _MAX_VAULT_ID_LEN:
         raise ValueError(f"vault_id exceeds {_MAX_VAULT_ID_LEN} chars")
 
-    hkdf = HKDF(
-        algorithm=hashes.SHA256(),
-        length=_KEY_LEN,
-        salt=None,
-        # Single variable-length trailing field after a constant prefix → injective.
-        info=_HKDF_INFO_PREFIX + vault_id.encode("utf-8"),
-    )
-    return hkdf.derive(root_key)
+    # Single variable-length trailing field after a constant prefix → injective.
+    return _hkdf(root_key, _HKDF_INFO_PREFIX + vault_id.encode("utf-8"))
 
 
 @dataclass(frozen=True)
@@ -248,3 +247,52 @@ def rewrap_dek(wrapped: WrappedDek, old_kek: bytes, new_kek: bytes, *, secret_id
     """Re-wrap a grant from *old_kek* to *new_kek* (key rotation; payload untouched)."""
     dek = unwrap_dek(wrapped, old_kek, secret_id=secret_id)
     return wrap_dek(dek, new_kek, wrapped.grantee, secret_id=secret_id)
+
+
+# --- Single-field sealing (#17981) -------------------------------------------
+# One value stored in a column or a key, with no DEK or grant of its own. It uses
+# the same AEAD and root key as the vault, and binds *context*, a stable
+# identifier of where the value is stored, so a sealed value moved to another
+# record or field fails to open. ``field_encryption`` is the facade callers use.
+
+FIELD_FORMAT_PREFIX = "fe1."  # "." is outside the base64url alphabet, so a legacy blob never starts with it
+#: Its own HKDF label, not a pseudo vault id under the vault-KEK prefix: the field key's
+#: domain separation must not depend on how vault ids are parsed (#17981 review).
+_FIELD_KEY_INFO = b"autobot-field-encryption:v1"
+
+
+def _field_aad(context: str) -> bytes:
+    if not context:
+        raise ValueError("context must name where the sealed value is stored")
+    return _aad(b"field-value", context.encode("utf-8"))
+
+
+def _field_key() -> bytes:
+    return _hkdf(load_root_key(), _FIELD_KEY_INFO)
+
+
+def seal_field(plaintext: bytes, *, context: str) -> str:
+    """Seal *plaintext* under the root-derived field key, bound to *context*."""
+    nonce, ciphertext = _seal_bytes(_field_key(), plaintext, _field_aad(context))
+    return FIELD_FORMAT_PREFIX + _b64e(nonce + ciphertext)
+
+
+def open_field(blob: str, *, context: str) -> bytes:
+    """Open a :func:`seal_field` blob; :class:`DecryptionError` if it belongs to another *context*."""
+    if not blob.startswith(FIELD_FORMAT_PREFIX):
+        raise UnsupportedFormatError("not a sealed-field blob")
+    raw = _b64d(blob[len(FIELD_FORMAT_PREFIX) :])
+    if len(raw) < _NONCE_LEN + 16:
+        raise DecryptionError("sealed-field blob is too short")
+    return _open_bytes(_field_key(), raw[:_NONCE_LEN], raw[_NONCE_LEN:], _field_aad(context))
+
+
+def open_unbound_legacy(key: bytes, raw: bytes) -> bytes:
+    """Read a value sealed before #17981, i.e. ``nonce || ciphertext`` with no AAD.
+
+    Read-only: nothing seals this format any more. A value read this way is
+    sealed in the new format the next time the product itself saves it.
+    """
+    if len(raw) < _NONCE_LEN + 16:
+        raise DecryptionError("legacy sealed value is too short")
+    return _open_bytes(key, raw[:_NONCE_LEN], raw[_NONCE_LEN:], None)

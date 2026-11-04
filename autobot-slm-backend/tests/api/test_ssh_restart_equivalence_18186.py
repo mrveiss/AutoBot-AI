@@ -125,6 +125,7 @@ async def test_orchestrator_argv_has_sudo_n_batchmode_one_call_all_units_env_bac
     assert run.argv == [
         *_FULL_SSH_PREFIX[:-1],
         "svc@node.example.test",
+        "sudo -n systemctl reset-failed -- a.service b.service 2>/dev/null; "
         "sudo -n systemctl restart -- a.service b.service",
     ]
     assert run.kwargs == {"stdout": asyncio.subprocess.PIPE, "stderr": asyncio.subprocess.STDOUT}
@@ -194,7 +195,11 @@ async def _execute(category="restart"):
 async def test_roles_argv_has_dash_n_one_call_all_units_and_timeout_120(monkeypatch, roles_role):
     run = _Runner(monkeypatch, out=b"OUT", err=b"ERR")
     body = await _execute()
-    assert run.argv == [*_FULL_SSH_PREFIX, "sudo -n systemctl restart -- a.service b.service"]
+    assert run.argv == [
+        *_FULL_SSH_PREFIX,
+        "sudo -n systemctl reset-failed -- a.service b.service 2>/dev/null; "
+        "sudo -n systemctl restart -- a.service b.service",
+    ]
     assert run.kwargs == {"stdout": asyncio.subprocess.PIPE, "stderr": asyncio.subprocess.PIPE}
     assert run.timeout == 120.0
     assert body == {"success": True, "node_id": "n1", "role_name": "r", "category": "restart", "output": "OUTERR"}
