@@ -27,7 +27,7 @@ const router = createRouter({
   ),
 })
 
-async function mountHeader(role: 'admin' | 'user'): Promise<VueWrapper> {
+async function mountHeader(role: 'admin' | 'superadmin' | 'operator' | 'user'): Promise<VueWrapper> {
   setActivePinia(createPinia())
   const user = useUserStore()
   user.currentUser = { id: '1', username: 'jane', role } as never
@@ -64,7 +64,7 @@ describe('AppHeader icon cluster', () => {
     expect(wrapper.text()).not.toMatch(/SLM Admin/)
   })
 
-  it('shows the Platform admin shield to a role with service.management, opening a new tab safely', async () => {
+  it('shows the Platform admin shield to an admin, opening a new tab safely', async () => {
     const wrapper = await mountHeader('admin')
     const shield = wrapper.get(`a[aria-label="${en.nav.platformAdminAria}"]`)
     expect(shield.attributes('href')).toBe(getSLMAdminUrl())
@@ -72,8 +72,14 @@ describe('AppHeader icon cluster', () => {
     expect(shield.attributes('rel')).toContain('noopener')
   })
 
-  it('hides the shield from a role without service.management', async () => {
-    const wrapper = await mountHeader('user')
+  it('shows the shield to a superadmin, who holds the admin role too', async () => {
+    const wrapper = await mountHeader('superadmin')
+    expect(wrapper.find(`a[aria-label="${en.nav.platformAdminAria}"]`).exists()).toBe(true)
+  })
+
+  it.each(['operator', 'user'] as const)('hides the shield from %s: the SLM is admin only (#20631)', async (role) => {
+    const wrapper = await mountHeader(role)
+    expect(useUserStore().hasServiceManagement).toBe(role === 'operator')
     expect(wrapper.find(`a[aria-label="${en.nav.platformAdminAria}"]`).exists()).toBe(false)
   })
 
