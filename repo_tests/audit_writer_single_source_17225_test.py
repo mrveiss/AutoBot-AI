@@ -29,6 +29,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _CANONICAL = "autobot-backend/services/audit/projection.py"
@@ -148,7 +149,7 @@ def _has_audit_insert(tree: ast.AST) -> bool:
 
 def is_audit_writer(source: str) -> bool:
     """True when `source` writes an audit store by one of the shapes in the module doc."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     nodes = list(ast.walk(tree))
     if any(_is_call(n, name=orm) for n in nodes for orm in _AUDIT_ORM_CLASSES):
         return True
@@ -263,7 +264,7 @@ def _redis_key_writers() -> list[str]:
     root = repo_root()
     found = []
     for rel in _writers():
-        tree = ast.parse((root / rel).read_text(encoding="utf-8"))
+        tree = parse_cache.parse((root / rel).read_text(encoding="utf-8"))
         if any(_is_call(n, attr_in=_WRITE_VERBS) for n in ast.walk(tree)) and _has_key_literal(tree):
             found.append(rel)
     return found
@@ -308,6 +309,8 @@ def test_audit_logs_rows_have_one_constructor() -> None:
     direct = sorted(
         rel
         for rel in _writers()
-        if any(_is_call(n, name="AuditLog") for n in ast.walk(ast.parse((root / rel).read_text(encoding="utf-8"))))
+        if any(
+            _is_call(n, name="AuditLog") for n in ast.walk(parse_cache.parse((root / rel).read_text(encoding="utf-8")))
+        )
     )
     assert set(direct) == _DIRECT_ROW_CONSTRUCTORS, f"#17225: build audit_logs rows with audit_rows.audit_row: {direct}"

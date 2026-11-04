@@ -31,6 +31,8 @@ import pathlib
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _ROOT = repo_root()
 _LIFESPAN = _ROOT / "autobot-backend/initialization/lifespan.py"
 _WORKERS = _ROOT / "autobot-backend/initialization/background_workers.py"
@@ -43,7 +45,7 @@ _WORKERS_STARTED = ("start_doc_sync_queue_worker", "start_vector_reconciler")
 
 def _tree(path: pathlib.Path) -> ast.AST:
     assert path.is_file(), f"{path.relative_to(_ROOT)} is gone; this guard's subject moved"
-    return ast.parse(path.read_text(encoding="utf-8"))
+    return parse_cache.parse(path.read_text(encoding="utf-8"))
 
 
 def _called_names(tree: ast.AST) -> set[str]:

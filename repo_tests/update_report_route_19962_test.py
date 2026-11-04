@@ -12,6 +12,8 @@ from repo_tests._paths import repo_root
 from sqlalchemy import Column, DateTime, Integer, select
 from sqlalchemy.orm import declarative_base
 
+from tools.lint import _parse_cache as parse_cache
+
 _SOURCE = repo_root() / "autobot-slm-backend" / "api" / "update_report.py"
 _Base = declarative_base()
 
@@ -24,7 +26,7 @@ class _Deployment(_Base):
 
 def _deploy_runs_since():
     """The shipped function, run against a real SQLAlchemy select; the suite stubs its import chain."""
-    tree = ast.parse(_SOURCE.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(_SOURCE.read_text(encoding="utf-8"))
     func = next(n for n in tree.body if isinstance(n, ast.AsyncFunctionDef) and n.name == "_deploy_runs_since")
     from datetime import datetime
 
