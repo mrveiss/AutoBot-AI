@@ -62,6 +62,8 @@ from pathlib import Path
 
 import pytest
 
+from tools.lint import _parse_cache as parse_cache
+
 #: The three paths #13708's review found unguarded and #16895 fixed. NOT the set of
 #: ingestion entry points -- see the module docstring. Named for what it is so the
 #: next reader cannot mistake its length for a coverage number.
@@ -167,7 +169,7 @@ def _calls_redact_content(source: str, *, function_name: str | None = None) -> b
     function that is absent returns False rather than falling back to the
     module, so a rename fails loudly instead of widening the scope.
     """
-    tree = ast.parse(textwrap.dedent(source))
+    tree = parse_cache.parse(textwrap.dedent(source))
     scope: ast.AST = tree
     if function_name is not None:
         named = next(
@@ -191,7 +193,7 @@ def _calls_function(source: str, name: str) -> bool:
     """True if *source* actually calls ``name(...)`` (ast, so a comment or docstring mention does not count)."""
     return any(
         isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == name
-        for node in ast.walk(ast.parse(textwrap.dedent(source)))
+        for node in ast.walk(parse_cache.parse(textwrap.dedent(source)))
     )
 
 
@@ -317,7 +319,7 @@ def test_the_authoritative_guards_still_exist() -> None:
     for rel, required in _AUTHORITATIVE_GUARDS.items():
         if not required:
             continue
-        defined = _collectible_test_names(ast.parse((root / rel).read_text(encoding="utf-8")))
+        defined = _collectible_test_names(parse_cache.parse((root / rel).read_text(encoding="utf-8")))
         gutted.extend(f"{rel}::{name}" for name in required if name not in defined)
     assert not gutted, (
         f"the tests that make these guards authoritative are gone: {gutted}. The files are "
