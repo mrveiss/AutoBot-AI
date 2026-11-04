@@ -21,6 +21,8 @@ import re
 import yaml
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _ROOT = repo_root()
 _SLM = _ROOT / "autobot-slm-backend"
 _STORES = (_SLM / "services" / "token_denylist.py", _SLM / "services" / "password_epoch_store.py")
@@ -31,7 +33,7 @@ def store_backends(source: str) -> set[str]:
     """Which backends a store imports: 'slm-db' and/or 'redis' -- read from its imports, not its
     prose, since the docstrings explain the move away from Redis."""
     found = set()
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.ImportFrom):
             module, names = node.module or "", {a.name for a in node.names}
         elif isinstance(node, ast.Import):
