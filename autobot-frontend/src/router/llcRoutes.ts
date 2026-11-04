@@ -79,6 +79,8 @@ export const llcCompanyChildren: RouteRecordRaw[] = [
   // #18431: Organization > Handbook -- generated role/workflow/process pages from the company model.
   { path: 'handbook', name: 'llc-handbook', component: () => import('@/views/llc/HandbookView.vue'), props: true, meta: { title: 'Handbook', requiresAuth: true } },
   { path: 'members', name: 'llc-members', component: () => import('@/views/llc/MembersView.vue'), props: true, meta: { title: 'Members', requiresAuth: true } },
+  // #18245: Organization > Teams -- company-scoped; the server limits writes to platform administrators.
+  { path: 'teams', name: 'llc-teams', component: () => import('@/views/llc/TeamsView.vue'), props: true, meta: { title: 'Teams', requiresAuth: true } },
   { path: 'portability', name: 'llc-company-portability', component: () => import('@/views/llc/CompanyPortabilityView.vue'), props: true, meta: { title: 'Portability', requiresAuth: true } },
   { path: 'secrets', name: 'llc-company-secrets', component: () => import('@/views/llc/CompanySecretsView.vue'), props: true, meta: { title: 'Secrets', requiresAuth: true } },
   // GH#10750 (B3): in-layout variants of the formerly top-level dashboard/
