@@ -58,8 +58,6 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "chunker-private-hook-scan",
     discover=_population,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=5944,  # re-pinned mid-window (train 72): population 5605, window [5305, 5605] (#17844)
     what="tracked python",
     roots=_ROOTS,
     growth=300,
