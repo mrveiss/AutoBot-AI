@@ -425,6 +425,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Both GUIs' component, view and composable .ts/.vue, excluding tests, against all tracked frontend source.",
     ),
+    "frontend-hand-rolled-file-save-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Both GUIs' .ts/.vue source, excluding tests, specs and stories, against all tracked frontend source.",
+    ),
     "frontend-hand-built-relative-time-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
