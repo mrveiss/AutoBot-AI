@@ -308,8 +308,6 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "pr-comment-upsert-sweep",
     discover=_population,
-    # Mid-window, from REACH.window() == (135, 435, 285).
-    floor=406,  # mid-window: population 556, window (256, 556)
     what="workflow YAML and non-test python",
     roots=_GUARDED_ROOTS,
     growth=300,

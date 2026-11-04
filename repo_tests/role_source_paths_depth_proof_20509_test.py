@@ -28,7 +28,6 @@ def _role_yaml(root: Path) -> list[Path]:
 REACH = declare(
     "role-source-paths-depth-proof-20509",
     discover=_role_yaml,
-    floor=189,  # mid-window: population 209, window (169, 209)
     growth=40,
     what="Ansible YAML files",
     roots=(_ROLES,),
