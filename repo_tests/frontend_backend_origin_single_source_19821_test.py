@@ -34,6 +34,8 @@ _SSOT_TS = "autobot-frontend/src/config/ssot-config.ts"
 _TEMPLATES = (".env.example", "autobot-frontend/.env.example")
 _INVENTORY = "autobot-slm-backend/ansible/inventory/production.yml"
 _APP_CONFIG = "autobot-frontend/src/config/AppConfig.js"
+_API_REPOSITORY = "autobot-frontend/src/models/repositories/ApiRepository.ts"
+_DYNAMIC_INVENTORY = "autobot-slm-backend/ansible/inventory/dynamic/generate_inventory.py"
 _DEPLOY_ROOTS = ("autobot-slm-backend/ansible", "autobot-infrastructure/shared/scripts/systemd", "docker")
 _DEPLOY_SUFFIXES = {".yml", ".yaml", ".j2", ".service", ".env", ""}
 
@@ -92,6 +94,14 @@ class TestTheDetectorsWork:
         )
         assert literal_port_writes(text) == []
 
+    def test_a_protocol_or_port_literal_is_found_and_a_reference_is_not(self) -> None:
+        positive = "  protocol: 'http',\n  port: env.X || '11434',\n  scheme: \"https\"\n"
+        assert len(protocol_or_port_literals(positive)) == 3
+        negative = (
+            "  protocol: INTERNAL_SERVICE_PROTOCOL,\n  port: String(PORT_DEFAULTS.ollama),\n  // 'http' in a comment\n"
+        )
+        assert protocol_or_port_literals(negative) == []
+
     def test_env_value_reads_the_live_line(self) -> None:
         assert env_value("# VITE_BACKEND_PORT=1\nVITE_BACKEND_PORT=8001\n", "VITE_BACKEND_PORT") == "8001"
 
@@ -129,7 +139,19 @@ def test_no_deploy_file_writes_the_gui_backend_port_as_a_number() -> None:
     ), f"derive VITE_BACKEND_PORT from {{{{ backend_port }}}} or ${{AUTOBOT_BACKEND_PORT}}: {offenders}"
 
 
-def test_app_config_holds_no_protocol_or_port_literal() -> None:
-    lines = [ln.strip() for ln in _text(_APP_CONFIG).splitlines() if not ln.lstrip().startswith(("//", "*"))]
-    found = [ln for ln in lines if _APP_LITERAL.search(ln)]
-    assert found == [], found
+def protocol_or_port_literals(text: str) -> list[str]:
+    """Code lines holding a quoted `http`/`https` or a quoted 2-5 digit port, comment lines skipped."""
+    lines = [ln.strip() for ln in text.splitlines() if not ln.lstrip().startswith(("//", "*", "/*"))]
+    return [ln for ln in lines if _APP_LITERAL.search(ln)]
+
+
+@pytest.mark.parametrize("rel", [_APP_CONFIG, _API_REPOSITORY])
+def test_the_gui_config_holds_no_protocol_or_port_literal(rel: str) -> None:
+    assert protocol_or_port_literals(_text(rel)) == [], rel
+
+
+def test_the_dynamic_inventory_sets_the_ssot_backend_port() -> None:
+    text = _text(_DYNAMIC_INVENTORY)
+    m = re.search(r'BACKEND_PORT = int\(os\.environ\.get\("AUTOBOT_BACKEND_PORT", "(\d+)"\)\)', text)
+    assert m and int(m.group(1)) == ssot_backend_port(), "the dynamic inventory's default must be the SSOT port"
+    assert '["backend_port"] = BACKEND_PORT' in text, "the dynamic inventory must hand Ansible backend_port"

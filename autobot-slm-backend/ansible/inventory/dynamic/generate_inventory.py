@@ -40,6 +40,9 @@ _DATABASES_YAML = (
 #: shell readers by redis_single_source_19232_test.py): AUTOBOT_REDIS_DB_<NAME>, trimmed ASCII
 #: digits within 0..15, refused (YAML number kept) when invalid or when two databases collide.
 _MAX_DATABASE_INDEX = 15
+# The GUI's backend port: AUTOBOT_BACKEND_PORT, whose default is the backend port field of
+# autobot_shared/ssot_config.py (frontend_backend_origin_single_source_19821_test pins the two equal).
+BACKEND_PORT = int(os.environ.get("AUTOBOT_BACKEND_PORT", "8001"))
 _LEGACY_ENV_NAMES = {"AUTOBOT_REDIS_DB_TASKS": "workflows"}
 
 
@@ -223,6 +226,8 @@ class AutoBotInventory:
         else:
             self.inventory = self.build_fallback_inventory()
 
+        # The GUI's backend port, as the static inventory states it (#19821).
+        self.inventory.setdefault("all", {}).setdefault("vars", {})["backend_port"] = BACKEND_PORT
         return json.dumps(self.inventory, indent=2)
 
     def host_vars(self, hostname: str) -> str:
