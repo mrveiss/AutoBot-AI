@@ -16,6 +16,8 @@ import ast
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _PROVIDERS = ["openai", "anthropic", "groq", "mistral", "vertexai", "openrouter", "huggingface", "bedrock", "bootstrap"]
 _VENDOR_PREFIXES = ("OPENAI_", "ANTHROPIC_", "GOOGLE_", "GROQ_", "MISTRAL_", "DEEPSEEK_")
 
@@ -24,7 +26,7 @@ def _model_names() -> set[str]:
     from autobot_shared.ssot_hosted_models import HOSTED_PROVIDER_DEFAULT_MODELS
 
     names = {m for models in HOSTED_PROVIDER_DEFAULT_MODELS.values() for m in models.values()}
-    tree = ast.parse((repo_root() / "autobot_shared" / "ssot_constants.py").read_text(encoding="utf-8"))
+    tree = parse_cache.parse((repo_root() / "autobot_shared" / "ssot_constants.py").read_text(encoding="utf-8"))
     for node in tree.body:
         if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
             if any(isinstance(t, ast.Name) and t.id.startswith(_VENDOR_PREFIXES) for t in node.targets):
@@ -36,7 +38,7 @@ def _model_names() -> set[str]:
 
 
 def _literals(source: str) -> list[tuple[int, str]]:
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     doc_nodes = {
         id(n.body[0].value)
         for n in ast.walk(tree)
@@ -100,7 +102,7 @@ def _default_position_literals(source: str) -> list[tuple[int, str]]:
         if isinstance(node, ast.Constant) and isinstance(node.value, str) and _MODEL_SHAPE.match(node.value):
             found.append((node.lineno, node.value))
 
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.Dict):
             for key, value in zip(node.keys, node.values):
                 if isinstance(key, ast.Constant) and key.value == "default_model":
