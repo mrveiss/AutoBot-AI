@@ -105,7 +105,7 @@ const headingClass = 'px-3 py-1 text-[10px] font-semibold uppercase tracking-wid
 
 const toolItems = computed(() => filterByFeatureFlag(profileMenuItems))
 const clusterItems = computed(() =>
-  navIconItems.filter((item) => item.requires !== 'serviceManagement' || userStore.hasServiceManagement),
+  navIconItems.filter((item) => item.requires !== 'admin' || userStore.isAdmin),
 )
 const rows = computed(() => [
   ...props.items.map((item) => ({ item, to: item.to as string | undefined, href: null as string | null })),

@@ -12,10 +12,12 @@
 import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useWebResearchStore } from '@/stores/useWebResearchStore'
+import { useUserStore } from '@/stores/useUserStore'
 import { getSLMAdminUrl } from '@/config/ssot-config'
 
 const { t } = useI18n()
 const store = useWebResearchStore()
+const userStore = useUserStore()
 
 const slmWebResearchUrl = computed(() => `${getSLMAdminUrl()}/settings/admin/web-research`)
 
@@ -63,12 +65,14 @@ onMounted(() => {
     </dl>
 
     <a
+      v-if="userStore.isAdmin"
       :href="slmWebResearchUrl"
       target="_blank"
       rel="noopener noreferrer"
       class="status-link"
       data-testid="web-research-slm-link"
     >{{ t('knowledge.webResearch.status.configureLink') }}</a>
+    <p v-else class="status-desc" data-testid="web-research-admin-note">{{ t('knowledge.webResearch.status.adminManaged') }}</p>
   </section>
 </template>
 
