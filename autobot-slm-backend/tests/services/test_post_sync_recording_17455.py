@@ -86,7 +86,7 @@ async def test_a_failed_restart_is_recorded(monkeypatch, recorded):
     outcome = await runner.restart_units(_base(), ["a.service"], _REC)
     (rec, category, label, command, units, recorded_outcome), _ = recorded.call_args
     assert (category, label, units) == ("restart", "Restart a.service", "a.service")
-    assert command == "sudo -n systemctl restart -- a.service"
+    assert command == "sudo -n systemctl reset-failed -- a.service 2>/dev/null; sudo -n systemctl restart -- a.service"
     assert (recorded_outcome.success, recorded_outcome.exit_code) == (False, 1)
     assert outcome.success is False
 
