@@ -33,7 +33,7 @@ import { isChunkLoadError } from '@/utils/chunkLoadError'
 import { createLogger } from '@/utils/debugUtils'
 import { setDocumentTitle } from '@/utils/documentTitle'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import { getBackendUrl, getSLMAdminUrl } from '@/config/ssot-config'
+import { getBackendUrl } from '@/config/ssot-config'
 import { llcCompanyParamGuard } from './llcGuards'
 import { llcCompanyChildren } from './llcRoutes'
 import { preferencesRoutes } from './preferencesRoutes'
@@ -779,23 +779,6 @@ export const routes: RouteRecordRaw[] = [
   // /desktop removed from nav — noVNC is accessible via the Chat tab's noVNC tab.
   // Redirect any bookmarked /desktop URLs to /chat.
   { path: '/desktop', redirect: '/chat' },
-  // #20605: remote desktop and the theme manager are SLM screens (tools/novnc, settings/admin/themes).
-  // A bookmark to the old URL goes where the Platform admin shield goes: the SLM console. The old
-  // views (SlmNoVncView, slm/ThemeManagerView) stay until nothing is confirmed to link to them.
-  {
-    path: '/slm/tools/novnc',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/tools/novnc`
-      return '/chat' // Fallback
-    }
-  },
-  {
-    path: '/slm/themes',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/settings/admin/themes`
-      return '/chat' // Fallback
-    }
-  },
   // Issue #3502: Custom Dashboard renamed to /home (see home route above)
 
   // Issue #729 / #20631: legacy infrastructure paths; admins go to the SLM, others to /home

@@ -29,6 +29,9 @@ export const SLM_REDIRECTS: ReadonlyArray<{ path: string; slmPath: string; deep:
   { path: '/settings', slmPath: '/settings', deep: true },
   { path: '/infrastructure', slmPath: '/infrastructure', deep: false },
   { path: '/tls-certificates', slmPath: '/security', deep: false },
+  // #20605: remote desktop and the theme manager are SLM screens; old bookmarks follow them.
+  { path: '/slm/tools/novnc', slmPath: '/tools/novnc', deep: false },
+  { path: '/slm/themes', slmPath: '/settings/admin/themes', deep: false },
 ]
 
 /** Leave the SPA for the SLM; the global guard has already confirmed an admin. */
