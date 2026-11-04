@@ -43,6 +43,7 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import tracked_paths
 
 #: Call targets that execute a program. `shell=True` forms are out of scope:
@@ -200,7 +201,7 @@ def _parsed_production_modules() -> list[tuple[str, ast.AST]]:
     unreadable: list[str] = []
     for rel in _production_modules():
         try:
-            parsed.append((rel, ast.parse((root / rel).read_text(encoding="utf-8"))))
+            parsed.append((rel, parse_cache.parse((root / rel).read_text(encoding="utf-8"))))
         except (OSError, SyntaxError, UnicodeDecodeError) as exc:
             unreadable.append(f"{rel}: {type(exc).__name__}: {exc}")
 
@@ -243,7 +244,7 @@ def test_the_pending_list_only_shrinks() -> None:
     stale: list[str] = []
     for occurrence in _PENDING:
         rel, _, lineno = occurrence.rpartition(":")
-        live = _bare_interpreter_spawns(ast.parse((root / rel).read_text(encoding="utf-8")))
+        live = _bare_interpreter_spawns(parse_cache.parse((root / rel).read_text(encoding="utf-8")))
         # The EXACT occurrence must still be live. Checking only "does this file
         # still spawn" would keep an entry alive on the strength of a different
         # spawn, which is the same hole as exempting by file (CodeRabbit, #13916).
@@ -305,4 +306,4 @@ def test_the_detector_separates_the_shapes(label: str, source: str, expected: in
     `env`, and this detector is deliberately about argv[0] only -- stated
     rather than left for a reader to discover.
     """
-    assert len(_bare_interpreter_spawns(ast.parse(source))) == expected, label
+    assert len(_bare_interpreter_spawns(parse_cache.parse(source))) == expected, label
