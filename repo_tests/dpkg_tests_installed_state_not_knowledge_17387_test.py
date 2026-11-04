@@ -59,6 +59,7 @@ import yaml
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._comment_syntax import strip_trailing_comment
 
 _SCANNED_SUFFIXES = (".yml", ".yaml", ".sh", ".py")
@@ -139,7 +140,7 @@ def _python_dpkg_strings(text: str) -> List[Tuple[int, str]]:
     `f"dpkg -l | grep {pkg}"` carries the pattern across a placeholder.
     """
     try:
-        tree = ast.parse(text)
+        tree = parse_cache.parse(text)
     except (SyntaxError, ValueError):
         return []
     docstring_nodes = set()
