@@ -173,8 +173,6 @@ def _ansible_yaml(root: Path) -> list[str]:
 REACH_FILES = declare(
     "ansible-credentials-never-logged",
     discover=_ansible_yaml,
-    # Mid-window, from REACH_FILES.window(); the arithmetic is on the PR, not here.
-    floor=317,
     what="ansible yml/yaml files, scanned for credential-bearing http tasks and messages that dump their response",
     roots=(_ANS,),
     growth=50,
