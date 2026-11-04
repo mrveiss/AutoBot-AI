@@ -217,7 +217,7 @@ const { confirm } = useConfirmDialog()
 import type { DocumentChange } from '@/composables/useDocumentChanges'
 import { formatBytes } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import { BaseButton } from '@autobot/ui'
+import { BaseButton, saveTextFile } from '@autobot/ui'
 
 // Composable
 const {
@@ -300,14 +300,7 @@ const handleClearChanges = async () => {
 }
 
 const handleExportChanges = () => {
-  const json = exportChanges()
-  const blob = new Blob([json], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `document-changes-${machineId.value}-${Date.now()}.json`
-  a.click()
-  URL.revokeObjectURL(url)
+  saveTextFile(exportChanges(), `document-changes-${machineId.value}-${Date.now()}.json`, 'application/json')
 }
 
 // Lifecycle

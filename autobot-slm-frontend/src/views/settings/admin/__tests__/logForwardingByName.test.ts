@@ -28,7 +28,7 @@ const api = {
 vi.mock('@/composables/useAutobotApi', () => ({ useAutobotApi: () => api }))
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en }, missingWarn: false, fallbackWarn: false })
-const t = (en as { settings: { admin: Record<string, Record<string, string>> } }).settings.admin.logForwardingSettings
+const t = en.settings.admin.logForwardingSettings
 
 function served(name: string, over: Record<string, unknown> = {}) {
   return {
