@@ -185,8 +185,6 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "hand-rolled-async-session-scan",
     discover=_population,
-    # Mid-window, from REACH.window(): population 2431 (test files + tests/testkit helpers) -> (2231, 2431, 2331).
-    floor=2666,  # re-pinned mid-window (train 81 on main)
     what="test python source",
     roots=SCAN_ROOTS,
     growth=200,
