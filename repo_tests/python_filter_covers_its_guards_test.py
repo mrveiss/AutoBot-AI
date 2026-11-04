@@ -37,6 +37,7 @@ from repo_tests.python_filter_uncovered_reads import (
 )
 
 from autobot_shared.paths import scrubbed_git_env
+from tools.lint import _parse_cache as parse_cache
 
 yaml = pytest.importorskip("yaml")
 
@@ -99,7 +100,7 @@ def _composed_reads(source: str) -> set[str]:
     written yet composes that way too.
     """
     try:
-        tree = ast.parse(source)
+        tree = parse_cache.parse(source)
     except SyntaxError:
         return set()
 
