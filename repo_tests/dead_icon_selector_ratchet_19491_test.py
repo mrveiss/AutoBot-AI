@@ -66,7 +66,6 @@ REACH_VUE_FILES = declare(
     "dead-icon-selector-vue-files",
     discover=lambda root: [p.relative_to(root).as_posix() for p in vue_files(root / _FRONTEND_SRC)],
     roots=(_FRONTEND_SRC,),
-    floor=447,  # mid-window: population 467, window (427, 467)
     growth=40,
     skips=0,
     what=".vue files scanned for dead <i> selectors",

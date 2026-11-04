@@ -213,8 +213,6 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "audit-writer-single-source",
     discover=_population,
-    # Mid-window, from REACH.window(): window (2697, 2997, 2847) at authoring.
-    floor=3342,  # re-pinned mid-window (train 73): population 3250, window [2950, 3250] (#17844)
     what="non-test python source",
     roots=("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     growth=300,

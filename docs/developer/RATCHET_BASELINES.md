@@ -542,6 +542,16 @@ folder cannot read as a clean 0.
 - **A branch doesn't repin (#19673):** the pre-push gate asks only when the branch changed a guard beyond its `floor=` lines. Merge trains still enforce every floor (`AUTOBOT_REACH_AUDIT=1`, train heads only) and repin the rest on their merged tree, so a branch hand-lowering a `floor=` is judged there, not locally.
 - **Re-pinning the floor:** `python scripts/repin_reach_floors.py` after the tree grows or shrinks
   past the window.
+- **A floor computed from the base (#19676):** a `declare()` without `floor=` gets
+  `population at the base - skips - growth` (`repo_tests/_reach_base.py`), the bottom of the
+  window a pin had to sit in. The base population is measured by the BASE's own declaration: the
+  guard module as it was at the base commit, imported from a temp worktree of that commit in a
+  separate `python -I` process. So a narrowed `discover` in the PR cannot pull the floor down with
+  it. The base is the one `_ratchet_base.base_commit` resolves. A base that cannot be read or
+  measured, a floor of zero or less, or a declaration the base does not have (a new guard) raises
+  `BaseUnavailable`: a new guard pins `floor=` until it lands. Such a floor never goes stale and is
+  never re-pinned. A guard whose `discover` reads untracked or generated files keeps an explicit
+  `floor=` and is listed with its reason in `_reach_base.PINNED_BY_DESIGN`.
 
 ## Checklist for a new ratchet
 
