@@ -20,8 +20,10 @@ from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.time_utils import utc_timestamp
 
 from ..kb.handoff_brief import HandoffBriefGenerator
+from ..models.activity import ActorType
 from ..models.enums import ActivityEventType, AssigneeType, WorkItemStatus
 from ..models.work_item import LLCWorkItem
+from .actor import audit
 from .base import LLCServiceBase
 from .wake_events import wake_for_item_changes
 
@@ -117,9 +119,11 @@ class HandoffService(LLCServiceBase):
         item.version += 1
         await wake_for_item_changes(session, item)  # #19582: the handoff assigns it to the agent
         await session.flush()
+        # The audit row goes first: if it fails the caller rolls the database back, and the checkout
+        # key must still be there and nobody told. Redis and the notification cannot be rolled back.
+        await self._record_h2a_activity(session, company_id, user_id, work_item_id, target_agent_id)
         await self._release_redis_key(work_item_id, user_id)
         await self._publish_h2a_notification(company_id, target_agent_id, work_item_id)
-        await self._record_h2a_activity(session, company_id, user_id, work_item_id, target_agent_id)
         task = asyncio.create_task(
             self._generate_and_update_h2a_brief_async(
                 work_item_id=work_item_id,
@@ -165,27 +169,13 @@ class HandoffService(LLCServiceBase):
         item.checkout_locked_at = None
         item.version += 1
         await session.flush()
+        # Audit before the key delete and the notification: a failed audit rolls the database back,
+        # and neither of those can be taken back.
+        await self._record_a2h_activity(session, company_id, agent_id, reviewer_user_id, work_item_id, brief)
         redis = await get_async_redis_client()
         if redis is not None:
             await redis.delete(f"{_CHECKOUT_REDIS_PREFIX}{work_item_id}")
         await self._publish_a2h_notification(company_id, work_item_id, reviewer_user_id, brief)
-        if self.activity_log:
-            try:
-                from ..models.activity import ActorType
-
-                await self.activity_log.record(
-                    session,
-                    company_id=company_id,
-                    actor_type=ActorType.AGENT,
-                    actor_id=agent_id,
-                    event_type=ActivityEventType.WORK_ITEM_HANDOFF,
-                    entity_type="work_item",
-                    entity_id=work_item_id,
-                    after={"status": WorkItemStatus.IN_REVIEW.value, "reviewer_user_id": reviewer_user_id},
-                    metadata={"brief": brief},
-                )
-            except Exception:
-                logger.warning("Activity log failed for agent_to_human %s", work_item_id)
 
         task = asyncio.create_task(
             self._generate_and_update_brief_async(
@@ -232,22 +222,17 @@ class HandoffService(LLCServiceBase):
         except Exception:
             logger.warning("workspace release skipped for task=%s", work_item_id, exc_info=True)
 
-        if self.activity_log:
-            try:
-                from ..models.activity import ActorType
-
-                await self.activity_log.record(
-                    session,
-                    company_id=company_id,
-                    actor_type=ActorType.USER,
-                    actor_id=reviewer_user_id,
-                    event_type=ActivityEventType.WORK_ITEM_REVIEW_APPROVED,
-                    entity_type="work_item",
-                    entity_id=work_item_id,
-                    after={"status": WorkItemStatus.DONE.value, "completed_at": now.isoformat()},
-                )
-            except Exception:
-                logger.warning("Activity log failed for approve %s", work_item_id)
+        await audit(
+            self.activity_log,
+            session,
+            company_id=company_id,
+            actor_type=ActorType.USER,
+            actor_id=reviewer_user_id,
+            event_type=ActivityEventType.WORK_ITEM_REVIEW_APPROVED,
+            entity_type="work_item",
+            entity_id=work_item_id,
+            after={"status": WorkItemStatus.DONE.value, "completed_at": now.isoformat()},
+        )
         return item
 
     async def request_changes(
@@ -286,23 +271,18 @@ class HandoffService(LLCServiceBase):
         )
         session.add(comment)
         await session.flush()
-        if self.activity_log:
-            try:
-                from ..models.activity import ActorType
-
-                await self.activity_log.record(
-                    session,
-                    company_id=company_id,
-                    actor_type=ActorType.USER,
-                    actor_id=reviewer_user_id,
-                    event_type=ActivityEventType.WORK_ITEM_REVIEW_CHANGES_REQUESTED,
-                    entity_type="work_item",
-                    entity_id=work_item_id,
-                    after={"status": WorkItemStatus.IN_PROGRESS.value, "assignee_agent_id": return_to_agent_id},
-                    metadata={"change_request": change_request},
-                )
-            except Exception:
-                logger.warning("Activity log failed for request_changes %s", work_item_id)
+        await audit(
+            self.activity_log,
+            session,
+            company_id=company_id,
+            actor_type=ActorType.USER,
+            actor_id=reviewer_user_id,
+            event_type=ActivityEventType.WORK_ITEM_REVIEW_CHANGES_REQUESTED,
+            entity_type="work_item",
+            entity_id=work_item_id,
+            after={"status": WorkItemStatus.IN_PROGRESS.value, "assignee_agent_id": return_to_agent_id},
+            metadata={"change_request": change_request},
+        )
         return item
 
     async def get_brief(self, session: AsyncSession, work_item_id: str) -> Optional[Dict[str, Any]]:
@@ -399,29 +379,47 @@ class HandoffService(LLCServiceBase):
         except Exception:
             logger.debug("HandoffService._publish_a2h_notification failed (swallowed)")
 
+    async def _record_a2h_activity(
+        self,
+        session: AsyncSession,
+        company_id: str,
+        agent_id: str,
+        reviewer_user_id: str,
+        work_item_id: str,
+        brief: Dict[str, Any],
+    ) -> None:
+        await audit(
+            self.activity_log,
+            session,
+            company_id=company_id,
+            actor_type=ActorType.AGENT,
+            actor_id=agent_id,
+            event_type=ActivityEventType.WORK_ITEM_HANDOFF,
+            entity_type="work_item",
+            entity_id=work_item_id,
+            after={"status": WorkItemStatus.IN_REVIEW.value, "reviewer_user_id": reviewer_user_id},
+            metadata={"brief": brief},
+        )
+
     async def _record_h2a_activity(
         self, session: AsyncSession, company_id: str, user_id: str, work_item_id: str, target_agent_id: str
     ) -> None:
-        if not self.activity_log:
-            return
-        try:
-            await self.activity_log.record(
-                session,
-                company_id=company_id,
-                actor_type="user",
-                actor_id=user_id,
-                event_type=ActivityEventType.WORK_ITEM_ASSIGNED,
-                entity_type="work_item",
-                entity_id=work_item_id,
-                after={
-                    "assignee_type": AssigneeType.AGENT.value,
-                    "assignee_agent_id": target_agent_id,
-                    "status": WorkItemStatus.READY.value,
-                    "has_human_handoff_context": True,
-                },
-            )
-        except Exception:
-            logger.warning("Activity log failed for h2a handoff work_item=%s", work_item_id)
+        await audit(
+            self.activity_log,
+            session,
+            company_id=company_id,
+            actor_type="user",
+            actor_id=user_id,
+            event_type=ActivityEventType.WORK_ITEM_ASSIGNED,
+            entity_type="work_item",
+            entity_id=work_item_id,
+            after={
+                "assignee_type": AssigneeType.AGENT.value,
+                "assignee_agent_id": target_agent_id,
+                "status": WorkItemStatus.READY.value,
+                "has_human_handoff_context": True,
+            },
+        )
 
     async def _generate_and_update_brief_async(
         self,
