@@ -32,12 +32,20 @@ def real_key_check(monkeypatch):
     monkeypatch.setattr(envelope_secrets, "verify_internal_api_key", verify_internal_api_key)
 
 
-@pytest.fixture
-def refused_hmac(monkeypatch):
+def _refuse_with(monkeypatch, status: int, detail: str) -> None:
     async def refuse(_request):
-        raise HTTPException(status_code=401, detail="Missing authentication headers")
+        raise HTTPException(status_code=status, detail=detail)
 
     monkeypatch.setattr(refusal, "validate_service_auth", refuse)
+
+
+@pytest.fixture
+def refused_hmac(monkeypatch):
+    _refuse_with(monkeypatch, 401, "Authentication required: Missing required headers")
+
+
+def _refusals(caplog) -> list:
+    return [r for r in caplog.records if "service principal refused" in r.getMessage()]
 
 
 @pytest.mark.asyncio
@@ -54,16 +62,11 @@ def refused_hmac(monkeypatch):
             "",
             "presented X-Internal-API-Key; the backend has no AUTOBOT_INTERNAL_API_KEY configured",
         ),
-        (
-            {"X-Service-ID": "slm-backend", "X-Service-Signature": "sig", "X-Service-Timestamp": "1"},
-            _OWN,
-            "presented X-Service-* (HMAC); the service signature did not validate",
-        ),
         ({}, _OWN, "presented none; no service credential was presented"),
     ],
-    ids=["key-mismatch", "backend-has-no-key", "hmac-refused", "no-credential"],
+    ids=["key-mismatch", "backend-has-no-key", "no-credential"],
 )
-async def test_each_refusal_names_the_form_and_why_never_a_value(
+async def test_each_key_refusal_names_the_form_and_why_never_a_value(
     monkeypatch, caplog, refused_hmac, headers, backend_key, expected
 ) -> None:
     if backend_key:
@@ -73,10 +76,61 @@ async def test_each_refusal_names_the_form_and_why_never_a_value(
     with caplog.at_level(logging.WARNING), pytest.raises(HTTPException) as refused:
         await envelope_secrets.service_principal(_request(headers))
     assert refused.value.status_code == 401
-    messages = [r.getMessage() for r in caplog.records if "service principal refused" in r.getMessage()]
-    assert messages == [f"service principal refused: {expected}"]
-    logged = " ".join(r.getMessage() for r in caplog.records)
-    assert _SENT not in logged and _OWN not in logged, "no key value reaches the log"
+    assert [r.getMessage() for r in _refusals(caplog)] == [f"service principal refused: {expected}"]
+    record = _refusals(caplog)[0]
+    assert (record.credential_form, record.path, record.method) == (
+        expected.split(";")[0].removeprefix("presented "),
+        "/api/v2/secrets/system",
+        "GET",
+    )
+    logged = " ".join(f"{r.getMessage()} {r.__dict__}" for r in caplog.records)
+    assert _SENT not in logged and _OWN not in logged, "no key value reaches the message or its extra"
+
+
+_HMAC = {"X-Service-ID": "evil-svc", "X-Service-Signature": "sig", "X-Service-Timestamp": "1"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "detail, reason",
+    [
+        ("Authentication failed: Invalid signature", "the service signature did not validate"),
+        ("Authentication failed: Unknown service: evil-svc", "the service is not registered"),
+        (
+            "Authentication required: Timestamp outside 300s window (diff: 999s)",
+            "the request timestamp is outside the allowed window",
+        ),
+        ("Authentication failed: Invalid timestamp format", "the request timestamp is malformed"),
+    ],
+    ids=["bad-signature", "unknown-service", "stale-timestamp", "malformed-timestamp"],
+)
+async def test_an_hmac_refusal_takes_its_reason_from_the_checks_fixed_detail(
+    monkeypatch, caplog, detail: str, reason: str
+) -> None:
+    """The reason is the check's own, not guessed from which headers arrived, and no client value is echoed."""
+    monkeypatch.setenv("AUTOBOT_INTERNAL_API_KEY", _OWN)
+    _refuse_with(monkeypatch, 401, detail)
+    with caplog.at_level(logging.WARNING), pytest.raises(HTTPException):
+        await envelope_secrets.service_principal(_request(_HMAC))
+    assert [r.getMessage() for r in _refusals(caplog)] == [
+        f"service principal refused: presented X-Service-* (HMAC); {reason}"
+    ]
+    assert "evil-svc" not in " ".join(r.getMessage() for r in caplog.records), "the caller's service id isn't echoed"
+
+
+@pytest.mark.asyncio
+async def test_an_auth_service_error_is_not_logged_as_a_refusal(monkeypatch, caplog) -> None:
+    """A 5xx (Redis down) is the authentication service failing, its own message, never 'did not validate'."""
+    monkeypatch.setenv("AUTOBOT_INTERNAL_API_KEY", _OWN)
+    _refuse_with(monkeypatch, 500, "Internal server error: Authentication service error")
+    with caplog.at_level(logging.WARNING), pytest.raises(HTTPException) as failed:
+        await envelope_secrets.service_principal(_request(_HMAC))
+    assert failed.value.status_code == 500
+    assert not _refusals(caplog)
+    errors = [r.getMessage() for r in caplog.records if r.levelno >= logging.ERROR]
+    assert errors == [
+        "service principal check failed: the authentication service errored (HTTP 500); presented X-Service-* (HMAC)"
+    ]
 
 
 @pytest.mark.asyncio
@@ -85,4 +139,4 @@ async def test_an_accepted_key_is_not_logged_as_a_refusal(monkeypatch, caplog, r
     monkeypatch.setenv("AUTOBOT_INTERNAL_API_KEY", _OWN)
     with caplog.at_level(logging.WARNING):
         assert await envelope_secrets.service_principal(_request({"X-Internal-API-Key": _OWN})) == "slm-backend"
-    assert not [r for r in caplog.records if "service principal refused" in r.getMessage()]
+    assert not _refusals(caplog)

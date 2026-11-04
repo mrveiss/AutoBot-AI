@@ -23,32 +23,56 @@ from security.service_auth import validate_service_auth
 logger = get_logger(__name__)
 
 
-def _refusal_reason(request: Request) -> tuple[str, str]:
-    """(the credential form presented, why it was refused) for a 401 log -- never a value (#20750).
+#: validate_service_auth's fixed server-side contexts -> the reason logged. Mapped, never echoed: one of
+#: them interpolates the caller's service id, which is client input.
+_HMAC_REASONS = (
+    ("Missing required headers", "the X-Service-* headers are incomplete"),
+    ("Invalid timestamp format", "the request timestamp is malformed"),
+    ("Timestamp outside", "the request timestamp is outside the allowed window"),
+    ("Unknown service", "the service is not registered"),
+    ("Invalid signature", "the service signature did not validate"),
+)
 
-    The forms are the internal key, the HMAC X-Service-* headers, or none. Naming which one came,
-    and why it failed, is what lets an operator tell a key mismatch from a missing key or an
-    unsigned call without reading a credential.
-    """
+
+def _form(request: Request) -> str:
+    """The credential form a request presented: the internal key, the HMAC headers, or none."""
     if request.headers.get("X-Internal-API-Key"):
-        if not internal_api_key():
-            return "X-Internal-API-Key", "the backend has no AUTOBOT_INTERNAL_API_KEY configured"
-        return "X-Internal-API-Key", "it does not match the backend's AUTOBOT_INTERNAL_API_KEY"
+        return "X-Internal-API-Key"
     if request.headers.get("X-Service-ID") or request.headers.get("X-Service-Signature"):
-        return "X-Service-* (HMAC)", "the service signature did not validate"
-    return "none", "no service credential was presented"
+        return "X-Service-* (HMAC)"
+    return "none"
+
+
+def _refusal_reason(form: str, refusal: HTTPException) -> str:
+    """Why a 401/403 refused *form*: from the backend's own key state or the check's fixed detail."""
+    if form == "X-Internal-API-Key":
+        if not internal_api_key():
+            return "the backend has no AUTOBOT_INTERNAL_API_KEY configured"
+        return "it does not match the backend's AUTOBOT_INTERNAL_API_KEY"
+    if form == "none":
+        return "no service credential was presented"
+    detail = str(refusal.detail)
+    return next(
+        (reason for marker, reason in _HMAC_REASONS if marker in detail), f"refused (HTTP {refusal.status_code})"
+    )
 
 
 async def validated_service(request: Request) -> Dict:
-    """``validate_service_auth``, logging a refusal with the credential form presented; re-raises it."""
+    """``validate_service_auth``; a 401/403 is logged as a refusal with its form and reason, a 5xx as an
+    auth-service error. Each re-raises unchanged."""
     try:
         return await validate_service_auth(request)
-    except HTTPException:
-        form, reason = _refusal_reason(request)
-        logger.warning(
-            "service principal refused: presented %s; %s",
-            form,
-            reason,
-            extra={"credential_form": form, "path": request.url.path, "method": request.method},
-        )
+    except HTTPException as failure:
+        form = _form(request)
+        where = {"credential_form": form, "path": request.url.path, "method": request.method}
+        if failure.status_code >= 500:
+            logger.error(
+                "service principal check failed: the authentication service errored (HTTP %s); presented %s",
+                failure.status_code,
+                form,
+                extra=where,
+            )
+        elif failure.status_code in (401, 403):
+            reason = _refusal_reason(form, failure)
+            logger.warning("service principal refused: presented %s; %s", form, reason, extra=where)
         raise
