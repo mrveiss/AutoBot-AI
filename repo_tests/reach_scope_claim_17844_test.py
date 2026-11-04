@@ -397,6 +397,7 @@ _DECLARED_SCOPES = {
     "generated-type-redeclarations": ("autobot-frontend/src",),
     "severity-order-copies": ("autobot-backend", "autobot-slm-backend", "autobot_shared", "pipeline-scripts"),
     "llc-sigterm-grace-copies": ("autobot-backend/llc",),
+    "frontend-backend-origin": ("autobot-frontend/src",),
     "frontend-http-transports": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "frontend-local-formatter-scan": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "frontend-local-date-formatter-scan": ("autobot-frontend/src", "autobot-slm-frontend/src"),
