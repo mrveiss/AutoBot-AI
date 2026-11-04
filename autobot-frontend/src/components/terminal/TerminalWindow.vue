@@ -142,6 +142,7 @@
 </template>
 
 <script>
+import { saveTextFile } from '@autobot/ui'
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useConfirmDialog } from '@/composables/useConfirmDialog';
@@ -905,15 +906,7 @@ export default {
         })
         .join('\n');
 
-      const blob = new Blob([logContent], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `terminal-${sessionId.value}-${new Date().toISOString().split('T')[0]}.log`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      saveTextFile(logContent, `terminal-${sessionId.value}-${new Date().toISOString().split('T')[0]}.log`);
     };
 
     const shareSession = async () => {
