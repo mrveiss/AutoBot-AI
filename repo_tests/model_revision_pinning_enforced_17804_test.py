@@ -125,13 +125,11 @@ def _production_files(root: Path) -> list[Path]:
 
 #: **3,027** production modules today, measured by the declaration mechanism
 #: rather than estimated -- my own ad-hoc count said ~2,705, and the difference
-#: is why the floor is pinned to a measurement and not to a guess. The band is
-#: 2,900..3,100; beyond it the floor is ratcheted deliberately.
+#: is why the floor is a measurement and not a guess; it is computed from the
+#: base commit (#19676).
 REACH = declare(
     "model-revision-pinning-sweep",
     discover=_production_files,
-    # Re-pinned MID-window 2026-10-11 (#17576 slice 2): population 3081, window [2881, 3081].
-    floor=3415,  # re-pinned mid-window (train 45): population 3269, window [3069, 3269]
     growth=200,
     skips=0,
     # Scope as data (#17844). This one spans THREE trees where its siblings span two, which is
