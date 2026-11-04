@@ -46,6 +46,8 @@ const tabs = [
   { id: 'validation', nameKey: 'monitoringView.tabs.validation', admin: true, path: '/monitoring/validation', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
   // #18277: browser-reported events held by the main backend
   { id: 'rum', nameKey: 'monitoringView.tabs.rum', admin: true, path: '/monitoring/rum', icon: 'M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z' },
+  // #19484: this install's own metrics, read from the main backend
+  { id: 'install', nameKey: 'monitoringView.tabs.install', admin: true, path: '/monitoring/install', icon: 'M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z' },
 ]
 
 // Admin-only tabs (route meta `admin`) are hidden from everyone else rather than
