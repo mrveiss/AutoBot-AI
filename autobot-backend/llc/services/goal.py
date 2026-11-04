@@ -150,19 +150,18 @@ class GoalService(LLCServiceBase):
         await session.flush()
         # Fix #2: Index after commit, not after flush, to avoid phantom entries on rollback
         self._schedule_post_commit_index(session, goal)
-        if self.activity_log:
-            actor = resolve_actor(actor_agent_id, actor_user_id)
-            await self.activity_log.record(
-                session,
-                company_id=company_id,
-                actor_type=actor.type,
-                actor_id=actor.id,
-                metadata=actor.metadata(),
-                event_type="goal.created",
-                entity_type="llc_goal",
-                entity_id=str(goal.id),
-                after={"title": title, "level": level.value, "status": status.value},
-            )
+        actor = resolve_actor(actor_agent_id, actor_user_id)
+        await self.activity_log.record(
+            session,
+            company_id=company_id,
+            actor_type=actor.type,
+            actor_id=actor.id,
+            metadata=actor.metadata(),
+            event_type="goal.created",
+            entity_type="llc_goal",
+            entity_id=str(goal.id),
+            after={"title": title, "level": level.value, "status": status.value},
+        )
         return goal
 
     async def get(self, session: AsyncSession, goal_id: uuid.UUID) -> Optional[LLCGoal]:
