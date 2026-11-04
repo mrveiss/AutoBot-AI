@@ -28,11 +28,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api._service_principal_refusal import validated_service
 from auth_middleware import resolve_human_user, verify_internal_api_key
 from autobot_shared.secrets_vault import VaultKind, VaultRef
 from llc.deps import get_session
 from models.secret import Secret
-from security.service_auth import validate_service_auth
 from services.envelope_secrets_service import SecretAccessError, SecretNotFoundError
 from services.secrets_coordinator import SecretsCoordinator
 
@@ -91,10 +91,7 @@ async def service_principal(request: Request) -> str:
         )
         return service_id
 
-    try:
-        info = await validate_service_auth(request)
-    except HTTPException:
-        raise
+    info = await validated_service(request)  # #20750: a refusal logs the credential form presented
     service_id = info["service_id"]
     logger.info(
         "service principal authenticated via HMAC for secrets API",
