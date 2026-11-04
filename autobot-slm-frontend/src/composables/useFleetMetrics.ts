@@ -35,7 +35,7 @@ import type {
   MonitoringAlertsWire,
   NpuNodesWire,
 } from './fleetMetricsModel'
-// Metric shapes shared with autobot-frontend's useInstallMetrics.ts — see the kit
+// Metric shapes shared with useInstallMetricsApi.ts — see the kit
 // file's doc comment for which fields are main-app-only extensions (#14907).
 // ServiceHealth is used only inside ServicesSummary's shape (not referenced
 // directly in this file), so it is re-exported but not locally imported —
