@@ -18,12 +18,14 @@ REPO-RELATIVE parts (#18972), so a checkout under `.worktrees` is not read as cl
 from __future__ import annotations
 
 import ast
+import functools
 from pathlib import Path
 
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 from repo_tests.chunk_identity_baseline_18142 import BASELINE
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOT = repo_root()
@@ -101,7 +103,7 @@ def _derivations(tree: ast.AST) -> int:
 def inline_sites(source: str) -> int:
     """How many inline chunk-identity reads or derivations *source* holds."""
     try:
-        tree = ast.parse(source)
+        tree = parse_cache.parse(source)
     except (SyntaxError, ValueError):
         return 0
     return sum(_is_chunk_id_read(n) for n in ast.walk(tree)) + _derivations(tree)
@@ -115,14 +117,18 @@ def measure(files: dict[str, str]) -> dict[str, int]:
 
 def _parses(source: str) -> bool:
     try:
-        ast.parse(source)
+        parse_cache.parse(source)
     except (SyntaxError, ValueError):
         return False
     return True
 
 
+@functools.lru_cache(maxsize=1)
 def _read_all() -> dict[str, str]:
-    """Files read AND parsed; the reach floor binds to these, not to the candidates listed (#19149)."""
+    """Files read AND parsed; the reach floor binds to these, not to the candidates listed (#19149).
+
+    Memoised (#20814): 2 tests read the same sweep.
+    """
     files = {}
     for rel in REACH.examined(_ROOT):
         try:
