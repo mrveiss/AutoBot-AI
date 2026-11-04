@@ -33,6 +33,7 @@ import functools
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import tracked_paths
 
 REPO = repo_root()
@@ -152,7 +153,7 @@ def _tracked_sources() -> dict[str, str]:
 @functools.lru_cache(maxsize=None)
 def _tree(source: str) -> ast.AST:
     """One parse per distinct source text, shared by every detector."""
-    return ast.parse(source)
+    return parse_cache.parse(source)
 
 
 def _spelled(source: str, names: frozenset[str]) -> set[str]:

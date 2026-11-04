@@ -16,13 +16,15 @@ import re
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _ROOT = repo_root()
 _SCHEMA = _ROOT / "autobot-backend" / "api" / "schemas_users_dashboard_layouts.py"
 _MODEL = _ROOT / "autobot-frontend" / "src" / "composables" / "dashboard" / "dashboardLayoutModel.ts"
 
 
 def _field_bounds(cls: str, field: str) -> dict[str, int]:
-    tree = ast.parse(_SCHEMA.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(_SCHEMA.read_text(encoding="utf-8"))
     node = next(n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == cls)
     stmt = next(s for s in node.body if isinstance(s, ast.AnnAssign) and s.target.id == field)
     names = {"MAX_DASHBOARDS": _schema_const("MAX_DASHBOARDS"), "MAX_WIDGETS": _schema_const("MAX_WIDGETS")}
