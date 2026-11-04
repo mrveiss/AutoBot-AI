@@ -64,11 +64,9 @@ def _cipher_names(source: str) -> set[str]:
 
 def _source_files(root: Path) -> list[str]:
     try:
-        return tracked_paths(
-            root,
-            "autobot_shared/*.py",
-            exclude=("*_test.py", "test_*.py", "conftest.py", "autobot_shared/tests/*", "autobot_shared/*/tests/*"),
-        )
+        found = tracked_paths(root, "autobot_shared/*.py", exclude=("*_test.py", "test_*.py", "conftest.py"))
+        # Test packages (autobot_shared/tests/, autobot_shared/<pkg>/tests/) are not cipher users.
+        return [path for path in found if "/tests/" not in path]
     except EmptyEnumeration:
         return []
 
