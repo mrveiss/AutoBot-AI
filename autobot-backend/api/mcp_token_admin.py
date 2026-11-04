@@ -26,7 +26,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Path
 from pydantic import BaseModel, Field
 
-from auth_rbac import require_role
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
@@ -118,7 +118,7 @@ _INDEX_KEY = "mcp:tokens:index"
 )
 async def create_mcp_token(
     body: CreateTokenRequest,
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
 ) -> CreateTokenResponse:
     """Generate a new scoped MCP client token.
 
@@ -184,7 +184,7 @@ async def create_mcp_token(
     error_code_prefix="MCP",
 )
 async def list_mcp_tokens(
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
 ) -> ListTokensResponse:
     """List all active MCP tokens.
 
@@ -235,7 +235,7 @@ async def list_mcp_tokens(
 )
 async def revoke_mcp_token(
     token_id: str = Path(..., description="Token ID to revoke"),
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
 ) -> RevokeTokenResponse:
     """Revoke an MCP token by its ID.
 
