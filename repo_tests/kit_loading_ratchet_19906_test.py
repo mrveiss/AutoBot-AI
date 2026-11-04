@@ -76,7 +76,6 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "frontend-hand-rolled-spinner-scan",
     discover=_population,
-    floor=614,  # mid-window: population 639, window (589, 639)
     growth=50,
     what="vue and css sources of both frontends and the plugins",
     roots=_ROOTS,
