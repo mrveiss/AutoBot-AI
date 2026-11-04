@@ -68,6 +68,9 @@ def _bearer_request(token: str | None, path: str = "/api/devices/list", method: 
     request.url.path = path
     request.method = method
     request.cookies = {}
+    # A real Request always has a scope; spec=Request cannot see it (an instance attribute). No
+    # endpoint in it means no service opt-in, so the device-JWT path is what gets exercised (#16333).
+    request.scope = {}
     return request
 
 
