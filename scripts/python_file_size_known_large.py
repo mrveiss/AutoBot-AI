@@ -99,7 +99,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/knowledge_api_integration_test.py": 623,
     "autobot-backend/api/knowledge_categories.py": 674,
     "autobot-backend/api/knowledge_collections.py": 726,
-    "autobot-backend/api/knowledge_connectors.py": 928,
+    "autobot-backend/api/knowledge_connectors.py": 919,
     "autobot-backend/api/knowledge_maintenance.py": 1960,
     "autobot-backend/api/knowledge_mcp.py": 1440,
     "autobot-backend/api/knowledge_population.py": 1238,
@@ -216,7 +216,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/knowledge/bulk.py": 1893,
     "autobot-backend/knowledge/categories.py": 965,
     "autobot-backend/knowledge/collections.py": 728,
-    "autobot-backend/knowledge/connectors/base.py": 663,
+    "autobot-backend/knowledge/connectors/base.py": 655,
     "autobot-backend/knowledge/connectors/credential_store.py": 768,  # #16444: rotate() validates the merged bundle
     "autobot-backend/knowledge/connectors/gdrive.py": 660,
     "autobot-backend/knowledge/connectors/gitlab.py": 836,
