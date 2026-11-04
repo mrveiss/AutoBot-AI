@@ -7,6 +7,7 @@
  * AutoBot - AI-Powered Automation Platform
  * Author: mrveiss
  */
+import { saveTextFile } from '@autobot/ui'
 import type { Ref } from 'vue'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { createLogger } from '@/utils/debugUtils'
@@ -339,20 +340,8 @@ export function generateSectionMarkdown(section: SectionType, data: unknown): st
   return _mdHeader(section) + '```json\n' + JSON.stringify(data, null, 2) + '\n```\n'
 }
 
-/**
- * Download content as a file via browser download.
- */
-function _downloadFile(content: string, filename: string, mimeType: string): void {
-  const blob = new Blob([content], { type: mimeType })
-  const url = window.URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  window.URL.revokeObjectURL(url)
-}
+/** Download content as a file: the kit's one save path (#20770). */
+const _downloadFile = saveTextFile
 
 /**
  * Composable providing codebase export functionality.

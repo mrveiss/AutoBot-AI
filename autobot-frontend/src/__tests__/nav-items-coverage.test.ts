@@ -58,7 +58,8 @@ const INTENTIONALLY_HIDDEN: Record<string, string> = {
   '/agents/heartbeat': 'Reached as a tab inside /agents shell (#6634); standalone URL kept for bookmarks',
   '/plugins': 'lives in the SLM console nav (#18240); no user-app nav entry, route kept for deep links',
   '/admin/users': 'Admin-only — surfaced via separate admin entrypoint',
-  '/slm/tools/novnc': "Accessed via Chat tab's noVNC sub-tab (#6414/#6415); standalone URL kept for bookmarks",
+  // /slm/tools/novnc is a redirect to the SLM console since #20605 (pinned in router/__tests__/slmRedirects.test.ts),
+  // so it is no longer a route this allowlist covers.
 }
 
 /** True if route is hidden from nav by an explicit meta flag. */
