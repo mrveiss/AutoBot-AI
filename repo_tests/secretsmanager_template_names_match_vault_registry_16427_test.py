@@ -27,6 +27,8 @@ import re
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _REPO_ROOT = repo_root()
 _VAULT_MODULE = _REPO_ROOT / "autobot-backend" / "services" / "provider_key_vault.py"
 _SECRETS_MANAGER_VUE = _REPO_ROOT / "autobot-frontend" / "src" / "components" / "security" / "SecretsManager.vue"
@@ -49,7 +51,7 @@ _EXPECTED_VAULT_BACKED_NAMES = {
 
 
 def _live_vault_registry() -> frozenset[str]:
-    tree = ast.parse(_VAULT_MODULE.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(_VAULT_MODULE.read_text(encoding="utf-8"))
     names: set[str] = set()
     for node in ast.walk(tree):
         # Each is `NAME: frozenset[str] = frozenset({...})` -- an AnnAssign,
