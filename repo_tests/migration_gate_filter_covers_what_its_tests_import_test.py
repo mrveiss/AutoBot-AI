@@ -32,6 +32,7 @@ import yaml
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _WORKFLOW = Path(".github/workflows/migration-gate.yml")
@@ -93,7 +94,7 @@ def _imported_modules(root: Path) -> set[str]:
     """First-party dotted module names imported by the migration tests."""
     found: set[str] = set()
     for rel in sorted(REACH.examined(root)):
-        module = ast.parse((root / rel).read_text(encoding="utf-8", errors="replace"))
+        module = parse_cache.parse((root / rel).read_text(encoding="utf-8", errors="replace"))
         for node in ast.walk(module):
             if isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
                 found.add(node.module)

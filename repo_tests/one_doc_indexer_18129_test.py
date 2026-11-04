@@ -26,6 +26,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 #: The service owns the pipeline; the shared helper is the section splitter it calls.
@@ -47,7 +48,7 @@ def _is_heading_pattern(node: ast.AST) -> bool:
 
 def _splits_markdown_headings(source: str) -> bool:
     """True when `source` calls a `split` whose first argument is a heading pattern."""
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "split":
             if node.args and _is_heading_pattern(node.args[0]):
                 return True
