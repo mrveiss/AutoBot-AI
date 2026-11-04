@@ -21,7 +21,7 @@ from fastapi.testclient import TestClient
 
 from api.mcp_token_admin import router
 from autobot_shared.secret_redaction import REDACTED_PLACEHOLDER
-from testkit.canonical_gate import canonical_resolver
+from testkit.canonical_gate import canonical_resolver, real_admin_gate
 
 # ---------------------------------------------------------------------------
 # App fixture
@@ -141,11 +141,8 @@ def test_create_token_superadmin_allowed():
 
 def test_create_token_non_admin_rejected():
     non_admin = {"user_id": "u2", "role": "user"}
-    with canonical_resolver(
-        "auth_rbac.resolve_human_user",
-        MagicMock(get_user_from_request=MagicMock(return_value=non_admin)),
-    ):
-        client = TestClient(app, raise_server_exceptions=False)
+    with real_admin_gate(MagicMock(get_user_from_request=MagicMock(return_value=non_admin))) as wire:
+        client = wire(TestClient(app, raise_server_exceptions=False))  # #16333: the one admin gate
         resp = client.post(
             "/api/mcp/tokens",
             json={"scopes": ["kb"], "label": ""},
