@@ -252,6 +252,7 @@ _DECLARED_SCOPES = {
     "brand-mark-announcer-scan": ("libs/autobot-ui", "autobot-frontend/src", "autobot-slm-frontend/src"),
     "one-content-digest-scan": ("autobot-backend", "autobot_shared"),
     "one-admin-gate": ("autobot-backend",),
+    "one-aead-core": ("autobot_shared",),
     "audit-action-vocabulary": ("autobot-backend", "autobot_shared", "autobot-slm-backend"),
     "hand-rolled-redis-pipeline-scan": ("autobot-backend", "autobot-slm-backend"),
     "one-internal-api-key-reader-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
