@@ -38,6 +38,13 @@ const config = getConfig();
  * - AI Stack role: AI processing
  * - Browser role: Web automation (Playwright)
  */
+/**
+ * Protocol of the internal services the GUI addresses directly (VNC, NPU worker, Ollama, the
+ * browser worker): plain HTTP on the service network. The backend's own protocol is
+ * `getConfig().httpProtocol` in `config/ssot-config.ts`, which follows the page (#19821).
+ */
+export const INTERNAL_SERVICE_PROTOCOL = 'http' as const
+
 export const NetworkConstants = Object.freeze({
   // Main machine (WSL) - from SSOT config
   MAIN_MACHINE_IP: config.vm.main,
