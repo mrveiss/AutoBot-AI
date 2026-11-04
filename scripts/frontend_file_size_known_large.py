@@ -27,16 +27,16 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/analytics/AdvancedAnalytics.vue": 902,  # #18849: 903 -> 902
     "autobot-frontend/src/components/analytics/CodeEvolutionTimeline.vue": 772,
     "autobot-frontend/src/components/analytics/CodeGenerationDashboard.vue": 1108,
-    "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": 1791,
-    "autobot-frontend/src/components/analytics/CodeReviewDashboard.vue": 1220,
+    "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": 1789,
+    "autobot-frontend/src/components/analytics/CodeReviewDashboard.vue": 1216,
     "autobot-frontend/src/components/analytics/CodebaseAnalytics.vue": 1260,
-    "autobot-frontend/src/components/analytics/CodebaseAnalyticsLanding.vue": 758,
+    "autobot-frontend/src/components/analytics/CodebaseAnalyticsLanding.vue": 756,
     "autobot-frontend/src/components/analytics/ConversationFlowDashboard.vue": 909,
-    "autobot-frontend/src/components/analytics/LLMPatternDashboard.vue": 1080,
+    "autobot-frontend/src/components/analytics/LLMPatternDashboard.vue": 1078,
     "autobot-frontend/src/components/analytics/LogPatternDashboard.vue": 941,
     "autobot-frontend/src/components/analytics/PatternAnalysis.vue": 944,
     "autobot-frontend/src/components/analytics/PerformanceAnalysisDashboard.vue": 1075,
-    "autobot-frontend/src/components/analytics/PrecommitHookDashboard.vue": 1097,
+    "autobot-frontend/src/components/analytics/PrecommitHookDashboard.vue": 1094,
     "autobot-frontend/src/components/analytics/SourceManager.vue": 830,
     "autobot-frontend/src/components/analytics/TechnicalDebtDashboard.vue": 1712,
     "autobot-frontend/src/components/analytics/panels/CodebaseBugPredictionPanel.vue": 779,
@@ -44,7 +44,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/analytics/panels/CodebaseIntelligenceScoresPanel.vue": 1325,
     "autobot-frontend/src/components/analytics/panels/CodebaseOwnershipPanel.vue": 1035,
     "autobot-frontend/src/components/audit/AuditLogTable.vue": 737,  # #14780 BasePagination: 758 -> 741
-    "autobot-frontend/src/components/browser/BrowserSessionManager.vue": 641,  # #18849: 654 -> 653
+    "autobot-frontend/src/components/browser/BrowserSessionManager.vue": 640,  # #18849: 654 -> 653
     "autobot-frontend/src/components/charts/BaseChart.vue": 602,
     "autobot-frontend/src/components/charts/FunctionCallGraph.vue": 2153,  # #19906: 2165 -> 2153
     "autobot-frontend/src/components/charts/ImportTreeChart.vue": 1353,  # #19906: 1365 -> 1353
@@ -60,7 +60,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/desktop/DesktopInterface.vue": 894,
     "autobot-frontend/src/components/desktop/PopoutChromiumBrowser.vue": 1229,
     "autobot-frontend/src/components/examples/ThemingPatternExample.vue": 603,
-    "autobot-frontend/src/components/feature-flags/AccessMetrics.vue": 722,
+    "autobot-frontend/src/components/feature-flags/AccessMetrics.vue": 719,
     "autobot-frontend/src/components/feature-flags/EndpointEnforcement.vue": 639,
     "autobot-frontend/src/components/file-browser/FileBrowser.vue": 736,
     "autobot-frontend/src/components/knowledge/ChromaDBExplorer.vue": 1146,
@@ -94,7 +94,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/terminal/TerminalWindow.vue": 1612,
     "autobot-frontend/src/components/ui/HostSelectionDialog.vue": 924,
     "autobot-frontend/src/components/vision/GUIAutomationControls.vue": 708,
-    "autobot-frontend/src/components/vision/MediaGallery.vue": 723,
+    "autobot-frontend/src/components/vision/MediaGallery.vue": 717,
     "autobot-frontend/src/components/vision/ScreenCaptureViewer.vue": 835,
     "autobot-frontend/src/components/vision/VideoProcessor.vue": 897,
     "autobot-frontend/src/components/visualizations/AgentActivityVisualization.vue": 936,
@@ -136,7 +136,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/utils/VisionMultimodalApiClient.ts": 663,
     "autobot-frontend/src/utils/debugUtils.ts": 620,
     "autobot-frontend/src/views/AdminUsersView.vue": 796,
-    "autobot-frontend/src/views/AdvancedControlView.vue": 1056,
+    "autobot-frontend/src/views/AdvancedControlView.vue": 1049,
     "autobot-frontend/src/views/BudgetPolicies.vue": 879,
     "autobot-frontend/src/views/BusinessIntelligenceView.vue": 987,  # #20004: 988 -> 987
     "autobot-frontend/src/views/CustomDashboard.vue": 878,  # #18242: 1106 -> 884; train-42 review: -5, then -1

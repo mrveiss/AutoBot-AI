@@ -420,7 +420,7 @@
 <script setup lang="ts">
 import { BaseButton } from '@autobot/ui'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { formatUptime } from '@/utils/formatHelpers'
+import { formatUptime, createDateFormatter } from '@/utils/formatHelpers'
 import { useI18n } from 'vue-i18n'
 import { useTabs } from '@/composables/useTabs'
 import { useAdvancedControl } from '@/composables/useAdvancedControl'
@@ -523,14 +523,7 @@ function clearError(): void {
   error.value = null
 }
 
-function formatDate(iso: string | null): string {
-  if (!iso) return '—'
-  try {
-    return new Date(iso).toLocaleString()
-  } catch {
-    return iso
-  }
-}
+const formatDate = createDateFormatter({ emptyText: '—' })
 
 const priorityBadgeClasses: Record<TakeoverPriority, string> = {
   LOW: 'badge-info',
