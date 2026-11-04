@@ -14,10 +14,13 @@ instead of a second, unreliable store.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 from models.database import Service
+from service_status import SystemdState
 
 logger = get_logger(__name__)
 
@@ -26,8 +29,10 @@ _ZERO_TRACKER = {"count": 0, "last_attempt": None, "exhausted": False, "last_cau
 # #20796: a restart counts as recovery only once the unit has stayed up this long after it.
 # Before #20767 systemd's start limit parked a crash-looping unit; reset-failed now clears that
 # park, so without a settle period a unit that starts and crashes again restarts forever and
-# never reaches exhaustion. Keep it above SERVICE_REMEDIATION_COOLDOWN plus a heartbeat.
-SERVICE_RESTART_SETTLE_S = env_int_clamped("AUTOBOT_SERVICE_RESTART_SETTLE_S", 600, min_v=1)
+# never reaches exhaustion. It is CONTINUOUS uptime (``healthy_since``), so the floor is two
+# heartbeats: one healthy beat alone must never be enough.
+SERVICE_RESTART_SETTLE_S = env_int_clamped("AUTOBOT_SERVICE_RESTART_SETTLE_S", 600, min_v=60, max_v=86400)
+_UP_STATES = frozenset({SystemdState.RUNNING.value, SystemdState.COMPLETED.value})
 CRASHED_AFTER_START = "the restart succeeded, but the unit failed again within {settle}s of starting"
 
 
@@ -89,39 +94,51 @@ def clear_service_remediation(service: Service) -> bool:
     return True
 
 
-def tracker_after_restart(previous: dict, success: bool, cause: str | None, now) -> dict:
-    """The tracker after one restart attempt (#20796).
+def tracker_after_restart(previous: dict, success: bool, cause: str | None) -> dict:
+    """The tracker after one restart attempt (#20796), stamped when the attempt RETURNED: the
+    playbook can run for minutes, and the cooldown counts from its end.
 
     A successful start still counts: the count is cleared only once the unit settles (see
-    ``drop_settled_remediation``). Its cause is what exhaustion reports if the unit fails again
+    ``settle_remediation``). Its cause is what exhaustion reports if the unit fails again
     before settling; a settled unit's tracker is dropped, so that text is never read otherwise.
     """
     return {
         "count": previous["count"] + 1,
-        "last_attempt": now,
+        "last_attempt": datetime.now(timezone.utc),
         "exhausted": False,
         "last_cause": CRASHED_AFTER_START.format(settle=SERVICE_RESTART_SETTLE_S) if success else cause,
     }
 
 
-def drop_settled_remediation(extra_data: dict, now) -> None:
-    """Drop the tracker from a not-failed row's ``extra_data`` once its last attempt has settled.
+def settle_remediation(extra_data: dict, status: str, now) -> None:
+    """Advance a row's tracker on one heartbeat: drop it only after continuous uptime (#20796).
 
-    A tracker with no readable attempt time has nothing to settle and is dropped at once (#16712).
+    ``healthy_since`` is set on the first ``running``/``completed`` beat and cleared on any other
+    status (``crash-loop``, ``starting``, ``failed`` ...), so a flapping unit never settles and an
+    exhausted tracker survives a single late healthy beat. A new restart attempt writes a fresh
+    tracker without it (``write_service_remediation``), so uptime is counted from that start.
     """
     raw = extra_data.get("remediation")
-    if _attempted_at(raw) is not None and (now - _attempted_at(raw)).total_seconds() < SERVICE_RESTART_SETTLE_S:
+    if not isinstance(raw, dict) or not raw:
+        extra_data.pop("remediation", None)  # a malformed value: nothing to keep (#17096)
         return
-    extra_data.pop("remediation", None)
+    if status not in _UP_STATES:
+        extra_data["remediation"] = {**raw, "healthy_since": None}
+        return
+    since = _healthy_since(raw)
+    if since is None:
+        extra_data["remediation"] = {**raw, "healthy_since": now.isoformat()}
+    elif (now - since).total_seconds() >= SERVICE_RESTART_SETTLE_S:
+        extra_data.pop("remediation", None)
 
 
-def _attempted_at(raw):
-    """The stored attempt time, or None when absent or unreadable (a heartbeat must not raise on it)."""
-    value = raw.get("last_attempt") if isinstance(raw, dict) else None
+def _healthy_since(raw: dict):
+    """The stored start of continuous uptime, or None when absent or unreadable (a heartbeat must not raise)."""
+    value = raw.get("healthy_since")
     try:
         return parse_utc_iso(value) if value else None
     except (TypeError, ValueError):
-        logger.warning("service_remediation_tracker: unreadable last_attempt %r, treating it as settled", value)
+        logger.warning("service_remediation_tracker: unreadable healthy_since %r, restarting the uptime count", value)
         return None
 
 

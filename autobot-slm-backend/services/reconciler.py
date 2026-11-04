@@ -59,9 +59,9 @@ from services.node_health_status import (
 from services.service_extra_data import engine_degraded_fields, is_managed_autobot_service
 from services.service_remediation_tracker import (
     clear_service_remediation,
-    drop_settled_remediation,
     log_restart_result,
     read_service_remediation,
+    settle_remediation,
     tracker_after_restart,
     write_service_remediation,
 )
@@ -1433,7 +1433,7 @@ class ReconcilerService:
         await db.refresh(service)
         fresh_tracker = read_service_remediation(service)
         # #20796: a start counts until it settles; #16712 AC: exhaustion names the cause.
-        write_service_remediation(service, tracker_after_restart(fresh_tracker, success, cause, now))
+        write_service_remediation(service, tracker_after_restart(fresh_tracker, success, cause))
 
         await self._handle_service_restart_result(db, node, service, success, fresh_tracker)
         return True
@@ -1892,8 +1892,7 @@ class ReconcilerService:
         if "n_restarts" in svc_data:
             existing_extra["n_restarts"] = svc_data["n_restarts"]
         existing_extra["n_restarts_increased_at"] = last_increase_iso
-        if status != SystemdState.FAILED.value:
-            drop_settled_remediation(existing_extra, now)  # #16712, #20796: a settled recovery resets it
+        settle_remediation(existing_extra, status, now)  # #16712, #20796: continuous uptime resets it
         service.extra_data = existing_extra
         return is_churning
 

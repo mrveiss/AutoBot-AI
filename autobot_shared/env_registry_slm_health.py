@@ -154,12 +154,12 @@ register_env_var(
         type=int,
         default=600,
         description=(
-            "Seconds a service must stay up after a successful restart before the reconciler clears its "
-            "restart count. A unit that starts and fails again within this period keeps counting toward "
-            "MAX_SERVICE_RESTART_ATTEMPTS, so a crash loop ends in the exhaustion event instead of restarting "
-            "forever. Keep it above the 120s service cooldown plus a heartbeat (#20796)."
+            "Seconds of continuous uptime (running or completed on every heartbeat) before the reconciler "
+            "clears a service's restart count. A unit that fails, crash-loops or restarts within this period "
+            "keeps counting toward MAX_SERVICE_RESTART_ATTEMPTS, so a crash loop ends in the exhaustion event "
+            "instead of restarting forever. Clamped to 60-86400: one healthy heartbeat is never enough (#20796)."
         ),
         component="slm",
-        range=(1, 86400),
+        range=(60, 86400),
     )
 )

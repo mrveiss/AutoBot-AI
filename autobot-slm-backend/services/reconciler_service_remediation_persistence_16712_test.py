@@ -64,6 +64,8 @@ def _load_real_reconciler():
 
 
 reconciler = _load_real_reconciler()
+_tracker = sys.modules[reconciler.tracker_after_restart.__module__]
+_SETTLE = timedelta(seconds=_tracker.SERVICE_RESTART_SETTLE_S)
 
 
 class _FakeService:
@@ -116,13 +118,16 @@ def test_the_tracker_survives_a_fresh_reconciler_instance():
 
 
 def test_recovery_clears_the_tracker():
-    """A service observed no longer FAILED resets its remediation entry on
-    the very next heartbeat -- no separate manual step needed.
+    """A service observed healthy resets its remediation entry once it has stayed up for the
+    settle period (#16712, #20796) -- no separate manual step needed.
     """
     service = _FakeService(extra_data={"remediation": {"count": 3, "last_attempt": None, "exhausted": True}})
     svc = reconciler.ReconcilerService()
+    now = datetime.now(timezone.utc)
 
-    svc._update_existing_service(service, {"status": "running"}, "running", "", datetime.now(timezone.utc))
+    svc._update_existing_service(service, {"status": "running"}, "running", "", now)
+    assert "remediation" in service.extra_data, "one healthy beat is not recovery"
+    svc._update_existing_service(service, {"status": "running"}, "running", "", now + _SETTLE)
 
     assert "remediation" not in service.extra_data
 
@@ -348,9 +353,6 @@ def test_restart_failure_cause_is_captured_end_to_end_through_to_the_exhaustion_
     assert event.node_id == node.node_id
 
 
-_tracker = sys.modules[reconciler.tracker_after_restart.__module__]
-
-
 def _restart_that_succeeds(svc) -> None:
     svc._restart_service_via_ansible = AsyncMock(return_value=(True, None))
 
@@ -389,28 +391,76 @@ def test_a_unit_that_crashes_again_before_settling_reaches_exhaustion_with_its_c
     assert "failed again within" in cause and str(_tracker.SERVICE_RESTART_SETTLE_S) in cause, cause
 
 
+def _beat(svc, service, status: str, at) -> None:
+    svc._update_existing_service(service, {}, status, "", at)
+
+
 def test_a_unit_that_stays_up_past_the_settle_period_has_its_count_cleared():
-    """#20796 AC: the same successful restart, then the unit stays up. Once the settle
-    period has passed, the next heartbeat clears the count."""
+    """#20796 AC: a successful restart, then the unit stays up. Once it has been up continuously
+    for the settle period, the next heartbeat clears the count."""
     service = _FakeService(extra_data=None)
     db = FakeAsyncSession(rows={(type(service), "service-row"): service})
     svc = reconciler.ReconcilerService()
     _restart_that_succeeds(svc)
-
     asyncio.run(svc._remediate_failed_service(db, _node(), service))
-    started = reconciler.read_service_remediation(service)["last_attempt"]
-    settle = timedelta(seconds=_tracker.SERVICE_RESTART_SETTLE_S)
+    up = reconciler.read_service_remediation(service)["last_attempt"] + timedelta(seconds=30)
 
-    svc._update_existing_service(service, {}, "running", "", started + settle - timedelta(seconds=1))
+    _beat(svc, service, "running", up)
+    _beat(svc, service, "running", up + _SETTLE - timedelta(seconds=1))
     assert reconciler.read_service_remediation(service)["count"] == 1, "the control: not settled yet, still counted"
-    svc._update_existing_service(service, {}, "running", "", started + settle + timedelta(seconds=1))
+    _beat(svc, service, "running", up + _SETTLE)
     assert "remediation" not in service.extra_data, "a settled unit keeps its count"
 
 
-def test_an_unreadable_attempt_time_on_a_running_unit_is_dropped_not_raised():
-    """A heartbeat must not fail on a malformed stored time; it has nothing to settle."""
-    service = _FakeService(extra_data={"remediation": {"count": 2, "last_attempt": "not a time"}})
+def test_uptime_is_counted_from_the_first_healthy_beat_not_the_attempt():
+    """A restart that took longer than the settle period (a slow playbook, or a late first
+    heartbeat) has not settled on its first healthy beat."""
+    service = _FakeService(extra_data=None)
+    db = FakeAsyncSession(rows={(type(service), "service-row"): service})
+    svc = reconciler.ReconcilerService()
+    _restart_that_succeeds(svc)
+    asyncio.run(svc._remediate_failed_service(db, _node(), service))
+    attempt = reconciler.read_service_remediation(service)["last_attempt"]
 
-    reconciler.ReconcilerService()._update_existing_service(service, {}, "running", "", datetime.now(timezone.utc))
+    _beat(svc, service, "running", attempt + 2 * _SETTLE)
 
-    assert "remediation" not in service.extra_data
+    assert reconciler.read_service_remediation(service)["count"] == 1
+
+
+def test_an_exhausted_tracker_survives_one_late_healthy_beat():
+    """Review of #20798: after exhaustion there are no more attempts, so a single healthy beat
+    long after the last one must not wipe the tracker and start the loop over."""
+    remediation = {"count": 3, "last_attempt": "2026-11-01T00:00:00+00:00", "exhausted": True}
+    service = _FakeService(extra_data={"remediation": remediation})
+    svc = reconciler.ReconcilerService()
+
+    _beat(svc, service, "running", datetime.now(timezone.utc))
+
+    tracker = reconciler.read_service_remediation(service)
+    assert tracker["exhausted"] is True and tracker["count"] == 3, tracker
+
+
+def test_a_flapping_unit_never_clears():
+    """Healthy beats interrupted by crash-loop or failed ones never add up to the settle period."""
+    service = _FakeService(extra_data={"remediation": {"count": 2, "last_attempt": None, "exhausted": False}})
+    svc = reconciler.ReconcilerService()
+    at = datetime.now(timezone.utc)
+    step = _SETTLE / 3
+
+    for status in ["running", "crash-loop", "running", "failed", "running", "starting"] * 3:
+        _beat(svc, service, status, at)
+        at += step
+
+    assert reconciler.read_service_remediation(service)["count"] == 2
+
+
+def test_an_unreadable_uptime_start_restarts_the_count_not_raises():
+    """A heartbeat must not fail on a malformed stored time; uptime is counted from this beat."""
+    remediation = {"count": 2, "last_attempt": None, "exhausted": False, "healthy_since": "not a time"}
+    service = _FakeService(extra_data={"remediation": remediation})
+    svc = reconciler.ReconcilerService()
+    now = datetime.now(timezone.utc)
+
+    _beat(svc, service, "running", now)
+
+    assert service.extra_data["remediation"]["healthy_since"] == now.isoformat()
