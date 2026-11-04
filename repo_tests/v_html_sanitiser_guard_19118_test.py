@@ -100,12 +100,11 @@ def _discover(repo: Path) -> list[Path]:
     return sorted(found)
 
 
-#: Train 84 (#19118): pinned mid-window on the population this sweep discovers, so an empty or
+#: Train 84 (#19118): the floor is computed from the base commit (#19676) on the population this sweep discovers, so an empty or
 #: truncated enumeration fails rather than reporting the same green as a clean tree.
 REACH = declare(
     "v-html-sanitiser-sinks",
     discover=_discover,
-    floor=1360,  # mid-window [1221, 1371] on a population of 1371
     growth=150,
     skips=0,
     what="non-test .vue/.ts source files",

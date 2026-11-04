@@ -110,7 +110,6 @@ def _references(root: Path) -> list[str]:
 REACH = declare(
     "operational-docs-playbook-references-19611",
     discover=_references,
-    floor=262,  # mid-window: population 282, window (242, 282)
     growth=40,
     what="playbook references in operational files",
     roots=(
