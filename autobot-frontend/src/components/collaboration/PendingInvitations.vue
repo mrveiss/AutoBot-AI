@@ -33,7 +33,7 @@ const getPermissionLabel = (permission: string): string => {
   }
 }
 
-// Matches SecretNotifications.vue's own ad-hoc relative-time formatting.
+// Under an hour: relative time; older: the browser's date and time (#19606).
 const formatInvitedAt = createRecencyFormatter({
   justNow: () => t('collaboration.invitations.justNow'),
   locale: () => locale.value,

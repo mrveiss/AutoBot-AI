@@ -39,7 +39,7 @@ export function agentActivityFormat(t: Translate, locale?: () => string) {
     return t(k('hours'), { n: Math.floor(seconds / 3600) })
   }
 
-  const formatTimeAgo = createRecencyFormatter({ locale, style: 'narrow', maxUnit: 'hour' })
+  const formatTimeAgo = createRecencyFormatter({ locale, style: 'narrow', maxUnit: 'hour', invalidText: '—' })
 
   function truncate(text: string, maxLength: number): string {
     return text.length <= maxLength ? text : text.slice(0, maxLength - 1) + '…'

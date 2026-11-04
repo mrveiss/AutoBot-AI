@@ -272,6 +272,7 @@ export function useDocumentChanges() {
     locale: () => locale.value,
     style: 'narrow',
     maxUnit: 'day',
+    invalidText: '—',
   })
 
   /**

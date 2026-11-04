@@ -213,4 +213,20 @@ describe('createRecencyFormatter (#19606)', () => {
     expect(f('not a date')).toBe('—')
     expect(createRecencyFormatter()('nope')).toBe('')
   })
+
+  it('reads a future moment as just now when given one, and as "in …" when not', () => {
+    const ahead = new Date(NOW + 5 * 60_000)
+    expect(createRecencyFormatter({ justNow: 'just now', now })(ahead)).toBe('just now')
+    expect(createRecencyFormatter({ locale: 'en', now })(ahead)).toBe('in 5 minutes')
+  })
+
+  it.each([
+    ['1h', 3_600_000, '59m ago'],
+    ['24h', 86_400_000, '23h ago'],
+    ['30d', 30 * 86_400_000, '29d ago'],
+  ])('switches to the older text exactly at a %s cutoff', (_label, cutoff, justUnder) => {
+    const f = createRecencyFormatter({ locale: 'en', style: 'narrow', maxUnit: 'day', olderThanMs: cutoff, older: () => 'older', now })
+    expect(f(at(cutoff - 60_000))).toBe(justUnder)
+    expect(f(at(cutoff))).toBe('older')
+  })
 })

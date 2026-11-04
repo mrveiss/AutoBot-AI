@@ -284,7 +284,7 @@ function openProject(sourceId: string) {
 // ---- Display Helpers ------------------------------------------------------
 
 const formatRelativeTime = createRecencyFormatter({
-  justNow: () => t('common.justNow', 'just now'), locale: () => locale.value, style: 'narrow', maxUnit: 'day',
+  justNow: () => t('common.justNow', 'just now'), locale: () => locale.value, style: 'narrow', maxUnit: 'day', invalidText: '—',
 })
 
 function getStatusIcon(status: string): IconName {

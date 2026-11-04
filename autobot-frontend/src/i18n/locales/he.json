@@ -6833,17 +6833,13 @@
       "legendLogOnly": "Log Only",
       "legendEnforced": "Enforced",
       "actionUpdated": "Configuration was updated",
-      "minuteAgo": "1 minute ago",
       "actionLogOnly": "Switched to log-only mode for safe testing",
       "modeEnforced": "Enforced",
-      "dayAgo": "1 day ago",
       "modeLegend": "Mode Legend:",
       "justNow": "Just now",
       "description": "Recent changes to access control configuration.",
       "modeDisabled": "Disabled",
-      "longAgo": "Long ago",
-      "disabled": "Disabled",
-      "hourAgo": "1 hour ago"
+      "disabled": "Disabled"
     },
     "loading": "Loading feature flags...",
     "retry": "Retry",
