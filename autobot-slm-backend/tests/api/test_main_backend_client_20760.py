@@ -93,3 +93,44 @@ def test_no_proxy_keeps_its_own_copy_of_the_call() -> None:
         assert "_proxy_to_main_backend" not in defined, name
         assert "services.main_backend_client" in source, name
         assert "node_proxy.internal_headers" not in source, f"{name} builds its own request again"
+
+
+@pytest.mark.asyncio
+async def test_a_timeout_is_a_504(monkeypatch) -> None:
+    _install(monkeypatch, httpx.TimeoutException("slow"))
+    with pytest.raises(HTTPException) as refused:
+        await backend.forward_to_main_backend(_Request(), "voice/speak", "Voice")
+    assert refused.value.status_code == 504
+
+
+@pytest.mark.asyncio
+async def test_an_unset_backend_url_is_a_503_not_configured(monkeypatch) -> None:
+    """resolve_node_url returns "" when neither AUTOBOT_BACKEND_URL nor the authority base is set."""
+    client = _install(monkeypatch, None)
+    monkeypatch.setattr(backend, "backend_url", lambda: "")
+    with pytest.raises(HTTPException) as refused:
+        await backend.forward_to_main_backend(_Request(), "voice/speak", "Voice")
+    assert (refused.value.status_code, refused.value.detail) == (503, "Voice service not configured")
+    assert client.calls == []
+
+
+@pytest.mark.asyncio
+async def test_the_personality_root_keeps_its_trailing_slash(monkeypatch) -> None:
+    from api import personality_proxy
+
+    answer = SimpleNamespace(content=b"{}", status_code=200, headers={"content-type": "application/json"})
+    client = _install(monkeypatch, answer)
+    root = next(route.endpoint for route in personality_proxy.router.routes if route.path.endswith("/personality/"))
+    await root(request=_Request(), current_user={"admin": True})
+    assert client.calls[0][1] == "https://backend/api/personality/"
+
+
+@pytest.mark.asyncio
+async def test_the_memory_proxy_names_a_missing_key_as_config(monkeypatch) -> None:
+    from api import memory_lifecycle_proxy
+
+    _install(monkeypatch, None, key="")
+    monkeypatch.setattr(memory_lifecycle_proxy, "backend_url", lambda: "https://backend")
+    body = await memory_lifecycle_proxy.get_memory_lifecycle(limit=5, _user=None)
+    assert body["degraded"] is True
+    assert body["nodes"][0]["error"] == backend.node_proxy.REASON_KEY_NOT_CONFIGURED

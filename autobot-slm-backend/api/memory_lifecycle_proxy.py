@@ -32,13 +32,6 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/memory", tags=["memory-lifecycle"])
 
-# URL, key, TLS policy and timeout all come from the shared node client (#14886).
-# An earlier revision here read its own AUTOBOT_NODE_PROXY_VERIFY_TLS with a
-# "false" default, shipping verification OFF unless an operator opted in — on
-# the channel that carries the internal API key (#14653). A per-module switch is
-# how that happens; there is now one switch for every node proxy, and this
-# module cannot hold an opinion about it.
-
 _EMPTY_SECTIONS: Dict[str, Any] = {
     "reinforcement": {"hot": [], "cold": []},
     "decay": {"last_run": None, "config": {}, "prune_preview": []},

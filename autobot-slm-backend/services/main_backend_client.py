@@ -26,6 +26,12 @@ from config import settings
 
 logger = get_logger(__name__)
 
+# URL, key, TLS policy and timeout all come from the shared node client (#14886). An earlier revision
+# of the memory proxy read its own AUTOBOT_NODE_PROXY_VERIFY_TLS with a "false" default, shipping
+# verification OFF unless an operator opted in -- on the channel that carries the internal API key
+# (#14653). A per-module switch is how that happens; there is one switch for every node proxy, and no
+# proxy -- nor this client -- holds an opinion about it.
+
 
 @dataclass
 class MainBackendUnavailable(Exception):  # not frozen: `raise ... from` sets __cause__
