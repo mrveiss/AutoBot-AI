@@ -122,6 +122,10 @@ REACH_ROOTS = {
     "repo_tests/file_type_sets_one_home_19339_test.py": ("autobot-backend",),
     "repo_tests/frontend_backend_origin_one_home_19821_test.py": ("autobot-frontend/src",),
     "repo_tests/frontend_hand_built_relative_time_19606_test.py": ("autobot-frontend/src", "autobot-slm-frontend/src"),
+    "repo_tests/frontend_hand_rolled_file_save_ratchet_20770_test.py": (
+        "autobot-frontend/src",
+        "autobot-slm-frontend/src",
+    ),
     "repo_tests/frontend_local_date_formatter_ratchet_19905_test.py": (
         "autobot-frontend/src",
         "autobot-slm-frontend/src",
