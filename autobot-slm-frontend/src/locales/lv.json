@@ -1119,6 +1119,7 @@
     "signInWithProviderAria": "Pieteikties ar {provider}",
     "signingIn": "Signing in...",
     "singleSignOnProvidersAria": "Single sign-on providers",
+    "adminOnly": "This console is for administrators.",
     "ssoLoginFailed": "SSO login failed. Please try again.",
     "twoFactorAuthentication": "Two-Factor Authentication",
     "twoFactorAuthenticationAria": "Two-factor authentication",
