@@ -25,6 +25,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOT = repo_root()
@@ -131,7 +132,7 @@ def _literal(value: ast.AST | None) -> object | None:
 def bindings(source: str) -> list[tuple[str, object]]:
     """``(name, literal)`` for every single-name assignment in *source* that binds a literal."""
     out = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
             name, value = node.target.id, node.value
         elif isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
