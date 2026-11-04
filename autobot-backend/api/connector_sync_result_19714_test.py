@@ -37,6 +37,7 @@ def _redis(store: dict, conflicts: int = 0) -> MagicMock:
     pipe.execute.side_effect = execute
     client = MagicMock()
     client.pipeline.return_value = pipe
+    client.exists.side_effect = lambda key: int(key in store)
     return client
 
 
@@ -69,7 +70,7 @@ async def test_the_live_instance_is_not_told_a_sync_redis_never_stored() -> None
     """Retries exhausted: the connector still exists, but the status route must not show an unsaved time."""
     store = {"k": json.dumps({"name": "n"})}
     instance = SimpleNamespace(config=SimpleNamespace(last_sync_at=None))
-    done = SimpleNamespace(completed_at=datetime(2026, 11, 3, tzinfo=timezone.utc))
+    done = SimpleNamespace(completed_at=datetime(2026, 11, 3, tzinfo=timezone.utc), status="success")
     with patch.object(result, "get_redis_client", return_value=_redis(store, conflicts=99)):
         assert await result.record_last_sync(instance, "k", done) is True, "not deleted"
     assert instance.config.last_sync_at is None
@@ -122,5 +123,27 @@ async def test_a_connector_deleted_during_the_sync_gets_no_history_row() -> None
 async def test_the_live_instance_reports_the_new_time() -> None:
     instance = SimpleNamespace(config=SimpleNamespace(last_sync_at=None))
     with patch.object(result, "get_redis_client", return_value=_redis({"k": json.dumps({"name": "n"})})):
-        assert await result.record_last_sync(instance, "k", SimpleNamespace(completed_at=_WHEN)) is True
+        assert (
+            await result.record_last_sync(instance, "k", SimpleNamespace(completed_at=_WHEN, status="success")) is True
+        )
     assert instance.config.last_sync_at == _WHEN
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", ["failed", "partial"])
+async def test_a_run_that_did_not_reach_every_source_does_not_move_the_cursor(status: str) -> None:
+    """#20556: last_sync_at is the next incremental `since`; moving it past unread sources skips them for good."""
+    store = {"k": json.dumps({"name": "n", "last_sync_at": "2026-11-01T00:00:00+00:00"})}
+    instance = SimpleNamespace(config=SimpleNamespace(last_sync_at=None))
+    run = SimpleNamespace(completed_at=_WHEN, status=status)
+    with patch.object(result, "get_redis_client", return_value=_redis(store)):
+        assert await result.record_last_sync(instance, "k", run) is True, "the connector still exists"
+    assert json.loads(store["k"])["last_sync_at"] == "2026-11-01T00:00:00+00:00"
+    assert instance.config.last_sync_at is None
+
+
+@pytest.mark.asyncio
+async def test_a_stopped_run_of_a_deleted_connector_still_reads_as_deleted() -> None:
+    run = SimpleNamespace(completed_at=_WHEN, status="failed")
+    with patch.object(result, "get_redis_client", return_value=_redis({})):
+        assert await result.record_last_sync(SimpleNamespace(config=SimpleNamespace()), "k", run) is False
