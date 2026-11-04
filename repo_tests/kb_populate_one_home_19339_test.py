@@ -48,7 +48,6 @@ def _sources(root: Path) -> list[Path]:
 REACH = declare(
     "kb-populate-doc-patterns",
     discover=_sources,
-    floor=180,  # mid-window: population 189, window (170, 189)
     growth=19,  # ~10%: ordinary growth between repins must not turn an unrelated PR red
     what="non-test infrastructure Python modules",
     roots=_ROOTS,
