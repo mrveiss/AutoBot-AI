@@ -709,7 +709,7 @@ const handleExport = (format: ExportFormat) => {
 
 const generateMarkdownExport = (entries: KnowledgeDocument[]): string => {
   const lines: string[] = ['# Knowledge Base Export', '']
-  lines.push(`> Exported on ${new Date().toLocaleDateString()}`)
+  lines.push(`> Exported on ${formatDate(new Date())}`)
   lines.push(`> ${entries.length} entries`)
   lines.push('')
 
