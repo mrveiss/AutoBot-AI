@@ -30,6 +30,7 @@ import re
 import yaml
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._comment_syntax import code_text
 
 _REPO_ROOT = repo_root()
@@ -67,7 +68,7 @@ def _shell_bodies() -> list[str]:
 
 def _code_strings(path) -> list[str]:
     """Every string constant in a script except docstrings: the argv lives here."""
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(path.read_text(encoding="utf-8"))
     docstrings = {
         id(node.body[0].value)
         for node in ast.walk(tree)
