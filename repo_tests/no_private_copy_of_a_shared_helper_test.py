@@ -43,6 +43,7 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import tracked_paths
 
 _CANONICAL = "tools/lint/_scan_helpers.py"
@@ -86,7 +87,7 @@ def _locally_defined(path: Path) -> set[str]:
     is excluded -- it is a seam, not a second implementation.
     """
     try:
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parse_cache.parse(path.read_text(encoding="utf-8"))
     except (OSError, SyntaxError, UnicodeDecodeError):
         return set()
     found: set[str] = set()
@@ -210,7 +211,7 @@ def test_a_script_invoked_checker_imports_the_helper_as_a_sibling() -> None:
             offenders.append(f"{rel}: invoked by a workflow but absent from the tree")
             continue
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            tree = parse_cache.parse(path.read_text(encoding="utf-8"))
         except (OSError, SyntaxError, UnicodeDecodeError) as exc:
             # An unreadable checker is a checker this guard did not examine. A
             # `continue` here let it escape while still counting toward the
