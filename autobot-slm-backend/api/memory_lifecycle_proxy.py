@@ -21,27 +21,16 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-import httpx
 from fastapi import APIRouter, Depends, Query
 
-from autobot_shared import node_proxy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import QueryDefaults
-from config import settings
 from services.auth import get_current_user
+from services.main_backend_client import MainBackendUnavailable, backend_url, call_main_backend  # #20760
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/memory", tags=["memory-lifecycle"])
-
-# URL, key, TLS policy and timeout all come from the shared node client (#14886).
-# An earlier revision here read its own AUTOBOT_NODE_PROXY_VERIFY_TLS with a
-# "false" default, shipping verification OFF unless an operator opted in — on
-# the channel that carries the internal API key (#14653). A per-module switch is
-# how that happens; there is now one switch for every node proxy, and this
-# module cannot hold an opinion about it.
-_NODE_URL = node_proxy.resolve_node_url(settings.authority_base_url)
-_INTERNAL_API_KEY = node_proxy.internal_api_key()
 
 _EMPTY_SECTIONS: Dict[str, Any] = {
     "reinforcement": {"hot": [], "cold": []},
@@ -68,13 +57,7 @@ async def get_memory_lifecycle(
     _user: Any = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Aggregate the fleet's memory lifecycle views. Never raises to the client."""
-    if not _INTERNAL_API_KEY:
-        # A missing key is a configuration fault, not a node fault. Saying so is
-        # the difference between an operator checking the node and checking a var.
-        logger.error("memory lifecycle: AUTOBOT_INTERNAL_API_KEY not configured")
-        return {"nodes": [_unreachable(_NODE_URL, node_proxy.REASON_KEY_NOT_CONFIGURED)], "degraded": True}
-
-    node = await _fetch_node(_NODE_URL, limit)
+    node = await _fetch_node(backend_url(), limit)
 
     # `degraded` composes. The node reports its own partial reads (#12631), and a
     # proxy that only reported transport failures would show a node whose decay
@@ -83,18 +66,16 @@ async def get_memory_lifecycle(
 
 
 async def _fetch_node(base_url: str, limit: int) -> Dict[str, Any]:
-    """One node's lifecycle payload, or an unreachable placeholder."""
-    if not base_url:
-        return _unreachable(base_url, node_proxy.REASON_URL_NOT_CONFIGURED)
+    """One node's lifecycle payload, or an unreachable placeholder.
 
-    url = f"{base_url.rstrip('/')}/api/memory/lifecycle"
+    The call is the one SLM->backend client's (#20760): a missing key or URL is a configuration
+    fault and a transport failure is the shared classification, reported as the placeholder's reason.
+    """
     try:
-        async with node_proxy.node_client() as client:
-            response = await client.get(url, params={"limit": limit}, headers=node_proxy.internal_headers())
-    except httpx.HTTPError as exc:
-        failure = node_proxy.classify_transport_error(exc)
-        logger.warning("memory lifecycle: %s (%s)", failure.reason, type(exc).__name__)
-        return _unreachable(base_url, failure.reason)
+        response = await call_main_backend("GET", "memory/lifecycle", params={"limit": limit}, service="Memory")
+    except MainBackendUnavailable as unavailable:
+        logger.warning("memory lifecycle: %s", unavailable.reason)
+        return _unreachable(base_url, unavailable.reason)
 
     if response.status_code != 200:
         # A non-200 is reported with its status rather than collapsed into
