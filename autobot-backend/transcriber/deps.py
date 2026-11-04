@@ -84,19 +84,6 @@ def caller_is_admin(request: Request) -> bool:
     return bool(getattr(getattr(request.state, "user", None), "is_admin", False))
 
 
-def require_transcriber_admin(request: Request) -> None:
-    """Route dependency: 403 unless the authenticated caller is an admin.
-
-    For transcriber routes that change process-wide state rather than one
-    user's rows. For example, ``PATCH /providers`` decides which cloud provider
-    receives every user's audio. The owner ruled on 2026-09-11 that this is
-    admin-only. The router-level ``authenticate`` runs first and records
-    ``is_admin``.
-    """
-    if not caller_is_admin(request):
-        raise HTTPException(status_code=403, detail="Admin privileges required")
-
-
 def can_access_transcriber_row(row: dict, caller_id: str, *, is_admin: bool = False) -> bool:
     """Strict ownership policy for transcriber rows (recordings/projects).
 
