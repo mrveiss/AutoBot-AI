@@ -298,6 +298,7 @@ REACH_ROOTS = {
         "autobot-slm-backend",
         "autobot_shared",
     ),
+    "repo_tests/parse_cache_test.py": ("repo_tests",),
     "repo_tests/pr_comment_upsert_12984_test.py": (
         ".github/workflows",
         "autobot_shared",

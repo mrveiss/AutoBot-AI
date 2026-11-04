@@ -260,6 +260,7 @@ _DECLARED_SCOPES = {
     "semantic-chunker-fork-scan": ("autobot-backend", "autobot_shared"),
     "migration-gate-test-import-sweep": ("autobot-backend/tests/migrations",),
     "paths-filter-workflow-sweep": (".github/workflows",),
+    "parse-cache-direct-parse-scan": ("repo_tests",),
     "workflow-visible-name-sweep": (".github/workflows",),
     "anti-pattern-type-emitters": ("autobot-backend/code_analysis", "autobot-backend/code_intelligence"),
     "compat-module-needs-importer": ("autobot-backend",),
