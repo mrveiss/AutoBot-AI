@@ -25,12 +25,10 @@ from repo_tests.collected_test_model import (
     swallowed_assertions,
 )
 
-from tools.lint import _parse_cache as parse_cache
-
 
 def _function(source: str) -> ast.AST:
     """The single collected test in ``source``."""
-    found = collectable_tests(parse_cache.parse(source))
+    found = collectable_tests(ast.parse(source))
     assert len(found) == 1, f"expected one collected test, found {len(found)}"
     return found[0]
 
