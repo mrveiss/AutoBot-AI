@@ -29,6 +29,8 @@ import re
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _ROOT = repo_root()
 _SHELL = _ROOT / "scripts" / "lib" / "git-root.sh"
 _PYTHON = _ROOT / "autobot_shared" / "paths.py"
@@ -58,7 +60,7 @@ def _shell_vars() -> set[str]:
 
 def _python_vars() -> set[str]:
     """Read the AMBIENT_GIT_VARS tuple literal without importing the module."""
-    tree = ast.parse(_PYTHON.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(_PYTHON.read_text(encoding="utf-8"))
     for node in tree.body:
         if not isinstance(node, ast.Assign):
             continue
@@ -93,6 +95,7 @@ def test_the_shell_and_python_scrub_lists_are_identical() -> None:
         "Add the missing name to BOTH; whichever side is short runs git with the "
         "ambient variable still set."
     )
+
 
 # --- the class, not the two lists ------------------------------------------
 #
