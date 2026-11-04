@@ -8,6 +8,7 @@
  * Provides reactive state and methods for code evolution mining and analysis.
  */
 
+import { saveBlob } from '@autobot/ui'
 import { ref, computed, isRef, type ComputedRef } from 'vue'
 import ApiClient from '@/utils/ApiClient'
 import { useLoadingState } from '@/composables/useLoadingState'
@@ -264,12 +265,7 @@ export function useEvolution(sourceId?: string | ComputedRef<string | undefined>
         const data = await response.json()
         blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
       }
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `evolution_data_${new Date().toISOString().slice(0, 10)}.${format}`
-      a.click()
-      URL.revokeObjectURL(url)
+      saveBlob(blob, `evolution_data_${new Date().toISOString().slice(0, 10)}.${format}`)
       logger.info('Evolution data exported as', format)
     } catch (e: unknown) {
       error.value = extractApiErrorMessage(e, 'Export failed')
