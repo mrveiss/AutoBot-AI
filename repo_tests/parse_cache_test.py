@@ -6,8 +6,10 @@ Two things are held here:
 
 * The primitive returns what ``ast.parse`` returns, memoises repeated calls, and
   raises ``SyntaxError`` every time, not once.
-* Guards under ``repo_tests/`` stop calling ``ast.parse`` directly. The count
-  of files that still do is pinned and may only shrink. The three modules that
+* Guards under ``repo_tests/`` stop calling ``ast.parse`` directly. The files
+  that still do are listed in ``_parse_cache_allowed.py``, and the list is
+  shrink-only in both directions: a new direct caller fails, and so does an
+  entry whose file no longer needs it. The three modules that
   rewrite the trees they parse are the exception: a shared tree must not be
   edited, so they keep their own parse, and this test refuses them the cache.
 """
@@ -15,11 +17,10 @@ Two things are held here:
 from __future__ import annotations
 
 import ast
-import io
-import tokenize
 from pathlib import Path
 
 import pytest
+from repo_tests._parse_cache_allowed import ALLOWED_DIRECT
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
@@ -35,10 +36,6 @@ TREE_REWRITERS = frozenset(
         "repo_tests/guard_reach_meta_test.py",
     }
 )
-
-#: Files under ``repo_tests/`` that still call ``ast.parse`` directly, rewriters
-#: excluded. Shrink only: lower it as guards move to the cache, never raise it.
-DIRECT_PARSE_FILES = 177
 
 
 def _population(root: Path) -> list[str]:
@@ -60,21 +57,55 @@ REACH = declare(
 )
 
 
+def _ast_names(tree: ast.AST) -> tuple[set[str], set[str]]:
+    """``(names bound to the ast module, names bound to ast.parse itself)``.
+
+    Covers ``import ast``, ``import ast as _ast`` and ``from ast import parse [as p]``,
+    wherever in the module the import sits.
+    """
+    modules, functions = set(), set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            modules.update(a.asname or a.name for a in node.names if a.name == "ast")
+        elif isinstance(node, ast.ImportFrom) and node.module == "ast":
+            functions.update(a.asname or a.name for a in node.names if a.name == "parse")
+    return modules, functions
+
+
 def calls_ast_parse(source: str) -> bool:
-    """Whether *source* calls ``ast.parse(`` in code. Text inside strings and comments is ignored."""
+    """Whether *source* calls ``ast.parse`` in code, under any alias. Strings and comments don't count."""
     try:
-        toks = [t for t in tokenize.generate_tokens(io.StringIO(source).readline) if t.type != tokenize.NL]
-    except (tokenize.TokenError, SyntaxError):
+        tree = parse_cache.parse(source)
+    except SyntaxError:
         return False
-    return any(
-        a.string == "ast"
-        and d.string == "."
-        and p.string == "parse"
-        and o.string == "("
-        and a.type == tokenize.NAME
-        and (i == 0 or toks[i - 1].string != ".")
-        for i, (a, d, p, o) in enumerate(zip(toks, toks[1:], toks[2:], toks[3:]))
-    )
+    modules, functions = _ast_names(tree)
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if isinstance(func, ast.Attribute) and func.attr == "parse" and isinstance(func.value, ast.Name):
+            if func.value.id in modules:
+                return True
+        elif isinstance(func, ast.Name) and func.id in functions:
+            return True
+    return False
+
+
+def imports_parse_cache(source: str) -> bool:
+    """Whether *source* imports ``tools.lint._parse_cache`` in code, not merely mentions it."""
+    try:
+        tree = parse_cache.parse(source)
+    except SyntaxError:
+        return False
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module == "tools.lint":
+            if any(a.name == "_parse_cache" for a in node.names):
+                return True
+        elif isinstance(node, ast.ImportFrom) and node.module == "tools.lint._parse_cache":
+            return True
+        elif isinstance(node, ast.Import) and any(a.name == "tools.lint._parse_cache" for a in node.names):
+            return True
+    return False
 
 
 def _scan() -> tuple[list[str], list[str]]:
@@ -84,7 +115,7 @@ def _scan() -> tuple[list[str], list[str]]:
     for rel in REACH.examined(root):
         source = (root / rel).read_text(encoding="utf-8")
         if rel in TREE_REWRITERS:
-            if "_parse_cache" in source:
+            if imports_parse_cache(source):
                 cached_rewriters.append(rel)
         elif rel != "repo_tests/parse_cache_test.py" and calls_ast_parse(source):
             direct.append(rel)
@@ -114,22 +145,47 @@ def test_a_syntax_error_is_raised_on_every_call() -> None:
 @pytest.mark.parametrize(
     ("source", "expected"),
     [
-        ("tree = ast.parse(text)\n", True),
+        ("import ast\ntree = ast.parse(text)\n", True),
+        ("import ast as _ast\ntree = _ast.parse(text)\n", True),
+        ("from ast import parse\ntree = parse(text)\n", True),
+        ("from ast import parse as p\ntree = p(text)\n", True),
         ("x = 'ast.parse(text)'\n", False),
         ("# ast.parse(text)\n", False),
         ("tree = parse_cache.parse(text)\n", False),
-        ("tree = my.ast.parse(text)\n", False),
+        ("import ast\ntree = my.ast.parse(text)\n", False),
     ],
 )
 def test_the_detector_tells_a_call_from_text(source: str, expected: bool) -> None:
     assert calls_ast_parse(source) is expected
 
 
-def test_direct_parses_only_shrink() -> None:
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("from tools.lint import _parse_cache as parse_cache\n", True),
+        ("from tools.lint._parse_cache import parse\n", True),
+        ("# tools.lint._parse_cache is not used here\n", False),
+        ('"""Unlike _parse_cache, this module parses its own trees."""\n', False),
+    ],
+)
+def test_the_import_check_tells_an_import_from_a_mention(source: str, expected: bool) -> None:
+    assert imports_parse_cache(source) is expected
+
+
+def test_no_new_direct_parse() -> None:
     direct, _ = _scan()
-    assert len(direct) <= DIRECT_PARSE_FILES, (
-        f"#20814: {len(direct)} guard files call ast.parse directly, above the pinned "
-        f"{DIRECT_PARSE_FILES}. Use `parse_cache.parse` from tools.lint._parse_cache instead."
+    unexpected = sorted(set(direct) - ALLOWED_DIRECT)
+    assert not unexpected, (
+        f"#20814: {unexpected} call ast.parse directly. Use `parse_cache.parse` from "
+        "tools.lint._parse_cache instead."
+    )
+
+
+def test_every_allowed_direct_caller_still_needs_its_entry() -> None:
+    direct, _ = _scan()
+    stale = sorted(ALLOWED_DIRECT - set(direct))
+    assert not stale, (
+        f"#20814: {stale} no longer call ast.parse directly; remove them from " "repo_tests/_parse_cache_allowed.py."
     )
 
 

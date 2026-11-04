@@ -15,13 +15,11 @@ import ast
 
 from repo_tests._paths import repo_root
 
-from tools.lint import _parse_cache as parse_cache
-
 _COORDINATOR = "autobot-infrastructure/shared/scripts/startup_coordinator.py"
 
 
 def _tree() -> ast.Module:
-    return parse_cache.parse((repo_root() / _COORDINATOR).read_text(encoding="utf-8"))
+    return ast.parse((repo_root() / _COORDINATOR).read_text(encoding="utf-8"))
 
 
 def shell_true_calls(tree: ast.AST) -> list[int]:
@@ -63,12 +61,10 @@ def test_each_component_starts_in_its_own_session() -> None:
 
 
 def test_the_detectors_see_a_shell_and_a_string_command() -> None:
-    bad = parse_cache.parse('subprocess.Popen(cmd, shell=True)\nComponentInfo(name="x", start_command="npm run dev")\n')
+    bad = ast.parse('subprocess.Popen(cmd, shell=True)\nComponentInfo(name="x", start_command="npm run dev")\n')
     assert shell_true_calls(bad) == [1]
     assert string_start_commands(bad) == [2]
-    good = parse_cache.parse(
-        'subprocess.Popen(cmd, shell=False)\nComponentInfo(name="x", start_command=["npm", "run"])\n'
-    )
+    good = ast.parse('subprocess.Popen(cmd, shell=False)\nComponentInfo(name="x", start_command=["npm", "run"])\n')
     assert shell_true_calls(good) == [] and string_start_commands(good) == []
 
 
