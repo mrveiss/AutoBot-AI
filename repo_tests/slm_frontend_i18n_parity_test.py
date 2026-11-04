@@ -74,9 +74,7 @@ def _en_message_keys(root: Path | None = None) -> list[str]:
 #: -- because copying the old constant into `declare` would pin a number nobody
 #: had checked against this tree, which is the whole point of the migration.
 #:
-#: Pinned mid-window: 3,161 leaves room for 30 more keys before the meta-test
-#: asks for a bump, where `population - growth` would put the slack exactly at
-#: the allowance and red on the next key anyone adds (#17142).
+#: The floor is computed from the base commit (#19676), not pinned here.
 REACH = declare(
     "slm-frontend-locale-keys",
     discover=_en_message_keys,

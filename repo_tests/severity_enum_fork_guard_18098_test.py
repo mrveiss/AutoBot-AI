@@ -118,12 +118,11 @@ def _discover(root: Path) -> list[str]:
     return [rel for rel in every if rel.startswith(prefixes)]
 
 
-#: Population 5,068 on 7139a853ce; `REACH.window()` = (4568, 5068, 4818), so the floor is pinned
-#: mid-window at 4,818 with 500 files of growth. Absolute, not relative: see ALLOWANCE_VERDICTS.
+#: The floor is computed from the base commit (#19676), with 500 files of growth.
+#: Absolute, not relative: see ALLOWANCE_VERDICTS.
 REACH = declare(
     "severity-enum-fork-scan",
     discover=_discover,
-    floor=5878,  # mid-window: population 6128, window (5628, 6128)
     growth=500,
     roots=SCANNED_ROOTS,
     what="tracked Python files scanned for a re-declared severity ladder",
