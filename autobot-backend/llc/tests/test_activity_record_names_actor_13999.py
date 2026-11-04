@@ -34,9 +34,8 @@ MIN_CALLS_EXPECTED = 40
 FORWARDING_FUNCTIONS = {"record_bulk", "audit"}  # forward **entry on purpose; their callers are checked
 _LOG_RECEIVER = re.compile(r"(^|\.|_)(activity_log|log)$|^(svc|self)$")
 
-EXEMPT = {
-    # file -> (allowed omissions, why)
-    "scheduler/liveness_monitor.py": (1, "held by PR #19958 (scheduler/agents/replay are edited there)"),
+EXEMPT: dict[str, tuple[int, str]] = {
+    # file -> (allowed omissions, why). Empty: the last one, liveness_monitor, now audits through audit().
 }
 
 
