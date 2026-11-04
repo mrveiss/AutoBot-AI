@@ -144,10 +144,14 @@ def handle(docker: Docker, project: str, own_name: str, method: str, path: str) 
 
 
 def _handled(docker: Docker, project: str, own_name: str, method: str, path: str) -> "tuple[int, dict]":
-    """Docker being stopped is an answer, not a dropped connection."""
+    """Docker being stopped, or closing the socket mid-answer, is an answer, not a dropped connection.
+
+    #20757: ``http.client.IncompleteRead`` (Docker closed the socket mid-body) is an ``HTTPException``,
+    not an ``OSError``; uncaught, the handler sent nothing and the SLM read the proxy as unreachable.
+    """
     try:
         return handle(docker, project, own_name, method, path)
-    except OSError:
+    except (OSError, http.client.HTTPException):
         return 503, {"error": "Docker isn't answering"}
 
 

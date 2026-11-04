@@ -38,8 +38,7 @@ from api.schemas_chat import (
     SharedMessageItem,
 )
 from api.user_management.dependencies import get_db_session
-from auth_middleware import get_current_user, resolve_human_user
-from auth_rbac import require_role
+from auth_middleware import check_admin_permission, get_current_user, resolve_human_user
 from autobot_shared.env_utils import env_int
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -277,7 +276,7 @@ async def list_shared_links(
 )
 async def list_all_shared_links_admin(
     request: Request,
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
     db: AsyncSession = Depends(get_db_session),
 ) -> Dict[str, Any]:
     """Return every active (non-expired) shared link with its owner (GH#8996, AC4)."""
