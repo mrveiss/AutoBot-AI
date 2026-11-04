@@ -16,6 +16,7 @@ from autobot_shared import model_prefetch
 from autobot_shared.env_registry import REGISTRY
 from autobot_shared.pinned_model_registry import ModelIntegrityError, get_pinned_revision, pinned_weight_files
 from autobot_shared.ssot_hf_models import CODE_EMBEDDING_MODEL, PREFETCHED_HF_MODELS, SPEECH_TO_TEXT_MODEL
+from tools.lint import _parse_cache as parse_cache
 
 _ROOT = repo_root()
 _ROLE = _ROOT / "autobot-slm-backend" / "ansible" / "roles" / "backend"
@@ -31,7 +32,7 @@ def _tasks(path: Path) -> list[dict]:
 
 def _assigned_name(path: Path, target: str) -> str:
     """The Name a module-level ``target = <Name>`` assigns (not a literal)."""
-    for node in ast.parse(_text(path)).body:
+    for node in parse_cache.parse(_text(path)).body:
         if isinstance(node, ast.Assign) and [t.id for t in node.targets if isinstance(t, ast.Name)] == [target]:
             assert isinstance(node.value, ast.Name), f"{target} in {path.name} is a literal, not the SSOT constant"
             return node.value.id
@@ -53,7 +54,7 @@ def test_the_loaders_read_the_ssot_ids() -> None:
     assert _assigned_name(gen, "CODEBERT_MODEL_NAME") == "CODE_EMBEDDING_MODEL"
     assert _assigned_name(pipe, "WHISPER_MODEL") == "SPEECH_TO_TEXT_MODEL"
     for path in (gen, pipe):  # neither id is a string literal in code (a comment may still name it)
-        literals = {n.value for n in ast.walk(ast.parse(_text(path))) if isinstance(n, ast.Constant)}
+        literals = {n.value for n in ast.walk(parse_cache.parse(_text(path))) if isinstance(n, ast.Constant)}
         assert not literals & set(PREFETCHED_HF_MODELS)
 
 

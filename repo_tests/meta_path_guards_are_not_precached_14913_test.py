@@ -37,6 +37,7 @@ import pytest
 from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
+from tools.lint import _parse_cache as parse_cache
 
 REPO_ROOT = repo_root()
 _SKIP_PARTS = {"node_modules", ".worktrees", "__pycache__", "venv", ".venv"}
@@ -74,7 +75,7 @@ def _blocked_prefixes(path: Path) -> Set[str]:
     with a different class name is still covered.
     """
     try:
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parse_cache.parse(path.read_text(encoding="utf-8"))
     except (OSError, SyntaxError):  # pragma: no cover
         return set()
     prefixes: Set[str] = set()

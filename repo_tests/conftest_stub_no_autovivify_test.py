@@ -77,6 +77,7 @@ import pytest
 from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
+from tools.lint import _parse_cache as parse_cache
 
 _REPO = repo_root()
 
@@ -180,7 +181,7 @@ def find_hybrid_catchall_violations(source: str, label: str) -> List[str]:
     promise (def/async def/lambda) AND a ``__getattr__`` bound to a blind
     catch-all (see module docstring for why both halves are required).
     """
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     funcs_by_name = _functions_by_name(tree)
 
     # base variable name -> {attr: assigned value node}

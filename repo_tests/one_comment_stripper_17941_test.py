@@ -28,6 +28,7 @@ import ast
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import tracked_paths
 
 _ROOT = repo_root()
@@ -145,7 +146,7 @@ def _files_with_private_strippers() -> set[str]:
     for rel in candidates:
         path = _ROOT / rel
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            tree = parse_cache.parse(path.read_text(encoding="utf-8"))
         except (OSError, SyntaxError, UnicodeDecodeError):
             continue
         if _strips_comments_by_hand(tree):
@@ -205,7 +206,7 @@ def test_the_detector_reads_code_and_not_prose(label: str, source: str, expected
     comments inside `_PENDING_PRIVATE_STRIPPERS` both spell the idiom. A
     text-keyed version of this guard would flag itself and then be muted.
     """
-    assert _strips_comments_by_hand(ast.parse(source)) is expected, label
+    assert _strips_comments_by_hand(parse_cache.parse(source)) is expected, label
 
 
 def test_the_shared_helper_is_the_only_exemption() -> None:

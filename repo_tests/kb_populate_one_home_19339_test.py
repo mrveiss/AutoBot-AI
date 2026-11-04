@@ -25,6 +25,8 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
+
 _ROOT = repo_root()
 _HOME = "autobot_shared/kb_doc_set.py"
 _ENGINE = "autobot-backend/knowledge_sync_incremental.py"
@@ -74,7 +76,7 @@ def pattern_lists(source: str, rel: str) -> list[str]:
     if rel == _HOME or rel in _KNOWN:
         return []
     try:
-        tree = ast.parse(source)
+        tree = parse_cache.parse(source)
     except SyntaxError:
         return []
     return [
@@ -94,7 +96,7 @@ def test_no_module_restates_the_documentation_set() -> None:
 
 def test_the_sync_cli_never_deletes_facts_itself() -> None:
     """The retired full sync bulk-deleted before collecting anything, and ran as a fallback (#19701)."""
-    tree = ast.parse((_ROOT / _CLI).read_text(encoding="utf-8"))
+    tree = parse_cache.parse((_ROOT / _CLI).read_text(encoding="utf-8"))
     calls = {n.func.attr for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
     assert "delete_fact" not in calls
 
