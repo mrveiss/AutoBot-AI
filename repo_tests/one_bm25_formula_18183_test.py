@@ -20,6 +20,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _CANONICAL = "autobot-backend/knowledge/search_components/bm25.py"
@@ -32,7 +33,7 @@ def _is_one(node: ast.AST) -> bool:
 
 def _has_bm25_length_norm(source: str) -> bool:
     """True when `source` computes `1 - X + X * ...` (the Okapi length normalisation)."""
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if (
             isinstance(node, ast.BinOp)
             and isinstance(node.op, ast.Add)

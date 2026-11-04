@@ -33,6 +33,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _CANONICAL = "autobot-slm-backend/services/service_restart.py"
@@ -69,7 +70,7 @@ def _skipped_ids(tree: ast.AST) -> set[int]:
 
 def _builds_remote_systemctl(source: str) -> bool:
     """True when `source` contains a remote `sudo [-n] systemctl <verb>` command string."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     skipped = _skipped_ids(tree)
     for node in ast.walk(tree):
         if id(node) in skipped:
