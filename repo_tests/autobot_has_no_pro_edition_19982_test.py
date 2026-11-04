@@ -74,12 +74,11 @@ def _user_text_population(root: Path) -> list[str]:
     return [p for p in found if p.endswith(".vue") or (p.endswith(".json") and p.startswith(_LOCALE_DIRS))]
 
 
-#: Measured 2026-10-30: ~12.7k tracked files; the floor is re-pinned mid-window by scripts/repin_reach_floors.py.
+#: Measured 2026-10-30: ~12.7k tracked files; the floor is computed from the base commit (#19676).
 NAME_REACH = declare(
     "autobot-has-no-pro-name",
     discover=_name_population,
     what="tracked non-changelog files",
-    floor=12940,  # mid-window: population 13140, window (12740, 13140)
     growth=400,
 )
 
@@ -87,7 +86,6 @@ USER_TEXT_REACH = declare(
     "autobot-has-no-pro-tier-in-user-text",
     discover=_user_text_population,
     what="frontend .vue components and locale files",
-    floor=407,  # mid-window: population 607, window (207, 607)
     growth=400,
     roots=_FRONTEND_SRC,
 )
