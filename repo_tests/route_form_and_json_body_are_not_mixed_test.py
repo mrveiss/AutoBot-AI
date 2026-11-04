@@ -39,6 +39,8 @@ from functools import lru_cache
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _REPO_ROOT = repo_root()
 _PACKAGES = ("autobot-backend", "autobot-slm-backend", "autobot_shared")
 
@@ -117,7 +119,7 @@ def _scan_source(source: str, label: str) -> tuple[int, int, list[str]]:
     """Return (routes, form routes, mixed findings) for one module's source text."""
     routes = form_routes = 0
     findings: list[str] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         paths = _route_paths(node)
@@ -182,7 +184,7 @@ def test_the_extractor_sees_form_in_the_source_it_reads() -> None:
     rather than silently reporting zero mixtures everywhere.
     """
     source = (_REPO_ROOT / "autobot-backend" / "api" / "agent.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     seen = {
         node.name: _classify(node, _route_paths(node) or [])[0]
         for node in ast.walk(tree)
