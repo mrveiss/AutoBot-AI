@@ -23,6 +23,11 @@ import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import { useLoadingState } from '@/composables/useLoadingState'
+import { createDateFormatter, formatLocalTime } from '@/utils/formatHelpers'
+
+const hourMinute = createDateFormatter({ kind: 'time', intl: { hour: '2-digit', minute: '2-digit' } })
+const hourOnly = createDateFormatter({ kind: 'time', intl: { hour: '2-digit' } })
+const weekday = createDateFormatter({ kind: 'date', intl: { weekday: 'short' } })
 
 const logger = createLogger('useResourceMetrics')
 
@@ -46,17 +51,13 @@ export function useResourceMetrics(machine: () => string) {
     switch (timeRange.value) {
       case '1h':
       case '6h':
-        return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+        return hourMinute(date)
       case '24h':
-        return date.toLocaleTimeString(undefined, { hour: '2-digit' })
+        return hourOnly(date)
       case '7d':
-        return (
-          date.toLocaleDateString(undefined, { weekday: 'short' }) +
-          ' ' +
-          date.toLocaleTimeString(undefined, { hour: '2-digit' })
-        )
+        return `${weekday(date)} ${hourOnly(date)}`
       default:
-        return date.toLocaleTimeString()
+        return formatLocalTime(date)
     }
   }
 
