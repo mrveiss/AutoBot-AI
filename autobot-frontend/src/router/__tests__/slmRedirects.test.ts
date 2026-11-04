@@ -4,7 +4,8 @@
 // Author: mrveiss
 
 // #20605: the main app's old /slm/* URLs send a bookmark to the SLM console, where the
-// theme manager and the remote-desktop tool live now, and fall back to /chat in this app.
+// theme manager and the remote-desktop tool live now. They are slmRedirectRoutes entries (#20631):
+// the guard leaves for the SLM and cancels the in-app navigation.
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import type { RouteRecordRaw } from 'vue-router'
@@ -25,30 +26,31 @@ afterEach(() => {
   Object.defineProperty(window, 'location', { value: originalLocation, configurable: true })
 })
 
-/** Runs the record's redirect function and reports where it sent the browser and what it falls back to. */
+/** Runs the record's guard and reports where it sent the browser and what it answered the router. */
 function followRedirect(path: string): { href: string; fallback: unknown } {
   const record = routes.find((r: RouteRecordRaw) => r.path === path)
   expect(record, `route ${path}`).toBeDefined()
-  const redirect = record?.redirect as () => unknown
+  const guard = record?.beforeEnter as () => unknown
   const fake = { href: '' }
   Object.defineProperty(window, 'location', { value: fake, configurable: true })
-  const fallback = redirect()
+  const fallback = guard()
   return { href: fake.href, fallback }
 }
 
 describe('/slm/* routes of the main app (#20605)', () => {
-  it('/slm/themes opens the SLM Themes screen and falls back to /chat', () => {
-    expect(followRedirect('/slm/themes')).toEqual({ href: 'https://slm.example/settings/admin/themes', fallback: '/chat' })
+  it('/slm/themes opens the SLM Themes screen and cancels the in-app navigation', () => {
+    expect(followRedirect('/slm/themes')).toEqual({ href: 'https://slm.example/settings/admin/themes', fallback: false })
   })
 
-  it('/slm/tools/novnc opens the SLM remote desktop tool and falls back to /chat', () => {
-    expect(followRedirect('/slm/tools/novnc')).toEqual({ href: 'https://slm.example/tools/novnc', fallback: '/chat' })
+  it('/slm/tools/novnc opens the SLM remote desktop tool and cancels the in-app navigation', () => {
+    expect(followRedirect('/slm/tools/novnc')).toEqual({ href: 'https://slm.example/tools/novnc', fallback: false })
   })
 
   it('neither is a view of this app any more', () => {
     for (const path of ['/slm/themes', '/slm/tools/novnc']) {
       const record = routes.find((r: RouteRecordRaw) => r.path === path)
-      expect(record?.component).toBeUndefined()
+      const view = record?.component as { render: () => unknown } | undefined
+      expect(view?.render(), path).toBeNull()
     }
   })
 })
