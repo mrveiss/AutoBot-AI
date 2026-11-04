@@ -16,13 +16,21 @@ spelling of either decision:
 It reads the syntax tree, so prose naming these shapes is not a hit. Also caught: an aliased
 ``verify_internal_api_key`` import or a ``getattr`` of it, a raw ``compare_digest`` against the
 internal key, ``Role.ADMIN`` / ``Role.ADMIN.value`` comparisons, any letter case of the literals,
-``startswith``/``endswith("admin")``, a role-named collection holding an admin role (a second
-``ADMIN_ROLES``), and a hand-built admin principal (``{"role": "admin"}``, ``user["role"] = "admin"``,
-``role="admin"``).
+``startswith``/``endswith("admin")``, ``match role: case "admin":``, a role-named collection
+holding an admin role (a second ``ADMIN_ROLES``), and a hand-built admin principal
+(``{"role": "admin"}``, ``user["role"] = "admin"``, ``user.role = "admin"``, ``role="admin"``).
+
+It also fails on a new FUNCTION named like an admin check (``require_admin``, ``require_*admin*``,
+``is_*admin*``, ``check_*admin*``...), even one built on ``is_admin_role``: the existing ones are
+recorded with the reason each is not a second gate.
+
+Heuristic limits, not caught: a default such as ``role or "admin"`` (no comparison), a regex such as
+``re.match("admin", role)``, and a decision whose literals arrive from configuration or another module.
 
 Scope: ``autobot-backend``. ``autobot_shared`` holds the canonical predicate
-(``auth.permissions.is_admin_role``) and the key check itself, and the SLM is a separate service
-with its own admin-only gate (#20628); neither is a second gate inside this backend. The existing sites
+(``auth.permissions.is_admin_role``) and the key check itself. The SLM is a separate service with
+its own admin-only gate (#20628), and the owner's ruling (b) on #16333 keeps the SLM's own
+service-principal path; neither is a second gate inside this backend. The existing sites
 are listed below with counts. The pending list only shrinks: PR B of #16333 moves the
 ``require_role`` sites, and PR C the local checks. Superadmin-only and company-membership
 decisions are different concepts, recorded with their reason.
@@ -72,6 +80,53 @@ _RECORDED = {
     ("autobot-backend/llc/services/authz.py", "set"): 1,
     ("autobot-backend/llc/services/work_item_service.py", "set"): 1,
 }
+
+#: Functions NAMED like an admin check (``_ADMIN_DEF``), each with the reason it is not a second gate.
+#: A new one fails: call ``check_admin_permission`` / ``is_admin_role`` inline, or record it here (#16333).
+_RECORDED_DEFS = {
+    # Delegates to the one gate (``Depends(check_admin_permission)`` or an awaited call), then adds a step.
+    "api/feature_flags.py": {"require_admin_role"},
+    "api/provider_auth_scope.py": {"provider_caller_is_admin"},
+    "api/settings_config.py": {"require_settings_admin"},
+    "api/system.py": {"admin_check"},  # a route handler, gated by the one gate
+    "auth_rbac.py": {"check_admin_mcp_tool_permission"},
+    # The one predicate (``is_admin_role``) over a caller record that is not a bare role.
+    "api/live_events.py": {"_is_admin"},
+    "api/redis_mcp/router.py": {"_is_admin"},
+    "api/voice_bundle_user.py": {"_is_admin", "_check_self_or_admin"},
+    "services/workflow_rbac.py": {"_is_admin"},
+    "transcriber/deps.py": {"caller_is_admin"},  # reads the flag ``authenticate`` set with is_admin_role
+    "knowledge/remote_read.py": {"remote_read_is_admin"},  # ``caller_reader``, built on is_admin_role
+    # Ownership OR the one predicate: a resource rule, not an admin gate.
+    "api/user_management/dependencies.py": {
+        "require_self_or_admin",
+        # The platform-admin CLAIM (``is_platform_admin``), a separate concept from the admin role.
+        "_is_platform_admin_claim",
+        "require_platform_admin_claim",
+        "require_platform_admin",
+    },
+    "services/workflow_automation/workflow_ownership.py": {"is_owner_or_admin", "require_owner_or_admin"},
+    "chat_workflow/tiered_context_sources.py": {"_is_platform_admin"},
+    # Superadmin ONLY (root reads), stricter than admin.
+    "knowledge/root_read.py": {"is_superadmin_role", "is_superadmin_user"},
+    # Company / org membership roles: admin of ONE company, not the system admin role (#20778).
+    "api/chat_presets.py": {"_is_org_admin"},
+    "security/session_ownership.py": {"_is_org_admin_access"},
+    "llc/api/budget.py": {"_require_budget_admin", "_require_limit_admin"},
+    "llc/api/company_ceo.py": {"_require_owner_or_admin"},
+    "llc/api/replay.py": {"_check_admin"},
+    "llc/api/secrets.py": {"_require_secret_admin"},
+    "llc/services/authz.py": {"require_company_admin", "require_company_admin_unless_platform"},
+    "llc/services/company.py": {"_require_gate_admin"},
+    # Not authorization: the security scanner probes a target's /admin paths.
+    "agents/security_scanner_agent.py": {"_check_admin_path"},
+}
+_GATE_DEF = ("auth_middleware.py", "check_admin_permission")
+_ADMIN_DEF = re.compile(
+    r"^_?(require_\w*admin\w*|is_\w*admin\w*|\w+_is_admin|check_\w*admin\w*|admin_check|\w+_admin_(gate|check|required|only))$",
+    re.IGNORECASE,
+)
+
 
 #: Pending migration. **Only shrinks.**
 _PENDING = {
@@ -153,10 +208,11 @@ def _role_set(node: ast.AST) -> bool:
 
 
 def _role_write(node: ast.AST) -> bool:
-    """``user["role"] = "admin"`` or ``role="admin"`` passed as a keyword."""
+    """``user["role"] = "admin"``, ``user.role = "admin"``, or ``role="admin"`` passed as a keyword."""
     if isinstance(node, ast.Assign) and _names_admin(node.value):
         return any(
-            isinstance(t, ast.Subscript) and isinstance(t.slice, ast.Constant) and t.slice.value == "role"
+            (isinstance(t, ast.Subscript) and isinstance(t.slice, ast.Constant) and t.slice.value == "role")
+            or (isinstance(t, ast.Attribute) and t.attr == "role")
             for t in node.targets
         )
     return isinstance(node, ast.keyword) and node.arg == "role" and _names_admin(node.value)
@@ -194,7 +250,18 @@ def _node_kind(node: ast.AST) -> str | None:
         return _call_kind(node)
     if isinstance(node, ast.Compare) and any(_names_admin(side) for side in (node.left, *node.comparators)):
         return "literal"
+    if isinstance(node, ast.MatchValue) and _names_admin(node.value):
+        return "literal"  # match role: case "admin":
     return None
+
+
+def admin_defs(source: str) -> set[str]:
+    """Names of functions defined in *source* that are named like an admin check."""
+    return {
+        n.name
+        for n in ast.walk(ast.parse(source))
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and _ADMIN_DEF.match(n.name)
+    }
 
 
 def admin_decisions(source: str) -> Counter:
@@ -202,21 +269,25 @@ def admin_decisions(source: str) -> Counter:
     return Counter(kind for node in ast.walk(ast.parse(source)) if (kind := _node_kind(node)))
 
 
-def _population() -> dict[tuple[str, str], int]:
+def _population() -> tuple[dict[tuple[str, str], int], dict[str, set[str]]]:
     examined = REACH.examined(_ROOT)
     found: dict[tuple[str, str], int] = {}
+    defs: dict[str, set[str]] = {}
     for rel in examined:
         try:
-            counts = admin_decisions((_ROOT / rel).read_text(encoding="utf-8"))
+            source = (_ROOT / rel).read_text(encoding="utf-8")
+            counts, names = admin_decisions(source), admin_defs(source)
         except SyntaxError:
             continue
         found.update({(rel, kind): n for kind, n in counts.items()})
+        if names:
+            defs[rel.removeprefix("autobot-backend/")] = names
     REACH.completed(len(examined), _ROOT)
-    return found
+    return found, defs
 
 
 def test_no_new_local_admin_decision():
-    population = _population()
+    population, _ = _population()
     assert ("autobot-backend/auth_service_opt_in.py", "key") in population, "instrument check: the canonical site"
     allowed = {**_RECORDED, **_PENDING}
     new = {site: n for site, n in population.items() if site not in _CANONICAL and n > allowed.get(site, 0)}
@@ -227,9 +298,56 @@ def test_no_new_local_admin_decision():
 
 
 def test_the_pending_list_only_shrinks():
-    population = _population()
+    population, _ = _population()
     stale = {site: (n, population.get(site, 0)) for site, n in _PENDING.items() if population.get(site, 0) < n}
     assert not stale, f"migrated sites still listed (listed, found): {stale}. Lower or delete their entries."
+
+
+def test_no_new_function_named_like_an_admin_check():
+    """#16333 AC: a new local ``def require_admin`` (or ``is_admin``, ``check_*admin*``) fails, even one
+    built on ``is_admin_role``. The one gate is ``auth_middleware.check_admin_permission``."""
+    _, defs = _population()
+    assert _GATE_DEF[1] in defs.get(_GATE_DEF[0], set()), "instrument check: the one gate is named like one"
+    new = {
+        path: sorted(names - _RECORDED_DEFS.get(path, set()))
+        for path, names in defs.items()
+        if path != _GATE_DEF[0] and names - _RECORDED_DEFS.get(path, set())
+    }
+    assert not new, (
+        f"new functions named like an admin check: {new}. Use Depends(check_admin_permission) or "
+        "is_admin_role(...) inline, or record the function in _RECORDED_DEFS with its reason (#16333)."
+    )
+
+
+def test_recorded_admin_functions_still_exist():
+    _, defs = _population()
+    stale = {p: sorted(n - defs.get(p, set())) for p, n in _RECORDED_DEFS.items() if n - defs.get(p, set())}
+    assert not stale, f"recorded functions that no longer exist: {stale}. Delete their entries."
+
+
+def test_the_def_detector_reads_names_not_bodies():
+    planted = """
+def require_admin(request): return is_admin_role(request.state.role)
+async def require_org_admin_access(user): ...
+def is_admin(user): ...
+def _is_superadmin(user): ...
+def caller_is_admin(request): ...
+def check_admin_rights(user): ...
+def tool_admin_only(user): ...
+def admin_check(): ...
+"""
+    assert admin_defs(planted) == {
+        "require_admin",
+        "require_org_admin_access",
+        "is_admin",
+        "_is_superadmin",
+        "caller_is_admin",
+        "check_admin_rights",
+        "tool_admin_only",
+        "admin_check",
+    }
+    lookalikes = "def list_admins(): ...\ndef admin_panel(): ...\ndef administrator_count(): ...\nis_admin = True"
+    assert admin_defs(lookalikes) == set()
 
 
 def test_the_detector_reads_code_not_prose():
@@ -256,6 +374,9 @@ def test_the_detector_reads_the_spellings_the_security_review_listed():
     assert admin_decisions('make_principal(name="svc", role="admin")') == Counter({"grant": 1})
     assert admin_decisions('check = getattr(auth, "verify_internal_api_key")') == Counter({"key": 1})
     assert admin_decisions("ok = hmac.compare_digest(header, internal_api_key())") == Counter({"key": 1})
+    # #20787: two more spellings.
+    assert admin_decisions('match role:\n    case "admin":\n        pass') == Counter({"literal": 1})
+    assert admin_decisions('user.role = "admin"') == Counter({"grant": 1})
 
 
 def test_the_extended_detector_leaves_lookalikes_alone():
@@ -264,3 +385,5 @@ def test_the_extended_detector_leaves_lookalikes_alone():
     assert admin_decisions('ok = path.startswith("/api/admin")') == Counter()
     assert admin_decisions("ok = hmac.compare_digest(a, b)") == Counter()
     assert admin_decisions('user["name"] = "admin"') == Counter()
+    assert admin_decisions('user.name = "admin"') == Counter()
+    assert admin_decisions('match role:\n    case "user":\n        pass') == Counter()

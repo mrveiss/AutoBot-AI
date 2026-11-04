@@ -4,11 +4,15 @@
 # Author: mrveiss
 """Group repeated audit records: one record per key per window, carrying the repeats it absorbed.
 
-Used where a caller can trigger an audit row on every request, so repeats can't flood the store
-while each refusal is still counted: the SLM's refused sessions (#20664) and the backend's
-role denials (#16333). Per process, so rows are bounded by workers x keys x windows. The tracked
-set is capped; when it is full, the keys dropped to make room lose their unreported counts and may
-get an extra record, which is the safe way round.
+Used where a caller can trigger an audit row on every request, so repeats can't flood the store:
+the SLM's refused sessions (#20664) and the backend's role denials (#16333). Per process, so rows
+are bounded by workers x keys x windows.
+
+What is NOT recorded (#20787): repeats are reported only by the key's NEXT record. A burst followed
+by silence shows as its first row alone, and the repeats are lost when the key expires or is
+dropped. Nothing runs on a timer to flush them. The tracked set is capped; when it is full, the
+keys dropped to make room lose their unreported counts and may get an extra record, which is the
+safe way round. A caller that needs every repeat counted must not use this.
 """
 
 from __future__ import annotations
