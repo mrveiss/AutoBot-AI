@@ -51,6 +51,14 @@
     - name: Resolve the models for this model server (#19731)
       ansible.builtin.include_tasks: ../roles/backend/tasks/resolve_models.yml
 
+    # #20750: the internal key is resolved, and each file keeps its own, as on every other render.
+    - name: "Resolve AUTOBOT_INTERNAL_API_KEY (#20750)"
+      ansible.builtin.include_tasks: ../_shared/tasks/resolve_internal_api_key.yml
+      vars:
+        internal_api_key_current_env_files:
+          - "{{ backend_code_dir ~ '/.env' }}"
+          - "{{ autobot_backend_env_file }}"
+
     - name: Deploy backend environment file
       ansible.builtin.template:
         src: ../roles/backend/templates/backend.env.j2
@@ -60,6 +68,9 @@
         group: "{{ backend_group }}"
       become_user: "{{ backend_user }}"
       notify: restart backend
+      vars:
+        internal_api_key_render: "{{ (internal_api_key_by_file | default({})).get(backend_code_dir ~ '/.env', internal_api_key_resolved | default(autobot_internal_api_key)) }}"  # #20750: the file keeps its key
+
 
     - name: Ensure autobot_shared symlink exists
       ansible.builtin.file:
