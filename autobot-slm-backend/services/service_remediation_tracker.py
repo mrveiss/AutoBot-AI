@@ -14,6 +14,7 @@ instead of a second, unreliable store.
 
 from __future__ import annotations
 
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 from models.database import Service
@@ -21,6 +22,13 @@ from models.database import Service
 logger = get_logger(__name__)
 
 _ZERO_TRACKER = {"count": 0, "last_attempt": None, "exhausted": False, "last_cause": None}
+
+# #20796: a restart counts as recovery only once the unit has stayed up this long after it.
+# Before #20767 systemd's start limit parked a crash-looping unit; reset-failed now clears that
+# park, so without a settle period a unit that starts and crashes again restarts forever and
+# never reaches exhaustion. Keep it above SERVICE_REMEDIATION_COOLDOWN plus a heartbeat.
+SERVICE_RESTART_SETTLE_S = env_int_clamped("AUTOBOT_SERVICE_RESTART_SETTLE_S", 600, min_v=1)
+CRASHED_AFTER_START = "the restart succeeded, but the unit failed again within {settle}s of starting"
 
 
 def read_service_remediation(service: Service) -> dict:
@@ -79,6 +87,42 @@ def clear_service_remediation(service: Service) -> bool:
     existing_extra.pop("remediation", None)
     service.extra_data = existing_extra
     return True
+
+
+def tracker_after_restart(previous: dict, success: bool, cause: str | None, now) -> dict:
+    """The tracker after one restart attempt (#20796).
+
+    A successful start still counts: the count is cleared only once the unit settles (see
+    ``drop_settled_remediation``). Its cause is what exhaustion reports if the unit fails again
+    before settling; a settled unit's tracker is dropped, so that text is never read otherwise.
+    """
+    return {
+        "count": previous["count"] + 1,
+        "last_attempt": now,
+        "exhausted": False,
+        "last_cause": CRASHED_AFTER_START.format(settle=SERVICE_RESTART_SETTLE_S) if success else cause,
+    }
+
+
+def drop_settled_remediation(extra_data: dict, now) -> None:
+    """Drop the tracker from a not-failed row's ``extra_data`` once its last attempt has settled.
+
+    A tracker with no readable attempt time has nothing to settle and is dropped at once (#16712).
+    """
+    raw = extra_data.get("remediation")
+    if _attempted_at(raw) is not None and (now - _attempted_at(raw)).total_seconds() < SERVICE_RESTART_SETTLE_S:
+        return
+    extra_data.pop("remediation", None)
+
+
+def _attempted_at(raw):
+    """The stored attempt time, or None when absent or unreadable (a heartbeat must not raise on it)."""
+    value = raw.get("last_attempt") if isinstance(raw, dict) else None
+    try:
+        return parse_utc_iso(value) if value else None
+    except (TypeError, ValueError):
+        logger.warning("service_remediation_tracker: unreadable last_attempt %r, treating it as settled", value)
+        return None
 
 
 def log_restart_result(service_name: str, hostname: str, timeout_s: int, result: dict) -> tuple[bool, str | None]:

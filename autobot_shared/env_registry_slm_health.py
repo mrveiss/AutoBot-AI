@@ -147,3 +147,19 @@ register_env_var(
         range=(1, 86400),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SERVICE_RESTART_SETTLE_S",
+        type=int,
+        default=600,
+        description=(
+            "Seconds a service must stay up after a successful restart before the reconciler clears its "
+            "restart count. A unit that starts and fails again within this period keeps counting toward "
+            "MAX_SERVICE_RESTART_ATTEMPTS, so a crash loop ends in the exhaustion event instead of restarting "
+            "forever. Keep it above the 120s service cooldown plus a heartbeat (#20796)."
+        ),
+        component="slm",
+        range=(1, 86400),
+    )
+)
