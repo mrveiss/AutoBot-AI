@@ -165,7 +165,7 @@ def _require_root_key(result: ConfigValidationResult) -> None:
     try:
         load_root_key()
     except RuntimeError as exc:
-        result.errors.append(str(exc))
+        result.add_error(str(exc))
 
 
 def validate_startup_config(raw_config: Dict[str, Any]) -> ConfigValidationResult:
