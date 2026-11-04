@@ -102,11 +102,10 @@ def _scanned_files(root: Path) -> list[str]:
 
 
 #: Files the no-second-decision-body sweep reads -- a scan of ~0 files is a broken glob.
-#: Migrated from a hand-rolled ``MIN_FILES_SCANNED = 300`` (#16147); pinned mid-window.
+#: Migrated from a hand-rolled ``MIN_FILES_SCANNED = 300`` (#16147); the floor is computed from the base commit (#19676).
 SCAN_REACH = declare(
     "deployment-mode-detector-scan",
     discover=_scanned_files,
-    floor=5464,  # re-pinned mid-window (train 82 on main)
     growth=150,
     what="python files scanned for a second deployment-mode decision body",
     roots=("autobot-backend/", "autobot-infrastructure/"),

@@ -120,11 +120,9 @@ def is_runtime_dir(rel: Path) -> bool:
     return not rel.name.startswith(".") and is_runtime(rel / "x.py")
 
 
-#: Mid-window from REACH.window(): population 3484, window [3184, 3484], pinned 3334.
 REACH = declare(
     "redis-keys-runtime-18999-scan",
     discover=lambda root: _population(root),
-    floor=3576,  # mid-window: population 3726, window (3426, 3726)
     what="runtime python source",
     growth=300,
 )

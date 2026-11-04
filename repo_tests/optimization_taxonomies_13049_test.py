@@ -64,8 +64,6 @@ def _population(root) -> list[str]:
 REACH = declare(
     "optimization-taxonomy-scan",
     discover=_population,
-    # Mid-window, from REACH.window().
-    floor=18,
     what="non-test python source",
     roots=("autobot-backend/llm_shared/optimization",),
     growth=4,
@@ -145,7 +143,6 @@ def _family_population(root) -> list[str]:
 FAMILY_REACH = declare(
     "architecture-family-definition-scan",
     discover=_family_population,
-    floor=3459,  # re-pinned mid-window (train 71) (#17844)
     what="non-test python source",
     roots=_FAMILY_ROOTS,
     growth=300,
