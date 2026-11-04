@@ -198,6 +198,7 @@ REACH_ROOTS = {
     ),
     "repo_tests/oauth_bundle_no_app_secret_13630_test.py": ("autobot-backend", "autobot_shared"),
     "repo_tests/one_actor_id_15754_test.py": ("autobot-backend/llc",),
+    "repo_tests/one_admin_gate_16333_test.py": ("autobot-backend",),
     "repo_tests/one_anthropic_message_split_16815_test.py": ("autobot-backend/llm_shared/providers",),
     "repo_tests/one_backoff_formula_15402_test.py": (
         "autobot-frontend/src",
