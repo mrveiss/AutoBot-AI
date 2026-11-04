@@ -13,7 +13,7 @@
  * admin only on the backend, and the SLM proxy lets only an admin session through at all.
  */
 
-import { isHttpError } from '@autobot/ui'
+import { isHttpError, type InstalledTheme } from '@autobot/ui'
 import { createAutobotBackendClient } from '@/composables/useAutobotApi'
 
 /** The proxy refused the body before the main backend saw it: its own size cap (413). */
@@ -23,13 +23,8 @@ const TIMEOUT_MESSAGE = /^Request timeout/
 /** What the proxy answers when the main backend does not. */
 const MAIN_APP_DOWN_STATUSES = [502, 503, 504]
 
-export interface InstalledTheme {
-  id: string
-  name: string
-  author: string
-  version: string
-  supports: string[]
-}
+// The one declaration lives in the kit (#14908); re-exported so this module's importers keep working.
+export type { InstalledTheme }
 
 /**
  * True when the main app could not be reached: the proxy's 502/503/504, or a request that never

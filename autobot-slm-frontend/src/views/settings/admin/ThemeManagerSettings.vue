@@ -40,7 +40,7 @@
       <BaseCard v-else :title="t(`${NS}.tableLabel`)">
         <BaseTable :columns="columns" :rows="rows" row-key="id" :aria-label="t(`${NS}.tableLabel`)" :actions-label="t(`${NS}.actions`)" data-testid="slm-themes-table">
           <template #actions="{ row }">
-            <BaseButton variant="secondary" size="sm" :data-testid="`slm-themes-uninstall-${row.id}`" @click="askRemove(row.id)">{{ t(`${NS}.uninstall`) }}</BaseButton>
+            <BaseButton variant="secondary" size="sm" :data-testid="`slm-themes-uninstall-${row.id}`" @click="askRemove(String(row.id))">{{ t(`${NS}.uninstall`) }}</BaseButton>
           </template>
         </BaseTable>
       </BaseCard>
