@@ -150,7 +150,10 @@ async def test_backup_stop_redis_timeout_and_error_text(monkeypatch, failure, te
 async def test_backup_start_redis_argv_then_verify_and_failure_text(monkeypatch):
     run = _Runner(monkeypatch, script=((0, b"", b""), (0, b"PONG\n7", b"")))
     assert await _backup()._start_and_verify_redis("node.example.test", "svc", 2222) == (True, "PONG\n7")
-    assert run.spawns[0][0] == [*_BACKUP_PREFIX, f"sudo systemctl start -- {backup.REDIS_UNIT}"]
+    assert run.spawns[0][0] == [
+        *_BACKUP_PREFIX,
+        f"sudo systemctl reset-failed -- {backup.REDIS_UNIT} 2>/dev/null; sudo systemctl start -- {backup.REDIS_UNIT}",
+    ]
     assert run.timeouts == [30, 15]
     _Runner(monkeypatch, script=((1, b"bad", b""),))
     assert await _backup()._start_and_verify_redis("h", "svc", 22) == (False, "Failed to start Redis: bad")
@@ -231,7 +234,10 @@ async def test_orchestrator_systemctl_action_argv_dash_n_pipe_pipe_timeout_30(mo
     run = _Runner(monkeypatch, script=((0, b"done", b""),))
     result = await _orch(tmp_path)._systemctl_action("node.example.test", "x.service", "restart")
     assert result == (True, "done")
-    assert run.argv == [*_orch_prefix(tmp_path), "sudo -n systemctl restart -- x.service"]
+    assert run.argv == [
+        *_orch_prefix(tmp_path),
+        "sudo -n systemctl reset-failed -- x.service 2>/dev/null; sudo -n systemctl restart -- x.service",
+    ]
     assert (run.kwargs["stdout"], run.kwargs["stderr"]) == (asyncio.subprocess.PIPE, asyncio.subprocess.PIPE)
     assert run.timeouts == [30.0]
 
