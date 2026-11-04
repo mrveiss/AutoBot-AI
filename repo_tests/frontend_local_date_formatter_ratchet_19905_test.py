@@ -63,10 +63,12 @@ _COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*).*$", re.M)
 # Two measures, so the down-only comparison against the base stays meaningful (#20004): the first is
 # the name-only count this guard has always pinned (32 at the base, 24 now); the second is the
 # functions only the behavioural detector finds, a measure that did not exist at the base.
-# Measured on 5b0014f63a plus #20004's migrations.
+# Measured on 5b0014f63a plus #20004's migrations; 23 and 20 down to 7 and 3 once the fixed-field
+# formatters moved to createDateFormatter / formatLocal* (#19905) and the relative-time ones to the
+# kit's createRecencyFormatter (#19606) -- measured on the merged tree, not added up from each side.
 NAMED = "local_date_formatter_declarations"
 BEHAVIOUR = "local_date_formatter_functions_by_behaviour"
-PINS = {NAMED: 23, BEHAVIOUR: 20}
+PINS = {NAMED: 7, BEHAVIOUR: 3}
 
 
 def _sources(src: Path) -> list[Path]:
@@ -113,7 +115,6 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "frontend-local-date-formatter-scan",
     discover=_population,
-    floor=903,  # re-pinned mid-window by scripts/repin_reach_floors.py (#19905)
     growth=50,
     what="component, view and composable sources in both frontends",
     roots=_ROOTS,

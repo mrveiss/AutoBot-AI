@@ -765,6 +765,16 @@
     "lightweightMode": "Lightweight mode",
     "lightweightModeTooltip": "lightweight Mode tooltip",
     "errors": {
+      "budgetExhausted": "Your {period} spending limit for this {scope} (${limit}) has been reached. Chat is unavailable until it resets or an administrator raises the limit.",
+      "budgetScope": {
+        "user": "account",
+        "tenant": "organization"
+      },
+      "budgetPeriod": {
+        "hour": "hourly",
+        "day": "daily",
+        "month": "monthly"
+      },
       "deleteFailed": "Couldn't delete the chat. Please try again.",
       "createFailed": "Failed to create chat: {error}",
       "loadSessionsFailed": "Failed to load chat sessions: {error}",
@@ -2609,8 +2619,6 @@
         "docs": "Documentation"
       },
       "justNow": "Just now",
-      "minutesAgo": "{count}m ago",
-      "hoursAgo": "{count}h ago",
       "installSuccess": "Pre-commit hooks installed successfully",
       "installFailed": "Failed to install hooks",
       "uninstallSuccess": "Pre-commit hooks uninstalled",
@@ -2816,6 +2824,15 @@
       "visibilityHint": "Only visible to you",
       "errorAddText": "Failed to add text to knowledge base",
       "errorFileTooLarge": "File \"{name}\" exceeds the maximum size limit ({max} MB)",
+      "chunked": {
+        "noSpace": "There isn't enough storage for this upload right now. Ask an admin to review unfinished uploads.",
+        "tooLarge": "This file is larger than this kind of upload allows.",
+        "busy": "This file is already being uploaded.",
+        "checksum": "The file changed or was damaged on the way. Upload it again.",
+        "keepsFailing": "The connection keeps failing. Try again to resume where it stopped.",
+        "stillProcessing": "The file is uploaded and still being processed. It will appear in the knowledge base when it's done.",
+        "failed": "The upload couldn't be completed. Try again to resume it."
+      },
       "errorImportUrl": "Failed to import URL content",
       "errorUnsupportedFormat": "File \"{name}\" has an unsupported format",
       "errorUploadFiles": "Failed to upload files",
@@ -3363,6 +3380,8 @@
       "reasonUnknown": "reason not reported"
     },
     "connectors": {
+      "syncNotStarted": "The sync of {name} didn't start. It may already be syncing; try again when it finishes.",
+      "syncUnavailable": "The sync of {name} didn't start: whether it is already syncing couldn't be checked. Try again shortly.",
       "title": "Source Connectors",
       "addConnector": "Add Connector",
       "loadingConnectors": "Loading connectors...",
@@ -3480,6 +3499,7 @@
         "verificationMode": "Verification Mode",
         "autonomous": "Autonomous",
         "collaborative": "Collaborative",
+        "syncNow": "Sync now, so its content is available right away",
         "verificationHint": "Autonomous auto-approves high-quality sources. Collaborative requires manual review.",
         "enabled": "Enabled",
         "nameAndSaveDesc": "Name the connector and save.",
@@ -3492,7 +3512,8 @@
         "create": "Create",
         "sqlQueryPlaceholder": "SELECT * FROM documents WHERE updated_at > :last_sync",
         "connectorNamePlaceholder": "My Connector"
-      }
+      },
+      "jobStatusFailed": "Couldn't get this sync's progress. Close and reopen the history to try again."
     },
     "modals": {
       "bulkEdit": {
@@ -6749,7 +6770,6 @@
       "sessionLabel": "Session {id}",
       "invitedAt": "Invited {time}",
       "justNow": "just now",
-      "minutesAgo": "{count}m ago",
       "accept": "Accept",
       "decline": "Decline",
       "respondError": "Couldn't process this response. Please try again.",
@@ -6903,6 +6923,22 @@
   },
   "security": {
     "secretsManager": {
+      "loadFailed": "The secrets could not be loaded. What is shown may be out of date. Refresh to try again.",
+      "dependentsTitle": "Secret is in use",
+      "dependentsMessage": "\"{name}\" is still used by: {dependents}. Delete it anyway? These will stop receiving it.",
+      "writeFailed": "The change could not be confirmed. It may have been refused, or applied with the response lost. Check the list before retrying.",
+      "systemVault": {
+        "title": "System vault",
+        "unavailable": "The system vault is unavailable, so its secrets cannot be shown.",
+        "empty": "No system vault secrets.",
+        "newValue": "New value",
+        "rotate": "Rotate",
+        "save": "Save",
+        "cancel": "Cancel",
+        "delete": "Delete",
+        "deleteTitle": "Delete system secret",
+        "deleteMessage": "Delete \"{name}\" from the system vault? Services that read it will stop receiving it."
+      },
       "sidebarTitle": "Credentials",
       "searchPlaceholder": "Search credentials...",
       "allCredentials": "All Credentials",
@@ -7399,9 +7435,6 @@
       "seconds": "{n}s",
       "minutes": "{n}m",
       "hours": "{n}h",
-      "secondsAgo": "{n}s ago",
-      "minutesAgo": "{n}m ago",
-      "hoursAgo": "{n}h ago",
       "types": {
         "orchestrator": "Orchestrator Agent",
         "worker": "Worker Agent",
@@ -7854,13 +7887,6 @@
       "actionEnforced": "Full enforcement mode was enabled",
       "system": "System",
       "justNow": "Just now",
-      "minuteAgo": "1 minute ago",
-      "minutesAgo": "{count} minute(s) ago",
-      "hourAgo": "1 hour ago",
-      "hoursAgo": "{count} hour(s) ago",
-      "dayAgo": "1 day ago",
-      "daysAgo": "{count} day(s) ago",
-      "longAgo": "Long ago",
       "modeLegend": "Mode Legend:",
       "legendDisabled": "Disabled",
       "legendLogOnly": "Log Only",
@@ -8230,6 +8256,7 @@
     "llcDashboard": "Dashboard",
     "llcOrgChart": "Org Chart",
     "llcMembers": "Members",
+    "llcTeams": "Teams",
     "llcGoals": "Goals",
     "llcCompanies": "Companies",
     "llcPortability": "Portability",
@@ -8320,6 +8347,29 @@
     "confirmArchive": "Archive \"{name}\"? This is a terminal state and cannot be undone.",
     "confirm": "Confirm",
     "updateError": "Could not change the company status."
+  },
+  "llcTeams": {
+    "title": "Teams",
+    "subtitle": "The teams of this company and the people on each.",
+    "peopleOnly": "Teams hold people with an account. Agents and contacts are not team members.",
+    "noCompany": "Select a company to see its teams.",
+    "loading": "Loading teams…",
+    "loadError": "Could not read this company's teams.",
+    "unavailable": "Teams are not available for this company, or you do not have access to them.",
+    "retry": "Try again",
+    "empty": "This company has no teams yet.",
+    "namesError": "Could not read the company's members, so team members are shown without names.",
+    "unknownMember": "Unknown member",
+    "inactive": "Inactive",
+    "colTeam": "Team",
+    "colMembers": "Members",
+    "colActions": "Actions",
+    "viewMembers": "View members",
+    "selectTeam": "Select a team to see its members.",
+    "membersOf": "Members of {name}",
+    "noMembers": "This team has no members yet.",
+    "colName": "Name",
+    "colRole": "Company role"
   },
   "llcMembers": {
     "title": "Members",
@@ -9424,13 +9474,10 @@
   "devices": {
     "addDevice": "Add device",
     "confirmDelete": "Confirm delete",
-    "daysAgo": "Days ago",
     "error": "Error",
-    "hoursAgo": "Hours ago",
     "justNow": "Just now",
     "lastSeen": "Last seen",
     "loading": "Loading",
-    "minutesAgo": "Minutes ago",
     "noDevices": "No devices",
     "pairDevice": "Pair device",
     "pairFirst": "Pair first",

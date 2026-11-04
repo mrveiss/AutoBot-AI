@@ -124,14 +124,14 @@ async def _self_update_unit_active() -> bool | None:
     return bool(stdout.decode("utf-8", errors="replace").strip())
 
 
-def _last_completed_play_at(log_path: Path) -> str | None:
+def _last_completed_play_at(log_path: Path, run_alive: bool | None = None) -> str | None:
     """Modification time of the self-update log, only if a run completed there.
 
     A completed run's final write is its PLAY RECAP, so the log's mtime dates
     the completion closely enough for a freshness judgement. An incomplete log
     yields None rather than a timestamp that would read as a completion.
     """
-    verdict = read_self_update_verdict(log_path)
+    verdict = read_self_update_verdict(log_path, run_alive=run_alive)
     if not verdict.complete:
         return None
     try:
@@ -155,7 +155,7 @@ async def read_deploy_activity(log_path: Path | None = None) -> DeployActivity:
     active = await _self_update_unit_active()
 
     try:
-        completed_at = _last_completed_play_at(path)
+        completed_at = _last_completed_play_at(path, active)
     except Exception as exc:  # pragma: no cover - defensive; reader never raises
         logger.warning("deploy activity: could not date the last completed play (%s)", exc)
         completed_at = None

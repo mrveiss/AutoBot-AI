@@ -23,6 +23,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._comment_syntax import code_lines
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
@@ -56,7 +57,6 @@ def _swept(root: Path) -> list[str]:
 REACH = declare(
     "user-mode-values-sweep-19437",
     discover=_swept,
-    floor=2170,  # measured at 2242 tracked files, pinned mid-window (#15928)
     growth=150,
     what="tracked docs and deployment files swept for a tenancy value in the wrong variable (#19437)",
 )
@@ -64,7 +64,7 @@ REACH = declare(
 
 def user_modes() -> frozenset[str]:
     """``UserManagementMode``'s values, read from its definition rather than restated."""
-    tree = ast.parse((_ROOT / _ENUM_FILE).read_text(encoding="utf-8"))
+    tree = parse_cache.parse((_ROOT / _ENUM_FILE).read_text(encoding="utf-8"))
     cls = next(n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == "UserManagementMode")
     return frozenset(n.value.value for n in cls.body if isinstance(n, ast.Assign) and isinstance(n.value, ast.Constant))
 

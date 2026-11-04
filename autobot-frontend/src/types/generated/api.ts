@@ -6206,6 +6206,144 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/knowledge_base/uploads/limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Upload Limits
+         * @description So the upload dialog mirrors nothing: what each use allows, and which files are media.
+         */
+        get: operations["get_upload_limits_api_knowledge_base_uploads_limits_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Upload */
+        post: operations["create_upload_api_knowledge_base_uploads_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/uploads/expired": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Expired Uploads
+         * @description Abandoned sessions for a person to review; each still takes up its disk space until cancelled.
+         */
+        get: operations["list_expired_uploads_api_knowledge_base_uploads_expired_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/uploads/expired/{upload_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Expired Upload
+         * @description An admin frees an abandoned upload from the review list: a person's decision, on the record first.
+         */
+        delete: operations["remove_expired_upload_api_knowledge_base_uploads_expired__upload_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/uploads/{upload_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Upload
+         * @description Where to resume from, and how the handoff went.
+         */
+        get: operations["get_upload_api_knowledge_base_uploads__upload_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Cancel Upload
+         * @description The person gives up on their own upload, which removes what was staged.
+         */
+        delete: operations["cancel_upload_api_knowledge_base_uploads__upload_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/uploads/{upload_id}/chunks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Chunk */
+        put: operations["put_chunk_api_knowledge_base_uploads__upload_id__chunks_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/uploads/{upload_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete Upload
+         * @description Every byte is here: check it, and hand it to the knowledge base. Poll the session for the result.
+         */
+        post: operations["complete_upload_api_knowledge_base_uploads__upload_id__complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/knowledge_base/ai-stack/search/rag": {
         parameters: {
             query?: never;
@@ -12030,6 +12168,8 @@ export interface paths {
         /**
          * Set Provider
          * @description Set the active cloud ASR provider.
+         *
+         *     Admin-only (owner ruling 2026-09-11): it decides which cloud provider receives every user's audio.
          *
          *     Persistence limitation: this is in-process only and is lost on restart.
          *     For persistence across restarts, set TRANSCRIBER_ASR_PROVIDER in the
@@ -45585,6 +45725,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/npu/assigned-unpaired-workers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Assigned Unpaired Workers
+         * @description Read only. A person pairs each through POST /npu/workers/pair.
+         */
+        get: operations["list_assigned_unpaired_workers_api_npu_assigned_unpaired_workers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/redis-service/start": {
         parameters: {
             query?: never;
@@ -60204,6 +60364,25 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * AssignedWorker
+         * @description A node the SLM assigned npu-worker with no paired worker.
+         */
+        AssignedWorker: {
+            /** Url */
+            url: string;
+            /** Hostname */
+            hostname: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** AssignedWorkersResponse */
+        AssignedWorkersResponse: {
+            /** Workers */
+            workers: components["schemas"]["AssignedWorker"][];
+        } & {
+            [key: string]: unknown;
+        };
         /** AssociateFileRequest */
         AssociateFileRequest: {
             /** Chat Id */
@@ -62588,7 +62767,7 @@ export interface components {
         BudgetPolicyRequest: {
             /**
              * Scope
-             * @description Scope: agent, project, task, or tenant
+             * @description Scope: agent, project, task, tenant, or user (chat requests)
              */
             scope: string;
             /**
@@ -67046,6 +67225,11 @@ export interface components {
             /** Connector Id */
             connector_id: string;
             config: components["schemas"]["ConnectorConfigDict"];
+            /**
+             * Sync Started
+             * @default false
+             */
+            sync_started: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -68447,6 +68631,11 @@ export interface components {
             verification_mode: string;
             /** Schedule Cron */
             schedule_cron?: string | null;
+            /**
+             * Sync Now
+             * @default true
+             */
+            sync_now: boolean;
             /** Include Patterns */
             include_patterns?: string[];
             /** Exclude Patterns */
@@ -97331,6 +97520,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+            /** Value */
+            value?: string | null;
             /**
              * Credentials
              * @description New sensitive auth fields, for a bridged secret
@@ -104358,6 +104549,41 @@ export interface components {
              * @description Visibility level: private, shared, public
              */
             visibility: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** UploadCreate */
+        UploadCreate: {
+            /** Filename */
+            filename: string;
+            /** Total Size */
+            total_size: number;
+            /**
+             * Target
+             * @enum {string}
+             */
+            target: "document" | "transcript";
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Category
+             * @default uploads
+             */
+            category: string;
+            /** Tags */
+            tags?: string[];
+            /**
+             * Whisper Model
+             * @default base
+             */
+            whisper_model: string;
+            /** Language */
+            language?: string | null;
+            /** Sha256 */
+            sha256?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -116312,6 +116538,254 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KnowledgeUploadLimitResponse"];
+                };
+            };
+        };
+    };
+    get_upload_limits_api_knowledge_base_uploads_limits_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    create_upload_api_knowledge_base_uploads_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploadCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_expired_uploads_api_knowledge_base_uploads_expired_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    remove_expired_upload_api_knowledge_base_uploads_expired__upload_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                upload_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_upload_api_knowledge_base_uploads__upload_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                upload_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_upload_api_knowledge_base_uploads__upload_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                upload_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_chunk_api_knowledge_base_uploads__upload_id__chunks_put: {
+        parameters: {
+            query: {
+                offset: number;
+            };
+            header?: {
+                "x-chunk-sha256"?: string;
+            };
+            path: {
+                upload_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_upload_api_knowledge_base_uploads__upload_id__complete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                upload_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -151108,6 +151582,7 @@ export interface operations {
         parameters: {
             query?: {
                 chat_id?: string | null;
+                confirm_dependents?: boolean;
             };
             header?: never;
             path: {
@@ -167786,6 +168261,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NPUPoolReloadResponse"];
+                };
+            };
+        };
+    };
+    list_assigned_unpaired_workers_api_npu_assigned_unpaired_workers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignedWorkersResponse"];
                 };
             };
         };

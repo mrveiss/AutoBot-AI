@@ -9,6 +9,7 @@ using appropriate verifiers (endpoint, test, config, code).
 
 import argparse
 import json
+import logging
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,6 +22,10 @@ from verifiers import (
     EndpointVerifier,
     TestVerifier,
 )
+
+# Standalone CLI: run as `python3 .claude/skills/claims-audit/<script>.py`, where
+# `autobot_shared` is not importable, so stdlib logging stands in for get_logger.
+logger = logging.getLogger(__name__)
 
 
 class ClaimsVerifier:
@@ -160,7 +165,7 @@ def main():
     parser = argparse.ArgumentParser(description="Verify documentation claims against codebase")
     parser.add_argument(
         "input",
-        help="Input claims JSON file (from extract-claims.py)",
+        help="Input claims JSON file (from extract_claims.py)",
     )
     parser.add_argument(
         "-o",
@@ -181,6 +186,7 @@ def main():
     )
 
     args = parser.parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     # Resolve paths
     repo_root = Path(args.repo_root).resolve()
@@ -188,29 +194,29 @@ def main():
     output_path = Path(args.output)
 
     if not repo_root.is_dir():
-        print(f"Error: Repository root not found: {repo_root}", file=sys.stderr)
+        logger.error("Error: Repository root not found: %s", repo_root)
         return 1
 
     if not input_path.is_file():
-        print(f"Error: Input file not found: {input_path}", file=sys.stderr)
+        logger.error("Error: Input file not found: %s", input_path)
         return 1
 
     # Load claims
     if args.verbose:
-        print(f"Loading claims from {input_path}...")
+        logger.info("Loading claims from %s...", input_path)
 
     try:
         claims = load_claims(str(input_path))
     except Exception as e:
-        print(f"Error loading claims: {e}", file=sys.stderr)
+        logger.error("Error loading claims: %s", e)
         return 1
 
     if args.verbose:
-        print(f"Loaded {len(claims)} claims")
+        logger.info("Loaded %d claims", len(claims))
 
     # Verify claims
     if args.verbose:
-        print(f"Verifying claims...")
+        logger.info("Verifying claims...")
 
     verifier = ClaimsVerifier(str(repo_root))
     inventory = verifier.verify_claims(claims)
@@ -221,13 +227,13 @@ def main():
 
     # Print summary
     summary = inventory["summary"]
-    print(f"\nVerification Summary:")
-    print(f"  Total claims: {summary['total_claims']}")
-    print(f"  ✅ Wired:     {summary['wired']} ({summary['wired']*100//summary['total_claims']}%)")
-    print(f"  ⚠️  Partial:   {summary['partial']} ({summary['partial']*100//summary['total_claims']}%)")
-    print(f"  ❌ Broken:    {summary['broken']} ({summary['broken']*100//summary['total_claims']}%)")
-    print(f"  📝 Manual:    {summary['manual']} ({summary['manual']*100//summary['total_claims']}%)")
-    print(f"\nInventory saved to: {output_path}")
+    logger.info("\nVerification Summary:")
+    total = summary["total_claims"]
+    logger.info("  Total claims: %d", total)
+    rows = (("✅ Wired:", "wired"), ("⚠️  Partial:", "partial"), ("❌ Broken:", "broken"), ("📝 Manual:", "manual"))
+    for label, key in rows:
+        logger.info("  %-12s %d (%d%%)", label, summary[key], summary[key] * 100 // total)
+    logger.info("\nInventory saved to: %s", output_path)
 
     return 0
 

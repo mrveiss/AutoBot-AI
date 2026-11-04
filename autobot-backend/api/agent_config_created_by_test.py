@@ -25,7 +25,6 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from api import settings_config
 from api.agent_config import router
 
 
@@ -62,10 +61,9 @@ def _recorded_author(method: str, path: str, json, *, internal_key: bool) -> str
             "api.agent_config.get_db_session",
             return_value=MagicMock(__aenter__=AsyncMock(return_value=MagicMock()), __aexit__=AsyncMock()),
         ),
-        patch.object(settings_config, "verify_internal_api_key", return_value=internal_key),
     ):
         client = _client()
-        response = getattr(client, method)(path, json=json)
+        response = getattr(client, method)(path, json=json, headers={"X-Internal-API-Key": "k"} if internal_key else {})
 
     assert response.status_code == 200, response.text
     return revisions.return_value.create_revision.await_args.kwargs["created_by"]
@@ -82,4 +80,4 @@ def test_recorded_author_is_not_the_literal_admin(method, path, json):
 def test_the_internal_service_key_is_recorded_as_the_service(method, path, json):
     """#16541 AC2: the internal-key branch, not just the admin-session one."""
     created_by = _recorded_author(method, path, json, internal_key=True)
-    assert created_by == settings_config.INTERNAL_SERVICE_ACTOR
+    assert created_by == "test-user"  # #16333: the session's admin, even beside the key
