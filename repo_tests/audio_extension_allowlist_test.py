@@ -166,83 +166,10 @@ def _swept_python_files(root: Path = REPO_ROOT) -> list[Path]:
 #: growth -- and is the only number here chosen by judgement rather than
 #: measurement. Splitting them is what makes that sentence possible; with one
 #: band nobody could say which part was which.
-#:
-#: Ratcheted 5100 -> 5450 (#16702): the 2d batch vehicle combines 14
-#: independently-reviewed PRs' new/moved files onto one tree, and that alone
-#: closed most of the old floor's 700-file runway. `git ls-files "*.py"`
-#: (this declaration's own `discover`) measures 5824 on the vehicle branch at
-#: this commit -- not estimated, not read off a CI log.
-#:
-#: 5450, not 5824: the guard's `completed()` bound is a hard floor with no
-#: skips/growth allowance (unlike `verify_floor`'s examined-vs-floor check),
-#: and the pre-push hook's own actual run of THIS guard reported
-#: `completed 5497` against that same 5824 discovered -- 327 files short.
-#: Corrected (e5 review): that gap is NOT unparseable files -- `test_no_
-#: fourth_literal_copy_exists`'s own loop `continue`s past the canonical
-#: file and everything under `repo_tests/` by design before it ever reads a
-#: file, which is most of the gap; a genuinely unparseable file fails the
-#: test outright via its own `assert not unparsed`, not a silent skip.
-#: Setting floor above 5497 would fail every honest run outright, which the
-#: first version of this fix did. 5450 leaves a small margin below the
-#: measured 5497 for ordinary population fluctuation while using most of
-#: the slack `verify_floor` allows (5824-5450=374, within
-#: skips=300+growth=400=700). `skips`/`growth` themselves are unchanged --
-#: #16724 tracks re-measuring this floor from CI's own log post-merge.
-# #17331/#17332 branch: this branch had pinned 5700 and ADOPTED main's 5752 on
-# rebase, rather than re-deriving a competing number for one measurement.
-# Re-measured here to confirm 5752 actually holds with this branch's files:
-#   population = 6154, gap 402 against the 700 allowance      -- OK
-#   completed  = 5767, so the floor has 15 files of headroom  -- OK, and thin
-# 15 is the number to watch. This declaration's loop skips `repo_tests` outright
-# (see the `rel.parts[0] == "repo_tests"` continue below), so `completed` FALLS
-# as guards are added -- five sessions added some tonight -- while population
-# rises. The two bounds close from opposite directions and only the gap one is
-# ever measured.
-# #18130: the deferral that stood here ("not re-pinning it, main's value holds,
-# recorded on #17142 instead") has had both of its premises removed, so it is
-# replaced rather than carried. #17142 is CLOSED, so it is no longer a home for
-# the finding; and no open PR touches this file, so the concurrent-branch
-# collision it was avoiding cannot happen. The #17818 window check now fails this
-# declaration outright -- 5764 sat in the bottom 40 of [5737, 6137] -- and that
-# check is the thing the deferral was waiting for: it turns "thin" from a number
-# a human watches into one the suite measures. Re-pinned MID-window at the value
-# this run reported, which is also the strict (upward) direction for a reach floor.
 REACH = declare(
     "audio-extension-allowlist",
     discover=_swept_python_files,
-    # Re-pinned 5450 -> 5752 (#17317), held at 5757 on the parent branch and at
-    # 5764 here (#17305/#17306, #17307/#17308): one re-pin measured on three
-    # trees a merge apart. #17317 read 6152 tracked python files, the parent
-    # branch 6159, and this stack 6166 -- its fourteen new modules. All three
-    # are legal in a 700-wide window (skips=300 + growth=400); the highest is
-    # kept because a floor only ever ratchets up, asserting the sweep reached
-    # MORE, which is the strict direction for a reach floor.
-    # 5764 -> 5937 (#18130): measured against a population of 6437, whose window
-    # is [5737, 6137]. 5764 was 27 files from red, which the #17818 check calls
-    # zero tolerance dressed as an allowance -- this PR's own new modules were
-    # that ordinary growth. Mid-window, re-measured here, not carried (#15928).
-    # Re-pinned (#18293): REACH.window() gives [5900, 6300] against population 6600, but
-    # completed() reaches only 6068 because more files are skipped than the declared 300.
-    # 6000 clears the bottom band (>= 5940) and stays under what actually completes.
-    # train-14b: population 6923 -> window [6223, 6623], completed() ~6355 (repo_tests/ skipped); 6309 is the
-    # middle of the legal overlap [6263, 6355].
-    # train-9c: population 6791 -> window [6091, 6491], completed() reaches 6236; 6183 is the middle of
-    # the legal overlap [6131, 6236]. train-8: population 6711 -> window [6011, 6411], completed 6167 (the loop skips
-    # repo_tests/, 544 files, past the declared skips=300). 6110 clears the bottom band (>= 6051) and
-    # stays under what completes; mid-window (6211) would fail every honest run.
-    # train-26: population 6972 -> window [6272, 6672], completed() ~6377 (594 repo_tests/ files skipped);
-    # 6344 is the middle of the legal overlap [6312, 6377].
-    # train-33: population 7017 -> window [6317, 6717], completed() 6408; 6382 is the middle of [6357, 6408].
-    # train-36: population 7045 -> window [6345, 6745], completed() 6434; 6409 is the middle of [6385, 6434].
-    # security train (#18904): population 7093 -> window [6393, 6793], completed() 6472; 6452 is the middle of [6433, 6472].
-    # train-51: population 7163 -> 6517, the middle of [6503, 6532].
-    # #16724: discover() now excludes the canonical file and repo_tests/ (the sweep's by-design
-    # exemptions, 1 + 657 files), so population == what the loop can complete. Measured on this tree:
-    # tracked python 7254 -> population 6596 (6598 on train 76's tree); unreadable 0, unparseable 0
-    # (an unparseable file fails the test outright), so skips=0 and completed() == population.
-    # Window [6196, 6596]; floor=6396 is mid-window: ~200 files of headroom from the bottom and
-    # under completed(), so ordinary growth or shrink no longer forces a re-pin every train.
-    floor=6894,  # mid-window: population 7094, window (6694, 7094)
+    # The floor is computed from the base commit (#19676); skips/growth set the window around it.
     growth=400,
     skips=0,
     what="tracked python files",
