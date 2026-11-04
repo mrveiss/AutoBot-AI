@@ -41,6 +41,7 @@ decisions are different concepts, recorded with their reason.
 from __future__ import annotations
 
 import ast
+import functools
 import re
 from collections import Counter
 from pathlib import Path
@@ -49,6 +50,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOT = repo_root()
@@ -320,16 +322,18 @@ def admin_defs(source: str) -> Counter:
             else:
                 visit(child, prefix)
 
-    visit(ast.parse(source), "")
+    visit(parse_cache.parse(source), "")
     return found
 
 
 def admin_decisions(source: str) -> Counter:
     """Local admin decisions in *source*, by kind."""
-    return Counter(kind for node in ast.walk(ast.parse(source)) if (kind := _node_kind(node)))
+    return Counter(kind for node in ast.walk(parse_cache.parse(source)) if (kind := _node_kind(node)))
 
 
+@functools.lru_cache(maxsize=1)
 def _population() -> tuple[dict[tuple[str, str], int], Counter]:
+    """Memoised (#20814): 4 tests read the same sweep."""
     examined = REACH.examined(_ROOT)
     found: dict[tuple[str, str], int] = {}
     defs: Counter = Counter()  # (file, qualname) -> definitions

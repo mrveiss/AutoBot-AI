@@ -45,6 +45,7 @@ from typing import List, Tuple
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import tracked_paths
 
 REPO_ROOT = repo_root()
@@ -92,7 +93,7 @@ def _tooling_files() -> List[str]:
 def root_walks_in(source: str) -> List[Tuple[int, str]]:
     """``(line, expression)`` for every enumeration rooted at the repo root."""
     try:
-        return root_walks_in_node(ast.parse(source))
+        return root_walks_in_node(parse_cache.parse(source))
     except SyntaxError:
         return []
 
@@ -237,7 +238,7 @@ def _sweep() -> Tuple[List[Finding], int]:
         except (OSError, UnicodeDecodeError):
             continue
         try:
-            tree = ast.parse(source)
+            tree = parse_cache.parse(source)
         except SyntaxError:
             continue
         parsed += 1
@@ -381,7 +382,7 @@ def _safety_of(source: str) -> bool:
     attempt at the test below passed identically with and without the exemption
     restored, because it never reached this function.
     """
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     func = next(n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)))
     return _is_safe(func, tree)
 
