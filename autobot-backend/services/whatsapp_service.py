@@ -22,7 +22,7 @@ Security: access token and app secret are encrypted at rest (see
 
 from typing import Any, Dict, List, Optional, Tuple
 
-from autobot_shared.field_encryption import open_tagged, seal_tagged
+from autobot_shared.field_encryption import open_tagged, seal_tagged, storage_context
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from integrations.base import IntegrationConfig
@@ -41,7 +41,7 @@ WHATSAPP_BASE_URL_KEY = "autobot:settings:whatsapp_base_url"  # nosec B105  # Re
 
 def _context(key: str) -> str:
     """Where a sealed WhatsApp value is stored; the seal is bound to it (#17981)."""
-    return f"redis:{key}"
+    return storage_context("redis", key)
 
 
 def _decode(key: str, raw: Any) -> Optional[str]:

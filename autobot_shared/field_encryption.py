@@ -58,6 +58,17 @@ def _legacy_key(context: str) -> bytes:
     return key
 
 
+def storage_context(store: str, location: str) -> str:
+    """The *context* for a value kept in *store* at *location*, e.g. ``redis`` and a key name (#17981).
+
+    One spelling for every caller: the seal is bound to this string, so two hand-built copies that
+    drifted apart would make each other's values unreadable.
+    """
+    if not store or not location:
+        raise ValueError("a storage context names both the store and the location")
+    return f"{store}:{location}"
+
+
 def encrypt_field(plaintext: str, *, context: str) -> str:
     """Seal *plaintext*, bound to *context*. Raises if the root key is unusable."""
     return seal_field(plaintext.encode("utf-8"), context=context)

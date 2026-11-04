@@ -150,11 +150,14 @@ def systemctl_remote_command(
     # #20767: a unit parked by its start limit (#4090, #20764) refuses start and restart until the
     # window passes. Every start or restart clears that first, as the SLM watchdog does; resetting a
     # unit that isn't failed is a no-op, and the line's exit status stays the action's own.
-    # `systemctl` stays literal in both lines, so the #18359 quoting guard reads each one.
-    sudo = "" if user_scope else ("sudo -n " if use_noninteractive_sudo else "sudo ")
-    scope = " --user" if user_scope else ""
-    reset = f"{sudo}systemctl{scope} reset-failed -- {quoted} 2>/dev/null; " if action in _RESETS_START_LIMIT else ""
-    return f"{reset}{sudo}systemctl{scope} {action}{flags} -- {quoted}{tail}"
+    # `systemctl` stays literal on every line, so the #18359 quoting and #18186 executor guards read each one.
+    resets = action in _RESETS_START_LIMIT
+    if user_scope:
+        reset = f"systemctl --user reset-failed -- {quoted} 2>/dev/null; " if resets else ""
+        return f"{reset}systemctl --user {action}{flags} -- {quoted}{tail}"
+    sudo = "sudo -n" if use_noninteractive_sudo else "sudo"
+    reset = f"{sudo} systemctl reset-failed -- {quoted} 2>/dev/null; " if resets else ""
+    return f"{reset}{sudo} systemctl {action}{flags} -- {quoted}{tail}"
 
 
 async def run_systemctl_over_ssh(

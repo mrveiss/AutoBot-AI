@@ -14,7 +14,7 @@ AES-256-GCM field encryption (see autobot_shared.field_encryption).
 
 from typing import Any, Dict, Optional
 
-from autobot_shared.field_encryption import is_plaintext, open_tagged, seal_tagged
+from autobot_shared.field_encryption import is_plaintext, open_tagged, seal_tagged, storage_context
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
@@ -34,7 +34,7 @@ TELEGRAM_BOT_ID_KEY = "autobot:settings:telegram_bot_id"
 
 def _context(redis_key: str) -> str:
     """Where a sealed Telegram credential is stored; the seal is bound to it (#17981)."""
-    return f"redis:{redis_key}"
+    return storage_context("redis", redis_key)
 
 
 async def _read_sealed(redis: Any, redis_key: str) -> Optional[str]:

@@ -59,7 +59,7 @@ _ALLOWED: dict[tuple[str, str, str], str] = {
         "autobot-slm-backend/services/service_restart.py",
         "systemctl_remote_command",
         "sudo",
-    ): "`sudo -n `, `sudo ` or empty for the user manager, selected from bools two lines above",
+    ): "`sudo -n` or `sudo`, selected from a bool the line above",
     (
         "autobot-slm-backend/services/service_restart.py",
         "systemctl_remote_command",
@@ -80,11 +80,6 @@ _ALLOWED: dict[tuple[str, str, str], str] = {
         "systemctl_remote_command",
         "quoted",
     ): "built from shlex.quote(validate_unit_name(u)) in the line above",
-    (
-        "autobot-slm-backend/services/service_restart.py",
-        "systemctl_remote_command",
-        "scope",
-    ): "` --user` or empty, selected from a bool (#20767)",
     (
         "autobot-slm-backend/services/service_restart.py",
         "systemctl_remote_command",
