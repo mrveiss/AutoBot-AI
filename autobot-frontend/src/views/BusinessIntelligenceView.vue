@@ -312,7 +312,7 @@
 
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BaseButton } from '@autobot/ui'
+import { BaseButton, saveTextFile } from '@autobot/ui'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import AdvancedAnalytics from '@/components/analytics/AdvancedAnalytics.vue'
 import AgentCostPanel from '@/components/analytics/AgentCostPanel.vue'
@@ -493,13 +493,8 @@ const generateReport = async (reportType: string) => {
 
 const downloadReport = () => {
   if (!generatedReport.value) return
-  const blob = new Blob([JSON.stringify(generatedReport.value, null, 2)], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `autobot_${generatedReport.value.report_type}_report.json`
-  a.click()
-  URL.revokeObjectURL(url)
+  const report = generatedReport.value
+  saveTextFile(JSON.stringify(report, null, 2), `autobot_${report.report_type}_report.json`, 'application/json')
 }
 
 const refreshAll = async () => {
