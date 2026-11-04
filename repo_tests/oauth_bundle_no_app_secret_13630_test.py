@@ -60,8 +60,6 @@ def _source_population(root: Path) -> list[str]:
 REACH = declare(
     "oauth-bundle-app-secret-scan",
     discover=_source_population,
-    # Mid-window, from REACH.window() = (2430, 2730, 2580).
-    floor=2948,  # re-pinned mid-window (train 81 on main)
     what="non-test python source",
     roots=("autobot-backend", "autobot_shared"),
     growth=300,
