@@ -86,9 +86,9 @@ async def _resolve_ws_user(websocket: WebSocket) -> "dict | None":
     `WebSocket` constructor's ``protocols`` argument) and the query string --
     so the subprotocol/query-param check (:func:`auth_middleware.authenticate_websocket`,
     #16457) goes first. A non-browser or service caller may instead send an
-    ``Authorization`` header, an ``X-Session-ID`` session header, a dev-mode
-    header, or the internal-service key; ``get_user_from_request`` and
-    ``verify_internal_api_key`` already resolve those for HTTP requests, and
+    ``Authorization`` header, an ``X-Session-ID`` session header or a dev-mode
+    header (not the internal-service key, which is not a user: #16333);
+    ``get_user_from_request`` already resolves those for HTTP requests, and
     a WebSocket exposes the same ``headers``/``cookies`` interface
     (``authenticate_ws_admin`` relies on the same fact). Trying each in turn
     is a union of the accepted checks -- more ways to prove identity, not a
@@ -98,14 +98,12 @@ async def _resolve_ws_user(websocket: WebSocket) -> "dict | None":
     from auth_middleware import (  # noqa: PLC0415
         authenticate_websocket,
         resolve_human_user,
-        verify_internal_api_key,
     )
 
     user = await authenticate_websocket(websocket)
     if user is not None:
         return user
-    if verify_internal_api_key(websocket.headers.get("X-Internal-API-Key")):
-        return {"username": "service:slm", "role": "admin", "service": True}
+    # #16333 (owner ruling b): the service key is not a user here; no WebSocket names a service caller.
     try:
         # #18688: the canonical resolver, so a JWT minted before a password change is refused
         # and an epoch store that cannot answer denies (fail closed) -- both read as "no user".
@@ -138,9 +136,9 @@ async def enforce_ws_authentication(websocket: WebSocket) -> "dict | None":
 
 
 async def authenticate_ws_admin(websocket: WebSocket) -> bool:
-    """Fail-closed auth+authz for admin WS endpoints: a valid user (JWT/session/
-    cookie) or the internal-service key, AND admin role — matching the REST
-    endpoints' ``Depends(check_admin_permission)``.
+    """Fail-closed auth+authz for admin WS endpoints: a valid human user (JWT/session/
+    cookie) AND admin role — matching the REST ``Depends(check_admin_permission)``.
+    The internal service key is not an admin (#16333).
 
     A WebSocket exposes the same ``headers``/``cookies`` interface as a Request,
     so the standard auth middleware resolves the caller. Any error → deny.
@@ -155,11 +153,9 @@ async def authenticate_ws_admin(websocket: WebSocket) -> bool:
     try:
         from auth_middleware import (  # noqa: PLC0415
             resolve_human_user,
-            verify_internal_api_key,
         )
 
-        if verify_internal_api_key(websocket.headers.get("X-Internal-API-Key")):
-            return True
+        # #16333 (owner ruling b): the service key is not an admin; a human admin's session is required.
         user = await resolve_human_user(websocket)  # type: ignore[arg-type]  # #18688: revocation enforced
         if not user:
             return False

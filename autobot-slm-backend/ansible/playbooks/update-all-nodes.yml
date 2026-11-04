@@ -1179,19 +1179,16 @@
       no_log: true
       tags: [backend, env]
 
-    # Internal service API key — backend must use the same key the SLM expects.
-    # Written by the backend role into /etc/autobot/autobot-backend.env (#10632).
-    - name: "[PLAY 2] Backend | Read AUTOBOT_INTERNAL_API_KEY (#10636)"
-      ansible.builtin.shell:
-        cmd: >-
-          grep -oP '^AUTOBOT_INTERNAL_API_KEY=\K.*'
-          {{ autobot_backend_env_file | quote }} 2>/dev/null || true
-      register: existing_internal_api_key
-      become: true
+    # Internal service API key (#10636): the one resolution install shares (#20750). The SLM's
+    # key is canonical; a backend whose key differs keeps it, visibly, because changing it needs
+    # the owner's approval (#17038). Sets autobot_internal_api_key for the env_only render below.
+    - name: "[PLAY 2] Backend | Resolve AUTOBOT_INTERNAL_API_KEY (#10636, #20750)"
+      ansible.builtin.include_tasks: ../_shared/tasks/resolve_internal_api_key.yml
+      vars:
+        internal_api_key_current_env_files:
+          - "{{ autobot.base_dir }}/autobot-backend/.env"
+          - "{{ autobot_backend_env_file }}"
       when: "'backend' in group_names"
-      failed_when: false
-      changed_when: false
-      no_log: true
       tags: [backend, env]
 
     # Full user management requires the autobot_app DB password (#10636).
@@ -1315,9 +1312,8 @@
         backend_secret_key: "{{ existing_secret_key.stdout | default(lookup('env', 'AUTOBOT_SECRET_KEY') | default('autobot-dev-secret-' + (9999999999 | random | string), true), true) }}"
         # #10400: prefer SLM_SECRET_KEY when present, else keep the role default.
         backend_jwt_secret: "{{ (existing_slm_secret_key.stdout | default('') | trim) if (existing_slm_secret_key.stdout | default('') | trim) | length > 0 else (existing_secret_key.stdout | default('') | trim) }}"
-        # #10636: internal service API key + full-user-management DB password,
-        # read from /etc/autobot above.
-        autobot_internal_api_key: "{{ existing_internal_api_key.stdout | default('') | trim }}"
+        # #10636: full-user-management DB password, read from /etc/autobot above. The internal
+        # service API key is the fact resolved above (#20750), not passed here.
         backend_postgres_password: "{{ existing_autobot_db_password.stdout | default('') | trim }}"
         # #10636: seed the default platform admin on first boot (full user mgmt).
         autobot_admin_password: "{{ _admin_seed_password_read | default('') }}"

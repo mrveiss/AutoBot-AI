@@ -12169,6 +12169,8 @@ export interface paths {
          * Set Provider
          * @description Set the active cloud ASR provider.
          *
+         *     Admin-only (owner ruling 2026-09-11): it decides which cloud provider receives every user's audio.
+         *
          *     Persistence limitation: this is in-process only and is lost on restart.
          *     For persistence across restarts, set TRANSCRIBER_ASR_PROVIDER in the
          *     backend environment before starting the service.
