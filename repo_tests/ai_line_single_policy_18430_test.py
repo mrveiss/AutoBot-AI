@@ -40,6 +40,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOTS = ("autobot-backend", "autobot_shared")
@@ -114,7 +115,7 @@ def decision_functions(source: str) -> list[str]:
     """Names of approval-decision ``def``s in *source*."""
     return [
         node.name
-        for node in ast.walk(ast.parse(source))
+        for node in ast.walk(parse_cache.parse(source))
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and _DECISION_NAME.search(node.name)
     ]
 
@@ -122,7 +123,7 @@ def decision_functions(source: str) -> list[str]:
 def calls_of(source: str, name: str) -> list[int]:
     """Lines calling ``name(...)`` or ``<obj>.name(...)``."""
     found = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.Call):
             func = node.func
             if (isinstance(func, ast.Name) and func.id == name) or (
@@ -138,7 +139,7 @@ def _population() -> tuple[tuple[str, str], ...]:
     texts = []
     for rel in REACH.examined(root):
         try:
-            ast.parse(text := (root / rel).read_text(encoding="utf-8"))
+            parse_cache.parse(text := (root / rel).read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError, SyntaxError):
             continue
         texts.append((rel, text))
@@ -213,7 +214,7 @@ def test_the_realtime_bridge_is_reached_only_by_routes_that_pass_the_authenticat
     for rel in _TOOL_EXECUTING_ROUTES:
         sites = [
             node
-            for node in ast.walk(ast.parse(_sources()[rel]))
+            for node in ast.walk(parse_cache.parse(_sources()[rel]))
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "call_tool"
         ]
         assert sites, f"{rel} no longer calls the bridge"
