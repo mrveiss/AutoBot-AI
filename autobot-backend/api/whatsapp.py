@@ -175,7 +175,7 @@ async def whatsapp_webhook_verify(request: Request) -> PlainTextResponse:
     token = params.get("hub.verify_token")
     challenge = params.get("hub.challenge", "")
 
-    stored_token = await get_whatsapp_verify_token()
+    stored_token = await get_whatsapp_verify_token()  # unreadable: one 503 from credential_handlers (#17981)
     if not stored_token:
         logger.error("WhatsApp verify token not configured — failing closed")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Webhook not configured")
@@ -206,7 +206,7 @@ async def whatsapp_webhook(request: Request) -> JSONResponse:
     """
     raw_body = await request.body()
 
-    app_secret = await get_whatsapp_app_secret()
+    app_secret = await get_whatsapp_app_secret()  # unreadable: one 503 from credential_handlers (#17981)
     if not app_secret:
         logger.error("WhatsApp app secret not configured — failing closed")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Webhook not configured")
