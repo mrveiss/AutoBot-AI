@@ -25,6 +25,8 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 # #15925: one canonical spelling of the repo root. Re-deriving it from
 # __file__ here would be a fork of exactly the kind this test's subject exists
 # to find -- the guard caught it, which is the system working.
@@ -118,8 +120,8 @@ def test_route_handlers_are_excluded_and_the_exclusion_is_load_bearing() -> None
     (8) and `get_status` (7) at the top. All were FastAPI handlers in separate
     routers -- normal design, not forks.
     """
-    handler = ast.parse("@router.get('/x')\ndef test_connection():\n    pass\n").body[0]
-    plain = ast.parse("def test_connection():\n    pass\n").body[0]
+    handler = parse_cache.parse("@router.get('/x')\ndef test_connection():\n    pass\n").body[0]
+    plain = parse_cache.parse("def test_connection():\n    pass\n").body[0]
     assert detector.is_route_handler(handler)
     assert not detector.is_route_handler(plain)
 
@@ -135,7 +137,7 @@ def test_route_handlers_are_excluded_and_the_exclusion_is_load_bearing() -> None
 )
 def test_route_handler_detection_does_not_overreach(source: str, expected: bool) -> None:
     """An over-broad exclusion silently shrinks the population it is measuring."""
-    assert detector.is_route_handler(ast.parse(source).body[0]) is expected
+    assert detector.is_route_handler(parse_cache.parse(source).body[0]) is expected
 
 
 def _subclasses_shared_namesake(cls: ast.ClassDef, origin: dict[str, tuple[str, str]]) -> bool:
@@ -211,7 +213,7 @@ def _independent_population() -> set[str]:
         if base.endswith("_test.py") or base.startswith("test_") or base == "conftest.py" or "tests" in parts:
             continue
         try:
-            tree = ast.parse((_REPO_ROOT / rel).read_text(encoding="utf-8"))
+            tree = parse_cache.parse((_REPO_ROOT / rel).read_text(encoding="utf-8"))
         except (SyntaxError, OSError):
             continue
         body = tree.body

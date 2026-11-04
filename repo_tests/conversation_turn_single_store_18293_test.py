@@ -46,6 +46,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
 from autobot_shared.store_authority import STORE_AUTHORITY
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOTS = ("autobot-backend", "autobot_shared", "autobot-infrastructure")
@@ -109,7 +110,7 @@ def _docstring_ids(tree: ast.AST) -> set[int]:
 
 def path_literals(source: str) -> list[int]:
     """Lines of string constants naming the location as a path component (docstrings excluded)."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     skip = _docstring_ids(tree)
     return [
         node.lineno
@@ -123,7 +124,9 @@ def path_literals(source: str) -> list[int]:
 
 def setting_reads(source: str) -> list[int]:
     """Lines reading the SSOT location setting -- ``<anything>.legacy_transcripts_dir``."""
-    return [n.lineno for n in ast.walk(ast.parse(source)) if isinstance(n, ast.Attribute) and n.attr == _SETTING]
+    return [
+        n.lineno for n in ast.walk(parse_cache.parse(source)) if isinstance(n, ast.Attribute) and n.attr == _SETTING
+    ]
 
 
 def _called_name(call: ast.Call) -> str:
@@ -161,7 +164,7 @@ def _is_write(node: ast.AST) -> bool:
 def transcript_writes(source: str) -> list[str]:
     """``function:line`` of every file-creating call in a function that names the location."""
     found = []
-    for fn in ast.walk(ast.parse(source)):
+    for fn in ast.walk(parse_cache.parse(source)):
         if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)) or not _names_location(fn):
             continue
         found.extend(f"{fn.name}:{node.lineno}" for node in ast.walk(fn) if _is_write(node))
@@ -170,7 +173,7 @@ def transcript_writes(source: str) -> list[str]:
 
 def writes_llm_context_cache(source: str) -> bool:
     """True when *source* builds a ``chat:conversation:*`` key AND writes Redis."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     names_prefix = any(
         (isinstance(n, ast.Attribute) and n.attr in _CACHE_PREFIX_NAMES)
         or (isinstance(n, ast.Constant) and isinstance(n.value, str) and n.value.startswith("chat:conversation:"))
@@ -351,7 +354,7 @@ def test_the_compose_backend_pins_the_location_under_the_image_workdir() -> None
 
 
 def _calls(source: str, name: str) -> bool:
-    return any(isinstance(n, ast.Call) and _called_name(n) == name for n in ast.walk(ast.parse(source)))
+    return any(isinstance(n, ast.Call) and _called_name(n) == name for n in ast.walk(parse_cache.parse(source)))
 
 
 def test_only_an_approved_proposal_removes_a_legacy_transcript() -> None:
@@ -372,7 +375,7 @@ _LEGACY_MODULE = "autobot-backend/chat_history/legacy_transcripts.py"
 
 
 def _imports_module(source: str, dotted: str) -> bool:
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.ImportFrom) and node.module == dotted:
             return True
         if isinstance(node, ast.Import) and any(alias.name == dotted for alias in node.names):
@@ -384,7 +387,7 @@ def _opening_functions(source: str) -> set[str]:
     """Functions in *source* that open a file -- the legacy module may have exactly one."""
     return {
         fn.name
-        for fn in ast.walk(ast.parse(source))
+        for fn in ast.walk(parse_cache.parse(source))
         if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef))
         and any(isinstance(n, ast.Call) and _called_name(n) == "open" for n in ast.walk(fn))
     }
