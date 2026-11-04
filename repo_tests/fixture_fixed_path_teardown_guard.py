@@ -47,6 +47,7 @@ from repo_tests.fixture_fixed_path_teardown_flow import (
 )
 
 from autobot_shared.paths import scrubbed_git_env
+from tools.lint import _parse_cache as parse_cache
 
 _REPO = repo_root()
 
@@ -418,7 +419,7 @@ def _scan_repo() -> Tuple[int, List[Tuple[Path, str, int]], List[Tuple[Path, str
     unreadable: List[Tuple[Path, str]] = []
     for path in _tracked_python_files():
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            tree = parse_cache.parse(path.read_text(encoding="utf-8"))
         except (SyntaxError, UnicodeDecodeError, ValueError, OSError) as failure:
             unreadable.append((path, f"{type(failure).__name__}: {failure}"))
             continue

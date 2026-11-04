@@ -14,16 +14,18 @@ from pathlib import Path
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _ROOT = repo_root()
 
 
 def _module_defs(rel: str) -> set[str]:
-    tree = ast.parse((_ROOT / rel).read_text(encoding="utf-8"))
+    tree = parse_cache.parse((_ROOT / rel).read_text(encoding="utf-8"))
     return {n.name for n in tree.body if isinstance(n, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))}
 
 
 def _defines(source: str, name: str) -> bool:
-    return name in {n.name for n in ast.parse(source).body if isinstance(n, (ast.ClassDef, ast.FunctionDef))}
+    return name in {n.name for n in parse_cache.parse(source).body if isinstance(n, (ast.ClassDef, ast.FunctionDef))}
 
 
 #: file -> (names that must be gone, names that now live there)

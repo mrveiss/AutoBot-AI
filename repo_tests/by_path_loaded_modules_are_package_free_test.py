@@ -43,6 +43,8 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 REPO_ROOT = repo_root()
 SLM_ROOT = REPO_ROOT / "autobot-slm-backend"
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "slm-migration-gate.yml"
@@ -69,7 +71,7 @@ def _first_party_packages() -> set[str]:
 
 def _absolute_imports(path: Path) -> set[str]:
     try:
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parse_cache.parse(path.read_text(encoding="utf-8"))
     except (OSError, SyntaxError):
         return set()
     found: set[str] = set()
@@ -116,7 +118,7 @@ def _unreachable_packages() -> set[str]:
 def _offending_imports(source: str, unreachable: set[str]) -> list[str]:
     """Imports that cannot resolve when the module is exec'd without a package."""
     problems = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.ImportFrom):
             if node.level:
                 problems.append(f"relative import: {'.' * node.level}{node.module or ''}")
