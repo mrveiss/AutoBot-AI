@@ -132,7 +132,7 @@ Searches for `text.?to.?sql|nl2sql|ontology|answerab|unconstructable|vacuous` ov
 
 ### What We Already Do Better
 
-- **Authentication on every route.** `nl_query` requires `Depends(get_current_user)` (`api/nl_database.py:138`).
+- **Authentication on the NL→SQL route.** `nl_query` requires `Depends(get_current_user)` (`api/nl_database.py:138`).
   The reference work's internal API and ingest services trust a forwarded header or have no
   authentication at all.
 - **A read-only check exists at all.** `_validate_readonly_sql` (`nl_database_service.py:71-95`, #723) runs
