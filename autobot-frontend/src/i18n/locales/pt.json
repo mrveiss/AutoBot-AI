@@ -3193,6 +3193,7 @@
       "reasonUnknown": "motivo não informado"
     },
     "connectors": {
+      "syncNotStarted": "The sync didn't start. This connector may already be syncing; try again when it finishes.",
       "title": "Conectores de fontes",
       "addConnector": "Adicionar conector",
       "loadingConnectors": "Carregando conectores...",
