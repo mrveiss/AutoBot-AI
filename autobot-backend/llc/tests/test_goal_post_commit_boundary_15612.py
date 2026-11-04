@@ -34,13 +34,14 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from autobot_shared.async_compat import pending_background_tasks
+from llc.models.activity import LLCActivityLog
 from llc.models.goal import GoalLevel, LLCGoal
 from llc.services import goal as goal_module
 from llc.services.goal import GoalService
 from llc.tests import _e2e_harness as harness
 from user_management.models.base import Base
 
-_COMPANY = "co-15612"
+_COMPANY = "00000000-0000-4000-8000-000000015612"  # a real UUID: the goal's audit row keys on it (#20101)
 
 # Session methods that constitute "using the database through this session".
 _SESSION_DB_METHODS = frozenset(
@@ -94,7 +95,7 @@ async def goal_env(monkeypatch) -> AsyncIterator[tuple]:
     engine = create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
         "sqlite+aiosqlite:///:memory:"
     )
-    tables = [LLCGoal.__table__]
+    tables = [LLCActivityLog.__table__, LLCGoal.__table__]
     for table in tables:
         harness._scrub_pg_server_defaults(table)
         harness._clientside_timestamps(table)
