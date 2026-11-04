@@ -29,6 +29,8 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_lines
+
 _SSOT_PY = "autobot_shared/ssot_config.py"
 _SSOT_TS = "autobot-frontend/src/config/ssot-config.ts"
 _TEMPLATES = (".env.example", "autobot-frontend/.env.example")
@@ -60,13 +62,9 @@ def env_value(text: str, key: str) -> str | None:
     return found[-1] if found else None
 
 
-def literal_port_writes(text: str) -> list[str]:
+def literal_port_writes(text: str, name: str | Path = "deploy.sh") -> list[str]:
     """Lines that write `VITE_BACKEND_PORT` as a number, comment lines skipped."""
-    return [
-        line.strip()
-        for line in text.splitlines()
-        if _LITERAL_PORT.search(line) and not line.lstrip().startswith(("#", "//"))
-    ]
+    return [ln.text.strip() for ln in code_lines(text, name=name) if _LITERAL_PORT.search(ln.text)]
 
 
 def _deploy_files() -> list[Path]:
@@ -132,26 +130,25 @@ def test_no_deploy_file_writes_the_gui_backend_port_as_a_number() -> None:
     offenders = {
         p.relative_to(repo_root()).as_posix(): w
         for p in files
-        if (w := literal_port_writes(p.read_text(encoding="utf-8", errors="replace")))
+        if (w := literal_port_writes(p.read_text(encoding="utf-8", errors="replace"), p))
     }
     assert (
         offenders == {}
     ), f"derive VITE_BACKEND_PORT from {{{{ backend_port }}}} or ${{AUTOBOT_BACKEND_PORT}}: {offenders}"
 
 
-def protocol_or_port_literals(text: str) -> list[str]:
+def protocol_or_port_literals(text: str, name: str | Path = "config.ts") -> list[str]:
     """Code lines holding a quoted `http`/`https` or a quoted 2-5 digit port, comment lines skipped."""
-    lines = [ln.strip() for ln in text.splitlines() if not ln.lstrip().startswith(("//", "*", "/*"))]
-    return [ln for ln in lines if _APP_LITERAL.search(ln)]
+    return [ln.text.strip() for ln in code_lines(text, name=name) if _APP_LITERAL.search(ln.text)]
 
 
 @pytest.mark.parametrize("rel", [_APP_CONFIG, _API_REPOSITORY])
 def test_the_gui_config_holds_no_protocol_or_port_literal(rel: str) -> None:
-    assert protocol_or_port_literals(_text(rel)) == [], rel
+    assert protocol_or_port_literals(_text(rel), rel) == [], rel
 
 
 def test_the_dynamic_inventory_sets_the_ssot_backend_port() -> None:
     text = _text(_DYNAMIC_INVENTORY)
-    m = re.search(r'BACKEND_PORT = int\(os\.environ\.get\("AUTOBOT_BACKEND_PORT", "(\d+)"\)\)', text)
+    m = re.search(r"^_DEFAULT_BACKEND_PORT = (\d+)$", text, re.M)
     assert m and int(m.group(1)) == ssot_backend_port(), "the dynamic inventory's default must be the SSOT port"
     assert '["backend_port"] = BACKEND_PORT' in text, "the dynamic inventory must hand Ansible backend_port"
