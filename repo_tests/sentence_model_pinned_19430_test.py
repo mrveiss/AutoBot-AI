@@ -17,6 +17,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 
 from autobot_shared.pinned_model_registry import get_pinned_revision
+from tools.lint import _parse_cache as parse_cache
 
 _BASE = repo_root() / "autobot-backend" / "utils" / "semantic_chunker_base.py"
 _SCOPES = ("autobot-backend", "autobot_shared")
@@ -41,7 +42,7 @@ def _constructions(tree: ast.AST) -> list[int]:
 
 
 def _base_constants() -> dict[str, object]:
-    tree = ast.parse(_BASE.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(_BASE.read_text(encoding="utf-8"))
     wanted = {"SENTENCE_EMBEDDING_MODEL", "SENTENCE_EMBEDDING_FALLBACKS"}
     return {
         t.id: ast.literal_eval(node.value)
@@ -53,8 +54,11 @@ def _base_constants() -> dict[str, object]:
 
 
 def test_the_detectors_see_a_construction_and_a_name_literal() -> None:
-    assert _constructions(ast.parse("m = SentenceTransformer('x')\nn = st.SentenceTransformer('y')\n")) == [1, 2]
-    assert _constructions(ast.parse("m = load_sentence_transformer('x')\n")) == []
+    assert _constructions(parse_cache.parse("m = SentenceTransformer('x')\nn = st.SentenceTransformer('y')\n")) == [
+        1,
+        2,
+    ]
+    assert _constructions(parse_cache.parse("m = load_sentence_transformer('x')\n")) == []
     assert _NAME_LITERAL.search('model = "all-MiniLM-L6-v2"')
     assert not _NAME_LITERAL.search("Local semantic chunker (all-MiniLM-L6-v2) - fallback")
 
@@ -65,7 +69,7 @@ def test_one_loader_constructs_every_sentence_transformer() -> None:
     sites = {
         f"{p.relative_to(repo_root()).as_posix()}:{line}"
         for p in files
-        for line in _constructions(ast.parse(p.read_text(encoding="utf-8")))
+        for line in _constructions(parse_cache.parse(p.read_text(encoding="utf-8")))
     }
     assert len(sites) == 1 and next(iter(sites)).startswith("autobot-backend/utils/semantic_chunker_base.py:"), sites
 
@@ -91,7 +95,11 @@ def _loader_is_verified(source: str) -> bool:
     """``load_sentence_transformer`` loads through ``load_verified(model_name, lambda revision: ...)``
     and passes that ``revision`` on, so the pin is used and the digests are checked before return."""
     loader = next(
-        (n for n in ast.parse(source).body if isinstance(n, ast.FunctionDef) and n.name == "load_sentence_transformer"),
+        (
+            n
+            for n in parse_cache.parse(source).body
+            if isinstance(n, ast.FunctionDef) and n.name == "load_sentence_transformer"
+        ),
         None,
     )
     if loader is None:

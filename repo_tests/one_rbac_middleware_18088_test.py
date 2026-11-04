@@ -27,6 +27,8 @@ import ast
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 CANONICAL = "autobot_shared/user_management/middleware/rbac_middleware.py"
 #: The decorators live beside the middleware (split to stay under the file-size ceiling).
 CANONICAL_DECORATORS = "autobot_shared/user_management/middleware/rbac_decorators.py"
@@ -56,7 +58,7 @@ MAX_SHIM_LINES = 60
 
 
 def _tree(rel: str) -> ast.Module:
-    return ast.parse((repo_root() / rel).read_text(encoding="utf-8"))
+    return parse_cache.parse((repo_root() / rel).read_text(encoding="utf-8"))
 
 
 def _defined_names(tree: ast.Module) -> set[str]:
@@ -159,7 +161,7 @@ def test_each_service_keeps_a_shim_not_a_copy(rel: str) -> None:
         f"#18088: {rel} is {lines} lines. Enforcement lives in {CANONICAL}; this path is a "
         "re-export shim. A copy here is the security drift #6511 named."
     )
-    defined = _defined_names(ast.parse(source))
+    defined = _defined_names(parse_cache.parse(source))
     assert not defined, f"#18088: {rel} defines {sorted(defined)} — a shim defines nothing"
 
 
@@ -200,7 +202,7 @@ def test_no_third_copy_of_the_middleware_has_appeared() -> None:
         if "RBACMiddleware" not in source and not any(name in source for name in DECORATOR_NAMES):
             continue
         try:
-            tree = ast.parse(source)
+            tree = parse_cache.parse(source)
         except SyntaxError:
             continue
         parsed += 1
@@ -217,21 +219,21 @@ def test_no_third_copy_of_the_middleware_has_appeared() -> None:
 def test_the_shim_detector_has_a_contrast_pair() -> None:
     """A detector that never fires passes every assertion above by finding nothing."""
     a_copy = "class RBACMiddleware:\n    def __init__(self):\n        pass\n"
-    assert _defined_names(ast.parse(a_copy)) == {"RBACMiddleware"}, "must see a real copy"
+    assert _defined_names(parse_cache.parse(a_copy)) == {"RBACMiddleware"}, "must see a real copy"
 
     a_shim = (
         "from autobot_shared.user_management.middleware.rbac_middleware import (\n"
         "    RBACMiddleware,\n    rbac_middleware,\n)\n"
     )
-    assert _defined_names(ast.parse(a_shim)) == set(), "must NOT call a re-export a definition"
-    assert {"RBACMiddleware", "rbac_middleware"} <= _imported_names(ast.parse(a_shim))
+    assert _defined_names(parse_cache.parse(a_shim)) == set(), "must NOT call a re-export a definition"
+    assert {"RBACMiddleware", "rbac_middleware"} <= _imported_names(parse_cache.parse(a_shim))
 
 
 def test_the_shared_middleware_imports_no_service_module_at_runtime() -> None:
     """Dependencies are injected (`configure_rbac`), never imported from a service."""
     modules = sorted((repo_root() / MIDDLEWARE_DIR).glob("*.py"))
     assert modules, f"no module found under {MIDDLEWARE_DIR} -- the sweep is looking wrong"
-    offenders = {m.name: _runtime_service_imports(ast.parse(m.read_text(encoding="utf-8"))) for m in modules}
+    offenders = {m.name: _runtime_service_imports(parse_cache.parse(m.read_text(encoding="utf-8"))) for m in modules}
     offenders = {name: found for name, found in offenders.items() if found}
     assert not offenders, (
         f"#18088: {offenders} import a service's user_management at runtime. Shared code takes "
@@ -241,45 +243,45 @@ def test_the_shared_middleware_imports_no_service_module_at_runtime() -> None:
 
 def test_the_runtime_import_detector_has_a_contrast_pair() -> None:
     bad = "from user_management.database import db_session_context\nimport user_management.models\n"
-    assert _runtime_service_imports(ast.parse(bad)) == ["user_management.database", "user_management.models"]
+    assert _runtime_service_imports(parse_cache.parse(bad)) == ["user_management.database", "user_management.models"]
 
     ok = (
         "from typing import TYPE_CHECKING\n"
         "if TYPE_CHECKING:\n    from user_management.services import UserService\n"
         "from autobot_shared.user_management.models.audit import AuditLog\n"
     )
-    assert _runtime_service_imports(ast.parse(ok)) == [], "TYPE_CHECKING and autobot_shared imports are allowed"
+    assert _runtime_service_imports(parse_cache.parse(ok)) == [], "TYPE_CHECKING and autobot_shared imports are allowed"
 
 
 def test_the_copy_detector_catches_a_partial_copy_with_a_contrast_pair() -> None:
     """A copy defining only one decorator is still a second implementation (#18088 AC3)."""
     for name in DECORATOR_NAMES:
         copy = f"def {name}(p):\n    async def w():\n        return await rbac_middleware.check_permission(p)\n"
-        assert _redefines_enforcement(ast.parse(copy)), name
-    assert _redefines_enforcement(ast.parse("class RBACMiddleware:\n    pass\n"))
+        assert _redefines_enforcement(parse_cache.parse(copy)), name
+    assert _redefines_enforcement(parse_cache.parse("class RBACMiddleware:\n    pass\n"))
 
     shim = "from autobot_shared.user_management.middleware.rbac_decorators import require_permission\n"
-    assert not _redefines_enforcement(ast.parse(shim)), "a re-export is not a definition"
+    assert not _redefines_enforcement(parse_cache.parse(shim)), "a re-export is not a definition"
     unrelated = "def require_permission(p):\n    return security_layer.check_permission(p)\n"
-    assert not _redefines_enforcement(ast.parse(unrelated)), "a different implementation is not a copy"
+    assert not _redefines_enforcement(parse_cache.parse(unrelated)), "a different implementation is not a copy"
 
 
 def test_the_type_checking_exemption_covers_only_the_body() -> None:
     """Contrast fixtures: the else branch and dynamic imports run, so they are flagged."""
     in_else = "if TYPE_CHECKING:\n    pass\nelse:\n    from user_management.x import Y\n"
-    assert _runtime_service_imports(ast.parse(in_else)) == ["user_management.x"]
+    assert _runtime_service_imports(parse_cache.parse(in_else)) == ["user_management.x"]
 
     in_body = "if TYPE_CHECKING:\n    from user_management.x import Y\n"
-    assert _runtime_service_imports(ast.parse(in_body)) == []
+    assert _runtime_service_imports(parse_cache.parse(in_body)) == []
 
     qualified = "import typing\nif typing.TYPE_CHECKING:\n    from user_management.x import Y\n"
-    assert _runtime_service_imports(ast.parse(qualified)) == []
+    assert _runtime_service_imports(parse_cache.parse(qualified)) == []
 
     negated = "if not TYPE_CHECKING:\n    from user_management.x import Y\n"
-    assert _runtime_service_imports(ast.parse(negated)) == ["user_management.x"]
+    assert _runtime_service_imports(parse_cache.parse(negated)) == ["user_management.x"]
 
     dynamic = 'import importlib\nimportlib.import_module("user_management.x")\n__import__("user_management.y")\n'
-    assert _runtime_service_imports(ast.parse(dynamic)) == ["user_management.x", "user_management.y"]
+    assert _runtime_service_imports(parse_cache.parse(dynamic)) == ["user_management.x", "user_management.y"]
 
     harmless = 'import importlib\nimportlib.import_module("autobot_shared.x")\n'
-    assert _runtime_service_imports(ast.parse(harmless)) == []
+    assert _runtime_service_imports(parse_cache.parse(harmless)) == []
