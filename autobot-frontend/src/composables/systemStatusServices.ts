@@ -14,6 +14,7 @@
  */
 
 import apiEndpointMapper from '@/utils/ApiEndpointMapper.js'
+import { createDateFormatter } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 
@@ -178,9 +179,7 @@ export async function fetchServiceStatus(): Promise<[ServiceRow[], boolean]> {
 }
 
 /** `HH:MM` in the viewer's locale, for the "as of" stamp. */
-function asOf(at: Date): string {
-  return at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
+const asOf = createDateFormatter({ kind: 'time', intl: { hour: '2-digit', minute: '2-digit' } })
 
 /**
  * GH#12866: why the backend row is amber -- the probes timed out while
