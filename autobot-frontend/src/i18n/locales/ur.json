@@ -1873,8 +1873,6 @@
         "docs": "Documentation"
       },
       "justNow": "Just now",
-      "minutesAgo": "{count}m ago",
-      "hoursAgo": "{count}h ago",
       "installSuccess": "Pre-commit hooks installed successfully",
       "installFailed": "Failed to install hooks",
       "uninstallSuccess": "Pre-commit hooks uninstalled",
@@ -2291,6 +2289,7 @@
       "promptDeleteAll": "Type \"DELETE ALL\" to confirm (case sensitive):"
     },
     "connectors": {
+      "syncNotStarted": "The sync didn't start. This connector may already be syncing; try again when it finishes.",
       "config": {
         "typeFileServerDesc": "Monitor a directory for new and changed files",
         "back": "Back",
@@ -5162,7 +5161,6 @@
       "sessionLabel": "سیشن {id}",
       "invitedAt": "مدعو کیا گیا {time}",
       "justNow": "ابھی ابھی",
-      "minutesAgo": "{count} منٹ پہلے",
       "accept": "قبول کریں",
       "decline": "مسترد کریں",
       "respondError": "اس جواب پر عمل نہیں ہو سکا۔ براہ کرم دوبارہ کوشش کریں۔",
@@ -6826,7 +6824,6 @@
     "changeHistory": {
       "noChanges": "No changes recorded yet.",
       "logOnly": "Log Only",
-      "hoursAgo": "{count} hour(s) ago",
       "system": "System",
       "legendDisabled": "Disabled",
       "title": "Change History",
@@ -6837,19 +6834,13 @@
       "legendLogOnly": "Log Only",
       "legendEnforced": "Enforced",
       "actionUpdated": "Configuration was updated",
-      "minuteAgo": "1 minute ago",
       "actionLogOnly": "Switched to log-only mode for safe testing",
-      "daysAgo": "{count} day(s) ago",
       "modeEnforced": "Enforced",
-      "dayAgo": "1 day ago",
       "modeLegend": "Mode Legend:",
       "justNow": "Just now",
-      "minutesAgo": "{count} minute(s) ago",
       "description": "Recent changes to access control configuration.",
       "modeDisabled": "Disabled",
-      "longAgo": "Long ago",
-      "disabled": "Disabled",
-      "hourAgo": "1 hour ago"
+      "disabled": "Disabled"
     },
     "loading": "Loading feature flags...",
     "retry": "Retry",
@@ -9165,13 +9156,10 @@
   "devices": {
     "addDevice": "Add device",
     "confirmDelete": "Confirm delete",
-    "daysAgo": "Days ago",
     "error": "Error",
-    "hoursAgo": "Hours ago",
     "justNow": "Just now",
     "lastSeen": "Last seen",
     "loading": "Loading",
-    "minutesAgo": "Minutes ago",
     "noDevices": "No devices",
     "pairDevice": "Pair device",
     "pairFirst": "Pair first",

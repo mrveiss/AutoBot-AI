@@ -46,9 +46,17 @@ def _write_last_sync(redis, key: str, when: str) -> bool | None:
 
 
 async def record_last_sync(instance, key: str, sync_result) -> bool:
-    """Set ``last_sync_at`` on the stored connector and the live instance. False if it was deleted."""
-    when = sync_result.completed_at or now_utc()
+    """Set ``last_sync_at`` after a successful sync, on the stored connector and the live instance.
+
+    False if the connector was deleted. ``last_sync_at`` is the next incremental sync's ``since``, so
+    only a run that reached every source may move it. A run that failed, finished partial or was
+    stopped (#20556: it lost its lease) leaves it where it was, together with its checkpoint, or
+    the next incremental sync would skip the sources this run never reached.
+    """
     redis = get_redis_client(database="knowledge")
+    if getattr(sync_result, "status", None) != "success":
+        return bool(await asyncio.to_thread(redis.exists, key))
+    when = sync_result.completed_at or now_utc()
     stored = await asyncio.to_thread(_write_last_sync, redis, key, when.isoformat())
     if stored is True:
         instance.config.last_sync_at = when  # what the status route reads; only once Redis has it
