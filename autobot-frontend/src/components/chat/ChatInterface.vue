@@ -301,7 +301,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useBackoffPoller } from '@/composables/useBackoffPoller'
-import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock } from '@autobot/ui'
+import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock, saveTextFile } from '@autobot/ui'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { useVoiceConversation } from '@/composables/useVoiceConversation'
 import { useChatStore } from '@/stores/useChatStore'
@@ -773,13 +773,8 @@ const exportSession = async () => {
       exportedAt: new Date().toISOString()
     }
 
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `chat-${session.title || session.id.slice(-8)}-${new Date().toISOString().split('T')[0]}.json`
-    a.click()
-    URL.revokeObjectURL(url)
+    const name = `chat-${session.title || session.id.slice(-8)}-${new Date().toISOString().split('T')[0]}.json`
+    saveTextFile(JSON.stringify(data, null, 2), name, 'application/json')
 
   } catch (error) {
     logger.error('Failed to export session:', error)

@@ -14,10 +14,21 @@ Output: JSON with source file:line citations.
 """
 
 import json
+import logging
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
+
+# Standalone CLI: run as `python3 .claude/skills/claims-audit/<script>.py`, where
+# `autobot_shared` is not importable, so stdlib logging stands in for get_logger.
+logger = logging.getLogger(__name__)
+
+_URL_RE = re.compile(r"https?://[^\s\)]+")
+_LINK_LINE_RE = re.compile(r"^\[.*\]\(https?://.*\)$")
+_URL_ONLY_LINE_RE = re.compile(r"^https?://.*$")
+
+CompiledPattern = Tuple[str, Dict[str, Any], "re.Pattern[str]"]
 
 
 class ClaimExtractor:
@@ -27,6 +38,8 @@ class ClaimExtractor:
         self.patterns_dir = patterns_dir
         self.repo_root = repo_root
         self.patterns = self._load_patterns()
+        self._compiled = self._compile_patterns()
+        self._any_pattern = self._combine_patterns()
         self.claims = []
 
     def _load_patterns(self) -> Dict[str, Any]:
@@ -37,6 +50,27 @@ class ClaimExtractor:
             with open(pattern_file, "r", encoding="utf-8") as f:
                 patterns[category] = json.load(f)
         return patterns
+
+    def _compile_patterns(self) -> List[CompiledPattern]:
+        """Every pattern compiled once, in load order, with the flags the scan uses (#20805)."""
+        return [
+            (category, pattern_def, re.compile(pattern_def["pattern"], re.IGNORECASE))
+            for category, pattern_data in self.patterns.items()
+            for pattern_def in pattern_data.get("patterns", [])
+        ]
+
+    def _combine_patterns(self) -> Optional["re.Pattern[str]"]:
+        """One alternation of every pattern, used only to skip lines no pattern matches.
+
+        It never produces claims: an alternation reports non-overlapping
+        matches, so two patterns matching the same text would yield one claim
+        instead of two. As a yes/no test it is exact -- ``search`` finds a
+        match if and only if at least one alternative matches in the line.
+        """
+        if not self._compiled:
+            return None
+        alternatives = "|".join(f"(?:{regex.pattern})" for _, _, regex in self._compiled)
+        return re.compile(alternatives, re.IGNORECASE)
 
     def _relativize(self, file_path: Path) -> str:
         """Path relative to ``repo_root`` where that is known, else the path as given.
@@ -68,72 +102,73 @@ class ClaimExtractor:
             if line.strip().startswith("```"):
                 in_code_block = not in_code_block
                 continue
-
-            # Skip code blocks, empty lines, and pure markdown headers
-            if in_code_block or not line.strip():
+            if in_code_block or self._is_skipped_line(line):
                 continue
-
-            # Skip lines that are just URLs or badges
-            if self._is_url_line(line) or self._is_badge_line(line):
-                continue
-
-            # Skip lines with only markdown formatting
-            stripped = line.strip()
-            if stripped.startswith("#") and len(stripped) < 100:
-                # Headers are usually metadata, skip short ones
-                continue
-
-            for category, pattern_data in self.patterns.items():
-                for pattern_def in pattern_data.get("patterns", []):
-                    pattern = pattern_def["pattern"]
-                    matches = list(re.finditer(pattern, line, re.IGNORECASE))
-                    for match in matches:
-                        # Skip matches that are inside URLs
-                        if self._is_in_url(line, match.start()):
-                            continue
-
-                        # Skip very short matches that might be noise
-                        if len(match.group(0).strip()) < 2:
-                            continue
-
-                        claim = {
-                            "category": category,
-                            "type": pattern_def["type"],
-                            "claim": line.strip(),
-                            "matched_text": match.group(0),
-                            "source": {
-                                "file": self._relativize(file_path),
-                                "line": line_num,
-                            },
-                            "pattern_description": pattern_def["description"],
-                        }
-                        file_claims.append(claim)
+            file_claims.extend(self._claims_in_line(line, line_num, file_path))
 
         return file_claims
+
+    def _is_skipped_line(self, line: str) -> bool:
+        """Empty lines, URL-only and badge lines, and short headers carry no claim."""
+        stripped = line.strip()
+        if not stripped:
+            return True
+        if self._is_url_line(line) or self._is_badge_line(line):
+            return True
+        # Headers are usually metadata, skip short ones
+        return stripped.startswith("#") and len(stripped) < 100
+
+    def _claims_in_line(self, line: str, line_num: int, file_path: Path) -> List[Dict[str, Any]]:
+        """Every pattern's matches in one line, minus matches inside URLs and noise."""
+        if self._any_pattern is None or not self._any_pattern.search(line):
+            return []
+        url_spans: Optional[List[Tuple[int, int]]] = None
+        claims = []
+        for category, pattern_def, regex in self._compiled:
+            for match in regex.finditer(line):
+                if url_spans is None:
+                    url_spans = [m.span() for m in _URL_RE.finditer(line)]
+                # Skip matches that are inside URLs
+                if any(start <= match.start() < end for start, end in url_spans):
+                    continue
+                # Skip very short matches that might be noise
+                if len(match.group(0).strip()) < 2:
+                    continue
+                claims.append(self._claim(category, pattern_def, line, match, line_num, file_path))
+        return claims
+
+    def _claim(
+        self,
+        category: str,
+        pattern_def: Dict[str, Any],
+        line: str,
+        match: "re.Match[str]",
+        line_num: int,
+        file_path: Path,
+    ) -> Dict[str, Any]:
+        """One claim record, in the shape the verify stage reads."""
+        return {
+            "category": category,
+            "type": pattern_def["type"],
+            "claim": line.strip(),
+            "matched_text": match.group(0),
+            "source": {
+                "file": self._relativize(file_path),
+                "line": line_num,
+            },
+            "pattern_description": pattern_def["description"],
+        }
 
     def _is_url_line(self, line: str) -> bool:
         """Check if line is primarily a URL."""
         stripped = line.strip()
-        return bool(re.match(r"^\[.*\]\(https?://.*\)$", stripped)) or bool(
-            re.match(r"^https?://.*$", stripped)
-        )
+        return bool(_LINK_LINE_RE.match(stripped)) or bool(_URL_ONLY_LINE_RE.match(stripped))
 
     def _is_badge_line(self, line: str) -> bool:
         """Check if line is a badge."""
         return "![" in line and "badge.svg" in line
 
-    def _is_in_url(self, line: str, position: int) -> bool:
-        """Check if a match position is inside a URL."""
-        # Find all URLs in the line
-        url_pattern = r"https?://[^\s\)]+"
-        for url_match in re.finditer(url_pattern, line):
-            if url_match.start() <= position < url_match.end():
-                return True
-        return False
-
-    def extract_from_directory(
-        self, dir_path: Path, glob_pattern: str = "**/*.md"
-    ) -> List[Dict[str, Any]]:
+    def extract_from_directory(self, dir_path: Path, glob_pattern: str = "**/*.md") -> List[Dict[str, Any]]:
         """Extract claims from all matching files in a directory."""
         dir_claims = []
         for file_path in dir_path.glob(glob_pattern):
@@ -204,37 +239,36 @@ class ClaimExtractor:
 
 def main():
     """Main entry point."""
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     # Determine paths
     script_dir = Path(__file__).parent
     patterns_dir = script_dir / "patterns"
-    repo_root = (
-        script_dir.parent.parent.parent
-    )  # .claude/skills/claims-audit -> repo root
+    repo_root = script_dir.parent.parent.parent  # .claude/skills/claims-audit -> repo root
 
     if not patterns_dir.exists():
-        print(f"Error: Patterns directory not found: {patterns_dir}", file=sys.stderr)
+        logger.error("Error: Patterns directory not found: %s", patterns_dir)
         sys.exit(1)
 
     # Extract claims
     extractor = ClaimExtractor(patterns_dir, repo_root)
-    print(f"Extracting claims from {repo_root}...")
+    logger.info("Extracting claims from %s...", repo_root)
     claims = extractor.extract_all(repo_root)
-    print(f"Found {len(claims)} total claims")
+    logger.info("Found %d total claims", len(claims))
 
     # Deduplicate
     unique_claims = extractor.deduplicate_claims(claims)
-    print(f"After deduplication: {len(unique_claims)} unique claims")
+    logger.info("After deduplication: %d unique claims", len(unique_claims))
 
     # Save output
     output_path = script_dir / "extracted-claims.json"
     extractor.save_claims(unique_claims, output_path)
-    print(f"\nClaims saved to: {output_path}")
+    logger.info("\nClaims saved to: %s", output_path)
 
     # Print summary
     by_category = extractor._count_by_category(unique_claims)
-    print("\nClaims by category:")
+    logger.info("\nClaims by category:")
     for category, count in sorted(by_category.items()):
-        print(f"  {category}: {count}")
+        logger.info("  %s: %d", category, count)
 
     return 0
 
