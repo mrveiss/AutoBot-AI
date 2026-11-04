@@ -31,6 +31,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 #: name -> (the one file that may define it, kind). ``kind`` separates a class from the
@@ -52,7 +53,7 @@ def _is_enum(node: ast.ClassDef) -> bool:
 def _defined_names(source: str) -> set[str]:
     """Names in `_ONE_MODEL` that `source` defines as a class, at any nesting depth."""
     found = set()
-    for n in ast.walk(ast.parse(source)):
+    for n in ast.walk(parse_cache.parse(source)):
         if isinstance(n, ast.ClassDef) and n.name in _ONE_MODEL:
             if _ONE_MODEL[n.name][1] == "any" or _is_enum(n):
                 found.add(n.name)
