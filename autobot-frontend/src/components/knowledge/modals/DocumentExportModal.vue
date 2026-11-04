@@ -15,7 +15,7 @@
 
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch } from 'vue'
-import { BaseModal, BaseButton } from '@autobot/ui'
+import { BaseModal, BaseButton, saveTextFile } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
 
@@ -165,16 +165,7 @@ async function performExport(): Promise<void> {
         break
     }
 
-    // Create and trigger download
-    const blob = new Blob([content], { type: mimeType })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+    saveTextFile(content, filename, mimeType)
 
     // Emit event and close
     emit('export', {
