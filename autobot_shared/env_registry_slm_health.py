@@ -133,3 +133,17 @@ register_env_var(
         range=(1, 86400),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SLM_KEY_FINDING_CHECK_INTERVAL_S",
+        type=float,
+        default=60.0,
+        description=(
+            "Seconds between database checks when the backend refuses the SLM's internal API key: a burst "
+            "of refused calls records the one key-mismatch finding without a query per call (#20750)."
+        ),
+        component="slm",
+        range=(1, 86400),
+    )
+)
