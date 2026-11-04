@@ -112,10 +112,11 @@ _START = "/api/start"
 _RESTART = "/api/restart"
 
 
-def test_the_internal_key_is_admitted_on_an_audit_route(audit_client, identity):
+def test_the_internal_key_alone_is_not_admitted_on_an_audit_route(audit_client, identity):
+    """#16333 (owner ruling b): the key is not an admin; no audit route names a service caller."""
     identity.user = None
     response = audit_client.get(_OPERATIONS, headers={"X-Internal-API-Key": _KEY})
-    assert response.status_code == 200
+    assert response.status_code == 401
 
 
 def test_a_wrong_internal_key_is_not_admitted_on_an_audit_route(audit_client, identity):
