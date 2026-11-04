@@ -66,13 +66,24 @@ describe('SystemVaultSecrets (#17099)', () => {
     expect(wrapper.emitted('changed')).toHaveLength(1)
   })
 
+  it('offers no second write while one is in flight (#20756)', async () => {
+    updateSecret.mockReturnValue(new Promise(() => {}))
+    const other = { id: 'sys-2', name: 'other-key', type: 'api_key' }
+    const wrapper = mountList({ available: true, secrets: [entry, other] })
+    await wrapper.find('[data-testid="rotate-start"]').trigger('click')
+    await wrapper.find('input').setValue('new-secret-value')
+    await wrapper.find('[data-testid="rotate-save"]').trigger('click')
+    expect(wrapper.get('[data-testid="delete"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="rotate-start"]').attributes('disabled')).toBeDefined()
+  })
+
   it('delete confirms, then calls DELETE /secrets/{id}', async () => {
     confirm.mockResolvedValue(true)
     const wrapper = mountList({ available: true, secrets: [entry] })
     await wrapper.find('[data-testid="delete"]').trigger('click')
     await flushPromises()
     expect(confirm).toHaveBeenCalledOnce()
-    expect(deleteSecret).toHaveBeenCalledWith('sys-1')
+    expect(deleteSecret).toHaveBeenCalledWith('sys-1', { chatId: undefined })
     expect(wrapper.emitted('changed')).toHaveLength(1)
   })
 
@@ -125,7 +136,7 @@ describe('SystemVaultSecrets (#17099)', () => {
     await wrapper.find('input').setValue('draft-value')
     await wrapper.find('[data-testid="delete"]').trigger('click')
     await flushPromises()
-    expect(deleteSecret).toHaveBeenCalledWith('sys-2')
+    expect(deleteSecret).toHaveBeenCalledWith('sys-2', { chatId: undefined })
     expect((wrapper.find('input').element as HTMLInputElement).value).toBe('draft-value')
   })
 })
