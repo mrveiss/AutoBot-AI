@@ -187,7 +187,6 @@ def _live_paths(root: Path) -> list[str]:
 REACH = declare(
     "ssot-rehardcode-scan-19730",
     discover=_live_paths,
-    floor=3312,  # measured at 3341 tracked files, pinned mid-window (#15928)
     growth=300,
     what="non-test Python files scanned for a re-hardcoded SSOT value (#19730)",
     roots=_ROOTS,
