@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for the py-hardcoded-url rule."""
 
-import ast
 from pathlib import Path
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint.canonical.context import Context
 from tools.lint.canonical.rules import py_hardcoded_url
 
@@ -14,7 +14,7 @@ FIXTURES = Path(__file__).parent.parent / "fixtures" / "py_hardcoded_url"
 def _check(name: str) -> list:
     path = FIXTURES / name
     ctx = Context(repo_root=path.parent)
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    tree = parse_cache.parse(path.read_text(encoding="utf-8"), filename=str(path))
     return py_hardcoded_url.check(path, tree, ctx)
 
 
