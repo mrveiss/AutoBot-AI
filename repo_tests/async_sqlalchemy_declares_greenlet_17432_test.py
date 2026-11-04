@@ -182,7 +182,6 @@ def _references_async_marker(text: str) -> bool:
 SQLALCHEMY_DECLARATIONS = declare(
     "sqlalchemy-requirements-files",
     discover=_declares_sqlalchemy,
-    floor=3,
     growth=3,
     what="requirements files declaring SQLAlchemy (#17432)",
 )
