@@ -110,7 +110,9 @@ async def _restart_outcome(ssh_base: list, units: Sequence[str]) -> ActionOutcom
 
 
 def units_are_valid(units: Sequence[str]) -> bool:
-    """True when every unit passes `validate_unit_name`; an invalid one is recorded as a failure, never run (#18359)."""
+    """True when there is a unit and each passes `validate_unit_name`; else a failure, never run (#18359)."""
+    if not units:
+        return False  # an empty list would build no command at all (systemctl_remote_command refuses it)
     try:
         for unit in units:
             validate_unit_name(unit)
