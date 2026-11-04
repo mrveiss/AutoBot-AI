@@ -65,3 +65,35 @@ def unauthenticated_canonical_gate():
     with pytest.MonkeyPatch.context() as monkeypatch:
         install_canonical_gate(monkeypatch, no_user_middleware())
         yield
+
+
+@contextmanager
+def real_admin_gate(middleware):
+    """Within the block, ``wire(client)`` makes a client's ``check_admin_permission`` routes run the REAL gate (#16333).
+
+    Under pytest ``auth_middleware`` is the stub, whose ``check_admin_permission`` admits everyone, and a
+    route captured that stub at import. ``wire`` overrides it on the client's app with the real gate,
+    which sees *middleware* (``no_user_middleware()`` for an anonymous caller).
+    """
+    from auth_middleware import check_admin_permission as stub_gate  # noqa: PLC0415
+    from tests.conftest import load_real_auth_middleware  # noqa: PLC0415
+
+    real = load_real_auth_middleware()
+    wired = []  # (app, the override it held before, or a sentinel when it had none)
+    absent = object()
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(real, "get_auth_middleware", lambda: middleware)
+
+        def wire(client):
+            wired.append((client.app, client.app.dependency_overrides.get(stub_gate, absent)))
+            client.app.dependency_overrides[stub_gate] = real.check_admin_permission
+            return client
+
+        try:
+            yield wire
+        finally:  # a module-level app is shared by later tests: leave it as found
+            for app, before in reversed(wired):
+                if before is absent:
+                    app.dependency_overrides.pop(stub_gate, None)
+                else:
+                    app.dependency_overrides[stub_gate] = before
