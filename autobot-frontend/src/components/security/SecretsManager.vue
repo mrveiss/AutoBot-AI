@@ -761,7 +761,7 @@ import { secretsApiClient } from '@/utils/SecretsApiClient';
 import { useChatStore } from '@/stores/useChatStore';
 import { useUserStore } from '@/stores/useUserStore';
 import { createLogger } from '@/utils/debugUtils';
-import { formatDateTime } from '@/utils/formatHelpers';
+import { createDateFormatter, DEFAULT_DATE_TIME_INTL } from '@/utils/formatHelpers';
 import { useDebounce } from '@/composables/useDebounce';
 import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger';
 import { useVirtualList } from '@/composables/useVirtualList';
@@ -772,10 +772,10 @@ import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import ShareSecretDialog from '@/components/secrets/ShareSecretDialog.vue';
 import SystemVaultSecrets, { type SystemVaultListing } from '@/components/secrets/SystemVaultSecrets.vue';
-import { BaseAlert, BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseModal, createRecencyFormatter } from '@autobot/ui'
 import { getCssVar } from '@/composables/useCssVars'
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const logger = createLogger('SecretsManager');
 // #16426: infrastructure hosts are admin-only, matching the backend gate on
 // GET/DELETE /api/infrastructure/hosts.
@@ -1540,30 +1540,20 @@ const copySecretValue = async () => {
   }
 };
 
-const formatDate = (dateString?: string | null) => {
-  if (!dateString) return 'N/A';
-  return formatDateTime(dateString);
-};
+const formatDate = createDateFormatter({
+  intl: DEFAULT_DATE_TIME_INTL,
+  emptyText: () => t('security.secretsManager.notAvailable'),
+  invalidText: '',
+});
 
-const formatRelativeTime = (dateString?: string) => {
-  if (!dateString) return '';
-  const date = new Date(dateString);
-  const now = new Date();
-  const diff = date.getTime() - now.getTime();
-  const absDiff = Math.abs(diff);
-
-  if (absDiff < 60000) return diff < 0 ? t('security.secretsManager.timeJustNow') : t('security.secretsManager.timeInAMoment');
-  if (absDiff < 3600000) {
-    const mins = Math.floor(absDiff / 60000);
-    return diff < 0 ? t('security.secretsManager.timeMinutesAgo', { count: mins }) : t('security.secretsManager.timeInMinutes', { count: mins });
-  }
-  if (absDiff < 86400000) {
-    const hours = Math.floor(absDiff / 3600000);
-    return diff < 0 ? t('security.secretsManager.timeHoursAgo', { count: hours }) : t('security.secretsManager.timeInHours', { count: hours });
-  }
-  const days = Math.floor(absDiff / 86400000);
-  return diff < 0 ? t('security.secretsManager.timeDaysAgo', { count: days }) : t('security.secretsManager.timeInDays', { count: days });
-};
+// Past or ahead (an expiry): the kit's relative time, in the app's language (#19905).
+const formatRelativeTime = createRecencyFormatter({
+  justNow: () => t('security.secretsManager.timeJustNow'),
+  soon: () => t('security.secretsManager.timeInAMoment'),
+  locale: () => locale.value,
+  style: 'narrow',
+  maxUnit: 'day',
+});
 
 const truncate = (text: string, length: number) => {
   if (!text || text.length <= length) return text;
