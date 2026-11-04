@@ -30,6 +30,8 @@ import ast
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _REPO_ROOT = repo_root()
 _HOOKS = _REPO_ROOT / "autobot-infrastructure" / "shared" / "scripts" / "hooks"
 
@@ -72,7 +74,7 @@ def _spawn_calls() -> tuple[list[_Call], int]:
     modules = 0
     for module in sorted(_HOOKS.rglob("*_test.py")):
         modules += 1
-        tree = ast.parse(module.read_text(encoding="utf-8"), filename=str(module))
+        tree = parse_cache.parse(module.read_text(encoding="utf-8"), filename=str(module))
         rel = str(module.relative_to(_REPO_ROOT))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call) or not node.args:
@@ -103,9 +105,7 @@ def test_the_sweep_actually_parsed_the_hook_suites() -> None:
     """
     assert _HOOKS.is_dir(), f"{_HOOKS} does not exist — this guard has no subject"
     assert _MODULES >= 18, f"only parsed {_MODULES} hook test modules"
-    assert len(_CALLS) >= 67, (
-        f"only found {len(_CALLS)} subprocess spawns — the AST matcher has regressed"
-    )
+    assert len(_CALLS) >= 67, f"only found {len(_CALLS)} subprocess spawns — the AST matcher has regressed"
     literals = [call for call in _CALLS if call.program is not None]
     assert len(literals) >= 67, (
         f"only {len(literals)} spawns name their program as a string literal — "
@@ -122,9 +122,7 @@ def test_no_hook_suite_spawns_a_shell_builtin() -> None:
     ``["bash", "-c", ...]``, which this check reads as ``bash`` and allows.
     """
     offenders = sorted(
-        f"{call.rel}:{call.lineno} spawns `{call.program}`"
-        for call in _CALLS
-        if call.program in _BUILTINS
+        f"{call.rel}:{call.lineno} spawns `{call.program}`" for call in _CALLS if call.program in _BUILTINS
     )
     assert not offenders, (
         "these call sites hand a shell BUILTIN to subprocess, which execs argv[0] "

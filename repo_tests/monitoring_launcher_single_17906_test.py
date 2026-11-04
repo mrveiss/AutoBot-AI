@@ -25,6 +25,8 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 MONITORING_DIR = repo_root() / "autobot-infrastructure" / "shared" / "scripts" / "monitoring"
 LAUNCHER = MONITORING_DIR / "start_monitoring.py"
 RETIRED_LAUNCHER = MONITORING_DIR / "start_hardware_monitoring.py"
@@ -34,7 +36,7 @@ MIN_SCRIPTS = 1  # the one launcher; a vanished directory must fail, not pass em
 
 def _defined(source: str) -> set[str]:
     """Names of the marker functions DEFINED (not merely mentioned) in *source*."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     return {n.name for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))} & set(MARKERS)
 
 
