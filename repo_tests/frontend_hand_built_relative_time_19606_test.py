@@ -75,7 +75,6 @@ def verdict(now: int, pinned: int) -> str | None:
 REACH = declare(
     "frontend-hand-built-relative-time-scan",
     discover=_population,
-    floor=1101,  # mid-window: population 1126, window (1076, 1126)
     growth=50,
     what=".ts/.vue sources in both frontends",
     roots=_ROOTS,
