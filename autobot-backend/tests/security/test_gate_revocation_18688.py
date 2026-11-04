@@ -171,14 +171,28 @@ def test_an_epoch_store_that_cannot_answer_denies_the_admin_gate(monkeypatch):
     assert int(exc.value.headers["Retry-After"]) >= 1
 
 
-def test_the_internal_key_still_passes_the_admin_gate_without_an_epoch_lookup(monkeypatch):
+def test_an_opted_in_route_admits_the_key_without_an_epoch_lookup(monkeypatch):
+    """#16333: the key is admitted only where a route names its caller, and that path reads no session."""
+    from unittest.mock import patch  # noqa: PLC0415
+
+    import auth_service_opt_in  # noqa: PLC0415
+    from auth_service_opt_in import service_opt_in  # noqa: PLC0415
+
     call = _admin_gate(monkeypatch)
+    monkeypatch.setattr(auth_service_opt_in, "verify_internal_api_key", lambda provided: provided == INTERNAL_KEY)
     epoch = AsyncMock(return_value=True)
     import auth_revocation  # noqa: PLC0415
 
     monkeypatch.setattr(auth_revocation, "is_token_revoked_by_password_change", epoch)
 
-    assert _resolve(call(_request({"X-Internal-API-Key": INTERNAL_KEY}))) is True
+    @service_opt_in("test-caller")
+    async def endpoint():
+        return None
+
+    request = _request({"X-Internal-API-Key": INTERNAL_KEY})
+    request.scope["endpoint"] = endpoint
+    with patch("services.audit.audit.record_committed", AsyncMock(return_value=True)):
+        assert _resolve(call(request)) is True
     epoch.assert_not_called()
 
 

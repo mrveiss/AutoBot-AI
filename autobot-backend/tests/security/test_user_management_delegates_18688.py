@@ -186,7 +186,8 @@ def test_a_human_admin_jwt_still_lists_companies(monkeypatch):
     svc.list_root_companies.assert_awaited_once()
 
 
-def test_the_internal_service_key_still_works_on_a_non_tenant_route(monkeypatch):
+def test_the_internal_service_key_alone_is_not_a_user_on_a_non_tenant_route(monkeypatch):
+    """#16333 (owner ruling b): it used to become the synthetic ``service:slm`` admin here."""
     real = _service_key_gate(monkeypatch)
     app = FastAPI()
 
@@ -196,8 +197,7 @@ def test_the_internal_service_key_still_works_on_a_non_tenant_route(monkeypatch)
 
     response = TestClient(app).get("/whoami", headers={"X-Internal-API-Key": INTERNAL_KEY})
 
-    assert response.status_code == 200, response.text
-    assert response.json() == {"username": "service:slm", "role": "admin", "service": True}
+    assert response.status_code == 401, response.text
 
 
 def test_a_service_principal_is_not_a_platform_admin_or_reporting_line_writer():
