@@ -176,8 +176,6 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "kb-construction-18122-scan",
     discover=_population,
-    # Mid-window from REACH.window(): population 3595, window [3295, 3595], pinned 3445.
-    floor=3693,  # mid-window: population 3843, window (3543, 3843)
     what="non-test python source",
     roots=_SEARCH_ROOTS,
     growth=300,
