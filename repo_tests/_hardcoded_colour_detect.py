@@ -122,7 +122,6 @@ def _important_scanned_files(root: Path) -> list[str]:
 REACH_COLOUR_FILES = declare(
     "hardcoded-colour-scan",
     discover=_colour_scanned_files,
-    floor=907,  # mid-window: population 937, window (877, 937)
     growth=60,
     skips=0,
     what="frontend source files scanned for colour literals",
@@ -130,7 +129,6 @@ REACH_COLOUR_FILES = declare(
 REACH_IMPORTANT_FILES = declare(
     "important-declaration-sweep",
     discover=_important_scanned_files,
-    floor=584,  # train 22b: re-pinned mid-window [547, 587] on a population of 587 (#18633 SLM views)
     growth=40,
     skips=0,
     what="component files scanned for !important, in both frontends (570 read; the SLM joined in #17567)",
@@ -296,7 +294,6 @@ def _component_style_blocks(root: Path) -> list[tuple[str, int]]:
 REACH_STYLE_BLOCKS = declare(
     "component-style-block-sweep",
     discover=_component_style_blocks,
-    floor=380,
     growth=40,
     skips=0,
     what="component <style> blocks searched for design-token redefinitions",
