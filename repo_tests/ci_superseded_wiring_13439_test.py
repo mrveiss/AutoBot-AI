@@ -38,6 +38,8 @@ from typing import Any, Dict, Iterable, List, Set
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 WATCHDOG_PATH = repo_root() / "pipeline-scripts" / "ci_dispatch_watchdog.py"
 
 REPO = "mrveiss/AutoBot-AI"
@@ -85,7 +87,7 @@ def _referenced_names(tree: ast.AST) -> Set[str]:
 
 @pytest.fixture(scope="module")
 def watchdog_tree() -> ast.Module:
-    return ast.parse(WATCHDOG_PATH.read_text(encoding="utf-8"))
+    return parse_cache.parse(WATCHDOG_PATH.read_text(encoding="utf-8"))
 
 
 # A module that mentions the selector three times and calls it zero times.
@@ -111,7 +113,7 @@ def check_runner_starvation(api, config):
 
 def test_the_detector_finds_a_real_call() -> None:
     """Known positive: without this, every assertion below is meaningless."""
-    assert SELECTOR in _called_names(ast.parse(REAL_CALL_FIXTURE))
+    assert SELECTOR in _called_names(parse_cache.parse(REAL_CALL_FIXTURE))
 
 
 def test_a_name_that_appears_only_in_prose_is_not_a_call() -> None:
@@ -121,7 +123,7 @@ def test_a_name_that_appears_only_in_prose_is_not_a_call() -> None:
     production call with a comment that mentions it must turn this guard red.
     """
     assert PROSE_ONLY_FIXTURE.count(SELECTOR) == 3, "fixture must carry the name in docstring, comment and literal"
-    assert SELECTOR not in _called_names(ast.parse(PROSE_ONLY_FIXTURE))
+    assert SELECTOR not in _called_names(parse_cache.parse(PROSE_ONLY_FIXTURE))
 
 
 def test_the_selector_is_called_from_the_reporter(watchdog_tree: ast.Module) -> None:
@@ -162,7 +164,7 @@ def test_the_cli_dispatches_to_that_entry_point(watchdog_tree: ast.Module) -> No
 
 def test_a_main_that_only_mentions_the_entry_point_fails_the_pin() -> None:
     """Contrast control for the assertion above, per the detector-pair rule."""
-    fixture_main = _function(ast.parse(REFERENCE_ONLY_FIXTURE), "main")
+    fixture_main = _function(parse_cache.parse(REFERENCE_ONLY_FIXTURE), "main")
     assert ENTRY in _referenced_names(fixture_main), "fixture should still MENTION it"
     assert ENTRY not in _called_names(fixture_main), (
         "a reference-only main must not satisfy the call assertion — otherwise "

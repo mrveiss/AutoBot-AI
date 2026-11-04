@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import ast
 
+from tools.lint import _parse_cache as parse_cache
+
 #: Chroma supplies this itself; no writer emits it.
 ENGINE_SUPPLIED = frozenset({"chroma:document"})
 
@@ -64,7 +66,7 @@ def metadata_keys_of(func: ast.AST) -> set[str]:
 
 def preparers(source: str) -> dict[str, set[str]]:
     """`_prepare_*_document` functions mapped to the keys they emit."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     return {
         node.name: metadata_keys_of(node)
         for node in ast.walk(tree)
@@ -76,7 +78,7 @@ def preparers(source: str) -> dict[str, set[str]]:
 
 def metadata_binders(source: str) -> set[str]:
     """Functions that bind a dict to `metadata` -- discovery by behaviour."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     found: set[str] = set()
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -96,7 +98,7 @@ def inline_write_site_keys(source: str) -> set[str]:
     the third population, and it is empty today by construction rather than by
     luck -- which is exactly why it needs its own contrast fixture.
     """
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     keys: set[str] = set()
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
@@ -125,7 +127,7 @@ def filter_keys(source: str) -> set[str]:
     that is assigned to a `*filter*`/`where*` name or passed as `where=`.
     Operators themselves are structure and are excluded.
     """
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     keys: set[str] = set()
 
     def harvest(node: ast.AST) -> None:
