@@ -26,6 +26,8 @@ import ast
 import re
 from pathlib import PurePosixPath
 
+from tools.lint import _parse_cache as parse_cache
+
 HELPER_MODULE = "autobot_shared.isolated_git"
 _VERBS = frozenset({"init", "commit"})
 _SHELL_GIT = re.compile(r"\bgit\s+(?:-\S+\s+)*(?:init|commit)\b")
@@ -130,7 +132,7 @@ def offends(source: str) -> bool:
     """True for a repo-building test file that does not use the isolated helper, or that imports it
     but runs a shell-string git write without ever naming ``isolated_git_env``."""
     try:
-        tree = ast.parse(source)
+        tree = parse_cache.parse(source)
     except SyntaxError:
         return False
     if not imports_helper(tree):

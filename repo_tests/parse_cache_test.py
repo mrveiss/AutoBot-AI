@@ -38,7 +38,7 @@ TREE_REWRITERS = frozenset(
 
 #: Files under ``repo_tests/`` that still call ``ast.parse`` directly, rewriters
 #: excluded. Shrink only: lower it as guards move to the cache, never raise it.
-DIRECT_PARSE_FILES = 177
+DIRECT_PARSE_FILES = 81
 
 
 def _population(root: Path) -> list[str]:
