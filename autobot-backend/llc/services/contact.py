@@ -60,18 +60,17 @@ class ContactService(LLCServiceBase):
         await session.flush()
         await session.refresh(contact)
 
-        if self.activity_log:
-            await self.activity_log.record(
-                session=session,
-                company_id=str(company_id),
-                actor_type=ActorType.USER if actor else ActorType.SYSTEM,
-                actor_id=actor,
-                event_type="contact.created",
-                entity_type="llc_contact",
-                entity_id=str(contact.id),
-                # Never log PII (name/email/phone/notes) — id only.
-                after={"id": str(contact.id)},
-            )
+        await self.activity_log.record(
+            session=session,
+            company_id=str(company_id),
+            actor_type=ActorType.USER if actor else ActorType.SYSTEM,
+            actor_id=actor,
+            event_type="contact.created",
+            entity_type="llc_contact",
+            entity_id=str(contact.id),
+            # Never log PII (name/email/phone/notes) — id only.
+            after={"id": str(contact.id)},
+        )
         return contact
 
     async def get(
@@ -117,7 +116,7 @@ class ContactService(LLCServiceBase):
                 setattr(contact, key, value)
         await session.flush()
 
-        if self.activity_log and changed_fields:
+        if changed_fields:
             await self.activity_log.record(
                 session=session,
                 company_id=str(company_id),
@@ -156,7 +155,7 @@ class ContactService(LLCServiceBase):
         )
         deleted = result.rowcount > 0
 
-        if deleted and self.activity_log:
+        if deleted:
             await self.activity_log.record(
                 session=session,
                 company_id=str(company_id),
