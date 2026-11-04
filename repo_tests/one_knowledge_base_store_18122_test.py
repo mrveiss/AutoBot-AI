@@ -35,6 +35,7 @@ from typing import NamedTuple
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import tracked_paths
 
 #: Modules still allowed to cache a KnowledgeBase, with why. SHRINK-ONLY: removing a
@@ -125,7 +126,7 @@ def _scan() -> _Scan:
         if rel.endswith("_test.py") or rel.startswith("test_") or "tests/" in rel:
             continue
         try:
-            tree = ast.parse((root / rel).read_text(encoding="utf-8"))
+            tree = parse_cache.parse((root / rel).read_text(encoding="utf-8"))
         except (OSError, SyntaxError) as exc:
             # Recorded, not swallowed. A file that stopped parsing is lost reach, and
             # `continue` alone made that indistinguishable from a file with no store.
@@ -160,13 +161,13 @@ def test_the_scan_is_not_vacuous() -> None:
 
 def test_the_matcher_sees_both_declaration_shapes() -> None:
     """Pinned against synthetic source, so it does not depend on the tree."""
-    annotated = ast.parse('_kb: "KnowledgeBase" | None = None\n')
+    annotated = parse_cache.parse('_kb: "KnowledgeBase" | None = None\n')
     assert _caches_a_knowledge_base(annotated)
-    in_class = ast.parse('class I:\n    _instance: "KnowledgeBase" | None = None\n')
+    in_class = parse_cache.parse('class I:\n    _instance: "KnowledgeBase" | None = None\n')
     assert _caches_a_knowledge_base(in_class)
-    constructed = ast.parse("_kb = KnowledgeBase()\n")
+    constructed = parse_cache.parse("_kb = KnowledgeBase()\n")
     assert _caches_a_knowledge_base(constructed)
-    unrelated = ast.parse("_x: int = 0\n\n\nclass C:\n    y = 1\n")
+    unrelated = parse_cache.parse("_x: int = 0\n\n\nclass C:\n    y = 1\n")
     assert not _caches_a_knowledge_base(unrelated)
 
 
@@ -187,7 +188,7 @@ def test_the_matcher_rejects_what_merely_mentions_the_name(label: str, source: s
     `KnowledgeBaseInitializer` all counted. Each row here is one of those false
     positives, kept so the loose form cannot come back.
     """
-    assert not _caches_a_knowledge_base(ast.parse(source)), label
+    assert not _caches_a_knowledge_base(parse_cache.parse(source)), label
 
 
 def test_no_fourth_knowledge_base_store_has_appeared() -> None:
@@ -236,7 +237,7 @@ def _publication_report(source: str) -> tuple[dict[str, set[str]], set[str], set
     in front of synthetic fixtures. Reading only the real file made this guard the shape
     it exists to forbid: a broken matcher would report a clean tree.
     """
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     funcs = [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
     callers = {
         node.name: {
@@ -477,7 +478,7 @@ def test_adoption_is_not_gated_behind_the_retry_cooldown() -> None:
     `peek_knowledge_base()` held a healthy instance. The cooldown exists to stop
     re-initialization attempts; adoption initializes nothing, so it precedes the gate.
     """
-    tree = ast.parse((repo_root() / "autobot-backend" / "knowledge_factory.py").read_text(encoding="utf-8"))
+    tree = parse_cache.parse((repo_root() / "autobot-backend" / "knowledge_factory.py").read_text(encoding="utf-8"))
     func = next(
         (
             n
@@ -509,7 +510,7 @@ def test_the_statement_order_probe_has_a_contrast_pair(gate: str) -> None:
         "async def get_or_create_knowledge_base(app):\n"
         '    """Mentions KB_RETRY_COOLDOWN_SECONDS in the docstring, as the real one does."""\n'
     )
-    broken = ast.parse(
+    broken = parse_cache.parse(
         head + f"    if _last_kb_init_failure > 0.0:\n        if {gate}:\n            return None\n"
         "    adopted = peek_knowledge_base()\n    return adopted\n"
     )
@@ -518,7 +519,7 @@ def test_the_statement_order_probe_has_a_contrast_pair(gate: str) -> None:
         func, _calls_peek
     ), "control: this fixture IS the broken order and the probe must see it that way"
 
-    fixed = ast.parse(
+    fixed = parse_cache.parse(
         head + "    adopted = peek_knowledge_base()\n    if adopted is not None:\n        return adopted\n"
         f"    if {gate}:\n        return None\n"
     )
@@ -556,7 +557,7 @@ def test_only_the_publisher_writes_the_projection_anywhere_in_the_backend() -> N
         if ".state.knowledge_base" not in source:
             continue
         try:
-            ast.parse(source)
+            parse_cache.parse(source)
         except SyntaxError:
             continue
         parsed += 1
