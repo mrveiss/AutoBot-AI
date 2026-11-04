@@ -110,6 +110,7 @@ _RECORDED_DEFS = {
     # Superadmin ONLY (root reads), stricter than admin.
     "knowledge/root_read.py": {"is_superadmin_role", "is_superadmin_user"},
     # Company / org membership roles: admin of ONE company, not the system admin role (#20778).
+    # System admin (``is_admin_role``) OR an org role (``org_admin`` / ``owner``): the org rule widens the gate.
     "api/chat_presets.py": {"_is_org_admin"},
     "security/session_ownership.py": {"_is_org_admin_access"},
     "llc/api/budget.py": {"_require_budget_admin", "_require_limit_admin"},
@@ -123,7 +124,12 @@ _RECORDED_DEFS = {
 }
 _GATE_DEF = ("auth_middleware.py", "check_admin_permission")
 _ADMIN_DEF = re.compile(
-    r"^_?(require_\w*admin\w*|is_\w*admin\w*|\w+_is_admin|check_\w*admin\w*|admin_check|\w+_admin_(gate|check|required|only))$",
+    r"^_?("
+    r"(require|ensure|assert|verify|has|check)_\w*admin(?![a-z])\w*"  # require_admin, ensure_admin, has_admin_role
+    r"|(get|validate)_admin(_user|_role)?"  # get_admin_user; not get_admin_dashboard or validate_admin_path
+    r"|is_\w*admin(?![a-z])\w*|\w+_is_admin"  # is_admin, is_superadmin_role, caller_is_admin
+    r"|\w*admin_(check|required|only|gate)"  # admin_required, _admin_only, tool_admin_check
+    r")$",
     re.IGNORECASE,
 )
 
@@ -335,6 +341,14 @@ def caller_is_admin(request): ...
 def check_admin_rights(user): ...
 def tool_admin_only(user): ...
 def admin_check(): ...
+def ensure_admin(user): ...
+def assert_admin(user): ...
+def verify_admin(user): ...
+def has_admin_access(user): ...
+def get_admin_user(request): ...
+def validate_admin(user): ...
+def admin_required(fn): ...
+def _admin_only(user): ...
 """
     assert admin_defs(planted) == {
         "require_admin",
@@ -345,8 +359,20 @@ def admin_check(): ...
         "check_admin_rights",
         "tool_admin_only",
         "admin_check",
+        "ensure_admin",
+        "assert_admin",
+        "verify_admin",
+        "has_admin_access",
+        "get_admin_user",
+        "validate_admin",
+        "admin_required",
+        "_admin_only",
     }
-    lookalikes = "def list_admins(): ...\ndef admin_panel(): ...\ndef administrator_count(): ...\nis_admin = True"
+    lookalikes = (
+        "def list_admins(): ...\ndef admin_panel(): ...\ndef administrator_count(): ...\nis_admin = True\n"
+        "def is_administrator(): ...\ndef get_admin_dashboard(): ...\ndef _validate_admin_path(p): ...\n"
+        "def get_all_sysadmin_templates(): ...\ndef validate_admin_username(v): ..."
+    )
     assert admin_defs(lookalikes) == set()
 
 
@@ -376,6 +402,7 @@ def test_the_detector_reads_the_spellings_the_security_review_listed():
     assert admin_decisions("ok = hmac.compare_digest(header, internal_api_key())") == Counter({"key": 1})
     # #20787: two more spellings.
     assert admin_decisions('match role:\n    case "admin":\n        pass') == Counter({"literal": 1})
+    assert admin_decisions('match role:\n    case "admin" | "superadmin":\n        pass') == Counter({"literal": 2})
     assert admin_decisions('user.role = "admin"') == Counter({"grant": 1})
 
 

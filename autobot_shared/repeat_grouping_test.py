@@ -40,8 +40,19 @@ def test_a_full_tracker_drops_expired_keys_first_and_still_records_a_new_key():
     assert set(grouper._recent) == {"live", "new"}
 
 
-def test_a_burst_then_silence_loses_its_repeats_when_the_key_is_forgotten():
-    """#20787: stated behaviour, pinned. Repeats ride only on the key's next record."""
+def test_an_expired_key_that_recurs_reports_its_repeats():
+    """#20787: with room in the tracker, an expired key's repeats arrive on its next record."""
+    grouper = RepeatGrouper(window_s=300)
+    assert grouper.repeats_to_record("burst") == 0
+    assert all(grouper.repeats_to_record("burst") is None for _ in range(9))
+    at, repeats = grouper._recent["burst"]
+    grouper._recent["burst"] = (at - 301, repeats)
+    assert grouper.repeats_to_record("other") == 0  # not full: nothing is forgotten
+    assert grouper.repeats_to_record("burst") == 9
+
+
+def test_a_full_tracker_drops_an_expired_key_with_its_repeats():
+    """#20787: stated behaviour, pinned. The repeats are lost when a full tracker drops the key."""
     grouper = RepeatGrouper(window_s=300, max_tracked=1)
     assert grouper.repeats_to_record("burst") == 0
     assert all(grouper.repeats_to_record("burst") is None for _ in range(9))
