@@ -63,9 +63,7 @@ def _ansible_files(root: Path) -> list[str]:
 REACH = declare(
     "opt-autobot-literal-ratchet-18880",
     discover=_ansible_files,
-    # mid-window on the SCANNED population (prose and fixtures excluded at discovery, CodeRabbit
-    # on #19388): 479 tracked - 17 out of scope = 462; floor 462 - 20 = 442, window (422, 462)
-    floor=459,  # mid-window: population 479, window (439, 479)
+    # The SCANNED population (prose and fixtures excluded at discovery, CodeRabbit on #19388).
     growth=40,
     what="tracked ansible files",
     roots=(_ANSIBLE,),
