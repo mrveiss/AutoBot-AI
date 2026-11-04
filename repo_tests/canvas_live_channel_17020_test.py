@@ -35,6 +35,8 @@ import ast
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _CANVAS_API = repo_root() / "autobot-backend" / "api" / "canvas.py"
 _CANVAS_EVENTS = repo_root() / "autobot-backend" / "canvas" / "events.py"
 _MANAGER = repo_root() / "autobot-backend" / "live_event_manager.py"
@@ -50,7 +52,7 @@ _COMMIT_ATTR = "commit"
 
 
 def _module(path) -> ast.Module:
-    return ast.parse(path.read_text(encoding="utf-8"))
+    return parse_cache.parse(path.read_text(encoding="utf-8"))
 
 
 def _functions(tree: ast.Module) -> dict[str, ast.AsyncFunctionDef | ast.FunctionDef]:
@@ -113,7 +115,7 @@ async def handler():
 
 
 def _ordering(source: str) -> tuple[int, int]:
-    names = call_names(_functions(ast.parse(source))["handler"])
+    names = call_names(_functions(parse_cache.parse(source))["handler"])
     return _first_index(names, _COMMIT_ATTR), _first_index(names, _PUBLISH_CALL)
 
 

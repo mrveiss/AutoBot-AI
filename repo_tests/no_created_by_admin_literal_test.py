@@ -26,6 +26,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 REPO_ROOT = repo_root()
@@ -44,7 +45,7 @@ def _created_by_admin_literals(source: str) -> list[int]:
     nothing conditionally, so no offender can hide behind a parse failure.
     """
     try:
-        tree = ast.parse(source)
+        tree = parse_cache.parse(source)
     except SyntaxError:
         return []
     hits = []
