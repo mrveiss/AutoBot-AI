@@ -33,6 +33,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 REPO_ROOT = repo_root()
@@ -108,7 +109,7 @@ REACH = declare(
 def admin_bypass_calls(source: str) -> list[int]:
     """Line numbers of gated-helper calls in *source* that pass ``is_admin=``."""
     lines = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if not isinstance(node, ast.Call):
             continue
         func = node.func
@@ -127,14 +128,14 @@ def canonical_helper_calls(source: str) -> list[int]:
     """Line numbers of calls to the canonical admin-aware fact-read helpers in *source*."""
     return [
         n.lineno
-        for n in ast.walk(ast.parse(source))
+        for n in ast.walk(parse_cache.parse(source))
         if isinstance(n, ast.Call) and _call_name(n) in CANONICAL_READ_HELPERS
     ]
 
 
 def helper_forwards_admin(source: str, helper: str = "can_read_fact") -> bool:
     """Whether *helper*'s body in *source* passes ``is_admin=`` to ``check_access``."""
-    for fn in ast.walk(ast.parse(source)):
+    for fn in ast.walk(parse_cache.parse(source)):
         if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)) and fn.name == helper:
             return any(
                 isinstance(n, ast.Call)

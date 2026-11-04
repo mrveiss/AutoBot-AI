@@ -38,6 +38,7 @@ import re
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import tracked_paths
 
 #: `re` entry points whose first positional argument is a pattern.
@@ -222,7 +223,7 @@ def _regex_literals() -> tuple[tuple[str, int, str], tuple[int, ...]]:
     skipped = 0
     for rel in _tracked_python_files():
         try:
-            tree = ast.parse((root / rel).read_text(encoding="utf-8"))
+            tree = parse_cache.parse((root / rel).read_text(encoding="utf-8"))
         except (OSError, SyntaxError):
             skipped += 1
             continue
