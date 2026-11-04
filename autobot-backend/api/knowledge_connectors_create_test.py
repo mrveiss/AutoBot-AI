@@ -277,7 +277,8 @@ async def test_a_failed_sync_leaves_a_history_entry(failing: str, stage: str):
         "_append_history": AsyncMock(),
     }
     with patch.multiple(mod, **patches):
-        await mod._run_sync_background("c1", False)
+        # The body under the lease (#20556), as the route runs it once its claim is held.
+        await mod._run_sync_background.__wrapped__("c1", False)
     entry = patches["_append_history"].await_args.args[1]
     assert entry["status"] == "failed" and stage in entry["errors"][0]
     assert "secret detail" not in str(entry)
