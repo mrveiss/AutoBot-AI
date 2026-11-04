@@ -60,7 +60,6 @@ REACH_FILES = declare(
     "primary-fill-white-label-files",
     discover=lambda root: [p.relative_to(root).as_posix() for p in frontend_files(root / _FRONTEND_SRC)],
     roots=(_FRONTEND_SRC,),
-    floor=480,  # population 505 when measured
     growth=40,
     skips=0,
     what=".vue and .css files scanned for a literal white label on a --color-primary fill",

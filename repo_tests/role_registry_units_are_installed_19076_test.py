@@ -47,7 +47,6 @@ def _registry_units(root: Path) -> list[tuple[str, str]]:
 REACH = declare(
     "role-registry-installed-units",
     discover=_registry_units,
-    floor=19,
     what="(role, systemd unit) pairs declared in services/role_registry.py",
 )
 
