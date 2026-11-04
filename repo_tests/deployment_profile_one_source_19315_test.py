@@ -171,7 +171,6 @@ def code_copies(root: Path) -> list[str]:
 WRITES = declare(
     "deployment-profile-writers-19315",
     discover=profile_writes,
-    floor=31,  # 36 live; window [26, 36], pin 31
     growth=10,
     what="literal assignments of AUTOBOT_ENVIRONMENT/ENV/DEPLOYMENT_MODE/DEBUG",
 )

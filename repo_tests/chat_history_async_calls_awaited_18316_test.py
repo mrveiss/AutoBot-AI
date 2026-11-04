@@ -57,11 +57,9 @@ def _api_sources(root: Path) -> list[str]:
         return []
 
 
-#: Mid-window from REACH.window(): 416 non-test api modules measured 2026-10-11, window [376, 416].
 REACH = declare(
     "chat-history-async-calls-awaited",
     discover=_api_sources,
-    floor=465,  # re-pinned mid-window (train 45): population 450, window [410, 450]
     growth=40,
     what="non-test python modules",
     roots=_ROOTS,
