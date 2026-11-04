@@ -22,7 +22,7 @@ Security: access token and app secret are encrypted at rest (see
 
 from typing import Any, Dict, List, Optional, Tuple
 
-from autobot_shared.field_encryption import decrypt_field, encrypt_field
+from autobot_shared.field_encryption import open_tagged, seal_tagged
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from integrations.base import IntegrationConfig
@@ -38,18 +38,18 @@ WHATSAPP_PHONE_NUMBER_ID_KEY = "autobot:settings:whatsapp_phone_number_id"  # no
 WHATSAPP_BUSINESS_ACCOUNT_ID_KEY = "autobot:settings:whatsapp_business_account_id"  # nosec B105  # Redis key name
 WHATSAPP_BASE_URL_KEY = "autobot:settings:whatsapp_base_url"  # nosec B105  # Redis key name
 
-# Sentinel prefix for encrypted values (backward compatibility with plaintext)
-_ENCRYPTED_PREFIX = "enc:"
+
+def _context(key: str) -> str:
+    """Where a sealed WhatsApp value is stored; the seal is bound to it (#17981)."""
+    return f"redis:{key}"
 
 
-def _decode(raw: Any) -> Optional[str]:
-    """Decode a Redis value to ``str``, decrypting if it carries the enc: prefix."""
+def _decode(key: str, raw: Any) -> Optional[str]:
+    """Decode a Redis value; an ``enc:`` value is decrypted or raises ``FieldDecryptionError``."""
     if raw is None:
         return None
     value = raw.decode("utf-8") if isinstance(raw, bytes) else raw
-    if value.startswith(_ENCRYPTED_PREFIX):
-        return decrypt_field(value[len(_ENCRYPTED_PREFIX) :])
-    return value
+    return open_tagged(value, context=_context(key))
 
 
 async def _set_encrypted(key: str, value: str) -> None:
@@ -58,7 +58,7 @@ async def _set_encrypted(key: str, value: str) -> None:
     if redis is None:
         logger.error("Redis unavailable; cannot persist WhatsApp config key %s", key)
         return
-    await redis.set(key, f"{_ENCRYPTED_PREFIX}{encrypt_field(value)}")
+    await redis.set(key, seal_tagged(value, context=_context(key)))
 
 
 async def _set_plain(key: str, value: str) -> None:
@@ -75,7 +75,7 @@ async def _get(key: str) -> Optional[str]:
     redis = await get_redis_client()
     if redis is None:
         return None
-    return _decode(await redis.get(key))
+    return _decode(key, await redis.get(key))
 
 
 async def save_whatsapp_config(
