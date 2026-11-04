@@ -83,6 +83,13 @@ def test_the_reset_keeps_the_actions_own_exit_status() -> None:
     assert line == "sudo -n systemctl reset-failed -- u.service 2>/dev/null; sudo -n systemctl restart -- u.service"
 
 
+@pytest.mark.parametrize("action", ["start", "stop"])
+def test_an_empty_unit_list_is_refused(action: str) -> None:
+    """No units must never become `systemctl reset-failed --`, which clears every failed unit on the host."""
+    with pytest.raises(ValueError, match="at least one unit"):
+        systemctl_remote_command(action, [])
+
+
 def test_the_ansible_path_clears_the_park_before_the_state_change() -> None:
     """manage-service.yml: the reconciler's remediation and the orchestration UI's per-role actions."""
     play = yaml.safe_load((_ROOT / "ansible" / "manage-service.yml").read_text(encoding="utf-8"))[0]

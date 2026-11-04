@@ -29,24 +29,24 @@ from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOT = repo_root()
 
-#: AEAD and token-cipher constructors from ``cryptography``.
-_CIPHERS = frozenset({"AESGCM", "AESCCM", "AESOCB3", "AESSIV", "ChaCha20Poly1305", "Fernet", "MultiFernet"})
+#: AEAD and token-cipher constructors from ``cryptography``, plus the raw ``Cipher`` primitive.
+_CIPHERS = frozenset({"AESGCM", "AESCCM", "AESOCB3", "AESSIV", "ChaCha20Poly1305", "Cipher", "Fernet", "MultiFernet"})
 
 #: The canonical core. Exempt by identity, not pending migration.
 _CANONICAL = frozenset({"autobot_shared/secrets_envelope.py"})
 
 #: Other cipher users, each with a reason it is not yet on the core. **This list
 #: only shrinks**: an entry is removed when that module moves onto the envelope
-#: core; nothing may be added. Each is tracked on #17981's list.
-_PENDING = frozenset(
-    {
-        # A legacy-key adapter. It reproduces the old per-company Fernet
-        # derivation byte for byte so pre-envelope data stays readable.
-        "autobot_shared/legacy_secret_keys.py",
-        # Passphrase-derived AES-GCM with no AAD: the same unbound shape #17981 fixed.
-        "autobot_shared/passphrase_encryption.py",
-    }
-)
+#: core; nothing may be added. Each is tracked on #17981's list. Each entry
+#: names the ciphers the module uses today, so a pending module cannot pick up
+#: a second one while it waits.
+_PENDING: dict[str, frozenset[str]] = {
+    # A legacy-key adapter. It reproduces the old per-company Fernet
+    # derivation byte for byte so pre-envelope data stays readable.
+    "autobot_shared/legacy_secret_keys.py": frozenset({"Fernet"}),
+    # Passphrase-derived AES-GCM with no AAD: the same unbound shape #17981 fixed.
+    "autobot_shared/passphrase_encryption.py": frozenset({"AESGCM"}),
+}
 
 
 def _cipher_names(source: str) -> set[str]:
@@ -64,7 +64,11 @@ def _cipher_names(source: str) -> set[str]:
 
 def _source_files(root: Path) -> list[str]:
     try:
-        return tracked_paths(root, "autobot_shared/*.py", exclude=("*_test.py", "test_*.py", "conftest.py"))
+        return tracked_paths(
+            root,
+            "autobot_shared/*.py",
+            exclude=("*_test.py", "test_*.py", "conftest.py", "autobot_shared/tests/*", "autobot_shared/*/tests/*"),
+        )
     except EmptyEnumeration:
         return []
 
@@ -98,15 +102,24 @@ def _population() -> set[str]:
 def test_no_new_cipher_implementation_in_autobot_shared():
     population = _population()
     assert _CANONICAL <= population, "the scan no longer sees the canonical core: the instrument is broken"
-    new = population - _CANONICAL - _PENDING
+    new = population - _CANONICAL - _PENDING.keys()
     assert not new, (
         f"{sorted(new)} use a cipher directly. Seal through autobot_shared.secrets_envelope "
         "(or the field_encryption facade) instead of adding a second core (#17981)."
     )
 
 
+def test_each_pending_module_uses_only_its_recorded_ciphers():
+    grown = {
+        rel: sorted(used - allowed)
+        for rel, allowed in _PENDING.items()
+        if (used := _cipher_names((_ROOT / rel).read_text(encoding="utf-8"))) - allowed
+    }
+    assert not grown, f"pending modules picked up another cipher: {grown}. Move them onto the envelope core (#17981)."
+
+
 def test_the_pending_list_names_only_current_users():
-    stale = _PENDING - _population()
+    stale = _PENDING.keys() - _population()
     assert not stale, f"{sorted(stale)} no longer use a cipher: delete them from _PENDING (the list only shrinks)"
 
 
@@ -120,4 +133,6 @@ def test_the_detector_reads_code_not_prose():
     code = "from cryptography.fernet import Fernet\nFernet(b'k')\n"
     assert _cipher_names(prose) == set()
     assert _cipher_names(code) == {"Fernet"}
+    raw = "from cryptography.hazmat.primitives.ciphers import Cipher\nCipher(a, m)\n"
+    assert _cipher_names(raw) == {"Cipher"}
     assert "autobot_shared/user_management/models/mfa.py" not in _population()

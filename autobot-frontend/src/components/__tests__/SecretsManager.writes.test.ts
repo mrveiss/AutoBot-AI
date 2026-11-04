@@ -115,7 +115,9 @@ describe('SecretsManager writes and reloads (#20732, #20734)', () => {
     const { vm } = await mountManager()
     await deleteUserSecret(vm)
     expect(confirm.mock.calls[0][0].message).toContain('service:scheduler')
-    expect(deleteSecret).toHaveBeenLastCalledWith('s1', { chatId: null, confirmDependents: true })
+    expect(deleteSecret).toHaveBeenCalledTimes(2)
+    expect(deleteSecret).toHaveBeenNthCalledWith(1, 's1', { chatId: null })
+    expect(deleteSecret).toHaveBeenNthCalledWith(2, 's1', { chatId: null, confirmDependents: true })
   })
 
   it('a failed delete shows the unconfirmed-write alert and reloads the list', async () => {

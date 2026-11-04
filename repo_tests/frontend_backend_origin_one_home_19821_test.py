@@ -57,7 +57,9 @@ def test_the_templates_agree_on_the_protocol():
     assert len(set(values.values())) == 1, f"templates disagree: {values}"
 
 
-_OWN_READ = re.compile(r"(import\.meta\.env\.|getEnv\(\s*['\"])VITE_(BACKEND_HOST|BACKEND_PORT|HTTP_PROTOCOL)\b")
+_OWN_READ = re.compile(
+    r"(import\.meta\.env\.|import\.meta\.env\[\s*['\"]|getEnv\(\s*['\"])VITE_(BACKEND_HOST|BACKEND_PORT|HTTP_PROTOCOL)\b"
+)
 _LITERAL_FALLBACK = re.compile(r"\|\|\s*['\"](8001|8443)['\"]")
 _ABSOLUTE_ORIGIN = re.compile(r"\$\{[^}]*\}:\$\{[^}]*(port\.backend|BACKEND_PORT)\}")
 
@@ -137,6 +139,8 @@ def test_every_allowance_is_still_needed():
     [
         "port: import.meta.env.VITE_BACKEND_PORT || '8001',",
         "const p = getEnv('VITE_HTTP_PROTOCOL', 'http')",
+        "const host = import.meta.env['VITE_BACKEND_HOST']",
+        'const port = import.meta.env["VITE_BACKEND_PORT"]',
         "return `ws://${cfg.vm.main}:${cfg.port.backend}/api/ws`",
         "return `ws://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}/api/terminal/ws`",
         "const port = env.PORT || '8443'",
