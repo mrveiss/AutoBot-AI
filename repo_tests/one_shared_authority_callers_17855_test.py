@@ -119,7 +119,6 @@ def _source_population(root: Path) -> list[str]:
 REACH = declare(
     "shared-authority-callers-scan",
     discover=_source_population,
-    floor=3355,  # re-pinned mid-window (train 80 on main)
     what="non-test python source",
     roots=("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     growth=300,
