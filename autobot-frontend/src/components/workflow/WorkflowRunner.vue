@@ -157,6 +157,7 @@
 
 <script setup lang="ts">
 import type { IconName } from '@/components/ui/Icon.vue'
+import { createDateFormatter } from '@/utils/formatHelpers'
 import Icon from '@/components/ui/Icon.vue'
 import { BaseBadge, BaseModal, RiskBadge, BaseButton } from '@autobot/ui'
 import { ref, computed } from 'vue';
@@ -215,10 +216,7 @@ function formatPhase(phase: string): string {
   return phase.charAt(0).toUpperCase() + phase.slice(1);
 }
 
-function formatTime(timestamp?: string): string {
-  if (!timestamp) return '-';
-  return new Date(timestamp).toLocaleTimeString();
-}
+const formatTime = createDateFormatter({ kind: 'time', emptyText: '-' });
 
 function formatResult(result: Record<string, unknown>): string {
   if (typeof result === 'string') return result;
