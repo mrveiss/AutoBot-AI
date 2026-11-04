@@ -70,8 +70,6 @@ def _source_population(root: Path) -> list[str]:
 REACH = declare(
     "one-doc-indexer",
     discover=_source_population,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=3643,  # re-pinned mid-window (train 58): population 3542, window [3242, 3542]
     what="non-test python source",
     roots=_ROOTS,
     growth=300,
