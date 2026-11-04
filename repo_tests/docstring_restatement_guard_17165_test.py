@@ -26,6 +26,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 from repo_tests.docstring_restatement_baseline_17165 import KNOWN_RESTATEMENTS
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 REPO_ROOT = repo_root()
@@ -58,7 +59,7 @@ def _public_symbols(root: Path) -> list[tuple[str, str, str | None]]:
             continue
         path = root / rel
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            tree = parse_cache.parse(path.read_text(encoding="utf-8"))
         except (SyntaxError, UnicodeDecodeError, OSError):
             continue
         for node in ast.walk(tree):

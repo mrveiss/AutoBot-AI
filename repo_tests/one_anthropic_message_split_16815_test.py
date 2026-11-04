@@ -24,6 +24,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _CANONICAL = "autobot-backend/llm_shared/providers/anthropic_format.py"
@@ -59,7 +60,7 @@ def _split_functions(source: str) -> list[str]:
     """Names of functions in `source` that separate `system` and build Anthropic message dicts."""
     return [
         n.name
-        for n in ast.walk(ast.parse(source))
+        for n in ast.walk(parse_cache.parse(source))
         if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
         and _compares_to_system(n)
         and _builds_role_content_dict(n)
@@ -163,7 +164,7 @@ def test_the_message_split_exists_once() -> None:
 
 @pytest.mark.parametrize("rel", _CALLERS)
 def test_each_anthropic_family_provider_calls_the_shared_split(rel: str) -> None:
-    tree = ast.parse((repo_root() / rel).read_text(encoding="utf-8"))
+    tree = parse_cache.parse((repo_root() / rel).read_text(encoding="utf-8"))
     calls = [
         n
         for n in ast.walk(tree)
