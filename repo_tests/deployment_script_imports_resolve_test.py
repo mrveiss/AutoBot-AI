@@ -69,6 +69,8 @@ from repo_tests.deployment_script_scan import count_blocks as _count_blocks
 from repo_tests.deployment_script_scan import embedded_python as _embedded_python
 from repo_tests.deployment_script_scan import shell_scripts as _shell_scripts
 
+from tools.lint import _parse_cache as parse_cache
+
 # The roots a deployment script puts on PYTHONPATH before running inline Python.
 _IMPORT_ROOTS = [_REPO_ROOT / "autobot-backend", _REPO_ROOT]
 
@@ -360,7 +362,7 @@ def _awaited_sync_redis_calls() -> tuple[list[str], int]:
     for script in _shell_scripts():
         for block in _embedded_python(script):
             try:
-                tree = ast.parse(block)
+                tree = parse_cache.parse(block)
             except SyntaxError:
                 continue  # heredoc interpolation we cannot parse; not our concern
             parsed += 1
@@ -402,7 +404,7 @@ def test_the_embedded_python_of_each_target_script_parses(rel: str) -> None:
     parsed = 0
     for block in blocks:
         try:
-            ast.parse(block)
+            parse_cache.parse(block)
         except SyntaxError:
             continue
         parsed += 1
