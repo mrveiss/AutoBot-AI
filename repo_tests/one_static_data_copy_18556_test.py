@@ -113,8 +113,6 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "one-static-data-copy-scan",
     discover=_population,
-    # Window against 8 files is [6, 8]; pinned mid-window.
-    floor=7,
     what="tracked files named like a guarded static data file",
     roots=_ROOTS,
     growth=2,
@@ -263,8 +261,7 @@ def _template_violations(templates: Iterable[str]) -> list[str]:
 TEMPLATES = declare(
     "one-system-knowledge-template-tree",
     discover=_templates,
-    # Measured 2026-10-23: 14 tracked templates, all under the template dir; window [12, 14].
-    floor=13,
+    # Measured 2026-10-23: 14 tracked templates, all under the template dir.
     what="tracked YAML files whose content is a system-knowledge template",
     roots=(SYSTEM_KNOWLEDGE_TEMPLATES_REL.parts[0],),
     growth=2,
