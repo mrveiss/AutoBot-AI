@@ -277,21 +277,11 @@ def is_redaction_implementation(source: str) -> bool:
 REACH = declare(
     "redaction-concept-census",
     discover=_tracked_sources,
-    # 3247, NOT the `population - growth` value. The first version of this
-    # declaration used that formula and went red on the next rebase after a
-    # handful of files landed -- which is what "zero tolerance by construction"
-    # means in practice. Second instance of that error by this author in one
-    # session; both are self-reported on #17142 with the figures.
+    # The floor is computed from the base commit (#19676); growth=300 buys room for ordinary
+    # growth instead of a handful of files.
     #
-    # 3247 is mid-window, buying room for ordinary growth instead of a handful
-    # of files.
-    #
-    # NO MEASURED NUMBERS HERE, deliberately: an earlier version of this comment
-    # cited the population and the window and both were stale one rebase later.
-    # Prose citing a measurement survives the rebase that changes it -- the
-    # resolver owns the value and nothing owns the sentence. The arithmetic is
-    # in the commit message, which cannot drift from the tree it describes.
-    floor=3880,  # re-pinned mid-window (train 82 on main)
+    # NO MEASURED NUMBERS HERE, deliberately: prose citing a measurement survives the rebase
+    # that changes it -- the resolver owns the value and nothing owns the sentence.
     growth=300,
     what="tracked production python files",
 )
