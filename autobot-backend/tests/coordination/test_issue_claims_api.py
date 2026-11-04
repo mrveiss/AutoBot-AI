@@ -78,12 +78,12 @@ def test_anonymous_is_401_everywhere(harness):
     assert c.get(BASE).status_code == 401
 
 
-def test_the_service_principal_reads_but_its_writes_are_403(harness):
+def test_the_service_key_alone_neither_reads_nor_writes(harness):
+    """#16333 (owner ruling b): the key is not a user; no claims route names a service caller."""
     svc = harness.creds["internal_service_key"]
-    assert harness.client.get(BASE, headers=svc).status_code == 200
-    assert harness.client.post(f"{BASE}/7", json={"owner": "s1"}, headers=svc).status_code == 403
-    assert harness.client.delete(f"{BASE}/7", params={"owner": "s1"}, headers=svc).status_code == 403
-    assert harness.client.get(BASE, headers=svc).json()["claims"] == []
+    assert harness.client.get(BASE, headers=svc).status_code == 401
+    assert harness.client.post(f"{BASE}/7", json={"owner": "s1"}, headers=svc).status_code == 401
+    assert harness.client.delete(f"{BASE}/7", params={"owner": "s1"}, headers=svc).status_code == 401
 
 
 def test_a_wrong_internal_key_is_anonymous(harness):
