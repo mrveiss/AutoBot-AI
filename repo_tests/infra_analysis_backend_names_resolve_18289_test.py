@@ -26,6 +26,8 @@ import pytest
 from repo_tests._infra_backend_names import backend_only_names
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 SCRIPTS = "autobot-infrastructure/shared/scripts"
 ANALYSIS = f"{SCRIPTS}/analysis"
 #: The tools #18289 repaired or classified as backend tools in the analysis folder.
@@ -106,7 +108,7 @@ _RESOLVE = textwrap.dedent("""
 def backend_from_imports(source: str, backend: frozenset[str]) -> dict[str, list[str]]:
     """``{module: [names]}`` for every absolute ``from <backend module> import ...`` at any depth."""
     wanted: dict[str, set[str]] = {}
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
             if node.module.split(".")[0] in backend:
                 wanted.setdefault(node.module, set()).update(a.name for a in node.names if a.name != "*")

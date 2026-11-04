@@ -17,6 +17,8 @@ import pytest
 import yaml
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _SLM = repo_root() / "autobot-slm-backend"
 _ANSIBLE = _SLM / "ansible"
 _LLM = "fleet-llm"
@@ -41,7 +43,7 @@ def _roles(**by_role: str) -> list:
 
 def _build_infra_vars(node_roles: list, ips: dict, local_ips=None) -> dict:
     """The wizard's own function, with its neighbours; the suite cannot import the wizard module."""
-    tree = ast.parse((_SLM / "api" / "setup_wizard.py").read_text(encoding="utf-8"))
+    tree = parse_cache.parse((_SLM / "api" / "setup_wizard.py").read_text(encoding="utf-8"))
     func = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_build_infra_vars")
     namespace = {"_ROLE_INFRA_VARS": {"backend": ("backend_host", 8001)}, "llm_infra_vars": _placement().llm_infra_vars}
     exec(compile(ast.Module([func], []), "setup_wizard", "exec"), namespace)  # noqa: S102 - the repo's own source

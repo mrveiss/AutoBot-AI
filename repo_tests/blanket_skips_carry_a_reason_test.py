@@ -27,6 +27,8 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
+
 # `git_repo_root()` with no argument asks from the process working directory, so
 # this guard's root was whatever pytest happened to be invoked from. `repo_root()`
 # anchors on the tree this file belongs to (#15925).
@@ -106,7 +108,7 @@ def _scan() -> tuple[dict[str, str], int]:
     found, parsed = {}, 0
     for path in REACH.examined(REPO):
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            tree = parse_cache.parse(path.read_text(encoding="utf-8"))
         except (SyntaxError, UnicodeDecodeError):
             continue
         parsed += 1

@@ -20,6 +20,8 @@ from pathlib import Path
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 REPO_ROOT = repo_root()
 _PYTEST_INI = REPO_ROOT / "pytest.ini"
 
@@ -209,7 +211,7 @@ _tree_cache: dict[Path, ast.Module | None] = {}
 def parse(path: Path) -> ast.Module | None:
     if path not in _tree_cache:
         try:
-            _tree_cache[path] = ast.parse(path.read_text(encoding="utf-8"))
+            _tree_cache[path] = parse_cache.parse(path.read_text(encoding="utf-8"))
         except SyntaxError:
             _tree_cache[path] = None
     return _tree_cache[path]
@@ -300,9 +302,7 @@ def _in_scope(path: Path) -> bool:
 
 def swept_files() -> list[Path]:
     return sorted(
-        p
-        for p in REPO_ROOT.rglob("*.py")
-        if not SKIP.intersection(p.relative_to(REPO_ROOT).parts) and _in_scope(p)
+        p for p in REPO_ROOT.rglob("*.py") if not SKIP.intersection(p.relative_to(REPO_ROOT).parts) and _in_scope(p)
     )
 
 
