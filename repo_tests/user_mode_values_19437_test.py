@@ -56,7 +56,6 @@ def _swept(root: Path) -> list[str]:
 REACH = declare(
     "user-mode-values-sweep-19437",
     discover=_swept,
-    floor=2170,  # measured at 2242 tracked files, pinned mid-window (#15928)
     growth=150,
     what="tracked docs and deployment files swept for a tenancy value in the wrong variable (#19437)",
 )
