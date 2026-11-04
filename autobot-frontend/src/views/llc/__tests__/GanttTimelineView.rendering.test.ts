@@ -31,6 +31,9 @@ const h = vi.hoisted(() => ({
 
 vi.mock('vue-router', () => ({ useRoute: () => h.route, useRouter: () => h.router }))
 vi.mock('@/plugins/api', () => ({ useApiClient: () => h.api }))
+// The PNG is saved through the kit's one save path (#20770); the test reads what it was given.
+const saveUrl = vi.hoisted(() => vi.fn())
+vi.mock('@autobot/ui', async (importOriginal) => ({ ...(await importOriginal<object>()), saveUrl }))
 vi.mock('@/composables/useNotificationBus', () => ({
   useNotificationBus: () => ({ showToast: vi.fn() }),
 }))
@@ -303,14 +306,13 @@ describe('PNG export (#14767)', () => {
       getContext: vi.fn(() => ctx),
       toDataURL: vi.fn(() => 'data:image/png;base64,STUB'),
     }
-    const link = { download: '', href: '', click: vi.fn() }
     const real = document.createElement.bind(document)
     vi.spyOn(document, 'createElement').mockImplementation(((tag: string) => {
       if (tag === 'canvas') return canvas as unknown as HTMLCanvasElement
-      if (tag === 'a') return link as unknown as HTMLAnchorElement
       return real(tag)
     }) as typeof document.createElement)
-    return { ctx, canvas, link }
+    saveUrl.mockClear()
+    return { ctx, canvas }
   }
 
   /** Let the off-DOM `new Image()` resolve, exercising the success path. */
@@ -388,7 +390,7 @@ describe('PNG export (#14767)', () => {
     vi.stubGlobal('devicePixelRatio', 2)
     stubToken('#101010')
     passImageLoad()
-    const { ctx, canvas, link } = stubCanvas()
+    const { ctx, canvas } = stubCanvas()
     const w = await mountView()
     pinSvgSize(w, 440, 66)
 
@@ -400,7 +402,7 @@ describe('PNG export (#14767)', () => {
     // in CSS units — otherwise the chart would be drawn into one quadrant.
     expect(ctx.scale).toHaveBeenCalledWith(4, 4)
     expect(ctx.drawImage).toHaveBeenCalledWith(expect.anything(), 0, 0, 440, 66)
-    expect(link.click).toHaveBeenCalled()
+    expect(saveUrl).toHaveBeenCalledWith('data:image/png;base64,STUB', expect.stringMatching(/^timeline-.*\.png$/))
   })
 
   it('never scales below 1x, so a very wide chart exports whole rather than cropped', async () => {

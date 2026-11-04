@@ -1737,6 +1737,105 @@
         "label": "Latest events pages",
         "summary": "Page {page} of {count}"
       }
+    },
+    "installMetrics": {
+      "title": "Install metrics",
+      "subtitle": "This install's own monitoring figures from the main backend: host, services, alerts, recommendations, GPU and NPU. Updated every 15 seconds.",
+      "refresh": "Refresh",
+      "loading": "Reading install metrics...",
+      "unavailableTitle": "The main app is not available",
+      "unavailableBody": "The main backend did not answer any install metrics request. No figures are shown, because any shown now would be out of date. Polling stops after repeated failures; use Refresh to read again.",
+      "sectionFailedTitle": "{section} could not be read",
+      "sectionFailedBody": "The install metrics request failed.",
+      "emptyTitle": "Nothing reported yet",
+      "emptyBody": "The main backend answered and reports no host figures, services, alerts, recommendations or devices.",
+      "notReported": "Not reported",
+      "percent": "{value}%",
+      "celsius": "{n} °C",
+      "watts": "{n} W",
+      "ms": "{n} ms",
+      "hours": "{n} h",
+      "readAt": "Read {time}",
+      "sections": {
+        "dashboard": "Host metrics",
+        "services": "Service health",
+        "alerts": "Alerts",
+        "recommendations": "Ieteikumi",
+        "gpu": "GPU",
+        "npu": "NPU"
+      },
+      "system": {
+        "title": "Host"
+      },
+      "gpu": {
+        "title": "GPU",
+        "absent": "The main backend reports no GPU on this install."
+      },
+      "npu": {
+        "title": "NPU",
+        "absent": "The main backend reports no NPU on this install."
+      },
+      "stat": {
+        "cpu": "CPU",
+        "memory": "Memory",
+        "disk": "Disk",
+        "processes": "Processes",
+        "overallHealth": "Overall health",
+        "performanceScore": "Performance score",
+        "gpuName": "Device",
+        "gpuUtilization": "Utilization",
+        "gpuMemory": "Memory utilization",
+        "gpuTemperature": "Temperature",
+        "gpuPower": "Power",
+        "npuUtilization": "Utilization",
+        "npuAcceleration": "Acceleration ratio",
+        "npuInferences": "Inferences"
+      },
+      "services": {
+        "title": "Services",
+        "summary": "{healthy} of {total} services healthy, overall {status}",
+        "empty": "The backend reports no services.",
+        "col": {
+          "name": "Service",
+          "status": "Statuss",
+          "endpoint": "Endpoint",
+          "response": "Response",
+          "score": "Health score",
+          "uptime": "Darbības laiks"
+        }
+      },
+      "alerts": {
+        "title": "Alerts",
+        "empty": "The backend reports no active alerts."
+      },
+      "recommendations": {
+        "title": "Ieteikumi",
+        "empty": "The backend has no optimization recommendations.",
+        "action": "Action: {action}"
+      },
+      "status": {
+        "healthy": "Healthy",
+        "degraded": "Degraded",
+        "critical": "Kritisks",
+        "offline": "Bezsaistē"
+      },
+      "health": {
+        "healthy": "healthy",
+        "degraded": "degraded",
+        "critical": "kritisks",
+        "unknown": "nezināms"
+      },
+      "severity": {
+        "critical": "Kritisks",
+        "high": "Augsts",
+        "warning": "Brīdinājums",
+        "info": "Info"
+      },
+      "priority": {
+        "high": "Augsts",
+        "medium": "Medium",
+        "low": "Low"
+      }
     }
   },
   "monitoringView": {
@@ -1756,7 +1855,8 @@
       "performance": "Veiktspēja",
       "agentLedger": "Aģentu žurnāls",
       "validation": "Validation",
-      "rum": "Real user monitoring"
+      "rum": "Real user monitoring",
+      "install": "Install metrics"
     }
   },
   "orchestration": {
@@ -3145,6 +3245,43 @@
         "checkingRbacStatus": "Checking RBAC status...",
         "failedToInitializeRbac": "Failed to initialize RBAC"
       },
+      "themeManager": {
+        "title": "Themes",
+        "subtitle": "Theme packages installed on the main app. Installing or removing one applies to every user.",
+        "refresh": "Refresh",
+        "dismiss": "Dismiss",
+        "loading": "Reading the installed themes...",
+        "errorTitle": "The installed themes could not be read",
+        "errorBody": "The theme list request failed.",
+        "unavailableTitle": "The theme manager is not available",
+        "unavailableBody": "Theme packages live on the main app, which did not answer. Try again once it is running.",
+        "emptyTitle": "No themes installed",
+        "emptyBody": "Upload a theme package (.zip) to make it available to every user.",
+        "installTitle": "Install a theme",
+        "installHint": "A .zip package holding theme.json and theme.css.",
+        "chooseFile": "Choose package",
+        "installing": "Installing...",
+        "installedOk": "Installed {name} {version}.",
+        "installFailed": "The theme could not be installed.",
+        "notZip": "Choose a .zip theme package.",
+        "tooLarge": "The package is larger than the SLM proxy accepts, so it was refused before the main app saw it.",
+        "adminOnly": "Only an administrator can change themes.",
+        "col": {
+          "name": "Nosaukums",
+          "version": "Version",
+          "author": "Author",
+          "supports": "Supports",
+          "id": "Id"
+        },
+        "tableLabel": "Installed themes",
+        "actions": "Darbības",
+        "uninstall": "Uninstall",
+        "confirmTitle": "Uninstall {name}?",
+        "confirmBody": "The theme is removed from the main app for every user.",
+        "confirmCancel": "Atcelt",
+        "removedOk": "Uninstalled {name}.",
+        "removeFailed": "The theme could not be uninstalled."
+      },
       "webResearchSettings": {
         "title": "Tīmekļa Izpēte",
         "subtitle": "Platform-wide web research settings. Changes apply to every user.",
@@ -3488,7 +3625,8 @@
       "llmFallbacks": "LLM Fallbacks",
       "budgetAudit": "Budget Audit",
       "sso": "SSO / OIDC",
-      "webResearch": "Tīmekļa Izpēte"
+      "webResearch": "Tīmekļa Izpēte",
+      "themes": "Themes"
     }
   },
   "settingsView": {
