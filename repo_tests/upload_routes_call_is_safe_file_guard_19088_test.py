@@ -19,6 +19,8 @@ from functools import lru_cache
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _REPO_ROOT = repo_root()
 _PACKAGES = ("autobot-backend", "autobot-slm-backend", "autobot_shared")
 _VERBS = {"get", "post", "put", "patch", "delete", "head", "options"}
@@ -132,7 +134,7 @@ def _gate_precedes_body_read(fn: ast.AST, stem: str, imports: dict, by_key: dict
 
 
 def _functions(source: str) -> list[ast.AST]:
-    return [n for n in ast.walk(ast.parse(source)) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    return [n for n in ast.walk(parse_cache.parse(source)) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
 
 
 _CONTEXT: dict[tuple[str, str], tuple[ast.AST, str, dict]] = {}
@@ -149,7 +151,7 @@ def _index() -> tuple[dict[tuple[str, str], list[frozenset]], list[tuple[str, st
             if _is_test(rel) or "node_modules" in rel:
                 continue
             try:
-                tree = ast.parse(module.read_text(encoding="utf-8"))
+                tree = parse_cache.parse(module.read_text(encoding="utf-8"))
             except (OSError, UnicodeDecodeError, SyntaxError):
                 continue
             imports = _import_map(tree)
@@ -244,7 +246,7 @@ def test_every_upload_route_reaches_is_safe_file():
 
 def test_control_an_ungated_route_is_detected_and_a_gated_one_is_not():
     def callees(src: str) -> frozenset:
-        tree = ast.parse(src)
+        tree = parse_cache.parse(src)
         fn = _functions(src)[0]
         assert _is_route(fn) and _takes_upload(fn)
         return _callees(fn, "mod", _import_map(tree))
@@ -265,10 +267,10 @@ def test_control_a_form_reading_route_is_an_upload_route_and_needs_the_gate():
     src = '@router.post("/u")\nasync def up(req: Request):\n    form = await req.form()\n    return await form.get("file").read()\n'
     fn = _functions(src)[0]
     assert _is_route(fn) and _takes_upload(fn)
-    assert not _reaches_gate(_callees(fn, "mod", _import_map(ast.parse(src))), {})
+    assert not _reaches_gate(_callees(fn, "mod", _import_map(parse_cache.parse(src))), {})
     gated = src.replace("    return", "    require_safe_upload(form.get('file').filename)\n    return")
     fn = _functions(gated)[0]
-    assert _reaches_gate(_callees(fn, "mod", _import_map(ast.parse(gated))), {})
+    assert _reaches_gate(_callees(fn, "mod", _import_map(parse_cache.parse(gated))), {})
     plain = '@router.post("/u")\nasync def up(req: Request):\n    return await req.json()\n'
     assert not _takes_upload(_functions(plain)[0])
 
@@ -279,4 +281,4 @@ def test_control_a_gate_after_the_body_read_is_flagged():
     early = head + "    require_safe_upload(file.filename)\n    data = await file.read()\n"
     for src, expected in ((late, False), (early, True)):
         fn = _functions(src)[0]
-        assert _gate_precedes_body_read(fn, "mod", _import_map(ast.parse(src)), {}) is expected
+        assert _gate_precedes_body_read(fn, "mod", _import_map(parse_cache.parse(src)), {}) is expected
