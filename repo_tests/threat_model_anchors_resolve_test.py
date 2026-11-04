@@ -30,6 +30,8 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 REPO_ROOT = repo_root()
 DOC = REPO_ROOT / "docs" / "developer" / "THREAT_MODEL.md"
 
@@ -123,7 +125,7 @@ def _format_lines(lines: list[int]) -> str:
 
 def _parse(target: Path) -> ast.Module | None:
     try:
-        return ast.parse(target.read_text(encoding="utf-8"))
+        return parse_cache.parse(target.read_text(encoding="utf-8"))
     except (OSError, SyntaxError):  # pragma: no cover - a tracked file that will not parse
         return None
 

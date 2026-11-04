@@ -25,6 +25,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOT = repo_root()
@@ -52,7 +53,7 @@ _PENDING: dict[str, frozenset[str]] = {
 def _cipher_names(source: str) -> set[str]:
     """Cipher names a module imports or references in code (comments and strings are ignored)."""
     found: set[str] = set()
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.ImportFrom):
             found |= {a.name for a in node.names if a.name in _CIPHERS}
         elif isinstance(node, ast.Name) and node.id in _CIPHERS:

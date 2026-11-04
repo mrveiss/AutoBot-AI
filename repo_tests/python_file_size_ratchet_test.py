@@ -53,6 +53,7 @@ import yaml
 from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_table, raised_entries
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import TRACKED_PY_FLOOR, tracked_paths
 
 REPO_ROOT = repo_root()
@@ -439,7 +440,7 @@ def test_the_hook_has_no_stdout_calls_left(hook):
     """
     banned = "pri" "nt"
     assert len(banned) == 5 and banned.endswith("nt"), "needle assembly broke"
-    tree = ast.parse(_SCRIPT.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(_SCRIPT.read_text(encoding="utf-8"))
     calls = [
         node.lineno
         for node in ast.walk(tree)

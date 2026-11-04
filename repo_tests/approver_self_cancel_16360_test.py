@@ -30,6 +30,8 @@ from types import SimpleNamespace
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 yaml = pytest.importorskip("yaml", reason="PyYAML needed to parse the workflows")
 
 WORKFLOW_DIR = repo_root() / ".github" / "workflows"
@@ -119,7 +121,7 @@ def _render(group: str, actor: str) -> str:
 
     def one(match: re.Match) -> str:
         source = match.group(1).strip().replace("&&", " and ").replace("||", " or ")
-        value = _eval(ast.parse(source, mode="eval").body, github)
+        value = _eval(parse_cache.parse(source, mode="eval").body, github)
         return "" if value in (None, False) else str(value)
 
     return _EXPRESSION.sub(one, group)
