@@ -50,6 +50,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 from repo_tests.kb_read_visibility_allowlist import ALLOWLIST
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 REPO_ROOT = repo_root()
@@ -366,7 +367,7 @@ def kb_reads(source: str, rel: str = "") -> list[tuple[str, int, bool]]:
                 )
             visit(child, name)
 
-    visit(ast.parse(source), "")
+    visit(parse_cache.parse(source), "")
     return reads
 
 
