@@ -34,7 +34,9 @@ _PROXY_DIR = _REPO_ROOT / "autobot-slm-backend" / "api"
 #: A module is a node proxy if it uses the shared client, or if it still spells
 #: the internal-key header itself — the shape a fourth copy-pasted proxy has.
 #: Matching both is what lets the sweep catch one that has not migrated.
-_PROXY_MARKERS = ('"X-Internal-API-Key"', "node_proxy")
+#: The import of the one SLM->backend client (#20760): the line itself, so a comment naming it doesn't count.
+_CLIENT_IMPORT = "from services.main_backend_client import"
+_PROXY_MARKERS = ('"X-Internal-API-Key"', "node_proxy", _CLIENT_IMPORT)
 
 #: voice, personality, memory_lifecycle. Only ever raised when a proxy is added.
 _MIN_NODE_PROXIES = 3
@@ -170,5 +172,8 @@ def test_every_node_proxy_uses_the_shared_client() -> None:
     sources = _node_proxy_sources()
     assert len(sources) >= _MIN_NODE_PROXIES, f"FIX THE SWEEP: only {len(sources)} node proxies reached"
 
-    unmigrated = sorted(name for name, source in sources.items() if "node_proxy." not in source)
+    # Directly, or through the one SLM->backend client that wraps it (#20760).
+    unmigrated = sorted(
+        name for name, source in sources.items() if "node_proxy." not in source and _CLIENT_IMPORT not in source
+    )
     assert unmigrated == [], f"{unmigrated} still hand-roll the node call — #14886"
