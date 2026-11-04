@@ -62,7 +62,7 @@ _RAW_ADMIN_NO_QUARANTINE = (
 _ORPHAN_REPAIR = (
     "ADMIN_ONLY: #16927 orphan-repair reads a fact's own metadata to judge/reassign it; "
     "reachable only through api/admin_orphan_repair.py's router-level "
-    'Depends(require_role("admin", "superadmin"))'
+    "Depends(check_admin_permission) (the one admin gate, #16333)"
 )
 _RAW_REPAIR = "NOT_USER_FACING: operator vector-repair CLI; returns row ids and booleans, no fact content"
 _RAW_ADMIN_MEMORY = "ADMIN_ONLY: platform-admin user reassignment over the verbatim and trajectory stores, not KB facts"

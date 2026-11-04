@@ -110,6 +110,10 @@ async def _request(method: str, path: str, **kwargs: Any) -> Any:
     async with get_http_client().tracked_request(method, url, headers=headers, timeout=timeout, **kwargs) as resp:
         if resp.status == 404:
             raise VaultSecretNotFound(f"secret not found at {path}")
+        if resp.status == 401 and "X-Internal-API-Key" in headers:  # #20750: a key mismatch, made visible
+            from services.backend_key_finding import report_backend_refused_internal_key
+
+            await report_backend_refused_internal_key(path)
         if resp.status == 204:
             return None
         if not resp.ok:
