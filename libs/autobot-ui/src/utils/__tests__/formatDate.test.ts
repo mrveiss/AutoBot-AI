@@ -8,7 +8,9 @@ import {
   formatISOString,
   formatTime,
   formatTimeAgo,
-  formatRelativeTime
+  formatRelativeTime,
+  formatLocalTime,
+  createRecencyFormatter
 } from '../format'
 
 const ISO = '2025-10-30T14:30:15Z'
@@ -90,8 +92,8 @@ describe('formatDate / formatDateTime / formatISOString / formatTime (#19905)', 
     expect(text).toMatch(/:15/)
   })
 
-  it('formatISOString returns an unparseable string unchanged', () => {
-    expect(formatISOString('nope')).toBe('nope')
+  it('formatISOString answers an unparseable string with the empty string, like formatDate', () => {
+    expect(formatISOString('nope')).toBe('')
     expect(formatISOString(null)).toBe('')
     expect(formatISOString(ISO)).toBe(new Date(ISO).toLocaleString())
   })
@@ -170,5 +172,80 @@ describe('formatRelativeTime (#19606)', () => {
     vi.setSystemTime(NOW)
     expect(formatRelativeTime(NOW - 120000, { locale: 'en' })).toBe('2 minutes ago')
     vi.useRealTimers()
+  })
+})
+
+describe('one answer for a missing or unparseable value (#19905)', () => {
+  it("formatDate, formatISOString and formatLocalTime show what the browser's toLocale…String() shows", () => {
+    const at = new Date(ISO)
+    expect(formatDate(at)).toBe(at.toLocaleDateString())
+    expect(formatISOString(at)).toBe(at.toLocaleString())
+    expect(formatISOString(ISO)).toBe(at.toLocaleString())
+    expect(formatLocalTime(at)).toBe(at.toLocaleTimeString())
+  })
+
+  it('every fixed formatter answers a missing AND an unparseable value with the empty string', () => {
+    for (const f of [formatDate, formatDateTime, formatISOString, formatLocalTime]) {
+      expect(f(undefined)).toBe('')
+      expect(f(null)).toBe('')
+      expect(f('not a date')).toBe('')
+    }
+  })
+})
+
+describe('createRecencyFormatter (#19606)', () => {
+  const NOW = Date.parse('2025-10-30T12:00:00Z')
+  const at = (msAgo: number) => new Date(NOW - msAgo)
+  const now = () => NOW
+
+  it('says just now under a minute, then relative text in the locale and style given', () => {
+    const f = createRecencyFormatter({ justNow: 'just now', locale: 'en', style: 'narrow', now })
+    expect(f(at(30_000))).toBe('just now')
+    expect(f(at(5 * 60_000))).toBe('5m ago')
+    expect(f(at(3 * 3_600_000))).toBe('3h ago')
+  })
+
+  it('reads the locale and the just-now text on every call, so a language switch applies', () => {
+    let lang = 'en'
+    let label = 'just now'
+    const f = createRecencyFormatter({ justNow: () => label, locale: () => lang, now })
+    expect(f(at(2 * 60_000))).toBe('2 minutes ago')
+    lang = 'de'
+    label = 'gerade eben'
+    expect(f(at(2 * 60_000))).toBe('vor 2 Minuten')
+    expect(f(at(1_000))).toBe('gerade eben')
+  })
+
+  it('shows the older text at or past the cutoff, a plain date by default', () => {
+    const day = 86_400_000
+    const f = createRecencyFormatter({ olderThanMs: day, locale: 'en', now })
+    expect(f(at(day - 1))).toBe('23 hours ago')
+    expect(f(at(day))).toBe(at(day).toLocaleDateString())
+    const g = createRecencyFormatter({ olderThanMs: day, older: () => 'long ago', now })
+    expect(g(at(2 * day))).toBe('long ago')
+  })
+
+  it('caps the unit and answers a missing or unparseable moment with the invalid text', () => {
+    const f = createRecencyFormatter({ locale: 'en', maxUnit: 'day', now, invalidText: '—' })
+    expect(f(at(45 * 86_400_000))).toBe('45 days ago')
+    expect(f(null)).toBe('—')
+    expect(f('not a date')).toBe('—')
+    expect(createRecencyFormatter()('nope')).toBe('')
+  })
+
+  it('reads a future moment as just now when given one, and as "in …" when not', () => {
+    const ahead = new Date(NOW + 5 * 60_000)
+    expect(createRecencyFormatter({ justNow: 'just now', now })(ahead)).toBe('just now')
+    expect(createRecencyFormatter({ locale: 'en', now })(ahead)).toBe('in 5 minutes')
+  })
+
+  it.each([
+    ['1h', 3_600_000, '59m ago'],
+    ['24h', 86_400_000, '23h ago'],
+    ['30d', 30 * 86_400_000, '29d ago'],
+  ])('switches to the older text exactly at a %s cutoff', (_label, cutoff, justUnder) => {
+    const f = createRecencyFormatter({ locale: 'en', style: 'narrow', maxUnit: 'day', olderThanMs: cutoff, older: () => 'older', now })
+    expect(f(at(cutoff - 60_000))).toBe(justUnder)
+    expect(f(at(cutoff))).toBe('older')
   })
 })
