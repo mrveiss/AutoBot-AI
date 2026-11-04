@@ -25,6 +25,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ALLOWED = {
@@ -40,7 +41,7 @@ def _references_check_access(source: str) -> bool:
     Flags any Load-context `<x>.check_access` attribute (a call, an alias, a `partial` argument)
     and any `getattr(<x>, "check_access")` with a constant name. Strings and comments are not code.
     """
-    for n in ast.walk(ast.parse(source)):
+    for n in ast.walk(parse_cache.parse(source)):
         if isinstance(n, ast.Attribute) and n.attr == "check_access" and isinstance(n.ctx, ast.Load):
             return True
         if (
