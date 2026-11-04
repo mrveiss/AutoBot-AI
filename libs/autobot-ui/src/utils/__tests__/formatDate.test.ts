@@ -233,10 +233,19 @@ describe('createRecencyFormatter (#19606)', () => {
     expect(createRecencyFormatter()('nope')).toBe('')
   })
 
-  it('reads a future moment as just now when given one, and as "in …" when not', () => {
-    const ahead = new Date(NOW + 5 * 60_000)
-    expect(createRecencyFormatter({ justNow: 'just now', now })(ahead)).toBe('just now')
-    expect(createRecencyFormatter({ locale: 'en', now })(ahead)).toBe('in 5 minutes')
+  it('without soon, reads every future moment as just now, as it always has (#19905)', () => {
+    const f = createRecencyFormatter({ justNow: 'just now', locale: 'en', now })
+    expect(f(new Date(NOW + 30_000))).toBe('just now')
+    expect(f(new Date(NOW + 5 * 60_000))).toBe('just now')
+    expect(f(new Date(NOW + 3 * 86_400_000))).toBe('just now')
+    expect(createRecencyFormatter({ locale: 'en', now })(new Date(NOW + 5 * 60_000))).toBe('in 5 minutes')
+  })
+
+  it('with soon, reads a moment under a minute ahead as soon and a later one as "in …"', () => {
+    const g = createRecencyFormatter({ justNow: 'just now', soon: 'in a moment', locale: 'en', style: 'narrow', now })
+    expect(g(new Date(NOW + 30_000))).toBe('in a moment')
+    expect(g(at(30_000))).toBe('just now')
+    expect(g(new Date(NOW + 3 * 3_600_000))).toBe('in 3h')
   })
 
   it.each([

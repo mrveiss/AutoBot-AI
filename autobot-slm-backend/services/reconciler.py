@@ -61,6 +61,8 @@ from services.service_remediation_tracker import (
     clear_service_remediation,
     log_restart_result,
     read_service_remediation,
+    settle_remediation,
+    tracker_after_restart,
     write_service_remediation,
 )
 from services.service_upsert import load_node_services, remove_stale_services, upsert_service
@@ -1430,15 +1432,8 @@ class ReconcilerService:
         # undo it. Captured by _handle_service_restart_result's own commit().
         await db.refresh(service)
         fresh_tracker = read_service_remediation(service)
-        write_service_remediation(
-            service,
-            {
-                "count": fresh_tracker["count"] + 1 if not success else 0,
-                "last_attempt": now,
-                "exhausted": False,
-                "last_cause": cause,  # #16712 AC: exhaustion must name the cause
-            },
-        )
+        # #20796: a start counts until it settles; #16712 AC: exhaustion names the cause.
+        write_service_remediation(service, tracker_after_restart(fresh_tracker, success, cause))
 
         await self._handle_service_restart_result(db, node, service, success, fresh_tracker)
         return True
@@ -1897,8 +1892,7 @@ class ReconcilerService:
         if "n_restarts" in svc_data:
             existing_extra["n_restarts"] = svc_data["n_restarts"]
         existing_extra["n_restarts_increased_at"] = last_increase_iso
-        if status != SystemdState.FAILED.value:
-            existing_extra.pop("remediation", None)  # #16712: recovery resets it
+        settle_remediation(existing_extra, status, now)  # #16712, #20796: continuous uptime resets it
         service.extra_data = existing_extra
         return is_churning
 
