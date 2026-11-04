@@ -23,6 +23,7 @@ from fastapi.responses import Response
 from autobot_shared import node_proxy
 from autobot_shared.logging_manager import get_logger
 from config import settings
+from services.backend_key_finding import report_backend_refused_internal_key
 
 logger = get_logger(__name__)
 
@@ -72,13 +73,18 @@ async def call_main_backend(
     url = f"{base.rstrip('/')}/api/{api_path.lstrip('/')}"
     try:
         async with node_proxy.node_client() as client:
-            return await client.request(
+            response = await client.request(
                 method, url, content=content, params=params, headers=node_proxy.internal_headers(content_type)
             )
     except httpx.HTTPError as exc:
         failure = node_proxy.classify_transport_error(exc)
         logger.error("Cannot reach main backend at %s (%s)", base, failure.reason)
         raise MainBackendUnavailable(failure.status_code, failure.detail, failure.reason) from exc
+    if response.status_code == 401:
+        # #20750: the backend refused the SLM's internal key -- one finding the admin sees, the same
+        # whichever proxy met it. The answer still goes back to the caller unchanged.
+        await report_backend_refused_internal_key(f"/api/{api_path.lstrip('/')}")
+    return response
 
 
 async def forward_to_main_backend(request: Request, api_path: str, service: str) -> Response:

@@ -134,3 +134,21 @@ async def test_the_memory_proxy_names_a_missing_key_as_config(monkeypatch) -> No
     body = await memory_lifecycle_proxy.get_memory_lifecycle(limit=5, _user=None)
     assert body["degraded"] is True
     assert body["nodes"][0]["error"] == backend.node_proxy.REASON_KEY_NOT_CONFIGURED
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status, reported", [(401, True), (403, False), (500, False), (200, False)])
+async def test_a_refused_internal_key_is_reported_once_whichever_proxy_met_it(monkeypatch, status, reported) -> None:
+    """#20750's finding, in the one client: a 401 on the internal key reports; any other answer doesn't."""
+    from unittest.mock import AsyncMock
+
+    report = AsyncMock()
+    monkeypatch.setattr(backend, "report_backend_refused_internal_key", report)
+    answer = SimpleNamespace(content=b"{}", status_code=status, headers={"content-type": "application/json"})
+    _install(monkeypatch, answer)
+    response = await backend.forward_to_main_backend(_Request(), "personality/toggle", "Personality")
+    assert response.status_code == status, "the backend's answer still goes back unchanged"
+    if reported:
+        report.assert_awaited_once_with("/api/personality/toggle")
+    else:
+        report.assert_not_awaited()
