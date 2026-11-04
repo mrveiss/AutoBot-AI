@@ -19,15 +19,18 @@ English literals it contains, where:
     A plain one-word label (`Running`, `Close`) is prose, for both guards;
   * attribute: a static (unbound) `placeholder`, `title`, `alt`, `aria-label`,
     `aria-description` or `label` whose value passes the same prose test;
-  * script: in `<script>`, matching
-    one of `.value =`, `message:`, `title:`, `label:`, `zeroText:` (the last two added in
-    #19885; the 120 sites they brought in are a one-time recorded freeze, see
-    RATCHET_BASELINES.md), `confirm(`, `alert(`, `Error(` followed by a
-    quoted string starting with a capital then a lower-case letter, closed by the SAME quote
+  * script: in `<script>`, and in the formatter modules `src/utils/format*.ts` of both apps,
+    matching one of `.value =`, `message:`, `title:`, `label:`, `zeroText:`, `nullText:`
+    (`label:` and `zeroText:` were added in #19885, and the 120 sites they brought in are a
+    one-time recorded freeze, see RATCHET_BASELINES.md; `nullText:` and the formatter scan were
+    added later in #19885 and found none), `confirm(`, `alert(`, `Error(` followed by a quoted
+    string that is prose (a capital, then a lower-case letter, five characters at least), a
+    byte size (`0 B`, `1.5 KB`) or an acronym plural (`SLOs`). It must close with the SAME quote
     character it opened with (`_SCRIPT_LITERAL` in `_ui_literal_scan.py`).
 
 **Not seen:** a literal in a custom component's own prop (`message`, `caption`,
-`hint`), text built by concatenation, `v-bind` string literals, `.ts` files,
+`hint`), text built by concatenation, `v-bind` string literals, `.ts` files other than
+the formatters,
 props defaults, and any language other than English.
 
 **Pinned per file and per literal**, in
