@@ -212,7 +212,7 @@ import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BaseButton } from '@autobot/ui'
+import { BaseButton, saveBlob } from '@autobot/ui'
 import { useNotificationBus } from '@/composables/useNotificationBus'
 import { useCodeEvolutionData } from '@/composables/analytics/useCodeEvolutionData'
 import type { TimelinePoint, TrendData, PatternPoint } from '@/composables/analytics/useCodeEvolutionData'
@@ -333,12 +333,7 @@ async function exportData() {
     const blob = await apiFetchExport(startDate, endDate)
     if (!blob) throw new Error('Export failed')
 
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `code_evolution_${endDate}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    saveBlob(blob, `code_evolution_${endDate}.csv`)
 
     showToast(t('analytics.codeEvolution.exportSuccess'), 'success')
   } catch {
