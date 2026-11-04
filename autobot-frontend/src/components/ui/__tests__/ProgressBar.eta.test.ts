@@ -24,4 +24,13 @@ describe('ProgressBar time remaining (#19905)', () => {
     // The local copy rounded the minutes, so 90 seconds read "2m 30s".
     expect(eta(90)).toBe('1m 30s remaining')
   })
+
+  it.each([
+    [59.9, '59s remaining'],
+    [60, '1m 0s remaining'],
+    [3599, '59m 59s remaining'],
+    [3600, '1h 0m remaining'],
+  ])('reads %ss at a unit boundary as %s', (seconds, text) => {
+    expect(eta(seconds)).toBe(text)
+  })
 })
