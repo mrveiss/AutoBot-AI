@@ -11,6 +11,8 @@ import pytest
 import yaml
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _ROLE = "autobot-slm-backend/ansible/roles/tts-worker"
 
 
@@ -54,7 +56,7 @@ def _calls_load_model(source: str) -> bool:
         and node.func.attr == "load_model"
         and isinstance(node.func.value, ast.Name)
         and node.func.value.id == "TTSModel"
-        for node in ast.walk(ast.parse(_as_python(source)))
+        for node in ast.walk(parse_cache.parse(_as_python(source)))
     )
 
 
