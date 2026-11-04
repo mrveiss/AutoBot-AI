@@ -58,6 +58,8 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
+
 #: Trees scanned. Frontend and infra are out of scope: a claim primitive is a
 #: Redis call from Python.
 _ROOTS = ("autobot-backend", "autobot_shared", "autobot-slm-backend", "scripts", "pipeline-scripts")
@@ -217,7 +219,7 @@ REACH = declare(
 def _sites_in_source(source: str, label: str) -> list[str]:
     """Every claim-or-lock primitive in one module, as `path:line kind`."""
     found: list[str] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.Call):
             name = node.func.attr if isinstance(node.func, ast.Attribute) else getattr(node.func, "id", "")
             keywords = {kw.arg for kw in node.keywords if kw.arg}

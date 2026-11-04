@@ -31,6 +31,7 @@ from repo_tests._ratchet_base import base_table
 from repo_tests._reach import declare
 
 from autobot_shared.status_enums import Severity
+from tools.lint import _parse_cache as parse_cache
 
 _ROOTS = ("autobot-backend", "autobot-slm-backend", "autobot_shared", "pipeline-scripts")
 _HOME = "autobot_shared/status_enums.py"
@@ -105,7 +106,7 @@ def order_copies(source: str, rel: str) -> list[str]:
     if rel == _HOME:
         return []
     try:
-        tree = ast.parse(source)
+        tree = parse_cache.parse(source)
     except SyntaxError:
         return []  # a file that does not parse is another guard's finding, not a red here for everyone
     return [f"{rel}:{n.lineno}: a hand-written severity order" for n in ast.walk(tree) if _is_ordering(n)]
