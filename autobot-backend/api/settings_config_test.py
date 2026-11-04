@@ -95,11 +95,12 @@ class TestAnAdmittedWriteRecordsItsAuthor:
         with (
             patch.object(settings_config, "ConfigService") as config,
             patch.object(settings_config, "ConfigRevisionService", revisions),
-            patch.object(settings_config, "verify_internal_api_key", return_value=internal_key),
         ):
             config.get_full_config.return_value = {}
             config.save_full_config.return_value = {"status": "saved"}
-            response = _client().post("/api/settings/", json={"key": "value"})
+            response = _client().post(
+                "/api/settings/", json={"key": "value"}, headers={"X-Internal-API-Key": "k"} if internal_key else {}
+            )
         assert response.status_code == 200, response.text
         return revisions.return_value.create_revision.await_args.kwargs["created_by"]
 
@@ -107,5 +108,6 @@ class TestAnAdmittedWriteRecordsItsAuthor:
         # The stub session's user is "test-user" (testkit/auth_middleware_stub.py).
         assert self._recorded_author(internal_key=False) == "test-user"
 
-    def test_the_internal_service_key_is_recorded_as_the_service(self):
-        assert self._recorded_author(internal_key=True) == settings_config.INTERNAL_SERVICE_ACTOR
+    def test_the_admin_is_recorded_even_when_the_proxy_sends_the_key(self):
+        """#16333: the key is not an admin, so a key-bearing write is the session's admin's."""
+        assert self._recorded_author(internal_key=True) == "test-user"
