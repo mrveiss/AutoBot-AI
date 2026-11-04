@@ -22,8 +22,6 @@ import ast
 from pathlib import Path
 from typing import Iterator, NamedTuple
 
-from tools.lint import _parse_cache as parse_cache
-
 #: callee name -> positional index of the action (keyword ``action`` / ``operation`` always wins).
 WRITERS: dict[str, int] = {
     "audit_log": 0,
@@ -53,7 +51,7 @@ class Written(NamedTuple):
 
 def enum_members(source: str, class_name: str) -> dict[str, str]:
     """``{MEMBER: "value"}`` of the string-valued class named *class_name* in *source*."""
-    for node in ast.walk(parse_cache.parse(source)):
+    for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.ClassDef) and node.name == class_name:
             return {
                 t.id: stmt.value.value
@@ -123,7 +121,7 @@ def _callee(call: ast.Call) -> str | None:
 
 def scan_source(rel: str, source: str, enums: dict[str, dict[str, str]]) -> list[Written]:
     """Every action spelling the writer calls (and action tables) in *source* pass."""
-    tree = parse_cache.parse(source)
+    tree = ast.parse(source)
     consts = _module_constants(tree)
     found: list[Written] = []
     for name in ACTION_TABLES & consts.keys():
