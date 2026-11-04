@@ -6,8 +6,8 @@ Two things are held here:
 
 * The primitive returns what ``ast.parse`` returns, memoises repeated calls, and
   raises ``SyntaxError`` every time, not once.
-* Guards under ``repo_tests/`` stop calling ``ast.parse`` directly. The count
-  of files that still do is pinned and may only shrink. The three modules that
+* Guards under ``repo_tests/`` don't call ``ast.parse`` directly. Four files at
+  their size ceiling are listed until they are split (#20820). The three modules that
   rewrite the trees they parse are the exception: a shared tree must not be
   edited, so they keep their own parse, and this test refuses them the cache.
 """
@@ -36,9 +36,17 @@ TREE_REWRITERS = frozenset(
     }
 )
 
-#: Files under ``repo_tests/`` that still call ``ast.parse`` directly, rewriters
-#: excluded. Shrink only: lower it as guards move to the cache, never raise it.
-DIRECT_PARSE_FILES = 81
+#: Guards that still call ``ast.parse`` directly, rewriters aside. Each sits at
+#: its file-size ceiling and cannot take the import line until it is split
+#: (#20820). Shrink only: remove an entry when its file moves to the cache.
+ALLOWED_DIRECT = frozenset(
+    {
+        "repo_tests/enum_union_guard_test.py",
+        "repo_tests/phase_validation_paths_and_skips_17089_test.py",
+        "repo_tests/router_auth_enumerator.py",
+        "repo_tests/sync_deletions_ansible_wiring_16310_test.py",
+    }
+)
 
 
 def _population(root: Path) -> list[str]:
@@ -125,12 +133,19 @@ def test_the_detector_tells_a_call_from_text(source: str, expected: bool) -> Non
     assert calls_ast_parse(source) is expected
 
 
-def test_direct_parses_only_shrink() -> None:
+def test_no_guard_calls_ast_parse_directly() -> None:
     direct, _ = _scan()
-    assert len(direct) <= DIRECT_PARSE_FILES, (
-        f"#20814: {len(direct)} guard files call ast.parse directly, above the pinned "
-        f"{DIRECT_PARSE_FILES}. Use `parse_cache.parse` from tools.lint._parse_cache instead."
+    unexpected = sorted(set(direct) - ALLOWED_DIRECT)
+    assert not unexpected, (
+        f"#20814: {unexpected} call ast.parse directly. Use `parse_cache.parse` from "
+        "tools.lint._parse_cache instead."
     )
+
+
+def test_every_allowed_direct_caller_still_needs_its_entry() -> None:
+    direct, _ = _scan()
+    stale = sorted(ALLOWED_DIRECT - set(direct))
+    assert not stale, f"#20820: {stale} no longer call ast.parse directly; remove them from ALLOWED_DIRECT."
 
 
 def test_tree_rewriters_keep_their_own_parse() -> None:
