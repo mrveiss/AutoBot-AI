@@ -44,6 +44,8 @@ import ast
 
 import pytest
 
+from tools.lint import _parse_cache as parse_cache
+
 from ._paths import repo_root
 
 MODULE = repo_root() / "autobot-backend" / "llc" / "api" / "agent_api.py"
@@ -69,7 +71,7 @@ _KNOWN_UNREAD: dict[str, tuple[str, str]] = {
 def _module() -> ast.Module:
     if not MODULE.exists():
         pytest.skip(f"{MODULE} not present in this checkout")
-    return ast.parse(MODULE.read_text(encoding="utf-8"))
+    return parse_cache.parse(MODULE.read_text(encoding="utf-8"))
 
 
 def _model_fields(tree: ast.Module) -> dict[str, list[str]]:

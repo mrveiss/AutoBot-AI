@@ -9,12 +9,12 @@ the right call, the right line, the standard comment, an expression floor left f
 
 from __future__ import annotations
 
-import ast
 import importlib.util
 
 from repo_tests._paths import repo_root
 
 from autobot_shared.isolated_git import git, make_repo
+from tools.lint import _parse_cache as parse_cache
 
 _SPEC = importlib.util.spec_from_file_location("repin_reach_floors", repo_root() / "scripts" / "repin_reach_floors.py")
 repin = importlib.util.module_from_spec(_SPEC)
@@ -78,7 +78,7 @@ def test_non_ascii_before_the_floor_and_a_form_feed_line_break_are_handled() -> 
     new, status = repin.repin_source(source, "x", mid=1020, count=1040, low=1000, high=1040)
     assert status == "re-pinned"
     assert new.startswith("# \x0c\n" + _ONE_LINE_CALL + '("x", what="déjà vu", floor=1020, growth=40)'), new
-    ast.parse(new)
+    parse_cache.parse(new)
 
 
 def test_a_hand_written_comment_is_kept_and_a_mid_window_one_refreshed() -> None:

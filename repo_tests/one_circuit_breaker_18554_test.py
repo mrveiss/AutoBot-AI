@@ -34,6 +34,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 from repo_tests.hand_rolled_circuit_breaker_baseline_18554 import ALLOWLIST, FROZEN_TOTAL
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 CANONICAL = "autobot_shared/circuit_breaker.py"
@@ -95,7 +96,7 @@ def _is_state_enum(cls: ast.ClassDef) -> bool:
 def breaker_shapes(source: str) -> list[tuple[str, str]]:
     """`(class name, kind)` for every breaker-shaped class in `source`."""
     shapes: list[tuple[str, str]] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if not isinstance(node, ast.ClassDef):
             continue
         if _is_state_enum(node):

@@ -49,6 +49,7 @@ from typing import Any, Dict
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._comment_syntax import code_lines
 
 _SCRIPTS = Path("autobot-infrastructure/shared/scripts")
@@ -107,7 +108,7 @@ def _workflow_text() -> str:
 
 
 def _system_tree() -> ast.Module:
-    return ast.parse((repo_root() / _SYSTEM).read_text(encoding="utf-8"))
+    return parse_cache.parse((repo_root() / _SYSTEM).read_text(encoding="utf-8"))
 
 
 def _ci_mode_results() -> Dict[str, Any]:
