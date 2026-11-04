@@ -5,7 +5,7 @@
 Generate verification.md from inventory.json
 
 Usage:
-    python generate-report.py [--inventory PATH] [--output PATH]
+    python generate_report.py [--inventory PATH] [--output PATH]
 """
 
 import argparse
