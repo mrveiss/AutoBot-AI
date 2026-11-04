@@ -163,11 +163,12 @@ export {
   formatISOString,
   formatTimeAgo,
   formatRelativeTime,
+  createRecencyFormatter,
   createDateFormatter,
   formatLocalTime,
   DEFAULT_DATE_TIME_INTL
 } from './src/utils/format'
-export type { DateInput, DateFormatterOptions, FormatRelativeTimeOptions } from './src/utils/format'
+export type { DateInput, DateFormatterOptions, FormatRelativeTimeOptions, RecencyFormatterOptions } from './src/utils/format'
 
 // Scoped console logger (#14908) — canonical LogLevel/log/createLogger; both
 // apps' utils/debugUtils.ts re-export these rather than re-declaring them.
