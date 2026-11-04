@@ -4,7 +4,7 @@
 // Author: mrveiss
 
 // #18245: the Teams screen says loading, empty, couldn't-read and not-available apart, names members from
-// the company's member list, and nothing on it writes (read-only until the company-scoped write routes land, #14106).
+// the company's member list. The writes are in TeamsView.writes.test.ts (#14106).
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
@@ -16,7 +16,7 @@ const get = vi.fn()
 const route = reactive({ params: { companyId: 'coA' } })
 
 vi.mock('vue-router', () => ({ useRoute: () => route }))
-vi.mock('@/plugins/api', () => ({ useApiClient: () => ({ get }) }))
+vi.mock('@/plugins/api', () => ({ useApiClient: () => ({ get, post: vi.fn(), delete: vi.fn() }) }))
 vi.mock('@/utils/debugUtils', () => ({
   createLogger: () => ({ warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() }),
 }))
@@ -64,15 +64,6 @@ describe('TeamsView (#18245)', () => {
     await flushPromises()
     expect(byId('teams-loading')?.textContent).toContain(en.llcTeams.loading)
     expect(byId('teams-empty')).toBeNull()
-  })
-
-  it('offers no create, delete, add or remove control', async () => {
-    reply(TEAMS)
-    await show()
-    await click(buttonNamed(en.llcTeams.viewMembers))
-    const labels = [...document.body.querySelectorAll('button')].map((b) => b.textContent?.trim())
-    expect(labels).toEqual([en.llcTeams.viewMembers, en.llcTeams.viewMembers])
-    expect(document.body.querySelector('input, select, [role="dialog"]')).toBeNull()
   })
 
   it('reads the company-scoped teams and members routes', async () => {

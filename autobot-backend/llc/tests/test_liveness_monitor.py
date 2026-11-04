@@ -11,7 +11,28 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from autobot_shared.redis_utils import COMPARE_AND_DELETE_LUA
+from llc.models.activity import ActorType, LLCActivityLog
+from llc.models.enums import ActivityEventType
 from llc.scheduler.liveness_monitor import LivenessMonitor, run_id_label
+from llc.services.activity_log import LLCActivityLogService
+from testkit.fake_async_session import FakeAsyncSession, FakeResult
+
+
+class _Savepoint:
+    """What ``session.begin_nested()`` returns on the AsyncMock sessions below: a SAVEPOINT that never fails."""
+
+    async def __aenter__(self) -> "_Savepoint":
+        return self
+
+    async def __aexit__(self, *exc: object) -> bool:
+        return False
+
+
+@pytest.fixture(autouse=True)
+def _no_live_publish():  # noqa: ANN202
+    """The monitor now audits through a real log; its pub/sub fan-out is not under test here."""
+    with patch.object(LLCActivityLogService, "_deliver", AsyncMock()):
+        yield
 
 
 def _mock_session(stuck_runs: list, work_item: object | None = None) -> AsyncMock:
@@ -31,6 +52,7 @@ def _mock_session(stuck_runs: list, work_item: object | None = None) -> AsyncMoc
     session.add = MagicMock()
     session.commit = AsyncMock()
     session.rollback = AsyncMock()
+    session.begin_nested = MagicMock(side_effect=lambda: _Savepoint())
     return session
 
 
@@ -222,3 +244,71 @@ def test_monitor_start_stop() -> None:
     # #13113: asyncio.run() — pytest-asyncio owns the loop lifecycle, so a sync test
     # running before any async test on its worker had no current loop for get_event_loop().
     asyncio.run(_run())
+
+
+# --- the audit write (#20101) -----------------------------------------------------------------
+
+
+def test_the_monitor_has_a_real_log_when_none_is_passed() -> None:
+    assert isinstance(LivenessMonitor()._activity_log, LLCActivityLogService)
+
+
+def _fake_scan(runs: list) -> FakeAsyncSession:
+    """A session whose first query finds *runs*; every later one finds nothing."""
+    return FakeAsyncSession(assign_ids=uuid.uuid4, results=[FakeResult(runs)], default_result=FakeResult([]))
+
+
+def _audit_rows(session: FakeAsyncSession) -> list:
+    return [obj for obj in session.added if isinstance(obj, LLCActivityLog)]
+
+
+async def _scan(monitor: LivenessMonitor, session: FakeAsyncSession, adapter: AsyncMock) -> None:
+    factory = MagicMock()
+    factory.return_value.__aenter__ = AsyncMock(return_value=session)
+    factory.return_value.__aexit__ = AsyncMock(return_value=False)
+    with (
+        patch("llc.scheduler.liveness_monitor.get_async_session_factory", return_value=factory),
+        patch("llc.scheduler.liveness_monitor.agent_ref_block_reason", AsyncMock(return_value=None)),
+        patch("llc.scheduler.liveness_monitor.get_async_redis_client", AsyncMock(return_value=None)),
+        patch("llc.scheduler.liveness_monitor.WorkItemService", return_value=MagicMock(create=AsyncMock())),
+        patch("llc.adapters.get_adapter_for_agent", AsyncMock(return_value=adapter)),
+    ):
+        await monitor._check_once()
+
+
+@pytest.mark.asyncio
+async def test_the_recovery_audits_as_the_system_under_a_real_run_id() -> None:
+    run = _make_run()
+    monitor = LivenessMonitor(poll_interval=9999)
+    session = _fake_scan([run])
+    await _scan(monitor, session, AsyncMock())
+    (row,) = _audit_rows(session)
+    assert (row.actor_type, row.actor_agent_id, row.actor_user_id) == (ActorType.SYSTEM.value, None, None)
+    assert (row.action, row.entity_type, row.entity_id) == (
+        ActivityEventType.HEARTBEAT_FAILED.value,
+        "heartbeat_run",
+        run.id,
+    )
+    assert session.commits == 1
+
+
+@pytest.mark.asyncio
+async def test_a_failed_audit_undoes_that_run_alone_and_the_other_runs_still_recover() -> None:
+    first, second = _make_run(), _make_run()
+    monitor = LivenessMonitor(poll_interval=9999)
+    real_record = monitor._activity_log.record
+    calls = {"n": 0}
+
+    async def fail_once(*args: object, **kwargs: object):  # noqa: ANN202
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("audit store down")
+        return await real_record(*args, **kwargs)
+
+    monitor._activity_log.record = fail_once
+    session, adapter = _fake_scan([first, second]), AsyncMock()
+    await _scan(monitor, session, adapter)
+    assert adapter.cancel.await_count == 1, "the failed run must not have cancelled its adapter"
+    adapter.cancel.assert_awaited_once_with({}, str(second.id))
+    assert session.rollbacks == 1 and session.commits == 1
+    assert [row.entity_id for row in _audit_rows(session)] == [second.id]
