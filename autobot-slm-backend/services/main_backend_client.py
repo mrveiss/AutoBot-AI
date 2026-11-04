@@ -13,6 +13,7 @@ on any of them (a missing key, a refused key: #20750) is handled in one place.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any, Mapping, Optional
 
@@ -23,8 +24,12 @@ from fastapi.responses import Response
 from autobot_shared import node_proxy
 from autobot_shared.logging_manager import get_logger
 from config import settings
+from services.backend_key_finding import report_backend_refused_internal_key
 
 logger = get_logger(__name__)
+
+#: Refused-key reports in flight, held so a running task isn't collected before it ends (#20750).
+_pending_reports: set = set()
 
 # URL, key, TLS policy and timeout all come from the shared node client (#14886). An earlier revision
 # of the memory proxy read its own AUTOBOT_NODE_PROXY_VERIFY_TLS with a "false" default, shipping
@@ -72,13 +77,31 @@ async def call_main_backend(
     url = f"{base.rstrip('/')}/api/{api_path.lstrip('/')}"
     try:
         async with node_proxy.node_client() as client:
-            return await client.request(
+            response = await client.request(
                 method, url, content=content, params=params, headers=node_proxy.internal_headers(content_type)
             )
     except httpx.HTTPError as exc:
         failure = node_proxy.classify_transport_error(exc)
         logger.error("Cannot reach main backend at %s (%s)", base, failure.reason)
         raise MainBackendUnavailable(failure.status_code, failure.detail, failure.reason) from exc
+    if response.status_code == 401:
+        # #20750: the backend refused the SLM's internal key -- one finding the admin sees, the same
+        # whichever proxy met it. Recorded in the background: the answer goes back to the caller now,
+        # without waiting on the finding's database lock.
+        _report_in_background(f"/api/{api_path.lstrip('/')}")
+    return response
+
+
+def _report_in_background(path: str) -> None:
+    task = asyncio.create_task(report_backend_refused_internal_key(path))
+    _pending_reports.add(task)
+    task.add_done_callback(_report_done)
+
+
+def _report_done(task: "asyncio.Task") -> None:
+    _pending_reports.discard(task)
+    if not task.cancelled() and task.exception() is not None:  # never raised to a caller: logged here
+        logger.warning("Could not record the refused-key finding: %s", task.exception())
 
 
 async def forward_to_main_backend(request: Request, api_path: str, service: str) -> Response:
