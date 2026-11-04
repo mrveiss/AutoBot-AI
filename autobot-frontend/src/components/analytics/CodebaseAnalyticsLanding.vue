@@ -179,7 +179,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { formatRelativeTime as formatRelativeMoment } from '@autobot/ui'
+import { createRecencyFormatter } from '@autobot/ui'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { useSourcesListEndpoint } from '@/composables/analytics/useSourcesListEndpoint'
@@ -283,11 +283,9 @@ function openProject(sourceId: string) {
 
 // ---- Display Helpers ------------------------------------------------------
 
-function formatRelativeTime(isoString: string): string {
-  const diffMs = Date.now() - new Date(isoString).getTime()
-  if (diffMs < 60000) return t('common.justNow', 'just now')
-  return formatRelativeMoment(isoString, { locale: locale.value, style: 'narrow', maxUnit: 'day' })
-}
+const formatRelativeTime = createRecencyFormatter({
+  justNow: () => t('common.justNow', 'just now'), locale: () => locale.value, style: 'narrow', maxUnit: 'day', invalidText: '—',
+})
 
 function getStatusIcon(status: string): IconName {
   const icons: Record<string, IconName> = {
