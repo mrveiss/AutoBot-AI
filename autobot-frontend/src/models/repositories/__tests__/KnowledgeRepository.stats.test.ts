@@ -16,7 +16,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { KnowledgeRepository } from '../KnowledgeRepository'
 
 vi.mock('@/config/ssot-config', () => ({
-  getApiBase: () => '/api'
+  getApiBase: () => '/api',
+  getBackendUrl: () => '',
 }))
 
 describe('KnowledgeRepository stats endpoints (#5215)', () => {

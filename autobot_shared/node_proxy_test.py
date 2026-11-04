@@ -21,6 +21,7 @@ API key. So the assertions come in two halves:
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 
 import httpx
@@ -37,6 +38,9 @@ _PROXY_DIR = _REPO_ROOT / "autobot-slm-backend" / "api"
 #: The import of the one SLM->backend client (#20760): the line itself, so a comment naming it doesn't count.
 _CLIENT_IMPORT = "from services.main_backend_client import"
 _PROXY_MARKERS = ('"X-Internal-API-Key"', "node_proxy", _CLIENT_IMPORT)
+
+#: Any client a proxy builds, or a module-level verb that builds one per call.
+_DIRECT_HTTPX = re.compile(r"\bhttpx\.(AsyncClient|Client|get|post|put|patch|delete|request|stream)\(")
 
 #: voice, personality, memory_lifecycle. Only ever raised when a proxy is added.
 _MIN_NODE_PROXIES = 3
@@ -161,7 +165,7 @@ def test_no_node_proxy_builds_its_own_http_client() -> None:
     sources = _node_proxy_sources()
     assert len(sources) >= _MIN_NODE_PROXIES, f"FIX THE SWEEP: only {len(sources)} node proxies reached"
 
-    offenders = sorted(name for name, source in sources.items() if "httpx.AsyncClient(" in source)
+    offenders = sorted(name for name, source in sources.items() if _DIRECT_HTTPX.search(source))
     assert offenders == [], (
         f"{offenders} construct their own httpx client, so verify= and timeout= "
         "are theirs to get wrong again — use node_proxy.node_client()."

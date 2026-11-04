@@ -3,7 +3,7 @@
 import type { ApiResponse, RequestOptions } from '@/types/models'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { describeFailedResponse, extractErrorMessage } from '@/utils/errorExtract'
-import { getApiBase } from '@/config/ssot-config'
+import { getApiBase, getBackendUrl } from '@/config/ssot-config'
 
 // Note: Window.rum type is defined in @/utils/RumAgent.ts
 
@@ -53,21 +53,10 @@ export class ApiRepository {
   }
 
   private getDefaultBaseUrl(): string {
-    // CRITICAL FIX: When VITE_BACKEND_HOST is empty, use empty string for proxy mode
-    // This prevents fallback to host.docker.internal which doesn't work in this environment
-    const backendHost = import.meta.env.VITE_BACKEND_HOST;
-    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL;
-
-    if (apiBaseUrl) {
-      return apiBaseUrl;
-    }
-
-    if (!backendHost) {
-      // Empty backend host = proxy mode (use relative URLs)
-      return '';
-    }
-
-    return `${import.meta.env.VITE_HTTP_PROTOCOL || 'http'}://${backendHost}:${import.meta.env.VITE_BACKEND_PORT || '8001'}`;
+    // #19821: the one backend-origin rule (ssot-config getBackendUrl): an explicit
+    // VITE_API_BASE_URL wins, otherwise same-origin proxy mode. A baked host/port
+    // no longer builds an absolute origin here -- that is the CSP-blocked origin #12339 removed.
+    return getBackendUrl();
   }
 
   // Cache management
