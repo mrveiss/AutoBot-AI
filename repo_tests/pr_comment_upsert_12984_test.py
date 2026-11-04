@@ -35,6 +35,7 @@ import yaml
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ACTION_DIR = ".github/actions/upsert-pr-comment"
@@ -235,7 +236,7 @@ def _workflow_has_inline_upsert(text: str) -> bool:
 def _python_has_inline_upsert(source: str) -> bool:
     """A string constant or called name that edits or lists comments. Comments and docstrings of
     other shapes are not constants this matcher can be fooled by: it reads the syntax tree."""
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.Constant) and isinstance(node.value, str) and "issues/comments/" in node.value:
             if not (node.value.endswith("\n") or len(node.value) > 200):
                 return True
