@@ -9,7 +9,7 @@
 
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { formatRelativeTime } from '@autobot/ui'
+import { createDateFormatter, createRecencyFormatter } from '@autobot/ui'
 import {
   useSessionCollaboration,
   type SecretSharingNotification
@@ -19,12 +19,12 @@ const { secretNotifications, clearSecretNotifications } = useSessionCollaboratio
 const { locale } = useI18n()
 
 // Format timestamp
-const formatTime = (date: Date): string => {
-  if (Date.now() - date.getTime() < 3600000) {
-    return formatRelativeTime(date, { locale: locale.value, style: 'narrow' })
-  }
-  return date.toLocaleTimeString()
-}
+const formatTime = createRecencyFormatter({
+  locale: () => locale.value,
+  style: 'narrow',
+  olderThanMs: 3_600_000,
+  older: createDateFormatter({ kind: 'time' }),
+})
 
 // Get icon for secret type
 const getSecretIcon = (type: string): string => {
