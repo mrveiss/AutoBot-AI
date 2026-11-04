@@ -42,6 +42,8 @@ from pathlib import Path
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 #: ``(sys.path entry relative to the repo root, package directory)``. Each backend
 #: puts its own directory on ``sys.path``, so ``api`` means a different package in
 #: each -- which is exactly why both are swept rather than one standing in for both.
@@ -156,7 +158,7 @@ def imported_names(entry: Entry, source: str) -> set[str]:
     ``a`` and ``a.b``, which is either a submodule or matches nothing.
     """
     names: set[str] = set()
-    for node in ast.walk(ast.parse(source, filename=entry.path)):
+    for node in ast.walk(parse_cache.parse(source, filename=entry.path)):
         if isinstance(node, ast.Import):
             for alias in node.names:
                 parts = alias.name.split(".")

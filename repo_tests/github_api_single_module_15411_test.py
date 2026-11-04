@@ -23,6 +23,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _CANONICAL = "pipeline-scripts/github_api.py"
@@ -33,7 +34,7 @@ def _defined_names(source: str) -> set[str]:
     """The guarded names that `source` defines as a class or function."""
     return {
         node.name
-        for node in ast.walk(ast.parse(source))
+        for node in ast.walk(parse_cache.parse(source))
         if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in _NAMES
     }
 
