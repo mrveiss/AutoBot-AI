@@ -21,6 +21,8 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
+
 _ROOTS = ("autobot-backend", "autobot_shared")
 
 #: The filename, for the cheap pre-filter only. The real decision is made by
@@ -40,7 +42,7 @@ def _path_literals(text: str) -> list[str]:
     regex over raw characters cannot, because both are quoted text.
     """
     try:
-        tree = ast.parse(text)
+        tree = parse_cache.parse(text)
     except SyntaxError:
         return []
     found = []
@@ -112,7 +114,7 @@ def _reads_the_ssot_key(text: str) -> bool:
     lookup, so the question is asked of the AST, not of the characters.
     """
     try:
-        tree = ast.parse(text)
+        tree = parse_cache.parse(text)
     except SyntaxError:
         return False  # unparseable: cannot establish a read, so do not exempt
     for node in ast.walk(tree):

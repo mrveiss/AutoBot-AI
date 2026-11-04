@@ -42,6 +42,7 @@ from repo_tests._reach import declare
 from repo_tests.one_serving_predicate_baseline_18820 import ALLOWLIST, FROZEN_TOTAL
 
 from autobot_shared.paths import scrubbed_git_env
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 CANONICAL = "autobot-backend/knowledge/serving.py"
@@ -130,7 +131,7 @@ def serving_decisions(source: str) -> set[tuple[str, str, str]]:
     """`(enclosing_qualname, field, kind)` for every serving-decision shape in `source`."""
     return {
         (qualname, field, kind)
-        for qualname, node in _walk_scoped(ast.parse(source), ())
+        for qualname, node in _walk_scoped(parse_cache.parse(source), ())
         for field, kind in _decision_kinds(node)
     }
 
@@ -274,7 +275,7 @@ _MAIN_REF = "origin/main"
 def _main_frozen(source: str) -> tuple[int, int]:
     """`(len(ALLOWLIST), FROZEN_TOTAL)` as written in a baseline file's source."""
     sizes: dict[str, int] = {}
-    for node in ast.parse(source).body:
+    for node in parse_cache.parse(source).body:
         # `ALLOWLIST: dict[str, str] = {...}` is an AnnAssign; `FROZEN_TOTAL = 76` an Assign.
         if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
             name = node.target.id
