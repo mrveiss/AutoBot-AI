@@ -11,7 +11,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Icon-only header controls from the nav registry: Secrets, Preferences, the mode toggle and Platform admin (shown only with service.management).',
+          'Icon-only header controls from the nav registry: Secrets, Preferences, the mode toggle and Platform admin (shown only to admins).',
       },
     },
   },
