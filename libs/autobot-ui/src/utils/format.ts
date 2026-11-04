@@ -372,8 +372,18 @@ export interface RecencyFormatterOptions {
   style?: 'long' | 'short' | 'narrow'
   /** The largest unit used (default `'year'`). */
   maxUnit?: Intl.RelativeTimeFormatUnit
-  /** Text for a moment under a minute old, or in the future; when absent, `Intl` words it. */
+  /**
+   * Text for a moment under a minute old, and for ANY future moment unless `soon` is set (a server
+   * clock ahead of the browser must not read as "in 5m" on a list of past events). When absent,
+   * `Intl` words it.
+   */
   justNow?: string | (() => string)
+  /**
+   * Opt-in for lists that hold future moments (an expiry): a moment under a minute ahead reads as
+   * this ("in a moment") and a later one as `Intl`'s "in 3d". It never applies to a past moment;
+   * one under a minute old is still `justNow`.
+   */
+  soon?: string | (() => string)
   /** At or past this age in milliseconds, `older(date)` is shown instead of relative text. */
   olderThanMs?: number
   /** The text for a moment past `olderThanMs` (default: {@link formatDate}). */
@@ -396,7 +406,11 @@ export function createRecencyFormatter(options: RecencyFormatterOptions = {}): (
     const date = toValidDate(input)
     if (!date) return options.invalidText ?? ''
     const age = (options.now?.() ?? Date.now()) - date.getTime()
-    if (options.justNow !== undefined && age < 60000) return read(options.justNow)
+    if (age < 0 && options.soon !== undefined) {
+      if (age > -60000) return read(options.soon)
+    } else if (age < 60000 && options.justNow !== undefined) {
+      return read(options.justNow)
+    }
     if (options.olderThanMs !== undefined && age >= options.olderThanMs) return (options.older ?? formatDate)(date)
     const locale = options.locale === undefined ? undefined : read(options.locale)
     return formatRelativeTime(date, { locale, style: options.style, maxUnit: options.maxUnit, now: options.now?.() })
