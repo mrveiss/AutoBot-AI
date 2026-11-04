@@ -11,7 +11,7 @@ import { HttpError, getEnvPositiveInt } from '@autobot/ui';
 import ServiceDiscovery from './ServiceDiscovery.js';
 import { NetworkConstants } from '../constants/network.ts';
 import { createLogger } from '@/utils/debugUtils';
-import { getApiBase, getApiTimeout, PORT_DEFAULTS } from '@/config/ssot-config';
+import { getApiBase, getApiTimeout, getConfig, PORT_DEFAULTS } from '@/config/ssot-config';
 
 const logger = createLogger('AppConfig');
 export class AppConfigService {
@@ -33,9 +33,9 @@ export class AppConfigService {
       // Service URLs - Will be resolved dynamically
       services: {
         backend: {
-          host: import.meta.env.VITE_BACKEND_HOST,
-          port: import.meta.env.VITE_BACKEND_PORT || '8001',
-          protocol: import.meta.env.VITE_HTTP_PROTOCOL || 'http'
+          host: getConfig().vm.main,
+          port: String(getConfig().port.backend),
+          protocol: getConfig().httpProtocol
         },
         // No redis entry (#19232): a browser never dials Redis; the backend owns its URL.
         // DORMANT: VNC browser path replaced by screenshot panel (#1130). Preserved for #5136 re-integration.
