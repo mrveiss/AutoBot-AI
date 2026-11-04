@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from testkit.canonical_gate import canonical_resolver
+from testkit.canonical_gate import canonical_resolver, real_admin_gate
 
 # ---------------------------------------------------------------------------
 # resolve_bundle_for_user
@@ -141,12 +141,12 @@ async def test_user_cannot_call_admin_bundle_endpoint_unauthenticated():
     app = FastAPI()
     app.include_router(bundle_admin_router)
 
-    # No authenticated user → require_role() (#12704) must reject.
+    # No authenticated user → the one admin gate (#16333) must reject.
     mock_auth = MagicMock()
     mock_auth.get_user_from_request.return_value = None
 
-    with canonical_resolver("auth_rbac.resolve_human_user", mock_auth):
-        with TestClient(app, raise_server_exceptions=False) as client:
+    with real_admin_gate(mock_auth) as wire:
+        with wire(TestClient(app, raise_server_exceptions=False)) as client:
             resp = client.get("/admin/voice/bundle/user-abc")
     # Expect 401 or 403
     assert resp.status_code in (401, 403)
