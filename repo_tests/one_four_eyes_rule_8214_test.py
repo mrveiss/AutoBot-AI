@@ -21,6 +21,8 @@ import sys
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 sys.path.insert(0, str(repo_root() / "tools" / "lint"))
 import check_symbol_forks as detector  # noqa: E402
 
@@ -57,7 +59,7 @@ def _sweep() -> tuple[dict[str, list[int]], int]:
         if not detector.in_population(path) or rel == HOME:
             continue
         try:
-            tree = ast.parse((repo_root() / rel).read_text(encoding="utf-8"))
+            tree = parse_cache.parse((repo_root() / rel).read_text(encoding="utf-8"))
         except (OSError, SyntaxError, ValueError):
             continue
         parsed += 1
@@ -78,10 +80,10 @@ def test_no_second_four_eyes_rule_by_behaviour() -> None:
 
 def test_the_detector_sees_each_shape_it_claims_to() -> None:
     """A zero means nothing unless these controls are found."""
-    assert _copies_the_rule(ast.parse("x = decider != requester"))
-    assert _copies_the_rule(ast.parse("if requester == decider and n >= 2: pass"))
-    assert _copies_the_rule(ast.parse('i = str(a.requested_by_agent).rsplit(":", 1)[-1]'))
-    assert not _copies_the_rule(ast.parse("x = decider != owner"))
+    assert _copies_the_rule(parse_cache.parse("x = decider != requester"))
+    assert _copies_the_rule(parse_cache.parse("if requester == decider and n >= 2: pass"))
+    assert _copies_the_rule(parse_cache.parse('i = str(a.requested_by_agent).rsplit(":", 1)[-1]'))
+    assert not _copies_the_rule(parse_cache.parse("x = decider != owner"))
 
 
 def test_the_rule_and_its_error_have_one_definition() -> None:
