@@ -120,8 +120,6 @@ def _conftests(root: Path) -> list[str]:
 REACH = declare(
     "conftest-stubset-primitives",
     discover=_conftests,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=24,  # #18811: population 29 -> window [19, 29], re-pinned mid-window
     what="conftest.py files",
     roots=_ROOTS,
     growth=10,
