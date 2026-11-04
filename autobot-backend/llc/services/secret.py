@@ -127,19 +127,18 @@ class SecretService(LLCServiceBase):
         await session.flush()
         await session.refresh(secret)
 
-        if self.activity_log:
-            who = resolve_actor(user_id=actor)
-            await self.activity_log.record(
-                session=session,
-                company_id=company_id,
-                actor_type=who.type,
-                actor_id=who.id,
-                metadata=who.metadata(),
-                event_type="secret.set",
-                entity_type="llc_secret",
-                entity_id=str(secret.id),
-                after={"name": name, "version": secret.version},
-            )
+        who = resolve_actor(user_id=actor)
+        await self.activity_log.record(
+            session=session,
+            company_id=company_id,
+            actor_type=who.type,
+            actor_id=who.id,
+            metadata=who.metadata(),
+            event_type="secret.set",
+            entity_type="llc_secret",
+            entity_id=str(secret.id),
+            after={"name": name, "version": secret.version},
+        )
 
         # Logs secret *name* (metadata key) and audit fields only — the encrypted value is never logged.
         logger.info(  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure  # noqa: E501
@@ -200,19 +199,18 @@ class SecretService(LLCServiceBase):
         secret.updated_at = now_utc()
         await session.flush()
 
-        if self.activity_log:
-            who = resolve_actor(user_id=actor)
-            await self.activity_log.record(
-                session=session,
-                company_id=company_id,
-                actor_type=who.type,
-                actor_id=who.id,
-                metadata=who.metadata(),
-                event_type="secret.revoked",
-                entity_type="llc_secret",
-                entity_id=str(secret.id),
-                after={"name": name, "revoked_at": secret.revoked_at.isoformat()},
-            )
+        who = resolve_actor(user_id=actor)
+        await self.activity_log.record(
+            session=session,
+            company_id=company_id,
+            actor_type=who.type,
+            actor_id=who.id,
+            metadata=who.metadata(),
+            event_type="secret.revoked",
+            entity_type="llc_secret",
+            entity_id=str(secret.id),
+            after={"name": name, "revoked_at": secret.revoked_at.isoformat()},
+        )
 
         # Logs secret *name* (metadata key) and audit fields only — the encrypted value is never logged.
         logger.info(  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure  # noqa: E501
