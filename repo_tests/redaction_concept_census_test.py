@@ -60,6 +60,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 REPO_ROOT = repo_root()
@@ -259,7 +260,7 @@ def is_redaction_implementation(source: str) -> bool:
     MEASUREMENT_DISCIPLINE forbids. The sweep below catches it per file and
     fails with the path.
     """
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     return _defines_redaction_api(tree) and _declares_own_detector(tree)
 
 
@@ -431,7 +432,7 @@ def test_an_unparseable_file_is_a_failure_not_a_clean_report() -> None:
 def _top_level_names(source: str) -> Set[str]:
     return {
         node.name
-        for node in ast.parse(source).body
+        for node in parse_cache.parse(source).body
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
     }
 
@@ -465,7 +466,7 @@ def declares_key_name_vocabulary(source: str) -> bool:
     ``_is_sensitive`` / ``_is_secret_key``, which the census rule cannot see.
     """
     nouns = _vocabulary_nouns()
-    for coll in ast.walk(ast.parse(source)):
+    for coll in ast.walk(parse_cache.parse(source)):
         if not isinstance(coll, (ast.Tuple, ast.List, ast.Set)):
             continue
         strings = [e.value for e in coll.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)]

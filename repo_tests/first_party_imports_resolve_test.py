@@ -24,10 +24,13 @@ check into a fragile one. Module-not-found is the failure this class produces.
 from __future__ import annotations
 
 import ast
+import functools
 from pathlib import Path
 
 import pytest
 from repo_tests._paths import repo_root
+
+from tools.lint import _parse_cache as parse_cache
 
 _REPO_ROOT = repo_root()
 _BACKEND = _REPO_ROOT / "autobot-backend"
@@ -82,8 +85,12 @@ def _optional_import_nodes(tree: ast.AST) -> set[int]:
     return guarded
 
 
+@functools.lru_cache(maxsize=1)
 def _unresolvable_imports() -> tuple[list[tuple[str, str, int]], int]:
-    """((relative path, module, lineno) list, files scanned) — the count is the floor."""
+    """((relative path, module, lineno) list, files scanned) — the count is the floor.
+
+    Memoised (#20814): 2 tests read the same sweep.
+    """
     roots = _first_party_roots()
     found: list[tuple[str, str, int]] = []
     scanned = 0
@@ -97,7 +104,7 @@ def _unresolvable_imports() -> tuple[list[tuple[str, str, int]], int]:
             continue
         scanned += 1
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            tree = parse_cache.parse(path.read_text(encoding="utf-8"))
         except SyntaxError:
             continue
         guarded = _optional_import_nodes(tree)
@@ -173,7 +180,7 @@ def test_each_exemption_is_still_broken(entry: tuple[str, str], issue: str) -> N
     # — it guards nothing and nothing says so.
     imported = {
         node.module
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        for node in ast.walk(parse_cache.parse(path.read_text(encoding="utf-8")))
         if isinstance(node, ast.ImportFrom) and node.module
     }
     assert module in imported, (
