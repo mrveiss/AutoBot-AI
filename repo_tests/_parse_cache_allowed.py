@@ -36,7 +36,6 @@ ALLOWED_DIRECT = frozenset(
         "repo_tests/chunker_private_embedding_hooks_18185_test.py",
         "repo_tests/ci_system_package_provisioning_test.py",
         "repo_tests/code_graph_writer_reader_agree_17254_test.py",
-        "repo_tests/collected_test_model_test.py",
         "repo_tests/collection_coverage_test.py",
         "repo_tests/comment_line_number_citations_test.py",
         "repo_tests/company_os_scheduling_starts_before_kb_20232_test.py",
