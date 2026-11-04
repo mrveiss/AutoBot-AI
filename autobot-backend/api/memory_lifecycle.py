@@ -28,6 +28,7 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, Query
 
 from auth_middleware import check_admin_permission
+from auth_service_opt_in import service_opt_in
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import QueryDefaults
@@ -117,6 +118,7 @@ async def _decay_section(limit: int) -> Dict[str, Any]:
 
 @router.get("/lifecycle")
 @with_error_handling(error_code_prefix="MEMORY_LIFECYCLE")
+@service_opt_in("slm-memory-lifecycle-proxy")
 async def get_memory_lifecycle(
     # The ceiling is the shared constant the SLM proxy also bounds `limit` by, so the
     # proxy never forwards a value this tier would reject with a 422 (#14887).
