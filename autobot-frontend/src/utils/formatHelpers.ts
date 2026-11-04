@@ -25,6 +25,7 @@ import {
   formatISOString,
   formatTimeAgo,
   createDateFormatter,
+  formatLocalTime,
   DEFAULT_DATE_TIME_INTL
 } from '@autobot/ui'
 export {
@@ -34,6 +35,7 @@ export {
   formatISOString,
   formatTimeAgo,
   createDateFormatter,
+  formatLocalTime,
   DEFAULT_DATE_TIME_INTL
 }
 export type { DateInput, DateFormatterOptions } from '@autobot/ui'
