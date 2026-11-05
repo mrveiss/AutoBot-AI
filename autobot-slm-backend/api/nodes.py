@@ -88,6 +88,7 @@ from services.ssh_utils import build_ssh_base_cmd
 from services.temp_inventory import write_linked_inventory
 
 logger = logging.getLogger(__name__)
+_SSH_TEST_TIMEOUT_S = 15.0  # one value for the SSH test wait and its message (#18056)
 router = APIRouter(prefix="/nodes", tags=["nodes"])
 
 
@@ -2272,7 +2273,6 @@ async def test_connection(
     remote_cmd = "uname -a && cat /etc/os-release 2>/dev/null | " "head -5 || echo 'OS info unavailable'"
 
     try:
-        # Build SSH command based on auth method
         if request.auth_method == "password" and request.password:
             if not shutil.which("sshpass"):
                 return ConnectionTestResponse(
@@ -2289,7 +2289,7 @@ async def test_connection(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=15.0)
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=_SSH_TEST_TIMEOUT_S)
         latency_ms = (time.time() - start_time) * 1000
 
         if process.returncode == 0:
@@ -2300,7 +2300,7 @@ async def test_connection(
         return ConnectionTestResponse(
             success=False,
             message="Connection timed out",
-            error="SSH connection timed out after 15 seconds",
+            error=f"SSH connection timed out after {_SSH_TEST_TIMEOUT_S:.0f} seconds",
         )
     except FileNotFoundError as e:
         return _handle_file_not_found_error(e)

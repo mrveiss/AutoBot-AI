@@ -4385,6 +4385,8 @@
       "quarantined": "Research quarantine"
     },
     "chromaExplorer": {
+      "documentCount": "{count} documents",
+      "includeEmpty": "Include empty collections ({count})",
       "subtitle": "Browse and search vector collections"
     }
   },
@@ -8289,6 +8291,7 @@
       "announceFull": "Full interface on. All features shown."
     },
     "llcLedger": "Agent ledger",
+    "llcMailbox": "Mailbox",
     "backendHealth": {
       "degradedTitle": "Backend degraded",
       "degradedMessage": "Some backend services are slow or failing. Features may not work as expected.",
@@ -9214,6 +9217,12 @@
       "retry": "Retry",
       "loadingItem": "Loading work item…",
       "itemLoadFailed": "Could not load this work item"
+    },
+    "mailbox": {
+      "title": "Mailbox",
+      "subtitle": "Company mail, read and written from one place.",
+      "unavailableTitle": "Inbound mail is not available yet",
+      "unavailableBody": "This company has no mail connection, so there is nothing to read or send here. Messages will appear on this screen once mail is connected."
     },
     "ledger": {
       "title": "Agent ledger",

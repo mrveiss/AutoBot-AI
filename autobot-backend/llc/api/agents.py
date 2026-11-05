@@ -65,7 +65,7 @@ async def list_agents(
 
 def _agent_row(node: AgentOrgNode, run: Any) -> Dict[str, Any]:
     """One agent in the list, with whether it can run and, when not, why (#20519)."""
-    reason = run_block_reason(node.status, node.adapter_type, node.adapter_config)
+    reason = run_block_reason(node.status, node.adapter_type, node.adapter_config, org_role=node.org_role)
     return {
         # Logical agent_id slug — kept as `id` for backward compatibility with
         # the heartbeat monitor; also exposed explicitly as `agent_id`.

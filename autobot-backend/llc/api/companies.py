@@ -985,7 +985,7 @@ def _compose_agent_node(
     Extracted from ``get_org_chart``'s per-row loop; the org-chart tests cover every field.
     """
     b_spent, b_total = _resolve_agent_budget(budget)
-    block_reason = run_block_reason(row.status, row.adapter_type, row.adapter_config)
+    block_reason = run_block_reason(row.status, row.adapter_type, row.adapter_config, org_role=row.org_role)
     return OrgChartNode(
         id=row.agent_id,
         node_id=str(row.id),  # AgentOrgNode UUID PK (assignment keyspace, #10032)
