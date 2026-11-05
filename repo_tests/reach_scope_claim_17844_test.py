@@ -252,6 +252,12 @@ _DECLARED_SCOPES = {
     "container-hardening-inline": ("autobot-backend", "autobot_shared"),
     "brand-mark-announcer-scan": ("libs/autobot-ui", "autobot-frontend/src", "autobot-slm-frontend/src"),
     "one-content-digest-scan": ("autobot-backend", "autobot_shared"),
+    "timeout-message-from-constant": (
+        "autobot-backend",
+        "autobot-slm-backend",
+        "autobot_shared",
+        "autobot-infrastructure",
+    ),
     "one-admin-gate": ("autobot-backend",),
     "one-aead-core": ("autobot_shared",),
     "audit-action-vocabulary": ("autobot-backend", "autobot_shared", "autobot-slm-backend"),
