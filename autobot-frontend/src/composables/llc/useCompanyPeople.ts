@@ -55,10 +55,13 @@ export function useCompanyPeople(companyId: string) {
   const humans = ref<HumanOption[]>([])
   const inactiveHumans = ref<InactiveMember[]>([])
   const isLoading = ref(false)
+  // #15945: an empty list after a failed load is not an empty company; a picker must tell them apart.
+  const loadFailed = ref(false)
 
   async function load(): Promise<void> {
     const api = useApiClient()
     isLoading.value = true
+    loadFailed.value = false
     try {
       const [org, members] = await Promise.all([
         api.get<{ nodes: OrgNode[] }>(`/api/llc/companies/${companyId}/org-chart`),
@@ -91,10 +94,11 @@ export function useCompanyPeople(companyId: string) {
       agents.value = []
       humans.value = []
       inactiveHumans.value = []
+      loadFailed.value = true
     } finally {
       isLoading.value = false
     }
   }
 
-  return { agents, humans, inactiveHumans, isLoading, load }
+  return { agents, humans, inactiveHumans, isLoading, loadFailed, load }
 }
