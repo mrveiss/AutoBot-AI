@@ -13,7 +13,7 @@ import pytest
 from services import approval_execution
 from services import chat_session_owner_action as action
 
-_ADMIN, _OTHER = uuid.uuid4(), uuid.uuid4()
+_ADMIN, _OTHER, _USER_ID = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
 
 
 class _Manager:
@@ -23,7 +23,7 @@ class _Manager:
     async def session_exists(self, session_id):
         return session_id in self.owners
 
-    async def list_sessions(self):
+    async def list_session_ids(self):
         return [{"chatId": session_id} for session_id in self.owners]
 
     async def get_session_owner(self, session_id):
@@ -40,18 +40,18 @@ def _session(user_exists: bool = True, admins: int = 2) -> MagicMock:
     session = MagicMock()
     session.commit = AsyncMock()
     found = MagicMock()
-    found.scalars.return_value.first.return_value = uuid.uuid4() if user_exists else None
+    found.scalars.return_value.first.return_value = _USER_ID if user_exists else None
     found.scalars.return_value.all.return_value = [_ADMIN] + [uuid.uuid4() for _ in range(admins - 1)]
     session.execute = AsyncMock(return_value=found)
     return session
 
 
-def _approval(decider=_OTHER, requested_by=_ADMIN, session_id="s1", owner="alice") -> SimpleNamespace:
+def _approval(decider=_OTHER, requested_by=_ADMIN, session_id="s1", owner="alice", owner_id=None) -> SimpleNamespace:
     approval = SimpleNamespace(
         id=uuid.uuid4(),
         decided_by_user="owner",
         requested_by_agent=f"chat-session-owner:{requested_by}",
-        context={"action": action.ACTION, "session_id": session_id, "owner": owner},
+        context={"action": action.ACTION, "session_id": session_id, "owner": owner, "owner_id": owner_id or str(_USER_ID)},
     )
     approval_execution.set_verified_decider(approval, decider)
     return approval
@@ -125,8 +125,9 @@ async def test_a_self_approval_with_another_admin_writes_nothing() -> None:
         (_approval(owner=""), True),
         (_approval(session_id=""), True),
         (_approval(), False),
+        (_approval(owner_id=str(uuid.uuid4())), True),
     ],
-    ids=["no-verified-decider", "unknown-requester", "no-owner", "no-session", "owner-not-a-user"],
+    ids=["no-verified-decider", "unknown-requester", "no-owner", "no-session", "owner-not-a-user", "name-now-another-account"],
 )
 async def test_a_bad_approval_writes_nothing(approval, user_exists: bool) -> None:
     manager = _Manager({"s1": None})
@@ -204,7 +205,7 @@ async def test_redis_failing_at_the_claim_writes_nothing() -> None:
 )
 async def test_one_sessions_answer_for_a_proposal(owners: dict, expected: bool) -> None:
     manager = _Manager(owners)
-    manager.list_sessions = AsyncMock(side_effect=AssertionError("must not read every session"))
+    manager.list_session_ids = AsyncMock(side_effect=AssertionError("must not read every session"))
     assert await action.session_is_ownerless(manager, "s1") is expected
 
 
@@ -217,3 +218,48 @@ def test_the_action_is_server_only_with_its_proposer() -> None:
     action.register_owner_assign_action()
     assert approval_execution.is_server_only_action(action.ACTION)
     assert approval_execution.registered_action_proposers()[action.ACTION] == action.PROPOSED_BY
+
+
+async def test_a_claim_that_failed_with_nobody_holding_the_key_writes_nothing() -> None:
+    """SET NX refused, yet the final lookup finds no owner (the key expired in between): do not write."""
+    manager = _Manager({"s1": None})
+    validator = _validator(cached=None, claim=AsyncMock(return_value=False))
+    with (
+        patch.object(action, "ChatHistoryManager", return_value=manager),
+        patch.object(action, "get_redis_client", AsyncMock()),
+        patch.object(action, "SessionOwnershipValidator", return_value=validator),
+        patch.object(action, "audit_log", AsyncMock()),
+        pytest.raises(ValueError, match="could not be claimed"),
+    ):
+        await action.execute_owner_assign(_approval(), _session())
+    assert manager.written == []
+
+
+async def test_a_cancelled_assignment_releases_the_claim_it_took() -> None:
+    import asyncio
+
+    manager, validator = _Manager({"s1": None}), _validator()
+    with (
+        patch.object(action, "ChatHistoryManager", return_value=manager),
+        patch.object(action, "get_redis_client", AsyncMock()),
+        patch.object(action, "SessionOwnershipValidator", return_value=validator),
+        patch.object(action, "audit_log", AsyncMock(side_effect=asyncio.CancelledError())),
+        pytest.raises(asyncio.CancelledError),
+    ):
+        await action.execute_owner_assign(_approval(), _session())
+    validator.redis.delete.assert_awaited_once_with("key:s1")
+
+
+async def test_a_cancelled_assignment_does_not_release_a_claim_it_did_not_take() -> None:
+    import asyncio
+
+    manager, validator = _Manager({"s1": None}), _validator(cached="alice")
+    with (
+        patch.object(action, "ChatHistoryManager", return_value=manager),
+        patch.object(action, "get_redis_client", AsyncMock()),
+        patch.object(action, "SessionOwnershipValidator", return_value=validator),
+        patch.object(action, "audit_log", AsyncMock(side_effect=asyncio.CancelledError())),
+        pytest.raises(asyncio.CancelledError),
+    ):
+        await action.execute_owner_assign(_approval(), _session())
+    validator.redis.delete.assert_not_awaited()
