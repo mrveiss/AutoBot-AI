@@ -31,6 +31,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
 from autobot_shared.ssot_constants import CategoryDefaults
+from tools.lint import _parse_cache as parse_cache
 
 _ROOT = "autobot-backend"
 _TEST = re.compile(r"(^|/)(tests?/|test_[^/]*\.py$|[^/]*_test\.py$|conftest\.py$)")
@@ -50,7 +51,6 @@ def _modules(root: Path) -> list[Path]:
 REACH = declare(
     "search-mode-copies",
     discover=_modules,
-    floor=2711,  # mid-window: population 2836, window (2586, 2836)
     growth=250,  # ~9%: ordinary backend growth between repins must not turn an unrelated PR red
     what="non-test backend modules",
     roots=(_ROOT,),
@@ -135,7 +135,7 @@ def _scopes(tree: ast.AST) -> dict[int, tuple[str, bool]]:
 def mode_copies(source: str, rel: str) -> list[str]:
     """Each place *source* restates the search-mode vocabulary."""
     found = []
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     scope = _scopes(tree)
     for node in ast.walk(tree):
         if _collection_hit(node):

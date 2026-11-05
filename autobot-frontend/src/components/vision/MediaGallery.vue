@@ -175,6 +175,7 @@
 
 <script setup lang="ts">
 import { BaseButton } from '@autobot/ui'
+import { createDateFormatter, formatISOString } from '@/utils/formatHelpers'
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onUnmounted } from 'vue';
@@ -234,19 +235,12 @@ const truncateFilename = (filename: string, maxLength: number = 20): string => {
   return `${truncatedName}.${ext}`;
 };
 
-const formatDate = (timestamp: number): string => {
-  const date = new Date(timestamp);
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
+const formatDate = createDateFormatter({
+  kind: 'date',
+  intl: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' },
+});
 
-const formatFullDate = (timestamp: number): string => {
-  return new Date(timestamp).toLocaleString();
-};
+const formatFullDate = formatISOString;
 
 const downloadItem = (item: GalleryItem) => {
   if (!item.analysisResult) {

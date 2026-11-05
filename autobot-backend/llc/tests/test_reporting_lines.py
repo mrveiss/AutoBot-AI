@@ -30,6 +30,7 @@ import pytest_asyncio
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from llc.models.activity import LLCActivityLog
 from llc.models.company_ceo import LLCCompanyCEO
 from llc.models.enums import MembershipRole, RoleHolderType
 from llc.models.membership import LLCCompanyMembership
@@ -58,6 +59,7 @@ async def session_factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
         "sqlite+aiosqlite:///:memory:"
     )
     tables = [
+        LLCActivityLog.__table__,
         LLCCompanyMembership.__table__,
         LLCReportingLine.__table__,
         LLCCompanyCEO.__table__,

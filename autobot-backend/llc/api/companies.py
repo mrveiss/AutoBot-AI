@@ -593,16 +593,14 @@ async def set_pm_config(
     # Issue #12233: tenant authz — writing another tenant's PM credentials is a
     # cross-tenant compromise; caller's org must match company_id unless admin.
     assert_company_access(ctx, company_id)  # shared guard (#12238)
-    import json
-
     from sqlalchemy import select, update
 
-    from autobot_shared.field_encryption import encrypt_field
+    from llc.sync.outbound_sync import seal_pm_config
 
     row = await session.execute(select(Organization.id).where(Organization.id == company_id))
     if row.one_or_none() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
-    encrypted = encrypt_field(json.dumps(body.credentials, ensure_ascii=False))
+    encrypted = seal_pm_config(company_id, body.credentials)
     await session.execute(
         update(Organization)
         .where(Organization.id == company_id)
@@ -622,11 +620,9 @@ async def test_pm_config(
     """Test connectivity to the configured external PM system (GH#8257)."""
     # Issue #12233: tenant authz — caller's org must match company_id unless admin.
     assert_company_access(ctx, company_id)  # shared guard (#12238)
-    import json
-
     from sqlalchemy import select
 
-    from autobot_shared.field_encryption import decrypt_field
+    from llc.sync.outbound_sync import open_pm_config
 
     row = await session.execute(
         select(Organization.external_pm_type, Organization.external_pm_config).where(Organization.id == company_id)
@@ -641,9 +637,9 @@ async def test_pm_config(
             detail="No PM integration configured for this company",
         )
     try:
-        pm_config = json.loads(decrypt_field(encrypted_config))
-    except Exception:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to decrypt PM config")
+        pm_config = open_pm_config(encrypted_config, company_id)  # unreadable: one 503 (credential_handlers, #17981)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Stored PM config is not JSON")
     try:
         health = await _test_pm_connectivity(pm_type, pm_config)
     except Exception as exc:
@@ -1578,7 +1574,7 @@ async def export_template(
     # Issue #12233: tenant authz — exporting another tenant's structure is a
     # cross-tenant data leak; caller's org must match company_id unless admin.
     assert_company_access(ctx, company_id)  # shared guard (#12238)
-    payload = await svc.export_template(company_id)
+    payload = await svc.export_template(company_id, actor=str(_current_user.get("id") or "system"))
     filename = f"company_{company_id}_template.json"
     return JSONResponse(
         content=payload,
@@ -1601,7 +1597,7 @@ async def export_snapshot(
     # Issue #12233: tenant authz — a full-state snapshot of another tenant is a
     # cross-tenant data leak; caller's org must match company_id unless admin.
     assert_company_access(ctx, company_id)  # shared guard (#12238)
-    payload = await svc.export_snapshot(company_id)
+    payload = await svc.export_snapshot(company_id, actor=str(_current_user.get("id") or "system"))
     filename = f"company_{company_id}_snapshot.json"
     return JSONResponse(
         content=payload,

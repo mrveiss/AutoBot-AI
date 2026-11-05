@@ -38,6 +38,7 @@ from initialization import (
     load_optional_routers,
     register_root_endpoints,
 )
+from initialization.credential_handlers import register_credential_handlers
 from initialization.integrity_handlers import register_integrity_handlers
 from initialization.memory_graph_handlers import register_memory_graph_handlers
 from initialization.registry_handlers import register_registry_handlers
@@ -62,6 +63,7 @@ def _register_exception_handlers(app: FastAPI) -> None:
     # flattened into a 500 (#15775).
     register_integrity_handlers(app)
     register_registry_handlers(app)
+    register_credential_handlers(app)
     register_memory_graph_handlers(app)
     # A 422's default body echoes the submitted payload verbatim -- the
     # concrete case is a secret disclosed through a failed request model

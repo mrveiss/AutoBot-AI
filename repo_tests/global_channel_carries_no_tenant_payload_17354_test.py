@@ -38,6 +38,8 @@ import ast
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _BACKEND = repo_root() / "autobot-backend"
 
 #: The spellings that reach the event bus. `publish_event_safe` is
@@ -189,7 +191,7 @@ def _scan_source(source: str, label: str) -> tuple[list[str], int, int]:
     offenders: list[str] = []
     opaque = 0
     seen = 0
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     names = _local_publish_names(tree)
     for node in ast.walk(tree):
         if not _is_global_publish(node, names):

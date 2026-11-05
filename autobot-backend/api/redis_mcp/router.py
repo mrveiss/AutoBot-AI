@@ -53,6 +53,7 @@ from api.redis_mcp.vector_search import (
     handle_redis_vector_search,
 )
 from auth_middleware import get_current_user
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_management.types import DATABASE_MAPPING
@@ -414,9 +415,8 @@ _TOOL_HANDLERS = {
 
 
 def _is_admin(user: dict) -> bool:
-    """Check if the user has admin role."""
-    role = user.get("role", "user")
-    return role in ("admin", "superadmin")
+    """The one admin predicate (#16333); the old literal tuple refused "Admin" and Role members."""
+    return is_admin_role(user.get("role"))
 
 
 def _extract_keys(args: dict) -> list[str]:

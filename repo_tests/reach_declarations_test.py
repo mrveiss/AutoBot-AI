@@ -469,7 +469,7 @@ def test_a_relative_declaration_whose_population_is_not_the_tree_names_its_own_r
     planted = Reach(
         name="self-check::borrows-the-tree",
         discover=lambda _root: ["a/x.py"],
-        floor=0,
+        pinned_floor=0,
         what="a subset borrowing the tracked-file count",
         min_fraction=0.5,
     )

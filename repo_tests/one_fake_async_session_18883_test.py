@@ -47,6 +47,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 from repo_tests.hand_rolled_async_session_baseline_18883 import ALLOWLIST, FROZEN_TOTAL
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 CANONICAL = "autobot-backend/testkit/fake_async_session.py"
@@ -158,7 +159,7 @@ def _visit(node: ast.AST, enclosing: str, found: list[tuple[str, str]], bound: t
 def hand_rolled_sessions(source: str) -> list[tuple[str, str]]:
     """`(enclosing function, class name)` for every hand-rolled session class in `source`."""
     found: list[tuple[str, str]] = []
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     _visit(tree, "<module>", found, _canonical_bindings(tree))
     return found
 
@@ -185,8 +186,6 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "hand-rolled-async-session-scan",
     discover=_population,
-    # Mid-window, from REACH.window(): population 2431 (test files + tests/testkit helpers) -> (2231, 2431, 2331).
-    floor=2666,  # re-pinned mid-window (train 81 on main)
     what="test python source",
     roots=SCAN_ROOTS,
     growth=200,

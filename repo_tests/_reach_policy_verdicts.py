@@ -120,6 +120,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "Files making outbound HTTP calls are a small subset of tracked python; the other ~6000 "
         "files grow independently, so a share of them sinks with nothing wrong with the sweep.",
     ),
+    "ansible-files-scanned-for-slm-port": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Ansible YAML and templates are a subset of tracked files; other trees grow independently of it.",
+    ),
     "ansible-apt-repo-budget-override-sweep": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -425,6 +430,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         ABSOLUTE,
         "SUBSET_DRIFTS",
         "Both GUIs' component, view and composable .ts/.vue, excluding tests, against all tracked frontend source.",
+    ),
+    "frontend-hand-rolled-file-save-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Both GUIs' .ts/.vue source, excluding tests, specs and stories, against all tracked frontend source.",
     ),
     "frontend-hand-built-relative-time-scan": (
         ABSOLUTE,

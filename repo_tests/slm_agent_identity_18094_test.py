@@ -11,6 +11,8 @@ import ast
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _ROOT = repo_root()
 _AGENT = _ROOT / "autobot-slm-backend" / "slm" / "agent" / "agent.py"
 _KEY_NAME = "AUTOBOT_INTERNAL_API_KEY"
@@ -20,7 +22,7 @@ _KEY_NAME = "AUTOBOT_INTERNAL_API_KEY"
 # this one file, and slm_agent_single_definition_19040_test fails if a copy reappears.
 @pytest.mark.parametrize("path", [_AGENT], ids=["canonical"])
 def test_agent_reads_the_key_through_the_one_reader(path):
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(path.read_text(encoding="utf-8"))
     imported = {
         a.name
         for n in ast.walk(tree)

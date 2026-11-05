@@ -356,6 +356,7 @@ Issue #753: User preference management interface
 
 <script setup lang="ts">
 import PreferencesPanel from '@/components/ui/PreferencesPanel.vue'
+import { formatLocalTime } from '@/utils/formatHelpers'
 import ThemePresetPicker from '@/components/settings/ThemePresetPicker.vue'
 import UiModeSettingsCard from '@/components/settings/UiModeSettingsCard.vue'
 import LanguageSettingsPanel from '@/components/settings/LanguageSettingsPanel.vue'
@@ -413,7 +414,6 @@ async function testBackendConnection(): Promise<void> {
     const reachable = await apiClient.validateConnection()
     lastLatencyMs.value = Math.round(performance.now() - t0)
     lastResult.value = reachable
-    lastTestedAt.value = new Date().toLocaleTimeString()
     showToast(
       reachable
         ? `${t('settings.connection.backendCheck.reachable')} (${lastLatencyMs.value}ms)`
@@ -424,10 +424,10 @@ async function testBackendConnection(): Promise<void> {
   } catch (error) {
     lastLatencyMs.value = Math.round(performance.now() - t0)
     lastResult.value = false
-    lastTestedAt.value = new Date().toLocaleTimeString()
     showToast(t('settings.connection.backendCheck.unreachable'), 'error')
     logger.error('Backend reachability test failed', error)
   } finally {
+    lastTestedAt.value = formatLocalTime(new Date())
     isChecking.value = false
   }
 }
