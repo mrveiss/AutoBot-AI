@@ -784,6 +784,16 @@
       "browser": "Navegador",
       "novnc": "Escritorio remoto",
       "ariaLabel": "Secciones del chat"
+    },
+    "attachmentNotice": {
+      "unavailable": "No se encontró un archivo adjunto en esta conversación, así que no se usó.",
+      "too_many": "Solo se usaron los primeros {limit} archivos adjuntos; el resto se omitió.",
+      "image": "\"{filename}\" es una imagen y no se puede leer como texto, así que no se usó.",
+      "unsupported": "\"{filename}\" no es un archivo de texto que el asistente pueda leer, así que no se usó.",
+      "unreadable": "No se pudo leer \"{filename}\", así que no se usó.",
+      "empty": "\"{filename}\" no tiene texto legible, así que no se usó.",
+      "truncated": "\"{filename}\" es largo, así que solo se usó el principio.",
+      "over_budget": "Los archivos adjuntos alcanzaron el límite de tamaño, así que no se usó \"{filename}\"."
     }
   },
   "settings": {
@@ -2496,8 +2506,6 @@
         "docs": "Documentation"
       },
       "justNow": "Ahora mismo",
-      "minutesAgo": "hace {count} minutos",
-      "hoursAgo": "hace {count} horas",
       "installSuccess": "Hooks instalados exitosamente",
       "installFailed": "Instalación fallida",
       "uninstallSuccess": "Hooks desinstalados exitosamente",
@@ -3185,6 +3193,7 @@
       "reasonUnknown": "motivo no informado"
     },
     "connectors": {
+      "syncNotStarted": "The sync didn't start. This connector may already be syncing; try again when it finishes.",
       "title": "Conectores de fuentes",
       "addConnector": "Añadir conector",
       "loadingConnectors": "Cargando conectores...",
@@ -6505,7 +6514,6 @@
       "sessionLabel": "Sesión {id}",
       "invitedAt": "Invitado {time}",
       "justNow": "ahora mismo",
-      "minutesAgo": "hace {count} min",
       "accept": "Aceptar",
       "decline": "Rechazar",
       "respondError": "No se pudo procesar esta respuesta. Inténtalo de nuevo.",
@@ -6815,12 +6823,6 @@
       "loadingValue": "Loading...",
       "timeJustNow": "just now",
       "timeInAMoment": "in a moment",
-      "timeMinutesAgo": "{count}m ago",
-      "timeInMinutes": "in {count}m",
-      "timeHoursAgo": "{count}h ago",
-      "timeInHours": "in {count}h",
-      "timeDaysAgo": "{count}d ago",
-      "timeInDays": "in {count}d",
       "categories": {
         "api_key": "Claves API",
         "token": "Tokens de acceso",
@@ -7557,13 +7559,6 @@
       "actionEnforced": "Full enforcement mode was enabled",
       "system": "System",
       "justNow": "Just now",
-      "minuteAgo": "1 minute ago",
-      "minutesAgo": "{count} minute(s) ago",
-      "hourAgo": "1 hour ago",
-      "hoursAgo": "{count} hour(s) ago",
-      "dayAgo": "1 day ago",
-      "daysAgo": "{count} day(s) ago",
-      "longAgo": "Long ago",
       "modeLegend": "Mode Legend:",
       "legendDisabled": "Disabled",
       "legendLogOnly": "Log Only",
@@ -9118,13 +9113,10 @@
   "devices": {
     "addDevice": "Add device",
     "confirmDelete": "Confirm delete",
-    "daysAgo": "Days ago",
     "error": "Error",
-    "hoursAgo": "Hours ago",
     "justNow": "Just now",
     "lastSeen": "Last seen",
     "loading": "Loading",
-    "minutesAgo": "Minutes ago",
     "noDevices": "No devices",
     "pairDevice": "Pair device",
     "pairFirst": "Pair first",

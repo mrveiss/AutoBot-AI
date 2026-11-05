@@ -41,7 +41,7 @@ from autobot_shared.auth.internal_api_key import verify_internal_api_key  # noqa
 from autobot_shared.auth.jwt_core import _peek_alg, decode_jwt_or_none, encode_jwt, hash_password
 from autobot_shared.auth.permission_evaluator import evaluate_permission
 from autobot_shared.auth.permission_gate import PermissionGate
-from autobot_shared.auth.permissions import Permission
+from autobot_shared.auth.permissions import Permission, is_admin_role
 from autobot_shared.auth.revocation_unavailable import revocation_unavailable_error
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
@@ -235,7 +235,9 @@ class AuthService:
         return result.scalar_one_or_none()
 
     async def create_token_response(self, user: User) -> TokenResponse:
-        """Create a token response for a user."""
+        """Create a token response for a user. Every SLM session starts here, so only admins get one (#20628)."""
+        if not user.is_platform_admin:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ADMIN_ONLY_DETAIL)
         role = role_for_user(user.is_platform_admin).value
         access_token = self.create_access_token(
             data={"sub": user.username, "admin": user.is_platform_admin, "role": role}
@@ -248,6 +250,15 @@ class AuthService:
 
 
 auth_service = AuthService()
+
+
+#: #20628: the SLM is a server admin panel, for admins only.
+ADMIN_ONLY_DETAIL = "This console is for administrators."
+
+
+def is_admin_session(payload: dict) -> bool:
+    """Whether a decoded token belongs to an admin. A token that doesn't say is not an admin's."""
+    return payload.get("admin") is True or is_admin_role(payload.get("role"))
 
 
 async def get_current_user(
@@ -275,6 +286,13 @@ async def get_current_user(
             detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    # #20628: a session from before this rule, or one the main app minted, may be a non-admin's.
+    if not is_admin_session(payload):
+        logger.warning("get_current_user: refusing a non-admin session for sub=%r", payload.get("sub"))
+        from services.refused_session_audit import note_refused_session  # #20664
+
+        await note_refused_session(payload.get("sub"))
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ADMIN_ONLY_DETAIL)
 
     return payload
 
@@ -315,7 +333,8 @@ async def require_service_management_or_internal(
 
     Machine callers presenting a valid ``AUTOBOT_INTERNAL_API_KEY`` bypass the
     user check; every other caller must be an authenticated user holding
-    service.management — preserving #10198's human-surface gate exactly.
+    service.management — preserving #10198's human-surface gate. ``get_current_user``
+    decides that person must be an admin (#20631), so the operator role is refused here too.
     """
     if verify_internal_api_key(x_internal_api_key):
         return {"internal_service": True, "role": "service"}
@@ -348,6 +367,10 @@ async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
 # authenticated user WITHOUT service.management gets 403.  Reuses the shared
 # ROLE_PERMISSIONS table — no second permission system.
 require_service_management = require_permission(Permission.SERVICE_MANAGEMENT)
+
+
+#: #20631: a valid key is refused when its owner is not an admin.
+NON_ADMIN_KEY_DETAIL = "This API key's owner is not an administrator"
 
 
 async def get_api_key_user(
@@ -387,6 +410,8 @@ async def get_api_key_user(
     user = await _get_user_for_api_key(db, api_key.user_id)
     if not user:
         await _reject_key(request, x_api_key, "User not found for API key", api_key_id=str(api_key.id))
+    if not user.is_platform_admin:
+        await _refuse_non_admin_key(request, x_api_key, str(api_key.id), user.username)
 
     # The KEY's authority, not the USER's (#16040).
     #
@@ -444,6 +469,21 @@ async def _reject_key(request: Request, presented: str, reason: str, api_key_id:
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=reason, headers={"WWW-Authenticate": "ApiKey"})
 
 
+async def _refuse_non_admin_key(request: Request, presented: str, api_key_id: str, username: str) -> NoReturn:
+    """Audit a key whose owner is not an admin, then answer 403: the SLM is admin only (#20631)."""
+    await _audit_or_503(
+        request,
+        action="api_key_refused_owner",
+        allowed=False,
+        status=403,
+        presented_key=presented,
+        api_key_id=api_key_id,
+        username=username,
+        reason=NON_ADMIN_KEY_DETAIL,
+    )
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=NON_ADMIN_KEY_DETAIL)
+
+
 async def _legacy_grace_or_401(request: Request, presented: str, api_key):
     """Return a pre-enforcement key's grace deadline, or None for a scoped key (#16040 AC5).
 
@@ -472,7 +512,8 @@ async def _legacy_grace_or_401(request: Request, presented: str, api_key):
 def require_key_permission(permission: Permission) -> Callable:
     """Like ``require_permission``, for a route that authenticates by API key (#16040 AC4).
 
-    The key's authority is its owner's role intersected with its scope bundle.
+    The key's authority is its owner's role intersected with its scope bundle, and only
+    an admin's key gets that far (#20631, in ``get_api_key_user``).
     A key lacking the scope gets 403, not 401. Depending on this is what puts a
     route on the key allow-list (``services/api_key_routes.py``, #16294), which
     ships empty. Every decision is audited as a key request.

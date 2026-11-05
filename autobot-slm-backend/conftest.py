@@ -408,10 +408,11 @@ import importlib.util as _importlib_util  # noqa: E402
 # pytest.ini's pythonpath `autobot_shared/` itself is a root, so a bare
 # `import status_enums` finds autobot_shared/status_enums.py -- a different
 # module with no NodeStatus. Production resolves the SLM's own; so does the suite.
-_se_spec = _importlib_util.spec_from_file_location("status_enums", Path(__file__).parent / "status_enums.py")
-_se_mod = _importlib_util.module_from_spec(_se_spec)
-_se_spec.loader.exec_module(_se_mod)
-sys.modules["status_enums"] = _se_mod
+# service_status (#16019) is not on the suite's path at all (#20796).
+for _top in ("status_enums", "service_status"):
+    _top_spec = _importlib_util.spec_from_file_location(_top, Path(__file__).parent / f"{_top}.py")
+    sys.modules[_top] = _importlib_util.module_from_spec(_top_spec)
+    _top_spec.loader.exec_module(sys.modules[_top])
 
 _REAL_SERVICE_MODULES = (
     "ssh_utils",

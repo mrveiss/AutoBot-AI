@@ -19,13 +19,11 @@ function is counted once, by name or by behaviour. ``Intl.DateTimeFormat().resol
 counted. The kit (``libs/autobot-ui``) and ``utils/`` hold the canonical helpers and are not scanned.
 Baseline re-measured for #20004 on main at 5b0014f63a plus that PR's migrations.
 
-**What the pin holds.** Three groups remain, each on purpose: (1) relative-time formatters that
-take their wording from i18n keys with their own thresholds (``formatRelativeTime``,
-``formatTimeAgo``, a few ``formatTime``/``formatDate``) -- the kit's ``formatTimeAgo`` is English
-only and has fixed tiers, so they stay until the kit gains an i18n-aware relative formatter
-(#19606); (2) duration formatters that happen to be called ``formatTime`` (#19680, #19929);
-(3) declarations in files an open PR held when this landed.
-The pin goes down as each is moved.
+**What the pin holds.** Only declarations in files an open PR held when this landed:
+``SecretAuditLog.vue`` (#20479), ``TerminalWindow.vue`` (#20779), and the SLM's
+``NodeLifecyclePanel.vue``, ``AlertsMonitor.vue`` and ``LLMFallbacksView.vue`` (#20660). The
+relative-time group moved to the kit's ``createRecencyFormatter`` (#19606) and the durations to its
+``formatDuration`` (#19680). The pin goes down to 0 as each held file is moved.
 
 **One number, not a per-file table**, for the reason given in
 ``slm_raw_setinterval_ratchet_19482_test.py``. The pin is down-only against the base (#19283). The
@@ -63,10 +61,13 @@ _COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*).*$", re.M)
 # Two measures, so the down-only comparison against the base stays meaningful (#20004): the first is
 # the name-only count this guard has always pinned (32 at the base, 24 now); the second is the
 # functions only the behavioural detector finds, a measure that did not exist at the base.
-# Measured on 5b0014f63a plus #20004's migrations.
+# Measured on 5b0014f63a plus #20004's migrations; 23 and 20 down to 7 and 3 once the fixed-field
+# formatters moved to createDateFormatter / formatLocal* (#19905) and the relative-time ones to the
+# kit's createRecencyFormatter (#19606) -- measured on the merged tree, not added up from each side.
+# Then 7 and 3 down to 3 and 2 when SecretsManager, ProgressBar, useCaptchaStatus and SettingsView moved.
 NAMED = "local_date_formatter_declarations"
 BEHAVIOUR = "local_date_formatter_functions_by_behaviour"
-PINS = {NAMED: 24, BEHAVIOUR: 20}
+PINS = {NAMED: 3, BEHAVIOUR: 2}
 
 
 def _sources(src: Path) -> list[Path]:
@@ -113,7 +114,6 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "frontend-local-date-formatter-scan",
     discover=_population,
-    floor=903,  # re-pinned mid-window by scripts/repin_reach_floors.py (#19905)
     growth=50,
     what="component, view and composable sources in both frontends",
     roots=_ROOTS,

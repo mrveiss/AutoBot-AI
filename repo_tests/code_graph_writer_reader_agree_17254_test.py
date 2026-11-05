@@ -30,6 +30,8 @@ import re
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _ROOT = repo_root()
 _STORAGE = _ROOT / "autobot-backend" / "api" / "codebase_analytics" / "storage.py"
 _READER = _ROOT / "autobot-backend" / "api" / "codebase_analytics" / "endpoints" / "impact.py"
@@ -90,7 +92,7 @@ def test_the_indexer_endpoint_is_routed():
     """
     import ast
 
-    tree = ast.parse(_text(_ROUTE))
+    tree = parse_cache.parse(_text(_ROUTE))
     decorated = [
         node
         for node in ast.walk(tree)
@@ -133,7 +135,7 @@ def _is_routed(source: str) -> bool:
     """Whether index_code carries a router .post decorator, read structurally."""
     import ast
 
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef)) and node.name == "index_code":
             for d in node.decorator_list:
                 if isinstance(d, ast.Call) and isinstance(d.func, ast.Attribute) and d.func.attr == "post":

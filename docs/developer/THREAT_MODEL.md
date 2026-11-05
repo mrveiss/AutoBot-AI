@@ -56,7 +56,7 @@ Two postures, one validator (#14016): the contract is the docstring of [`securit
 **Canonical enforcement:** every route in
 [`autobot-backend/plugin_manager.py`](../../autobot-backend/plugin_manager.py) carries a
 `Depends` on [`auth_middleware.py`](../../autobot-backend/auth_middleware.py)
-`check_admin_permission` (:943).
+`check_admin_permission` (:944).
 Archive safety lives in [`autobot-backend/archive_safety.py`](../../autobot-backend/archive_safety.py)
 — `validate_zip_metadata` (:29), `safe_extract` (:60), `MAX_UPLOAD_BYTES` (:21).
 
@@ -74,7 +74,7 @@ Archive safety lives in [`autobot-backend/archive_safety.py`](../../autobot-back
 response, a log line, an issue, a PR comment — is already redacted.
 
 **Canonical enforcement:** [`encryption_service.py`](../../autobot-backend/encryption_service.py) AES-GCM + PBKDF2 for data at rest ·
-[`autobot_shared/field_encryption.py`](../../autobot_shared/field_encryption.py) `encrypt_field`/`decrypt_field` for single columns ·
+[`autobot_shared/field_encryption.py`](../../autobot_shared/field_encryption.py) `encrypt_field`/`decrypt_field` for single columns, a facade over the [`secrets_envelope`](../../autobot_shared/secrets_envelope.py) core that binds each value to where it is stored (#17981). **Known limit:** field values are sealed directly under a key derived from `AUTOBOT_SECRETS_ROOT_KEY`, and rotating that key re-wraps vault grants only, so every field-sealed credential becomes unreadable (a 503 `CREDENTIAL_UNREADABLE`, never a silent empty value) until it is re-entered. The approval-gated re-seal path is #20744 ·
 [`credential_store.py`](../../autobot-backend/knowledge/connectors/credential_store.py) `ConnectorCredentialStore` (:211) for connector/OAuth creds, ownership via `_require_owner` (:642) ·
 [`autobot_shared/auth/internal_api_key.py`](../../autobot_shared/auth/internal_api_key.py) `verify_internal_api_key` (:17) for service-to-service (re-exported by `auth_middleware.py` and the SLM `services/auth.py`) ·
 [`services/auth.py`](../../autobot-slm-backend/services/auth.py) `decode_token_async` (:130) for SLM token revocation.
@@ -138,6 +138,15 @@ refused `1008` before any RFB byte. Full reasoning is in that function's docstri
   [`autobot_shared/security/ssrf_guard.py`](../../autobot_shared/security/ssrf_guard.py)
   `fetch_safe_url` (:305) / `pinned_request_with_redirects` (:230). A bare `aiohttp`/`requests`
   call on a user-influenced URL is SSRF (core rule 8).
+- **LLM failover moves prompts (#19753):** [`ModelFallbackCoordinator`](../../autobot-backend/llm_shared/model_fallback_coordinator.py)
+  `fail_over` re-sends a turn's prompt to another model. It never carries a prompt from a local provider to an external one unless
+  the operator wrote that chain (`AUTOBOT_FALLBACK_CHAIN_*`, `FallbackChain.operator_configured`) -- `failover_policy.locality_allows`
+  -- and only while the turn has emitted no text and run no tool (`chat_workflow/llm_failover.py` `turn_has_acted`), so a side effect
+  never replays. A model the user picked by hand never fails over. The shared degradation mark is set only by provider-wide causes
+(`failover_policy.marks_provider_wide`): a caller's own credential failure (a principal is in scope, `caller_owns_credential`) is
+surfaced and neither hops nor marks, and one local request's 5xx or timeout does not degrade a local model for everyone. A hop with no
+provider, or from an unknown origin, counts as external and needs an operator-written chain; "local" is by provider type, not host. The
+event, the response metadata and the log line carry `fallback_provider` and `operator_configured`.
 - **Refactor fallout** historically outranks new code here: a renamed validator or store with
   call sites left on the old name silently removes the check. Grep the **old** identifier.
 - **Prompt injection (#16488):** content `research`/`adopt`/`web-fetch` fetch is data, never

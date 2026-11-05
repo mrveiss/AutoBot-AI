@@ -479,7 +479,7 @@ async function executeFindPath(): Promise<void> {
 
 .action-btn.primary {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border-color: transparent;
 }
 

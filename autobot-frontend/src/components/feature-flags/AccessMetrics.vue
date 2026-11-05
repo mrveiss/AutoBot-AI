@@ -300,10 +300,7 @@ const getPercentage = (value: number, max: number) => {
   return Math.min((value / max) * 100, 100);
 };
 
-const formatDayLabel = (dateString: string) => {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-US', { weekday: 'short' });
-};
+const formatDayLabel = createDateFormatter({ kind: 'date', intl: { weekday: 'short' } });
 
 const formatTime = createDateFormatter({ locale: 'en-US', unit: 'seconds', intl: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } });
 </script>

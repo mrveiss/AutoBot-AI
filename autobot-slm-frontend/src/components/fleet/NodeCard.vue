@@ -14,7 +14,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { SLMNode } from '@/types/slm'
 import { useFleetStore } from '@/stores/fleet'
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, createRecencyFormatter } from '@autobot/ui'
 
 const props = defineProps<{
   node: SLMNode
@@ -24,7 +24,8 @@ const emit = defineEmits<{
   (e: 'action', action: string, nodeId: string): void
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const formatHeartbeatAge = createRecencyFormatter({ locale: () => locale.value, style: 'narrow', maxUnit: 'hour' })
 const fleetStore = useFleetStore()
 const showMenu = ref(false)
 
@@ -49,15 +50,7 @@ const lastSeen = computed(() => {
   // Issue #989: online nodes are actively connected — last_heartbeat can be stale
   if (props.node.status === 'online') return t('fleet.nodeCard.justNow')
   if (!props.node.health?.last_heartbeat) return t('fleet.nodeCard.never')
-  const date = new Date(props.node.health.last_heartbeat)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffSec = Math.floor(diffMs / 1000)
-  if (diffSec < 60) return t('fleet.nodeCard.secondsAgo', { seconds: diffSec })
-  const diffMin = Math.floor(diffSec / 60)
-  if (diffMin < 60) return t('fleet.nodeCard.minutesAgo', { minutes: diffMin })
-  const diffHr = Math.floor(diffMin / 60)
-  return t('fleet.nodeCard.hoursAgo', { hours: diffHr })
+  return formatHeartbeatAge(props.node.health.last_heartbeat)
 })
 
 const canEnroll = computed(() => {

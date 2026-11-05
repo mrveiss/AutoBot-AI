@@ -26,6 +26,7 @@ import uuid
 from typing import Any, Dict, Optional
 
 from autobot_shared.async_compat import fire_and_forget
+from autobot_shared.field_encryption import FieldDecryptionError
 from autobot_shared.redis_client import get_async_redis_client
 
 logger = logging.getLogger(__name__)
@@ -140,16 +141,27 @@ def map_status(pm_config: Dict[str, Any], llc_status: str) -> str:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def _decrypt_pm_config(encrypted_blob: str) -> Dict[str, Any]:
-    """Decrypt the AES-256 encrypted PM config blob.
+def pm_config_context(company_id: object) -> str:
+    """Where a company's PM credentials are stored; the seal is bound to it (#17981)."""
+    return f"organization:{uuid.UUID(str(company_id))}:external_pm_config"  # one spelling of the id
 
-    Uses ``AUTOBOT_FIELD_ENCRYPTION_KEY`` from the environment (same key used
-    by the secrets module).  Returns the decoded JSON dict.
-    """
-    from autobot_shared.field_encryption import decrypt_field
 
-    plaintext = decrypt_field(encrypted_blob)
-    return json.loads(plaintext)
+def seal_pm_config(company_id: object, credentials: Dict[str, Any]) -> str:
+    """Seal a company's PM credentials, bound to that company's record (#17981)."""
+    from autobot_shared.field_encryption import encrypt_field
+
+    return encrypt_field(json.dumps(credentials, ensure_ascii=False), context=pm_config_context(company_id))
+
+
+def open_pm_config(encrypted_blob: str, company_id: object) -> Dict[str, Any]:
+    """Open a company's sealed PM config. Raises ``FieldDecryptionError``, never returns nothing."""
+    from autobot_shared.field_encryption import FieldDecryptionError, decrypt_field
+
+    try:
+        return json.loads(decrypt_field(encrypted_blob, context=pm_config_context(company_id)))
+    except FieldDecryptionError as exc:
+        logger.error("PM config unreadable: %s", exc)
+        raise
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -460,7 +472,7 @@ class LLCOutboundSyncService:
             if not pm_type or pm_type == "none" or not encrypted_config:
                 return
 
-            pm_config = _decrypt_pm_config(encrypted_config)
+            pm_config = open_pm_config(encrypted_config, company_id)
             dispatcher = _DISPATCHER.get(pm_type)
             if dispatcher is None:
                 logger.warning("LLCOutboundSyncService: unsupported pm_type=%s", pm_type)
@@ -474,6 +486,13 @@ class LLCOutboundSyncService:
                 pm_type,
             )
 
+        except FieldDecryptionError as exc:
+            # #17981: one structured line naming where the credential is stored, never the value,
+            # and a sync_failed entry that says why, so the PM status shows it.
+            logger.error(
+                "LLC outbound sync: PM credential unreadable: company=%s event=%s (%s)", company_id, event, exc
+            )
+            await _log_sync_failed(company_id, work_item_id, event, f"credential unreadable: {exc}")
         except Exception as exc:
             logger.exception(
                 "LLC outbound sync failed: company=%s event=%s",

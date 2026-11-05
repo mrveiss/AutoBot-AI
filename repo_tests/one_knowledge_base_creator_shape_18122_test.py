@@ -23,6 +23,8 @@ import ast
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _PUBLISHER = "_publish_knowledge_base"
 _LOCK = "_knowledge_base_lock"
 
@@ -89,14 +91,14 @@ def _called(func: ast.AST) -> set[str]:
 
 
 def _calls_helper(source: str, caller: str, *callees: str) -> bool:
-    func = _funcs(ast.parse(source)).get(caller)
+    func = _funcs(parse_cache.parse(source)).get(caller)
     return func is not None and set(callees) <= _called(func)
 
 
 def _instance_assigners(source: str) -> set[str]:
     """Functions assigning ``_knowledge_base_instance`` as a global name or as an attribute."""
     found = set()
-    for name, func in _funcs(ast.parse(source)).items():
+    for name, func in _funcs(parse_cache.parse(source)).items():
         declared = {g for n in ast.walk(func) if isinstance(n, ast.Global) for g in n.names}
         for n in ast.walk(func):
             targets = (
@@ -122,7 +124,7 @@ def _unlocked_initializes(source: str) -> tuple[int, int]:
 
     The in-place path is ``_ready_app_state_kb`` plus every module function it calls.
     """
-    funcs = _funcs(ast.parse(source))
+    funcs = _funcs(parse_cache.parse(source))
     root = funcs.get("_ready_app_state_kb")
     if root is None:
         return 0, 0
