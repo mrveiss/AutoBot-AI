@@ -64,7 +64,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         "root-relative `*.j2` sweep; the matching files live outside the python filter's trees",
     ),
     "*.json": (
-        {"repo_tests/user_mode_values_19437_test.py"},
+        {"repo_tests/i18n_untranslated_ratchet_test.py", "repo_tests/user_mode_values_19437_test.py"},
         "root-relative `*.json` sweep; the matching files live outside the python filter's trees",
     ),
     "*.md": (
@@ -135,8 +135,13 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         },
         "root-relative `*.ts` sweep; the matching files live outside the python filter's trees",
     ),
+    "*.css": (
+        {"repo_tests/primary_fill_label_reads_text_on_primary_20425_test.py"},
+        "root-relative `*.css` sweep; the matching files live outside the python filter's trees (#20425).",
+    ),
     "*.vue": (
         {
+            "repo_tests/primary_fill_label_reads_text_on_primary_20425_test.py",
             "repo_tests/_hardcoded_colour_detect.py",
             "repo_tests/_hardcoded_ui_literal_detect.py",
             "repo_tests/_raw_palette_detect.py",

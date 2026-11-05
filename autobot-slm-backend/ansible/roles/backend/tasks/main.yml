@@ -192,46 +192,15 @@
   no_log: true
   tags: ['backend', 'config']
 
-# #11507: Derive AUTOBOT_INTERNAL_API_KEY from /etc/autobot/slm-secrets.env (the
-# single source of truth — the SLM SystemSecret; slm_manager writes it there) and
-# set autobot_internal_api_key BEFORE rendering EITHER env file. Previously the
-# /etc/autobot/autobot-backend.env below was rendered from the raw inventory var
-# while the code-dir .env (rendered later, after the #10636 read-back) used the
-# slm-secrets value — so the managed backend and the SLM drifted onto two keys and
-# every cross-service call 401'd. Reading it here converges both env files on one
-# value. Gated on a non-empty read so a host without slm-secrets.env keeps the
-# inventory/vault var (mirrors the #10400 SLM_SECRET_KEY pattern above).
-# #12145: stat first so the read-retry below only spins while the file exists.
-- name: "Backend | Stat slm-secrets.env for the internal-key read (#12145)"
-  ansible.builtin.stat:
-    path: /etc/autobot/slm-secrets.env
-  register: _slm_secrets_stat
-  tags: ['backend', 'config']
-
-- name: "Backend | Read AUTOBOT_INTERNAL_API_KEY from slm-secrets.env (#11507)"
-  ansible.builtin.shell:
-    cmd: >-
-      grep -oP '^AUTOBOT_INTERNAL_API_KEY=\K.*'
-      /etc/autobot/slm-secrets.env 2>/dev/null || true
-  register: _backend_internal_api_key
-  changed_when: false
-  failed_when: false
-  no_log: true
-  # #12145: retry on a transient empty read (file mid-write during a concurrent
-  # deploy) so the key is not silently left drifted; short-circuits when the file
-  # is absent (nothing to align).
-  until: >-
-    (_backend_internal_api_key.stdout | default('') | trim | length > 0)
-    or (not (_slm_secrets_stat.stat.exists | default(false)))
-  retries: 5
-  delay: 2
-  tags: ['backend', 'config']
-
-- name: "Backend | Align autobot_internal_api_key with slm-secrets.env when present (#11507)"
-  ansible.builtin.set_fact:
-    autobot_internal_api_key: "{{ _backend_internal_api_key.stdout | trim }}"
-  when: (_backend_internal_api_key.stdout | default('') | trim) | length > 0
-  no_log: true
+# #11507, #20750: AUTOBOT_INTERNAL_API_KEY is resolved BEFORE rendering EITHER env file, by the one
+# task install and update share. The SLM's slm-secrets.env is the canonical source; a backend that
+# already has a different key keeps it, visibly, because changing it needs approval (#17038).
+- name: "Backend | Resolve AUTOBOT_INTERNAL_API_KEY (#11507, #20750)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/resolve_internal_api_key.yml
+  vars:
+    internal_api_key_current_env_files:
+      - "{{ backend_code_dir | default(backend_install_dir) }}/.env"
+      - "{{ autobot_backend_env_file }}"
   tags: ['backend', 'config']
 
 # #12513: the CLIENT half of chroma's token auth. backend.env.j2 already renders
@@ -494,6 +463,8 @@
       owner: root
       group: "{{ backend_service_account }}"
     tags: ['backend', 'config']
+    vars:
+      internal_api_key_render: "{{ (internal_api_key_by_file | default({})).get(autobot_backend_env_file, internal_api_key_resolved | default(autobot_internal_api_key)) }}"  # #20750: the file keeps its key
 
   # Issue #2953: Write deployment.mode into config/config.yaml so the backend
   # config loader can read it without relying on env alone.
@@ -1114,6 +1085,7 @@
     become: true
     when: backend_gpu_available | default(false) | bool
 
+  # #20082: a large download can drop or run out of disk. Retry it, and name the room left if it fails.
   - name: "Backend | Install CUDA torch requirements (requirements-gpu-torch.txt) (#15162)"
     ansible.builtin.pip:
       requirements: "{{ backend_code_dir }}/filtered-requirements-gpu-torch.txt"
@@ -1127,6 +1099,26 @@
       PIP_DEFAULT_TIMEOUT: "120"
     timeout: 1800  # CUDA-built torch is large
     when: backend_gpu_available | default(false) | bool
+    register: _gpu_torch_install
+    until: _gpu_torch_install is succeeded
+    retries: "{{ backend_torch_install_retries }}"
+    delay: "{{ backend_torch_install_retry_delay }}"
+    ignore_errors: true
+
+  - name: "Backend | Read the free disk space for a failed CUDA torch install"
+    ansible.builtin.command:
+      cmd: "df -h --output=avail {{ backend_code_dir }}"
+    register: _gpu_torch_disk
+    changed_when: false
+    failed_when: false
+    when: _gpu_torch_install is failed
+
+  - name: "Backend | Stop this host, naming the failed CUDA torch install"
+    ansible.builtin.fail:
+      msg: >-
+        Installing CUDA torch failed after {{ backend_torch_install_retries }} retries.
+        Free space for {{ backend_code_dir }}: {{ _gpu_torch_disk.stdout_lines | default([]) | last | default('unknown') }}.
+    when: _gpu_torch_install is failed
 
   # Install GPU-built faiss whenever a GPU is present, the same gate as CUDA
   # torch above and independent of vLLM (#15163: gpu_vector_search.py's
@@ -1236,6 +1228,10 @@
     notify:
       - restart backend
       - restart celery
+
+  - name: "Backend | Pre-fetch the pinned HuggingFace models (#19869, #19738)"
+    ansible.builtin.include_tasks: prefetch_models.yml
+    when: backend_prefetch_models | bool
 
   # ==========================================================
   # PostgreSQL for User Management (Issue #2953)
@@ -1377,6 +1373,8 @@
       owner: "{{ backend_user }}"
       group: "{{ backend_group }}"
     tags: ['backend', 'config']  # No backup: true (#20517): each render left another copy of the secrets
+    vars:
+      internal_api_key_render: "{{ (internal_api_key_by_file | default({})).get((backend_code_dir | default(backend_install_dir)) ~ '/.env', internal_api_key_resolved | default(autobot_internal_api_key)) }}"  # #20750: the file keeps its key
 
   # MVA-1633: Verify .env file exists (will be read by service on restart)
   - name: "Backend | Verify .env file readable (MVA-1633)"

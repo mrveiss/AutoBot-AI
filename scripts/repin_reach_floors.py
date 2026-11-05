@@ -56,7 +56,8 @@ def _declarations() -> tuple[list, dict[str, str]]:
     from repo_tests import reach_declarations_test as meta  # noqa: PLC0415 - imports every guard
 
     failures = dict(getattr(meta, "IMPORT_FAILURES", {}))
-    return [r for r in meta._declarations() if r.min_fraction is None], failures
+    # A computed floor (no ``floor=``, #19676) has no constant to re-pin.
+    return [r for r in meta._declarations() if r.min_fraction is None and not r.computed], failures
 
 
 def _floor_node(source: str, name: str) -> ast.AST | None | bool:
@@ -115,14 +116,28 @@ def _repin(reach) -> str:
     new, status = repin_source(path.read_text(encoding="utf-8"), reach.name, mid, count, low, high)
     if status != "re-pinned":
         return f"SKIP  {reach.name}: {status} ({path.relative_to(_ROOT)})"
-    if dataclasses.replace(reach, floor=mid).staleness(_ROOT) is not None:
+    if dataclasses.replace(reach, pinned_floor=mid).staleness(_ROOT) is not None:
         return f"SKIP  {reach.name}: the mid-window value {mid} is still stale -- check skips=/growth="
     path.write_text(new, encoding="utf-8")
     return f"PIN   {reach.name}: floor -> {mid} (population {count}) in {path.relative_to(_ROOT)}"
 
 
+_FLOOR_LINE = re.compile(r"^\s*floor=\d+,?\s*(#.*)?$")
+
+
+def only_floor_lines(diff: str) -> bool:
+    """True when a unified diff changes nothing but ``floor=`` lines (#19673)."""
+    changed = [line[1:] for line in diff.splitlines() if line[:1] in "+-" and line[:3] not in ("+++", "---")]
+    return bool(changed) and all(_FLOOR_LINE.match(line) for line in changed)
+
+
 def _changed_files(ref: str) -> set[str] | None:
-    """Repo-relative paths this branch changed since it left *ref*; None if git could not say."""
+    """Paths this branch changed since it left *ref*, not counting a change only to floor pins.
+
+    None if git could not say. A repin alone doesn't make a guard the branch's (#19673): counted, one
+    repin put the file in the diff, the next growth on the base read as this branch's, and the gate
+    demanded another repin. Each of those edits one line every other PR edits too.
+    """
     from autobot_shared.paths import scrubbed_git_env  # noqa: PLC0415 - _ROOT is on the path only from here
 
     done = subprocess.run(
@@ -133,7 +148,21 @@ def _changed_files(ref: str) -> set[str] | None:
         check=False,
         env=scrubbed_git_env(),
     )
-    return set(done.stdout.split()) if done.returncode == 0 else None
+    if done.returncode != 0:
+        return None
+    changed = set(done.stdout.split())
+    for path in sorted(p for p in changed if p.startswith("repo_tests/")):
+        one = subprocess.run(
+            ["git", "diff", "-U0", f"{ref}...HEAD", "--", path],
+            cwd=_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=scrubbed_git_env(),
+        )
+        if one.returncode == 0 and only_floor_lines(one.stdout):
+            changed.discard(path)
+    return changed
 
 
 def _not_this_branch(reach, changed: set[str] | None) -> bool:

@@ -7,6 +7,7 @@
  * Integrates with ConversationFileManager backend for per-session file operations.
  */
 
+import { saveBlob } from '@autobot/ui'
 import { getFileIconNameByMimeType } from '@/utils/iconMappings'
 import { formatFileSize } from '@/utils/formatHelpers'
 import type { IconName } from '@/components/ui/Icon.vue'
@@ -15,6 +16,8 @@ import { useApiClient } from '@/plugins/api'
 import { useBatchSelection } from './useBatchSelection'
 import { createLogger } from '@/utils/debugUtils'
 import { extractApiErrorMessage } from '@/utils/errorExtract'
+import { describeApiRefusal } from '@/utils/conversationFileUpload'
+import i18n from '@/i18n'
 import { getApiBase } from '@/config/ssot-config'
 import { mapFileList, type BackendFileList } from '@/utils/conversationFileList'
 import { useLoadingState } from '@/composables/useLoadingState'
@@ -253,22 +256,9 @@ export function useConversationFiles(sessionId: string) {
       )
 
       const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-
       // Use provided filename or get from file list
-      if (filename) {
-        link.download = filename
-      } else {
-        const file = files.value.find(f => f.file_id === fileId)
-        link.download = file?.filename || `file_${fileId}`
-      }
-
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
+      const name = filename || files.value.find(f => f.file_id === fileId)?.filename || `file_${fileId}`
+      saveBlob(blob, name)
 
     } catch (err: unknown) {
       error.value = extractApiErrorMessage(err, 'Download failed')
@@ -355,7 +345,9 @@ export function useConversationFiles(sessionId: string) {
         error.value = 'Failed to create file'
         return false
       } catch (err: unknown) {
-        error.value = extractApiErrorMessage(err, 'Failed to create file')
+        error.value =
+          describeApiRefusal(err, (key, params) => i18n.global.t(key, params ?? {})) ??
+          extractApiErrorMessage(err, 'Failed to create file')
         logger.error('Create file error:', err)
         return false
       }

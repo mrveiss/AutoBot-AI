@@ -20,6 +20,8 @@ import pytest
 import yaml
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 REPO_ROOT = repo_root()
 _CHECKER = REPO_ROOT / "tools" / "lint" / "check_ci_system_package_provisioning.py"
 
@@ -343,7 +345,7 @@ def _imported_roots(source: str) -> list[str]:
     ``.`` so it can never be silently treated as stdlib.
     """
     found: list[str] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.Import):
             found.extend(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom):

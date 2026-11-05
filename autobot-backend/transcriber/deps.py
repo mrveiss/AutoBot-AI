@@ -11,6 +11,7 @@ from fastapi import Depends, HTTPException, Request
 
 from auth_middleware import get_current_user
 from autobot_shared.auth.permissions import is_admin_role
+from autobot_shared.principal import resolve_principal_id
 from transcriber.database import Database
 
 # Owner stamped on every row written before #15758: until then no route resolved
@@ -54,6 +55,8 @@ def authenticate(request: Request, current_user: dict = Depends(get_current_user
     """
     request.state.user = SimpleNamespace(
         id=resolve_user_id(current_user),
+        principal_id=resolve_principal_id(current_user) or resolve_user_id(current_user),  # LLM budget key (#16845)
+        org_id=str(current_user.get("org_id") or ""),
         is_admin=is_admin_role(current_user.get("role")),
     )
 
@@ -66,21 +69,19 @@ def caller_id_of(request: Request) -> str:
     return user.id
 
 
+def caller_principal_of(request: Request) -> tuple[str, str]:
+    """``(principal_id, org_id)`` the LLM budget gate and spend records key on (#16845).
+
+    Falls back to the transcriber id for a caller that was authenticated without them.
+    """
+    user = getattr(request.state, "user", None)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return getattr(user, "principal_id", None) or user.id, getattr(user, "org_id", "") or ""
+
+
 def caller_is_admin(request: Request) -> bool:
     return bool(getattr(getattr(request.state, "user", None), "is_admin", False))
-
-
-def require_transcriber_admin(request: Request) -> None:
-    """Route dependency: 403 unless the authenticated caller is an admin.
-
-    For transcriber routes that change process-wide state rather than one
-    user's rows. For example, ``PATCH /providers`` decides which cloud provider
-    receives every user's audio. The owner ruled on 2026-09-11 that this is
-    admin-only. The router-level ``authenticate`` runs first and records
-    ``is_admin``.
-    """
-    if not caller_is_admin(request):
-        raise HTTPException(status_code=403, detail="Admin privileges required")
 
 
 def can_access_transcriber_row(row: dict, caller_id: str, *, is_admin: bool = False) -> bool:

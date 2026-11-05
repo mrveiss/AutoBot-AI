@@ -56,7 +56,7 @@ Two postures, one validator (#14016): the contract is the docstring of [`securit
 **Canonical enforcement:** every route in
 [`autobot-backend/plugin_manager.py`](../../autobot-backend/plugin_manager.py) carries a
 `Depends` on [`auth_middleware.py`](../../autobot-backend/auth_middleware.py)
-`check_admin_permission` (:943).
+`check_admin_permission` (:944).
 Archive safety lives in [`autobot-backend/archive_safety.py`](../../autobot-backend/archive_safety.py)
 — `validate_zip_metadata` (:29), `safe_extract` (:60), `MAX_UPLOAD_BYTES` (:21).
 
@@ -74,7 +74,7 @@ Archive safety lives in [`autobot-backend/archive_safety.py`](../../autobot-back
 response, a log line, an issue, a PR comment — is already redacted.
 
 **Canonical enforcement:** [`encryption_service.py`](../../autobot-backend/encryption_service.py) AES-GCM + PBKDF2 for data at rest ·
-[`autobot_shared/field_encryption.py`](../../autobot_shared/field_encryption.py) `encrypt_field`/`decrypt_field` for single columns ·
+[`autobot_shared/field_encryption.py`](../../autobot_shared/field_encryption.py) `encrypt_field`/`decrypt_field` for single columns, a facade over the [`secrets_envelope`](../../autobot_shared/secrets_envelope.py) core that binds each value to where it is stored (#17981). **Known limit:** field values are sealed directly under a key derived from `AUTOBOT_SECRETS_ROOT_KEY`, and rotating that key re-wraps vault grants only, so every field-sealed credential becomes unreadable (a 503 `CREDENTIAL_UNREADABLE`, never a silent empty value) until it is re-entered. The approval-gated re-seal path is #20744 ·
 [`credential_store.py`](../../autobot-backend/knowledge/connectors/credential_store.py) `ConnectorCredentialStore` (:211) for connector/OAuth creds, ownership via `_require_owner` (:642) ·
 [`autobot_shared/auth/internal_api_key.py`](../../autobot_shared/auth/internal_api_key.py) `verify_internal_api_key` (:17) for service-to-service (re-exported by `auth_middleware.py` and the SLM `services/auth.py`) ·
 [`services/auth.py`](../../autobot-slm-backend/services/auth.py) `decode_token_async` (:130) for SLM token revocation.

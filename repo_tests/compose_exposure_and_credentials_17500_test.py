@@ -34,8 +34,6 @@ _GENERATOR = _ROOT / "docker" / "generate-secrets.sh"
 _ALL_INTERFACES = {
     ("docker-compose.yml", "autobot-frontend", "80"): "the web UI entry point; nginx serves users on the LAN",
     ("docker-compose.yml", "autobot-frontend", "443"): "the web UI entry point over TLS",
-    ("docker-compose.yml", "autobot-slm-gui", "80"): "the SLM-only profile's web entry point",
-    ("docker-compose.yml", "autobot-slm-gui", "443"): "the SLM-only profile's web entry point over TLS",
 }
 _LOOPBACK = {"127.0.0.1", "::1", "[::1]", "localhost"}
 #: A bind address variable that defaults to loopback: closed unless an operator opens it on purpose.
@@ -48,6 +46,7 @@ _EMPTY_WHEN_UNSET = {
     "SLM_SECRET_KEY": "the SLM generates and persists it when unset (autobot-slm-backend/config.py)",  # pragma: allowlist secret
     "AUTOBOT_ENCRYPTION_KEY": "empty, EncryptionService raises where encryption is used -- it fails closed",  # pragma: allowlist secret
     "AUTOBOT_CHROMADB_AUTH_TOKEN": "optional ChromaDB token auth (#12513); ChromaDB binds loopback only",  # pragma: allowlist secret
+    "AUTOBOT_DOCKER_PROXY_TOKEN": "empty, the proxy refuses every request: it fails closed, and an older stack can still start (#20629)",  # pragma: allowlist secret
     "ANTHROPIC_API_KEY": "an optional third-party provider key",  # pragma: allowlist secret
     "GH_TOKEN": "an optional third-party token",  # pragma: allowlist secret
 }

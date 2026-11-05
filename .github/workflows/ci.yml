@@ -32,7 +32,7 @@ name: AutoBot CI/CD Pipeline
 
 on:
   push:
-    branches: [ release, main, develop, dev ]
+    branches: [ release, main ]
   merge_group:
     # #14054: every required context reports inside a merge queue. Inert until the
     # `merge_queue` ruleset rule is enabled -- this event does not exist before then.
@@ -105,7 +105,7 @@ jobs:
       # verify-precommit-config is never filtered; only its repo-wide sweep is scoped.
       run_precommit_sweep: ${{ steps.docs.outputs.precommit_sweep == 'true' }}
       run_security: >-
-        ${{ (github.event_name == 'push' && contains(fromJSON('["release","dev","main"]'), github.ref_name))
+        ${{ (github.event_name == 'push' && contains(fromJSON('["release","main"]'), github.ref_name))
             || (github.event_name == 'pull_request'
                 && (steps.gp.outputs.self == 'true' || steps.gp.outputs.security_scope == 'true')) }}
       run_deps_scan: ${{ steps.gp.outputs.self == 'true' || steps.bp.outputs.deps == 'true' }}

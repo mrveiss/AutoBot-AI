@@ -33,6 +33,7 @@ from chat_workflow.tool_call_grammar import (
     normalize_tool_call_text,
     strip_unparsed_tool_tags,
 )
+from chat_workflow.tool_call_loop import framed_tool_output
 from constants.api_constants import PATH_OLLAMA_GENERATE
 from constants.model_constants import ModelConfig
 from constants.ttl_constants import TIMEOUT_HTTP_DEFAULT, TTL_24_HOURS
@@ -41,6 +42,7 @@ from services.tool_output_filter import cap_unmatched_output, get_tool_output_fi
 from slash_command_handler import get_slash_command_handler
 
 from .attachment_context import apply_attachments, attachment_notice_messages
+from .budget_refusal import budget_refusal_message
 from .conversation import ConversationHandlerMixin
 from .lightweight_mode import decide_lightweight_mode
 from .llm_failover import IterationCall, stream_with_failover
@@ -1776,9 +1778,6 @@ class ChatWorkflowManager(
         told the result was unavailable, it was told the tool ran fine and
         returned nothing, which makes answering from memory the rational next
         move. Very likely #12508's mechanism.
-
-        Handler names rather than line numbers on purpose — the numbers in the
-        first version of this docstring were already wrong when it was written.
         """
         cmd = result.get("command") or result.get("tool") or "unknown"
         stdout = _as_output_text(result.get("stdout"))
@@ -1802,7 +1801,7 @@ class ChatWorkflowManager(
 
         output_text = _filter_step_output(cmd, output_text, is_shell=bool(result.get("command")))
 
-        return f"**Step {step_num}:** `{cmd}`\n- Status: {status}\n- Output:\n```\n{output_text}\n```"
+        return f"**Step {step_num}:** `{cmd}`\n- Status: {status}\n- Output:{framed_tool_output(output_text)}"
 
     def _build_tools_reminder(self, consecutive_invalid_tool_calls: int) -> str:
         """Build an optional tool-name correction block for continuation prompts. Issue #2735.
@@ -2029,17 +2028,7 @@ before summarizing.
         return tool_calls
 
     def _create_llm_service_error(self, status_code: int) -> WorkflowMessage:
-        """
-        Create an error WorkflowMessage for LLM service failures.
-
-        Issue #620: Extracted from _process_single_llm_iteration to reduce function length.
-
-        Args:
-            status_code: HTTP status code from the failed request
-
-        Returns:
-            WorkflowMessage with error details. Issue #620.
-        """
+        """Error WorkflowMessage for an LLM service failure with HTTP ``status_code`` (#620)."""
         logger.error("[ChatWorkflowManager] Ollama request failed: %s", status_code)
         return WorkflowMessage(
             type="error",
@@ -2095,6 +2084,10 @@ before summarizing.
         """
         import aiohttp
 
+        if (refusal := await budget_refusal_message()) is not None:  # budget gate, before any spend (#16845)
+            yield refusal
+            yield (None, None)
+            return
         payload = self._get_llm_request_payload(
             selected_model,
             current_prompt,
@@ -3739,16 +3732,18 @@ before summarizing.
         session_id: str,
         decision: Dict[str, Any],
         attachment_access: bool = False,
+        auth_scope: dict | None = None,
     ):
-        """Resume a paused graph after command approval (#1043); the attachment verdict is replaced (#20195)."""
+        """Resume a paused graph after approval (#1043) as the caller (#16845); attachment verdict fresh (#20195)."""
         from .attachment_context import resume_command
         from .graph import get_compiled_graph
 
         graph = await get_compiled_graph(self)
         resume = await resume_command(graph, session_id, decision, attachment_access)
-        async with aclosing(stream_graph_turn(self, graph, session_id, resume)) as turn:
-            async for msg in turn:
-                yield msg
+        with llm_principal_scope_for(auth_scope):
+            async with aclosing(stream_graph_turn(self, graph, session_id, resume)) as turn:
+                async for msg in turn:
+                    yield msg
 
     async def shutdown(self):
         """Shutdown the workflow manager and clean up resources."""

@@ -25,46 +25,45 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/__tests__/TerminalWindow.test.ts": 627,
     "autobot-frontend/src/components/agents/HeartbeatPanel.vue": 721,
     "autobot-frontend/src/components/analytics/AdvancedAnalytics.vue": 902,  # #18849: 903 -> 902
-    "autobot-frontend/src/components/analytics/CodeEvolutionTimeline.vue": 772,
+    "autobot-frontend/src/components/analytics/CodeEvolutionTimeline.vue": 767,
     "autobot-frontend/src/components/analytics/CodeGenerationDashboard.vue": 1108,
-    "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": 1791,
-    "autobot-frontend/src/components/analytics/CodeReviewDashboard.vue": 1220,
+    "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": 1789,
+    "autobot-frontend/src/components/analytics/CodeReviewDashboard.vue": 1216,
     "autobot-frontend/src/components/analytics/CodebaseAnalytics.vue": 1260,
-    "autobot-frontend/src/components/analytics/CodebaseAnalyticsLanding.vue": 758,
+    "autobot-frontend/src/components/analytics/CodebaseAnalyticsLanding.vue": 756,
     "autobot-frontend/src/components/analytics/ConversationFlowDashboard.vue": 909,
-    "autobot-frontend/src/components/analytics/LLMPatternDashboard.vue": 1080,
+    "autobot-frontend/src/components/analytics/LLMPatternDashboard.vue": 1078,
     "autobot-frontend/src/components/analytics/LogPatternDashboard.vue": 941,
     "autobot-frontend/src/components/analytics/PatternAnalysis.vue": 944,
     "autobot-frontend/src/components/analytics/PerformanceAnalysisDashboard.vue": 1075,
-    "autobot-frontend/src/components/analytics/PrecommitHookDashboard.vue": 1097,
-    "autobot-frontend/src/components/analytics/SourceManager.vue": 838,
-    "autobot-frontend/src/components/analytics/TechnicalDebtDashboard.vue": 1712,
+    "autobot-frontend/src/components/analytics/PrecommitHookDashboard.vue": 1094,
+    "autobot-frontend/src/components/analytics/SourceManager.vue": 830,
+    "autobot-frontend/src/components/analytics/TechnicalDebtDashboard.vue": 1706,
     "autobot-frontend/src/components/analytics/panels/CodebaseBugPredictionPanel.vue": 779,
     "autobot-frontend/src/components/analytics/panels/CodebaseCrossLanguagePanel.vue": 640,
     "autobot-frontend/src/components/analytics/panels/CodebaseIntelligenceScoresPanel.vue": 1325,
     "autobot-frontend/src/components/analytics/panels/CodebaseOwnershipPanel.vue": 1035,
     "autobot-frontend/src/components/audit/AuditLogTable.vue": 737,  # #14780 BasePagination: 758 -> 741
-    "autobot-frontend/src/components/browser/BrowserSessionManager.vue": 647,  # #18849: 654 -> 653
+    "autobot-frontend/src/components/browser/BrowserSessionManager.vue": 640,  # #18849: 654 -> 653
     "autobot-frontend/src/components/charts/BaseChart.vue": 602,
     "autobot-frontend/src/components/charts/FunctionCallGraph.vue": 2153,  # #19906: 2165 -> 2153
     "autobot-frontend/src/components/charts/ImportTreeChart.vue": 1353,  # #19906: 1365 -> 1353
     "autobot-frontend/src/components/chat/ChatInput.vue": 1628,  # #20133: 1672 -> 1631; #20195: -> 1628
-    "autobot-frontend/src/components/chat/ChatInterface.vue": 1521,
+    "autobot-frontend/src/components/chat/ChatInterface.vue": 1516,
     "autobot-frontend/src/components/chat/ChatMessages.vue": 2097,  # #20195: 2118 -> 2097 (approval routing moved out)
     "autobot-frontend/src/components/chat/ChatSidebar.vue": 807,  # #18849: 808 -> 807
     "autobot-frontend/src/components/chat/DocumentationSearchSidebar.vue": 766,
-    "autobot-frontend/src/components/chat/VisionAnalysisModal.vue": 702,
+    "autobot-frontend/src/components/chat/VisionAnalysisModal.vue": 693,
     "autobot-frontend/src/components/chat/VisualBrowserPanel.vue": 632,
     "autobot-frontend/src/components/chat/VoiceConversationOverlay.vue": 916,
     "autobot-frontend/src/components/chat/VoiceConversationPanel.vue": 649,
-    "autobot-frontend/src/components/desktop/DesktopInterface.vue": 894,
+    "autobot-frontend/src/components/desktop/DesktopInterface.vue": 891,
     "autobot-frontend/src/components/desktop/PopoutChromiumBrowser.vue": 1229,
     "autobot-frontend/src/components/examples/ThemingPatternExample.vue": 603,
-    "autobot-frontend/src/components/feature-flags/AccessMetrics.vue": 722,
+    "autobot-frontend/src/components/feature-flags/AccessMetrics.vue": 719,
     "autobot-frontend/src/components/feature-flags/EndpointEnforcement.vue": 639,
-    "autobot-frontend/src/components/file-browser/FileBrowser.vue": 736,
+    "autobot-frontend/src/components/file-browser/FileBrowser.vue": 732,
     "autobot-frontend/src/components/knowledge/ChromaDBExplorer.vue": 1155,
-    "autobot-frontend/src/components/knowledge/DocumentChangeFeed.vue": 601,
     "autobot-frontend/src/components/knowledge/EntityExtractor.vue": 776,
     "autobot-frontend/src/components/knowledge/EntityGraphManager.vue": 692,
     "autobot-frontend/src/components/knowledge/GraphConnectionPath.vue": 701,
@@ -76,31 +75,31 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/knowledge/KnowledgeHealth.vue": 925,
     "autobot-frontend/src/components/knowledge/KnowledgePersistenceDialog.vue": 891,  # #18819+#18849 one import (-1)
     "autobot-frontend/src/components/knowledge/KnowledgeResearchPanel.vue": 1189,
-    "autobot-frontend/src/components/knowledge/KnowledgeSystemDocs.vue": 863,
-    "autobot-frontend/src/components/knowledge/KnowledgeUpload.vue": 1632,
+    "autobot-frontend/src/components/knowledge/KnowledgeSystemDocs.vue": 846,
+    "autobot-frontend/src/components/knowledge/KnowledgeUpload.vue": 1631,
     "autobot-frontend/src/components/knowledge/KnowledgeVerificationQueue.vue": 797,
     "autobot-frontend/src/components/knowledge/SystemKnowledgeManager.vue": 1018,  # #19906: 1034 -> 1018
     "autobot-frontend/src/components/knowledge/WebResearchPanel.vue": 779,
-    "autobot-frontend/src/components/knowledge/connectors/ConnectorConfigModal.vue": 1626,  # #18849: 1627 -> 1626
+    "autobot-frontend/src/components/knowledge/connectors/ConnectorConfigModal.vue": 1624,  # #18849: 1627 -> 1626
     "autobot-frontend/src/components/knowledge/modals/BulkEditModal.vue": 615,  # #18849: 616 -> 615
     "autobot-frontend/src/components/knowledge/modals/CategoryEditModal.vue": 726,  # #18849: 727 -> 726
     "autobot-frontend/src/components/llc/TemplateBrowser.vue": 806,
     "autobot-frontend/src/components/manpage/ManPageManager.vue": 1213,  # #18849: 1214 -> 1213
-    "autobot-frontend/src/components/security/SecretsManager.vue": 2775,
+    "autobot-frontend/src/components/security/SecretsManager.vue": 2750,
     "autobot-frontend/src/components/security/ThreatIntelligenceDashboard.vue": 776,
     "autobot-frontend/src/components/terminal/AdvancedStepConfirmationModal.vue": 615,  # #18849: 616 -> 615
     "autobot-frontend/src/components/terminal/BaseXTerminal.vue": 825,
     "autobot-frontend/src/components/terminal/TerminalModals.vue": 742,  # #18849: 743 -> 742
-    "autobot-frontend/src/components/terminal/TerminalWindow.vue": 1612,
+    "autobot-frontend/src/components/terminal/TerminalWindow.vue": 1605,
     "autobot-frontend/src/components/ui/HostSelectionDialog.vue": 924,
     "autobot-frontend/src/components/vision/GUIAutomationControls.vue": 708,
-    "autobot-frontend/src/components/vision/MediaGallery.vue": 723,
+    "autobot-frontend/src/components/vision/MediaGallery.vue": 717,
     "autobot-frontend/src/components/vision/ScreenCaptureViewer.vue": 835,
-    "autobot-frontend/src/components/vision/VideoProcessor.vue": 897,
+    "autobot-frontend/src/components/vision/VideoProcessor.vue": 891,
     "autobot-frontend/src/components/visualizations/AgentActivityVisualization.vue": 936,
-    "autobot-frontend/src/components/visualizations/SystemArchitectureDiagram.vue": 1881,
+    "autobot-frontend/src/components/visualizations/SystemArchitectureDiagram.vue": 1874,
     "autobot-frontend/src/components/visualizations/WorkflowVisualization.vue": 1017,  # #16744: 1020 -> 1019
-    "autobot-frontend/src/components/workflow/PhaseProgressionIndicator.vue": 634,
+    "autobot-frontend/src/components/workflow/PhaseProgressionIndicator.vue": 618,
     "autobot-frontend/src/components/workflow/WorkflowCanvas.vue": 2887,
     "autobot-frontend/src/components/workflow/WorkflowLiveDashboard.vue": 782,
     "autobot-frontend/src/composables/__tests__/useClipboard.test.ts": 696,
@@ -122,23 +121,23 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/composables/useVoiceOutput.ts": 1089,
     "autobot-frontend/src/composables/useWorkflowBuilder.ts": 1293,
     "autobot-frontend/src/config/__tests__/ssot-config.spec.ts": 626,
-    "autobot-frontend/src/config/ssot-config.ts": 819,
+    "autobot-frontend/src/config/ssot-config.ts": 804,  # #19821 -15
     "autobot-frontend/src/models/controllers/ChatController.ts": 1156,
     "autobot-frontend/src/models/controllers/KnowledgeController.ts": 645,
     "autobot-frontend/src/models/repositories/ChatRepository.ts": 674,
     "autobot-frontend/src/models/repositories/KnowledgeRepository.ts": 897,
-    "autobot-frontend/src/router/index.ts": 1385,
+    "autobot-frontend/src/router/index.ts": 1305,  # #20605 + #20631: 1385 -> 1305
     "autobot-frontend/src/services/GlobalWebSocketService.ts": 905,
     "autobot-frontend/src/services/TerminalService.ts": 1137,
     "autobot-frontend/src/stores/useChatStore.ts": 1176,
     "autobot-frontend/src/stores/useKnowledgeStore.ts": 809,
-    "autobot-frontend/src/utils/RumAgent.ts": 857,
+    "autobot-frontend/src/utils/RumAgent.ts": 852,
     "autobot-frontend/src/utils/VisionMultimodalApiClient.ts": 663,
     "autobot-frontend/src/utils/debugUtils.ts": 620,
     "autobot-frontend/src/views/AdminUsersView.vue": 796,
-    "autobot-frontend/src/views/AdvancedControlView.vue": 1056,
+    "autobot-frontend/src/views/AdvancedControlView.vue": 1049,
     "autobot-frontend/src/views/BudgetPolicies.vue": 879,
-    "autobot-frontend/src/views/BusinessIntelligenceView.vue": 987,  # #20004: 988 -> 987
+    "autobot-frontend/src/views/BusinessIntelligenceView.vue": 982,  # #20004: 988 -> 987
     "autobot-frontend/src/views/CustomDashboard.vue": 878,  # #18242: 1106 -> 884; train-42 review: -5, then -1
     "autobot-frontend/src/views/DevSpeedupView.vue": 644,
     "autobot-frontend/src/views/ErrorMonitoringView.vue": 839,
@@ -154,8 +153,8 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/llc/CompanyCreationWizard.vue": 909,
     "autobot-frontend/src/views/llc/CompanyPortabilityView.vue": 761,
     "autobot-frontend/src/views/llc/CostDashboard.vue": 1012,  # #20123: 1015 -> 1012 (mixed bucket lists each currency)
-    "autobot-frontend/src/views/llc/GanttTimelineView.vue": 817,
-    "autobot-frontend/src/views/llc/HeartbeatMonitor.vue": 805,
+    "autobot-frontend/src/views/llc/GanttTimelineView.vue": 815,
+    "autobot-frontend/src/views/llc/HeartbeatMonitor.vue": 800,
     "autobot-frontend/src/views/llc/OrgChart.vue": 1517,  # #14780: 1527 -> 1522 (kit BaseDrawer)
     "autobot-frontend/src/views/llc/ProjectBrowserView.vue": 1370,  # #18819 1379->1374; #18849 -1; #14778 BaseInput -1
     "autobot-frontend/src/views/llc/RolesView.vue": 1026,  # #18819 1029->1027; #18849 one kit import on the merge (-1)
@@ -168,14 +167,14 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/index.ts": 957,
     "autobot-slm-frontend/src/components/AddNodeModal.vue": 1067,  # #14777 batch 2: 1111 -> 1067
     "autobot-slm-frontend/src/components/fleet/NodeLifecyclePanel.vue": 934,
-    "autobot-slm-frontend/src/composables/useAutobotApi.ts": 1973,  # #19217 factory in; #12363 formatter out
-    "autobot-slm-frontend/src/composables/useCodeSync.ts": 1078,
+    "autobot-slm-frontend/src/composables/useAutobotApi.ts": 1896,  # #19217 factory in; #12363 formatter out
+    "autobot-slm-frontend/src/composables/useCodeSync.ts": 1075,
     "autobot-slm-frontend/src/composables/useOrchestrationManagement.ts": 693,
     "autobot-slm-frontend/src/composables/useSlmApi.ts": 1457,
     "autobot-slm-frontend/src/stores/fleet.ts": 994,
     "autobot-slm-frontend/src/types/slm.ts": 838,
     "autobot-slm-frontend/src/views/AgentsView.vue": 712,
-    "autobot-slm-frontend/src/views/CodeSyncView.vue": 2035,  # #18819: 2080 -> 2069
+    "autobot-slm-frontend/src/views/CodeSyncView.vue": 1957,  # #18819: 2080 -> 2069; #20201: poll loop extracted
     "autobot-slm-frontend/src/views/DeploymentsView.vue": 1614,  # #18819 + #14777: 1703 -> 1623; #20003: -> 1614
     "autobot-slm-frontend/src/views/FleetOverview.vue": 708,  # #14780: 786 -> 708
     "autobot-slm-frontend/src/views/MaintenanceView.vue": 790,  # #14777 batch 2: 817 -> 794; #20003: -> 790

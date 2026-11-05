@@ -33,10 +33,11 @@ import { isChunkLoadError } from '@/utils/chunkLoadError'
 import { createLogger } from '@/utils/debugUtils'
 import { setDocumentTitle } from '@/utils/documentTitle'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import { getBackendUrl, getSLMAdminUrl } from '@/config/ssot-config'
+import { getBackendUrl } from '@/config/ssot-config'
 import { llcCompanyParamGuard } from './llcGuards'
 import { llcCompanyChildren } from './llcRoutes'
 import { preferencesRoutes } from './preferencesRoutes'
+import { slmRedirectRoutes } from './slmRedirectRoutes'
 import { adminRoutes, resolveAdminPermissionRedirect } from './adminRoutes'
 
 const logger = createLogger('Router');
@@ -778,91 +779,10 @@ export const routes: RouteRecordRaw[] = [
   // /desktop removed from nav — noVNC is accessible via the Chat tab's noVNC tab.
   // Redirect any bookmarked /desktop URLs to /chat.
   { path: '/desktop', redirect: '/chat' },
-  // Issue #4977: Standalone noVNC view at /slm/tools/novnc (driven by HostSelector)
-  {
-    path: '/slm/tools/novnc',
-    name: 'SlmNoVnc',
-    component: () => import('@/views/SlmNoVncView.vue'),
-    meta: {
-      title: 'Remote Desktop',
-      requiresAuth: true,
-      hideFooter: true,
-    },
-  },
-  // Issue #10472: Admin theme-package management under the /slm route group.
-  // Upload/list/uninstall theme zips; install is admin-gated server-side.
-  {
-    path: '/slm/themes',
-    name: 'slm-themes',
-    component: () => import('@/views/slm/ThemeManagerView.vue'),
-    meta: {
-      title: 'Theme Manager',
-      requiresAuth: true,
-      // Admin-only operator view, reached via /slm — not in the primary nav rail.
-      hideInNav: true,
-    },
-  },
   // Issue #3502: Custom Dashboard renamed to /home (see home route above)
 
-  // Issue #729: Infrastructure routes redirected to slm-admin
-  // These routes are kept as redirects for backwards compatibility
-  {
-    path: '/tools',
-    redirect: () => {
-      // Redirect to SLM Admin Tools
-      window.location.href = `${getSLMAdminUrl()}/#/tools`
-      return '/chat' // Fallback
-    }
-  },
-  {
-    path: '/tools/:pathMatch(.*)*',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/#/tools`
-      return '/chat'
-    }
-  },
-  {
-    path: '/monitoring',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/#/monitoring`
-      return '/chat'
-    }
-  },
-  {
-    path: '/monitoring/:pathMatch(.*)*',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/#/monitoring`
-      return '/chat'
-    }
-  },
-  {
-    path: '/settings',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/#/settings`
-      return '/chat'
-    }
-  },
-  {
-    path: '/settings/:pathMatch(.*)*',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/#/settings`
-      return '/chat'
-    }
-  },
-  {
-    path: '/infrastructure',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/#/`
-      return '/chat'
-    }
-  },
-  {
-    path: '/tls-certificates',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/#/security`
-      return '/chat'
-    }
-  },
+  // Issue #729 / #20631: legacy infrastructure paths; admins go to the SLM, others to /home
+  ...slmRedirectRoutes,
   // Issue #929: Plugin Manager UI
   {
     path: '/plugins',

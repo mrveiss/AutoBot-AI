@@ -45,8 +45,6 @@ class RoleRateService(LLCServiceBase):
         actor: Optional[str],
         after: Optional[dict],
     ) -> None:
-        if not self.activity_log:
-            return
         await self.activity_log.record(
             session=session,
             company_id=str(rate.company_id),

@@ -34,7 +34,6 @@ WORKFLOW_REACH = declare(
     discover=lambda root: sorted((root / ".github" / "workflows").glob("*.y*ml")),
     what="workflow files searched for their own requirements-ci.txt install",
     roots=(".github/workflows",),
-    floor=65,  # mid-window; repinned by scripts/repin_reach_floors.py
     growth=10,
 )
 

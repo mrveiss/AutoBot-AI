@@ -478,3 +478,33 @@ register_env_var(
         component="security",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MEMBER_EPOCH_WRITE_CONCURRENCY",
+        type=int,
+        default=10,
+        description=(
+            "Members whose token-revocation marker is written at once when an organisation is "
+            "deactivated or deleted (#20443); bounds the store's concurrent writes however large the "
+            "organisation is; read by autobot_shared/user_management/password_epoch.py."
+        ),
+        component="security",
+        range=(1, 100),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_ROLE_DENIED_AUDIT_WINDOW_S",
+        type=int,
+        default=300,
+        description=(
+            "Seconds between role_denied audit records for one user on one route (#16333); repeats in "
+            "the window are counted into the next record, so a non-admin cannot flood the audit log; "
+            "read by autobot-backend/auth_rbac.py."
+        ),
+        component="security",
+        range=(1, 86400),
+    )
+)

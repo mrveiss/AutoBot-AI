@@ -4,8 +4,8 @@
   AutoBot - AI-Powered Automation Platform
   Author: mrveiss
 
-  AdminLayout (#19833, epic #19829): the shell of the one permission-gated /admin
-  section (ADR-011). It owns the section header and renders the active admin page
+  AdminLayout (#19833): the shell of the main app's permission-gated /admin
+  section. It owns the section header and renders the active admin page
   through a nested <router-view>; access is decided by the router guard, never here.
 -->
 <script setup lang="ts">

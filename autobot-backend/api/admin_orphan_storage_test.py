@@ -16,7 +16,7 @@ from auth_middleware import get_current_user
 from models.approval import Approval
 from services import orphan_storage
 from services.approval_gate_service import ApprovalGateService
-from testkit.canonical_gate import canonical_resolver
+from testkit.canonical_gate import canonical_resolver, real_admin_gate
 from testkit.fake_async_session import FakeAsyncSession
 
 _ADMIN = {"username": "admin", "role": "admin", "user_id": "admin-1"}
@@ -35,8 +35,8 @@ def test_a_non_admin_is_refused(monkeypatch):
     auth = MagicMock()
     auth.get_user_from_request.return_value = {"username": "u2", "role": "user", "user_id": "u2"}
 
-    with canonical_resolver("auth_rbac.resolve_human_user", auth):
-        response = _client().get("/api/admin/orphan-storage")
+    with real_admin_gate(auth) as wire:  # #16333: the one admin gate, run for real
+        response = wire(_client()).get("/api/admin/orphan-storage")
 
     assert response.status_code in (401, 403)
 
@@ -133,8 +133,8 @@ def test_a_non_admin_cannot_propose_a_deletion(monkeypatch):
     auth = MagicMock()
     auth.get_user_from_request.return_value = {"username": "u2", "role": "user", "user_id": "u2"}
 
-    with canonical_resolver("auth_rbac.resolve_human_user", auth):
-        response = _client().post(
+    with real_admin_gate(auth) as wire:  # #16333: the one admin gate, run for real
+        response = wire(_client()).post(
             "/api/admin/orphan-storage/deletion-requests",
             json={"provider": "code_source_clone", "candidate_id": "abc"},
         )

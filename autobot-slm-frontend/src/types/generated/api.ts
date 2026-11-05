@@ -1634,6 +1634,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/code-sync/update-all/nodes-offline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Nodes Offline After Update
+         * @description Nodes the last self-update left offline and still are (#20250), with when that update ran.
+         */
+        get: operations["get_nodes_offline_after_update_api_code_sync_update_all_nodes_offline_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/code-sync/update-all/progress": {
         parameters: {
             query?: never;
@@ -7381,6 +7401,8 @@ export interface paths {
         /**
          * Scim Delete User
          * @description DELETE /scim/v2/Users/{id} — deactivate/soft-delete a user.
+         *
+         *     A soft-deleted user is found again, so a delete answered 503 can be repeated (#20443).
          */
         delete: operations["scim_delete_user_scim_v2_Users__user_id__delete"];
         options?: never;
@@ -18013,6 +18035,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UpdateAllJob"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_nodes_offline_after_update_api_code_sync_update_all_nodes_offline_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: number | string;
+                    };
                 };
             };
             /** @description Validation Error */

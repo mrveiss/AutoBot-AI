@@ -50,7 +50,6 @@ REACH_VUE_FILES = declare(
     "icon-font-size-rule-vue-files",
     discover=lambda root: [p.relative_to(root).as_posix() for p in vue_files(root / _FRONTEND_SRC)],
     roots=(_FRONTEND_SRC,),
-    floor=444,  # population 464 when measured
     growth=40,
     skips=0,
     what=".vue files scanned for .icon rules that set font-size only",

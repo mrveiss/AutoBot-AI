@@ -65,6 +65,9 @@ types:
   - 'autobot-backend/**/*.py'
   - 'autobot_shared/**/*.py'
   - 'autobot-frontend/src/types/generated/api.ts'
+  # #16568: workflow.ts is generated from Python sources by gen_frontend_types.py.
+  - 'autobot-frontend/src/types/_generated/**'
+  - 'autobot-infrastructure/shared/scripts/gen_frontend_types.py'
   - 'autobot-frontend/package.json'
   - 'autobot-frontend/package-lock.json'
   - 'scripts/audit_api_wiring.py'

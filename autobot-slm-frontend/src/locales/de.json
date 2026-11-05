@@ -269,6 +269,7 @@
     "waiting": "Waiting for the update to write its log."
   },
   "codeSyncView": {
+    "nodesOfflineAfterUpdate": "The update of {time} finished, but {offline} of the {total} nodes online before it are still offline. They may need attention.",
     "actions": "Aktionen",
     "addSchedule": "Add Schedule",
     "advancedDiagnostics": "Advanced / Diagnostics",
@@ -339,6 +340,12 @@
     "pipelineColocatedPartial": "SLM is current, but a co-located component failed to update — see the SLM self-update stage below for details.",
     "pipelinePartial": "Update finished — {count} node(s) skipped because they are not operational.",
     "pipelineReconnectingAttempt": "Control plane restarting — reconnecting… (attempt {attempt})",
+    "pipelineSessionExpiredTitle": "Session expired",
+    "pipelineSessionExpired": "The server rejected the status check because you are no longer logged in. Log in again to see whether the update finished.",
+    "pipelineLogInAgain": "Log in again",
+    "pipelineGaveUpTitle": "Stopped checking the update",
+    "pipelineGaveUp": "No answer from the control plane after {attempt} status checks, so polling stopped. The update may have finished; re-check its status.",
+    "pipelineRecheckStatus": "Re-check status",
     "pipelineStageCurrent": "already current",
     "pipelineStageFailed": "fehlgeschlagen",
     "pipelineStagePartial": "partial",
@@ -897,12 +904,10 @@
       "enrollNode": "Enroll Node",
       "enrolling": "Enrolling...",
       "healthMetricsAria": "Health metrics",
-      "hoursAgo": "vor {hours} Std.",
       "justNow": "Gerade eben",
       "lastSeen": "Last seen: {time}",
       "manageRoles": "Manage Roles",
       "memory": "MEM",
-      "minutesAgo": "vor {minutes} Min.",
       "never": "Nie",
       "noHealthDataAvailable": "Keine Zustandsdaten verfügbar",
       "noRolesAssigned": "No roles assigned",
@@ -912,7 +917,6 @@
       "reEnrollNode": "Re-enroll Node",
       "recoverConnection": "Recover Connection",
       "restartNodeAria": "Restart {hostname}",
-      "secondsAgo": "{seconds}s ago",
       "serviceHealthSummaryAria": "Service health summary",
       "services": "Services",
       "services1": "Services:",
@@ -1115,6 +1119,7 @@
     "signInWithProviderAria": "Mit {provider} anmelden",
     "signingIn": "Signing in...",
     "singleSignOnProvidersAria": "Single sign-on providers",
+    "adminOnly": "This console is for administrators.",
     "ssoLoginFailed": "SSO login failed. Please try again.",
     "twoFactorAuthentication": "Two-Factor Authentication",
     "twoFactorAuthenticationAria": "Two-factor authentication",
@@ -1622,7 +1627,7 @@
       },
       "trends": {
         "title": "Trends",
-        "note": "The backend builds these series from a fixed placeholder formula, not from stored history, so they show shape only and are not measurements.",
+        "note": "No stored trend history is available yet, so the backend sends no trend series.",
         "empty": "The backend sent no trend series",
         "col": {
           "series": "Series",
@@ -1733,6 +1738,105 @@
         "label": "Latest events pages",
         "summary": "Page {page} of {count}"
       }
+    },
+    "installMetrics": {
+      "title": "Install metrics",
+      "subtitle": "This install's own monitoring figures from the main backend: host, services, alerts, recommendations, GPU and NPU. Updated every 15 seconds.",
+      "refresh": "Aktualisieren",
+      "loading": "Reading install metrics...",
+      "unavailableTitle": "The main app is not available",
+      "unavailableBody": "The main backend did not answer any install metrics request. No figures are shown, because any shown now would be out of date. Polling stops after repeated failures; use Refresh to read again.",
+      "sectionFailedTitle": "{section} could not be read",
+      "sectionFailedBody": "The install metrics request failed.",
+      "emptyTitle": "Nothing reported yet",
+      "emptyBody": "The main backend answered and reports no host figures, services, alerts, recommendations or devices.",
+      "notReported": "Not reported",
+      "percent": "{value}%",
+      "celsius": "{n} °C",
+      "watts": "{n} W",
+      "ms": "{n} ms",
+      "hours": "{n} h",
+      "readAt": "Read {time}",
+      "sections": {
+        "dashboard": "Host metrics",
+        "services": "Service health",
+        "alerts": "Alerts",
+        "recommendations": "Empfehlungen",
+        "gpu": "GPU",
+        "npu": "NPU"
+      },
+      "system": {
+        "title": "Host"
+      },
+      "gpu": {
+        "title": "GPU",
+        "absent": "The main backend reports no GPU on this install."
+      },
+      "npu": {
+        "title": "NPU",
+        "absent": "The main backend reports no NPU on this install."
+      },
+      "stat": {
+        "cpu": "CPU",
+        "memory": "Memory",
+        "disk": "Disk",
+        "processes": "Processes",
+        "overallHealth": "Overall health",
+        "performanceScore": "Performance score",
+        "gpuName": "Device",
+        "gpuUtilization": "Utilization",
+        "gpuMemory": "Memory utilization",
+        "gpuTemperature": "Temperature",
+        "gpuPower": "Power",
+        "npuUtilization": "Utilization",
+        "npuAcceleration": "Acceleration ratio",
+        "npuInferences": "Inferences"
+      },
+      "services": {
+        "title": "Services",
+        "summary": "{healthy} of {total} services healthy, overall {status}",
+        "empty": "The backend reports no services.",
+        "col": {
+          "name": "Service",
+          "status": "Status",
+          "endpoint": "Endpoint",
+          "response": "Response",
+          "score": "Health score",
+          "uptime": "Betriebszeit"
+        }
+      },
+      "alerts": {
+        "title": "Alerts",
+        "empty": "The backend reports no active alerts."
+      },
+      "recommendations": {
+        "title": "Empfehlungen",
+        "empty": "The backend has no optimization recommendations.",
+        "action": "Action: {action}"
+      },
+      "status": {
+        "healthy": "Healthy",
+        "degraded": "Degraded",
+        "critical": "Kritisch",
+        "offline": "Offline"
+      },
+      "health": {
+        "healthy": "healthy",
+        "degraded": "degraded",
+        "critical": "kritisch",
+        "unknown": "unbekannt"
+      },
+      "severity": {
+        "critical": "Kritisch",
+        "high": "Hoch",
+        "warning": "Warnung",
+        "info": "Info"
+      },
+      "priority": {
+        "high": "Hoch",
+        "medium": "Mittel",
+        "low": "Low"
+      }
     }
   },
   "monitoringView": {
@@ -1752,7 +1856,8 @@
       "performance": "Leistung",
       "agentLedger": "Agenten-Ledger",
       "validation": "Validation",
-      "rum": "Real user monitoring"
+      "rum": "Real user monitoring",
+      "install": "Install metrics"
     }
   },
   "orchestration": {
@@ -2743,6 +2848,9 @@
         "online": "Online",
         "pairNewWorker": "Pair New Worker",
         "pairWorker": "Pair Worker",
+        "assignedNotPaired": "{hostname} has the NPU worker role in the SLM but isn't paired, so it gets no work yet.",
+        "assignedPairFailed": "Could not pair the NPU worker on {hostname}. Check that it is running, then try again.",
+        "assignedReadFailed": "Could not read which nodes have the NPU worker role, so a node waiting to be paired may be missing here.",
         "pairYourFirstWorker": "Pair Your First Worker",
         "platform": "Platform *",
         "port": "Port *",
@@ -3138,6 +3246,43 @@
         "checkingRbacStatus": "Checking RBAC status...",
         "failedToInitializeRbac": "Failed to initialize RBAC"
       },
+      "themeManager": {
+        "title": "Themes",
+        "subtitle": "Theme packages installed on the main app. Installing or removing one applies to every user.",
+        "refresh": "Aktualisieren",
+        "dismiss": "Dismiss",
+        "loading": "Reading the installed themes...",
+        "errorTitle": "The installed themes could not be read",
+        "errorBody": "The theme list request failed.",
+        "unavailableTitle": "The theme manager is not available",
+        "unavailableBody": "Theme packages live on the main app, which did not answer. Try again once it is running.",
+        "emptyTitle": "No themes installed",
+        "emptyBody": "Upload a theme package (.zip) to make it available to every user.",
+        "installTitle": "Install a theme",
+        "installHint": "A .zip package holding theme.json and theme.css.",
+        "chooseFile": "Choose package",
+        "installing": "Installiere...",
+        "installedOk": "Installed {name} {version}.",
+        "installFailed": "The theme could not be installed.",
+        "notZip": "Choose a .zip theme package.",
+        "tooLarge": "The package is larger than the SLM proxy accepts, so it was refused before the main app saw it.",
+        "adminOnly": "Only an administrator can change themes.",
+        "col": {
+          "name": "Name",
+          "version": "Version",
+          "author": "Author",
+          "supports": "Supports",
+          "id": "Id"
+        },
+        "tableLabel": "Installed themes",
+        "actions": "Aktionen",
+        "uninstall": "Deinstallieren",
+        "confirmTitle": "Uninstall {name}?",
+        "confirmBody": "The theme is removed from the main app for every user.",
+        "confirmCancel": "Abbrechen",
+        "removedOk": "Uninstalled {name}.",
+        "removeFailed": "The theme could not be uninstalled."
+      },
       "webResearchSettings": {
         "title": "Web-Recherche",
         "subtitle": "Platform-wide web research settings. Changes apply to every user.",
@@ -3481,7 +3626,8 @@
       "llmFallbacks": "LLM Fallbacks",
       "budgetAudit": "Budget Audit",
       "sso": "SSO / OIDC",
-      "webResearch": "Web-Recherche"
+      "webResearch": "Web-Recherche",
+      "themes": "Themes"
     }
   },
   "settingsView": {
