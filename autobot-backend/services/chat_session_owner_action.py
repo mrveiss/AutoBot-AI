@@ -46,7 +46,7 @@ async def ownerless_report(manager) -> tuple[list[str], list[str]]:
     """
     ownerless: list[str] = []
     unreadable: list[str] = []
-    for entry in await manager.list_sessions():
+    for entry in await manager.list_session_ids():
         session_id = entry["chatId"]
         try:
             if not await manager.get_session_owner(session_id):
@@ -120,14 +120,42 @@ async def _owner_elsewhere(manager, validator, session_id: str, owner: str) -> s
     """Who holds the session if not *owner*. Otherwise *owner* now holds it in Redis.
 
     The ownership gate may have granted an owner that is only in Redis. The claim is atomic, so
-    a grant made while this runs loses to it or wins over it, never both.
+    a grant made while this runs loses to it or wins over it, never both. A claim that fails while
+    nobody holds the key afterwards (it expired in between) is an error: nothing is written on it.
     """
     on_file = await manager.get_session_owner(session_id)
     if on_file:
         return on_file
     if await _claim_in_redis(validator, session_id, owner):
         return None
-    return await validator.get_session_owner(session_id)
+    holder = await validator.get_session_owner(session_id)
+    if holder is None:
+        raise ValueError(f"session {session_id} could not be claimed; nothing was written")
+    return holder
+
+
+async def _release_claim(validator, session_id: str) -> None:
+    try:
+        await validator.redis.delete(validator._get_ownership_key(session_id))
+    except Exception as exc:  # the failure that brought us here is the one to raise
+        logger.warning("Could not release the claim on session %s: %s", session_id, type(exc).__name__)
+
+
+async def _attempt(approval: "Approval", manager, validator, claimed: bool, user_id: str, self_approved: bool) -> str:
+    """Audit, then write the owner. A claim this run alone took is dropped on ANY failure, cancellation included.
+
+    Our claim alone would let the owner in with the proposal failed, and a cancelled request would
+    otherwise leave it until the TTL (24 hours) expired.
+    """
+    ctx = approval.context
+    session_id, owner = ctx["session_id"], ctx["owner"]
+    try:
+        await _audit(approval, session_id, "attempted", stage="started", owner=owner, self_approval=self_approved)
+        return await _write_owner(manager, validator, session_id, owner, user_id)
+    except BaseException:
+        if claimed:
+            await _release_claim(validator, session_id)
+        raise
 
 
 async def execute_owner_assign(approval: "Approval", session: "AsyncSession") -> None:
@@ -140,6 +168,8 @@ async def execute_owner_assign(approval: "Approval", session: "AsyncSession") ->
     user_id = await active_user_id(session, owner)
     if user_id is None:
         raise ValueError(f"{owner} is not an active user")
+    if user_id != ctx.get("owner_id"):
+        raise ValueError(f"{owner} no longer names the account that was proposed")
     manager = ChatHistoryManager()
     validator = SessionOwnershipValidator(await get_redis_client(async_client=True, database="main"))
     held_before = await validator.get_session_owner(session_id)
@@ -148,24 +178,12 @@ async def execute_owner_assign(approval: "Approval", session: "AsyncSession") ->
         await _comment(approval, session, f"Session {session_id} already belongs to {existing}; nothing changed.")
         await _audit(approval, session_id, "denied", stage="skipped", existing_owner=existing)
         return
-    await _audit(approval, session_id, "attempted", stage="started", owner=owner, self_approval=self_approved)
-    try:
-        outcome = await _write_owner(manager, validator, session_id, owner, user_id)
-    except ValueError:
-        if held_before is None:  # our claim alone would let them in with the proposal failed
-            await validator.redis.delete(validator._get_ownership_key(session_id))
-        raise
+    outcome = await _attempt(approval, manager, validator, held_before is None, user_id, self_approved)
     note = " (self-approved)" if self_approved else ""
     tail = "" if outcome == "success" else " Its owner is on file, but the Redis record was not written."
     await _comment(approval, session, f"Session {session_id} now belongs to {owner}{note}.{tail}")
-    await _audit(
-        approval,
-        session_id,
-        "success" if outcome == "success" else "error",
-        stage=outcome,
-        owner=owner,
-        self_approval=self_approved,
-    )
+    result = "success" if outcome == "success" else "error"
+    await _audit(approval, session_id, result, stage=outcome, owner=owner, self_approval=self_approved)
 
 
 def register_owner_assign_action() -> None:

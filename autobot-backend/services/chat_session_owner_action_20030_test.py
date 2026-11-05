@@ -51,7 +51,12 @@ def _approval(decider=_OTHER, requested_by=_ADMIN, session_id="s1", owner="alice
         id=uuid.uuid4(),
         decided_by_user="owner",
         requested_by_agent=f"chat-session-owner:{requested_by}",
-        context={"action": action.ACTION, "session_id": session_id, "owner": owner, "owner_id": owner_id or str(_USER_ID)},
+        context={
+            "action": action.ACTION,
+            "session_id": session_id,
+            "owner": owner,
+            "owner_id": owner_id or str(_USER_ID),
+        },
     )
     approval_execution.set_verified_decider(approval, decider)
     return approval
@@ -127,7 +132,14 @@ async def test_a_self_approval_with_another_admin_writes_nothing() -> None:
         (_approval(), False),
         (_approval(owner_id=str(uuid.uuid4())), True),
     ],
-    ids=["no-verified-decider", "unknown-requester", "no-owner", "no-session", "owner-not-a-user", "name-now-another-account"],
+    ids=[
+        "no-verified-decider",
+        "unknown-requester",
+        "no-owner",
+        "no-session",
+        "owner-not-a-user",
+        "name-now-another-account",
+    ],
 )
 async def test_a_bad_approval_writes_nothing(approval, user_exists: bool) -> None:
     manager = _Manager({"s1": None})
