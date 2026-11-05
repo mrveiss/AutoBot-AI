@@ -131,7 +131,7 @@ async def test_the_scheduler_refuses_before_any_adapter_is_resolved_when_the_fla
     """The real dispatch point, with enforcement on: every heartbeat/comment-wake run passes it (#16974)."""
     from llc.scheduler import heartbeat_scheduler
 
-    with patch.object(heartbeat_scheduler, "is_feature_enabled", return_value=True):
+    with patch("llc.org_role_authority.is_feature_enabled", return_value=True):
         with patch.object(heartbeat_scheduler, "get_adapter") as get_adapter:
             with pytest.raises(HeartbeatDispatchSkipped):
                 await heartbeat_scheduler._dispatch_adapter(_agent("worker", adapter="copilot_local"), {})
@@ -144,7 +144,7 @@ async def test_the_scheduler_does_not_enforce_when_the_flag_is_off():
     """Default is off (#16974 owner decision): a deployment that never set the flag runs exactly as before."""
     from llc.scheduler import heartbeat_scheduler
 
-    with patch.object(heartbeat_scheduler, "is_feature_enabled", return_value=False):
+    with patch("llc.org_role_authority.is_feature_enabled", return_value=False):
         with patch.object(heartbeat_scheduler, "get_adapter") as get_adapter:
             with patch.object(heartbeat_scheduler, "_dispatch_registry_adapter", AsyncMock(return_value=None)):
                 await heartbeat_scheduler._dispatch_adapter(_agent("worker", adapter="copilot_local"), {})
