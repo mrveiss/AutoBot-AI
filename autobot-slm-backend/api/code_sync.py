@@ -123,6 +123,7 @@ from services.slm_frontend_build import build_slm_frontend as _build_slm_fronten
 from services.slm_frontend_build import write_slm_deployed_commit_marker as _write_slm_deployed_commit_marker
 from services.ssh_utils import _ssh_key_usable, ssh_remote_path
 from services.sync_orchestrator import get_sync_orchestrator
+from services.sync_restart import no_restart_args
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/code-sync", tags=["code-sync"])
@@ -761,6 +762,7 @@ async def get_sync_status(
     # #11820: never read "up to date" while a co-located managed component is stale. #20250: first,
     # so a slow scan holds no open transaction; and a scan with no answer says so, never "none stale".
     stale_components, stale_scan_unknown = await _stale_components_cache.get_or_unknown(_scan_stale_components, [])
+    deploy_activity = await read_deploy_activity()  # #19770: before any query; slow systemctl, no pooled connection
     tracker = await _get_tracker_for_db(db)
 
     # Get latest version from settings
@@ -811,10 +813,8 @@ async def get_sync_status(
     # this is deployed files vs the process's in-memory state.
     process_divergence = await _compute_process_divergence()
 
-    # #12776: the self-update path restarts this backend mid-run, so nothing
-    # in-process can assert the playbook finished. Read the verdict off the log
-    # instead, so a run that died before Play 2 stops being reported as success.
-    verdict = _read_last_self_update_verdict()
+    # #12776: the self-update restarts this backend, so the log has the verdict; #19770: liveness reads it.
+    verdict = _read_last_self_update_verdict(run_alive=deploy_activity.in_progress)
 
     return CodeSyncStatusResponse(
         latest_version=latest_version,
@@ -839,7 +839,7 @@ _SELF_UPDATE_QUEUED_MESSAGE = (
 )
 
 
-def _read_last_self_update_verdict(not_before: Optional[str] = None):
+def _read_last_self_update_verdict(not_before: Optional[str] = None, run_alive: Optional[bool] = None):
     """Verdict for the last self-update run; never fails the status endpoint (#12776).
 
     #12959: the log only says whether the *playbook* finished. A run can reach
@@ -856,7 +856,7 @@ def _read_last_self_update_verdict(not_before: Optional[str] = None):
     from services.self_update_log_reader import SelfUpdateVerdict, read_self_update_verdict
 
     try:
-        verdict = read_self_update_verdict(SELF_UPDATE_LOG_PATH, not_before)
+        verdict = read_self_update_verdict(SELF_UPDATE_LOG_PATH, not_before, run_alive)
     except Exception as exc:  # noqa: BLE001 — status must answer even if this cannot
         logger.warning("self-update verdict unavailable: %s", exc)
         verdict = SelfUpdateVerdict(reason=None)
@@ -3066,15 +3066,11 @@ async def _execute_node_playbook(
     # hostname is user-editable and can drift from inventory host names (#921)
     # Issue #1091: Include localhost so Play 0 (archive build) runs
     limit = ["localhost", node.node_id]
-    tags = []
-    if not request.restart:
-        tags.append("!restart")  # Skip restart tasks
-
     playbook_result = await executor.execute_playbook(
         playbook_name="update-all-nodes.yml",
         limit=limit,
-        tags=tags if tags else None,
         progress_callback=progress_callback,
+        **no_restart_args(request.restart),  # #20743
     )
 
     if playbook_result["success"]:
@@ -3462,15 +3458,8 @@ async def _sync_single_node(
         # Use node_id (maps to slm_node_id in Ansible inventory) not hostname (#921)
         # Issue #1091: Include localhost so Play 0 (archive build) runs
         limit = ["localhost", node_state.node_id]
-        tags = []
-        if not restart:
-            tags.append("!restart")  # Skip restart tasks
-
-        # Execute update playbook
         result = await executor.execute_playbook(
-            playbook_name="update-all-nodes.yml",
-            limit=limit,
-            tags=tags if tags else None,
+            playbook_name="update-all-nodes.yml", limit=limit, **no_restart_args(restart)  # #20743
         )
 
         if result["success"]:
@@ -5248,7 +5237,7 @@ def _completion_is_newer_than(completed_at: Optional[str], since: Optional[str])
     return done > fired
 
 
-def _rotated_completion_time() -> Optional[str]:
+def _rotated_completion_time(run_alive: Optional[bool] = None) -> Optional[str]:
     """When the last verdict came from the ROTATED log, when that log was rotated.
 
     Returns None when the verdict came from the live log (the normal case) or
@@ -5269,7 +5258,7 @@ def _rotated_completion_time() -> Optional[str]:
         from services.playbook_executor import SELF_UPDATE_LOG_PATH
         from services.self_update_log_reader import read_self_update_verdict
 
-        verdict = read_self_update_verdict(SELF_UPDATE_LOG_PATH)
+        verdict = read_self_update_verdict(SELF_UPDATE_LOG_PATH, run_alive=run_alive)
         if getattr(verdict, "from_rotated_log", False) is not True:
             return None
         # Only a run that reached its recap is a completion. `complete` is a real
@@ -5345,7 +5334,7 @@ async def _reconcile_self_update_stage(
     # probe_role_delivery and `/status` already gates on. Resolving this stage
     # on the weaker check would let a degraded self-update be reported as
     # resolved and then deploy to the fleet on the strength of it.
-    verdict = _read_last_self_update_verdict(stage.started_at)
+    verdict = _read_last_self_update_verdict(stage.started_at, run_alive=(await read_deploy_activity()).in_progress)
     if verdict.degraded:
         # Carry the reason into the stage: the count alone gave an operator
         # nothing to act on.

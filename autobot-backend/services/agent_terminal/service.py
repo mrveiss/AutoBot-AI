@@ -20,7 +20,7 @@ from services.command_approval_manager import AgentRole, CommandApprovalManager
 from services.command_execution_queue import get_command_queue
 from type_defs.common import Metadata
 
-from .ai_line_gate import PENDING_APPROVAL_REFUSAL, decide_command, permission_refusal, write_reservation
+from .ai_line_gate import claim_pending, decide_command, permission_refusal, settle_pending, write_reservation
 from .approval_handler import ApprovalHandler
 from .command_executor import CommandExecutor
 from .errors import PostExecutionError, execution_failed_response, post_execution_failed_response, post_execution_guard
@@ -202,9 +202,9 @@ class AgentTerminalService:
             interactive_reasons=interactive_reasons,
         )
 
-        # #19951: no await between this check and the write below, so overlapping calls cannot both pass it.
-        if session.has_pending_approval():
-            return session.get_permission_denied_response(PENDING_APPROVAL_REFUSAL, command, risk.value)
+        refusal = await claim_pending(session, self.redis_client, cmd_execution.command_id, command, risk)
+        if refusal is not None:
+            return refusal
 
         # #14955 review: session.pending_approval["risk"] (read back via
         # get_pending_risk_level()) feeds the auto-approve rules engine
@@ -231,7 +231,7 @@ class AgentTerminalService:
             interactive_reasons=interactive_reasons,
         )
 
-        await write_reservation(session, cmd_execution, self.command_queue)
+        await write_reservation(session, cmd_execution, self.command_queue, self.redis_client)
         logger.info("✅ [QUEUE] Added command %s to queue", cmd_execution.command_id)
 
         if self.redis_client:
@@ -442,7 +442,7 @@ class AgentTerminalService:
             result=result,
         )
 
-        session.clear_pending_and_resume()
+        await settle_pending(session, self.session_manager)
 
         if auto_approve_future and user_id:
             await self.approval_handler.store_auto_approve_rule(
@@ -570,7 +570,7 @@ class AgentTerminalService:
             comment=comment,
         )
 
-        session.clear_pending_and_resume()
+        await settle_pending(session, self.session_manager)
 
         await self._update_and_broadcast_approval_status(session, command, False, user_id, comment)
 

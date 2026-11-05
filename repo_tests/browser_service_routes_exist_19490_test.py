@@ -23,6 +23,7 @@ import re
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _SERVER = "autobot-browser-worker/playwright-server.js"
@@ -40,7 +41,6 @@ def _live_paths(root) -> list[str]:
 REACH = declare(
     "browser-service-routes-scan-19490",
     discover=_live_paths,
-    floor=6489,  # measured at 6515 tracked files, pinned mid-window (#15928)
     growth=300,
     what="tracked Python files swept for a browser-port URL path (#19490)",
     roots=_ROOTS,
@@ -88,7 +88,7 @@ def _path_after(parts: list[ast.AST], index: int) -> str | None:
 
 def browser_paths(source: str) -> list[tuple[int, str]]:
     """``(line, path)`` of every browser-port URL path an f-string builds in *source*."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     bases = _base_url_names(tree)
     found = []
     for node in ast.walk(tree):

@@ -742,7 +742,7 @@ onMounted(async () => {
 
 .tab-btn.active .tab-badge {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
 }
 
 /* ---- Loading / Empty States ---- */

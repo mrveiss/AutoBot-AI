@@ -31,6 +31,9 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 
+# #20629: the proxy listens on this URL's port and the SLM calls it, so they share one definition.
+x-docker-proxy-url: &docker-proxy-url AUTOBOT_DOCKER_PROXY_URL=http://autobot-docker-proxy:2375
+
 x-default-logging: &default-logging
   driver: json-file
   options:
@@ -87,16 +90,54 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./docker/postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh
     environment:
       # Canonical names first; AUTOBOT_DB_USER, AUTOBOT_DB_NAME and AUTOBOT_USERS_DB_NAME still
       # work for one release, and the SLM logs a deprecation warning naming them (#19408).
       - POSTGRES_USER=${AUTOBOT_POSTGRES_USER:-${AUTOBOT_DB_USER:-autobot}}
       - POSTGRES_PASSWORD=${AUTOBOT_DB_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}
+      # #20639: the main app's database only. An existing volume also still holds the old SLM copies.
+      - POSTGRES_DB=${AUTOBOT_POSTGRES_DB:-${AUTOBOT_USERS_DB_NAME:-autobot_users}}
+    healthcheck:
+      # -d targets an existing DB; without it pg_isready connects to db=user
+      # ("autobot"), which is never created → FATAL spam every interval (#9713).
+      test: ["CMD-SHELL", "pg_isready -U ${AUTOBOT_POSTGRES_USER:-${AUTOBOT_DB_USER:-autobot}} -d ${AUTOBOT_POSTGRES_DB:-${AUTOBOT_USERS_DB_NAME:-autobot_users}}"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+    logging: *default-logging
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      autobot-mgmt:
+        ipv4_address: ${AUTOBOT_DOCKER_MGMT_PREFIX}.11
+      autobot-data:
+
+  autobot-slm-postgres:
+    image: postgres:16-bookworm
+    container_name: autobot-slm-postgres
+    restart: unless-stopped
+    # #20639: the SLM's own, so the main app's Postgres being down doesn't stop SLM login. No host port.
+    volumes:
+      - slm_postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh
+    environment:
+      - POSTGRES_USER=${AUTOBOT_POSTGRES_USER:-${AUTOBOT_DB_USER:-autobot}}
+      - POSTGRES_PASSWORD=${AUTOBOT_DB_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}
       - POSTGRES_DB=${SLM_DB_NAME:-${AUTOBOT_DB_NAME:-autobot_slm}}
-      # Read by docker/postgres/init-databases.sh, which creates this database. Postgres runs that
-      # script only on an empty volume; on an existing one, create a renamed database by hand.
-      - AUTOBOT_POSTGRES_DB=${AUTOBOT_POSTGRES_DB:-${AUTOBOT_USERS_DB_NAME:-autobot_users}}
     healthcheck:
       # -d targets an existing DB; without it pg_isready connects to db=user
       # ("autobot"), which is never created → FATAL spam every interval (#9713).
@@ -123,8 +164,31 @@ services:
       - no-new-privileges:true
     networks:
       autobot-mgmt:
-        ipv4_address: ${AUTOBOT_DOCKER_MGMT_PREFIX}.11
+        ipv4_address: ${AUTOBOT_DOCKER_MGMT_PREFIX}.18
       autobot-data:
+
+  # #20639: copies the SLM's databases out of autobot-postgres once, on an install that has them there.
+  autobot-slm-postgres-copy:
+    image: postgres:16-bookworm
+    container_name: autobot-slm-postgres-copy
+    restart: "no"
+    command: ["bash", "/usr/local/bin/copy-slm-databases.sh"]
+    volumes:
+      - ./docker/postgres/copy-slm-databases.sh:/usr/local/bin/copy-slm-databases.sh:ro
+      - postgres_data:/old-postgres:ro
+    environment:
+      - POSTGRES_USER=${AUTOBOT_POSTGRES_USER:-${AUTOBOT_DB_USER:-autobot}}
+      - PGPASSWORD=${AUTOBOT_DB_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}
+      - SLM_DB_NAME=${SLM_DB_NAME:-${AUTOBOT_DB_NAME:-autobot_slm}}
+      - SLM_POSTGRES_USER=${SLM_POSTGRES_USER:-}
+    depends_on:
+      autobot-slm-postgres:
+        condition: service_healthy
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - autobot-data
 
   autobot-chromadb:
     # Match the v1 client (chromadb>=1.5.9 in autobot-backend/requirements.txt).
@@ -226,6 +290,7 @@ services:
       - docker/.env.docker
     volumes:
       - backend_data:/app/data
+      - huggingface_cache:/app/huggingface  # #19869: the model cache survives a recreated container
       - backend_logs:/app/logs
       - autobot_secrets:/secrets:ro
       - ./docker/with-secrets.sh:/usr/local/bin/with-secrets.sh:ro
@@ -387,6 +452,7 @@ services:
       - docker/.env.docker
     volumes:
       - backend_data:/app/data
+      - huggingface_cache:/app/huggingface  # #19869: the model cache survives a recreated container
       - backend_logs:/app/logs
       - autobot_secrets:/secrets:ro
       - ./docker/with-secrets.sh:/usr/local/bin/with-secrets.sh:ro
@@ -569,6 +635,33 @@ services:
         ipv4_address: ${AUTOBOT_DOCKER_MGMT_PREFIX}.15
       autobot-data:
 
+  # #20629: the only container with the Docker socket. A fixed list of actions on this stack's
+  # containers (docker/docker-proxy/proxy.py), reachable only from the SLM, with no published port.
+  autobot-docker-proxy:
+    image: python:3.13-slim-bookworm
+    container_name: autobot-docker-proxy
+    restart: unless-stopped
+    command: ["python3", "/app/proxy.py"]
+    volumes:
+      - ./docker/docker-proxy/proxy.py:/app/proxy.py:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - AUTOBOT_DOCKER_PROXY_TOKEN=${AUTOBOT_DOCKER_PROXY_TOKEN:-}
+      - *docker-proxy-url
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.25'
+    logging: *default-logging
+    networks:
+      - autobot-docker-control
+
   autobot-slm:
     build:
       context: .
@@ -592,13 +685,15 @@ services:
       - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
       - AUTOBOT_REDIS_HOST=autobot-redis
       - AUTOBOT_REDIS_PORT=6379
-      - SLM_DATABASE_URL=postgresql+asyncpg://${SLM_POSTGRES_USER:-${AUTOBOT_POSTGRES_USER:-${AUTOBOT_DB_USER:-autobot}}}:${AUTOBOT_DB_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}@autobot-postgres:5432/${SLM_DB_NAME:-${AUTOBOT_DB_NAME:-autobot_slm}}
-      - SLM_USERS_DATABASE_URL=postgresql+asyncpg://${SLM_POSTGRES_USER:-${AUTOBOT_POSTGRES_USER:-${AUTOBOT_DB_USER:-autobot}}}:${AUTOBOT_DB_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}@autobot-postgres:5432/slm_users
+      - SLM_DATABASE_URL=postgresql+asyncpg://${SLM_POSTGRES_USER:-${AUTOBOT_POSTGRES_USER:-${AUTOBOT_DB_USER:-autobot}}}:${AUTOBOT_DB_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}@autobot-slm-postgres:5432/${SLM_DB_NAME:-${AUTOBOT_DB_NAME:-autobot_slm}}
+      - SLM_USERS_DATABASE_URL=postgresql+asyncpg://${SLM_POSTGRES_USER:-${AUTOBOT_POSTGRES_USER:-${AUTOBOT_DB_USER:-autobot}}}:${AUTOBOT_DB_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}@autobot-slm-postgres:5432/slm_users
       # #19406: without this the SLM falls back to 127.0.0.1 and role slm_app for autobot_users.
       # A non-default SLM_POSTGRES_USER must already exist: compose creates only the owner role (#19408).
       - AUTOBOT_USERS_DATABASE_URL=postgresql+asyncpg://${SLM_POSTGRES_USER:-${AUTOBOT_POSTGRES_USER:-${AUTOBOT_DB_USER:-autobot}}}:${AUTOBOT_DB_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}@autobot-postgres:5432/${AUTOBOT_POSTGRES_DB:-${AUTOBOT_USERS_DB_NAME:-autobot_users}}
       - AUTOBOT_COMPOSE_LEGACY_DB_VARS=${AUTOBOT_DB_USER:+AUTOBOT_DB_USER }${AUTOBOT_DB_NAME:+AUTOBOT_DB_NAME }${AUTOBOT_USERS_DB_NAME:+AUTOBOT_USERS_DB_NAME}
-      - SLM_POSTGRES_HOST=autobot-postgres
+      - SLM_POSTGRES_HOST=autobot-slm-postgres
+      - *docker-proxy-url
+      - AUTOBOT_DOCKER_PROXY_TOKEN=${AUTOBOT_DOCKER_PROXY_TOKEN:-}
       - SLM_ADMIN_PASSWORD=${SLM_ADMIN_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}
       - SLM_DATA_DIR=/app/data
       # Point LoggingManager at the writable slm_logs volume so read_only: true
@@ -627,8 +722,10 @@ services:
         condition: service_completed_successfully
       autobot-redis:
         condition: service_healthy
-      autobot-postgres:
+      autobot-slm-postgres:
         condition: service_healthy
+      autobot-slm-postgres-copy:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 20s
@@ -660,6 +757,7 @@ services:
         ipv4_address: ${AUTOBOT_DOCKER_MGMT_PREFIX}.16
       autobot-data:
       autobot-app:
+      autobot-docker-control:
 
   autobot-frontend:
     build:
@@ -726,12 +824,11 @@ services:
       autobot-app:
 
   # ---- Optional: SLM web GUI only (#18585) ----
-  # `docker compose --profile slm up -d autobot-slm-gui` brings up the SLM web
+  # `docker compose up -d autobot-slm-gui` brings up the SLM web
   # GUI with only what it needs (secrets-init, redis, postgres, autobot-slm) —
   # not the full platform. It binds port 80 like autobot-frontend: run one or
   # the other. Add the rest of the fleet from the GUI afterwards.
   autobot-slm-gui:
-    profiles: ["slm"]
     build:
       context: .
       dockerfile: docker/frontend/Dockerfile
@@ -740,9 +837,10 @@ services:
     container_name: autobot-slm-gui
     restart: unless-stopped
     ports:
-      - "80:80"
-      # Host port for HTTPS; change it when host port 443 is taken (#18593).
-      - "${AUTOBOT_DOCKER_SLM_HTTPS_PORT:-443}:443"
+      # #20620: starts by default, on its own ports, because the frontend holds 80 and 443. Local
+      # only by default: without TLS, an admin login would cross the network in plain text.
+      - "${AUTOBOT_DOCKER_SLM_BIND_ADDRESS:-127.0.0.1}:${AUTOBOT_DOCKER_SLM_HTTP_PORT:-8080}:80"
+      - "${AUTOBOT_DOCKER_SLM_BIND_ADDRESS:-127.0.0.1}:${AUTOBOT_DOCKER_SLM_HTTPS_PORT:-8443}:443"
     volumes:
       # nginx config: HTTP-only by default, like autobot-frontend.
       # For TLS: set AUTOBOT_DOCKER_SLM_NGINX_CONF=./docker/nginx/nginx-slm-ssl.conf (#18593)
@@ -876,7 +974,7 @@ services:
       - monitoring
 
   autobot-grafana:
-    image: grafana/grafana:11.1.0
+    image: grafana/grafana:11.6.16
     container_name: autobot-grafana
     restart: unless-stopped
     ports:
@@ -922,10 +1020,12 @@ services:
 volumes:
   autobot_secrets:
   postgres_data:
+  slm_postgres_data:
   redis_data:
   chroma_data:
   backend_data:
   backend_logs:
+  huggingface_cache:
   slm_data:
   slm_logs:
   ollama_data:
@@ -933,6 +1033,10 @@ volumes:
   grafana_data:
 
 networks:
+  # #20629: only the SLM and the Docker proxy.
+  autobot-docker-control:
+    driver: bridge
+    internal: true
   autobot-data:
     driver: bridge
   autobot-app:

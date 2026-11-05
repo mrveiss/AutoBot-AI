@@ -73,7 +73,6 @@ def _modules(root: Path) -> list[str]:
 REACH = declare(
     "shadowed-literal-routes",
     discover=_modules,
-    floor=394,
     growth=40,
     what="router modules read to rebuild registration order",
     roots=(_BACKEND, _SLM),

@@ -61,6 +61,7 @@ from llc.models.enums import (
     WorkItemStatus,
 )
 from llc.models.membership import LLCCompanyMembership
+from llc.scheduler.dispatch_gate import run_block_reason
 from llc.services.authz import NotAuthorisedError, may_attach_under
 from llc.services.backlog import BacklogService
 from llc.services.company import (
@@ -122,24 +123,8 @@ def _get_membership_service() -> MembershipService:
 
 
 def _to_read(org: Organization) -> CompanyRead:
-    return CompanyRead(
-        id=org.id,
-        name=org.name,
-        slug=org.slug,
-        description=org.description,
-        issue_prefix=org.issue_prefix,
-        issue_counter=org.issue_counter,
-        budget_monthly_cents=org.budget_monthly_cents,
-        spent_monthly_cents=org.spent_monthly_cents,
-        brand_color=org.brand_color,
-        require_approval_for_hires=org.require_approval_for_hires,
-        parent_org_id=org.parent_org_id,
-        llc_status=LLCCompanyStatus(org.llc_status),
-        pause_reason=org.pause_reason,
-        paused_at=org.paused_at,
-        created_at=org.created_at,
-        updated_at=org.updated_at,
-    )
+    """The wire shape of a company: every ``CompanyRead`` field, read off the row (``from_attributes``)."""
+    return CompanyRead.model_validate(org)
 
 
 def _get_service(session: AsyncSession = Depends(get_async_session)) -> CompanyService:
@@ -210,16 +195,14 @@ async def _assert_may_create_under(
 async def _create_and_commit(
     svc: CompanyService, membership_svc: MembershipService, body: CompanyCreate, user_id: str
 ) -> CompanyRead:
-    """Insert, record the creator as OWNER, ensure the KB collections, THEN commit (GH#12323).
+    """Insert, record the creator as OWNER, THEN commit (GH#12323).
 
-    A failure in any step is rolled back by the route, so no committed-but-unreported row;
-    ``ensure_collection`` is idempotent, so a rollback leaves only reusable empty collections.
+    A failure in any step is rolled back by the route, so no committed-but-unreported row.
+    KB collections appear on their first write, so creating a company makes none (#19725).
     """
     org = await svc.create(body)
     await membership_svc.add_member(svc.session, str(org.id), user_id, MembershipRole.OWNER)
     read = _to_read(org)
-    for suffix in (None, KbCollectionManager.AGENTS_SUFFIX, KbCollectionManager.DECISIONS_SUFFIX):
-        await _kb_manager.ensure_collection(KbCollectionManager.COMPANY_PREFIX, org.id, suffix)
     await svc.session.commit()
     return read
 
@@ -316,8 +299,8 @@ async def delete_company(
     try:
         await svc.delete(company_id)
         await svc.session.commit()
-        # #13920: drop the three collections create_company's ensure_collection
-        # loop makes (base, agents, decisions). Derived from the same constants
+        # #13920: drop the three collections a company's writes can make
+        # (base, agents, decisions). Derived from the same constants
         # rather than restated, so a fourth suffix cannot be created and then
         # silently never cleaned up.
         for suffix in (None, KbCollectionManager.AGENTS_SUFFIX, KbCollectionManager.DECISIONS_SUFFIX):
@@ -610,16 +593,14 @@ async def set_pm_config(
     # Issue #12233: tenant authz — writing another tenant's PM credentials is a
     # cross-tenant compromise; caller's org must match company_id unless admin.
     assert_company_access(ctx, company_id)  # shared guard (#12238)
-    import json
-
     from sqlalchemy import select, update
 
-    from autobot_shared.field_encryption import encrypt_field
+    from llc.sync.outbound_sync import seal_pm_config
 
     row = await session.execute(select(Organization.id).where(Organization.id == company_id))
     if row.one_or_none() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
-    encrypted = encrypt_field(json.dumps(body.credentials, ensure_ascii=False))
+    encrypted = seal_pm_config(company_id, body.credentials)
     await session.execute(
         update(Organization)
         .where(Organization.id == company_id)
@@ -639,11 +620,9 @@ async def test_pm_config(
     """Test connectivity to the configured external PM system (GH#8257)."""
     # Issue #12233: tenant authz — caller's org must match company_id unless admin.
     assert_company_access(ctx, company_id)  # shared guard (#12238)
-    import json
-
     from sqlalchemy import select
 
-    from autobot_shared.field_encryption import decrypt_field
+    from llc.sync.outbound_sync import open_pm_config
 
     row = await session.execute(
         select(Organization.external_pm_type, Organization.external_pm_config).where(Organization.id == company_id)
@@ -658,9 +637,9 @@ async def test_pm_config(
             detail="No PM integration configured for this company",
         )
     try:
-        pm_config = json.loads(decrypt_field(encrypted_config))
-    except Exception:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to decrypt PM config")
+        pm_config = open_pm_config(encrypted_config, company_id)  # unreadable: one 503 (credential_handlers, #17981)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Stored PM config is not JSON")
     try:
         health = await _test_pm_connectivity(pm_type, pm_config)
     except Exception as exc:
@@ -816,6 +795,9 @@ class OrgChartNode(BaseModel):
     # quietly assert every agent is inactive.
     is_active: Optional[bool] = None
     heartbeat_enabled: Optional[bool] = None  # #15907: periodic schedule on/off; None for a person
+    # #20519: run-start per the agent's own row (status, adapter), not pause/budget; None for a person.
+    can_run: Optional[bool] = None
+    cannot_run_reason: Optional[str] = None
     last_heartbeat: Optional[str]
     budget_spent: float
     budget_total: float
@@ -1000,16 +982,10 @@ def _compose_agent_node(
     """Compose one agent's ``OrgChartNode`` from its hierarchy row, its budget
     row (if any), and its latest heartbeat run (if any) (#14184).
 
-    Extracted verbatim out of ``get_org_chart``'s per-row loop — a pure move,
-    the precedent being the already-extracted human branch,
-    ``_compose_human_nodes``. No field's source expression changed: every
-    right-hand side below is byte-for-byte the same expression that used to
-    sit inline in the loop (budget resolution now lives in
-    ``_resolve_agent_budget``), and the existing org-chart test suite
-    (``test_llc_org_chart.py``, ``test_org_chart_enrichment.py``) exercises
-    every one of them unchanged as the behaviour-preservation evidence.
+    Extracted from ``get_org_chart``'s per-row loop; the org-chart tests cover every field.
     """
     b_spent, b_total = _resolve_agent_budget(budget)
+    block_reason = run_block_reason(row.status, row.adapter_type, row.adapter_config)
     return OrgChartNode(
         id=row.agent_id,
         node_id=str(row.id),  # AgentOrgNode UUID PK (assignment keyspace, #10032)
@@ -1025,6 +1001,8 @@ def _compose_agent_node(
         adapter_type=row.adapter_type or "",
         is_human=False,
         heartbeat_enabled=row.heartbeat_enabled,
+        can_run=block_reason is None,
+        cannot_run_reason=block_reason,
         # Liveness: latest run is picked by created_at; a just-queued run
         # may have no started_at, so fall back to created_at.
         last_heartbeat=(
@@ -1596,7 +1574,7 @@ async def export_template(
     # Issue #12233: tenant authz — exporting another tenant's structure is a
     # cross-tenant data leak; caller's org must match company_id unless admin.
     assert_company_access(ctx, company_id)  # shared guard (#12238)
-    payload = await svc.export_template(company_id)
+    payload = await svc.export_template(company_id, actor=str(_current_user.get("id") or "system"))
     filename = f"company_{company_id}_template.json"
     return JSONResponse(
         content=payload,
@@ -1619,7 +1597,7 @@ async def export_snapshot(
     # Issue #12233: tenant authz — a full-state snapshot of another tenant is a
     # cross-tenant data leak; caller's org must match company_id unless admin.
     assert_company_access(ctx, company_id)  # shared guard (#12238)
-    payload = await svc.export_snapshot(company_id)
+    payload = await svc.export_snapshot(company_id, actor=str(_current_user.get("id") or "system"))
     filename = f"company_{company_id}_snapshot.json"
     return JSONResponse(
         content=payload,

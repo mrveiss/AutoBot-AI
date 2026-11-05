@@ -480,6 +480,10 @@ class ActivityEventType(str, Enum):
     # Notification
     NOTIFICATION_SENT = "notification.sent"
 
+    # Template library (#20101: services/template.py named these before they existed)
+    TEMPLATE_PUBLISHED = "template.published"
+    TEMPLATE_IMPORTED = "template.imported"
+
 
 class WorkflowStatus(str, Enum):
     """Lifecycle of a workflow *definition* (#14210).
