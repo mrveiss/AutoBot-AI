@@ -4385,6 +4385,8 @@
       "quarantined": "Research quarantine"
     },
     "chromaExplorer": {
+      "documentCount": "{count} documents",
+      "includeEmpty": "Include empty collections ({count})",
       "subtitle": "Browse and search vector collections"
     }
   },
