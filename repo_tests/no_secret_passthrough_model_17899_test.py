@@ -27,7 +27,6 @@ ceiling and the ceiling is split, not raised.
 
 from __future__ import annotations
 
-import ast
 from pathlib import Path
 
 import pytest
@@ -44,6 +43,8 @@ from repo_tests.no_secret_passthrough_routes_17899 import (
     PASSTHROUGH_FROZEN_AT,
     PASSTHROUGH_ROUTES,
 )
+
+from tools.lint import _parse_cache as parse_cache
 
 _ROOT = repo_root()
 
@@ -295,9 +296,9 @@ def test_extra_allow_is_detected_independently_of_field_count():
     detector that ignored ``extra`` entirely pass every fixture above, because
     "declares no fields" alone already separates most of them.
     """
-    with_fields = ast.parse('class S(BaseModel):\n    model_config = {"extra": "allow"}\n    a: str\n').body[0]
+    with_fields = parse_cache.parse('class S(BaseModel):\n    model_config = {"extra": "allow"}\n    a: str\n').body[0]
     assert declares_extra_allow(with_fields) is True
     assert is_passthrough(with_fields) is False
-    bare = ast.parse("class S(BaseModel):\n    pass\n").body[0]
+    bare = parse_cache.parse("class S(BaseModel):\n    pass\n").body[0]
     assert declares_extra_allow(bare) is False
     assert is_passthrough(bare) is False

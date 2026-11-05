@@ -3,7 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { BaseButton } from '@autobot/ui'
+import { BaseButton, saveTextFile } from '@autobot/ui'
 /**
  * VisionAnalysisModal — Modal dialog for image analysis from the chat input.
  *
@@ -139,16 +139,7 @@ function sendToChat(): void {
 
 function exportResults(): void {
   if (!analysisResult.value) return
-  const blob = new Blob(
-    [JSON.stringify(analysisResult.value, null, 2)],
-    { type: 'application/json' },
-  )
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `analysis_${Date.now()}.json`
-  a.click()
-  URL.revokeObjectURL(url)
+  saveTextFile(JSON.stringify(analysisResult.value, null, 2), `analysis_${Date.now()}.json`, 'application/json')
 }
 
 onUnmounted(() => {

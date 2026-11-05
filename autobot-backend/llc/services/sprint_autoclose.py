@@ -25,10 +25,12 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..kb.sprint_summarizer import SprintKbSummarizer
+from ..models.activity import ActorType
 from ..models.enums import ActivityEventType, ApprovalStatus, ApprovalType, SprintStatus, WorkItemStatus
 from ..models.sprint import LLCSprint
 from ..models.work_item import LLCWorkItem
 from ..services.approval import ApprovalService
+from .actor import audit, resolve_actor
 from .base import LLCServiceBase
 
 logger = logging.getLogger(__name__)
@@ -111,15 +113,17 @@ class SprintAutoCloseService(LLCServiceBase):
             sprint.pending_close_approval_id = approval.id
             await session.flush()
 
-            if self.activity_log:
-                await self.activity_log.log(
-                    session,
-                    event_type=ActivityEventType.APPROVAL_REQUESTED,
-                    entity_type="sprint",
-                    entity_id=str(sprint.id),
-                    company_id=str(sprint.company_id),
-                    after_state={"sprint_id": str(sprint.id), "approval_id": str(approval.id)},
-                )
+            await audit(
+                self.activity_log,
+                session,
+                company_id=str(sprint.company_id),
+                actor_type=ActorType.SYSTEM,
+                actor_id=None,
+                event_type=ActivityEventType.APPROVAL_REQUESTED,
+                entity_type="sprint",
+                entity_id=str(sprint.id),
+                after={"sprint_id": str(sprint.id), "approval_id": str(approval.id)},
+            )
 
             queued.append(sprint)
             logger.info(
@@ -155,6 +159,7 @@ class SprintAutoCloseService(LLCServiceBase):
         sprint_id: uuid.UUID,
         approval_id: uuid.UUID,
         decided_by: uuid.UUID,
+        actor_user_id: Optional[str] = None,
     ) -> LLCSprint:
         """Close a sprint after its SPRINT_CLOSE approval is granted.
 
@@ -171,6 +176,8 @@ class SprintAutoCloseService(LLCServiceBase):
             sprint_id: Sprint to close.
             approval_id: ID of the APPROVED Approval row (#17043).
             decided_by: Agent that granted approval.
+            actor_user_id: The authenticated user who closed it (recorded as the actor);
+                with none, the close is recorded as the system's act.
 
         Returns:
             Updated LLCSprint row.
@@ -225,21 +232,25 @@ class SprintAutoCloseService(LLCServiceBase):
         rolled_count = await self._rollover_items(session, sprint_id=sprint_id, auto_rollover=auto_rollover)
 
         # -- Activity log --
-        if self.activity_log:
-            await self.activity_log.log(
-                session,
-                event_type=ActivityEventType.SPRINT_COMPLETED,
-                entity_type="sprint",
-                entity_id=str(sprint.id),
-                company_id=str(sprint.company_id),
-                before_state=before_state,
-                after_state={
-                    "status": SprintStatus.CLOSED.value,
-                    "actual_points": actual_points,
-                    "rolled_over_items": rolled_count,
-                    "decided_by": str(decided_by),
-                },
-            )
+        who = resolve_actor(user_id=actor_user_id)
+        await audit(
+            self.activity_log,
+            session,
+            company_id=str(sprint.company_id),
+            actor_type=who.type,
+            actor_id=who.id,
+            metadata=who.metadata(),
+            event_type=ActivityEventType.SPRINT_COMPLETED,
+            entity_type="sprint",
+            entity_id=str(sprint.id),
+            before=before_state,
+            after={
+                "status": SprintStatus.CLOSED.value,
+                "actual_points": actual_points,
+                "rolled_over_items": rolled_count,
+                "decided_by": str(decided_by),
+            },
+        )
 
         logger.info(
             "Sprint closed: sprint_id=%s actual_points=%d rolled_over=%d",

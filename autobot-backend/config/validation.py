@@ -154,6 +154,20 @@ def _validate_enums(raw_config: Dict[str, Any], result: ConfigValidationResult) 
             _validate_choice(value, label, allowed, result)
 
 
+def _require_root_key(result: ConfigValidationResult) -> None:
+    """A deployment without a usable secrets root key fails here, at startup, not on first credential read (#17981).
+
+    ``load_root_key`` is the one reader; its error names the setting and which check failed, never the value.
+    Imported here, not at module level: this module is on the logging-manager init path (GH#7765).
+    """
+    from autobot_shared.secrets_envelope import load_root_key
+
+    try:
+        load_root_key()
+    except RuntimeError as exc:
+        result.add_error(str(exc))
+
+
 def validate_startup_config(raw_config: Dict[str, Any]) -> ConfigValidationResult:
     """Validate *raw_config* at startup and return a structured result.
 
@@ -280,6 +294,7 @@ class ValidationMixin:
         """
         raw = self._config if hasattr(self, "_config") else {}
         result = validate_startup_config(raw)
+        _require_root_key(result)
 
         # Log override warnings so operators see them at startup.
         for warning in result.warnings:

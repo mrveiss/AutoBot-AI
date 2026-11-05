@@ -24,6 +24,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _GATEWAY = "autobot-backend/services/gateway/"
@@ -64,7 +65,7 @@ def test_the_package_matcher_tells_an_adapter_module_from_the_rest(rel: str, exp
 
 def _adapter_classes(source: str) -> list[str]:
     """Top-level class names that look like gateway adapters."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     return [n.name for n in tree.body if isinstance(n, ast.ClassDef) and n.name.endswith("Adapter")]
 
 
@@ -138,7 +139,7 @@ def _declared_platforms(source: str) -> set[str]:
     """String values passed as `platform=` keywords in `source`."""
     return {
         kw.value.value
-        for node in ast.walk(ast.parse(source))
+        for node in ast.walk(parse_cache.parse(source))
         if isinstance(node, ast.Call)
         for kw in node.keywords
         if kw.arg == "platform" and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str)
@@ -147,7 +148,7 @@ def _declared_platforms(source: str) -> set[str]:
 
 def _channel_type_values(source: str) -> set[str]:
     """String values of the `ChannelType` members, read from source (the gateway cannot be imported here)."""
-    cls = next(n for n in ast.parse(source).body if isinstance(n, ast.ClassDef) and n.name == "ChannelType")
+    cls = next(n for n in parse_cache.parse(source).body if isinstance(n, ast.ClassDef) and n.name == "ChannelType")
     return {n.value.value for n in cls.body if isinstance(n, ast.Assign) and isinstance(n.value, ast.Constant)}
 
 

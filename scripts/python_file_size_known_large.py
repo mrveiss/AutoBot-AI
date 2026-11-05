@@ -89,7 +89,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/database_mcp.py": 1056,
     "autobot-backend/api/development_speedup.py": 611,
     "autobot-backend/api/enterprise_features.py": 698,
-    "autobot-backend/api/envelope_secrets.py": 615,
+    "autobot-backend/api/envelope_secrets.py": 612,
     "autobot-backend/api/files.py": 1241,
     "autobot-backend/api/filesystem_mcp.py": 1954,
     "autobot-backend/api/git_mcp.py": 1336,
@@ -236,10 +236,10 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llc/adapters/tests/test_claude_code_adapter.py": 602,
     "autobot-backend/llc/api/companies.py": 1605,
     "autobot-backend/llc/api/roles.py": 713,
-    "autobot-backend/llc/api/sprints.py": 1216,
+    "autobot-backend/llc/api/sprints.py": 1215,
     "autobot-backend/llc/api/work_items.py": 1302,  # #19582: comment wake moved into the service
     "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 980,  # #19240 (run key moved out)
-    "autobot-backend/llc/services/template.py": 643,
+    "autobot-backend/llc/services/template.py": 642,
     "autobot-backend/llc/services/work_item_service.py": 1023,  # #20102: completion effects moved out
     "autobot-backend/llc/tests/conftest.py": 832,
     "autobot-backend/llc/tests/test_autobot_agent_adapter.py": 663,
@@ -442,7 +442,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/services/drift_checker_test.py": 1351,
     "autobot-slm-backend/services/inventory_builder.py": 710,
     "autobot-slm-backend/services/playbook_executor.py": 1304,  # #17150: ansible_dir self-heal, re-detect before sync
-    "autobot-slm-backend/services/reconciler.py": 2188,
+    "autobot-slm-backend/services/reconciler.py": 2182,
     # Not legacy debt: created after this guard existed (#14465/#14548). Tracked
     # as a live violation, not #5060 backlog -- see #14630.
     "autobot-slm-backend/services/reconciler_remediation_tracker_expiry_14465_test.py": 783,

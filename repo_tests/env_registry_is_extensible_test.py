@@ -27,6 +27,8 @@ from pathlib import Path
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 REPO_ROOT = repo_root()
 SHARED = REPO_ROOT / "autobot_shared"
 PARENT = SHARED / "env_registry.py"
@@ -37,7 +39,7 @@ _MODULES = sorted(SHARED.glob("env_registry*.py"))
 
 def _registrations(path: Path) -> list[str]:
     """Names registered by *path*, in file order."""
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(path.read_text(encoding="utf-8"))
     names = []
     for node in tree.body:
         if not (isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)):
@@ -59,7 +61,7 @@ def _imported_siblings() -> set[str]:
     green precisely when the import it checks for has been deleted, so this
     resolves real `import` / `from ... import` statements instead.
     """
-    tree = ast.parse(PARENT.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(PARENT.read_text(encoding="utf-8"))
     stems: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -69,6 +71,7 @@ def _imported_siblings() -> set[str]:
             if node.module:
                 stems.add(node.module.rsplit(".", 1)[-1])
     return stems
+
 
 def test_the_scan_finds_the_registry_modules():
     """FIX THE SWEEP floor: a glob matching nothing would assert nothing below."""
@@ -86,9 +89,7 @@ def test_registrations_live_outside_the_parent_module():
     `env_registry.py`, that file resumes growing toward its ceiling and the next
     variable is blocked again — with nothing on record saying why.
     """
-    elsewhere = {
-        module.name: _registrations(module) for module in _MODULES if module != PARENT
-    }
+    elsewhere = {module.name: _registrations(module) for module in _MODULES if module != PARENT}
     populated = {name: entries for name, entries in elsewhere.items() if entries}
 
     assert populated, (
