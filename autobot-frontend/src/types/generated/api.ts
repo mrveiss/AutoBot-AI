@@ -9164,9 +9164,8 @@ export interface paths {
         };
         /**
          * Get Connector Job
-         * @description Return in-flight job state for a connector sync (Issue #8149).
-         *
-         *     Returns 404 when no sync is currently in flight (or the 24h TTL expired).
+         * @description Return a connector's sync job (Issue #8149): ``starting``/``running`` while one is in flight,
+         *     else the last finished one. 404 when there is neither (#20755, see ``job_state``).
          */
         get: operations["get_connector_job_api_knowledge_base_connectors__connector_id__job_get"];
         put?: never;
