@@ -23,8 +23,8 @@ describe('useConnectorJob first job', () => {
     starting.forEach((s) => get.mockResolvedValueOnce(s))
     get.mockResolvedValueOnce({ status: 'running' }).mockResolvedValueOnce({ status: 'success' })
     const { isPolling, jobState, start } = useConnectorJob()
-    start('c')
-    await vi.advanceTimersByTimeAsync(POLL_MS * 30)
+    start('c') // polls at once, so 30 answers cover t=0 .. 29 intervals
+    await vi.advanceTimersByTimeAsync(POLL_MS * 29)
     expect(isPolling.value, 'a detection longer than any fixed wait still watches').toBe(true)
     expect(jobState.value?.status).toBe('starting')
     await vi.advanceTimersByTimeAsync(POLL_MS * 2)
