@@ -4385,6 +4385,8 @@
       "quarantined": "Research quarantine"
     },
     "chromaExplorer": {
+      "documentCount": "{count} documents",
+      "includeEmpty": "Include empty collections ({count})",
       "subtitle": "Browse and search vector collections"
     }
   },
@@ -6744,7 +6746,19 @@
       "bellTitle": "Pending invitations"
     }
   },
+  "approvals": {
+    "envelope": {
+      "approve": "Approve",
+      "reject": "Reject"
+    }
+  },
   "research": {
+    "approval": {
+      "title": "Approval Required",
+      "baseline": "Baseline val_bpb:",
+      "result": "Result val_bpb:",
+      "improvement": "Improvement:"
+    },
     "captcha": {
       "detected": "CAPTCHA Detected",
       "message": "A CAPTCHA was detected during web research. Please solve it manually via VNC to continue.",
@@ -8280,6 +8294,7 @@
       "announceFull": "Full interface on. All features shown."
     },
     "llcLedger": "Agent ledger",
+    "llcMailbox": "Mailbox",
     "backendHealth": {
       "degradedTitle": "Backend degraded",
       "degradedMessage": "Some backend services are slow or failing. Features may not work as expected.",
@@ -9205,6 +9220,12 @@
       "retry": "Retry",
       "loadingItem": "Loading work item…",
       "itemLoadFailed": "Could not load this work item"
+    },
+    "mailbox": {
+      "title": "Mailbox",
+      "subtitle": "Company mail, read and written from one place.",
+      "unavailableTitle": "Inbound mail is not available yet",
+      "unavailableBody": "This company has no mail connection, so there is nothing to read or send here. Messages will appear on this screen once mail is connected."
     },
     "ledger": {
       "title": "Agent ledger",
