@@ -369,13 +369,10 @@ async def _analyze_and_return_env_result(
 ) -> JSONResponse:
     """Helper for get_environment_analysis. Ref: #1088. Issue #12330: per-source cache."""
     analysis = await _execute_env_analysis(analyzer, path, pattern_list, use_llm_filter, llm_model, filter_priority)
-    if analysis is None:
-        return JSONResponse(
-            _build_error_response(
-                "Analysis timed out after 120s. Try with fewer patterns.",
-                status="partial",
-            )
-        )
+    if analysis is None:  # #18056: the deadline of the path taken, not ANALYSIS_TIMEOUT for both
+        deadline = LLM_ANALYSIS_TIMEOUT if use_llm_filter else ANALYSIS_TIMEOUT
+        message = f"Analysis timed out after {deadline}s. Try with fewer patterns."
+        return JSONResponse(_build_error_response(message, status="partial"))
     result = _build_environment_result(analysis, path, for_display=True)
     full_result = _build_environment_result(analysis, path, for_display=False)
     _add_llm_filtering_metadata(result, analysis, use_llm_filter)
