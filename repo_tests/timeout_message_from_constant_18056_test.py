@@ -32,6 +32,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOT = repo_root()
@@ -110,7 +111,7 @@ def _docstring_nodes(tree: ast.AST) -> set[int]:
 def literal_sites(source: str) -> int:
     """Non-docstring string literals stating a timeout duration in digits."""
     try:
-        tree = ast.parse(source)
+        tree = parse_cache.parse(source)
     except SyntaxError:
         return 0
     skip = _docstring_nodes(tree)
