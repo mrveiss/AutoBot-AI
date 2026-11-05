@@ -33,10 +33,11 @@ import { isChunkLoadError } from '@/utils/chunkLoadError'
 import { createLogger } from '@/utils/debugUtils'
 import { setDocumentTitle } from '@/utils/documentTitle'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import { getBackendUrl, getSLMAdminUrl } from '@/config/ssot-config'
+import { getBackendUrl } from '@/config/ssot-config'
 import { llcCompanyParamGuard } from './llcGuards'
 import { llcCompanyChildren } from './llcRoutes'
 import { preferencesRoutes } from './preferencesRoutes'
+import { slmRedirectRoutes } from './slmRedirectRoutes'
 import { adminRoutes, resolveAdminPermissionRedirect } from './adminRoutes'
 
 const logger = createLogger('Router');
@@ -778,84 +779,10 @@ export const routes: RouteRecordRaw[] = [
   // /desktop removed from nav — noVNC is accessible via the Chat tab's noVNC tab.
   // Redirect any bookmarked /desktop URLs to /chat.
   { path: '/desktop', redirect: '/chat' },
-  // #20605: remote desktop and the theme manager are SLM screens (tools/novnc, settings/admin/themes).
-  // A bookmark to the old URL goes where the Platform admin shield goes: the SLM console. The old
-  // views (SlmNoVncView, slm/ThemeManagerView) stay until nothing is confirmed to link to them.
-  {
-    path: '/slm/tools/novnc',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/tools/novnc`
-      return '/chat' // Fallback
-    }
-  },
-  {
-    path: '/slm/themes',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/settings/admin/themes`
-      return '/chat' // Fallback
-    }
-  },
   // Issue #3502: Custom Dashboard renamed to /home (see home route above)
 
-  // Issue #729: Infrastructure routes redirected to slm-admin
-  // These routes are kept as redirects for backwards compatibility
-  {
-    path: '/tools',
-    redirect: () => {
-      // Redirect to SLM Admin Tools
-      window.location.href = `${getSLMAdminUrl()}/#/tools`
-      return '/chat' // Fallback
-    }
-  },
-  {
-    path: '/tools/:pathMatch(.*)*',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/#/tools`
-      return '/chat'
-    }
-  },
-  {
-    path: '/monitoring',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/#/monitoring`
-      return '/chat'
-    }
-  },
-  {
-    path: '/monitoring/:pathMatch(.*)*',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/#/monitoring`
-      return '/chat'
-    }
-  },
-  {
-    path: '/settings',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/#/settings`
-      return '/chat'
-    }
-  },
-  {
-    path: '/settings/:pathMatch(.*)*',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/#/settings`
-      return '/chat'
-    }
-  },
-  {
-    path: '/infrastructure',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/#/`
-      return '/chat'
-    }
-  },
-  {
-    path: '/tls-certificates',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/#/security`
-      return '/chat'
-    }
-  },
+  // Issue #729 / #20631: legacy infrastructure paths; admins go to the SLM, others to /home
+  ...slmRedirectRoutes,
   // Issue #929: Plugin Manager UI
   {
     path: '/plugins',

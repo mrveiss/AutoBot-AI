@@ -50,13 +50,7 @@ describe('MonitoringView tabs', () => {
     ])
   })
 
-  it('does not offer a non-admin the admin-only sections', async () => {
-    const labels = await tabLabels(false)
-    expect(labels).not.toContain(TABS.backendHealth)
-    expect(labels).not.toContain(TABS.agentLedger)
-    expect(labels).not.toContain(TABS.validation)
-    expect(labels).not.toContain(TABS.rum)
-    expect(labels).not.toContain(TABS.install)
-    expect(labels).toContain(TABS.performance)
+  it('offers a non-admin no section: the console is admin only (#20631)', async () => {
+    expect(await tabLabels(false)).toEqual([])
   })
 })

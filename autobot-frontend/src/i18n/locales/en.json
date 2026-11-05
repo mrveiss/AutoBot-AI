@@ -1016,7 +1016,8 @@
       "deployed": "Deployed via SLM · v{version}",
       "empty": "No additional themes are deployed.",
       "info": "Administrators install and deploy themes in the SLM console.",
-      "slmLink": "SLM › Settings › Themes ↗"
+      "slmLink": "SLM › Settings › Themes ↗",
+      "adminManaged": "An administrator manages additional themes."
     },
     "telegramPanel": {
       "title": "Telegram Bot",
@@ -4307,7 +4308,8 @@
         "no": "No",
         "available": "Available",
         "notAvailable": "Not available",
-        "configureLink": "Configure web research in the SLM console"
+        "configureLink": "Configure web research in the SLM console",
+        "adminManaged": "An administrator manages web research settings."
       }
     },
     "watchFolders": {
@@ -8353,6 +8355,7 @@
     "unavailable": "Teams are not available for this company, or you do not have access to them.",
     "retry": "Try again",
     "empty": "This company has no teams yet.",
+    "emptyHint": "Create the first team to group the people of this company.",
     "namesError": "Could not read the company's members, so team members are shown without names.",
     "unknownMember": "Unknown member",
     "inactive": "Inactive",
@@ -8360,11 +8363,33 @@
     "colMembers": "Members",
     "colActions": "Actions",
     "viewMembers": "View members",
-    "selectTeam": "Select a team to see its members.",
+    "selectTeam": "Select a team to see and change its members.",
     "membersOf": "Members of {name}",
     "noMembers": "This team has no members yet.",
     "colName": "Name",
-    "colRole": "Company role"
+    "colRole": "Company role",
+    "createTeam": "Create team",
+    "createTitle": "Create team",
+    "nameLabel": "Team name",
+    "nameHint": "Between 1 and 255 characters.",
+    "nameRequired": "Enter a team name.",
+    "create": "Create",
+    "createError": "Could not create the team.",
+    "duplicateName": "A team with this name already exists in this company.",
+    "forbidden": "Only company owners and admins can change teams.",
+    "deleteTeam": "Delete",
+    "deleteTitle": "Delete team",
+    "deleteConfirm": "Delete the team \"{name}\"? Its members stay in the company; only the grouping is removed.",
+    "confirmDelete": "Delete team",
+    "deleteError": "Could not delete the team.",
+    "removeMember": "Remove",
+    "removeMemberAria": "Remove {name} from {team}",
+    "removeError": "Could not remove the member from the team.",
+    "addMemberLabel": "Person to add",
+    "addMemberPlaceholder": "Choose a person",
+    "addMemberAction": "Add to team",
+    "noCandidates": "Everyone in this company is already in this team.",
+    "addError": "Could not add the member to the team."
   },
   "llcMembers": {
     "title": "Members",
