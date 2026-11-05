@@ -189,7 +189,7 @@ const getActionStyle = (action: SecretAction): { color: string; icon: string } =
     case 'access':
       return { color: 'text-blue-400 bg-blue-400/10', icon: 'key' }
     case 'list':
-      return { color: 'text-blue-300 bg-blue-300/10', icon: 'list-ul' }
+      return { color: 'text-autobot-primary bg-autobot-primary/10', icon: 'list-ul' }
     case 'transfer':
       return { color: 'text-yellow-400 bg-yellow-400/10', icon: 'arrow-left-right' }
     case 'create':
