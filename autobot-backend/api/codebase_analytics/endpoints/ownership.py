@@ -377,7 +377,7 @@ async def get_ownership_analysis(
             return JSONResponse(
                 {
                     "status": "partial",
-                    "message": "Analysis timed out after 180s. Try with fewer patterns.",
+                    "message": f"Analysis timed out after {ANALYSIS_TIMEOUT}s. Try with fewer patterns.",
                     "summary": {},
                 }
             )
