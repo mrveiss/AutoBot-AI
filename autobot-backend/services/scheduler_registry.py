@@ -82,6 +82,18 @@ REGISTRY: list[ScheduledJob] = [
         startup_marker="start_pricing_cache_scheduler",
     ),
     ScheduledJob(
+        name="ApprovalExpiryScheduler",
+        interval_seconds="env:AUTOBOT_APPROVAL_EXPIRY_SWEEP_INTERVAL_S",
+        owner_file="services/approval_expiry_scheduler.py",
+        runtime="asyncio_per_worker",
+        description=(
+            "Moves pending approvals past expires_at to EXPIRED and resumes their source as "
+            "expired, once (ApprovalGateService.expire_stale, #18412). A status change only; "
+            "deletes nothing. Default 60 s."
+        ),
+        startup_marker="start_background_workers",
+    ),
+    ScheduledJob(
         name="WorkflowScheduler",
         interval_seconds=10,
         owner_file="workflow_scheduler.py",
