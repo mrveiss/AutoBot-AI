@@ -7,12 +7,6 @@ const meta = {
   title: 'Components/Secrets/SecretAuditLog',
   component: SecretAuditLog,
   tags: ['autodocs'],
-  argTypes: {
-    secretId: {
-      control: 'text',
-      description: 'Filter audit log entries by a specific secret ID',
-    },
-  },
 } as Meta<typeof SecretAuditLog>;
 
 export default meta;
@@ -32,24 +26,6 @@ export const Default: Story = {
     docs: {
       description: {
         story: 'Default audit log showing all secret operations. Fetches real data from the backend on mount.',
-      },
-    },
-  },
-};
-
-export const FilteredBySecret: Story = {
-  render: () => ({
-    components: { SecretAuditLog },
-    template: `
-      <div style="height: 500px; width: 700px; background: #1f2937;">
-        <SecretAuditLog secret-id="secret_abc123" />
-      </div>
-    `,
-  }),
-  parameters: {
-    docs: {
-      description: {
-        story: 'Audit log scoped to a single secret ID — only entries for that secret are displayed.',
       },
     },
   },

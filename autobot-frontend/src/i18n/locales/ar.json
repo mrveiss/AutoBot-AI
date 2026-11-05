@@ -6603,9 +6603,6 @@
       "title": "Secret Audit Log",
       "allActions": "All Actions",
       "access": "Access",
-      "inject": "Inject",
-      "copy": "نسخ",
-      "reveal": "Reveal",
       "allUsers": "All Users",
       "by": "by",
       "details": "Details",
@@ -6616,8 +6613,10 @@
       "hoursAgo": "{hours}h ago",
       "create": "Create",
       "delete": "Delete",
-      "read": "Read",
-      "update": "Update"
+      "update": "Update",
+      "list": "قائمة",
+      "transfer": "نقل",
+      "bulkDelete": "حذف جماعي"
     },
     "vault": {
       "title": "Secret Vault",
@@ -7647,7 +7646,6 @@
       "vmName": "VM Name",
       "vmSource": "VM Source",
       "ipAddress": "IP Address",
-      "errorMessage": "Error Message",
       "details": "Details",
       "loading": "Loading audit logs...",
       "viewDetails": "View details"
