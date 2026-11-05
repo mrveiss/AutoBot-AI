@@ -1016,7 +1016,8 @@
       "deployed": "Deployed via SLM · v{version}",
       "empty": "No additional themes are deployed.",
       "info": "Administrators install and deploy themes in the SLM console.",
-      "slmLink": "SLM › Settings › Themes ↗"
+      "slmLink": "SLM › Settings › Themes ↗",
+      "adminManaged": "An administrator manages additional themes."
     },
     "telegramPanel": {
       "title": "Telegram Bot",
@@ -2619,8 +2620,6 @@
         "docs": "Documentation"
       },
       "justNow": "Just now",
-      "minutesAgo": "{count}m ago",
-      "hoursAgo": "{count}h ago",
       "installSuccess": "Pre-commit hooks installed successfully",
       "installFailed": "Failed to install hooks",
       "uninstallSuccess": "Pre-commit hooks uninstalled",
@@ -3382,6 +3381,8 @@
       "reasonUnknown": "reason not reported"
     },
     "connectors": {
+      "syncNotStarted": "The sync of {name} didn't start. It may already be syncing; try again when it finishes.",
+      "syncUnavailable": "The sync of {name} didn't start: whether it is already syncing couldn't be checked. Try again shortly.",
       "title": "Source Connectors",
       "addConnector": "Add Connector",
       "loadingConnectors": "Loading connectors...",
@@ -3513,7 +3514,7 @@
         "sqlQueryPlaceholder": "SELECT * FROM documents WHERE updated_at > :last_sync",
         "connectorNamePlaceholder": "My Connector"
       },
-      "jobStatusFailed": "Couldn't get this sync's progress. Close and reopen the history to try again."
+      "jobStatusFailed": "Couldn't get this sync's progress."
     },
     "modals": {
       "bulkEdit": {
@@ -4307,7 +4308,8 @@
         "no": "No",
         "available": "Available",
         "notAvailable": "Not available",
-        "configureLink": "Configure web research in the SLM console"
+        "configureLink": "Configure web research in the SLM console",
+        "adminManaged": "An administrator manages web research settings."
       }
     },
     "watchFolders": {
@@ -6770,7 +6772,6 @@
       "sessionLabel": "Session {id}",
       "invitedAt": "Invited {time}",
       "justNow": "just now",
-      "minutesAgo": "{count}m ago",
       "accept": "Accept",
       "decline": "Decline",
       "respondError": "Couldn't process this response. Please try again.",
@@ -6925,6 +6926,9 @@
   "security": {
     "secretsManager": {
       "loadFailed": "The secrets could not be loaded. What is shown may be out of date. Refresh to try again.",
+      "dependentsTitle": "Secret is in use",
+      "dependentsMessage": "\"{name}\" is still used by: {dependents}. Delete it anyway? These will stop receiving it.",
+      "writeFailed": "The change could not be confirmed. It may have been refused, or applied with the response lost. Check the list before retrying.",
       "systemVault": {
         "title": "System vault",
         "unavailable": "The system vault is unavailable, so its secrets cannot be shown.",
@@ -6935,10 +6939,7 @@
         "cancel": "Cancel",
         "delete": "Delete",
         "deleteTitle": "Delete system secret",
-        "deleteMessage": "Delete \"{name}\" from the system vault? Services that read it will stop receiving it.",
-        "failed": "The change could not be confirmed. It may have been refused, or it may have been applied and the response lost. The list has been reloaded; check it before retrying.",
-        "dependentsTitle": "Secret is in use",
-        "dependentsMessage": "\"{name}\" is still used by: {dependents}. Delete it anyway? These will stop receiving it."
+        "deleteMessage": "Delete \"{name}\" from the system vault? Services that read it will stop receiving it."
       },
       "sidebarTitle": "Credentials",
       "searchPlaceholder": "Search credentials...",
@@ -7094,14 +7095,9 @@
       "showValue": "Show value",
       "expirationHint": "Optional auto-expiry date",
       "loadingValue": "Loading...",
+      "notAvailable": "N/A",
       "timeJustNow": "just now",
       "timeInAMoment": "in a moment",
-      "timeMinutesAgo": "{count}m ago",
-      "timeInMinutes": "in {count}m",
-      "timeHoursAgo": "{count}h ago",
-      "timeInHours": "in {count}h",
-      "timeDaysAgo": "{count}d ago",
-      "timeInDays": "in {count}d",
       "categories": {
         "api_key": "API Keys",
         "token": "Tokens",
@@ -7436,9 +7432,6 @@
       "seconds": "{n}s",
       "minutes": "{n}m",
       "hours": "{n}h",
-      "secondsAgo": "{n}s ago",
-      "minutesAgo": "{n}m ago",
-      "hoursAgo": "{n}h ago",
       "types": {
         "orchestrator": "Orchestrator Agent",
         "worker": "Worker Agent",
@@ -7891,13 +7884,6 @@
       "actionEnforced": "Full enforcement mode was enabled",
       "system": "System",
       "justNow": "Just now",
-      "minuteAgo": "1 minute ago",
-      "minutesAgo": "{count} minute(s) ago",
-      "hourAgo": "1 hour ago",
-      "hoursAgo": "{count} hour(s) ago",
-      "dayAgo": "1 day ago",
-      "daysAgo": "{count} day(s) ago",
-      "longAgo": "Long ago",
       "modeLegend": "Mode Legend:",
       "legendDisabled": "Disabled",
       "legendLogOnly": "Log Only",
@@ -8267,6 +8253,7 @@
     "llcDashboard": "Dashboard",
     "llcOrgChart": "Org Chart",
     "llcMembers": "Members",
+    "llcTeams": "Teams",
     "llcGoals": "Goals",
     "llcCompanies": "Companies",
     "llcPortability": "Portability",
@@ -8357,6 +8344,52 @@
     "confirmArchive": "Archive \"{name}\"? This is a terminal state and cannot be undone.",
     "confirm": "Confirm",
     "updateError": "Could not change the company status."
+  },
+  "llcTeams": {
+    "title": "Teams",
+    "subtitle": "The teams of this company and the people on each.",
+    "peopleOnly": "Teams hold people with an account. Agents and contacts are not team members.",
+    "noCompany": "Select a company to see its teams.",
+    "loading": "Loading teams…",
+    "loadError": "Could not read this company's teams.",
+    "unavailable": "Teams are not available for this company, or you do not have access to them.",
+    "retry": "Try again",
+    "empty": "This company has no teams yet.",
+    "emptyHint": "Create the first team to group the people of this company.",
+    "namesError": "Could not read the company's members, so team members are shown without names.",
+    "unknownMember": "Unknown member",
+    "inactive": "Inactive",
+    "colTeam": "Team",
+    "colMembers": "Members",
+    "colActions": "Actions",
+    "viewMembers": "View members",
+    "selectTeam": "Select a team to see and change its members.",
+    "membersOf": "Members of {name}",
+    "noMembers": "This team has no members yet.",
+    "colName": "Name",
+    "colRole": "Company role",
+    "createTeam": "Create team",
+    "createTitle": "Create team",
+    "nameLabel": "Team name",
+    "nameHint": "Between 1 and 255 characters.",
+    "nameRequired": "Enter a team name.",
+    "create": "Create",
+    "createError": "Could not create the team.",
+    "duplicateName": "A team with this name already exists in this company.",
+    "forbidden": "Only company owners and admins can change teams.",
+    "deleteTeam": "Delete",
+    "deleteTitle": "Delete team",
+    "deleteConfirm": "Delete the team \"{name}\"? Its members stay in the company; only the grouping is removed.",
+    "confirmDelete": "Delete team",
+    "deleteError": "Could not delete the team.",
+    "removeMember": "Remove",
+    "removeMemberAria": "Remove {name} from {team}",
+    "removeError": "Could not remove the member from the team.",
+    "addMemberLabel": "Person to add",
+    "addMemberPlaceholder": "Choose a person",
+    "addMemberAction": "Add to team",
+    "noCandidates": "Everyone in this company is already in this team.",
+    "addError": "Could not add the member to the team."
   },
   "llcMembers": {
     "title": "Members",
@@ -9461,13 +9494,10 @@
   "devices": {
     "addDevice": "Add device",
     "confirmDelete": "Confirm delete",
-    "daysAgo": "Days ago",
     "error": "Error",
-    "hoursAgo": "Hours ago",
     "justNow": "Just now",
     "lastSeen": "Last seen",
     "loading": "Loading",
-    "minutesAgo": "Minutes ago",
     "noDevices": "No devices",
     "pairDevice": "Pair device",
     "pairFirst": "Pair first",

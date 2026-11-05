@@ -161,7 +161,6 @@
 1|other|autobot-backend/api/npu_workers.py|http://192.168.1.100:8082
 2|other|autobot-backend/api/openai_compat.py|"assistant"
 2|other|autobot-backend/api/process_management.py|offset=0
-1|other|autobot-backend/api/redis_mcp/router.py|"user"
 2|other|autobot-backend/api/redis_mcp/router.py|10
 2|other|autobot-backend/api/redis_mcp/vector_search.py|10
 1|other|autobot-backend/api/schemas_code.py|5

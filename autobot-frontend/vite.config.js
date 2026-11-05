@@ -93,7 +93,7 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/api/terminal/ws': { target: `${config.protocol}://${config.backend.host}:${config.backend.port}`, changeOrigin: true, secure: false, ws: true, timeout: 300000 },
         '/api/ws': { target: `${config.protocol}://${config.backend.host}:${config.backend.port}`, changeOrigin: true, secure: false, ws: true, timeout: 300000 },
-        '/api': { target: `${config.protocol}://${config.backend.host}:${config.backend.port}`, changeOrigin: true, secure: false, timeout: 300000 },
+        '/api': { target: `${config.protocol}://${config.backend.host}:${config.backend.port}`, changeOrigin: true, secure: false, ws: true, timeout: 300000 },
         '/ws': { target: `${config.protocol}://${config.backend.host}:${config.backend.port}`, ws: true, changeOrigin: true, timeout: 300000 }
       }
     },

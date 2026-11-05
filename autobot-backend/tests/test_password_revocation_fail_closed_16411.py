@@ -26,7 +26,8 @@ from autobot_shared.auth.revocation_unavailable import (
 
 _REDIS = "autobot_shared.user_management.password_epoch.get_async_redis_client"
 _JWT_USER = {"username": "alice", "sub": "alice", "iat": 1, "auth_method": "jwt", "role": "user"}
-_REQUEST = SimpleNamespace(headers={}, url=SimpleNamespace(path="/api/chat"))
+# scope={}: a real Request always has one; no endpoint in it means no service opt-in (#16333).
+_REQUEST = SimpleNamespace(headers={}, url=SimpleNamespace(path="/api/chat"), scope={})
 
 
 def _redis_answering(value=None, error=None) -> AsyncMock:

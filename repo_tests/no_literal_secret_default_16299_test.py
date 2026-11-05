@@ -25,6 +25,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOTS = ("autobot-slm-backend", "autobot-backend", "autobot_shared")
@@ -91,7 +92,7 @@ def _str(node: ast.expr) -> str | None:
 
 def find_hits(source: str) -> list[str]:
     hits = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if not (isinstance(node, ast.Call) and _is_env_read(node.func) and len(node.args) >= 2):
             continue
         name, default = _str(node.args[0]), _str(node.args[1])

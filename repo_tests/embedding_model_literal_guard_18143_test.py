@@ -24,6 +24,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
 from autobot_shared.embedding_model import is_embedding_model_id
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 # The infra collection builder sits outside the package roots, so it is named by file (#18328). The
@@ -66,8 +67,6 @@ def _py_files(root: Path) -> list[str]:
 REACH_PY = declare(
     "embedding-model-literal-sites",
     discover=_py_files,
-    # Mid-window (2454..2754) from REACH_PY.window(): population 2754, growth 300; two infra builders added (#18328).
-    floor=2971,  # train 30: re-pinned mid-window (#15928)
     what="production python files, parsed for embedding-model string constants",
     roots=_ROOTS,
     growth=300,
@@ -76,7 +75,7 @@ REACH_PY = declare(
 
 def literals_in(source: str) -> list[tuple[int, str]]:
     """(line, value) of every string constant that is a bare embedding-model id; docstrings are skipped."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     skip: set[int] = set()
     for node in ast.walk(tree):
         body = getattr(node, "body", None)

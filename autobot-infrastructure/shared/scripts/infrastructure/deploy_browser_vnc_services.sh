@@ -69,6 +69,9 @@ echo "✓ Manual processes stopped"
 
 # Step 5: Start services
 echo "[5/5] Starting services..."
+# The units carry StartLimitBurst/StartLimitIntervalSec: clear any start-limit
+# state left by an earlier run, or the start below is refused under set -e.
+run_on_browser_vm "sudo systemctl reset-failed browser-vnc.service browser-vnc-websockify.service browser-playwright.service"
 run_on_browser_vm "sudo systemctl start browser-vnc.service"
 sleep 2
 run_on_browser_vm "sudo systemctl start browser-vnc-websockify.service"

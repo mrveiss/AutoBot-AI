@@ -333,7 +333,8 @@ async def require_service_management_or_internal(
 
     Machine callers presenting a valid ``AUTOBOT_INTERNAL_API_KEY`` bypass the
     user check; every other caller must be an authenticated user holding
-    service.management — preserving #10198's human-surface gate exactly.
+    service.management — preserving #10198's human-surface gate. ``get_current_user``
+    decides that person must be an admin (#20631), so the operator role is refused here too.
     """
     if verify_internal_api_key(x_internal_api_key):
         return {"internal_service": True, "role": "service"}
@@ -366,6 +367,10 @@ async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
 # authenticated user WITHOUT service.management gets 403.  Reuses the shared
 # ROLE_PERMISSIONS table — no second permission system.
 require_service_management = require_permission(Permission.SERVICE_MANAGEMENT)
+
+
+#: #20631: a valid key is refused when its owner is not an admin.
+NON_ADMIN_KEY_DETAIL = "This API key's owner is not an administrator"
 
 
 async def get_api_key_user(
@@ -405,6 +410,8 @@ async def get_api_key_user(
     user = await _get_user_for_api_key(db, api_key.user_id)
     if not user:
         await _reject_key(request, x_api_key, "User not found for API key", api_key_id=str(api_key.id))
+    if not user.is_platform_admin:
+        await _refuse_non_admin_key(request, x_api_key, str(api_key.id), user.username)
 
     # The KEY's authority, not the USER's (#16040).
     #
@@ -462,6 +469,21 @@ async def _reject_key(request: Request, presented: str, reason: str, api_key_id:
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=reason, headers={"WWW-Authenticate": "ApiKey"})
 
 
+async def _refuse_non_admin_key(request: Request, presented: str, api_key_id: str, username: str) -> NoReturn:
+    """Audit a key whose owner is not an admin, then answer 403: the SLM is admin only (#20631)."""
+    await _audit_or_503(
+        request,
+        action="api_key_refused_owner",
+        allowed=False,
+        status=403,
+        presented_key=presented,
+        api_key_id=api_key_id,
+        username=username,
+        reason=NON_ADMIN_KEY_DETAIL,
+    )
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=NON_ADMIN_KEY_DETAIL)
+
+
 async def _legacy_grace_or_401(request: Request, presented: str, api_key):
     """Return a pre-enforcement key's grace deadline, or None for a scoped key (#16040 AC5).
 
@@ -490,7 +512,8 @@ async def _legacy_grace_or_401(request: Request, presented: str, api_key):
 def require_key_permission(permission: Permission) -> Callable:
     """Like ``require_permission``, for a route that authenticates by API key (#16040 AC4).
 
-    The key's authority is its owner's role intersected with its scope bundle.
+    The key's authority is its owner's role intersected with its scope bundle, and only
+    an admin's key gets that far (#20631, in ``get_api_key_user``).
     A key lacking the scope gets 403, not 401. Depending on this is what puts a
     route on the key allow-list (``services/api_key_routes.py``, #16294), which
     ships empty. Every decision is audited as a key request.

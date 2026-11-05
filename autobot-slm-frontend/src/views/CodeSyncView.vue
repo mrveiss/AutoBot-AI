@@ -13,6 +13,7 @@
 
 import { ref, watch, onMounted, onUnmounted, computed, type DeepReadonly } from 'vue'
 import { BaseAlert } from '@autobot/ui'
+import UpdateNodesOfflineAlert from './UpdateNodesOfflineAlert.vue'
 import { useI18n } from 'vue-i18n'
 import {
   useCodeSync,
@@ -148,7 +149,7 @@ let fleetSyncPollTimer: ReturnType<typeof setTimeout> | null = null
 const updateAllJob = ref<UpdateAllJob | null>(null)
 // Polling state, its give-up/auth end states and the banner flags live in the composable (#20201).
 const {
-  transientErrors: updateAllTransientErrors,
+  polling: updateAllPolling, transientErrors: updateAllTransientErrors,
   lostContact: updateAllLostContact,
   gaveUp: updateAllGaveUp,
   authFailed: updateAllAuthFailed,
@@ -854,7 +855,7 @@ onUnmounted(() => {
 
 <template>
   <div>
-    <!-- Header -->
+    <UpdateNodesOfflineAlert :updating="updateAllPolling" />
     <div class="flex items-center justify-between mb-6">
       <div>
         <h2 class="text-lg font-semibold text-gray-900">{{ $t('codeSyncView.codeSync') }}</h2>
@@ -894,7 +895,6 @@ onUnmounted(() => {
           <p class="text-sm text-gray-500">{{ $t('codeSyncView.updatePipelineDesc') }}</p>
         </div>
         <div class="shrink-0">
-          <!-- Already current state -->
           <button
             v-if="!codeSync.hasUpdate.value && codeSync.outdatedCount.value === 0 && !updateAllIsRunning"
             disabled

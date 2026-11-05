@@ -501,6 +501,16 @@ exception, rather than leave the fields unwatched.
 - **Second derivation (rule 3):** the rough regex above, over the same files, compared as sets. The
   script kind is otherwise not independently re-derivable (no JavaScript parser in this suite).
 
+**Second widening, no freeze (#19885 AC3, 2026-11-03).** The first widening still could not see
+the three sites the issue names: `zeroText: '0B'`, `nullText: '0 B'` in a `.ts` formatter, and
+`label: 'SLOs'`. The matcher now adds the key `nullText:` and two value shapes beside prose: a
+byte size (`0 B`, `1.5 KB`) and an acronym plural (`SLOs`). The scan also reads the formatter
+modules, `src/utils/format*.ts` in both apps, for the script kind. **True count: 0** new sites,
+so the baseline did not change. Second derivation: `git ls-files` plus `grep -P` over 608 files,
+which is a superset scope, since it reads whole files and not just `<script>`. It also found 0,
+and a control string matched. A number with any other unit (`24h`, `3d`) is still not matched:
+`3d` is a view-mode identifier in `KnowledgeGraph.vue`.
+
 ## Down-only tables are compared with the base, not with a hand total (#19283)
 
 A per-entry table (file-size `KNOWN_LARGE`, the colour and palette baselines) used to carry a
@@ -542,6 +552,16 @@ folder cannot read as a clean 0.
 - **A branch doesn't repin (#19673):** the pre-push gate asks only when the branch changed a guard beyond its `floor=` lines. Merge trains still enforce every floor (`AUTOBOT_REACH_AUDIT=1`, train heads only) and repin the rest on their merged tree, so a branch hand-lowering a `floor=` is judged there, not locally.
 - **Re-pinning the floor:** `python scripts/repin_reach_floors.py` after the tree grows or shrinks
   past the window.
+- **A floor computed from the base (#19676):** a `declare()` without `floor=` gets
+  `population at the base - skips - growth` (`repo_tests/_reach_base.py`), the bottom of the
+  window a pin had to sit in. The base population is measured by the BASE's own declaration: the
+  guard module as it was at the base commit, imported from a temp worktree of that commit in a
+  separate `python -I` process. So a narrowed `discover` in the PR cannot pull the floor down with
+  it. The base is the one `_ratchet_base.base_commit` resolves. A base that cannot be read or
+  measured, a floor of zero or less, or a declaration the base does not have (a new guard) raises
+  `BaseUnavailable`: a new guard pins `floor=` until it lands. Such a floor never goes stale and is
+  never re-pinned. A guard whose `discover` reads untracked or generated files keeps an explicit
+  `floor=` and is listed with its reason in `_reach_base.PINNED_BY_DESIGN`.
 
 ## Checklist for a new ratchet
 

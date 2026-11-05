@@ -32,6 +32,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOTS = ("autobot-backend/api", "autobot-slm-backend/api")
@@ -61,8 +62,6 @@ def _population(root) -> list[str]:
 REACH = declare(
     "doubled-api-prefix-scan",
     discover=_population,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=526,  # mid-window: population 556, window (496, 556)
     what="non-test python source",
     roots=_ROOTS,
     growth=60,
@@ -137,7 +136,7 @@ def _is_router_include(call: ast.Call, apps: set[str]) -> bool:
 
 def doubled_paths(source: str) -> list[str]:
     """Every route path and ``APIRouter(prefix=...)`` in `source` that starts with ``/api``."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     routers, apps = _bound_names(tree, "APIRouter"), _bound_names(tree, "FastAPI")
     decorators = _decorator_calls(tree)
     found: list[str] = []

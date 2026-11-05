@@ -99,6 +99,8 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
+
 _TREES = ("autobot-backend", "autobot_shared", "autobot-slm-backend")
 
 #: The helper that makes the order safe by construction.
@@ -125,13 +127,11 @@ def _production_files(root: Path) -> list[Path]:
 
 #: **3,027** production modules today, measured by the declaration mechanism
 #: rather than estimated -- my own ad-hoc count said ~2,705, and the difference
-#: is why the floor is pinned to a measurement and not to a guess. The band is
-#: 2,900..3,100; beyond it the floor is ratcheted deliberately.
+#: is why the floor is a measurement and not a guess; it is computed from the
+#: base commit (#19676).
 REACH = declare(
     "model-revision-pinning-sweep",
     discover=_production_files,
-    # Re-pinned MID-window 2026-10-11 (#17576 slice 2): population 3081, window [2881, 3081].
-    floor=3415,  # re-pinned mid-window (train 45): population 3269, window [3069, 3269]
     growth=200,
     skips=0,
     # Scope as data (#17844). This one spans THREE trees where its siblings span two, which is
@@ -153,7 +153,7 @@ def _parse(path: Path) -> ast.Module | None:
     mojibake that parses.
     """
     try:
-        return ast.parse(path.read_text(encoding="utf-8"))
+        return parse_cache.parse(path.read_text(encoding="utf-8"))
     except (SyntaxError, UnicodeDecodeError, ValueError):
         return None
 
@@ -405,24 +405,24 @@ def go():
 
 
 def test_an_unpinned_literal_is_found_and_reported_unpinned() -> None:
-    loads = _fixed_repo_loads(ast.parse(_UNPINNED_LITERAL))
+    loads = _fixed_repo_loads(parse_cache.parse(_UNPINNED_LITERAL))
     assert [pinned for _, pinned in loads] == [False], f"expected one unpinned load, got {loads}"
 
 
 def test_a_pinned_literal_is_found_and_reported_pinned() -> None:
     """The positive control: the guard must not simply call everything unpinned."""
-    loads = _fixed_repo_loads(ast.parse(_PINNED_LITERAL))
+    loads = _fixed_repo_loads(parse_cache.parse(_PINNED_LITERAL))
     assert [pinned for _, pinned in loads] == [True], f"expected one pinned load, got {loads}"
 
 
 def test_a_caller_supplied_model_is_exempt_by_the_rule() -> None:
     """Exempt because the id is unknowable without running the program."""
-    assert _fixed_repo_loads(ast.parse(_CALLER_SUPPLIED)) == []
+    assert _fixed_repo_loads(parse_cache.parse(_CALLER_SUPPLIED)) == []
 
 
 def test_a_module_constant_is_not_exempt() -> None:
     """The site #17804 was filed for: the id is one line up, so it is knowable."""
-    loads = _fixed_repo_loads(ast.parse(_MODULE_CONSTANT))
+    loads = _fixed_repo_loads(parse_cache.parse(_MODULE_CONSTANT))
     assert [pinned for _, pinned in loads] == [False], f"expected one unpinned load, got {loads}"
 
 
@@ -433,14 +433,14 @@ def test_a_constant_bound_inside_a_block_is_still_found() -> None:
     statically knowable as a top-level one. Before the fix this returned `[]` --
     a false negative on the primary assertion, not a missed annotation.
     """
-    loads = _fixed_repo_loads(ast.parse(_CONSTANT_IN_A_BLOCK))
+    loads = _fixed_repo_loads(parse_cache.parse(_CONSTANT_IN_A_BLOCK))
     assert [pinned for _, pinned in loads] == [
         False
     ], f"a repo id bound inside a try block escaped the sweep entirely: {loads}"
 
 
 def test_a_function_local_constant_is_found() -> None:
-    loads = _fixed_repo_loads(ast.parse(_FUNCTION_LOCAL_CONSTANT))
+    loads = _fixed_repo_loads(parse_cache.parse(_FUNCTION_LOCAL_CONSTANT))
     assert [pinned for _, pinned in loads] == [False], f"expected one unpinned load, got {loads}"
 
 
@@ -474,7 +474,7 @@ def go():
 
 
 def test_the_helper_is_recognised_called_by_name() -> None:
-    assert _module_is_order_safe(ast.parse(_HELPER_BY_NAME)) is True
+    assert _module_is_order_safe(parse_cache.parse(_HELPER_BY_NAME)) is True
 
 
 def test_the_helper_is_recognised_called_through_its_module() -> None:
@@ -485,17 +485,17 @@ def test_the_helper_is_recognised_called_through_its_module() -> None:
     ordinary way.
     """
     assert (
-        _module_is_order_safe(ast.parse(_HELPER_BY_ATTRIBUTE)) is True
+        _module_is_order_safe(parse_cache.parse(_HELPER_BY_ATTRIBUTE)) is True
     ), "an attribute-style call to the helper was not recognised"
 
 
 def test_a_named_integrity_handler_is_the_other_safe_shape() -> None:
-    assert _module_is_order_safe(ast.parse(_NAMED_INTEGRITY_HANDLER)) is True
+    assert _module_is_order_safe(parse_cache.parse(_NAMED_INTEGRITY_HANDLER)) is True
 
 
 def test_a_broad_except_alone_is_not_order_safe() -> None:
     """The negative control: #17124's bug was a broad `except` swallowing it."""
-    assert _module_is_order_safe(ast.parse(_BROAD_EXCEPT_ONLY)) is False
+    assert _module_is_order_safe(parse_cache.parse(_BROAD_EXCEPT_ONLY)) is False
 
 
 def test_an_unparseable_file_is_reported_not_skipped(tmp_path: Path) -> None:
@@ -541,18 +541,18 @@ def go(name):
 
 def test_a_factory_bare_literal_is_found_unpinned() -> None:
     """`model="repo/id"` with no module constant in sight: the keyword path, literal."""
-    loads = _fixed_repo_loads(ast.parse(_FACTORY_BARE_LITERAL))
+    loads = _fixed_repo_loads(parse_cache.parse(_FACTORY_BARE_LITERAL))
     assert [pinned for _, pinned in loads] == [False], f"expected one unpinned factory load, got {loads}"
 
 
 def test_a_factory_caller_supplied_model_is_exempt() -> None:
     """Exempt BY THE RULE on the factory side too, not only for `from_pretrained`."""
-    assert _fixed_repo_loads(ast.parse(_FACTORY_CALLER_SUPPLIED)) == []
+    assert _fixed_repo_loads(parse_cache.parse(_FACTORY_CALLER_SUPPLIED)) == []
 
 
 def test_a_factory_positional_repo_id_is_found_unpinned() -> None:
     """`pipeline(task, "repo/id")` -- the repo id is args[1], not a keyword."""
-    loads = _fixed_repo_loads(ast.parse(_FACTORY_POSITIONAL_LITERAL))
+    loads = _fixed_repo_loads(parse_cache.parse(_FACTORY_POSITIONAL_LITERAL))
     assert [pinned for _, pinned in loads] == [False], f"expected one unpinned factory load, got {loads}"
 
 
@@ -570,4 +570,4 @@ def test_the_factory_positional_index_reads_the_repo_not_the_task() -> None:
     fixed repo id and the guard invents a finding. Empty list or one entry --
     the mutation cannot hide in a shared answer.
     """
-    assert _fixed_repo_loads(ast.parse(_FACTORY_POSITIONAL_CALLER_SUPPLIED)) == []
+    assert _fixed_repo_loads(parse_cache.parse(_FACTORY_POSITIONAL_CALLER_SUPPLIED)) == []

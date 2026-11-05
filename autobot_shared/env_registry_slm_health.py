@@ -133,3 +133,33 @@ register_env_var(
         range=(1, 86400),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SLM_KEY_FINDING_CHECK_INTERVAL_S",
+        type=float,
+        default=60.0,
+        description=(
+            "Seconds between database checks when the backend refuses the SLM's internal API key: a burst "
+            "of refused calls records the one key-mismatch finding without a query per call (#20750)."
+        ),
+        component="slm",
+        range=(1, 86400),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SERVICE_RESTART_SETTLE_S",
+        type=int,
+        default=600,
+        description=(
+            "Seconds of continuous uptime (running or completed on every heartbeat) before the reconciler "
+            "clears a service's restart count. A unit that fails, crash-loops or restarts within this period "
+            "keeps counting toward MAX_SERVICE_RESTART_ATTEMPTS, so a crash loop ends in the exhaustion event "
+            "instead of restarting forever. Clamped to 60-86400: one healthy heartbeat is never enough (#20796)."
+        ),
+        component="slm",
+        range=(60, 86400),
+    )
+)

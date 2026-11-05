@@ -29,6 +29,8 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 from repo_tests.redis_keys_baseline_18999 import BASELINE
 
+from tools.lint import _parse_cache as parse_cache
+
 ROOT = repo_root()
 #: Skipped at any depth: test trees, tooling output, vendored or generated directories.
 SKIP_ANYWHERE = {
@@ -91,7 +93,7 @@ def keys_call_lines(source: str) -> list[int]:
     """Lines of Redis KEYS calls: `.keys(<arg>)` and `execute_command("KEYS ...")`."""
     return sorted(
         n.lineno
-        for n in ast.walk(ast.parse(source))
+        for n in ast.walk(parse_cache.parse(source))
         if isinstance(n, ast.Call) and (_is_keys_method(n) or _is_raw_keys_command(n))
     )
 
@@ -120,11 +122,9 @@ def is_runtime_dir(rel: Path) -> bool:
     return not rel.name.startswith(".") and is_runtime(rel / "x.py")
 
 
-#: Mid-window from REACH.window(): population 3484, window [3184, 3484], pinned 3334.
 REACH = declare(
     "redis-keys-runtime-18999-scan",
     discover=lambda root: _population(root),
-    floor=3576,  # mid-window: population 3726, window (3426, 3726)
     what="runtime python source",
     growth=300,
 )
