@@ -41,7 +41,6 @@ from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.env_utils import env_float, env_float_clamped
-from autobot_shared.feature_flags import is_feature_enabled
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
@@ -58,7 +57,7 @@ from ..exceptions import (
 )
 from ..models.enums import HeartbeatInvocationSource, LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
-from ..org_role_authority import apply_org_role_bound
+from ..org_role_authority import apply_org_role_bound, role_bound_enforced
 from ..services.budget import BudgetService
 from ..services.controls_service import ControlsService
 from ..services.work_item_queue import has_pending_work
@@ -811,7 +810,7 @@ async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> O
     ephemeral, run-scoped LLC API key so the woken agent can authenticate its
     LLC API calls; the key is revoked when the run finishes.
     """
-    if is_feature_enabled("org_role_bound"):
+    if role_bound_enforced():
         # #16950/#16974: bounded by its org role, or refused with the reason. Off by
         # default (owner decision #16974) until copilot_local/copilot_subscription can
         # actually enforce a bound -- see org_role_authority.py's module docstring.
