@@ -26,6 +26,7 @@ if str(_BACKEND) not in sys.path:
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from knowledge.connectors.credential_store import get_credential_store
+from knowledge.connectors.job_state import JOB_KEY_SUFFIX
 
 logger = get_logger(__name__)
 
@@ -55,7 +56,7 @@ def _get_auth_cls(auth_type: str | None):
     return _AUTH_TYPE_MAP.get(auth_type)
 
 
-_NON_CONFIG_INFIXES = (":history", ":job:current", ":schedule:", "scheduler:")
+_NON_CONFIG_INFIXES = (":history", JOB_KEY_SUFFIX, ":schedule:", "scheduler:")
 
 
 def _is_config_key(key_str: str) -> bool:
