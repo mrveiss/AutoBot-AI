@@ -27,6 +27,12 @@ class _Redis:
     async def ping(self):
         return True
 
+    async def get(self, key):
+        return self.keys.get(key)
+
+    async def exists(self, key):
+        return int(key in self.keys)
+
     async def eval(self, _script, _count, key, value, _ttl):
         return int(self.keys.get(key) == value)
 
