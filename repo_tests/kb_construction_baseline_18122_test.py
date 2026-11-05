@@ -36,6 +36,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 CANONICAL_CREATOR = "autobot-backend/knowledge_factory.py"
@@ -148,7 +149,7 @@ def _bindings(tree: ast.Module, defines_it: bool) -> tuple[set[str], set[str]]:
 
 def _construction_lines(source: str, rel: str = "") -> list[int]:
     """Line numbers of calls that construct the real KnowledgeBase."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     classes, modules = _bindings(tree, rel == DEFINER)
     lines = []
     for node in ast.walk(tree):

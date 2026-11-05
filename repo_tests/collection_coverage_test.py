@@ -54,6 +54,7 @@ from autobot_shared.paths import (
     git_repo_root,
     scrubbed_git_env,
 )
+from tools.lint import _parse_cache as parse_cache
 
 
 def project_root() -> Path:
@@ -289,7 +290,7 @@ def _declared_markers(path: Path) -> set[str]:
     per-test decorator -- and, being an AST walk, cannot be satisfied by the
     string appearing in a comment or a docstring.
     """
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(path.read_text(encoding="utf-8"))
     return {
         node.attr
         for node in ast.walk(tree)

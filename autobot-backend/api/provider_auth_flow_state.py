@@ -12,11 +12,10 @@ completing request may supply:
 - device flow: a context keyed by a hash of the ``device_code``, written by
   /device/initiate and consumed when the token is stored.
 
-The PKCE verifier is held in Redis in plaintext, deliberately. The canonical
-field cipher (``autobot_shared.field_encryption``) needs
-``AUTOBOT_FIELD_ENCRYPTION_KEY``, which is optional; making sign-in depend on it
-would break every install that has not set it. Plaintext is acceptable here
-because the verifier is useless on its own:
+The PKCE verifier is held in Redis in plaintext, deliberately. (Before #17981 the
+field cipher needed an optional key, which was a further reason; it now derives
+from the always-provisioned secrets root key, so that reason is gone.) Plaintext
+is acceptable here because the verifier is useless on its own:
 
 - exchanging it needs the authorization code, which the provider sends only to
   the registered redirect URI in the initiator's browser;

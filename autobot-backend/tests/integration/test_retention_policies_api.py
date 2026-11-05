@@ -27,7 +27,7 @@ from sqlalchemy.pool import StaticPool
 
 from api.admin_retention_policies import router as retention_router
 from api.user_management.dependencies import get_db_session
-from testkit.canonical_gate import canonical_resolver
+from testkit.canonical_gate import real_admin_gate
 from user_management.models.base import Base
 from user_management.models.retention_policy import RetentionPolicy
 
@@ -97,16 +97,14 @@ _CURRENT: dict = {"user": None}
 
 @pytest.fixture(autouse=True)
 def _patch_auth_middleware():
-    """Feed the canonical require_role() gate (#12704) the injected test user.
-
-    Retention endpoints use ``require_role("admin", "superadmin")``, which reads
-    the user via ``auth_rbac.resolve_human_user``.
-    """
+    """Run the one admin gate, ``check_admin_permission`` (#16333), for real, seeing the injected user."""
     mw = MagicMock()
     mw.get_user_from_request.side_effect = lambda request: _CURRENT["user"]
-    with canonical_resolver("auth_rbac.resolve_human_user", mw):
+    with real_admin_gate(mw) as wire:
+        _CURRENT["wire"] = wire
         yield
     _CURRENT["user"] = None
+    _CURRENT.pop("wire", None)
 
 
 @pytest.fixture
@@ -116,7 +114,7 @@ def test_client_admin(test_db_session, admin_user):
     app = FastAPI()
     app.include_router(retention_router, prefix="/api")
     app.dependency_overrides[get_db_session] = lambda: test_db_session
-    return TestClient(app)
+    return _CURRENT["wire"](TestClient(app))
 
 
 @pytest.fixture
@@ -131,7 +129,7 @@ def test_client_superadmin(test_db_session):
     app = FastAPI()
     app.include_router(retention_router, prefix="/api")
     app.dependency_overrides[get_db_session] = lambda: test_db_session
-    return TestClient(app)
+    return _CURRENT["wire"](TestClient(app))
 
 
 @pytest.fixture
@@ -141,7 +139,7 @@ def test_client_regular(test_db_session, regular_user):
     app = FastAPI()
     app.include_router(retention_router, prefix="/api")
     app.dependency_overrides[get_db_session] = lambda: test_db_session
-    return TestClient(app)
+    return _CURRENT["wire"](TestClient(app))
 
 
 @pytest.mark.asyncio

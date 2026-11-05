@@ -29,18 +29,20 @@ import ast
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _PIPELINE = "autobot-backend/media/audio/pipeline.py"
 _VOICE = "autobot-backend/api/voice.py"
 
 
 def _module(rel: str) -> ast.Module:
-    return ast.parse((repo_root() / rel).read_text(encoding="utf-8"))
+    return parse_cache.parse((repo_root() / rel).read_text(encoding="utf-8"))
 
 
 def _parse_source(path, rel: str, unparsed: list[str]):
     """The AST of *path*, or ``None`` after recording *rel*: an unparsed file is a gap, never a pass."""
     try:
-        return ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+        return parse_cache.parse(path.read_text(encoding="utf-8", errors="replace"))
     except SyntaxError as exc:
         unparsed.append(f"{rel}: {exc.msg}")
         return None
@@ -228,7 +230,7 @@ def direct_whisper_invocations(source: str) -> list[int]:
     `get_whisper_pipeline()` (`pipe = get_whisper_pipeline(); pipe(...)`, also annotated,
     walrus and `self._pipe` bindings).
     """
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     bound = _bound_pipeline_names(tree)
     hits = []
     for node in ast.walk(tree):

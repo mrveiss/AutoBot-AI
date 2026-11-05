@@ -14,6 +14,7 @@ import pytest
 from repo_tests._paths import repo_root
 
 from autobot_shared.network_constants import NetworkConstants
+from tools.lint import _parse_cache as parse_cache
 
 _ROOT = repo_root()
 _DOCKER = _ROOT / "autobot-infrastructure" / "autobot-npu-worker" / "docker"
@@ -34,7 +35,7 @@ _NEW_NAMES = (
 
 def _host_chain(path: Path) -> list[tuple[str, str | None]]:
     """(env name, default) pairs of the worker's `host = os.getenv(..) or os.getenv(..)`."""
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(path.read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "host":
             calls = node.value.values if isinstance(node.value, ast.BoolOp) else [node.value]

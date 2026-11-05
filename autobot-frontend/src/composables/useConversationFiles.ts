@@ -7,6 +7,7 @@
  * Integrates with ConversationFileManager backend for per-session file operations.
  */
 
+import { saveBlob } from '@autobot/ui'
 import { getFileIconNameByMimeType } from '@/utils/iconMappings'
 import { formatFileSize } from '@/utils/formatHelpers'
 import type { IconName } from '@/components/ui/Icon.vue'
@@ -255,22 +256,9 @@ export function useConversationFiles(sessionId: string) {
       )
 
       const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-
       // Use provided filename or get from file list
-      if (filename) {
-        link.download = filename
-      } else {
-        const file = files.value.find(f => f.file_id === fileId)
-        link.download = file?.filename || `file_${fileId}`
-      }
-
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
+      const name = filename || files.value.find(f => f.file_id === fileId)?.filename || `file_${fileId}`
+      saveBlob(blob, name)
 
     } catch (err: unknown) {
       error.value = extractApiErrorMessage(err, 'Download failed')
