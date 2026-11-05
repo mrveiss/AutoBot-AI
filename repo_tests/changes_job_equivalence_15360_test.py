@@ -161,6 +161,8 @@ ALLOWED_ADDITIONS = {
             f"{WORKFLOWS}/_changes.yml",
             f"{WORKFLOWS}/migration-gate.yml",
             f"{WORKFLOWS}/ai-security-review.yml",
+            # #16568: workflow_types_gate_16568_test reads the required generated-types gate.
+            f"{WORKFLOWS}/verify-generated-types.yml",
             # #19503: install_and_code_sync_modes_19503_test reads this shell sync by concrete literal.
             "autobot-slm-frontend/scripts/sync-to-admin.sh",
             # #19503: its rsync guard exempts wiki.yml by concrete literal.
@@ -234,6 +236,8 @@ ALLOWED_ADDITIONS = {
             # #17500, #18729: both guards read the secrets generator, so editing it must run the suite.
             "docker/generate-secrets.sh",
             "docker/postgres/init-databases.sh",
+            "docker/docker-proxy/proxy.py",  # #20629
+            "docker/postgres/copy-slm-databases.sh",  # #20639
             # #19178: user_docs_stay_consistent_19178_test.py reads docs/README.md.
             "docs/README.md",
             # #18266: social_preview_18266_test.py pins the rendered preview image.
@@ -248,6 +252,7 @@ ALLOWED_ADDITIONS = {
             "docs/llc/_index.md",
             # #19459: the disaster-recovery guard reads the runbook for the units it names.
             "docs/operations/disaster-recovery.md",
+            ".github/workflows/dependabot-close-stale.yml",
             # #19611: the playbook-reference guard reads this guide for its declared exemption.
             "docs/guides/slm-docker-ansible-deployment.md",
             # #19279: the landing-page guard reads the page for the libraries and placeholders it renders.

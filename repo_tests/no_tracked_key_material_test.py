@@ -83,24 +83,14 @@ def _tracked(root: Path) -> list[str]:
 #:
 #: The floor's job is to catch a COLLAPSED enumeration (a broken glob, an
 #: inherited GIT_DIR, an empty tree) rather than to track growth, so it sits far
-#: below the live population on purpose, mid-window: roughly as many files may
-#: be deleted before it bites as may be added before `growth` does.
+#: below the live population on purpose; it is computed from the base commit (#19676).
 #:
-#: `growth` is how far the population may grow before reach_declarations_test
-#: asks for the floor to be raised -- a maintenance interval chosen by judgement,
-#: not measured. No `skips`: the tree holds no symlink or gitlink in this
+#: `growth` is how far a PR may shrink the population below the base before the
+#: floor fails -- an allowance chosen by judgement, not measured. No `skips`: the tree holds no symlink or gitlink in this
 #: enumeration, so every listed path is a file the sweep reads.
-#:
-#: NO MEASURED NUMBERS IN THIS COMMENT, deliberately (#17384): a population
-#: written here survives the merge that changes it, and a floor comment that
-#: accumulates one paragraph per re-pin is how four of these files ended up
-#: describing branches that no longer exist. The arithmetic for the current pin
-#: is in the commit message, which cannot drift from the tree it describes.
-#: Re-derive rather than trusting any figure written here.
 REACH = declare(
     "tracked-key-material",
     discover=_tracked,
-    floor=12688,  # mid-window: population 13088, window (12288, 13088)
     growth=800,
     what="tracked files of any extension",
 )

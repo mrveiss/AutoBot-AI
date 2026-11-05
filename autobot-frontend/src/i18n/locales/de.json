@@ -784,6 +784,16 @@
       "browser": "Browser",
       "novnc": "Remotedesktop",
       "ariaLabel": "Chat-Bereiche"
+    },
+    "attachmentNotice": {
+      "unavailable": "Eine angehängte Datei wurde in dieser Unterhaltung nicht gefunden und wurde nicht verwendet.",
+      "too_many": "Nur die ersten {limit} angehängten Dateien wurden verwendet; die übrigen wurden weggelassen.",
+      "image": "\"{filename}\" ist ein Bild und kann nicht als Text gelesen werden, daher wurde es nicht verwendet.",
+      "unsupported": "\"{filename}\" ist keine Textdatei, die der Assistent lesen kann, daher wurde sie nicht verwendet.",
+      "unreadable": "\"{filename}\" konnte nicht gelesen werden und wurde nicht verwendet.",
+      "empty": "\"{filename}\" enthält keinen lesbaren Text und wurde nicht verwendet.",
+      "truncated": "\"{filename}\" ist lang, daher wurde nur der Anfang verwendet.",
+      "over_budget": "Die angehängten Dateien haben die Größenbeschränkung erreicht, daher wurde \"{filename}\" nicht verwendet."
     }
   },
   "settings": {
@@ -1310,7 +1320,7 @@
       "ownership": {
         "title": "Code-Besitzanalyse",
         "analyzing": "Codebesitz wird analysiert...",
-        "overview": "Überblick",
+        "overview": "Übersicht",
         "contributors": "Mitwirkende",
         "filesTab": "Dateien",
         "knowledgeGaps": "Wissenslücken",
@@ -2496,8 +2506,6 @@
         "docs": "Documentation"
       },
       "justNow": "Gerade eben",
-      "minutesAgo": "vor {count} Minuten",
-      "hoursAgo": "vor {count} Stunden",
       "installSuccess": "Hooks erfolgreich installiert",
       "installFailed": "Installation fehlgeschlagen",
       "uninstallSuccess": "Hooks erfolgreich deinstalliert",
@@ -3185,6 +3193,7 @@
       "reasonUnknown": "kein Grund gemeldet"
     },
     "connectors": {
+      "syncNotStarted": "The sync didn't start. This connector may already be syncing; try again when it finishes.",
       "title": "Quell-Konnektoren",
       "addConnector": "Konnektor hinzufügen",
       "loadingConnectors": "Konnektoren werden geladen...",
@@ -6542,7 +6551,6 @@
       "sessionLabel": "Sitzung {id}",
       "invitedAt": "Eingeladen {time}",
       "justNow": "gerade eben",
-      "minutesAgo": "vor {count} Min.",
       "accept": "Annehmen",
       "decline": "Ablehnen",
       "respondError": "Diese Antwort konnte nicht verarbeitet werden. Bitte versuchen Sie es erneut.",
@@ -6851,12 +6859,6 @@
       "loadingValue": "Loading...",
       "timeJustNow": "just now",
       "timeInAMoment": "in a moment",
-      "timeMinutesAgo": "{count}m ago",
-      "timeInMinutes": "in {count}m",
-      "timeHoursAgo": "{count}h ago",
-      "timeInHours": "in {count}h",
-      "timeDaysAgo": "{count}d ago",
-      "timeInDays": "in {count}d",
       "categories": {
         "api_key": "API-Schlüssel",
         "token": "Zugriffstoken",
@@ -7593,13 +7595,6 @@
       "actionEnforced": "Full enforcement mode was enabled",
       "system": "System",
       "justNow": "Just now",
-      "minuteAgo": "1 minute ago",
-      "minutesAgo": "{count} minute(s) ago",
-      "hourAgo": "1 hour ago",
-      "hoursAgo": "{count} hour(s) ago",
-      "dayAgo": "1 day ago",
-      "daysAgo": "{count} day(s) ago",
-      "longAgo": "Long ago",
       "modeLegend": "Mode Legend:",
       "legendDisabled": "Disabled",
       "legendLogOnly": "Log Only",
@@ -9153,13 +9148,10 @@
   "devices": {
     "addDevice": "Add device",
     "confirmDelete": "Confirm delete",
-    "daysAgo": "Days ago",
     "error": "Error",
-    "hoursAgo": "Hours ago",
     "justNow": "Just now",
     "lastSeen": "Last seen",
     "loading": "Loading",
-    "minutesAgo": "Minutes ago",
     "noDevices": "No devices",
     "pairDevice": "Pair device",
     "pairFirst": "Pair first",

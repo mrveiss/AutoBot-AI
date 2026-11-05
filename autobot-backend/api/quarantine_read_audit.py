@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Mapping
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 
 from auth_middleware import resolve_human_user
 from autobot_shared.logging_manager import get_logger
@@ -35,6 +35,14 @@ async def request_actor(request: Request) -> str:
     if not user:
         return INTERNAL_SERVICE_ACTOR
     return str(user.get("username") or user.get("user_id") or user.get("id") or INTERNAL_SERVICE_ACTOR)
+
+
+async def request_person(request: Request) -> str:
+    """The named person acting; the internal service key is refused, so no agent can act with it (#17038)."""
+    actor = await request_actor(request)
+    if actor == INTERNAL_SERVICE_ACTOR:
+        raise HTTPException(status_code=403, detail="A person must do this: the service key cannot.")
+    return actor
 
 
 def quarantined_row_ids(ids: Iterable[str], metadatas: Iterable[Mapping[str, Any] | None]) -> list[str]:

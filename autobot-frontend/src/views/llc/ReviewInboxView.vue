@@ -105,18 +105,18 @@ onMounted(load)
   margin-bottom: 1rem;
 }
 .inbox-title {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
-  color: var(--text-primary, #111827);
+  color: var(--text-primary);
   margin: 0;
 }
 .inbox-count {
   font-size: 0.8125rem;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
 }
 .inbox-state {
   padding: 2rem 0;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
 }
 .review-list {
   list-style: none;
@@ -133,27 +133,27 @@ onMounted(load)
   gap: 0.75rem;
   padding: 0.75rem 1rem;
   text-align: left;
-  border: 1px solid var(--border-default, #e5e7eb);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md, 8px);
-  background: var(--bg-surface, #fff);
+  background: var(--bg-surface);
   cursor: pointer;
 }
 .review-row:hover {
-  border-color: var(--color-accent, #c4651a);
+  border-color: var(--color-primary);
 }
 .review-identifier {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 .review-title {
   flex: 1;
   font-size: 0.9375rem;
-  color: var(--text-primary, #111827);
+  color: var(--text-primary);
 }
 .review-type {
   font-size: 0.6875rem;
   text-transform: uppercase;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
 }
 </style>

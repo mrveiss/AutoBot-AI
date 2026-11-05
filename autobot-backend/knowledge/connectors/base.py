@@ -34,6 +34,7 @@ from knowledge.connectors.models import (
     SourceInfo,
     SyncResult,
 )
+from knowledge.connectors.sync_lease import ConnectorSyncLeaseLost, raise_if_sync_lease_lost
 from knowledge.ingestion_visibility import stamp_if_document
 
 T = TypeVar("T")
@@ -440,50 +441,9 @@ class AbstractConnector(ABC):
                 incremental,
             )
 
-            await self._write_job_state(
-                job_id=job_id,
-                status="running",
-                started_at=started_at,
-                sources_total=result.sources_total,
-                sources_done=0,
-                sources_failed=0,
-            )
-
-            concurrency = self.max_concurrency
+            await self._write_progress(job_id, started_at, result, "running")
             pending = [c for c in changes if c.source_id not in already_processed]
-            if concurrency <= 1:
-                for change in pending:
-                    errors_before = len(result.errors)
-                    await self._process_change(change, result)
-                    if len(result.errors) == errors_before:
-                        await self._write_checkpoint(change.source_id)
-                    await self._write_job_state(
-                        job_id=job_id,
-                        status="running",
-                        started_at=started_at,
-                        sources_total=result.sources_total,
-                        sources_done=result.sources_done,
-                        sources_failed=result.sources_failed,
-                    )
-            else:
-                sem = asyncio.Semaphore(concurrency)
-
-                async def bounded(change: ChangeInfo) -> None:
-                    async with sem:
-                        errors_before = len(result.errors)
-                        await self._process_change(change, result)
-                        if len(result.errors) == errors_before:
-                            await self._write_checkpoint(change.source_id)
-                        await self._write_job_state(
-                            job_id=job_id,
-                            status="running",
-                            started_at=started_at,
-                            sources_total=result.sources_total,
-                            sources_done=result.sources_done,
-                            sources_failed=result.sources_failed,
-                        )
-
-                await asyncio.gather(*[bounded(c) for c in pending], return_exceptions=True)
+            await self._process_pending(pending, result, job_id, started_at)
 
             result.status = "success" if not result.errors else "partial"
             if result.status == "success":
@@ -494,16 +454,48 @@ class AbstractConnector(ABC):
             result.status = "failed"
         finally:
             result.completed_at = datetime_now()
-            await self._write_job_state(
-                job_id=job_id,
-                status=result.status,
-                started_at=started_at,
-                sources_total=result.sources_total,
-                sources_done=result.sources_done,
-                sources_failed=result.sources_failed,
-            )
+            await self._write_progress(job_id, started_at, result, result.status)
 
         return result
+
+    async def _write_progress(self, job_id: str, started_at: datetime, result: SyncResult, status: str) -> None:
+        """The job state for :meth:`sync`, from the result's own counts."""
+        await self._write_job_state(
+            job_id=job_id,
+            status=status,
+            started_at=started_at,
+            sources_total=result.sources_total,
+            sources_done=result.sources_done,
+            sources_failed=result.sources_failed,
+        )
+
+    async def _process_pending(
+        self, pending: List[ChangeInfo], result: SyncResult, job_id: str, started_at: datetime
+    ) -> None:
+        """Each change for :meth:`sync`, checkpointed as it lands; a run that lost its lease stops (#20556)."""
+
+        async def run_one(change: ChangeInfo) -> None:
+            raise_if_sync_lease_lost()  # before each source, so two runs never overlap
+            errors_before = len(result.errors)
+            await self._process_change(change, result)
+            if len(result.errors) == errors_before:
+                await self._write_checkpoint(change.source_id)
+            await self._write_progress(job_id, started_at, result, "running")
+
+        if self.max_concurrency <= 1:
+            for change in pending:
+                await run_one(change)
+            return
+        sem = asyncio.Semaphore(self.max_concurrency)
+
+        async def bounded(change: ChangeInfo) -> None:
+            async with sem:
+                await run_one(change)
+
+        outcomes = await asyncio.gather(*[bounded(c) for c in pending], return_exceptions=True)
+        lost = next((o for o in outcomes if isinstance(o, ConnectorSyncLeaseLost)), None)
+        if lost is not None:
+            raise lost
 
     async def _process_change(self, change: ChangeInfo, result: SyncResult) -> None:
         """Process a single ChangeInfo entry during sync (Issue #1254: extracted)."""

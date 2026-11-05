@@ -20,16 +20,8 @@ export const FIX_HINT =
 //: those PRs are open. Remove an entry in the PR that converts the file; a
 //: file with MORE literals than recorded is reported again.
 const WAIVED_FILES = new Map([
-  ["autobot-frontend/src/components/audit/AuditLogTable.vue", { count: 1, pr: "#20000" }],
-  ["autobot-frontend/src/components/charts/ImportTreeChart.vue", { count: 3, pr: "#20018" }],
   ["autobot-frontend/src/components/chat/ChatInput.vue", { count: 2, pr: "#19949" }],
-  ["autobot-frontend/src/components/chat/MCPPromptTemplatePicker.vue", { count: 1, pr: "#20018" }],
-  ["autobot-frontend/src/components/chat/PresetFormBody.vue", { count: 1, pr: "#20018" }],
   ["autobot-frontend/src/components/knowledge/KnowledgeGraph.vue", { count: 2, pr: "#20000" }],
-  ["autobot-frontend/src/components/plugins/CapabilityApprovalDialog.vue", { count: 1, pr: "#20018" }],
-  ["autobot-frontend/src/views/llc/HeartbeatMonitor.vue", { count: 1, pr: "#20000" }],
-  ["autobot-slm-frontend/src/components/monitoring/GrafanaDashboard.vue", { count: 2, pr: "#20018" }],
-  ["libs/autobot-ui/src/components/ToastContainer.vue", { count: 1, pr: "#19949" }],
 ]);
 
 export const waivedFilesForTest = () => new Map(WAIVED_FILES);

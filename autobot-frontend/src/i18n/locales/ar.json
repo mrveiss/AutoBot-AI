@@ -784,6 +784,16 @@
       "browser": "المتصفح",
       "novnc": "سطح المكتب البعيد",
       "ariaLabel": "أقسام المحادثة"
+    },
+    "attachmentNotice": {
+      "unavailable": "تعذّر العثور على ملف مرفق في هذه المحادثة، لذلك لم يُستخدم.",
+      "too_many": "تم استخدام أول {limit} من الملفات المرفقة فقط، وتم تجاهل الباقي.",
+      "image": "\"{filename}\" صورة ولا يمكن قراءتها كنص، لذلك لم تُستخدم.",
+      "unsupported": "\"{filename}\" ليس ملفًا نصيًا يستطيع المساعد قراءته، لذلك لم يُستخدم.",
+      "unreadable": "تعذّرت قراءة \"{filename}\"، لذلك لم يُستخدم.",
+      "empty": "لا يحتوي \"{filename}\" على نص قابل للقراءة، لذلك لم يُستخدم.",
+      "truncated": "\"{filename}\" طويل، لذلك استُخدمت بدايته فقط.",
+      "over_budget": "بلغت الملفات المرفقة حدّ الحجم، لذلك لم يُستخدم \"{filename}\"."
     }
   },
   "settings": {
@@ -2496,8 +2506,6 @@
         "docs": "Documentation"
       },
       "justNow": "Just now",
-      "minutesAgo": "{count}m ago",
-      "hoursAgo": "{count}h ago",
       "installSuccess": "Pre-commit hooks installed successfully",
       "installFailed": "Failed to install hooks",
       "uninstallSuccess": "Pre-commit hooks uninstalled",
@@ -3185,6 +3193,7 @@
       "reasonUnknown": "لم يُبلَّغ عن سبب"
     },
     "connectors": {
+      "syncNotStarted": "The sync didn't start. This connector may already be syncing; try again when it finishes.",
       "title": "Source Connectors",
       "addConnector": "Add Connector",
       "loadingConnectors": "Loading connectors...",
@@ -6542,7 +6551,6 @@
       "sessionLabel": "الجلسة {id}",
       "invitedAt": "تمت الدعوة {time}",
       "justNow": "الآن",
-      "minutesAgo": "منذ {count} دقيقة",
       "accept": "قبول",
       "decline": "رفض",
       "respondError": "تعذّرت معالجة هذا الرد. حاول مرة أخرى.",
@@ -6851,12 +6859,6 @@
       "loadingValue": "جارٍ التحميل...",
       "timeJustNow": "الآن",
       "timeInAMoment": "in a moment",
-      "timeMinutesAgo": "{count}m ago",
-      "timeInMinutes": "in {count}m",
-      "timeHoursAgo": "{count}h ago",
-      "timeInHours": "in {count}h",
-      "timeDaysAgo": "{count}d ago",
-      "timeInDays": "in {count}d",
       "categories": {
         "api_key": "مفاتيح API",
         "token": "رموز الوصول",
@@ -7593,13 +7595,6 @@
       "actionEnforced": "Full enforcement mode was enabled",
       "system": "النظام",
       "justNow": "Just now",
-      "minuteAgo": "1 minute ago",
-      "minutesAgo": "{count} minute(s) ago",
-      "hourAgo": "1 hour ago",
-      "hoursAgo": "{count} hour(s) ago",
-      "dayAgo": "1 day ago",
-      "daysAgo": "{count} day(s) ago",
-      "longAgo": "Long ago",
       "modeLegend": "Mode Legend:",
       "legendDisabled": "Disabled",
       "legendLogOnly": "Log Only",
@@ -9153,13 +9148,10 @@
   "devices": {
     "addDevice": "Add device",
     "confirmDelete": "Confirm delete",
-    "daysAgo": "Days ago",
     "error": "Error",
-    "hoursAgo": "Hours ago",
     "justNow": "Just now",
     "lastSeen": "Last seen",
     "loading": "Loading",
-    "minutesAgo": "Minutes ago",
     "noDevices": "No devices",
     "pairDevice": "Pair device",
     "pairFirst": "Pair first",

@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from llc.models.company_os import LLCRoleSkill, LLCWorkflowNode, LLCWorkflowTransition
 from llc.models.company_os_enums import WorkflowKind, WorkflowTriggerKind
 from llc.models.enums import WorkflowStatus
+from llc.services.activity_log import LLCActivityLogService
 from llc.services.authz import require_company_admin
 from llc.services.base import LLCServiceBase
 from llc.services.workflow import WorkflowConflictError, WorkflowService
@@ -32,9 +33,9 @@ from .triggers import validate_trigger
 
 
 class CompanyOsWorkflowService(LLCServiceBase):
-    def __init__(self, activity_log: Any = None) -> None:
+    def __init__(self, activity_log: Optional[LLCActivityLogService] = None) -> None:
         super().__init__(activity_log)
-        self._base = WorkflowService(activity_log)
+        self._base = WorkflowService(self.activity_log)
 
     async def create(
         self,

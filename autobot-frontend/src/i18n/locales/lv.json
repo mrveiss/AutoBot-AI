@@ -784,6 +784,16 @@
       "browser": "Pārlūks",
       "novnc": "Attālā darbvirsma",
       "ariaLabel": "Tērzēšanas sadaļas"
+    },
+    "attachmentNotice": {
+      "unavailable": "Pievienotais fails šajā sarunā netika atrasts, tāpēc tas netika izmantots.",
+      "too_many": "Tika izmantoti tikai pirmie {limit} pievienotie faili; pārējie tika izlaisti.",
+      "image": "\"{filename}\" ir attēls, ko nevar nolasīt kā tekstu, tāpēc tas netika izmantots.",
+      "unsupported": "\"{filename}\" nav teksta fails, ko asistents var nolasīt, tāpēc tas netika izmantots.",
+      "unreadable": "Failu \"{filename}\" neizdevās nolasīt, tāpēc tas netika izmantots.",
+      "empty": "Failā \"{filename}\" nav nolasāma teksta, tāpēc tas netika izmantots.",
+      "truncated": "Fails \"{filename}\" ir garš, tāpēc tika izmantots tikai tā sākums.",
+      "over_budget": "Pievienotie faili sasniedza izmēra ierobežojumu, tāpēc \"{filename}\" netika izmantots."
     }
   },
   "settings": {
@@ -2496,8 +2506,6 @@
         "docs": "Documentation"
       },
       "justNow": "Just now",
-      "minutesAgo": "{count}m ago",
-      "hoursAgo": "{count}h ago",
       "installSuccess": "Pre-commit hooks installed successfully",
       "installFailed": "Failed to install hooks",
       "uninstallSuccess": "Pre-commit hooks uninstalled",
@@ -3185,6 +3193,7 @@
       "reasonUnknown": "iemesls nav norādīts"
     },
     "connectors": {
+      "syncNotStarted": "The sync didn't start. This connector may already be syncing; try again when it finishes.",
       "title": "Avotu savienotāji",
       "addConnector": "Pievienot savienotāju",
       "loadingConnectors": "Ielādē savienotājus...",
@@ -6542,7 +6551,6 @@
       "sessionLabel": "Sesija {id}",
       "invitedAt": "Uzaicināts {time}",
       "justNow": "tikko",
-      "minutesAgo": "pirms {count} min",
       "accept": "Pieņemt",
       "decline": "Noraidīt",
       "respondError": "Neizdevās apstrādāt šo atbildi. Lūdzu, mēģiniet vēlreiz.",
@@ -6851,12 +6859,6 @@
       "loadingValue": "Loading...",
       "timeJustNow": "just now",
       "timeInAMoment": "in a moment",
-      "timeMinutesAgo": "{count}m ago",
-      "timeInMinutes": "in {count}m",
-      "timeHoursAgo": "{count}h ago",
-      "timeInHours": "in {count}h",
-      "timeDaysAgo": "{count}d ago",
-      "timeInDays": "in {count}d",
       "categories": {
         "api_key": "API atslēgas",
         "token": "Piekļuves žetoni",
@@ -7593,13 +7595,6 @@
       "actionEnforced": "Full enforcement mode was enabled",
       "system": "System",
       "justNow": "Just now",
-      "minuteAgo": "1 minute ago",
-      "minutesAgo": "{count} minute(s) ago",
-      "hourAgo": "1 hour ago",
-      "hoursAgo": "{count} hour(s) ago",
-      "dayAgo": "1 day ago",
-      "daysAgo": "{count} day(s) ago",
-      "longAgo": "Long ago",
       "modeLegend": "Mode Legend:",
       "legendDisabled": "Disabled",
       "legendLogOnly": "Log Only",
@@ -9153,13 +9148,10 @@
   "devices": {
     "addDevice": "Add device",
     "confirmDelete": "Confirm delete",
-    "daysAgo": "Days ago",
     "error": "Error",
-    "hoursAgo": "Hours ago",
     "justNow": "Just now",
     "lastSeen": "Last seen",
     "loading": "Loading",
-    "minutesAgo": "Minutes ago",
     "noDevices": "No devices",
     "pairDevice": "Pair device",
     "pairFirst": "Pair first",

@@ -54,10 +54,10 @@ from autobot_shared import postgres_identity as _pg
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.paths import install_base_dir, project_root
 from autobot_shared.secret_redaction import RedactedReprMixin
+from autobot_shared.ssot_codebase_index import CodebaseIndexSettings
 from autobot_shared.ssot_company_os_flags import CompanyOsFeatureFlags
 from autobot_shared.ssot_llm_oauth_config import LlmOAuthConfig
 from autobot_shared.ssot_role_mirrors import (  # #19319: SSOT defaults an Ansible role mirrors
-    FEATURE_ROUTERS_STRICT_DEFAULT,
     SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE_DEFAULT,
     SERVICE_AUTH_ENFORCEMENT_MODE_DEFAULT,
     SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES_DEFAULT,
@@ -68,7 +68,6 @@ from autobot_shared.ssot_tls import TLSConfig, TLSMode
 
 _Env = Annotated[str, BeforeValidator(_profile.env_field), Field(validation_alias=AliasChoices(*_profile.ENV_NAMES))]
 # Determine project root for .env file location.
-#
 # The resolution itself lives in ``autobot_shared.paths`` (#13149) so that the
 # 50-odd standalone tooling scripts that also need the project root can ask for
 # it without importing this module, which builds every pydantic settings model.
@@ -1252,13 +1251,13 @@ class PathConfig(RedactedSettings):
     logs_dir: str = Field(default="logs", alias="AUTOBOT_LOG_DIR")
     models_dir: str = Field(default="models", alias="AUTOBOT_MODELS_DIR")
     docs_dir: str = Field(default="docs", alias="AUTOBOT_DOCS_DIR")
+    upload_dir: str = Field(default="", alias="AUTOBOT_UPLOAD_DIR")  # #19823: empty is under the transcriber's data
     # #18293: the retired, read-only transcript store -- under base_dir (NOT data_dir), as its writer put it.
     legacy_transcripts_dir: str = Field(default="data/conversation_transcripts", alias="AUTOBOT_LEGACY_TRANSCRIPTS_DIR")
     # On a real deployment, code_source lives at /opt/autobot/code_source, a
     # sibling of autobot-backend/ (NOT inside base_dir) — and the Ansible
-    # template always sets AUTOBOT_CODE_SOURCE explicitly, so this default
-    # only governs the unset case. In a checkout there is no separate
-    # code_source sibling: the checkout root *is* the git repo root, so the
+    # template always sets AUTOBOT_CODE_SOURCE explicitly, so this default only governs the unset case.
+    # In a checkout there is no separate code_source sibling: the checkout root *is* the git repo root, so the
     # default resolves lazily via project_root() (#13149, #14050) to that
     # same checkout instead of the live install.
     code_source_dir: str = Field(default_factory=lambda: str(project_root()), alias="AUTOBOT_CODE_SOURCE")
@@ -1386,7 +1385,7 @@ class PathConfig(RedactedSettings):
         return Path(self.management_ssh_key_path)
 
 
-class MiscConfig(RedactedSettings):
+class MiscConfig(RedactedSettings, CodebaseIndexSettings):
     """Miscellaneous/unmapped environment variables.
 
     This class collects all env vars not yet migrated to structured config sections.
@@ -1578,7 +1577,9 @@ class MiscConfig(RedactedSettings):
             "See utils/error_metrics.py."
         ),
     )
-    feature_routers_strict: str = Field(default=FEATURE_ROUTERS_STRICT_DEFAULT, alias="AUTOBOT_FEATURE_ROUTERS_STRICT")
+    feature_routers_strict: str = Field(
+        default_factory=_profile.feature_routers_strict_default, alias="AUTOBOT_FEATURE_ROUTERS_STRICT"
+    )
     gc_threshold_0: int = Field(default=700, alias="AUTOBOT_GC_THRESHOLD_0")  # #13264 batch 3
     gc_threshold_1: int = Field(default=10, alias="AUTOBOT_GC_THRESHOLD_1")  # #13264 batch 3
     gc_threshold_2: int = Field(default=10, alias="AUTOBOT_GC_THRESHOLD_2")  # #13264 batch 3
@@ -1845,12 +1846,6 @@ class MiscConfig(RedactedSettings):
     celery_broker_url: str = Field(default="", alias="CELERY_BROKER_URL")
     celery_result_backend: str = Field(default="", alias="CELERY_RESULT_BACKEND")
     ci: str = Field(default="", alias="CI")
-    codebase_index_batch_size: int = Field(default=0, alias="CODEBASE_INDEX_BATCH_SIZE")
-    codebase_index_embedding_mode: str = Field(default="precompute", alias="CODEBASE_INDEX_EMBEDDING_MODE")
-    codebase_index_embed_batch_size: int = Field(default=100, alias="CODEBASE_INDEX_EMBED_BATCH_SIZE")
-    codebase_index_incremental: str = Field(default="", alias="CODEBASE_INDEX_INCREMENTAL")
-    codebase_index_parallel_batches: str = Field(default="", alias="CODEBASE_INDEX_PARALLEL_BATCHES")
-    codebase_index_parallel_files: str = Field(default="50", alias="CODEBASE_INDEX_PARALLEL_FILES")
     # #12392: restore pre-#7437 default (True) — "" silently disabled parallel indexing
     codebase_parallel_mode: str = Field(default="true", alias="CODEBASE_PARALLEL_MODE")
     codebase_scan_parallel_files: str = Field(default="50", alias="CODEBASE_SCAN_PARALLEL_FILES")

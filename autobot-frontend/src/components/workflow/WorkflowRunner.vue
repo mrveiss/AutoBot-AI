@@ -157,6 +157,7 @@
 
 <script setup lang="ts">
 import type { IconName } from '@/components/ui/Icon.vue'
+import { createDateFormatter } from '@/utils/formatHelpers'
 import Icon from '@/components/ui/Icon.vue'
 import { BaseBadge, BaseModal, RiskBadge, BaseButton } from '@autobot/ui'
 import { ref, computed } from 'vue';
@@ -215,10 +216,7 @@ function formatPhase(phase: string): string {
   return phase.charAt(0).toUpperCase() + phase.slice(1);
 }
 
-function formatTime(timestamp?: string): string {
-  if (!timestamp) return '-';
-  return new Date(timestamp).toLocaleTimeString();
-}
+const formatTime = createDateFormatter({ kind: 'time', emptyText: '-' });
 
 function formatResult(result: Record<string, unknown>): string {
   if (typeof result === 'string') return result;
@@ -308,7 +306,7 @@ function formatResult(result: Record<string, unknown>): string {
 .step-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); font-weight: 600; background: var(--bg-tertiary); color: var(--text-tertiary); }
 .step-icon.completed { background: var(--color-success); color: white; }
 .step-icon.failed { background: var(--color-error-solid); color: var(--text-on-error); }
-.step-icon.executing { background: var(--color-primary); color: white; }
+.step-icon.executing { background: var(--color-primary); color: var(--text-on-primary); }
 .step-icon.waiting_approval { background: var(--color-warning); color: white; }
 .step-icon.skipped { background: var(--bg-tertiary); color: var(--text-muted); }
 .step-line { width: 2px; flex: 1; min-height: 20px; background: var(--border-default); margin-top: var(--spacing-1); }

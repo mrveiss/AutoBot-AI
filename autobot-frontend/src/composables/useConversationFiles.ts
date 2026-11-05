@@ -7,6 +7,7 @@
  * Integrates with ConversationFileManager backend for per-session file operations.
  */
 
+import { saveBlob } from '@autobot/ui'
 import { getFileIconNameByMimeType } from '@/utils/iconMappings'
 import { formatFileSize } from '@/utils/formatHelpers'
 import type { IconName } from '@/components/ui/Icon.vue'
@@ -15,7 +16,10 @@ import { useApiClient } from '@/plugins/api'
 import { useBatchSelection } from './useBatchSelection'
 import { createLogger } from '@/utils/debugUtils'
 import { extractApiErrorMessage } from '@/utils/errorExtract'
+import { describeApiRefusal } from '@/utils/conversationFileUpload'
+import i18n from '@/i18n'
 import { getApiBase } from '@/config/ssot-config'
+import { mapFileList, type BackendFileList } from '@/utils/conversationFileList'
 import { useLoadingState } from '@/composables/useLoadingState'
 
 // Create scoped logger for useConversationFiles
@@ -33,6 +37,21 @@ export interface ConversationFile {
   upload_timestamp: string
   download_url: string
   preview_url: string
+}
+
+/** How long a preview tab's blob URL stays valid before it is revoked (#20195). */
+export const PREVIEW_BLOB_REVOKE_MS = 60_000
+
+/**
+ * The type a preview blob is opened as, or null when it must not be opened in this origin (#20195).
+ * A blob URL inherits the app's origin, so text-like uploads (HTML, XML, scripts) are shown as plain text and
+ * SVG, which can carry script, is downloaded instead.
+ */
+export function previewBlobType(mimeType: string): string | null {
+  const type = (mimeType || '').toLowerCase()
+  if (type.startsWith('image/svg')) return null
+  if (type.startsWith('text/') || type === 'application/json') return 'text/plain'
+  return type || null
 }
 
 /** Issue #70: Sort options for file list */
@@ -121,16 +140,12 @@ export function useConversationFiles(sessionId: string) {
     error.value = null
     await wrap(async () => {
       try {
-        const data = await api.get<{ files: ConversationFile[]; stats: FileStats }>(`${getApiBase()}/conversation-files/conversation/${sessionId}/list`)
+        const data = await api.get<BackendFileList>(`${API}/list`)
 
         if (data) {
-          files.value = data.files || []
-          stats.value = data.stats || {
-            total_files: 0,
-            total_size_bytes: 0,
-            uploads_count: 0,
-            generated_count: 0
-          }
+          const mapped = mapFileList(data, API)
+          files.value = mapped.files
+          stats.value = mapped.stats
         }
       } catch (err: unknown) {
         error.value = extractApiErrorMessage(err, 'Failed to load files')
@@ -241,22 +256,9 @@ export function useConversationFiles(sessionId: string) {
       )
 
       const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-
       // Use provided filename or get from file list
-      if (filename) {
-        link.download = filename
-      } else {
-        const file = files.value.find(f => f.file_id === fileId)
-        link.download = file?.filename || `file_${fileId}`
-      }
-
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
+      const name = filename || files.value.find(f => f.file_id === fileId)?.filename || `file_${fileId}`
+      saveBlob(blob, name)
 
     } catch (err: unknown) {
       error.value = extractApiErrorMessage(err, 'Download failed')
@@ -278,10 +280,11 @@ export function useConversationFiles(sessionId: string) {
         return
       }
 
-      // For previewable types, open preview URL
-      if (isPreviewable(file.mime_type)) {
-        const previewUrl = `${getApiBase()}/conversation-files/conversation/${sessionId}/preview/${fileId}`
-        window.open(previewUrl, '_blank')
+      // For previewable types, open the bytes as a blob URL: the routes are bearer-authenticated
+      // (Authorization header only), which a plain window.open() never sends (#20195).
+      const shownType = previewBlobType(file.mime_type)
+      if (shownType && isPreviewable(file.mime_type)) {
+        await openAuthenticatedPreview(fileId, shownType)
       } else {
         // For non-previewable types, download instead
         await downloadFile(fileId, file.filename)
@@ -290,6 +293,24 @@ export function useConversationFiles(sessionId: string) {
     } catch (err: unknown) {
       error.value = extractApiErrorMessage(err, 'Preview failed')
       logger.error('Preview error:', err)
+    }
+  }
+
+  /**
+   * Open a file in a new tab through the authenticated client, then revoke the blob URL (#20195).
+   * The tab is opened synchronously (a popup after an await is blocked), then pointed at the blob.
+   */
+  const openAuthenticatedPreview = async (fileId: string, shownType: string): Promise<void> => {
+    const tab = window.open('', '_blank')
+    try {
+      const response = await api.rawRequest(`${API}/download/${fileId}`, { method: 'GET' })
+      const blob = new Blob([await response.blob()], { type: shownType })
+      const url = window.URL.createObjectURL(blob)
+      if (tab) tab.location.href = url
+      setTimeout(() => window.URL.revokeObjectURL(url), PREVIEW_BLOB_REVOKE_MS)
+    } catch (err) {
+      tab?.close()
+      throw err
     }
   }
 
@@ -324,7 +345,9 @@ export function useConversationFiles(sessionId: string) {
         error.value = 'Failed to create file'
         return false
       } catch (err: unknown) {
-        error.value = extractApiErrorMessage(err, 'Failed to create file')
+        error.value =
+          describeApiRefusal(err, (key, params) => i18n.global.t(key, params ?? {})) ??
+          extractApiErrorMessage(err, 'Failed to create file')
         logger.error('Create file error:', err)
         return false
       }

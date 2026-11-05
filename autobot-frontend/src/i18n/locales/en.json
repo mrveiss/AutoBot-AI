@@ -320,6 +320,9 @@
         "invalidResponse": "The server sent an unreadable response",
         "network": "Network error during upload",
         "cancelled": "Upload cancelled",
+        "fileTooLarge": "This file is too large. The maximum size is {maxMb} MB.",
+        "quotaExceeded": "Your storage limit of {limitMb} MB is reached. {liveMb} MB is in use and {remainingMb} MB is left.",
+        "quotaExceededPendingRemoval": "Your storage limit of {limitMb} MB is reached. {liveMb} MB is in use, and {pendingMb} MB of deleted files still count until their removal is approved after human review.",
         "unknown": "Upload failed"
       },
       "filesAttached": "{count} files attached",
@@ -762,6 +765,16 @@
     "lightweightMode": "Lightweight mode",
     "lightweightModeTooltip": "lightweight Mode tooltip",
     "errors": {
+      "budgetExhausted": "Your {period} spending limit for this {scope} (${limit}) has been reached. Chat is unavailable until it resets or an administrator raises the limit.",
+      "budgetScope": {
+        "user": "account",
+        "tenant": "organization"
+      },
+      "budgetPeriod": {
+        "hour": "hourly",
+        "day": "daily",
+        "month": "monthly"
+      },
       "deleteFailed": "Couldn't delete the chat. Please try again.",
       "createFailed": "Failed to create chat: {error}",
       "loadSessionsFailed": "Failed to load chat sessions: {error}",
@@ -786,6 +799,16 @@
       "browser": "Browser",
       "novnc": "Remote Desktop",
       "ariaLabel": "Chat sections"
+    },
+    "attachmentNotice": {
+      "unavailable": "An attached file could not be found in this conversation, so it was not used.",
+      "too_many": "Only the first {limit} attached files were used; the rest were left out.",
+      "image": "\"{filename}\" is an image and cannot be read as text, so it was not used.",
+      "unsupported": "\"{filename}\" is not a text file this assistant can read, so it was not used.",
+      "unreadable": "\"{filename}\" could not be read, so it was not used.",
+      "empty": "\"{filename}\" has no readable text, so it was not used.",
+      "truncated": "\"{filename}\" is long, so only the start of it was used.",
+      "over_budget": "The attached files reached the size limit, so \"{filename}\" was not used."
     }
   },
   "settings": {
@@ -993,7 +1016,8 @@
       "deployed": "Deployed via SLM · v{version}",
       "empty": "No additional themes are deployed.",
       "info": "Administrators install and deploy themes in the SLM console.",
-      "slmLink": "SLM › Settings › Themes ↗"
+      "slmLink": "SLM › Settings › Themes ↗",
+      "adminManaged": "An administrator manages additional themes."
     },
     "telegramPanel": {
       "title": "Telegram Bot",
@@ -1054,6 +1078,7 @@
     "dashboard": "Dashboard",
     "codebase": {
       "title": "Real-time Codebase Analytics",
+      "sectionLoadFailed": "This section could not be loaded, so this is not a result: {error}",
       "scanRunner": {
         "title": "Scan Progress"
       },
@@ -1638,6 +1663,7 @@
       "clearStoredPatterns": "Clear stored patterns",
       "lastScan": "Last scan",
       "noAnalysis": "No pattern analysis available",
+      "errorTitle": "Pattern analysis could not be loaded",
       "emptyHint": "Click 'Analyze Patterns' to detect duplicates, complexity hotspots, and optimization opportunities.",
       "confirmClear": "Clear all stored patterns from ChromaDB?"
     },
@@ -2594,8 +2620,6 @@
         "docs": "Documentation"
       },
       "justNow": "Just now",
-      "minutesAgo": "{count}m ago",
-      "hoursAgo": "{count}h ago",
       "installSuccess": "Pre-commit hooks installed successfully",
       "installFailed": "Failed to install hooks",
       "uninstallSuccess": "Pre-commit hooks uninstalled",
@@ -2801,6 +2825,15 @@
       "visibilityHint": "Only visible to you",
       "errorAddText": "Failed to add text to knowledge base",
       "errorFileTooLarge": "File \"{name}\" exceeds the maximum size limit ({max} MB)",
+      "chunked": {
+        "noSpace": "There isn't enough storage for this upload right now. Ask an admin to review unfinished uploads.",
+        "tooLarge": "This file is larger than this kind of upload allows.",
+        "busy": "This file is already being uploaded.",
+        "checksum": "The file changed or was damaged on the way. Upload it again.",
+        "keepsFailing": "The connection keeps failing. Try again to resume where it stopped.",
+        "stillProcessing": "The file is uploaded and still being processed. It will appear in the knowledge base when it's done.",
+        "failed": "The upload couldn't be completed. Try again to resume it."
+      },
       "errorImportUrl": "Failed to import URL content",
       "errorUnsupportedFormat": "File \"{name}\" has an unsupported format",
       "errorUploadFiles": "Failed to upload files",
@@ -3348,6 +3381,8 @@
       "reasonUnknown": "reason not reported"
     },
     "connectors": {
+      "syncNotStarted": "The sync of {name} didn't start. It may already be syncing; try again when it finishes.",
+      "syncUnavailable": "The sync of {name} didn't start: whether it is already syncing couldn't be checked. Try again shortly.",
       "title": "Source Connectors",
       "addConnector": "Add Connector",
       "loadingConnectors": "Loading connectors...",
@@ -3465,6 +3500,7 @@
         "verificationMode": "Verification Mode",
         "autonomous": "Autonomous",
         "collaborative": "Collaborative",
+        "syncNow": "Sync now, so its content is available right away",
         "verificationHint": "Autonomous auto-approves high-quality sources. Collaborative requires manual review.",
         "enabled": "Enabled",
         "nameAndSaveDesc": "Name the connector and save.",
@@ -3477,7 +3513,8 @@
         "create": "Create",
         "sqlQueryPlaceholder": "SELECT * FROM documents WHERE updated_at > :last_sync",
         "connectorNamePlaceholder": "My Connector"
-      }
+      },
+      "jobStatusFailed": "Couldn't get this sync's progress. Close and reopen the history to try again."
     },
     "modals": {
       "bulkEdit": {
@@ -4271,7 +4308,8 @@
         "no": "No",
         "available": "Available",
         "notAvailable": "Not available",
-        "configureLink": "Configure web research in the SLM console"
+        "configureLink": "Configure web research in the SLM console",
+        "adminManaged": "An administrator manages web research settings."
       }
     },
     "watchFolders": {
@@ -4816,7 +4854,9 @@
       "readyTitle": "Phase Validation Ready",
       "readyHint": "Click \"Load Validation Data\" above to fetch phase status from the validation dashboard.",
       "capabilities": "Capabilities",
-      "unknownPhase": "Unknown Phase"
+      "unknownPhase": "Unknown Phase",
+      "notScored": "Not scored",
+      "noneScored": "No phases scored"
     }
   },
   "agent": {
@@ -6732,7 +6772,6 @@
       "sessionLabel": "Session {id}",
       "invitedAt": "Invited {time}",
       "justNow": "just now",
-      "minutesAgo": "{count}m ago",
       "accept": "Accept",
       "decline": "Decline",
       "respondError": "Couldn't process this response. Please try again.",
@@ -6885,6 +6924,22 @@
   },
   "security": {
     "secretsManager": {
+      "loadFailed": "The secrets could not be loaded. What is shown may be out of date. Refresh to try again.",
+      "dependentsTitle": "Secret is in use",
+      "dependentsMessage": "\"{name}\" is still used by: {dependents}. Delete it anyway? These will stop receiving it.",
+      "writeFailed": "The change could not be confirmed. It may have been refused, or applied with the response lost. Check the list before retrying.",
+      "systemVault": {
+        "title": "System vault",
+        "unavailable": "The system vault is unavailable, so its secrets cannot be shown.",
+        "empty": "No system vault secrets.",
+        "newValue": "New value",
+        "rotate": "Rotate",
+        "save": "Save",
+        "cancel": "Cancel",
+        "delete": "Delete",
+        "deleteTitle": "Delete system secret",
+        "deleteMessage": "Delete \"{name}\" from the system vault? Services that read it will stop receiving it."
+      },
       "sidebarTitle": "Credentials",
       "searchPlaceholder": "Search credentials...",
       "allCredentials": "All Credentials",
@@ -7039,14 +7094,9 @@
       "showValue": "Show value",
       "expirationHint": "Optional auto-expiry date",
       "loadingValue": "Loading...",
+      "notAvailable": "N/A",
       "timeJustNow": "just now",
       "timeInAMoment": "in a moment",
-      "timeMinutesAgo": "{count}m ago",
-      "timeInMinutes": "in {count}m",
-      "timeHoursAgo": "{count}h ago",
-      "timeInHours": "in {count}h",
-      "timeDaysAgo": "{count}d ago",
-      "timeInDays": "in {count}d",
       "categories": {
         "api_key": "API Keys",
         "token": "Tokens",
@@ -7381,9 +7431,6 @@
       "seconds": "{n}s",
       "minutes": "{n}m",
       "hours": "{n}h",
-      "secondsAgo": "{n}s ago",
-      "minutesAgo": "{n}m ago",
-      "hoursAgo": "{n}h ago",
       "types": {
         "orchestrator": "Orchestrator Agent",
         "worker": "Worker Agent",
@@ -7836,13 +7883,6 @@
       "actionEnforced": "Full enforcement mode was enabled",
       "system": "System",
       "justNow": "Just now",
-      "minuteAgo": "1 minute ago",
-      "minutesAgo": "{count} minute(s) ago",
-      "hourAgo": "1 hour ago",
-      "hoursAgo": "{count} hour(s) ago",
-      "dayAgo": "1 day ago",
-      "daysAgo": "{count} day(s) ago",
-      "longAgo": "Long ago",
       "modeLegend": "Mode Legend:",
       "legendDisabled": "Disabled",
       "legendLogOnly": "Log Only",
@@ -8211,6 +8251,7 @@
     "llcDashboard": "Dashboard",
     "llcOrgChart": "Org Chart",
     "llcMembers": "Members",
+    "llcTeams": "Teams",
     "llcGoals": "Goals",
     "llcCompanies": "Companies",
     "llcPortability": "Portability",
@@ -8302,6 +8343,52 @@
     "confirm": "Confirm",
     "updateError": "Could not change the company status."
   },
+  "llcTeams": {
+    "title": "Teams",
+    "subtitle": "The teams of this company and the people on each.",
+    "peopleOnly": "Teams hold people with an account. Agents and contacts are not team members.",
+    "noCompany": "Select a company to see its teams.",
+    "loading": "Loading teams…",
+    "loadError": "Could not read this company's teams.",
+    "unavailable": "Teams are not available for this company, or you do not have access to them.",
+    "retry": "Try again",
+    "empty": "This company has no teams yet.",
+    "emptyHint": "Create the first team to group the people of this company.",
+    "namesError": "Could not read the company's members, so team members are shown without names.",
+    "unknownMember": "Unknown member",
+    "inactive": "Inactive",
+    "colTeam": "Team",
+    "colMembers": "Members",
+    "colActions": "Actions",
+    "viewMembers": "View members",
+    "selectTeam": "Select a team to see and change its members.",
+    "membersOf": "Members of {name}",
+    "noMembers": "This team has no members yet.",
+    "colName": "Name",
+    "colRole": "Company role",
+    "createTeam": "Create team",
+    "createTitle": "Create team",
+    "nameLabel": "Team name",
+    "nameHint": "Between 1 and 255 characters.",
+    "nameRequired": "Enter a team name.",
+    "create": "Create",
+    "createError": "Could not create the team.",
+    "duplicateName": "A team with this name already exists in this company.",
+    "forbidden": "Only company owners and admins can change teams.",
+    "deleteTeam": "Delete",
+    "deleteTitle": "Delete team",
+    "deleteConfirm": "Delete the team \"{name}\"? Its members stay in the company; only the grouping is removed.",
+    "confirmDelete": "Delete team",
+    "deleteError": "Could not delete the team.",
+    "removeMember": "Remove",
+    "removeMemberAria": "Remove {name} from {team}",
+    "removeError": "Could not remove the member from the team.",
+    "addMemberLabel": "Person to add",
+    "addMemberPlaceholder": "Choose a person",
+    "addMemberAction": "Add to team",
+    "noCandidates": "Everyone in this company is already in this team.",
+    "addError": "Could not add the member to the team."
+  },
   "llcMembers": {
     "title": "Members",
     "subtitle": "Manage the people who belong to this company and their roles.",
@@ -8373,6 +8460,9 @@
     }
   },
   "llc": {
+    "agent": {
+      "cannotRun": "Cannot run"
+    },
     "templates": {
       "searchPlaceholder": "Search templates...",
       "loading": "Loading templates...",
@@ -8463,6 +8553,7 @@
     },
     "cost": {
       "title": "Cost Dashboard",
+      "raisePendingApproval": "This company requires board approval to raise a budget limit. Your request was submitted for approval; the limit has not changed.",
       "exportCsv": "Export CSV",
       "selectCompany": "Select a company to view costs.",
       "totalThisMonth": "Total This Month",
@@ -8558,6 +8649,21 @@
     },
     "approvals": {
       "title": "Approvals Inbox",
+      "removals": {
+        "title": "{count} removal proposal(s) await your decision.",
+        "hint": "Approving permanently removes the named data; rejecting keeps it and the proposal is not repeated.",
+        "approve": "Approve",
+        "reject": "Reject",
+        "decideError": "Could not record the decision."
+      },
+      "stuckCleanup": {
+        "title": "{count} deleted file(s), {size}, are stuck: removal was refused repeatedly and they are no longer proposed.",
+        "hint": "The bytes are still on disk. Reset lets a file be proposed again; removal still needs an approval.",
+        "reset": "Propose again",
+        "resetDone": "The file will be proposed for removal again.",
+        "resetError": "Could not reset this file.",
+        "loadError": "Could not load the file cleanup status. Try again."
+      },
       "tabPending": "Pending",
       "tabHistory": "History",
       "selectCompany": "Select a company to view approvals.",
@@ -9386,13 +9492,10 @@
   "devices": {
     "addDevice": "Add device",
     "confirmDelete": "Confirm delete",
-    "daysAgo": "Days ago",
     "error": "Error",
-    "hoursAgo": "Hours ago",
     "justNow": "Just now",
     "lastSeen": "Last seen",
     "loading": "Loading",
-    "minutesAgo": "Minutes ago",
     "noDevices": "No devices",
     "pairDevice": "Pair device",
     "pairFirst": "Pair first",
