@@ -28,6 +28,7 @@ from models.agent_org import AgentOrgNode
 from ..adapters import get_adapter
 from ..adapters.subprocess_base import is_subprocess_adapter
 from ..models.enums import UNDISPATCHABLE_AGENT_STATUSES, LLCAgentStatus
+from ..org_role_authority import describe_role_bound, role_bound_refusal
 from ..services.budget import BudgetService
 
 logger = get_logger(__name__)
@@ -110,16 +111,21 @@ def adapter_block_reason(adapter_type: Optional[str], adapter_config: Optional[d
 
 
 def run_block_reason(
-    status: Optional[str], adapter_type: Optional[str], adapter_config: Optional[dict]
+    status: Optional[str], adapter_type: Optional[str], adapter_config: Optional[dict], *, org_role: Optional[str]
 ) -> Optional[str]:
-    """The reason an agent cannot run from its own row alone (status, then adapter), or ``None``.
+    """The reason an agent cannot run from its own row alone (status, adapter, role bound), or ``None``.
 
     Pause flags and budget live in Redis and the budget tables; they are enforced at
-    dispatch by :func:`dispatch_block_reason` and not read per row for a list.
+    dispatch by :func:`dispatch_block_reason` and not read per row for a list. The
+    role bound refuses only while it is enforced (#20706).
     """
     if status in UNDISPATCHABLE_AGENT_STATUSES:
         return f"agent status is {status}"
-    return adapter_block_reason(adapter_type, adapter_config)
+    # Same order as dispatch: a role-bound refusal is the reason it will not run, even when the
+    # adapter is also unavailable -- fixing the adapter alone would not make it runnable.
+    return role_bound_refusal(describe_role_bound(org_role, adapter_type)) or adapter_block_reason(
+        adapter_type, adapter_config
+    )
 
 
 async def _pause_flag_reason(slug: Optional[str], company_id: Optional[Any]) -> Optional[str]:
