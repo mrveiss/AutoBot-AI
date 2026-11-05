@@ -16,6 +16,7 @@ vi.mock('@/utils/fetchWithAuth', () => ({
 }))
 vi.mock('@/config/ssot-config', () => ({
   getApiBase: () => '/api',
+  getBackendUrl: () => '',
 }))
 
 let useThinkingMode: typeof import('../useThinkingMode')['useThinkingMode']

@@ -154,7 +154,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { useMultiModelCompare } from '@/composables/useMultiModelCompare'
 import { useModelPicker } from '@/composables/useModelPicker'
 import BaseChart from '@/components/charts/BaseChart.vue'
-import { BaseTable, type BaseTableColumn } from '@autobot/ui'
+import { BaseTable, type BaseTableColumn, saveTextFile } from '@autobot/ui'
 import {
   type BenchmarkResultRow,
   type BenchmarkRun,
@@ -287,13 +287,7 @@ async function onSaveRun(): Promise<void> {
 
 function exportCsv(): void {
   const csv = toCsv(resultRows.value, promptText.value, currentPromptType.value)
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `benchmark-${Date.now()}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  saveTextFile(csv, `benchmark-${Date.now()}.csv`, 'text/csv;charset=utf-8')
 }
 
 async function loadHistory(): Promise<void> {
@@ -494,7 +488,7 @@ onMounted(() => {
   background: none;
   border: none;
   color: var(--text-tertiary);
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   cursor: pointer;
   line-height: 1;
 }

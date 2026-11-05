@@ -10,6 +10,8 @@ import ast
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 ADAPTERS = (
     "autobot-backend/knowledge/backends/chromadb_adapter.py",
     "autobot-backend/knowledge/backends/async_chromadb_adapter.py",
@@ -25,7 +27,7 @@ DELEGATE = "def add(self, ids):\n    self._raw.add(**write_args(ids, None, None,
 def own_argument_work(source: str) -> set[str]:
     """Arguments *source* reshapes itself, and the provenance timestamp if it stamps one."""
     found = set()
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
             if node.func.id == "utc_timestamp":
                 found.add("provenance")

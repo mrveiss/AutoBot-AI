@@ -62,13 +62,25 @@ from pathlib import Path
 
 import pytest
 
+from tools.lint import _parse_cache as parse_cache
+
 #: The three paths #13708's review found unguarded and #16895 fixed. NOT the set of
 #: ingestion entry points -- see the module docstring. Named for what it is so the
 #: next reader cannot mistake its length for a coverage number.
 _HISTORICAL_ENTRY_POINTS = [
     ("knowledge.connectors.gdrive", "GoogleDriveConnector.fetch_content"),
     ("knowledge.connectors.onedrive", "OneDriveConnector.fetch_content"),
-    ("api.knowledge", "upload_file_to_knowledge"),
+    # #19713: the upload route's redaction moved into the shared function both upload routes call, so the
+    # redacting entry point is that function; the routes are checked to still reach it (below).
+    ("api.knowledge", "ingest_uploaded_document"),
+]
+
+#: Entry points that hand their content to a registered redacting entry point instead of calling the
+#: redactor themselves: (module, function, the function it must call). Redaction is proven at the
+#: delegate by the list above; this proves the route still goes through it (#19713).
+_DELEGATING_ENTRY_POINTS = [
+    ("api.knowledge", "upload_file_to_knowledge", "ingest_uploaded_document"),
+    ("api.knowledge_chunked_upload", "_hand_to_document", "ingest_uploaded_document"),
 ]
 
 #: The guards that actually establish coverage, and the test in each that does the
@@ -157,7 +169,7 @@ def _calls_redact_content(source: str, *, function_name: str | None = None) -> b
     function that is absent returns False rather than falling back to the
     module, so a rename fails loudly instead of widening the scope.
     """
-    tree = ast.parse(textwrap.dedent(source))
+    tree = parse_cache.parse(textwrap.dedent(source))
     scope: ast.AST = tree
     if function_name is not None:
         named = next(
@@ -174,6 +186,14 @@ def _calls_redact_content(source: str, *, function_name: str | None = None) -> b
     return any(
         isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "redact_content"
         for node in ast.walk(scope)
+    )
+
+
+def _calls_function(source: str, name: str) -> bool:
+    """True if *source* actually calls ``name(...)`` (ast, so a comment or docstring mention does not count)."""
+    return any(
+        isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == name
+        for node in ast.walk(parse_cache.parse(textwrap.dedent(source)))
     )
 
 
@@ -197,6 +217,47 @@ def test_historical_entry_point_still_redacts_credentials(module_path: str, qual
         "redact_content(...) call -- a credential in this content would reach the "
         "indexer/embedder unmasked (#13708)."
     )
+
+
+@pytest.mark.parametrize(
+    "module_path,qualname,delegate",
+    _DELEGATING_ENTRY_POINTS,
+    ids=[f"{m}.{q}" for m, q, _ in _DELEGATING_ENTRY_POINTS],
+)
+def test_a_delegating_entry_point_still_reaches_its_redacting_delegate(
+    module_path: str, qualname: str, delegate: str
+) -> None:
+    assert any(
+        d == delegate for m, d in _HISTORICAL_ENTRY_POINTS if m == "api.knowledge"
+    ), f"{delegate} is not a registered redacting entry point, so delegating to it proves nothing"
+    source = inspect.getsource(_resolve(module_path, qualname))
+    assert _calls_function(source, delegate), (
+        f"{module_path}.{qualname} no longer calls {delegate}(...), which is where its content is redacted -- "
+        "a credential in an upload would reach the indexer/embedder unmasked (#13708)."
+    )
+
+
+def test_negative_control_a_route_that_stops_delegating_is_caught() -> None:
+    """The delegation check can fail: a route that bypasses the delegate, or only mentions it, is refused."""
+
+    def _route_that_indexes_directly(kb, content):
+        # TODO: call ingest_uploaded_document(kb, content) here
+        """Should call ingest_uploaded_document(...)."""
+        return kb.add(content)
+
+    def _route_that_delegates(kb, content):
+        return ingest_uploaded_document(kb, content)  # noqa: F821
+
+    assert not _calls_function(inspect.getsource(_route_that_indexes_directly), "ingest_uploaded_document")
+    assert _calls_function(inspect.getsource(_route_that_delegates), "ingest_uploaded_document")
+
+
+def test_negative_control_a_delegate_that_loses_its_redaction_is_caught() -> None:
+    """The delegate keeps its own check: ingest_uploaded_document without redact_content(...) fails the scan."""
+    source = inspect.getsource(_resolve("api.knowledge", "ingest_uploaded_document"))
+    assert _calls_redact_content(source)
+    stripped = source.replace("redact_content(", "str(")
+    assert not _calls_redact_content(stripped), "removing the call must be visible to the guard"
 
 
 def test_negative_control_a_function_that_skips_redaction_is_caught() -> None:
@@ -258,7 +319,7 @@ def test_the_authoritative_guards_still_exist() -> None:
     for rel, required in _AUTHORITATIVE_GUARDS.items():
         if not required:
             continue
-        defined = _collectible_test_names(ast.parse((root / rel).read_text(encoding="utf-8")))
+        defined = _collectible_test_names(parse_cache.parse((root / rel).read_text(encoding="utf-8")))
         gutted.extend(f"{rel}::{name}" for name in required if name not in defined)
     assert not gutted, (
         f"the tests that make these guards authoritative are gone: {gutted}. The files are "

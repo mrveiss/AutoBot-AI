@@ -27,6 +27,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOTS = (
@@ -84,7 +85,7 @@ def _is_path_wrapper(func: ast.AST) -> bool:
 def depth_resolvers(source: str) -> list[str]:
     """Names of functions whose single return climbs from `__file__` by depth."""
     found = []
-    for fn in ast.walk(ast.parse(source)):
+    for fn in ast.walk(parse_cache.parse(source)):
         if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         body = [s for s in fn.body if not (isinstance(s, ast.Expr) and isinstance(s.value, ast.Constant))]
@@ -128,7 +129,6 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "root-resolver-depth-scan",
     discover=_population,
-    floor=7249,  # mid-window: population 7399, window (7099, 7399)
     what="tracked python",
     roots=_ROOTS,
     growth=300,

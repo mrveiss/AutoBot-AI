@@ -30,6 +30,8 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
+
 _ROOT = "autobot-backend"
 _HOMES = frozenset({"autobot-backend/utils/file_categorization.py", "autobot-backend/utils/file_types.py"})
 
@@ -58,7 +60,6 @@ def _modules(root: Path) -> list[Path]:
 REACH = declare(
     "file-type-sets-one-home-19339",
     discover=_modules,
-    floor=2566,  # mid-window: population 2701, window (2431, 2701)
     growth=270,  # ~10%: ordinary backend growth between repins must not turn an unrelated PR red
     what="non-test backend modules",
     roots=(_ROOT,),
@@ -92,7 +93,7 @@ def _is_string_literal_collection(node: ast.AST | None) -> bool:
 def literal_copies(source: str, rel: str) -> list[str]:
     """Each re-declared extension/skip-dir literal in *source*, as ``path:line: NAME``."""
     hits: list[str] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if not isinstance(node, ast.Assign | ast.AnnAssign):
             continue
         targets = node.targets if isinstance(node, ast.Assign) else [node.target]
@@ -148,7 +149,7 @@ def test_the_homes_exist_and_export_the_canonical_names() -> None:
         "autobot-backend/utils/file_types.py": {"TEXT_FILE_EXTENSIONS", "DOCX_EXTENSIONS"},
     }
     for rel, expected in names.items():
-        tree = ast.parse((root / rel).read_text(encoding="utf-8"))
+        tree = parse_cache.parse((root / rel).read_text(encoding="utf-8"))
         bound = {n for node in tree.body for t in _targets(node) for n in _target_names(t)}
         assert expected <= bound, f"{rel} no longer binds {sorted(expected - bound)}"
 

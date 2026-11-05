@@ -11,9 +11,8 @@ generated API types, the locale files and comment lines. The kit (``libs/autobot
 scanned: ``formatRelativeTime`` there is the one home. A translated key such as
 ``t('x.minutesAgo', { count })`` holds no ``${...}`` and is not counted.
 
-**What the pin holds.** The remaining sites sit in files an open PR held when this landed
-(``BrowserSessionManager``, ``SourceManager``, ``DeviceManagementPanel``). The pin goes down as each
-moves to the kit; it never goes up (#19283). The reach floor guards the scan itself: a moved folder
+**What the pin holds.** Nothing: the last sites (``DeviceManagementPanel``) moved to the kit's
+``createRecencyFormatter``, so the pin is 0 and any new hand-built string fails (#19283). The reach floor guards the scan itself: a moved folder
 would otherwise read as a clean 0.
 """
 
@@ -33,7 +32,7 @@ _HAND_BUILT = re.compile(rf"`[^`\n]*\$\{{[^}}`\n]*\}}\s*{_UNIT}\s+ago\b[^`\n]*`"
 _COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*).*$", re.M)
 
 # Measured on origin/main with this detector; lowered as the held files move to the kit.
-PINS = {"hand_built_ago_strings": 10}
+PINS = {"hand_built_ago_strings": 0}
 
 
 def _sources(src: Path) -> list[Path]:
@@ -76,7 +75,6 @@ def verdict(now: int, pinned: int) -> str | None:
 REACH = declare(
     "frontend-hand-built-relative-time-scan",
     discover=_population,
-    floor=1080,  # mid-window: population 1105, window (1055, 1105)
     growth=50,
     what=".ts/.vue sources in both frontends",
     roots=_ROOTS,

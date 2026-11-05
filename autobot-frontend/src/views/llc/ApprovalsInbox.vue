@@ -26,6 +26,8 @@
       </div>
     </div>
 
+    <StuckFileCleanupPanel />
+
     <div v-if="!companyId" class="state-msg">{{ $t('llc.approvals.selectCompany') }}</div>
 
     <template v-else>
@@ -136,6 +138,7 @@
 
 <script setup lang="ts">
 import { BaseButton } from '@autobot/ui'
+import StuckFileCleanupPanel from '@/components/llc/StuckFileCleanupPanel.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
@@ -302,7 +305,7 @@ onUnmounted(() => {
 }
 
 .view-title {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 600;
   margin: 0;
 }
@@ -316,7 +319,7 @@ onUnmounted(() => {
   padding: 0 0.4rem;
   background: var(--color-error-solid);
   color: white;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 700;
   border-radius: var(--radius-full);
 }
@@ -331,7 +334,7 @@ onUnmounted(() => {
 
 .tab-btn {
   padding: 0.375rem 1rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   border: none;
   background: transparent;
   color: var(--text-primary);
@@ -341,7 +344,7 @@ onUnmounted(() => {
 
 .tab-btn.active {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .inbox-filters {
@@ -357,7 +360,7 @@ onUnmounted(() => {
   border-radius: 0.375rem;
   background: var(--bg-surface);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .filter-search {
@@ -410,7 +413,7 @@ onUnmounted(() => {
   display: inline-block;
   padding: 0.125rem 0.5rem;
   border-radius: var(--radius-full);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 500;
 }
 
@@ -468,7 +471,7 @@ onUnmounted(() => {
   border-radius: 0.375rem;
   background: var(--bg-surface);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   resize: vertical;
 }
 

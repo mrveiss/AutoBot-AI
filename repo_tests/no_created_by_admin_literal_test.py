@@ -26,6 +26,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 REPO_ROOT = repo_root()
@@ -44,7 +45,7 @@ def _created_by_admin_literals(source: str) -> list[int]:
     nothing conditionally, so no offender can hide behind a parse failure.
     """
     try:
-        tree = ast.parse(source)
+        tree = parse_cache.parse(source)
     except SyntaxError:
         return []
     hits = []
@@ -86,7 +87,6 @@ def _tracked_backend_python_files(root: Path = REPO_ROOT) -> list[Path]:
 REACH = declare(
     "no-created-by-admin-literal",
     discover=_tracked_backend_python_files,
-    floor=4131,  # re-pinned mid-window (#19654): population 4158
     growth=300,
     what="tracked backend python files (tests excluded)",
 )

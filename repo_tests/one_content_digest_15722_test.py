@@ -30,6 +30,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _CANONICAL = "autobot_shared/content_digest.py"
@@ -61,7 +62,7 @@ def _terminal_name(node: ast.AST) -> str:
 
 def _hashes_content(source: str) -> bool:
     """True when `source` calls sha256 on `<content-named expr>.encode(...)`."""
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if not (isinstance(node, ast.Call) and node.args):
             continue
         func = node.func
@@ -111,8 +112,6 @@ def _source_population(root: Path) -> list[str]:
 REACH = declare(
     "one-content-digest-scan",
     discover=_source_population,
-    floor=2948,  # re-pinned mid-window (train 81 on main)
-    # Mid-window, from REACH.window(): 2730 measured, growth 300 -> 150 of headroom each way.,
     what="non-test python source",
     roots=_ROOTS,
     growth=300,

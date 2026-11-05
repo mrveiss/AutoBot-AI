@@ -90,11 +90,11 @@ class LeaderLease:
         """Whether this worker currently holds the lease."""
         return self._is_leader
 
-    async def try_acquire_or_refresh(self) -> bool:
-        """Take the lease with SET NX, or atomically extend one already held."""
+    async def _attempt(self) -> Optional[bool]:
+        """SET NX, or the atomic extend of a lease already held: True held, False another owner's, None unknown."""
         redis = await get_async_redis_client(database=self.database)
         if redis is None:
-            return False
+            return None
         try:
             if self._is_leader:
                 held = await redis.eval(_REFRESH_LUA, 1, self.key, self.worker_id, str(self.ttl_ms))
@@ -103,7 +103,23 @@ class LeaderLease:
             return acquired is not None
         except Exception as exc:
             logger.warning("Leader election Redis error for %s: %s", self.label, exc)
-            return False
+            return None
+
+    async def try_acquire_or_refresh(self) -> bool:
+        """Take the lease with SET NX, or atomically extend one already held."""
+        return await self._attempt() is True
+
+    async def hold_or_refresh(self) -> Optional[bool]:
+        """Like :meth:`_attempt`, and leadership follows only a definite answer (#20556).
+
+        True: held, its TTL reset. False: another worker owns the key, so leadership ends now.
+        None: Redis did not answer. Leadership is left as it was, since the key still names this
+        worker until its TTL runs out; the caller decides how long to keep trying.
+        """
+        state = await self._attempt()
+        if state is not None:
+            self._is_leader = state
+        return state
 
     async def update_leadership(
         self,

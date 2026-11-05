@@ -24,6 +24,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _SECRET_KEY = "client_secret"  # pragma: allowlist secret
@@ -36,7 +37,7 @@ def _dict_keys(node: ast.Dict) -> set[str]:
 
 def _bundle_with_app_secret(source: str) -> bool:
     """True when `source` builds a token-bundle dict that also holds the app client secret."""
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.Dict):
             keys = _dict_keys(node)
             if _SECRET_KEY in keys and _BUNDLE_KEY in keys:
@@ -60,8 +61,6 @@ def _source_population(root: Path) -> list[str]:
 REACH = declare(
     "oauth-bundle-app-secret-scan",
     discover=_source_population,
-    # Mid-window, from REACH.window() = (2430, 2730, 2580).
-    floor=2948,  # re-pinned mid-window (train 81 on main)
     what="non-test python source",
     roots=("autobot-backend", "autobot_shared"),
     growth=300,

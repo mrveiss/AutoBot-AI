@@ -61,6 +61,8 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root as _repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _SYMBOL = "is_accessible_by"
 
 #: Where the definition lives today. If it moves, the finder below still locates it
@@ -100,7 +102,7 @@ _FORWARDING_BUILTINS = frozenset({"getattr", "setattr", "hasattr", "delattr"})
 def _parsed(path: Path) -> ast.AST | None:
     """The module tree, or None when it cannot be read or parsed."""
     try:
-        return ast.parse(path.read_text(encoding="utf-8"))
+        return parse_cache.parse(path.read_text(encoding="utf-8"))
     except (OSError, SyntaxError, UnicodeDecodeError):
         return None
 
