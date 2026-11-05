@@ -16892,7 +16892,7 @@ export interface paths {
         };
         /**
          * Get Approval
-         * @description Get a single approval gate by ID (#1402).
+         * @description Get a single approval gate by ID; another user's approval is a 404 (#1402, #18413).
          */
         get: operations["get_approval_api_approval_gates__approval_id__get"];
         put?: never;
@@ -27882,10 +27882,8 @@ export interface paths {
          * Execute command (SLM admin terminal)
          * @description Execute a single shell command and return stdout/stderr/exit_code.
          *
-         *     Runs on the local backend machine. No auth required — accessible via
-         *     the /autobot-api/ nginx proxy (Issue #983).
-         *
-         *     Blocks commands matching RISKY_COMMAND_PATTERNS.
+         *     Runs on the local backend machine. Admin-only: ``admin_router`` requires
+         *     ``check_admin_permission`` (Issue #983). Blocks commands matching RISKY_COMMAND_PATTERNS.
          */
         post: operations["admin_execute_command_api_terminal_execute_post"];
         delete?: never;
