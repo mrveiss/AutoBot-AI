@@ -22,7 +22,9 @@ from llc.scheduler.base import PollLoopScheduler
 
 logger = get_logger(__name__)
 
-APPROVAL_EXPIRY_SWEEP_INTERVAL_S: float = env_float_clamped("AUTOBOT_APPROVAL_EXPIRY_SWEEP_INTERVAL_S", 60.0, min_v=1.0)
+APPROVAL_EXPIRY_SWEEP_INTERVAL_S: float = env_float_clamped(
+    "AUTOBOT_APPROVAL_EXPIRY_SWEEP_INTERVAL_S", 60.0, min_v=1.0, positive_finite=True
+)
 
 
 class ApprovalExpiryScheduler(PollLoopScheduler):
@@ -34,6 +36,11 @@ class ApprovalExpiryScheduler(PollLoopScheduler):
         super().__init__(poll_interval)
 
     async def _tick(self) -> None:
+        # The admin toggle is re-read every tick, as the other registered schedulers do (#12820).
+        from services.scheduler_toggles import is_scheduler_enabled
+
+        if not await is_scheduler_enabled("ApprovalExpiryScheduler"):
+            return
         # A failed sweep is logged and the next tick retries: rows stay pending and are still
         # refused at decision time, so a missed sweep delays the resume, never the safety check.
         try:
