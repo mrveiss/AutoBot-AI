@@ -44,7 +44,7 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "bg-gray-700": 2,
     "bg-gray-800": 3,
     "bg-green-100": 9,
-    "bg-green-400/10": 2,
+    "bg-green-400/10": 1,
     "bg-green-50": 2,  # #16253 SystemStatusNotification severities onto theme tokens (3 -> 2)
     "bg-green-500": 9,  # #14780 BaseAvatar: hand-rolled avatars and presence dots left for the kit (11 -> 9)
     "bg-green-500/10": 2,
@@ -58,7 +58,7 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "bg-indigo-700": 1,
     "bg-indigo-900/20": 1,
     "bg-neutral-400": 2,
-    "bg-orange-400/10": 2,
+    "bg-orange-400/10": 1,
     "bg-orange-500": 1,
     "bg-purple-100": 3,
     "bg-purple-400/10": 2,
@@ -149,7 +149,7 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "text-gray-900": 2,
     "text-green-200": 2,
     "text-green-300": 2,
-    "text-green-400": 14,  # #16253 SystemStatusNotification severities onto theme tokens (15 -> 14)
+    "text-green-400": 13,  # #16253 SystemStatusNotification severities onto theme tokens (15 -> 14)
     "text-green-500": 13,
     "text-green-600": 18,  # #16253 SystemStatusNotification severities onto theme tokens (20 -> 18)
     "text-green-700": 4,  # #16253 SystemStatusNotification severities onto theme tokens (5 -> 4)
@@ -158,7 +158,7 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "text-indigo-400": 1,
     "text-indigo-600": 2,
     "text-indigo-700": 2,
-    "text-orange-400": 3,
+    "text-orange-400": 2,
     "text-orange-500": 4,
     "text-orange-600": 2,
     "text-purple-200": 1,
