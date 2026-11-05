@@ -121,8 +121,10 @@ def run_block_reason(
     """
     if status in UNDISPATCHABLE_AGENT_STATUSES:
         return f"agent status is {status}"
-    return adapter_block_reason(adapter_type, adapter_config) or role_bound_refusal(
-        describe_role_bound(org_role, adapter_type)
+    # Same order as dispatch: a role-bound refusal is the reason it will not run, even when the
+    # adapter is also unavailable -- fixing the adapter alone would not make it runnable.
+    return role_bound_refusal(describe_role_bound(org_role, adapter_type)) or adapter_block_reason(
+        adapter_type, adapter_config
     )
 
 
