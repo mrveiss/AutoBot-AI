@@ -83,12 +83,11 @@ def _sources(root: Path) -> list[Path]:
     return found
 
 
-#: 1,088 files measured on b07673947b across both GUIs; repinned by scripts/repin_reach_floors.py.
-#: #19532: the unmounted SettingsPanel, CacheService and settings types retired (1,087); pinned mid-window.
+#: 1,088 files measured on b07673947b across both GUIs; the floor is computed from the base commit (#19676).
+#: #19532: the unmounted SettingsPanel, CacheService and settings types retired (1,087).
 REACH = declare(
     "frontend-http-transports",
     discover=_sources,
-    floor=1037,
     growth=100,  # ~9%: ordinary GUI growth between repins must not turn an unrelated PR red
     what="non-test GUI source files",
     roots=tuple(f"{app}/src" for app in PINS),

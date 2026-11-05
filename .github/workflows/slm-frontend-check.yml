@@ -15,7 +15,7 @@ name: SLM Frontend Check
 
 on:
   push:
-    branches: [release, main, develop]
+    branches: [release, main]
     paths:
       - 'autobot-slm-frontend/**'
       - '.github/workflows/slm-frontend-check.yml'
@@ -34,7 +34,7 @@ on:
     # draft == false, and marking a PR ready fires ONLY this event. Without
     # it a required context stays `skipped` and the PR can never merge.
     types: [opened, synchronize, reopened, ready_for_review]
-    branches: [release, main, develop]
+    branches: [release, main]
     # #13388: SAFE — "SLM Frontend Check" is NOT one of the ten required contexts
     # on main, so this workflow may skip its run entirely. (The header note
     # above about a path-filtered required check deadlocking a pull request is why
@@ -93,6 +93,11 @@ jobs:
         working-directory: autobot-slm-frontend
     steps:
       - uses: actions/checkout@v7
+        with:
+          # fetch-depth: 2, not the default of 1: the two repo_tests guards below declare their reach
+          # through repo_tests/_reach, which computes the floor from the ratchet base at HEAD^1 (#19676)
+          # and refuses to run without it (#19283).
+          fetch-depth: 2
 
       - name: Self-skip when no SLM frontend changes
         if: needs.changes.outputs.slm_frontend != 'true'

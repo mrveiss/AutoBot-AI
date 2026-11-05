@@ -454,7 +454,6 @@ def _all_ansible_yml_files(repo_root: Path) -> list[Path]:
 _PLAY_YML_REACH = declare(
     "nginx-play-level-yml-sweep",
     discover=_all_ansible_yml_files,
-    floor=336,
     growth=34,
     skips=0,
     what="*.yml files under the ansible tree",

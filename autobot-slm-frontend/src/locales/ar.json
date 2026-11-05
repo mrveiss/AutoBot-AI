@@ -255,7 +255,21 @@
     "selectANode": "Select a node...",
     "update": "Update"
   },
+  "updateProgressPanel": {
+    "elapsed": "Running for {minutes} min",
+    "exited": "The update process has stopped without finishing. Check the update report before running it again.",
+    "lastLine": "Last log line: {time}",
+    "note": "The update continues in the background. A long pause does not mean it failed.",
+    "play": "Play: {name}",
+    "quiet": "The log has not moved for a while, but the update process is still running. Some steps are silent for a long time.",
+    "task": "Task: {name}",
+    "title": "Update progress",
+    "unavailable": "Could not read the update's progress just now. Trying again.",
+    "unknown": "Could not tell whether the update process is still running.",
+    "waiting": "Waiting for the update to write its log."
+  },
   "codeSyncView": {
+    "nodesOfflineAfterUpdate": "The update of {time} finished, but {offline} of the {total} nodes online before it are still offline. They may need attention.",
     "actions": "Actions",
     "addSchedule": "Add Schedule",
     "advancedDiagnostics": "Advanced / Diagnostics",
@@ -326,6 +340,12 @@
     "pipelineColocatedPartial": "SLM is current, but a co-located component failed to update — see the SLM self-update stage below for details.",
     "pipelinePartial": "Update finished — {count} node(s) skipped because they are not operational.",
     "pipelineReconnectingAttempt": "Control plane restarting — reconnecting… (attempt {attempt})",
+    "pipelineSessionExpiredTitle": "Session expired",
+    "pipelineSessionExpired": "The server rejected the status check because you are no longer logged in. Log in again to see whether the update finished.",
+    "pipelineLogInAgain": "Log in again",
+    "pipelineGaveUpTitle": "Stopped checking the update",
+    "pipelineGaveUp": "No answer from the control plane after {attempt} status checks, so polling stopped. The update may have finished; re-check its status.",
+    "pipelineRecheckStatus": "Re-check status",
     "pipelineStageCurrent": "already current",
     "pipelineStageFailed": "failed",
     "pipelineStagePartial": "partial",
@@ -884,12 +904,10 @@
       "enrollNode": "Enroll Node",
       "enrolling": "Enrolling...",
       "healthMetricsAria": "Health metrics",
-      "hoursAgo": "{hours}h ago",
       "justNow": "Just now",
       "lastSeen": "Last seen: {time}",
       "manageRoles": "Manage Roles",
       "memory": "MEM",
-      "minutesAgo": "{minutes}m ago",
       "never": "أبدًا",
       "noHealthDataAvailable": "No health data available",
       "noRolesAssigned": "No roles assigned",
@@ -899,7 +917,6 @@
       "reEnrollNode": "Re-enroll Node",
       "recoverConnection": "Recover Connection",
       "restartNodeAria": "Restart {hostname}",
-      "secondsAgo": "{seconds}s ago",
       "serviceHealthSummaryAria": "Service health summary",
       "services": "Services",
       "services1": "Services:",
@@ -1102,6 +1119,7 @@
     "signInWithProviderAria": "تسجيل الدخول باستخدام {provider}",
     "signingIn": "Signing in...",
     "singleSignOnProvidersAria": "Single sign-on providers",
+    "adminOnly": "This console is for administrators.",
     "ssoLoginFailed": "SSO login failed. Please try again.",
     "twoFactorAuthentication": "Two-Factor Authentication",
     "twoFactorAuthenticationAria": "Two-factor authentication",
@@ -1522,6 +1540,303 @@
       "pendingFor": "{n} معلقة لـ {name}",
       "sentBy": "من {names}",
       "waitsForIdle": "{who} ينتظر حتى يصبح {target} خاملاً"
+    },
+    "validationDashboard": {
+      "title": "Validation dashboard",
+      "subtitle": "System validation status from the main backend: phases, metrics, alerts and recommendations.",
+      "refresh": "تحديث",
+      "generate": "Rebuild HTML dashboard",
+      "generateStarted": "The HTML dashboard is rebuilding in the background. This screen does not show it; the backend serves it on its own dashboard page.",
+      "generateFailed": "The dashboard rebuild did not start.",
+      "loading": "Reading the validation report...",
+      "unavailableTitle": "Validation reporting is not available",
+      "unavailableBody": "The backend answered that its validation report generator is not available. Check that the generator is installed on the backend, then refresh.",
+      "errorTitle": "The validation report could not be read",
+      "errorBody": "The validation report request failed.",
+      "emptyTitle": "No validation phases reported",
+      "emptyBody": "The backend answered, but its report lists no phases yet.",
+      "percent": "{value}%",
+      "yes": "Yes",
+      "no": "No",
+      "outOf": "{done} of {total}",
+      "seconds": "{n} s",
+      "days": "{n} days",
+      "health": {
+        "excellent": "Excellent",
+        "good": "Good",
+        "fair": "Fair",
+        "needs_attention": "Needs attention"
+      },
+      "overview": {
+        "title": "نظرة عامة",
+        "measures": "The headline figure measures:",
+        "readAt": "Read {time}"
+      },
+      "stat": {
+        "maturity": "Overall maturity",
+        "health": "System health",
+        "phases": "Phases complete",
+        "capabilities": "Active capabilities",
+        "averageCompletion": "Average completion",
+        "minCompletion": "Lowest completion",
+        "maxCompletion": "Highest completion",
+        "above50": "Phases at 50% or more",
+        "above90": "Phases at 90% or more",
+        "stage": "Development stage",
+        "validationScore": "Validation score",
+        "errorRate": "Error rate",
+        "recentChanges": "Recent changes",
+        "velocity": "Progression velocity",
+        "canProgress": "Can progress",
+        "blocked": "Blocked phases",
+        "refreshInterval": "Dashboard refresh interval",
+        "retention": "Data retention"
+      },
+      "phases": {
+        "title": "Phases",
+        "empty": "No phases reported",
+        "notScored": "Not scored",
+        "col": {
+          "phase": "Phase",
+          "status": "الحالة",
+          "completion": "Completion",
+          "requirements": "Requirements met",
+          "missing": "Missing",
+          "verifiedBy": "Verified by"
+        }
+      },
+      "alerts": {
+        "title": "Alerts ({n})",
+        "empty": "No alerts: the report raised none.",
+        "level": {
+          "critical": "Critical",
+          "warning": "تحذير",
+          "info": "معلومات"
+        }
+      },
+      "recommendations": {
+        "title": "Recommendations ({n})",
+        "empty": "No recommendations: the report made none.",
+        "action": "Next step: {action}",
+        "urgency": {
+          "high": "مرتفع",
+          "medium": "متوسط",
+          "low": "Low",
+          "info": "معلومات"
+        }
+      },
+      "trends": {
+        "title": "Trends",
+        "note": "No stored trend history is available yet, so the backend sends no trend series.",
+        "empty": "The backend sent no trend series",
+        "col": {
+          "series": "Series",
+          "points": "Points",
+          "first": "First",
+          "latest": "Latest"
+        },
+        "series": {
+          "maturity_trend": "Maturity",
+          "phase_completion_trend": "Completed phases",
+          "capability_growth": "Capabilities"
+        }
+      }
+    },
+    "rum": {
+      "title": "Real user monitoring",
+      "subtitle": "What browsers have reported to the main backend: errors, performance and interaction events, and their sessions.",
+      "refresh": "تحديث",
+      "dismiss": "Dismiss",
+      "loading": "Reading real user monitoring...",
+      "errorTitle": "Real user monitoring could not be read",
+      "errorBody": "The real user monitoring status request failed.",
+      "detailFailedTitle": "The collected data could not be read",
+      "detailFailedBody": "The real user monitoring export request failed.",
+      "emptyOnTitle": "Collecting, nothing received yet",
+      "emptyOnBody": "Collection is on and the backend holds no events or sessions yet.",
+      "emptyOffTitle": "Collection is off and nothing is held",
+      "emptyOffBody": "The backend holds no events or sessions. Turn collection on to receive them.",
+      "yes": "Yes",
+      "no": "No",
+      "collection": {
+        "title": "المجموعة",
+        "switch": "Collect browser events",
+        "on": "On",
+        "off": "Off",
+        "memoryNote": "Events are held in the backend's memory, so a backend restart empties them. Turning collection off keeps what is already held until it is cleared.",
+        "enabledOk": "Collection is on.",
+        "disabledOk": "Collection is off.",
+        "enableFailed": "Collection could not be turned on.",
+        "disableFailed": "Collection could not be turned off."
+      },
+      "stat": {
+        "total_events": "Events held",
+        "total_sessions": "Sessions held",
+        "active_sessions": "Active sessions (last 30 minutes)",
+        "events_today": "Events today"
+      },
+      "settings": {
+        "title": "Collection settings",
+        "label": {
+          "enabled": "Enabled",
+          "error_tracking": "Error tracking",
+          "performance_monitoring": "Performance monitoring",
+          "interaction_tracking": "Interaction tracking",
+          "session_recording": "Session recording",
+          "sample_rate": "Sample rate (%)",
+          "max_events_per_session": "Max events per session",
+          "debug_mode": "Debug mode",
+          "log_to_backend": "Log to backend",
+          "log_level": "Log level"
+        }
+      },
+      "clear": {
+        "title": "Clear collected data",
+        "body": "Removes every event and session the backend holds. This cannot be undone.",
+        "button": "Clear collected data",
+        "confirmTitle": "Clear collected data?",
+        "confirmBody": "This permanently removes {events} events and {sessions} sessions. It cannot be undone.",
+        "confirm": "مسح",
+        "cancel": "إلغاء",
+        "done": "Cleared {events} events and {sessions} sessions.",
+        "failed": "The collected data could not be cleared."
+      },
+      "types": {
+        "title": "Events by type",
+        "empty": "No events",
+        "col": {
+          "type": "النوع",
+          "count": "Events"
+        }
+      },
+      "sessions": {
+        "title": "الجلسات",
+        "empty": "No sessions",
+        "col": {
+          "id": "Session",
+          "url": "First page",
+          "agent": "المتصفح",
+          "events": "Events",
+          "started": "بدأت",
+          "last": "Last activity"
+        }
+      },
+      "events": {
+        "title": "Latest events",
+        "empty": "No events",
+        "shown": "Showing the latest {shown} of {total} events held.",
+        "col": {
+          "at": "Received",
+          "type": "النوع",
+          "url": "صفحة",
+          "session": "Session"
+        }
+      },
+      "page": {
+        "previous": "Previous",
+        "next": "التالي",
+        "label": "Latest events pages",
+        "summary": "Page {page} of {count}"
+      }
+    },
+    "installMetrics": {
+      "title": "Install metrics",
+      "subtitle": "This install's own monitoring figures from the main backend: host, services, alerts, recommendations, GPU and NPU. Updated every 15 seconds.",
+      "refresh": "تحديث",
+      "loading": "Reading install metrics...",
+      "unavailableTitle": "The main app is not available",
+      "unavailableBody": "The main backend did not answer any install metrics request. No figures are shown, because any shown now would be out of date. Polling stops after repeated failures; use Refresh to read again.",
+      "sectionFailedTitle": "{section} could not be read",
+      "sectionFailedBody": "The install metrics request failed.",
+      "emptyTitle": "Nothing reported yet",
+      "emptyBody": "The main backend answered and reports no host figures, services, alerts, recommendations or devices.",
+      "notReported": "Not reported",
+      "percent": "{value}%",
+      "celsius": "{n} °C",
+      "watts": "{n} W",
+      "ms": "{n} ms",
+      "hours": "{n} h",
+      "readAt": "Read {time}",
+      "sections": {
+        "dashboard": "Host metrics",
+        "services": "Service health",
+        "alerts": "Alerts",
+        "recommendations": "Recommendations",
+        "gpu": "GPU",
+        "npu": "NPU"
+      },
+      "system": {
+        "title": "Host"
+      },
+      "gpu": {
+        "title": "GPU",
+        "absent": "The main backend reports no GPU on this install."
+      },
+      "npu": {
+        "title": "NPU",
+        "absent": "The main backend reports no NPU on this install."
+      },
+      "stat": {
+        "cpu": "CPU",
+        "memory": "Memory",
+        "disk": "Disk",
+        "processes": "Processes",
+        "overallHealth": "Overall health",
+        "performanceScore": "Performance score",
+        "gpuName": "Device",
+        "gpuUtilization": "Utilization",
+        "gpuMemory": "Memory utilization",
+        "gpuTemperature": "Temperature",
+        "gpuPower": "Power",
+        "npuUtilization": "Utilization",
+        "npuAcceleration": "Acceleration ratio",
+        "npuInferences": "Inferences"
+      },
+      "services": {
+        "title": "Services",
+        "summary": "{healthy} of {total} services healthy, overall {status}",
+        "empty": "The backend reports no services.",
+        "col": {
+          "name": "Service",
+          "status": "الحالة",
+          "endpoint": "Endpoint",
+          "response": "Response",
+          "score": "Health score",
+          "uptime": "مدة التشغيل"
+        }
+      },
+      "alerts": {
+        "title": "Alerts",
+        "empty": "The backend reports no active alerts."
+      },
+      "recommendations": {
+        "title": "Recommendations",
+        "empty": "The backend has no optimization recommendations.",
+        "action": "Action: {action}"
+      },
+      "status": {
+        "healthy": "سليم",
+        "degraded": "متدهور",
+        "critical": "Critical",
+        "offline": "Offline"
+      },
+      "health": {
+        "healthy": "healthy",
+        "degraded": "degraded",
+        "critical": "critical",
+        "unknown": "unknown"
+      },
+      "severity": {
+        "critical": "Critical",
+        "high": "مرتفع",
+        "warning": "تحذير",
+        "info": "معلومات"
+      },
+      "priority": {
+        "high": "مرتفع",
+        "medium": "متوسط",
+        "low": "Low"
+      }
     }
   },
   "monitoringView": {
@@ -1539,7 +1854,10 @@
       "errors": "الأخطاء",
       "backendHealth": "Backend Health",
       "performance": "الأداء",
-      "agentLedger": "سجل الوكلاء"
+      "agentLedger": "سجل الوكلاء",
+      "validation": "Validation",
+      "rum": "Real user monitoring",
+      "install": "Install metrics"
     }
   },
   "orchestration": {
@@ -2530,6 +2848,9 @@
         "online": "Online",
         "pairNewWorker": "Pair New Worker",
         "pairWorker": "Pair Worker",
+        "assignedNotPaired": "{hostname} has the NPU worker role in the SLM but isn't paired, so it gets no work yet.",
+        "assignedPairFailed": "Could not pair the NPU worker on {hostname}. Check that it is running, then try again.",
+        "assignedReadFailed": "Could not read which nodes have the NPU worker role, so a node waiting to be paired may be missing here.",
         "pairYourFirstWorker": "Pair Your First Worker",
         "platform": "Platform *",
         "port": "Port *",
@@ -2925,6 +3246,43 @@
         "checkingRbacStatus": "Checking RBAC status...",
         "failedToInitializeRbac": "Failed to initialize RBAC"
       },
+      "themeManager": {
+        "title": "Themes",
+        "subtitle": "Theme packages installed on the main app. Installing or removing one applies to every user.",
+        "refresh": "تحديث",
+        "dismiss": "Dismiss",
+        "loading": "Reading the installed themes...",
+        "errorTitle": "The installed themes could not be read",
+        "errorBody": "The theme list request failed.",
+        "unavailableTitle": "The theme manager is not available",
+        "unavailableBody": "Theme packages live on the main app, which did not answer. Try again once it is running.",
+        "emptyTitle": "No themes installed",
+        "emptyBody": "Upload a theme package (.zip) to make it available to every user.",
+        "installTitle": "Install a theme",
+        "installHint": "A .zip package holding theme.json and theme.css.",
+        "chooseFile": "Choose package",
+        "installing": "Installing...",
+        "installedOk": "Installed {name} {version}.",
+        "installFailed": "The theme could not be installed.",
+        "notZip": "Choose a .zip theme package.",
+        "tooLarge": "The package is larger than the SLM proxy accepts, so it was refused before the main app saw it.",
+        "adminOnly": "Only an administrator can change themes.",
+        "col": {
+          "name": "الاسم",
+          "version": "Version",
+          "author": "Author",
+          "supports": "Supports",
+          "id": "Id"
+        },
+        "tableLabel": "Installed themes",
+        "actions": "Actions",
+        "uninstall": "Uninstall",
+        "confirmTitle": "Uninstall {name}?",
+        "confirmBody": "The theme is removed from the main app for every user.",
+        "confirmCancel": "إلغاء",
+        "removedOk": "Uninstalled {name}.",
+        "removeFailed": "The theme could not be uninstalled."
+      },
       "webResearchSettings": {
         "title": "Web Research",
         "subtitle": "Platform-wide web research settings. Changes apply to every user.",
@@ -3268,7 +3626,8 @@
       "llmFallbacks": "LLM Fallbacks",
       "budgetAudit": "Budget Audit",
       "sso": "SSO / OIDC",
-      "webResearch": "Web Research"
+      "webResearch": "Web Research",
+      "themes": "Themes"
     }
   },
   "settingsView": {

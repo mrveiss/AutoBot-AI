@@ -63,6 +63,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ANSIBLE = "autobot-slm-backend/ansible"
@@ -198,7 +199,7 @@ def _declared_in_python(root: Path) -> str | None:
     Parsed, not imported: `pki.config` pulls pydantic-settings and the shared
     paths module, and what is being pinned is the declaration itself.
     """
-    tree = ast.parse((root / "autobot-backend" / "pki" / "config.py").read_text(encoding="utf-8"))
+    tree = parse_cache.parse((root / "autobot-backend" / "pki" / "config.py").read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant):
             for target in node.targets:

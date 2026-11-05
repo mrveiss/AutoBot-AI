@@ -72,7 +72,6 @@ def _auditable_workspaces(root: Path) -> list[str]:
 REACH = declare(
     "npm-audit-workspace-coverage",
     discover=_auditable_workspaces,
-    floor=5,
     what="workspaces with a package.json and a lockfile",
     growth=6,
 )

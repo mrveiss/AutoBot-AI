@@ -14,6 +14,17 @@ from autobot_shared.env_registry import EnvVarSpec, register_env_var
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_KB_UPLOAD_MAX_MB",
+        type=int,
+        default=10,
+        description="Largest knowledge file the upload route accepts, in MB; the upload dialog reads it too (#19712).",
+        component="knowledge",
+        range=(1, 1024),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_KB_EMBED_WINDOW_CHARS",
         type=int,
         default=4000,
@@ -383,5 +394,152 @@ register_env_var(
         ),
         component="knowledge",
         range=(0.1, 60.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PREFETCH_MODELS",
+        type=bool,
+        default=True,
+        description=(
+            "Docker only: whether the backend container's entrypoint fetches the pinned speech-to-text and "
+            "code-embedding models into the model cache volume before starting (docker/backend/entrypoint.sh, "
+            "autobot_shared/model_prefetch.py, #19869, #19738). A model already in the volume costs no network. "
+            "Set false (or 0) for an air-gapped host that places the models itself; a fetch that fails while "
+            "this is on stops the container with a message naming the model and the room left."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_UPLOAD_CHUNK_MB",
+        type=int,
+        default=8,
+        description="Largest chunk of a resumable upload, in MB; must fit the web server's body limit (#19713).",
+        component="knowledge",
+        range=(1, 512),
+    )
+)
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CONVERSATION_FILE_USER_QUOTA_BYTES",
+        type=int,
+        default=1073741824,
+        description=(
+            "Bytes one user may keep in conversation files (soft-deleted ones count until their bytes are "
+            "removed); an upload past it is refused with HTTP 413 and a stable code "
+            "(conversation_file_quota.py, #20217)."
+        ),
+        component="knowledge",
+        range=(0, 1099511627776),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CONVERSATION_FILE_CLEANUP_MAX_ATTEMPTS",
+        type=int,
+        default=3,
+        description=(
+            "How many times an approved removal of a deleted conversation file may be refused (still "
+            "referenced, path outside the store, unlink error) before it is no longer proposed again. "
+            "The file is then reported as stuck in the storage stats and logged, and its bytes stay. "
+            "Raising it retries more; lowering it stops sooner (conversation_file_cleanup.py, #20234)."
+        ),
+        component="conversation_files",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_UPLOAD_MAX_TOTAL_MB",
+        type=int,
+        default=8192,
+        description="Largest whole file a resumable upload accepts, in MB (#19713).",
+        component="knowledge",
+        range=(1, 1048576),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_BM25_REFRESH_MIN_INTERVAL_S",
+        type=float,
+        default=60.0,
+        description="Least time between BM25 corpus-stats recomputes, each of which reads every fact (#19726).",
+        component="knowledge",
+        range=(1.0, 3600.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CONVERSATION_FILE_CLEANUP_COOLDOWN_SECONDS",
+        type=int,
+        default=86400,
+        description=(
+            "Seconds after a refused removal of a deleted conversation file before it may be proposed "
+            "again, so a refusal does not raise a new proposal on every file delete. Raising it slows the "
+            "inbox; lowering it retries sooner (conversation_file_cleanup.py, #20234)."
+        ),
+        component="conversation_files",
+    )
+)
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_UPLOAD_SESSION_TTL_HOURS",
+        type=int,
+        default=48,
+        description="Hours before an unfinished upload stops taking chunks and is listed for review (#19713).",
+        component="knowledge",
+        range=(1, 8760),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_UPLOAD_STAGING_DIR",
+        type=str,
+        default="",
+        description="Where resumable uploads are staged; empty: uploads-staging under the data directory (#19713).",
+        component="knowledge",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_UPLOAD_MAX_OPEN_PER_OWNER",
+        type=int,
+        default=5,
+        description="Unfinished resumable uploads one person may hold (#19713).",
+        component="knowledge",
+        range=(1, 1000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_UPLOAD_MAX_STAGED_MB",
+        type=int,
+        default=32768,
+        description="Total size all unfinished resumable uploads may promise, in MB (#19713).",
+        component="knowledge",
+        range=(1, 10485760),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_KEYWORD_SEARCH_MAX_SCAN",
+        type=int,
+        default=10000,
+        description="Facts one keyword search reads at most; a warning says when it cut one short (#19726).",
+        component="knowledge",
+        range=(100, 1000000),
     )
 )

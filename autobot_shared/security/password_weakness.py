@@ -20,6 +20,8 @@ Design constraints:
 
 from __future__ import annotations
 
+import sys
+
 __all__ = ["check_password_weakness"]
 
 # Minimum character count before a password is considered too short.
@@ -80,6 +82,18 @@ def _get_seeded_default() -> str:
         return ""
 
 
+def check_guessable(password: str) -> str | None:
+    """Why *password* is too guessable to seed an admin account with, or ``None`` (#16299).
+
+    Length and the common list only: "equals the configured seed" would refuse every seed.
+    """
+    if len(password) < _MIN_LENGTH:
+        return f"Password is too short (minimum {_MIN_LENGTH} characters recommended)."
+    if password.lower() in _COMMON_PASSWORDS:
+        return "Password is in the list of commonly used passwords — choose a unique password."
+    return None
+
+
 def check_password_weakness(password: str) -> str | None:
     """Return a weakness reason string, or ``None`` if the password is acceptable.
 
@@ -105,12 +119,12 @@ def check_password_weakness(password: str) -> str | None:
     if seeded and password == seeded:
         return "Password matches the operator-configured default — please change it immediately."
 
-    # 2. Length gate.
-    if len(password) < _MIN_LENGTH:
-        return f"Password is too short (minimum {_MIN_LENGTH} characters recommended)."
+    return check_guessable(password)
 
-    # 3. Common-password list (case-insensitive).
-    if password.lower() in _COMMON_PASSWORDS:
-        return "Password is in the list of commonly used passwords — choose a unique password."
 
-    return None
+if __name__ == "__main__":
+    # The installer's check: the password on stdin, never in argv; the reason out, never the value (#16299).
+    _reason = check_guessable(sys.stdin.read().rstrip("\n"))
+    if _reason:
+        sys.stdout.write(_reason + "\n")
+    sys.exit(1 if _reason else 0)

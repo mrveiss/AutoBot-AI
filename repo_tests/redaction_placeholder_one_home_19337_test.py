@@ -31,6 +31,8 @@ from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_table, base_tree_texts
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
+
 _ROOTS = ("autobot-backend", "autobot-slm-backend", "autobot_shared")
 _HOME = "autobot_shared/secret_redaction.py"
 _THIS = "repo_tests/redaction_placeholder_one_home_19337_test.py"
@@ -55,7 +57,6 @@ def _modules(root: Path) -> list[Path]:
 REACH = declare(
     "redaction-placeholder-literals",
     discover=_modules,
-    floor=3266,  # mid-window: population 3416, window (3116, 3416)
     growth=300,  # ~9%: ordinary growth between repins must not turn an unrelated PR red
     what="non-test Python modules",
     roots=_ROOTS,
@@ -67,7 +68,7 @@ def placeholder_literals(source: str, rel: str) -> list[str]:
     if rel == _HOME:
         return []
     try:
-        tree = ast.parse(source)
+        tree = parse_cache.parse(source)
     except SyntaxError:
         return []
     docstrings = {

@@ -95,6 +95,8 @@ from pathlib import Path
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _ROOT = repo_root()
 
 _SCOPES = (
@@ -205,7 +207,7 @@ def _eligible_lines(path: Path) -> set[int]:
         pass  # a file this cannot tokenize is another guard's problem
 
     try:
-        tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+        tree = parse_cache.parse(path.read_text(encoding="utf-8", errors="replace"))
     except SyntaxError:
         return lines
 

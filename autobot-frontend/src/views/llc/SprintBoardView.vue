@@ -394,19 +394,19 @@ onMounted(async () => {
 
 .sprint-title {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
 }
 
 .sprint-dates {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
 .sprint-status-badge {
   padding: 0.125rem 0.5rem;
   border-radius: 9999px;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 500;
   text-transform: capitalize;
 }
@@ -478,7 +478,7 @@ onMounted(async () => {
 
 .sprint-header-skeleton {
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .board-layout {
@@ -515,7 +515,7 @@ onMounted(async () => {
   justify-content: space-between;
   padding: 0.75rem 1rem;
   font-weight: 600;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   border-bottom: 1px solid var(--border-default);
 }
 
@@ -524,7 +524,7 @@ onMounted(async () => {
   border: 1px solid var(--border-default);
   border-radius: 9999px;
   padding: 0 0.5rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 500;
 }
 
@@ -599,7 +599,7 @@ onMounted(async () => {
 .column-empty {
   text-align: center;
   padding: 1.5rem 0.5rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   border: 2px dashed var(--border-default);
   border-radius: 0.375rem;
@@ -619,7 +619,7 @@ onMounted(async () => {
 
 .sidebar-title {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
 }
 
@@ -654,7 +654,7 @@ onMounted(async () => {
 }
 
 .chart-empty {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   text-align: center;
   padding: 1rem 0;

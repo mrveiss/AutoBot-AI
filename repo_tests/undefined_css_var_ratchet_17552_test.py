@@ -84,23 +84,10 @@ def _inspected_files(root: Path) -> list[Path]:
 #: ``verify_floor`` refuses one that drifts too far under its own population
 #: (#15928).
 #:
-#: RE-MEASURED at **1463** files (was 1452 when floor=1400 was set). The tree
-#: grew 11 files, which took the slack to 63 against an allowance of 60 and
-#: failed the declaration itself -- not the scan.
-#:
-#: Restated at 1433 rather than nudged past the failure. The old pin sat 52 of
-#: its 60 allowance below its own measurement, leaving room for **8** more
-#: files before a bump came due; 11 arrived. 1433 sits at half the allowance,
-#: so the slack is 30 and the next bump is due after 30 more files. That is the
-#: mid-window convention `python_file_size_known_large` records: a floor at
-#: ``population - growth`` puts the slack exactly at the allowance and goes red
-#: on the next file anyone adds, which is the state this just came out of.
+#: The floor is computed from the base commit (#19676), not pinned here.
 REACH = declare(
     "undefined-css-var-scan",
     discover=_inspected_files,
-    # train-85b: population 1584 -> window [1524, 1584]; 1528 sat in the bottom band, re-pinned mid-window.
-    # #18242: population 1558 -> window [1498, 1558]; 1503 sat in the bottom band, re-pinned mid-window.
-    floor=1607,  # mid-window: population 1637, window (1577, 1637)
     growth=60,
     skips=0,
     what="frontend source files scanned for var() references",

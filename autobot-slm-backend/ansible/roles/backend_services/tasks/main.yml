@@ -79,7 +79,7 @@
 
 - name: Copy AutoBot application files
   synchronize:
-    src: "{{ playbook_dir }}/../"
+    src: "{{ role_path }}/../../"
     dest: "{{ autobot.base_dir }}/app/"
     rsync_opts:
       - "--chmod=o-w"  # #19503
@@ -105,6 +105,14 @@
   ansible.builtin.include_tasks: ../../backend/tasks/resolve_models.yml
   tags: ['backend', 'config']
 
+# #20750: the internal key is resolved, and each file keeps its own, as on every other render.
+- name: "Resolve AUTOBOT_INTERNAL_API_KEY (#20750)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/resolve_internal_api_key.yml
+  vars:
+    internal_api_key_current_env_files:
+      - "{{ backend_services_env_dest }}"
+      - "{{ autobot_backend_env_file }}"
+
 - name: Generate environment configuration
   template:
     src: backend.env.j2
@@ -113,6 +121,8 @@
     group: autobot
     mode: '0640'
   notify: restart backend services
+  vars:
+    internal_api_key_render: "{{ (internal_api_key_by_file | default({})).get(backend_services_env_dest, internal_api_key_resolved | default(autobot_internal_api_key)) }}"  # #20750: the file keeps its key
 
 # #10005: Render the backend role's unit template — the single source of truth
 # for autobot-backend.service (carries the #9934 LimitNOFILE directive). This

@@ -9,10 +9,12 @@ the right call, the right line, the standard comment, an expression floor left f
 
 from __future__ import annotations
 
-import ast
 import importlib.util
 
 from repo_tests._paths import repo_root
+
+from autobot_shared.isolated_git import git, make_repo
+from tools.lint import _parse_cache as parse_cache
 
 _SPEC = importlib.util.spec_from_file_location("repin_reach_floors", repo_root() / "scripts" / "repin_reach_floors.py")
 repin = importlib.util.module_from_spec(_SPEC)
@@ -76,7 +78,7 @@ def test_non_ascii_before_the_floor_and_a_form_feed_line_break_are_handled() -> 
     new, status = repin.repin_source(source, "x", mid=1020, count=1040, low=1000, high=1040)
     assert status == "re-pinned"
     assert new.startswith("# \x0c\n" + _ONE_LINE_CALL + '("x", what="déjà vu", floor=1020, growth=40)'), new
-    ast.parse(new)
+    parse_cache.parse(new)
 
 
 def test_a_hand_written_comment_is_kept_and_a_mid_window_one_refreshed() -> None:
@@ -130,3 +132,71 @@ def test_ci_enforces_staleness_on_merge_trains() -> None:
         and f"{REACH_AUDIT_ENV}=1" in str(s.get("run", ""))
     ]
     assert wired, f"ci.yml's python-shard job no longer sets {REACH_AUDIT_ENV}=1 on train-* heads"
+
+
+# ---------------------------------------- #20050: a floor stale on the base, a branch that did not cause it
+
+
+def _base_stale(monkeypatch, tmp_path, changed):
+    guard = tmp_path / "repo_tests" / "g_test.py"
+    guard.parent.mkdir()
+    guard.write_text("", encoding="utf-8")
+    monkeypatch.setattr(repin, "_ROOT", tmp_path)
+    monkeypatch.setattr(repin, "_source_file", lambda _r: guard)
+    monkeypatch.setattr(repin, "_changed_files", lambda _ref: changed)
+    return _main(monkeypatch, [_Reach("a", True)], {}, "--check", "--changed-since", "origin/main")
+
+
+def test_a_floor_stale_from_the_base_does_not_fail_a_branch_that_left_it_alone(monkeypatch, tmp_path, capsys) -> None:
+    assert _base_stale(monkeypatch, tmp_path, {"docs/x.md"}) == 0
+    assert capsys.readouterr().out.startswith("BASE-STALE a:")
+
+
+def test_a_branch_that_touched_the_guard_still_answers_for_its_floor(monkeypatch, tmp_path, capsys) -> None:
+    assert _base_stale(monkeypatch, tmp_path, {"repo_tests/g_test.py"}) == 1
+    assert capsys.readouterr().out.startswith("STALE a:")
+
+
+def test_when_git_cannot_say_what_changed_the_floor_still_blocks(monkeypatch, tmp_path, capsys) -> None:
+    assert _base_stale(monkeypatch, tmp_path, None) == 1
+    assert capsys.readouterr().out.startswith("STALE a:")
+
+
+def test_without_the_option_every_stale_floor_still_fails(monkeypatch, capsys) -> None:
+    assert _main(monkeypatch, [_Reach("a", True)], {}, "--check") == 1
+    assert capsys.readouterr().out.startswith("STALE a:")
+
+
+def test_changed_files_reads_the_branchs_own_diff_from_real_git(monkeypatch, tmp_path) -> None:
+    make_repo(tmp_path, default_branch="main")
+    (tmp_path / "a.txt").write_text("a", encoding="utf-8")
+    git(tmp_path, "add", "."), git(tmp_path, "commit", "-qm", "one")
+    git(tmp_path, "switch", "-qc", "branch")
+    (tmp_path / "mine.txt").write_text("b", encoding="utf-8")
+    git(tmp_path, "add", "."), git(tmp_path, "commit", "-qm", "two")
+    git(tmp_path, "switch", "-q", "main")
+    (tmp_path / "main_only.txt").write_text("c", encoding="utf-8")
+    git(tmp_path, "add", "."), git(tmp_path, "commit", "-qm", "three")
+    git(tmp_path, "switch", "-q", "branch")
+    monkeypatch.setattr(repin, "_ROOT", tmp_path)
+    assert repin._changed_files("main") == {"mine.txt"}
+    assert repin._changed_files("no-such-ref") is None
+
+
+def test_an_import_failure_names_its_reason(monkeypatch, capsys) -> None:
+    _main(monkeypatch, [], {"g": "Traceback\nModuleNotFoundError: No module named 'x'"}, "--check")
+    err = capsys.readouterr().err
+    assert "g: ModuleNotFoundError: No module named 'x'" in err and "train audit" in err
+
+
+def _diff(*lines: str) -> str:
+    return "\n".join(("--- a/x", "+++ b/x", "@@ -1 +1 @@", *lines))
+
+
+def test_a_floor_only_change_doesnt_make_a_guard_the_branchs_19673() -> None:
+    from scripts.repin_reach_floors import only_floor_lines
+
+    assert only_floor_lines(_diff("-    floor=10,  # mid-window: population 20", "+    floor=12,"))
+    assert not only_floor_lines(_diff("-    floor=10,", "+    floor=12,", "+    growth=9,")), "a real change counts"
+    assert not only_floor_lines(_diff("+def discover(): ...")), "a real change counts"
+    assert not only_floor_lines(""), "no change isn't a floor-only change"

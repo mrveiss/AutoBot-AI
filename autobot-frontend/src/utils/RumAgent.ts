@@ -7,6 +7,7 @@
  * Issue #476: Added Prometheus metrics export via /api/rum/metrics endpoint.
  */
 
+import { saveTextFile } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import { isBenignBrowserNotice } from '@/utils/benignBrowserNotice'
@@ -806,13 +807,7 @@ class RumAgent {
       timestamp: new Date().toISOString()
     }
 
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `rum-data-${this.sessionId}.json`
-    a.click()
-    URL.revokeObjectURL(url)
+    saveTextFile(JSON.stringify(data, null, 2), `rum-data-${this.sessionId}.json`, 'application/json')
   }
 
   // Manual control methods

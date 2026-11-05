@@ -14,6 +14,7 @@ import { useEventBus } from '@/composables/useEventBus'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase, getServiceUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import { formatDuration } from '@/utils/formatHelpers'
 
 const logger = createLogger('useCaptchaStatus')
 
@@ -144,11 +145,8 @@ export function useCaptchaStatus() {
   // Utilities
   // --------------------------------------------------------------------------
 
-  function formatTime(seconds: number): string {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins}:${secs.toString().padStart(2, '0')}`
-  }
+  /** A countdown as `m:ss`, the kit's clock duration (#19905). */
+  const formatClock = (seconds: number): string => formatDuration(seconds, { style: 'clock' })
 
   /**
    * Open the browser session's VNC view (#17423).
@@ -239,7 +237,7 @@ export function useCaptchaStatus() {
     captchaTypeLabelKey,
     truncatedUrl,
     progressPercentage,
-    formatTime,
+    formatTime: formatClock,
     openVnc,
     markSolved,
     skipCaptcha,

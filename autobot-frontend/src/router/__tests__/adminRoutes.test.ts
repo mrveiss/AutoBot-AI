@@ -3,7 +3,7 @@
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
 
-// #19833: the one permission-gated /admin parent. Pins the gate (allowed,
+// #19833: the main app's permission-gated /admin parent. Pins the gate (allowed,
 // denied, unresolved auth fails closed), that every pre-existing /admin URL
 // still resolves to the same component, and that AdminLayout renders the
 // matched child through a nested router-view.
