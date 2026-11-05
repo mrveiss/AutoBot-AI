@@ -62,8 +62,7 @@ def env(name: str, default: Any = None) -> Any:
 # ---------------------------------------------------------------------------
 # Registered variables — grouped by component
 # ---------------------------------------------------------------------------
-# Per-component siblings split off at the size ceiling (#14236; ledger #18391). Imported after
-# REGISTRY/register_env_var exist and before anything below reads the registry.
+# Per-component siblings split at the size ceiling (#14236, #18391); imported after REGISTRY exists, before any read.
 from autobot_shared import env_registry_agent_runtime  # noqa: E402,F401
 from autobot_shared import env_registry_backend  # noqa: E402,F401
 from autobot_shared import env_registry_backend_services  # noqa: E402,F401
@@ -78,6 +77,7 @@ from autobot_shared import (  # noqa: E402,F401
     env_registry_agent_tools,
     env_registry_ai,
     env_registry_analytics,
+    env_registry_approvals,
     env_registry_batch,
     env_registry_chat_attachments,
     env_registry_gateway,
