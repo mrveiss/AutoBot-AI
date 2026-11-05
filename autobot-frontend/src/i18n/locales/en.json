@@ -3514,7 +3514,7 @@
         "sqlQueryPlaceholder": "SELECT * FROM documents WHERE updated_at > :last_sync",
         "connectorNamePlaceholder": "My Connector"
       },
-      "jobStatusFailed": "Couldn't get this sync's progress. Close and reopen the history to try again."
+      "jobStatusFailed": "Couldn't get this sync's progress."
     },
     "modals": {
       "bulkEdit": {
