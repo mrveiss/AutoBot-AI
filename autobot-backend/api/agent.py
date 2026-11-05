@@ -227,7 +227,7 @@ async def _run_subprocess(command: str, security_layer, user_role: str) -> tuple
             {"command": command, "reason": "timeout"},
         )
         raise SubprocessError(
-            message="Command execution timed out after 5 minutes",
+            message=f"Command execution timed out after {TimingConstants.VERY_LONG_TIMEOUT}s",
             command=command[:200],
             return_code=None,
         )
