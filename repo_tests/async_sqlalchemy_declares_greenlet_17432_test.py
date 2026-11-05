@@ -38,6 +38,8 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
+
 #: Names whose use implies SQLAlchemy's async engine, and therefore greenlet.
 #: `async_engine_from_config` was missing, and `run_async_migrations` in
 #: `autobot-backend/migrations/env.py` reaches the async engine through it and
@@ -164,7 +166,7 @@ def _references_async_marker(text: str) -> bool:
     if not any(marker in text for marker in _ASYNC_MARKERS):
         return False
     try:
-        tree = ast.parse(text)
+        tree = parse_cache.parse(text)
     except (SyntaxError, ValueError):
         # Unparseable: fall back to the substring answer rather than silently
         # reporting "no async usage", which would be a pass by failure to read.
@@ -182,7 +184,6 @@ def _references_async_marker(text: str) -> bool:
 SQLALCHEMY_DECLARATIONS = declare(
     "sqlalchemy-requirements-files",
     discover=_declares_sqlalchemy,
-    floor=3,
     growth=3,
     what="requirements files declaring SQLAlchemy (#17432)",
 )

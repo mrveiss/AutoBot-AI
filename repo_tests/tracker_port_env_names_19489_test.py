@@ -17,6 +17,8 @@ import re
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _NETWORK_TS = "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/constants/network.ts"
 _SSOT = "autobot_shared/ssot_config.py"
 #: network.ts key -> the PortConfig field it mirrors.
@@ -39,7 +41,7 @@ _ANY_PORT_KEY = re.compile(r"^\s*(\w+_PORT): ", re.M)
 
 def port_aliases() -> dict[str, str]:
     """``PortConfig`` field -> its env alias, read from the class."""
-    tree = ast.parse((repo_root() / _SSOT).read_text(encoding="utf-8"))
+    tree = parse_cache.parse((repo_root() / _SSOT).read_text(encoding="utf-8"))
     cls = next(n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == "PortConfig")
     out = {}
     for node in cls.body:

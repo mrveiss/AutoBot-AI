@@ -153,7 +153,7 @@ def test_a_real_guard_whose_discovery_stops_reaching_a_root_fails() -> None:
     mutant = Reach(
         name="self-check::kb-read-visibility-narrowed",
         discover=_narrowed,
-        floor=kb.REACH.floor,
+        pinned_floor=kb.REACH.floor,
         what=kb.REACH.what,
         growth=kb.REACH.growth,
         roots=kb.SCAN_ROOTS,
@@ -170,7 +170,7 @@ def test_a_sweep_reaching_outside_its_declared_scope_fails() -> None:
     reach = Reach(
         name="self-check::under-claimed-scope",
         discover=lambda _root: ["a/x.py", "elsewhere/y.py"],
-        floor=1,
+        pinned_floor=1,
         what="things under a/",
         roots=("a/",),
     )
@@ -200,7 +200,7 @@ def test_a_declared_scope_that_the_sweep_does_not_reach_is_refused() -> None:
     overclaiming = Reach(
         name="self-check::overclaiming-scope",
         discover=lambda _root: ["autobot-backend/api/x.py"],
-        floor=1,
+        pinned_floor=1,
         what="production python files under autobot-backend/, autobot-slm-backend/",
         roots=("autobot-backend/", "autobot-slm-backend/"),
     )
@@ -251,6 +251,8 @@ _DECLARED_SCOPES = {
     "container-hardening-inline": ("autobot-backend", "autobot_shared"),
     "brand-mark-announcer-scan": ("libs/autobot-ui", "autobot-frontend/src", "autobot-slm-frontend/src"),
     "one-content-digest-scan": ("autobot-backend", "autobot_shared"),
+    "one-admin-gate": ("autobot-backend",),
+    "one-aead-core": ("autobot_shared",),
     "audit-action-vocabulary": ("autobot-backend", "autobot_shared", "autobot-slm-backend"),
     "hand-rolled-redis-pipeline-scan": ("autobot-backend", "autobot-slm-backend"),
     "one-internal-api-key-reader-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
@@ -258,6 +260,7 @@ _DECLARED_SCOPES = {
     "semantic-chunker-fork-scan": ("autobot-backend", "autobot_shared"),
     "migration-gate-test-import-sweep": ("autobot-backend/tests/migrations",),
     "paths-filter-workflow-sweep": (".github/workflows",),
+    "parse-cache-direct-parse-scan": ("repo_tests",),
     "workflow-visible-name-sweep": (".github/workflows",),
     "anti-pattern-type-emitters": ("autobot-backend/code_analysis", "autobot-backend/code_intelligence"),
     "compat-module-needs-importer": ("autobot-backend",),
@@ -396,10 +399,12 @@ _DECLARED_SCOPES = {
     "generated-type-redeclarations": ("autobot-frontend/src",),
     "severity-order-copies": ("autobot-backend", "autobot-slm-backend", "autobot_shared", "pipeline-scripts"),
     "llc-sigterm-grace-copies": ("autobot-backend/llc",),
+    "frontend-backend-origin": ("autobot-frontend/src",),
     "frontend-http-transports": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "frontend-local-formatter-scan": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "frontend-local-date-formatter-scan": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "frontend-hand-built-relative-time-scan": ("autobot-frontend/src", "autobot-slm-frontend/src"),
+    "frontend-hand-rolled-file-save-scan": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "frontend-hand-rolled-spinner-scan": ("autobot-frontend/src", "autobot-slm-frontend/src", "autobot-plugins"),
     "search-mode-copies": ("autobot-backend",),
     "redaction-placeholder-literals": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
@@ -531,6 +536,7 @@ _DECLARED_SCOPES = {
         "autobot-slm-backend",
         "scripts",
     ),
+    "ansible-files-scanned-for-slm-port": ("autobot-slm-backend/ansible",),
 }
 
 

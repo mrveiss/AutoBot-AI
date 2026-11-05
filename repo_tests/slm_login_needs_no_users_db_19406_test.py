@@ -43,7 +43,6 @@ def _source_paths(root: Path) -> list[str]:
 REACH = declare(
     "slm-users-db-scan",
     discover=_source_paths,
-    floor=312,  # mid-window: population 312, window (312, 312)
     what="non-test SLM python source",
     roots=(SLM.name,),
 )

@@ -47,7 +47,6 @@ def discover_compose_files(root: Path) -> list[str]:
 COMPOSE_FILES = declare(
     "compose-files",
     discover=discover_compose_files,
-    floor=7,
     growth=3,
     what="tracked docker-compose files at any depth (#15317, #17500)",
 )

@@ -31,6 +31,8 @@ import ast
 from functools import lru_cache
 from pathlib import Path
 
+from tools.lint import _parse_cache as parse_cache
+
 
 def _declares_router_config(source: str) -> bool:
     """True when *source* CALLS ``RouterConfig(...)``.
@@ -40,7 +42,7 @@ def _declares_router_config(source: str) -> bool:
     finding the old file and reporting zero entries from it.
     """
     try:
-        tree = ast.parse(source)
+        tree = parse_cache.parse(source)
     except SyntaxError:
         return False
     return any(
@@ -85,7 +87,7 @@ def entries_in_source(source: str, *, origin: str = "<source>") -> tuple[tuple[t
     """
     found: list[tuple[str, str]] = []
     problems: list[str] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if not (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "RouterConfig"):
             continue
         kwargs = {kw.arg: kw.value for kw in node.keywords}
