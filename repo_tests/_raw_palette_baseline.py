@@ -21,10 +21,8 @@ from __future__ import annotations
 
 RAW_PALETTE_CLASSES: dict[str, int] = {
     "accent-blue-500": 2,
-    "bg-amber-50": 1,
-    "bg-amber-500": 3,
+    "bg-amber-500": 2,
     "bg-amber-600": 1,
-    "bg-amber-950": 1,
     "bg-blue-100": 8,
     "bg-blue-400/10": 2,
     "bg-blue-50": 1,  # #16253 SystemStatusNotification severities onto theme tokens (2 -> 1)
@@ -48,8 +46,8 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "bg-green-50": 2,  # #16253 SystemStatusNotification severities onto theme tokens (3 -> 2)
     "bg-green-500": 9,  # #14780 BaseAvatar: hand-rolled avatars and presence dots left for the kit (11 -> 9)
     "bg-green-500/10": 2,
-    "bg-green-600": 4,  # #16253 SystemStatusNotification severities onto theme tokens (5 -> 4)
-    "bg-green-700": 2,  # #16253 SystemStatusNotification severities onto theme tokens (3 -> 2)
+    "bg-green-600": 3,  # #16253 SystemStatusNotification severities onto theme tokens (5 -> 4)
+    "bg-green-700": 1,  # #16253 SystemStatusNotification severities onto theme tokens (3 -> 2)
     "bg-green-900": 2,
     "bg-green-900/30": 3,
     "bg-indigo-100": 2,
@@ -73,8 +71,8 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "bg-red-500/10": 5,
     "bg-red-500/20": 1,
     "bg-red-500/30": 1,
-    "bg-red-600": 4,  # #16253 SystemStatusNotification severities onto theme tokens (5 -> 4)
-    "bg-red-700": 4,  # #16253 SystemStatusNotification severities onto theme tokens (5 -> 4)
+    "bg-red-600": 3,  # #16253 SystemStatusNotification severities onto theme tokens (5 -> 4)
+    "bg-red-700": 3,  # #16253 SystemStatusNotification severities onto theme tokens (5 -> 4)
     "bg-red-900": 2,
     "bg-red-900/30": 3,
     "bg-yellow-100": 7,
@@ -86,8 +84,6 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "bg-yellow-900": 1,
     "bg-yellow-900/20": 1,
     "bg-yellow-900/30": 1,
-    "border-amber-200": 1,
-    "border-amber-800": 1,
     "border-blue-300": 1,
     "border-blue-500": 4,
     "border-blue-500/20": 2,
@@ -122,10 +118,8 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "ring-offset-gray-800": 1,
     "ring-purple-500": 1,
     "ring-red-500": 2,  # #16253 SystemStatusNotification severities onto theme tokens (3 -> 2)
-    "text-amber-200": 1,
     "text-amber-400": 2,
     "text-amber-600": 2,
-    "text-amber-800": 1,
     "text-amber-950": 1,
     "text-blue-200": 3,
     "text-blue-300": 1,
@@ -149,9 +143,9 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "text-gray-900": 2,
     "text-green-200": 2,
     "text-green-300": 2,
-    "text-green-400": 13,  # #16253 SystemStatusNotification severities onto theme tokens (15 -> 14)
+    "text-green-400": 12,  # #16253 SystemStatusNotification severities onto theme tokens (15 -> 14)
     "text-green-500": 13,
-    "text-green-600": 18,  # #16253 SystemStatusNotification severities onto theme tokens (20 -> 18)
+    "text-green-600": 17,  # #16253 SystemStatusNotification severities onto theme tokens (20 -> 18)
     "text-green-700": 4,  # #16253 SystemStatusNotification severities onto theme tokens (5 -> 4)
     "text-green-800": 4,
     "text-green-900": 1,  # #16253 SystemStatusNotification severities onto theme tokens (2 -> 1)
