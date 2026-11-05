@@ -5,7 +5,7 @@ import { BaseButton } from '@autobot/ui'
 // Author: mrveiss
 
 /**
- * DevSpeedupView - Developer productivity tools and code generation
+ * DevSpeedupView - code templates and action history
  * Issue #902 - Developer Speedup Tools
  * Issue #1359: i18n string extraction
  */
@@ -14,78 +14,21 @@ import { ref, computed } from 'vue'
 import { useDevSpeedup } from '@/composables/useDevSpeedup'
 import { createLogger } from '@/utils/debugUtils'
 import Icon from '@/components/ui/Icon.vue'
-import { runCodeAction } from './devSpeedupCodeAction'
 
 const logger = createLogger('DevSpeedupView')
 
-// Each flag returns with its route (#18749); the dev-speedup routes below are not served.
-// Quick search: POST /dev-speedup/quick-search.
-const QUICK_SEARCH_ENABLED = false
-// Snippet generation: POST /dev-speedup/snippet-generate.
-const SNIPPET_GENERATE_ENABLED = false
-// Code actions (refactor, tests, optimize, format, lint-fix): POST /dev-speedup/{refactor-suggest,test-generate,optimize,format,lint-fix}.
-const CODE_ACTIONS_ENABLED = false
-
 const {
-  searchResults,
-  snippets,
   templates,
-  refactorSuggestions,
-  generatedTests,
   actionHistory,
   isLoading,
   error,
-  quickSearch,
-  generateSnippet,
   fetchTemplates,
-  suggestRefactor,
-  generateTests,
-  optimizeCode,
-  formatCode,
-  lintFix,
 } = useDevSpeedup({ autoFetch: true })
-
-const activeTab = ref<'search' | 'snippets' | 'templates' | 'actions'>(
-  QUICK_SEARCH_ENABLED ? 'search' : 'templates',
-)
-const searchQuery = ref('')
-const searchType = ref<'file' | 'code' | 'symbol' | undefined>(undefined)
-
-const snippetDescription = ref('')
-const snippetLanguage = ref('python')
 
 const selectedCategory = ref<string | undefined>(undefined)
 
-const codeInput = ref('')
-const actionLanguage = ref('python')
-const actionType = ref<'refactor' | 'optimize' | 'format' | 'lint' | 'test'>('refactor')
-
-const supportedLanguages = ['python', 'javascript', 'typescript', 'java', 'go', 'rust', 'cpp']
-
-async function handleSearch() {
-  if (!searchQuery.value.trim()) return
-  await quickSearch(searchQuery.value, searchType.value)
-}
-
-async function handleGenerateSnippet() {
-  if (!snippetDescription.value.trim()) return
-  const snippet = await generateSnippet(snippetDescription.value, snippetLanguage.value)
-  if (snippet) {
-    logger.debug('Snippet generated:', snippet.id)
-    snippetDescription.value = ''
-  }
-}
-
 async function handleFetchTemplates() {
   await fetchTemplates(selectedCategory.value)
-}
-
-async function handleCodeAction() {
-  if (!codeInput.value.trim()) return
-  const replacement = await runCodeAction(actionType.value, codeInput.value, actionLanguage.value, {
-    suggestRefactor, optimizeCode, formatCode, lintFix, generateTests,
-  })
-  if (replacement) codeInput.value = replacement
 }
 
 function copyToClipboard(text: string) {
@@ -123,116 +66,9 @@ const templateCategories = computed(() => {
       </div>
     </div>
 
-    <!-- Tabs -->
-    <nav class="tab-nav">
-      <button v-if="QUICK_SEARCH_ENABLED" @click="activeTab = 'search'" :class="['tab-btn', { active: activeTab === 'search' }]">
-        <Icon name="search" /> {{ $t('views.devSpeedup.quickSearch') }}
-      </button>
-      <button v-if="SNIPPET_GENERATE_ENABLED" @click="activeTab = 'snippets'" :class="['tab-btn', { active: activeTab === 'snippets' }]">
-        <Icon name="puzzle-piece" /> {{ $t('views.devSpeedup.snippetsTab', { count: snippets.length }) }}
-      </button>
-      <button @click="activeTab = 'templates'" :class="['tab-btn', { active: activeTab === 'templates' }]">
-        <Icon name="file-code" /> {{ $t('views.devSpeedup.templatesTab', { count: templates.length }) }}
-      </button>
-      <button v-if="CODE_ACTIONS_ENABLED" @click="activeTab = 'actions'" :class="['tab-btn', { active: activeTab === 'actions' }]">
-        <Icon name="bolt" /> {{ $t('views.devSpeedup.quickActions') }}
-      </button>
-    </nav>
-
-    <!-- Tab Content -->
+    <!-- Templates -->
     <div class="tab-content">
-      <!-- Search Tab -->
-      <div v-if="QUICK_SEARCH_ENABLED" v-show="activeTab === 'search'" class="tab-panel">
-        <div class="card">
-          <div class="card-header"><span class="card-title">{{ $t('views.devSpeedup.quickCodeSearch') }}</span></div>
-          <div class="card-body">
-            <div class="search-row">
-              <input v-model="searchQuery" type="text" :placeholder="$t('views.devSpeedup.searchPlaceholder')" class="field-input search-input">
-              <select v-model="searchType" class="field-select">
-                <option :value="undefined">{{ $t('views.devSpeedup.allTypes') }}</option>
-                <option value="file">{{ $t('views.devSpeedup.files') }}</option>
-                <option value="code">{{ $t('views.devSpeedup.code') }}</option>
-                <option value="symbol">{{ $t('views.devSpeedup.symbols') }}</option>
-              </select>
-              <BaseButton size="sm" @click="handleSearch" :disabled="isLoading || !searchQuery.trim()">
-                {{ $t('views.devSpeedup.search') }}
-              </BaseButton>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="searchResults.length > 0" class="card">
-          <div class="card-header"><span class="card-title">{{ $t('views.devSpeedup.results', { count: searchResults.length }) }}</span></div>
-          <div class="card-body">
-            <div class="results-list">
-              <div v-for="(result, idx) in searchResults" :key="idx" class="result-item">
-                <span :class="['badge', 'badge-' + result.type]">{{ result.type }}</span>
-                <div class="result-content">
-                  <p class="result-path">{{ result.path }}</p>
-                  <p v-if="result.line" class="result-line">{{ $t('views.devSpeedup.line', { num: result.line }) }}</p>
-                  <p class="result-text">{{ result.content }}</p>
-                  <p v-if="result.context" class="result-context">{{ result.context }}</p>
-                </div>
-                <div class="result-score">{{ $t('views.devSpeedup.score', { value: result.score.toFixed(2) }) }}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div v-else-if="searchQuery && !isLoading" class="empty-state">
-          <Icon name="search" />
-          <p>{{ $t('views.devSpeedup.noResults') }}</p>
-        </div>
-      </div>
-
-      <!-- Snippets Tab -->
-      <div v-if="SNIPPET_GENERATE_ENABLED" v-show="activeTab === 'snippets'" class="tab-panel">
-        <div class="card">
-          <div class="card-header"><span class="card-title">{{ $t('views.devSpeedup.generateCodeSnippet') }}</span></div>
-          <div class="card-body">
-            <div class="field-group">
-              <label class="field-label">{{ $t('views.devSpeedup.language') }}</label>
-              <select v-model="snippetLanguage" class="field-select">
-                <option v-for="lang in supportedLanguages" :key="lang" :value="lang">
-                  {{ lang.charAt(0).toUpperCase() + lang.slice(1) }}
-                </option>
-              </select>
-            </div>
-            <div class="field-group">
-              <label class="field-label">{{ $t('views.devSpeedup.description') }}</label>
-              <textarea v-model="snippetDescription" rows="3" :placeholder="$t('views.devSpeedup.snippetPlaceholder')" class="field-input"></textarea>
-            </div>
-            <BaseButton size="sm" block @click="handleGenerateSnippet" :disabled="isLoading || !snippetDescription.trim()">
-              {{ $t('views.devSpeedup.generateSnippet') }}
-            </BaseButton>
-          </div>
-        </div>
-
-        <div v-if="snippets.length > 0" class="snippets-list">
-          <div v-for="snippet in snippets" :key="snippet.id" class="card">
-            <div class="card-body">
-              <div class="snippet-header">
-                <div class="snippet-tags">
-                  <span class="badge badge-info">{{ snippet.language }}</span>
-                  <span v-for="tag in snippet.tags" :key="tag" class="badge badge-neutral">{{ tag }}</span>
-                </div>
-                <BaseButton variant="ghost" size="xs" @click="copyToClipboard(snippet.code)">{{ $t('views.devSpeedup.copy') }}</BaseButton>
-              </div>
-              <p class="snippet-desc">{{ snippet.description }}</p>
-              <pre class="code-block"><code>{{ snippet.code }}</code></pre>
-              <p class="snippet-date">{{ $t('views.devSpeedup.created', { date: new Date(snippet.created_at).toLocaleString() }) }}</p>
-            </div>
-          </div>
-        </div>
-
-        <div v-else class="empty-state">
-          <Icon name="puzzle-piece" />
-          <p>{{ $t('views.devSpeedup.noSnippets') }}</p>
-        </div>
-      </div>
-
-      <!-- Templates Tab -->
-      <div v-show="activeTab === 'templates'" class="tab-panel">
+      <div class="tab-panel">
         <div class="card template-filter">
           <div class="card-body filter-row">
             <select v-model="selectedCategory" class="field-select filter-select">
@@ -271,93 +107,6 @@ const templateCategories = computed(() => {
         </div>
       </div>
 
-      <!-- Actions Tab -->
-      <div v-if="CODE_ACTIONS_ENABLED" v-show="activeTab === 'actions'" class="tab-panel">
-        <div class="card">
-          <div class="card-header"><span class="card-title">{{ $t('views.devSpeedup.quickCodeActions') }}</span></div>
-          <div class="card-body">
-            <div class="form-grid">
-              <div class="field-group">
-                <label class="field-label">{{ $t('views.devSpeedup.language') }}</label>
-                <select v-model="actionLanguage" class="field-select">
-                  <option v-for="lang in supportedLanguages" :key="lang" :value="lang">
-                    {{ lang.charAt(0).toUpperCase() + lang.slice(1) }}
-                  </option>
-                </select>
-              </div>
-              <div class="field-group">
-                <label class="field-label">{{ $t('views.devSpeedup.action') }}</label>
-                <select v-model="actionType" class="field-select">
-                  <option value="refactor">{{ $t('views.devSpeedup.suggestRefactorings') }}</option>
-                  <option value="optimize">{{ $t('views.devSpeedup.optimizeCode') }}</option>
-                  <option value="format">{{ $t('views.devSpeedup.formatCode') }}</option>
-                  <option value="lint">{{ $t('views.devSpeedup.fixLinting') }}</option>
-                  <option value="test">{{ $t('views.devSpeedup.generateTests') }}</option>
-                </select>
-              </div>
-            </div>
-            <div class="field-group">
-              <label class="field-label">{{ $t('views.devSpeedup.code') }}</label>
-              <textarea v-model="codeInput" rows="12" :placeholder="$t('views.devSpeedup.codePlaceholder')" class="field-input code-textarea"></textarea>
-            </div>
-            <BaseButton size="sm" block @click="handleCodeAction" :disabled="isLoading || !codeInput.trim()">
-              {{ isLoading ? $t('views.devSpeedup.processing') : $t('views.devSpeedup.runAction') }}
-            </BaseButton>
-          </div>
-        </div>
-
-        <!-- Refactor Suggestions -->
-        <div v-if="actionType === 'refactor' && refactorSuggestions.length > 0" class="card">
-          <div class="card-header">
-            <span class="card-title">{{ $t('views.devSpeedup.refactorSuggestions', { count: refactorSuggestions.length }) }}</span>
-          </div>
-          <div class="card-body suggestions-list">
-            <div v-for="(suggestion, idx) in refactorSuggestions" :key="idx" class="suggestion-item">
-              <div class="suggestion-meta">
-                <span class="badge badge-info">{{ suggestion.type }}</span>
-                <span :class="[
-                  'badge',
-                  suggestion.impact === 'high' ? 'badge-error' :
-                  suggestion.impact === 'medium' ? 'badge-warning' : 'badge-neutral'
-                ]">
-                  {{ $t('views.devSpeedup.impact', { level: suggestion.impact }) }}
-                </span>
-              </div>
-              <p class="suggestion-desc">{{ suggestion.description }}</p>
-              <div class="diff-grid">
-                <div>
-                  <p class="diff-label">{{ $t('views.devSpeedup.before') }}:</p>
-                  <pre class="code-block code-sm"><code>{{ suggestion.before }}</code></pre>
-                </div>
-                <div>
-                  <p class="diff-label">{{ $t('views.devSpeedup.after') }}:</p>
-                  <pre class="code-block code-sm"><code>{{ suggestion.after }}</code></pre>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Generated Tests -->
-        <div v-if="actionType === 'test' && generatedTests.length > 0" class="card">
-          <div class="card-header">
-            <span class="card-title">{{ $t('views.devSpeedup.generatedTests', { count: generatedTests.length }) }}</span>
-          </div>
-          <div class="card-body tests-list">
-            <div v-for="(test, idx) in generatedTests" :key="idx" class="test-item">
-              <div class="test-header">
-                <div>
-                  <h4 class="test-name">{{ test.name }}</h4>
-                  <span class="badge badge-success">{{ test.framework }}</span>
-                </div>
-                <BaseButton variant="ghost" size="xs" @click="copyToClipboard(test.code)">{{ $t('views.devSpeedup.copy') }}</BaseButton>
-              </div>
-              <p class="test-desc">{{ test.description }}</p>
-              <pre class="code-block"><code>{{ test.code }}</code></pre>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 </template>
@@ -420,91 +169,22 @@ const templateCategories = computed(() => {
   gap: var(--spacing-5);
 }
 
-/* Search */
-.search-row {
-  display: flex;
-  gap: var(--spacing-3);
-}
-
-.search-input { flex: 1; }
-
-/* Results */
-.results-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-3);
-}
-
-.result-item {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--spacing-3);
-  padding: var(--spacing-4);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  transition: background var(--duration-150) var(--ease-in-out);
-}
-
-.result-item:hover { background: var(--bg-secondary); }
-
-.result-content { flex: 1; }
-
-.result-path {
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  font-family: var(--font-mono);
-  color: var(--text-primary);
-  margin: var(--spacing-0);
-}
-
-.result-line {
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-  margin: var(--spacing-1) 0 0;
-}
-
-.result-text {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  margin: var(--spacing-2) 0 0;
-}
-
-.result-context {
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-  margin: var(--spacing-1) 0 0;
-}
-
-.result-score {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  flex-shrink: 0;
-}
-
-/* Badge types */
-.badge-file { background: var(--color-info-bg); color: var(--color-info); }
-.badge-code { background: var(--color-success-bg); color: var(--color-success); }
-.badge-symbol { background: rgba(147, 51, 234, 0.1); color: var(--color-purple); }
 .badge-purple { background: rgba(147, 51, 234, 0.1); color: var(--color-purple); }
 
 /* Snippets / Templates lists */
-.snippets-list,
 .templates-list {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-4);
 }
 
-.snippet-header,
-.template-header,
-.test-header {
+.template-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   margin-bottom: var(--spacing-3);
 }
 
-.snippet-tags,
 .template-tags {
   display: flex;
   gap: var(--spacing-2);
@@ -520,9 +200,7 @@ const templateCategories = computed(() => {
   margin: var(--spacing-0);
 }
 
-.snippet-desc,
-.template-desc,
-.test-desc {
+.template-desc {
   font-size: var(--text-sm);
   color: var(--text-secondary);
   margin: 0 0 var(--spacing-3);
@@ -532,12 +210,6 @@ const templateCategories = computed(() => {
   font-size: var(--text-xs);
   color: var(--text-secondary);
   margin: 0 0 var(--spacing-3);
-}
-
-.snippet-date {
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-  margin: var(--spacing-2) 0 0;
 }
 
 /* Code blocks */
@@ -552,17 +224,6 @@ const templateCategories = computed(() => {
   margin: var(--spacing-0);
 }
 
-.code-sm { padding: var(--spacing-3); font-size: var(--text-xs); }
-.code-textarea { font-family: var(--font-mono); font-size: var(--text-sm); resize: vertical; }
-
-/* Form grid */
-.form-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--spacing-4);
-  margin-bottom: var(--spacing-4);
-}
-
 /* Filter row */
 .filter-row {
   display: flex;
@@ -571,52 +232,6 @@ const templateCategories = computed(() => {
 }
 
 .filter-select { flex: 1; }
-
-/* Suggestions */
-.suggestions-list,
-.tests-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-4);
-}
-
-.suggestion-item,
-.test-item {
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-4);
-}
-
-.suggestion-meta {
-  display: flex;
-  gap: var(--spacing-2);
-  margin-bottom: var(--spacing-2);
-}
-
-.suggestion-desc {
-  font-size: var(--text-sm);
-  color: var(--text-primary);
-  margin: 0 0 var(--spacing-3);
-}
-
-.diff-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--spacing-4);
-}
-
-.diff-label {
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-  margin: 0 0 var(--spacing-1);
-}
-
-.test-name {
-  font-size: var(--text-sm);
-  font-weight: var(--font-semibold);
-  color: var(--text-primary);
-  margin: var(--spacing-0);
-}
 
 /* Empty state */
 .empty-state {
@@ -635,10 +250,5 @@ const templateCategories = computed(() => {
 
 .empty-state p { margin: var(--spacing-0); font-size: var(--text-sm); }
 
-@media (max-width: 768px) {
-  .search-row { flex-direction: column; }
-  .form-grid { grid-template-columns: 1fr; }
-  .diff-grid { grid-template-columns: 1fr; }
   .filter-row { flex-direction: column; }
-}
 </style>
