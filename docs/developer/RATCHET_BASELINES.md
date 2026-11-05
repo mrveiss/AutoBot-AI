@@ -479,6 +479,38 @@ binding, exact `path:qualname`; a module-level binding's qualname is its name), 
 - `--freeze` writes the baseline from the clusters left after exceptions, so an excepted name
   leaves the baseline in a removals-only diff.
 
+## Recorded exception: widening the UI-literal matcher to `label:` and `zeroText:` (#19885)
+
+A matcher change that brings existing sites into a shrink-only baseline cannot pass the rule
+"the baseline only shrinks". The owner decided on 2026-11-02 to freeze them **once** as a recorded
+exception, rather than leave the fields unwatched.
+
+- **Matcher:** `_SCRIPT_LITERAL` in `repo_tests/_ui_literal_scan.py` now includes `label:` and
+  `zeroText:` beside `message:` and `title:`, under the same rule (capital then lowercase, at least
+  five characters). Scope: `.vue` under both apps; `.ts` files are not scanned by this guard.
+- **True count:** 120 literals in 24 `.vue` files, all `label:` (0 for `zeroText:`). Main GUI 46 in
+  11 files; SLM console 74 in 13 files. The baseline grew by exactly those 120 digests and lost none.
+- **Against the 187 lines in 32 files a plain regex gave:** that regex reproduces exactly (187 / 32),
+  and it is the same population with the shape rule removed. 120 are detected; 66 are `label:` values
+  under five characters or without a lowercase letter (`Info`, `PDF`, `Chat`, `AWS`), which the shared
+  rule does not match for any key; 1 is a `label: '--'` in a template expression, not script. No hit was
+  lost to the script-block restriction. The "about 24" in the issue was the file count (24 matches).
+- **One-time:** this is a one-time freeze. It is not a precedent for freezing a later widening; the
+  baseline shrinks from 120 as each literal moves to `t('...')`, and a NEW `label:` or `zeroText:`
+  literal fails like any other (controls in `TestLabelAndZeroTextFields`).
+- **Second derivation (rule 3):** the rough regex above, over the same files, compared as sets. The
+  script kind is otherwise not independently re-derivable (no JavaScript parser in this suite).
+
+**Second widening, no freeze (#19885 AC3, 2026-11-03).** The first widening still could not see
+the three sites the issue names: `zeroText: '0B'`, `nullText: '0 B'` in a `.ts` formatter, and
+`label: 'SLOs'`. The matcher now adds the key `nullText:` and two value shapes beside prose: a
+byte size (`0 B`, `1.5 KB`) and an acronym plural (`SLOs`). The scan also reads the formatter
+modules, `src/utils/format*.ts` in both apps, for the script kind. **True count: 0** new sites,
+so the baseline did not change. Second derivation: `git ls-files` plus `grep -P` over 608 files,
+which is a superset scope, since it reads whole files and not just `<script>`. It also found 0,
+and a control string matched. A number with any other unit (`24h`, `3d`) is still not matched:
+`3d` is a view-mode identifier in `KnowledgeGraph.vue`.
+
 ## Down-only tables are compared with the base, not with a hand total (#19283)
 
 A per-entry table (file-size `KNOWN_LARGE`, the colour and palette baselines) used to carry a
@@ -517,8 +549,19 @@ folder cannot read as a clean 0.
 - **Not independently re-derived.** Rule 3 asks for a second enumeration; this ratchet has only the
   detector's, so its count is as good as the regex. The fixtures in the test file are its positive
   and negative controls.
+- **A branch doesn't repin (#19673):** the pre-push gate asks only when the branch changed a guard beyond its `floor=` lines. Merge trains still enforce every floor (`AUTOBOT_REACH_AUDIT=1`, train heads only) and repin the rest on their merged tree, so a branch hand-lowering a `floor=` is judged there, not locally.
 - **Re-pinning the floor:** `python scripts/repin_reach_floors.py` after the tree grows or shrinks
   past the window.
+- **A floor computed from the base (#19676):** a `declare()` without `floor=` gets
+  `population at the base - skips - growth` (`repo_tests/_reach_base.py`), the bottom of the
+  window a pin had to sit in. The base population is measured by the BASE's own declaration: the
+  guard module as it was at the base commit, imported from a temp worktree of that commit in a
+  separate `python -I` process. So a narrowed `discover` in the PR cannot pull the floor down with
+  it. The base is the one `_ratchet_base.base_commit` resolves. A base that cannot be read or
+  measured, a floor of zero or less, or a declaration the base does not have (a new guard) raises
+  `BaseUnavailable`: a new guard pins `floor=` until it lands. Such a floor never goes stale and is
+  never re-pinned. A guard whose `discover` reads untracked or generated files keeps an explicit
+  `floor=` and is listed with its reason in `_reach_base.PINNED_BY_DESIGN`.
 
 ## Checklist for a new ratchet
 

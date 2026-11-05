@@ -47,6 +47,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.env_utils import env_float_clamped, env_int_clamped
 from autobot_shared.ssot_config import config
 from models.database import Node, Service, SystemdState
+from services.docker_proxy_client import is_compose_node, run_compose_service_action
 from services.journal_fetch import build_journal_command, fetch_service_journal
 from services.ssh_utils import ssh_destination
 from services.unit_names import validate_unit_name
@@ -122,6 +123,8 @@ class SystemctlResult:
 
 # systemctl verbs the executor will put on a remote command line (#18359).
 ALLOWED_SYSTEMCTL_ACTIONS = frozenset({"start", "stop", "restart", "status", "reload"})
+#: The actions that clear a start-limit park first (#20767).
+_RESETS_START_LIMIT = frozenset({"start", "restart"})
 
 
 def systemctl_remote_command(
@@ -139,13 +142,22 @@ def systemctl_remote_command(
     """
     if action not in ALLOWED_SYSTEMCTL_ACTIONS:
         raise ValueError(f"systemctl action not allowed: {action!r}")
+    if not units:
+        raise ValueError("systemctl needs at least one unit")
     quoted = " ".join(shlex.quote(validate_unit_name(unit)) for unit in units)
     tail = " || true" if tolerate_failure else ""
     flags = " --no-pager" if no_pager else ""
+    # #20767: a unit parked by its start limit (#4090, #20764) refuses start and restart until the
+    # window passes. Every start or restart clears that first, as the SLM watchdog does; resetting a
+    # unit that isn't failed is a no-op, and the line's exit status stays the action's own.
+    # `systemctl` stays literal on every line, so the #18359 quoting and #18186 executor guards read each one.
+    resets = action in _RESETS_START_LIMIT
     if user_scope:
-        return f"systemctl --user {action}{flags} -- {quoted}{tail}"
+        reset = f"systemctl --user reset-failed -- {quoted} 2>/dev/null; " if resets else ""
+        return f"{reset}systemctl --user {action}{flags} -- {quoted}{tail}"
     sudo = "sudo -n" if use_noninteractive_sudo else "sudo"
-    return f"{sudo} systemctl {action}{flags} -- {quoted}{tail}"
+    reset = f"{sudo} systemctl reset-failed -- {quoted} 2>/dev/null; " if resets else ""
+    return f"{reset}{sudo} systemctl {action}{flags} -- {quoted}{tail}"
 
 
 async def run_systemctl_over_ssh(
@@ -233,6 +245,8 @@ async def run_ansible_service_action(
     action: str,
 ) -> Tuple[bool, str]:
     """Run SSH command to control a service via systemctl. Ref: #1088."""
+    if is_compose_node(node):  # #20629: a container has no SSH or systemd
+        return await run_compose_service_action(node, service_name, action)
     ssh_base_cmd = build_service_ssh_base_cmd(node)  # outside the try, as before: a bad node row raises
 
     try:

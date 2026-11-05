@@ -58,6 +58,8 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
+
 #: Trees scanned. Frontend and infra are out of scope: a claim primitive is a
 #: Redis call from Python.
 _ROOTS = ("autobot-backend", "autobot_shared", "autobot-slm-backend", "scripts", "pipeline-scripts")
@@ -96,6 +98,10 @@ _THE_REGISTRY = "autobot_shared/coordination/work_claims_lua.py"
 #: old stale-entry check only fired when a file lost its LAST primitive, so
 #: going from two to one was invisible in both directions at once.
 _ALLOWED: dict[str, tuple[int, str]] = {
+    "autobot-backend/services/agent_terminal/pending_claim.py": (
+        2,
+        "one pending approval per terminal session (#20059): a slot on a record, not a work claim with subtree overlap",
+    ),
     "autobot_shared/membership_epoch.py": (
         1,
         "#19630 -- a token mint, not a lock: SETNX fills a missing epoch key so concurrent workers "
@@ -197,25 +203,10 @@ def _iter_sources(root: Path | None = None) -> list[Path]:
 
 #: The sweep's reach, declared so the meta-test proves the floor against the
 #: live population (#15928) instead of this file asserting its own number.
-#: Pinned MID-WINDOW, not at `population - growth`. With 3,001 modules live and
-#: `growth=50`, a floor of 2,951 puts the slack exactly at the allowance, so the
-#: very next module anyone adds reds the meta-test -- zero headroom by
-#: construction (#17142). 2,976 left room for 25 more before a bump was due.
-#:
-#: Re-pinned 2026-09-28 at 3,027 live (measured by `len(REACH.discover())` at
-#: `b2f41ad3c694`, not by grep), so the mid-window floor is 3,002. The previous
-#: 2,976 had drifted 51 below -- one past the allowance -- and only one of those
-#: 51 modules came from the change that surfaced it: the sweep skips `_test.py`,
-#: so a PR adding two test files and one module moves this by one. The other 50
-#: arrived with base.
+#: The floor is computed from the base commit (#19676), not pinned here.
 REACH = declare(
     "one-claim-registry",
     discover=_iter_sources,
-    # Re-pinned MID-window 2026-10-04 (#17356): `_reach.verify_floor` now refuses a floor in
-    # the bottom tenth of `growth`, because that is zero tolerance dressed as an allowance.
-    # Re-measured by the mechanism itself, not carried across (#15928); the arithmetic is in
-    # the commit message, which cannot drift from the tree it describes.
-    floor=3502,  # re-pinned mid-window (train 80 on main)
     what="Python modules swept for claim-or-lock primitives",
     growth=50,
     # Scope as data (#17844). Five trees, including `scripts/` and `pipeline-scripts/` that no
@@ -228,7 +219,7 @@ REACH = declare(
 def _sites_in_source(source: str, label: str) -> list[str]:
     """Every claim-or-lock primitive in one module, as `path:line kind`."""
     found: list[str] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.Call):
             name = node.func.attr if isinstance(node.func, ast.Attribute) else getattr(node.func, "id", "")
             keywords = {kw.arg for kw in node.keywords if kw.arg}

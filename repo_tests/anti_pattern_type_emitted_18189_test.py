@@ -25,6 +25,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ENUM = "AntiPatternType"
@@ -33,7 +34,7 @@ _ENUM = "AntiPatternType"
 def _emitted_members(source: str) -> set[str]:
     """Members used as `pattern_type=AntiPatternType.<NAME>` in a call."""
     found: set[str] = set()
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if not isinstance(node, ast.Call):
             continue
         for kw in node.keywords:
@@ -71,8 +72,6 @@ def _source_population(root: Path) -> list[str]:
 REACH = declare(
     "anti-pattern-type-emitters",
     discover=_source_population,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=125,
     what="non-test python source in the two detector packages",
     roots=("autobot-backend/code_analysis", "autobot-backend/code_intelligence"),
     growth=30,

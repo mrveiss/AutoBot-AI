@@ -48,7 +48,6 @@ from llc.deps import get_session
 from llc.deps import load_owned_project as _load_owned_project
 from user_management.services import TenantContext
 
-from ..kb.collections import KbCollectionManager
 from ..models.enums import ApprovalType, SprintStatus, WorkItemRelationType, WorkItemStatus
 from ..models.sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint
 from ..models.work_item import LLCWorkItem, LLCWorkItemRelation
@@ -60,13 +59,13 @@ from ..services.sprint_autoclose import SprintAutoCloseService
 from ..services.sprint_planning import SprintNotFound, SprintPlanningService
 from ..services.timeline import compute_critical_path, duration_days
 from ._common import actor_id
+from .sprint_access import require_sprint_in_org
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["llc-sprints"])
 
 _approval_svc = ApprovalService()
 _autoclose_svc = SprintAutoCloseService(approval_service=_approval_svc)
-_kb_manager = KbCollectionManager()
 
 
 # ------------------------------------------------------------------ Schemas
@@ -589,7 +588,6 @@ async def create_project(
     session.add(project)
     await session.commit()
     await session.refresh(project)
-    await _kb_manager.ensure_collection(KbCollectionManager.PROJECT_PREFIX, project.id)
     return project
 
 
@@ -844,7 +842,6 @@ async def create_sprint(
     session.add(sprint)
     await session.commit()
     await session.refresh(sprint)
-    await _kb_manager.ensure_collection(KbCollectionManager.SPRINT_PREFIX, sprint.id)
     return sprint
 
 
@@ -931,13 +928,11 @@ async def close_sprint(
     (the sprint no longer has that approval pending). It remains for an approval granted before
     deciding applied the close.
     """
-    # IDOR guard (#10148): verify the sprint belongs to the caller's org before closing.
-    _sprint_check = (await session.execute(select(LLCSprint).where(LLCSprint.id == sprint_id))).scalar_one_or_none()
-    if _sprint_check is None or str(_sprint_check.company_id) != str(ctx.org_id):
-        raise HTTPException(status_code=404, detail="Sprint not found")
+    await require_sprint_in_org(session, sprint_id, ctx.org_id)
+    caller = actor_id(current_user)
     try:
         sprint = await _autoclose_svc.execute_close(
-            session, sprint_id=sprint_id, approval_id=body.approval_id, decided_by=actor_id(current_user)
+            session, sprint_id=sprint_id, approval_id=body.approval_id, decided_by=caller, actor_user_id=str(caller)
         )
         await session.commit()
         _autoclose_svc.schedule_closed_sprint_summary(sprint_id)  # after the commit, off the request (#8214)

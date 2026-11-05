@@ -21,10 +21,22 @@ WHAT COUNTS AS USER-VISIBLE, and the boundary is the whole design:
   component's own prop (`message`, `caption`, `hint`, `tooltip`) is user-visible
   and not seen (review finding on #17395);
 - (#12732 only) a SCRIPT literal: in `<script>`, a string literal in the
-  position `.value = '...'`, `message: '...'`, `title: '...'`, `confirm('...')`,
-  `alert('...')` or `Error('...')` that starts with a capital followed by a
-  lowercase letter and is at least five characters long. This is a regex over
-  the script blocks; it has no second derivation (see the ratchet test).
+  position `.value = '...'`, `message: '...'`, `title: '...'`, `label: '...'`,
+  `zeroText: '...'`, `nullText: '...'`, `confirm('...')`, `alert('...')` or `Error('...')`
+  whose text has one of three shapes, the same three for every key:
+  * prose: a capital followed by a lowercase letter, at least five characters
+    (`Total Nodes`);
+  * a byte size: a number and a byte unit, `0 B`, `0B`, `1.5 KB`, `2 GiB` (#19885);
+  * an acronym plural: two or more capitals and an `s`, `SLOs`, `APIs` (#19885).
+  This is a regex over the script blocks; it has no second derivation (see the
+  ratchet test). `label:`, `zeroText:` and `nullText:` and the two short shapes
+  were added by #19885, whose sites (`zeroText: '0B'`, `nullText: '0 B'`,
+  `label: 'SLOs'`) the prose rule alone could not see. Still not matched: a short
+  word (`Chat`), a bare acronym (`PDF`), and a number with any other unit
+  (`24h`, `3d`, which is as often a mode identifier as visible text).
+  `.ts` files are scanned only where `formatter_files()` in
+  `_hardcoded_ui_literal_detect.py` says (`src/utils/format*.ts`, #19885), and
+  only by the #12732 ratchet; every other `.ts` file is not scanned.
 
 WHAT DOES NOT COUNT, listed because an unstated exclusion is how a guard ends up
 measuring nothing:
@@ -92,7 +104,8 @@ _SCRIPT_BODY = re.compile(r"<script\b[^>]*>(.*?)</script\b[^>]*>", re.DOTALL | r
 #: The closing quote is the opening one (backreference), so `alert("Can't connect")` is one
 #: literal; the other two quote characters may occur inside it (#18802).
 _SCRIPT_LITERAL = re.compile(
-    r"""(?:\.value\s*=|message:|title:|confirm\(|alert\(|Error\()\s*([`'"])([A-Z][a-z](?:(?!\1).){3,}?)\1"""
+    r"""(?:\.value\s*=|message:|title:|label:|zeroText:|nullText:|confirm\(|alert\(|Error\()"""
+    r"""\s*([`'"])((?:[A-Z][a-z](?:\\.|(?!\1).){3,}?)|\d+(?:\.\d+)?\s?[KMGTP]?i?B|[A-Z]{2,}s)\1"""
 )
 KINDS = ("template-text", "attribute", "script")
 
@@ -195,6 +208,11 @@ def script_literals(source: str) -> list[str]:
     for block in _SCRIPT_BODY.findall(source):
         found += [m.group(2) for m in _SCRIPT_LITERAL.finditer(block)]
     return found
+
+
+def ts_literals(source: str) -> list[tuple[str, str]]:
+    """Every script-kind literal in a `.ts` module, read as one script body (#19885)."""
+    return [("script", m.group(2)) for m in _SCRIPT_LITERAL.finditer(source)]
 
 
 def literals_in(source: str) -> list[tuple[str, str]]:

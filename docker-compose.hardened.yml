@@ -65,6 +65,18 @@ services:
           cpus: '0.75'
           pids: 256
 
+
+  autobot-slm-postgres:
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: '0.75'
+          pids: 256
   autobot-chromadb:
     read_only: true
     tmpfs:
