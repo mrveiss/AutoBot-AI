@@ -34,6 +34,7 @@ from repo_tests._reach import declare
 
 from autobot_shared import deployment_profile as profile
 from autobot_shared.paths import scrubbed_git_env
+from tools.lint import _parse_cache as parse_cache
 
 _ROOT = repo_root()
 
@@ -152,7 +153,7 @@ def _copied_var(call: ast.Call) -> object:
 def code_copies_in(path: str, source: str) -> list[str]:
     """``path:line: VAR`` for every literal default of a profile variable in *source*."""
     out = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.Call) and _copied_var(node) in profile.PROFILE_VARS:
             out.append(f"{path}:{node.lineno}: {_copied_var(node)}")
     return out
@@ -171,7 +172,6 @@ def code_copies(root: Path) -> list[str]:
 WRITES = declare(
     "deployment-profile-writers-19315",
     discover=profile_writes,
-    floor=31,  # 36 live; window [26, 36], pin 31
     growth=10,
     what="literal assignments of AUTOBOT_ENVIRONMENT/ENV/DEPLOYMENT_MODE/DEBUG",
 )

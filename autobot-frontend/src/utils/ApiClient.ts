@@ -3,7 +3,7 @@
 import { ApiClientBase, httpErrorFrom, type RawRequestOptions, type TransportRequestOptions } from '@autobot/ui'
 import appConfig from '@/config/AppConfig.js';
 import { createLogger } from '@/utils/debugUtils';
-import { getApiBase } from '@/config/ssot-config';
+import { getApiBase, getBackendUrl } from '@/config/ssot-config';
 import { getSelectedCompanyId } from '@/utils/orgContext';
 import { clearStoredAuth, readStoredAuthToken } from '@/utils/authToken';
 import { CircuitBreakerError, runWithCircuitBreaker } from '@/utils/apiCircuitBreaker';
@@ -163,22 +163,15 @@ export class ApiClient extends ApiClientBase<RequestOptions> {
   }
 
   private _detectBaseUrl(): string {
-    const backendHost = import.meta.env.VITE_BACKEND_HOST;
-    const backendPort = import.meta.env.VITE_BACKEND_PORT;
-    const protocol = import.meta.env.VITE_HTTP_PROTOCOL;
-
     // Proxy mode: Vite dev server uses empty baseUrl for proxy
     const isViteDevServer = typeof window !== 'undefined' && window.location.port === '5173';
     if (isViteDevServer && import.meta.env.DEV) {
       return '';
     }
 
-    if (backendHost && backendPort && protocol) {
-      return `${protocol}://${backendHost}:${backendPort}`;
-    }
-
-    // Default to proxy mode (empty = relative URLs via nginx) (#919)
-    return '';
+    // #19821: the one backend-origin rule (ssot-config getBackendUrl): an explicit
+    // VITE_API_BASE_URL, otherwise proxy mode (empty = relative URLs via nginx, #919, #12339).
+    return getBackendUrl();
   }
 
   private async ensureBaseUrl(): Promise<string> {
@@ -276,7 +269,7 @@ export class ApiClient extends ApiClientBase<RequestOptions> {
   }
 
   // Uploads go through XHR, which has no shared header path. The routes the main app uploads to
-  // (e.g. /conversation-files/.../upload, gated by check_admin_permission) accept only an
+  // (e.g. /conversation-files/.../upload, gated by ownership in _authorize_file_operation, #20133) accept only an
   // Authorization bearer, X-Session-ID or the internal key, never a cookie, so send the bearer (#19983).
   protected authorizeUpload(xhr: XMLHttpRequest): void {
     const token = this.getAuthToken();

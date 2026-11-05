@@ -37,17 +37,5 @@ export const KNOWLEDGE_UPLOAD_EXTENSIONS: readonly string[] = [
   '.xlsx'
 ] as const
 
-/**
- * Mirror of `MAX_FILE_SIZE_MB` in `autobot-backend/api/knowledge.py`.
- *
- * Checking it client-side is a courtesy, not the enforcement: the server rejects an
- * oversize upload with 400 regardless. It never truncates, so a file over this size is
- * refused whole.
- */
-export const KNOWLEDGE_UPLOAD_MAX_MB = 10
-
-/** The same limit in bytes, for comparing against `File.size`. */
-export const KNOWLEDGE_UPLOAD_MAX_BYTES = KNOWLEDGE_UPLOAD_MAX_MB * 1024 * 1024
-
 /** The value for an `<input type="file">` `accept` attribute. */
 export const KNOWLEDGE_UPLOAD_ACCEPT = KNOWLEDGE_UPLOAD_EXTENSIONS.join(',')

@@ -5,7 +5,7 @@
 """KB collection lifecycle manager (GH#8235).
 
 Canonical naming and lifecycle for ChromaDB collections across all LLC entities.
-Collections are created on entity creation and archived on entity deletion,
+Collections are created by their first write (#19725) and archived on entity deletion,
 with document merging support for ephemeral entities (sprints, work items).
 """
 
@@ -73,6 +73,9 @@ class KbCollectionManager:
     ) -> str:
         """Create ChromaDB collection if not exists; idempotent.
 
+        No production caller since entities stopped creating one (#19725); that issue's
+        health-scan proposal is its next caller.
+
         Args:
             entity_type: Type of entity
             entity_id: Unique identifier for the entity
@@ -134,7 +137,7 @@ class KbCollectionManager:
             try:
                 original = await kb._async_chroma_client.get_collection(original_name)
             except Exception:
-                logger.warning(
+                logger.debug(  # the usual case: a collection appears only on its first write (#19725)
                     "Collection %s does not exist; nothing to archive",
                     original_name,
                 )

@@ -15,6 +15,8 @@ import json
 import yaml
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _SLM = repo_root() / "autobot-slm-backend"
 _ROLE = _SLM / "ansible" / "roles" / "llm"
 
@@ -28,7 +30,7 @@ def _models():
 
 def _ollama_settings(rows: dict) -> dict:
     """The shipped settings reader, with its helper; the suite's stubs make the API module unimportable."""
-    tree = ast.parse((_SLM / "api" / "llm_config.py").read_text(encoding="utf-8"))
+    tree = parse_cache.parse((_SLM / "api" / "llm_config.py").read_text(encoding="utf-8"))
     wanted = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in ("_json_list", "_ollama_settings")]
     assert len(wanted) == 2
     namespace = {"json": json, "Dict": dict, "List": list, "default_llm_models": _models()}
@@ -62,5 +64,5 @@ def test_the_role_refuses_an_empty_pull_list_before_pulling() -> None:
     tasks = yaml.safe_load((_ROLE / "tasks" / "main.yml").read_text(encoding="utf-8"))
     names = [str(task.get("name", "")) for task in tasks]
     guard = names.index("Models | There is something to pull")
-    assert guard < names.index("Models | Pull models appropriate for this node")
+    assert guard < names.index("Models | Pull models, retrying a failed download")
     assert tasks[guard]["ansible.builtin.assert"]["that"] == ["_llm_models_to_pull | length > 0"]

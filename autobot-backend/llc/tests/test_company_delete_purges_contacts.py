@@ -26,9 +26,11 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.ext.compiler import compiles
 
+from llc.models.activity import LLCActivityLog
 from llc.models.contact import LLCContact
 from llc.services.company import CompanyService
 from llc.services.contact import ContactService
+from llc.tests import _e2e_harness as harness
 from user_management.models.base import Base
 from user_management.models.organization import Organization
 
@@ -49,6 +51,7 @@ async def _seed_company(session_factory, llc_status: str = "active") -> uuid.UUI
             budget_monthly_cents=0,
             spent_monthly_cents=0,
             require_approval_for_hires=False,
+            require_approval_for_budget_raises=False,
         )
         session.add(org)
         await session.commit()
@@ -58,10 +61,17 @@ async def _seed_company(session_factory, llc_status: str = "active") -> uuid.UUI
 @pytest.fixture()
 async def session_factory() -> AsyncIterator:
     engine = create_async_engine("sqlite+aiosqlite://")  # canonical: ignore py-adhoc-db-engine (test-local engine)
+    for table in (LLCActivityLog.__table__,):
+        harness._scrub_pg_server_defaults(table)
+        harness._clientside_timestamps(table)
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all, tables=[Organization.__table__, LLCContact.__table__])
+        await conn.run_sync(
+            Base.metadata.create_all, tables=[Organization.__table__, LLCContact.__table__, LLCActivityLog.__table__]
+        )
     try:
-        yield async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
+        yield async_sessionmaker(  # canonical: ignore py-adhoc-db-engine (test)
+            bind=engine, expire_on_commit=False, autoflush=False
+        )
     finally:
         await engine.dispose()
 

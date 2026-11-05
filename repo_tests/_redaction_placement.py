@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import ast
 
+from tools.lint import _parse_cache as parse_cache
+
 
 def _callee_name(node: ast.AST) -> str | None:
     """The called name, whether the call is bare or attribute-style."""
@@ -54,7 +56,7 @@ def redacts_input_data_before_the_extract_loop(source: str) -> tuple[bool, str]:
     fn = next(
         (
             n
-            for n in ast.walk(ast.parse(source))
+            for n in ast.walk(parse_cache.parse(source))
             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == "_run_extract_stage"
         ),
         None,
@@ -110,7 +112,7 @@ def redacts_target_version_in_place(source: str) -> tuple[bool, str]:
     fn = next(
         (
             n
-            for n in ast.walk(ast.parse(source))
+            for n in ast.walk(parse_cache.parse(source))
             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == "_apply_version_to_fact"
         ),
         None,
@@ -153,7 +155,7 @@ def applies_the_version_before_recording_it(source: str) -> tuple[bool, str]:
     fn = next(
         (
             n
-            for n in ast.walk(ast.parse(source))
+            for n in ast.walk(parse_cache.parse(source))
             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == "revert_to_version"
         ),
         None,

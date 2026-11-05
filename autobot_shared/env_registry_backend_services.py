@@ -583,3 +583,15 @@ register_env_var(
         component="backend",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_UPLOAD_DIR",
+        type=str,
+        default="",
+        description="Transcriber uploads, the only base the path guard allows; empty: <TRANSCRIBER_DATA_DIR>/uploads.",
+        component="backend",
+    )
+)
+
+from autobot_shared import env_registry_chat_attachments  # noqa: E402,F401 -- registers #20195 vars; see its docstring

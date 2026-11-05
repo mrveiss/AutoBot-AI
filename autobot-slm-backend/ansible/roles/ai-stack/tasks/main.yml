@@ -22,42 +22,9 @@
 # ============================================================
 # Per-role env at /etc/autobot/  (#926 Phase 4)
 # ============================================================
-- name: "AI Stack | Ensure /etc/autobot dir exists"
-  ansible.builtin.file:
-    path: /etc/autobot
-    state: directory
-    mode: "0755"
-    owner: root
-    group: root
-  tags: ['ai', 'config']
-
-# #16627 (P1b of #13568): the AI stack's Redis client (autobot_shared, via
-# REDIS_* in this env file) authenticates as `default` with the SLM-generated
-# password while the server stays nopass. Adopted only when no password is set,
-# and always with the username -- a password alone is refused by nopass.
-- name: "AI Stack | Read the SLM-generated Redis credential (#16627)"
-  ansible.builtin.include_tasks: ../../../_shared/tasks/read_redis_password.yml
-  tags: ['ai', 'config']
-
-- name: "AI Stack | Adopt the SLM-generated Redis credential when none is set (#16627)"
-  ansible.builtin.set_fact:
-    ai_redis_password: "{{ _redis_password_read }}"
-    ai_redis_username: "{{ ai_redis_username | default('', true) or _redis_username_read }}"
-  when:
-    - (_redis_password_read | default('') | trim) | length > 0
-    - (ai_redis_password | default('') | trim) | length == 0
-  no_log: true
-  tags: ['ai', 'config']
-
-- name: "AI Stack | Deploy /etc/autobot/autobot-ai-stack.env"
-  ansible.builtin.template:
-    src: ai-stack.env.j2
-    dest: /etc/autobot/autobot-ai-stack.env
-    mode: "0640"
-    owner: root
-    group: "{{ ai_group }}"
-  notify: restart ai-stack
-  tags: ['ai', 'config']
+# Rendered by env_files.yml, which code_only.yml includes, so the builtin
+# updater re-renders it too (#20724). Nothing before "Deploy service files"
+# below reads it.
 
 # ============================================================
 # #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
@@ -277,15 +244,6 @@
 # because a branch nothing can ever take is not a source of truth to keep
 # describing.
 
-- name: Deploy AI stack environment file
-  ansible.builtin.template:
-    src: ai-stack.env.j2
-    dest: "{{ ai_install_dir }}/.env"
-    mode: "0600"
-    owner: "{{ ai_user }}"
-    group: "{{ ai_group }}"
-  notify: restart ai-stack
-
 - name: Deploy AI Stack application source files
   ansible.builtin.copy:
     src: "{{ item }}"
@@ -294,8 +252,8 @@
     group: "{{ ai_group }}"
     mode: "0644"
   loop:
-    - "{{ playbook_dir }}/../../../autobot-infrastructure/shared/docker/ai-stack/ai_api_server.py"
-    - "{{ playbook_dir }}/../../../autobot-infrastructure/shared/docker/ai-stack/ai_container_main.py"
+    - "{{ role_path }}/../../../../autobot-infrastructure/shared/docker/ai-stack/ai_api_server.py"
+    - "{{ role_path }}/../../../../autobot-infrastructure/shared/docker/ai-stack/ai_container_main.py"
   notify: restart ai-stack
   tags: ['ai', 'deploy']
 
@@ -342,7 +300,8 @@
 # this role undeliverable in the first place (#12959).
 - name: "AI Stack | Deploy service files"
   ansible.builtin.include_tasks: code_only.yml
-  tags: ['ai', 'deploy']
+  # 'config' too: an include's tags gate its tasks, so `--tags config` reaches env_files.yml (#20724)
+  tags: ['ai', 'deploy', 'config']
 
 - name: Enable and start ChromaDB service
   ansible.builtin.systemd:

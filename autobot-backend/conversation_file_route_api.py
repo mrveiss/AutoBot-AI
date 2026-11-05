@@ -14,6 +14,7 @@ import mimetypes
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from conversation_file_quota import UploadRefused, quota_refusal, remaining_bytes, usage
 
 logger = get_logger(__name__)
 
@@ -46,6 +47,23 @@ class ConversationFileRouteApi:
         )
         extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else None
         return {**stored, "filename": filename, "size": stored["file_size"], "extension": extension}
+
+    async def remaining_upload_quota(self, user_id: str | None) -> int:
+        """Bytes *user_id* may still store; deleted files awaiting human-approved removal count (#20217)."""
+        connection = await self._get_async_db_connection()
+        try:
+            return await remaining_bytes(connection, user_id)
+        finally:
+            await connection.close()
+
+    async def upload_quota_refusal(self, user_id: str | None) -> UploadRefused:
+        """The 413 for *user_id* out of room: live bytes and bytes awaiting human-approved removal, apart."""
+        connection = await self._get_async_db_connection()
+        try:
+            held = await usage(connection, user_id)
+        finally:
+            await connection.close()
+        return quota_refusal(held["live"], held["pending_removal"])
 
     async def get_file_info(self, session_id: str, file_id: str) -> Dict[str, Any] | None:
         """The live file ``file_id`` of ``session_id`` as a ``ConversationFileInfo`` dict, else ``None``."""
@@ -96,6 +114,9 @@ class ConversationFileRouteApi:
                 await connection.close()
         await self._invalidate_session_cache(session_id)
         await self._log_access(file_id, "delete", user_id, {"session_id": session_id})
+        from services.conversation_file_cleanup_proposals import propose_due_cleanups_logged
+
+        await propose_due_cleanups_logged(self)  # proposes only; removal waits for a human (#20234)
         return True
 
     async def transfer_files(
@@ -107,8 +128,26 @@ class ConversationFileRouteApi:
         copy: bool = False,
         tags: List[str] | None = None,
         user_id: str | None = None,
+        principal: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
-        """Send files to the knowledge base or the shared file root; a move also removes the source."""
+        """Send files to the knowledge base or the shared file root; a move also removes the source.
+
+        ``principal`` is the verified caller: it names the user and owns a KB fact in the id the read side
+        compares, and the whole transfer runs in its caller write scope (#20233).
+        """
+        from knowledge.search_filters import extract_user_context_from_request
+        from knowledge.write_scope import caller_write_scope_for
+
+        owner_id = extract_user_context_from_request(principal)[0] if principal else None
+        user_id = user_id or (principal or {}).get("username")
+        with caller_write_scope_for(principal):
+            return await self._transfer_each(
+                session_id, file_ids, destination, target_path, copy, tags, user_id, owner_id
+            )
+
+    async def _transfer_each(
+        self, session_id, file_ids, destination, target_path, copy, tags, user_id, owner_id
+    ) -> Dict[str, Any]:
         from conversation_file_transfer import transfer_one
 
         done: List[Dict[str, str]] = []
@@ -118,7 +157,7 @@ class ConversationFileRouteApi:
                 info = await self.get_file_info(session_id, file_id)
                 if info is None:
                     raise LookupError("File not found in this conversation")
-                entry = await transfer_one(info, destination, target_path, tags, user_id)
+                entry = await transfer_one(info, destination, target_path, tags, user_id, owner_id)
             except Exception as exc:  # one file failing must not abort the rest of the batch
                 logger.warning("Transfer of %s failed: %s", file_id, exc)
                 failed.append({"file_id": file_id, "error": str(exc)})

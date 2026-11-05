@@ -16,6 +16,7 @@ import DashboardGrid from '@/components/dashboard/DashboardGrid.vue'
 import CompanyDashboardWidget from '@/components/llc/CompanyDashboardWidget.vue'
 import { useDashboardLayout } from '@/composables/dashboard/useDashboardLayout'
 import { displayText, type DashboardWidget } from '@/composables/dashboard/dashboardLayoutModel'
+import { agentLabelMap } from '@/composables/llc/agentLabels'
 import {
   companyWidgetsOf,
   defaultCompanyOsLayout,
@@ -81,11 +82,13 @@ async function fetchDashboardData() {
       api.get<RawRunRow[]>('/api/llc/heartbeat-runs?limit=20'),
       api.get<{ items: Array<Record<string, unknown>> }>(`/api/llc/companies/${cid}/activity?page_size=50`),
     ])
+    // #20519: runs and budgets name their agent, not its slug, and same-named agents stay apart.
+    const labels = agentLabelMap(agentsResp ?? [])
     data.value = {
       agents: (agentsResp ?? []).map(mapAgent),
       approvals: approvalsResp ?? [],
-      budgets: (budgetsResp ?? []).map(mapBudget),
-      runs: (runsResp ?? []).map(mapRun),
+      budgets: (budgetsResp ?? []).map((b) => mapBudget(b, labels.get(b.agent_id))),
+      runs: (runsResp ?? []).map((r) => mapRun(r, labels.get(r.agent_id))),
       // Backend returns ActivityLogEntry rows, not the display shape — map them
       // through the same mapper as live events so fields aren't blank (#11395).
       activity: (activityResp?.items ?? []).map(mapActivityRow).slice(0, 50),

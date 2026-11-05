@@ -50,7 +50,7 @@ async def visible_by_source(
 ) -> List[dict]:
     """*items* whose source fact *reader* may read; an unresolvable source drops the item (#16665).
 
-    A summary carries its own quarantine marker (#19163), so only items without one (events) ask the source.
+    *withhold_quarantined_source* also drops items whose source fact is research-quarantined, for an admin too.
     """
     doc_ids = [str(document_id_of(item) or "") for item in items]
     sources = await _source_map(kb, doc_ids)
@@ -64,8 +64,14 @@ async def visible_by_source(
 
 
 async def visible_summaries(summaries: List[dict], kb, reader: KbReader) -> List[dict]:
-    """*summaries* whose source fact *reader* may read; the rest, and any with no resolvable source, are dropped."""
-    return await visible_by_source(summaries, kb, reader, lambda s: (s.get("metadata") or {}).get("document_id"))
+    """*summaries* whose source fact *reader* may read; the rest, and any with no resolvable source, are dropped.
+
+    The source fact is read for its quarantine state too, so a summary stored before the #19163 marker existed
+    is withheld when its source is quarantined (#20162), for an admin too, as the marker does.
+    """
+    return await visible_by_source(
+        summaries, kb, reader, lambda s: (s.get("metadata") or {}).get("document_id"), withhold_quarantined_source=True
+    )
 
 
 async def visible_events(events: List[dict], kb, reader: KbReader) -> List[dict]:

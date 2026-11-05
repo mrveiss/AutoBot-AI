@@ -146,6 +146,7 @@
 </template>
 
 <script setup lang="ts">
+import { saveUrl } from '@autobot/ui'
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
@@ -546,10 +547,7 @@ async function exportPng() {
       getComputedStyle(svg).getPropertyValue('--bg-surface').trim() || '#ffffff'
     ctx.fillRect(0, 0, cssW, cssH)
     ctx.drawImage(img, 0, 0, cssW, cssH)
-    const link = document.createElement('a')
-    link.download = `timeline-${selectedProjectId.value}.png`
-    link.href = canvas.toDataURL('image/png')
-    link.click()
+    saveUrl(canvas.toDataURL('image/png'), `timeline-${selectedProjectId.value}.png`)
   } catch (err) {
     logger.error('PNG export failed', err)
   } finally {
@@ -711,7 +709,7 @@ onBeforeUnmount(() => {
   background: transparent;
   color: var(--color-primary);
   cursor: pointer;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   padding: 0.1rem 0.35rem;
   border-radius: var(--radius-md);

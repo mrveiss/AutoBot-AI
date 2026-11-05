@@ -853,7 +853,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.3);
-  z-index: 10;
+  z-index: var(--z-10);
   gap: var(--spacing-2);
 }
 
@@ -1059,7 +1059,7 @@ onUnmounted(() => {
   border-left: 1px solid var(--border-color);
   border-radius: 0;
   overflow-y: auto;
-  z-index: 100;
+  z-index: var(--z-dropdown);
   box-shadow: var(--shadow-sm);
 }
 
@@ -1072,7 +1072,7 @@ onUnmounted(() => {
   background: var(--bg-secondary);
   position: sticky;
   top: 0;
-  z-index: 101;
+  z-index: var(--z-raised);
 }
 
 .detail-icon {

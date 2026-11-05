@@ -36,7 +36,7 @@
 
 - name: "Venv husks | Stage the provenance module onto the node (#17339)"
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../../../autobot-slm-backend/venv_provenance.py"
+    src: "{{ role_path | default(playbook_dir ~ '/x') }}/../../../../autobot-slm-backend/venv_provenance.py"
     dest: "{{ autobot.base_dir }}/venv_provenance.py"
     owner: "{{ autobot.user }}"
     mode: "0644"

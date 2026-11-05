@@ -33,6 +33,8 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 REPO_ROOT = repo_root()
 
 # The production Python surface. Deliberately not the whole tree: node_modules,
@@ -136,7 +138,7 @@ def _text(path: Path) -> str:
 @lru_cache(maxsize=None)
 def _parse(path: Path) -> ast.Module | None:
     try:
-        return ast.parse(_text(path))
+        return parse_cache.parse(_text(path))
     except SyntaxError:
         # A file this interpreter cannot parse is reported, never skipped
         # quietly — see test_the_sweep_reached_the_production_tree.
@@ -303,9 +305,10 @@ def test_both_known_denial_paths_are_among_the_derived_sites() -> None:
         "_emit_permission_denied_audit" in functions
     ), f"the DB-backed denial-audit function is no longer derived, only {sorted(functions)}"
     # #18263 retired auth_rbac._deny_permission_access (a permission denial now audits through
-    # _emit_permission_denied_audit); require_role's _deny_role_access is the file-backed path left.
+    # _emit_permission_denied_audit). #16333 moved the file-backed write into audit_role_denied, which
+    # both require_role and check_admin_permission call, so one admin refusal writes one shaped row.
     assert (
-        "_deny_role_access" in functions
+        "audit_role_denied" in functions
     ), f"the file-backed denial-audit function is no longer derived, only {sorted(functions)}"
     assert "audit_log" in callees, f"the file-backed sink is no longer resolved, only {sorted(callees)}"
 
@@ -336,7 +339,7 @@ def test_the_derived_check_would_notice_an_uncounted_sink() -> None:
     stopped matching. This drives the same two functions against a synthetic
     sink so a broken detector fails here instead of reporting the tree clean.
     """
-    uncounted = ast.parse(
+    uncounted = parse_cache.parse(
         "def audit_log(self, action):\n"
         "    try:\n"
         "        with open(self.path, 'a', encoding='utf-8') as fh:\n"
@@ -344,7 +347,7 @@ def test_the_derived_check_would_notice_an_uncounted_sink() -> None:
         "    except Exception as exc:\n"
         "        logger.error('lost: %s', exc)\n"
     ).body[0]
-    counted = ast.parse(
+    counted = parse_cache.parse(
         "def audit_log(self, action):\n"
         "    try:\n"
         "        with open(self.path, 'a', encoding='utf-8') as fh:\n"
@@ -353,7 +356,7 @@ def test_the_derived_check_would_notice_an_uncounted_sink() -> None:
         "        record_audit_write_failure_safely(action, type(exc).__name__)\n"
         "        logger.error('lost: %s', exc)\n"
     ).body[0]
-    reraised = ast.parse(
+    reraised = parse_cache.parse(
         "def audit_log(self, action):\n"
         "    try:\n"
         "        with open(self.path, 'a', encoding='utf-8') as fh:\n"
