@@ -145,6 +145,8 @@ class AuditAction(str, Enum):
     CONVERSATION_FILE_CLEANUP = "conversation_file.cleanup"
     CONVERSATION_FILE_CLEANUP_RESET = "conversation_file.cleanup_reset"
     BUDGET_CHAT_REFUSED = "budget.chat_refused"  # #20589 chat over a budget
+    # #16333: the internal service key was admitted on a route that names its caller (service_opt_in).
+    SERVICE_KEY_ADMITTED = "auth.service_key_admitted"  # pragma: allowlist secret -- an action name, not a key
     # #20750: re-aligning the backend's AUTOBOT_INTERNAL_API_KEY to the SLM's, one record per step.
     INTERNAL_KEY_REALIGN_PROPOSED = "credential.internal_key.realign_proposed"  # pragma: allowlist secret
     INTERNAL_KEY_REALIGN_CLAIMED = "credential.internal_key.realign_claimed"  # pragma: allowlist secret

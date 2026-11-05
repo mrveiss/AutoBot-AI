@@ -10,6 +10,7 @@ backend's own env file, so once the two differed nothing realigned them and noth
 """
 
 import json
+import os
 import shutil
 import subprocess  # nosec B404 -- runs ansible-playbook on a generated local playbook
 import sys
@@ -90,8 +91,10 @@ def _run(tmp_path: Path, canonical: str, env_key: str, etc_key: str) -> tuple[di
         "internal_api_key_canonical_file": str(tmp_path / "slm-secrets.env"),
         "internal_api_key_current_env_files": [str(files["env"]), str(files["etc"])],
     }
-    cmd = ["ansible-playbook", "-i", "localhost,", "-c", "local", str(tmp_path / "p.yml"), "-e", json.dumps(extra)]
-    env = {"ANSIBLE_LOG_PATH": str(tmp_path / "a.log"), "PATH": "/usr/bin:/bin:/usr/local/bin"}
+    ansible = shutil.which("ansible-playbook")  # the one the skip found, wherever it is installed
+    cmd = [ansible, "-i", "localhost,", "-c", "local", str(tmp_path / "p.yml"), "-e", json.dumps(extra)]
+    path = os.pathsep.join([os.path.dirname(ansible), "/usr/bin", "/bin", "/usr/local/bin"])
+    env = {"ANSIBLE_LOG_PATH": str(tmp_path / "a.log"), "PATH": path}
     out = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=120, check=False).stdout  # nosec B603
     renders = {}
     for line in out.splitlines():

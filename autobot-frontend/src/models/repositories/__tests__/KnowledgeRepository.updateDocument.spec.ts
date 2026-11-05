@@ -16,7 +16,8 @@ import { KnowledgeRepository } from '../KnowledgeRepository'
 import type { KnowledgeDocument } from '../KnowledgeRepository'
 
 vi.mock('@/config/ssot-config', () => ({
-  getApiBase: () => '/api'
+  getApiBase: () => '/api',
+  getBackendUrl: () => '',
 }))
 
 describe('KnowledgeRepository.updateDocument (#12386)', () => {

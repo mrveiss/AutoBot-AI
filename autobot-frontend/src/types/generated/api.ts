@@ -9164,9 +9164,8 @@ export interface paths {
         };
         /**
          * Get Connector Job
-         * @description Return in-flight job state for a connector sync (Issue #8149).
-         *
-         *     Returns 404 when no sync is currently in flight (or the 24h TTL expired).
+         * @description Return a connector's sync job (Issue #8149): ``starting``/``running`` while one is in flight,
+         *     else the last finished one. 404 when there is neither (#20755, see ``job_state``).
          */
         get: operations["get_connector_job_api_knowledge_base_connectors__connector_id__job_get"];
         put?: never;
@@ -12168,6 +12167,8 @@ export interface paths {
         /**
          * Set Provider
          * @description Set the active cloud ASR provider.
+         *
+         *     Admin-only (owner ruling 2026-09-11): it decides which cloud provider receives every user's audio.
          *
          *     Persistence limitation: this is in-process only and is lost on restart.
          *     For persistence across restarts, set TRANSCRIBER_ASR_PROVIDER in the
@@ -51171,7 +51172,11 @@ export interface paths {
          */
         get: operations["get_company_teams_api_llc_companies__company_id__teams_get"];
         put?: never;
-        post?: never;
+        /**
+         * Create Company Team
+         * @description Create a team in the path's company; the caller becomes its team owner (``TeamService``).
+         */
+        post: operations["create_company_team_api_llc_companies__company_id__teams_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -51272,6 +51277,50 @@ export interface paths {
         head?: never;
         /** Change Member Role */
         patch: operations["change_member_role_api_llc_companies__company_id__members__user_id__patch"];
+        trace?: never;
+    };
+    "/api/llc/companies/{company_id}/teams/{team_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Company Team
+         * @description Soft-delete a team of the path's company. A user action: nothing here deletes teams on its own.
+         */
+        delete: operations["delete_company_team_api_llc_companies__company_id__teams__team_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/companies/{company_id}/teams/{team_id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Company Team Member
+         * @description Add one of the company's own users to one of its teams.
+         */
+        post: operations["add_company_team_member_api_llc_companies__company_id__teams__team_id__members__user_id__post"];
+        /**
+         * Remove Company Team Member
+         * @description Remove a user from one of the company's teams.
+         */
+        delete: operations["remove_company_team_member_api_llc_companies__company_id__teams__team_id__members__user_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/llc/companies/{company_id}/ceo": {
@@ -176128,6 +176177,41 @@ export interface operations {
             };
         };
     };
+    create_company_team_api_llc_companies__company_id__teams_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeamCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamCreatedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     search_agents_api_llc_companies__company_id__agents_search_get: {
         parameters: {
             query: {
@@ -176283,6 +176367,107 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_company_team_api_llc_companies__company_id__teams__team_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                team_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamDeletedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_company_team_member_api_llc_companies__company_id__teams__team_id__members__user_id__post: {
+        parameters: {
+            query?: {
+                /** @description Member role (owner, admin, member) */
+                role?: string;
+            };
+            header?: never;
+            path: {
+                company_id: string;
+                team_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberAddedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_company_team_member_api_llc_companies__company_id__teams__team_id__members__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                team_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberRemovedResponse"];
                 };
             };
             /** @description Validation Error */
