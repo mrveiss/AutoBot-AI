@@ -16,32 +16,12 @@ import type { IconName } from '@/components/ui/Icon.vue'
 export type AuditResult = 'success' | 'denied' | 'failed' | 'error'
 
 /**
- * Single audit log entry from backend
- */
-export interface AuditEntry {
-  id: string
-  timestamp: string
-  operation: string
-  result: AuditResult
-  user_id: string | null
-  session_id: string | null
-  vm_name: string | null
-  vm_source: string | null
-  details: Record<string, unknown>
-  error_message: string | null
-  ip_address: string | null
-  user_agent: string | null
-}
-
-/**
  * One row as `GET /audit/logs` sends it (`AuditEntry.to_response_dict` in
  * services/audit_logger.py): `timestamp` is epoch SECONDS (a float), the
- * operation's data is in `details`, and there is no `metadata` field (#20173).
- * {@link AuditEntry} is the older dashboard shape and still declares the
- * timestamp as a string; it becomes this type once the dashboard components
- * stop treating it as one.
+ * operation's data is in `details`, and there is no `metadata`, `error_message`
+ * or `user_agent` field (#20173, #20176).
  */
-export interface AuditApiEntry {
+export interface AuditEntry {
   id: string
   timestamp: number
   date: string
@@ -57,6 +37,9 @@ export interface AuditApiEntry {
   details: Record<string, unknown>
   performance_ms: number | null
 }
+
+/** The API row under its wire-contract name; the same type as {@link AuditEntry}. */
+export type AuditApiEntry = AuditEntry
 
 /** An audit row's epoch-seconds timestamp as a Date (`new Date(seconds)` reads it as milliseconds). */
 export function auditTimestampToDate(seconds: number): Date {
