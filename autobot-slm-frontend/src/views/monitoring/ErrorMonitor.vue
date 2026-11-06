@@ -11,7 +11,7 @@
  */
 
 import { ref, computed, onMounted } from 'vue'
-import { BaseModal, usePagination, BasePagination, PollingPausedAlert } from '@autobot/ui'
+import { BaseModal, usePagination, BasePagination, PollingPausedAlert, createLogger, createDateFormatter } from '@autobot/ui'
 import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useSlmApi } from '@/composables/useSlmApi'
 import type {
@@ -20,10 +20,8 @@ import type {
   ErrorCategoryShare,
   ComponentBreakdown,
 } from '@/types/api-responses'
-import { createLogger } from '@/utils/debugUtils'
 import { formatRelativeTime } from '@/utils/dateUtils'
 import { getTimezoneOption } from '@/composables/useTimezone'
-import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('ErrorMonitor')
 const api = useSlmApi()
