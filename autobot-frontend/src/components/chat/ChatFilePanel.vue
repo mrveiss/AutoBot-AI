@@ -308,12 +308,11 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, createRecencyFormatter } from '@autobot/ui'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useConversationFiles, type SortField } from '@/composables/useConversationFiles'
-import { formatTimeAgo } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 
@@ -325,7 +324,8 @@ defineEmits<{
   close: []
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const formatTimeAgo = createRecencyFormatter({ justNow: () => t('common.justNow'), locale: () => locale.value, invalidText: '—' })
 const { confirm } = useConfirmDialog()
 
 // File management composable

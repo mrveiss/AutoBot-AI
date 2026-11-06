@@ -135,9 +135,13 @@ import {
   canCancel,
   canResume
 } from '@/types/operations'
-import { formatTimeAgo as formatRelativeTime } from '@/utils/formatHelpers'
+import { useI18n } from 'vue-i18n'
+import { createRecencyFormatter } from '@autobot/ui'
 import OperationProgress from './OperationProgress.vue'
 import OperationFilters from './OperationFilters.vue'
+
+const { t, locale } = useI18n()
+const formatRelativeTime = createRecencyFormatter({ justNow: () => t('common.justNow'), locale: () => locale.value, invalidText: '—' })
 
 interface Props {
   operations: Operation[]
