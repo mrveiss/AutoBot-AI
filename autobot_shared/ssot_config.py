@@ -81,7 +81,7 @@ def default_audit_log_file() -> str:
     """The ONE definition of the audit-log default (#14070): was ALSO spelled out
     as ``security_layer._AUDIT_LOG_FILE_DEFAULT``, kept in step by an equality
     test -- agreement today, not derivation. A function, so it stays lazy."""
-    return str(project_root() / "logs" / "audit.log")
+    return str(resolve_logs_dir() / "audit.log")  # #20894
 
 
 # Default model constants - single source of truth for fallback values (#2553)

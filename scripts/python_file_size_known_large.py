@@ -433,7 +433,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/models/schemas.py": 2144,
     "autobot-slm-backend/monitoring/business_intelligence_dashboard.py": 1159,
     "autobot-slm-backend/monitoring/performance_benchmark.py": 1073,
-    "autobot-slm-backend/monitoring/performance_monitor.py": 729,
+    "autobot-slm-backend/monitoring/performance_monitor.py": 723,
     "autobot-slm-backend/monitoring/performance_optimizer.py": 771,
     "autobot-slm-backend/services/backup.py": 774,
     "autobot-slm-backend/services/blue_green.py": 1243,

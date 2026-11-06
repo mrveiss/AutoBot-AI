@@ -7,7 +7,7 @@ anything under `tests/`, `repo_tests/`). Counted, by AST (comments and docstring
 a `getenv`/`environ.get` call whose default is the literal "logs", and a `<expr> / "logs"` whose
 left side names PROJECT_ROOT, project_root, base_dir, __file__ or a `.parent`.
 
-Frozen at the #20894 PR: 13 sites in 12 files (derived by the detector itself, then listed). The
+Frozen at the #20894 PR: 11 sites in 10 files (derived by the detector itself, then listed). The
 logging manager and the backend API are at 0 -- the one resolver is autobot_shared/log_dir.py. What
 is left is standalone tooling and the audit-log default, tracked in the follow-up issue. Each entry only goes DOWN.
 """
@@ -22,7 +22,5 @@ BASELINE: dict[str, int] = {
     "autobot-infrastructure/shared/scripts/trace_backend.py": 1,
     "autobot-infrastructure/shared/scripts/utilities/init_memory_graph_redis.py": 1,
     "autobot-npu-worker/resources/windows-npu-worker/gui/main.py": 1,
-    "autobot-slm-backend/monitoring/performance_monitor.py": 1,
-    "autobot_shared/ssot_config.py": 1,  # default_audit_log_file(); pinned by security_layer_test
     "debug/capture_output.py": 1,
 }
