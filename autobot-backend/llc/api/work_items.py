@@ -55,6 +55,7 @@ from ..models.enums import (
     WorkItemType,
 )
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
+from ..services.accessors import get_attachment_service, get_work_product_service
 from ..services.activity_log import ActivityLogQuery, LLCActivityLogService
 from ..services.attachment_service import (
     AttachmentNotFound,
@@ -74,7 +75,6 @@ from ..services.work_item_service import (
     WorkItemService,
     resolve_actor_role,
 )
-from ..services.work_product_service import WorkProductService
 from ._common import actor_id as verified_user_id
 from .activity import ActivityLogEntry, ActivityLogResponse
 from .github_webhooks import validate_github_pr_url
@@ -112,10 +112,10 @@ class CoworkerRequest(BaseModel):
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/work-items", tags=["llc-work-items"], dependencies=[Depends(require_work_item_id)])
-_get_product_service = lazy_singleton(WorkProductService)
+_get_product_service = get_work_product_service
 _get_handoff_service = lazy_singleton(HandoffService)
 _kb_manager = KbCollectionManager()
-_get_attachment_service = lazy_singleton(AttachmentService)
+_get_attachment_service = get_attachment_service
 _get_activity_service = lazy_singleton(LLCActivityLogService)
 _get_ac_suggester = lazy_singleton(AcSuggester)
 
