@@ -20,9 +20,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.node_proxy import internal_api_key
-from user_management.models import Role, User
+from user_management.models import User
 from user_management.models.person_link import PersonLink
 from user_management.services.base_service import TenantContext
+from user_management.services.seed import _find_admin_role_id
 from user_management.services.user_service import UserService
 
 logger = get_logger(__name__)
@@ -79,14 +80,14 @@ async def _main_store_may_hold_them(session: AsyncSession, person: SlmPerson) ->
 
 async def _create_linked_admin(session: AsyncSession, person: SlmPerson) -> User:
     """Create the main-app user with the SLM's hash, so this person keeps their password."""
-    role = (await session.execute(select(Role.id).where(Role.name == "admin", Role.is_system.is_(True)))).first()
+    role_id = await _find_admin_role_id(session)  # the seeded system role, found once in seed.py
     user = await UserService(session=session, context=TenantContext()).create_user(
         email=person.email,
         username=person.username,
         password=secrets.token_urlsafe(32),  # replaced below; create_user takes no hash
         display_name=person.display_name,
         is_platform_admin=True,
-        role_ids=[role.id] if role else None,
+        role_ids=[role_id] if role_id else None,
     )
     user.password_hash = person.password_hash
     session.add(PersonLink(slm_user_id=person.id, user_id=user.id))
