@@ -10,6 +10,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BaseButton, BaseInput } from '@autobot/ui'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import {
   breakdownWith,
   edgeCaseWith,
@@ -18,7 +19,9 @@ import {
   LABELS,
   subStepsFor,
   type BreakdownBody,
+  type EdgeCase,
   type EdgeCaseBody,
+  type EdgeCasePatch,
   type Label,
   type Plan,
 } from '@/composables/llc/workflowPlanTypes'
@@ -27,10 +30,13 @@ const props = defineProps<{ plan: Plan; busy: boolean }>()
 const emit = defineEmits<{
   breakdown: [stepKey: string, body: BreakdownBody]
   addEdgeCase: [stepKey: string, body: EdgeCaseBody]
+  patchEdgeCase: [caseKey: string, body: EdgeCasePatch]
+  deleteEdgeCase: [caseKey: string]
   classify: [subStepKey: string, label: Label | null]
   acknowledge: []
 }>()
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 
 const newSub = ref('')
 const newCase = ref('')
@@ -51,6 +57,16 @@ function addSub() {
   if (!label || !stepKey.value) return
   emit('breakdown', stepKey.value, breakdownWith(props.plan, stepKey.value, label))
   newSub.value = ''
+}
+
+function rewordCase(c: EdgeCase, e: Event) {
+  const description = (e.target as HTMLInputElement).value.trim()
+  if (description && description !== c.description) emit('patchEdgeCase', c.key, { description })
+}
+
+async function removeCase(c: EdgeCase) {
+  const ok = await confirm({ title: t('llc.workflowPlanner.label.deleteEdgeCaseTitle'), message: t('llc.workflowPlanner.label.deleteEdgeCaseMessage', { text: c.description }) })
+  if (ok) emit('deleteEdgeCase', c.key)
 }
 
 function addCase(label: Label) {
@@ -96,8 +112,18 @@ function addCase(label: Label) {
               <span class="flex-1">{{ s.label }}</span>
               <BaseButton size="xs" variant="ghost" :disabled="busy" @click="emit('classify', s.key, null)">{{ t('llc.workflowPlanner.label.unlabel') }}</BaseButton>
             </li>
-            <li v-for="c in cases.filter((e) => e.classification === l)" :key="c.key" class="py-1 text-sm italic text-autobot-text-muted">
-              {{ t('llc.workflowPlanner.label.edgeCase', { text: c.description }) }}
+            <li v-for="c in cases.filter((e) => e.classification === l)" :key="c.key" class="flex items-center gap-2 py-1 text-sm italic text-autobot-text-muted">
+              <input
+                :value="c.description"
+                class="min-w-0 flex-1 rounded-md border border-autobot-border bg-autobot-bg-card px-2 py-1 text-sm text-autobot-text-primary"
+                :aria-label="t('llc.workflowPlanner.label.edgeCaseField')"
+                :disabled="busy"
+                :data-testid="`edit-edge-case-${c.key}`"
+                @change="rewordCase(c, $event)"
+              />
+              <BaseButton size="xs" variant="ghost" :disabled="busy" :data-testid="`delete-edge-case-${c.key}`" @click="removeCase(c)">
+                {{ t('llc.workflowPlanner.label.deleteEdgeCase') }}
+              </BaseButton>
             </li>
           </ul>
         </div>

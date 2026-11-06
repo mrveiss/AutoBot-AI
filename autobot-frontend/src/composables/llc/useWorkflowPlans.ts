@@ -16,7 +16,14 @@ import { describeApiError } from '@/composables/llc/apiErrorMessage'
 import {
   isNotFoundError,
   type BreakdownBody,
+  type Edge,
   type EdgeCaseBody,
+  type EdgeCasePatch,
+  type EdgePatch,
+  type Lane,
+  type LanePatch,
+  type ReturnKind,
+  type StepPatch,
   type MapBody,
   type OneNumberBody,
   type PlanCreate,
@@ -61,6 +68,28 @@ export function useWorkflowPlans() {
     planRequest(api, 'put', '/api/llc/company-os/workflow-plans/{plan_key}/steps/{step_key}/breakdown', { plan_key: key, step_key: step }, body)
   const addEdgeCase = (key: string, step: string, body: EdgeCaseBody) =>
     planRequest(api, 'post', '/api/llc/company-os/workflow-plans/{plan_key}/steps/{step_key}/edge-cases', { plan_key: key, step_key: step }, body)
+  const addLane = (key: string, body: Lane) =>
+    planRequest(api, 'post', '/api/llc/company-os/workflow-plans/{plan_key}/lanes', { plan_key: key }, body)
+  const patchLane = (key: string, lane: string, body: LanePatch) =>
+    planRequest(api, 'patch', '/api/llc/company-os/workflow-plans/{plan_key}/lanes/{lane_key}', { plan_key: key, lane_key: lane }, body)
+  const deleteLane = (key: string, lane: string) =>
+    planRequest(api, 'delete', '/api/llc/company-os/workflow-plans/{plan_key}/lanes/{lane_key}', { plan_key: key, lane_key: lane })
+  const patchStep = (key: string, step: string, body: StepPatch) =>
+    planRequest(api, 'patch', '/api/llc/company-os/workflow-plans/{plan_key}/steps/{step_key}', { plan_key: key, step_key: step }, body)
+  const deleteStep = (key: string, step: string) =>
+    planRequest(api, 'delete', '/api/llc/company-os/workflow-plans/{plan_key}/steps/{step_key}', { plan_key: key, step_key: step })
+  const addEdge = (key: string, body: Edge) =>
+    planRequest(api, 'post', '/api/llc/company-os/workflow-plans/{plan_key}/edges', { plan_key: key }, body)
+  const patchEdge = (key: string, from: string, to: string, body: EdgePatch) =>
+    planRequest(api, 'patch', '/api/llc/company-os/workflow-plans/{plan_key}/edges/{from_step}/{to_step}', { plan_key: key, from_step: from, to_step: to }, body)
+  const deleteEdge = (key: string, from: string, to: string) =>
+    planRequest(api, 'delete', '/api/llc/company-os/workflow-plans/{plan_key}/edges/{from_step}/{to_step}', { plan_key: key, from_step: from, to_step: to })
+  const patchEdgeCase = (key: string, edgeCase: string, body: EdgeCasePatch) =>
+    planRequest(api, 'patch', '/api/llc/company-os/workflow-plans/{plan_key}/edge-cases/{edge_case_key}', { plan_key: key, edge_case_key: edgeCase }, body)
+  const deleteEdgeCase = (key: string, edgeCase: string) =>
+    planRequest(api, 'delete', '/api/llc/company-os/workflow-plans/{plan_key}/edge-cases/{edge_case_key}', { plan_key: key, edge_case_key: edgeCase })
+  const oneNumberCandidates = (key: string, returnKind: ReturnKind) =>
+    planRequest(api, 'get', '/api/llc/company-os/workflow-plans/{plan_key}/one-number/candidates', { plan_key: key }, undefined, { return_kind: returnKind })
   const classifySubStep = (key: string, sub: string, classification: Label | null) =>
     planRequest(api, 'patch', '/api/llc/company-os/workflow-plans/{plan_key}/sub-steps/{sub_step_key}', { plan_key: key, sub_step_key: sub }, { classification })
   const acknowledgeByHand = (key: string) =>
@@ -89,6 +118,17 @@ export function useWorkflowPlans() {
     putOneNumber,
     putBreakdown,
     addEdgeCase,
+    addLane,
+    patchLane,
+    deleteLane,
+    patchStep,
+    deleteStep,
+    addEdge,
+    patchEdge,
+    deleteEdge,
+    patchEdgeCase,
+    deleteEdgeCase,
+    oneNumberCandidates,
     classifySubStep,
     acknowledgeByHand,
     previewConversion,

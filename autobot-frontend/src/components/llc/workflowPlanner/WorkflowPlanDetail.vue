@@ -145,10 +145,24 @@ onMounted(load)
       <PlannerConvertStep v-if="step === 'convert'" :plan="plan" :gate="gate" :api="api" :stale="!!staleError" @changed="onConverted" />
 
       <fieldset v-else :disabled="!editable" class="border-0 p-0">
-        <PlannerMapStep v-if="step === 'map'" :plan="plan" :busy="busy" :warnings="warnings" @map="saveMap" @wait-note="(k, n) => run(() => api.setWaitNote(planKey, k, n))" />
+        <PlannerMapStep
+          v-if="step === 'map'"
+          :plan="plan"
+          :busy="busy"
+          :warnings="warnings"
+          @map="saveMap"
+          @add-lane="(b) => run(() => api.addLane(planKey, b))"
+          @patch-lane="(k, b) => run(() => api.patchLane(planKey, k, b))"
+          @delete-lane="(k) => run(() => api.deleteLane(planKey, k))"
+          @patch-step="(k, b) => run(() => api.patchStep(planKey, k, b))"
+          @delete-step="(k) => run(() => api.deleteStep(planKey, k))"
+          @add-edge="(b) => run(() => api.addEdge(planKey, b))"
+          @patch-edge="(f, to, b) => run(() => api.patchEdge(planKey, f, to, b))"
+          @delete-edge="(f, to) => run(() => api.deleteEdge(planKey, f, to))"
+          @wait-note="(k, n) => run(() => api.setWaitNote(planKey, k, n))" />
         <PlannerMeasureStep v-else-if="step === 'measure'" :plan="plan" :busy="busy" @save="(k, b) => run(() => api.putMetric(planKey, k, b))" @clear="(k) => run(() => api.deleteMetric(planKey, k))" />
-        <PlannerOneNumberStep v-else-if="step === 'oneNumber'" :plan="plan" :busy="busy" @save="(b) => run(() => api.putOneNumber(planKey, b))" />
-        <PlannerLabelBoard v-else :plan="plan" :busy="busy" @breakdown="(k, b) => run(() => api.putBreakdown(planKey, k, b))" @add-edge-case="(k, b) => run(() => api.addEdgeCase(planKey, k, b))" @classify="(k, l) => run(() => api.classifySubStep(planKey, k, l))" @acknowledge="run(() => api.acknowledgeByHand(planKey))" />
+        <PlannerOneNumberStep v-else-if="step === 'oneNumber'" :plan="plan" :busy="busy" :rank="(k) => api.oneNumberCandidates(planKey, k)" @save="(b) => run(() => api.putOneNumber(planKey, b))" />
+        <PlannerLabelBoard v-else :plan="plan" :busy="busy" @breakdown="(k, b) => run(() => api.putBreakdown(planKey, k, b))" @add-edge-case="(k, b) => run(() => api.addEdgeCase(planKey, k, b))" @patch-edge-case="(k, b) => run(() => api.patchEdgeCase(planKey, k, b))" @delete-edge-case="(k) => run(() => api.deleteEdgeCase(planKey, k))" @classify="(k, l) => run(() => api.classifySubStep(planKey, k, l))" @acknowledge="run(() => api.acknowledgeByHand(planKey))" />
       </fieldset>
 
       <div v-if="gate?.missing.length && step !== 'convert'" class="mt-4" data-testid="gate-missing">
