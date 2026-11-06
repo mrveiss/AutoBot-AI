@@ -8,6 +8,7 @@ from fastapi import HTTPException, status
 
 from autobot_shared.auth.permissions import is_admin_role
 from services.approval_execution import action_needs_elevated_approver
+from services.audit.taxonomy import AuditAction
 from services.audit_logger import audit_log
 
 
@@ -17,7 +18,7 @@ async def require_action_approver_role(approval, current_user: dict) -> None:
     if not action_needs_elevated_approver(action) or is_admin_role(current_user.get("role")):
         return
     await audit_log(
-        "approval.approve",
+        AuditAction.APPROVAL_APPROVE,
         result="denied",
         durable=True,
         user_id=current_user.get("username"),
