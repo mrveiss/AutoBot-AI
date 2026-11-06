@@ -133,6 +133,23 @@ async def test_rate_limited_error_result_stays_rate_limited(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_rate_limit_at_the_start_of_an_oversized_result_line_is_seen(tmp_path) -> None:
+    limited = dict(_RESULT_AUTH, result="rate_limit_error: too many requests " + "x" * 9000)
+    result = await _final_status(tmp_path, [limited])
+    assert result.status == LLCRunStatus.RATE_LIMITED
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_quoted_in_tool_output_of_a_long_run_stays_failed(tmp_path) -> None:
+    tool = {
+        "type": "user",
+        "message": {"content": [{"type": "tool_result", "content": "rate_limit_error " + "y" * 9000}]},
+    }
+    result = await _final_status(tmp_path, [tool, dict(_RESULT_AUTH, result="other " + "z" * 9000)])
+    assert (result.status, result.error) == (LLCRunStatus.FAILED, ERROR_RESULT_REASON)
+
+
+@pytest.mark.asyncio
 async def test_auth_failure_through_subscription_adapter(tmp_path) -> None:
     result = await _final_status(tmp_path, [_ASSISTANT_AUTH, _RESULT_AUTH], ClaudeCodeSubscriptionAdapter())
     assert (result.status, result.error) == (LLCRunStatus.FAILED, AUTH_FAILED_REASON)
@@ -144,3 +161,23 @@ async def test_clean_success_stays_completed(tmp_path) -> None:
     result = await _final_status(tmp_path, [ok])
     assert result.status == LLCRunStatus.COMPLETED
     assert result.error is None
+
+
+def test_wide_tail_drops_the_fragment_the_seek_landed_in(tmp_path, monkeypatch) -> None:
+    from llc.adapters import claude_result_failure as crf
+
+    monkeypatch.setattr(crf, "_WIDE_TAIL_BYTES", 60)
+    path = tmp_path / "out.jsonl"
+    first = json.dumps({"type": "user", "content": "x rate limit exceeded x"})
+    second = json.dumps({"type": "result", "subtype": "success"})
+    path.write_text(first + "\n" + second + "\n", encoding="utf-8")
+    # 60 bytes back from the end lands inside the first line
+    assert crf.read_wide_tail(str(path)) == second + "\n"
+
+
+def test_wide_tail_of_a_short_file_keeps_every_line(tmp_path) -> None:
+    from llc.adapters.claude_result_failure import read_wide_tail
+
+    path = tmp_path / "out.jsonl"
+    path.write_text("a\nb\n", encoding="utf-8")
+    assert read_wide_tail(str(path)) == "a\nb\n"
