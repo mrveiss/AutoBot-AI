@@ -28,9 +28,9 @@ import pytest_asyncio
 from fastapi import HTTPException
 
 from api.schemas_agent import SignupRequest
+from tests.helpers._sqlite_test_engine import real_savepoint_session_factory
 from user_management.models import User
 from user_management.services.user_service import UserService
-from user_management.sqlite_test_engine import real_savepoint_session_factory
 
 # Generated per run rather than written as a literal. An earlier version of this
 # line assembled the string from fragments with a comment saying it was done to

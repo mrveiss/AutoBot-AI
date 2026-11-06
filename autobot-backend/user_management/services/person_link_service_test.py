@@ -21,6 +21,9 @@ from user_management.models.person_link import PersonLink
 from user_management.services import person_link_service as service
 
 _PERSON = service.SlmPerson(uuid.uuid4(), "Root", "root@example.test", "Root", "$2b$hash")
+_ADMIN_ROLE_ID = uuid.UUID(
+    "a1b2c3d4-0000-4000-8000-00000000ad01"
+)  # has hex letters: an all-digit id is stored as a number by SQLite
 
 
 @compiles(JSONB, "sqlite")
@@ -38,6 +41,8 @@ async def session():
     try:
         sessions = async_sessionmaker(bind=engine, expire_on_commit=False)  # canonical: ignore py-adhoc-db-engine
         async with sessions() as db:
+            db.add(Role(id=_ADMIN_ROLE_ID, name="admin", is_system=True))  # the system role seed.py finds by name
+            await db.flush()
             yield db
     finally:
         await engine.dispose()
@@ -61,6 +66,9 @@ async def test_a_clean_install_links_the_admin_and_keeps_their_password_and_slm_
     create.assert_awaited_once()
     assert status == service.LINK_OK and user.password_hash == "$2b$hash"
     assert create.await_args.kwargs["is_platform_admin"] is True
+    assert create.await_args.kwargs["role_ids"] == [
+        _ADMIN_ROLE_ID
+    ]  # the seeded admin role, found by find_admin_role_id
     link = (await session.execute(select(PersonLink))).scalar_one()
     assert (link.slm_user_id, link.user_id) == (_PERSON.id, user.id)
 

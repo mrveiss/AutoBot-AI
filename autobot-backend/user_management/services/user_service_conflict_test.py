@@ -7,7 +7,7 @@
 ``UserService.create_user`` reads (``_check_duplicate_user``) then inserts. Two concurrent callers can both
 pass the pre-check and both insert; the loser used to raise an uncaught ``IntegrityError`` -- a 500.
 
-Every case here runs against a REAL SQLite database (``sqlite_test_engine``), never a mocked ``begin_nested``:
+Every case here runs against a REAL SQLite database (``tests/helpers/_sqlite_test_engine``), never a mocked ``begin_nested``:
 a mock cannot see ``session.add`` flushing OUTSIDE the SAVEPOINT, which killed the caller's transaction
 (#10200). The pre-check is stubbed out only to reach the conflict branch, as in the race it is already past.
 """
@@ -24,9 +24,9 @@ from sqlalchemy import func, select
 
 from autobot_shared.user_management.user_service_conflict import insert_user_or_raise_duplicate
 from autobot_shared.user_management.user_service_errors import DuplicateUserError
+from tests.helpers._sqlite_test_engine import real_savepoint_session_factory
 from user_management.models import User
 from user_management.services.user_service import UserService
-from user_management.sqlite_test_engine import real_savepoint_session_factory
 
 # Deterministic ids. uuid5 rather than an all-digit literal: SQLite stores a UUID as 32 hex characters, and a
 # string of digits only is coerced to a float by the column's numeric affinity.

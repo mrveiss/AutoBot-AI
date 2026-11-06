@@ -4,8 +4,9 @@
 # Author: mrveiss
 """A real in-memory SQLite engine whose SAVEPOINT and unique-index behaviour match a server database (#10200).
 
-Shared by the database-backed user tests so none of them mocks ``begin_nested``: a mock cannot catch an
-``add`` that flushes outside the SAVEPOINT. Test support only; nothing in the application imports it.
+Shared test support (tests/helpers), reused by the database-backed user tests so none of them mocks
+``begin_nested``: a mock cannot catch an ``add`` that flushes outside the SAVEPOINT.
+Test support only; nothing in the application imports it.
 """
 
 from __future__ import annotations

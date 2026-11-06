@@ -14,10 +14,12 @@ import pytest_asyncio
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 
+from autobot_shared.user_management import user_service_conflict as conflict
+from autobot_shared.user_management.user_service_errors import DuplicateUserError
+from tests.helpers._sqlite_test_engine import real_savepoint_session_factory
 from user_management.models import AuditLog, Role, User
 from user_management.models.person_link import PersonLink
 from user_management.services import person_link_service as service
-from user_management.sqlite_test_engine import real_savepoint_session_factory
 
 _PERSON = service.SlmPerson(uuid.uuid4(), "root", "root@example.test", "Root", "$2b$kept-hash")
 
@@ -116,19 +118,35 @@ async def test_an_admin_without_a_hash_is_reported_not_ok_and_nothing_is_written
 
 
 def _checks_meet_before_either_inserts():
-    """Wrap the last check before the insert so both starts pass it before either goes on to insert."""
-    arrived, release = [], asyncio.Event()
-    real = service._main_store_may_hold_them
+    """Hold both starts just after ``create_user``'s own duplicate pre-check, before either inserts.
 
-    async def wrapped(session, person):
-        held = await real(session, person)
-        arrived.append(held)
+    Both therefore pass every check (the person lookup and the user duplicate check) and the loser can
+    only fail in the INSERT, inside the SAVEPOINT.
+    """
+    arrived, release = [], asyncio.Event()
+    real = service.UserService._check_duplicate_user
+
+    async def wrapped(self, *args, **kwargs):
+        await real(self, *args, **kwargs)  # a duplicate here would raise: the pre-check must pass for both
+        arrived.append(args)
         if len(arrived) >= 2:
             release.set()
         await asyncio.wait_for(release.wait(), timeout=10)  # fails the test, not hangs it, if one never arrives
-        return held
 
-    return patch.object(service, "_main_store_may_hold_them", wrapped), arrived
+    return patch.object(service.UserService, "_check_duplicate_user", wrapped), arrived
+
+
+def _spy_on_savepoint_conflict():
+    """Count the calls that turn the SAVEPOINT's IntegrityError into a ``DuplicateUserError``."""
+    resolved = []
+    real = conflict._resolve_conflict
+
+    async def spy(*args, **kwargs):
+        error = await real(*args, **kwargs)
+        resolved.append(error)
+        return error
+
+    return patch.object(conflict, "_resolve_conflict", spy), resolved
 
 
 @pytest.mark.asyncio
@@ -136,11 +154,20 @@ async def test_two_concurrent_starts_both_report_ok_and_leave_one_linked_user(fi
     """Both starts pass every check before either inserts, so the loser must hit the conflict path, roll back whole and still report ok."""
     slm, db = _slm_and_db(file_factory)
     meet, arrived = _checks_meet_before_either_inserts()
-    with slm, db, meet, patch.object(service.logger, "error") as errors, patch.object(service.logger, "info") as infos:
+    spy, resolved = _spy_on_savepoint_conflict()
+    with (
+        slm,
+        db,
+        meet,
+        spy,
+        patch.object(service.logger, "error") as errors,
+        patch.object(service.logger, "info") as infos,
+    ):
         statuses = await asyncio.gather(
             service.link_first_slm_admin_at_startup(), service.link_first_slm_admin_at_startup()
         )
-    assert arrived == [False, False]  # both saw nobody and so both went on to insert
+    assert len(arrived) == 2  # both passed the duplicate pre-check, so both went on to insert
+    assert len(resolved) == 1 and isinstance(resolved[0], DuplicateUserError)  # the SAVEPOINT conflict path ran
     assert sorted(statuses) == [service.LINK_OK, service.LINK_OK]  # a benign double start is not a failure
     errors.assert_not_called()
     lost = [c for c in infos.call_args_list if "lost the startup race" in c.args[0]]
