@@ -27,7 +27,7 @@ import { ref, computed } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useDashboardPoller } from '@/composables/useDashboardPoller'
 import { getConfig } from '@/config/ssot-config'
-import { createLogger } from '@/utils/debugUtils'
+import { createLogger } from '@autobot/ui'
 
 const logger = createLogger('ProvisionStore')
 

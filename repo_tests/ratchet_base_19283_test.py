@@ -170,6 +170,11 @@ def test_a_frozenset_table_reads_as_a_set() -> None:
     assert literal_in(source, "EXEMPT") == frozenset({"a", "b"})
 
 
+def test_an_emptied_frozenset_table_reads_as_the_empty_set() -> None:
+    """#20382: once the exemption list drains, ``EXEMPT = frozenset()`` is still readable at the base."""
+    assert literal_in("EXEMPT = frozenset()\n", "EXEMPT") == frozenset()
+
+
 def test_added_entries_reports_only_additions_and_treats_a_missing_table_as_all_added() -> None:
     assert added_entries(frozenset({"a", "b"}), frozenset({"a", "c"})) == ["b"]
     assert added_entries(frozenset({"a"}), {}) == ["a"]

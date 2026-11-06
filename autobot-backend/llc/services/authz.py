@@ -153,12 +153,16 @@ async def require_company_admin_unless_platform(
 async def active_admin_ids(session: AsyncSession, company_id: uuid.UUID) -> set[uuid.UUID]:
     """The company's current owners/admins, leaving out anyone deactivated, deleted or hard-deleted, who cannot act.
 
-    Locks those memberships until the decision commits, so a second admin cannot leave after this
-    check, and two concurrent decisions on one company take turns. A platform admin is not counted:
+    Takes the lock the membership routes take first, then reads: a member added while this waited for it is
+    committed by then, and a statement that started before the insert would not see them. Held until the
+    decision commits, so a second admin cannot leave after this check, and two concurrent decisions on one
+    company take turns. A platform admin is not counted:
     a company's sole owner or admin may self-approve even while a platform admin exists.
     """
     from .member_standing import member_people  # noqa: PLC0415 -- it imports this module
+    from .membership_policy import lock_company_members  # noqa: PLC0415 -- it imports this module
 
+    await lock_company_members(session, company_id)
     rows = await session.execute(
         select(LLCCompanyMembership.user_id)
         .where(

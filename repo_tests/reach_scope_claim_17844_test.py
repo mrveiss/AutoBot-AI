@@ -14,9 +14,8 @@ in the same `declare()` call. That leaves a third coverage state nothing could s
 | floored correctly, over the WRONG population | nothing, until this |
 
 Measured on #17844's base: 52 `what=` strings, 14 naming a root or scope, 38 bare population
-nouns. Seven guards claimed some form of "production python files" across floors from 2555 to
-3247 -- a 692-file spread fully explained by differing scan roots, and invisible because only
-two of the seven said which roots.
+nouns. Seven guards claimed "production python files" across floors from 2555 to 3247 -- a
+692-file spread fully explained by differing scan roots, invisible because only two said which.
 
 The real-fixture case below is the one the issue asks for by name. A synthetic declaration
 proves the rule can fire; it does not prove the rule fires on the shape that actually occurs,
@@ -284,6 +283,9 @@ _DECLARED_SCOPES = {
     "workflow-visible-name-sweep": (".github/workflows",),
     "anti-pattern-type-emitters": ("autobot-backend/code_analysis", "autobot-backend/code_intelligence"),
     "compat-module-needs-importer": ("autobot-backend",),
+    "unconnected-code-modules": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
+    "unconnected-code-routes": ("autobot-backend", "autobot-slm-backend"),
+    "unconnected-code-stores": ("autobot-backend", "autobot-slm-backend", "autobot_shared", "autobot-infrastructure"),
     "compose-nodes-restated-default": ("autobot-slm-backend", "autobot-infrastructure", "docker", "docker-compose.yml"),
     "chat-history-async-calls-awaited": ("autobot-backend/api",),
     "chat-single-delete-implementation": ("autobot-backend/api",),
