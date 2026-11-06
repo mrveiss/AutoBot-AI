@@ -149,7 +149,7 @@ def _failure(raw: Metadata, result: Metadata) -> CommandStepFailed:
 def _refused(message: str, user: str | None, trigger: str) -> CommandStepFailed:
     """A step refused before the security layer ran; audited with its trigger, never exit 0."""
     get_security_layer().audit_log(
-        action="command_execution_refused",
+        action="command_execution_denied",
         user=user or "unknown",
         outcome="denied",
         details={"trigger": trigger, "source": "workflow_step"},
