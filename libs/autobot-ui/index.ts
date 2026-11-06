@@ -174,8 +174,8 @@ export type { InstalledTheme } from './src/types/theme'
 // Saving a file from the browser, the one implementation (#20770).
 export { saveBlob, saveTextFile, saveUrl } from './src/utils/saveFile'
 
-// Scoped console logger (#14908) — canonical LogLevel/log/createLogger; both
-// apps' utils/debugUtils.ts re-export these rather than re-declaring them.
+// Scoped console logger (#14908) — canonical LogLevel/log/createLogger. The SLM
+// imports them from the kit; the user app's utils/debugUtils.ts re-exports them.
 export { log, createLogger } from './src/utils/logger'
 // Managed polling with scoped disposal and a consecutive-error stop (#19482).
 export { usePollingJob } from './src/composables/usePollingJob'

@@ -12,9 +12,8 @@
  */
 
 import { ref, onMounted } from 'vue'
-import { HttpError } from '@autobot/ui'
+import { HttpError, createLogger } from '@autobot/ui'
 import { throwIfFailed, useDashboardPoller } from '@/composables/useDashboardPoller'
-import { createLogger } from '@/utils/debugUtils'
 import { slmApiClient } from '@/utils/ApiClient'
 
 const logger = createLogger('usePerformanceMonitoring')

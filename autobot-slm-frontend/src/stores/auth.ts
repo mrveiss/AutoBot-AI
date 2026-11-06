@@ -13,7 +13,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { createLogger } from '@/utils/debugUtils'
+import { createLogger } from '@autobot/ui'
 import { slmApiClient } from '@/utils/ApiClient'
 import { clearSlmSession, readSlmToken, readSlmUserRaw, writeSlmToken, writeSlmUser } from '@/utils/authStorage'
 import type { components } from '@/types/generated/api'

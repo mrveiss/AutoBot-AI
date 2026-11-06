@@ -164,8 +164,8 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-infrastructure/shared/ide-extensions/vscode-autobot/src/extension.ts": 741,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/background-monitor.ts": 713,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/index.ts": 957,
-    "autobot-slm-frontend/src/components/AddNodeModal.vue": 1067,  # #14777 batch 2: 1111 -> 1067
-    "autobot-slm-frontend/src/components/fleet/NodeLifecyclePanel.vue": 934,
+    "autobot-slm-frontend/src/components/AddNodeModal.vue": 1066,  # #14777 batch 2: 1111 -> 1067
+    "autobot-slm-frontend/src/components/fleet/NodeLifecyclePanel.vue": 932,
     "autobot-slm-frontend/src/composables/useAutobotApi.ts": 1896,  # #19217 factory in; #12363 formatter out
     "autobot-slm-frontend/src/composables/useCodeSync.ts": 1075,
     "autobot-slm-frontend/src/composables/useOrchestrationManagement.ts": 693,
@@ -173,21 +173,20 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-frontend/src/stores/fleet.ts": 994,
     "autobot-slm-frontend/src/types/slm.ts": 838,
     "autobot-slm-frontend/src/views/AgentsView.vue": 712,
-    "autobot-slm-frontend/src/views/CodeSyncView.vue": 1957,  # #18819: 2080 -> 2069; #20201: poll loop extracted
-    "autobot-slm-frontend/src/views/DeploymentsView.vue": 1614,  # #18819 + #14777: 1703 -> 1623; #20003: -> 1614
-    "autobot-slm-frontend/src/views/FleetOverview.vue": 708,  # #14780: 786 -> 708
-    "autobot-slm-frontend/src/views/MaintenanceView.vue": 790,  # #14777 batch 2: 817 -> 794; #20003: -> 790
-    "autobot-slm-frontend/src/views/OrchestrationView.vue": 2189,
-    "autobot-slm-frontend/src/views/ReplicationView.vue": 699,  # #18819 + #14777: 731 -> 706
-    "autobot-slm-frontend/src/views/SecurityView.vue": 1368,  # #14780 BasePagination: 1386 -> 1374
-    "autobot-slm-frontend/src/views/SetupWizardView.vue": 1790,
+    "autobot-slm-frontend/src/views/CodeSyncView.vue": 1956,  # #18819: 2080 -> 2069; #20201: poll loop extracted
+    "autobot-slm-frontend/src/views/DeploymentsView.vue": 1613,  # #18819 + #14777: 1703 -> 1623; #20003: -> 1614
+    "autobot-slm-frontend/src/views/FleetOverview.vue": 707,  # #14780: 786 -> 708
+    "autobot-slm-frontend/src/views/MaintenanceView.vue": 789,  # #14777 batch 2: 817 -> 794; #20003: -> 790
+    "autobot-slm-frontend/src/views/OrchestrationView.vue": 2188,
+    "autobot-slm-frontend/src/views/ReplicationView.vue": 698,  # #18819 + #14777: 731 -> 706
+    "autobot-slm-frontend/src/views/SecurityView.vue": 1367,  # #14780 BasePagination: 1386 -> 1374
+    "autobot-slm-frontend/src/views/SetupWizardView.vue": 1789,
     "autobot-slm-frontend/src/views/SkillsView.vue": 631,  # #18819 + #14777: 645 -> 633; #19482: -> 631
     "autobot-slm-frontend/src/views/SystemUpdatesTab.vue": 621,  # #18819: 638 -> 635; #19482: -> 632; #18863: -> 626
-    "autobot-slm-frontend/src/views/monitoring/ErrorMonitor.vue": 602,  # #14780: 617 -> 609; #19482: 608; #20004: 602
     "autobot-slm-frontend/src/views/settings/SecuritySettings.vue": 706,  # #18819 + #14777: 807 -> 773
-    "autobot-slm-frontend/src/views/settings/admin/DataHygieneView.vue": 656,  # #18819 + #14777: 669 -> 662
-    "autobot-slm-frontend/src/views/settings/admin/LogForwardingSettings.vue": 650,  # #14780: 664 -> 655 (BaseSwitch)
-    "autobot-slm-frontend/src/views/settings/admin/NPUWorkersSettings.vue": 716,  # #18819 + #14777: 733 -> 721
+    "autobot-slm-frontend/src/views/settings/admin/DataHygieneView.vue": 654,  # #18819 + #14777: 669 -> 662
+    "autobot-slm-frontend/src/views/settings/admin/LogForwardingSettings.vue": 649,  # #14780: 664 -> 655 (BaseSwitch)
+    "autobot-slm-frontend/src/views/settings/admin/NPUWorkersSettings.vue": 715,  # #20601 + #14908: 716 -> 715
     "autobot-slm-frontend/src/views/settings/admin/SSOSettings.vue": 822,  # #18819 + #14777: 869 -> 824; #19816: -> 822
     "autobot-slm-frontend/src/views/settings/admin/UserManagementSettings.vue": 1057,  # #18819 + #14777: 1099 -> 1088
 }
