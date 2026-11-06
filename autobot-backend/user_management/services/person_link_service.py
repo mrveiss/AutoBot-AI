@@ -15,11 +15,13 @@ import uuid
 from dataclasses import dataclass
 
 from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.node_proxy import internal_api_key
+from autobot_shared.user_management.user_service_errors import DuplicateUserError
 from user_management.models import User
 from user_management.models.person_link import PersonLink
 from user_management.services.base_service import TenantContext
@@ -142,6 +144,34 @@ async def link_first_slm_admin(session: AsyncSession, person: SlmPerson | None) 
     return LINK_OK
 
 
+async def _is_linked(session: AsyncSession, person: SlmPerson) -> bool:
+    query = select(PersonLink.id).where(PersonLink.slm_user_id == person.id).limit(1)
+    return (await session.execute(query)).first() is not None
+
+
+async def _link_in_own_transaction(person: SlmPerson | None) -> str:
+    """Link inside one explicit transaction; a start that lost the race to another reports ok.
+
+    Committed or rolled back by hand so the lost race can roll back, re-read and answer. (The race
+    itself was reported as a failure because ``insert_user_or_raise_duplicate`` added the user before
+    opening its SAVEPOINT: the flush at SAVEPOINT entry failed outside it and deactivated this whole
+    transaction, so the duplicate lookup raised ``InvalidRequestError``; fixed there.)
+    """
+    from user_management.database import get_async_session_factory
+
+    async with get_async_session_factory()() as session:
+        try:
+            status = await link_first_slm_admin(session, person)
+            await session.commit()
+            return status
+        except (IntegrityError, DuplicateUserError):
+            await session.rollback()
+            if person is None or not await _is_linked(session, person):
+                raise  # a real clash with someone else's user: a failure, not a lost race
+            logger.info("Person link: lost the startup race for %s; the winner linked them", person.username)
+            return LINK_OK
+
+
 async def link_first_slm_admin_at_startup() -> str:
     """Its own transaction: all of the link or none of it, and a failure can't touch seeding's session.
 
@@ -149,13 +179,9 @@ async def link_first_slm_admin_at_startup() -> str:
     returned and kept in ``last_link_status``; every failure is logged at error level.
     """
     global last_link_status
-    from user_management.database import get_async_session_factory
-
     status = LINK_OK
     try:
-        person = await fetch_first_slm_admin()
-        async with get_async_session_factory()() as session, session.begin():
-            status = await link_first_slm_admin(session, person)
+        status = await _link_in_own_transaction(await fetch_first_slm_admin())
     except FirstAdminLinkError as exc:  # already logged at error level where it was raised
         status = exc.status
     except Exception as exc:

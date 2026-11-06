@@ -9,18 +9,42 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import pytest_asyncio
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.compiler import compiles
 
+from user_management.models import AuditLog, Role, User
+from user_management.models.base import Base
+from user_management.models.person_link import PersonLink
 from user_management.services import person_link_service as service
 
 _PERSON = service.SlmPerson(uuid.uuid4(), "Root", "root@example.test", "Root", "$2b$hash")
 
 
-def _session(*firsts) -> MagicMock:
-    """Each execute answers .first() with the next value."""
-    session = MagicMock()
-    session.flush = AsyncMock()
-    session.execute = AsyncMock(side_effect=[MagicMock(first=MagicMock(return_value=v)) for v in firsts])
-    return session
+@compiles(JSONB, "sqlite")
+def _compile_jsonb_as_json_on_sqlite(element, compiler, **kw):  # noqa: ANN001
+    return "JSON"
+
+
+@pytest_asyncio.fixture
+async def session():
+    """A real session on an in-memory database, so the checks run as the queries they are."""
+    engine = create_async_engine("sqlite+aiosqlite://")  # canonical: ignore py-adhoc-db-engine (test-local, in-memory)
+    async with engine.begin() as conn:
+        tables = [User.__table__, Role.__table__, AuditLog.__table__, PersonLink.__table__]
+        await conn.run_sync(Base.metadata.create_all, tables=tables)
+    try:
+        sessions = async_sessionmaker(bind=engine, expire_on_commit=False)  # canonical: ignore py-adhoc-db-engine
+        async with sessions() as db:
+            yield db
+    finally:
+        await engine.dispose()
+
+
+async def _count(session, model) -> int:
+    return (await session.execute(select(func.count()).select_from(model))).scalar_one()
 
 
 async def _link(session, person=_PERSON):
@@ -32,36 +56,37 @@ async def _link(session, person=_PERSON):
     return status, user, users.return_value.create_user
 
 
-async def test_a_clean_install_links_the_admin_and_keeps_their_password_and_slm_id() -> None:
-    session = _session(None, None, SimpleNamespace(id=uuid.uuid4()))
+async def test_a_clean_install_links_the_admin_and_keeps_their_password_and_slm_id(session) -> None:
     status, user, create = await _link(session)
     create.assert_awaited_once()
     assert status == service.LINK_OK and user.password_hash == "$2b$hash"
     assert create.await_args.kwargs["is_platform_admin"] is True
-    link = session.add.call_args.args[0]
+    link = (await session.execute(select(PersonLink))).scalar_one()
     assert (link.slm_user_id, link.user_id) == (_PERSON.id, user.id)
 
 
-async def test_re_running_creates_nothing() -> None:
-    session = _session(SimpleNamespace(id=uuid.uuid4()))
+async def test_re_running_creates_nothing(session) -> None:
+    session.add(PersonLink(slm_user_id=_PERSON.id, user_id=None))
+    await session.flush()
     status, _, create = await _link(session)
     assert status == service.LINK_OK
     create.assert_not_awaited()
 
 
-async def test_someone_who_may_be_this_person_is_never_matched_automatically() -> None:
-    session = _session(None, SimpleNamespace(id=uuid.uuid4()))
+async def test_someone_who_may_be_this_person_is_never_matched_automatically(session) -> None:
+    session.add(User(email="root@example.test", username="root", password_hash="x"))
+    await session.flush()
     status, _, create = await _link(session)
     assert status == service.LINK_OK
     create.assert_not_awaited()
-    session.add.assert_not_called()
+    assert await _count(session, PersonLink) == 0
 
 
-async def test_an_slm_without_an_admin_links_nothing() -> None:
-    session = _session()
-    status, _, _ = await _link(session, person=None)
+async def test_an_slm_without_an_admin_links_nothing(session) -> None:
+    status, _, create = await _link(session, person=None)
     assert status == service.LINK_OK
-    session.execute.assert_not_awaited()
+    create.assert_not_awaited()
+    assert await _count(session, PersonLink) == 0
 
 
 async def test_a_404_from_the_slm_says_so_in_the_log() -> None:
@@ -128,9 +153,9 @@ async def test_startup_returns_the_failure_status_and_records_it() -> None:
     assert service.last_link_status == service.LINK_KEY_MISSING
 
 
-async def test_an_slm_admin_without_a_password_hash_is_not_linked() -> None:
+async def test_an_slm_admin_without_a_password_hash_is_not_linked(session) -> None:
     """Linking would create an admin who cannot log in and would stop default-admin seeding."""
     no_hash = service.SlmPerson(uuid.uuid4(), "Root", "root@example.test", "Root", None)
-    status, _user, create_user = await _link(_session(None, None), no_hash)
+    status, _user, create_user = await _link(session, no_hash)
     assert status == service.LINK_NO_HASH
     create_user.assert_not_awaited()

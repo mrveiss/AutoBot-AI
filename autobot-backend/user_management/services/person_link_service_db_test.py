@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, event, func, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -31,9 +31,43 @@ def _compile_jsonb_as_json_on_sqlite(element, compiler, **kw):  # noqa: ANN001
     return "JSON"
 
 
+_WRITES = ("SAVEPOINT", "INSERT", "UPDATE", "DELETE")
+
+
+def _begin_transactions_properly(engine) -> None:
+    """Open the transaction at the first write, as a server database does, instead of pysqlite's quirks.
+
+    pysqlite only opens one at the first INSERT, so a SAVEPOINT taken first is released as a commit. An
+    IMMEDIATE begin at the first write also makes a second writer wait and then see the first's rows,
+    which is how the unique conflict is reached instead of "database is locked".
+    """
+    sync_engine = engine.sync_engine
+
+    @event.listens_for(sync_engine, "connect")
+    def _autocommit(dbapi_connection, _record) -> None:  # noqa: ANN001
+        dbapi_connection.isolation_level = None
+
+    @event.listens_for(sync_engine, "checkout")
+    def _fresh(_dbapi_connection, record, _proxy) -> None:  # noqa: ANN001
+        record.info["open"] = False
+
+    @event.listens_for(sync_engine, "before_cursor_execute")
+    def _begin_at_first_write(conn, cursor, statement, *_rest) -> None:  # noqa: ANN001
+        info = conn.connection.info
+        if not info.get("open") and statement.lstrip().upper().startswith(_WRITES):
+            cursor.execute("BEGIN IMMEDIATE")
+            info["open"] = True
+
+    @event.listens_for(sync_engine, "commit")
+    @event.listens_for(sync_engine, "rollback")
+    def _closed(conn) -> None:  # noqa: ANN001
+        conn.connection.info["open"] = False
+
+
 @pytest_asyncio.fixture
 async def factory() -> AsyncIterator:
     engine = create_async_engine(_SQLITE_URL)  # canonical: ignore py-adhoc-db-engine (test-local, in-memory)
+    _begin_transactions_properly(engine)
     async with engine.begin() as conn:
         tables = [User.__table__, Role.__table__, AuditLog.__table__, PersonLink.__table__]
         await conn.run_sync(Base.metadata.create_all, tables=tables)
@@ -116,6 +150,7 @@ async def file_factory(tmp_path) -> AsyncIterator:
     """A file database: the in-memory one shares a single connection, so it cannot race."""
     url = f"sqlite+aiosqlite:///{tmp_path / 'race.db'}"
     engine = create_async_engine(url)  # canonical: ignore py-adhoc-db-engine (test-local, tmp file)
+    _begin_transactions_properly(engine)
     async with engine.begin() as conn:
         tables = [User.__table__, Role.__table__, AuditLog.__table__, PersonLink.__table__]
         await conn.run_sync(Base.metadata.create_all, tables=tables)
@@ -150,16 +185,18 @@ def _checks_meet_before_either_inserts():
 
 
 @pytest.mark.asyncio
-async def test_two_concurrent_starts_leave_one_linked_user(file_factory) -> None:
-    """Both starts pass every check before either inserts, so the loser must hit the conflict path and fail whole."""
+async def test_two_concurrent_starts_both_report_ok_and_leave_one_linked_user(file_factory) -> None:
+    """Both starts pass every check before either inserts, so the loser must hit the conflict path, roll back whole and still report ok."""
     slm, db = _slm_and_db(file_factory)
     meet, arrived = _checks_meet_before_either_inserts()
-    with slm, db, meet, patch.object(service.logger, "error") as errors:  # patched once: overlapping contexts leak
+    with slm, db, meet, patch.object(service.logger, "error") as errors, patch.object(service.logger, "info") as infos:
         statuses = await asyncio.gather(
             service.link_first_slm_admin_at_startup(), service.link_first_slm_admin_at_startup()
         )
     assert arrived == [False, False]  # both saw nobody and so both went on to insert
-    assert sorted(statuses) == sorted([service.LINK_OK, service.LINK_FAILED])  # the loser took the failure branch
-    errors.assert_called_once()  # ...which logs once, and the rollback left no partial user
-    assert "could not link" in errors.call_args.args[0]  # the failure branch of the startup, not another path
+    assert sorted(statuses) == [service.LINK_OK, service.LINK_OK]  # a benign double start is not a failure
+    errors.assert_not_called()
+    lost = [c for c in infos.call_args_list if "lost the startup race" in c.args[0]]
+    assert len(lost) == 1  # exactly one start took the conflict path, rolled back and re-read
+    assert service.last_link_status == service.LINK_OK
     assert await _counts(file_factory) == (1, 1)
