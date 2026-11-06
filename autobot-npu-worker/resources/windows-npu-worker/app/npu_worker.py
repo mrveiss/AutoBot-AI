@@ -114,7 +114,10 @@ class WindowsNPUWorker(
 
         # Real OpenVINO model manager (Issue #640 - replaces mock inference)
         self._model_manager: OpenVINOModelManager | None = None
-        self._use_real_inference = True  # Set to False to use mock inference for testing
+        self._use_real_inference = True
+        # Mock vectors are only valid for explicit development/test runs. They
+        # must never be silently returned by a production worker.
+        self._allow_mock_inference = os.environ.get("NPU_WORKER_ALLOW_MOCK_INFERENCE", "false").lower() == "true"
 
         # Thread-safe LRU cache (Issue #68 - race condition + memory growth fix)
         cache_size = cache_config.get("max_size", DEFAULT_EMBEDDING_CACHE_SIZE)
