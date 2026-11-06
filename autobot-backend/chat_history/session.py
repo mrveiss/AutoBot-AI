@@ -24,7 +24,7 @@ import aiofiles
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
 from chat_history.cache import _CHAT_RECENT_MAX_ENTRIES
-from chat_history.file_io import existing_chat_path, run_in_chat_io_executor
+from chat_history.file_io import existing_chat_path, run_in_chat_io_executor, session_file_lock
 from chat_history.graph_owner import create_entity_on_missing, session_owner_scope
 from chat_history.session_lease import ChatFileUnreadable, SessionLeaseError
 from chat_history.session_locked import SessionLockMixin
@@ -411,10 +411,9 @@ class SessionMixin(SessionLockMixin):
         chat_data: Dict[str, Any],
         before_replace: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
-        """Atomic write with a direct-write fallback (Issue #665); both run under the session lease (#20862).
+        """Atomic write, direct-write fallback (#665); both under the session lease and file lock (#20862).
 
-        ``before_replace`` runs right before the replace (the lease check); if it raises, nothing is
-        written and the fallback is not tried.
+        ``before_replace`` runs right before the replace; if it raises, nothing is written.
         """
         encrypted_data = self._encrypt_data(chat_data)
         try:
@@ -423,10 +422,11 @@ class SessionMixin(SessionLockMixin):
             raise
         except Exception as atomic_error:
             logger.warning(f"Atomic write failed, falling back to direct write: {atomic_error}")
-            if before_replace is not None:
-                await before_replace()
-            async with aiofiles.open(chat_file, "w", encoding="utf-8") as f:
-                await f.write(encrypted_data)
+            async with session_file_lock(chat_file):
+                if before_replace is not None:
+                    await before_replace()
+                async with aiofiles.open(chat_file, "w", encoding="utf-8") as f:
+                    await f.write(encrypted_data)
 
     async def _handle_periodic_cleanup(self) -> None:
         """

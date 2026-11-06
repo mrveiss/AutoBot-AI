@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, Awaitable, Callable, Dict, Optional, Tupl
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
-from chat_history.file_io import run_in_chat_io_executor
+from chat_history.file_io import remove_session_lock, run_in_chat_io_executor
 from chat_history.session_lease import (
     ChatFileUnreadable,
     SessionLease,
@@ -238,6 +238,7 @@ class SessionLockMixin:
                 await lease.fence({}, await self._peek_generation(session_id, chats_directory))
                 deleted = await self._delete_session_files(session_id, chats_directory)
                 await self._delete_companion_files(session_id, chats_directory)
+                await run_in_chat_io_executor(remove_session_lock, f"{session_id}_chat.json", chats_directory)
                 await self._clear_session_redis_cache(session_id)
             if not deleted:
                 logger.warning("Chat session %s not found for deletion", session_id)

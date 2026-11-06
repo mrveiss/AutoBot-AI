@@ -21,12 +21,14 @@ import json
 import os
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
-from typing import Awaitable, Callable
+from contextlib import asynccontextmanager
+from typing import AsyncIterator, Awaitable, Callable
 
 import aiofiles
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
+from chat_history.session_lease import CHAT_LEASE_POLL_S, CHAT_LEASE_WAIT_S, SessionLeaseLost
 from constants.ttl_constants import TTL_24_HOURS
 
 logger = get_logger(__name__)
@@ -69,6 +71,53 @@ def existing_chat_path(name: str, directory: str) -> str | None:
     """
     path = str(validate_relative_path(name, directory))
     return path if os.path.exists(path) else None
+
+
+SESSION_FILE_LOCK_SUFFIX = ".lock"
+
+
+@asynccontextmanager
+async def session_file_lock(file_path: str) -> AsyncIterator[None]:
+    """Exclusive flock on the session file's sidecar lock, held across check-then-replace (#20862).
+
+    The Redis lease can be lost between a generation check and the rename; this lock cannot be
+    taken by two processes at once, so "read the on-disk generation, compare, replace" is one step
+    against every other writer of the file. The sidecar sits beside the file (validated against its
+    directory) and is polled non-blocking so a waiter never parks one of the chat I/O threads the
+    holder needs. A wait longer than the lease bound raises SessionLeaseLost: nothing is written.
+    """
+    directory, name = os.path.split(file_path)
+    lock_path = str(validate_relative_path(name + SESSION_FILE_LOCK_SUFFIX, directory))
+    fd = await run_in_chat_io_executor(os.open, lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        try:
+            async with asyncio.timeout(CHAT_LEASE_WAIT_S):
+                while not _try_flock(fd):
+                    await asyncio.sleep(CHAT_LEASE_POLL_S)
+        except TimeoutError:
+            raise SessionLeaseLost(
+                "file lock on %s was not free within %.1fs; nothing written" % (name, CHAT_LEASE_WAIT_S)
+            ) from None
+        yield
+    finally:
+        os.close(fd)  # closing the descriptor releases the flock
+
+
+def remove_session_lock(name: str, directory: str) -> None:
+    """Remove the sidecar lock of chat file *name* (the session is deleted, and the lease is held)."""
+    try:
+        os.unlink(str(validate_relative_path(name + SESSION_FILE_LOCK_SUFFIX, directory)))
+    except FileNotFoundError:
+        pass
+
+
+def _try_flock(fd: int) -> bool:
+    """Take the exclusive flock without blocking; False when another descriptor holds it."""
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return False
+    return True
 
 
 class FileIOMixin:
@@ -128,12 +177,12 @@ class FileIOMixin:
             async with aiofiles.open(temp_path, "w", encoding="utf-8") as f:
                 await f.write(content)
 
-            # #20862: the caller's last check (the session lease) runs right before the rename
-            if before_replace is not None:
-                await before_replace()
-
-            # Atomic rename (cross-platform atomic operation)
-            await self._run_in_io_executor(os.replace, temp_path, file_path)
+            # #20862: the caller's last check (lease, on-disk generation) and the rename are one step
+            # against every other writer of this file: both run under its sidecar flock.
+            async with session_file_lock(file_path):
+                if before_replace is not None:
+                    await before_replace()
+                await self._run_in_io_executor(os.replace, temp_path, file_path)
 
             logger.debug("Atomic write completed: %s", file_path)
 

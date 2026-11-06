@@ -18,7 +18,7 @@ SKIP_WEBSOCKET_PERSISTENCE_TYPES in backend/type_defs/common.py
 
 import time
 import uuid
-from typing import Any, Dict, List
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
 from chat_history.session_lease import SessionLeaseError
@@ -37,7 +37,22 @@ class MessagesMixin:
     - self.save_session(): method
     - self._save_history(): method
     - self._periodic_memory_check(): method
+    - self._locked_update(), self._update_redis_cache_on_save(): methods (SessionLockMixin / SessionMixin)
     """
+
+    if TYPE_CHECKING:  # the host interface this mixin calls, declared like SessionLockMixin does
+
+        async def _locked_update(
+            self,
+            session_id: str,
+            operation: str,
+            mutate: Callable[[Dict[str, Any]], None],
+            *,
+            must_exist: bool = False,
+            after: Optional[Callable[[str, Dict[str, Any]], Awaitable[None]]] = None,
+        ) -> Optional[Dict[str, Any]]: ...
+
+        async def _update_redis_cache_on_save(self, session_id: str, chat_data: Dict[str, Any]) -> None: ...
 
     def _build_message_dict(
         self,

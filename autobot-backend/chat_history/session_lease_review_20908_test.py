@@ -17,7 +17,7 @@ from chat_history.session_lease import (
     StaleGenerationError,
     session_lease,
 )
-from chat_history.session_lease_20862_test import _Manager, _msg, _on_disk, _raw, _texts
+from chat_history.session_lease_20862_test import _Manager, _msg, _on_disk, _plant, _raw, _texts
 from testkit.async_bounds import bound_async_tests
 
 _REAL_LEASE_CLIENT = lease_mod._lease_client  # captured before the autouse fixture rebinds it
@@ -177,6 +177,49 @@ async def test_an_append_batch_carrying_one_id_twice_adds_it_once(manager, tmp_p
     same = {**_msg("echo", "t1"), "id": "dup-1"}
     await manager.add_messages_batch("d2", [same, dict(same)])
     assert _texts(tmp_path, "d2") == ["first", "echo"]
+
+
+def _read_json(path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _gen_checked_write(manager, path, content: str, my_generation: int, pause=None):
+    """One writer's check-then-replace: refuse when the file's generation is newer, optionally pausing after the check."""
+
+    async def check() -> None:
+        on_disk = _read_json(path)["write_generation"]
+        if on_disk > my_generation:
+            raise StaleGenerationError("race", my_generation, on_disk)
+        if pause is not None:
+            paused, release = pause
+            paused.set()
+            await release.wait()
+
+    return asyncio.create_task(manager._atomic_write(str(path), content, check))
+
+
+def _doc(generation: int, text: str) -> str:
+    return json.dumps({"write_generation": generation, "text": text})
+
+
+@pytest.mark.parametrize("holder_is_newer", [False, True])
+async def test_check_and_replace_is_one_step_against_a_racing_writer(manager, tmp_path, holder_is_newer):
+    path = tmp_path / "race_chat.json"
+    _plant(tmp_path, "race", _doc(1, "base"))
+    paused, release = asyncio.Event(), asyncio.Event()
+    holder_gen, other_gen = (3, 2) if holder_is_newer else (2, 3)
+    holder = _gen_checked_write(manager, path, _doc(holder_gen, "holder"), holder_gen, pause=(paused, release))
+    await paused.wait()  # the holder passed its generation check and has not replaced yet
+    other = _gen_checked_write(manager, path, _doc(other_gen, "other"), other_gen)
+    done, _ = await asyncio.wait({other}, timeout=0.5)  # a racing writer must not get through the holder's window
+    assert not done, "a second writer checked and replaced inside the first writer's check-then-replace"
+    release.set()
+    results = await asyncio.gather(holder, other, return_exceptions=True)
+    assert _read_json(path)["write_generation"] == 3  # the newer generation survives in this interleaving
+    if holder_is_newer:
+        assert isinstance(results[1], StaleGenerationError)  # the older writer was refused after the newer landed
+    else:
+        assert results == [None, None]
 
 
 bound_async_tests(globals())  # no pytest-timeout in the repo: bound each test here
