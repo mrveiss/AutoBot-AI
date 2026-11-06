@@ -86,7 +86,7 @@ def is_server_only_action(action: object) -> bool:
     return isinstance(action, str) and action in _SERVER_ONLY
 
 
-def is_admin_only_action(action: object) -> bool:
+def action_needs_elevated_approver(action: object) -> bool:
     """Whether approving *action* needs the admin role (#20046)."""
     return isinstance(action, str) and action in _ADMIN_ONLY
 

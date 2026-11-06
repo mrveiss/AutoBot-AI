@@ -21,8 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_cleanup_proposals import CleanupRequestResponse, CleanupStatus
 from api.user_management.dependencies import get_db_session
-from auth_middleware import get_current_user
-from auth_rbac import require_role
+from auth_middleware import check_admin_permission, get_current_user
 from models.approval import Approval, ApprovalStatus, ApprovalType
 from services.approval_gate_service import ApprovalGateService
 from services.install_cleanup_actions import (
@@ -33,7 +32,7 @@ from services.install_cleanup_actions import (
     register_install_cleanup_actions,
 )
 
-router = APIRouter(prefix="/admin", dependencies=[Depends(require_role("admin", "superadmin"))])
+router = APIRouter(prefix="/admin", dependencies=[Depends(check_admin_permission)])
 
 # Registered at this router's import time so the executors exist before any approve().
 register_install_cleanup_actions()

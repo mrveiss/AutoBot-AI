@@ -61,10 +61,10 @@ interface Card {
   error: string
 }
 
-const makeCard = (id: string, base: string): Card => ({
+const makeCard = (id: string, statusUrl: string, requestUrl: string): Card => ({
   id,
-  statusUrl: `/api/admin/${base}`,
-  requestUrl: `/api/admin/${base}/requests`,
+  statusUrl,
+  requestUrl,
   status: null,
   loadFailed: false,
   busy: false,
@@ -73,8 +73,8 @@ const makeCard = (id: string, base: string): Card => ({
 })
 
 const cards = reactive<Card[]>([
-  makeCard('envCopies', 'env-copies-cleanup'),
-  makeCard('tierColumn', 'org-tier-column'),
+  makeCard('envCopies', '/api/admin/env-copies-cleanup', '/api/admin/env-copies-cleanup/requests'),
+  makeCard('tierColumn', '/api/admin/org-tier-column', '/api/admin/org-tier-column/requests'),
 ])
 
 // The approvals inbox is company-scoped: go to the selected company's, else the company picker.
