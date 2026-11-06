@@ -160,10 +160,12 @@ class WorkerInferenceMixin:
 
     def _generate_embedding(self, text: str, model_name: str) -> List[float]:
         """
-        Generate embedding using real OpenVINO inference or mock fallback.
+        Generate an embedding using real OpenVINO inference.
 
         Issue #640: Replaces mock embeddings with real NPU inference.
-        Falls back to mock if real inference unavailable.
+        Mock vectors are available only when explicitly enabled for development
+        or tests. Production requests fail loudly instead of returning data
+        that can be cached and indexed as real.
         """
         # Issue #640: Use real inference if available
         if self._use_real_inference and self._model_manager is not None:
@@ -171,11 +173,14 @@ class WorkerInferenceMixin:
                 embedding = self._model_manager.generate_embedding(text, model_name)
                 return embedding
             except Exception as e:
-                logger.warning(f"Real inference failed for {model_name}, using mock: {e}")
-                # Fall through to mock implementation
+                logger.error("Real inference failed for %s: %s", model_name, e)
+                raise RuntimeError(f"Embedding inference failed for {model_name}: {e}") from e
 
-        # Mock implementation (fallback)
-        return self._generate_mock_embedding(text, model_name)
+        if self._allow_mock_inference:
+            logger.warning("Using explicit mock inference for %s", model_name)
+            return self._generate_mock_embedding(text, model_name)
+
+        raise RuntimeError(f"Embedding inference is unavailable for {model_name}")
 
     def _generate_mock_embedding(self, text: str, model_name: str) -> List[float]:
         """Generate mock embedding using deterministic hash (fallback)."""

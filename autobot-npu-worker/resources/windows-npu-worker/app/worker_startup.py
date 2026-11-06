@@ -261,7 +261,7 @@ class WorkerStartupMixin:
 
                 except Exception as e:
                     logger.error(f"Failed to initialize model manager: {e}")
-                    logger.info("Falling back to mock inference")
+                    logger.info("Real inference unavailable; requests will fail unless mock inference is explicitly enabled")
                     self._use_real_inference = False
 
         except ImportError as e:
@@ -336,11 +336,10 @@ class WorkerStartupMixin:
                         }
                         logger.info(f"Model {model_name} loaded for {display_device} (real inference)")
                     else:
-                        logger.warning(f"Failed to load {model_name} with real inference, using mock")
+                        logger.warning("Failed to load %s with real inference", model_name)
                         await self._load_mock_model(model_name, optimization_level, start_time)
 
                 else:
-                    # Fallback to mock loading
                     await self._load_mock_model(model_name, optimization_level, start_time)
 
             except Exception as e:
@@ -348,7 +347,10 @@ class WorkerStartupMixin:
                 raise
 
     async def _load_mock_model(self, model_name: str, optimization_level: str, start_time: float):
-        """Load mock model (fallback when real inference unavailable)."""
+        """Load a mock model only for explicit development/test runs."""
+        if not self._allow_mock_inference:
+            raise RuntimeError(f"Real inference is unavailable for {model_name}")
+
         if self.npu_available:
             logger.info(f"Loading {model_name} for NPU (mock)...")
             await asyncio.sleep(2)  # Simulate loading

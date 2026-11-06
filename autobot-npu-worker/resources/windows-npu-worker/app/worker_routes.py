@@ -215,7 +215,7 @@ class WorkerRoutesMixin:
             )
         except Exception as e:
             logger.error(f"Inference failed for task {task_id}: {e}")
-            return NPUTaskResponse(task_id=task_id, status="failed", error=str(e))
+            raise HTTPException(status_code=500, detail=f"Inference failed: {e}") from e
 
     async def _handle_embedding_generate(
         self,
@@ -249,7 +249,7 @@ class WorkerRoutesMixin:
             }
         except Exception as e:
             logger.error(f"Embedding generation failed: {e}")
-            raise HTTPException(status_code=500, detail="Embedding generation failed")
+            raise HTTPException(status_code=500, detail=f"Embedding generation failed: {e}") from e
 
     async def _handle_semantic_search(
         self,
