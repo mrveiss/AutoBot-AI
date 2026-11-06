@@ -9356,7 +9356,25 @@
         "addLane": "Add lane",
         "stepLabel": "Step",
         "stepLane": "Lane of the step",
-        "addStep": "Add step"
+        "addStep": "Add step",
+        "looseStepLabel": "Step to connect yourself",
+        "addLooseStep": "Add unconnected step",
+        "renameLane": "Lane name",
+        "deleteLane": "Delete lane",
+        "deleteLaneTitle": "Delete this lane?",
+        "deleteLaneMessage": "Lane \"{name}\" will be removed from the plan. A lane that still holds steps is refused and nothing changes: move or delete its steps first. A plan always keeps at least one lane.",
+        "renameStep": "Step name",
+        "deleteStep": "Delete step",
+        "deleteStepTitle": "Delete this step?",
+        "deleteStepMessage": "Step \"{label}\" and every connection to it will be removed.",
+        "edges": "Flow between steps",
+        "edgeCondition": "When is this path taken?",
+        "edgeFrom": "From step",
+        "edgeTo": "To step",
+        "addEdge": "Connect steps",
+        "deleteEdge": "Cut connection",
+        "deleteEdgeTitle": "Cut this connection?",
+        "deleteEdgeMessage": "{from} will no longer lead to {to}."
       },
       "source": {
         "self_reported": "You said",
@@ -9384,6 +9402,8 @@
         "title": "Name this number",
         "returnKind": "What you get back",
         "target": "Target",
+        "rank": "Rank for this return",
+        "rankFailed": "The ranking could not be loaded.",
         "save": "Save as my one number"
       },
       "returnKind": {
@@ -9397,6 +9417,11 @@
         "addSubStep": "Add sub-step",
         "unlabel": "Remove label",
         "edgeCase": "Edge case: {text}",
+        "edgeCaseField": "Edge case",
+        "addEdgeCase": "Add as {label}",
+        "deleteEdgeCase": "Delete edge case",
+        "deleteEdgeCaseTitle": "Delete this edge case?",
+        "deleteEdgeCaseMessage": "\"{text}\" will be removed from the plan.",
         "byHandNote": "These stay with people. AI never acts on them.",
         "acknowledge": "I have read the By Hand list",
         "acknowledged": "By Hand list read"
