@@ -3,7 +3,6 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('BatchTool')
 /**
@@ -17,8 +16,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAutobotApi } from '@/composables/useAutobotApi'
 import { formatFleetDateTime } from '@/composables/useTimezone'
-import { BaseAlert, BaseModal, PollingPausedAlert } from '@autobot/ui'
-import { formatDuration } from '@/utils/formatHelpers'
+import { BaseAlert, BaseModal, PollingPausedAlert, createLogger, formatDuration } from '@autobot/ui'
 import { useDashboardPoller } from '@/composables/useDashboardPoller'
 import { POLL_CONSECUTIVE_ERROR_LIMIT } from '@/constants/api-timeouts'
 

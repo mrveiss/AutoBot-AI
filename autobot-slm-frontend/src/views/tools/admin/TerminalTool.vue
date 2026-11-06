@@ -11,9 +11,8 @@
 
 import { ref, computed, onMounted, watch } from 'vue'
 import { SshTerminal } from '@autobot/terminal'
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, createLogger } from '@autobot/ui'
 import { getSlmApiBase } from '@/config/ssot-config'
-import { createLogger } from '@/utils/debugUtils'
 import { useAuthStore } from '@/stores/auth'
 import { useFleetStore } from '@/stores/fleet'
 

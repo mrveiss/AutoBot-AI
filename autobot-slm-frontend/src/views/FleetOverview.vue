@@ -19,7 +19,6 @@ import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useNodeConnectionTest } from '@/composables/useNodeConnectionTest'
 import { useRoles } from '@/composables/useRoles'
 import type { SLMNode, NodeHealth } from '@/types/slm'
-import { createLogger } from '@/utils/debugUtils'
 import { formatCompactRelativeTime } from '@/utils/dateUtils'
 import NodeCard from '@/components/fleet/NodeCard.vue'
 import FleetSummary from '@/components/fleet/FleetSummary.vue'
@@ -30,7 +29,7 @@ import NPUWorkersTab from '@/components/fleet/NPUWorkersTab.vue'
 import RoleManagementModal from '@/components/RoleManagementModal.vue'
 import DecommissionModal from '@/components/fleet/DecommissionModal.vue'
 import InfrastructureView from '@/views/InfrastructureView.vue'
-import { BaseModal, BaseDrawer, useToast } from '@autobot/ui'
+import { BaseModal, BaseDrawer, useToast, createLogger } from '@autobot/ui'
 
 const logger = createLogger('FleetOverview')
 const { t } = useI18n()
