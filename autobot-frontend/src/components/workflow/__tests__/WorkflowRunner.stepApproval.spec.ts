@@ -9,6 +9,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
+import StepApprovalCard from '@/components/workflow/StepApprovalCard.vue'
 import WorkflowRunner from '../WorkflowRunner.vue'
 
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
@@ -30,9 +31,9 @@ describe('WorkflowRunner waiting step', () => {
       props: { workflows: [WF], currentWorkflow: WF, loading: false, approveStep, skipStep: vi.fn() },
       global: { plugins: [i18n], stubs: { WorkflowNotificationConfig: true } },
     })
-    expect(wrapper.find('.step-approval-card').exists()).toBe(true)
+    expect(wrapper.findComponent(StepApprovalCard).exists()).toBe(true)
     expect(wrapper.find('.step-actions').exists()).toBe(false)
-    await wrapper.findAll('.step-approval-card button').find((b) => b.text() === 'Approve')!.trigger('click')
+    await wrapper.findComponent(StepApprovalCard).findAll('button').find((b) => b.text() === 'Approve')!.trigger('click')
     expect(approveStep).toHaveBeenCalledWith('wf-1', 's1')
   })
 })

@@ -44,7 +44,7 @@ async function decide(answer: StepAnswer): Promise<void> {
 
 <template>
   <ApprovalEnvelope
-    class="step-approval-card"
+    class="my-3"
     icon="clock"
     :title="t('workflow.builder.stepApprovalTitle')"
     :risk="step.risk_tier ?? undefined"
@@ -54,13 +54,7 @@ async function decide(answer: StepAnswer): Promise<void> {
     @approve="decide(approve)"
     @reject="decide(skip)"
   >
-    <p class="step-approval-description">{{ step.description }}</p>
-    <code class="step-approval-command">{{ step.command }}</code>
+    <p class="mb-2">{{ step.description }}</p>
+    <code class="block overflow-x-auto">{{ step.command }}</code>
   </ApprovalEnvelope>
 </template>
-
-<style scoped>
-.step-approval-card { margin: var(--spacing-3) 0; }
-.step-approval-description { margin: var(--spacing-0) var(--spacing-0) var(--spacing-2); color: var(--text-primary); }
-.step-approval-command { display: block; padding: var(--spacing-2); background: var(--bg-tertiary); border-radius: var(--radius-default); color: var(--text-secondary); overflow-x: auto; }
-</style>

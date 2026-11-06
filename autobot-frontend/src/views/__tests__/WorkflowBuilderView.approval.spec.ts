@@ -11,6 +11,7 @@ import { mount } from '@vue/test-utils'
 import { ref, computed } from 'vue'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
+import StepApprovalCard from '@/components/workflow/StepApprovalCard.vue'
 
 const approvePlan = vi.fn().mockResolvedValue(true)
 const rejectPlan = vi.fn().mockResolvedValue(true)
@@ -161,7 +162,7 @@ describe('WorkflowBuilderView step approval card (#17677)', () => {
     currentWorkflow.value = { workflow_id: 'wf-1', steps: [{ ...WAITING }] }
   })
 
-  const card = (w: ReturnType<typeof mountView>) => w.findAll('.step-approval-card')
+  const card = (w: ReturnType<typeof mountView>) => w.findAllComponents(StepApprovalCard)
 
   it('shows one card on the canvas tab and persists across a refresh that still says waiting', async () => {
     const wrapper = mountView()
@@ -176,7 +177,7 @@ describe('WorkflowBuilderView step approval card (#17677)', () => {
     let release!: () => void
     controlWorkflow.mockImplementationOnce(() => new Promise((r) => { release = () => r({ success: true }) }))
     const wrapper = mountView()
-    const approve = () => wrapper.findAll('.step-approval-card button').find((b) => b.text() === 'Approve')!
+    const approve = () => wrapper.findComponent(StepApprovalCard).findAll('button').find((b) => b.text() === 'Approve')!
     await approve().trigger('click')
     await approve().trigger('click')
     expect(controlWorkflow).toHaveBeenCalledTimes(1)
