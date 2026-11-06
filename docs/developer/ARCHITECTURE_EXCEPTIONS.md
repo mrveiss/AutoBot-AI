@@ -634,5 +634,10 @@ and no user token, whatever its role, can substitute (`autobot-slm-backend/tests
 asserts no key, a user token without the key, and a wrong key are refused, and the valid key succeeds).
 The hash is read once at first start and is never logged.
 
+**Second barrier:** every public nginx edge that proxies `/api` denies `/api/internal/` with a `location ^~` 404,
+so a browser session cannot reach the route even with the key injected (#20046; every file is discovered and
+checked by `repo_tests/internal_paths_denied_at_edge_20046_test.py`, which also pins this route under the denied
+prefix). The SLM vhost templates are already among the files it reads and all carry the deny.
+
 **Review trigger:** reopen this if the route gains any non-internal caller, if the hash is read or
 logged anywhere beyond that one first-start link, or if the shared-users decision on #10200 changes.

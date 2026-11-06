@@ -153,6 +153,15 @@ def test_the_routes_sit_under_the_denied_prefix() -> None:
         assert path.startswith("/api/internal/")
 
 
+def test_the_first_admin_route_sits_under_the_denied_prefix() -> None:
+    """#10200: the SLM's first-admin route (the main backend's call and the SLM's route) is behind the edge deny."""
+    root = repo_root()
+    caller = (root / "autobot-backend/user_management/services/person_link_service.py").read_text(encoding="utf-8")
+    assert re.search(r'^_FIRST_ADMIN_PATH = "/api/internal/first-admin"$', caller, re.MULTILINE)
+    route = (root / "autobot-slm-backend/api/first_admin_internal.py").read_text(encoding="utf-8")
+    assert 'prefix="/internal"' in route and '"/first-admin"' in route
+
+
 _PLAIN = "    location /api/ {\n        proxy_pass http://x;\n    }\n"
 _DENY = "    location ^~ /api/internal/ {\n        return 404;\n    }\n"
 
