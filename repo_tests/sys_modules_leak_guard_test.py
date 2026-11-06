@@ -262,6 +262,22 @@ def test_a_restored_stub_stops_being_reported(guard):
     assert _leaks_for(guard, _OTHER_MODULE) == []
 
 
+def test_a_withdrawn_stub_put_back_by_its_owner_is_not_blamed_on_the_next_module(guard):
+    """A conftest lifetime manager drops and reinstates the same object (#16069); the importer must not inherit it."""
+    stub = types.ModuleType("agents")
+    _install("agents", stub)
+    guard.attribute(_LLC_CONFTEST)
+    del sys.modules["agents"]
+    guard.attribute(_OTHER_MODULE)
+    _install("agents", stub)
+    inside = _ROOT / "backend" / "llc" / "tests" / "first_test.py"
+    guard.attribute(inside)
+
+    assert _leaks_for(guard, inside) == []
+    assert guard._tracked["agents"].owner == _LLC_OWNER
+    assert _leaks_for(guard, _OTHER_MODULE) == ["agents"]
+
+
 class _MutatingModules(dict):
     """A ``sys.modules`` stand-in that grows while its live view is iterated.
 
@@ -402,9 +418,7 @@ def test_a_still_leaking_listed_owner_is_exercised_and_reported(make_guard):
 def test_the_baseline_file_ignores_comments_and_blank_lines(tmp_path):
     """The file carries its own instructions, so comments have to be free."""
     path = tmp_path / "baseline.txt"
-    path.write_text(
-        "# header\n\nbackend/conftest.py\n  backend/x/conftest.py  \n", encoding="utf-8"
-    )
+    path.write_text("# header\n\nbackend/conftest.py\n  backend/x/conftest.py  \n", encoding="utf-8")
 
     baseline = _load_baseline(path)
 

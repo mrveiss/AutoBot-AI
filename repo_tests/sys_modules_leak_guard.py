@@ -441,6 +441,7 @@ class _LeakGuard:
         # each of the thousands of collectors a session brackets.
         self._candidate_names = {Path(owner).name for owner in removal_candidates}
         self._tracked: dict[str, _Mutation] = {}
+        self._first_owner: dict[str, _Mutation] = {}  # a stub withdrawn and put back keeps its owner
         # name -> why the synthetic->genuine exemption was refused (#13651)
         self._exempt_blocked: dict[str, str] = {}
         self._reported: set[tuple[str, str]] = set()
@@ -461,19 +462,11 @@ class _LeakGuard:
     def snapshot(self) -> None:
         """Re-baseline. Everything after this point is attributable.
 
-        The baseline stores the module objects and comparison is by identity.
-        Building ``{name: id(mod)}`` instead ran a Python-level comprehension
-        over every entry ``sys.modules`` holds — ~3600 in an
-        ``autobot-backend`` session — on every collector and every test, and
-        measured 1.028 ms against 0.087 ms for the plain copy.
-
-        ``sys.modules.copy()`` and never a live view: ``dict.copy()`` is a
-        single C-level operation and cannot be torn, whereas iterating
-        ``sys.modules.items()`` races with any import happening on another
-        thread.  The suite has plenty — the analytics/celery task tests spawn
-        them — and the loser of that race is a ``RuntimeError: dictionary
-        changed size during iteration`` raised inside a hook, which under xdist
-        kills the worker and takes the session down with ``INTERNALERROR``.
+        The baseline stores the module objects, compared by identity (building
+        ``{name: id(mod)}`` cost 1.028 ms against 0.087 ms at ~3600 entries).
+        ``sys.modules.copy()`` and never a live view: one C-level operation that
+        cannot be torn, whereas iterating races with imports on other threads
+        (``RuntimeError`` in a hook, ``INTERNALERROR`` under xdist).
         """
         self._baseline = sys.modules.copy()
 
@@ -501,10 +494,14 @@ class _LeakGuard:
         owner_ancestors = frozenset(owner_dir.parents)
         for name, module, previous in changed:
             self._exempt_blocked.pop(name, None)
+            first = self._first_owner.get(name)
+            if first is not None and first.obj_id == id(module):
+                self._tracked[name] = first  # reinstalled, not new
+                continue
             kind = self._classify(name, module, previous)
             if kind is None:
                 continue
-            self._tracked[name] = _Mutation(
+            self._tracked[name] = self._first_owner[name] = _Mutation(
                 key=name,
                 kind=kind,
                 owner=owner,
