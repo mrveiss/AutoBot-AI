@@ -443,7 +443,9 @@ async def delete_conversation(
         names = [f"{conversation_id}{suffix}" for suffix in ("_chat.json", "_terminal_transcript.txt")]
         present = [n for n in names if validate_relative_path(n, chats_dir).exists()]
         try:
-            await get_chat_history_manager(request).delete_session(conversation_id)
+            deleted = await get_chat_history_manager(request).delete_session(conversation_id)
+            if not deleted and any(validate_relative_path(n, chats_dir).exists() for n in present):
+                errors.append("Error deleting chat file")  # the manager refused and a file is still there
         except SessionLeaseError:
             raise  # answered by the app-wide handler (initialization/session_lease_handlers.py)
         except Exception:

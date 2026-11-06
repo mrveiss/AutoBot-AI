@@ -13,6 +13,7 @@ Provides detailed logging of terminal commands with:
 """
 
 import asyncio
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, FrozenSet, List
@@ -21,6 +22,7 @@ import aiofiles
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
+from chat_history.file_io import atomic_write
 from chat_history.session_lease import session_lease
 
 # Issue #765: Use centralized strip_ansi_codes from encoding_utils
@@ -74,39 +76,41 @@ class TerminalLogger:
         because the frontend loads sessions by scanning for *_chat.json files.
         Without chat.json, the session is invisible in the UI.
 
+        A chat file only ever appears through the atomic writer (a rename), so one that exists is
+        complete and an established session never waits for the session lease. A missing one is created
+        under the lease, checked again there, through the same atomic writer and file lock as every
+        other write of a session file (#20862).
+
         Args:
             session_id: Chat session ID
         """
-        import json
-
         chat_file = self._session_file(session_id, "chat.json")
-
-        # Only create if it doesn't exist. #20862: checked again under the session lease, so a stub
-        # never overwrites a chat file another writer created between the check and the write.
-        async with session_lease(session_id, "terminal_chat_stub"):
-            # Issue #358 - avoid blocking
+        if await asyncio.to_thread(chat_file.exists):  # Issue #358 - avoid blocking
+            return
+        async with session_lease(session_id, "terminal_chat_stub") as lease:
             if await asyncio.to_thread(chat_file.exists):
                 return
-            current_time = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-
-            chat_data = {
-                "chatId": session_id,
-                "name": "",
-                "messages": [],
-                "created_time": current_time,
-                "last_modified": current_time,
-            }
-
+            chat_data = self._stub_chat_data(session_id)
+            await lease.begin(0)
+            await lease.fence(chat_data, 0)
             try:
-                async with aiofiles.open(chat_file, "w", encoding="utf-8") as f:
-                    await f.write(json.dumps(chat_data, indent=2))
-                logger.info("✅ Created chat.json for terminal session: %s", session_id)
-            except OSError as e:
-                logger.error(f"❌ Failed to write chat.json file {chat_file}: {e}")
-                raise
+                await atomic_write(str(chat_file), json.dumps(chat_data, indent=2), lease.verify)
             except Exception as e:
-                logger.error(f"❌ Failed to create chat.json for session {session_id}: {e}")
+                logger.error("❌ Failed to create chat.json for session %s: %s", session_id, e)
                 raise
+        logger.info("✅ Created chat.json for terminal session: %s", session_id)
+
+    @staticmethod
+    def _stub_chat_data(session_id: str) -> Dict[str, Any]:
+        """The empty chat a terminal session gets so the frontend lists it."""
+        current_time = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        return {
+            "chatId": session_id,
+            "name": "",
+            "messages": [],
+            "created_time": current_time,
+            "last_modified": current_time,
+        }
 
     def _create_log_entry(
         self,

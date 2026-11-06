@@ -91,3 +91,33 @@ register_env_var(
         component="chat",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_LEASE_BEST_EFFORT_WAIT_S",
+        type=float,
+        default=0.5,
+        range=(0.01, None),
+        description=(
+            "Seconds a best-effort pass (old-file cleanup, orphan recovery while listing) waits for one "
+            "session's lease before it skips that session and leaves it for the next pass "
+            "(chat_history/session_lease.py, #20862). Minimum 0.01."
+        ),
+        component="chat",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_LEASE_PASS_BUDGET_S",
+        type=float,
+        default=5.0,
+        range=(0.1, None),
+        description=(
+            "Seconds in total one best-effort pass (old-file cleanup, orphan recovery while listing) may "
+            "spend waiting for session leases; the sessions it did not reach wait for the next pass "
+            "(chat_history/session_lease.py, #20862). Minimum 0.1."
+        ),
+        component="chat",
+    )
+)

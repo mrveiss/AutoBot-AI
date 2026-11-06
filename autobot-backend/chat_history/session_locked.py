@@ -29,7 +29,8 @@ from chat_history.session_lease import (
 
 logger = get_logger(__name__)
 
-Mutation = Callable[[Dict[str, Any]], None]
+#: Changes the session data in place; returning ``False`` means "nothing to change": no write, no new generation.
+Mutation = Callable[[Dict[str, Any]], Optional[bool]]
 AfterWrite = Callable[[str, Dict[str, Any]], Awaitable[None]]
 
 
@@ -130,6 +131,8 @@ class SessionLockMixin:
     ) -> Optional[Dict[str, Any]]:
         """Apply *mutate* to the session's current file under its lease; None when *must_exist* and absent.
 
+        None too when *mutate* returns ``False`` (nothing to change): the file, cache and generation are untouched.
+
         Raises SessionLeaseTimeout (waited out, holder named), SessionLeaseLost or
         StaleGenerationError (nothing written); never writes unlocked.
         """
@@ -141,7 +144,8 @@ class SessionLockMixin:
             if must_exist and not await self._resolve_session_file_path(session_id, chats_directory):
                 return None
             chat_data, read_generation, signature = await self._read_for_update(session_id, chats_directory, lease)
-            mutate(chat_data)
+            if mutate(chat_data) is False:
+                return None
             on_disk = await self._stored_generation(session_id, chats_directory, read_generation, signature)
             await lease.fence(chat_data, on_disk)
             guard = self._fence_at_file(session_id, chats_directory, lease, read_generation, signature)

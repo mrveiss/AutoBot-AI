@@ -33,6 +33,11 @@ def client():
     async def lost():
         raise SessionLeaseLost("file lock on s1_chat.json was not free within 30.0s; nothing written")
 
+    @app.get("/forged")
+    @with_error_handling(category=ErrorCategory.SERVER_ERROR, operation="forged", error_code_prefix="T")
+    async def forged():
+        raise SessionLeaseTimeout("s\x1b[31m1\nFORGED", "backend-2-1:save_session:aa", 30.0)
+
     @app.get("/unreadable")
     @with_error_handling(category=ErrorCategory.SERVER_ERROR, operation="unreadable", error_code_prefix="T")
     async def unreadable():
@@ -64,3 +69,10 @@ def test_an_unreadable_chat_file_is_a_typed_500_without_the_decode_cause(client)
     assert response.status_code == 500
     assert response.json()["detail"]["code"] == "chat_session_unreadable"
     assert "bad" not in response.text and "ValueError" not in response.text
+
+
+def test_control_characters_in_the_path_or_the_session_id_do_not_reach_the_log(client, caplog):
+    response = client.get("/forged")
+    assert response.status_code == 409
+    assert "\x1b" not in caplog.text and "\nFORGED" not in caplog.text
+    assert "chat session write conflict" in caplog.text

@@ -24,7 +24,7 @@ import aiofiles
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
 from chat_history.file_io import run_in_chat_io_executor
-from chat_history.session_lease import session_lease
+from chat_history.session_lease import LeaseBudget, SessionLeaseTimeout, session_lease
 
 logger = get_logger(__name__)
 
@@ -396,7 +396,7 @@ class SessionListingMixin:
         }
 
     async def _create_orphaned_session(
-        self, session_id: str, filename: str, chats_directory: str
+        self, session_id: str, filename: str, chats_directory: str, wait_s: float | None = None
     ) -> Dict[str, Any] | None:
         """Create a chat session for orphaned terminal file (Issue #315: extracted).
 
@@ -404,6 +404,7 @@ class SessionListingMixin:
             session_id: Session identifier
             filename: Source terminal filename
             chats_directory: Path to chats directory
+            wait_s: Longest to wait for the session lease (None: the full bound)
 
         Returns:
             Session dict or None on error
@@ -411,7 +412,7 @@ class SessionListingMixin:
         chat_file = str(validate_relative_path(f"{session_id}_chat.json", chats_directory))
 
         # #20862: checked again under the session lease, so a save that created the file in between is never truncated.
-        async with session_lease(session_id, "orphan_import") as lease:
+        async with session_lease(session_id, "orphan_import", wait_s) as lease:
             if await run_in_chat_io_executor(os.path.exists, chat_file):
                 return None
             empty_chat = self._build_empty_chat_data(session_id, filename)
@@ -439,6 +440,7 @@ class SessionListingMixin:
         Issue #315: Refactored to use helper methods for reduced nesting.
         """
         orphaned_sessions_created = 0
+        budget = LeaseBudget()  # a listing never waits long for an orphan: the next listing retries the skipped ones
 
         try:
             orphan_filenames = await run_in_chat_io_executor(os.listdir, chats_directory)
@@ -447,13 +449,20 @@ class SessionListingMixin:
                 session_id = self._extract_session_id_from_terminal_file(filename)
                 if not session_id or session_id in existing_chat_ids:
                     continue
+                if budget.spent:
+                    logger.info("Orphan recovery: lease wait budget spent; the rest wait for the next listing")
+                    break
 
                 try:
-                    session = await self._create_orphaned_session(session_id, filename, chats_directory)
+                    session = await self._create_orphaned_session(
+                        session_id, filename, chats_directory, budget.wait_s()
+                    )
                     if session:
                         existing_chat_ids.add(session_id)
                         sessions.append(session)
                         orphaned_sessions_created += 1
+                except SessionLeaseTimeout:
+                    logger.info("Orphan recovery: session %s is busy; left for the next listing", session_id)
                 except Exception as create_err:
                     logger.error(
                         "Failed to auto-create chat session for orphaned %s: %s",

@@ -44,20 +44,42 @@ def message_keys(messages: List[Message]) -> List[Key]:
     return keys
 
 
-def merge_snapshot(on_disk: List[Message], supplied: List[Message]) -> List[Message]:
+def _occurrence_keys(messages: List[Message]) -> List[Key]:
+    """``message_keys`` made unique: a repeated id is told apart by which repeat of it a message is.
+
+    Distinct messages that share an id (an import can carry them) each keep their own slot, so a snapshot
+    carrying both updates both rather than overwriting the first with the second.
+    """
+    seen: Dict[Key, int] = {}
+    keys: List[Key] = []
+    for key in message_keys(messages):
+        seen[key] = seen.get(key, 0) + 1
+        keys.append(key + (seen[key],))
+    return keys
+
+
+def dropped_keys(existing: List[Message], kept: List[Message]) -> frozenset:
+    """Keys of the *existing* messages absent from *kept*: what a caller's snapshot deliberately dropped."""
+    kept_keys = set(_occurrence_keys(kept))
+    return frozenset(k for k in _occurrence_keys(existing) if k not in kept_keys)
+
+
+def merge_snapshot(on_disk: List[Message], supplied: List[Message], discard: frozenset = frozenset()) -> List[Message]:
     """*on_disk* with each *supplied* message updated in place, or inserted after its predecessor.
 
     One pass over each list: a supplied message the file lacks goes after the nearest preceding
-    supplied message the file has (at the end when there is none).
+    supplied message the file has (at the end when there is none). A stored message whose key is in
+    *discard* (one the snapshot's author dropped on purpose) is left out; a message added to the file
+    since the snapshot was taken is not in *discard* and stays.
     """
-    disk_keys = message_keys(on_disk)
-    supplied_keys = message_keys(supplied)
+    disk_keys = _occurrence_keys(on_disk)
+    supplied_keys = _occurrence_keys(supplied)
     on_disk_set = set(disk_keys)
-    updates = dict(zip(supplied_keys, supplied))
+    updates = dict(zip(supplied_keys, supplied, strict=True))
     after: Dict[Key, List[Message]] = {}
     tail: List[Message] = []
     predecessor: Key | None = None
-    for key, message in zip(supplied_keys, supplied):
+    for key, message in zip(supplied_keys, supplied, strict=True):
         if key in on_disk_set:
             predecessor = key
         elif predecessor is None:
@@ -65,8 +87,9 @@ def merge_snapshot(on_disk: List[Message], supplied: List[Message]) -> List[Mess
         else:
             after.setdefault(predecessor, []).append(message)
     result: List[Message] = []
-    for key, message in zip(disk_keys, on_disk):
-        result.append(updates.get(key, message))
+    for key, message in zip(disk_keys, on_disk, strict=True):
+        if key not in discard:
+            result.append(updates.get(key, message))
         result.extend(after.get(key, ()))
     return result + tail
 
@@ -78,7 +101,7 @@ def new_messages_only(on_disk: List[Message], supplied: List[Message]) -> List[M
     """
     seen = {k for k in message_keys(on_disk) if k[0] == "id"}
     fresh: List[Message] = []
-    for message, key in zip(supplied, message_keys(supplied)):
+    for message, key in zip(supplied, message_keys(supplied), strict=True):
         if key in seen:
             continue
         if key[0] == "id":
@@ -87,10 +110,17 @@ def new_messages_only(on_disk: List[Message], supplied: List[Message]) -> List[M
     return fresh
 
 
-def combine_messages(on_disk: List[Message], supplied: List[Message], *, append: bool, replace: bool) -> List[Message]:
+def combine_messages(
+    on_disk: List[Message],
+    supplied: List[Message],
+    *,
+    append: bool,
+    replace: bool,
+    discard: frozenset | None = None,
+) -> List[Message]:
     """The message list to write: replaced, appended to, or merged by id (the default)."""
     if replace:
         return supplied
     if append:
         return on_disk + new_messages_only(on_disk, supplied)
-    return merge_snapshot(on_disk, supplied)
+    return merge_snapshot(on_disk, supplied, discard or frozenset())

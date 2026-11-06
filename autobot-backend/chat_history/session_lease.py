@@ -56,8 +56,9 @@ def _ttl_ms() -> int:
 
 
 def _seconds(name: str) -> float:
+    """A registered seconds setting: finite and positive (``inf`` would never time out), clamped to its range."""
     default, low, high = _registered_range(name)
-    return env_float_clamped(name, default, low, high)
+    return env_float_clamped(name, default, low, high, positive_finite=True)
 
 
 # Defaults and ranges live in autobot_shared/env_registry_chat_lease.py; a malformed value falls back to the
@@ -65,6 +66,8 @@ def _seconds(name: str) -> float:
 CHAT_LEASE_TTL_MS: int = _ttl_ms()
 CHAT_LEASE_WAIT_S: float = _seconds("AUTOBOT_CHAT_LEASE_WAIT_S")
 CHAT_LEASE_POLL_S: float = _seconds("AUTOBOT_CHAT_LEASE_POLL_S")
+CHAT_LEASE_BEST_EFFORT_WAIT_S: float = _seconds("AUTOBOT_CHAT_LEASE_BEST_EFFORT_WAIT_S")
+CHAT_LEASE_PASS_BUDGET_S: float = _seconds("AUTOBOT_CHAT_LEASE_PASS_BUDGET_S")
 CHAT_LEASE_DATABASE: str = env("AUTOBOT_CHAT_LEASE_REDIS_DB")
 #: Lease keys and their fencing counters live under different prefixes, so no session id can make one the other.
 CHAT_LEASE_KEY_PREFIX: str = env("AUTOBOT_CHAT_LEASE_KEY_PREFIX")
@@ -265,12 +268,12 @@ async def _local_turn(session_id: str, operation: str) -> AsyncIterator[None]:
             _local_locks.pop(session_id, None)
 
 
-async def _enter(stack: AsyncExitStack, session_id: str, operation: str) -> SessionLease:
-    """Queue locally, then take the Redis lease, all inside ONE bound of CHAT_LEASE_WAIT_S."""
+async def _enter(stack: AsyncExitStack, session_id: str, operation: str, wait_s: float) -> SessionLease:
+    """Queue locally, then take the Redis lease, all inside ONE bound of *wait_s*."""
     lease = SessionLease(session_id, operation)
     queued = False
     try:
-        async with asyncio.timeout(CHAT_LEASE_WAIT_S):
+        async with asyncio.timeout(wait_s):
             await stack.enter_async_context(_local_turn(session_id, operation))
             queued = True
             stack.push_async_callback(lease.release)  # a no-op until acquired, so a cancel mid-acquire leaks nothing
@@ -278,13 +281,13 @@ async def _enter(stack: AsyncExitStack, session_id: str, operation: str) -> Sess
     except TimeoutError:
         # still in the local queue: the holder is another task here; otherwise it is whoever holds the Redis key
         holder = (None if queued else _local_holder.get(session_id)) or await lease.holder()
-        raise SessionLeaseTimeout(session_id, holder, CHAT_LEASE_WAIT_S) from None
+        raise SessionLeaseTimeout(session_id, holder, wait_s) from None
     return lease
 
 
 @asynccontextmanager
-async def session_lease(session_id: str, operation: str) -> AsyncIterator[SessionLease]:
-    """Hold the session's write lease for the block, waiting at most CHAT_LEASE_WAIT_S in total.
+async def session_lease(session_id: str, operation: str, wait_s: float | None = None) -> AsyncIterator[SessionLease]:
+    """Hold the session's write lease for the block, waiting at most *wait_s* (CHAT_LEASE_WAIT_S) in total.
 
     Re-entrant within the task that holds it. A task spawned inside the block inherits the held lease
     through its copied context but is not its owner, so it queues for the lease like any other writer.
@@ -295,7 +298,7 @@ async def session_lease(session_id: str, operation: str) -> AsyncIterator[Sessio
         yield current
         return
     async with AsyncExitStack() as stack:
-        lease = await _enter(stack, session_id, operation)
+        lease = await _enter(stack, session_id, operation, CHAT_LEASE_WAIT_S if wait_s is None else wait_s)
         token = _held.set({**held, session_id: lease})
         try:
             yield lease
@@ -303,7 +306,32 @@ async def session_lease(session_id: str, operation: str) -> AsyncIterator[Sessio
             _held.reset(token)
 
 
+class LeaseBudget:
+    """The total time a best-effort pass (cleanup, orphan recovery) may spend waiting for session leases.
+
+    Each session gets at most CHAT_LEASE_BEST_EFFORT_WAIT_S, and the pass at most CHAT_LEASE_PASS_BUDGET_S
+    over all of them; a session it skips (a ``SessionLeaseTimeout``, or the budget gone) is still there for
+    the next pass, so nothing is dropped and the lease is still held around every write.
+    """
+
+    def __init__(self) -> None:
+        self._deadline = asyncio.get_running_loop().time() + CHAT_LEASE_PASS_BUDGET_S
+
+    def wait_s(self) -> float:
+        """Seconds the next session's lease may be waited for; 0 once the pass budget is spent."""
+        remaining = self._deadline - asyncio.get_running_loop().time()
+        return min(CHAT_LEASE_BEST_EFFORT_WAIT_S, max(remaining, 0.0))
+
+    @property
+    def spent(self) -> bool:
+        """True when no budget is left for another wait."""
+        return self.wait_s() <= 0.0
+
+
 __all__ = [
+    "CHAT_LEASE_BEST_EFFORT_WAIT_S",
+    "CHAT_LEASE_PASS_BUDGET_S",
+    "LeaseBudget",
     "CHAT_LEASE_TTL_MS",
     "CHAT_LEASE_WAIT_S",
     "ChatFileUnreadable",

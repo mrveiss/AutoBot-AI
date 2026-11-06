@@ -99,7 +99,13 @@ class LeaderLease:
 
     async def _attempt(self) -> Optional[bool]:
         """SET NX, or the atomic extend of a lease already held: True held, False another owner's, None unknown."""
-        redis = await self._client()
+        try:
+            redis = await self._client()
+        except Exception as exc:
+            if not self._is_leader:
+                raise  # while contesting, a factory failure (an unknown database) reaches the caller
+            logger.warning("Leader election Redis error for %s: %s", self.label, exc)
+            return None  # while holding, it is "no answer" (as a failed refresh): the heartbeat carries on
         if redis is None:
             return None
         try:
@@ -184,10 +190,10 @@ class LeaderLease:
         if not self._is_leader:
             return
         self._is_leader = False
-        redis = await self._client()
-        if redis is None:
-            return
         try:
+            redis = await self._client()
+            if redis is None:
+                return
             await delete_if_value(redis, self.key, self.worker_id)
         except Exception as exc:
             logger.warning("Failed to release leader lease %s: %s", self.label, exc)

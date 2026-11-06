@@ -14,6 +14,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import sanitize_log_value
 from chat_history.session_lease import ChatFileUnreadable, SessionLeaseError
 
 logger = get_logger(__name__)
@@ -25,6 +26,12 @@ CHAT_SESSION_UNREADABLE = {
 }
 
 
+def _loggable(request: Request, exc: Exception) -> tuple[str, str, str]:
+    """Method, path and error text with control characters escaped: a request path or a session id in the
+    error can carry terminal escapes or line breaks that would rewrite the log."""
+    return sanitize_log_value(request.method), sanitize_log_value(request.url.path), sanitize_log_value(str(exc))
+
+
 def register_session_lease_handlers(app: FastAPI) -> None:
     """Lease contention (timeout, lost lease or file lock, stale generation) is a 409; an unreadable file a 500.
 
@@ -34,10 +41,10 @@ def register_session_lease_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(ChatFileUnreadable)
     async def _chat_unreadable(request: Request, exc: ChatFileUnreadable) -> JSONResponse:
-        logger.error("chat session file unreadable on %s %s: %s", request.method, request.url.path, exc)
+        logger.error("chat session file unreadable on %s %s: %s", *_loggable(request, exc))
         return JSONResponse(status_code=500, content={"detail": CHAT_SESSION_UNREADABLE})
 
     @app.exception_handler(SessionLeaseError)
     async def _session_conflict(request: Request, exc: SessionLeaseError) -> JSONResponse:
-        logger.warning("chat session write conflict on %s %s: %s", request.method, request.url.path, exc)
+        logger.warning("chat session write conflict on %s %s: %s", *_loggable(request, exc))
         return JSONResponse(status_code=409, content={"detail": str(exc)})

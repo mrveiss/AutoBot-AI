@@ -46,7 +46,7 @@ class MessagesMixin:
             self,
             session_id: str,
             operation: str,
-            mutate: Callable[[Dict[str, Any]], None],
+            mutate: Callable[[Dict[str, Any]], Optional[bool]],
             *,
             must_exist: bool = False,
             after: Optional[Callable[[str, Dict[str, Any]], Awaitable[None]]] = None,
@@ -394,14 +394,15 @@ class MessagesMixin:
         """
         found = False
 
-        def apply(chat_data: Dict[str, Any]) -> None:
+        def apply(chat_data: Dict[str, Any]) -> bool:
             nonlocal found
             for message in chat_data.get("messages") or []:
                 if self._message_matches_filter(message, metadata_filter):
                     self._apply_metadata_updates(message, metadata_updates)
                     chat_data["last_modified"] = time.strftime("%Y-%m-%d %H:%M:%S")
                     found = True
-                    return
+                    return True
+            return False  # no match: nothing is rewritten, cached or fenced
 
         written = await self._locked_update(
             session_id, "update_message_metadata", apply, must_exist=True, after=self._update_redis_cache_on_save

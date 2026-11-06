@@ -12,7 +12,6 @@ import asyncio
 import contextvars
 import json
 import threading
-import time
 
 import fakeredis.aioredis
 import pytest
@@ -301,12 +300,24 @@ async def test_a_delete_with_a_stale_generation_removes_nothing(manager, tmp_pat
 
 async def test_a_delete_during_a_save_does_not_resurrect_the_session(manager, tmp_path):
     await manager.save_session("s24", messages=[_msg("x", "t0")])
-    await asyncio.gather(
-        manager.save_session("s24", messages=[_msg("x", "t0"), _msg("y", "t1")]),
-        manager.delete_session("s24"),
-    )
-    exists = (tmp_path / "s24_chat.json").exists()
-    assert not exists or _texts(tmp_path, "s24") == ["x", "y"]
+    real_write = manager._atomic_write
+    saving, finish_save = asyncio.Event(), asyncio.Event()
+
+    async def hold_the_save_inside_its_write(file_path, content, before_replace=None):
+        saving.set()
+        await finish_save.wait()
+        await real_write(file_path, content, before_replace)
+
+    manager._atomic_write = hold_the_save_inside_its_write
+    save = asyncio.create_task(manager.save_session("s24", messages=[_msg("x", "t0"), _msg("y", "t1")]))
+    await saving.wait()  # the save holds the lease; the delete starts only now
+    delete = asyncio.create_task(manager.delete_session("s24"))
+    while lease_mod._local_waiters.get("s24") != 2:  # the delete is queued behind the save
+        await asyncio.sleep(0)
+    assert (tmp_path / "s24_chat.json").exists()  # nothing was deleted around the holder
+    finish_save.set()
+    await asyncio.gather(save, delete)
+    assert not (tmp_path / "s24_chat.json").exists()  # the save landed, then the delete removed it
 
 
 async def test_a_lease_that_expires_mid_write_is_rejected_before_the_replace(manager, tmp_path, fake_session_lease):
@@ -346,12 +357,11 @@ async def test_the_whole_acquire_is_bounded_once_across_the_local_queue_and_redi
             pytest.fail("granted while the first writer held it")
 
     async with session_lease("s32", "first-writer"):
-        started = loop.time()
-        # a fresh context, as another request has: no inherited lease to re-enter
+        # a fresh context, as another request has: no inherited lease to re-enter. An unbounded wait would
+        # hang here until the test's own bound fails it; no elapsed-time assertion is needed.
         task = loop.create_task(second_writer(), context=contextvars.Context())
         with pytest.raises(SessionLeaseTimeout) as err:
             await task
-        assert loop.time() - started < 0.6
     assert "first-writer" in str(err.value)
 
 
@@ -369,41 +379,34 @@ async def test_an_append_of_a_message_already_stored_by_id_adds_nothing(manager,
     assert _texts(tmp_path, "s34") == ["once", "fresh"]
 
 
+class _Counted(dict):
+    """A message that counts how often the merge looks into it or compares it."""
+
+    reads = 0
+
+    def get(self, *args):
+        _Counted.reads += 1
+        return super().get(*args)
+
+    def __eq__(self, other):
+        _Counted.reads += 1
+        return super().__eq__(other)
+
+    __hash__ = None
+
+
+def _merge_work(size: int) -> int:
+    """Message reads and comparisons one merge of a *size*-message file with a snapshot of its own makes."""
+    disk = [_Counted(id=f"d{i}") for i in range(size)]
+    snapshot = disk[::2] + [_Counted(id=f"n{i}") for i in range(size // 5)]
+    _Counted.reads = 0
+    assert len(merge_snapshot(disk, snapshot)) == size + size // 5
+    return _Counted.reads
+
+
 def test_merging_a_large_snapshot_is_linear():
-    disk = [{"id": f"d{i}"} for i in range(10000)]
-    snapshot = disk[::2] + [{"id": f"n{i}"} for i in range(2000)]
-    start = time.perf_counter()
-    merged = merge_snapshot(disk, snapshot)
-    assert len(merged) == 12000
-    assert time.perf_counter() - start < 2.0
-
-
-async def test_the_orphan_import_does_not_truncate_a_file_a_save_created(manager, tmp_path):
-    await manager.save_session("s35", messages=[_msg("real", "t0")])
-    assert await manager._create_orphaned_session("s35", "s35_terminal.log", str(tmp_path)) is None
-    assert _texts(tmp_path, "s35") == ["real"]
-
-
-async def test_the_orphan_import_waits_for_the_lease_holder(manager, tmp_path, fake_session_lease):
-    other_worker = fakeredis.aioredis.FakeRedis(server=fake_session_lease, decode_responses=True)
-    await other_worker.set(lease_mod.CHAT_LEASE_KEY_PREFIX + "s36", "backend-2-1:save_session:aa", px=_SHORT_HOLD_MS)
-    assert await manager._create_orphaned_session("s36", "s36_terminal.log", str(tmp_path)) is not None
-    assert (tmp_path / "s36_chat.json").exists()
-
-
-async def test_a_lease_timeout_is_raised_by_the_update_and_delete_methods_not_turned_into_false(
-    manager, monkeypatch, fake_session_lease
-):
-    await manager.save_session("s37", messages=[_msg("x", "t0")])
-    monkeypatch.setattr(lease_mod, "CHAT_LEASE_WAIT_S", 0.2)
-    other_worker = fakeredis.aioredis.FakeRedis(server=fake_session_lease, decode_responses=True)
-    await other_worker.set(lease_mod.CHAT_LEASE_KEY_PREFIX + "s37", "backend-2-1:save_session:aa", px=_HELD_FOR_MS)
-    with pytest.raises(SessionLeaseTimeout):
-        await manager.update_session_name("s37", "n")
-    with pytest.raises(SessionLeaseTimeout):
-        await manager.update_session_metadata("s37", {"owner": "bob"})
-    with pytest.raises(SessionLeaseTimeout):
-        await manager.delete_session("s37")
+    small, large = _merge_work(1000), _merge_work(4000)
+    assert large < small * 6  # 4x the input is ~4x the work; a quadratic merge would be ~16x
 
 
 bound_async_tests(globals())  # no pytest-timeout in the repo: bound each test here

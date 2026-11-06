@@ -61,8 +61,10 @@ async def test_a_write_with_an_unknown_lease_database_is_raised_not_reported_as_
 @pytest.mark.parametrize(
     ("name", "raw", "reader", "expected"),
     [
-        ("AUTOBOT_CHAT_LEASE_WAIT_S", "0", lease_mod._seconds, 0.1),
-        ("AUTOBOT_CHAT_LEASE_POLL_S", "-3", lease_mod._seconds, 0.001),
+        ("AUTOBOT_CHAT_LEASE_WAIT_S", "0.05", lease_mod._seconds, 0.1),
+        ("AUTOBOT_CHAT_LEASE_POLL_S", "0.0001", lease_mod._seconds, 0.001),
+        ("AUTOBOT_CHAT_LEASE_WAIT_S", "0", lease_mod._seconds, 30.0),  # not positive: the default, not a clamp
+        ("AUTOBOT_CHAT_LEASE_POLL_S", "-3", lease_mod._seconds, 0.05),
         ("AUTOBOT_CHAT_LEASE_WAIT_S", "soon", lease_mod._seconds, 30.0),
         ("AUTOBOT_CHAT_LEASE_TTL_MS", "5", lease_mod._ttl_ms, 1000),
         ("AUTOBOT_CHAT_LEASE_TTL_MS", "forever", lease_mod._ttl_ms, 30000),
@@ -216,7 +218,17 @@ def _doc(generation: int, text: str) -> str:
 
 
 @pytest.mark.parametrize("holder_is_newer", [False, True])
-async def test_check_and_replace_is_one_step_against_a_racing_writer(manager, tmp_path, holder_is_newer):
+async def test_check_and_replace_is_one_step_against_a_racing_writer(manager, tmp_path, holder_is_newer, monkeypatch):
+    other_is_waiting = asyncio.Event()
+    real_try = file_io._try_flock
+
+    def watching(fd) -> bool:
+        got = real_try(fd)
+        if not got:
+            other_is_waiting.set()  # a second writer is polling the sidecar the holder has
+        return got
+
+    monkeypatch.setattr(file_io, "_try_flock", watching)
     path = tmp_path / "race_chat.json"
     _plant(tmp_path, "race", _doc(1, "base"))
     paused, release = asyncio.Event(), asyncio.Event()
@@ -225,6 +237,7 @@ async def test_check_and_replace_is_one_step_against_a_racing_writer(manager, tm
     await paused.wait()  # the holder passed its generation check and has not replaced yet
     _assert_sidecar_is_held(path)  # a probe, not a timing window: the holder is inside check-then-replace
     other = _gen_checked_write(manager, path, _doc(other_gen, "other"), other_gen)
+    await other_is_waiting.wait()  # the other writer reached the held lock; only now may the holder replace
     release.set()
     results = await asyncio.gather(holder, other, return_exceptions=True)
     assert _read_json(path)["write_generation"] == 3  # the newer generation survives in this interleaving

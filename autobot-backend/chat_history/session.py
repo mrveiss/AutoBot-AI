@@ -24,9 +24,9 @@ import aiofiles
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
 from chat_history.cache import _CHAT_RECENT_MAX_ENTRIES
-from chat_history.file_io import existing_chat_path, run_in_chat_io_executor, session_file_lock
+from chat_history.file_io import existing_chat_path, run_in_chat_io_executor
 from chat_history.graph_owner import create_entity_on_missing, session_owner_scope
-from chat_history.session_lease import ChatFileUnreadable, SessionLeaseError
+from chat_history.session_lease import ChatFileUnreadable
 from chat_history.session_locked import SessionLockMixin
 from chat_history.session_merge import combine_messages
 from constants.redis_constants import REDIS_KEY
@@ -258,22 +258,30 @@ class SessionMixin(SessionLockMixin):
         return self._decrypt_data(file_content)
 
     async def _process_loaded_messages(self, session_id: str, chat_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Deduplicate messages and save cleaned version if needed. Issue #620."""
+        """Deduplicate messages; when the file had duplicates, clean it under the lease. Issue #620, #20862.
+
+        The cleanup re-reads the file once the lease is held and dedupes *that*, so a message appended
+        after this load is kept; a failed cleanup is raised to the caller (typed lease errors), not logged away.
+        """
         messages = chat_data.get("messages", [])
         cleaned_messages = self._dedupe_streaming_messages(messages)
-
         if len(cleaned_messages) < len(messages):
             logger.info(
-                "Cleaned %d duplicate streaming messages from session %s",
+                "Cleaning %d duplicate streaming messages from session %s",
                 len(messages) - len(cleaned_messages),
                 session_id,
             )
-            chat_data["messages"] = cleaned_messages
-            try:
-                await self.save_session(session_id, messages=cleaned_messages, replace=True)
-            except Exception as save_err:
-                logger.warning("Could not save cleaned session: %s", save_err)
 
+            def dedupe(current: Dict[str, Any]) -> None:
+                current["messages"] = self._dedupe_streaming_messages(current.get("messages", []))
+
+            committed = await self._locked_update(
+                session_id, "dedupe_streaming", dedupe, must_exist=True, after=self._update_redis_cache_on_save
+            )
+            if committed is not None:  # None: deleted since it was read
+                chat_data.clear()
+                chat_data.update(committed)
+                return committed.get("messages", [])
         return cleaned_messages
 
     async def load_session(self, session_id: str) -> List[Dict[str, Any]]:
@@ -411,22 +419,12 @@ class SessionMixin(SessionLockMixin):
         chat_data: Dict[str, Any],
         before_replace: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
-        """Atomic write, direct-write fallback (#665); both under the session lease and file lock (#20862).
+        """Atomic write under the session lease and file lock (#665, #20862); a failure is raised.
 
-        ``before_replace`` runs right before the replace; if it raises, nothing is written.
+        No direct-write fallback: truncating the file in place leaves it unreadable if the process dies
+        mid-write. ``before_replace`` runs right before the replace; if it raises, nothing is written.
         """
-        encrypted_data = self._encrypt_data(chat_data)
-        try:
-            await self._atomic_write(chat_file, encrypted_data, before_replace)
-        except SessionLeaseError:
-            raise
-        except Exception as atomic_error:
-            logger.warning(f"Atomic write failed, falling back to direct write: {atomic_error}")
-            async with session_file_lock(chat_file):
-                if before_replace is not None:
-                    await before_replace()
-                async with aiofiles.open(chat_file, "w", encoding="utf-8") as f:
-                    await f.write(encrypted_data)
+        await self._atomic_write(chat_file, self._encrypt_data(chat_data), before_replace)
 
     async def _handle_periodic_cleanup(self) -> None:
         """
@@ -512,6 +510,7 @@ class SessionMixin(SessionLockMixin):
         metadata: Dict[str, Any] | None = None,
         append: bool = False,
         replace: bool = False,
+        discard: frozenset | None = None,
     ):
         """Save a chat session with messages and metadata.
 
@@ -528,6 +527,7 @@ class SessionMixin(SessionLockMixin):
             replace: Write *messages* as the whole list, dropping stored messages they lack. The
                 explicit delete operation; without it a snapshot is merged by message id and can
                 only add or update.
+            discard: ``message_keys`` of stored messages the caller's snapshot deliberately dropped.
 
         Issue #665, #620, #12129: Refactored to use extracted helper methods.
         #20862: the write runs under the per-session lease; a failure (a wait that timed out, a
@@ -539,7 +539,7 @@ class SessionMixin(SessionLockMixin):
         def apply(chat_data: Dict[str, Any]) -> None:
             on_disk = chat_data.get("messages", [])
             on_disk = self._dedupe_streaming_messages(on_disk) if append else on_disk  # as a load cleans them
-            merged = combine_messages(on_disk, session_messages, append=append, replace=replace)
+            merged = combine_messages(on_disk, session_messages, append=append, replace=replace, discard=discard)
             merged = self._prepare_session_messages(session_id, merged)
             self._build_session_chat_data(chat_data, session_id, name, merged, current_time, metadata)
 

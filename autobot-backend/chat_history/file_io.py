@@ -22,7 +22,7 @@ import os
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from typing import AsyncIterator, Awaitable, Callable
+from typing import Any, AsyncIterator, Awaitable, Callable
 
 import aiofiles
 
@@ -171,6 +171,47 @@ def _try_flock(fd: int) -> bool:
     return True
 
 
+async def atomic_write(
+    file_path: str,
+    content: str,
+    before_replace: Callable[[], Awaitable[None]] | None = None,
+    *,
+    run: Callable[..., Awaitable[Any]] = run_in_chat_io_executor,
+) -> None:
+    """Write *content* to *file_path* atomically: the one write path for a session file (#20862).
+
+    The content goes to a temp file beside the target (same filesystem, so ``os.replace`` is atomic),
+    then, under the file's sidecar lock, *before_replace* runs (the caller's last check; if it raises,
+    nothing is replaced) and the temp file is renamed over the target. A reader sees the old file or
+    the new one, never a partial one. Issue #718: blocking calls go through *run*, the chat I/O executor.
+    """
+    fd, temp_path = await run(tempfile.mkstemp, ".json", ".tmp_chat_", os.path.dirname(file_path))
+    try:
+        await run(fcntl.flock, fd, fcntl.LOCK_EX)
+        os.close(fd)  # closed so aiofiles can open the path
+        async with aiofiles.open(temp_path, "w", encoding="utf-8") as f:
+            await f.write(content)
+        async with session_file_lock(file_path):
+            if before_replace is not None:
+                await before_replace()
+            await run(os.replace, temp_path, file_path)
+        logger.debug("Atomic write completed: %s", file_path)
+    except Exception as e:
+        logger.error("Atomic write failed for %s: %s", file_path, e)
+        raise
+    finally:
+        await _discard_temp(temp_path, run)
+
+
+async def _discard_temp(temp_path: str, run: Callable[..., Awaitable[Any]]) -> None:
+    """Remove the temp file if the replace did not consume it."""
+    try:
+        if await run(os.path.exists, temp_path):
+            await run(os.unlink, temp_path)
+    except Exception as cleanup_error:
+        logger.warning("Failed to cleanup temp file %s: %s", temp_path, cleanup_error)
+
+
 class FileIOMixin:
     """
     Mixin providing file I/O operations for chat history.
@@ -197,57 +238,12 @@ class FileIOMixin:
         content: str,
         before_replace: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
+        """Atomic file write under the session file lock: :func:`atomic_write` on this manager's executor seam.
+
+        Issue #718: file I/O goes through ``_run_in_io_executor``. Raises if the write fails (the
+        temp file is cleaned up); if *before_replace* raises, nothing is replaced.
         """
-        Atomic file write with exclusive locking to prevent data corruption.
-
-        Issue #718: Uses dedicated thread pool for file I/O operations to
-        prevent blocking when the main asyncio pool is saturated by indexing.
-        Temp files are created in the same directory as the target (required
-        for atomic os.replace to work on the same filesystem).
-
-        Args:
-            file_path: Target file path
-            content: Content to write
-            before_replace: Awaited just before the rename; if it raises, nothing is replaced
-
-        Raises:
-            Exception: If write fails (temp file is cleaned up automatically)
-        """
-        dir_path = os.path.dirname(file_path)
-
-        # Create temporary file in same directory (required for atomic rename)
-        # Issue #718: Use dedicated executor to avoid blocking on saturated pool
-        fd, temp_path = await self._run_in_io_executor(tempfile.mkstemp, ".json", ".tmp_chat_", dir_path)
-
-        try:
-            # Acquire exclusive lock - use dedicated executor
-            await self._run_in_io_executor(fcntl.flock, fd, fcntl.LOCK_EX)
-
-            # Write content to temporary file using aiofiles for async I/O
-            os.close(fd)  # Close fd so aiofiles can open it
-            async with aiofiles.open(temp_path, "w", encoding="utf-8") as f:
-                await f.write(content)
-
-            # #20862: the caller's last check (lease, on-disk generation) and the rename are one step
-            # against every other writer of this file: both run under its sidecar flock.
-            async with session_file_lock(file_path):
-                if before_replace is not None:
-                    await before_replace()
-                await self._run_in_io_executor(os.replace, temp_path, file_path)
-
-            logger.debug("Atomic write completed: %s", file_path)
-
-        except Exception as e:
-            logger.error("Atomic write failed for %s: %s", file_path, e)
-            raise e
-
-        finally:
-            # Always cleanup temporary file if it exists
-            try:
-                if await self._run_in_io_executor(os.path.exists, temp_path):
-                    await self._run_in_io_executor(os.unlink, temp_path)
-            except Exception as cleanup_error:
-                logger.warning("Failed to cleanup temp file %s: %s", temp_path, cleanup_error)
+        await atomic_write(file_path, content, before_replace, run=self._run_in_io_executor)
 
     async def _save_history(self):
         """
