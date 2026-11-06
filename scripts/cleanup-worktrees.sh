@@ -104,14 +104,21 @@ delete_local_branch() {
     return 1
 }
 
-# Print the ledger's claim line for a worktree when a session holds it; empty
-# when unclaimed (or no ledger is installed).
+# Print why a worktree must be KEPT, or nothing when the ledger positively says it
+# is unclaimed. Fails CLOSED: a missing ledger binary or a failed lookup is
+# reported as a reason to keep, never read as "unclaimed".
 worktree_claim() {
     local name="$1" ledger="${LEDGER_BIN:-$HOME/.claude/scripts/ledger}" out
-    [ -x "$ledger" ] || return 0
-    out=$("$ledger" who worktree "$name" 2>/dev/null) || return 0
+    if [ ! -x "$ledger" ]; then
+        printf 'claim unverifiable: ledger binary %s missing or not executable' "$ledger"
+        return 0
+    fi
+    if ! out=$("$ledger" who worktree "$name" 2>&1); then
+        printf 'claim unverifiable: ledger who failed: %s' "$out"
+        return 0
+    fi
     case "$out" in *unclaimed*) return 0 ;; esac
-    printf '%s' "$out"
+    printf 'claimed by a session: %s' "$out"
 }
 br_local_removed=0
 br_remote_removed=0
@@ -156,7 +163,7 @@ if ! $BRANCHES_ONLY; then
 
             claim=$(worktree_claim "$dir_name")
             if [ -n "$claim" ]; then
-                echo "  KEEP          ${dir_name}  (claimed by a session: ${claim})"
+                echo "  KEEP          ${dir_name}  (${claim})"
                 wt_skipped=$((wt_skipped + 1))
                 continue
             fi
@@ -232,12 +239,13 @@ if [ -n "$merged_local" ]; then
         [ -z "$branch" ] && continue
         if $DRY_RUN; then
             echo "  WOULD DELETE local merged: ${branch}"
+            br_local_removed=$((br_local_removed + 1))
+        elif delete_error=$(git -C "$REPO_ROOT" branch -d "$branch" 2>&1); then
+            echo "  Deleted local merged: ${branch}"
+            br_local_removed=$((br_local_removed + 1))
         else
-            git -C "$REPO_ROOT" branch -d "$branch" 2>/dev/null && \
-                echo "  Deleted local merged: ${branch}" || \
-                echo "  SKIP (in use by worktree): ${branch}"
+            echo "  SKIP (not deleted): ${branch}: ${delete_error}"
         fi
-        br_local_removed=$((br_local_removed + 1))
     done <<< "$merged_local"
 else
     echo "  No merged local branches found."
@@ -284,12 +292,16 @@ if [ -n "$local_branches" ]; then
             merged_pr=$(merged_pr_for_issue "$issue_number")
             if [ -n "$merged_pr" ]; then
                 if $DRY_RUN; then
-                    echo "  WOULD DELETE local: ${branch}  (#${issue_number} closed, PR #${merged_pr} merged)"
-                else
-                    delete_local_branch "$branch" && \
-                        echo "  Deleted local: ${branch}  (#${issue_number} closed, PR #${merged_pr} merged)"
+                    if branch_is_landed "$branch"; then
+                        echo "  WOULD DELETE local: ${branch}  (#${issue_number} closed, PR #${merged_pr} merged)"
+                        br_local_removed=$((br_local_removed + 1))
+                    else
+                        echo "  WOULD KEEP local: ${branch}  (#${issue_number} closed, PR #${merged_pr} merged, but the branch tip is not provably landed; git -d would refuse)"
+                    fi
+                elif delete_local_branch "$branch"; then
+                    echo "  Deleted local: ${branch}  (#${issue_number} closed, PR #${merged_pr} merged)"
+                    br_local_removed=$((br_local_removed + 1))
                 fi
-                br_local_removed=$((br_local_removed + 1))
             else
                 echo "  KEEP  ${branch}  (#${issue_number} closed but no merged PR found -- verify manually)"
             fi
@@ -323,11 +335,15 @@ if [ -n "$remote_branches" ]; then
                 if $DRY_RUN; then
                     echo "  WOULD DELETE remote: origin/${branch}  (#${issue_number} closed, PR #${merged_pr} merged)"
                 else
-                    git -C "$REPO_ROOT" push origin --delete "$branch" 2>/dev/null && \
-                        echo "  Deleted remote: origin/${branch}  (#${issue_number} closed, PR #${merged_pr} merged)" || \
-                        echo "  ERROR deleting remote: origin/${branch}"
+                    if remote_error=$(git -C "$REPO_ROOT" push origin --delete "$branch" 2>&1); then
+                        echo "  Deleted remote: origin/${branch}  (#${issue_number} closed, PR #${merged_pr} merged)"
+                        br_remote_removed=$((br_remote_removed + 1))
+                    else
+                        echo "  ERROR deleting remote origin/${branch}: ${remote_error}"
+                        errors=$((errors + 1))
+                    fi
                 fi
-                br_remote_removed=$((br_remote_removed + 1))
+                if $DRY_RUN; then br_remote_removed=$((br_remote_removed + 1)); fi
             else
                 echo "  KEEP  origin/${branch}  (#${issue_number} closed but no merged PR found -- verify manually)"
             fi
