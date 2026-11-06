@@ -25,6 +25,7 @@ from concurrent.futures import ThreadPoolExecutor
 import aiofiles
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.path_validator import validate_relative_path
 from constants.ttl_constants import TTL_24_HOURS
 
 logger = get_logger(__name__)
@@ -58,6 +59,15 @@ async def run_in_chat_io_executor(func, *args, **kwargs):
     if kwargs:
         func = functools.partial(func, **kwargs)
     return await loop.run_in_executor(_CHAT_IO_EXECUTOR, func, *args)
+
+
+def existing_chat_path(name: str, directory: str) -> str | None:
+    """The validated path of chat file *name* under *directory* if it exists, else None (#20030).
+
+    Blocking (``realpath`` and ``stat``): run it through :func:`run_in_chat_io_executor`.
+    """
+    path = str(validate_relative_path(name, directory))
+    return path if os.path.exists(path) else None
 
 
 class FileIOMixin:
