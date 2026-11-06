@@ -215,7 +215,7 @@ REACH_CLAUDE_IDS = declare(
     discover=_claude_scan_files,
     what="tracked py/ts/vue/json/yml/yaml and docs md files, scanned for a pinned Claude model id",
     roots=_SCAN_ROOTS,
-    floor=6200,
+    floor=6730,  # mid-window: population 6730, window (6730, 6730)
 )
 
 
