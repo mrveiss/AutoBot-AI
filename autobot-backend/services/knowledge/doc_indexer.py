@@ -544,7 +544,7 @@ class DocIndexerService:
             count=store_guard.read_count(self._collection),
             needs_reindex=getattr(self, "_needs_reindex", False),
             cache_entries=len(_load_hash_cache()),
-            recorded=store_guard.load_recorded_store(HASH_CACHE_FILE),
+            hash_override=HASH_CACHE_FILE,
             current=self._store,
         )
 

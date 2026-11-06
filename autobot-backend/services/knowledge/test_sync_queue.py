@@ -20,6 +20,7 @@ import pytest
 
 from services.knowledge.sync_queue import (
     MAX_ATTEMPTS,
+    DocumentGone,
     DocumentSyncQueue,
     SyncQueueEntry,
     SyncQueueWorker,
@@ -428,3 +429,42 @@ class TestAdminEndpoint:
         assert failed_entry.id in failed_ids
         assert response["counts"]["pending"] == 1
         assert response["counts"]["failed"] == 1
+
+
+class TestVanishedFile20968:
+    """A file that no longer exists is dropped once as gone; a real error still retries (#20968)."""
+
+    @pytest.mark.asyncio
+    async def test_a_vanished_file_is_gone_after_one_attempt_not_failed(self, queue: DocumentSyncQueue, caplog) -> None:
+        await queue.enqueue_sync("docs/adr/.~tmp~/template.md", SyncReason.CONTENT_CHANGED)
+
+        async def processor(entry: SyncQueueEntry) -> None:
+            raise DocumentGone(f"File no longer exists: {entry.document_path}")
+
+        with caplog.at_level("INFO"):
+            result = await queue.process_one(processor)
+
+        assert result is not None and result.status == SyncStatus.GONE and result.attempts == 0
+        stats = await queue.stats()
+        assert stats["failed"] == 0 and stats["pending"] == 0
+        assert "dropped" in caplog.text and "template.md" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_the_reindex_processor_reports_a_missing_path_as_gone(self, tmp_path) -> None:
+        from services.knowledge.sync_queue import _reindex_processor
+
+        entry = SyncQueueEntry(id="e1", document_path=str(tmp_path / "missing.md"), reason=SyncReason.MANUAL)
+        with pytest.raises(DocumentGone):
+            await _reindex_processor(entry)
+
+    @pytest.mark.asyncio
+    async def test_a_genuine_error_still_retries_to_max_attempts(self, queue: DocumentSyncQueue) -> None:
+        await queue.enqueue_sync("a.md", SyncReason.CONTENT_CHANGED)
+
+        async def processor(_: SyncQueueEntry) -> None:
+            raise RuntimeError("File not found: transient mount")
+
+        last = None
+        for _ in range(MAX_ATTEMPTS):
+            last = await queue.process_one(processor)
+        assert last is not None and last.status == SyncStatus.FAILED and last.attempts == MAX_ATTEMPTS

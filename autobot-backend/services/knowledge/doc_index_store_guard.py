@@ -64,21 +64,43 @@ def save_recorded_store(store: str, hash_override: Path | None = None) -> None:
         logger.warning("Could not record the doc index store: %s", e)
 
 
+def _refusal(cache_entries: int, recorded: str | None, current: str) -> str:
+    """The refusal text: what was seen and the two ways to proceed (#20886)."""
+    seen = (
+        f"was built against '{recorded}' and this run opened '{current}'"
+        if recorded
+        else f"predates store recording and this run opened '{current}'"
+    )
+    return (
+        f"collection is empty but the hash cache ({cache_entries} files) {seen}. Refusing to re-embed "
+        "into what may be the wrong store. Point the indexer at the original store, or pass --force to "
+        "re-embed everything here on purpose, or pass --adopt-store to record this store as the cache's "
+        "store without embedding anything."
+    )
+
+
+def adopt_store(service: Any, hash_override: Path | None = None) -> str:
+    """Operator command (--adopt-store): record the service's opened store; embeds and deletes nothing."""
+    save_recorded_store(service._store, hash_override)
+    logger.info(
+        "Doc index store adopted: '%s' (%d vectors); nothing embedded", service._store, read_count(service._collection)
+    )
+    return service._store
+
+
 def reindex_reason(
-    *, count: int, needs_reindex: bool, cache_entries: int, recorded: str | None, current: str
+    *, count: int, needs_reindex: bool, cache_entries: int, hash_override: Path | None, current: str
 ) -> str | None:
     """Why a full re-embed is warranted, or None. Raises StoreLocationChanged rather than guess."""
     if needs_reindex:
         return "collection was recreated after an embedding-dimension mismatch (_needs_reindex)"
+    recorded = load_recorded_store(hash_override)
     if count != 0:
+        if recorded is None:  # a legacy cache over a populated collection: no re-embed risk, so remember the store
+            save_recorded_store(current, hash_override)
         return None
-    if cache_entries and recorded and recorded != current:
-        raise StoreLocationChanged(
-            f"collection is empty but the hash cache ({cache_entries} files) was built against "
-            f"'{recorded}' and this run opened '{current}'. Refusing to re-embed into what may be "
-            "the wrong store; point the indexer at the original store, or pass --force to "
-            "re-embed here on purpose."
-        )
+    if cache_entries and recorded != current:
+        raise StoreLocationChanged(_refusal(cache_entries, recorded, current))
     return f"collection count=0 ({cache_entries} files in the hash cache, store '{current}')"
 
 

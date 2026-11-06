@@ -68,6 +68,15 @@ def _add_mode_flags(parser: argparse.ArgumentParser) -> None:
         help="Re-index and re-embed every file, ignoring the hash cache.",
     )
     mode.add_argument(
+        "--adopt-store",
+        dest="adopt_store",
+        action="store_true",
+        help=(
+            "One-time, operator-run: record the store this run opened as the hash cache's store, "
+            "embedding and deleting nothing (#20886). Use after a refusal you have checked."
+        ),
+    )
+    mode.add_argument(
         "--rebuild",
         action="store_true",
         help=(
@@ -172,6 +181,14 @@ async def run_index(force: bool, rebuild: bool, args: argparse.Namespace | None 
     args.force, args.rebuild = force, rebuild
     if args.search or args.stats:
         return await _read_collection(logger, service, args)
+    if args.adopt_store:
+        from services.knowledge import doc_index_store_guard, doc_indexer
+
+        await service.initialize()
+        logger.info(
+            "Adopted doc index store: %s", doc_index_store_guard.adopt_store(service, doc_indexer.HASH_CACHE_FILE)
+        )
+        return 0
     if args.dry_run:
         return _dry_run(logger, service, args)
     result = await _index(service, args)

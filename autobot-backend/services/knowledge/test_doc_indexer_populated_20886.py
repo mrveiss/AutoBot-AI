@@ -105,12 +105,56 @@ async def test_force_re_embeds_into_a_moved_store_on_purpose(indexer: DocIndexer
     assert guard.load_recorded_store(doc_indexer.HASH_CACHE_FILE) == OTHER
 
 
-async def test_a_legacy_cache_without_a_recorded_store_keeps_the_old_behaviour(indexer: DocIndexerService) -> None:
-    await indexer.index_all()
+def _make_legacy(indexer: DocIndexerService) -> None:
+    """A cache written before store recording: hashes present, no store record."""
     guard.doc_index_store(doc_indexer.HASH_CACHE_FILE).unlink()
+
+
+async def test_a_legacy_cache_with_an_empty_collection_is_refused(indexer: DocIndexerService, caplog) -> None:
+    await indexer.index_all()
+    _make_legacy(indexer)
+    embedded = indexer._embed_model.calls
     indexer._collection = InMemoryClient().get_or_create_collection("autobot_docs")
+    with caplog.at_level(logging.INFO):
+        result = await indexer.index_all()
+    assert indexer._embed_model.calls == embedded and indexer._collection.count() == 0
+    assert result.success == 0 and result.errors
+    assert "--force" in caplog.text and "--adopt-store" in caplog.text
+    assert guard.load_recorded_store(doc_indexer.HASH_CACHE_FILE) is None, "a refusal records nothing"
+
+
+async def test_adopt_store_records_without_embedding_then_runs_incrementally(indexer: DocIndexerService) -> None:
+    await indexer.index_all()
+    _make_legacy(indexer)
+    indexer._collection = InMemoryClient().get_or_create_collection("autobot_docs")
+    embedded = indexer._embed_model.calls
+    assert guard.adopt_store(indexer, doc_indexer.HASH_CACHE_FILE) == STORE
+    assert indexer._embed_model.calls == embedded and indexer._collection.count() == 0
+    assert guard.load_recorded_store(doc_indexer.HASH_CACHE_FILE) == STORE
+    result = await indexer.index_all()  # adopted: the guard no longer refuses, the run proceeds
+    assert result.success == 1 and not result.errors
+    assert indexer._embed_model.calls > embedded and indexer._collection.count() > 0
+    embedded = indexer._embed_model.calls
+    again = await indexer.index_all()  # and the run after that is incremental
+    assert indexer._embed_model.calls == embedded and again.skipped == 1 and again.success == 0
+
+
+async def test_a_legacy_cache_with_a_populated_collection_proceeds_and_records(indexer: DocIndexerService) -> None:
+    await indexer.index_all()
+    _make_legacy(indexer)
+    embedded = indexer._embed_model.calls
     result = await indexer.index_all()
-    assert result.success == 1
+    assert indexer._embed_model.calls == embedded
+    assert result.skipped == 1 and not result.errors
+    assert guard.load_recorded_store(doc_indexer.HASH_CACHE_FILE) == STORE
+
+
+async def test_force_re_embeds_a_legacy_cache_on_an_empty_collection(indexer: DocIndexerService) -> None:
+    await indexer.index_all()
+    _make_legacy(indexer)
+    indexer._collection = InMemoryClient().get_or_create_collection("autobot_docs")
+    result = await indexer.index_all(force=True)
+    assert result.success == 1 and indexer._collection.count() > 0
 
 
 def test_the_store_record_is_written_beside_the_cache(indexer: DocIndexerService, tmp_path: Path) -> None:
