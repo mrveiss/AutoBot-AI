@@ -23,7 +23,7 @@ from autobot_shared.node_proxy import internal_api_key
 from user_management.models import User
 from user_management.models.person_link import PersonLink
 from user_management.services.base_service import TenantContext
-from user_management.services.seed import _find_admin_role_id
+from user_management.services.seed import find_admin_role_id
 from user_management.services.user_service import UserService
 
 logger = get_logger(__name__)
@@ -80,7 +80,7 @@ async def _main_store_may_hold_them(session: AsyncSession, person: SlmPerson) ->
 
 async def _create_linked_admin(session: AsyncSession, person: SlmPerson) -> User:
     """Create the main-app user with the SLM's hash, so this person keeps their password."""
-    role_id = await _find_admin_role_id(session)  # the seeded system role, found once in seed.py
+    role_id = await find_admin_role_id(session)  # the seeded system role, found once in seed.py
     user = await UserService(session=session, context=TenantContext()).create_user(
         email=person.email,
         username=person.username,
