@@ -526,7 +526,7 @@ onUnmounted(() => {
 }
 
 .dialog-icon {
-  font-size: var(--font-size-3xl);
+  font-size: var(--text-3xl);
   opacity: 0.9;
 }
 
@@ -536,13 +536,13 @@ onUnmounted(() => {
 
 .dialog-title h3 {
   margin: 0 0 var(--spacing-1) 0;
-  font-size: var(--font-size-lg);
+  font-size: var(--text-lg);
   font-weight: var(--font-weight-semibold);
 }
 
 .dialog-subtitle {
   margin: var(--spacing-0);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   opacity: 0.9;
 }
 
@@ -550,7 +550,7 @@ onUnmounted(() => {
   background: transparent;
   border: none;
   color: var(--text-on-primary);
-  font-size: var(--font-size-lg);
+  font-size: var(--text-lg);
   cursor: pointer;
   padding: var(--spacing-2);
   border-radius: var(--radius-sm);
@@ -581,7 +581,7 @@ onUnmounted(() => {
 
 .command-preview h4 {
   margin: 0 0 var(--spacing-2) 0;
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: var(--font-weight-semibold);
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -598,7 +598,7 @@ onUnmounted(() => {
 .command-box code {
   color: var(--text-inverse);
   font-family: var(--font-mono);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   white-space: pre-wrap;
   word-break: break-all;
 }
@@ -610,7 +610,7 @@ onUnmounted(() => {
 
 .host-selection-section h4 {
   margin: 0 0 var(--spacing-3) 0;
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: var(--font-weight-semibold);
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -631,7 +631,7 @@ onUnmounted(() => {
 
 .loading-state > .icon,
 .empty-state > .icon {
-  width: var(--font-size-2xl); height: var(--font-size-2xl);
+  width: var(--text-2xl); height: var(--text-2xl);
 }
 
 .add-host-link {
@@ -641,7 +641,7 @@ onUnmounted(() => {
   padding: var(--spacing-2) var(--spacing-4);
   border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
@@ -708,7 +708,7 @@ onUnmounted(() => {
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
   color: var(--text-secondary);
-  font-size: var(--font-size-lg);
+  font-size: var(--text-lg);
 }
 
 .host-card.selected .host-icon {
@@ -724,7 +724,7 @@ onUnmounted(() => {
 .host-name {
   font-weight: var(--font-weight-semibold);
   color: var(--text-primary);
-  font-size: var(--font-size-base);
+  font-size: var(--text-base);
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
@@ -737,7 +737,7 @@ onUnmounted(() => {
   padding: var(--spacing-1) var(--spacing-2);
   background: var(--color-warning-bg);
   color: var(--color-warning);
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
   font-weight: var(--font-weight-medium);
   border-radius: var(--radius-sm);
 }
@@ -751,7 +751,7 @@ onUnmounted(() => {
   align-items: center;
   gap: var(--spacing-3);
   margin-top: var(--spacing-1);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -768,7 +768,7 @@ onUnmounted(() => {
 
 .host-purpose {
   margin-top: var(--spacing-1);
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
   color: var(--text-muted);
   font-style: italic;
 }
@@ -820,7 +820,7 @@ onUnmounted(() => {
   align-items: center;
   cursor: pointer;
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
 }
 
 .checkbox-label input[type="checkbox"] {
@@ -848,7 +848,7 @@ onUnmounted(() => {
   top: var(--spacing-neg-2px);
   left: 3px;
   color: var(--text-on-primary);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: var(--font-weight-bold);
 }
 
@@ -862,7 +862,7 @@ onUnmounted(() => {
   align-items: center;
   gap: var(--spacing-2);
   color: var(--color-error-dark);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
 }
 
 /* Footer */
@@ -888,7 +888,7 @@ onUnmounted(() => {
   justify-content: center;
   gap: var(--spacing-2);
   color: var(--text-muted);
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
 }
 
 /* Responsive */
