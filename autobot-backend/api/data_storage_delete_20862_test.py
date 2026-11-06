@@ -16,6 +16,8 @@ from chat_history import session_lease as lease_mod
 from chat_history.file_io import FileIOMixin
 from chat_history.security import SecurityMixin
 from chat_history.session import SessionMixin
+from chat_history.session_lease import StaleGenerationError
+from testkit.async_bounds import bound_async_tests
 
 _HELD_FOR_MS = 60_000  # outlives the test wait
 
@@ -73,7 +75,23 @@ async def test_the_route_waits_for_the_session_lease_and_does_not_delete_around_
     monkeypatch.setattr(lease_mod, "CHAT_LEASE_WAIT_S", 0.2)
     holder = fakeredis.aioredis.FakeRedis(server=fake_session_lease, decode_responses=True)
     await holder.set(lease_mod.CHAT_LEASE_KEY_PREFIX + "c2", "backend-2-1:save_session:aa", px=_HELD_FOR_MS)
-    with pytest.raises(HTTPException) as err:  # the route's error boundary reports the lease timeout, not a delete
+    with pytest.raises(HTTPException) as err:  # a contended delete is a conflict naming the holder, not a 500
         await data_storage.delete_conversation("c2", MagicMock(), None)
-    assert err.value.status_code == 500
+    assert err.value.status_code == 409
+    assert "backend-2-1:save_session:aa" in err.value.detail
     assert (chats / "c2_chat.json").exists()
+
+
+async def test_the_route_maps_a_stale_generation_to_a_conflict(route, monkeypatch):
+    chats, manager = route
+
+    async def _stale(session_id, *args, **kwargs):
+        raise StaleGenerationError(session_id, 1, 2)
+
+    monkeypatch.setattr(manager, "delete_session", _stale)
+    with pytest.raises(HTTPException) as err:
+        await data_storage.delete_conversation("c3", MagicMock(), None)
+    assert err.value.status_code == 409
+
+
+bound_async_tests(globals())  # no pytest-timeout in the repo: bound each test here

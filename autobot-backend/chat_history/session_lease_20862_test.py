@@ -30,6 +30,7 @@ from chat_history.session_lease import (
 )
 from chat_history.session_listing import SessionListingMixin
 from chat_history.session_merge import merge_snapshot
+from testkit.async_bounds import bound_async_tests
 
 _HELD_FOR_MS = 60_000  # a holder that outlives every test wait
 _SHORT_HOLD_MS = 300  # a holder that finishes inside the wait bound
@@ -402,3 +403,6 @@ async def test_a_lease_timeout_is_raised_by_the_update_and_delete_methods_not_tu
         await manager.update_session_metadata("s37", {"owner": "bob"})
     with pytest.raises(SessionLeaseTimeout):
         await manager.delete_session("s37")
+
+
+bound_async_tests(globals())  # no pytest-timeout in the repo: bound each test here

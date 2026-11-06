@@ -44,7 +44,7 @@ from autobot_shared.security.path_http import require_contained_relative_path
 from autobot_shared.security.path_validator import validate_relative_path
 from autobot_shared.store_authority import legacy_conversation_transcripts_dir
 from chat_history.legacy_transcripts import legacy_transcript_file
-from chat_history.session_lease import SessionLeaseError
+from chat_history.session_lease import SessionLeaseError, SessionLeaseTimeout, StaleGenerationError
 from utils.catalog_http_exceptions import raise_server_error
 from utils.chat_utils import get_chat_history_manager
 
@@ -443,6 +443,10 @@ async def delete_conversation(
         present = [n for n in names if validate_relative_path(n, chats_dir).exists()]
         try:
             await get_chat_history_manager(request).delete_session(conversation_id)
+        except (SessionLeaseTimeout, StaleGenerationError) as exc:
+            # Another writer holds the session (or wrote a newer generation): the delete is
+            # refused and retryable, a conflict -- not a server fault. The message names the holder.
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         except SessionLeaseError:
             raise
         except Exception:
