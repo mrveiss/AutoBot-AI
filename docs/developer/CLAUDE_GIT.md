@@ -144,7 +144,9 @@ deliberate, evidenced act — not cleanup.
    This is **ancestor-based and deliberately conservative** — a branch whose commits were squashed
    (a solo PR, older history) reports as unmerged, which fails safe. It is *not* evidence that work is stranded:
    confirm that with `gh pr list --head <branch> --state all` before concluding anything was
-   lost, and delete with `-D` once the PR shows MERGED.
+   lost. Delete with `-D` only once the PR shows MERGED **and** the local tip equals the merged
+   PR head (`git rev-parse <branch>` vs `gh pr view <n> --json headRefOid`) or `git log origin/<branch>..<branch>`
+   is empty; commits added after the merge would otherwise lose their only reference.
 
 **Why:** Past incidents: staged 5,371 files for deletion in a worktree, nearly reset `release` during a cherry-pick with 30+ conflicts, committed fixes to wrong branches.
 

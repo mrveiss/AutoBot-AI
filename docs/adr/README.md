@@ -18,7 +18,7 @@ An Architecture Decision Record (ADR) is a document that captures an important a
 Each ADR follows a consistent template (see [template.md](template.md)):
 
 1. **Title**: Short descriptive title with ADR number
-2. **Status**: Proposed, Accepted, Deprecated, or Superseded
+2. **Status**: Proposed, Accepted, Deprecated, Rejected, or Superseded
 3. **Date**: When the decision was made
 4. **Context**: What is the issue we're addressing?
 5. **Decision**: What is the change we're making?

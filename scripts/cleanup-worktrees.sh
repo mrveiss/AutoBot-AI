@@ -66,6 +66,20 @@ source "${REPO_ROOT}/scripts/lib/session-handoffs.sh"
 
 wt_removed=0
 wt_skipped=0
+
+# Print why `git worktree remove` (no --force) would refuse a tree; empty if it would not.
+# Mirrors the refusal conditions so dry-run does not count a tree the real run keeps.
+worktree_removal_blocker() {
+    local path="$1"
+    if git -C "$REPO_ROOT" worktree list --porcelain | awk -v p="${path%/}" \
+        '$1=="worktree"{cur=($2==p)} cur&&$1=="locked"{f=1} END{exit !f}'; then
+        echo "locked"
+    elif [ -n "$(git -C "$path" status --porcelain 2>/dev/null)" ]; then
+        echo "uncommitted changes"
+    elif [ -f "$path/.gitmodules" ]; then
+        echo "contains submodules"
+    fi
+}
 br_local_removed=0
 br_remote_removed=0
 errors=0
@@ -112,10 +126,17 @@ if ! $BRANCHES_ONLY; then
                 branch_name=$(git -C "$worktree_path" branch --show-current 2>/dev/null) || true
 
                 if $DRY_RUN; then
-                    echo "  WOULD REMOVE  ${dir_name}  (issue #${issue_number} is closed, branch: ${branch_name:-unknown})"
+                    blocker=$(worktree_removal_blocker "$worktree_path")
+                    if [ -n "$blocker" ]; then
+                        echo "  WOULD KEEP    ${dir_name}  (issue #${issue_number} is closed, but git would refuse removal: ${blocker})"
+                        wt_skipped=$((wt_skipped + 1))
+                    else
+                        echo "  WOULD REMOVE  ${dir_name}  (issue #${issue_number} is closed, branch: ${branch_name:-unknown})"
+                        wt_removed=$((wt_removed + 1))
+                    fi
                 else
                     echo "  REMOVING      ${dir_name}  (issue #${issue_number} is closed)"
-                    if git -C "$REPO_ROOT" worktree remove "$worktree_path" 2>/dev/null; then
+                    if removal_error=$(git -C "$REPO_ROOT" worktree remove "$worktree_path" 2>&1); then
                         # Delete local branch if it exists
                         if [ -n "$branch_name" ]; then
                             git -C "$REPO_ROOT" branch -D "$branch_name" 2>/dev/null && \
@@ -135,13 +156,11 @@ if ! $BRANCHES_ONLY; then
                     else
                         # No --force and no rm -rf (owner rule 9): a tree git refuses to
                         # remove (dirty, locked) is unfinished work. Report it and leave it.
-                        echo "    KEPT ${dir_name} -- git worktree remove refused (dirty or locked); left in place"
+                        echo "    KEPT ${dir_name} -- git worktree remove refused; left in place"
+                        echo "    git said: ${removal_error}"
                         wt_skipped=$((wt_skipped + 1))
                         errors=$((errors + 1))
                     fi
-                fi
-                if $DRY_RUN; then
-                    wt_removed=$((wt_removed + 1))
                 fi
             else
                 echo "  KEEP          ${dir_name}  (issue #${issue_number} is ${issue_state})"
