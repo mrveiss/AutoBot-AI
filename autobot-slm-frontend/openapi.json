@@ -10982,6 +10982,158 @@
         "title": "RolesUpdateRequest",
         "type": "object"
       },
+      "RollbackCandidates": {
+        "description": "The picker's contents: ancestors of the branch head, newest first.",
+        "properties": {
+          "branch": {
+            "title": "Branch",
+            "type": "string"
+          },
+          "commits": {
+            "items": {
+              "$ref": "#/components/schemas/RollbackCommit"
+            },
+            "title": "Commits",
+            "type": "array"
+          },
+          "deployed_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deployed Commit"
+          }
+        },
+        "required": [
+          "branch",
+          "commits"
+        ],
+        "title": "RollbackCandidates",
+        "type": "object"
+      },
+      "RollbackCommit": {
+        "description": "One commit the operator may roll back to.",
+        "properties": {
+          "commit": {
+            "title": "Commit",
+            "type": "string"
+          },
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "is_deployed": {
+            "default": false,
+            "title": "Is Deployed",
+            "type": "boolean"
+          },
+          "short": {
+            "title": "Short",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "commit",
+          "short",
+          "date",
+          "subject"
+        ],
+        "title": "RollbackCommit",
+        "type": "object"
+      },
+      "RollbackDatabaseCheck": {
+        "description": "Whether a database migration is in the way, for one database.",
+        "properties": {
+          "database": {
+            "title": "Database",
+            "type": "string"
+          },
+          "in_the_way": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "In The Way",
+            "type": "array"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database",
+          "status"
+        ],
+        "title": "RollbackDatabaseCheck",
+        "type": "object"
+      },
+      "RollbackPreview": {
+        "description": "What the confirmation step shows before anything runs.",
+        "properties": {
+          "allowed": {
+            "title": "Allowed",
+            "type": "boolean"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/RollbackDatabaseCheck"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "commit": {
+            "$ref": "#/components/schemas/RollbackCommit"
+          },
+          "refusal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refusal"
+          }
+        },
+        "required": [
+          "commit",
+          "allowed",
+          "checks"
+        ],
+        "title": "RollbackPreview",
+        "type": "object"
+      },
+      "RollbackRequest": {
+        "description": "The commit the operator picked from the list; validated again server-side.",
+        "properties": {
+          "commit": {
+            "description": "Full commit id from the candidates list",
+            "maxLength": 200,
+            "title": "Commit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "commit"
+        ],
+        "title": "RollbackRequest",
+        "type": "object"
+      },
       "SLOCreateRequest": {
         "description": "SLO creation request.",
         "properties": {
@@ -20587,6 +20739,194 @@
         ],
         "summary": "Sync Role",
         "tags": [
+          "code-sync"
+        ]
+      }
+    },
+    "/api/code-sync/rollback": {
+      "post": {
+        "description": "Deploy the chosen earlier commit. Refused while an update runs or when a migration is in the way.",
+        "operationId": "start_rollback_api_code_sync_rollback_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RollbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateAllJob"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start Rollback",
+        "tags": [
+          "code-sync",
+          "code-sync"
+        ]
+      }
+    },
+    "/api/code-sync/rollback/candidates": {
+      "get": {
+        "description": "The newest commits of the tracked branch, with dates and subjects, for the picker.",
+        "operationId": "rollback_candidates_api_code_sync_rollback_candidates_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollbackCandidates"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rollback Candidates",
+        "tags": [
+          "code-sync",
+          "code-sync"
+        ]
+      }
+    },
+    "/api/code-sync/rollback/preview": {
+      "get": {
+        "description": "Validate one commit and say whether a database migration is in the way.",
+        "operationId": "rollback_preview_api_code_sync_rollback_preview_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "commit",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "title": "Commit",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollbackPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rollback Preview",
+        "tags": [
+          "code-sync",
           "code-sync"
         ]
       }
