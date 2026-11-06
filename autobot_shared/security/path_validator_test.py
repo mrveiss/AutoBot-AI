@@ -548,5 +548,8 @@ class TestValidateRelativePathContainment20611:
         with pytest.raises(ValueError, match="escapes base directory"):
             validate_relative_path("link/x_chat.json", base)
 
+    def test_base_itself_resolves(self, tmp_path) -> None:
+        assert validate_relative_path(".", tmp_path) == tmp_path.resolve()
+
     def test_file_under_the_base_resolves(self, tmp_path) -> None:
         assert validate_relative_path("s_chat.json", tmp_path) == tmp_path.resolve() / "s_chat.json"
