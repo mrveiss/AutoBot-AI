@@ -124,15 +124,13 @@ def _scan() -> set[tuple[str, str]]:
 
 
 _LEGACY_LITERAL = "autobot-api-key-v1"
-# The ONE sanctioned home of the old public pepper: a read-only verifier for rows
-# hashed before the default was removed (#16299). Sunset: when every install has
-# set SLM_HMAC_API_KEY_SECRET.
-_LEGACY_LITERAL_FILE = "autobot-slm-backend/user_management/services/api_key_service.py"
+# The old public pepper has no home in examined (non-test) code: PBKDF2 is the
+# only API-key scheme and legacy verification was removed (#20611).
 
 
-def test_legacy_public_pepper_only_in_its_one_declared_place():
+def test_legacy_public_pepper_has_no_home():
     homes = {rel for rel, src in _texts().items() if _LEGACY_LITERAL in src}
-    assert homes == {_LEGACY_LITERAL_FILE}, sorted(homes)
+    assert homes == set(), sorted(homes)
 
 
 def test_detector_sees_the_pattern():
