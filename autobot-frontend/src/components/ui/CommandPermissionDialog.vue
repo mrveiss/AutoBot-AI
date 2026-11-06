@@ -320,19 +320,19 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
 }
 
 .command-icon {
-  font-size: var(--font-size-3xl);
+  font-size: var(--text-3xl);
   opacity: 0.9;
 }
 
 .command-title h3 {
   margin: 0 0 var(--spacing-1) 0;
-  font-size: var(--font-size-lg);
+  font-size: var(--text-lg);
   font-weight: var(--font-weight-semibold);
 }
 
 .command-subtitle {
   margin: var(--spacing-0);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   opacity: 0.9;
 }
 
@@ -347,7 +347,7 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
 .command-details h4 {
   margin: 0 0 var(--spacing-3) 0;
   color: var(--text-primary);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: var(--font-weight-semibold);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -374,7 +374,7 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
   font-weight: var(--font-weight-semibold);
   color: var(--text-tertiary);
   min-width: 80px;
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
   text-transform: uppercase;
 }
 
@@ -384,7 +384,7 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
   padding: var(--spacing-1) var(--spacing-2);
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
 }
 
 .purpose {
@@ -405,7 +405,7 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
   align-items: center;
   cursor: pointer;
   color: var(--text-tertiary);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
 }
 
 .checkbox-label input[type="checkbox"] {
@@ -433,7 +433,7 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
   top: -2px;
   left: 3px;
   color: var(--text-on-primary);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: var(--font-weight-bold);
 }
 
@@ -446,12 +446,12 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
   align-items: center;
   gap: var(--spacing-2);
   color: var(--color-error-dark);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
 }
 
 .warning-message .icon {
-  width: var(--font-size-base);
-  height: var(--font-size-base);
+  width: var(--text-base);
+  height: var(--text-base);
 }
 
 .command-footer {
@@ -471,12 +471,12 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
   align-items: center;
   gap: var(--spacing-2);
   color: var(--text-tertiary);
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
 }
 
 .security-note .icon {
-  width: var(--font-size-sm);
-  height: var(--font-size-sm);
+  width: var(--text-sm);
+  height: var(--text-sm);
 }
 
 /* Comment Section Styles */
@@ -489,14 +489,14 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
 .comment-header h4 {
   margin: 0 0 var(--spacing-2) 0;
   color: var(--text-primary);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: var(--font-weight-semibold);
 }
 
 .comment-header p {
   margin: 0 0 var(--spacing-4) 0;
   color: var(--text-tertiary);
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
 }
 
 .comment-input-group {
@@ -508,7 +508,7 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
   padding: var(--spacing-3);
   border: 1px solid var(--border-secondary);
   border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-family: inherit;
   resize: vertical;
   min-height: 80px;
