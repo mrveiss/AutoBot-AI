@@ -47,6 +47,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 PostApprovalAction = Callable[["Approval", "AsyncSession"], Awaitable[None]]
+DecisionReview = Callable[["Approval", "AsyncSession"], Awaitable[bool]]
 
 _REGISTRY: dict[str, PostApprovalAction] = {}
 
@@ -62,6 +63,10 @@ _RESUME_HANDLERS: dict[str, PostApprovalAction] = {}
 #: apart: an action with an executor and no proposer is unreachable, which
 #: is how the orphan-storage gate shipped dead.
 _PROPOSERS: dict[str, str] = {}
+
+#: action -> who may decide it, checked in the decision's own transaction (#18978). A handler runs after the
+#: commit, so its refusal could only record a comment beside an approval that already reads approved.
+_DECISION_REVIEWS: dict[str, DecisionReview] = {}
 
 #: The ``audit_log`` operation every dispatcher-recorded failure shares,
 #: regardless of which action failed -- the action name is in ``resource``.
@@ -79,6 +84,18 @@ _ADMIN_ONLY: set[str] = set()
 #: Attribute carrying the VERIFIED decider's user id from the decision route to the handler. Never persisted and
 #: never parsed from ``decided_by_user``, which is a display name on one route and a different shape on the other.
 _DECIDER_ATTR = "_verified_decider_id"
+
+
+async def review_decision(approval: "Approval", session: "AsyncSession", decider: "uuid.UUID | None") -> bool:
+    """Run the action's decider check before the decision commits; True for a flagged self-approval.
+
+    A refusal raises, and the caller rolls back so the approval stays pending for someone who may decide it.
+    An approval naming no reviewed action passes unflagged.
+    """
+    set_verified_decider(approval, decider)
+    action = (approval.context or {}).get("action")
+    review = _DECISION_REVIEWS.get(action) if isinstance(action, str) else None
+    return await review(approval, session) if review is not None else False
 
 
 def is_server_only_action(action: object) -> bool:
@@ -132,6 +149,7 @@ def register_post_approval_action(
     server_only: bool = False,
     admin_only: bool = False,
     free_text_keys: "frozenset[str]" = frozenset(),
+    review: "DecisionReview | None" = None,
 ) -> None:
     """Register *handler* to run when an approved gate's context names *action*.
 
@@ -144,6 +162,8 @@ def register_post_approval_action(
     here lets ``approval_execution_proposer_test.py`` check every registered
     action against a real entry point, so the next action cannot land
     unreachable the same way.
+
+    *review* refuses a decider before the decision commits; see :func:`review_decision`.
     """
     if not action or not action.strip():
         raise ValueError("a post-approval action needs a non-empty name")
@@ -156,6 +176,8 @@ def register_post_approval_action(
     if admin_only:
         _ADMIN_ONLY.add(action)
     _FREE_TEXT_KEYS[action] = frozenset(free_text_keys)
+    if review is not None:
+        _DECISION_REVIEWS[action] = review
 
 
 def register_resume_handler(source: str, handler: PostApprovalAction) -> None:

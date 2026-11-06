@@ -153,13 +153,18 @@ async def _attempt(approval: "Approval", manager, validator, claimed: bool, user
         raise
 
 
+async def _review_owner_assign(approval: "Approval", session: "AsyncSession") -> bool:
+    """The four-eyes check, run before the decision commits (as every four-eyes action does) and again here."""
+    return await is_self_approval(approval, session, what="the owner assignment")
+
+
 async def execute_owner_assign(approval: "Approval", session: "AsyncSession") -> None:
     """Write the owner an approved proposal named, unless the session has gained one since, on file or in Redis."""
     ctx = approval.context or {}
     session_id, owner = ctx.get("session_id"), ctx.get("owner")
     if not session_id or not owner:
         raise ValueError(f"approval {approval.id} needs a session and an owner")
-    self_approved = await is_self_approval(approval, session, what="the owner assignment")
+    self_approved = await _review_owner_assign(approval, session)
     user_id = await active_user_id(session, owner, lock=True)
     if user_id is None:
         raise ValueError(f"{owner} is not an active user")
@@ -181,7 +186,9 @@ async def execute_owner_assign(approval: "Approval", session: "AsyncSession") ->
 
 def register_owner_assign_action() -> None:
     """Idempotent: re-registering just replaces the same key with an equal handler."""
-    register_post_approval_action(ACTION, execute_owner_assign, proposed_by=PROPOSED_BY, server_only=True)
+    register_post_approval_action(
+        ACTION, execute_owner_assign, proposed_by=PROPOSED_BY, server_only=True, review=_review_owner_assign
+    )
 
 
 __all__ = [
