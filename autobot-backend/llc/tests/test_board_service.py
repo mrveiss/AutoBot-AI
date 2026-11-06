@@ -320,7 +320,7 @@ async def test_move_item_transitions_status_and_publishes(service):
 
     assert result is updated_item
     mock_wis_instance.transition_status.assert_called_once_with(
-        session, str(updated_item.id), WorkItemStatus.IN_PROGRESS
+        session, str(updated_item.id), WorkItemStatus.IN_PROGRESS, acting_user=None
     )
     mock_redis.publish.assert_called_once()
     channel, payload = mock_redis.publish.call_args[0]

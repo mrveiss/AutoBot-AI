@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.membership import LLCCompanyMembership
+from ..models.work_item import LLCWorkItem
 
 logger = logging.getLogger(__name__)
 
@@ -71,3 +72,16 @@ async def resolve_actor_role(session: AsyncSession, actor_id: Optional[str], com
         pass
 
     return "member"
+
+
+_COWORKING_ALLOWED_ROLES: frozenset = frozenset({"owner", "admin", "lead"})
+
+
+def _coworking_state(item: LLCWorkItem) -> dict:
+    """The co-worker fields of *item*, as the activity log's before/after snapshot."""
+    return {
+        "co_worker_type": item.co_worker_type,
+        "co_worker_agent_id": str(item.co_worker_agent_id) if item.co_worker_agent_id else None,
+        "co_worker_user_id": str(item.co_worker_user_id) if item.co_worker_user_id else None,
+        "co_working_enabled": item.co_working_enabled,
+    }

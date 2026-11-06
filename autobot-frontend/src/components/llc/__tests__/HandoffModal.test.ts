@@ -71,9 +71,9 @@ describe('HandoffModal (GH#10531)', () => {
     expect(body.user_id).toBe('user-1')
   })
 
-  it('to_human posts to /handoff/to-human with reviewer_user_id + the agent assignee', async () => {
+  it('to_human posts only the reviewer: the backend takes the agent from the item (#20476)', async () => {
     const wrapper = mount(HandoffModal, {
-      props: { workItemId: 'wi-2', companyId: 'c1', direction: 'to_human', agentAssigneeId: 'agent-pk-9' },
+      props: { workItemId: 'wi-2', companyId: 'c1', direction: 'to_human' },
       ...mountOpts,
     })
     await flushPromises()
@@ -84,6 +84,6 @@ describe('HandoffModal (GH#10531)', () => {
     const [url, body] = post.mock.calls[0]
     expect(url).toBe('/api/llc/work-items/wi-2/handoff/to-human')
     expect(body.reviewer_user_id).toBe('human-1')
-    expect(body.agent_id).toBe('agent-pk-9')
+    expect(body.agent_id).toBeUndefined()
   })
 })

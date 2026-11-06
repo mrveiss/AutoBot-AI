@@ -277,6 +277,7 @@ class BoardService(LLCServiceBase):
         work_item_id: str,
         column_id: str,
         actor_id: Optional[str] = None,
+        acting_user: Optional[uuid.UUID] = None,
     ) -> LLCWorkItem:
         """Move *work_item_id* into *column_id*, enforcing WIP limit.
 
@@ -326,7 +327,7 @@ class BoardService(LLCServiceBase):
 
         new_status = WorkItemStatus(column.status_filter[0])
         work_item_svc = WorkItemService(activity_log=self.activity_log)
-        updated_item = await work_item_svc.transition_status(session, work_item_id, new_status)
+        updated_item = await work_item_svc.transition_status(session, work_item_id, new_status, acting_user=acting_user)
 
         await self._publish_board_event(
             board_id=board_id,

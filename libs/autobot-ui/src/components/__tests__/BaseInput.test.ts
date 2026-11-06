@@ -12,7 +12,7 @@ import inputSource from '../BaseInput.vue?raw'
 import BaseInput, { type InputSize, type InputType } from '../BaseInput.vue'
 
 const SIZES: InputSize[] = ['sm', 'md', 'lg']
-const TYPES: InputType[] = ['text', 'email', 'password', 'search', 'tel', 'url']
+const TYPES: InputType[] = ['text', 'email', 'password', 'search', 'tel', 'url', 'number']
 
 describe('BaseInput', () => {
   it('renders a real <input> with defaults: type=text, size=md, no label', () => {
