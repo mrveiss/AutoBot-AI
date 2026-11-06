@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import uuid
 from decimal import Decimal
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy.dialects import postgresql
@@ -189,6 +190,9 @@ async def test_a_requester_that_names_no_person_does_not_strand_the_request(
     await _decide_as(session_factory, aid, ApprovalStatus.APPROVED, ASKER)
     assert await _applied(session_factory, ApprovalType.BUDGET_OVERRIDE)
     assert [a["self_approval"] for a in _approved_rows(activity)] == [False]
+    other = await _ask(session_factory, ApprovalType.BUDGET_OVERRIDE, _RAISE, requested_by)
+    rejected = await _decide_as(session_factory, other, ApprovalStatus.REJECTED, ASKER)
+    assert rejected.status == ApprovalStatus.REJECTED.value
 
 
 @pytest.mark.asyncio
@@ -208,7 +212,20 @@ async def test_a_forged_requester_in_the_body_is_replaced_by_the_verified_caller
 @pytest.mark.asyncio
 async def test_the_admin_read_locks_the_memberships_until_the_decision_commits() -> None:
     """SQLite ignores row locks, so this reads the statement: a plain select let two decisions both pass."""
-    session = FakeAsyncSession(results=[[]])
+    session = FakeAsyncSession(results=[[], []])
     await active_admin_ids(session, _ORG)
-    statement = str(session.statements[0].compile(dialect=postgresql.dialect()))
+    statement = str(session.statements[1].compile(dialect=postgresql.dialect()))
     assert "FOR UPDATE OF llc_company_memberships" in statement
+
+
+@pytest.mark.asyncio
+async def test_a_member_added_while_the_decision_waits_for_the_lock_is_counted(session_factory) -> None:  # noqa: ANN001
+    """A statement started before the insert would miss them, so the read must follow the member routes' lock."""
+    await _member(session_factory, ASKER, "owner")
+
+    async def _added_while_waiting(_session, _company) -> None:
+        await _member(session_factory, OTHER, "admin")
+
+    with patch("llc.services.membership_policy.lock_company_members", new=_added_while_waiting):
+        async with session_factory() as session:
+            assert await active_admin_ids(session, _ORG) == {ASKER, OTHER}
