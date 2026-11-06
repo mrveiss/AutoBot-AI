@@ -182,6 +182,8 @@ async def _create_task(session, company_id: str, user_id: str | None, params: Di
         raise LLCToolError(f"{exc}{await _project_choices(session, company_id)}") from None
     except HierarchyViolation as exc:
         raise LLCToolError(str(exc)) from None
+    except ValueError as exc:
+        raise LLCToolError(f"invalid project_id or parent_id: {exc}") from None
     return {"entity_type": "work_item", "entity_id": str(item.id), "title": title}
 
 
