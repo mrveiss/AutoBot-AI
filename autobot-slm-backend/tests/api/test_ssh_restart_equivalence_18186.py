@@ -210,7 +210,7 @@ async def test_roles_argv_has_dash_n_one_call_all_units_and_timeout_120(monkeypa
     [
         ({"rc": 1, "out": b"o", "err": b"e"}, False, "oe"),
         ({"rc": 1, "out": b"x" * 3000}, False, "x" * 2000),
-        ({"timeout": True}, False, "Timeout after 120 seconds"),
+        ({"timeout": True}, False, f"Timeout after {roles._SSH_ACTION_TIMEOUT_S:g} seconds"),
         ({"spawn_error": OSError("boom")}, False, "Error: SSH command failed"),
     ],
 )
@@ -218,6 +218,16 @@ async def test_roles_reports_each_failure_to_the_user(monkeypatch, roles_role, k
     _Runner(monkeypatch, **kwargs)
     body = await _execute()
     assert (body["success"], body["output"]) == (success, output)
+
+
+@pytest.mark.parametrize("category", ["restart", "build"])
+async def test_roles_wait_and_timeout_message_follow_the_constant(monkeypatch, roles_role, category):
+    """Both read _SSH_ACTION_TIMEOUT_S: a non-default value moves the wait and the message together (#18056)."""
+    monkeypatch.setattr(roles, "_SSH_ACTION_TIMEOUT_S", 30.0)
+    run = _Runner(monkeypatch, timeout=True)
+    body = await _execute(category)
+    assert run.timeout == 30.0
+    assert body["output"] == "Timeout after 30 seconds"
 
 
 async def test_roles_restart_without_units_is_422_and_the_other_category_is_untouched(monkeypatch, roles_role):
