@@ -3,7 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { BaseAlert, BaseButton } from '@autobot/ui'
+import { BaseAlert, BaseButton, createDateFormatter } from '@autobot/ui'
 /**
  * SecretsSettings - System Secrets Management (#1417)
  *
@@ -19,7 +19,6 @@ import {
   type SecretResponse,
   type SecretCreate,
 } from '@/composables/useSecretsApi'
-import { createDateFormatter } from '@/utils/formatHelpers'
 
 const api = useSecretsApi()
 const { t } = useI18n()
