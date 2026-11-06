@@ -126,9 +126,40 @@ async def file_factory(tmp_path) -> AsyncIterator:
 
 
 @pytest.mark.asyncio
+async def test_an_admin_without_a_hash_is_reported_not_ok_and_nothing_is_written(factory) -> None:
+    no_hash = service.SlmPerson(uuid.uuid4(), "root", "root@example.test", "Root", None)
+    await _at_startup(factory, no_hash)
+    assert service.last_link_status == service.LINK_NO_HASH
+    assert await _counts(factory) == (0, 0)
+
+
+def _checks_meet_before_either_inserts():
+    """Wrap the last check before the insert so both starts pass it before either goes on to insert."""
+    arrived, release = [], asyncio.Event()
+    real = service._main_store_may_hold_them
+
+    async def wrapped(session, person):
+        held = await real(session, person)
+        arrived.append(held)
+        if len(arrived) >= 2:
+            release.set()
+        await asyncio.wait_for(release.wait(), timeout=10)  # fails the test, not hangs it, if one never arrives
+        return held
+
+    return patch.object(service, "_main_store_may_hold_them", wrapped), arrived
+
+
+@pytest.mark.asyncio
 async def test_two_concurrent_starts_leave_one_linked_user(file_factory) -> None:
-    """Two workers can both pass the checks; the loser must fail whole and leave no partial user."""
+    """Both starts pass every check before either inserts, so the loser must hit the conflict path and fail whole."""
     slm, db = _slm_and_db(file_factory)
-    with slm, db:  # patched once: overlapping patch.object contexts restore each other's mock, leaking it
-        await asyncio.gather(service.link_first_slm_admin_at_startup(), service.link_first_slm_admin_at_startup())
+    meet, arrived = _checks_meet_before_either_inserts()
+    with slm, db, meet, patch.object(service.logger, "error") as errors:  # patched once: overlapping contexts leak
+        statuses = await asyncio.gather(
+            service.link_first_slm_admin_at_startup(), service.link_first_slm_admin_at_startup()
+        )
+    assert arrived == [False, False]  # both saw nobody and so both went on to insert
+    assert sorted(statuses) == sorted([service.LINK_OK, service.LINK_FAILED])  # the loser took the failure branch
+    errors.assert_called_once()  # ...which logs once, and the rollback left no partial user
+    assert "could not link" in errors.call_args.args[0]  # the failure branch of the startup, not another path
     assert await _counts(file_factory) == (1, 1)

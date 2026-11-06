@@ -18,6 +18,13 @@ from repo_tests._paths import repo_root
 _KEY = "AUTOBOT_INTERNAL_API_KEY"
 
 
+def _real_helper(text: str) -> str:
+    """The installer's own _upsert_secrets_key, cut out of install.sh whole, so the test cannot drift from it."""
+    match = re.search(r"^[ \t]*_upsert_secrets_key\(\) \{\n.*?^[ \t]*\}\n", text, re.M | re.S)
+    assert match, "install.sh no longer defines _upsert_secrets_key"
+    return match.group(0)
+
+
 def _install() -> str:
     return (repo_root() / "install.sh").read_text(encoding="utf-8")
 
@@ -34,15 +41,8 @@ def test_a_reinstall_keeps_an_existing_key_and_a_new_one_is_generated() -> None:
 
 def test_a_preserved_file_without_the_key_gets_one_and_with_it_keeps_it(tmp_path: Path) -> None:
     line = next(ln for ln in _install().splitlines() if ln.strip().startswith(f"grep -q '^{_KEY}=.'"))
-    upsert = next(
-        ln for ln in _install().splitlines() if ln.strip().startswith('_upsert_secrets_key "NETWORK_GATEWAY"')
-    )
-    assert upsert and line
-    helper = (
-        '_upsert_secrets_key() { local key="$1" value="$2" file="$3"; '
-        'if grep -q "^${key}=" "${file}"; then sed -i "s|^${key}=.*|${key}=${value}|" "${file}"; '
-        'else echo "${key}=${value}" >> "${file}"; fi; }\n'
-    )
+    helper = _real_helper(_install())
+    assert line
     secrets = tmp_path / "slm-secrets.env"
 
     def run() -> str:

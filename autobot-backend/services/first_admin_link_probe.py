@@ -25,6 +25,10 @@ _HEALTH_BY_STATUS: dict[str, tuple[str, str | None]] = {
         "down",
         "the SLM refused the internal API key; the key differs between the backend and the SLM",
     ),
+    link.LINK_NO_HASH: (
+        "degraded",
+        "the SLM's first admin has no password hash, so it was not linked and a default admin was seeded",
+    ),
     link.LINK_FAILED: (
         "degraded",
         "the SLM's first admin could not be read; the admin was not linked and a default was seeded",

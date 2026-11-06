@@ -25,6 +25,7 @@ from user_management.services import person_link_service as link  # noqa: E402
         (link.LINK_KEY_MISSING, "down"),
         (link.LINK_REFUSED, "down"),
         (link.LINK_FAILED, "degraded"),
+        (link.LINK_NO_HASH, "degraded"),
         (None, "idle"),
         ("something_new", "degraded"),
     ],
@@ -34,7 +35,7 @@ def test_status_maps_to_health(status, expected):
 
 
 def test_error_states_carry_a_message():
-    for status in (link.LINK_KEY_MISSING, link.LINK_REFUSED, link.LINK_FAILED):
+    for status in (link.LINK_KEY_MISSING, link.LINK_REFUSED, link.LINK_FAILED, link.LINK_NO_HASH):
         assert probe._status_for(status)[1]
 
 

@@ -28,14 +28,15 @@ async def _link(session, person=_PERSON):
     users = MagicMock()
     users.return_value.create_user = AsyncMock(return_value=user)
     with patch.object(service, "UserService", users):
-        linked = await service.link_first_slm_admin(session, person)
-    return linked, user, users.return_value.create_user
+        status = await service.link_first_slm_admin(session, person)
+    return status, user, users.return_value.create_user
 
 
 async def test_a_clean_install_links_the_admin_and_keeps_their_password_and_slm_id() -> None:
     session = _session(None, None, SimpleNamespace(id=uuid.uuid4()))
-    linked, user, create = await _link(session)
-    assert linked is True and user.password_hash == "$2b$hash"
+    status, user, create = await _link(session)
+    create.assert_awaited_once()
+    assert status == service.LINK_OK and user.password_hash == "$2b$hash"
     assert create.await_args.kwargs["is_platform_admin"] is True
     link = session.add.call_args.args[0]
     assert (link.slm_user_id, link.user_id) == (_PERSON.id, user.id)
@@ -43,23 +44,23 @@ async def test_a_clean_install_links_the_admin_and_keeps_their_password_and_slm_
 
 async def test_re_running_creates_nothing() -> None:
     session = _session(SimpleNamespace(id=uuid.uuid4()))
-    linked, _, create = await _link(session)
-    assert linked is False
+    status, _, create = await _link(session)
+    assert status == service.LINK_OK
     create.assert_not_awaited()
 
 
 async def test_someone_who_may_be_this_person_is_never_matched_automatically() -> None:
     session = _session(None, SimpleNamespace(id=uuid.uuid4()))
-    linked, _, create = await _link(session)
-    assert linked is False
+    status, _, create = await _link(session)
+    assert status == service.LINK_OK
     create.assert_not_awaited()
     session.add.assert_not_called()
 
 
 async def test_an_slm_without_an_admin_links_nothing() -> None:
     session = _session()
-    linked, _, _ = await _link(session, person=None)
-    assert linked is False
+    status, _, _ = await _link(session, person=None)
+    assert status == service.LINK_OK
     session.execute.assert_not_awaited()
 
 
@@ -130,6 +131,6 @@ async def test_startup_returns_the_failure_status_and_records_it() -> None:
 async def test_an_slm_admin_without_a_password_hash_is_not_linked() -> None:
     """Linking would create an admin who cannot log in and would stop default-admin seeding."""
     no_hash = service.SlmPerson(uuid.uuid4(), "Root", "root@example.test", "Root", None)
-    linked, _user, create_user = await _link(_session(None, None), no_hash)
-    assert linked is False
+    status, _user, create_user = await _link(_session(None, None), no_hash)
+    assert status == service.LINK_NO_HASH
     create_user.assert_not_awaited()

@@ -34,6 +34,7 @@ LINK_OK = "ok"  # linked, already linked, or left for a person to match
 LINK_FAILED = "failed"  # the SLM could not be read; the admin is NOT linked and seeding follows
 LINK_KEY_MISSING = "internal_key_missing"  # no internal API key configured; nothing was sent
 LINK_REFUSED = "slm_refused_internal_key"  # the SLM answered 403: its key differs from ours
+LINK_NO_HASH = "slm_admin_has_no_password_hash"  # the SLM's admin has no hash; left unlinked, seeding follows
 
 last_link_status: str | None = None  # read by callers and the admin UI; None until startup ran
 
@@ -118,22 +119,27 @@ async def _create_linked_admin(session: AsyncSession, person: SlmPerson) -> User
     return user
 
 
-async def link_first_slm_admin(session: AsyncSession, person: SlmPerson | None) -> bool:
-    """Create and link the main-app user for *person*; True if it did. Re-running creates nothing."""
+async def link_first_slm_admin(session: AsyncSession, person: SlmPerson | None) -> str:
+    """Create and link the main-app user for *person*; returns the status to report.
+
+    ``LINK_OK`` covers linked, already linked and left for a person to match. ``LINK_NO_HASH`` is the one
+    skip that leaves the admin unlinked through no one's decision, so health must not report it as ok.
+    Re-running creates nothing.
+    """
     if person is None or (await session.execute(select(PersonLink.id).limit(1))).first() is not None:
-        return False
+        return LINK_OK
     if await _main_store_may_hold_them(session, person):
         logger.warning("Person link: %s may already be a main-app user; left for a person to match", person.username)
-        return False
+        return LINK_OK
     if not person.password_hash:  # a linked admin with no hash can't log in, and linking stops default-admin seeding
         logger.error(
             "Person link: SLM admin %s has no password hash; left unlinked so seeding keeps a usable admin",
             person.username,
         )
-        return False
+        return LINK_NO_HASH
     user = await _create_linked_admin(session, person)
     logger.info("Person link: SLM admin %s linked to main-app user %s", person.username, user.id)
-    return True
+    return LINK_OK
 
 
 async def link_first_slm_admin_at_startup() -> str:
@@ -149,7 +155,7 @@ async def link_first_slm_admin_at_startup() -> str:
     try:
         person = await fetch_first_slm_admin()
         async with get_async_session_factory()() as session, session.begin():
-            await link_first_slm_admin(session, person)
+            status = await link_first_slm_admin(session, person)
     except FirstAdminLinkError as exc:  # already logged at error level where it was raised
         status = exc.status
     except Exception as exc:
