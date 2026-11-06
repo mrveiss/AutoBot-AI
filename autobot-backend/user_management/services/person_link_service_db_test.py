@@ -4,6 +4,7 @@
 # Author: mrveiss
 """#10200: the startup link against a real database: all of it or none of it, and only once."""
 
+import asyncio
 import uuid
 from typing import AsyncIterator
 from unittest.mock import AsyncMock, patch
@@ -11,42 +12,45 @@ from unittest.mock import AsyncMock, patch
 import pytest
 import pytest_asyncio
 from sqlalchemy import delete, func, select
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.ext.compiler import compiles
 
+from autobot_shared.user_management import user_service_conflict as conflict
+from autobot_shared.user_management.user_service_errors import DuplicateUserError
+from tests.helpers._sqlite_test_engine import real_savepoint_session_factory
 from user_management.models import AuditLog, Role, User
-from user_management.models.base import Base
 from user_management.models.person_link import PersonLink
 from user_management.services import person_link_service as service
 
-_SQLITE_URL = "sqlite+aiosqlite://"  # canonical: ignore py-adhoc-db-engine (test-local engine, in-memory only)
 _PERSON = service.SlmPerson(uuid.uuid4(), "root", "root@example.test", "Root", "$2b$kept-hash")
 
 
-@compiles(JSONB, "sqlite")
-def _compile_jsonb_as_json_on_sqlite(element, compiler, **kw):  # noqa: ANN001
-    return "JSON"
+_TABLES = [User.__table__, Role.__table__, AuditLog.__table__, PersonLink.__table__]
+
+
+@pytest.fixture(autouse=True)
+def _no_copy_sync_listeners():
+    """The startup also starts the SLM copy sync, whose commit listener would push in the background
+    over this file's single in-memory connection; these tests are about the link only."""
+    with patch("user_management.services.person_copy_sync.start_person_copy_sync"):
+        yield
 
 
 @pytest_asyncio.fixture
 async def factory() -> AsyncIterator:
-    engine = create_async_engine(_SQLITE_URL)  # canonical: ignore py-adhoc-db-engine (test-local, in-memory)
-    async with engine.begin() as conn:
-        tables = [User.__table__, Role.__table__, AuditLog.__table__, PersonLink.__table__]
-        await conn.run_sync(Base.metadata.create_all, tables=tables)
-    try:
-        yield async_sessionmaker(bind=engine, expire_on_commit=False)  # canonical: ignore py-adhoc-db-engine (as above)
-    finally:
-        await engine.dispose()
+    async for session_factory in real_savepoint_session_factory(_TABLES):
+        yield session_factory
+
+
+def _slm_and_db(factory, person=_PERSON):
+    return (
+        patch.object(service, "fetch_first_slm_admin", AsyncMock(return_value=person)),
+        patch("user_management.database.get_async_session_factory", return_value=factory),
+    )
 
 
 async def _at_startup(factory, person=_PERSON) -> None:
-    with (
-        patch.object(service, "fetch_first_slm_admin", AsyncMock(return_value=person)),
-        patch("user_management.database.get_async_session_factory", return_value=factory),
-    ):
+    slm, db = _slm_and_db(factory, person)
+    with slm, db:
         await service.link_first_slm_admin_at_startup()
 
 
@@ -103,3 +107,78 @@ async def test_a_deleted_user_is_not_brought_back_on_the_next_start(factory) -> 
         await session.execute(delete(User).where(User.id == user_id))
     await _at_startup(factory)
     assert await _counts(factory) == (0, 1)
+
+
+@pytest_asyncio.fixture
+async def file_factory(tmp_path) -> AsyncIterator:
+    """A file database: the in-memory one shares a single connection, so it cannot race."""
+    url = f"sqlite+aiosqlite:///{tmp_path / 'race.db'}"
+    async for session_factory in real_savepoint_session_factory(_TABLES, url):
+        yield session_factory
+
+
+@pytest.mark.asyncio
+async def test_an_admin_without_a_hash_is_reported_not_ok_and_nothing_is_written(factory) -> None:
+    no_hash = service.SlmPerson(uuid.uuid4(), "root", "root@example.test", "Root", None)
+    await _at_startup(factory, no_hash)
+    assert service.last_link_status == service.LINK_NO_HASH
+    assert await _counts(factory) == (0, 0)
+
+
+def _checks_meet_before_either_inserts():
+    """Hold both starts just after ``create_user``'s own duplicate pre-check, before either inserts.
+
+    Both therefore pass every check (the person lookup and the user duplicate check) and the loser can
+    only fail in the INSERT, inside the SAVEPOINT.
+    """
+    arrived, release = [], asyncio.Event()
+    real = service.UserService._check_duplicate_user
+
+    async def wrapped(self, *args, **kwargs):
+        await real(self, *args, **kwargs)  # a duplicate here would raise: the pre-check must pass for both
+        arrived.append(args)
+        if len(arrived) >= 2:
+            release.set()
+        await asyncio.wait_for(release.wait(), timeout=10)  # fails the test, not hangs it, if one never arrives
+
+    return patch.object(service.UserService, "_check_duplicate_user", wrapped), arrived
+
+
+def _spy_on_savepoint_conflict():
+    """Count the calls that turn the SAVEPOINT's IntegrityError into a ``DuplicateUserError``."""
+    resolved = []
+    real = conflict._resolve_conflict
+
+    async def spy(*args, **kwargs):
+        error = await real(*args, **kwargs)
+        resolved.append(error)
+        return error
+
+    return patch.object(conflict, "_resolve_conflict", spy), resolved
+
+
+@pytest.mark.asyncio
+async def test_two_concurrent_starts_both_report_ok_and_leave_one_linked_user(file_factory) -> None:
+    """Both starts pass every check before either inserts, so the loser must hit the conflict path, roll back whole and still report ok."""
+    slm, db = _slm_and_db(file_factory)
+    meet, arrived = _checks_meet_before_either_inserts()
+    spy, resolved = _spy_on_savepoint_conflict()
+    with (
+        slm,
+        db,
+        meet,
+        spy,
+        patch.object(service.logger, "error") as errors,
+        patch.object(service.logger, "info") as infos,
+    ):
+        statuses = await asyncio.gather(
+            service.link_first_slm_admin_at_startup(), service.link_first_slm_admin_at_startup()
+        )
+    assert len(arrived) == 2  # both passed the duplicate pre-check, so both went on to insert
+    assert len(resolved) == 1 and isinstance(resolved[0], DuplicateUserError)  # the SAVEPOINT conflict path ran
+    assert sorted(statuses) == [service.LINK_OK, service.LINK_OK]  # a benign double start is not a failure
+    errors.assert_not_called()
+    lost = [c for c in infos.call_args_list if "lost the startup race" in c.args[0]]
+    assert len(lost) == 1  # exactly one start took the conflict path, rolled back and re-read
+    assert service.last_link_status == service.LINK_OK
+    assert await _counts(file_factory) == (1, 1)

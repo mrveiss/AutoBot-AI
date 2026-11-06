@@ -10,11 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_person_links import PersonPushFailure, PersonPushFailuresResponse
 from api.user_management.dependencies import get_db_session
-from auth_rbac import require_role
+from auth_middleware import check_admin_permission
 from user_management.models import User
 from user_management.models.person_link import PersonLink
 
-router = APIRouter(prefix="/admin", dependencies=[Depends(require_role("admin", "superadmin"))])
+router = APIRouter(prefix="/admin", dependencies=[Depends(check_admin_permission)])
 
 
 @router.get("/person-links/push-failures", response_model=PersonPushFailuresResponse)

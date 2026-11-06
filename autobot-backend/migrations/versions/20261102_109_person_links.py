@@ -20,7 +20,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from migrations.guards import has_table
 
 revision: str = "20261102_109"
-down_revision: Union[str, None] = "20261101_110"
+down_revision: Union[str, None] = "20261106_113"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

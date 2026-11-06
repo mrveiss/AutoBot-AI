@@ -91,6 +91,25 @@ async def test_a_deleted_user_reaches_the_slm_as_inactive() -> None:
     with (
         patch("services.slm_client.get_slm_client", return_value=client),
         patch.object(sync, "assert_egress_policy", AsyncMock()),
+        patch("user_management.services.person_link_service.internal_api_key", return_value="k"),
     ):
         await sync._post_copy(link.slm_user_id, user)
     assert http.post.call_args.kwargs["json"]["is_active"] is False
+    assert http.post.call_args.kwargs["headers"] == {"X-Internal-API-Key": "k"}
+
+
+async def test_an_unset_internal_key_sends_nothing_and_is_recorded_as_a_failure(caplog) -> None:
+    pair = _pair()
+    http = MagicMock(post=MagicMock())
+    client = MagicMock(_get_session=AsyncMock(return_value=http), _rest_url=lambda path: f"http://slm{path}")
+    with (
+        _no_lock(),
+        patch("services.slm_client.get_slm_client", return_value=client),
+        patch.object(sync, "assert_egress_policy", AsyncMock()),
+        patch("user_management.services.person_link_service.internal_api_key", return_value=""),
+        caplog.at_level("ERROR"),
+    ):
+        await sync._push_person(_session_with([pair, pair]), uuid.uuid4())
+    http.post.assert_not_called()
+    assert pair[0].push_error == "FirstAdminLinkError"
+    assert any(r.levelname == "ERROR" and "no internal API key" in r.message for r in caplog.records)

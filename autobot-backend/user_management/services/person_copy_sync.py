@@ -30,11 +30,11 @@ from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.node_proxy import internal_api_key
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import delete_if_value
 from user_management.models import User
 from user_management.models.person_link import PersonLink
+from user_management.services.person_link_service import require_internal_key
 
 logger = get_logger(__name__)
 
@@ -56,6 +56,7 @@ async def _post_copy(slm_user_id: uuid.UUID, user: User) -> None:
     client = get_slm_client()
     if client is None:
         raise RuntimeError("SLM control link is not initialised")
+    key = require_internal_key("a person's copy cannot be pushed to the SLM")
     session = await client._get_session()
     url = client._rest_url(_COPY_PATH)
     await assert_egress_policy(url)
@@ -64,7 +65,7 @@ async def _post_copy(slm_user_id: uuid.UUID, user: User) -> None:
         "password_hash": user.password_hash,
         "is_active": bool(user.is_active and user.deleted_at is None),
     }
-    headers = {"X-Internal-API-Key": internal_api_key() or ""}
+    headers = {"X-Internal-API-Key": key}
     async with session.post(url, json=payload, headers=headers, allow_redirects=False) as response:
         response.raise_for_status()
 
