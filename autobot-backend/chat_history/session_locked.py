@@ -17,7 +17,13 @@ from typing import TYPE_CHECKING, Any, Awaitable, Callable, Dict, Optional, Tupl
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
 from chat_history.file_io import run_in_chat_io_executor
-from chat_history.session_lease import ChatFileUnreadable, file_generation, session_lease
+from chat_history.session_lease import (
+    ChatFileUnreadable,
+    SessionLease,
+    SessionLeaseError,
+    file_generation,
+    session_lease,
+)
 
 logger = get_logger(__name__)
 
@@ -55,7 +61,9 @@ class SessionLockMixin:
             self, session_id: str, chat_file: str, chats_directory: str
         ) -> Dict[str, Any]: ...
 
-        async def _write_session_to_storage(self, chat_file: str, chat_data: Dict[str, Any]) -> None: ...
+        async def _write_session_to_storage(
+            self, chat_file: str, chat_data: Dict[str, Any], before_replace: Callable[[], Awaitable[None]] | None = None
+        ) -> None: ...
 
         async def _update_redis_session_cache(self, session_id: str, chat_data: Dict[str, Any]) -> None: ...
 
@@ -74,6 +82,18 @@ class SessionLockMixin:
             return read_generation
         chat_file = str(validate_relative_path(name, chats_directory))
         return file_generation(await self._load_existing_chat_data(session_id, chat_file, chats_directory))
+
+    async def _read_for_update(
+        self, session_id: str, chats_directory: str, lease: SessionLease
+    ) -> Tuple[Dict[str, Any], int, Any]:
+        """Re-read the file under the lease and allocate the fencing generation above the file's."""
+        name = f"{session_id}_chat.json"
+        signature = await run_in_chat_io_executor(_stat_signature, name, chats_directory)
+        chat_file = str(validate_relative_path(name, chats_directory))
+        chat_data = await self._load_existing_chat_data(session_id, chat_file, chats_directory)
+        read_generation = file_generation(chat_data)
+        await lease.begin(read_generation)
+        return chat_data, read_generation, signature
 
     async def _locked_update(
         self,
@@ -96,15 +116,11 @@ class SessionLockMixin:
         async with session_lease(session_id, operation) as lease:
             if must_exist and not await self._resolve_session_file_path(session_id, chats_directory):
                 return None
-            signature = await run_in_chat_io_executor(_stat_signature, f"{session_id}_chat.json", chats_directory)
-            chat_data = await self._load_existing_chat_data(session_id, chat_file, chats_directory)
-            read_generation = file_generation(chat_data)
-            await lease.begin(read_generation)
+            chat_data, read_generation, signature = await self._read_for_update(session_id, chats_directory, lease)
             mutate(chat_data)
-            await lease.fence(
-                chat_data, await self._stored_generation(session_id, chats_directory, read_generation, signature)
-            )
-            await self._write_session_to_storage(chat_file, chat_data)
+            on_disk = await self._stored_generation(session_id, chats_directory, read_generation, signature)
+            await lease.fence(chat_data, on_disk)
+            await self._write_session_to_storage(chat_file, chat_data, before_replace=lease.verify)
             if after is not None:
                 await after(session_id, chat_data)
         return chat_data
@@ -125,6 +141,8 @@ class SessionLockMixin:
                 return False
             logger.info("Session %s updated successfully", session_id)
             return True
+        except SessionLeaseError:
+            raise  # a lease timeout is not "not found"; the caller must be able to tell
         except Exception as e:
             logger.error("Error updating session %s: %s", session_id, e)
             return False
@@ -145,6 +163,8 @@ class SessionLockMixin:
                 return False
             logger.info("Chat session '%s' name updated to '%s'", session_id, name)
             return True
+        except SessionLeaseError:
+            raise
         except Exception as e:
             logger.error("Error updating chat session %s name: %s", session_id, e)
             return False
@@ -170,6 +190,8 @@ class SessionLockMixin:
                 return False
             logger.info("Session %s metadata updated successfully", session_id)
             return True
+        except SessionLeaseError:
+            raise
         except Exception as e:
             logger.error("Error updating session metadata %s: %s", session_id, e)
             return False
@@ -202,6 +224,8 @@ class SessionLockMixin:
                 return False
             logger.info("Chat session '%s' deleted successfully", session_id)
             return True
+        except SessionLeaseError:
+            raise
         except Exception as e:
             logger.error("Error deleting chat session %s: %s", session_id, e)
             return False

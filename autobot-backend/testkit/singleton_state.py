@@ -39,21 +39,21 @@ def reset_feature_flags_singleton():
 def fake_session_lease(monkeypatch):
     """Back the per-session chat lease with an in-memory Redis, so no test waits on a real one (#20862).
 
-    A save now needs the session lease, and with no Redis a writer waits out the lease bound
-    rather than writing unlocked. Each test gets a fresh server; a test that needs the lease
-    store gone (or contended) rebinds ``chat_history.session_lease._lease_client`` itself.
-    A no-op until a test module has imported the lease.
+    A save needs the session lease, and with no Redis a writer waits out the lease bound rather than
+    writing unlocked. The lease module is imported here, unconditionally, so a test that imports the
+    chat code lazily inside its body is bound to the fake too (an unbound test would reach the real
+    client and wait for the whole bound). Each test gets a fresh server; a test that needs the lease
+    store gone or contended rebinds ``chat_history.session_lease._lease_client`` itself.
     """
-    module = sys.modules.get("chat_history.session_lease")
-    server = None
-    if module is not None:
-        import fakeredis
-        import fakeredis.aioredis
+    import fakeredis
+    import fakeredis.aioredis
 
-        server = fakeredis.FakeServer()
+    from chat_history import session_lease  # a broken chat_history import fails loudly, never skips silently
 
-        async def _client(database):
-            return fakeredis.aioredis.FakeRedis(server=server, decode_responses=True)
+    server = fakeredis.FakeServer()
 
-        monkeypatch.setattr(module, "_lease_client", _client)
+    async def _client(database):
+        return fakeredis.aioredis.FakeRedis(server=server, decode_responses=True)
+
+    monkeypatch.setattr(session_lease, "_lease_client", _client)
     yield server

@@ -22,6 +22,7 @@ from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from chat_history.file_io import run_in_chat_io_executor
+from chat_history.session_lease import session_lease
 
 logger = get_logger(__name__)
 
@@ -109,7 +110,9 @@ class MemoryMixin:
                 files_to_remove = chat_files[self.max_session_files :]
                 for file_path, _, filename in files_to_remove:
                     try:
-                        await run_in_chat_io_executor(os.remove, file_path)
+                        # #20862: under the session lease, so a removal cannot race a write to the same file
+                        async with session_lease(filename[len("chat_") : -len(".json")], "cleanup_old_session"):
+                            await run_in_chat_io_executor(os.remove, file_path)
                         logger.info("CLEANUP: Removed old session file: %s", filename)
                     except Exception as e:
                         logger.error("Failed to remove session file %s: %s", filename, e)

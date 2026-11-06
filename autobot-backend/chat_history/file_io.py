@@ -21,6 +21,7 @@ import json
 import os
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
+from typing import Awaitable, Callable
 
 import aiofiles
 
@@ -90,7 +91,12 @@ class FileIOMixin:
         """
         return await run_in_chat_io_executor(func, *args, **kwargs)
 
-    async def _atomic_write(self, file_path: str, content: str) -> None:
+    async def _atomic_write(
+        self,
+        file_path: str,
+        content: str,
+        before_replace: Callable[[], Awaitable[None]] | None = None,
+    ) -> None:
         """
         Atomic file write with exclusive locking to prevent data corruption.
 
@@ -102,6 +108,7 @@ class FileIOMixin:
         Args:
             file_path: Target file path
             content: Content to write
+            before_replace: Awaited just before the rename; if it raises, nothing is replaced
 
         Raises:
             Exception: If write fails (temp file is cleaned up automatically)
@@ -120,6 +127,10 @@ class FileIOMixin:
             os.close(fd)  # Close fd so aiofiles can open it
             async with aiofiles.open(temp_path, "w", encoding="utf-8") as f:
                 await f.write(content)
+
+            # #20862: the caller's last check (the session lease) runs right before the rename
+            if before_replace is not None:
+                await before_replace()
 
             # Atomic rename (cross-platform atomic operation)
             await self._run_in_io_executor(os.replace, temp_path, file_path)

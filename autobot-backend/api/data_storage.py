@@ -16,7 +16,7 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from api.data_storage_categories import (
     LEGACY_TRANSCRIPTS_CATEGORY,
@@ -44,7 +44,9 @@ from autobot_shared.security.path_http import require_contained_relative_path
 from autobot_shared.security.path_validator import validate_relative_path
 from autobot_shared.store_authority import legacy_conversation_transcripts_dir
 from chat_history.legacy_transcripts import legacy_transcript_file
+from chat_history.session_lease import SessionLeaseError
 from utils.catalog_http_exceptions import raise_server_error
+from utils.chat_utils import get_chat_history_manager
 
 router = APIRouter(prefix="/data-storage", tags=["Data Storage"])
 logger = get_logger(__name__)
@@ -414,6 +416,7 @@ async def cleanup_old_backups(
 )
 async def delete_conversation(
     conversation_id: str,
+    request: Request,
     _: None = Depends(check_admin_permission),
 ):
     """Delete a specific conversation and its associated files."""
@@ -433,16 +436,19 @@ async def delete_conversation(
                 "its removal goes through the approval queue",
             )
 
+        # #20862: the session files go through delete_session -- the one delete, which takes the session
+        # lease and is fenced like a save -- so a delete cannot race a write and be undone by it.
         chats_dir = DATA_DIR / "chats"
-        for suffix in ["_chat.json", "_terminal_transcript.txt"]:
-            chat_file = validate_relative_path(f"{conversation_id}{suffix}", chats_dir)
-            if chat_file.exists():
-                try:
-                    chat_file.unlink()
-                    files_deleted.append(str(chat_file.name))
-                except (OSError, PermissionError) as e:
-                    logger.exception("Unexpected error: %s", e)
-                    errors.append("Error deleting chat file")
+        names = [f"{conversation_id}{suffix}" for suffix in ("_chat.json", "_terminal_transcript.txt")]
+        present = [n for n in names if validate_relative_path(n, chats_dir).exists()]
+        try:
+            await get_chat_history_manager(request).delete_session(conversation_id)
+        except SessionLeaseError:
+            raise
+        except Exception:
+            logger.exception("Unexpected error deleting conversation files")
+            errors.append("Error deleting chat file")
+        files_deleted.extend(n for n in present if not validate_relative_path(n, chats_dir).exists())
 
         if not files_deleted and not errors:
             raise HTTPException(status_code=404, detail=f"Conversation not found: {conversation_id}")

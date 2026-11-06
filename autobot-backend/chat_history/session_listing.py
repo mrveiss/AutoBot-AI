@@ -24,6 +24,7 @@ import aiofiles
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
 from chat_history.file_io import run_in_chat_io_executor
+from chat_history.session_lease import session_lease
 
 logger = get_logger(__name__)
 
@@ -409,13 +410,14 @@ class SessionListingMixin:
         """
         chat_file = str(validate_relative_path(f"{session_id}_chat.json", chats_directory))
 
-        chat_file_exists = await run_in_chat_io_executor(os.path.exists, chat_file)
-        if chat_file_exists:
-            return None
-
-        empty_chat = self._build_empty_chat_data(session_id, filename)
-        async with aiofiles.open(chat_file, "w", encoding="utf-8") as f:
-            await f.write(json.dumps(empty_chat, indent=2, ensure_ascii=False))
+        # #20862: checked again under the session lease, so a save that created the file in between is never truncated.
+        async with session_lease(session_id, "orphan_import") as lease:
+            if await run_in_chat_io_executor(os.path.exists, chat_file):
+                return None
+            empty_chat = self._build_empty_chat_data(session_id, filename)
+            await lease.begin(0)
+            await lease.fence(empty_chat, 0)
+            await self._write_session_to_storage(chat_file, empty_chat, before_replace=lease.verify)
 
         stat = await run_in_chat_io_executor(os.stat, chat_file)
         logger.info(

@@ -29,9 +29,10 @@ import contextvars
 import os
 import socket
 import uuid
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from typing import Any, AsyncIterator, Dict
 
+from autobot_shared.env_registry import env
 from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
@@ -39,11 +40,12 @@ from autobot_shared.redis_utils import decode_redis_value
 
 logger = get_logger(__name__)
 
-CHAT_LEASE_TTL_MS = int(os.getenv("AUTOBOT_CHAT_LEASE_TTL_MS", "30000"))
-CHAT_LEASE_WAIT_S = float(os.getenv("AUTOBOT_CHAT_LEASE_WAIT_S", "30"))
-CHAT_LEASE_POLL_S = float(os.getenv("AUTOBOT_CHAT_LEASE_POLL_S", "0.05"))
-CHAT_LEASE_DATABASE = os.getenv("AUTOBOT_CHAT_LEASE_REDIS_DB", "main")
-CHAT_LEASE_KEY_PREFIX = os.getenv("AUTOBOT_CHAT_LEASE_KEY_PREFIX", "autobot:chat:session_lease:")
+# Read through the registry (autobot_shared/env_registry_chat_lease.py): one default, and a bad value falls back to it.
+CHAT_LEASE_TTL_MS: int = env("AUTOBOT_CHAT_LEASE_TTL_MS")
+CHAT_LEASE_WAIT_S: float = env("AUTOBOT_CHAT_LEASE_WAIT_S")
+CHAT_LEASE_POLL_S: float = env("AUTOBOT_CHAT_LEASE_POLL_S")
+CHAT_LEASE_DATABASE: str = env("AUTOBOT_CHAT_LEASE_REDIS_DB")
+CHAT_LEASE_KEY_PREFIX: str = env("AUTOBOT_CHAT_LEASE_KEY_PREFIX")
 
 #: Key in the chat file that carries the generation of the lease that last wrote it.
 GENERATION_FIELD = "write_generation"
@@ -137,6 +139,7 @@ class SessionLease:
             client_factory=_lease_client,
         )
         self._heartbeat: asyncio.Task | None = None
+        self._lost = False
 
     async def holder(self) -> str:
         """Who holds the lease now, as recorded in the lease value."""
@@ -149,25 +152,34 @@ class SessionLease:
         return value or "unknown (lease store unreachable or lease just released)"
 
     async def acquire(self) -> None:
-        """Take the lease, waiting up to the bound; raise SessionLeaseTimeout naming the holder."""
-        loop = asyncio.get_running_loop()
-        started = loop.time()
+        """Take the lease, polling until it is free. The caller bounds the wait (see session_lease)."""
         while await self._lease.hold_or_refresh() is not True:
-            if loop.time() - started >= CHAT_LEASE_WAIT_S:
-                raise SessionLeaseTimeout(self.session_id, await self.holder(), loop.time() - started)
             await asyncio.sleep(CHAT_LEASE_POLL_S)
         self._heartbeat = asyncio.create_task(self._beat())
 
+    def _mark_lost(self) -> None:
+        """Record, once and for good, that this writer no longer holds the lease."""
+        if not self._lost:
+            self._lost = True
+            logger.warning("Lost the lease on chat session %s (operation %s)", self.session_id, self.operation)
+
     async def _beat(self) -> None:
-        """Keep the lease alive while the holder works; a failed refresh is caught by verify()."""
+        """Keep the lease alive while the holder works; a refresh that finds another owner ends it."""
         while True:
             await asyncio.sleep(self._lease.refresh_s)
             if await self._lease.hold_or_refresh() is False:
+                self._mark_lost()
                 return
 
     async def verify(self) -> None:
-        """Confirm the lease is still ours (extending it); raise SessionLeaseLost when it is not."""
-        if await self._lease.hold_or_refresh() is not True:
+        """Confirm the lease is still ours (extending it); raise SessionLeaseLost when it is not.
+
+        A lease once lost stays lost: it is never re-acquired mid-operation.
+        """
+        state = None if self._lost else await self._lease.hold_or_refresh()
+        if state is False:
+            self._mark_lost()
+        if state is not True:
             raise SessionLeaseLost(
                 "lease on chat session %s could not be confirmed before the write; held by %s"
                 % (self.session_id, await self.holder())
@@ -201,21 +213,16 @@ class SessionLease:
 
 @asynccontextmanager
 async def _local_turn(session_id: str, operation: str) -> AsyncIterator[None]:
-    """Fair in-worker queue in front of the Redis lease, bounded by the same wait."""
+    """Fair in-worker queue in front of the Redis lease; the caller's timeout bounds the wait."""
     lock = _local_locks.setdefault(session_id, asyncio.Lock())
     _local_waiters[session_id] = _local_waiters.get(session_id, 0) + 1
     try:
-        try:
-            await asyncio.wait_for(lock.acquire(), CHAT_LEASE_WAIT_S)
-        except asyncio.TimeoutError:
-            holder = _local_holder.get(session_id, "another writer in this worker")
-            raise SessionLeaseTimeout(session_id, holder, CHAT_LEASE_WAIT_S) from None
-        _local_holder[session_id] = operation
-        try:
-            yield
-        finally:
-            _local_holder.pop(session_id, None)
-            lock.release()
+        async with lock:
+            _local_holder[session_id] = operation
+            try:
+                yield
+            finally:
+                _local_holder.pop(session_id, None)
     finally:
         _local_waiters[session_id] -= 1
         if not _local_waiters[session_id]:
@@ -223,22 +230,41 @@ async def _local_turn(session_id: str, operation: str) -> AsyncIterator[None]:
             _local_locks.pop(session_id, None)
 
 
+async def _enter(stack: AsyncExitStack, session_id: str, operation: str) -> SessionLease:
+    """Queue locally, then take the Redis lease, all inside ONE bound of CHAT_LEASE_WAIT_S."""
+    lease = SessionLease(session_id, operation)
+    queued = False
+    try:
+        async with asyncio.timeout(CHAT_LEASE_WAIT_S):
+            await stack.enter_async_context(_local_turn(session_id, operation))
+            queued = True
+            stack.push_async_callback(lease.release)  # a no-op until acquired, so a cancel mid-acquire leaks nothing
+            await lease.acquire()
+    except TimeoutError:
+        # still in the local queue: the holder is another task here; otherwise it is whoever holds the Redis key
+        holder = (None if queued else _local_holder.get(session_id)) or await lease.holder()
+        raise SessionLeaseTimeout(session_id, holder, CHAT_LEASE_WAIT_S) from None
+    return lease
+
+
 @asynccontextmanager
 async def session_lease(session_id: str, operation: str) -> AsyncIterator[SessionLease]:
-    """Hold the session's write lease for the block; re-entrant within one task."""
+    """Hold the session's write lease for the block, waiting at most CHAT_LEASE_WAIT_S in total.
+
+    Re-entrant within one task. A task spawned inside the block inherits the held lease through its
+    copied context and shares it, so the block must not run its own mutation while such a child runs.
+    """
     held = _held.get({})
     if session_id in held:
         yield held[session_id]
         return
-    async with _local_turn(session_id, operation):
-        lease = SessionLease(session_id, operation)
-        await lease.acquire()
+    async with AsyncExitStack() as stack:
+        lease = await _enter(stack, session_id, operation)
         token = _held.set({**held, session_id: lease})
         try:
             yield lease
         finally:
             _held.reset(token)
-            await lease.release()
 
 
 __all__ = [

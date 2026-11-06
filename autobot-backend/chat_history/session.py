@@ -17,7 +17,7 @@ import json
 import os
 import time
 import uuid
-from typing import Any, Dict, List
+from typing import Any, Awaitable, Callable, Dict, List
 
 import aiofiles
 
@@ -26,7 +26,7 @@ from autobot_shared.security.path_validator import validate_relative_path
 from chat_history.cache import _CHAT_RECENT_MAX_ENTRIES
 from chat_history.file_io import existing_chat_path, run_in_chat_io_executor
 from chat_history.graph_owner import create_entity_on_missing, session_owner_scope
-from chat_history.session_lease import ChatFileUnreadable
+from chat_history.session_lease import ChatFileUnreadable, SessionLeaseError
 from chat_history.session_locked import SessionLockMixin
 from chat_history.session_merge import combine_messages
 from constants.redis_constants import REDIS_KEY
@@ -409,24 +409,22 @@ class SessionMixin(SessionLockMixin):
         self,
         chat_file: str,
         chat_data: Dict[str, Any],
+        before_replace: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
-        """
-        Write session data to storage with atomic write and fallback.
+        """Atomic write with a direct-write fallback (Issue #665); both run under the session lease (#20862).
 
-        Attempts atomic write first for data integrity, falls back to
-        direct write if atomic operation fails.
-
-        Args:
-            chat_file: Path to the chat session file.
-            chat_data: The session data dictionary to save.
-
-        Issue #665: Extracted from save_session for single responsibility.
+        ``before_replace`` runs right before the replace (the lease check); if it raises, nothing is
+        written and the fallback is not tried.
         """
         encrypted_data = self._encrypt_data(chat_data)
         try:
-            await self._atomic_write(chat_file, encrypted_data)
+            await self._atomic_write(chat_file, encrypted_data, before_replace)
+        except SessionLeaseError:
+            raise
         except Exception as atomic_error:
             logger.warning(f"Atomic write failed, falling back to direct write: {atomic_error}")
+            if before_replace is not None:
+                await before_replace()
             async with aiofiles.open(chat_file, "w", encoding="utf-8") as f:
                 await f.write(encrypted_data)
 

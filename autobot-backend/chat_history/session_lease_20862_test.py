@@ -9,8 +9,10 @@ the autouse ``fake_session_lease`` fixture.
 """
 
 import asyncio
+import contextvars
 import json
 import threading
+import time
 
 import fakeredis.aioredis
 import pytest
@@ -26,13 +28,14 @@ from chat_history.session_lease import (
     StaleGenerationError,
     session_lease,
 )
+from chat_history.session_listing import SessionListingMixin
 from chat_history.session_merge import merge_snapshot
 
 _HELD_FOR_MS = 60_000  # a holder that outlives every test wait
 _SHORT_HOLD_MS = 300  # a holder that finishes inside the wait bound
 
 
-class _Manager(SessionMixin, MessagesMixin, SecurityMixin, FileIOMixin):
+class _Manager(SessionMixin, SessionListingMixin, MessagesMixin, SecurityMixin, FileIOMixin):
     """Minimal manager with real disk persistence."""
 
     def __init__(self, chats_directory: str):
@@ -258,7 +261,8 @@ async def test_a_message_add_surfaces_an_unreadable_file(manager, tmp_path):
 
 async def test_a_metadata_update_refuses_an_unreadable_file(manager, tmp_path):
     _plant(tmp_path, "s20", "{broken")
-    assert await manager.update_session_metadata("s20", {"owner": "bob"}) is False
+    with pytest.raises(ChatFileUnreadable):
+        await manager.update_session_metadata("s20", {"owner": "bob"})
     assert _raw(tmp_path, "s20") == "{broken"
 
 
@@ -275,7 +279,8 @@ async def test_delete_leaves_the_file_when_the_wait_times_out(manager, tmp_path,
     monkeypatch.setattr(lease_mod, "CHAT_LEASE_WAIT_S", 0.2)
     other_worker = fakeredis.aioredis.FakeRedis(server=fake_session_lease, decode_responses=True)
     await other_worker.set(lease_mod.CHAT_LEASE_KEY_PREFIX + "s22", "backend-2-1:save_session:aa", px=_HELD_FOR_MS)
-    assert await manager.delete_session("s22") is False
+    with pytest.raises(SessionLeaseTimeout):
+        await manager.delete_session("s22")
     assert (tmp_path / "s22_chat.json").exists()
 
 
@@ -287,7 +292,8 @@ async def test_a_delete_with_a_stale_generation_removes_nothing(manager, tmp_pat
         return next(calls)
 
     manager._peek_generation = peek
-    assert await manager.delete_session("s23") is False
+    with pytest.raises(StaleGenerationError):
+        await manager.delete_session("s23")
     assert (tmp_path / "s23_chat.json").exists()
 
 
@@ -299,3 +305,100 @@ async def test_a_delete_during_a_save_does_not_resurrect_the_session(manager, tm
     )
     exists = (tmp_path / "s24_chat.json").exists()
     assert not exists or _texts(tmp_path, "s24") == ["x", "y"]
+
+
+async def test_a_lease_that_expires_mid_write_is_rejected_before_the_replace(manager, tmp_path, fake_session_lease):
+    await manager.save_session("s30", messages=[_msg("first", "t0")])
+    before = _raw(tmp_path, "s30")
+    real_write = manager._atomic_write
+    other_worker = fakeredis.aioredis.FakeRedis(server=fake_session_lease, decode_responses=True)
+
+    async def expire_then_write(file_path, content, before_replace=None):
+        await other_worker.delete(lease_mod.CHAT_LEASE_KEY_PREFIX + "s30")  # the TTL runs out mid-write
+        await other_worker.set(lease_mod.CHAT_LEASE_KEY_PREFIX + "s30", "backend-9-1:save_session:ee", px=_HELD_FOR_MS)
+        await real_write(file_path, content, before_replace)
+
+    manager._atomic_write = expire_then_write
+    with pytest.raises(lease_mod.SessionLeaseLost):
+        await manager.save_session("s30", messages=[_msg("first", "t0"), _msg("late", "t9")])
+    assert _raw(tmp_path, "s30") == before
+
+
+async def test_a_lost_lease_stays_lost_and_is_logged(manager, fake_session_lease, caplog):
+    other_worker = fakeredis.aioredis.FakeRedis(server=fake_session_lease, decode_responses=True)
+    async with session_lease("s31", "op") as lease:
+        await other_worker.delete(lease_mod.CHAT_LEASE_KEY_PREFIX + "s31")
+        with pytest.raises(lease_mod.SessionLeaseLost):
+            await lease.verify()
+        with pytest.raises(lease_mod.SessionLeaseLost):  # not re-acquired by a later check
+            await lease.verify()
+    assert "Lost the lease on chat session s31" in caplog.text
+
+
+async def test_the_whole_acquire_is_bounded_once_across_the_local_queue_and_redis(manager, monkeypatch):
+    monkeypatch.setattr(lease_mod, "CHAT_LEASE_WAIT_S", 0.3)
+    loop = asyncio.get_running_loop()
+
+    async def second_writer():
+        async with session_lease("s32", "second-writer"):
+            pytest.fail("granted while the first writer held it")
+
+    async with session_lease("s32", "first-writer"):
+        started = loop.time()
+        # a fresh context, as another request has: no inherited lease to re-enter
+        task = loop.create_task(second_writer(), context=contextvars.Context())
+        with pytest.raises(SessionLeaseTimeout) as err:
+            await task
+        assert loop.time() - started < 0.6
+    assert "first-writer" in str(err.value)
+
+
+async def test_identical_idless_messages_in_a_snapshot_are_both_kept(manager, tmp_path):
+    twin = _msg("same", "t0")
+    await manager.save_session("s33", messages=[twin, dict(twin)])
+    await manager.save_session("s33", messages=[twin, dict(twin), _msg("next", "t1")])
+    assert _texts(tmp_path, "s33") == ["same", "same", "next"]
+
+
+async def test_an_append_of_a_message_already_stored_by_id_adds_nothing(manager, tmp_path):
+    stored = {"id": "m1", "sender": "user", "text": "once", "timestamp": "t0"}
+    await manager.save_session("s34", messages=[stored])
+    await manager.save_session("s34", messages=[stored, _msg("fresh", "t1")], append=True)
+    assert _texts(tmp_path, "s34") == ["once", "fresh"]
+
+
+def test_merging_a_large_snapshot_is_linear():
+    disk = [{"id": f"d{i}"} for i in range(10000)]
+    snapshot = disk[::2] + [{"id": f"n{i}"} for i in range(2000)]
+    start = time.perf_counter()
+    merged = merge_snapshot(disk, snapshot)
+    assert len(merged) == 12000
+    assert time.perf_counter() - start < 2.0
+
+
+async def test_the_orphan_import_does_not_truncate_a_file_a_save_created(manager, tmp_path):
+    await manager.save_session("s35", messages=[_msg("real", "t0")])
+    assert await manager._create_orphaned_session("s35", "s35_terminal.log", str(tmp_path)) is None
+    assert _texts(tmp_path, "s35") == ["real"]
+
+
+async def test_the_orphan_import_waits_for_the_lease_holder(manager, tmp_path, fake_session_lease):
+    other_worker = fakeredis.aioredis.FakeRedis(server=fake_session_lease, decode_responses=True)
+    await other_worker.set(lease_mod.CHAT_LEASE_KEY_PREFIX + "s36", "backend-2-1:save_session:aa", px=_SHORT_HOLD_MS)
+    assert await manager._create_orphaned_session("s36", "s36_terminal.log", str(tmp_path)) is not None
+    assert (tmp_path / "s36_chat.json").exists()
+
+
+async def test_a_lease_timeout_is_raised_by_the_update_and_delete_methods_not_turned_into_false(
+    manager, monkeypatch, fake_session_lease
+):
+    await manager.save_session("s37", messages=[_msg("x", "t0")])
+    monkeypatch.setattr(lease_mod, "CHAT_LEASE_WAIT_S", 0.2)
+    other_worker = fakeredis.aioredis.FakeRedis(server=fake_session_lease, decode_responses=True)
+    await other_worker.set(lease_mod.CHAT_LEASE_KEY_PREFIX + "s37", "backend-2-1:save_session:aa", px=_HELD_FOR_MS)
+    with pytest.raises(SessionLeaseTimeout):
+        await manager.update_session_name("s37", "n")
+    with pytest.raises(SessionLeaseTimeout):
+        await manager.update_session_metadata("s37", {"owner": "bob"})
+    with pytest.raises(SessionLeaseTimeout):
+        await manager.delete_session("s37")
