@@ -171,6 +171,27 @@ _SWEEPS: tuple[Sweep, ...] = (
         min_declarations=1,
     ),
     Sweep(
+        "pre-commit python3.N lines",
+        (".pre-commit-config.yaml",),
+        re.compile(r"^\s*(?:language_version|python):\s*python(\d+\.\d+)\s*$"),
+        min_files_swept=1,
+        min_declarations=2,
+    ),
+    Sweep(
+        "pre-push floor fallback",
+        ("tools/git-hooks/pre-push",),
+        re.compile(r"floor_fallback=\"(\d+\.\d+)\""),
+        min_files_swept=1,
+        min_declarations=1,
+    ),
+    Sweep(
+        "function-length hook interpreter",
+        ("autobot-infrastructure/shared/scripts/hooks/pre-commit-function-length",),
+        re.compile(r"echo \"python(\d+\.\d+)\""),
+        min_files_swept=1,
+        min_declarations=1,
+    ),
+    Sweep(
         "DEPENDENCIES.md python lines",
         ("docs/DEPENDENCIES.md",),
         re.compile(r"^(?:python3 \(|\| Python \| )(\d+\.\d+)\+"),

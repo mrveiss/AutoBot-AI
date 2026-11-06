@@ -34,14 +34,20 @@ class UnsupportedPythonError(RuntimeError):
     """The running interpreter is older than the declared floor."""
 
 
-def minimum_python_version():
-    """``(major, minor)`` read from ``.python-version``; the fallback if unreadable."""
+def declared_python_version():
+    """``(major, minor)`` read from ``.python-version``, or ``None`` if unreadable."""
     try:
         text = (_REPO_ROOT / ".python-version").read_text(encoding="utf-8").strip()
         major, minor = text.split(".")[:2]
         return int(major), int(minor)
     except (OSError, ValueError):
-        return _FALLBACK_PYTHON_FLOOR
+        return None
+
+
+def minimum_python_version():
+    """The declared floor; the swept fallback if ``.python-version`` is unreadable."""
+    declared = declared_python_version()
+    return _FALLBACK_PYTHON_FLOOR if declared is None else declared
 
 
 def require_supported_python(version=None, executable=None):

@@ -51,5 +51,5 @@ def test_importing_autobot_shared_on_python_310_is_refused_cleanly():
         ["python3.10", "-I", "-c", code], capture_output=True, text=True, timeout=60, check=False
     )
     assert result.returncode != 0
-    assert "requires Python 3.14" in result.stderr
+    assert "requires Python %d.%d" % minimum_python_version() in result.stderr
     assert "multiple repeat" not in result.stderr

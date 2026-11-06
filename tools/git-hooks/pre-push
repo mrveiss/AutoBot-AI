@@ -379,10 +379,15 @@ pick_python() {
     # Version alone is not enough: a bare /usr/bin/python3.14 with no pytest
     # fails with "No module named pytest", which is the same push-blocking
     # non-failure in different words.
-    local candidate main_root floor_major floor_minor
-    # The floor is the repo's .python-version; 3.14 only if the file is absent.
-    IFS=. read -r floor_major floor_minor _ < "$REPO_ROOT/.python-version" 2>/dev/null || true
-    case "$floor_major.$floor_minor" in (*[!0-9.]*|.*|*.) floor_major=3; floor_minor=14 ;; esac
+    local candidate main_root floor_text="" floor_major floor_minor
+    local floor_fallback="3.14"  # only if .python-version is unreadable; swept by the drift guard
+    # The floor is the repo's .python-version (initialised above: this hook runs under set -u).
+    [ -r "$REPO_ROOT/.python-version" ] && IFS= read -r floor_text < "$REPO_ROOT/.python-version"
+    case "$floor_text" in
+        ([0-9]*.[0-9]*) [ -z "${floor_text//[0-9.]/}" ] || floor_text="$floor_fallback" ;;
+        (*) floor_text="$floor_fallback" ;;
+    esac
+    IFS=. read -r floor_major floor_minor _ <<< "$floor_text"
     # In a worktree $PWD is the worktree, which has no venv; the venv lives in
     # the main checkout, whose path is the parent of the common git dir.
     main_root="$(dirname "$(git rev-parse --git-common-dir 2>/dev/null || echo .)")"

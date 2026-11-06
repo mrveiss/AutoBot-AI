@@ -34,7 +34,7 @@ from typing import Any, Dict, List, Tuple
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.python_floor import minimum_python_version
+from autobot_shared.python_floor import declared_python_version, minimum_python_version
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 from constants.path_constants import PATH
@@ -48,8 +48,12 @@ def _minimum_python_version() -> Tuple[int, int]:
     """Interpreter floor read from `.python-version` (#13842, #20903) -- the same
     file CI, mypy, and both Dockerfiles read. Delegates to the shared module so
     the import-time refusal and this startup check share one implementation.
+    A deployed host without the file runs on the swept fallback; say so, loudly.
     """
-    return minimum_python_version()
+    floor = minimum_python_version()
+    if declared_python_version() is None:
+        logger.error(".python-version unreadable; running on the fallback Python floor %s.%s", *floor)
+    return floor
 
 
 @dataclass
