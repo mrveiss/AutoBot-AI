@@ -43,7 +43,9 @@ _COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*).*$", re.M)
 
 # Measured on origin/main with these detectors; each key only goes down.
 PINS = {"hand_built_ago_strings": 0, "translated_ago_ladders": 0}
-_TRANSLATED = re.compile(r"""(?<![\w.])\$?t\(\s*['"][\w.]*(?:seconds?|minutes?|hours?|days?)Ago['"]\s*,\s*\{""")
+_TRANSLATED = re.compile(
+    r"""(?:(?<![\w.])|(?<=\bglobal\.))\$?t\(\s*['"][\w.]*(?:seconds?|minutes?|hours?|days?)Ago['"]\s*,\s*\{"""
+)
 
 
 def _sources(src: Path) -> list[Path]:
@@ -146,6 +148,9 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
     def test_the_translated_ladder_detector_has_controls(self) -> None:
         assert _ladders("t('k.hoursAgo', { hours })") == 1  # positive control
         assert _ladders("{{ $t('k.daysAgo', { days }) }}") == 1
+        assert _ladders("i18n.global.t('k.minutesAgo', { n })") == 1
+        assert _ladders("$t('k.minutesAgo', { n })") == 1
+        assert _ladders("obj.t('k.minutesAgo', { n })") == 0
         assert _ladders("t(\n  'k.secondsAgo',\n  { n }\n)") == 1
         assert _ladders("t('k.justNow')") == 0  # negative controls
         assert _ladders("t('security.secretsManager.expiresIn', { time: x })") == 0

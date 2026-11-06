@@ -182,7 +182,7 @@
             <div class="flex items-center gap-2 mt-0.5">
               <span class="text-xs text-autobot-text-secondary">{{ formatFileSize(file.size_bytes) }}</span>
               <span class="text-xs text-autobot-text-muted">&middot;</span>
-              <span class="text-xs text-autobot-text-secondary">{{ formatDate(file.upload_timestamp) }}</span>
+              <span class="text-xs text-autobot-text-secondary">{{ formatTimeAgo(file.upload_timestamp) }}</span>
             </div>
             <StatusBadge
               v-if="file.file_type === 'generated'"
@@ -494,9 +494,6 @@ const handleKeydown = (event: KeyboardEvent) => {
     handleBulkDelete()
   }
 }
-
-// Use shared time formatting utility
-const formatDate = formatTimeAgo
 
 onMounted(() => {
   if (props.sessionId) loadFiles()
