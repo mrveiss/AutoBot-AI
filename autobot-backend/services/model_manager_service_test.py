@@ -208,3 +208,14 @@ async def test_get_model_names_filters_unavailable() -> None:
 
     assert "llama3" in names
     assert "gpt-4o" not in names
+
+
+def test_the_claude_3_opus_integration_config_reads_its_window_from_the_table() -> None:
+    from constants.model_constants import ANTHROPIC_CLAUDE3_OPUS_DATED
+    from context_window_lookup import known_context_window_tokens
+    from modern_ai_integration import ModernAIIntegration
+
+    config = ModernAIIntegration._create_anthropic_config(object.__new__(ModernAIIntegration))
+    assert known_context_window_tokens(ANTHROPIC_CLAUDE3_OPUS_DATED) == 200000
+    assert config.metadata["context_window"] == known_context_window_tokens(ANTHROPIC_CLAUDE3_OPUS_DATED)
+    assert known_context_window_tokens("claude-unlisted-9") == 0

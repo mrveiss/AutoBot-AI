@@ -13,7 +13,6 @@ combined list in Redis for 60 seconds to avoid latency on every dropdown open.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
@@ -50,7 +49,6 @@ _MODEL_HINTS: Dict[str, Dict[str, Any]] = {
 
 # Claude capabilities by tier. The context window is never written here: it is read per model from
 # config/context_windows.yaml (held to autobot_shared.ssot_claude_models), 0 when that has no entry (#20884).
-_CONTEXT_WINDOWS_YAML = Path(__file__).resolve().parent.parent / "config" / "context_windows.yaml"
 _CLAUDE_TIER_CAPABILITIES: Dict[str, List[str]] = {
     "opus": ["chat", "code", "vision"],
     "sonnet": ["chat", "code", "vision"],
@@ -63,10 +61,9 @@ def _claude_hints(name_lower: str) -> Dict[str, Any] | None:
     """Hints for a Claude model: tier capabilities, window from the context-window table (0 = unknown)."""
     for tier, capabilities in _CLAUDE_TIER_CAPABILITIES.items():
         if f"claude-{tier}" in name_lower:
-            from context_window_manager import get_context_window_manager
+            from context_window_lookup import known_context_window_tokens
 
-            entry = get_context_window_manager(str(_CONTEXT_WINDOWS_YAML)).config["models"].get(name_lower) or {}
-            return {"capabilities": capabilities, "context_window": int(entry.get("context_window_tokens", 0))}
+            return {"capabilities": capabilities, "context_window": known_context_window_tokens(name_lower)}
     return None
 
 
