@@ -60,7 +60,14 @@ from .work_item_actor_role import (  # noqa: F401 -- resolve_actor_role is re-ex
 from .work_item_approval_categories import validated_approval_categories as _validated_approval_categories
 from .work_item_completion_effects import release_workspace_for_task
 from .work_item_hierarchy import reparent, validate_create
-from .work_item_own_task import InvalidTransition, is_own_task, refuse_past_reviewer, stamp_and_release
+from .work_item_own_task import (
+    InvalidTransition,
+    is_own_task,
+    other_checkout_holder,
+    refuse_past_reviewer,
+    stamp_agent_checkout,
+    stamp_and_release,
+)
 from .work_item_relations import WorkItemRelationService
 
 logger = logging.getLogger(__name__)
@@ -419,6 +426,7 @@ class WorkItemService(LLCServiceBase):
         redis_key = f"llc:checkout:{work_item_id}"
         redis = await get_async_redis_client()
 
+        acquired = False
         if redis is not None:
             acquired = await redis.set(redis_key, agent_id, nx=True, ex=_CHECKOUT_TTL)
             if not acquired:
@@ -432,27 +440,16 @@ class WorkItemService(LLCServiceBase):
         )
         item = result.scalar_one_or_none()
         if item is None:
-            if redis is not None:
+            if acquired:
                 await redis.delete(redis_key)
             raise ValueError(f"Work item {work_item_id} not found")
 
-        if item.checkout_run_id is not None and str(item.assignee_agent_id) != agent_id:
-            if redis is not None:
+        if holder := other_checkout_holder(item, agent_id):
+            if acquired:
                 await redis.delete(redis_key)
-            raise CheckoutConflict(f"Work item {work_item_id} already checked out by agent {item.assignee_agent_id}")
+            raise CheckoutConflict(f"Work item {work_item_id} already checked out by {holder}")
 
-        item.checkout_run_id = run_id or str(uuid.uuid4())
-        item.checkout_locked_at = datetime.now(timezone.utc)
-        item.assignee_agent_id = uuid.UUID(agent_id)
-        # Single-assignee invariant (#10532): `update()` enforced it, `checkout` did not (#15964).
-        item.assignee_user_id = None
-        item.assignee_type = AssigneeType.AGENT.value
-        # GH#9532 — persist intent for audit; clearing it when work_intent is absent is deliberate.
-        item.checkout_intent = work_intent
-        item.version += 1
-        if item.status in (WorkItemStatus.BACKLOG, WorkItemStatus.READY):
-            item.status = WorkItemStatus.IN_PROGRESS
-            item.started_at = item.started_at or datetime.now(timezone.utc)
+        stamp_agent_checkout(item, agent_id, run_id, work_intent)
 
         await session.flush()
 
@@ -785,7 +782,7 @@ class WorkItemService(LLCServiceBase):
             if await svc.has_unresolved_blockers(session, work_item_id, cid):
                 raise InvalidTransition("Cannot move to in_progress: item has unresolved blocked_by relations")
 
-        await stamp_and_release(item, new_status, datetime.now(timezone.utc), own=own)
+        stamp_and_release(session, item, new_status, datetime.now(timezone.utc), own=own)
         item.version += 1
         await session.flush()
 
@@ -872,7 +869,7 @@ class WorkItemService(LLCServiceBase):
                     "No HandoffService available to initiate handoff."
                 )
 
-        await stamp_and_release(item, WorkItemStatus.DONE, datetime.now(timezone.utc))
+        stamp_and_release(session, item, WorkItemStatus.DONE, datetime.now(timezone.utc))
         item.version += 1
         await session.flush()
 
