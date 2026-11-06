@@ -13,10 +13,14 @@ from __future__ import annotations
 
 import json
 
+from .base import BILLING_API, BILLING_SUBSCRIPTION
 from .subprocess_support import final_result_event
 
 # Upper bound for the fallback read of a result line larger than the scan tail.
 _WIDE_TAIL_BYTES = 1024 * 1024
+# The init event is the stream's first line. Its size scales with the tool/MCP/plugin
+# lists, so there is no fixed small size; this only bounds a runaway or non-stream file.
+_INIT_LINE_MAX_BYTES = 16 * 1024 * 1024
 
 _AUTH_FAILED_ERROR_CODE = "authentication_failed"
 # 401 only. 403 is deliberately not treated as auth: this CLI's own output does not
@@ -31,10 +35,17 @@ def read_wide_tail(output_file: str) -> str:
     try:
         with open(output_file, "rb") as fh:
             fh.seek(0, 2)
-            fh.seek(max(0, fh.tell() - _WIDE_TAIL_BYTES))
-            return fh.read().decode("utf-8", errors="replace")
+            offset = max(0, fh.tell() - _WIDE_TAIL_BYTES)
+            fh.seek(offset)
+            data = fh.read()
     except OSError:
         return ""
+    if offset > 0:
+        # The seek landed mid-line: drop the fragment so only complete lines remain.
+        _, newline, data = data.partition(b"\n")
+        if not newline:
+            return ""
+    return data.decode("utf-8", errors="replace")
 
 
 def resolve_result_event(output_file: str, tail: str) -> tuple[dict | None, str]:
@@ -48,6 +59,29 @@ def resolve_result_event(output_file: str, tail: str) -> tuple[dict | None, str]
         return event, tail
     wide = read_wide_tail(output_file)
     return final_result_event(wide), wide
+
+
+def run_billing(output_file: str) -> str | None:
+    """How the CLI authenticated this run, from the ``system``/``init`` event (#20266).
+
+    The init event is the first line of the stream and carries ``apiKeySource``:
+    ``"none"`` when the CLI holds no API key (it is on a login), else where the key
+    came from. ``None`` when the event or field is missing: unknown is not subscription.
+    """
+    try:
+        with open(output_file, "rb") as fh:
+            first_line = fh.readline(_INIT_LINE_MAX_BYTES).decode("utf-8", errors="replace")
+    except OSError:
+        return None
+    try:
+        event = json.loads(first_line)
+    except ValueError:
+        return None
+    if isinstance(event, dict) and event.get("type") == "system" and event.get("subtype") == "init":
+        source = event.get("apiKeySource")
+        if isinstance(source, str):
+            return BILLING_SUBSCRIPTION if source == "none" else BILLING_API
+    return None
 
 
 def is_failed_result_event(result_event: dict | None) -> bool:
