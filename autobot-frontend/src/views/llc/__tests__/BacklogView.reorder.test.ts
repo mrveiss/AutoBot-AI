@@ -1,8 +1,8 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
-// GH#10040: BacklogView now wires drag-reorder + suggest-AC to the #9861
-// backends. These tests assert the endpoints + payloads and the revert-on-error
-// behaviour for reorder.
+// GH#10040: BacklogView wires drag-reorder to the #9861 backend. These tests
+// assert the endpoint + payload and the revert-on-error behaviour. Suggest-AC
+// moved into BacklogCreateModal (#18978); see BacklogCreateModal.test.ts.
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
@@ -34,11 +34,8 @@ interface WorkItemLike {
 // Surface of the <script setup> bindings the tests drive.
 interface BacklogVm {
   items: WorkItemLike[]
-  newItem: { title: string; description: string }
-  suggestedACs: { text: string; selected: boolean }[]
   onDragStart: (item: WorkItemLike) => void
   onDrop: (target: WorkItemLike) => Promise<void>
-  suggestAC: () => Promise<void>
 }
 
 const ITEMS = [
@@ -60,7 +57,7 @@ async function mountView() {
   return wrapper
 }
 
-describe('BacklogView reorder + suggest-AC wiring (GH#10040)', () => {
+describe('BacklogView reorder wiring (GH#10040)', () => {
   beforeEach(() => {
     post.mockReset()
     get.mockReset()
@@ -92,37 +89,5 @@ describe('BacklogView reorder + suggest-AC wiring (GH#10040)', () => {
     await flushPromises()
 
     expect(vm.items.map(i => i.id)).toEqual(original)
-  })
-
-  it('suggestAC POSTs title/description (never company_id) and fills suggestedACs', async () => {
-    const wrapper = await mountView()
-    post.mockResolvedValueOnce({ suggestions: ['Given X', 'When Y'] })
-    const vm = wrapper.vm as unknown as BacklogVm
-    vm.newItem.title = 'New PBI'
-    vm.newItem.description = 'desc'
-
-    await vm.suggestAC()
-    await flushPromises()
-
-    expect(post).toHaveBeenCalledWith('/api/llc/work-items/suggest-ac', {
-      title: 'New PBI',
-      description: 'desc',
-    })
-    expect(vm.suggestedACs).toEqual([
-      { text: 'Given X', selected: true },
-      { text: 'When Y', selected: true },
-    ])
-  })
-
-  it('suggestAC degrades to an empty list on backend failure', async () => {
-    const wrapper = await mountView()
-    post.mockRejectedValueOnce(new Error('LLM down'))
-    const vm = wrapper.vm as unknown as BacklogVm
-    vm.newItem.title = 'X'
-
-    await vm.suggestAC()
-    await flushPromises()
-
-    expect(vm.suggestedACs).toEqual([])
   })
 })

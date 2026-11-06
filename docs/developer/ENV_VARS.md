@@ -198,6 +198,7 @@ appears outside the known overlays.
 | `AUTOBOT_FACTS_PRUNE_QUALITY_FLOOR` | knowledge | float | `0.1` | A fact is prunable only below this quality score (knowledge/facts.py consolidation). |
 | `AUTOBOT_FACTS_PRUNE_SCAN_LIMIT` | knowledge | int | `5000` | Most facts examined in one consolidation pass (knowledge/facts.py). |
 | `AUTOBOT_FACT_FORCING` | ai | bool | false | Enable the fact-forcing gate, which requires an answer to cite retrieved facts. |
+| `AUTOBOT_FACT_SCAN_BATCH_SIZE` | knowledge | int | `200` | Fact hashes read per round trip while get_all_facts streams the fact keyspace (knowledge/fact_stream.py). |
 | `AUTOBOT_FEATURE_FLAG_CACHE_TTL_SECONDS` | security | float | `5.0` | Seconds this process serves the access-control enforcement mode and per-endpoint overrides from memory (#18998). A write in the same process invalidates at once; a write from another process is seen within this window. 0 disables the cache. Clamped to 0-60. Range: 0–60. |
 | `AUTOBOT_FFMPEG_TIMEOUT_SECONDS` | voice | float | `300.0` | Wall-clock cap on one ffmpeg audio extraction. On expiry the process is killed and reaped and the request fails with a sanitized error, so a hostile or corrupt upload cannot hang a worker forever (media/audio/ffmpeg_service.py). |
 | `AUTOBOT_FRONTEND_HTTP_PORT` | network | int | `80` | Port nginx serves the frontend over plain HTTP; used when AUTOBOT_FRONTEND_SERVED_BY=nginx. Range: 1–65535. |

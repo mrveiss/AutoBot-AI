@@ -141,6 +141,7 @@ class AuditAction(str, Enum):
     CONVERSATION_FILE_CLEANUP = "conversation_file.cleanup"
     CONVERSATION_FILE_CLEANUP_RESET = "conversation_file.cleanup_reset"
     BUDGET_CHAT_REFUSED = "budget.chat_refused"  # #20589 chat over a budget
+    LLC_PROJECT_BACKFILL = "llc.project_backfill"  # #18978: an approved project backfill assigned projects
     # #16333: the internal service key was admitted on a route that names its caller (service_opt_in).
     SERVICE_KEY_ADMITTED = "auth.service_key_admitted"  # pragma: allowlist secret -- an action name, not a key
 
