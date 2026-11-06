@@ -70,6 +70,8 @@ async def test_env_copies_keep_only_the_newest(tmp_path: Path) -> None:
     details = audit.await_args.kwargs["details"]
     assert audit.await_args.kwargs["result"] == "success" and details["removed"] == 2
     assert _SECRET not in repr(audit.await_args_list) and _SECRET not in session.add.call_args.args[0].body
+    intent = audit.await_args_list[0].kwargs  # a consumer counting completed removals must not count this
+    assert intent["result"] == "attempted" and intent["details"]["phase"] == "intent"
 
 
 async def test_nothing_to_do_removes_nothing(tmp_path: Path) -> None:

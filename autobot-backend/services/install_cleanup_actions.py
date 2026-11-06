@@ -107,6 +107,9 @@ def _remove_env_copies(plan: CleanupPlan, root: Path) -> int:
     return removed
 
 
+_AUDIT = AuditAction.CLEANUP_ENV_COPIES
+
+
 async def _audit(approval: "Approval", action: AuditAction, result: str, **details: object) -> bool:
     """Whether the entry was written. Durable, as the entry before a removal must not be lost (#17038)."""
     return await audit_log(
@@ -124,40 +127,46 @@ async def _record(approval: "Approval", session: "AsyncSession", body: str) -> N
     await session.commit()
 
 
+async def _stop_without_removal(approval: "Approval", session: "AsyncSession", plan: CleanupPlan, own: bool) -> None:
+    """A refused plan removes nothing: record why, then raise so the approval shows the failure."""
+    await _audit(approval, _AUDIT, "denied", reason=plan.refused, self_approval=own)
+    await _record(approval, session, f"Nothing removed: {plan.refused}.")
+    raise ValueError(plan.refused)
+
+
+async def _record_intent(approval: "Approval", session: "AsyncSession", names: list[str], own: bool) -> None:
+    """The paper trail comes first: no committed entry means nothing is removed (#17038)."""
+    if await _audit(approval, _AUDIT, "attempted", phase="intent", paths=names, self_approval=own):
+        return
+    await _record(approval, session, "Nothing removed: the audit entry could not be written.")
+    raise ValueError("the audit entry could not be written, so nothing was removed")
+
+
+async def _remove_audited(approval: "Approval", plan: CleanupPlan, root: Path, own: bool) -> int:
+    try:
+        return await asyncio.to_thread(_remove_env_copies, plan, root)
+    except (OSError, ValueError) as exc:
+        await _audit(approval, _AUDIT, "failed", error=type(exc).__name__, self_approval=own)
+        raise
+
+
 async def execute_env_copies_cleanup(approval: "Approval", session: "AsyncSession") -> None:
     """Remove all but the newest ``.env.*~`` copy once a human approved it: four eyes, re-plan, audit first."""
-    audit_action, planner, remover, noun = (
-        AuditAction.CLEANUP_ENV_COPIES,
-        plan_env_copies,
-        _remove_env_copies,
-        ".env.*~ copies",
-    )
-    self_approval = await is_self_approval(approval, session, what="the .env.*~ cleanup")
+    own = await is_self_approval(approval, session, what="the .env.*~ cleanup")
     root = install_root()
-    plan = await asyncio.to_thread(planner, root)
+    plan = await asyncio.to_thread(plan_env_copies, root)
     if plan.refused:
-        await _audit(approval, audit_action, "denied", reason=plan.refused, self_approval=self_approval)
-        await _record(approval, session, f"Nothing removed: {plan.refused}.")
-        raise ValueError(plan.refused)
+        await _stop_without_removal(approval, session, plan, own)
     if not plan.targets:
-        await _audit(approval, audit_action, "success", removed=0, self_approval=self_approval)
-        await _record(approval, session, f"Nothing to remove: no {noun} found.")
+        await _audit(approval, _AUDIT, "success", removed=0, self_approval=own)
+        await _record(approval, session, "Nothing to remove: no .env.*~ copies found.")
         return
-    # The paper trail comes first: no committed entry means nothing is removed (#17038).
     names = [str(p.relative_to(root)) for p in plan.targets]
-    if not await _audit(approval, audit_action, "success", phase="intent", paths=names, self_approval=self_approval):
-        await _record(approval, session, "Nothing removed: the audit entry could not be written.")
-        raise ValueError("the audit entry could not be written, so nothing was removed")
-    try:
-        removed = await asyncio.to_thread(remover, plan, root)
-    except (OSError, ValueError) as exc:
-        await _audit(approval, audit_action, "failed", error=type(exc).__name__, self_approval=self_approval)
-        raise
-    await _audit(
-        approval, audit_action, "success", phase="completion", removed=removed, paths=names, self_approval=self_approval
-    )
-    suffix = " (self-approved by the only admin)." if self_approval else "."
-    await _record(approval, session, f"Removed {removed} {noun}: {', '.join(names)}{suffix}")
+    await _record_intent(approval, session, names, own)
+    removed = await _remove_audited(approval, plan, root, own)
+    await _audit(approval, _AUDIT, "success", phase="completion", removed=removed, paths=names, self_approval=own)
+    suffix = " (self-approved by the only admin)." if own else "."
+    await _record(approval, session, f"Removed {removed} .env.*~ copies: {', '.join(names)}{suffix}")
 
 
 def register_install_cleanup_actions() -> None:
