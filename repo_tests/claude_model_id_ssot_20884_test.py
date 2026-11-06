@@ -10,8 +10,6 @@ the other half: that every home carries every current ID.
 
 from __future__ import annotations
 
-import ast
-
 import yaml
 from repo_tests._paths import repo_root
 
@@ -47,16 +45,17 @@ def test_llm_models_yaml_covers_every_current_id():
     assert set(CLAUDE_MODEL_IDS) <= set(registry["anthropic_thinking_enabled"])
 
 
-def test_every_current_id_is_priced_in_both_tables():
+def test_every_current_id_is_priced_in_both_tables_and_the_tables_agree():
+    """The provider baseline reads the current rows from the canonical table: one definition, same price."""
+    from llm_shared.pricing.anthropic_source import _BASELINE
+
     assert set(CLAUDE_MODEL_IDS) <= set(MODEL_PRICING_PER_1M_TOKENS)
-    source = (repo_root() / "autobot-backend/llm_shared/pricing/anthropic_source.py").read_text(encoding="utf-8")
-    rows = {
-        el.elts[0].value
-        for node in ast.walk(ast.parse(source))
-        if isinstance(node, ast.AnnAssign) and getattr(node.target, "id", "") == "_BASELINE"
-        for el in node.value.elts
-    }
-    assert set(CLAUDE_MODEL_IDS) <= rows
+    rows = {row[0]: row for row in _BASELINE}
+    for model in CLAUDE_MODEL_IDS:
+        assert (rows[model][1], rows[model][2]) == (
+            MODEL_PRICING_PER_1M_TOKENS[model]["input"],
+            MODEL_PRICING_PER_1M_TOKENS[model]["output"],
+        ), model
 
 
 def test_a_tier_alias_resolves_and_anything_else_passes_through():

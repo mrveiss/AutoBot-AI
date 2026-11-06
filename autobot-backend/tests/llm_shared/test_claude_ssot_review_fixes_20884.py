@@ -32,6 +32,40 @@ def test_a_caller_enabled_thinking_dict_becomes_adaptive_on_a_5x_model():
     assert _BETA not in str(headers)
 
 
+def test_converting_a_caller_thinking_dict_drops_the_callers_interleaved_beta_only():
+    kwargs, headers = _sdk_kwargs(
+        CLAUDE_SONNET,
+        {
+            "thinking": {"type": "enabled", "budget_tokens": 8000},
+            "betas": [_BETA, "output-128k-2025-02-19"],
+            "extra_headers": {"anthropic-beta": f"{_BETA},other-beta"},
+        },
+    )
+    assert kwargs["thinking"] == {"type": "adaptive"}
+    assert _BETA not in str(headers)
+    assert "output-128k-2025-02-19" in headers["anthropic-beta"] and "other-beta" in headers["anthropic-beta"]
+
+
+def test_a_pre_4_6_caller_keeps_its_interleaved_beta():
+    _, headers = _sdk_kwargs(
+        "claude-sonnet-4-20250514", {"thinking": {"type": "enabled", "budget_tokens": 5000}, "betas": [_BETA]}
+    )
+    assert _BETA in headers["anthropic-beta"]
+
+
+def test_the_current_pricing_rows_are_read_from_the_canonical_table():
+    from autobot_shared.model_pricing import MODEL_PRICING_PER_1M_TOKENS
+    from autobot_shared.ssot_claude_models import CLAUDE_MODEL_IDS
+    from llm_shared.pricing.anthropic_source import _BASELINE
+
+    rows = {r[0]: r for r in _BASELINE}
+    for model in CLAUDE_MODEL_IDS:
+        assert (rows[model][1], rows[model][2]) == (
+            MODEL_PRICING_PER_1M_TOKENS[model]["input"],
+            MODEL_PRICING_PER_1M_TOKENS[model]["output"],
+        )
+
+
 def test_a_caller_enabled_thinking_dict_is_kept_on_a_pre_4_6_model():
     kwargs, _ = _sdk_kwargs("claude-sonnet-4-20250514", {"thinking": {"type": "enabled", "budget_tokens": 5000}})
     assert kwargs["thinking"] == {"type": "enabled", "budget_tokens": 5000}

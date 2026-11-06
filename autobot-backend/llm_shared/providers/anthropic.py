@@ -349,6 +349,16 @@ class AnthropicProvider(BaseProvider):
         budget = thinking.get("budget_tokens")
         api_kwargs.pop("thinking")
         _apply_thinking_budget(api_kwargs, model, int(budget) if budget else 0)
+        # Interleaved thinking is automatic on an adaptive model: the caller's beta for it is dropped (#20884).
+        beta = "interleaved-thinking-2025-05-14"
+        if api_kwargs.get("betas"):
+            api_kwargs["betas"] = [b for b in api_kwargs["betas"] if b != beta]
+        headers = api_kwargs.get("extra_headers") or {}
+        if headers.get("anthropic-beta"):
+            kept = [b for b in headers["anthropic-beta"].split(",") if b and b.strip() != beta]
+            api_kwargs["extra_headers"] = {**headers, "anthropic-beta": ",".join(kept)}
+            if not kept:
+                del api_kwargs["extra_headers"]["anthropic-beta"]
 
     def _build_request_kwargs(self, model: str, request: LLMRequest) -> tuple[Dict[str, Any], Dict[str, Any], bool]:
         """Build kwargs and extra_headers for an Anthropic SDK call."""

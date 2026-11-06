@@ -12,6 +12,8 @@ the hardcoded fallback.
 
 from __future__ import annotations
 
+from autobot_shared.model_pricing import MODEL_PRICING_PER_1M_TOKENS
+from autobot_shared.ssot_claude_models import CLAUDE_FABLE, CLAUDE_HAIKU, CLAUDE_OPUS, CLAUDE_SONNET
 from llm_shared.pricing.sources import BaselinePricingSource
 
 _PROVIDER = "anthropic"
@@ -23,15 +25,22 @@ _PROVIDER = "anthropic"
 # this table's `deepseek-r1` had been charging API rates against the local
 # model's id, and `PER_1K` had two prices years out of date.
 # Keys use the same model IDs as ANTHROPIC_* constants (GH#6480).
+#: Cache-read prices of the current generation (per 1M). ``None`` is "not stated by the source": unknown,
+#: never 0.0 (which reads as free). Cache-write prices are not stated and are not recorded.
+_CURRENT_CACHE_READ_PER_1M: dict[str, float | None] = {
+    CLAUDE_FABLE: 0.25,
+    CLAUDE_OPUS: 0.20,
+    CLAUDE_SONNET: 0.20,
+    CLAUDE_HAIKU: None,
+}
+
+# Input/output prices of the current generation are read from the canonical table, not restated (#20884).
 _BASELINE: list[tuple[str, float, float, float | None]] = [
     # (model_id, input_per_1m, output_per_1m, cache_read_per_1m)
-    # Current generation (#20884; ids = autobot_shared.ssot_claude_models). Cache-write prices
-    # are not stated by the source and are not recorded. Haiku's cache-read is not stated either,
-    # so its 4th element is None: "unknown", never 0.0 (which reads as free).
-    ("claude-fable-5-1", 10.00, 50.00, 0.25),
-    ("claude-opus-5-5", 4.00, 20.00, 0.20),
-    ("claude-sonnet-5-5", 2.00, 10.00, 0.20),
-    ("claude-haiku-5-5", 0.10, 0.50, None),
+    *(
+        (model, MODEL_PRICING_PER_1M_TOKENS[model]["input"], MODEL_PRICING_PER_1M_TOKENS[model]["output"], cache_read)
+        for model, cache_read in _CURRENT_CACHE_READ_PER_1M.items()
+    ),
     ("claude-opus-4-0", 15.00, 75.00, 1.50),
     ("claude-haiku-4-5", 0.80, 4.00, 0.08),
     ("claude-sonnet-4-0", 3.00, 15.00, 0.30),

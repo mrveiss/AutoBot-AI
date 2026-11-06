@@ -20,14 +20,10 @@ export interface ContextWindowState {
   hasData: ComputedRef<boolean>
 }
 
-// Known context windows for common models when live data is unavailable
+// Known context windows for common non-Claude models when live data is unavailable. Claude windows are
+// never written here: the backend model list carries them (from its context-window table), and a Claude
+// model missing from that list is unknown (0), not a guessed number.
 const FALLBACK_CONTEXT_WINDOWS: Record<string, number> = {
-  'claude-3-opus': 200_000,
-  'claude-3-sonnet': 200_000,
-  'claude-3-haiku': 200_000,
-  'claude-3-5-sonnet': 200_000,
-  'claude-sonnet': 200_000,
-  'claude-opus': 200_000,
   'gpt-4o': 128_000,
   'gpt-4': 128_000,
   'gpt-4-turbo': 128_000,

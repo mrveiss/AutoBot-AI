@@ -155,7 +155,9 @@ def test_the_default_position_check_has_contrast():
 # at most the count recorded, and a count that fell must be lowered here (the number only falls).
 # ---------------------------------------------------------------------------
 
-_CLAUDE_ID = re.compile(r"claude-(?:opus|sonnet|haiku|fable)-\d")
+#: A pinned id (``claude-sonnet-5-5``) or a quoted tier-only literal (``'claude-sonnet'``): the latter is how a
+#: frontend or table once mapped every model of a tier to one window or price (#20884).
+_CLAUDE_ID = re.compile(r"""claude-(?:opus|sonnet|haiku|fable)-\d|['"`]claude-(?:opus|sonnet|haiku|fable)['"`]""")
 _SCAN_ROOTS = (
     "autobot-backend",
     "autobot-frontend",
@@ -180,13 +182,22 @@ _CLAUDE_HOMES: dict[str, str] = {
     "autobot_shared/ssot_claude_models.py": "the SSOT",
     "autobot_shared/ssot_constants.py": "model-name constants for every vendor (history, pricing keys)",
     "autobot_shared/model_pricing.py": _PRICING,
-    "autobot-backend/llm_shared/pricing/anthropic_source.py": _PRICING,
     "autobot-backend/config/llm_models.yaml": "the per-model parameter registry",
     "autobot-backend/config/context_windows.yaml": "the per-model context-window table",
 }
 #: file -> (most instances allowed, why they remain). Each is a follow-up, not a decision to keep.
 _CLAUDE_BASELINE: dict[str, tuple[int, str]] = {
+    "autobot-backend/llm_shared/model_param_registry.py": (1, "docstring usage example"),
+    "autobot-backend/services/llm_cost_tracker.py": (
+        4,
+        "substring keys of the price fallback; each maps to a current SSOT row, none states a price or window",
+    ),
+    "docs/api/USAGE_METERING_API.md": (1, "prose naming the substring-pattern heuristic"),
     "autobot-backend/llm_shared/pricing/crosscheck.py": (2, "prose: describes how external catalogues spell a model"),
+    "autobot-backend/llm_shared/pricing/anthropic_source.py": (
+        3,
+        "older 4.x baseline rows keyed by literal; the current generation is read from model_pricing",
+    ),
     "autobot-backend/llm_shared/pricing/vertexai_source.py": (
         2,
         "Vertex versioned ids; the 5.x Vertex ids are not known",
@@ -271,6 +282,8 @@ def test_the_claude_matcher_catches_a_planted_second_definition_and_ignores_alia
         "autobot-backend/x.py: 1 pinned Claude id(s), 0 allowed",
         "docs/y.md: 1 pinned Claude id(s), 0 allowed",
     ]
+    tier_only = {"f.ts": "const W = { 'claude-sonnet': 200_000, \"claude-opus\": 1 }"}
+    assert claude_id_counts(tier_only) == {"f.ts": 2}
     clean = {"a.py": 'MODEL = "sonnet"\nx = CLAUDE_SONNET\n', "b.md": "claude-sonnet (no digit) and claude-3-5-sonnet"}
     assert claude_id_counts(clean) == {}
     # the sweep sees real files: the SSOT itself must register, or the matcher/enumeration is broken

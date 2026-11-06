@@ -13,6 +13,7 @@ combined list in Redis for 60 seconds to avoid latency on every dropdown open.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
@@ -45,10 +46,29 @@ _MODEL_HINTS: Dict[str, Dict[str, Any]] = {
     "o3": {"capabilities": ["chat", "code", "reasoning"], "context_window": 200000},
     "text-embedding": {"capabilities": ["embedding"], "context_window": 8192},
     # Anthropic
-    "claude-opus": {"capabilities": ["chat", "code", "vision"], "context_window": 200000},
-    "claude-sonnet": {"capabilities": ["chat", "code", "vision"], "context_window": 200000},
-    "claude-haiku": {"capabilities": ["chat", "code"], "context_window": 200000},
 }
+
+# Claude capabilities by tier. The context window is never written here: it is read per model from
+# config/context_windows.yaml (held to autobot_shared.ssot_claude_models), 0 when that has no entry (#20884).
+_CONTEXT_WINDOWS_YAML = Path(__file__).resolve().parent.parent / "config" / "context_windows.yaml"
+_CLAUDE_TIER_CAPABILITIES: Dict[str, List[str]] = {
+    "opus": ["chat", "code", "vision"],
+    "sonnet": ["chat", "code", "vision"],
+    "haiku": ["chat", "code"],
+    "fable": ["chat", "code", "vision"],
+}
+
+
+def _claude_hints(name_lower: str) -> Dict[str, Any] | None:
+    """Hints for a Claude model: tier capabilities, window from the context-window table (0 = unknown)."""
+    for tier, capabilities in _CLAUDE_TIER_CAPABILITIES.items():
+        if f"claude-{tier}" in name_lower:
+            from context_window_manager import get_context_window_manager
+
+            entry = get_context_window_manager(str(_CONTEXT_WINDOWS_YAML)).config["models"].get(name_lower) or {}
+            return {"capabilities": capabilities, "context_window": int(entry.get("context_window_tokens", 0))}
+    return None
+
 
 _DEFAULT_HINTS: Dict[str, Any] = {
     "capabilities": ["chat"],
@@ -59,6 +79,9 @@ _DEFAULT_HINTS: Dict[str, Any] = {
 def _hints_for_model(model_name: str) -> Dict[str, Any]:
     """Return the best-matching capability/context hints for *model_name*."""
     name_lower = model_name.lower()
+    claude = _claude_hints(name_lower)
+    if claude is not None:
+        return claude
     for prefix, hints in _MODEL_HINTS.items():
         if prefix in name_lower:
             return hints

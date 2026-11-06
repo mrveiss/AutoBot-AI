@@ -38,6 +38,18 @@ def test_hints_for_anthropic_claude() -> None:
     assert hints["context_window"] == 200000
 
 
+def test_hints_for_a_current_claude_model_read_the_1m_window_from_the_table() -> None:
+    from autobot_shared.ssot_claude_models import CLAUDE_CONTEXT_WINDOW, CLAUDE_SONNET
+
+    assert _hints_for_model(CLAUDE_SONNET)["context_window"] == CLAUDE_CONTEXT_WINDOW
+
+
+def test_hints_for_a_claude_model_with_no_table_entry_say_unknown_not_a_guess() -> None:
+    hints = _hints_for_model("claude-sonnet-9-9")
+    assert hints["context_window"] == 0
+    assert "chat" in hints["capabilities"]
+
+
 def test_hints_unknown_model_uses_defaults() -> None:
     hints = _hints_for_model("totally-unknown-model:latest")
     assert hints["capabilities"] == ["chat"]
