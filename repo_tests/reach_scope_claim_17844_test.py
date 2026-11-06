@@ -218,6 +218,20 @@ def test_a_declared_scope_that_the_sweep_does_not_reach_is_refused() -> None:
 #: Compared as a SET in both directions. Adding a scoped declaration means adding a line here,
 #: and that is the point -- the scope is a decision, so it is written twice on purpose.
 _DECLARED_SCOPES = {
+    "inline-lazy-singleton": (
+        ".claude",
+        "autobot-backend",
+        "autobot-infrastructure",
+        "autobot-npu-worker",
+        "autobot-slm-backend",
+        "autobot_shared",
+        "libs",
+        "pipeline-scripts",
+        "plugins",
+        "repo_tests",
+        "scripts",
+        "tools",
+    ),
     "slm-users-db-scan": ("autobot-slm-backend",),
     "windows-install-scripts-stage-constraints-19681": ("autobot-npu-worker/resources/windows-npu-worker",),
     "role-source-paths-depth-proof-20509": ("autobot-slm-backend/ansible/roles",),
