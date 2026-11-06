@@ -58,6 +58,7 @@ describe('saveFile (#20770)', () => {
     })
     expect(() => saveBlob(new Blob(['x']), 'x.txt')).toThrow('blocked')
     expect(document.querySelectorAll('a').length).toBe(0)
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled()
     vi.runAllTimers()
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-1')
   })
