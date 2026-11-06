@@ -29,7 +29,13 @@ from auth_middleware import get_current_user
 from auth_service_opt_in import service_opt_in
 from autobot_shared.auth.internal_api_key import require_internal_api_key
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.slm_credential_deletion import ACTION, CREDENTIAL_KIND, proposer_id
+from autobot_shared.slm_credential_deletion import (
+    ACTION,
+    CREDENTIAL_KIND,
+    SPLIT_DEPLOYMENT_MESSAGE,
+    is_split_without_tls,
+    proposer_id,
+)
 from models.approval import Approval, ApprovalStatus, ApprovalType
 from services.approval_gate_service import ApprovalGateService
 from services.slm_ssh_password_action import register_ssh_password_action
@@ -67,7 +73,12 @@ async def _pending_for(service: ApprovalGateService, node_id: str) -> Approval |
 async def propose_ssh_password_deletion(
     body: SshPasswordDeletionProposal, session: AsyncSession = Depends(get_db_session)
 ) -> SshPasswordDeletionProposalResponse:
-    """Propose the deletion -- a request, not an execution; one pending proposal per node."""
+    """Propose the deletion -- a request, not an execution; one pending proposal per node.
+
+    Refused (409, clear message) on a split deployment without SLM TLS (#20899, option A).
+    """
+    if is_split_without_tls():
+        raise HTTPException(status.HTTP_409_CONFLICT, SPLIT_DEPLOYMENT_MESSAGE)
     service = ApprovalGateService(session)
     pending = await _pending_for(service, body.node_id)
     if pending:

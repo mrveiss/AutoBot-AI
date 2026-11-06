@@ -11,6 +11,8 @@ so the two ends cannot drift apart.
 
 from __future__ import annotations
 
+import ipaddress
+
 #: The ``context["action"]`` an approval names to route to the executor.
 ACTION = "slm_node_ssh_password_delete"
 #: The credential kind a proposal names (never the value).
@@ -27,16 +29,47 @@ NODE_NOT_FOUND_DETAIL = "Node not found"
 APPROVAL_QUERY = "approval_id"
 
 
+class PlainHttpToRemoteSlmError(ValueError):
+    """The internal key would cross the network in clear text to a non-loopback SLM (#20899, option A)."""
+
+
+#: The user-facing refusal when SLM and backend run on different machines without SLM TLS (#20899).
+SPLIT_DEPLOYMENT_MESSAGE = (
+    "Stored SSH password deletion is unavailable when the SLM and the backend run on different machines "
+    "without TLS on the SLM: the internal key would be sent unencrypted. Enable SLM TLS or run both on one machine."
+)
+
+
+def is_loopback_host(host: str) -> bool:
+    """Whether *host* is a literal loopback address or ``localhost``; any other name or address is remote."""
+    if host.strip().lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host.strip().strip("[]")).is_loopback
+    except ValueError:
+        return False
+
+
+def is_split_without_tls() -> bool:
+    """Whether the SLM is on a non-loopback host with TLS off, so the flow cannot run safely (#20899)."""
+    from autobot_shared.ssot_config import config  # noqa: PLC0415  (this module is imported by the SLM too)
+
+    return not config.tls.slm_tls_enabled and not is_loopback_host(config.vm.slm)
+
+
 def slm_direct_url() -> str:
     """The SLM's own uvicorn URL, scheme and port from the SSOT TLS config, never the nginx edge ``SLM_URL`` names.
 
     The edge denies ``/api/internal/`` (#20046), and uvicorn has no ``/slm`` prefix, so the backend's call
-    to the SLM's internal route goes here directly.
+    to the SLM's internal route goes here directly. Raises ``PlainHttpToRemoteSlmError`` rather than return
+    a plain-http URL for a non-loopback SLM: the internal key is never sent in clear text over the network.
     """
-    from autobot_shared.ssot_config import config  # noqa: PLC0415  (this module is imported by the SLM too)
+    from autobot_shared.ssot_config import config  # noqa: PLC0415
 
     if config.tls.slm_tls_enabled:
         return f"https://{config.vm.slm}:{config.tls.slm_tls_port}"
+    if not is_loopback_host(config.vm.slm):
+        raise PlainHttpToRemoteSlmError(SPLIT_DEPLOYMENT_MESSAGE)
     return f"http://{config.vm.slm}:{config.port.slm}"
 
 

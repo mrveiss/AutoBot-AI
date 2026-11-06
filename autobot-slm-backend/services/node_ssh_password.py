@@ -27,7 +27,9 @@ from autobot_shared.slm_credential_deletion import (
     CREDENTIAL_KIND,
     NODE_NOT_FOUND_DETAIL,
     PROPOSAL_PATH,
+    SPLIT_DEPLOYMENT_MESSAGE,
     claim_path,
+    is_split_without_tls,
 )
 from config import settings
 from models.database import Node
@@ -52,6 +54,11 @@ async def propose_password_deletion(node: Node) -> bool:
     a later enrollment of the node proposes again, and the backend de-duplicates.
     """
     if not has_stored_password(node):
+        return False
+    if is_split_without_tls():  # #20899 option A: never offer the deletion where its key would cross in clear text
+        logger.warning(
+            "Deletion of node %s's stored SSH password not proposed: %s", node.node_id, SPLIT_DEPLOYMENT_MESSAGE
+        )
         return False
     if node.auth_method != "key" or not await key_auth_and_sudo_work(node):
         logger.warning(

@@ -14,6 +14,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.approval_gates_approver import require_action_approver_role
 from api.schemas_approvals import (
     ApprovalAddCommentRequest,
     ApprovalCommentResponse,
@@ -179,7 +180,7 @@ def _guard_resubmit(approval, new_context: dict | None, current_user: dict) -> N
         )
 
 
-async def _require_visible(svc: ApprovalGateService, approval_id: uuid.UUID, current_user: dict) -> None:
+async def _require_visible(svc: ApprovalGateService, approval_id: uuid.UUID, current_user: dict):
     """404 an approval the caller may not see, exactly as a missing one, before any write (#18413, #17161).
 
     Same rule as the reads: an admin, the row's ``owner_user``, or a legacy unsourced unowned row. Nothing
@@ -190,6 +191,7 @@ async def _require_visible(svc: ApprovalGateService, approval_id: uuid.UUID, cur
     )
     if visible is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Approval {approval_id} not found")
+    return visible
 
 
 # -- Endpoints ---------------------------------------------------------
@@ -337,7 +339,8 @@ async def approve(
     """Approve a pending approval gate (#1402); only a person may (#17042)."""
     require_interactive_human(current_user, "approval gate approve")
     svc = ApprovalGateService(session)
-    await _require_visible(svc, approval_id, current_user)
+    visible = await _require_visible(svc, approval_id, current_user)
+    await require_action_approver_role(visible, current_user)
     username = current_user.get("username", "unknown")
     try:
         approval = await svc.approve(

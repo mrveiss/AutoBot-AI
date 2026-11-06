@@ -115,7 +115,9 @@ async def execute_ssh_password_delete(approval: "Approval", session: "AsyncSessi
 
 def register_ssh_password_action() -> None:
     """Idempotent: re-registering just replaces the same key with an equal handler."""
-    register_post_approval_action(ACTION, execute_ssh_password_delete, proposed_by=PROPOSED_BY, server_only=True)
+    register_post_approval_action(
+        ACTION, execute_ssh_password_delete, proposed_by=PROPOSED_BY, server_only=True, admin_only=True
+    )
 
 
 __all__ = ["ACTION", "PROPOSED_BY", "execute_ssh_password_delete", "register_ssh_password_action"]

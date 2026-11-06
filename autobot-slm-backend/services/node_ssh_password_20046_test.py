@@ -561,3 +561,15 @@ def test_a_valid_key_opens_csrf_only_on_the_internal_service_prefix(world) -> No
     client = _app_behind_csrf(world)
     other = client.delete("/api/nodes-x/node-a", headers={"X-Internal-API-Key": _KEY})
     assert other.status_code == 401  # not under /api/internal/: the key does not exempt it
+
+
+async def test_no_proposal_is_offered_when_slm_and_backend_are_split_without_tls() -> None:
+    from autobot_shared.ssot_config import config  # noqa: PLC0415
+
+    with (
+        patch.object(config.vm, "slm", "slm.cluster.example"),
+        patch.object(config.tls, "slm_tls_enabled", False),
+        patch.object(ssh, "key_auth_and_sudo_work", AsyncMock(return_value=True)) as probe,
+    ):
+        assert await ssh.propose_password_deletion(_node({"ssh_password": _SECRET})) is False
+    probe.assert_not_awaited()

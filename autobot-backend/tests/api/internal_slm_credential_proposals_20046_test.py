@@ -94,3 +94,13 @@ def test_a_dot_segment_node_id_is_refused_before_it_can_vanish_from_the_delete_p
     response = world.client.post(PROPOSE, json={**NODE, "node_id": node_id}, headers=KEY_HEADERS)
     assert response.status_code == 422
     world.service.create_approval.assert_not_awaited()
+
+
+def test_propose_is_refused_with_a_clear_message_when_slm_and_backend_are_split(world) -> None:
+    from autobot_shared.slm_credential_deletion import SPLIT_DEPLOYMENT_MESSAGE  # noqa: PLC0415
+    from autobot_shared.ssot_config import config  # noqa: PLC0415
+
+    with patch.object(config.vm, "slm", "slm.cluster.example"), patch.object(config.tls, "slm_tls_enabled", False):
+        response = world.client.post(PROPOSE, json=NODE, headers=KEY_HEADERS)
+    assert response.status_code == 409 and response.json()["detail"] == SPLIT_DEPLOYMENT_MESSAGE
+    world.service.create_approval.assert_not_awaited()
