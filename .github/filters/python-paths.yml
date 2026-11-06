@@ -81,6 +81,10 @@ python:
   - 'autobot-monitoring/prometheus.yml'
   - 'autobot-monitoring/grafana/provisioning/datasources/prometheus.yml'
   - 'autobot-backend/config/llm_models.yaml'
+  # #20884: claude_model_id_ssot_20884_test.py holds this table to the Claude ID SSOT; the pinned-ID
+  # scan in hosted_model_literal_guard_15501_test.py names the workflow doc in its baseline.
+  - 'autobot-backend/config/context_windows.yaml'
+  - 'docs/developer/CLAUDE_WORKFLOW.md'
   - 'autobot-infrastructure/shared/config/permission_rules.yaml'
   # The guard scans the whole repo by basename (pathspec *<name>), so an unallowed copy can
   # land anywhere: one glob per guarded basename, not just the listed trees.

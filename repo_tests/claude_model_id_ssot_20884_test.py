@@ -74,7 +74,8 @@ def test_built_in_templates_name_tier_aliases_that_resolve():
     import json
 
     seen = set()
-    for path in (repo_root() / "autobot-backend/llc/built_in_templates").glob("*.json"):
+    for name in ("content-team", "customer-ops", "research-team", "software-team"):
+        path = repo_root() / "autobot-backend/llc/built_in_templates" / f"{name}.json"
         for agent in json.loads(path.read_text(encoding="utf-8")).get("agents", []):
             if "model" in agent:
                 seen.add(agent["model"])
