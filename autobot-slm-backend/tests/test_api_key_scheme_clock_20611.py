@@ -14,42 +14,10 @@ from types import SimpleNamespace
 
 import pytest
 
+from testkit.fake_async_session import FakeAsyncSession
+
 _ROOT = Path(__file__).resolve().parents[1]
 _KEY = "api_key_pbkdf2_active_since"
-
-
-class _Result:
-    def __init__(self, row):
-        self.row = row
-
-    def scalar_one_or_none(self):
-        return self.row
-
-
-class _Nested:
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *exc):
-        return False
-
-
-class _Db:
-    def __init__(self, rows):
-        self.rows = rows
-        self.committed = 0
-
-    async def execute(self, _query):
-        return _Result(self.rows.get(_KEY))
-
-    def begin_nested(self):
-        return _Nested()
-
-    def add(self, row):
-        self.rows[row.key] = row
-
-    async def commit(self):
-        self.committed += 1
 
 
 class _Ctx:
@@ -65,13 +33,20 @@ class _Ctx:
 
 @pytest.fixture
 def clock(monkeypatch):
-    rows = {}
-    db = _Db(rows)
+    created = []
+
+    class _Setting:
+        key = _KEY
+
+        def __init__(self, **kw):
+            self.__dict__.update(kw)
+            created.append(self)
+
+    # 1st read: no row; then the stored row is read back after the insert, and on every later read.
+    db = FakeAsyncSession(results=[[], lambda _s: created[:1], lambda _s: created[:1]])
     fakes = {
         "services.database": SimpleNamespace(db_service=SimpleNamespace(session=lambda: _Ctx(db))),
-        "models.database": SimpleNamespace(
-            Setting=type("Setting", (), {"key": _KEY, "__init__": lambda self, **kw: self.__dict__.update(kw)})
-        ),
+        "models.database": SimpleNamespace(Setting=_Setting),
     }
     for name, attrs in fakes.items():
         mod = types.ModuleType(name)
@@ -81,20 +56,20 @@ def clock(monkeypatch):
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     monkeypatch.setattr(mod, "select", lambda *_a: SimpleNamespace(where=lambda *_b: None))
-    return mod, db
+    return mod, db, created
 
 
 def test_first_call_records_the_instant_and_later_calls_keep_it(clock):
-    mod, db = clock
+    mod, db, created = clock
     first = asyncio.run(mod.scheme_active_since())
-    assert db.rows[_KEY].value == first.isoformat() and db.committed == 1
+    assert len(created) == 1 and created[0].value == first.isoformat() and db.committed
     mod.reset_cache()
     assert asyncio.run(mod.scheme_active_since()) == first
-    assert db.committed == 1
+    assert len(created) == 1
 
 
 def test_cutoff_is_thirty_days_after_activation(clock):
-    mod, _ = clock
+    mod, *_ = clock
     start = datetime(2026, 11, 6, tzinfo=timezone.utc)
     assert mod.LEGACY_CUTOFF_DAYS == 30
     assert not mod.cutoff_passed(start, start + timedelta(days=29, hours=23))

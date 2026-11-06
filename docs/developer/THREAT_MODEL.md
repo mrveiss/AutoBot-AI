@@ -14,8 +14,8 @@ trusted to be inside a root.
 
 **Canonical enforcement:** [`autobot_shared/security/path_validator.py`](../../autobot_shared/security/path_validator.py)
 — `validate_path` (:96) absolute paths · `validate_relative_path` (:157) a segment under a
-known base · `resolve_within_sandbox` (:289) the file-management sandbox ·
-`require_path_string` (:241) type gate before `Path()` / `os.makedirs`.
+known base · `resolve_within_sandbox` (:291) the file-management sandbox ·
+`require_path_string` (:243) type gate before `Path()` / `os.makedirs`.
 
 **Invariants**
 - `validate_path` is never called without an explicit `allowed_roots`. The default `_DEFAULT_ALLOWED_ROOTS` (:34) is `("/opt/autobot",)` — no `/tmp` (#15238): world-writable and shared, so a default including it let an unprivileged local process plant a file for any fallback-taking handler to read back. Prefer `PROJECT_ALLOWED_ROOTS` (:41) — `str(project_root())` — over the default for a request-supplied path scoped to this project.
