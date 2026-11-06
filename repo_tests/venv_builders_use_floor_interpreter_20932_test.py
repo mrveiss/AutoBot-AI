@@ -22,6 +22,10 @@ cannot rot into a blanket exemption.
 import re
 from pathlib import Path
 
+from repo_tests._reach import declare
+
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
+
 _ROOT = Path(__file__).resolve().parent.parent
 
 #: Deploy and infrastructure paths a node venv is built from.
@@ -58,12 +62,44 @@ def _is_comment(line: str) -> bool:
     return line.lstrip().startswith("#")
 
 
+def _in_scope(rel: str) -> bool:
+    return (
+        (rel.startswith(_SCAN_DIRS) or rel in _SCAN_FILES)
+        and Path(rel).suffix in _SUFFIXES
+        and not rel.startswith(_SKIP_PREFIXES)
+        and not any(part in rel.split("/") for part in _SKIP_PARTS)
+    )
+
+
+def _scanned(root: Path) -> list[str]:
+    """Tracked deploy-path files this guard reads."""
+    try:
+        listed = tracked_paths(root, *(f"*{s}" for s in sorted(_SUFFIXES)))
+    except EmptyEnumeration:
+        return []  # an empty tree: the reach's min_fraction raises the typed refusal instead
+    return sorted(rel for rel in listed if _in_scope(rel))
+
+
+def _independent_count(root: Path) -> int:
+    """The same population counted from the unfiltered tracked list, so it cannot fail in lockstep."""
+    try:
+        return sum(1 for rel in tracked_paths(root) if _in_scope(rel))
+    except EmptyEnumeration:
+        return 0
+
+
+REACH = declare(
+    "venv-builders-use-floor-interpreter-sweep",
+    discover=_scanned,
+    min_fraction=0.95,
+    reference=_independent_count,
+    roots=_SCAN_DIRS + _SCAN_FILES,
+    what="tracked deploy and infrastructure files searched for a hard-coded venv interpreter",
+)
+
+
 def _candidates():
-    for rel_dir in _SCAN_DIRS:
-        yield from (p for p in (_ROOT / rel_dir).rglob("*") if p.is_file())
-    for name in _SCAN_FILES:
-        if (_ROOT / name).is_file():
-            yield _ROOT / name
+    return [_ROOT / rel for rel in REACH.examined(_ROOT)]
 
 
 def hardcoded_builders(files, root: Path = _ROOT) -> list[str]:
