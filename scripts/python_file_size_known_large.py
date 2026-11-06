@@ -144,7 +144,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/autobot_memory_graph/semantic_search.py": 706,
     "autobot-backend/benchmarks/benchmark_belief_state.py": 725,
     "autobot-backend/chat_history/context_overflow.py": 845,
-    "autobot-backend/chat_history/session.py": 923,
+    "autobot-backend/chat_history/session.py": 921,
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
     "autobot-backend/chat_workflow/graph.py": 1459,  # #19715
     "autobot-backend/chat_workflow/llm_handler.py": 1300,
@@ -297,7 +297,7 @@ KNOWN_LARGE: dict[str, int] = {
     # #16354: invisible-char table moved to security/unicode_normalization.py
     "autobot-backend/security/prompt_injection_detector.py": 703,
     "autobot-backend/security/security_edge_cases_test.py": 613,
-    "autobot-backend/security/session_ownership.py": 814,
+    "autobot-backend/security/session_ownership.py": 813,
     "autobot-backend/security/threat_detection_refactor_test.py": 880,
     "autobot-backend/security/threat_intelligence.py": 762,
     "autobot-backend/security_layer.py": 670,

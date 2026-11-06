@@ -169,6 +169,20 @@ class SessionListingMixin:
             logger.error("Error listing chat sessions: %s", str(e))
             return []
 
+    async def list_session_ids(self) -> List[Dict[str, Any]]:
+        """Read only: one ``{"chatId": id}`` per chat file, whether or not it can be read (#20030).
+
+        Unlike :meth:`list_sessions` this never runs the old-file cleanup (a report must not delete
+        conversations), never creates the chats directory, and does not drop a file whose content cannot be
+        decrypted: the caller learns that from ``get_session_owner``. An absent directory lists nothing.
+        """
+        chats_directory = self._get_chats_directory()
+        if not await run_in_chat_io_executor(os.path.isdir, chats_directory):
+            return []
+        filenames = await run_in_chat_io_executor(os.listdir, chats_directory)
+        chat_ids = {chat_id for chat_id in map(_extract_chat_id_from_filename, filenames) if chat_id}
+        return [{"chatId": chat_id} for chat_id in sorted(chat_ids)]
+
     async def _read_chat_file_metadata(self, chat_path: str) -> tuple[str | None, int, str, str]:
         """Read chat name, message count and tenancy scope from file.
 
