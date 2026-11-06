@@ -36,10 +36,10 @@ from ..models.enums import ActivityEventType, WorkItemStatus, WorkItemType
 from ..models.heartbeat_run import LLCHeartbeatRun
 from ..models.sprint import LLCProject
 from ..models.work_item import LLCWorkItem
+from ..services.accessors import get_work_item_service
 from ..services.activity_log import LLCActivityLogService
 from ..services.actor import audit
 from ..services.work_item_hierarchy import HierarchyViolation, parent_if_allowed
-from ..services.work_item_service import WorkItemService
 from .base import PollLoopScheduler
 from .dispatch_gate import agent_ref_block_reason
 
@@ -193,7 +193,7 @@ class LivenessMonitor(PollLoopScheduler):
             f"Work item {identifier} has been set to blocked. "
             f"Investigate and unblock manually."
         )
-        svc = WorkItemService()
+        svc = get_work_item_service()
         # #18978: the Bug follows the stuck item's parent only where the hierarchy rules allow it
         # (a stuck Subtask's parent is a Task) and always sits in the stuck item's project.
         project_id = await _recovery_project(session, work_item, company_id)
