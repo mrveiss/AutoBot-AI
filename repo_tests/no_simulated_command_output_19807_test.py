@@ -21,10 +21,11 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from tools.lint._scan_helpers import tracked_paths  # noqa: E402
+from repo_tests._reach import declare  # noqa: E402
+
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths  # noqa: E402
 
 LITERAL = "Simulated output"
-_MIN_FILES_SCANNED = 1000
 
 
 def _is_test_path(path: str) -> bool:
@@ -38,9 +39,32 @@ def contains_literal(source: str) -> bool:
     return LITERAL.lower() in source.lower()
 
 
-def _production_python_files() -> list[str]:
-    listed = tracked_paths(REPO_ROOT, "*.py")
-    return [path for path in listed if not _is_test_path(path)]
+def _production_python_files(root: Path) -> list[str]:
+    """Tracked non-test ``.py`` files that exist in the working tree, i.e. the files that can be read."""
+    try:
+        listed = tracked_paths(root, "*.py")
+    except EmptyEnumeration:
+        return []
+    return [path for path in listed if not _is_test_path(path) and (root / path).is_file()]
+
+
+def _all_python(root: Path) -> int:
+    try:
+        return len(tracked_paths(root, "*.py"))
+    except EmptyEnumeration:
+        return 0
+
+
+#: Measured ~49% of tracked ``.py`` is non-test and present on disk; 0.35 leaves room for tests to grow.
+FRACTION = 0.35
+
+REACH = declare(
+    "no-simulated-command-output-19807-scan",
+    discover=_production_python_files,
+    what="tracked non-test Python files present in the working tree",
+    reference=_all_python,
+    min_fraction=FRACTION,
+)
 
 
 def test_the_detector_sees_the_literal_and_ignores_other_text():
@@ -49,7 +73,6 @@ def test_the_detector_sees_the_literal_and_ignores_other_text():
 
 
 def test_no_production_code_returns_simulated_command_output():
-    read = [path for path in _production_python_files() if (REPO_ROOT / path).is_file()]
-    assert len(read) >= _MIN_FILES_SCANNED, f"read only {len(read)} files; the listing is broken"
+    read = REACH.examined(REPO_ROOT)
     offenders = [path for path in read if contains_literal((REPO_ROOT / path).read_text(encoding="utf-8"))]
     assert offenders == [], f"canned command output in non-test code: {offenders}"
