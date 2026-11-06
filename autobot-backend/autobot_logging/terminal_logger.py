@@ -21,6 +21,7 @@ import aiofiles
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
+from chat_history.session_lease import session_lease
 
 # Issue #765: Use centralized strip_ansi_codes from encoding_utils
 from utils.encoding_utils import strip_ansi_codes
@@ -80,9 +81,12 @@ class TerminalLogger:
 
         chat_file = self._session_file(session_id, "chat.json")
 
-        # Only create if it doesn't exist
-        # Issue #358 - avoid blocking
-        if not await asyncio.to_thread(chat_file.exists):
+        # Only create if it doesn't exist. #20862: checked again under the session lease, so a stub
+        # never overwrites a chat file another writer created between the check and the write.
+        async with session_lease(session_id, "terminal_chat_stub"):
+            # Issue #358 - avoid blocking
+            if await asyncio.to_thread(chat_file.exists):
+                return
             current_time = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
             chat_data = {

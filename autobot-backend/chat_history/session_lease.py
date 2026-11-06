@@ -72,6 +72,16 @@ class SessionLeaseTimeout(SessionLeaseError):
         )
 
 
+class ChatFileUnreadable(SessionLeaseError):
+    """A chat file exists but cannot be read or decoded, so nothing is written over it."""
+
+    def __init__(self, session_id: str, cause: BaseException) -> None:
+        self.session_id = session_id
+        super().__init__(
+            "chat session %s has a file that cannot be read (%s); not overwriting it" % (session_id, cause)
+        )
+
+
 class SessionLeaseLost(SessionLeaseError):
     """The lease could not be confirmed just before a write, so nothing was written."""
 
@@ -234,6 +244,7 @@ async def session_lease(session_id: str, operation: str) -> AsyncIterator[Sessio
 __all__ = [
     "CHAT_LEASE_TTL_MS",
     "CHAT_LEASE_WAIT_S",
+    "ChatFileUnreadable",
     "GENERATION_FIELD",
     "SessionLease",
     "SessionLeaseError",

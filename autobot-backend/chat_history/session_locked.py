@@ -17,7 +17,7 @@ from typing import Any, Awaitable, Callable, Dict, Optional, Tuple
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
 from chat_history.file_io import run_in_chat_io_executor
-from chat_history.session_lease import file_generation, session_lease
+from chat_history.session_lease import ChatFileUnreadable, file_generation, session_lease
 
 logger = get_logger(__name__)
 
@@ -147,4 +147,36 @@ class SessionLockMixin:
             return True
         except Exception as e:
             logger.error("Error updating session metadata %s: %s", session_id, e)
+            return False
+
+    async def _peek_generation(self, session_id: str, chats_directory: str) -> int:
+        """The file's fencing generation, 0 when it is absent or unreadable (a delete may remove either)."""
+        chat_file = str(validate_relative_path(f"{session_id}_chat.json", chats_directory))
+        try:
+            return file_generation(await self._load_existing_chat_data(session_id, chat_file, chats_directory))
+        except ChatFileUnreadable:
+            return 0
+
+    async def delete_session(self, session_id: str) -> bool:
+        """Delete a chat session and its companion files under the session lease, fenced like a save.
+
+        Without the lease a delete could land between another writer's read and write, and that
+        write would bring the session back (#20862). True when a session file was removed.
+        """
+        try:
+            self._sanitize_session_id(session_id)
+            chats_directory = self._get_chats_directory()
+            async with session_lease(session_id, "delete_session") as lease:
+                await lease.begin(await self._peek_generation(session_id, chats_directory))
+                await lease.fence({}, await self._peek_generation(session_id, chats_directory))
+                deleted = await self._delete_session_files(session_id, chats_directory)
+                await self._delete_companion_files(session_id, chats_directory)
+                await self._clear_session_redis_cache(session_id)
+            if not deleted:
+                logger.warning("Chat session %s not found for deletion", session_id)
+                return False
+            logger.info("Chat session '%s' deleted successfully", session_id)
+            return True
+        except Exception as e:
+            logger.error("Error deleting chat session %s: %s", session_id, e)
             return False

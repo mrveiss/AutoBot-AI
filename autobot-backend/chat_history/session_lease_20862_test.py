@@ -21,11 +21,12 @@ from chat_history.messages import MessagesMixin
 from chat_history.security import SecurityMixin
 from chat_history.session import SessionMixin
 from chat_history.session_lease import (
+    ChatFileUnreadable,
     SessionLeaseTimeout,
     StaleGenerationError,
     session_lease,
 )
-from chat_history.session_merge import merge_concurrent_tail
+from chat_history.session_merge import merge_snapshot
 
 _HELD_FOR_MS = 60_000  # a holder that outlives every test wait
 _SHORT_HOLD_MS = 300  # a holder that finishes inside the wait bound
@@ -76,6 +77,10 @@ def _rewrite_generation(tmp_path, session_id: str, generation: int) -> None:
     data = _on_disk(tmp_path, session_id)
     data["write_generation"] = generation
     (tmp_path / f"{session_id}_chat.json").write_text(json.dumps(data), encoding="utf-8")
+
+
+def _plant(tmp_path, session_id: str, content: str) -> None:
+    (tmp_path / f"{session_id}_chat.json").write_text(content, encoding="utf-8")
 
 
 def _texts(tmp_path, session_id: str) -> list:
@@ -199,8 +204,98 @@ async def test_the_lease_is_released_after_the_block(manager, fake_session_lease
     assert await probe.get(lease_mod.CHAT_LEASE_KEY_PREFIX + "s12") is None
 
 
-def test_merge_keeps_a_concurrent_tail_and_a_deliberate_replacement():
-    a, b, c = _msg("a", "1"), _msg("b", "2"), _msg("c", "3")
-    assert merge_concurrent_tail([a, b], [a, c]) == [a, c, b]
-    assert merge_concurrent_tail([b], [c]) == [c]
-    assert merge_concurrent_tail([], [c]) == [c]
+async def test_a_snapshot_sharing_no_message_does_not_replace_the_file(manager, tmp_path):
+    await manager.save_session("s13", messages=[_msg("kept-1", "t0"), _msg("kept-2", "t1")])
+    await manager.save_session("s13", messages=[_msg("stale-view", "t9")])
+    assert sorted(_texts(tmp_path, "s13")) == ["kept-1", "kept-2", "stale-view"]
+
+
+async def test_a_snapshot_merges_by_message_id_and_updates_in_place(manager, tmp_path):
+    first = {"id": "a", "sender": "user", "text": "hello", "timestamp": "t0"}
+    second = {"id": "b", "sender": "assistant", "text": "partial", "timestamp": "t1"}
+    await manager.save_session("s14", messages=[first, second])
+    await manager.save_session("s14", messages=[{**second, "text": "complete"}])
+    assert _texts(tmp_path, "s14") == ["hello", "complete"]
+
+
+async def test_an_empty_snapshot_does_not_wipe_a_session(manager, tmp_path):
+    await manager.save_session("s15", messages=[_msg("keep", "t0")])
+    await manager.save_session("s15", messages=[])
+    assert _texts(tmp_path, "s15") == ["keep"]
+
+
+async def test_replace_is_the_explicit_way_to_drop_messages(manager, tmp_path):
+    await manager.save_session("s16", messages=[_msg("a", "t0"), _msg("b", "t1")])
+    await manager.save_session("s16", messages=[_msg("a", "t0")], replace=True)
+    assert _texts(tmp_path, "s16") == ["a"]
+
+
+def test_combine_inserts_a_new_message_after_its_predecessor():
+    a, b, c = {"id": "a"}, {"id": "b"}, {"id": "c"}
+    assert merge_snapshot([a, c], [a, b]) == [a, b, c]
+
+
+@pytest.mark.parametrize("damage", ["{not json", ""])
+async def test_save_refuses_to_overwrite_an_unreadable_file(manager, tmp_path, damage):
+    _plant(tmp_path, "s17", damage)
+    with pytest.raises(ChatFileUnreadable) as err:
+        await manager.save_session("s17", messages=[_msg("new", "t0")])
+    assert "s17" in str(err.value)
+    assert _raw(tmp_path, "s17") == damage
+
+
+async def test_an_absent_file_is_an_empty_session_not_an_error(manager, tmp_path):
+    await manager.save_session("s18", messages=[_msg("first", "t0")])
+    assert _texts(tmp_path, "s18") == ["first"]
+
+
+async def test_a_message_add_surfaces_an_unreadable_file(manager, tmp_path):
+    _plant(tmp_path, "s19", "{broken")
+    with pytest.raises(ChatFileUnreadable):
+        await manager._add_message_to_session("s19", _msg("new", "t0"))
+    assert _raw(tmp_path, "s19") == "{broken"
+
+
+async def test_a_metadata_update_refuses_an_unreadable_file(manager, tmp_path):
+    _plant(tmp_path, "s20", "{broken")
+    assert await manager.update_session_metadata("s20", {"owner": "bob"}) is False
+    assert _raw(tmp_path, "s20") == "{broken"
+
+
+async def test_delete_waits_for_the_lease_holder(manager, tmp_path, fake_session_lease):
+    await manager.save_session("s21", messages=[_msg("x", "t0")])
+    other_worker = fakeredis.aioredis.FakeRedis(server=fake_session_lease, decode_responses=True)
+    await other_worker.set(lease_mod.CHAT_LEASE_KEY_PREFIX + "s21", "backend-2-1:save_session:aa", px=_SHORT_HOLD_MS)
+    assert await manager.delete_session("s21") is True
+    assert not (tmp_path / "s21_chat.json").exists()
+
+
+async def test_delete_leaves_the_file_when_the_wait_times_out(manager, tmp_path, monkeypatch, fake_session_lease):
+    await manager.save_session("s22", messages=[_msg("x", "t0")])
+    monkeypatch.setattr(lease_mod, "CHAT_LEASE_WAIT_S", 0.2)
+    other_worker = fakeredis.aioredis.FakeRedis(server=fake_session_lease, decode_responses=True)
+    await other_worker.set(lease_mod.CHAT_LEASE_KEY_PREFIX + "s22", "backend-2-1:save_session:aa", px=_HELD_FOR_MS)
+    assert await manager.delete_session("s22") is False
+    assert (tmp_path / "s22_chat.json").exists()
+
+
+async def test_a_delete_with_a_stale_generation_removes_nothing(manager, tmp_path):
+    await manager.save_session("s23", messages=[_msg("x", "t0")])
+    calls = iter([0, 10**9])
+
+    async def peek(*_args):
+        return next(calls)
+
+    manager._peek_generation = peek
+    assert await manager.delete_session("s23") is False
+    assert (tmp_path / "s23_chat.json").exists()
+
+
+async def test_a_delete_during_a_save_does_not_resurrect_the_session(manager, tmp_path):
+    await manager.save_session("s24", messages=[_msg("x", "t0")])
+    await asyncio.gather(
+        manager.save_session("s24", messages=[_msg("x", "t0"), _msg("y", "t1")]),
+        manager.delete_session("s24"),
+    )
+    exists = (tmp_path / "s24_chat.json").exists()
+    assert not exists or _texts(tmp_path, "s24") == ["x", "y"]
