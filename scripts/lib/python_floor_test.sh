@@ -48,6 +48,26 @@ check "remote cmd has no single quote" "no" "$([[ "$cmd" == *"'"* ]] && echo yes
 echo "x" > "$tmp/.python-version"
 check "remote cmd refuses on a bad floor" "yes" "$([[ "$(python_floor_remote_venv_cmd "$tmp" /x/venv)" == *"exit 1" ]] && echo yes || echo no)"
 
+printf '3.14' > "$tmp/.python-version"
+check "no trailing newline still reads" "3.14" "$(python_floor_version "$tmp")"
+echo "3.14" > "$tmp/.python-version"
+check "venv dir with metachar refused" "yes" "$([[ "$(python_floor_remote_venv_cmd "$tmp" '/x; rm -rf /')" == *"exit 1" && "$(python_floor_remote_venv_cmd "$tmp" '/x; rm -rf /')" != *"venv /x"* ]] && echo yes || echo no)"
+check "remote cmd gates on ubuntu" "yes" "$([[ "$(python_floor_remote_venv_cmd "$tmp" /x/venv)" == *"grep -qx ID=ubuntu"* && "$(python_floor_remote_venv_cmd "$tmp" /x/venv)" != *"|| true"* ]] && echo yes || echo no)"
+printf 'NAME=Debian\nID=debian\n' > "$tmp/os-release"
+echo "3.99" > "$tmp/.python-version"
+unset AUTOBOT_PYTHON_FLOOR_NO_PROVISION
+out="$(AUTOBOT_PYTHON_FLOOR_OS_RELEASE="$tmp/os-release" python_floor_ensure "$tmp" 2>&1)"; rc=$?
+export AUTOBOT_PYTHON_FLOOR_NO_PROVISION=1
+check "non-ubuntu refuses" "1" "$rc"
+check "non-ubuntu names OS and interpreter" "yes" "$([[ "$out" == *"debian"* && "$out" == *"python3.99"* ]] && echo yes || echo no)"
+mkdir -p "$tmp/v/bin"
+printf '#!/bin/sh\necho 3.14\n' > "$tmp/v/bin/python"; chmod +x "$tmp/v/bin/python"
+echo "3.14" > "$tmp/.python-version"
+python_floor_venv_matches "$tmp" "$tmp/v"; check "venv on floor matches" "0" "$?"
+echo "3.15" > "$tmp/.python-version"
+python_floor_venv_matches "$tmp" "$tmp/v"; check "venv on older python mismatches" "1" "$?"
+python_floor_venv_matches "$tmp" "$tmp/none"; check "missing venv mismatches" "1" "$?"
+
 echo "$(python3 -c 'import sys;print("%d.%d"%sys.version_info[:2])')" > "$tmp/.python-version"
 check "present interpreter is returned" "yes" "$([[ "$(python_floor_ensure "$tmp")" == python3.* ]] && echo yes || echo no)"
 

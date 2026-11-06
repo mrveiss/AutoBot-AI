@@ -24,7 +24,7 @@
   ansible.builtin.include_role:
     name: python_interpreter
     tasks_from: resolve
-  tags: ['redis', 'chromadb']
+  tags: ['always']
 
 - name: "ChromaDB | Enforce venv target Python version (env-drift fix)"
   ansible.builtin.include_role:

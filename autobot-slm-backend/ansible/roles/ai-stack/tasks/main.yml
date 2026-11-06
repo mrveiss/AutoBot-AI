@@ -76,7 +76,7 @@
   ansible.builtin.include_role:
     name: python_interpreter
     tasks_from: resolve
-  tags: ['ai', 'venv']
+  tags: ['always']
 
 - name: Check existing venv Python version (#3534)
   ansible.builtin.command:

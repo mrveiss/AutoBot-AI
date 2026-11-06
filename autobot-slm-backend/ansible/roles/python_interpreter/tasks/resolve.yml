@@ -22,9 +22,9 @@
   ansible.builtin.set_fact:
     python_interpreter_version: "{{ lookup('file', role_path + '/../../../../.python-version') | trim }}"
   when: python_interpreter_version | default('') | length == 0
-  tags: ['deps', 'python_interpreter', 'python314']
+  tags: ['always']
 
 - name: "python_interpreter | Publish python_interpreter_binary for the calling play"
   ansible.builtin.set_fact:
     python_interpreter_binary: "python{{ python_interpreter_version }}"
-  tags: ['deps', 'python_interpreter', 'python314']
+  tags: ['always']

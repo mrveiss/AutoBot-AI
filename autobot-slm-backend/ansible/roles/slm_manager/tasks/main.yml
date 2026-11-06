@@ -255,7 +255,7 @@
   ansible.builtin.include_role:
     name: python_interpreter
     tasks_from: resolve
-  tags: ['slm', 'backend']
+  tags: ['always']
 
 - name: "SLM | Check venv Python version matches target"
   ansible.builtin.shell:

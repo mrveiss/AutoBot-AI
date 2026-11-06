@@ -810,6 +810,7 @@
     ansible.builtin.include_role:
       name: python_interpreter
       tasks_from: resolve
+    tags: ['always']
 
   - name: Check if venv directory itself is a symlink (legacy layout)
     ansible.builtin.stat:

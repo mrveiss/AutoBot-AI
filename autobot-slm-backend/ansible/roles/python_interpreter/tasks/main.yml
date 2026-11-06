@@ -19,7 +19,7 @@
 # needs the interpreter name can reuse it without the install below.
 - name: "python_interpreter | Resolve the floor interpreter (version and binary)"
   ansible.builtin.include_tasks: resolve.yml
-  tags: ['deps', 'python_interpreter', 'python314']
+  tags: ['always']
 
 - name: "python_interpreter | Check if Python {{ python_interpreter_version }} is available"
   ansible.builtin.command:

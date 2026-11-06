@@ -174,11 +174,15 @@ configure_backend() {
     log "INFO" "Configuring WSL backend services..."
 
     # Install backend dependencies if needed
+    # shellcheck source=scripts/lib/python_floor.sh
+    source "$SCRIPT_DIR/../../scripts/lib/python_floor.sh"
+    if [[ -f ../venv/bin/activate ]] && ! python_floor_venv_matches "$SCRIPT_DIR/../.." ../venv; then
+        log "WARN" "Existing venv is not on the floor interpreter; rebuilding it (#20932)"
+        rm -rf ../venv
+    fi
     if [[ ! -f ../venv/bin/activate ]]; then
         log "INFO" "Creating Python virtual environment..."
         # #20932: the floor interpreter from .python-version, never a bare python3
-        # shellcheck source=scripts/lib/python_floor.sh
-        source "$SCRIPT_DIR/../../scripts/lib/python_floor.sh"
         PYTHON_BIN="$(python_floor_ensure "$SCRIPT_DIR/../..")" || { log "ERROR" "No floor Python interpreter available"; exit 1; }
         "$PYTHON_BIN" -m venv ../venv
         source ../venv/bin/activate

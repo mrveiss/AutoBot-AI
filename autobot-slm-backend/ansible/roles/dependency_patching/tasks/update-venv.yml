@@ -69,6 +69,7 @@
   ansible.builtin.include_role:
     name: python_interpreter
     tasks_from: resolve
+  tags: ['always']
 
 - name: Update Python packages with security fixes
   block:

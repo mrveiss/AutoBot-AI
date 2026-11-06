@@ -139,6 +139,19 @@
 #
 # `--break-system-packages` is gone with it: inside a venv it is neither needed
 # nor meaningful.
+# #20932: a venv already built on an older interpreter is removed here so the
+# pip task below rebuilds it on the floor (no `creates:` guards that task).
+- name: "SLM Agent | Enforce venv target Python version (#20932)"
+  ansible.builtin.include_role:
+    name: python_interpreter
+    tasks_from: ensure_venv_version
+    apply:
+      tags: ['slm_agent', 'packages']
+  vars:
+    venv_path: "{{ slm_agent_venv }}"
+    venv_python: "{{ python_interpreter_binary }}"
+  tags: ['slm_agent', 'packages']
+
 - name: "SLM Agent | Install Python dependencies into the agent venv (#14278)"
   ansible.builtin.pip:
     name: "{{ slm_agent_python_packages }}"
