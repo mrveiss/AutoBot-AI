@@ -155,9 +155,13 @@ function eventTimeText(event: TemporalEvent): string {
   )
 }
 
-/** The day heading for an event, or its temporal expression when the timestamp is missing or unparseable. */
+/** The day heading for an event: its date, else its temporal expression, else the same unknown-time label `eventTimeText` uses. */
 function dateMarkerText(event: TemporalEvent): string {
-  return formatMarkerDate(event.timestamp) || event.temporal_expression || ''
+  return (
+    formatMarkerDate(event.timestamp) ||
+    event.temporal_expression ||
+    t('knowledge.temporal.events.unknownTime')
+  )
 }
 
 /** Undated events key to '' so they ride the preceding day's group instead of opening a heading. */

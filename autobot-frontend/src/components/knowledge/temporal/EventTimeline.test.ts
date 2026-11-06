@@ -69,7 +69,8 @@ describe('EventTimeline day heading', () => {
     expect(markerText(ts, 'last spring')).toBe('last spring')
   })
 
-  it('is blank rather than the raw text when nothing else is available', () => {
-    expect(markerText('not-a-date', null)).toBe('')
+  it('falls back to the unknown-time label rather than a blank heading when nothing else is available', () => {
+    expect(markerText('not-a-date', null)).toBe(en.knowledge.temporal.events.unknownTime)
+    expect(markerText(null, null)).toBe(en.knowledge.temporal.events.unknownTime)
   })
 })
