@@ -1424,15 +1424,15 @@ async def _seed_agent_registry() -> None:
 async def _seed_default_admin() -> None:
     """Seed the default platform-admin into autobot_users (#10199).
 
-    Idempotent — skips if any admin user already exists or if
-    AUTOBOT_ADMIN_PASSWORD is not configured.  Non-fatal: errors are
-    logged and swallowed so a seed failure never blocks startup.
+    Links the SLM's first admin first (#10200), so seeding then finds an admin. Non-fatal.
     """
     logger.info("[ 97%%] Admin Seed: seeding default admin user...")
     try:
         from user_management.database import get_async_session_factory
+        from user_management.services.person_link_service import link_first_slm_admin_at_startup
         from user_management.services.seed import seed_default_admin
 
+        await link_first_slm_admin_at_startup()
         async with get_async_session_factory()() as session:
             await seed_default_admin(session)
             # seed_default_admin (via UserService) only flushes; without an
