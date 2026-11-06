@@ -134,4 +134,30 @@ describe('BacklogView project filter (#17680)', () => {
     expect(options.map(o => o.text())).toContain('First')
     expect(options.map(o => o.text())).toContain('Second')
   })
+
+  it('refetches after a create instead of prepending into a filtered list', async () => {
+    const wrapper = await mountView()
+    const before = backlogUrls().length
+    wrapper.findComponent({ name: 'BacklogCreateModal' }).vm.$emit('created', { id: 'other-project-item' })
+    await flushPromises()
+    expect(backlogUrls().length).toBe(before + 1)
+    expect((wrapper.vm as unknown as { items: unknown[] }).items).toEqual([])
+  })
+
+  it('reports a failed project load to the form and retries on request', async () => {
+    get.mockImplementation((url?: string) =>
+      url?.includes('/projects') ? Promise.reject(new Error('down')) : routeGet(url),
+    )
+    const wrapper = mount(BacklogView, {
+      global: { plugins: [i18n], stubs: { LlcBreadcrumb: true, 'router-link': true } },
+    })
+    await flushPromises()
+    const form = wrapper.findComponent({ name: 'BacklogCreateModal' })
+    expect(form.props('projectsFailed')).toBe(true)
+    get.mockImplementation(routeGet)
+    form.vm.$emit('retry-projects')
+    await flushPromises()
+    expect(form.props('projectsFailed')).toBe(false)
+    expect(form.props('projects')).toHaveLength(PROJECTS.length)
+  })
 })

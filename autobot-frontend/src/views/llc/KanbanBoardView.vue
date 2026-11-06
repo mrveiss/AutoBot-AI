@@ -14,6 +14,11 @@
     </div>
 
 
+    <div v-if="moveError" class="board-load-error" role="alert">
+      <span class="board-load-error-text">{{ $t('llc.board.moveFailed') }}</span>
+      <span class="board-load-error-detail">{{ moveError }}</span>
+    </div>
+
     <!-- #14064: a load failure used to be logged only, so the board rendered
          empty — indistinguishable from a board with no cards. -->
     <div v-if="loadError" class="board-load-error" role="alert">
@@ -171,6 +176,7 @@ const columns = ref<BoardColumn[]>([])
 const items = ref<BoardCard[]>([])
 // #14064: a load failure was only logged, so it rendered as an empty board.
 const loadError = ref<string | null>(null)
+const moveError = ref<string | null>(null)
 const isLoading = ref(false)
 const detailItem = ref<WorkItem | null>(null)
 const detailLoading = ref(false)
@@ -255,6 +261,7 @@ async function onDrop(colId: string) {
   draggedItem.value = null
   const prevCol = item.column_id
   item.column_id = colId
+  moveError.value = null
   try {
     await api.post<unknown>(`/api/llc/boards/${boardId.value}/move`, {
       work_item_id: item.id,
@@ -263,6 +270,7 @@ async function onDrop(colId: string) {
   } catch (err) {
     logger.error('Move failed', err)
     item.column_id = prevCol
+    moveError.value = err instanceof Error ? err.message : String(err)
   }
 }
 

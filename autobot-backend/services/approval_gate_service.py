@@ -24,6 +24,7 @@ from autobot_shared.time_utils import now_utc
 from models.approval import Approval, ApprovalComment, ApprovalStatus, TaskApprovalLink
 from services.approval_execution import (
     resume_decided_approval,
+    review_decision,
     run_post_approval_actions,
     set_verified_decider,
 )
@@ -45,6 +46,11 @@ _VALID_TRANSITIONS = {
         ApprovalStatus.REJECTED.value,
     },
 }
+
+
+def _expired(approval: Approval) -> bool:
+    """Whether the row's ``expires_at`` has passed, whether or not a sweeper has marked it yet."""
+    return approval.expires_at is not None and approval.expires_at <= now_utc()
 
 
 class ApprovalGateService:
@@ -128,9 +134,10 @@ class ApprovalGateService:
         ``decider_id`` is the authenticated person's user id (#18430); handlers that care who decided compare it,
         never ``decided_by`` (a display name).
 
-        The transition itself commits first; ``run_post_approval_actions``
-        cannot fail the approval decision, only what happens after it.
+        A decider the action refuses raises here and the approval stays pending (#18978). The transition then
+        commits first; ``run_post_approval_actions`` cannot fail the approval decision, only what happens after it.
         """
+        await self._review_decider(approval_id, decider_id)
         approval = await self._transition(
             approval_id,
             ApprovalStatus.APPROVED,
@@ -484,6 +491,18 @@ class ApprovalGateService:
         await self.session.refresh(approval)
         return approval
 
+    async def _review_decider(self, approval_id: uuid.UUID, decider_id: uuid.UUID | None) -> None:
+        """The action's check on who decides, in the transaction the transition commits: its locks hold until then."""
+        approval = await self._get_or_raise(approval_id)
+        approvable = ApprovalStatus.APPROVED.value in _VALID_TRANSITIONS.get(approval.status, ())
+        if not approvable or _expired(approval):
+            return  # no decision to review: ``_transition`` gives its usual error
+        try:
+            await review_decision(approval, self.session, decider_id)
+        except Exception:
+            await self.session.rollback()
+            raise
+
     async def _transition(
         self,
         approval_id: uuid.UUID,
@@ -495,7 +514,7 @@ class ApprovalGateService:
         """Perform a status transition atomically; resume the source only for the winning caller."""
         current = await self._get_or_raise(approval_id)
         prior_status = current.status  # read now: a rollback below expires the instance
-        if current.expires_at is not None and current.expires_at <= now_utc():
+        if _expired(current):
             if prior_status == ApprovalStatus.PENDING.value:
                 await self._expire_if_pending(approval_id)
             raise ValueError(f"Cannot transition: approval {approval_id} expired")
