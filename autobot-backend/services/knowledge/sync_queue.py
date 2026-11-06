@@ -461,7 +461,7 @@ class DocumentSyncQueue:
         try:
             await processor(entry)
         except DocumentGone as gone:
-            logger.info("sync entry %s dropped: %s", entry.id, gone)
+            logger.warning("sync entry %s dropped, file gone: %s (%s)", entry.id, entry.document_path, gone)
             await self.mark_done(entry.id, SyncStatus.GONE)
             entry.status = SyncStatus.GONE
             return entry

@@ -439,7 +439,7 @@ class TestVanishedFile20968:
         await queue.enqueue_sync("docs/adr/.~tmp~/template.md", SyncReason.CONTENT_CHANGED)
 
         async def processor(entry: SyncQueueEntry) -> None:
-            raise DocumentGone(f"File no longer exists: {entry.document_path}")
+            raise DocumentGone("file vanished")  # message deliberately omits the path
 
         with caplog.at_level("INFO"):
             result = await queue.process_one(processor)
@@ -447,7 +447,8 @@ class TestVanishedFile20968:
         assert result is not None and result.status == SyncStatus.GONE and result.attempts == 0
         stats = await queue.stats()
         assert stats["failed"] == 0 and stats["pending"] == 0
-        assert "dropped" in caplog.text and "template.md" in caplog.text
+        assert "dropped" in caplog.text
+        assert "docs/adr/.~tmp~/template.md" in caplog.text  # the path itself, so stale chunks can be found
 
     @pytest.mark.asyncio
     async def test_the_reindex_processor_reports_a_missing_path_as_gone(self, tmp_path) -> None:
