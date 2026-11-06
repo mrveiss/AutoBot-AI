@@ -14,7 +14,7 @@
 
 import { ref, computed, readonly } from 'vue'
 import { makeAxiosCompatClient } from '@/utils/slmApiCompat'
-import { createLogger } from '@/utils/debugUtils'
+import { createLogger } from '@autobot/ui'
 import type { components } from '@/types/generated/api'
 
 const logger = createLogger('useOrchestration')

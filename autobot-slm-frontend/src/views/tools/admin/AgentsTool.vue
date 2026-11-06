@@ -3,8 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { BaseAlert, PollingPausedAlert } from '@autobot/ui'
-import { createLogger } from '@/utils/debugUtils'
+import { BaseAlert, PollingPausedAlert, createLogger } from '@autobot/ui'
 
 const logger = createLogger('AgentsTool')
 const REFRESH_INTERVAL_MS = 30000
