@@ -23,8 +23,46 @@ from typing import Dict, List, NamedTuple, Optional
 from autobot_shared.llm_provider_order import ORDER_ENV_VAR, provider_is_permitted
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.ssot_claude_models import (
+    CLAUDE_FABLE,
+    CLAUDE_HAIKU,
+    CLAUDE_OPUS,
+    CLAUDE_SONNET,
+    legacy_claude_model,
+    resolve_claude_model,
+)
+from autobot_shared.ssot_constants import (
+    ANTHROPIC_CLAUDE3_OPUS_DATED,
+    ANTHROPIC_CLAUDE_OPUS4_6,
+    ANTHROPIC_CLAUDE_SONNET4,
+    ANTHROPIC_CLAUDE_SONNET4_6,
+)
 
 logger = get_logger(__name__)
+
+
+#: 4.x / 3.x IDs the Anthropic provider still lists. Each keeps a default chain (a listed model never loses its
+#: fallback): an Opus-tier ID falls to the current Sonnet then Haiku, a Sonnet-tier ID to the current Haiku.
+_LISTED_LEGACY_OPUS = (ANTHROPIC_CLAUDE_OPUS4_6, ANTHROPIC_CLAUDE3_OPUS_DATED)
+_LISTED_LEGACY_SONNET = (ANTHROPIC_CLAUDE_SONNET4_6, ANTHROPIC_CLAUDE_SONNET4)
+
+
+def _canonical_model(name: str, env_key: str) -> str:
+    """*name* as the current model ID: a legacy short name (see ``LEGACY_CLAUDE_KEYS``) or a tier alias is mapped.
+
+    A legacy name is still honoured so an update keeps an operator's configured chain, with a
+    deprecation warning naming the variable to change (#20884).
+    """
+    current = legacy_claude_model(name)
+    if current is None:
+        return resolve_claude_model(name)
+    logger.warning(
+        "%s: model name %r is deprecated and was mapped to %r; update the variable to the new name",
+        env_key,
+        name,
+        current,
+    )
+    return current
 
 
 class FallbackHop(NamedTuple):
@@ -98,24 +136,7 @@ class FallbackChainManager:
 
     def _load_default_chains(self) -> None:
         """Load default fallback chains for common models."""
-        # Anthropic Claude fallback chain
-        self.register_chain(
-            FallbackChain(
-                primary_model="claude-opus-4",
-                fallback_models=["claude-sonnet-4", "claude-haiku-4"],
-                primary_provider="anthropic",
-                fallback_providers=["anthropic", "anthropic"],
-            )
-        )
-
-        self.register_chain(
-            FallbackChain(
-                primary_model="claude-sonnet-4",
-                fallback_models=["claude-haiku-4"],
-                primary_provider="anthropic",
-                fallback_providers=["anthropic"],
-            )
-        )
+        self._load_anthropic_default_chains()
 
         # OpenAI GPT fallback chain
         self.register_chain(
@@ -139,7 +160,7 @@ class FallbackChainManager:
         # Cross-provider fallback: expensive cloud → cheaper cloud → local
         self.register_chain(
             FallbackChain(
-                primary_model="claude-opus-4-cross",
+                primary_model=f"{CLAUDE_OPUS}-cross",
                 fallback_models=["gpt-4o", "ollama/llama3"],
                 primary_provider="anthropic",
                 fallback_providers=["openai", "ollama"],
@@ -147,6 +168,55 @@ class FallbackChainManager:
         )
 
         logger.info("Loaded %d default fallback chains", len(self._chains))
+
+    def _load_anthropic_default_chains(self) -> None:
+        """Default chains for every Claude model the provider lists: current tiers and still-listed older IDs."""
+        # Anthropic Claude fallback chain
+        self.register_chain(
+            FallbackChain(
+                primary_model=CLAUDE_FABLE,
+                fallback_models=[CLAUDE_OPUS, CLAUDE_SONNET, CLAUDE_HAIKU],
+                primary_provider="anthropic",
+                fallback_providers=["anthropic", "anthropic", "anthropic"],
+            )
+        )
+
+        self.register_chain(
+            FallbackChain(
+                primary_model=CLAUDE_OPUS,
+                fallback_models=[CLAUDE_SONNET, CLAUDE_HAIKU],
+                primary_provider="anthropic",
+                fallback_providers=["anthropic", "anthropic"],
+            )
+        )
+
+        self.register_chain(
+            FallbackChain(
+                primary_model=CLAUDE_SONNET,
+                fallback_models=[CLAUDE_HAIKU],
+                primary_provider="anthropic",
+                fallback_providers=["anthropic"],
+            )
+        )
+
+        for legacy in _LISTED_LEGACY_OPUS:
+            self.register_chain(
+                FallbackChain(
+                    primary_model=legacy,
+                    fallback_models=[CLAUDE_SONNET, CLAUDE_HAIKU],
+                    primary_provider="anthropic",
+                    fallback_providers=["anthropic", "anthropic"],
+                )
+            )
+        for legacy in _LISTED_LEGACY_SONNET:
+            self.register_chain(
+                FallbackChain(
+                    primary_model=legacy,
+                    fallback_models=[CLAUDE_HAIKU],
+                    primary_provider="anthropic",
+                    fallback_providers=["anthropic"],
+                )
+            )
 
     def _load_env_chains(self) -> None:
         """
@@ -156,13 +226,18 @@ class FallbackChainManager:
           AUTOBOT_FALLBACK_CHAIN_<PRIMARY_MODEL>=fallback1,fallback2,fallback3
 
         Provider can be specified with provider:model format:
-          AUTOBOT_FALLBACK_CHAIN_CLAUDE_OPUS=anthropic:claude-sonnet-4,openai:gpt-4o
+          AUTOBOT_FALLBACK_CHAIN_OPUS=anthropic:sonnet,openai:gpt-4o
+
+        A Claude tier alias (opus / sonnet / haiku / fable), as the primary key or a fallback,
+        is resolved to its pinned ID from ``autobot_shared.ssot_claude_models`` (#20884).
         """
         for key, value in os.environ.items():
             if not key.startswith("AUTOBOT_FALLBACK_CHAIN_"):
                 continue
 
-            primary_model_key = key.replace("AUTOBOT_FALLBACK_CHAIN_", "").lower().replace("_", "-")
+            primary_model_key = _canonical_model(
+                key.replace("AUTOBOT_FALLBACK_CHAIN_", "").lower().replace("_", "-"), key
+            )
             fallback_spec = value.strip()
 
             if not fallback_spec:
@@ -177,10 +252,10 @@ class FallbackChainManager:
                 if ":" in part:
                     provider, model = part.split(":", 1)
                     fallback_providers.append(provider.strip())
-                    fallback_models.append(model.strip())
+                    fallback_models.append(_canonical_model(model.strip(), key))
                 else:
                     fallback_providers.append(None)  # type: ignore[arg-type]
-                    fallback_models.append(part)
+                    fallback_models.append(_canonical_model(part, key))
 
             chain = FallbackChain(
                 primary_model=primary_model_key,

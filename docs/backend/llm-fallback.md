@@ -23,10 +23,14 @@ Built-in chains are registered at startup and require no configuration to use.
 
 ### Anthropic Claude
 
+`opus`, `sonnet` and `haiku` are tier aliases. Each stands for the pinned model ID in
+`autobot_shared/ssot_claude_models.py` (the single place those IDs are written); the chains are
+keyed on that ID, and the logs below print it. An alias is accepted wherever a chain names a model.
+
 | Primary | Fallback 1 | Fallback 2 |
 |---------|-----------|-----------|
-| `claude-opus-4` (anthropic) | `claude-sonnet-4` (anthropic) | `claude-haiku-4` (anthropic) |
-| `claude-sonnet-4` (anthropic) | `claude-haiku-4` (anthropic) | — |
+| `opus` (anthropic) | `sonnet` (anthropic) | `haiku` (anthropic) |
+| `sonnet` (anthropic) | `haiku` (anthropic) | — |
 
 ### OpenAI GPT
 
@@ -39,7 +43,7 @@ Built-in chains are registered at startup and require no configuration to use.
 
 | Primary | Fallback 1 | Fallback 2 |
 |---------|-----------|-----------|
-| `claude-opus-4-cross` (anthropic) | `gpt-4o` (openai) | `ollama/llama3` (ollama) |
+| `opus-cross` (anthropic) | `gpt-4o` (openai) | `ollama/llama3` (ollama) |
 
 This chain demonstrates the recommended pattern: expensive cloud → cheaper cloud → local model.
 
@@ -61,7 +65,7 @@ AUTOBOT_FALLBACK_CHAIN_<PRIMARY_MODEL>=<fallback_spec>
 The variable name's suffix is lowercased and underscores are converted to hyphens to form the lookup key:
 
 ```
-AUTOBOT_FALLBACK_CHAIN_CLAUDE_OPUS_4  →  primary key: "claude-opus-4"
+AUTOBOT_FALLBACK_CHAIN_OPUS  →  primary key: "opus" (resolved to the pinned Opus ID)
 ```
 
 ### Examples
@@ -69,13 +73,13 @@ AUTOBOT_FALLBACK_CHAIN_CLAUDE_OPUS_4  →  primary key: "claude-opus-4"
 **Same-provider chain (Anthropic):**
 
 ```bash
-AUTOBOT_FALLBACK_CHAIN_CLAUDE_OPUS_4=anthropic:claude-sonnet-4,anthropic:claude-haiku-4
+AUTOBOT_FALLBACK_CHAIN_OPUS=anthropic:sonnet,anthropic:haiku
 ```
 
 **Cross-provider chain (Claude → OpenAI → Local):**
 
 ```bash
-AUTOBOT_FALLBACK_CHAIN_CLAUDE_OPUS_4=openai:gpt-4o,ollama:llama3
+AUTOBOT_FALLBACK_CHAIN_OPUS=openai:gpt-4o,ollama:llama3
 ```
 
 **OpenAI with local fallback:**
@@ -93,8 +97,8 @@ AUTOBOT_FALLBACK_CHAIN_MY_CUSTOM_MODEL=my-backup-model,my-last-resort-model
 **Full `.env` example:**
 
 ```dotenv
-# Primary: claude-opus-4 → claude-sonnet-4 → gpt-4o-mini (if Anthropic quota exhausted)
-AUTOBOT_FALLBACK_CHAIN_CLAUDE_OPUS_4=anthropic:claude-sonnet-4,openai:gpt-4o-mini
+# Primary: opus → sonnet → gpt-4o-mini (if Anthropic quota exhausted)
+AUTOBOT_FALLBACK_CHAIN_OPUS=anthropic:sonnet,openai:gpt-4o-mini
 
 # Primary: gpt-4o → local Ollama as emergency fallback
 AUTOBOT_FALLBACK_CHAIN_GPT_4O=openai:gpt-4o-mini,ollama:llama3
@@ -186,10 +190,10 @@ All fallback activity is logged. Set `AUTOBOT_LOG_LEVEL=debug` to see per-attemp
 **Example log sequence for a successful fallback:**
 
 ```
-DEBUG  Attempting chat completion with anthropic:claude-opus-4 (attempt 1/10)
-INFO   Rate limit hit on anthropic:claude-opus-4, falling back to anthropic:claude-sonnet-4
-DEBUG  Attempting chat completion with anthropic:claude-sonnet-4 (attempt 2/10)
-INFO   Fallback successful: anthropic:claude-sonnet-4 worked after 2 attempts (tried: anthropic:claude-opus-4 → anthropic:claude-sonnet-4)
+DEBUG  Attempting chat completion with anthropic:opus (attempt 1/10)
+INFO   Rate limit hit on anthropic:opus, falling back to anthropic:sonnet
+DEBUG  Attempting chat completion with anthropic:sonnet (attempt 2/10)
+INFO   Fallback successful: anthropic:sonnet worked after 2 attempts (tried: anthropic:opus → anthropic:sonnet)
 ```
 
 ### Admin UI
@@ -263,7 +267,7 @@ A low `tokens` value approaching 0 indicates the provider is near its rate limit
 1. The chain has more models than the 10-attempt safety limit, or all models in the chain are also rate-limited.
 2. Add a local model (Ollama, vLLM) as the last entry — local models have no cloud quota:
    ```bash
-   AUTOBOT_FALLBACK_CHAIN_CLAUDE_OPUS_4=anthropic:claude-sonnet-4,anthropic:claude-haiku-4,ollama:llama3
+   AUTOBOT_FALLBACK_CHAIN_OPUS=anthropic:sonnet,anthropic:haiku,ollama:llama3
    ```
 3. Check Redis token buckets to see which providers are depleted (see [Redis Keys](#redis-keys)).
 
@@ -304,10 +308,10 @@ A low `tokens` value approaching 0 indicates the provider is near its rate limit
 **Always include a local model at the end of cross-provider chains.** Local Ollama or vLLM models have no cloud quota, ensuring a last-resort path that never hits a 429:
 
 ```bash
-AUTOBOT_FALLBACK_CHAIN_CLAUDE_OPUS_4=anthropic:claude-sonnet-4,openai:gpt-4o-mini,ollama:llama3
+AUTOBOT_FALLBACK_CHAIN_OPUS=anthropic:sonnet,openai:gpt-4o-mini,ollama:llama3
 ```
 
-**Match fallback model capability to use case.** Falling back from `claude-opus-4` to `claude-haiku-4` is appropriate for most tasks but may degrade quality on complex reasoning. Evaluate whether the fallback result is acceptable for your application's workload.
+**Match fallback model capability to use case.** Falling back from `opus` to `haiku` is appropriate for most tasks but may degrade quality on complex reasoning. Evaluate whether the fallback result is acceptable for your application's workload.
 
 **Tune RPM limits to your actual plan.** Default limits are conservative free-tier estimates. Operators on paid plans should increase limits to avoid premature proactive blocking:
 

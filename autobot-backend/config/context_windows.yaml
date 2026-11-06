@@ -200,6 +200,44 @@ models:
   # ---------------------------------------------------------------------------
   # Anthropic
   # ---------------------------------------------------------------------------
+  # Current IDs (#20884): autobot_shared/ssot_claude_models.py is the SSOT. max_output_tokens
+  # is left unset (not stated by the source); the manager treats a missing value as 0.
+  claude-fable-5-1:
+    context_window_tokens: 1000000
+    compression_threshold: 32768
+    essential_story_tokens: 800
+    message_budget:
+      system_prompt: 1000
+      recent_messages: 80
+      max_history_tokens: 20000
+
+  claude-opus-5-5:
+    context_window_tokens: 1000000
+    compression_threshold: 32768
+    essential_story_tokens: 800
+    message_budget:
+      system_prompt: 1000
+      recent_messages: 80
+      max_history_tokens: 20000
+
+  claude-sonnet-5-5:
+    context_window_tokens: 1000000
+    compression_threshold: 32768
+    essential_story_tokens: 800
+    message_budget:
+      system_prompt: 1000
+      recent_messages: 80
+      max_history_tokens: 20000
+
+  claude-haiku-5-5:
+    context_window_tokens: 1000000
+    compression_threshold: 32768
+    essential_story_tokens: 800
+    message_budget:
+      system_prompt: 1000
+      recent_messages: 80
+      max_history_tokens: 20000
+
   claude-sonnet-4-6:
     context_window_tokens: 200000
     max_output_tokens: 32000
