@@ -37,28 +37,25 @@ from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOT = repo_root()
 _ROOTS = ("autobot-backend", "autobot-slm-backend", "autobot_shared", "autobot-infrastructure")
-_TEST_FILE = re.compile(r"(^|/)(tests?/|test_[^/]*\.py$|[^/]*_test\.py$|conftest\.py$)")
+#: Pytest test trees and modules stay out (their literals are fixtures); `test_*.py` scripts are scanned.
+_TEST_FILE = re.compile(r"(^|/)(tests?/|[^/]*_test\.py$|conftest\.py$)")
 #: "timed out after 30s", "Timeout after 120 seconds", "Analysis timeout (5 minutes)",
 #: "Redis set timeout after 2s", "after 10s timeout". Case-insensitive.
 _LITERAL = re.compile(r"(?i)\btime(d\s*)?\s*out\s*(after|\()\s*\d|\bafter\s+\d+\s*(s|sec|seconds?)\s+timeout")
 
 #: Sites still stating a literal, with how many. **Only shrinks.** Each is a follow-up of #18056.
 _PENDING = {
-    # Five open PRs touch this file; the sites follow once they land.
+    # Open PRs touch these two files; the sites are appended to #18056's PR once they land.
     "autobot-slm-backend/api/code_sync.py": 2,
     # Says "5 minutes" but nothing in this file sets a timeout, so the stated
     # duration is not enforced here at all. That needs tracing to its caller, not a constant swap.
     "autobot-backend/secure_command_executor.py": 1,
-    # Found once the detector covered "timeout after N", "timeout (N minutes)" and
-    # "after Ns timeout" (case-insensitive). Each is checked against its wait in the follow-up.
-    "autobot-backend/api/analytics_controller.py": 2,
-    "autobot-backend/benchmarks/benchmark_belief_state.py": 2,
-    "autobot-backend/chat_workflow/conversation.py": 1,
-    "autobot-backend/security/enterprise/security_policy_manager.py": 1,
-    "autobot-infrastructure/shared/scripts/ai-ml/optimize_llm_models.py": 1,
-    "autobot-infrastructure/shared/scripts/diagnose_backend.py": 1,
-    "autobot-slm-backend/api/roles.py": 1,
-    "autobot-slm-backend/migrations/runner.py": 1,
+}
+
+#: Literals checked against their code and found not to report a wait: (count, why). Exact, not a ceiling.
+_NOT_A_WAIT = {
+    "autobot-backend/benchmarks/benchmark_belief_state.py": (2, "fixture log lines fed to the belief-state parser"),
+    "autobot-backend/security/enterprise/security_policy_manager.py": (1, "session-policy description, not a wait"),
 }
 
 #: Files whose only text hit is a comment, not a message. The text derivation sees them and the
@@ -141,7 +138,7 @@ def _populations() -> tuple[dict[str, int], set[str]]:
 
 def test_no_new_timeout_message_states_a_literal():
     by_ast, _ = _populations()
-    grown = {rel: n for rel, n in by_ast.items() if n > _PENDING.get(rel, 0)}
+    grown = {rel: n for rel, n in by_ast.items() if n > _PENDING.get(rel, 0) + _NOT_A_WAIT.get(rel, (0, ""))[0]}
     assert not grown, (
         f"timeout messages stating a literal duration: {grown}. Build the message from the value the "
         "wait uses (f'... {TIMEOUT_S:.0f}s'), so the two cannot drift (#18056)."
@@ -152,6 +149,13 @@ def test_the_pending_list_only_shrinks():
     by_ast, _ = _populations()
     stale = {rel: (n, by_ast.get(rel, 0)) for rel, n in _PENDING.items() if by_ast.get(rel, 0) < n}
     assert not stale, f"fixed sites still listed (listed, found): {stale}. Lower or delete their _PENDING entries."
+
+
+def test_the_exclusions_are_exact():
+    by_ast, _ = _populations()
+    drifted = {rel: (n, by_ast.get(rel, 0)) for rel, (n, _why) in _NOT_A_WAIT.items() if by_ast.get(rel, 0) != n}
+    assert not drifted, f"excluded sites changed (recorded, found): {drifted}. Re-check them against their waits."
+    assert not set(_NOT_A_WAIT) & set(_PENDING), "a file is either pending or excluded, not both"
 
 
 def test_the_two_derivations_agree():
@@ -172,3 +176,13 @@ def test_the_detector_reads_literals_not_prose():
     assert literal_sites('x = f"timed out after {T:.0f} seconds"') == 0
     assert literal_sites('def f():\n    """It timed out after 30 seconds once."""\n') == 0
     assert literal_sites('log("timed out after %.0fs", T)') == 0
+
+
+def test_test_scripts_are_scanned_and_pytest_modules_are_not():
+    """Control: a `test_*.py` script is in the population, a `*_test.py` module or `tests/` file is not."""
+    assert _TEST_FILE.search("scripts/analysis/test_chat_simple.py") is None
+    assert _TEST_FILE.search("pkg/tests/test_x.py") is not None
+    assert _TEST_FILE.search("pkg/x_test.py") is not None
+    site = 'logger.error("Test timed out after 10 seconds")'
+    assert literal_sites(site) == 1  # what test_chat_simple.py:43 stated before this fix
+    assert "autobot-infrastructure/shared/scripts/analysis/test_chat_simple.py" in _source_files(_ROOT)

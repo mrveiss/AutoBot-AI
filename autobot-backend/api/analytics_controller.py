@@ -45,6 +45,8 @@ _analytics_state_lock = asyncio.Lock()
 # Performance optimization: O(1) lookup for analysis type routing (Issue #326)
 COMMUNICATION_CHAIN_ANALYSIS_TYPES = {"full", "communication_chains"}
 CODE_INDEXING_ANALYSIS_TYPES = {"full", "incremental"}
+#: Wait for the code-index subprocess; the timeout message reports this same value (#18056).
+_CODE_INDEX_TIMEOUT_S = 180.0
 
 # Bounded-dict limits for per-endpoint tracking dicts (Issue #1554).
 # After normalization these should stay well under the cap, but it acts as a
@@ -313,7 +315,7 @@ class AnalyticsController:
                 results["code_analysis_error"] = stderr.decode()
 
         except asyncio.TimeoutError:
-            results["code_analysis_error"] = "Analysis timeout (5 minutes)"
+            results["code_analysis_error"] = f"Analysis timeout ({TimingConstants.VERY_LONG_TIMEOUT:g} seconds)"
         except Exception as e:
             results["code_analysis_error"] = str(e)
 
@@ -337,7 +339,7 @@ class AnalyticsController:
                 cwd=str(self.code_index_path),
             )
 
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=180)
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=_CODE_INDEX_TIMEOUT_S)
 
             if process.returncode == 0:
                 index_data = json.loads(stdout.decode())
@@ -352,7 +354,7 @@ class AnalyticsController:
                 results["code_index_error"] = stderr.decode()
 
         except asyncio.TimeoutError:
-            results["code_index_error"] = "Indexing timeout (3 minutes)"
+            results["code_index_error"] = f"Indexing timeout ({_CODE_INDEX_TIMEOUT_S:g} seconds)"
         except Exception as e:
             results["code_index_error"] = str(e)
 

@@ -58,6 +58,8 @@ _CLASSIFICATION_MODEL = _get_model("classification", "gemma2:2b")
 _RAG_MODEL = _get_model("rag", "mistral:7b-instruct")
 _CHAT_MODEL = _get_model("chat", "qwen3.5:9b")
 _CODE_MODEL = _get_model("npu_code_search", "phi3:mini")
+#: Wait for one `ollama pull`; the timeout result reports this same value (#18056).
+_MODEL_PULL_TIMEOUT_S = 1800
 _EMBEDDING_MODEL = "nomic-embed-text:latest"  # embeddings.model in agents.yaml
 
 # Critical models that must be installed (derived from SSOT roles above)
@@ -193,7 +195,7 @@ class LLMModelOptimizer:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=1800)
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=_MODEL_PULL_TIMEOUT_S)
 
             if process.returncode == 0:
                 elapsed = time.time() - start
@@ -209,7 +211,7 @@ class LLMModelOptimizer:
 
         except asyncio.TimeoutError:
             logger.error("Installation of %s timed out", model)
-            return {"status": "timeout", "error": "Timed out after 30 minutes"}
+            return {"status": "timeout", "error": f"Timed out after {_MODEL_PULL_TIMEOUT_S / 60:g} minutes"}
         except Exception as e:
             logger.error("Error installing %s: %s", model, e)
             return {"status": "error", "error": str(e)}

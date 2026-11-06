@@ -210,7 +210,7 @@ async def test_roles_argv_has_dash_n_one_call_all_units_and_timeout_120(monkeypa
     [
         ({"rc": 1, "out": b"o", "err": b"e"}, False, "oe"),
         ({"rc": 1, "out": b"x" * 3000}, False, "x" * 2000),
-        ({"timeout": True}, False, "Timeout after 120 seconds"),
+        ({"timeout": True}, False, f"Timeout after {roles._SSH_ACTION_TIMEOUT_S:g} seconds"),
         ({"spawn_error": OSError("boom")}, False, "Error: SSH command failed"),
     ],
 )

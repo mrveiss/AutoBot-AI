@@ -31,6 +31,9 @@ from migrations import utils as _migration_utils
 
 logger = logging.getLogger(__name__)
 
+#: Connect timeout for the migration runner; the failure log reports this same value (#18056).
+_CONNECT_TIMEOUT_S = 10
+
 # Migration files in order of execution
 # Add new migrations to this list
 MIGRATIONS = [
@@ -180,12 +183,12 @@ def _parse_db_url(url: str) -> dict:
     return _migration_utils.parse_db_url(url)
 
 
-def get_connection(db_url: str = None, timeout: int = 10) -> psycopg2.extensions.connection:
+def get_connection(db_url: str = None, timeout: int = _CONNECT_TIMEOUT_S) -> psycopg2.extensions.connection:
     """Get a PostgreSQL connection (#786).
 
     Args:
         db_url: Database URL (defaults to get_db_url())
-        timeout: Connection timeout in seconds (default 10s)
+        timeout: Connection timeout in seconds (default _CONNECT_TIMEOUT_S)
     """
     if db_url is None:
         db_url = get_db_url()
@@ -345,7 +348,7 @@ def run_all_migrations(db_url: str = None) -> List[Tuple[str, bool, str]]:
         conn = get_connection(db_url)
         logger.info("Database connection established")
     except Exception as e:
-        logger.error("Failed to connect to database after 10s timeout: %s", e)
+        logger.error("Failed to connect to database after %ss timeout: %s", _CONNECT_TIMEOUT_S, e)
         logger.error("Check that PostgreSQL is running and accepting connections on the configured host/port")
         return [("database_connection", False, f"Connection failed: {e}")]
 
