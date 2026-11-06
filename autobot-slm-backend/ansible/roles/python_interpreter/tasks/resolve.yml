@@ -1,0 +1,30 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# The ONE derivation of the floor interpreter for Ansible (#20932).
+#
+# Sets python_interpreter_version (from .python-version, the SSOT, unless a
+# caller passed an override) and python_interpreter_binary. tasks/main.yml
+# includes this before installing; a role or play that only needs the name to
+# build a venv with -- and does not want to install anything -- calls it alone:
+#
+#   - ansible.builtin.include_role:
+#       name: python_interpreter
+#       tasks_from: resolve
+#
+# `role_path` is only valid while this role's own tasks run, which is why this
+# is a task file and not a `defaults:` entry (see defaults/main.yml).
+---
+
+- name: "python_interpreter | Derive interpreter version from .python-version unless overridden"
+  ansible.builtin.set_fact:
+    python_interpreter_version: "{{ lookup('file', role_path + '/../../../../.python-version') | trim }}"
+  when: python_interpreter_version | default('') | length == 0
+  tags: ['deps', 'python_interpreter', 'python314']
+
+- name: "python_interpreter | Publish python_interpreter_binary for the calling play"
+  ansible.builtin.set_fact:
+    python_interpreter_binary: "python{{ python_interpreter_version }}"
+  tags: ['deps', 'python_interpreter', 'python314']

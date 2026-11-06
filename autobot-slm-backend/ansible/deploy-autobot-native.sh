@@ -176,7 +176,11 @@ configure_backend() {
     # Install backend dependencies if needed
     if [[ ! -f ../venv/bin/activate ]]; then
         log "INFO" "Creating Python virtual environment..."
-        python3 -m venv ../venv
+        # #20932: the floor interpreter from .python-version, never a bare python3
+        # shellcheck source=scripts/lib/python_floor.sh
+        source "$SCRIPT_DIR/../../scripts/lib/python_floor.sh"
+        PYTHON_BIN="$(python_floor_ensure "$SCRIPT_DIR/../..")" || { log "ERROR" "No floor Python interpreter available"; exit 1; }
+        "$PYTHON_BIN" -m venv ../venv
         source ../venv/bin/activate
         pip install -r ../requirements.txt
     fi

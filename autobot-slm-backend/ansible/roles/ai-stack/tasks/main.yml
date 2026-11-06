@@ -72,6 +72,12 @@
   failed_when: false
   tags: ['ai', 'venv']
 
+- name: "AI Stack | Resolve the floor interpreter (.python-version, #20932)"
+  ansible.builtin.include_role:
+    name: python_interpreter
+    tasks_from: resolve
+  tags: ['ai', 'venv']
+
 - name: Check existing venv Python version (#3534)
   ansible.builtin.command:
     cmd: "{{ ai_install_dir }}/venv/bin/python --version"
@@ -80,17 +86,17 @@
   failed_when: false
   check_mode: false
 
-- name: Remove stale venv if not Python 3.14 (#3534)
+- name: Remove stale venv if not the floor Python (#3534)
   ansible.builtin.file:
     path: "{{ ai_install_dir }}/venv"
     state: absent
   when:
     - _ai_venv_python_version.rc == 0
-    - "'Python 3.14' not in _ai_venv_python_version.stdout"
+    - "('Python ' ~ python_interpreter_version) not in _ai_venv_python_version.stdout"
 
 - name: Create Python virtual environment (#3534)
   ansible.builtin.command:
-    cmd: python3.14 -m venv {{ ai_install_dir }}/venv
+    cmd: "{{ python_interpreter_binary }} -m venv {{ ai_install_dir }}/venv"
     creates: "{{ ai_install_dir }}/venv/bin/python"
 
 - name: Fix venv ownership
@@ -126,7 +132,7 @@
     # #16641: without this, pip falls back to shelling out to the standalone
     # `virtualenv` executable, absent from these hosts. Matches the
     # interpreter the "Create Python virtual environment" task above targets.
-    virtualenv_command: "python3.14 -m venv"
+    virtualenv_command: "{{ python_interpreter_binary }} -m venv"
     state: latest
   become_user: "{{ ai_user }}"
   environment:
@@ -221,7 +227,7 @@
     requirements: "{{ ai_install_dir }}/filtered-requirements-ai.txt"
     virtualenv: "{{ ai_install_dir }}/venv"
     # #16641: see "Upgrade pip in venv" above.
-    virtualenv_command: "python3.14 -m venv"
+    virtualenv_command: "{{ python_interpreter_binary }} -m venv"
     state: present
     extra_args: "--timeout 300"
   become_user: "{{ ai_user }}"

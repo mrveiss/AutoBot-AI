@@ -20,18 +20,24 @@
   become: true
   tags: ['redis', 'chromadb']
 
+- name: "ChromaDB | Resolve the floor interpreter (.python-version, #20932)"
+  ansible.builtin.include_role:
+    name: python_interpreter
+    tasks_from: resolve
+  tags: ['redis', 'chromadb']
+
 - name: "ChromaDB | Enforce venv target Python version (env-drift fix)"
   ansible.builtin.include_role:
     name: python_interpreter
     tasks_from: ensure_venv_version
   vars:
     venv_path: "{{ chromadb_install_dir }}/venv"
-    venv_python: python3.14
+    venv_python: "{{ python_interpreter_binary }}"
   tags: ['redis', 'chromadb']
 
 - name: "ChromaDB | Create Python venv"
   ansible.builtin.command:
-    cmd: "python3.14 -m venv {{ chromadb_install_dir }}/venv --clear"
+    cmd: "{{ python_interpreter_binary }} -m venv {{ chromadb_install_dir }}/venv --clear"
     creates: "{{ chromadb_install_dir }}/venv/bin/python"
   become: true
   become_user: "{{ redis_owner }}"
@@ -45,7 +51,7 @@
     name: pip
     state: latest
     virtualenv: "{{ chromadb_install_dir }}/venv"
-    virtualenv_command: "python3.14 -m venv"
+    virtualenv_command: "{{ python_interpreter_binary }} -m venv"
   become: true
   become_user: "{{ redis_owner }}"
   environment:
@@ -71,7 +77,7 @@
     name: chromadb
     state: present
     virtualenv: "{{ chromadb_install_dir }}/venv"
-    virtualenv_command: "python3.14 -m venv"
+    virtualenv_command: "{{ python_interpreter_binary }} -m venv"
     extra_args: "--timeout 300 -c {{ autobot.base_dir }}/constraints/shared.txt"
   become: true
   become_user: "{{ redis_owner }}"
