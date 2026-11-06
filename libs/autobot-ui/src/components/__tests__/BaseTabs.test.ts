@@ -189,8 +189,9 @@ describe('BaseTabs items and defaults (#20382)', () => {
 
   it('keeps a tab the user chose when the items change', async () => {
     await render()
-    tabs()[2].click()
-    await flushPromises()
+    tabs()[0].focus()
+    await press(tabs()[0], 'ArrowRight')
+    expect(selected()).toBe(2)
     await wrapper?.setProps({ items: [...ITEMS] })
     await flushPromises()
     expect(selected()).toBe(2)
