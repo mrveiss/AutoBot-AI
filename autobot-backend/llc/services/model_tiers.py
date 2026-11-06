@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_claude_models import CLAUDE_HAIKU, CLAUDE_SONNET
 
 logger = get_logger(__name__)
 
@@ -59,7 +60,7 @@ def _load_platform_defaults() -> Dict[str, Dict[str, str]]:
         with open(_TIERS_YAML_PATH, encoding="utf-8") as fh:
             data = yaml.safe_load(fh) or {}
         # Keep only entries that have both senior and assistant keys.
-        tiers = {}
+        tiers = {"anthropic": {"senior": CLAUDE_SONNET, "assistant": CLAUDE_HAIKU}}  # SSOT (#20884)
         for provider, entry in data.items():
             if isinstance(entry, dict) and "senior" in entry and "assistant" in entry:
                 tiers[provider] = {"senior": entry["senior"], "assistant": entry["assistant"]}

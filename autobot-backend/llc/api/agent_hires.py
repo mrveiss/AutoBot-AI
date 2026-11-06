@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.env_utils import env_str
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_claude_models import CLAUDE_HAIKU, CLAUDE_SONNET, resolve_claude_model
 from llc.adapters import adapter_unavailable_reason, registered_adapter_types
 from llc.deps import assert_company_access, service_dep
 from llc.services.agent_hire_service import (
@@ -49,8 +50,8 @@ _approval_service = service_dep(ApprovalService)
 # Model tier constants (GH#8486)
 # ---------------------------------------------------------------------------
 
-SONNET_MODEL = "claude-sonnet-4-6"
-HAIKU_MODEL = "claude-haiku-4-5-20251001"
+SONNET_MODEL = CLAUDE_SONNET
+HAIKU_MODEL = CLAUDE_HAIKU  # tier aliases ``sonnet``/``haiku`` are accepted and resolved (#20884)
 
 _VALID_MODELS = {SONNET_MODEL, HAIKU_MODEL}
 
@@ -232,7 +233,8 @@ class AgentHireRequest(BaseModel):
     model: Optional[str] = Field(
         None,
         description=(
-            f"Model override. Supported: {SONNET_MODEL!r} (default), {HAIKU_MODEL!r}. "
+            f"Model override. Supported: {SONNET_MODEL!r} (default), {HAIKU_MODEL!r}; "
+            "the tier aliases 'sonnet' and 'haiku' name them. "
             "Use Haiku for execution-only assistant agents."
         ),
     )
@@ -437,7 +439,7 @@ def _validate_hire(body: AgentHireRequest) -> str:
 
     Extracted from ``hire_agent`` (#15907, function length); the checks are unchanged.
     """
-    resolved_model = body.model or SONNET_MODEL
+    resolved_model = resolve_claude_model(body.model) or SONNET_MODEL
     if resolved_model not in _VALID_MODELS:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

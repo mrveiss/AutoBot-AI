@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.ssot_claude_models import resolve_claude_models
 from llc.models.enums import ActivityEventType
 from llc.models.template import (
     TemplateCategory,
@@ -635,8 +636,7 @@ def _load_built_in_template(template_key: str) -> Dict[str, Any]:
         raise BuiltInTemplateNotFoundError(f"Built-in template '{template_key}' not found")
 
     try:
-        with open(resolved_path, encoding="utf-8") as f:
-            return json.load(f)
+        return resolve_claude_models(json.loads(resolved_path.read_text(encoding="utf-8")))
     except Exception as exc:
         logger.exception("Failed to load built-in template: %s", resolved_path)
         raise BuiltInTemplateNotFoundError(f"Failed to load template '{template_key}'") from exc

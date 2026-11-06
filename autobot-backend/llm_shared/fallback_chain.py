@@ -23,6 +23,7 @@ from typing import Dict, List, NamedTuple, Optional
 from autobot_shared.llm_provider_order import ORDER_ENV_VAR, provider_is_permitted
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.ssot_claude_models import CLAUDE_HAIKU, CLAUDE_OPUS, CLAUDE_SONNET, resolve_claude_model
 
 logger = get_logger(__name__)
 
@@ -101,8 +102,8 @@ class FallbackChainManager:
         # Anthropic Claude fallback chain
         self.register_chain(
             FallbackChain(
-                primary_model="claude-opus-4",
-                fallback_models=["claude-sonnet-4", "claude-haiku-4"],
+                primary_model=CLAUDE_OPUS,
+                fallback_models=[CLAUDE_SONNET, CLAUDE_HAIKU],
                 primary_provider="anthropic",
                 fallback_providers=["anthropic", "anthropic"],
             )
@@ -110,8 +111,8 @@ class FallbackChainManager:
 
         self.register_chain(
             FallbackChain(
-                primary_model="claude-sonnet-4",
-                fallback_models=["claude-haiku-4"],
+                primary_model=CLAUDE_SONNET,
+                fallback_models=[CLAUDE_HAIKU],
                 primary_provider="anthropic",
                 fallback_providers=["anthropic"],
             )
@@ -139,7 +140,7 @@ class FallbackChainManager:
         # Cross-provider fallback: expensive cloud → cheaper cloud → local
         self.register_chain(
             FallbackChain(
-                primary_model="claude-opus-4-cross",
+                primary_model=f"{CLAUDE_OPUS}-cross",
                 fallback_models=["gpt-4o", "ollama/llama3"],
                 primary_provider="anthropic",
                 fallback_providers=["openai", "ollama"],
@@ -156,13 +157,18 @@ class FallbackChainManager:
           AUTOBOT_FALLBACK_CHAIN_<PRIMARY_MODEL>=fallback1,fallback2,fallback3
 
         Provider can be specified with provider:model format:
-          AUTOBOT_FALLBACK_CHAIN_CLAUDE_OPUS=anthropic:claude-sonnet-4,openai:gpt-4o
+          AUTOBOT_FALLBACK_CHAIN_OPUS=anthropic:sonnet,openai:gpt-4o
+
+        A Claude tier alias (opus / sonnet / haiku / fable), as the primary key or a fallback,
+        is resolved to its pinned ID from ``autobot_shared.ssot_claude_models`` (#20884).
         """
         for key, value in os.environ.items():
             if not key.startswith("AUTOBOT_FALLBACK_CHAIN_"):
                 continue
 
-            primary_model_key = key.replace("AUTOBOT_FALLBACK_CHAIN_", "").lower().replace("_", "-")
+            primary_model_key = resolve_claude_model(
+                key.replace("AUTOBOT_FALLBACK_CHAIN_", "").lower().replace("_", "-")
+            )
             fallback_spec = value.strip()
 
             if not fallback_spec:
@@ -177,10 +183,10 @@ class FallbackChainManager:
                 if ":" in part:
                     provider, model = part.split(":", 1)
                     fallback_providers.append(provider.strip())
-                    fallback_models.append(model.strip())
+                    fallback_models.append(resolve_claude_model(model.strip()))
                 else:
                     fallback_providers.append(None)  # type: ignore[arg-type]
-                    fallback_models.append(part)
+                    fallback_models.append(resolve_claude_model(part))
 
             chain = FallbackChain(
                 primary_model=primary_model_key,
