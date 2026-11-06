@@ -507,10 +507,9 @@ import { useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useProvisionStore } from '@/stores/provision'
 import type { NodeRole } from '@/types/slm'
-import { createLogger } from '@/utils/debugUtils'
 import { useToast } from '@/composables/useToast'
 import { useI18n } from 'vue-i18n'
-import { PollingPausedAlert, BaseButton } from '@autobot/ui'
+import { PollingPausedAlert, BaseButton, createLogger } from '@autobot/ui'
 
 const logger = createLogger('SetupWizard')
 
