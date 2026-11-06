@@ -255,3 +255,31 @@ Index(
     unique=True,
     postgresql_where=text(PENDING_SESSION_OWNER_WHERE),
 ).ddl_if(dialect="postgresql")
+
+
+#: One PENDING SSH-password deletion proposal per node, enforced by the database (#20046). The SLM can retry
+#: while an earlier proposal is still pending, and two requests can both pass the application-level read;
+#: only a unique index makes the second insert fail, and the route then returns the existing proposal.
+PENDING_SSH_CREDENTIAL_INDEX = "uq_approvals_pending_ssh_password_deletion"  # pragma: allowlist secret
+PENDING_SSH_CREDENTIAL_WHERE = (
+    "status = 'pending' AND context ->> 'action' = 'slm_node_ssh_password_delete'"  # pragma: allowlist secret
+)
+Index(
+    PENDING_SSH_CREDENTIAL_INDEX,
+    Approval.context["node_id"].astext,
+    unique=True,
+    postgresql_where=text(PENDING_SSH_CREDENTIAL_WHERE),
+).ddl_if(dialect="postgresql")
+
+
+#: One PENDING ``.env.*~`` cleanup proposal per node, enforced by the database (#20567). Keyed by the node as
+#: well as the action, so a request made on one installation never blocks another's when they share a store.
+PENDING_ENV_COPIES_INDEX = "uq_approvals_pending_env_copies_cleanup"
+PENDING_ENV_COPIES_WHERE = "status = 'pending' AND context ->> 'action' = 'env_backup_copies_cleanup'"
+Index(
+    PENDING_ENV_COPIES_INDEX,
+    Approval.context["action"].astext,
+    Approval.context["node"].astext,
+    unique=True,
+    postgresql_where=text(PENDING_ENV_COPIES_WHERE),
+).ddl_if(dialect="postgresql")

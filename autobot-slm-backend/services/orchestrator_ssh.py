@@ -23,6 +23,8 @@ from services.ssh_utils import ssh_destination
 logger = logging.getLogger(__name__)
 
 _SSH_TIMEOUT_S = 30.0
+#: How long a killed ssh may take to be reaped before the caller gets its timeout anyway.
+_REAP_TIMEOUT_S = 5.0
 
 
 def ssh_base_cmd(ssh_user: str, ssh_key, host: str) -> list:
@@ -42,14 +44,33 @@ def ssh_base_cmd(ssh_user: str, ssh_key, host: str) -> list:
     ]
 
 
-async def spawn_ssh(ssh_cmd: list) -> tuple:
-    """Run *ssh_cmd*; returns (returncode, stdout, stderr)."""
+async def _reap(process) -> None:
+    """Wait for the killed child, but never longer than ``_REAP_TIMEOUT_S``: a helper that inherited the pipes
+    can hold ``wait()`` open after ssh is dead, and the caller's own ceiling must still hold (#20046)."""
+    try:
+        await asyncio.wait_for(process.wait(), timeout=_REAP_TIMEOUT_S)
+    except asyncio.TimeoutError:
+        logger.warning("ssh child %s was killed but not reaped within %ss", process.pid, _REAP_TIMEOUT_S)
+
+
+async def spawn_ssh(ssh_cmd: list, timeout: float = _SSH_TIMEOUT_S) -> tuple:
+    """Run *ssh_cmd*; returns (returncode, stdout, stderr).
+
+    On timeout the child is killed and reaped before ``TimeoutError`` propagates: ``wait_for`` only cancels
+    the wait, so a hung ssh (a stuck sudo, a dead peer) used to outlive its caller as an orphan (#20046).
+    """
     process = await asyncio.create_subprocess_exec(
         *ssh_cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=_SSH_TIMEOUT_S)
+    try:
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+    except BaseException:  # TimeoutError, and cancellation of the caller: the child must not outlive either
+        if process.returncode is None:
+            process.kill()
+        await _reap(process)
+        raise
     return process.returncode, stdout, stderr
 
 

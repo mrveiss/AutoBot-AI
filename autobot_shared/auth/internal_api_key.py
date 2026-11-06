@@ -11,6 +11,8 @@ name stays importable (and patchable) from each service.
 
 import secrets
 
+from fastapi import Header, HTTPException, status
+
 from autobot_shared import node_proxy
 
 
@@ -25,4 +27,11 @@ def verify_internal_api_key(provided: str | None) -> bool:
     expected = node_proxy.internal_api_key()
     if not expected or not provided:
         return False
-    return secrets.compare_digest(provided, expected)
+    # Bytes, not str: compare_digest raises TypeError on a non-ASCII str, which would be a 500 on a hostile header.
+    return secrets.compare_digest(provided.encode("utf-8"), expected.encode("utf-8"))
+
+
+async def require_internal_api_key(x_internal_api_key: str | None = Header(None, alias="X-Internal-API-Key")) -> None:
+    """FastAPI dependency: only a holder of the internal service key passes; a user token is refused (#20046)."""
+    if not verify_internal_api_key(x_internal_api_key):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "internal service key required")
