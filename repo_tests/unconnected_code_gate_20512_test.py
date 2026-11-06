@@ -383,3 +383,27 @@ def test_route_candidates_have_no_phantom_forms_20910() -> None:
     assert cand(_NormMod, "/x", "/own", "/api") == ("/api/own/x",)
     assert cand(_NormMod, "/x", "", "/api") == ("/api/x",)
     assert cand(_NormMod, "/x", "/own", None) == ("/own/x", "/x")
+
+
+@pytest.mark.parametrize(
+    ("label", "path", "body"),
+    [
+        ("shell $VAR", "scripts/probe.sh", 'curl -s "$BACKEND_URL/api/planted/orphan"\n'),
+        ("shell quoted base", "scripts/probe.sh", 'curl -s "$BASE"/api/planted/orphan\n'),
+        ("shell ${VAR}", "scripts/probe.sh", "curl -s ${BASE}/api/planted/orphan\n"),
+        ("python f-string", "scripts/probe.py", 'URL = f"{base}/api/planted/orphan"\n'),
+        ("literal host and port", "scripts/probe.yml", "url: http://localhost:8001/api/planted/orphan\n"),
+        ("jinja variable", "scripts/probe.yml", 'url: "{{ backend_url }}/api/planted/orphan"\n'),
+    ],
+)
+def test_a_non_frontend_caller_behind_a_url_base_connects_the_route_20910(
+    tmp_path: Path, label: str, path: str, body: str
+) -> None:
+    """`$BASE/api/x`, `f"{base}/api/x"`, `host:8001/api/x` and `{{ var }}/api/x` are calls, not prose."""
+    assert _fired(tmp_path, {**_ROUTE, **_WIRED, path: body}) == set(), label
+
+
+def test_a_file_path_ending_in_api_is_not_a_caller_20910(tmp_path: Path) -> None:
+    """`autobot-backend/api/x.py` names a file; it must not read as a call to `/api/x.py`."""
+    decoy = {"scripts/note.sh": "# edit autobot-backend/api/planted/orphan\n"}
+    assert _fired(tmp_path, {**_ROUTE, **_WIRED, **decoy}) == {"route:autobot-backend/api/planted_route.py:GET /orphan"}

@@ -96,11 +96,11 @@ ROUTE_DECORATOR_RE = re.compile(
 # api_endpoint_scanner.py with separate regexes, and the two had diverged —
 # the scanner got package resolution (#12945/#12956), this gate did not.
 include_router_prefixes = _routing.include_router_prefixes
-# Frontend request-URL extraction lives in autobot_shared/api_routing/frontend_call_paths.py (#20910); these names
-# are re-exported because the tests and find_missing_api_prefix use them here.
+# Request-URL extraction lives in autobot_shared/api_routing/frontend_call_paths.py (#20910); re-exported here.
 FE_API_RE = _fcp.FE_API_RE
 GETAPIBASE_CALL_RE = _fcp.GETAPIBASE_CALL_RE
 BACKEND_URL_CALL_RE = _fcp.BACKEND_URL_CALL_RE
+URL_BASE_API_RE = _fcp.URL_BASE_API_RE
 call_paths = _fcp.call_paths
 PARAM_RE = re.compile(r"\{[^}]*\}")
 

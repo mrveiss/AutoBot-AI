@@ -158,7 +158,9 @@ def other_callers(tree: Tree, audit: Audit) -> dict[str, set[str]]:
         text = tree.text(rel)
         if rel.startswith(skip) or "/api/" not in text:
             continue
-        for hit in mod.FE_API_RE.findall(mod.ROUTE_DECORATOR_RE.sub("", text) if "@" in text else text):
+        body = mod.ROUTE_DECORATOR_RE.sub("", text) if "@" in text else text
+        # a quoted `/api/..` or one behind a URL base (`$BASE/api/..`, `f"{base}/api/.."`, `host:8001/api/..`)
+        for hit in (*mod.FE_API_RE.findall(body), *mod.URL_BASE_API_RE.findall(body)):
             path = mod.norm_path(hit)
             if path.count("{") == path.count("}"):
                 calls.setdefault(path, set()).add(rel)

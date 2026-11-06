@@ -27,9 +27,14 @@ GETAPIBASE_CALL_RE = re.compile(r"\$\{getApiBase\(\)\}(/[A-Za-z0-9_/${}():.\-]+)
 # serve. We only flag the high-confidence case where /api<path> IS a real
 # route (a forgotten /api, the #10036 class) — never legit non-/api mounts.
 BACKEND_URL_CALL_RE = re.compile(r"\$\{getBackendUrl\(\)\}(/[A-Za-z0-9_/${}():.\-]+)")
-# #20910: any other host-level placeholder directly before `/api/` (`${API_BASE}/api/x`, `${backendUrl}/api/x`,
-# `${NetworkConstants.getBackendUrl()}/api/x`, `${getBackendWsUrl()}/api/x`) is a call to that /api path too.
-HOST_PLACEHOLDER_API_RE = re.compile(r"\$\{[\w.]+(?:\(\))?\}(/api/[A-Za-z0-9_/${}():.\-]+)")
+# #20910: ONE rule for "a URL base directly before `/api/`", for frontend and non-frontend callers alike. The base is a
+# placeholder (`${API_BASE}`, `${NetworkConstants.getBackendUrl()}`, shell `$BASE` or `"$BASE"`, python `{base}`,
+# jinja `{{ backend_url }}`) or a literal host (`http://localhost:8001`, `:8001`). A directory name before `/api/`
+# (`autobot-backend/api/x.py`) is a file path, not a base, and does not match.
+URL_BASE_API_RE = re.compile(
+    r"(?:\$\{[^}\n]*\}|\$[A-Za-z_]\w*\"?|\{{1,2}[^{}\n]+\}{1,2}|:\d{2,5}|(?:https?|wss?)://[\w.\-]+)"
+    r"(/api/[A-Za-z0-9_/${}():.\-]+)"
+)
 # #20910: a file-local base constant that names an /api path, which later calls extend:
 # ``const API_BASE = `${getApiBase()}/knowledge-graph` `` then ``${API_BASE}/entities``.
 BASE_CONST_RE = re.compile(
@@ -68,7 +73,7 @@ def call_paths(txt: str) -> list[str]:
         found += ["/api" + s for s in GETAPIBASE_CALL_RE.findall(line)]
         # `${getBackendUrl()}/<path>` (host-level, so the path is the call target) and other host placeholders.
         found += BACKEND_URL_CALL_RE.findall(line)
-        found += HOST_PLACEHOLDER_API_RE.findall(line)
+        found += URL_BASE_API_RE.findall(line)
         for name, base in bases.items():
             found += [base + t for t in re.findall(r"\$\{" + name + r"\}(/[A-Za-z0-9_/${}():.\-]+)", line)]
             found += [base + t for t in re.findall(r"\b" + name + r"\s*\+\s*[`'\"](/[A-Za-z0-9_/${}():.\-]+)", line)]
