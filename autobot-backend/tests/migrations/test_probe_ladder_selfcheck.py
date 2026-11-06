@@ -179,6 +179,8 @@ def test_observability_coverage():
         "20261101_110",  # approvals pending cleanup-proposal partial unique index (#20234): index-only,
         # the same structural category as 20260821_081; upgrade() returns early when the index exists,
         # so the adoption re-run is a no-op (a duplicate refusal only repeats the first run's message)
+        "20261105_111",  # approvals pending chat-session-owner partial unique index (#20030): index-only,
+        # the same category as 20261101_110; upgrade() returns early when the index exists
     }
     assert unobservable <= allowed, (
         f"new unobservable revisions: {sorted(unobservable - allowed)} — "
