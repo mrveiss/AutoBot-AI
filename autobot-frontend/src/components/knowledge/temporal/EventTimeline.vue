@@ -144,7 +144,7 @@ const props = defineProps<{
 const { t } = useI18n()
 const { isExpanded: isEventExpanded, expand: expandEvent, collapseAll: collapseAllEvents } = useExpansion<string>()
 
-const formatMarkerDate = createDateFormatter({ kind: 'date', intl: { year: 'numeric', month: 'long', day: 'numeric' } })
+const formatMarkerDate = createDateFormatter({ kind: 'date', intl: { year: 'numeric', month: 'long', day: 'numeric' }, invalidText: '' })
 
 /** The event's moment, else its temporal expression, else the unknown-time text. */
 function eventTimeText(event: TemporalEvent): string {
@@ -155,11 +155,12 @@ function eventTimeText(event: TemporalEvent): string {
   )
 }
 
-/** The day heading for an event, or its temporal expression when it has no timestamp. */
+/** The day heading for an event, or its temporal expression when the timestamp is missing or unparseable. */
 function dateMarkerText(event: TemporalEvent): string {
-  return event.timestamp ? formatMarkerDate(event.timestamp) : (event.temporal_expression ?? '')
+  return formatMarkerDate(event.timestamp) || event.temporal_expression || ''
 }
 
+/** Undated events key to '' so they ride the preceding day's group instead of opening a heading. */
 function getDateKey(event: TemporalEvent): string {
   return formatDate(event.timestamp)
 }
