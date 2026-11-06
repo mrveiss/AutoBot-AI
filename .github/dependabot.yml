@@ -586,6 +586,12 @@ updates:
     labels:
       - "dependencies"
       - "backend"
+    ignore:
+      - dependency-name: "transformers"
+        # #15298: exact-pinned to the version vetted on the NPU host; 5.22.1 (#20727)
+        # is not. Guarded by repo_tests/windows_npu_worker_transformers_bound_test.py.
+        # Raise this ceiling together with that test's expectation after vetting.
+        versions: [">5.16.1"]
     groups:
       all-dependencies:
         patterns:

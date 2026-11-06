@@ -39,12 +39,13 @@ openvino  # version from constraints/shared.txt
 # HuggingFace for model downloading and tokenizers
 # #15298: was an unbounded transformers>=4.36.0 -- a fresh resolve could land on any
 # 5.x release, including the one that dropped `resume_download` (#15054). Exact-pinned
-# to 5.16.1 to match requirements-ci/ai-ml.txt's `transformers==5.22.1`, which is this
-# tree's convention for a reproducible, already-vetted version rather than an open floor.
+# to 5.16.1, the version vetted on the NPU host, rather than an open floor. Later releases
+# are NOT vetted there: .github/dependabot.yml ignores transformers above this pin, and
+# repo_tests/windows_npu_worker_transformers_bound_test.py fails on any other exact version.
 # The three `from_pretrained` calls in app/npu_worker.py (AutoTokenizer x2, AutoModel)
 # pass only `trust_remote_code`, which 5.16.1 still accepts (verified against PyPI
 # metadata, no execution) -- the same read-only method #15054 used.
-transformers==5.22.1
+transformers==5.16.1
 tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a floor above
                           # that is unsatisfiable. Matches the ai-stack and npu-worker-docker
                           # siblings now that #15298 aligned this file's transformers pin with
