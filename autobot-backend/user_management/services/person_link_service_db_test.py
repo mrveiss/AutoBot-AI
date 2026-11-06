@@ -43,11 +43,16 @@ async def factory() -> AsyncIterator:
         await engine.dispose()
 
 
-async def _at_startup(factory, person=_PERSON) -> None:
-    with (
+def _slm_and_db(factory, person=_PERSON):
+    return (
         patch.object(service, "fetch_first_slm_admin", AsyncMock(return_value=person)),
         patch("user_management.database.get_async_session_factory", return_value=factory),
-    ):
+    )
+
+
+async def _at_startup(factory, person=_PERSON) -> None:
+    slm, db = _slm_and_db(factory, person)
+    with slm, db:
         await service.link_first_slm_admin_at_startup()
 
 
@@ -123,5 +128,7 @@ async def file_factory(tmp_path) -> AsyncIterator:
 @pytest.mark.asyncio
 async def test_two_concurrent_starts_leave_one_linked_user(file_factory) -> None:
     """Two workers can both pass the checks; the loser must fail whole and leave no partial user."""
-    await asyncio.gather(_at_startup(file_factory), _at_startup(file_factory))
+    slm, db = _slm_and_db(file_factory)
+    with slm, db:  # patched once: overlapping patch.object contexts restore each other's mock, leaking it
+        await asyncio.gather(service.link_first_slm_admin_at_startup(), service.link_first_slm_admin_at_startup())
     assert await _counts(file_factory) == (1, 1)
