@@ -156,6 +156,29 @@ async def test_control_a_withdrawn_request_is_over_and_a_retry_may_file_a_new_on
     assert await _count(factory, Approval, None) == 4
 
 
+async def test_a_revision_2_conversion_files_its_own_request_beside_a_pending_revision_1_one(ctx, monkeypatch):
+    """#20086: only a revision-1 retry may adopt a pending request filed under the unversioned reference."""
+    from llc.services.company_os.plan_convert_lines import file_proposals
+    from llc.services.company_os.plan_types import AiLineProposal
+
+    admin, role, factory = ctx
+    await _approved(admin, role)
+    restore = _under_the_old_ref(monkeypatch)  # revision 1's requests sit under the unversioned reference
+    await _convert_that_loses_its_outcomes(admin, monkeypatch)
+    restore()
+    first = (await admin.get(f"{PREFIX}/intake")).json()["conversion"]["ai_line_proposals"]
+    async with factory() as s:
+        before = {str(i) for i in (await s.execute(select(Approval.id))).scalars()}
+    assert len(before) == 2
+    second = [
+        AiLineProposal(tool_action=p["tool_action"], line=p["line"], sub_step_key=p["sub_step_key"]) for p in first
+    ]
+    await file_proposals(COMPANY_A, "intake", 2, second, ADMIN_A)
+    assert await _count(factory, Approval, None) == 4  # two new requests, not the pending revision-1 ones
+    assert {p.outcome.value for p in second} == {"filed"}
+    assert not {p.approval_id for p in second} & before  # revision 2 is not filed against a revision-1 approval
+
+
 # ------------------------------------------------------------------ the response says the policies are not enforced
 
 
