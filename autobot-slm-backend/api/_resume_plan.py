@@ -32,6 +32,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from api.code_sync import UpdateAllJob
 
 from autobot_shared.logging_manager import get_logger
+from services.rollback_target import current_rollback_ref
 
 logger = get_logger(__name__)
 
@@ -73,6 +74,7 @@ async def _persist_resume_plan(
         "remaining_node_ids": remaining_node_ids,
         "target_commit": target_commit,  # C1
         "created_at": job.created_at,
+        "deploy_ref": current_rollback_ref(),  # #20214: set only for a rollback; the resumed fleet stage reads it
         # #15881: `_stage_log` writes to `stage.log_lines`, which lives in the
         # process the self-update is about to restart. Without this the operator
         # watching the GUI sees the log stop at "Firing Ansible self-update

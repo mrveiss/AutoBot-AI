@@ -244,7 +244,7 @@ setattr(sys.modules["models"], "schemas_secrets", _ss_mod)
 # reason -- services/node_gpu.py builds pydantic responses from them, and a
 # MagicMock model validates nothing. Both import only pydantic; gpu_schemas also
 # imports npu_schemas, hence the order and the sys.modules entry before exec.
-for _schema in ("npu_schemas", "gpu_schemas", "post_sync_schemas"):
+for _schema in ("npu_schemas", "gpu_schemas", "post_sync_schemas", "rollback_schemas"):
     _schema_path = Path(__file__).parent / "models" / f"{_schema}.py"
     _schema_spec = _ss_importlib_util.spec_from_file_location(f"models.{_schema}", _schema_path)
     _schema_mod = _ss_importlib_util.module_from_spec(_schema_spec)
