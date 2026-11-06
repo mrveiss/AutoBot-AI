@@ -16,7 +16,7 @@
     emits  : update:modelValue
 -->
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from 'reka-ui'
 import { resolveDirection, type KitDirection } from '../utils/direction'
 
@@ -56,19 +56,30 @@ const props = withDefaults(
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 
 const direction = computed(() => resolveDirection(props.dir))
-const initial = computed(() => props.defaultValue ?? props.items[0]?.value)
+// Uncontrolled use keeps the chosen tab here, so items that arrive after mount still get a
+// selection and a default never lands on a disabled first item (#20382).
+const chosen = ref(props.defaultValue)
+const active = computed(() => {
+  if (props.modelValue !== undefined) return props.modelValue
+  const kept = props.items.some((item) => item.value === chosen.value)
+  return kept ? chosen.value : props.items.find((item) => !item.disabled)?.value
+})
+
+function onSelect(value: string | number): void {
+  chosen.value = String(value)
+  emit('update:modelValue', chosen.value)
+}
 </script>
 
 <template>
   <TabsRoot
     class="aui-tabs"
     :class="[`aui-tabs--${variant}`, `aui-tabs--${size}`, `aui-tabs--${orientation}`]"
-    :model-value="modelValue"
-    :default-value="initial"
+    :model-value="active"
     :orientation="orientation"
     :activation-mode="activationMode"
     :dir="direction"
-    @update:model-value="emit('update:modelValue', String($event))"
+    @update:model-value="onSelect"
   >
     <TabsList class="aui-tabs__list" :aria-label="label">
       <TabsTrigger
