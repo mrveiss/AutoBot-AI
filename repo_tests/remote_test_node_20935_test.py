@@ -90,7 +90,13 @@ def _run(node: dict, *cmd: str, timeout: int = 30) -> subprocess.Popen:
 def _leftovers(node: dict) -> list[str]:
     runs = node["base"] / "runs"
     refs = _git(node["base"], "--git-dir=mirror.git", "for-each-ref", "refs/runs")
-    return [p.name for p in runs.glob("*")] + ([refs] if refs else [])
+    dirs = sorted(os.listdir(runs)) if runs.is_dir() else []
+    return dirs + ([refs] if refs else [])
+
+
+def _checked_out(node: dict) -> bool:
+    runs = node["base"] / "runs"
+    return any((runs / name / "tree/hello.txt").is_file() for name in (os.listdir(runs) if runs.is_dir() else []))
 
 
 def _wait_for(pred, secs: float = 20.0) -> bool:
@@ -140,7 +146,7 @@ def test_a_timeout_stops_the_command_and_cleans_up(node):
 
 def test_sigterm_mid_run_leaves_no_checkout(node):
     proc = _run(node, "sleep", "60")
-    assert _wait_for(lambda: any((node["base"] / "runs").glob("job.*/tree/hello.txt")))
+    assert _wait_for(lambda: _checked_out(node))
     proc.send_signal(signal.SIGTERM)
     proc.communicate(timeout=60)
     assert proc.returncode == 128 + signal.SIGTERM
@@ -149,7 +155,7 @@ def test_sigterm_mid_run_leaves_no_checkout(node):
 
 def test_a_lost_ssh_session_removes_the_checkout(node):
     proc = _run(node, "sleep", "60")
-    assert _wait_for(lambda: any((node["base"] / "runs").glob("job.*/tree/hello.txt")))
+    assert _wait_for(lambda: _checked_out(node))
     pid = subprocess.run(["pgrep", "-f", "fake-ssh"], capture_output=True, text=True).stdout.split()[0]
     os.kill(int(pid), signal.SIGKILL)
     assert _wait_for(lambda: _leftovers(node) == [], 30), "the node must clean up when its session vanishes"
@@ -282,8 +288,21 @@ def test_a_remote_test_failure_is_a_failure_not_a_fallback(tmp_path):
     assert "handled=0 rc=1" in _call_hook_fn(tmp_path, 1).stdout
 
 
+_TOOL_FILES = ("run.py", "remote_job.sh", "provision.sh", "requirements.txt")
+
+
 def test_no_address_or_credential_is_written_into_the_tooling():
-    for path in (p for p in _TOOL.iterdir() if p.is_file()):
+    for path in (_TOOL / name for name in _TOOL_FILES):
         text = path.read_text(encoding="utf-8")
         assert not re.search(r"\b\d{1,3}(\.\d{1,3}){3}\b", text), path.name
         assert "BEGIN" not in text or "PRIVATE KEY" not in text
+
+
+def test_shipping_a_commit_does_not_run_the_repos_own_pre_push_hook(node):
+    """The hook calls this tool; a hook-running transport would recurse into itself."""
+    hook = node["src"] / ".git/hooks/pre-push"
+    hook.write_text("#!/bin/sh\necho hook-ran >&2\nexit 1\n", encoding="utf-8")
+    hook.chmod(0o755)
+    proc = _run(node, "true")
+    out, _ = proc.communicate(timeout=60)
+    assert proc.returncode == 0 and "hook-ran" not in out

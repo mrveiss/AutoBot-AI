@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Send a test command for one commit to the remote test node (#20935; maintainer decision 2026-11-06).
 
-The pushed SHA goes over SSH with ``git push`` into a mirror on the node, so only what the branch adds crosses
+The pushed SHA goes over SSH with ``git send-pack`` into a mirror on the node, so only what the branch adds crosses
 the link, the node holds no repository credential and every run starts from a clean checkout. The node's
 address, user and key come from ``AUTOBOT_TEST_NODE_*`` settings and never from the repo.
 Exit status: the command's own, 124 on timeout, 75 when the node is not
@@ -35,7 +35,7 @@ REQUIREMENTS = ("requirements-ci-test.txt", "tools/remote_test_node/requirements
 
 
 @dataclass(frozen=True)
-class NodeConfig:
+class RemoteNodeSettings:
     host: str
     user: str
     key: str
@@ -48,7 +48,7 @@ class NodeConfig:
     ttl_min: int
 
 
-def load_config(env: "os._Environ[str] | dict[str, str]") -> "NodeConfig | str":
+def load_config(env: "os._Environ[str] | dict[str, str]") -> "RemoteNodeSettings | str":
     """The settings, or the reason the node is not configured."""
     get = env.get
     if get("AUTOBOT_TEST_NODE_ENABLED", "1") == "0":
@@ -57,7 +57,7 @@ def load_config(env: "os._Environ[str] | dict[str, str]") -> "NodeConfig | str":
     if not host or not user:
         return "AUTOBOT_TEST_NODE_HOST / AUTOBOT_TEST_NODE_USER are not set"
     timeout = int(get("AUTOBOT_TEST_NODE_TIMEOUT", "600"))
-    return NodeConfig(
+    return RemoteNodeSettings(
         host=host,
         user=user,
         key=get("AUTOBOT_TEST_NODE_SSH_KEY", ""),
@@ -71,7 +71,7 @@ def load_config(env: "os._Environ[str] | dict[str, str]") -> "NodeConfig | str":
     )
 
 
-def ssh_options(cfg: NodeConfig) -> list[str]:
+def node_ssh_options(cfg: RemoteNodeSettings) -> list[str]:
     """The ssh command line up to, not including, the destination (git reuses it as GIT_SSH_COMMAND)."""
     argv = [
         cfg.ssh_bin,
@@ -93,8 +93,8 @@ def ssh_options(cfg: NodeConfig) -> list[str]:
     return argv
 
 
-def ssh_argv(cfg: NodeConfig) -> list[str]:
-    return ssh_options(cfg) + [f"{cfg.user}@{cfg.host}"]
+def ssh_argv(cfg: RemoteNodeSettings) -> list[str]:
+    return node_ssh_options(cfg) + [f"{cfg.user}@{cfg.host}"]
 
 
 def _script_command(script: str, *args: str) -> str:
@@ -103,7 +103,7 @@ def _script_command(script: str, *args: str) -> str:
     return " ".join(["bash", "-c", shlex.quote(text), script, *map(shlex.quote, args)])
 
 
-def probe(cfg: NodeConfig) -> "str | None":
+def probe(cfg: RemoteNodeSettings) -> "str | None":
     """None when the node answers over SSH, else why not."""
     done = subprocess.run(
         ssh_argv(cfg) + ["true"], capture_output=True, text=True, check=False, timeout=cfg.connect_timeout + 10
@@ -111,7 +111,7 @@ def probe(cfg: NodeConfig) -> "str | None":
     return None if done.returncode == 0 else f"ssh to the test node failed (exit {done.returncode})"
 
 
-def remote_cleanup(cfg: NodeConfig, job: str) -> None:
+def remote_cleanup(cfg: RemoteNodeSettings, job: str) -> None:
     """Belt and braces for the node's own trap: remove this job's dir whatever state the session is in."""
     mirror = shlex.quote(f"{cfg.base}/mirror.git")
     path = shlex.quote(f"{cfg.base}/runs/job.{job}")
@@ -119,16 +119,19 @@ def remote_cleanup(cfg: NodeConfig, job: str) -> None:
     subprocess.run(ssh_argv(cfg) + [drop], capture_output=True, check=False, timeout=60)
 
 
-def ship_commit(cfg: NodeConfig, sha: str, job: str) -> "str | None":
-    """Refresh the node's mirror of the base branch, then push only what ``sha`` adds. None, or why not."""
+def ship_commit(cfg: RemoteNodeSettings, sha: str, job: str) -> "str | None":
+    """Refresh the node's mirror of the base branch, then send only what ``sha`` adds; None, or why not.
+
+    ``send-pack``, not ``push``: a push would run this repo's pre-push hook, which calls this tool.
+    """
     mirror = shlex.quote(f"{cfg.base}/mirror.git")
     refresh = f"git --git-dir={mirror} fetch --quiet --no-tags origin +refs/heads/main:refs/heads/main"
     if subprocess.run(ssh_argv(cfg) + [refresh], capture_output=True, check=False, timeout=600).returncode != 0:
         return "the node's mirror could not be refreshed (run --provision?)"
-    ssh_cmd = shlex.join(ssh_options(cfg))
+    ssh_cmd = shlex.join(node_ssh_options(cfg))
     dest = f"{cfg.user}@{cfg.host}:{cfg.base}/mirror.git"
     done = subprocess.run(
-        ["git", "push", "--quiet", dest, f"{sha}:refs/runs/{job}"],
+        ["git", "send-pack", "--quiet", dest, f"{sha}:refs/runs/{job}"],
         env=scrubbed_git_env({**os.environ, "GIT_SSH_COMMAND": ssh_cmd}),
         capture_output=True,
         check=False,
@@ -137,14 +140,14 @@ def ship_commit(cfg: NodeConfig, sha: str, job: str) -> "str | None":
     return None if done.returncode == 0 else "the commit could not be pushed to the node"
 
 
-def run_remote(cfg: NodeConfig, sha: str, cmd: list[str], timeout: int) -> int:
+def run_remote(cfg: RemoteNodeSettings, sha: str, cmd: list[str], timeout: int) -> int:
     job = uuid.uuid4().hex[:12]
     ssh = None
     old = {s: signal.signal(s, _raise_on_signal) for s in (signal.SIGINT, signal.SIGTERM)}
     try:
         why = ship_commit(cfg, sha, job)
         if why:
-            return unavailable(why)
+            return report_unavailable(why)
         remote = _script_command(
             "remote_job.sh", cfg.base, str(cfg.slots), str(timeout), str(cfg.ttl_min), job, "--", *cmd
         )
@@ -168,7 +171,7 @@ def _raise_on_signal(signum: int, _frame: object) -> None:
     raise _Interrupted(signum)
 
 
-def _finish(cfg: NodeConfig, job: str, ssh, old: dict) -> None:
+def _finish(cfg: RemoteNodeSettings, job: str, ssh, old: dict) -> None:
     if ssh is not None and ssh.poll() is None:
         ssh.kill()
         ssh.wait()
@@ -191,7 +194,7 @@ def _origin_url() -> str:
     return done.stdout.strip()
 
 
-def provision(cfg: NodeConfig, root: Path) -> int:
+def provision(cfg: RemoteNodeSettings, root: Path) -> int:
     """Send provision.sh and the CI test requirements; safe to run again."""
     reqs = "\n".join((root / name).read_text(encoding="utf-8") for name in REQUIREMENTS if (root / name).is_file())
     done = subprocess.run(
@@ -203,7 +206,7 @@ def provision(cfg: NodeConfig, root: Path) -> int:
     return done.returncode
 
 
-def unavailable(reason: str) -> int:
+def report_unavailable(reason: str) -> int:
     sys.stderr.write(f"[remote-test-node] UNAVAILABLE: {reason}\n")
     return UNAVAILABLE
 
@@ -217,16 +220,16 @@ def main(argv: "list[str] | None" = None, env: "dict[str, str] | None" = None) -
     args = parser.parse_args(argv)
     cfg = load_config(os.environ if env is None else env)
     if isinstance(cfg, str):
-        return unavailable(f"not configured ({cfg})")
+        return report_unavailable(f"not configured ({cfg})")
     if args.provision:
         return provision(cfg, Path.cwd())
     if not args.sha or not args.cmd:
         parser.error("--sha and a command are required")
     reason = probe(cfg)
     if reason:
-        return unavailable(reason)
+        return report_unavailable(reason)
     rc = run_remote(cfg, args.sha, args.cmd, args.timeout or cfg.timeout)
-    return unavailable("the SSH session failed mid-run") if rc == 255 else rc
+    return report_unavailable("the SSH session failed mid-run") if rc == 255 else rc
 
 
 if __name__ == "__main__":
