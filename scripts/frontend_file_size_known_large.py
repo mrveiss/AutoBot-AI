@@ -119,7 +119,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/composables/useTimeout.ts": 749,
     "autobot-frontend/src/composables/useVoiceConversation.ts": 986,
     "autobot-frontend/src/composables/useVoiceOutput.ts": 1089,
-    "autobot-frontend/src/composables/useWorkflowBuilder.ts": 1292,  # #17677: 1293 -> 1292
+    "autobot-frontend/src/composables/useWorkflowBuilder.ts": 1284,  # #17677: 1293 -> 1292 -> 1284
     "autobot-frontend/src/config/__tests__/ssot-config.spec.ts": 626,
     "autobot-frontend/src/config/ssot-config.ts": 804,  # #19821 -15
     "autobot-frontend/src/models/controllers/ChatController.ts": 1156,
@@ -147,7 +147,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/PluginsView.vue": 1058,
     "autobot-frontend/src/views/SettingsView.vue": 739,
     "autobot-frontend/src/views/VisionAutomationView.vue": 848,
-    "autobot-frontend/src/views/WorkflowBuilderView.vue": 2169,  # #13421: 2201 -> 2169; #13422: 2300 -> 2267
+    "autobot-frontend/src/views/WorkflowBuilderView.vue": 2166,
     "autobot-frontend/src/views/llc/BacklogView.vue": 618,
     "autobot-frontend/src/views/llc/CompanyCreationWizard.vue": 909,
     "autobot-frontend/src/views/llc/CompanyPortabilityView.vue": 761,

@@ -648,6 +648,8 @@ export function useWorkflowBuilder() {
   const isWorkflowPaused = computed(() => currentWorkflow.value?.is_paused ?? false);
   const currentStepIndex = computed(() => currentWorkflow.value?.current_step ?? 0);
   const totalSteps = computed(() => currentWorkflow.value?.total_steps ?? 0);
+  /** Steps the server reports as waiting: the approval card derives from this, not from socket frames (#17677). */
+  const stepsAwaitingApproval = computed(() => currentWorkflow.value?.steps?.filter((s) => s.status === 'waiting_approval') ?? []);
   const progress = computed(() => {
     if (totalSteps.value === 0) return 0;
     return Math.round((currentStepIndex.value / totalSteps.value) * 100);
@@ -992,27 +994,16 @@ export function useWorkflowBuilder() {
     return false;
   }
 
-  /** Approve workflow step */
-  async function approveStep(workflowId: string, stepId: string): Promise<boolean> {
-    const response = await apiClient.controlWorkflow(workflowId, 'approve_step', stepId);
-    if (response.success) {
-      logger.info('Step approved:', { workflowId, stepId });
-      await getWorkflowStatus(workflowId);
-      return true;
-    }
-    return false;
+  /** Answer a waiting step (approve or skip), then re-read its server status. */
+  async function answerStep(workflowId: string, stepId: string, action: 'approve_step' | 'skip_step'): Promise<boolean> {
+    const response = await apiClient.controlWorkflow(workflowId, action, stepId);
+    if (!response.success) return false;
+    logger.info(`Step answered (${action}):`, { workflowId, stepId });
+    await getWorkflowStatus(workflowId);
+    return true;
   }
-
-  /** Skip workflow step */
-  async function skipStep(workflowId: string, stepId: string): Promise<boolean> {
-    const response = await apiClient.controlWorkflow(workflowId, 'skip_step', stepId);
-    if (response.success) {
-      logger.info('Step skipped:', { workflowId, stepId });
-      await getWorkflowStatus(workflowId);
-      return true;
-    }
-    return false;
-  }
+  const approveStep = (workflowId: string, stepId: string) => answerStep(workflowId, stepId, 'approve_step');
+  const skipStep = (workflowId: string, stepId: string) => answerStep(workflowId, stepId, 'skip_step');
 
   /** Approve plan */
   async function approvePlan(workflowId: string): Promise<boolean> {
@@ -1269,6 +1260,7 @@ export function useWorkflowBuilder() {
     pauseWorkflow,
     resumeWorkflow,
     cancelWorkflow,
+    stepsAwaitingApproval,
     approveStep,
     skipStep,
     approvePlan,
