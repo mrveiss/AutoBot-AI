@@ -879,7 +879,7 @@ async def handoff_to_human(
         item = await _handoff_service().agent_to_human(
             session,
             work_item_id=work_item_id,
-            agent_id=handing_off_agent(existing, _current_user),
+            agent_id=await handing_off_agent(session, existing, _current_user),
             reviewer_user_id=await member_reviewer(session, ctx.org_id, body.reviewer_user_id),
             company_id=str(ctx.org_id),
             agent_notes=body.agent_notes,

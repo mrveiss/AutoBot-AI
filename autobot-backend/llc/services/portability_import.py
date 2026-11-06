@@ -25,6 +25,11 @@ logger = get_logger(__name__)
 _PLACEHOLDER_RE = re.compile(r"\{\{(\w+)\}\}")
 
 
+def _template_work_items(template: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """The work items a template carries: a template export's ``seed_work_items`` and a snapshot's ``work_items``."""
+    return [*template.get("seed_work_items", []), *template.get("work_items", [])]
+
+
 class PortabilityImportMixin:
     """Reporting lines, secrets and entity inserts; mixed into ``PortabilityService``."""
 
@@ -187,7 +192,7 @@ class PortabilityImportMixin:
         whose named project was not imported is never moved to an unrelated project.
         """
         fallback = next(iter(project_ids.values()), None)
-        for item in template.get("work_items", []):
+        for item in _template_work_items(template):
             if not item.get("is_seed"):
                 continue
             named = item.get("project_id")

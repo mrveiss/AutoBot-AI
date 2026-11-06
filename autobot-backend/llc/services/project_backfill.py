@@ -113,9 +113,17 @@ async def apply_project_backfill(session: AsyncSession, company_id: uuid.UUID) -
         session.add(LLCProject(id=default_id, company_id=company_id, name=DEFAULT_PROJECT_NAME))
         await session.flush()
     target = {i: (p if p is not None else default_id) for i, (p, _) in plan.items()}
+    updated = 0
     for project in set(target.values()):
         ids = [i for i, t in target.items() if t == project]
-        await session.execute(update(LLCWorkItem).where(LLCWorkItem.id.in_(ids)).values(project_id=project))
+        stmt = (
+            update(LLCWorkItem)
+            .where(LLCWorkItem.id.in_(ids), LLCWorkItem.project_id.is_(None))  # one that got a project since keeps it
+            .values(project_id=project)
+        )
+        updated += (await session.execute(stmt)).rowcount or 0
     await session.flush()
+    result["updated"] = updated
+    result["skipped_already_in_project"] = len(target) - updated
     result["default_project_id"] = str(default_id) if default_id else None
     return result

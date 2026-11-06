@@ -19,16 +19,21 @@ _AGENT = uuid.uuid4()
 _ORG, _REVIEWER = str(uuid.uuid4()), str(uuid.uuid4())
 
 
-def test_a_person_hands_off_for_the_items_agent_whatever_the_body_says() -> None:
-    item = SimpleNamespace(assignee_agent_id=_AGENT)
-    with patch.object(identity, "is_interactive_human", return_value=True):
-        assert identity.handing_off_agent(item, {"id": "someone"}) == str(_AGENT)
+@pytest.mark.asyncio
+async def test_a_person_hands_off_for_the_items_agent_whatever_the_body_says() -> None:
+    item = SimpleNamespace(assignee_agent_id=_AGENT, company_id=_ORG)
+    with (
+        patch.object(identity, "is_interactive_human", return_value=True),
+        patch.object(identity, "resolve_actor_role", AsyncMock(return_value="owner")),
+    ):
+        assert await identity.handing_off_agent(AsyncMock(), item, {"id": "someone"}) == str(_AGENT)
 
 
-def test_an_agent_credential_is_refused_on_the_route() -> None:
-    item = SimpleNamespace(assignee_agent_id=_AGENT)
+@pytest.mark.asyncio
+async def test_an_agent_credential_is_refused_on_the_route() -> None:
+    item = SimpleNamespace(assignee_agent_id=_AGENT, company_id=_ORG)
     with patch.object(identity, "is_interactive_human", return_value=False), pytest.raises(HTTPException) as refused:
-        identity.handing_off_agent(item, {"agent_id": str(_AGENT)})
+        await identity.handing_off_agent(AsyncMock(), item, {"agent_id": str(_AGENT)})
     assert refused.value.status_code == 403
 
 
@@ -60,10 +65,15 @@ def test_the_request_bodies_have_no_acting_identity(model, forged) -> None:
     assert not set(forged) & set(model.model_fields)
 
 
-def test_an_item_with_no_assigned_agent_is_refused_not_handed_off_as_none() -> None:
-    item = SimpleNamespace(assignee_agent_id=None)
-    with patch.object(identity, "is_interactive_human", return_value=True), pytest.raises(HTTPException) as refused:
-        identity.handing_off_agent(item, {"id": "someone"})
+@pytest.mark.asyncio
+async def test_an_item_with_no_assigned_agent_is_refused_not_handed_off_as_none() -> None:
+    item = SimpleNamespace(assignee_agent_id=None, company_id=_ORG)
+    with (
+        patch.object(identity, "is_interactive_human", return_value=True),
+        patch.object(identity, "resolve_actor_role", AsyncMock(return_value="owner")),
+        pytest.raises(HTTPException) as refused,
+    ):
+        await identity.handing_off_agent(AsyncMock(), item, {"id": "someone"})
     assert refused.value.status_code == 409
     assert "no assigned agent" in refused.value.detail
 

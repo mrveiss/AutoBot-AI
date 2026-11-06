@@ -13,18 +13,27 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.auth.interactive_principal import is_interactive_human
+from autobot_shared.auth.permissions import is_admin_role
 
 from ..models.work_item import LLCWorkItem
 from ..services.authz import membership_role
+from ..services.work_item_actor_role import coworking_denial, resolve_actor_role
 
 
-def handing_off_agent(item: LLCWorkItem, current_user: Mapping[str, Any]) -> str:
-    """The item's assigned agent, handed off by a person on its behalf; any other credential is refused.
+async def handing_off_agent(session: AsyncSession, item: LLCWorkItem, current_user: Mapping[str, Any]) -> str:
+    """The item's assigned agent, handed off by a person who manages its agent work; any other caller is refused.
 
-    An agent reaches this through ``WorkItemService``, not this route.
+    Managing is the co-working rule (owner/lead or an admin role), so a plain member cannot hand an
+    agent's item off or pick its reviewer. An agent reaches this through ``WorkItemService``, not this route.
     """
     if not is_interactive_human(current_user):
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Only a person can hand this off here")
+    actor_id = current_user.get("user_id") or current_user.get("id")
+    role = await resolve_actor_role(session, str(actor_id) if actor_id else None, str(item.company_id))
+    if is_admin_role(current_user.get("role") or "member"):
+        role = "admin"
+    if coworking_denial(role) is not None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Only an owner, lead or admin can hand this off")
     if item.assignee_agent_id is None:
         raise HTTPException(status.HTTP_409_CONFLICT, detail="This work item has no assigned agent to hand off for")
     return str(item.assignee_agent_id)

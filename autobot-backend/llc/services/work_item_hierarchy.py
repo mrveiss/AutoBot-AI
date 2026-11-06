@@ -175,18 +175,26 @@ async def parent_if_allowed(
     return parent_id
 
 
-async def move_subtree_to_project(session: AsyncSession, root_id: uuid.UUID, project_id: uuid.UUID) -> int:
-    """Set ``project_id`` on every descendant of *root_id*; bounded and cycle-safe. Returns the row count."""
+async def move_subtree_to_project(
+    session: AsyncSession, root_id: uuid.UUID, project_id: uuid.UUID, company_id: uuid.UUID
+) -> int:
+    """Set ``project_id`` on every descendant of *root_id* in *company_id*; bounded, cycle-safe. Returns the count."""
     seen = {root_id}
     frontier = [root_id]
     moved = 0
     for _ in range(MAX_HIERARCHY_DEPTH):
-        rows = await session.execute(select(LLCWorkItem.id).where(LLCWorkItem.parent_id.in_(frontier)))
+        rows = await session.execute(
+            select(LLCWorkItem.id).where(LLCWorkItem.parent_id.in_(frontier), LLCWorkItem.company_id == company_id)
+        )
         frontier = [i for i in rows.scalars().all() if i not in seen]
         if not frontier:
             break
         seen.update(frontier)
-        await session.execute(update(LLCWorkItem).where(LLCWorkItem.id.in_(frontier)).values(project_id=project_id))
+        await session.execute(
+            update(LLCWorkItem)
+            .where(LLCWorkItem.id.in_(frontier), LLCWorkItem.company_id == company_id)
+            .values(project_id=project_id)
+        )
         moved += len(frontier)
     return moved
 
@@ -216,7 +224,7 @@ async def reparent(
     )
     if project is not None and str(item.project_id) != project:
         item.project_id = uuid.UUID(project)
-        await move_subtree_to_project(session, item.id, item.project_id)
+        await move_subtree_to_project(session, item.id, item.project_id, item.company_id)
     return new_parent
 
 
