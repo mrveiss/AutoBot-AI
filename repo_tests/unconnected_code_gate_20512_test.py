@@ -176,19 +176,44 @@ def test_declared_entries_describe_the_live_references() -> None:
     )
 
 
-#: One-time exception to "shrink only" (#20910): the route detector stopped judging a route by paths it is never
-#: served at, which newly flagged routes that were always unconnected. Each such entry links one of these grouped
-#: wiring issues. Nothing else may be added; do not extend this set.
-REMEASURE_ISSUES = frozenset(["#20970", "#20971", "#20972", "#20973", "#20974", "#20975", "#20976", "#20977"])
+REMEASURE_REL = "repo_tests/unconnected_code_remeasure_20910.txt"
+
+
+def _remeasure_keys(text: str) -> set[str]:
+    """The frozen one-time re-measure (#20910): comment lines dropped."""
+    return {ln for ln in text.split("\n") if ln and not ln.startswith("#")}
+
+
+def _additions_beyond_the_base(current: dict[str, str], base: str, frozen: set[str]) -> list[str]:
+    """Baseline keys absent from *base* that the frozen re-measure does not name. The issue an entry links never matters."""
+    old_keys = uc.parse_baseline(base)
+    return sorted(k for k in current if k not in old_keys and k not in frozen)
 
 
 def test_the_baseline_only_shrinks_against_the_base() -> None:
     base = base_text(repo_root(), uc.BASELINE_REL)
     if base is None:
         return  # this file is new at the base: the baseline is being introduced, not raised
-    old_keys = uc.parse_baseline(base)
-    added = sorted(k for k, issue in _baseline().items() if k not in old_keys and issue not in REMEASURE_ISSUES)
+    frozen = _remeasure_keys((repo_root() / REMEASURE_REL).read_text(encoding="utf-8"))
+    added = _additions_beyond_the_base(_baseline(), base, frozen)
     assert not added, f"#20512: baseline entries were added against the base: {added}. Wire the code in instead."
+
+
+def test_the_frozen_remeasure_never_grows_against_the_base() -> None:
+    base = base_text(repo_root(), REMEASURE_REL)
+    if base is None:
+        return  # introduced by the change that makes the re-measure
+    now = _remeasure_keys((repo_root() / REMEASURE_REL).read_text(encoding="utf-8"))
+    grown = sorted(now - _remeasure_keys(base))
+    assert not grown, f"#20910: the frozen one-time re-measure gained entries: {grown}"
+
+
+def test_a_new_entry_linked_to_a_remeasure_issue_is_refused() -> None:
+    """Linking a grouped wiring issue (#20970..#20977) does not exempt a new entry: only the frozen list does."""
+    base = "route:a.py:GET /x\t#10603\n"
+    planted = {"route:a.py:GET /x": "#10603", "route:new.py:GET /y": "#20970"}
+    assert _additions_beyond_the_base(planted, base, frozen=set()) == ["route:new.py:GET /y"]
+    assert _additions_beyond_the_base(planted, base, frozen={"route:new.py:GET /y"}) == []
 
 
 def test_the_baseline_states_what_it_cannot_see() -> None:

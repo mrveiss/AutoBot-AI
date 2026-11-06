@@ -6,8 +6,8 @@
 # code to delete: wiring in is the remedy, never deletion. A key leaves this file when its code is
 # connected; nothing may be added (the gate fails a new unconnected key, and a test compares this
 # file with the base commit). #10603 is the umbrella for built-but-disconnected machinery.
-# One ruled exception (#20910): the route detector fix newly flagged routes that were always unconnected;
-# they were added once, each linked to a grouped wiring issue under #20512 (REMEASURE_ISSUES in the test).
+# One ruled exception (#20910): the detector fixes newly flagged routes that were always unconnected;
+# they were added once, each linked to a grouped wiring issue under #20512 (frozen in the gate test).
 #
 # What it cannot see: a function nobody calls inside a module somebody imports; a module imported
 # only by another unused module; callers that build a path or key at runtime; plugins and
@@ -188,7 +188,6 @@ route:autobot-backend/api/agent_ledger.py:GET /ledger/presence	#10603
 route:autobot-backend/api/agent_ledger.py:GET /ledger/waitlists	#10603
 route:autobot-backend/api/agent_ledger.py:POST /ledger/claims/yield-request	#10603
 route:autobot-backend/api/agent_org.py:GET /{agent_id}/chain	#10603
-route:autobot-backend/api/agent_org.py:GET /{agent_id}/delegations	#10603
 route:autobot-backend/api/agent_org.py:GET /{agent_id}/org/role-defaults	#10603
 route:autobot-backend/api/agent_org.py:PATCH /delegations/{delegation_id}/status	#10603
 route:autobot-backend/api/agent_org.py:PATCH /{agent_id}/org	#10603
@@ -312,11 +311,7 @@ route:autobot-backend/api/chat.py:GET /chat/sessions/{session_id}/work-item	#106
 route:autobot-backend/api/chat.py:PUT /chat/sessions/{session_id}/approval-categories	#10603
 route:autobot-backend/api/chat.py:PUT /chat/sessions/{session_id}/role	#10603
 route:autobot-backend/api/chat.py:PUT /chat/sessions/{session_id}/work-item	#10603
-route:autobot-backend/api/chat_folders.py:DELETE /chat/folders/{folder_id}	#10603
-route:autobot-backend/api/chat_folders.py:PUT /chat/folders/{folder_id}	#10603
 route:autobot-backend/api/chat_knowledge.py:POST /files/upload/{chat_id}	#10603
-route:autobot-backend/api/chat_presets.py:DELETE /chat/presets/{preset_id}	#10603
-route:autobot-backend/api/chat_presets.py:PUT /chat/presets/{preset_id}	#10603
 route:autobot-backend/api/chat_sessions.py:DELETE /sessions/{session_id}/checkpoints	#10603
 route:autobot-backend/api/chat_shared_links.py:GET /chat/sessions/{session_id}/share-links	#10603
 route:autobot-backend/api/chat_trace.py:GET /chat/sessions/{session_id}/trace	#10603
@@ -444,7 +439,6 @@ route:autobot-backend/api/execution_snapshots.py:DELETE /execution/snapshots/{sn
 route:autobot-backend/api/execution_snapshots.py:GET /execution/snapshots	#10603
 route:autobot-backend/api/execution_snapshots.py:POST /execution/snapshots	#10603
 route:autobot-backend/api/execution_snapshots.py:POST /execution/snapshots/{snapshot_id}/restore	#10603
-route:autobot-backend/api/feature_flags.py:GET /access-control/metrics	#10603
 route:autobot-backend/api/files.py:GET /download/{path:path}	#10603
 route:autobot-backend/api/files.py:GET /view/{path:path}	#10603
 route:autobot-backend/api/filesystem_mcp.py:GET /mcp/list_allowed_directories	#10603
@@ -569,9 +563,7 @@ route:autobot-backend/api/knowledge_eval.py:POST /test/rebuild_index	#10603
 route:autobot-backend/api/knowledge_graph_routes.py:GET /documents/{document_id}/overview	#10603
 route:autobot-backend/api/knowledge_graph_routes.py:GET /entities/{entity_id}/relationships	#10603
 route:autobot-backend/api/knowledge_graph_routes.py:GET /events/{entity_name}/timeline	#10603
-route:autobot-backend/api/knowledge_graph_routes.py:GET /summaries/search	#10603
 route:autobot-backend/api/knowledge_graph_routes.py:GET /summaries/{summary_id}/drill-down	#10603
-route:autobot-backend/api/knowledge_graph_routes.py:POST /pipeline/run	#10603
 route:autobot-backend/api/knowledge_grounding.py:POST /kb-conflicts/{conflict_id}/resolve	#10603
 route:autobot-backend/api/knowledge_maintenance.py:GET /lint/report	#10603
 route:autobot-backend/api/knowledge_maintenance.py:GET /synthesis/log	#10603
@@ -618,7 +610,6 @@ route:autobot-backend/api/knowledge_rag_loop.py:GET /loop/status	#10603
 route:autobot-backend/api/knowledge_rag_loop.py:POST /loop/approve	#10603
 route:autobot-backend/api/knowledge_rag_loop.py:POST /loop/reject	#10603
 route:autobot-backend/api/knowledge_relations.py:GET /fact/{fact_id}	#10603
-route:autobot-backend/api/knowledge_research_ws.py:WEBSOCKET /ws/knowledge/research	#10603
 route:autobot-backend/api/knowledge_search_documentation.py:GET /documentation/search	#10603
 route:autobot-backend/api/knowledge_search_documentation.py:GET /documentation/stats	#10603
 route:autobot-backend/api/knowledge_search_scoped.py:POST /rag/scoped	#10603
@@ -723,7 +714,6 @@ route:autobot-backend/api/research_browser.py:POST /session/{session_id}/navigat
 route:autobot-backend/api/run_jwt_router.py:POST /runs/{run_id}/jwt/refresh	#10603
 route:autobot-backend/api/sandbox.py:POST /execute/batch	#10603
 route:autobot-backend/api/sandbox.py:POST /execute/script	#10603
-route:autobot-backend/api/sandbox_files.py:GET /view/{file_path:path}	#10603
 route:autobot-backend/api/scheduler.py:DELETE /workflows/{workflow_id}	#10603
 route:autobot-backend/api/scheduler.py:GET /templates/schedule/{template_id}	#10603
 route:autobot-backend/api/scheduler.py:GET /workflows/{workflow_id}	#10603
@@ -801,10 +791,7 @@ route:autobot-backend/api/task_workspace_ws.py:POST /tasks/{task_id}/exec	#10603
 route:autobot-backend/api/task_workspace_ws.py:POST /tasks/{task_id}/restore	#10603
 route:autobot-backend/api/task_workspace_ws.py:POST /tasks/{task_id}/snapshot	#10603
 route:autobot-backend/api/task_workspace_ws.py:WEBSOCKET /tasks/{task_id}/shell	#10603
-route:autobot-backend/api/telegram_bot.py:POST /telegram/webhook	#10603
-route:autobot-backend/api/terminal.py:WEBSOCKET /ws/ssh/{host_id}	#10603
 route:autobot-backend/api/themes.py:GET /{theme_id}/assets/{rel:path}	#10603
-route:autobot-backend/api/themes.py:GET /{theme_id}/theme.css	#10603
 route:autobot-backend/api/transcripts.py:POST /transcripts/{transcript_id}/kb-push	#10603
 route:autobot-backend/api/transcripts.py:WEBSOCKET /transcripts/{transcript_id}/analyze	#10603
 route:autobot-backend/api/triggers.py:DELETE /triggers/{trigger_id}	#10603
@@ -839,7 +826,6 @@ route:autobot-backend/api/vnc_mcp.py:POST /mcp/observe_vnc_activity	#10603
 route:autobot-backend/api/vnc_mcp.py:POST /observations/{vnc_type}	#10603
 route:autobot-backend/api/vnc_proxy.py:GET /{vnc_type}/control/status	#10603
 route:autobot-backend/api/vnc_proxy.py:GET /{vnc_type}/status	#10603
-route:autobot-backend/api/vnc_proxy.py:GET /{vnc_type}/vnc.html	#10603
 route:autobot-backend/api/vnc_proxy.py:POST /{vnc_type}/control/acquire	#10603
 route:autobot-backend/api/vnc_proxy.py:POST /{vnc_type}/control/release	#10603
 route:autobot-backend/api/vnc_proxy.py:WEBSOCKET /{vnc_type}/websockify	#10603
@@ -919,28 +905,7 @@ route:autobot-backend/services/autoresearch/routes.py:POST /prompt-optimizer/reg
 route:autobot-backend/services/knowledge_sync_service.py:POST /daemon/start	#10603
 route:autobot-backend/services/knowledge_sync_service.py:POST /daemon/stop	#10603
 route:autobot-backend/services/workflow_automation/routes.py:GET /workflow_state/{workflow_id}	#10603
-route:autobot-backend/services/workflow_automation/routes.py:WEBSOCKET /workflow_ws/{session_id}	#10603
 route:autobot-backend/services/workflow_rbac.py:GET /workflows/{workflow_id}/steps	#10603
-route:autobot-backend/transcriber/routes/ai.py:POST /recordings/{recording_id}/ai/ask	#10603
-route:autobot-backend/transcriber/routes/export.py:POST /recordings/{recording_id}/export	#10603
-route:autobot-backend/transcriber/routes/kb.py:GET /recordings/{recording_id}/kb/status	#10603
-route:autobot-backend/transcriber/routes/kb.py:POST /recordings/{recording_id}/kb/push	#10603
-route:autobot-backend/transcriber/routes/projects.py:DELETE /projects/{project_id}	#10603
-route:autobot-backend/transcriber/routes/projects.py:GET /projects/{project_id}	#10603
-route:autobot-backend/transcriber/routes/projects.py:PATCH /projects/{project_id}	#10603
-route:autobot-backend/transcriber/routes/recordings.py:DELETE /recordings/{recording_id}	#10603
-route:autobot-backend/transcriber/routes/recordings.py:GET /projects/{project_id}/recordings	#10603
-route:autobot-backend/transcriber/routes/recordings.py:GET /recordings/{recording_id}	#10603
-route:autobot-backend/transcriber/routes/recordings.py:GET /recordings/{recording_id}/audio/chunks	#10603
-route:autobot-backend/transcriber/routes/recordings.py:GET /recordings/{recording_id}/audio/waveform	#10603
-route:autobot-backend/transcriber/routes/recordings.py:POST /projects/{project_id}/recordings	#10603
-route:autobot-backend/transcriber/routes/transcripts.py:DELETE /notes/{note_id}	#10603
-route:autobot-backend/transcriber/routes/transcripts.py:GET /recordings/{recording_id}/transcript	#10603
-route:autobot-backend/transcriber/routes/transcripts.py:PATCH /notes/{note_id}	#10603
-route:autobot-backend/transcriber/routes/transcripts.py:PATCH /segments/{segment_id}	#10603
-route:autobot-backend/transcriber/routes/transcripts.py:PATCH /speakers/{speaker_id}	#10603
-route:autobot-backend/transcriber/routes/transcripts.py:POST /segments/{segment_id}/notes	#10603
-route:autobot-backend/transcriber/routes/transcripts.py:POST /speakers/merge	#10603
 route:autobot-backend/utils/response_builder.py:GET /items/{id}	#10603
 route:autobot-slm-backend/api/agent_ledger.py:GET /dev-loop/{issue}	#10603
 route:autobot-slm-backend/api/agent_ledger.py:POST /claims/yield-request	#10603
@@ -961,7 +926,6 @@ route:autobot-slm-backend/api/nodes.py:GET /{node_id}/service-order	#10603
 route:autobot-slm-backend/api/nodes.py:GET /{node_id}/update-policy	#10603
 route:autobot-slm-backend/api/nodes.py:POST /{node_id}/a2a-card/refresh	#10603
 route:autobot-slm-backend/api/nodes.py:POST /{node_id}/acknowledge-remediation	#10603
-route:autobot-slm-backend/api/nodes.py:POST /{node_id}/provision	#10603
 route:autobot-slm-backend/api/performance.py:DELETE /alerts/rules/{rule_id}	#10603
 route:autobot-slm-backend/api/performance.py:DELETE /slos/{slo_id}	#10603
 route:autobot-slm-backend/api/performance.py:GET /alerts/rules	#10603
@@ -1088,7 +1052,6 @@ route:autobot-backend/api/analytics_embedding_patterns.py:GET /model-comparison	
 route:autobot-backend/api/analytics_embedding_patterns.py:GET /optimization-recommendations	#20972
 route:autobot-backend/api/analytics_embedding_patterns.py:GET /stats	#20972
 route:autobot-backend/api/analytics_embedding_patterns.py:POST /record	#20972
-route:autobot-backend/api/analytics_evolution.py:GET /summary	#20972
 route:autobot-backend/api/analytics_evolution.py:POST /pattern-snapshot	#20972
 route:autobot-backend/api/analytics_evolution.py:POST /snapshot	#20972
 route:autobot-backend/api/analytics_export.py:GET /formats	#20972
@@ -1115,7 +1078,6 @@ route:autobot-backend/api/analytics_precommit.py:GET /config	#20972
 route:autobot-backend/api/analytics_precommit.py:POST /check-content	#20972
 route:autobot-backend/api/analytics_precommit.py:POST /config	#20972
 route:autobot-backend/api/analytics_quality.py:GET /remediation-deltas	#20972
-route:autobot-backend/api/analytics_quality.py:WEBSOCKET /ws	#20972
 route:autobot-backend/api/analytics_reporting.py:GET /summary	#20972
 route:autobot-backend/api/analytics_reporting.py:GET /trends	#20972
 route:autobot-backend/api/anti_pattern.py:GET /cached	#20973
@@ -1173,7 +1135,6 @@ route:autobot-backend/api/development_speedup.py:GET /quality	#20973
 route:autobot-backend/api/development_speedup.py:GET /recommendations	#20973
 route:autobot-backend/api/development_speedup.py:GET /refactoring	#20973
 route:autobot-backend/api/development_speedup.py:GET /status	#20973
-route:autobot-backend/api/development_speedup.py:GET /templates	#20973
 route:autobot-backend/api/development_speedup.py:POST /analyze	#20973
 route:autobot-backend/api/elevation.py:GET /pending	#20971
 route:autobot-backend/api/embeddings.py:DELETE /switch	#20975
@@ -1188,7 +1149,6 @@ route:autobot-backend/api/entity_extraction.py:POST /extract-batch	#20975
 route:autobot-backend/api/envelope_secrets.py:DELETE /system/{secret_id}	#20971
 route:autobot-backend/api/envelope_secrets.py:GET /system/{secret_id}	#20971
 route:autobot-backend/api/envelope_secrets.py:PUT /system/{secret_id}	#20971
-route:autobot-backend/api/error_monitoring.py:POST /metrics/cleanup	#20974
 route:autobot-backend/api/error_resilience.py:GET /circuit-breakers	#20974
 route:autobot-backend/api/error_resilience.py:GET /error-budgets	#20974
 route:autobot-backend/api/gpu_monitoring.py:GET /capabilities	#20974
@@ -1256,8 +1216,6 @@ route:autobot-backend/api/knowledge_crawl.py:POST /crawl	#20975
 route:autobot-backend/api/knowledge_debug.py:GET /debug_redis	#20975
 route:autobot-backend/api/knowledge_debug.py:GET /fresh_stats	#20975
 route:autobot-backend/api/knowledge_extract.py:POST /extract	#20975
-route:autobot-backend/api/knowledge_graph_routes.py:GET /entities	#20975
-route:autobot-backend/api/knowledge_graph_routes.py:GET /events	#20975
 route:autobot-backend/api/knowledge_grounding.py:GET /kb-conflicts	#20975
 route:autobot-backend/api/knowledge_grounding.py:GET /kb-stats	#20975
 route:autobot-backend/api/knowledge_grounding.py:POST /ground-response	#20975
@@ -1334,7 +1292,6 @@ route:autobot-backend/api/merge_conflict_resolution.py:POST /analyze	#20973
 route:autobot-backend/api/merge_conflict_resolution.py:POST /analyze-repository	#20973
 route:autobot-backend/api/merge_conflict_resolution.py:POST /apply	#20973
 route:autobot-backend/api/merge_conflict_resolution.py:POST /resolve	#20973
-route:autobot-backend/api/monitoring.py:GET /metrics/current	#20974
 route:autobot-backend/api/monitoring.py:POST /metrics/query	#20974
 route:autobot-backend/api/monitoring.py:POST /start	#20974
 route:autobot-backend/api/monitoring.py:POST /stop	#20974
@@ -1349,7 +1306,6 @@ route:autobot-backend/api/nl_database.py:GET /history	#20975
 route:autobot-backend/api/nl_database.py:GET /schema	#20975
 route:autobot-backend/api/nl_database.py:POST /query	#20975
 route:autobot-backend/api/nl_database.py:POST /train	#20975
-route:autobot-backend/api/onboarding.py:GET /status	#20974
 route:autobot-backend/api/personality.py:GET /languages	#20970
 route:autobot-backend/api/personality.py:GET /profiles	#20970
 route:autobot-backend/api/personality.py:GET /status	#20970
@@ -1387,12 +1343,6 @@ route:autobot-backend/api/sandbox.py:GET /examples	#20973
 route:autobot-backend/api/sandbox.py:GET /security-levels	#20973
 route:autobot-backend/api/sandbox.py:GET /stats	#20973
 route:autobot-backend/api/sandbox.py:POST /execute	#20973
-route:autobot-backend/api/sandbox_files.py:DELETE /delete	#20973
-route:autobot-backend/api/sandbox_files.py:GET /preview	#20973
-route:autobot-backend/api/sandbox_files.py:GET /stats	#20973
-route:autobot-backend/api/sandbox_files.py:GET /tree	#20973
-route:autobot-backend/api/sandbox_files.py:POST /create_directory	#20973
-route:autobot-backend/api/sandbox_files.py:POST /rename	#20973
 route:autobot-backend/api/scheduler.py:GET /queue	#20974
 route:autobot-backend/api/scheduler.py:GET /stats	#20974
 route:autobot-backend/api/scheduler.py:GET /status	#20974
@@ -1466,7 +1416,6 @@ route:autobot-backend/api/validation_dashboard.py:GET /recommendations	#20973
 route:autobot-backend/api/validation_dashboard.py:GET /trends	#20973
 route:autobot-backend/api/validation_dashboard.py:POST /judge_agent_response	#20973
 route:autobot-backend/api/validation_dashboard.py:POST /judge_workflow_step	#20973
-route:autobot-backend/api/vision.py:GET /layout	#20970
 route:autobot-backend/api/vnc_manager.py:GET /macros	#20974
 route:autobot-backend/api/vnc_manager.py:GET /screenshot	#20974
 route:autobot-backend/api/vnc_manager.py:GET /status	#20974
@@ -1483,7 +1432,6 @@ route:autobot-backend/api/vnc_manager.py:POST /type	#20974
 route:autobot-backend/api/vnc_manager.py:POST /wait-for-image	#20974
 route:autobot-backend/api/vnc_manager.py:POST /wait-for-text	#20974
 route:autobot-backend/api/voice_bundle_user.py:GET /bundles	#20976
-route:autobot-backend/api/voice_stream.py:WEBSOCKET /stream	#20976
 route:autobot-backend/api/wake_word.py:GET /config	#20976
 route:autobot-backend/api/wake_word.py:GET /stats	#20976
 route:autobot-backend/api/wake_word.py:GET /words	#20976
@@ -1618,7 +1566,3 @@ route:autobot-backend/services/knowledge_sync_service.py:GET /history	#20975
 route:autobot-backend/services/knowledge_sync_service.py:GET /metrics	#20975
 route:autobot-backend/services/knowledge_sync_service.py:GET /status	#20975
 route:autobot-backend/services/knowledge_sync_service.py:POST /manual	#20975
-route:autobot-backend/transcriber/routes/projects.py:GET /projects	#20976
-route:autobot-backend/transcriber/routes/projects.py:POST /projects	#20976
-route:autobot-backend/transcriber/routes/providers.py:GET /providers	#20976
-route:autobot-backend/transcriber/routes/providers.py:PATCH /providers	#20976
