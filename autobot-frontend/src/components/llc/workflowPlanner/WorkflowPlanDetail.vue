@@ -154,6 +154,7 @@ onMounted(load)
           @add-lane="(b) => run(() => api.addLane(planKey, b))"
           @patch-lane="(k, b) => run(() => api.patchLane(planKey, k, b))"
           @delete-lane="(k) => run(() => api.deleteLane(planKey, k))"
+          @add-step="(b) => run(() => api.addStep(planKey, b))"
           @patch-step="(k, b) => run(() => api.patchStep(planKey, k, b))"
           @delete-step="(k) => run(() => api.deleteStep(planKey, k))"
           @add-edge="(b) => run(() => api.addEdge(planKey, b))"

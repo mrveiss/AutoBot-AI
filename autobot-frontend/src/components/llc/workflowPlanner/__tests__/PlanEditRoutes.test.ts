@@ -98,6 +98,16 @@ describe('map step edits one lane, step or edge at a time', () => {
     expect(del).toHaveBeenCalledWith(`${BASE}/lanes/lane-1`)
   })
 
+  it('POST /steps adds a step that is connected to nothing', async () => {
+    const w = await open('map')
+    const fields = w.findAll('input').filter((i) => !i.attributes('data-testid'))
+    await fields[2].setValue('Site visit') // lane name, step, then the unconnected-step field
+    await w.find('[data-testid="add-loose-step"]').trigger('click')
+    await settle()
+    expect(post).toHaveBeenCalledWith(`${BASE}/steps`, { key: 'step-3', lane_key: 'lane-1', label: 'Site visit', position: 2 })
+    expect(post).not.toHaveBeenCalledWith(`${BASE}/edges`, expect.anything())
+  })
+
   it('PATCH /steps/{step_key} renames a step', async () => {
     const w = await open('map')
     const input = w.find('[data-testid="rename-step-step-1"]')

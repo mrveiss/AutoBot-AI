@@ -23,6 +23,7 @@ import {
   type Lane,
   type LanePatch,
   type ReturnKind,
+  type Step,
   type StepPatch,
   type MapBody,
   type OneNumberBody,
@@ -74,6 +75,8 @@ export function useWorkflowPlans() {
     planRequest(api, 'patch', '/api/llc/company-os/workflow-plans/{plan_key}/lanes/{lane_key}', { plan_key: key, lane_key: lane }, body)
   const deleteLane = (key: string, lane: string) =>
     planRequest(api, 'delete', '/api/llc/company-os/workflow-plans/{plan_key}/lanes/{lane_key}', { plan_key: key, lane_key: lane })
+  const addStep = (key: string, body: Step) =>
+    planRequest(api, 'post', '/api/llc/company-os/workflow-plans/{plan_key}/steps', { plan_key: key }, body)
   const patchStep = (key: string, step: string, body: StepPatch) =>
     planRequest(api, 'patch', '/api/llc/company-os/workflow-plans/{plan_key}/steps/{step_key}', { plan_key: key, step_key: step }, body)
   const deleteStep = (key: string, step: string) =>
@@ -121,6 +124,7 @@ export function useWorkflowPlans() {
     addLane,
     patchLane,
     deleteLane,
+    addStep,
     patchStep,
     deleteStep,
     addEdge,

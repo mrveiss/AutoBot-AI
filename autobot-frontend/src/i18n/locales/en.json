@@ -9352,6 +9352,8 @@
         "stepLabel": "Step",
         "stepLane": "Lane of the step",
         "addStep": "Add step",
+        "looseStepLabel": "Step to connect yourself",
+        "addLooseStep": "Add unconnected step",
         "renameLane": "Lane name",
         "deleteLane": "Delete lane",
         "deleteLaneTitle": "Delete this lane?",

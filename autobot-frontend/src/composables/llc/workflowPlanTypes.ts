@@ -89,16 +89,17 @@ export function withLane(plan: Plan, name: string): MapBody {
   return { ...map, lanes: [...(map.lanes ?? []), buildLane(plan, name)] }
 }
 
+/** A new step in *laneKey*: the next free slug, placed last, connected to nothing. */
+export function buildStep(plan: Plan, label: string, laneKey: string): Step {
+  const steps = plan.steps ?? []
+  return { key: slugKey('step', steps.map((s) => s.key)), lane_key: laneKey, label, position: steps.length }
+}
+
 /** A new step is chained after the plan's last step, so the map stays one connected flow. */
 export function withStep(plan: Plan, label: string, laneKey: string): MapBody {
   const map = mapBodyOf(plan)
   const steps = map.steps ?? []
-  const step: Step = {
-    key: slugKey('step', steps.map((s) => s.key)),
-    lane_key: laneKey,
-    label,
-    position: steps.length,
-  }
+  const step = buildStep(plan, label, laneKey)
   const last = steps[steps.length - 1]
   const edges = last ? [...(map.edges ?? []), { from_step: last.key, to_step: step.key }] : map.edges
   return { ...map, steps: [...steps, step], edges }

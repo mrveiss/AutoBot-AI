@@ -11,12 +11,13 @@ import { useI18n } from 'vue-i18n'
 import { BaseButton, BaseInput, EmptyState } from '@autobot/ui'
 import PlannerMapEdges from './PlannerMapEdges.vue'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
-import { laneName, buildLane, withStep, type Edge, type EdgePatch, type Lane, type LanePatch, type MapBody, type Plan, type StepPatch } from '@/composables/llc/workflowPlanTypes'
+import { laneName, buildLane, buildStep, withStep, type Edge, type EdgePatch, type Lane, type LanePatch, type MapBody, type Plan, type Step, type StepPatch } from '@/composables/llc/workflowPlanTypes'
 
 const props = defineProps<{ plan: Plan; busy: boolean; warnings: string[] }>()
 const emit = defineEmits<{
   map: [body: MapBody]
   addLane: [body: Lane]
+  addStep: [body: Step]
   patchLane: [laneKey: string, body: LanePatch]
   deleteLane: [laneKey: string]
   patchStep: [stepKey: string, body: StepPatch]
@@ -31,6 +32,7 @@ const { confirm } = useConfirmDialog()
 
 const newLane = ref('')
 const newStep = ref('')
+const looseStep = ref('')
 const stepLane = ref('')
 const lanes = computed(() => props.plan.lanes ?? [])
 const handoffs = computed(() => props.plan.handoffs ?? [])
@@ -52,6 +54,14 @@ function addStep() {
 
 function stepsIn(laneKey: string) {
   return (props.plan.steps ?? []).filter((s) => s.lane_key === laneKey)
+}
+
+/** A step on its own: nothing connects it until the owner draws an edge to or from it. */
+function addLooseStep() {
+  const label = looseStep.value.trim()
+  if (!label || !targetLane.value) return
+  emit('addStep', buildStep(props.plan, label, targetLane.value))
+  looseStep.value = ''
 }
 
 /** A rename is sent only when the text really changed and is not blank. */
@@ -163,6 +173,10 @@ function noteOf(e: Event): string | null {
       </select>
       <BaseButton size="sm" variant="secondary" :disabled="busy || !newStep.trim() || !targetLane" data-testid="add-step" @click="addStep">
         {{ t('llc.workflowPlanner.map.addStep') }}
+      </BaseButton>
+      <BaseInput v-model="looseStep" size="sm" :label="t('llc.workflowPlanner.map.looseStepLabel')" />
+      <BaseButton size="sm" variant="outline" :disabled="busy || !looseStep.trim() || !targetLane" data-testid="add-loose-step" @click="addLooseStep">
+        {{ t('llc.workflowPlanner.map.addLooseStep') }}
       </BaseButton>
     </div>
   </section>
