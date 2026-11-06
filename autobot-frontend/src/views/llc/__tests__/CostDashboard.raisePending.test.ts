@@ -66,6 +66,15 @@ describe('raising a budget limit in a company that gates it (#8214)', () => {
     expect(notice.text()).toBe(en.llc.cost.raisePendingApproval)
   })
 
+  it('announces a failed save to assistive technology', async () => {
+    patch.mockRejectedValue(new Error('refused'))
+    const wrapper = await openSettingsModal()
+    await wrapper.find('.btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[role="alert"]').text()).toBe('refused')
+  })
+
   it('closes the form with no notice when the limit was applied', async () => {
     patch.mockResolvedValue({ agent_id: 'a1', budget_limit: '5.000000' })
     const wrapper = await openSettingsModal()
