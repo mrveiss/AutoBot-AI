@@ -198,6 +198,9 @@ ALLOWED_ADDITIONS = {
             "**/prometheus.yml",
             "**/permission_rules.yaml",
             "**/llm_models.yaml",
+            # #20884: claude_model_id_ssot_20884_test reads this table; the pinned-ID scan names the workflow doc.
+            "autobot-backend/config/context_windows.yaml",
+            "docs/developer/CLAUDE_WORKFLOW.md",
             # #18549: one_playwright_server_18549_test.py reads the canonical server and its store.
             "autobot-browser-worker/playwright-server.js",
             "autobot-browser-worker/session-store.js",
