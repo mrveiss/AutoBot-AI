@@ -49,3 +49,60 @@ async def test_an_slm_without_an_admin_says_so():
     with pytest.raises(HTTPException) as missing:
         await _get(None)
     assert missing.value.status_code == 404
+
+
+# The route is mounted on the unauthenticated health router (api/__init__.py), so the handler's own
+# internal-key check is the ONLY gate. These drive the real route over HTTP with the real
+# `verify_internal_api_key`: only the key's expected value is set, and no user auth can substitute.
+_KEY = "internal-key-for-test"
+
+
+def _client(admin):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    app = FastAPI()
+    app.include_router(route.router, prefix="/api")
+
+    async def _session_override():
+        return _session(admin)
+
+    app.dependency_overrides[route.get_slm_session] = _session_override
+    return TestClient(app)
+
+
+@pytest.fixture
+def key_configured():
+    with patch("autobot_shared.auth.internal_api_key.node_proxy.internal_api_key", return_value=_KEY):
+        yield
+
+
+def test_over_http_no_key_is_refused(key_configured):
+    admin = SimpleNamespace()
+    response = _client(admin).get("/api/internal/first-admin")
+    assert response.status_code == 403
+    assert "password_hash" not in response.text
+
+
+def test_over_http_a_user_token_without_the_key_is_refused(key_configured):
+    response = _client(SimpleNamespace()).get(
+        "/api/internal/first-admin", headers={"Authorization": "Bearer an-admin-session-token"}
+    )
+    assert response.status_code == 403
+    assert "password_hash" not in response.text
+
+
+def test_over_http_a_wrong_key_is_refused(key_configured):
+    response = _client(SimpleNamespace()).get("/api/internal/first-admin", headers={"X-Internal-API-Key": "nope"})
+    assert response.status_code == 403
+
+
+def test_over_http_the_valid_key_gets_the_admin(key_configured):
+    import uuid
+
+    admin = SimpleNamespace(
+        id=uuid.uuid4(), username="root", email="r@example.test", display_name=None, password_hash="h"
+    )
+    response = _client(admin).get("/api/internal/first-admin", headers={"X-Internal-API-Key": _KEY})
+    assert response.status_code == 200
+    assert response.json()["password_hash"] == "h"

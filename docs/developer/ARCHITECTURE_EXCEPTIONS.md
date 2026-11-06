@@ -611,3 +611,28 @@ decision on the split; the control work is #20625.
 
 **Sync cadence:** None; the SLM calls these routes and keeps no copy of the worker records. Reopen
 this decision if the SLM needs to hold NPU worker credentials itself.
+
+---
+
+## SLM First Admin Password Hash Crosses to the Main Backend
+
+**File:** `autobot-slm-backend/api/first_admin_internal.py` (`GET /api/internal/first-admin`)
+**Consumer:** `autobot-backend/user_management/services/person_link_service.py`
+**Diverges from:** the rule that no `response_model` carries a stored credential (#17865)
+**Issue:** #10200, PR #20607
+
+**What crosses:** the first SLM admin's password hash (`password_hash`), SLM to main backend, so that
+person keeps their password when the main app is installed and links them.
+
+**Reason:** maintainer ruling, https://github.com/mrveiss/AutoBot-AI/pull/20607#issuecomment-6689286310,
+matching the shared-users decision on #10200. The guard records it as a deliberate waiver in
+`repo_tests/no_secret_in_response_model_baseline_17865.py` (`_WAIVED`, keyed to this one route).
+
+**Constraint:** the route is reachable only with the internal service key. It is mounted on the
+unauthenticated health router, so the handler's own `verify_internal_api_key` check is the only gate
+and no user token, whatever its role, can substitute (`autobot-slm-backend/tests/api/test_first_admin_internal.py`
+asserts no key, a user token without the key, and a wrong key are refused, and the valid key succeeds).
+The hash is read once at first start and is never logged.
+
+**Review trigger:** reopen this if the route gains any non-internal caller, if the hash is read or
+logged anywhere beyond that one first-start link, or if the shared-users decision on #10200 changes.
