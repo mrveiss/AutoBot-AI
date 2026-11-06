@@ -15,6 +15,7 @@ from llc.services.company_os import plan_breakdown, plan_store
 from llc.services.company_os.errors import GraphInvalid
 from models.approval import ApprovalStatus
 from services import ai_line_change_proposal as proposal
+from testkit.fake_async_session import FakeAsyncSession, FakeResult
 
 
 class _Item(SimpleNamespace):
@@ -77,11 +78,9 @@ async def test_a_pending_request_wins_over_a_decided_one_for_the_same_plan():
     decided = SimpleNamespace(status=ApprovalStatus.APPROVED.value, context=ctx)
     pending = SimpleNamespace(status=ApprovalStatus.PENDING.value, context=ctx)
 
-    class _Session:
-        async def execute(self, _stmt):
-            return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [decided, pending]))
+    session = FakeAsyncSession(results=[FakeResult([decided, pending])])
 
     found = await proposal._pending_match(
-        _Session(), company_id=uuid.uuid4(), requester="r", wanted=("a", "k", "l", "s"), plan_ref="p"
+        session, company_id=uuid.uuid4(), requester="r", wanted=("a", "k", "l", "s"), plan_ref="p"
     )
     assert found is pending
