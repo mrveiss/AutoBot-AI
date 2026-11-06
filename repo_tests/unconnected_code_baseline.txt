@@ -146,7 +146,6 @@ queue:autobot-infrastructure/shared/scripts/utilities/npu_worker.py:npu_tasks_fa
 queue:autobot-infrastructure/shared/scripts/utilities/npu_worker.py:npu_tasks_processing	#10603
 queue:autobot-slm-backend/monitoring/business_intelligence_dashboard.py:autobot:bi_dashboard:history	#10603
 table:deployment_logs	#10603
-table:file_cleanup_queue	#20234
 table:host_health	#10603
 table:hosts	#10603
 table:migrations_applied	#10603
@@ -154,6 +153,18 @@ table:service_dependencies	#10603
 table:ssh_keys	#10603
 table:system_events	#10603
 table:validation_results	#10603
+module:autobot_shared/env_registry_ai.py	#10603
+module:autobot_shared/env_registry_slm.py	#10603
+route:autobot-backend/api/admin_ownerless_chat_sessions.py:POST /ownerless-chat-sessions/requests	#10603
+route:autobot-backend/api/conversation_files.py:GET /conversation/{session_id}/preview/{file_id}	#10603
+route:autobot-backend/api/knowledge_chunked_upload.py:DELETE /expired/{upload_id}	#10603
+route:autobot-backend/api/monitoring.py:GET /alerts/check	#10603
+route:autobot-backend/api/monitoring.py:GET /dashboard/overview	#10603
+route:autobot-backend/api/monitoring.py:GET /hardware/gpu	#10603
+route:autobot-backend/api/monitoring.py:GET /hardware/npu	#10603
+route:autobot-backend/api/monitoring.py:GET /optimization/recommendations	#10603
+route:autobot-slm-backend/api/update_report.py:GET /update-all/nodes-offline	#10603
+route:autobot-slm-backend/api/update_report.py:GET /update-all/progress	#10603
 declared:get_api_key_user=autobot_shared/user_management/models/api_key.py	#10603
 declared:require_key_permission=autobot-slm-backend/services/api_key_routes.py	#10603
 declared:RoleCredentialService=autobot-backend/llc/api/roles.py,autobot-backend/llc/models/role_credential.py,autobot-backend/migrations/versions/20260820_080_llc_role_tools_and_credentials.py	#10603
@@ -265,14 +276,6 @@ route:autobot-backend/api/analytics_pattern_learning.py:GET /patterns/{pattern_i
 route:autobot-backend/api/analytics_performance.py:GET /patterns/{pattern_id}	#10603
 route:autobot-backend/api/analytics_precommit.py:GET /checks/{check_id}	#10603
 route:autobot-backend/api/approval_gates.py:DELETE /approval-gates/{approval_id}/tasks/{task_id}	#10603
-route:autobot-backend/api/approval_gates.py:GET /approval-gates/pending	#10603
-route:autobot-backend/api/approval_gates.py:GET /approval-gates/{approval_id}	#10603
-route:autobot-backend/api/approval_gates.py:POST /approval-gates/{approval_id}/approve	#10603
-route:autobot-backend/api/approval_gates.py:POST /approval-gates/{approval_id}/comments	#10603
-route:autobot-backend/api/approval_gates.py:POST /approval-gates/{approval_id}/reject	#10603
-route:autobot-backend/api/approval_gates.py:POST /approval-gates/{approval_id}/request-revision	#10603
-route:autobot-backend/api/approval_gates.py:POST /approval-gates/{approval_id}/resubmit	#10603
-route:autobot-backend/api/approval_gates.py:POST /approval-gates/{approval_id}/tasks	#10603
 route:autobot-backend/api/autobot_mcp_router.py:POST /mcp/tool	#10603
 route:autobot-backend/api/bi_export_endpoints.py:DELETE /reports/saved/{report_id}	#10603
 route:autobot-backend/api/bi_export_endpoints.py:GET /reports/saved	#10603
@@ -314,7 +317,6 @@ route:autobot-backend/api/chat.py:GET /chat/chats	#10603
 route:autobot-backend/api/chat.py:GET /chat/sessions/{session_id}/approval-categories	#10603
 route:autobot-backend/api/chat.py:GET /chat/sessions/{session_id}/role	#10603
 route:autobot-backend/api/chat.py:GET /chat/sessions/{session_id}/work-item	#10603
-route:autobot-backend/api/chat.py:POST /chats/{chat_id}/resume	#20401
 route:autobot-backend/api/chat.py:PUT /chat/sessions/{session_id}/approval-categories	#10603
 route:autobot-backend/api/chat.py:PUT /chat/sessions/{session_id}/role	#10603
 route:autobot-backend/api/chat.py:PUT /chat/sessions/{session_id}/work-item	#10603

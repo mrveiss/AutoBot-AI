@@ -57,6 +57,7 @@ fails until you do, which is what keeps the file shrinking.
 from __future__ import annotations
 
 import functools
+import re
 from pathlib import Path
 
 import pytest
@@ -157,7 +158,7 @@ def test_every_baseline_entry_is_still_unconnected() -> None:
 
 
 def test_every_baseline_entry_links_its_wiring_issue() -> None:
-    bad = {k: v for k, v in _baseline().items() if not (v.startswith("#") and v[1:].isdigit())}
+    bad = {k: v for k, v in _baseline().items() if not re.fullmatch(r"#[0-9]+", v)}
     unknown = [k for k in _baseline() if k.split(":", 1)[0] not in uc.KINDS]
     assert not bad and not unknown, f"#20512: entries without a '#<issue>' link: {bad}; unknown kinds: {unknown}"
 

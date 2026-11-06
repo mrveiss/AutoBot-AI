@@ -29,6 +29,8 @@ from repo_tests import _unconnected_routes as routes
 from repo_tests import _unconnected_stores as stores
 from repo_tests._unconnected_common import Tree
 
+from tools.lint._comment_syntax import code_lines
+
 BASELINE_REL = "repo_tests/unconnected_code_baseline.txt"
 KINDS = ("module", "route", "queue", "table", "declared")
 
@@ -45,9 +47,9 @@ def detected(tree: Tree, audit: "routes.Audit") -> set[str]:
 def parse_baseline(text: str) -> dict[str, str]:
     """``{key: issue}`` from the baseline file's tab-separated, ``#``-commented lines."""
     entries: dict[str, str] = {}
-    for line in text.splitlines():
-        if line.strip() and not line.startswith("#"):
-            key, _, issue = line.rpartition("\t")
+    for entry in code_lines(text):
+        if entry.text.strip():
+            key, _, issue = entry.text.rpartition("\t")
             entries[key] = issue.strip()
     return entries
 
