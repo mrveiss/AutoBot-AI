@@ -157,7 +157,7 @@ async function apply(action: CompanyStatusAction): Promise<void> {
 .company-status-error {
   flex-basis: 100%;
   margin: 0;
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
   color: var(--color-danger);
 }
 
