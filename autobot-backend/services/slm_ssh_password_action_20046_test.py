@@ -19,6 +19,7 @@ from services import approval_execution
 from services import slm_ssh_password_action as action
 from services.approval_gate_service import ApprovalGateService
 from services.audit.taxonomy import AuditAction
+from testkit.fake_async_session import FakeAsyncSession, FakeResult
 
 _KEY = "k" * 40  # pragma: allowlist secret
 _DECIDER = uuid.uuid4()
@@ -87,7 +88,8 @@ async def _decide(method: str) -> AsyncMock:
     """Run approve or reject through the real gate service; returns the SLM deletion mock."""
     action.register_ssh_password_action()
     approval = _approval()
-    service = ApprovalGateService(_session())
+    # the gate's _get_or_raise awaits session.execute: the shared fake answers it with the approval
+    service = ApprovalGateService(FakeAsyncSession(results=[FakeResult([approval])]))
     with (
         patch.object(ApprovalGateService, "_transition", AsyncMock(return_value=approval)),
         patch.object(action, "_delete_in_slm", AsyncMock(return_value=True)) as delete,

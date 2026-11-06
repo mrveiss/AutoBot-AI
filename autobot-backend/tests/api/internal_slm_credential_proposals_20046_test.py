@@ -26,7 +26,7 @@ from autobot_shared import node_proxy
 KEY = "k" * 40  # pragma: allowlist secret
 KEY_HEADERS = {"X-Internal-API-Key": KEY}
 NODE = {"node_id": "node-a", "credential_kind": "ssh_password"}
-CLAIM = f"/api/internal/slm/ssh-password-deletion-approvals/{uuid.uuid4()}/claim"
+CLAIM = f"/api/internal/slm/ssh-password-deletion-approvals/{uuid.UUID(int=1)}/claim"  # fixed: a random id gives each xdist worker a different test id
 PROPOSE = "/api/internal/slm/ssh-password-deletion-proposals"
 
 

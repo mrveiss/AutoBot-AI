@@ -19500,27 +19500,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/admin/ownerless-chat-sessions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Ownerless Chat Sessions
-         * @description Read only: which sessions record no owner.
-         */
-        get: operations["ownerless_chat_sessions_api_admin_ownerless_chat_sessions_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/admin/ownerless-chat-sessions/requests": {
+    "/api/internal/slm/ssh-password-deletion-proposals": {
         parameters: {
             query?: never;
             header?: never;
@@ -19530,10 +19510,32 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Propose Chat Session Owner
-         * @description Propose an owner -- a request, not an execution. Refused unless the session is ownerless and the user exists.
+         * Propose Ssh Password Deletion
+         * @description Propose the deletion -- a request, not an execution; one pending proposal per node.
+         *
+         *     Refused (409, clear message) on a split deployment without SLM TLS (#20899, option A).
          */
-        post: operations["propose_chat_session_owner_api_admin_ownerless_chat_sessions_requests_post"];
+        post: operations["propose_ssh_password_deletion_api_internal_slm_ssh_password_deletion_proposals_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/internal/slm/ssh-password-deletion-approvals/{approval_id}/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Claim Ssh Password Deletion Approval
+         * @description The SLM's last check before it deletes: this approval is a human's, for this node, and unused -- now spent.
+         */
+        post: operations["claim_ssh_password_deletion_approval_api_internal_slm_ssh_password_deletion_approvals__approval_id__claim_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -19574,6 +19576,46 @@ export interface paths {
          * @description Propose keeping only the newest ``.env.*~`` copy -- a request, not an execution.
          */
         post: operations["propose_env_copies_cleanup_api_admin_env_copies_cleanup_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/ownerless-chat-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ownerless Chat Sessions
+         * @description Read only: which sessions record no owner.
+         */
+        get: operations["ownerless_chat_sessions_api_admin_ownerless_chat_sessions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/ownerless-chat-sessions/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Chat Session Owner
+         * @description Propose an owner -- a request, not an execution. Refused unless the session is ownerless and the user exists.
+         */
+        post: operations["propose_chat_session_owner_api_admin_ownerless_chat_sessions_requests_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -65030,6 +65072,20 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * CleanupRequestResponse
+         * @description The approval a proposal created.
+         */
+        CleanupRequestResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Status */
+            status: string;
+            /** Action */
+            action: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * CleanupResult
          * @description Cleanup operation result.
          */
@@ -65084,6 +65140,20 @@ export interface components {
             session_breakdown?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CleanupStatus
+         * @description What one cleanup would remove on this node. Counts and names only, never a file's contents.
+         */
+        CleanupStatus: {
+            /** Count */
+            count: number;
+            /** Detail */
+            detail: string;
+            /** Refused */
+            refused?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -89327,34 +89397,6 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * CleanupRequestResponse
-         * @description The approval a proposal created.
-         */
-        CleanupRequestResponse: {
-            /** Approval Id */
-            approval_id: string;
-            /** Status */
-            status: string;
-            /** Action */
-            action: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * CleanupStatus
-         * @description What one cleanup would remove on this node. Counts and names only, never a file's contents.
-         */
-        CleanupStatus: {
-            /** Count */
-            count: number;
-            /** Detail */
-            detail: string;
-            /** Refused */
-            refused?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
          * OrgTierColumnRequestResponse
          * @description The approval a proposal created.
          */
@@ -100264,6 +100306,58 @@ export interface components {
             velocity_actual?: number | null;
             /** Capacity Points */
             capacity_points?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SshPasswordDeletionClaim
+         * @description The SLM names the node it is about to delete a password for; the approval must name the same one.
+         */
+        SshPasswordDeletionClaim: {
+            /** Node Id */
+            node_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SshPasswordDeletionClaimResponse
+         * @description The approval was valid and is now spent.
+         */
+        SshPasswordDeletionClaimResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Node Id */
+            node_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SshPasswordDeletionProposal
+         * @description What the SLM proposes: a node and a credential kind, never a value.
+         */
+        SshPasswordDeletionProposal: {
+            /** Node Id */
+            node_id: string;
+            /**
+             * Credential Kind
+             * @default ssh_password
+             * @constant
+             */
+            credential_kind: "ssh_password";
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SshPasswordDeletionProposalResponse
+         * @description The pending approval, and whether this call created it or found it already pending.
+         */
+        SshPasswordDeletionProposalResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Status */
+            status: string;
+            /** Created */
+            created: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -133979,36 +134073,18 @@ export interface operations {
             };
         };
     };
-    ownerless_chat_sessions_api_admin_ownerless_chat_sessions_get: {
+    propose_ssh_password_deletion_api_internal_slm_ssh_password_deletion_proposals_post: {
         parameters: {
             query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OwnerlessChatSessionsReport"];
-                };
+            header?: {
+                "X-Internal-API-Key"?: string | null;
             };
-        };
-    };
-    propose_chat_session_owner_api_admin_ownerless_chat_sessions_requests_post: {
-        parameters: {
-            query?: never;
-            header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["OwnerlessChatSessionRequest"];
+                "application/json": components["schemas"]["SshPasswordDeletionProposal"];
             };
         };
         responses: {
@@ -134018,7 +134094,44 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OwnerlessChatSessionRequestResponse"];
+                    "application/json": components["schemas"]["SshPasswordDeletionProposalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    claim_ssh_password_deletion_approval_api_internal_slm_ssh_password_deletion_approvals__approval_id__claim_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path: {
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SshPasswordDeletionClaim"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SshPasswordDeletionClaimResponse"];
                 };
             };
             /** @description Validation Error */
@@ -134068,6 +134181,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CleanupRequestResponse"];
+                };
+            };
+        };
+    };
+    ownerless_chat_sessions_api_admin_ownerless_chat_sessions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerlessChatSessionsReport"];
+                };
+            };
+        };
+    };
+    propose_chat_session_owner_api_admin_ownerless_chat_sessions_requests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OwnerlessChatSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerlessChatSessionRequestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

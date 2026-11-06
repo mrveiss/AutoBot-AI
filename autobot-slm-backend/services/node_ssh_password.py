@@ -12,7 +12,6 @@ up (ADR-012): a failed proposal is logged and enrollment carries on.
 
 from __future__ import annotations
 
-import logging
 import uuid
 from typing import Any
 
@@ -22,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared import node_proxy
 from autobot_shared.http_egress_guard import EgressBlockedError, assert_egress_policy
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.slm_credential_deletion import (
     ACTION,
     CREDENTIAL_KIND,
@@ -35,7 +35,7 @@ from config import settings
 from models.database import Node
 from services.node_ssh_key_probe import key_auth_and_sudo_work
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 #: The ``extra_data`` keys that hold the password and the flag describing it.
 _PASSWORD_KEYS = ("ssh_password", "ssh_password_encrypted")  # nosec B105  # pragma: allowlist secret
