@@ -3,8 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { BaseAlert } from '@autobot/ui'
-import { createLogger } from '@/utils/debugUtils'
+import { BaseAlert, createLogger } from '@autobot/ui'
 
 const logger = createLogger('BrowserTool')
 /**
