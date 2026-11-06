@@ -95,6 +95,20 @@ def test_reports_a_synthetic_top_level_stub_reaching_a_sibling(guard):
     assert _leaks_for(guard, _OTHER_MODULE) == ["agents"]
 
 
+def test_a_stub_reinstalled_outside_its_first_owners_tree_is_blamed_on_the_reinstaller(guard):
+    """Owner reuse is scoped to the owner's tree: elsewhere the module that left it live is the leaker."""
+    stub = types.ModuleType("agents")
+    _install("agents", stub)
+    guard.attribute(_LLC_CONFTEST)
+    del sys.modules["agents"]
+    guard.attribute(_LLC_CONFTEST)
+    _install("agents", stub)
+    guard.attribute(_OTHER_MODULE)
+
+    assert guard._tracked["agents"].owner != _LLC_OWNER
+    assert guard._tracked["agents"].owner.endswith("lifespan_test.py")
+
+
 def test_reports_a_replaced_real_module(guard):
     """The #13324 shape: ``autobot_shared`` swapped for a bare MagicMock."""
     _install("autobot_shared", types.ModuleType("autobot_shared"))

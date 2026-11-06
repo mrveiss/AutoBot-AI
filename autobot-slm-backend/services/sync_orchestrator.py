@@ -455,7 +455,12 @@ class SyncOrchestrator:
             return
         logger.info("code_source HEAD is detached; checking out %s before the pull (#20214)", branch)
         proc = await start_git("-C", repo_path, "checkout", branch, stderr=asyncio.subprocess.STDOUT)
-        await asyncio.wait_for(proc.communicate(), timeout=BRANCH_CHECKOUT_TIMEOUT_S)
+        try:
+            await asyncio.wait_for(proc.communicate(), timeout=BRANCH_CHECKOUT_TIMEOUT_S)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            raise
 
     async def _get_local_git_commit(self, repo_path: str) -> str | None:
         """Get git HEAD commit from a local repo without SSH. Helper for #1194."""
