@@ -255,6 +255,8 @@ ALLOWED_ADDITIONS = {
             ".github/workflows/dependabot-close-stale.yml",
             # #19611: the playbook-reference guard reads this guide for its declared exemption.
             "docs/guides/slm-docker-ansible-deployment.md",
+            # #20903: python_version_declaration_drift_test.py sweeps this file's python floor lines.
+            "docs/DEPENDENCIES.md",
             # #19279: the landing-page guard reads the page for the libraries and placeholders it renders.
             "docs/index.html",
             # #18559: both duplication-guard tests read the pins file.
