@@ -1,6 +1,6 @@
 # GitHub Actions workflow to enforce pre-commit hooks installation
 # Ensures developers have pre-commit configured to catch issues before push
-# Related: MVA-2111, MVA-2108 (6 PRs required admin override due to missing local checks)
+# Added after 6 PRs required an admin override because of missing local checks.
 
 name: Enforce Pre-commit Hooks
 

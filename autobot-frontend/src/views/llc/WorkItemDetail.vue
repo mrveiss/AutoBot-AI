@@ -238,7 +238,6 @@
     :work-item-id="props.item.id"
     :company-id="props.companyId"
     :direction="handoffDirection"
-    :agent-assignee-id="localItem.assignee_agent_id"
     @close="handoffDirection = null"
     @done="onHandoffDone"
   />

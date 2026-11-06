@@ -8443,6 +8443,25 @@
         "title": "NodeServiceOrderResponse",
         "type": "object"
       },
+      "NodeSshPasswordDeleteResponse": {
+        "description": "What a deletion removed. Carries the node and a flag, never a value.",
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "boolean"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "node_id",
+          "deleted"
+        ],
+        "title": "NodeSshPasswordDeleteResponse",
+        "type": "object"
+      },
       "NodeStatus": {
         "description": "Node status enumeration.",
         "enum": [
@@ -23725,6 +23744,80 @@
         "summary": "Get Playbook",
         "tags": [
           "infrastructure"
+        ]
+      }
+    },
+    "/api/internal/nodes/{node_id}/ssh-password": {
+      "delete": {
+        "description": "Delete the node's stored SSH password under a human's approval; ``deleted`` is False when it held none.",
+        "operationId": "delete_node_ssh_password_api_internal_nodes__node_id__ssh_password_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "node_id",
+            "required": true,
+            "schema": {
+              "title": "Node Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "approval_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Approval Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NodeSshPasswordDeleteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Node Ssh Password",
+        "tags": [
+          "internal"
         ]
       }
     },
