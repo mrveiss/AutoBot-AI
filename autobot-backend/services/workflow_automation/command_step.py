@@ -20,7 +20,7 @@ import tempfile
 import time
 import uuid
 from pathlib import Path
-from typing import Callable, FrozenSet
+from typing import Callable
 
 from fastapi import HTTPException
 
@@ -32,7 +32,7 @@ from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.user_management.login_eligibility import login_refusal
 from command_run_policy import CommandRunPolicy
 from security_layer import SecurityLayer
-from services.workflow_secret_service import get_workflow_secret_service
+from services.workflow_secret_service import StepSecrets, get_workflow_secret_service
 from type_defs.common import Metadata
 from user_management.database import db_session_context
 from user_management.services.user_service import UserService
@@ -97,13 +97,11 @@ def _work_dir() -> str:
     return str(path)
 
 
-def secret_value_redactor(owner_id: str | None, names: FrozenSet[str]) -> Callable[[str], str]:
+def secret_value_redactor(secrets: StepSecrets) -> Callable[[str], str]:
     """A redactor that masks the values of the secrets injected into this step."""
 
     def redact(text: str) -> str:
-        if not names:
-            return text
-        return get_workflow_secret_service().redact_secrets(text, owner_id, resolved_names=names)
+        return get_workflow_secret_service().redact_secrets(text, secrets) if secrets else text
 
     return redact
 

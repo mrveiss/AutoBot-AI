@@ -23,6 +23,7 @@ from fastapi import FastAPI
 from starlette.testclient import TestClient
 
 from auth_middleware import get_current_user
+from services.workflow_secret_service import StepSecrets
 
 from . import routes
 from .models import ActiveWorkflow, AutomationMode
@@ -252,13 +253,13 @@ def test_secret_resolution_without_an_owner_resolves_nothing(monkeypatch):
     monkeypatch.setattr(
         executor,
         "get_workflow_secret_service",
-        lambda: SimpleNamespace(resolve_secrets=lambda c, o: called.append(o) or (c, frozenset())),
+        lambda: SimpleNamespace(resolve_secrets=lambda c, o: called.append(o) or (c, StepSecrets())),
     )
 
-    command, names = executor._resolve_command_secrets("echo ${secrets.TOKEN}", None)
+    command, injected = executor._resolve_command_secrets("echo ${secrets.TOKEN}", None)
 
     assert command == "echo ${secrets.TOKEN}"
-    assert names == frozenset()
+    assert not injected
     assert called == [], "the secret service must not be asked on behalf of a non-user"
 
 
@@ -269,12 +270,14 @@ def test_secret_resolution_with_an_owner_still_uses_it(monkeypatch):
     monkeypatch.setattr(
         executor,
         "get_workflow_secret_service",
-        lambda: SimpleNamespace(resolve_secrets=lambda c, o: (seen.append(o), ("resolved", frozenset({"TOKEN"})))[1]),
+        lambda: SimpleNamespace(
+            resolve_secrets=lambda c, o: (seen.append(o), ("resolved", StepSecrets({"TOKEN": "v"})))[1]
+        ),
     )
 
-    command, names = executor._resolve_command_secrets("echo ${secrets.TOKEN}", "u-alice")
+    command, injected = executor._resolve_command_secrets("echo ${secrets.TOKEN}", "u-alice")
 
-    assert (command, names) == ("resolved", frozenset({"TOKEN"}))
+    assert command == "resolved" and injected.names == frozenset({"TOKEN"})
     assert seen == ["u-alice"]
 
 
