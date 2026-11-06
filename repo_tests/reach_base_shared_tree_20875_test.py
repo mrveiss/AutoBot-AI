@@ -87,6 +87,13 @@ def test_a_second_call_for_the_same_commit_reuses_the_tree(cache: Path, monkeypa
     assert _reach_base.base_tree() == first
 
 
+def test_a_tree_in_an_older_layout_is_rebuilt_not_reused(cache: Path) -> None:
+    legacy = cache / f"{_reach_base.TREE_PREFIX}{_head()}"  # the layout before the format was versioned
+    legacy.mkdir(parents=True)
+    tree = _reach_base.base_tree()
+    assert tree != legacy and (tree / ".git").is_dir()
+
+
 _SLOW_BUILD = """
 import os, sys, time
 from pathlib import Path

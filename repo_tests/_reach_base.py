@@ -61,6 +61,9 @@ REPO_ROOT = repo_root()
 TREE_PREFIX = "autobot-reach-base-"
 #: Env var naming the cache directory that holds the base trees; default is under the system temp dir.
 CACHE_DIR_ENV = "AUTOBOT_REACH_BASE_CACHE_DIR"
+#: Bumped whenever the tree's layout changes; it is part of the directory name, so a tree built in an
+#: older layout (say, without the git index) is never reused for the same commit -- it is built afresh.
+TREE_FORMAT = 2
 #: A tree for another commit (or a partial build) untouched for this long is pruned on the next use.
 _STALE_AFTER_S = int(os.environ.get("AUTOBOT_REACH_BASE_TTL_S", str(6 * 3600)))
 
@@ -210,7 +213,7 @@ def base_tree() -> Path:
         return _TREE["tree"]
     sha = base_commit(REPO_ROOT)
     root = _cache_root()
-    final = root / f"{TREE_PREFIX}{sha}"
+    final = root / f"{TREE_PREFIX}v{TREE_FORMAT}-{sha}"
     can_trap = threading.current_thread() is threading.main_thread()
     with _locked(root):
         if can_trap:
