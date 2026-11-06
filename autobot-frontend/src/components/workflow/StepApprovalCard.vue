@@ -20,6 +20,9 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ApprovalEnvelope from '@/components/approvals/ApprovalEnvelope.vue'
 import type { WorkflowStep } from '@/composables/useWorkflowBuilder'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('StepApprovalCard')
 
 const props = defineProps<{
   step: WorkflowStep
@@ -36,6 +39,9 @@ async function decide(answer: StepAnswer): Promise<void> {
   deciding.value = true
   try {
     await answer(props.workflowId, props.step.step_id)
+  } catch (error) {
+    // The owner reports the failure to the user; the step is still waiting, so the card stays.
+    logger.error('Step answer rejected:', error)
   } finally {
     deciding.value = false
   }
@@ -43,18 +49,19 @@ async function decide(answer: StepAnswer): Promise<void> {
 </script>
 
 <template>
-  <ApprovalEnvelope
-    class="my-3"
-    icon="clock"
-    :title="t('workflow.builder.stepApprovalTitle')"
-    :risk="step.risk_tier ?? undefined"
-    :approve-label="t('workflow.runner.approve')"
-    :reject-label="t('workflow.builder.stepApprovalSkip')"
-    :deciding="deciding"
-    @approve="decide(approve)"
-    @reject="decide(skip)"
-  >
-    <p class="mb-2">{{ step.description }}</p>
-    <code class="block overflow-x-auto">{{ step.command }}</code>
-  </ApprovalEnvelope>
+  <div class="my-3" role="region" aria-live="polite" :aria-label="t('workflow.builder.stepApprovalTitle')">
+    <ApprovalEnvelope
+      icon="clock"
+      :title="t('workflow.builder.stepApprovalTitle')"
+      :risk="step.risk_tier ?? undefined"
+      :approve-label="t('workflow.runner.approve')"
+      :reject-label="t('workflow.builder.stepApprovalSkip')"
+      :deciding="deciding"
+      @approve="decide(approve)"
+      @reject="decide(skip)"
+    >
+      <p class="mb-2">{{ step.description }}</p>
+      <code class="block overflow-x-auto">{{ step.command }}</code>
+    </ApprovalEnvelope>
+  </div>
 </template>

@@ -69,4 +69,20 @@ describe('StepApprovalCard', () => {
     await new Promise((r) => setTimeout(r, 0))
     expect(button(wrapper, 'Approve').attributes('disabled')).toBeUndefined()
   })
+
+  it('is a labelled polite live region and does not take focus', () => {
+    const { wrapper } = mountCard()
+    const region = wrapper.find('[role="region"]')
+    expect(region.attributes('aria-label')).toBe('Step waiting for your approval')
+    expect(region.attributes('aria-live')).toBe('polite')
+    expect(wrapper.find('[autofocus]').exists()).toBe(false)
+  })
+
+  it('a rejecting answer is contained and the buttons come back for a retry', async () => {
+    const approve = vi.fn().mockRejectedValue(new Error('network'))
+    const { wrapper } = mountCard(approve)
+    await button(wrapper, 'Approve').trigger('click')
+    await new Promise((r) => setTimeout(r, 0))
+    expect(button(wrapper, 'Approve').attributes('disabled')).toBeUndefined()
+  })
 })

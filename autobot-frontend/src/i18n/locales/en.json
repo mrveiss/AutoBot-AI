@@ -4694,6 +4694,8 @@
       "stepAwaitingApproval": "Approval needed: {step}",
       "stepApprovalTitle": "Step waiting for your approval",
       "stepApprovalSkip": "Skip step",
+      "stepApproveFailed": "Could not approve the step; it is still waiting for you",
+      "stepSkipFailed": "Could not skip the step; it is still waiting for you",
       "stepRejectedByJudge": "Step refused before it ran: {reason}",
       "controlRefused": "Refused: only an administrator or the workflow's owner may control it",
       "stepSkipped": "Step skipped",

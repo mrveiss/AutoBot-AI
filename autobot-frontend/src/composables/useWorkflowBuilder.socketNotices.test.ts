@@ -61,6 +61,26 @@ describe('useWorkflowBuilder workflow socket notices (#17677)', () => {
     expect(stepsAwaitingApproval.value).toEqual([]);
   });
 
+  it.each([['approveStep', 'approve_step'], ['skipStep', 'skip_step']] as const)(
+    '%s makes exactly one control call, then re-reads the status',
+    async (fn, action) => {
+      http.post.mockResolvedValue({ success: true });
+      const composable = useWorkflowBuilder();
+      await expect(composable[fn]('wf-1', 's1')).resolves.toBe(true);
+      expect(http.post).toHaveBeenCalledTimes(1);
+      expect(http.post.mock.calls[0][0]).toContain('control_workflow');
+      expect(http.post.mock.calls[0][1]).toMatchObject({ workflow_id: 'wf-1', action, step_id: 's1' });
+      expect(getUrls()).toContain('workflow_status/wf-1');
+    },
+  );
+
+  it('a failed control request resolves false and does not re-read the status', async () => {
+    http.post.mockRejectedValue(new Error('refused'));
+    const { approveStep } = useWorkflowBuilder();
+    await expect(approveStep('wf-1', 's1')).resolves.toBe(false);
+    expect(http.get).not.toHaveBeenCalled();
+  });
+
   it('a notice for another workflow does not fetch or replace the displayed one', async () => {
     const { currentWorkflow } = useWorkflowBuilder();
     currentWorkflow.value = { workflow_id: 'wf-1' } as never;
