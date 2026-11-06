@@ -78,6 +78,19 @@ server {
     root {{ slm_frontend_dir }}/current;
     index index.html;
 
+    # #20046: service-to-service only; the SLM and the backend call each other directly, never through this edge.
+    location ^~ /api/internal/ {
+        return 404;
+    }
+
+    location ^~ /slm/api/internal/ {
+        return 404;
+    }
+
+    location ^~ /autobot-api/internal/ {
+        return 404;
+    }
+
 {% if slm_colocated_frontend | default(false) | bool %}
     # ── Co-located mode (#2829) ───────────────────────────────
     # SLM API under /slm/api/, user backend at /api/, user frontend at /

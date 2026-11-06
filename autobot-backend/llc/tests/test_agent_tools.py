@@ -103,6 +103,17 @@ async def test_create_task_calls_work_item_service_with_authed_actor():
 
 
 @pytest.mark.asyncio
+async def test_create_task_malformed_hierarchy_id_is_tool_error():
+    """A malformed project_id/parent_id (UUID parse ValueError) is a structured tool error."""
+    p, _ = _patch_session()
+    svc = MagicMock()
+    svc.create = AsyncMock(side_effect=ValueError("badly formed hexadecimal UUID string"))
+    with p, patch("llc.services.work_item_service.WorkItemService", return_value=svc):
+        with pytest.raises(LLCToolError, match="invalid project_id or parent_id"):
+            await dispatch_llc_tool("create_task", {"title": "T", "parent_id": "not-a-uuid"}, _COMPANY, _USER)
+
+
+@pytest.mark.asyncio
 async def test_create_task_blank_title_is_tool_error():
     p, _ = _patch_session()
     with p:
