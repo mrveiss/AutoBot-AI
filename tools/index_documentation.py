@@ -162,8 +162,10 @@ async def run_index(force: bool, rebuild: bool, args: argparse.Namespace | None 
     """Run the indexer and return a process exit code."""
     _install_import_paths()
     from autobot_shared.logging_manager import get_logger
+    from autobot_shared.placeholder_guard import enforce_no_placeholders
     from services.knowledge.doc_indexer import get_doc_indexer_service
 
+    enforce_no_placeholders()  # #20886: one clear error, not a failure per client
     logger = get_logger(__name__)
     service = get_doc_indexer_service()
     args = args or parse_args([])
