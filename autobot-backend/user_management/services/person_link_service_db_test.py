@@ -4,6 +4,7 @@
 # Author: mrveiss
 """#10200: the startup link against a real database: all of it or none of it, and only once."""
 
+import asyncio
 import uuid
 from typing import AsyncIterator
 from unittest.mock import AsyncMock, patch
@@ -103,3 +104,24 @@ async def test_a_deleted_user_is_not_brought_back_on_the_next_start(factory) -> 
         await session.execute(delete(User).where(User.id == user_id))
     await _at_startup(factory)
     assert await _counts(factory) == (0, 1)
+
+
+@pytest_asyncio.fixture
+async def file_factory(tmp_path) -> AsyncIterator:
+    """A file database: the in-memory one shares a single connection, so it cannot race."""
+    url = f"sqlite+aiosqlite:///{tmp_path / 'race.db'}"
+    engine = create_async_engine(url)  # canonical: ignore py-adhoc-db-engine (test-local, tmp file)
+    async with engine.begin() as conn:
+        tables = [User.__table__, Role.__table__, AuditLog.__table__, PersonLink.__table__]
+        await conn.run_sync(Base.metadata.create_all, tables=tables)
+    try:
+        yield async_sessionmaker(bind=engine, expire_on_commit=False)  # canonical: ignore py-adhoc-db-engine (as above)
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_two_concurrent_starts_leave_one_linked_user(file_factory) -> None:
+    """Two workers can both pass the checks; the loser must fail whole and leave no partial user."""
+    await asyncio.gather(_at_startup(file_factory), _at_startup(file_factory))
+    assert await _counts(file_factory) == (1, 1)

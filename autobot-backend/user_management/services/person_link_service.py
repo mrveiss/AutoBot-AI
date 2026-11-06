@@ -30,6 +30,21 @@ logger = get_logger(__name__)
 
 _FIRST_ADMIN_PATH = "/api/internal/first-admin"
 
+LINK_OK = "ok"  # linked, already linked, or left for a person to match
+LINK_FAILED = "failed"  # the SLM could not be read; the admin is NOT linked and seeding follows
+LINK_KEY_MISSING = "internal_key_missing"  # no internal API key configured; nothing was sent
+LINK_REFUSED = "slm_refused_internal_key"  # the SLM answered 403: its key differs from ours
+
+last_link_status: str | None = None  # read by callers and the admin UI; None until startup ran
+
+
+class FirstAdminLinkError(RuntimeError):
+    """The SLM's first admin could not be read; carries the status a caller reports."""
+
+    def __init__(self, message: str, status: str) -> None:
+        super().__init__(message)
+        self.status = status
+
 
 @dataclass(frozen=True)
 class SlmPerson:
@@ -50,8 +65,16 @@ async def fetch_first_slm_admin() -> SlmPerson | None:
     session = await client._get_session()
     url = client._rest_url(_FIRST_ADMIN_PATH)
     await assert_egress_policy(url)
-    headers = {"X-Internal-API-Key": internal_api_key() or ""}
-    async with session.get(url, headers=headers, allow_redirects=False) as response:
+    key = internal_api_key()
+    if not key:  # never send an empty header: the SLM answers 403 and the link is skipped unseen
+        message = "Person link: no internal API key is configured, so the SLM's first admin cannot be read"
+        logger.error(message)
+        raise FirstAdminLinkError(message, LINK_KEY_MISSING)
+    async with session.get(url, headers={"X-Internal-API-Key": key}, allow_redirects=False) as response:
+        if response.status == 403:
+            message = "Person link: the SLM refused the internal API key (403); backend and SLM keys differ"
+            logger.error(message)
+            raise FirstAdminLinkError(message, LINK_REFUSED)
         if response.status == 404:  # logged: a misrouted 404 looks the same, and seeding follows
             logger.warning("Person link: the SLM answered 404 for its first admin; treating it as none yet")
             return None
@@ -102,21 +125,35 @@ async def link_first_slm_admin(session: AsyncSession, person: SlmPerson | None) 
     if await _main_store_may_hold_them(session, person):
         logger.warning("Person link: %s may already be a main-app user; left for a person to match", person.username)
         return False
+    if not person.password_hash:  # a linked admin with no hash can't log in, and linking stops default-admin seeding
+        logger.error(
+            "Person link: SLM admin %s has no password hash; left unlinked so seeding keeps a usable admin",
+            person.username,
+        )
+        return False
     user = await _create_linked_admin(session, person)
     logger.info("Person link: SLM admin %s linked to main-app user %s", person.username, user.id)
     return True
 
 
-async def link_first_slm_admin_at_startup() -> None:
+async def link_first_slm_admin_at_startup() -> str:
     """Its own transaction: all of the link or none of it, and a failure can't touch seeding's session.
 
-    An unreachable SLM must not stop the main app starting; seeding still runs.
+    An unreachable SLM must not stop the main app starting; seeding still runs. The outcome is
+    returned and kept in ``last_link_status``; every failure is logged at error level.
     """
+    global last_link_status
     from user_management.database import get_async_session_factory
 
+    status = LINK_OK
     try:
         person = await fetch_first_slm_admin()
         async with get_async_session_factory()() as session, session.begin():
             await link_first_slm_admin(session, person)
+    except FirstAdminLinkError as exc:  # already logged at error level where it was raised
+        status = exc.status
     except Exception as exc:
-        logger.warning("Person link: could not link the SLM's first admin: %s", type(exc).__name__)
+        status = LINK_FAILED
+        logger.error("Person link: could not link the SLM's first admin: %s", type(exc).__name__)
+    last_link_status = status
+    return status

@@ -8,6 +8,8 @@ import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from user_management.services import person_link_service as service
 
 _PERSON = service.SlmPerson(uuid.uuid4(), "Root", "root@example.test", "Root", "$2b$hash")
@@ -73,7 +75,61 @@ async def test_a_404_from_the_slm_says_so_in_the_log() -> None:
     with (
         patch("services.slm_client.get_slm_client", return_value=client),
         patch.object(service, "assert_egress_policy", AsyncMock()),
+        patch.object(service, "internal_api_key", return_value="k"),
         patch.object(service, "logger") as logger,
     ):
         assert await service.fetch_first_slm_admin() is None
     logger.warning.assert_called_once()
+
+
+def _slm_client(status: int):
+    response = MagicMock(status=status)
+    context = MagicMock(__aenter__=AsyncMock(return_value=response), __aexit__=AsyncMock(return_value=False))
+    http = MagicMock(get=MagicMock(return_value=context))
+    client = MagicMock(_get_session=AsyncMock(return_value=http), _rest_url=lambda path: f"https://slm{path}")
+    return client, http
+
+
+async def test_a_missing_internal_key_is_an_error_and_sends_nothing() -> None:
+    client, http = _slm_client(200)
+    with (
+        patch("services.slm_client.get_slm_client", return_value=client),
+        patch.object(service, "assert_egress_policy", AsyncMock()),
+        patch.object(service, "internal_api_key", return_value=""),
+        patch.object(service, "logger") as logger,
+    ):
+        with pytest.raises(service.FirstAdminLinkError) as raised:
+            await service.fetch_first_slm_admin()
+    assert raised.value.status == service.LINK_KEY_MISSING
+    http.get.assert_not_called()
+    logger.error.assert_called_once()
+
+
+async def test_a_403_from_the_slm_is_reported_as_an_error() -> None:
+    client, http = _slm_client(403)
+    with (
+        patch("services.slm_client.get_slm_client", return_value=client),
+        patch.object(service, "assert_egress_policy", AsyncMock()),
+        patch.object(service, "internal_api_key", return_value="k"),
+        patch.object(service, "logger") as logger,
+    ):
+        with pytest.raises(service.FirstAdminLinkError) as raised:
+            await service.fetch_first_slm_admin()
+    assert raised.value.status == service.LINK_REFUSED
+    assert http.get.call_args.kwargs["headers"] == {"X-Internal-API-Key": "k"}
+    logger.error.assert_called_once()
+
+
+async def test_startup_returns_the_failure_status_and_records_it() -> None:
+    err = service.FirstAdminLinkError("x", service.LINK_KEY_MISSING)
+    with patch.object(service, "fetch_first_slm_admin", AsyncMock(side_effect=err)):
+        assert await service.link_first_slm_admin_at_startup() == service.LINK_KEY_MISSING
+    assert service.last_link_status == service.LINK_KEY_MISSING
+
+
+async def test_an_slm_admin_without_a_password_hash_is_not_linked() -> None:
+    """Linking would create an admin who cannot log in and would stop default-admin seeding."""
+    no_hash = service.SlmPerson(uuid.uuid4(), "Root", "root@example.test", "Root", None)
+    linked, _user, create_user = await _link(_session(None, None), no_hash)
+    assert linked is False
+    create_user.assert_not_awaited()
