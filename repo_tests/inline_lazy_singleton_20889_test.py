@@ -23,6 +23,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
@@ -48,7 +49,7 @@ _CONSTRUCTION_ALLOWED = {
     "autobot-backend/llc/services/board.py": "WorkItemService(activity_log=...) takes a per-call argument",
 }
 
-_ROOT = Path(__file__).resolve().parent.parent
+_ROOT = repo_root()
 _ROOTS = (
     ".claude",
     "autobot-backend",
