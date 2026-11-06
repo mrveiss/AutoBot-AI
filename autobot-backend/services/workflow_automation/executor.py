@@ -281,7 +281,7 @@ class WorkflowExecutor:
         active_count = len([w for w in workflows.values() if w.started_at and not w.completed_at])
         self.prometheus_metrics.update_active_workflows(workflow_type=workflow_type, count=active_count)
 
-        # Send workflow start message to frontend
+        # Server-to-client only (clients start workflows over REST; #17677)
         await self.messenger.send_message(
             workflow.session_id,
             {

@@ -17,7 +17,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { redactUrlForLogging, redactErrorForLogging } from '@/utils/redactUrlForLogging'
+import { redactUrlForLogging, redactErrorForLogging } from '../redactUrlForLogging'
 
 describe('redactUrlForLogging', () => {
   it('redacts a token carried in the URL fragment, not only the query string', () => {
