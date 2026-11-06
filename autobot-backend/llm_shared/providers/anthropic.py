@@ -16,10 +16,14 @@ Extended thinking (#3258):
   chain-of-thought reasoning on supported models (claude-3-7-sonnet and later):
 
       api_kwargs = {
-          "thinking": {"type": "enabled", "budget_tokens": 63000},
+          "thinking": {"type": "adaptive"},
+          "output_config": {"effort": "high"},
           "max_tokens": 64000,
-          "extra_headers": {"anthropic-beta": "output-128k-2025-02-19"},
       }
+
+  A pre-4.6 model takes ``{"type": "enabled", "budget_tokens": N}`` instead. A caller-supplied
+  ``enabled`` dict for a model that requires adaptive thinking (``budget_tokens`` is a 400 there)
+  is converted to the adaptive form by ``_build_request_kwargs`` (#20884).
 
   Thinking blocks are stripped from the returned ``content`` unless
   ``preserve_reasoning=True`` is present in ``api_kwargs``.
@@ -82,7 +86,7 @@ async def _apply_adapter_pre_send(request: LLMRequest, context_type: str) -> Non
         logger.debug("Claude adapter pre-send optimization skipped (fail-safe): %s", exc)
 
 
-from autobot_shared.ssot_claude_models import CLAUDE_MODEL_IDS
+from autobot_shared.ssot_claude_models import CLAUDE_MODEL_IDS, requires_adaptive_thinking
 from autobot_shared.ssot_config import config
 from autobot_shared.ssot_hosted_models import hosted_default_model
 from constants.model_constants import (
@@ -334,6 +338,18 @@ class AnthropicProvider(BaseProvider):
         if request.tool_choice:
             kwargs["tool_choice"] = {"type": request.tool_choice}
 
+    @staticmethod
+    def _normalise_caller_thinking(api_kwargs: Dict[str, Any], model: str) -> None:
+        """Convert a caller's ``enabled`` thinking dict to adaptive when *model* rejects ``budget_tokens`` (#20884)."""
+        thinking = api_kwargs.get("thinking")
+        if not isinstance(thinking, dict) or thinking.get("type") != "enabled":
+            return
+        if not requires_adaptive_thinking(model):
+            return
+        budget = thinking.get("budget_tokens")
+        api_kwargs.pop("thinking")
+        _apply_thinking_budget(api_kwargs, model, int(budget) if budget else 0)
+
     def _build_request_kwargs(self, model: str, request: LLMRequest) -> tuple[Dict[str, Any], Dict[str, Any], bool]:
         """Build kwargs and extra_headers for an Anthropic SDK call."""
         system_content, chat_messages = split_system_and_chat(request.messages)
@@ -352,6 +368,7 @@ class AnthropicProvider(BaseProvider):
         thinking_tokens: int | None = api_kwargs.pop("thinking_tokens", None)
         if thinking_tokens and "thinking" not in api_kwargs:
             _apply_thinking_budget(api_kwargs, model, thinking_tokens)
+        self._normalise_caller_thinking(api_kwargs, model)
         preserve_reasoning: bool = bool(api_kwargs.get("preserve_reasoning", False))
         kwargs, extra_headers = _build_api_kwargs(kwargs, api_kwargs)
         kwargs = _route_sampling_kwargs(kwargs)

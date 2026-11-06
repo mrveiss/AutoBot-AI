@@ -225,7 +225,8 @@ class TestBuildRequestKwargs:
                 }
             }
         )
-        kwargs, headers, preserve = provider._build_request_kwargs("claude-sonnet-4-6", request)
+        # A pre-4.6 model takes budget_tokens as written; a 4.6+ model gets it converted (#20884).
+        kwargs, headers, preserve = provider._build_request_kwargs("claude-sonnet-4-20250514", request)
         assert kwargs["thinking"] == thinking
         assert kwargs["max_tokens"] == 64000
         assert headers == {"anthropic-beta": "output-128k-2025-02-19"}

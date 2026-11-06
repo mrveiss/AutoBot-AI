@@ -54,20 +54,21 @@ _MODEL_PREFIX_TO_PROVIDER: list[tuple[str, str]] = [
 @lru_cache(maxsize=1)
 def _load_platform_defaults() -> Dict[str, Dict[str, str]]:
     """Load model-tiers.yml once; returns provider→{senior, assistant} dict."""
+    # Built before the read, so a YAML failure still leaves the anthropic defaults (SSOT, #20884).
+    tiers: Dict[str, Dict[str, str]] = {"anthropic": {"senior": CLAUDE_SONNET, "assistant": CLAUDE_HAIKU}}
     try:
         import yaml  # PyYAML — available in autobot-backend
 
         with open(_TIERS_YAML_PATH, encoding="utf-8") as fh:
             data = yaml.safe_load(fh) or {}
         # Keep only entries that have both senior and assistant keys.
-        tiers = {"anthropic": {"senior": CLAUDE_SONNET, "assistant": CLAUDE_HAIKU}}  # SSOT (#20884)
         for provider, entry in data.items():
             if isinstance(entry, dict) and "senior" in entry and "assistant" in entry:
                 tiers[provider] = {"senior": entry["senior"], "assistant": entry["assistant"]}
         return tiers
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Could not load model-tiers.yml, using empty defaults: %s", exc)
-        return {}
+        logger.warning("Could not load model-tiers.yml, using the SSOT anthropic defaults only: %s", exc)
+        return tiers
 
 
 class ModelTierService:

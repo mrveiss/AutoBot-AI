@@ -24,14 +24,27 @@ from autobot_shared.llm_provider_order import ORDER_ENV_VAR, provider_is_permitt
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_claude_models import (
+    CLAUDE_FABLE,
     CLAUDE_HAIKU,
     CLAUDE_OPUS,
     CLAUDE_SONNET,
     legacy_claude_model,
     resolve_claude_model,
 )
+from autobot_shared.ssot_constants import (
+    ANTHROPIC_CLAUDE3_OPUS_DATED,
+    ANTHROPIC_CLAUDE_OPUS4_6,
+    ANTHROPIC_CLAUDE_SONNET4,
+    ANTHROPIC_CLAUDE_SONNET4_6,
+)
 
 logger = get_logger(__name__)
+
+
+#: 4.x / 3.x IDs the Anthropic provider still lists. Each keeps a default chain (a listed model never loses its
+#: fallback): an Opus-tier ID falls to the current Sonnet then Haiku, a Sonnet-tier ID to the current Haiku.
+_LISTED_LEGACY_OPUS = (ANTHROPIC_CLAUDE_OPUS4_6, ANTHROPIC_CLAUDE3_OPUS_DATED)
+_LISTED_LEGACY_SONNET = (ANTHROPIC_CLAUDE_SONNET4_6, ANTHROPIC_CLAUDE_SONNET4)
 
 
 def _canonical_model(name: str, env_key: str) -> str:
@@ -123,24 +136,7 @@ class FallbackChainManager:
 
     def _load_default_chains(self) -> None:
         """Load default fallback chains for common models."""
-        # Anthropic Claude fallback chain
-        self.register_chain(
-            FallbackChain(
-                primary_model=CLAUDE_OPUS,
-                fallback_models=[CLAUDE_SONNET, CLAUDE_HAIKU],
-                primary_provider="anthropic",
-                fallback_providers=["anthropic", "anthropic"],
-            )
-        )
-
-        self.register_chain(
-            FallbackChain(
-                primary_model=CLAUDE_SONNET,
-                fallback_models=[CLAUDE_HAIKU],
-                primary_provider="anthropic",
-                fallback_providers=["anthropic"],
-            )
-        )
+        self._load_anthropic_default_chains()
 
         # OpenAI GPT fallback chain
         self.register_chain(
@@ -172,6 +168,55 @@ class FallbackChainManager:
         )
 
         logger.info("Loaded %d default fallback chains", len(self._chains))
+
+    def _load_anthropic_default_chains(self) -> None:
+        """Default chains for every Claude model the provider lists: current tiers and still-listed older IDs."""
+        # Anthropic Claude fallback chain
+        self.register_chain(
+            FallbackChain(
+                primary_model=CLAUDE_FABLE,
+                fallback_models=[CLAUDE_OPUS, CLAUDE_SONNET, CLAUDE_HAIKU],
+                primary_provider="anthropic",
+                fallback_providers=["anthropic", "anthropic", "anthropic"],
+            )
+        )
+
+        self.register_chain(
+            FallbackChain(
+                primary_model=CLAUDE_OPUS,
+                fallback_models=[CLAUDE_SONNET, CLAUDE_HAIKU],
+                primary_provider="anthropic",
+                fallback_providers=["anthropic", "anthropic"],
+            )
+        )
+
+        self.register_chain(
+            FallbackChain(
+                primary_model=CLAUDE_SONNET,
+                fallback_models=[CLAUDE_HAIKU],
+                primary_provider="anthropic",
+                fallback_providers=["anthropic"],
+            )
+        )
+
+        for legacy in _LISTED_LEGACY_OPUS:
+            self.register_chain(
+                FallbackChain(
+                    primary_model=legacy,
+                    fallback_models=[CLAUDE_SONNET, CLAUDE_HAIKU],
+                    primary_provider="anthropic",
+                    fallback_providers=["anthropic", "anthropic"],
+                )
+            )
+        for legacy in _LISTED_LEGACY_SONNET:
+            self.register_chain(
+                FallbackChain(
+                    primary_model=legacy,
+                    fallback_models=[CLAUDE_HAIKU],
+                    primary_provider="anthropic",
+                    fallback_providers=["anthropic"],
+                )
+            )
 
     def _load_env_chains(self) -> None:
         """

@@ -100,6 +100,43 @@ def test_adaptive_thinking_covers_the_5x_ids_and_4_6_plus_and_not_older_models()
     assert not requires_adaptive_thinking("claude-3-5-sonnet-20241022")
 
 
+def test_adaptive_is_the_default_for_any_claude_id_not_an_explicit_pre_4_6_family():
+    from autobot_shared.ssot_claude_models import requires_adaptive_thinking
+
+    for adaptive in (
+        "claude-opus-9-9",  # a future ID
+        "claude-sonnet-5-5-20261001",  # a dated current ID
+        "anthropic.claude-sonnet-5-5-v1:0",  # Bedrock spelling
+        "us.anthropic.claude-opus-5-5-20260101-v1:0",
+        "claude-opus-5-5@20260101",  # Vertex spelling
+        "sonnet",  # a bare tier alias
+    ):
+        assert requires_adaptive_thinking(adaptive), adaptive
+    for budgeted in (
+        "claude-sonnet-4-5",
+        "claude-sonnet-4-5-20250929",
+        "claude-3-5-sonnet",
+        "claude-opus-4-1-20250805",
+        "claude-opus-4-20250514",
+        "claude-haiku-4-5",
+        "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "gpt-4o",
+    ):
+        assert not requires_adaptive_thinking(budgeted), budgeted
+
+
+def test_current_claude_model_maps_earlier_generation_ids_to_their_tier_and_passes_the_rest():
+    from autobot_shared.ssot_claude_models import CLAUDE_HAIKU, CLAUDE_SONNET, current_claude_model
+
+    assert current_claude_model("claude-sonnet-4-6") == CLAUDE_SONNET
+    assert current_claude_model("claude-haiku-4-5-20251001") == CLAUDE_HAIKU
+    assert current_claude_model("claude-haiku-4") == CLAUDE_HAIKU
+    assert current_claude_model("haiku") == CLAUDE_HAIKU
+    assert current_claude_model(CLAUDE_SONNET) == CLAUDE_SONNET
+    assert current_claude_model("gpt-4o") == "gpt-4o"
+    assert current_claude_model(None) is None
+
+
 def test_every_budget_tokens_sender_goes_through_the_one_predicate():
     """The only places a thinking ``budget_tokens`` request is built are the shared builder's fixed-budget branch."""
     root = repo_root() / "autobot-backend"

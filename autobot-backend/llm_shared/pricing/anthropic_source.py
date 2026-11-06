@@ -23,15 +23,15 @@ _PROVIDER = "anthropic"
 # this table's `deepseek-r1` had been charging API rates against the local
 # model's id, and `PER_1K` had two prices years out of date.
 # Keys use the same model IDs as ANTHROPIC_* constants (GH#6480).
-_BASELINE: list[tuple[str, float, float, float]] = [
+_BASELINE: list[tuple[str, float, float, float | None]] = [
     # (model_id, input_per_1m, output_per_1m, cache_read_per_1m)
     # Current generation (#20884; ids = autobot_shared.ssot_claude_models). Cache-write prices
     # are not stated by the source and are not recorded. Haiku's cache-read is not stated either,
-    # so its 4th element is omitted (the source default of 0.0 applies, meaning unstated).
+    # so its 4th element is None: "unknown", never 0.0 (which reads as free).
     ("claude-fable-5-1", 10.00, 50.00, 0.25),
     ("claude-opus-5-5", 4.00, 20.00, 0.20),
     ("claude-sonnet-5-5", 2.00, 10.00, 0.20),
-    ("claude-haiku-5-5", 0.10, 0.50),
+    ("claude-haiku-5-5", 0.10, 0.50, None),
     ("claude-opus-4-0", 15.00, 75.00, 1.50),
     ("claude-haiku-4-5", 0.80, 4.00, 0.08),
     ("claude-sonnet-4-0", 3.00, 15.00, 0.30),

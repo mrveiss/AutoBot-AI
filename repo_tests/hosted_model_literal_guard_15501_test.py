@@ -150,7 +150,7 @@ def test_the_default_position_check_has_contrast():
 # had spread through code, config, templates, the frontend and the docs, all a generation stale.
 # This extends the guards above from "provider modules" to every tracked file of the types below.
 #
-# SCOPE (declared, #15897): tracked *.py *.ts *.vue *.json *.yml *.yaml under _SCAN_ROOTS, and docs/**/*.md. Tests,
+# SCOPE (declared, #15897): tracked *.py *.ts *.vue *.json *.yml *.yaml *.j2 *.toml *.sh *.env.example under _SCAN_ROOTS, and docs/**/*.md. Tests,
 # node_modules and the historical areas in _HISTORICAL are not read. A ratchet: each file below holds
 # at most the count recorded, and a count that fell must be lowered here (the number only falls).
 # ---------------------------------------------------------------------------
@@ -169,7 +169,7 @@ _SCAN_ROOTS = (
     "libs",
     "docs",
 )
-_SCAN_EXTS = ("*.py", "*.ts", "*.vue", "*.json", "*.yml", "*.yaml")
+_SCAN_EXTS = ("*.py", "*.ts", "*.vue", "*.json", "*.yml", "*.yaml", "*.j2", "*.toml", "*.sh", "*.env.example")
 _SCAN_PATTERNS = (*(f"{r}/{e}" for r in _SCAN_ROOTS if r != "docs" for e in _SCAN_EXTS), "docs/*.md")
 _TEST_PART = re.compile(
     r"(^|/)(tests?|test_[^/]*|[^/]*_test\.py|[^/]*\.(test|spec)\.ts|conftest\.py|node_modules|__tests__)(/|$)"
@@ -213,9 +213,9 @@ def _claude_scan_files(root) -> list[str]:
 REACH_CLAUDE_IDS = declare(
     "claude-model-id-literal-sites",
     discover=_claude_scan_files,
-    what="tracked py/ts/vue/json/yml/yaml and docs md files, scanned for a pinned Claude model id",
+    what="tracked py/ts/vue/json/yml/yaml/j2/toml/sh/env.example and docs md files, scanned for a pinned Claude model id",
     roots=_SCAN_ROOTS,
-    floor=6730,  # mid-window: population 6730, window (6730, 6730)
+    floor=6990,  # mid-window: population 6990, window (6990, 6990)
 )
 
 

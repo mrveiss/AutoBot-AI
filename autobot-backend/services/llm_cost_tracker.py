@@ -27,12 +27,10 @@ from autobot_shared.local_models import is_local_model
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
+from autobot_shared.ssot_claude_models import CLAUDE_FABLE, CLAUDE_HAIKU, CLAUDE_OPUS, CLAUDE_SONNET
 from autobot_shared.status_enums import LLMProvider  # noqa: F401 (re-exported, #12661)
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.model_constants import (
-    ANTHROPIC_CLAUDE_HAIKU4_5,
-    ANTHROPIC_CLAUDE_OPUS4,
-    ANTHROPIC_CLAUDE_SONNET4,
     DEEPSEEK_R1_API,
     DEEPSEEK_V3,
     GOOGLE_GEMINI15_PRO,
@@ -203,10 +201,12 @@ class LLMCostTracker(AsyncRedisClientMixin):
     # Pattern-based pricing fallbacks for unknown models (#1961).
     # Ordered from most specific to least specific.
     _FALLBACK_PATTERNS: List[tuple] = [
-        ("claude-opus", ANTHROPIC_CLAUDE_OPUS4),
-        ("claude-sonnet", ANTHROPIC_CLAUDE_SONNET4),
-        ("claude-haiku", ANTHROPIC_CLAUDE_HAIKU4_5),
-        ("claude", ANTHROPIC_CLAUDE_SONNET4),
+        # Claude: the current-generation rows (#20884). An exact 4.x row is found before this fallback runs.
+        ("claude-fable", CLAUDE_FABLE),
+        ("claude-opus", CLAUDE_OPUS),
+        ("claude-sonnet", CLAUDE_SONNET),
+        ("claude-haiku", CLAUDE_HAIKU),
+        ("claude", CLAUDE_SONNET),
         ("gpt-4o", OPENAI_GPT4O),
         ("gpt-4.1", OPENAI_GPT41),
         ("gpt-4", OPENAI_GPT4_TURBO),

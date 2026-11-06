@@ -18,6 +18,7 @@ older ``ANTHROPIC_CLAUDE_*`` constants stay there for the models they name (pric
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 CLAUDE_OPUS = "claude-opus-5-5"
@@ -81,14 +82,54 @@ def legacy_claude_model(value: str) -> str | None:
     return LEGACY_CLAUDE_KEYS.get(value.strip().lower())
 
 
-#: Models whose thinking is requested as ``{"type": "adaptive"}``. ``budget_tokens`` is rejected with HTTP 400
-#: on every current 5.x model and on Opus 4.7 / 4.8, and is deprecated on Opus 4.6 / Sonnet 4.6; a model
-#: older than 4.6 still takes ``budget_tokens``. Written here so the request builders ask, never name an ID.
-ADAPTIVE_THINKING_MODELS: frozenset[str] = frozenset(
-    {*CLAUDE_MODEL_IDS, "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6"}
-)
+#: Families that still take ``budget_tokens``: Claude 3.x and the 4 / 4.0 / 4.1 / 4.5 generations. ``budget_tokens``
+#: is rejected with HTTP 400 on every current 5.x model and on Opus 4.7 / 4.8, and deprecated on Opus 4.6 /
+#: Sonnet 4.6, so the default is inverted: any other Claude ID (future, dated, cloud-hosted spelling) is adaptive.
+_PRE_ADAPTIVE_RE = re.compile(r"^claude-(?:3(?:-\d+)?-(?:opus|sonnet|haiku)|(?:opus|sonnet|haiku)-4(?:-[015])?)$")
+_DATE_SUFFIX_RE = re.compile(r"-(?:\d{8}|latest)$")
+_BEDROCK_SUFFIX_RE = re.compile(r"-v\d+(?::\d+)?$")
+
+
+def _normalise_claude_id(model: str) -> str:
+    """*model* as a bare family ID: alias resolved; vendor prefix, ``@`` / version and date suffixes dropped."""
+    value = (resolve_claude_model(model) or "").strip().lower()
+    value = value.split("@", 1)[0]
+    value = value.rsplit("/", 1)[-1]  # Vertex / gateway path spellings
+    if value.startswith(("anthropic.", "us.anthropic.", "eu.anthropic.", "global.anthropic.")):
+        value = value.split("anthropic.", 1)[1]
+    value = _BEDROCK_SUFFIX_RE.sub("", value)
+    return _DATE_SUFFIX_RE.sub("", value)
 
 
 def requires_adaptive_thinking(model: str) -> bool:
-    """True when *model* must use adaptive thinking instead of a ``budget_tokens`` budget."""
-    return model.strip().lower() in ADAPTIVE_THINKING_MODELS
+    """True when *model* must use adaptive thinking instead of a ``budget_tokens`` budget.
+
+    False only for an explicit pre-4.6 family (and its dated or cloud-hosted forms) or a non-Claude ID.
+    """
+    value = _normalise_claude_id(model)
+    if not value.startswith("claude-"):
+        return False
+    return _PRE_ADAPTIVE_RE.match(value) is None
+
+
+_LEGACY_ID_RE = re.compile(
+    r"^claude-(?:(?P<tier_a>opus|sonnet|haiku)-4(?:-\d)?|3(?:-\d+)?-(?P<tier_b>opus|sonnet|haiku))$"
+)
+
+
+def current_claude_model(value: str | None) -> str | None:
+    """The current ID for *value*: a tier alias, a legacy short name, or a pre-5 pinned ID (dated forms too).
+
+    Any other value (a current ID, a non-Claude ID, ``None``) passes through unchanged. Used at the edges that
+    validate or compare a stored model ID, so a row written under an earlier generation still means its tier.
+    """
+    if value is None:
+        return None
+    resolved = resolve_claude_model(value) or value
+    legacy = legacy_claude_model(resolved)
+    if legacy is not None:
+        return legacy
+    match = _LEGACY_ID_RE.match(_normalise_claude_id(resolved))
+    if match:
+        return CLAUDE_TIER_MODELS[match.group("tier_a") or match.group("tier_b")]
+    return resolved
