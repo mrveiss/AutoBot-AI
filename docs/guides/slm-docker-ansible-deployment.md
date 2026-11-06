@@ -1212,8 +1212,8 @@ All endpoints are prefixed with `/api` and require JWT Bearer authentication unl
 |--------|----------|-------------|
 | `GET` | `/api/roles` | List all role definitions (from `roles` table). |
 | `GET` | `/api/roles/definitions` | Lightweight role definitions for agents (**no auth required**). |
-| `GET` | `/api/roles/fleet-health` | Fleet health: `{"health": "healthy|degraded|critical", "required_down", "optional_down"}`. |
-| `GET` | `/api/roles/owners` | Role-to-node ownership mapping (`{"owners": {"role": "node_id"}}`). |
+| `GET` | `/api/roles/fleet-health` | Fleet health: `{"health": "healthy|degraded|critical", "required_down", "optional_down", "roles_with_nodes_down"}`. |
+| `GET` | `/api/roles/owners` | Role-to-nodes mapping and the roles allowed on several nodes (`{"owners": {"role": ["node_id"]}, "multi_node_roles": ["role"]}`). |
 | `GET` | `/api/roles/{role_name}` | Get specific role details including `ansible_playbook` field. |
 | `POST` | `/api/roles` | Create a new role definition. |
 | `PUT` | `/api/roles/{role_name}` | Update a role definition. |
