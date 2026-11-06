@@ -26,7 +26,7 @@ from autobot_shared.security.path_validator import validate_relative_path
 from chat_history.cache import _CHAT_RECENT_MAX_ENTRIES
 from chat_history.file_io import existing_chat_path, run_in_chat_io_executor
 from chat_history.graph_owner import create_entity_on_missing, session_owner_scope
-from chat_history.session_lease import ChatFileUnreadable
+from chat_history.session_lease import CHAT_LEASE_BEST_EFFORT_WAIT_S, ChatFileUnreadable, SessionLeaseTimeout
 from chat_history.session_locked import SessionLockMixin
 from chat_history.session_merge import combine_messages
 from constants.redis_constants import REDIS_KEY
@@ -261,7 +261,9 @@ class SessionMixin(SessionLockMixin):
         """Deduplicate messages; when the file had duplicates, clean it under the lease. Issue #620, #20862.
 
         The cleanup re-reads the file once the lease is held and dedupes *that*, so a message appended
-        after this load is kept; a failed cleanup is raised to the caller (typed lease errors), not logged away.
+        after this load is kept. A busy lease (waited at most CHAT_LEASE_BEST_EFFORT_WAIT_S) skips the cleanup and
+        serves the deduped messages (a read must not fail over housekeeping; the next load retries); other lease
+        errors are raised.
         """
         messages = chat_data.get("messages", [])
         cleaned_messages = self._dedupe_streaming_messages(messages)
@@ -275,9 +277,18 @@ class SessionMixin(SessionLockMixin):
             def dedupe(current: Dict[str, Any]) -> None:
                 current["messages"] = self._dedupe_streaming_messages(current.get("messages", []))
 
-            committed = await self._locked_update(
-                session_id, "dedupe_streaming", dedupe, must_exist=True, after=self._update_redis_cache_on_save
-            )
+            try:
+                committed = await self._locked_update(
+                    session_id,
+                    "dedupe_streaming",
+                    dedupe,
+                    must_exist=True,
+                    after=self._update_redis_cache_on_save,
+                    wait_s=CHAT_LEASE_BEST_EFFORT_WAIT_S,
+                )
+            except SessionLeaseTimeout:
+                logger.warning("Duplicate cleanup of busy session %s skipped; retried on the next load", session_id)
+                return cleaned_messages
             if committed is not None:  # None: deleted since it was read
                 chat_data.clear()
                 chat_data.update(committed)
@@ -317,11 +328,11 @@ class SessionMixin(SessionLockMixin):
             # Session file not found — not an error, just an empty result.
             return []
 
-        # Process messages (Issue #620 - uses helper)
         cleaned_messages = await self._process_loaded_messages(session_id, chat_data)
 
-        # Warm up Redis cache with cleaned data
-        await self._warm_cache_safe(session_id, chat_data)
+        # Warm the cache from the file under the lease; not while a skipped cleanup left duplicates in it (#20862)
+        if len(cleaned_messages) == len(chat_data.get("messages", [])):
+            await self._warm_cache_safe(session_id)
 
         return cleaned_messages
 
@@ -335,17 +346,6 @@ class SessionMixin(SessionLockMixin):
         """
         self._sanitize_session_id(session_id)
         return await self._load_session_from_file(session_id)
-
-    async def _warm_cache_safe(self, session_id: str, chat_data: Dict[str, Any]) -> None:
-        """Warm up Redis cache safely. (Issue #315 - extracted)"""
-        if not self.redis_client:
-            return
-        try:
-            cache_key = f"chat:session:{session_id}"
-            await self._async_cache_session(cache_key, chat_data)
-            logger.debug("Warmed cache for session %s", session_id)
-        except Exception as e:
-            logger.error("Failed to warm cache: %s", e)
 
     async def _update_redis_cache_on_save(self, session_id: str, chat_data: Dict[str, Any]) -> None:
         """Update Redis cache on session save. (Issue #315 - extracted)"""

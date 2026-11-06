@@ -73,6 +73,9 @@ CHAT_LEASE_DATABASE: str = env("AUTOBOT_CHAT_LEASE_REDIS_DB")
 CHAT_LEASE_KEY_PREFIX: str = env("AUTOBOT_CHAT_LEASE_KEY_PREFIX")
 CHAT_LEASE_GENERATION_PREFIX: str = env("AUTOBOT_CHAT_LEASE_GENERATION_KEY_PREFIX")
 
+#: Reported when no holder could be read before the bounded wait ran out.
+UNKNOWN_HOLDER = "unknown (not read before the wait ended)"
+
 #: Key in the chat file that carries the generation of the lease that last wrote it.
 GENERATION_FIELD = "write_generation"
 
@@ -178,6 +181,8 @@ class SessionLease:
         )
         self._heartbeat: asyncio.Task | None = None
         self._lost = False
+        #: Who held the lease at the last failed attempt; read inside the caller's bound, reported on timeout.
+        self.last_seen_holder = UNKNOWN_HOLDER
 
     async def holder(self) -> str:
         """Who holds the lease now, as recorded in the lease value."""
@@ -192,6 +197,7 @@ class SessionLease:
     async def acquire(self) -> None:
         """Take the lease, polling until it is free. The caller bounds the wait (see session_lease)."""
         while await self._lease.hold_or_refresh() is not True:
+            self.last_seen_holder = await self.holder()  # inside the caller's bound: a hung lookup is cut with it
             await asyncio.sleep(CHAT_LEASE_POLL_S)
         self._heartbeat = asyncio.create_task(self._beat())
 
@@ -279,8 +285,9 @@ async def _enter(stack: AsyncExitStack, session_id: str, operation: str, wait_s:
             stack.push_async_callback(lease.release)  # a no-op until acquired, so a cancel mid-acquire leaks nothing
             await lease.acquire()
     except TimeoutError:
-        # still in the local queue: the holder is another task here; otherwise it is whoever holds the Redis key
-        holder = (None if queued else _local_holder.get(session_id)) or await lease.holder()
+        # still in the local queue: the holder is another task here; otherwise whoever held the Redis key at the
+        # last attempt. Read inside the bound, so a slow lookup cannot stretch the wait.
+        holder = (None if queued else _local_holder.get(session_id)) or lease.last_seen_holder
         raise SessionLeaseTimeout(session_id, holder, wait_s) from None
     return lease
 

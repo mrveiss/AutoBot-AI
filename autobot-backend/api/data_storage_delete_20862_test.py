@@ -66,6 +66,14 @@ async def test_the_route_deletes_the_chat_and_transcript_through_the_manager(rou
     assert not (chats / "c1_chat.json").exists()
 
 
+async def test_the_route_looks_for_files_where_the_manager_keeps_them(route, tmp_path, monkeypatch):
+    chats, manager = route
+    monkeypatch.setattr(data_storage, "DATA_DIR", tmp_path / "elsewhere")  # not the manager's directory
+    await manager.save_session("c9", messages=[{"sender": "user", "text": "hi", "timestamp": "t"}])
+    result = await data_storage.delete_conversation("c9", MagicMock(), None)
+    assert result["files_deleted"] == ["c9_chat.json"] and not (chats / "c9_chat.json").exists()
+
+
 async def test_the_route_waits_for_the_session_lease_and_does_not_delete_around_it(
     route, monkeypatch, fake_session_lease
 ):

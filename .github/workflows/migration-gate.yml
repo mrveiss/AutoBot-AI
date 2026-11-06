@@ -250,12 +250,14 @@ jobs:
           # croniter: services/trigger_service.py imports it at module level since #18469, and the
           # migration tests import that module through api.schemas_workflows; without it the
           # backend conftest stubs the module and TriggerType becomes a MagicMock. Version: constraints.
+          # fakeredis[lua]: the autouse fake_session_lease fixture (testkit/singleton_state.py) binds it for every
+          # backend test (#20862); no version is pinned anywhere in constraints/shared.txt, so none is declared here.
           python -m pip install -c requirements-ci/storage.txt -c constraints/shared.txt \
             "alembic>=1.13" "sqlalchemy[asyncio]>=2.0" asyncpg aiosqlite croniter \
             pydantic pydantic-settings "email-validator>=2.3.0" \
             bcrypt pyjwt redis httpx aiofiles python-dotenv pyyaml \
             cryptography fastapi structlog aiohttp prometheus_client cachetools \
-            pytest pytest-asyncio
+            pytest pytest-asyncio "fakeredis[lua]"
 
       - name: Run migration matrix
         env:

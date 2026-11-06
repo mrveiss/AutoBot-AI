@@ -18,10 +18,12 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
 from chat_history.file_io import remove_session_lock, run_in_chat_io_executor, session_file_lock
 from chat_history.session_lease import (
+    CHAT_LEASE_BEST_EFFORT_WAIT_S,
     ChatFileUnreadable,
     SessionLease,
     SessionLeaseError,
     SessionLeaseLost,
+    SessionLeaseTimeout,
     StaleGenerationError,
     file_generation,
     session_lease,
@@ -78,30 +80,48 @@ class SessionLockMixin:
 
         async def _clear_session_redis_cache(self, session_id: str) -> None: ...
 
-    async def _stored_generation(
-        self, session_id: str, chats_directory: str, read_generation: int, read_signature: Any
-    ) -> int:
-        """The generation in the file now; re-read only when the file changed since it was read."""
-        name = f"{session_id}_chat.json"
-        if await run_in_chat_io_executor(_stat_signature, name, chats_directory) == read_signature:
-            return read_generation
-        chat_file = str(validate_relative_path(name, chats_directory))
+        async def _load_session_from_file(self, session_id: str) -> Dict[str, Any] | None: ...
+
+        async def _async_cache_session(self, cache_key: str, chat_data: Dict[str, Any]) -> Any: ...
+
+        redis_client: Any
+
+    async def _warm_cache_safe(self, session_id: str) -> None:
+        """Warm the cache from the file as it is once the lease is held (#315, #20862).
+
+        A cache write made outside the lease can overwrite a concurrent append's newer entry, so the file is
+        re-read under the lease first. Best effort: a busy lease skips the warm (the next load retries).
+        """
+        if not self.redis_client:
+            return
+        try:
+            async with session_lease(session_id, "warm_cache", CHAT_LEASE_BEST_EFFORT_WAIT_S):
+                fresh = await self._load_session_from_file(session_id)
+                if fresh is not None:
+                    await self._async_cache_session(f"chat:session:{session_id}", fresh)
+        except SessionLeaseTimeout:
+            logger.debug("Cache warm skipped for busy session %s", session_id)
+        except Exception as e:
+            logger.error("Failed to warm cache: %s", e)
+
+    async def _stored_generation(self, session_id: str, chats_directory: str) -> int:
+        """The generation in the file now, always read from it.
+
+        A (mtime, size) match cannot prove the file is unchanged: an in-place fallback write can keep both.
+        """
+        chat_file = str(validate_relative_path(f"{session_id}_chat.json", chats_directory))
         return file_generation(await self._load_existing_chat_data(session_id, chat_file, chats_directory))
 
-    async def _read_for_update(
-        self, session_id: str, chats_directory: str, lease: SessionLease
-    ) -> Tuple[Dict[str, Any], int, Any]:
-        """Re-read the file under the lease and allocate the fencing generation above the file's."""
+    async def _read_for_update(self, session_id: str, chats_directory: str) -> Tuple[Dict[str, Any], Any]:
+        """Re-read the file under the lease; the file's stat signature (None when absent) is returned with it."""
         name = f"{session_id}_chat.json"
         signature = await run_in_chat_io_executor(_stat_signature, name, chats_directory)
         chat_file = str(validate_relative_path(name, chats_directory))
         chat_data = await self._load_existing_chat_data(session_id, chat_file, chats_directory)
-        read_generation = file_generation(chat_data)
-        await lease.begin(read_generation)
-        return chat_data, read_generation, signature
+        return chat_data, signature
 
     def _fence_at_file(
-        self, session_id: str, chats_directory: str, lease: SessionLease, read_generation: int, signature: Any
+        self, session_id: str, chats_directory: str, lease: SessionLease, signature: Any
     ) -> Callable[[], Awaitable[None]]:
         """The check run immediately before ``os.replace``: the lease is ours and the file is not newer.
 
@@ -116,7 +136,7 @@ class SessionLockMixin:
             await lease.verify()
             if signature is not None and await run_in_chat_io_executor(_stat_signature, name, chats_directory) is None:
                 raise SessionLeaseLost("chat session %s was deleted since it was read; not recreating it" % session_id)
-            on_disk = await self._stored_generation(session_id, chats_directory, read_generation, signature)
+            on_disk = await self._stored_generation(session_id, chats_directory)
             if on_disk > lease.generation:
                 raise StaleGenerationError(session_id, lease.generation, on_disk)
 
@@ -131,6 +151,7 @@ class SessionLockMixin:
         *,
         must_exist: Literal[False] = False,
         after: Optional[AfterWrite] = None,
+        wait_s: Optional[float] = None,
     ) -> Dict[str, Any]: ...
 
     @overload
@@ -142,6 +163,7 @@ class SessionLockMixin:
         *,
         must_exist: bool = False,
         after: Optional[AfterWrite] = None,
+        wait_s: Optional[float] = None,
     ) -> Optional[Dict[str, Any]]: ...
 
     async def _locked_update(
@@ -152,10 +174,13 @@ class SessionLockMixin:
         *,
         must_exist: bool = False,
         after: Optional[AfterWrite] = None,
+        wait_s: Optional[float] = None,
     ) -> Optional[Dict[str, Any]]:
         """Apply *mutate* to the session's current file under its lease; None when *must_exist* and absent.
 
         None too when *mutate* returns ``False`` (nothing to change): the file, cache and generation are untouched.
+
+        *wait_s* bounds the wait for the lease (default CHAT_LEASE_WAIT_S).
 
         Raises SessionLeaseTimeout (waited out, holder named), SessionLeaseLost or
         StaleGenerationError (nothing written); never writes unlocked.
@@ -164,15 +189,16 @@ class SessionLockMixin:
         chats_directory = self._get_chats_directory()
         await self._ensure_chats_directory_exists(chats_directory)
         chat_file = str(validate_relative_path(f"{session_id}_chat.json", chats_directory))
-        async with session_lease(session_id, operation) as lease:
+        async with session_lease(session_id, operation, wait_s) as lease:
             if must_exist and not await self._resolve_session_file_path(session_id, chats_directory):
                 return None
-            chat_data, read_generation, signature = await self._read_for_update(session_id, chats_directory, lease)
+            chat_data, signature = await self._read_for_update(session_id, chats_directory)
             if mutate(chat_data) is False:
-                return None
-            on_disk = await self._stored_generation(session_id, chats_directory, read_generation, signature)
+                return None  # nothing to change: no generation is allocated
+            await lease.begin(file_generation(chat_data))
+            on_disk = await self._stored_generation(session_id, chats_directory)
             await lease.fence(chat_data, on_disk)
-            guard = self._fence_at_file(session_id, chats_directory, lease, read_generation, signature)
+            guard = self._fence_at_file(session_id, chats_directory, lease, signature)
             await self._write_session_to_storage(chat_file, chat_data, before_replace=guard)
             if after is not None:
                 await after(session_id, chat_data)

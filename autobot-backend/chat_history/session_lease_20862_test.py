@@ -411,7 +411,19 @@ def test_merging_a_large_snapshot_is_linear():
     assert large < small * 6  # 4x the input is ~4x the work; a quadratic merge would be ~16x
 
 
-bound_async_tests(globals())  # no pytest-timeout in the repo: bound each test here
+def test_the_work_counter_tells_a_quadratic_scan_from_a_linear_merge():
+    """Negative control: a scan of the file per supplied message, counted the same way, grows ~16x."""
+
+    def scan_work(size: int) -> int:
+        disk = [_Counted(id=f"d{i}") for i in range(size)]
+        snapshot = disk[::2]
+        _Counted.reads = 0
+        for message in snapshot:
+            any(stored.get("id") == message.get("id") for stored in disk)
+        return _Counted.reads
+
+    small, large = scan_work(250), scan_work(1000)
+    assert large >= small * 12
 
 
 def _refuse_replace(monkeypatch, error: BaseException) -> None:
@@ -505,3 +517,6 @@ async def test_a_failed_fallback_raises(manager, tmp_path, monkeypatch):
     monkeypatch.setattr(file_io, "_write_in_place", refuse_in_place)
     with pytest.raises(PermissionError, match="in place"):
         await manager.save_session("s44", messages=[_msg("first", "t0"), _msg("late", "t9")])
+
+
+bound_async_tests(globals())  # no pytest-timeout in the repo: bound each test here

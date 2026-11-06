@@ -58,9 +58,43 @@ def _occurrence_keys(messages: List[Message]) -> List[Key]:
     return keys
 
 
+def _aligned_keys(reference: List[Message], messages: List[Message]) -> List[Key]:
+    """Occurrence keys for *messages*, numbered against *reference* rather than against their own list.
+
+    Distinct messages sharing a key are told apart by content first: a supplied message equal to a stored
+    one takes that one's slot, and only then does a changed one take the first slot left. ``[A, B]`` stored
+    and ``[B]`` supplied (A and B sharing an id) therefore updates B's slot and leaves A alone; numbering the
+    supplied list from 1 would have mapped B onto A's slot and overwritten it.
+    """
+    slots: Dict[Key, List[Tuple[int, Message]]] = {}
+    for key, stored in zip(_occurrence_keys(reference), reference, strict=True):
+        slots.setdefault(key[:-1], []).append((key[-1], stored))
+    base = message_keys(messages)
+    taken: Dict[Key, set] = {}
+    chosen: List[int | None] = [None] * len(messages)
+    for exact in (True, False):
+        for index, (key, message) in enumerate(zip(base, messages, strict=True)):
+            if chosen[index] is not None:
+                continue
+            used = taken.setdefault(key, set())
+            for occurrence, stored in slots.get(key, ()):
+                if occurrence not in used and (not exact or stored == message):
+                    used.add(occurrence)
+                    chosen[index] = occurrence
+                    break
+    next_free = {key: len(group) for key, group in slots.items()}
+    keys: List[Key] = []
+    for key, occurrence in zip(base, chosen, strict=True):
+        if occurrence is None:  # more copies than the reference has: numbered past its last slot
+            next_free[key] = next_free.get(key, 0) + 1
+            occurrence = next_free[key]
+        keys.append(key + (occurrence,))
+    return keys
+
+
 def dropped_keys(existing: List[Message], kept: List[Message]) -> frozenset:
     """Keys of the *existing* messages absent from *kept*: what a caller's snapshot deliberately dropped."""
-    kept_keys = set(_occurrence_keys(kept))
+    kept_keys = set(_aligned_keys(existing, kept))
     return frozenset(k for k in _occurrence_keys(existing) if k not in kept_keys)
 
 
@@ -73,7 +107,7 @@ def merge_snapshot(on_disk: List[Message], supplied: List[Message], discard: fro
     since the snapshot was taken is not in *discard* and stays.
     """
     disk_keys = _occurrence_keys(on_disk)
-    supplied_keys = _occurrence_keys(supplied)
+    supplied_keys = _aligned_keys(on_disk, supplied)
     on_disk_set = set(disk_keys)
     updates = dict(zip(supplied_keys, supplied, strict=True))
     after: Dict[Key, List[Message]] = {}

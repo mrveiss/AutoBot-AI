@@ -439,11 +439,12 @@ async def delete_conversation(
 
         # #20862: the session files go through delete_session -- the one delete, which takes the session
         # lease and is fenced like a save -- so a delete cannot race a write and be undone by it.
-        chats_dir = DATA_DIR / "chats"
+        manager = get_chat_history_manager(request)
+        chats_dir = Path(manager._get_chats_directory())  # the directory delete_session itself works on
         names = [f"{conversation_id}{suffix}" for suffix in ("_chat.json", "_terminal_transcript.txt")]
         present = [n for n in names if validate_relative_path(n, chats_dir).exists()]
         try:
-            deleted = await get_chat_history_manager(request).delete_session(conversation_id)
+            deleted = await manager.delete_session(conversation_id)
             if not deleted and any(validate_relative_path(n, chats_dir).exists() for n in present):
                 errors.append("Error deleting chat file")  # the manager refused and a file is still there
         except SessionLeaseError:

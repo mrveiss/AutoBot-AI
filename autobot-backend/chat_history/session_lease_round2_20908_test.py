@@ -14,6 +14,7 @@ import pytest
 
 from autobot_logging import terminal_logger as terminal_mod
 from autobot_logging.terminal_logger import TerminalLogger
+from autobot_shared.eventually import eventually
 from autobot_shared.leader_lease import LeaderLease
 from chat_history import file_io
 from chat_history import session_lease as lease_mod
@@ -90,17 +91,6 @@ def test_a_non_finite_or_non_positive_wait_falls_back_to_the_default(monkeypatch
 def _duplicated(tmp_path, session_id: str) -> None:
     twin = [_msg("same words", "2026-01-01 10:00:00"), _msg("same words", "2026-01-01 10:00:05")]
     _plant(tmp_path, session_id, json.dumps({"id": session_id, "messages": twin}))
-
-
-async def test_a_cleanup_that_cannot_take_the_lease_is_raised_not_logged_away(
-    manager, tmp_path, monkeypatch, fake_session_lease
-):
-    _duplicated(tmp_path, "c1")
-    monkeypatch.setattr(lease_mod, "CHAT_LEASE_WAIT_S", 0.2)
-    await _hold(fake_session_lease, "c1")
-    with pytest.raises(SessionLeaseTimeout):
-        await manager.load_session("c1")
-    assert len(_on_disk(tmp_path, "c1")["messages"]) == 2  # untouched
 
 
 async def test_a_cleanup_keeps_a_message_appended_after_the_load(manager, tmp_path):
@@ -203,8 +193,8 @@ async def test_a_pass_stops_waiting_once_its_budget_is_spent(monkeypatch):
     monkeypatch.setattr(lease_mod, "CHAT_LEASE_PASS_BUDGET_S", 0.05)
     budget = lease_mod.LeaseBudget()
     assert not budget.spent
-    await asyncio.sleep(0.1)
-    assert budget.spent and budget.wait_s() == 0.0
+    await eventually(lambda: budget.spent)
+    assert budget.wait_s() == 0.0
 
 
 async def test_a_listing_skips_a_busy_orphan_quickly_and_recovers_it_next_time(
@@ -272,10 +262,12 @@ async def test_the_delete_route_reports_a_file_the_manager_could_not_remove(tmp_
     _write(chats / "x1_chat.json")
 
     class _Refusing:
+        def _get_chats_directory(self):
+            return str(chats)
+
         async def delete_session(self, session_id):
             return False
 
-    monkeypatch.setattr(data_storage, "DATA_DIR", tmp_path)
     monkeypatch.setattr(data_storage, "get_chat_history_manager", lambda request: _Refusing())
     result = await data_storage.delete_conversation("x1", MagicMock(), None)
     assert result["success"] is False and result["errors"] == ["Error deleting chat file"]
@@ -284,6 +276,126 @@ async def test_the_delete_route_reports_a_file_the_manager_could_not_remove(tmp_
 def test_the_lease_error_hierarchy_is_unchanged():
     assert issubclass(SessionLeaseTimeout, SessionLeaseError)
     assert file_io.atomic_write.__name__ == "atomic_write"
+
+
+# --- round 3 (#20862): holder lookup bound, repeated ids, cache warm, generations -----------------------
+
+
+async def test_a_hung_holder_lookup_cannot_stretch_the_bounded_wait(manager, tmp_path, monkeypatch, fake_session_lease):
+    await manager.save_session("h1", messages=[_msg("first", "t0")])
+    await _hold(fake_session_lease, "h1")
+    monkeypatch.setattr(lease_mod, "CHAT_LEASE_WAIT_S", 0.2)
+
+    async def hung(self):
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(lease_mod.SessionLease, "holder", hung)
+    with pytest.raises(SessionLeaseTimeout) as err:
+        await asyncio.wait_for(manager.save_session("h1", messages=[_msg("late", "t9")]), timeout=10)
+    assert "unknown" in err.value.holder
+
+
+_SHARED = {"id": "x", "sender": "user", "timestamp": "t0"}
+_A, _B = {**_SHARED, "text": "a"}, {**_SHARED, "text": "b"}
+
+
+def test_a_snapshot_of_the_second_of_two_messages_with_one_id_keeps_the_first():
+    assert merge_snapshot([_A, _B], [_B]) == [_A, _B]
+
+
+def test_a_changed_second_message_with_a_shared_id_updates_only_its_own_slot():
+    changed = {**_B, "text": "b2"}
+    assert merge_snapshot([_A, _B], [_A, changed]) == [_A, changed]
+
+
+def test_dropping_the_first_of_two_messages_with_one_id_drops_only_it():
+    discard = dropped_keys([_A, _B], [_B])
+    assert merge_snapshot([_A, _B], [_B], discard) == [_B]
+
+
+class _Cached(_Manager):
+    """A manager whose cache writes are recorded, as the message texts each one carried."""
+
+    def __init__(self, directory: str):
+        super().__init__(directory)
+        self.redis_client = object()
+        self.cache_writes: list = []
+
+    def _try_get_from_cache(self, session_id):
+        return None
+
+    async def _async_cache_session(self, cache_key, chat_data):
+        self.cache_writes.append([m["text"] for m in chat_data["messages"]])
+
+    async def _update_redis_cache_on_save(self, session_id, chat_data):
+        await self._async_cache_session(f"chat:session:{session_id}", chat_data)
+
+
+async def test_the_cache_warm_cannot_overwrite_an_append_made_after_the_load_read_the_file(tmp_path, monkeypatch):
+    cached = _Cached(str(tmp_path))
+    await cached.save_session("w1", messages=[_msg("first", "t0")])
+    cached.cache_writes.clear()
+    real_process = cached._process_loaded_messages
+
+    async def append_after_the_read(session_id, chat_data):
+        result = await real_process(session_id, chat_data)
+        await cached._add_message_to_session(session_id, _msg("late", "t9"))  # lands before the warm
+        return result
+
+    monkeypatch.setattr(cached, "_process_loaded_messages", append_after_the_read)
+    await cached.load_session("w1")
+    assert cached.cache_writes[-1] == ["first", "late"]  # the warm re-read the file under the lease
+
+
+async def test_the_cache_warm_is_skipped_while_another_writer_holds_the_lease(
+    tmp_path, monkeypatch, fake_session_lease
+):
+    cached = _Cached(str(tmp_path))
+    await cached.save_session("w2", messages=[_msg("first", "t0")])
+    cached.cache_writes.clear()
+    await _hold(fake_session_lease, "w2")
+    monkeypatch.setattr(lease_mod, "CHAT_LEASE_BEST_EFFORT_WAIT_S", 0.05)
+    messages = await cached.load_session("w2")
+    assert [m["text"] for m in messages] == ["first"] and cached.cache_writes == []
+
+
+def _bump_generation_keeping_size_and_mtime(path, stat) -> int:
+    raw = path.read_text(encoding="utf-8")
+    old = json.loads(raw)["write_generation"]
+    path.write_text(raw.replace(f'"write_generation": {old}', f'"write_generation": {old + 1}'), encoding="utf-8")
+    os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+    return old + 1
+
+
+async def test_the_stored_generation_is_read_from_the_file_even_when_its_stat_is_unchanged(manager, tmp_path):
+    await manager.save_session("g1", messages=[_msg("first", "t0")])
+    path = tmp_path / "g1_chat.json"
+    stat = path.stat()
+    newer = _bump_generation_keeping_size_and_mtime(path, stat)
+    assert path.stat().st_size == stat.st_size
+    assert await manager._stored_generation("g1", str(tmp_path)) == newer
+
+
+async def test_a_mutation_with_nothing_to_change_allocates_no_generation(manager, fake_session_lease):
+    await manager.save_session("g2", messages=[_msg("first", "t0")])
+    counter = lease_mod.CHAT_LEASE_GENERATION_PREFIX + "g2"
+    redis = fakeredis.aioredis.FakeRedis(server=fake_session_lease, decode_responses=True)
+    before = await redis.get(counter)
+    assert await manager._locked_update("g2", "noop", lambda chat_data: False) is None
+    assert await redis.get(counter) == before
+
+
+async def test_a_load_over_a_busy_lease_serves_the_deduped_messages_and_skips_cleanup_and_warm(
+    tmp_path, monkeypatch, fake_session_lease
+):
+    cached = _Cached(str(tmp_path))
+    _duplicated(tmp_path, "c9")
+    before = _raw(tmp_path, "c9")
+    await _hold(fake_session_lease, "c9")
+    monkeypatch.setattr(lease_mod, "CHAT_LEASE_BEST_EFFORT_WAIT_S", 0.05)
+    messages = await cached.load_session("c9")  # does not raise: housekeeping must not fail a read
+    assert [m["text"] for m in messages] == ["same words"]
+    assert _raw(tmp_path, "c9") == before and cached.cache_writes == []
 
 
 bound_async_tests(globals())
