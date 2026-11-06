@@ -57,7 +57,9 @@ async def _pending_match(  # noqa: ANN001
         where.append(Approval.requested_by_agent == requester)
     else:
         where.append(Approval.context["plan_ref"].as_string().in_([plan_ref, *legacy_plan_refs]))
-    for existing in (await session.execute(select(Approval).where(*where))).scalars().all():
+    matches = (await session.execute(select(Approval).where(*where))).scalars().all()
+    # Pending first: a person's decided request must not shadow the open one a retry should reuse.
+    for existing in sorted(matches, key=lambda a: a.status != ApprovalStatus.PENDING.value):
         ctx = existing.context or {}
         same = (ctx.get("action"), ctx.get("action_key"), ctx.get("line"), ctx.get("scope_id"))
         ref = ctx.get("plan_ref")

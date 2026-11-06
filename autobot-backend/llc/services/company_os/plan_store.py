@@ -75,7 +75,7 @@ async def locked_plan(
     The lock is what makes two people editing at once safe: the second waits, then reads the first's
     committed document and applies its own change to that, so neither overwrites the other (#20086).
     """
-    await require_company_admin(session, company_id, actor)
+    await require_company_admin(session, company_id, actor, for_update=True)
     row = await load_writable(session, company_id, plan_key)
     return row, read_plan(row)
 

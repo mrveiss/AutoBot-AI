@@ -41,6 +41,17 @@ def _breakdown_errors(sub_steps: Sequence[SubStep], edge_cases: Sequence[EdgeCas
     return errors
 
 
+def _other_step_key_errors(
+    plan: CompanyWorkflowPlan, step_key: str, sub_steps: Sequence[SubStep], edge_cases: Sequence[EdgeCase]
+) -> List[str]:
+    """Keys are plan-wide ids (PATCH and DELETE find a case by key): none may repeat one on another step."""
+    taken_subs = {s.key for s in plan.sub_steps if s.step_key != step_key}
+    taken_cases = {c.key for c in plan.edge_cases if c.step_key != step_key}
+    errors = [f"sub-step key {s.key!r} is already used on another step" for s in sub_steps if s.key in taken_subs]
+    errors += [f"edge case key {c.key!r} is already used on another step" for c in edge_cases if c.key in taken_cases]
+    return errors
+
+
 def replace_breakdown(
     plan: CompanyWorkflowPlan, step_key: str, sub_steps: Sequence[SubStep], edge_cases: Sequence[EdgeCase]
 ) -> None:
@@ -53,7 +64,7 @@ def replace_breakdown(
         for i, s in enumerate(sub_steps)
     ]
     cases = [c.model_copy(update={"step_key": step_key}) for c in edge_cases]
-    errors = _breakdown_errors(fixed, cases)
+    errors = _breakdown_errors(fixed, cases) + _other_step_key_errors(plan, step_key, fixed, cases)
     if errors:
         raise GraphInvalid(errors)
     plan.sub_steps = [s for s in plan.sub_steps if s.step_key != step_key] + fixed
