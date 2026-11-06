@@ -161,3 +161,23 @@ async def test_clean_success_stays_completed(tmp_path) -> None:
     result = await _final_status(tmp_path, [ok])
     assert result.status == LLCRunStatus.COMPLETED
     assert result.error is None
+
+
+def test_wide_tail_drops_the_fragment_the_seek_landed_in(tmp_path, monkeypatch) -> None:
+    from llc.adapters import claude_result_failure as crf
+
+    monkeypatch.setattr(crf, "_WIDE_TAIL_BYTES", 60)
+    path = tmp_path / "out.jsonl"
+    first = json.dumps({"type": "user", "content": "x rate limit exceeded x"})
+    second = json.dumps({"type": "result", "subtype": "success"})
+    path.write_text(first + "\n" + second + "\n", encoding="utf-8")
+    # 60 bytes back from the end lands inside the first line
+    assert crf.read_wide_tail(str(path)) == second + "\n"
+
+
+def test_wide_tail_of_a_short_file_keeps_every_line(tmp_path) -> None:
+    from llc.adapters.claude_result_failure import read_wide_tail
+
+    path = tmp_path / "out.jsonl"
+    path.write_text("a\nb\n", encoding="utf-8")
+    assert read_wide_tail(str(path)) == "a\nb\n"

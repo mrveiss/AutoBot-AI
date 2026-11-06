@@ -143,6 +143,16 @@ def _cost_of(model: str, agent_id: str, tokens_in: int, tokens_out: int) -> Deci
     return Decimal(str((tokens_in * pricing.input_per_1m + tokens_out * pricing.output_per_1m) / 1_000_000))
 
 
+async def _persist_then_stop(session: AsyncSession, stop: BudgetExhausted) -> None:
+    """Commit the spend just recorded, then raise the hard stop (#20202).
+
+    The overrun already happened; every caller rolls back on an exception, which
+    would erase the cost event and counter update for it.
+    """
+    await session.commit()
+    raise stop
+
+
 class BudgetService(LLCServiceBase):
     """Per-agent budget enforcement: cost ingest, hard stop, soft alert."""
 
@@ -221,8 +231,10 @@ class BudgetService(LLCServiceBase):
         Uses atomic UPDATE to avoid read-modify-write races across 4 uvicorn workers.
 
         Returns the dollar cost added this call (always calculated for analytics).
-        Raises BudgetExhausted if spending exceeds the active budget mode limit,
-        and UnpricedModel if the model is neither local nor in the live catalogue.
+        Raises BudgetExhausted if spending exceeds the active budget mode limit;
+        the recorded event and counter update are committed first, so a caller
+        that rolls back on the exception does not lose spend that really happened
+        (#20202). Raises UnpricedModel if the model is neither local nor in the live catalogue.
         """
         cost = _cost_of(model, agent_id, tokens_in, tokens_out) if bill_dollars else Decimal("0")
 
@@ -301,13 +313,17 @@ class BudgetService(LLCServiceBase):
         # Enforce budget based on mode (GH#8997)
         if budget_mode == "tokens" and token_limit is not None:
             if tokens_spent > token_limit:
-                raise BudgetExhausted(agent_id=agent_id, spent=tokens_spent, limit=token_limit)
+                await _persist_then_stop(
+                    session, BudgetExhausted(agent_id=agent_id, spent=tokens_spent, limit=token_limit)
+                )
             if token_limit > 0 and tokens_spent / token_limit >= threshold:
                 await self._emit_alert(agent_id, tokens_spent, token_limit)
         elif bill_dollars:
             # Default DOLLARS mode
             if spent > limit:
-                raise BudgetExhausted(agent_id=agent_id, spent=float(spent), limit=float(limit))
+                await _persist_then_stop(
+                    session, BudgetExhausted(agent_id=agent_id, spent=float(spent), limit=float(limit))
+                )
             if limit > Decimal("0") and spent / limit >= threshold:
                 await self._emit_alert(agent_id, float(spent), float(limit))
 

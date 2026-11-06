@@ -79,3 +79,12 @@ async def test_turn_limit_run_is_failed_with_billing_and_tokens(tmp_path) -> Non
     result = await _status(tmp_path, [_init("none"), _TURN_LIMIT], ClaudeCodeAdapter())
     assert result.status == LLCRunStatus.FAILED
     assert (result.billing, result.tokens_in, result.tokens_out) == (BILLING_SUBSCRIPTION, 100, 5)
+
+
+def test_init_line_longer_than_any_fixed_head_still_reads_billing(tmp_path) -> None:
+    from llc.adapters.claude_result_failure import run_billing
+
+    path = tmp_path / "out.jsonl"
+    event = dict(_init("none"), tools=["t" * 100] * 5000)  # ~500 KB first line
+    path.write_text(json.dumps(event) + "\n" + json.dumps(_SUCCESS) + "\n", encoding="utf-8")
+    assert run_billing(str(path)) == BILLING_SUBSCRIPTION
