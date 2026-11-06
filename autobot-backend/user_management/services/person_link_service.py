@@ -187,8 +187,12 @@ def _status_for(status: str | None) -> tuple[str, str | None]:
     return _HEALTH_BY_STATUS.get(status, ("degraded", f"unrecognised first-admin link status: {status}"))
 
 
-@register_health_probe(_PROBE_NAME)
 async def probe_first_admin_link(request: Request | None = None) -> ComponentHealth:
     """Report the outcome of the startup first-admin link (#10200)."""
     health, detail = _status_for(last_link_status)
     return ComponentHealth(name=_PROBE_NAME, status=health, detail=detail, data={"link_status": last_link_status})
+
+
+def register_first_admin_link_probe() -> None:
+    """Register the link probe with the health aggregator; called from the backend lifespan (#10200)."""
+    register_health_probe(_PROBE_NAME)(probe_first_admin_link)

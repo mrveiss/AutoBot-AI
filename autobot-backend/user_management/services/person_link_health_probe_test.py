@@ -4,6 +4,11 @@
 # Author: mrveiss
 """The first-admin link status is reported through the system health aggregator (#10200)."""
 
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 
 pytest.importorskip("fastapi")
@@ -33,8 +38,32 @@ def test_error_states_carry_a_message():
         assert probe._status_for(status)[1]
 
 
-def test_probe_is_registered_in_the_aggregator():
-    assert _PROBES[KnownProbes.FIRST_ADMIN_LINK] is probe.probe_first_admin_link
+def test_importing_the_service_registers_nothing():
+    """No import side effect: a fresh interpreter importing the module leaves the registry empty."""
+    code = (
+        "from api.system_health import _PROBES, KnownProbes\n"
+        "import user_management.services.person_link_service\n"
+        "assert KnownProbes.FIRST_ADMIN_LINK not in _PROBES"
+    )
+    subprocess.run(
+        [sys.executable, "-c", code], check=True, env={**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)}
+    )
+
+
+def test_register_function_registers_the_probe(monkeypatch):
+    monkeypatch.setattr("api.system_health._PROBES", dict(_PROBES))
+    probe.register_first_admin_link_probe()
+    from api import system_health
+
+    assert system_health._PROBES[KnownProbes.FIRST_ADMIN_LINK] is probe.probe_first_admin_link
+
+
+def test_lifespan_registers_the_probe_before_the_link_attempt():
+    source = (Path(__file__).resolve().parents[2] / "initialization" / "lifespan.py").read_text(encoding="utf-8")
+    body = source.split("async def _seed_default_admin()")[1]
+    register_pos = body.index("register_first_admin_link_probe()")
+    link_pos = body.index("link_first_slm_admin_at_startup()")
+    assert register_pos < link_pos
 
 
 @pytest.mark.asyncio
