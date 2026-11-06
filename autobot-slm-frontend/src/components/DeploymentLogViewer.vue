@@ -13,10 +13,8 @@
  */
 
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { BaseAlert, BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseModal, createLogger, createDateFormatter } from '@autobot/ui'
 import { getSlmApiBase } from '@/config/ssot-config'
-import { createLogger } from '@/utils/debugUtils'
-import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('DeploymentLogViewer')
 

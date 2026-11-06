@@ -19,10 +19,9 @@
  */
 
 import { ref, computed, onMounted } from 'vue'
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, createLogger } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import { useAutobotApi, type BudgetPolicy } from '@/composables/useAutobotApi'
-import { createLogger } from '@/utils/debugUtils'
 
 const { t } = useI18n()
 const logger = createLogger('BudgetAuditView')
