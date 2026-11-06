@@ -428,7 +428,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/api/stateful.py": 685,
     "autobot-slm-backend/api/tls.py": 994,
     "autobot-slm-backend/api/updates.py": 1107,
-    "autobot-slm-backend/main.py": 773,  # #19368: admin seed password into services/admin_seed_password.py
+    "autobot-slm-backend/main.py": 772,  # #19368: admin seed password into services/admin_seed_password.py
     "autobot-slm-backend/models/database.py": 1140,
     "autobot-slm-backend/models/schemas.py": 2144,
     "autobot-slm-backend/monitoring/business_intelligence_dashboard.py": 1159,
