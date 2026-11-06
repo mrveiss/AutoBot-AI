@@ -103,3 +103,22 @@ export interface WorkItem {
   acceptance_criteria_done?: boolean[]
   linked_pr_urls?: string[]
 }
+
+/** Options for the type and priority pickers (backlog filters and the create form). */
+export const WORK_ITEM_TYPES: { value: WorkItemType; label: string }[] = [
+  { value: 'epic', label: 'Epic' },
+  { value: 'feature', label: 'Feature' },
+  { value: 'pbi', label: 'PBI' },
+  { value: 'task', label: 'Task' },
+  { value: 'bug', label: 'Bug' },
+  { value: 'subtask', label: 'Subtask' },
+  { value: 'spike', label: 'Spike' },
+  { value: 'risk', label: 'Risk' },
+]
+
+export const PRIORITIES: { value: WorkItemPriority; label: string }[] = [
+  { value: 'critical', label: 'Critical' },
+  { value: 'high', label: 'High' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'low', label: 'Low' },
+]
