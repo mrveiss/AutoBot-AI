@@ -21,25 +21,32 @@ cannot be read or measured raises :class:`BaseUnavailable`, never a pass. A decl
 base does not have (a guard new in this PR) is refused the same way: pin ``floor=`` until it
 lands.
 
-The base tree is one detached ``git worktree`` per process, in its own directory under the
-system temp dir, checked out with ``read-tree`` so the repository's checkout hooks never run on
-it, and removed (then pruned) when the process exits. A guard whose ``discover`` reads untracked
+The base tree is one directory per base commit in a private per-user cache under the system temp
+dir, shared by every xdist worker and concurrent run: built once under a file lock from
+``git archive`` into a temp dir and renamed into place, so it is never half-built and never a
+registered ``git worktree`` (#20875). SIGTERM removes this process's partial builds; trees for other
+commits are pruned after a TTL. A guard whose ``discover`` reads untracked
 or generated files cannot be measured at the base and keeps an explicit ``floor=``; it is listed
 in :data:`PINNED_BY_DESIGN`, which ``reach_base_floor_19676_test`` holds to pinned declarations.
 """
 
 from __future__ import annotations
 
-import atexit
+import contextlib
+import fcntl
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
+import tarfile
 import tempfile
+import threading
 import time
-import warnings
+from collections.abc import Iterator
 from pathlib import Path
+from types import FrameType
 from typing import TYPE_CHECKING, Any
 
 from repo_tests._paths import repo_root
@@ -52,8 +59,10 @@ if TYPE_CHECKING:
 
 REPO_ROOT = repo_root()
 TREE_PREFIX = "autobot-reach-base-"
-#: A base tree left by a killed process is removed on the next first use once it is this old.
-_STALE_AFTER_S = 6 * 3600
+#: Env var naming the cache directory that holds the base trees; default is under the system temp dir.
+CACHE_DIR_ENV = "AUTOBOT_REACH_BASE_CACHE_DIR"
+#: A tree for another commit (or a partial build) untouched for this long is pruned on the next use.
+_STALE_AFTER_S = int(os.environ.get("AUTOBOT_REACH_BASE_TTL_S", str(6 * 3600)))
 
 #: Declarations that keep an explicit ``floor=`` because their population cannot be measured at
 #: the base, each with the reason. Empty: measured on all declarations, the base and live
@@ -61,6 +70,9 @@ _STALE_AFTER_S = 6 * 3600
 PINNED_BY_DESIGN: dict[str, str] = {}
 
 _TREE: dict[str, Path] = {}
+#: Temp build dirs this process created and has not yet renamed into place; SIGTERM removes only these.
+_PARTIAL: set[Path] = set()
+_PREVIOUS_HANDLER: dict[int, Any] = {}
 _BASE_COUNT: dict[str, int] = {}
 _BASE_FAILED: dict[str, str] = {}
 
@@ -99,44 +111,120 @@ def _git(*args: str, cwd: Path = REPO_ROOT) -> subprocess.CompletedProcess[str]:
     )
 
 
-def _sweep_stale_trees() -> None:
-    """Remove base trees a killed process left behind; a live one (younger) is never touched."""
-    for old in Path(tempfile.gettempdir()).glob(f"{TREE_PREFIX}*"):
-        if old.is_dir() and time.time() - old.stat().st_mtime > _STALE_AFTER_S:
-            shutil.rmtree(old, ignore_errors=True)
-    _git("worktree", "prune")
+def _cache_root() -> Path:
+    """The per-user directory holding every base tree; private to this user, never in the repo."""
+    root = Path(os.environ.get(CACHE_DIR_ENV) or Path(tempfile.gettempdir()) / f"{TREE_PREFIX}cache-{os.getuid()}")
+    root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if root.stat().st_uid != os.getuid():
+        raise BaseUnavailable(f"{root} is owned by another user; refusing to read a base tree from it.")
+    return root
+
+
+@contextlib.contextmanager
+def _locked(root: Path) -> Iterator[None]:
+    """Hold the cache's exclusive lock: all xdist workers and concurrent runs queue here."""
+    fd = os.open(root / ".lock", os.O_CREAT | os.O_WRONLY, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)  # closing the descriptor releases the flock
+
+
+def _prune(root: Path, keep: Path) -> None:
+    """Remove trees for other commits, and partial builds, that nobody has touched for the TTL."""
+    for old in root.iterdir():
+        if old == keep or not old.is_dir() or time.time() - old.stat().st_mtime <= _STALE_AFTER_S:
+            continue
+        shutil.rmtree(old)
+
+
+def _extract(sha: str, into: Path) -> None:
+    """Materialise *sha* in *into* from ``git archive``; nothing is registered with git."""
+    with subprocess.Popen(
+        ["git", "-C", str(REPO_ROOT), "archive", "--format=tar", sha],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=scrubbed_git_env(),
+    ) as proc:  # fmt: skip
+        assert proc.stdout is not None
+        with tarfile.open(fileobj=proc.stdout, mode="r|") as archive:
+            archive.extractall(into, filter="data")
+        stderr = proc.stderr.read().decode("utf-8", "replace") if proc.stderr else ""
+    if proc.returncode != 0:
+        raise BaseUnavailable(f"git archive {sha} failed ({stderr.strip()}); no floor without the base.")
+
+
+def _index(sha: str, tree: Path) -> None:
+    """Give the extracted *tree* its own standalone repository holding *sha*'s index.
+
+    ``git ls-files`` (what every ``discover`` runs) needs one. It borrows the source repository's
+    objects through ``alternates`` and records nothing in the source's ``.git/worktrees``.
+    """
+    objects = _git("rev-parse", "--path-format=absolute", "--git-path", "objects")
+    if objects.returncode != 0:
+        raise BaseUnavailable(f"cannot locate the object store ({objects.stderr.strip()}).")
+    steps = (("init", "--quiet"), ("read-tree", sha), ("update-ref", "--no-deref", "HEAD", sha))
+    for i, step in enumerate(steps):
+        if i == 1:
+            (tree / ".git" / "objects" / "info" / "alternates").write_text(objects.stdout, encoding="utf-8")
+        out = _git(*step, cwd=tree)
+        if out.returncode != 0:
+            raise BaseUnavailable(f"git {step[0]} in the base tree failed ({out.stderr.strip()}).")
+
+
+def _remove_partials(*_signal_args: object) -> None:
+    for partial in list(_PARTIAL):
+        shutil.rmtree(partial, ignore_errors=True)
+    _PARTIAL.clear()
+
+
+def _on_sigterm(signum: int, frame: FrameType | None) -> None:
+    """Drop this process's partial builds, then let the previous disposition act (default: die)."""
+    _remove_partials()
+    previous = _PREVIOUS_HANDLER.get(signum, signal.SIG_DFL)
+    if callable(previous):
+        previous(signum, frame)
+        return
+    if previous == signal.SIG_IGN:
+        return
+    signal.signal(signum, signal.SIG_DFL)
+    os.kill(os.getpid(), signum)
+
+
+def _build(root: Path, sha: str, final: Path) -> None:
+    """Extract into a private temp dir, then rename it into place: *final* is never half-built."""
+    partial = Path(tempfile.mkdtemp(prefix=".partial-", dir=root))
+    _PARTIAL.add(partial)
+    try:
+        _extract(sha, partial)
+        _index(sha, partial)
+        partial.rename(final)
+    except BaseException:
+        _remove_partials()
+        raise
+    _PARTIAL.discard(partial)
 
 
 def base_tree() -> Path:
-    """The base commit checked out once for this process, in its own temp directory."""
+    """The base commit's tree: one per commit, shared by every worker and run, built once."""
     if "tree" in _TREE:
         return _TREE["tree"]
-    _sweep_stale_trees()
     sha = base_commit(REPO_ROOT)
-    tree = Path(tempfile.mkdtemp(prefix=TREE_PREFIX))
-    added = _git("worktree", "add", "--detach", "--no-checkout", str(tree), sha)
-    if added.returncode != 0:
-        shutil.rmtree(tree, ignore_errors=True)
-        raise BaseUnavailable(f"git worktree add failed ({added.stderr.strip()}); no floor without the base.")
-    atexit.register(remove_base_tree, tree)
-    out = _git("read-tree", "-u", "--reset", "HEAD", cwd=tree)
-    if out.returncode != 0:
-        remove_base_tree(tree)
-        raise BaseUnavailable(f"checking out the base failed ({out.stderr.strip()}).")
-    _TREE["tree"] = tree
-    return tree
-
-
-def remove_base_tree(tree: Path) -> None:
-    """Remove the base worktree and its record; fall back to deleting the directory, and say so."""
-    try:
-        out = _git("worktree", "remove", str(tree))
-        if out.returncode != 0 and tree.exists():
-            warnings.warn(f"git worktree remove {tree} failed ({out.stderr.strip()}); deleting it", stacklevel=2)
-            shutil.rmtree(tree, ignore_errors=True)
-    finally:
-        _git("worktree", "prune")
-        _TREE.pop("tree", None)
+    root = _cache_root()
+    final = root / f"{TREE_PREFIX}{sha}"
+    can_trap = threading.current_thread() is threading.main_thread()
+    with _locked(root):
+        if can_trap:
+            _PREVIOUS_HANDLER[signal.SIGTERM] = signal.signal(signal.SIGTERM, _on_sigterm)
+        try:
+            if not final.is_dir():
+                _build(root, sha, final)
+            os.utime(final)
+            _prune(root, keep=final)
+        finally:
+            if can_trap:
+                signal.signal(signal.SIGTERM, _PREVIOUS_HANDLER.pop(signal.SIGTERM))
+    _TREE["tree"] = final
+    return final
 
 
 def _declaring_file(reach: "Reach[Any]") -> str:
