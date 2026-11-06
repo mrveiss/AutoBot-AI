@@ -13,6 +13,9 @@ from chat_history.file_io import FileIOMixin
 from chat_history.security import SecurityMixin
 from chat_history.session import SessionMixin
 
+_MESSAGES = [{"id": "m1", "sender": "user", "text": "hi", "timestamp": "t0"}]
+_METADATA = {"owner": "bob"}
+
 
 class _Stub(SessionMixin, FileIOMixin):
     """A manager whose chat file is ciphertext, so a rename must decrypt it and encrypt the result."""
@@ -20,6 +23,7 @@ class _Stub(SessionMixin, FileIOMixin):
     def __init__(self, directory: str) -> None:
         self._directory = directory
         self._update_redis_session_cache = AsyncMock()
+        self.encrypted: list = []  # everything that reached _encrypt_data
 
     def _get_chats_directory(self) -> str:
         return self._directory
@@ -27,10 +31,10 @@ class _Stub(SessionMixin, FileIOMixin):
     @staticmethod
     def _decrypt_data(data: str) -> dict:
         assert data == "ciphertext"
-        return {"name": "old"}
+        return {"name": "old", "messages": _MESSAGES, "metadata": _METADATA}
 
-    @staticmethod
-    def _encrypt_data(data: dict) -> str:
+    def _encrypt_data(self, data: dict) -> str:
+        self.encrypted.append(data)
         return f"encrypted:{data['name']}"
 
 
@@ -47,8 +51,13 @@ async def test_a_rename_reads_an_encrypted_chat(chat_file) -> None:
 
 
 async def test_a_rename_writes_through_the_encryption_path(chat_file) -> None:
-    await _Stub(str(Path(chat_file).parent)).update_session_name("s", "new")
+    stub = _Stub(str(Path(chat_file).parent))
+    await stub.update_session_name("s", "new")
     assert _read(chat_file) == "encrypted:new"
+    (written,) = stub.encrypted
+    assert written["name"] == "new"
+    assert written["messages"] == _MESSAGES  # the rename keeps what the decrypted file carried
+    assert written["metadata"] == _METADATA
 
 
 def _read(path: str) -> str:

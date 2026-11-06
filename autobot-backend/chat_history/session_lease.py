@@ -32,7 +32,9 @@ import uuid
 from contextlib import AsyncExitStack, asynccontextmanager
 from typing import Any, AsyncIterator, Dict
 
-from autobot_shared.env_registry import env
+from autobot_shared.env_registry import REGISTRY, env
+from autobot_shared.env_utils import env_float_clamped, env_int_clamped
+from autobot_shared.error_boundaries.types import PassThroughError
 from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
@@ -40,12 +42,33 @@ from autobot_shared.redis_utils import decode_redis_value
 
 logger = get_logger(__name__)
 
-# Read through the registry (autobot_shared/env_registry_chat_lease.py): one default, and a bad value falls back to it.
-CHAT_LEASE_TTL_MS: int = env("AUTOBOT_CHAT_LEASE_TTL_MS")
-CHAT_LEASE_WAIT_S: float = env("AUTOBOT_CHAT_LEASE_WAIT_S")
-CHAT_LEASE_POLL_S: float = env("AUTOBOT_CHAT_LEASE_POLL_S")
+
+def _registered_range(name: str) -> tuple[Any, Any, Any]:
+    """The registry's default and (min, max) for *name*, so the registered range is the one enforced."""
+    spec = REGISTRY[name]
+    low, high = spec.range or (None, None)
+    return spec.default, low, high
+
+
+def _ttl_ms() -> int:
+    default, low, high = _registered_range("AUTOBOT_CHAT_LEASE_TTL_MS")
+    return env_int_clamped("AUTOBOT_CHAT_LEASE_TTL_MS", default, low, high)
+
+
+def _seconds(name: str) -> float:
+    default, low, high = _registered_range(name)
+    return env_float_clamped(name, default, low, high)
+
+
+# Defaults and ranges live in autobot_shared/env_registry_chat_lease.py; a malformed value falls back to the
+# default and an out-of-range one is clamped (with a warning), so neither crashes the import.
+CHAT_LEASE_TTL_MS: int = _ttl_ms()
+CHAT_LEASE_WAIT_S: float = _seconds("AUTOBOT_CHAT_LEASE_WAIT_S")
+CHAT_LEASE_POLL_S: float = _seconds("AUTOBOT_CHAT_LEASE_POLL_S")
 CHAT_LEASE_DATABASE: str = env("AUTOBOT_CHAT_LEASE_REDIS_DB")
+#: Lease keys and their fencing counters live under different prefixes, so no session id can make one the other.
 CHAT_LEASE_KEY_PREFIX: str = env("AUTOBOT_CHAT_LEASE_KEY_PREFIX")
+CHAT_LEASE_GENERATION_PREFIX: str = env("AUTOBOT_CHAT_LEASE_GENERATION_KEY_PREFIX")
 
 #: Key in the chat file that carries the generation of the lease that last wrote it.
 GENERATION_FIELD = "write_generation"
@@ -59,8 +82,11 @@ return redis.call('INCR', KEYS[1])
 """
 
 
-class SessionLeaseError(RuntimeError):
-    """Base class for chat-session lease failures."""
+class SessionLeaseError(PassThroughError, RuntimeError):
+    """Base class for chat-session lease failures.
+
+    A ``PassThroughError``: ``with_error_handling`` re-raises it so the app-wide handler answers it.
+    """
 
 
 class SessionLeaseTimeout(SessionLeaseError):
@@ -107,8 +133,15 @@ _local_holder: Dict[str, str] = {}
 
 
 async def _lease_client(database: str) -> Any:
-    """Redis client for the lease keys (module-level so tests can bind a fake)."""
-    return await get_async_redis_client(database=database)
+    """Redis client for the lease keys (module-level so tests can bind a fake).
+
+    An unknown AUTOBOT_CHAT_LEASE_REDIS_DB is a lease failure the caller can tell apart, not a bare
+    KeyError that a broad ``except`` further up would read as "the write failed".
+    """
+    try:
+        return await get_async_redis_client(database=database)
+    except KeyError as exc:
+        raise SessionLeaseError("chat lease Redis database %r is not a known database" % database) from exc
 
 
 def file_generation(chat_data: Dict[str, Any]) -> int:
@@ -126,6 +159,8 @@ class SessionLease:
         self.session_id = session_id
         self.operation = operation
         self.key = CHAT_LEASE_KEY_PREFIX + session_id
+        self.generation_key = CHAT_LEASE_GENERATION_PREFIX + session_id
+        self.owner: asyncio.Task | None = asyncio.current_task()
         self.generation = 0
         holder = "%s-%d:%s:%s" % (socket.gethostname(), os.getpid(), operation, uuid.uuid4().hex[:8])
         self._lease = LeaderLease(
@@ -193,7 +228,7 @@ class SessionLease:
         if redis is None:
             raise SessionLeaseLost("lease store unreachable for chat session %s" % self.session_id)
         floor = int(current_file_generation)
-        self.generation = int(await redis.eval(_GENERATION_LUA, 1, self.key + ":generation", floor))
+        self.generation = int(await redis.eval(_GENERATION_LUA, 1, self.generation_key, floor))
 
     async def fence(self, chat_data: Dict[str, Any], on_disk_generation: int) -> None:
         """Confirm the lease, reject a stale write, and stamp this lease's generation into *chat_data*."""
@@ -251,12 +286,13 @@ async def _enter(stack: AsyncExitStack, session_id: str, operation: str) -> Sess
 async def session_lease(session_id: str, operation: str) -> AsyncIterator[SessionLease]:
     """Hold the session's write lease for the block, waiting at most CHAT_LEASE_WAIT_S in total.
 
-    Re-entrant within one task. A task spawned inside the block inherits the held lease through its
-    copied context and shares it, so the block must not run its own mutation while such a child runs.
+    Re-entrant within the task that holds it. A task spawned inside the block inherits the held lease
+    through its copied context but is not its owner, so it queues for the lease like any other writer.
     """
     held = _held.get({})
-    if session_id in held:
-        yield held[session_id]
+    current = held.get(session_id)
+    if current is not None and current.owner is asyncio.current_task():
+        yield current
         return
     async with AsyncExitStack() as stack:
         lease = await _enter(stack, session_id, operation)

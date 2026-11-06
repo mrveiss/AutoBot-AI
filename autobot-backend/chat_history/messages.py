@@ -352,24 +352,46 @@ class MessagesMixin:
             )
         """
         try:
-            messages = await self.load_session(session_id)
-
-            for message in messages:
-                if self._message_matches_filter(message, metadata_filter):
-                    self._apply_metadata_updates(message, metadata_updates)
-                    await self.save_session(session_id, messages=messages)
-                    logger.info(
-                        f"Updated message metadata in session {session_id}: "
-                        f"filter={metadata_filter}, updates={metadata_updates}"
-                    )
-                    return True
+            if await self._update_first_matching_message(session_id, metadata_filter, metadata_updates):
+                logger.info(
+                    f"Updated message metadata in session {session_id}: "
+                    f"filter={metadata_filter}, updates={metadata_updates}"
+                )
+                return True
 
             logger.warning(f"No message found matching metadata filter in session " f"{session_id}: {metadata_filter}")
             return False
 
+        except SessionLeaseError:
+            raise  # #20862: a wait that timed out is surfaced, not turned into a quiet False
         except Exception as e:
             logger.error(f"Error updating message metadata in session {session_id}: {e}")
             return False
+
+    async def _update_first_matching_message(
+        self, session_id: str, metadata_filter: Dict[str, Any], metadata_updates: Dict[str, Any]
+    ) -> bool:
+        """Apply *metadata_updates* to the first matching message inside the session's locked update (#20862).
+
+        The message is found and changed on the file as it is once the lease is held, so a concurrent
+        edit to another key of the same message, or a new message, is kept rather than overwritten by a
+        snapshot loaded before the wait.
+        """
+        found = False
+
+        def apply(chat_data: Dict[str, Any]) -> None:
+            nonlocal found
+            for message in chat_data.get("messages") or []:
+                if self._message_matches_filter(message, metadata_filter):
+                    self._apply_metadata_updates(message, metadata_updates)
+                    chat_data["last_modified"] = time.strftime("%Y-%m-%d %H:%M:%S")
+                    found = True
+                    return
+
+        written = await self._locked_update(
+            session_id, "update_message_metadata", apply, must_exist=True, after=self._update_redis_cache_on_save
+        )
+        return written is not None and found
 
     async def add_tool_marker_to_last_message(
         self, session_id: str, tool_type: str, tool_action: str, **marker_data: Any

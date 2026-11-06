@@ -72,9 +72,19 @@ def merge_snapshot(on_disk: List[Message], supplied: List[Message]) -> List[Mess
 
 
 def new_messages_only(on_disk: List[Message], supplied: List[Message]) -> List[Message]:
-    """*supplied* minus messages whose id is already in the file, so a retried append adds nothing twice."""
-    stored = {k for k in message_keys(on_disk) if k[0] == "id"}
-    return [m for m, k in zip(supplied, message_keys(supplied)) if k not in stored]
+    """*supplied* minus messages whose id is already in the file or earlier in *supplied*.
+
+    A retried append adds nothing twice, and a batch carrying one id twice adds it once.
+    """
+    seen = {k for k in message_keys(on_disk) if k[0] == "id"}
+    fresh: List[Message] = []
+    for message, key in zip(supplied, message_keys(supplied)):
+        if key in seen:
+            continue
+        if key[0] == "id":
+            seen.add(key)
+        fresh.append(message)
+    return fresh
 
 
 def combine_messages(on_disk: List[Message], supplied: List[Message], *, append: bool, replace: bool) -> List[Message]:

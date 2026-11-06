@@ -77,3 +77,17 @@ register_env_var(
         component="chat",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_LEASE_GENERATION_KEY_PREFIX",
+        type=str,
+        default="autobot:chat:session_generation:",
+        description=(
+            "Key prefix of the per-session fencing counter; the session id is appended. Kept apart from "
+            "AUTOBOT_CHAT_LEASE_KEY_PREFIX so one session's counter can never be another session's "
+            "lease key (chat_history/session_lease.py, #20862)."
+        ),
+        component="chat",
+    )
+)

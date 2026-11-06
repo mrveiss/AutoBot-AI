@@ -513,8 +513,7 @@ class SessionMixin(SessionLockMixin):
         append: bool = False,
         replace: bool = False,
     ):
-        """
-        Save a chat session with messages and metadata.
+        """Save a chat session with messages and metadata.
 
         Args:
             session_id: The identifier for the session to save.
@@ -539,6 +538,7 @@ class SessionMixin(SessionLockMixin):
 
         def apply(chat_data: Dict[str, Any]) -> None:
             on_disk = chat_data.get("messages", [])
+            on_disk = self._dedupe_streaming_messages(on_disk) if append else on_disk  # as a load cleans them
             merged = combine_messages(on_disk, session_messages, append=append, replace=replace)
             merged = self._prepare_session_messages(session_id, merged)
             self._build_session_chat_data(chat_data, session_id, name, merged, current_time, metadata)

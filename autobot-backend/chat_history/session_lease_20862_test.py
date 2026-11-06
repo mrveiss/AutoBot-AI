@@ -18,6 +18,7 @@ import fakeredis.aioredis
 import pytest
 
 from chat_history import session_lease as lease_mod
+from chat_history.deduplication import DeduplicationMixin
 from chat_history.file_io import FileIOMixin
 from chat_history.messages import MessagesMixin
 from chat_history.security import SecurityMixin
@@ -36,7 +37,7 @@ _HELD_FOR_MS = 60_000  # a holder that outlives every test wait
 _SHORT_HOLD_MS = 300  # a holder that finishes inside the wait bound
 
 
-class _Manager(SessionMixin, SessionListingMixin, MessagesMixin, SecurityMixin, FileIOMixin):
+class _Manager(SessionMixin, SessionListingMixin, MessagesMixin, SecurityMixin, FileIOMixin, DeduplicationMixin):
     """Minimal manager with real disk persistence."""
 
     def __init__(self, chats_directory: str):

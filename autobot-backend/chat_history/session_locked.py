@@ -21,6 +21,7 @@ from chat_history.session_lease import (
     ChatFileUnreadable,
     SessionLease,
     SessionLeaseError,
+    StaleGenerationError,
     file_generation,
     session_lease,
 )
@@ -95,6 +96,24 @@ class SessionLockMixin:
         await lease.begin(read_generation)
         return chat_data, read_generation, signature
 
+    def _fence_at_file(
+        self, session_id: str, chats_directory: str, lease: SessionLease, read_generation: int, signature: Any
+    ) -> Callable[[], Awaitable[None]]:
+        """The check run immediately before ``os.replace``: the lease is ours and the file is not newer.
+
+        The lease can be lost, and another writer land a newer generation, between the fence and the
+        rename. Re-reading the file's generation here, as the write's last step before the rename, refuses
+        the write (nothing is replaced) instead of overwriting the newer content.
+        """
+
+        async def check() -> None:
+            await lease.verify()
+            on_disk = await self._stored_generation(session_id, chats_directory, read_generation, signature)
+            if on_disk > lease.generation:
+                raise StaleGenerationError(session_id, lease.generation, on_disk)
+
+        return check
+
     async def _locked_update(
         self,
         session_id: str,
@@ -120,7 +139,8 @@ class SessionLockMixin:
             mutate(chat_data)
             on_disk = await self._stored_generation(session_id, chats_directory, read_generation, signature)
             await lease.fence(chat_data, on_disk)
-            await self._write_session_to_storage(chat_file, chat_data, before_replace=lease.verify)
+            guard = self._fence_at_file(session_id, chats_directory, lease, read_generation, signature)
+            await self._write_session_to_storage(chat_file, chat_data, before_replace=guard)
             if after is not None:
                 await after(session_id, chat_data)
         return chat_data
