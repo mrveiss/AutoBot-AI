@@ -546,6 +546,12 @@ _DECLARED_SCOPES = {
         "scripts",
     ),
     "ansible-files-scanned-for-slm-port": ("autobot-slm-backend/ansible",),
+    "venv-builders-use-floor-interpreter-sweep": (
+        "autobot-slm-backend/ansible",
+        "autobot-infrastructure",
+        "autobot-backend/code_analysis",
+        "install.sh",
+    ),
 }
 
 
