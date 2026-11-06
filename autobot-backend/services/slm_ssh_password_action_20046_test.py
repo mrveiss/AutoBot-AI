@@ -185,8 +185,15 @@ async def test_no_committed_entry_means_nothing_is_deleted() -> None:
 
 
 def test_the_backend_calls_the_slm_directly_never_through_the_edge() -> None:
-    url = action._slm_direct_url()
+    url = action.slm_direct_url()
     assert url.startswith("http://") and "/slm" not in url and "/api/internal" not in url
+
+
+def test_the_direct_url_follows_the_ssot_tls_setting() -> None:
+    from autobot_shared.ssot_config import config  # noqa: PLC0415
+
+    with patch.object(config.tls, "slm_tls_enabled", True):
+        assert action.slm_direct_url().startswith("https://")
 
 
 class _Resp:

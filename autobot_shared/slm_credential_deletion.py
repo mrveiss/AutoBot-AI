@@ -27,6 +27,19 @@ NODE_NOT_FOUND_DETAIL = "Node not found"
 APPROVAL_QUERY = "approval_id"
 
 
+def slm_direct_url() -> str:
+    """The SLM's own uvicorn URL, scheme and port from the SSOT TLS config, never the nginx edge ``SLM_URL`` names.
+
+    The edge denies ``/api/internal/`` (#20046), and uvicorn has no ``/slm`` prefix, so the backend's call
+    to the SLM's internal route goes here directly.
+    """
+    from autobot_shared.ssot_config import config  # noqa: PLC0415  (this module is imported by the SLM too)
+
+    if config.tls.slm_tls_enabled:
+        return f"https://{config.vm.slm}:{config.tls.slm_tls_port}"
+    return f"http://{config.vm.slm}:{config.port.slm}"
+
+
 def claim_path(approval_id: str) -> str:
     """The backend path that verifies and consumes *approval_id*."""
     return CLAIM_PATH_TEMPLATE.format(approval_id=approval_id)

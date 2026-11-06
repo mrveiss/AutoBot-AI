@@ -26,8 +26,8 @@ from autobot_shared.slm_credential_deletion import (
     CREDENTIAL_KIND,
     NODE_NOT_FOUND_DETAIL,
     delete_path,
+    slm_direct_url,
 )
-from autobot_shared.ssot_config import config
 from models.approval import ApprovalComment
 from services.approval_execution import register_post_approval_action, verified_decider
 from services.audit_logger import audit_log
@@ -42,15 +42,6 @@ logger = get_logger(__name__)
 #: The production module that PROPOSES this action (#17315).
 PROPOSED_BY = "api.internal_slm_credential_proposals"
 _AUDIT_ACTION = "node.ssh_password.delete"  # an AuditAction member (services/audit/taxonomy.py)
-
-
-def _slm_direct_url() -> str:
-    """The SLM's own uvicorn URL (vm.slm : port.slm), never the nginx edge ``SLM_URL`` may name.
-
-    The edge denies ``/api/internal/`` (#20046), so this call cannot go through it, and it must not add the
-    ``/slm`` prefix ``rest_url`` adds behind nginx: uvicorn has no such route.
-    """
-    return f"http://{config.vm.slm}:{config.port.slm}"
 
 
 async def _detail(response: aiohttp.ClientResponse) -> object:
@@ -69,7 +60,7 @@ async def _delete_in_slm(node_id: str, approval_id: str) -> bool | None:
     """
     if not node_proxy.internal_api_key():
         raise RuntimeError("the internal service key is not configured")
-    url = f"{_slm_direct_url()}{delete_path(node_id)}"
+    url = f"{slm_direct_url()}{delete_path(node_id)}"
     await assert_egress_policy(url)  # #17576
     timeout = aiohttp.ClientTimeout(total=node_proxy.node_timeout())
     async with aiohttp.ClientSession(headers=node_proxy.internal_headers()) as http:

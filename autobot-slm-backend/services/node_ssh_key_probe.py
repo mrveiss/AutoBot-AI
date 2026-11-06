@@ -42,7 +42,13 @@ async def key_auth_and_sudo_work(node: Node) -> bool:
     except InvalidSshDestination:
         logger.warning("Key probe of node %s skipped: its SSH destination is invalid", node.node_id)
         return False
-    cmd[1:1] = ssh_options("BatchMode=yes", "PasswordAuthentication=no", "IdentitiesOnly=yes")
+    cmd[1:1] = ssh_options(
+        "BatchMode=yes",
+        "PasswordAuthentication=no",
+        "IdentitiesOnly=yes",
+        "ControlMaster=no",  # a live master connection would let a stale key pass: test the key itself
+        "ControlPath=none",
+    )
     try:
         returncode, _stdout, _stderr = await spawn_ssh([*cmd, _REMOTE_CHECK], timeout=KEY_PROBE_TIMEOUT_SECONDS)
     except (OSError, asyncio.TimeoutError) as exc:

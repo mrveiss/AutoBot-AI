@@ -155,22 +155,33 @@ async def _audit_best_effort(db: AsyncSession, node_id: str, approval_id: uuid.U
     return True
 
 
-async def _remove_password_fields(db: AsyncSession, node: Node) -> bool:
+async def _stage_password_removal(db: AsyncSession, node_id: str) -> bool:
+    """Stage (flush, not commit) the removal from the row's CURRENT value, which stays locked until commit.
+
+    Locking and re-reading means a heartbeat written since the node was first loaded is kept, not
+    overwritten from a stale snapshot. Returns whether any field was staged for removal.
+    """
+    locked = select(Node).where(Node.node_id == node_id).with_for_update().execution_options(populate_existing=True)
+    node = (await db.execute(locked)).scalar_one_or_none()
+    if node is None:
+        raise DeletionRefused(404, NODE_NOT_FOUND_DETAIL)
     extra = dict(node.extra_data or {})
     removed = any([extra.pop(key, None) is not None for key in _PASSWORD_KEYS])
     if removed:
         node.extra_data = extra  # reassigned: an in-place edit of a JSON column is not tracked
-        await db.commit()
+        await db.flush()
     return removed
 
 
 async def delete_stored_password(db: AsyncSession, node_id: str, approval_id: uuid.UUID) -> bool:
     """Delete only *node_id*'s stored SSH password fields after a spent human approval; raises DeletionRefused.
 
-    Order: key access is proven again, the intent audit row commits, the backend verifies and spends the
-    approval, the fields go, then a completion row records the outcome. A failed intent row means nothing
-    was spent or deleted. Once the fields are gone the deletion stands: a failed completion row is logged,
-    not raised, so the caller is told what happened. Returns True if any field was removed.
+    Order: key access is proven again, the intent audit row commits, the removal is staged on the locked
+    row, the backend verifies and spends the approval, the removal commits, then a completion row records
+    the outcome. A failed intent row or a failed staging means nothing was spent or deleted, so the
+    approval stays usable for a retry; a refused claim rolls the staged removal back.
+    Once the fields are gone the deletion stands: a failed completion row is logged, not raised,
+    so the caller is told what happened. Returns True if any field was removed.
     """
     node = (await db.execute(select(Node).where(Node.node_id == node_id))).scalar_one_or_none()
     if node is None:
@@ -181,14 +192,22 @@ async def delete_stored_password(db: AsyncSession, node_id: str, approval_id: uu
         raise DeletionRefused(409, "key access to the node is not proven")
     await _audit(db, node_id, approval_id, "intent")
     try:
+        removed = await _stage_password_removal(db, node_id)  # before the spend: a failure here costs nothing
+    except Exception:
+        await db.rollback()
+        await _audit_best_effort(db, node_id, approval_id, "failed", False)
+        raise
+    try:
         await _claim_approval(approval_id, node_id)
     except DeletionRefused:
+        await db.rollback()  # the staged removal is dropped: a refused claim deletes nothing
         await _audit_best_effort(db, node_id, approval_id, "refused", False)
         raise
     try:
-        removed = await _remove_password_fields(db, node)
+        await db.commit()
     except Exception:
         await db.rollback()
+        logger.error("Approval %s was spent but the removal for node %s did not commit", approval_id, node_id)
         await _audit_best_effort(db, node_id, approval_id, "failed", False)
         raise
     await _audit_best_effort(db, node_id, approval_id, "completed", True)

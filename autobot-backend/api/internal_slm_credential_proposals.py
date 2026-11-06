@@ -25,6 +25,7 @@ from api.schemas_slm_credential_proposals import (
 )
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
+from auth_service_opt_in import service_opt_in
 from autobot_shared.auth.internal_api_key import require_internal_api_key
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.slm_credential_deletion import ACTION, CREDENTIAL_KIND, proposer_id
@@ -34,6 +35,9 @@ from services.slm_ssh_password_action import register_ssh_password_action
 from services.slm_ssh_password_claim import ClaimRefused, claim_deletion_approval
 
 logger = get_logger(__name__)
+
+#: The caller named on the service-key admission audit row (#16333).
+SLM_CALLER = "slm-ssh-password-deletion"
 
 # get_current_user is the recognised gate; require_internal_api_key narrows it to the service key alone.
 router = APIRouter(prefix="/internal/slm", dependencies=[Depends(require_internal_api_key), Depends(get_current_user)])
@@ -47,6 +51,7 @@ register_ssh_password_action()
     response_model=SshPasswordDeletionProposalResponse,
     status_code=status.HTTP_201_CREATED,
 )
+@service_opt_in(SLM_CALLER)
 async def propose_ssh_password_deletion(
     body: SshPasswordDeletionProposal, session: AsyncSession = Depends(get_db_session)
 ) -> SshPasswordDeletionProposalResponse:
@@ -76,6 +81,7 @@ async def propose_ssh_password_deletion(
 
 
 @router.post("/ssh-password-deletion-approvals/{approval_id}/claim", response_model=SshPasswordDeletionClaimResponse)
+@service_opt_in(SLM_CALLER)
 async def claim_ssh_password_deletion_approval(
     approval_id: uuid.UUID, body: SshPasswordDeletionClaim, session: AsyncSession = Depends(get_db_session)
 ) -> SshPasswordDeletionClaimResponse:
