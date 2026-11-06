@@ -12,11 +12,10 @@
  * herd reconnection during backend restarts.
  */
 
-import { backoffDelay } from '@autobot/ui'
+import { backoffDelay, createLogger } from '@autobot/ui'
 import { ref, onUnmounted } from 'vue'
 import type { SLMWebSocketMessage, NodeHealth } from '@/types/slm'
 import { getConfig } from '@/config/ssot-config'
-import { createLogger } from '@/utils/debugUtils'
 import { slmApiClient } from '@/utils/ApiClient'
 import { readSlmToken } from '@/utils/authStorage'
 import { HEALTH_PROBE_TIMEOUT_MS } from '@/constants/api-timeouts'
