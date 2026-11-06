@@ -47,6 +47,7 @@ import time
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_claude_models import CLAUDE_MODEL_IDS, requires_adaptive_thinking
 
 # ---------------------------------------------------------------------------
 # Adapter helpers — lazy so tests that don't boot the full app still work.
@@ -86,7 +87,6 @@ async def _apply_adapter_pre_send(request: LLMRequest, context_type: str) -> Non
         logger.debug("Claude adapter pre-send optimization skipped (fail-safe): %s", exc)
 
 
-from autobot_shared.ssot_claude_models import CLAUDE_MODEL_IDS, requires_adaptive_thinking
 from autobot_shared.ssot_config import config
 from autobot_shared.ssot_hosted_models import hosted_default_model
 from constants.model_constants import (
