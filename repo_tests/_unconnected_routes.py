@@ -137,9 +137,12 @@ def route_sites(tree: Tree, audit: Audit) -> list[tuple[str, str, str, tuple[str
 
 def _candidates(mod: ModuleType, raw: str, own: str, reg: str | None) -> tuple[str, ...]:
     glue = "" if (raw.startswith("/") or not raw) else "/"
-    forms = {raw, own + glue + raw}
-    if reg is not None:
-        forms.update({reg + glue + raw, reg + own + glue + raw})
+    if reg is None:
+        forms = {raw, own + glue + raw}  # no registry mount known: the router may be mounted anywhere
+    else:
+        forms = {reg + own + glue + raw}
+        if not own:
+            forms.add(reg + glue + raw)
     return tuple(sorted({mod.norm_path(f) if f else mod.norm_path(own or reg or "/") for f in forms}))
 
 

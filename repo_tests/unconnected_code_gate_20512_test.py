@@ -176,11 +176,18 @@ def test_declared_entries_describe_the_live_references() -> None:
     )
 
 
+#: One-time exception to "shrink only" (#20910): the route detector stopped judging a route by paths it is never
+#: served at, which newly flagged routes that were always unconnected. Each such entry links one of these grouped
+#: wiring issues. Nothing else may be added; do not extend this set.
+REMEASURE_ISSUES = frozenset(["#20970", "#20971", "#20972", "#20973", "#20974", "#20975", "#20976", "#20977"])
+
+
 def test_the_baseline_only_shrinks_against_the_base() -> None:
     base = base_text(repo_root(), uc.BASELINE_REL)
     if base is None:
         return  # this file is new at the base: the baseline is being introduced, not raised
-    added = sorted(set(_baseline()) - set(uc.parse_baseline(base)))
+    old_keys = uc.parse_baseline(base)
+    added = sorted(k for k, issue in _baseline().items() if k not in old_keys and issue not in REMEASURE_ISSUES)
     assert not added, f"#20512: baseline entries were added against the base: {added}. Wire the code in instead."
 
 
@@ -323,3 +330,30 @@ def test_the_module_detector_finds_a_real_module_once_its_importers_are_removed(
     assert "autobot_shared/paths.py" not in modules.unconnected(Tree.of_files(real))
     alone = {"autobot_shared/paths.py": real["autobot_shared/paths.py"]}
     assert modules.unconnected(Tree.of_files(alone)) == ["autobot_shared/paths.py"]
+
+
+def test_a_parenthesised_import_with_comments_keeps_every_name_20907() -> None:
+    """A comment on the opening line, or on a name line, must not drop the names that follow it."""
+    text = (
+        "from autobot_shared import (  # noqa: F401\n"
+        "    alpha,  # first\n"
+        "    beta,\n"
+        ")\n"
+        "from autobot_shared.gamma import delta  # trailing\n"
+    )
+    refs = modules.import_refs("autobot-backend/x.py", text)
+    assert {"autobot_shared.alpha", "autobot_shared.beta", "autobot_shared.gamma"} <= refs, refs
+
+
+class _NormMod:
+    @staticmethod
+    def norm_path(path: str) -> str:
+        return path
+
+
+def test_route_candidates_have_no_phantom_forms_20910() -> None:
+    """With a registration prefix and an own prefix only reg+own+raw is real; reg+raw only without an own prefix."""
+    cand = routes._candidates
+    assert cand(_NormMod, "/x", "/own", "/api") == ("/api/own/x",)
+    assert cand(_NormMod, "/x", "", "/api") == ("/api/x",)
+    assert cand(_NormMod, "/x", "/own", None) == ("/own/x", "/x")
