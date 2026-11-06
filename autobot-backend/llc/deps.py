@@ -91,10 +91,9 @@ def service_dep(service_cls: Type[_T]) -> Callable[[], _T]:
     """Return a zero-argument FastAPI dependency that yields the singleton
     instance of *service_cls*.
 
-    The returned callable is cached per class (``lru_cache``), so repeated
+    The returned callable is cached per class in a locked registry, so repeated
     calls with the same class return the same dependency function — avoiding
-    redundant closure creation per request (a locked registry, not
-    ``lru_cache``, which does not lock a miss).
+    redundant closure creation per request.
 
     Example::
 

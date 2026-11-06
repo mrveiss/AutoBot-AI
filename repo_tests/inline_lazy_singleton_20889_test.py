@@ -31,7 +31,9 @@ _FACTORY_MODULE = "autobot_shared.singleton_factory"
 _FACTORIES = frozenset({"lazy_singleton", "async_lazy_singleton"})
 
 #: Classes whose one shared instance lives in ``llc/services/accessors.py``.
-_MANAGED = frozenset({"WorkItemService", "BudgetService", "AgentWikiService", "AttachmentService"})
+_MANAGED = frozenset(
+    {"WorkItemService", "BudgetService", "AgentWikiService", "AttachmentService", "WorkProductService"}
+)
 
 #: A factory built inside a function on purpose, with the reason.
 _FACTORY_IN_FUNCTION_ALLOWED = {
@@ -89,6 +91,12 @@ class _Names:
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
                 self._from(node)
+        for node in ast.walk(tree):  # ``S = WorkItemService`` makes ``S()`` a construction too
+            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Name) and self._is_managed(node.value.id):
+                self.managed.update(t.id for t in node.targets if isinstance(t, ast.Name))
+
+    def _is_managed(self, name: str) -> bool:
+        return name in self.managed or name in _MANAGED
 
     def _from(self, node: ast.ImportFrom) -> None:
         mod = node.module or ""
@@ -209,6 +217,9 @@ def test_control_strings_for_a_direct_construction():
     assert direct_constructions("async def f():\n    return await BudgetService().check()") == [2]
     assert direct_constructions("x = mod.AgentWikiService()") == [1]
     assert direct_constructions("from m import AttachmentService as AS\nx = AS()") == [2]
+    assert direct_constructions("x = WorkProductService()") == [1]
+    assert direct_constructions("S = WorkItemService\nx = S()") == [2]
+    assert direct_constructions("def f():\n    S = BudgetService\n    return S()") == [3]
     assert direct_constructions("x = get_work_item_service()") == []
     assert direct_constructions("x = OtherService()") == []
 
