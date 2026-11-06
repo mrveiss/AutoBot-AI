@@ -6,18 +6,18 @@
 ## PR granularity
 
 - **Batch same-scope issues into one PR by default** — one CI suite per batch, not per issue. Each issue must still be *fully* delivered; partial delivery never closes. Independent or different-risk changes get separate PRs, as does anything too large for one honest review pass. Write **one `Closes #N` per line** — `Closes #A, #B` links only #A.
-- **Finish what you started — append before you open** (owner rule 2026-09-19). Before opening a new PR, check for an open PR the change can be appended to (same scope, risk, owner) and append; fix and land existing PRs before opening new ones; finish started issues before starting new ones.
-- **Issues touching the same file go in ONE PR, solved by ONE agent** (owner rule 2026-09-18). Hub files — registries, ratchet baselines, `.secrets.baseline`, `.github/`, `CLAUDE.md` — are exempt; one agent may split sequentially, the next PR opening after the previous merges. Check the open PRs touching a file before editing it.
-- **A pushed PR ends the tick — never wait on its CI.** Pushing is the sweep point: check every *other* in-flight PR once (approval gate, CI verdict, behind-ness), act on what is green or red, then start the next non-colliding scoped issue immediately. The PR just pushed is re-checked at the next sweep, never polled.
+- **Finish what you started — append before you open** (owner rule 2026-09-19). Before opening a new PR, check for an open PR the change can be appended to (same scope, risk, owner) and append, but only to a PR not yet queued for a train ([OWNER_RULES.md](OWNER_RULES.md) rule 2). Existing open PRs never block opening a new one (rule 1, no cap); finish started issues before starting new ones.
+- **Same file (owner rule 2026-11-01, replaces the 2026-09-18 one-PR-per-file rule).** Check `ledger who task trainmaster`. If it is claimed, PRs may overlap on the same file and the trainmaster alone reconciles them when building a train; authors don't coordinate or wait on each other, and a file is off limits only while held. If it is unclaimed, overlapping work goes in a single PR. A conflict between a PR not in a train and main stays the author's to resolve ([OWNER_RULES.md](OWNER_RULES.md) rule 2).
+- **A pushed PR ends the tick — never wait on its CI.** Pushing is the sweep point: check every *other* in-flight PR once (approval gate, CI verdict, behind-ness), act on what is green or red, then start the next scoped issue immediately. The PR just pushed is re-checked at the next sweep, never polled.
 
 **The PR-granularity rules agree on "fewer PRs" and disagree on the unit.** Resolve in this order:
 
-    same file      -> ONE PR, ONE agent        (strongest: avoids conflicts, not just CI cost)
-    same scope     -> batch into one PR
     same issue     -> one branch, never split
-    already open   -> append rather than open a new one
+    same file      -> one PR only while no trainmaster is claimed
+    same scope     -> batch into one PR
+    already open   -> append, if not yet queued
 
-When two apply, the **earlier line wins**. Hub files (listed above) are exempt from the file rule.
+When two apply, the **earlier line wins**. While a trainmaster is claimed, sharing a file is not a granularity criterion.
 
 ## Self-review before pushing: known self-inflicted patterns
 
@@ -100,8 +100,8 @@ Check each before sending the PR# and head:
    `tools/lint/prepush_selection.py`, #18808), so a green pre-push covers item 4. A new
    symbol that reuses an existing name (#19205, #19215) is what the symbol-fork ratchet catches.
 
-5. **Local runs respect the shared machine (owner rule, 2026-10-23).** Targeted tests plus the
-   whole-tree set, each run under the `machine:heavy-run` lock with a hold of at most 20
+5. **Local runs respect the shared machine (owner rule, 2026-10-23).** Only the test you changed
+   (owner, 2026-11-02), run under the `machine:heavy-run` lock with a hold of at most 20
    minutes; never a full local `repo_tests` suite (CI is the full gate). Train pushes go first,
    and a hold whose reason says "train push waiting" is released at the next test boundary.
 
@@ -172,8 +172,8 @@ reason).
 The check is telling you the change is wrong, or that the check is wrong. Both are
 root causes and both are yours to fix:
 
-1. **Confirm it is actually red**, not queued. Queued checks on the singleton
-   self-hosted runner are not failures — see "CI Diagnosis" below and verify the
+1. **Confirm it is actually red**, not queued. Queued checks on the self-hosted
+   runner are not failures — see "CI Diagnosis" below and verify the
    verdict against the head SHA from `gh api repos/{owner}/{repo}/pulls/N --jq
    '.head.sha'`, sorting check-runs by `started_at` (array order is not chronological,
    so a stale FAILURE can sit next to the real SUCCESS).
@@ -227,16 +227,14 @@ Three failed attempts on the same red check is an escalation, not a fourth attem
 post the findings on the issue and move on.
 
 **Applies identically in autonomous `/loop` mode.** The loop merges what is green;
-red means the tick moves to the next non-colliding issue, never to a workaround.
+red means the tick moves to the next issue, never to a workaround.
 
 ---
 
-## Review threads are cleared before CI, not during it
+## Review comments are answered before a relaunch and before merge
 
-**A PR does not get a CI run while it has unresolved review comments** (owner rule 2026-09-25).
-Resolving a thread costs **no CI**; a CI cycle costs ~35 minutes on a serialized shard queue. A
-reviewer who has already named what will break is evidence that has been paid for, and spending a
-run ahead of reading it buys a second opinion while ignoring the first.
+CodeRabbit is advisory ([OWNER_RULES.md](OWNER_RULES.md) rule 12, replaces the 2026-09-25 "no CI while threads are unresolved"): it never blocks a PR opening or its first CI run, but every comment is answered before any CI relaunch and before merge. Resolving a thread costs **no CI**; a CI cycle costs ~35 minutes on a serialized shard queue. A
+reviewer who has already named what will break is evidence that has been paid for, so read it before spending a relaunch.
 
 Measured: one PR spent **four cycles** discovering guards one at a time while fourteen review
 comments sat unread behind them.
@@ -326,7 +324,7 @@ After merging all PRs in a batch:
 
 ## Merge trains
 
-The trainmaster (PR-coordinator session) alone builds and lands trains: merge commits, never squash, two CI slots, one train worked at a time. Authors send the PR number and head, then stop pushing to a queued head unless asked. CodeRabbit never blocks a first CI run; a relaunch answers open threads first. Full list: [`OWNER_RULES.md`](OWNER_RULES.md).
+The trainmaster (PR-coordinator session) alone builds and lands trains: merge commits, never squash, two CI slots, two trains may run in CI, and only the one landing next is built and fixed. Authors send the PR number and head, then stop pushing to a queued head unless asked; a head moved only by merging main stays in line, and any other new commit needs a fresh look. CodeRabbit never blocks a first CI run; a relaunch answers open threads first. Full list: [`OWNER_RULES.md`](OWNER_RULES.md).
 
 ## CI Diagnosis
 
@@ -334,7 +332,7 @@ The trainmaster (PR-coordinator session) alone builds and lands trains: merge co
 - Confirm whether checks are actually failing vs. queued on a self-hosted runner
 - Default assumption: checks are running normally, not broken
 - Only cancel/retrigger when a check has been in a non-running state for >30 minutes with no activity
-- Never cancel a `train-*` branch's runs or any run under a live `ci-slot` ledger hold (`ledger holds | grep ci-slot`); the trainmaster owns CI priority ([OWNER_RULES.md](OWNER_RULES.md))
+- Never cancel a `train-*` branch's runs or any run under a live `ci-slot` ledger hold (`ledger holds | grep ci-slot`), except that the conflict gate (`pr-merge-conflict-gate.yml`, #19769) cancels a train with a real merge conflict, because it can't land; the trainmaster owns CI priority ([OWNER_RULES.md](OWNER_RULES.md))
 
 **Why:** Sessions wasted time canceling/retriggering smoke tests that were running normally.
 
@@ -374,8 +372,8 @@ Always use these exact headings when creating or editing PR descriptions.
 
 ## Issue Ownership & Posting
 
-- Before posting review findings or comments to any Paperclip/MVA issue, **verify the target issue is assigned to this agent**
-- If the correct target is unclear, pivot to an agent-owned tracking issue
+- Before posting review findings or comments to an issue, **verify it is the issue the work belongs to**
+- If the correct target is unclear, file a tracking issue and link it
 - PR authors cannot self-approve — post a detailed review comment instead
 
 **Posting comments correctly** — when writing a PR/issue comment or updating a PR body:

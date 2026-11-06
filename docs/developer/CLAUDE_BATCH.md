@@ -9,7 +9,7 @@ Default behavior:
 - All issues get their own worktree: `.worktrees/issue-XXXX/`
 - Main session stays on `main` — never switches
 - Agents commit locally; main session pushes and creates PRs
-- After each batch: review, merge, file discovery issues, then next batch
+- After each batch: review, hand each PR number and head to the trainmaster (it alone lands), file discovery issues, then next batch
 
 **Do NOT ask:** "Which issues?", "Parallel?", "How many?" — just run the pre-flight checklist and start.
 
@@ -42,7 +42,7 @@ Checklist", all 8 steps — batch work is exactly the case where steps 5-8 apply
 4. **Agents commit locally only** — do NOT push; main session handles all pushes
 5. **After each batch:** `/batch-implement` auto-detects failures:
    - API 529 → wait 60s, retry
-   - Merge conflicts → auto-rebase, retry
+   - Merge conflicts → merge main, retry (never rebase a pushed branch)
    - Already resolved → skip
    - Agent crash → retry up to 3 times
    - Only escalate unresolvable issues
