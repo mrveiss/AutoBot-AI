@@ -68,12 +68,15 @@ export function listSettings(options: RequestOptions = {}): Promise<Setting[]> {
 }
 
 /**
- * Read one setting, or `null` when it does not exist / is not readable.
- * Keeps the "absent key is not an error" contract of the JSON-settings panels.
+ * Read one setting, or `null` when the key does not exist (404).
+ * Keeps the "absent key is not an error" contract of the JSON-settings panels;
+ * any other non-OK response throws, so a failed read stays distinguishable from
+ * an absent setting and a panel never saves defaults over a value it could not read.
  */
 export async function getSetting(key: string): Promise<Setting | null> {
   const res = await slmApiClient.rawRequest(settingPath(key))
-  if (!res.ok) return null
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return (await res.json()) as Setting
 }
 
