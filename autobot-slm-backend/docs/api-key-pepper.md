@@ -1,6 +1,6 @@
 # API-key pepper (#16299, #19120)
 
-SLM API keys are stored as `HMAC-SHA256(pepper, key)`. The pepper is a rotatable
+SLM API keys are stored as `PBKDF2-HMAC-SHA256(key, salt=pepper)` (#20611; 20000 rounds, a constant in `api_key_service.py`). The pepper is a rotatable
 credential, so it lives in the SLM secrets store (`SystemSecret`), not in an env file.
 
 ## Setting it
@@ -24,3 +24,9 @@ generates the value for you; pick a long random string and keep it in your own v
 The store holds one value and no previous one, so there is no dual-verify window.
 Changing `slm_hmac_api_key_secret` makes every key hashed under the old value stop
 verifying (the key owner must be issued a new key). Rotate only when that is acceptable.
+
+## Old key formats (#20611)
+
+Only the PBKDF2 digest is accepted. A key stored in any older format (HMAC-SHA256 under the
+current or legacy pepper, or bare SHA-256) no longer verifies and must be reissued. Its stored
+row is left as it is: removing stored keys is an approval-queue proposal, never automatic.
