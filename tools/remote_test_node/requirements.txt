@@ -1,0 +1,25 @@
+# Packages the pre-push fast guards import, beyond requirements-ci-test.txt (#20935). Names only: a version is
+# declared in the code's own requirement files and constraints/shared.txt, never repeated here. `run.py --provision`
+# installs this and requirements-ci-test.txt into the node's venv; the venv is rebuilt when either changes.
+pydantic
+pydantic-settings
+jinja2
+fastapi
+starlette
+sqlalchemy
+httpx
+requests
+structlog
+pyyaml
+aiohttp
+llama-index-core
+email-validator
+bcrypt
+llama-index-vector-stores-chroma
+prometheus-client
+pyjwt
+aiofiles
+xxhash
+psutil
+redis
+cryptography

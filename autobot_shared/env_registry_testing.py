@@ -167,3 +167,81 @@ for _name, _type, _default, _description in (
     register_env_var(
         EnvVarSpec(name=_name, type=_type, default=_default, description=_description, component="testing")
     )
+
+# Remote test node (#20935): where the pre-push fast guards and a train's suite run when a node is configured.
+# Values are per-machine settings and never committed; tools/remote_test_node/run.py reads them.
+_NODE = "tools/remote_test_node/run.py"
+for _name, _type, _default, _desc, _range in (
+    (
+        "AUTOBOT_TEST_NODE_HOST",
+        str,
+        "",
+        f"Address of the remote test node ({_NODE}); empty means not configured, so runs stay local.",
+        None,
+    ),
+    ("AUTOBOT_TEST_NODE_USER", str, "", "SSH user on the remote test node.", None),
+    (
+        "AUTOBOT_TEST_NODE_SSH_KEY",
+        str,
+        "",
+        "Path to the SSH private key for the test node; the key itself stays in the secrets manager or key file.",
+        None,
+    ),
+    ("AUTOBOT_TEST_NODE_PORT", str, "22", "SSH port of the remote test node.", None),
+    (
+        "AUTOBOT_TEST_NODE_ENABLED",
+        str,
+        "1",
+        "0 turns the remote test node off even when it is configured; runs stay local.",
+        None,
+    ),
+    (
+        "AUTOBOT_TEST_NODE_SLOTS",
+        int,
+        3,
+        "Jobs the remote test node runs at once (a counting lock on the node). Default 3, measured on a "
+        "12-core, 14 GB node: 3 jobs of the fast-guard suite at 2 workers each took 2.3x one job's wall time "
+        "(209 s against 89 s) at peak load 8.6 "
+        "and a 6.0 GB memory low-water; 4 jobs at 4 workers each left 0.85 GB free. Re-measure on different hardware.",
+        (1, 12),
+    ),
+    (
+        "AUTOBOT_TEST_NODE_WORKERS",
+        int,
+        2,
+        "pytest-xdist workers per remote job (-n). Default 2, measured: one job took "
+        "104 s at 1 worker, 89 s at 2, 114 s at 4 and 136 s at 8, so more workers add load without finishing sooner.",
+        (1, 12),
+    ),
+    (
+        "AUTOBOT_TEST_NODE_TIMEOUT",
+        int,
+        600,
+        "Seconds a remote job may run before the node stops it and removes its checkout.",
+        (30, 3600),
+    ),
+    (
+        "AUTOBOT_TEST_NODE_CONNECT_TIMEOUT",
+        int,
+        10,
+        "Seconds to wait for the node's SSH connection before falling back to local.",
+        (1, 120),
+    ),
+    (
+        "AUTOBOT_TEST_NODE_BASE",
+        str,
+        ".autobot-test-node",
+        "Directory on the node (relative to its home) holding the mirror, venv, slots and runs.",
+        None,
+    ),
+    (
+        "AUTOBOT_TEST_NODE_SSH_BIN",
+        str,
+        "ssh",
+        "The ssh executable used to reach the node (tests substitute a stand-in).",
+        None,
+    ),
+):
+    register_env_var(
+        EnvVarSpec(name=_name, type=_type, default=_default, description=_desc, component="testing", range=_range)
+    )

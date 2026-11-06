@@ -461,6 +461,22 @@ fast_guard_tests() {
     || return 1
   printf '%s\n' "$list" | sed -e 's/#.*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d'
 }
+# #20935: the guard pytest on the remote test node (tools/remote_test_node/run.py; settings are
+# AUTOBOT_TEST_NODE_*, documented in ENV_VARS.md). Returns 0 when the node ran and judged it (sets the
+# caller's guard_output and rc), 1 when it could not take the run: not configured, unreachable or not
+# provisioned. That is said, then the caller runs locally. A failing remote test is a failure, never a fallback.
+remote_guard_pytest() {
+  local run="$REPO_ROOT/tools/remote_test_node/run.py"
+  [ -f "$run" ] || return 1
+  # shellcheck disable=SC2046,SC2086 # word-splitting the file list is intended
+  guard_output=$(cd "$REPO_ROOT" && exec 9>&- && "$PYTEST_PYTHON" "$run" --sha "$local_sha" --timeout "$MAX_BUDGET" -- \
+    python -m pytest -q -p no:cacheprovider -m "not reach_floor" -n "${AUTOBOT_TEST_NODE_WORKERS:-2}" --dist loadscope --tb=line \
+    $(printf '%s\n' "$1" | grep -vxF -f <(printf '%s\n' "$2")) 2>&1) && rc=0 || rc=$?
+  [ "$rc" = "75" ] || return 0
+  warn "$(printf '%s\n' "$guard_output" | grep -m1 'UNAVAILABLE' || echo 'remote test node unavailable'); running the fast guards locally under the machine slot"
+  rc=0
+  return 1
+}
 # The guard tests, then the reach-floor pins (`repin_reach_floors.py --check`: 0 clean, 2 when
 # some guard modules cannot import locally -- both still judged by their STALE/PIN lines;
 # 124 is a timeout; any other exit is a crash and fails, never reads as clean).
@@ -478,16 +494,20 @@ run_fast_guards() {
     fail "fast guard list names file(s) absent from ${local_sha:0:10} (fix ${FAST_GUARD_LIST}): $(echo $missing)"
     EXIT_CODE=1
   fi
+  # #20935: the remote test node first; local (under the machine slot) only when it cannot take the run.
+  local where="locally"
+  if remote_guard_pytest "$guards" "$missing"; then where="on the remote test node"; else
   # shellcheck disable=SC2046,SC2086 # word-splitting the file list and xdist args is intended
   # -m "not reach_floor" as every pre-push pytest (#17810): the floors are CI's; the pins are below.
   guard_output=$(cd "$REPO_ROOT" && exec 9>&- && timeout "$MAX_BUDGET" "$PYTEST_PYTHON" -m pytest -q -p no:cacheprovider -m "not reach_floor" \
     $(pytest_xdist_args) --tb=line $(printf '%s\n' "$guards" | grep -vxF -f <(printf '%s\n' "$missing")) 2>&1) || rc=$?
+  fi
   # As the full pytest run (#19312 review): an interpreter that cannot import pytest ran nothing.
-  if ! "$PYTEST_PYTHON" -c 'import pytest' >/dev/null 2>&1; then
+  if [ "$where" = "locally" ] && ! "$PYTEST_PYTHON" -c 'import pytest' >/dev/null 2>&1; then
     could_not_run "fast guards" "${PYTEST_PYTHON} cannot import pytest, so the guard tests did not run"
   elif [ "$rc" = "124" ]; then did_not_run "fast guards" "$MAX_BUDGET"
-  elif [ "$rc" != "0" ]; then fail "fast guards failed:"; failure_excerpt "$guard_output" >&2; EXIT_CODE=1
-  else ok "fast guards: $(printf '%s\n' "$guards" | grep -c .) guard file(s) pass"; fi
+  elif [ "$rc" != "0" ]; then fail "fast guards failed ${where}:"; failure_excerpt "$guard_output" >&2; EXIT_CODE=1
+  else ok "fast guards ${where}: $(printf '%s\n' "$guards" | grep -c .) guard file(s) pass"; fi
   rc=0
   out=$(cd "$REPO_ROOT" && exec 9>&- && timeout "$MAX_BUDGET" "$PYTEST_PYTHON" scripts/repin_reach_floors.py --check --changed-since origin/main 2>&1) || rc=$?
   if [ "$rc" = "124" ]; then
