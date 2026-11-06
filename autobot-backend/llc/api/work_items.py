@@ -153,7 +153,6 @@ class WorkItemCreate(BaseModel):
     assignee_agent_id: Optional[str] = None
     assignee_user_id: Optional[str] = None
     created_by_agent_id: Optional[str] = None
-    created_by_user_id: Optional[str] = None
     labels: Optional[List[str]] = None
     # GH#11140: declarative approval-gated action categories (plan-time visibility).
     requires_approval_before: Optional[List[str]] = None

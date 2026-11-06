@@ -107301,8 +107301,6 @@ export interface components {
             assignee_user_id?: string | null;
             /** Created By Agent Id */
             created_by_agent_id?: string | null;
-            /** Created By User Id */
-            created_by_user_id?: string | null;
             /** Labels */
             labels?: string[] | null;
             /** Requires Approval Before */
