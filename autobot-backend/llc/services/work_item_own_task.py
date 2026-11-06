@@ -26,7 +26,6 @@ from autobot_shared.redis_utils import delete_if_value
 
 from ..models.enums import AssigneeType, WorkItemStatus
 from ..models.work_item import LLCWorkItem
-from ..scheduler.event_wake import within_transaction
 
 logger = get_logger(__name__)
 
@@ -166,6 +165,9 @@ def _release_committed(sync: Session) -> None:
 
 def _forget_undone(sync: Session, previous_transaction: SessionTransaction) -> None:
     """Drop the releases whose transition this rollback (outer or SAVEPOINT) undid: the row still names the holder."""
+    # Imported here: event_wake reaches the accessors through dispatch_gate, and the accessors import this module.
+    from ..scheduler.event_wake import within_transaction
+
     pending = sync.info.get(_PENDING_KEY, [])
     pending[:] = [p for p in pending if not within_transaction(p.transaction, previous_transaction)]
 
