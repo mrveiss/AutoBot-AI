@@ -592,11 +592,6 @@ updates:
         # is not. Guarded by repo_tests/windows_npu_worker_transformers_bound_test.py.
         # Raise this ceiling together with that test's expectation after vetting.
         versions: [">5.16.1"]
-    groups:
-      all-dependencies:
-        patterns:
-          - "*"
-    ignore:
       - dependency-name: "tokenizers"
         # #10331, and the SAME value the ai-stack and npu-worker-docker blocks
         # carry: transformers caps tokenizers at <=0.23.0, so anything from
@@ -610,6 +605,10 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "numpy"
         update-types: ["version-update:semver-major"]
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
 
   # === #7182 P2: Root-level manifests ===
   # Catches root-level requirements*.txt (requirements.txt, requirements-ci.txt,
