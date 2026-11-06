@@ -25,6 +25,7 @@ from voice_processing.providers import (
 )
 
 logger = get_logger(__name__)
+_LATE_TIMEOUT_S = 300  # one value for the LATE run and its timeout message (#18056)
 
 
 class LateProvider(SpeechProvider):
@@ -98,12 +99,12 @@ class LateProvider(SpeechProvider):
                     cmd,
                     capture_output=True,
                     text=True,
-                    timeout=300,  # 5 minute timeout
+                    timeout=_LATE_TIMEOUT_S,
                     encoding="utf-8",
                 )
             )
         except subprocess.TimeoutExpired as exc:
-            raise ProviderFailed("LATE command timed out after 5 minutes") from exc
+            raise ProviderFailed(f"LATE command timed out after {_LATE_TIMEOUT_S}s") from exc
         if result.returncode != 0:
             logger.error(f"LATE command failed: {result.stderr}")
             raise ProviderFailed(f"LATE command exited {result.returncode}")

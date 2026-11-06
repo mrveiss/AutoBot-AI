@@ -7,7 +7,7 @@
 ``_run_duplicate_analysis`` used to signal "no analysis" with ``None`` from two
 places -- the single-flight lock being held, and a real deadline expiring -- and
 every caller reported the *timeout* reason. A request that returned in 0.2 s
-because a scan was already running therefore claimed "timed out after 120s",
+because a scan was already running therefore claimed a 120 s timeout,
 with advice (raise ``min_similarity``) that cannot help a caller who is merely
 queued behind a running scan.
 

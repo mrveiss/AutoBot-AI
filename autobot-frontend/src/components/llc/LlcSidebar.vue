@@ -79,6 +79,7 @@ const links = computed<SidebarLink[]>(() => {
     // LlcCompanyLayout — and therefore this sidebar — stays mounted (#10750 B3).
     { labelKey: 'nav.llcDashboard', to: { path: `/llc/companies/${id}/dashboard` } },
     { labelKey: 'nav.llcLedger', to: { path: `/llc/companies/${id}/ledger` } },
+    { labelKey: 'nav.llcMailbox', to: { path: `/llc/companies/${id}/mailbox` } },
     { labelKey: 'nav.llcBacklog', to: { path: `/llc/companies/${id}/backlog` } },
     { labelKey: 'nav.llcBoards', to: { path: `/llc/companies/${id}/boards` } },
     { labelKey: 'nav.llcReviewInbox', to: { path: `/llc/companies/${id}/reviews` } },
@@ -105,6 +106,7 @@ const links = computed<SidebarLink[]>(() => {
     { labelKey: 'nav.llcActivity', to: { path: `/llc/companies/${id}/activity` } },
     { labelKey: 'nav.llcPortability', to: { path: `/llc/companies/${id}/portability` } },
     { labelKey: 'nav.llcSecrets', to: { path: `/llc/companies/${id}/secrets` } },
+    { labelKey: 'nav.llcSettings', to: { path: `/llc/companies/${id}/settings` } },
   ]
 })
 

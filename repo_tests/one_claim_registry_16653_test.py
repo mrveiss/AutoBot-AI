@@ -98,6 +98,12 @@ _THE_REGISTRY = "autobot_shared/coordination/work_claims_lua.py"
 #: old stale-entry check only fired when a file lost its LAST primitive, so
 #: going from two to one was invisible in both directions at once.
 _ALLOWED: dict[str, tuple[int, str]] = {
+    "autobot-backend/security/session_owner_claim.py": (
+        1,
+        "#20030 -- first writer on the session's own ownership key: SET NX gives an unowned session to ONE "
+        "writer, for the ordinary grant and an approved proposal alike. The key is the ownership record itself, "
+        "not a work lease.",
+    ),
     "autobot-backend/services/agent_terminal/pending_claim.py": (
         2,
         "one pending approval per terminal session (#20059): a slot on a record, not a work claim with subtree overlap",

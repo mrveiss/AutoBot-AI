@@ -39,6 +39,7 @@ const OLD_ADMIN_PATHS: Record<string, string> = {
   '/admin/pricing': 'admin-pricing',
   '/admin/mcp-servers': 'admin-mcp-servers',
   '/admin/permission-scopes': 'admin-permission-scopes',
+  '/admin/conversations': 'admin-conversations',
 }
 
 const OLD_COMPONENT_FILES: Record<string, string> = {
@@ -51,6 +52,7 @@ const OLD_COMPONENT_FILES: Record<string, string> = {
   'admin-pricing': 'AdminPricingView.vue',
   'admin-mcp-servers': 'AdminMcpServersView.vue',
   'admin-permission-scopes': 'AdminPermissionScopesView.vue',
+  'admin-conversations': 'AdminConversationsView.vue',
 }
 
 function adminTo(): RouteLocationNormalized {
