@@ -68,7 +68,9 @@ describe('HandoffModal (GH#10531)', () => {
     expect(url).toBe('/api/llc/work-items/wi-1/handoff/to-agent')
     expect(url).not.toContain('/release')
     expect(body.target_agent_id).toBe('agent-pk-1')
-    expect(body.user_id).toBe('user-1')
+    // The backend takes the actor from the verified caller (#20476).
+    expect(body.user_id).toBeUndefined()
+    expect(body.company_id).toBeUndefined()
   })
 
   it('to_human posts only the reviewer: the backend takes the agent from the item (#20476)', async () => {

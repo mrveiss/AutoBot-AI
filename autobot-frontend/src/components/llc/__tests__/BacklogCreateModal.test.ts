@@ -145,6 +145,22 @@ describe('BacklogCreateModal (#18978)', () => {
     expect((w.find('select').element as HTMLSelectElement).value).toBe('p-1')
   })
 
+  it('suggest-AC POSTs title/description (never company_id) and lists the suggestions', async () => {
+    const w = mountForm()
+    await w.find('input[type="text"]').setValue('New PBI')
+    await w.find('textarea').setValue('desc')
+    const suggest = w.findAll('button').find((b) => b.text().includes('llc.backlog.suggestAcs'))!
+    post.mockResolvedValueOnce({ suggestions: ['Given X', 'When Y'] })
+    await suggest.trigger('click')
+    await flushPromises()
+    expect(post).toHaveBeenCalledWith('/api/llc/work-items/suggest-ac', {
+      title: 'New PBI',
+      description: 'desc',
+    })
+    expect(w.text()).toContain('Given X')
+    expect(w.text()).toContain('When Y')
+  })
+
   it('tells a failed suggestion request apart from an empty answer', async () => {
     const w = mountForm()
     await w.find('input[type="text"]').setValue('T')
