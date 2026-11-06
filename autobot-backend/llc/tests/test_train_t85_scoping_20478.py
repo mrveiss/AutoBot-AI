@@ -137,7 +137,7 @@ async def test_a_backfill_keeps_a_project_an_item_got_after_planning(session) ->
     plan = {planned.id: (default, False), raced.id: (default, False)}
     raced.project_id = kept
     await session.flush()
-    with patch.object(project_backfill, "_plan_for", AsyncMock(return_value=plan)):
+    with patch.object(project_backfill, "_plan_for", AsyncMock(return_value=(plan, set(), None))):
         result = await project_backfill.apply_project_backfill(session, COMPANY)
     await session.refresh(planned)
     await session.refresh(raced)
