@@ -10,7 +10,6 @@ command step "succeeded" and ran nothing. These tests drive the real
 stood in for, so the recording sites can be inspected.
 """
 
-import asyncio
 import os
 import uuid
 from contextlib import asynccontextmanager
@@ -24,6 +23,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.ext.compiler import compiles
 
+from autobot_shared.eventually import eventually
 from command_run_policy import CommandRunPolicy
 from security_layer import SecurityLayer
 from user_management.models import Role, User, UserRole
@@ -428,10 +428,7 @@ async def test_the_child_inherits_no_backend_environment(tmp_path, monkeypatch):
 async def test_a_backgrounded_process_does_not_outlive_the_step(tmp_path):
     pid_file = tmp_path / "bg.pid"
     await run_bounded(f"sh -c 'sleep 60 & echo $! > {pid_file}'", cwd=str(tmp_path), timeout_s=2, max_output_bytes=1000)
-    for _ in range(50):  # SIGKILL is delivered asynchronously
-        if _is_gone(pid_file):
-            break
-        await asyncio.sleep(0.1)
+    await eventually(lambda: _is_gone(pid_file), deadline=10)  # SIGKILL is delivered asynchronously
     assert _is_gone(pid_file)
 
 
