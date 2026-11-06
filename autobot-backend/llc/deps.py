@@ -33,7 +33,7 @@ Usage::
 
 from __future__ import annotations
 
-import functools
+import threading
 import uuid
 from typing import Any, AsyncGenerator, Callable, Set, Type, TypeVar
 
@@ -66,24 +66,35 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-@functools.lru_cache(maxsize=None)
+# ``functools.lru_cache`` does not lock a miss: two threads can both build the
+# value and hand out different ones. A lock around a dict makes "one per class"
+# true. Re-entrant because ``service_dep`` calls ``service_singleton`` under it.
+_REGISTRY_LOCK = threading.RLock()
+_SINGLETON_FACTORIES: dict[type, Callable[[], Any]] = {}
+_SERVICE_DEPS: dict[type, Callable[[], Any]] = {}
+
+
 def service_singleton(service_cls: Type[_T]) -> Callable[[], _T]:
     """The ONE singleton factory for *service_cls*, shared by every user (#20889).
 
     ``service_dep`` and ``services.accessors`` both resolve through here, so a
     dependency-injected handler and a direct caller get the same instance.
     """
-    return lazy_singleton(service_cls)
+    with _REGISTRY_LOCK:
+        factory = _SINGLETON_FACTORIES.get(service_cls)
+        if factory is None:
+            factory = _SINGLETON_FACTORIES[service_cls] = lazy_singleton(service_cls)
+        return factory
 
 
-@functools.lru_cache(maxsize=None)
 def service_dep(service_cls: Type[_T]) -> Callable[[], _T]:
     """Return a zero-argument FastAPI dependency that yields the singleton
     instance of *service_cls*.
 
     The returned callable is cached per class (``lru_cache``), so repeated
     calls with the same class return the same dependency function — avoiding
-    redundant closure creation per request.
+    redundant closure creation per request (a locked registry, not
+    ``lru_cache``, which does not lock a miss).
 
     Example::
 
@@ -93,6 +104,14 @@ def service_dep(service_cls: Type[_T]) -> Callable[[], _T]:
         async def handler(svc: ApprovalService = Depends(_svc_dep)):
             ...
     """
+    with _REGISTRY_LOCK:
+        dep = _SERVICE_DEPS.get(service_cls)
+        if dep is None:
+            dep = _SERVICE_DEPS[service_cls] = _build_dep(service_cls)
+        return dep
+
+
+def _build_dep(service_cls: Type[_T]) -> Callable[[], _T]:
     _get = service_singleton(service_cls)
 
     def _dep() -> _T:

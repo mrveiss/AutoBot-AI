@@ -58,7 +58,7 @@ from ..exceptions import (
 from ..models.enums import HeartbeatInvocationSource, LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
 from ..org_role_authority import apply_org_role_bound, role_bound_enforced
-from ..services.budget import BudgetService
+from ..services.accessors import get_budget_service
 from ..services.controls_service import ControlsService
 from ..services.work_item_queue import has_pending_work
 
@@ -942,7 +942,7 @@ async def _ingest_adapter_usage(agent: Dict[str, Any], result: AdapterRunStatus)
         factory = get_async_session_factory()
         async with factory() as session:
             company = str(agent.get("company_id") or "")
-            await BudgetService().ingest_cost_event(
+            await get_budget_service().ingest_cost_event(
                 session, agent_id, company, int(result.tokens_in or 0), int(result.tokens_out or 0), model
             )
             await session.commit()

@@ -33,9 +33,9 @@ from ..models.activity import ActorType
 from ..models.enums import ActivityEventType, WorkItemStatus, WorkItemType
 from ..models.heartbeat_run import LLCHeartbeatRun
 from ..models.work_item import LLCWorkItem
+from ..services.accessors import get_work_item_service
 from ..services.activity_log import LLCActivityLogService
 from ..services.actor import audit
-from ..services.work_item_service import WorkItemService
 from .base import PollLoopScheduler
 from .dispatch_gate import agent_ref_block_reason
 
@@ -187,7 +187,7 @@ class LivenessMonitor(PollLoopScheduler):
         # Resolve manager via company hierarchy — default to None (board-visible)
         manager_agent_id = await self._resolve_manager(session, company_id, agent_id)
 
-        svc = WorkItemService()
+        svc = get_work_item_service()
         await svc.create(
             session,
             company_id=company_id,

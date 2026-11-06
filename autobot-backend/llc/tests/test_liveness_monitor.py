@@ -110,7 +110,7 @@ async def test_stuck_run_marked_timed_out() -> None:
     with (
         patch("llc.scheduler.liveness_monitor.get_async_redis_client", new_callable=AsyncMock) as mock_redis,
         patch("llc.adapters.get_adapter_for_agent", new_callable=AsyncMock) as mock_adapter,
-        patch("llc.scheduler.liveness_monitor.WorkItemService"),
+        patch("llc.scheduler.liveness_monitor.get_work_item_service"),
     ):
         mock_redis.return_value = None
         mock_adapter.return_value = None
@@ -147,7 +147,7 @@ async def test_checkout_lock_released_on_recovery() -> None:
             return_value=mock_redis,
         ),
         patch("llc.adapters.get_adapter_for_agent", new_callable=AsyncMock, return_value=None),
-        patch("llc.scheduler.liveness_monitor.WorkItemService"),
+        patch("llc.scheduler.liveness_monitor.get_work_item_service"),
     ):
         session = _mock_session([run])
 
@@ -177,7 +177,7 @@ async def test_adapter_cancel_called_best_effort() -> None:
             return_value=mock_adapter,
         ),
         patch("llc.scheduler.liveness_monitor.get_async_redis_client", new_callable=AsyncMock, return_value=None),
-        patch("llc.scheduler.liveness_monitor.WorkItemService"),
+        patch("llc.scheduler.liveness_monitor.get_work_item_service"),
     ):
         session = _mock_session([run])
 
@@ -206,7 +206,7 @@ async def test_adapter_cancel_exception_is_swallowed() -> None:
             return_value=mock_adapter,
         ),
         patch("llc.scheduler.liveness_monitor.get_async_redis_client", new_callable=AsyncMock, return_value=None),
-        patch("llc.scheduler.liveness_monitor.WorkItemService"),
+        patch("llc.scheduler.liveness_monitor.get_work_item_service"),
     ):
         session = _mock_session([run])
 
@@ -270,7 +270,7 @@ async def _scan(monitor: LivenessMonitor, session: FakeAsyncSession, adapter: As
         patch("llc.scheduler.liveness_monitor.get_async_session_factory", return_value=factory),
         patch("llc.scheduler.liveness_monitor.agent_ref_block_reason", AsyncMock(return_value=None)),
         patch("llc.scheduler.liveness_monitor.get_async_redis_client", AsyncMock(return_value=None)),
-        patch("llc.scheduler.liveness_monitor.WorkItemService", return_value=MagicMock(create=AsyncMock())),
+        patch("llc.scheduler.liveness_monitor.get_work_item_service", return_value=MagicMock(create=AsyncMock())),
         patch("llc.adapters.get_adapter_for_agent", AsyncMock(return_value=adapter)),
     ):
         await monitor._check_once()

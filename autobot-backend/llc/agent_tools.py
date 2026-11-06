@@ -139,12 +139,12 @@ def _enum_or_error(enum_cls, value, field: str):
 
 async def _create_task(session, company_id: str, user_id: str | None, params: Dict[str, Any]) -> Dict[str, Any]:
     from .models.enums import WorkItemPriority, WorkItemType
-    from .services.work_item_service import WorkItemService
+    from .services.accessors import get_work_item_service
 
     title = (params.get("title") or "").strip()
     if not title:
         raise LLCToolError("create_task requires a non-empty 'title'")
-    item = await WorkItemService().create(
+    item = await get_work_item_service().create(
         session,
         company_id=company_id,
         type=_enum_or_error(WorkItemType, params.get("type", "task"), "type"),
