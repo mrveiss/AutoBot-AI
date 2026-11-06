@@ -16,6 +16,7 @@ import subprocess
 import yaml
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._comment_syntax import code_lines
 from tools.lint._scan_helpers import tracked_paths
 
@@ -41,7 +42,7 @@ _NOT_CODE = {"data-migration.yml"}
 def _rsync_lists(source: str) -> list[list[ast.expr]]:
     """Argument lists of every rsync command, as list literals or subprocess calls."""
     found = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         args = node.elts if isinstance(node, ast.List) else node.args if isinstance(node, ast.Call) else []
         if args and isinstance(args[0], ast.Constant) and args[0].value == "rsync":
             found.append(args)

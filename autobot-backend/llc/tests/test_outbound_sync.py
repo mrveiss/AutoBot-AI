@@ -175,7 +175,7 @@ async def test_sync_failure_is_logged_not_raised():
 
     with (
         patch("user_management.database.get_async_session_factory") as MockSession,
-        patch("llc.sync.outbound_sync._decrypt_pm_config", return_value={"project_key": "P"}),
+        patch("llc.sync.outbound_sync.open_pm_config", return_value={"project_key": "P"}),
         # _DISPATCHER holds the dispatch fns by value at import, so patch the dict
         # entry (patching _dispatch_to_jira itself would not be seen).
         patch("llc.sync.outbound_sync._DISPATCHER", {"jira": AsyncMock(side_effect=RuntimeError("boom"))}),
@@ -216,7 +216,7 @@ async def test_sync_skips_when_no_pm_configured():
         mock_session.execute = AsyncMock(return_value=mock_result)
         MockSession.return_value.return_value = mock_session
 
-        with patch("llc.sync.outbound_sync._DISPATCHER", {}) as mock_dispatcher:
+        with patch("llc.sync.outbound_sync._DISPATCHER", {}):
             await service._sync(
                 company_id="00000000-0000-0000-0000-000000000002",
                 work_item_id="wi_002",
@@ -261,7 +261,7 @@ async def test_integration_create_triggers_jira_sync():
     with (
         patch("user_management.database.get_async_session_factory") as MockSession,
         patch(
-            "llc.sync.outbound_sync._decrypt_pm_config",
+            "llc.sync.outbound_sync.open_pm_config",
             return_value=pm_config,
         ),
         patch("integrations.project_management_integration.JiraIntegration") as MockJira,

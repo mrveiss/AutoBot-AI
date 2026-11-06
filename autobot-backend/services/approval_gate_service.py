@@ -334,6 +334,27 @@ class ApprovalGateService:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    @staticmethod
+    def visibility(viewer: str | None, is_admin: bool) -> tuple:
+        """WHERE clauses limiting a read to the approvals *viewer* may see (#18413).
+
+        One rule for every read route: an admin sees all; anyone else sees rows whose ``owner_user``
+        is their username plus legacy unsourced rows with no owner. Company-scoped rows never reach
+        this service (their reviewers use the tenant-checked ``llc`` routes).
+        """
+        if is_admin:
+            return ()
+        legacy = and_(Approval.source.is_(None), Approval.owner_user.is_(None))
+        return (or_(Approval.owner_user == viewer, legacy) if viewer else legacy,)
+
+    async def get_visible(self, approval_id: uuid.UUID, *, viewer: str | None, is_admin: bool) -> Approval | None:
+        """``get`` limited by ``visibility``: someone else's approval is None, same as a missing one."""
+        approval = await self.get(approval_id)
+        if approval is None or is_admin:
+            return approval
+        owned = approval.owner_user == viewer if viewer else False
+        return approval if owned or (approval.source is None and approval.owner_user is None) else None
+
     async def list_pending(
         self,
         *,
@@ -352,9 +373,7 @@ class ApprovalGateService:
         A past ``expires_at`` is hidden (#18412) even before a sweeper has marked the row.
         """
         visible = [or_(Approval.expires_at.is_(None), Approval.expires_at > now_utc())]
-        if not is_admin:
-            legacy = and_(Approval.source.is_(None), Approval.owner_user.is_(None))
-            visible.append(or_(Approval.owner_user == viewer, legacy) if viewer else legacy)
+        visible.extend(self.visibility(viewer, is_admin))
         return await self.list_approvals(
             status=ApprovalStatus.PENDING.value,
             limit=limit,

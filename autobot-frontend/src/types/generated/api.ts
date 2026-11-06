@@ -9164,9 +9164,8 @@ export interface paths {
         };
         /**
          * Get Connector Job
-         * @description Return in-flight job state for a connector sync (Issue #8149).
-         *
-         *     Returns 404 when no sync is currently in flight (or the 24h TTL expired).
+         * @description Return a connector's sync job (Issue #8149): ``starting``/``running`` while one is in flight,
+         *     else the last finished one. 404 when there is neither (#20755, see ``job_state``).
          */
         get: operations["get_connector_job_api_knowledge_base_connectors__connector_id__job_get"];
         put?: never;
@@ -12168,6 +12167,8 @@ export interface paths {
         /**
          * Set Provider
          * @description Set the active cloud ASR provider.
+         *
+         *     Admin-only (owner ruling 2026-09-11): it decides which cloud provider receives every user's audio.
          *
          *     Persistence limitation: this is in-process only and is lost on restart.
          *     For persistence across restarts, set TRANSCRIBER_ASR_PROVIDER in the
@@ -16891,7 +16892,7 @@ export interface paths {
         };
         /**
          * Get Approval
-         * @description Get a single approval gate by ID (#1402).
+         * @description Get a single approval gate by ID; another user's approval is a 404 (#1402, #18413).
          */
         get: operations["get_approval_api_approval_gates__approval_id__get"];
         put?: never;
@@ -19533,6 +19534,46 @@ export interface paths {
          * @description Propose keeping only the newest ``.env.*~`` copy -- a request, not an execution.
          */
         post: operations["propose_env_copies_cleanup_api_admin_env_copies_cleanup_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/ownerless-chat-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ownerless Chat Sessions
+         * @description Read only: which sessions record no owner.
+         */
+        get: operations["ownerless_chat_sessions_api_admin_ownerless_chat_sessions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/ownerless-chat-sessions/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Chat Session Owner
+         * @description Propose an owner -- a request, not an execution. Refused unless the session is ownerless and the user exists.
+         */
+        post: operations["propose_chat_session_owner_api_admin_ownerless_chat_sessions_requests_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -27921,10 +27962,8 @@ export interface paths {
          * Execute command (SLM admin terminal)
          * @description Execute a single shell command and return stdout/stderr/exit_code.
          *
-         *     Runs on the local backend machine. No auth required — accessible via
-         *     the /autobot-api/ nginx proxy (Issue #983).
-         *
-         *     Blocks commands matching RISKY_COMMAND_PATTERNS.
+         *     Runs on the local backend machine. Admin-only: ``admin_router`` requires
+         *     ``check_admin_permission`` (Issue #983). Blocks commands matching RISKY_COMMAND_PATTERNS.
          */
         post: operations["admin_execute_command_api_terminal_execute_post"];
         delete?: never;
@@ -51171,7 +51210,11 @@ export interface paths {
          */
         get: operations["get_company_teams_api_llc_companies__company_id__teams_get"];
         put?: never;
-        post?: never;
+        /**
+         * Create Company Team
+         * @description Create a team in the path's company; the caller becomes its team owner (``TeamService``).
+         */
+        post: operations["create_company_team_api_llc_companies__company_id__teams_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -51272,6 +51315,50 @@ export interface paths {
         head?: never;
         /** Change Member Role */
         patch: operations["change_member_role_api_llc_companies__company_id__members__user_id__patch"];
+        trace?: never;
+    };
+    "/api/llc/companies/{company_id}/teams/{team_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Company Team
+         * @description Soft-delete a team of the path's company. A user action: nothing here deletes teams on its own.
+         */
+        delete: operations["delete_company_team_api_llc_companies__company_id__teams__team_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/companies/{company_id}/teams/{team_id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Company Team Member
+         * @description Add one of the company's own users to one of its teams.
+         */
+        post: operations["add_company_team_member_api_llc_companies__company_id__teams__team_id__members__user_id__post"];
+        /**
+         * Remove Company Team Member
+         * @description Remove a user from one of the company's teams.
+         */
+        delete: operations["remove_company_team_member_api_llc_companies__company_id__teams__team_id__members__user_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/llc/companies/{company_id}/ceo": {
@@ -64919,6 +65006,20 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * CleanupRequestResponse
+         * @description The approval a proposal created.
+         */
+        CleanupRequestResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Status */
+            status: string;
+            /** Action */
+            action: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * CleanupResult
          * @description Cleanup operation result.
          */
@@ -64973,6 +65074,20 @@ export interface components {
             session_breakdown?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CleanupStatus
+         * @description What one cleanup would remove on this node. Counts and names only, never a file's contents.
+         */
+        CleanupStatus: {
+            /** Count */
+            count: number;
+            /** Detail */
+            detail: string;
+            /** Refused */
+            refused?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -89231,34 +89346,6 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * CleanupRequestResponse
-         * @description The approval a proposal created.
-         */
-        CleanupRequestResponse: {
-            /** Approval Id */
-            approval_id: string;
-            /** Status */
-            status: string;
-            /** Action */
-            action: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * CleanupStatus
-         * @description What one cleanup would remove on this node. Counts and names only, never a file's contents.
-         */
-        CleanupStatus: {
-            /** Count */
-            count: number;
-            /** Detail */
-            detail: string;
-            /** Refused */
-            refused?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
          * OrgTierColumnRequestResponse
          * @description The approval a proposal created.
          */
@@ -89668,6 +89755,46 @@ export interface components {
             active: boolean;
             /** Summary */
             summary?: unknown | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OwnerlessChatSessionRequest
+         * @description The session and the owner a human has picked for it.
+         */
+        OwnerlessChatSessionRequest: {
+            /** Session Id */
+            session_id: string;
+            /** Owner */
+            owner: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OwnerlessChatSessionRequestResponse
+         * @description The approval a proposal created.
+         */
+        OwnerlessChatSessionRequestResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Status */
+            status: string;
+            /** Action */
+            action: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OwnerlessChatSessionsReport
+         * @description Sessions with no recorded owner, and those whose owner could not be read.
+         */
+        OwnerlessChatSessionsReport: {
+            /** Count */
+            count: number;
+            /** Session Ids */
+            session_ids: string[];
+            /** Unreadable */
+            unreadable: string[];
         } & {
             [key: string]: unknown;
         };
@@ -108767,7 +108894,7 @@ export interface operations {
                 /** @description VM filter */
                 vm_name?: string | null;
                 /** @description Result filter */
-                result?: ("success" | "denied" | "failed" | "error") | null;
+                result?: ("success" | "denied" | "failed" | "error" | "attempted") | null;
                 /** @description Maximum number of items to return */
                 limit?: number;
                 /** @description Number of items to skip before returning results */
@@ -108890,7 +109017,7 @@ export interface operations {
                 /** @description Hours of history to check */
                 hours?: number;
                 /** @description Result type to filter */
-                result_filter?: "success" | "denied" | "failed" | "error";
+                result_filter?: "success" | "denied" | "failed" | "error" | "attempted";
             };
             header?: never;
             path?: never;
@@ -133894,6 +134021,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CleanupRequestResponse"];
+                };
+            };
+        };
+    };
+    ownerless_chat_sessions_api_admin_ownerless_chat_sessions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerlessChatSessionsReport"];
+                };
+            };
+        };
+    };
+    propose_chat_session_owner_api_admin_ownerless_chat_sessions_requests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OwnerlessChatSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerlessChatSessionRequestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -176128,6 +176308,41 @@ export interface operations {
             };
         };
     };
+    create_company_team_api_llc_companies__company_id__teams_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeamCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamCreatedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     search_agents_api_llc_companies__company_id__agents_search_get: {
         parameters: {
             query: {
@@ -176283,6 +176498,107 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_company_team_api_llc_companies__company_id__teams__team_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                team_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamDeletedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_company_team_member_api_llc_companies__company_id__teams__team_id__members__user_id__post: {
+        parameters: {
+            query?: {
+                /** @description Member role (owner, admin, member) */
+                role?: string;
+            };
+            header?: never;
+            path: {
+                company_id: string;
+                team_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberAddedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_company_team_member_api_llc_companies__company_id__teams__team_id__members__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                team_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberRemovedResponse"];
                 };
             };
             /** @description Validation Error */
