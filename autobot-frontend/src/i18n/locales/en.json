@@ -8691,6 +8691,7 @@
       "human": "Human",
       "agent": "Agent",
       "dropHere": "Drop items here",
+      "moving": "Moving…",
       "wipLimit": "WIP limit: {limit}",
       "prLinked": "{count} PR(s) linked"
     },
@@ -8768,7 +8769,9 @@
       "sprint": "Sprint",
       "selectProject": "Select a project…",
       "fieldProject": "Project",
-      "noProjectsHint": "This company has no project yet. Create a project first; every work item belongs to one.",
+      "noProjectsHint": "No project is available for new work items. Every work item belongs to an active project, and archived projects can't take new ones. Create or restore a project first.",
+      "storyPointsWholeNumber": "Story points must be a whole number, 0 or more.",
+      "createdRefreshFailed": "The work item was created, but the list did not refresh.",
       "projectsLoadFailed": "Couldn't load this company's projects.",
       "selectSprint": "Select a sprint…",
       "loadingProjects": "Loading projects…",
