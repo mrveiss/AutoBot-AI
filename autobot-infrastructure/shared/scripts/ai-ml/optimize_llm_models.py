@@ -17,6 +17,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from autobot_shared.env_utils import env_float
 from autobot_shared.paths import project_root
 
 # Setup logging
@@ -59,7 +60,7 @@ _RAG_MODEL = _get_model("rag", "mistral:7b-instruct")
 _CHAT_MODEL = _get_model("chat", "qwen3.5:9b")
 _CODE_MODEL = _get_model("npu_code_search", "phi3:mini")
 #: Wait for one `ollama pull`; the timeout result reports this same value (#18056).
-_MODEL_PULL_TIMEOUT_S = 1800
+_MODEL_PULL_TIMEOUT_S = env_float("AUTOBOT_MODEL_PULL_TIMEOUT_SECONDS", 1800.0)
 _EMBEDDING_MODEL = "nomic-embed-text:latest"  # embeddings.model in agents.yaml
 
 # Critical models that must be installed (derived from SSOT roles above)

@@ -37,9 +37,6 @@ logger = get_logger(__name__)
 #: of chat_sessions; the lookup fails loudly if that declaration ever goes away.
 SYSTEM_OF_RECORD = system_of_record("chat_sessions")
 
-#: Wait for the Redis history write; the timeout warning reports this same value (#18056).
-_REDIS_SET_TIMEOUT_S = 2.0
-
 
 class ConversationHandlerMixin:
     """Mixin for conversation history management."""
@@ -122,13 +119,13 @@ class ConversationHandlerMixin:
             try:
                 await asyncio.wait_for(
                     self.redis_client.set(key, history_json, ex=self.conversation_history_ttl),
-                    timeout=_REDIS_SET_TIMEOUT_S,
+                    timeout=config.timeout.redis_op,
                 )
                 logger.debug("Saved conversation history for session %s to Redis", session_id)
             except asyncio.TimeoutError:
                 logger.warning(
                     "Redis set timeout after %gs for session %s - data may not be cached",
-                    _REDIS_SET_TIMEOUT_S,
+                    config.timeout.redis_op,
                     session_id,
                 )
 

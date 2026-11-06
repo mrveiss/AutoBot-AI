@@ -26,13 +26,14 @@ from typing import List, Tuple
 
 import psycopg2
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.secret_redaction import redact_url_credentials
 from migrations import utils as _migration_utils
 
 logger = logging.getLogger(__name__)
 
 #: Connect timeout for the migration runner; the failure log reports this same value (#18056).
-_CONNECT_TIMEOUT_S = 10
+_CONNECT_TIMEOUT_S = env_int("AUTOBOT_MIGRATION_CONNECT_TIMEOUT_SECONDS", 10)
 
 # Migration files in order of execution
 # Add new migrations to this list
@@ -330,7 +331,7 @@ def run_migration(db_url: str, name: str) -> Tuple[bool, str]:
         return False, f"Failed to apply {name}: {e}"
 
 
-def run_all_migrations(db_url: str = None) -> List[Tuple[str, bool, str]]:
+def run_all_migrations(db_url: str = None, connect_timeout: int = _CONNECT_TIMEOUT_S) -> List[Tuple[str, bool, str]]:
     """
     Run all pending migrations (#786).
 
@@ -345,10 +346,10 @@ def run_all_migrations(db_url: str = None) -> List[Tuple[str, bool, str]]:
 
     try:
         logger.debug("Connecting to PostgreSQL for migrations")
-        conn = get_connection(db_url)
+        conn = get_connection(db_url, timeout=connect_timeout)
         logger.info("Database connection established")
     except Exception as e:
-        logger.error("Failed to connect to database after %ss timeout: %s", _CONNECT_TIMEOUT_S, e)
+        logger.error("Failed to connect to database after %ss timeout: %s", connect_timeout, e)
         logger.error("Check that PostgreSQL is running and accepting connections on the configured host/port")
         return [("database_connection", False, f"Connection failed: {e}")]
 

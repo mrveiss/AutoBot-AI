@@ -27,6 +27,7 @@ import redis
 
 from api.schemas_analytics import CodeAnalysisRequest, CommunicationPattern
 from autobot_shared.endpoint_normalization import collapse_dynamic_segments
+from autobot_shared.env_utils import env_float
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
 from constants import PATH
@@ -46,7 +47,7 @@ _analytics_state_lock = asyncio.Lock()
 COMMUNICATION_CHAIN_ANALYSIS_TYPES = {"full", "communication_chains"}
 CODE_INDEXING_ANALYSIS_TYPES = {"full", "incremental"}
 #: Wait for the code-index subprocess; the timeout message reports this same value (#18056).
-_CODE_INDEX_TIMEOUT_S = 180.0
+_CODE_INDEX_TIMEOUT_S = env_float("AUTOBOT_CODE_INDEX_RUN_TIMEOUT_SECONDS", 180.0)
 
 # Bounded-dict limits for per-endpoint tracking dicts (Issue #1554).
 # After normalization these should stay well under the cap, but it acts as a
