@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+from typing import Awaitable, Callable
 
 from sqlalchemy import update
 from sqlalchemy.dialects.postgresql import JSONB
@@ -36,6 +37,10 @@ _NOT_A_PERSON = frozenset({"", "unknown", "system"})
 
 class ClaimRefused(Exception):
     """The approval does not authorize this change; the message says which check failed."""
+
+
+class ClaimNotRecorded(Exception):
+    """The durable record of the claim could not be written, so the approval was NOT spent (#17038)."""
 
 
 def _refusal(approval: Approval | None, action: CredentialAction, node_id: str) -> str | None:
@@ -58,12 +63,23 @@ def _refusal(approval: Approval | None, action: CredentialAction, node_id: str) 
 
 
 async def claim_approval(
-    session: AsyncSession, approval_id: uuid.UUID, action: CredentialAction, node_id: str
+    session: AsyncSession,
+    approval_id: uuid.UUID,
+    action: CredentialAction,
+    node_id: str,
+    record_first: Callable[[Approval], Awaitable[bool]] | None = None,
 ) -> Approval:
-    """Accept *approval_id* for *action* on *node_id* exactly once; raises :class:`ClaimRefused` otherwise."""
+    """Accept *approval_id* for *action* on *node_id* exactly once; raises :class:`ClaimRefused` otherwise.
+
+    *record_first* writes the durable audit row after the checks pass and BEFORE the approval is spent;
+    if it reports failure nothing is spent and :class:`ClaimNotRecorded` is raised, so a change is never
+    authorized without its paper trail (#17038).
+    """
     approval = await session.get(Approval, approval_id)
     if reason := _refusal(approval, action, node_id):
         raise ClaimRefused(reason)
+    if record_first is not None and not await record_first(approval):
+        raise ClaimNotRecorded("the claim could not be recorded")
     spent = {CONSUMED_KEY: datetime.now(timezone.utc).isoformat()}
     result = await session.execute(
         update(Approval)

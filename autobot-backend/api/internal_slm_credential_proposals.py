@@ -12,6 +12,11 @@ One route set for every action in ``autobot_shared.slm_credential_actions.ACTION
 the action and the node, never a value; a second call for a node whose approval is still open (pending,
 or approved and unused) returns that one. Nothing changes here: a human approves it in the Approvals
 inbox, the applying side claims it (verified, then spent once), applies the change, and reports.
+
+Each realign step's audit row is durable and written FIRST: a claim whose row cannot be written spends
+nothing (503), and an outcome whose row cannot be written is not stamped (503), so the report can be
+retried. A run that dies between the claim and the outcome leaves an approval that is spent with no
+outcome; it is never reused, so the next update proposes a fresh one and needs a NEW human decision.
 """
 
 import uuid
@@ -28,6 +33,7 @@ from api.schemas_slm_credential_proposals import (
 )
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
+from auth_service_opt_in import service_opt_in
 from autobot_shared.auth.internal_api_key import require_internal_api_key
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.slm_credential_actions import ACTIONS, INTERNAL_KEY_REALIGN, CredentialAction
@@ -35,6 +41,7 @@ from models.approval import Approval, ApprovalComment, ApprovalStatus, ApprovalT
 from services.approval_gate_service import ApprovalGateService
 from services.slm_credential_claim import (
     CONSUMED_KEY,
+    ClaimNotRecorded,
     ClaimRefused,
     OutcomeRefused,
     claim_approval,
@@ -48,6 +55,11 @@ from services.slm_ssh_password_action import register_ssh_password_action
 logger = get_logger(__name__)
 
 # get_current_user is the recognised gate; require_internal_api_key narrows it to the service key alone.
+# The updater's calls carry that key and no user, so each handler names its caller with service_opt_in
+# (#16333); without it get_current_user refuses the key and the realign could never be proposed or claimed.
+_CALLER = "slm-credential-actions"
+_NOT_RECORDED = "the step could not be recorded; try again"
+
 router = APIRouter(prefix="/internal/slm", dependencies=[Depends(require_internal_api_key), Depends(get_current_user)])
 
 # Registered at this router's import time so the executors exist before any approve().
@@ -74,7 +86,25 @@ async def _open_approval(service: ApprovalGateService, action: CredentialAction,
     return None
 
 
+def _claim_recorder(action: CredentialAction):
+    """The audit write that must succeed before a claim spends the approval; None where the action has none."""
+    if action is not INTERNAL_KEY_REALIGN:
+        return None
+    return lambda approval: record_realign_step("claimed", approval, "success")
+
+
+async def _reject_unrecorded(service: ApprovalGateService, approval: Approval) -> None:
+    """A proposal whose audit row failed must not wait for a human unrecorded: withdraw it (rejecting is safe)."""
+    try:
+        await service.reject(
+            approval.id, "system", "Withdrawn: the proposal could not be recorded.", author_type="system"
+        )
+    except Exception:  # the 503 still reports it; the approval cannot be claimed without its trail either
+        logger.exception("could not withdraw unrecorded proposal %s", approval.id)
+
+
 @router.post("/credential-proposals", response_model=CredentialProposalResponse, status_code=status.HTTP_201_CREATED)
+@service_opt_in(_CALLER)
 async def propose_credential_change(
     body: CredentialProposal, session: AsyncSession = Depends(get_db_session)
 ) -> CredentialProposalResponse:
@@ -91,28 +121,32 @@ async def propose_credential_change(
         requested_by_agent=action.proposer_id(body.node_id),
         context={"action": action.name, "node_id": body.node_id, "credential_kind": action.credential_kind},
     )
-    if action is INTERNAL_KEY_REALIGN:
-        await record_realign_step("proposed", approval, "success")
+    if action is INTERNAL_KEY_REALIGN and not await record_realign_step("proposed", approval, "success"):
+        await _reject_unrecorded(service, approval)
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, _NOT_RECORDED)
     return CredentialProposalResponse(approval_id=str(approval.id), status=approval.status, created=True)
 
 
 @router.post("/credential-approvals/{approval_id}/claim", response_model=CredentialClaimResponse)
+@service_opt_in(_CALLER)
 async def claim_credential_approval(
     approval_id: uuid.UUID, body: CredentialClaim, session: AsyncSession = Depends(get_db_session)
 ) -> CredentialClaimResponse:
     """The applying side's last check: this approval is a human's, for this action and node, and unused -- now spent."""
     action = ACTIONS[body.action]
     try:
-        approval = await claim_approval(session, approval_id, action, body.node_id)
+        await claim_approval(session, approval_id, action, body.node_id, _claim_recorder(action))
     except ClaimRefused as refusal:
         logger.warning("Credential claim refused for approval %s (%s): %s", approval_id, action.name, refusal)
         raise HTTPException(status.HTTP_403_FORBIDDEN, "the approval does not authorize this change")
-    if action is INTERNAL_KEY_REALIGN:
-        await record_realign_step("claimed", approval, "success")
+    except ClaimNotRecorded:
+        logger.error("Credential claim for approval %s not spent: its audit row was not written", approval_id)
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, _NOT_RECORDED)
     return CredentialClaimResponse(approval_id=str(approval_id), node_id=body.node_id)
 
 
 @router.post("/credential-approvals/{approval_id}/outcome", status_code=status.HTTP_204_NO_CONTENT)
+@service_opt_in(_CALLER)
 async def report_credential_outcome(
     approval_id: uuid.UUID, body: CredentialOutcome, session: AsyncSession = Depends(get_db_session)
 ) -> None:
@@ -128,10 +162,11 @@ async def report_credential_outcome(
         raise HTTPException(status.HTTP_409_CONFLICT, str(refusal))
     applied = body.result == "applied"
     detail = clean_detail(body.detail)
-    if action is INTERNAL_KEY_REALIGN:
-        await record_realign_step(
-            "applied" if applied else "apply_failed", approval, "success" if applied else "failed", detail=detail
-        )
+    if action is INTERNAL_KEY_REALIGN and not await record_realign_step(
+        "applied" if applied else "apply_failed", approval, "success" if applied else "failed", detail=detail
+    ):
+        await session.rollback()  # the outcome is not stamped, so the applying side can report it again
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, _NOT_RECORDED)
     note = "Applied." if applied else f"Applying it failed: {detail or 'no detail given'}"
     session.add(ApprovalComment(approval_id=approval.id, author="system", author_type="system", body=note))
     await session.commit()

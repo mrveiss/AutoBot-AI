@@ -105,7 +105,12 @@ def _approval(action: str = _REALIGN, **context) -> SimpleNamespace:
 
 def test_a_claim_is_audited_and_an_ssh_approval_cannot_be_claimed_as_a_realign(audit) -> None:
     client, service, _ = _client()
-    with patch.object(routes, "claim_approval", AsyncMock(return_value=_approval())) as claim:
+
+    async def claim_then_record(_session, _id, _action, _node, record_first):
+        assert await record_first(_approval())  # the route hands the audit write to run BEFORE the spend
+        return _approval()
+
+    with patch.object(routes, "claim_approval", AsyncMock(side_effect=claim_then_record)) as claim:
         ok = _post(client, service, claim_path(str(_ID)), {"action": _REALIGN, "node_id": "node-b"})
     assert ok.status_code == 200
     assert claim.await_args.args[2] is INTERNAL_KEY_REALIGN
@@ -191,3 +196,34 @@ def test_a_reported_detail_is_one_capped_line_of_plain_text(audit) -> None:
     kept = audit.await_args.kwargs["details"]["detail"]
     assert kept.startswith("a b c ") and len(kept) == 300 and "\n" not in kept and "\x00" not in kept
     assert session.add.call_args.args[0].body == f"Applying it failed: {kept}"
+
+
+def test_a_claim_whose_audit_row_fails_spends_nothing_and_is_503() -> None:
+    """The paper trail comes first (#17038): the row is written before the spend, and a failed row aborts it."""
+    client, service, session = _client(approval=_approval())
+    with patch("services.slm_credential_texts.audit_log", AsyncMock(return_value=False)) as recorded:
+        response = _post(client, service, claim_path(str(_ID)), {"action": _REALIGN, "node_id": "node-b"})
+    assert response.status_code == 503
+    recorded.assert_awaited_once()
+    session.execute.assert_not_awaited()  # the spending UPDATE never ran
+    session.commit.assert_not_awaited()
+
+
+def test_an_outcome_whose_audit_row_fails_is_not_stamped() -> None:
+    client, service, session = _client(approval=_approval(consumed_at="2026-11-03T22:01:00+00:00"))
+    session.rollback = AsyncMock()
+    body = {"action": _REALIGN, "node_id": "node-b", "result": "applied"}
+    with patch("services.slm_credential_texts.audit_log", AsyncMock(return_value=False)):
+        response = _post(client, service, outcome_path(str(_ID)), body)
+    assert response.status_code == 503
+    session.rollback.assert_awaited_once()
+    session.commit.assert_not_awaited()
+
+
+def test_a_proposal_whose_audit_row_fails_is_withdrawn_and_is_503() -> None:
+    client, service, _ = _client()
+    service.reject = AsyncMock()
+    with patch("services.slm_credential_texts.audit_log", AsyncMock(return_value=False)):
+        response = _post(client, service, PROPOSAL_PATH, {"action": _REALIGN, "node_id": "node-b"})
+    assert response.status_code == 503
+    service.reject.assert_awaited_once()

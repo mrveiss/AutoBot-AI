@@ -20,6 +20,9 @@
 # `internal_api_key_backend_url`, the backend on the node's own loopback (its port is bound there, #11455).
 ---
 
+# A run that dies between the claim and the outcome leaves a spent approval with no outcome; it is never
+# reused, so the next update proposes a fresh one and needs a NEW human decision (safe, not silent).
+#
 # Claim -> render -> restart (backend and celery) -> verify -> outcome is one unit: an approval is only
 # claimed when this run will also do the rest. A run whose tag selection skips the render, the restart or
 # the verify (`--tags env`, `--skip-tags restart`, `--skip-tags celery`), or a no-restart sync (#20743),
