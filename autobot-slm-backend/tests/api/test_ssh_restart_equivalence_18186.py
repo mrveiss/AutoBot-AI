@@ -220,6 +220,16 @@ async def test_roles_reports_each_failure_to_the_user(monkeypatch, roles_role, k
     assert (body["success"], body["output"]) == (success, output)
 
 
+@pytest.mark.parametrize("category", ["restart", "build"])
+async def test_roles_wait_and_timeout_message_follow_the_constant(monkeypatch, roles_role, category):
+    """Both read _SSH_ACTION_TIMEOUT_S: a non-default value moves the wait and the message together (#18056)."""
+    monkeypatch.setattr(roles, "_SSH_ACTION_TIMEOUT_S", 30.0)
+    run = _Runner(monkeypatch, timeout=True)
+    body = await _execute(category)
+    assert run.timeout == 30.0
+    assert body["output"] == "Timeout after 30 seconds"
+
+
 async def test_roles_restart_without_units_is_422_and_the_other_category_is_untouched(monkeypatch, roles_role):
     run = _Runner(monkeypatch)
     await _execute("build")
