@@ -26,13 +26,15 @@ from autobot_shared.security.path_validator import validate_relative_path
 from chat_history.cache import _CHAT_RECENT_MAX_ENTRIES
 from chat_history.file_io import existing_chat_path, run_in_chat_io_executor
 from chat_history.graph_owner import create_entity_on_missing, session_owner_scope
+from chat_history.session_locked import SessionLockMixin
+from chat_history.session_merge import merge_concurrent_tail
 from constants.redis_constants import REDIS_KEY
 from security.session_owner_errors import SessionOwnerUnreadable
 
 logger = get_logger(__name__)
 
 
-class SessionMixin:
+class SessionMixin(SessionLockMixin):
     """
     Mixin providing session CRUD operations for chat history.
 
@@ -510,6 +512,7 @@ class SessionMixin:
         messages: List[Dict[str, Any]] | None = None,
         name: str = "",
         metadata: Dict[str, Any] | None = None,
+        append: bool = False,
     ):
         """
         Save a chat session with messages and metadata.
@@ -522,36 +525,32 @@ class SessionMixin:
                 metadata. Defaults to None, which leaves any existing on-disk
                 metadata untouched (Issue #12129) — callers that never pass
                 metadata keep their exact prior behavior.
+            append: Treat *messages* as new messages to add to the file as it is when the
+                session lease is held (#20862), not as a snapshot of the whole session.
 
         Issue #665, #620, #12129: Refactored to use extracted helper methods.
+        #20862: the write runs under the per-session lease; a failure (a wait that timed out, a
+        stale generation) is raised to the caller instead of dropping the save.
         """
-        try:
-            self._sanitize_session_id(session_id)
-            chats_directory = self._get_chats_directory()
-            await self._ensure_chats_directory_exists(chats_directory)
+        current_time = time.strftime("%Y-%m-%d %H:%M:%S")
+        session_messages = self._prepare_session_messages(session_id, messages)
 
-            chat_file = str(validate_relative_path(f"{session_id}_chat.json", chats_directory))
-            current_time = time.strftime("%Y-%m-%d %H:%M:%S")
-            session_messages = self._prepare_session_messages(session_id, messages)
+        def apply(chat_data: Dict[str, Any]) -> None:
+            on_disk = chat_data.get("messages", [])
+            merged = on_disk + session_messages if append else merge_concurrent_tail(on_disk, session_messages)
+            merged = self._prepare_session_messages(session_id, merged)
+            self._build_session_chat_data(chat_data, session_id, name, merged, current_time, metadata)
 
-            chat_data = await self._load_existing_chat_data(session_id, chat_file, chats_directory)
-            chat_data = self._build_session_chat_data(
-                chat_data, session_id, name, session_messages, current_time, metadata
+        chat_data = await self._locked_update(session_id, "save_session", apply, after=self._update_redis_cache_on_save)
+        session_messages = chat_data.get("messages", [])
+        logger.info("Chat session '%s' saved successfully", session_id)
+
+        if self.memory_graph_enabled and self.memory_graph:
+            await self._update_memory_graph_entity(
+                session_id, session_messages, name, current_time, chat_data.get("metadata")
             )
 
-            await self._write_session_to_storage(chat_file, chat_data)
-            await self._update_redis_cache_on_save(session_id, chat_data)
-            logger.info("Chat session '%s' saved successfully", session_id)
-
-            if self.memory_graph_enabled and self.memory_graph:
-                await self._update_memory_graph_entity(
-                    session_id, session_messages, name, current_time, chat_data.get("metadata")
-                )
-
-            await self._handle_periodic_cleanup()
-
-        except Exception as e:
-            logger.error("Error saving chat session %s: %s", session_id, e)
+        await self._handle_periodic_cleanup()
 
     def _build_memory_graph_observations(
         self,
@@ -745,131 +744,6 @@ class SessionMixin:
                 await self._async_cache_session(cache_key, chat_data)
             except Exception as e:
                 logger.error("Failed to update Redis cache: %s", e)
-
-    async def update_session(self, session_id: str, updates: Dict[str, Any]) -> bool:
-        """
-        Update session metadata (name, etc).
-
-        Args:
-            session_id: The session identifier
-            updates: Dictionary of fields to update
-
-        Returns:
-            True if update successful, False otherwise
-        """
-        try:
-            self._sanitize_session_id(session_id)
-            chats_directory = self._get_chats_directory()
-            chat_file = await self._resolve_session_file_path(session_id, chats_directory)
-            if not chat_file:
-                logger.warning("Session %s not found for update", session_id)
-                return False
-
-            # Load existing data
-            async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
-                file_content = await f.read()
-            chat_data = self._decrypt_data(file_content)
-
-            # Update fields
-            chat_data.update(updates)
-            chat_data["last_modified"] = time.strftime("%Y-%m-%d %H:%M:%S")
-
-            # Save updated data (always use new format)
-            chat_file_new = str(validate_relative_path(f"{session_id}_chat.json", chats_directory))
-            encrypted_data = self._encrypt_data(chat_data)
-            async with aiofiles.open(chat_file_new, "w", encoding="utf-8") as f:
-                await f.write(encrypted_data)
-
-            await self._update_redis_session_cache(session_id, chat_data)
-            logger.info("Session %s updated successfully", session_id)
-            return True
-
-        except OSError as e:
-            logger.error("Failed to read/write session file for %s: %s", session_id, e)
-            return False
-        except Exception as e:
-            logger.error("Error updating session %s: %s", session_id, e)
-            return False
-
-    async def update_session_name(self, session_id: str, name: str) -> bool:
-        """
-        Update the name of a chat session.
-
-        Args:
-            session_id: The identifier for the session to update
-            name: The new name for the session
-
-        Returns:
-            True if update was successful, False otherwise.
-            Issue #620: Refactored to use existing helpers.
-        """
-        try:
-            self._sanitize_session_id(session_id)
-            chats_directory = self._get_chats_directory()
-
-            # Resolve file path using existing helper
-            chat_file = await self._resolve_session_file_path(session_id, chats_directory)
-            if not chat_file:
-                logger.warning("Chat session %s not found for name update", session_id)
-                return False
-
-            # Load and update session data (Issue #620: extracted helper)
-            chat_data = await self._load_and_update_session_name(chat_file, name)
-
-            # Save and cache updated data (Issue #620: extracted helper)
-            await self._save_session_name_update(session_id, chats_directory, chat_data, name)
-
-            return True
-
-        except Exception as e:
-            logger.error("Error updating chat session %s name: %s", session_id, e)
-            return False
-
-    async def _load_and_update_session_name(self, chat_file: str, name: str) -> Dict[str, Any]:
-        """
-        Load session data and update the name field.
-
-        Args:
-            chat_file: Path to the chat session file
-            name: New name for the session
-
-        Returns:
-            Updated chat data dictionary. Issue #620.
-        """
-        async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
-            file_content = await f.read()
-        chat_data = self._decrypt_data(file_content)  # #19864: raw JSON failed on an encrypted chat
-
-        chat_data["name"] = name
-        chat_data["last_modified"] = time.strftime("%Y-%m-%d %H:%M:%S")
-
-        return chat_data
-
-    async def _save_session_name_update(
-        self,
-        session_id: str,
-        chats_directory: str,
-        chat_data: Dict[str, Any],
-        name: str,
-    ) -> None:
-        """
-        Save updated session data and update Redis cache.
-
-        Args:
-            session_id: Session identifier
-            chats_directory: Directory containing chat files
-            chat_data: Updated chat data to save
-            name: New session name (for logging). Issue #620.
-        """
-        # Save updated data (always use new format, #1721)
-        chat_file_new = str(validate_relative_path(f"{session_id}_chat.json", chats_directory))
-        async with aiofiles.open(chat_file_new, "w", encoding="utf-8") as f:
-            await f.write(self._encrypt_data(chat_data))  # #19864: a rename must not leave plaintext
-
-        # Update Redis cache using existing helper
-        await self._update_redis_session_cache(session_id, chat_data)
-
-        logger.info("Chat session '%s' name updated to '%s'", session_id, name)
 
     async def load_full_session(self, session_id: str) -> Dict[str, Any] | None:
         """

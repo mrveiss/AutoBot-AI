@@ -9,12 +9,20 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from chat_history.file_io import FileIOMixin
 from chat_history.security import SecurityMixin
 from chat_history.session import SessionMixin
 
 
-class _Stub:
-    _update_redis_session_cache = AsyncMock()
+class _Stub(SessionMixin, FileIOMixin):
+    """A manager whose chat file is ciphertext, so a rename must decrypt it and encrypt the result."""
+
+    def __init__(self, directory: str) -> None:
+        self._directory = directory
+        self._update_redis_session_cache = AsyncMock()
+
+    def _get_chats_directory(self) -> str:
+        return self._directory
 
     @staticmethod
     def _decrypt_data(data: str) -> dict:
@@ -34,13 +42,12 @@ def chat_file(tmp_path):
 
 
 async def test_a_rename_reads_an_encrypted_chat(chat_file) -> None:
-    updated = await SessionMixin._load_and_update_session_name(_Stub(), chat_file, "new")
-    assert updated["name"] == "new"
+    stub = _Stub(str(Path(chat_file).parent))
+    assert await stub.update_session_name("s", "new") is True
 
 
 async def test_a_rename_writes_through_the_encryption_path(chat_file) -> None:
-    directory = str(Path(chat_file).parent)
-    await SessionMixin._save_session_name_update(_Stub(), "s", directory, {"name": "new"}, "new")
+    await _Stub(str(Path(chat_file).parent)).update_session_name("s", "new")
     assert _read(chat_file) == "encrypted:new"
 
 

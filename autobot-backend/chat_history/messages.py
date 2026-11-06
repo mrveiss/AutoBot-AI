@@ -21,6 +21,7 @@ import uuid
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from chat_history.session_lease import SessionLeaseError
 
 logger = get_logger(__name__)
 
@@ -106,11 +107,11 @@ class MessagesMixin:
         Issue #620.
         """
         try:
-            messages = await self.load_session(session_id)
-            messages.append(message)
-            await self.save_session(session_id, messages=messages)
+            await self.save_session(session_id, messages=[message], append=True)
             logger.debug("Added message to session %s", session_id)
             return True
+        except SessionLeaseError:
+            raise  # #20862: a wait that timed out is surfaced, not turned into a quiet False
         except Exception as e:
             logger.error("Error adding message to session %s: %s", session_id, e)
             return False
@@ -136,15 +137,15 @@ class MessagesMixin:
         if not messages:
             return True
         try:
-            existing = await self.load_session(session_id)
-            existing.extend(messages)
-            await self.save_session(session_id, messages=existing)
+            await self.save_session(session_id, messages=messages, append=True)
             logger.debug(
                 "Batch-added %d messages to session %s",
                 len(messages),
                 session_id,
             )
             return True
+        except SessionLeaseError:
+            raise  # #20862
         except Exception as e:
             logger.error(
                 "Batch add to session %s failed: %s",
