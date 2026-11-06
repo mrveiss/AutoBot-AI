@@ -67,6 +67,16 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 @functools.lru_cache(maxsize=None)
+def service_singleton(service_cls: Type[_T]) -> Callable[[], _T]:
+    """The ONE singleton factory for *service_cls*, shared by every user (#20889).
+
+    ``service_dep`` and ``services.accessors`` both resolve through here, so a
+    dependency-injected handler and a direct caller get the same instance.
+    """
+    return lazy_singleton(service_cls)
+
+
+@functools.lru_cache(maxsize=None)
 def service_dep(service_cls: Type[_T]) -> Callable[[], _T]:
     """Return a zero-argument FastAPI dependency that yields the singleton
     instance of *service_cls*.
@@ -83,7 +93,7 @@ def service_dep(service_cls: Type[_T]) -> Callable[[], _T]:
         async def handler(svc: ApprovalService = Depends(_svc_dep)):
             ...
     """
-    _get = lazy_singleton(service_cls)
+    _get = service_singleton(service_cls)
 
     def _dep() -> _T:
         return _get()

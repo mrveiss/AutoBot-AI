@@ -10,7 +10,7 @@ route code calls ``get_*()`` and never wraps the class inline (an inline
 call, so nothing is ever shared).
 """
 
-from autobot_shared.singleton_factory import lazy_singleton
+from llc.deps import service_singleton
 
 from .agent_wiki_service import AgentWikiService
 from .attachment_service import AttachmentService
@@ -18,8 +18,8 @@ from .budget import BudgetService
 from .work_item_service import WorkItemService
 from .work_product_service import WorkProductService
 
-get_work_item_service = lazy_singleton(WorkItemService)
-get_budget_service = lazy_singleton(BudgetService)
-get_work_product_service = lazy_singleton(WorkProductService)
-get_attachment_service = lazy_singleton(AttachmentService)
-get_agent_wiki_service = lazy_singleton(AgentWikiService)
+get_work_item_service = service_singleton(WorkItemService)
+get_budget_service = service_singleton(BudgetService)
+get_work_product_service = service_singleton(WorkProductService)
+get_attachment_service = service_singleton(AttachmentService)
+get_agent_wiki_service = service_singleton(AgentWikiService)
