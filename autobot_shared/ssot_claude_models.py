@@ -79,3 +79,16 @@ def resolve_claude_models(node: Any) -> Any:
 def legacy_claude_model(value: str) -> str | None:
     """The current ID replacing a legacy short chain name (case-insensitive), or ``None`` if it is not one."""
     return LEGACY_CLAUDE_KEYS.get(value.strip().lower())
+
+
+#: Models whose thinking is requested as ``{"type": "adaptive"}``. ``budget_tokens`` is rejected with HTTP 400
+#: on every current 5.x model and on Opus 4.7 / 4.8, and is deprecated on Opus 4.6 / Sonnet 4.6; a model
+#: older than 4.6 still takes ``budget_tokens``. Written here so the request builders ask, never name an ID.
+ADAPTIVE_THINKING_MODELS: frozenset[str] = frozenset(
+    {*CLAUDE_MODEL_IDS, "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6"}
+)
+
+
+def requires_adaptive_thinking(model: str) -> bool:
+    """True when *model* must use adaptive thinking instead of a ``budget_tokens`` budget."""
+    return model.strip().lower() in ADAPTIVE_THINKING_MODELS

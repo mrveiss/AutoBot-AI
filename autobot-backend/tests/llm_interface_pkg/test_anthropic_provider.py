@@ -246,9 +246,10 @@ class TestBuildRequestKwargs:
         assert kwargs["extra_body"]["temperature"] == 0
 
     def test_thinking_budget_kept_for_model_without_adaptive_requirement(self):
+        """#20884: a model older than 4.6 still takes budget_tokens; 4.6+ is adaptive."""
         provider = self._provider()
         request = self._make_request(metadata={"api_kwargs": {"thinking_tokens": 8000}})
-        kwargs, _, _ = provider._build_request_kwargs("claude-sonnet-4-6", request)
+        kwargs, _, _ = provider._build_request_kwargs("claude-sonnet-4-20250514", request)
         assert kwargs["thinking"] == {"type": "enabled", "budget_tokens": 8000}
         # #15042: temperature must be dropped, not routed to extra_body, once
         # thinking is active -- the API rejects a sampling kwarg outright.

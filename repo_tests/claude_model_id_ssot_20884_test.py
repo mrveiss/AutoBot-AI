@@ -88,3 +88,22 @@ def test_resolving_a_template_replaces_every_nested_model_alias_and_nothing_else
         "agents": [{"model": CLAUDE_TIER_MODELS["opus"], "name": "sonnet"}, {"model": "gpt-4o"}],
         "nested": {"model": CLAUDE_TIER_MODELS["haiku"]},
     }
+
+
+def test_adaptive_thinking_covers_the_5x_ids_and_4_6_plus_and_not_older_models():
+    from autobot_shared.ssot_claude_models import requires_adaptive_thinking
+
+    assert all(requires_adaptive_thinking(m) for m in CLAUDE_MODEL_IDS)
+    assert all(requires_adaptive_thinking(m) for m in ("claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6"))
+    assert requires_adaptive_thinking("claude-sonnet-4-6")
+    assert not requires_adaptive_thinking("claude-sonnet-4-20250514")
+    assert not requires_adaptive_thinking("claude-3-5-sonnet-20241022")
+
+
+def test_every_budget_tokens_sender_goes_through_the_one_predicate():
+    """The only places a thinking ``budget_tokens`` request is built are the shared builder's fixed-budget branch."""
+    root = repo_root() / "autobot-backend"
+    for rel in ("llm_shared/providers/anthropic_request.py", "chat_workflow/reasoning_kwargs.py"):
+        text = (root / rel).read_text(encoding="utf-8")
+        assert '"enabled"' not in text or "requires_adaptive_thinking" in text, rel
+    assert '"enabled"' not in (root / "chat_workflow/reasoning_kwargs.py").read_text(encoding="utf-8")
