@@ -29,7 +29,14 @@ describe('useSlmJsonSetting', () => {
     await expect(load()).resolves.toEqual({ enabled: true })
   })
 
-  it('load() returns null on a non-ok response', async () => {
+  it('load() throws on a non-404 failure rather than reporting the key absent', async () => {
+    global.fetch = vi.fn(async () => ({ ok: false, status: 503 })) as unknown as typeof fetch
+
+    const { load } = useSlmJsonSetting<Payload>('some.key')
+    await expect(load()).rejects.toThrow('HTTP 503')
+  })
+
+  it('load() returns null when the key is absent (404)', async () => {
     global.fetch = vi.fn(async () => ({ ok: false, status: 404 })) as unknown as typeof fetch
 
     const { load } = useSlmJsonSetting<Payload>('some.key')
