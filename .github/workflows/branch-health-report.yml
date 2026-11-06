@@ -7,8 +7,8 @@
 # - Worktree status
 # - Recommendations
 #
-# WHY NOT `git branch --merged` (#15036). This repository squash-merges, so the
-# base branch is never a descendant of a merged branch's commits. `--merged`
+# WHY NOT `git branch --merged` (#15036). Trains land with merge commits now, but
+# older history holds squashes, whose branches the base never descends from. `--merged`
 # (and `--is-ancestor`) therefore report ~0 merged branches no matter how much
 # has landed, and the "merged branches to clean up" recommendation built on it
 # was never actionable. The landed/unproven split below uses
