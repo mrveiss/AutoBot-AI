@@ -70,11 +70,16 @@ describe('StepApprovalCard', () => {
     expect(button(wrapper, 'Approve').attributes('disabled')).toBeUndefined()
   })
 
-  it('is a labelled polite live region and does not take focus', () => {
+  it('is a labelled region with a separate sr-only polite announcement and does not take focus', () => {
     const { wrapper } = mountCard()
     const region = wrapper.find('[role="region"]')
     expect(region.attributes('aria-label')).toBe('Step waiting for your approval')
-    expect(region.attributes('aria-live')).toBe('polite')
+    expect(region.attributes('aria-live')).toBeUndefined()
+    const note = wrapper.find('[data-testid="step-approval-announcement"]')
+    expect(note.classes()).toContain('sr-only')
+    expect(note.attributes('aria-live')).toBe('polite')
+    expect(note.text()).toBe('Step waiting for your approval')
+    expect(note.find('button').exists()).toBe(false)
     expect(wrapper.find('[autofocus]').exists()).toBe(false)
   })
 

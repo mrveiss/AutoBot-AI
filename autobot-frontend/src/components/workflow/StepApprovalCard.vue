@@ -49,7 +49,9 @@ async function decide(answer: StepAnswer): Promise<void> {
 </script>
 
 <template>
-  <div class="my-3" role="region" aria-live="polite" :aria-label="t('workflow.builder.stepApprovalTitle')">
+  <div class="my-3" role="region" :aria-label="t('workflow.builder.stepApprovalTitle')">
+    <!-- Announced once when the card appears; kept apart from the buttons so a `deciding` toggle never re-reads the card. -->
+    <span class="sr-only" aria-live="polite" data-testid="step-approval-announcement">{{ t('workflow.builder.stepApprovalTitle') }}</span>
     <ApprovalEnvelope
       icon="clock"
       :title="t('workflow.builder.stepApprovalTitle')"
