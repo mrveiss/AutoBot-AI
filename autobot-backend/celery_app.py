@@ -15,7 +15,7 @@ from datetime import timedelta
 
 from celery import Celery
 from celery.schedules import crontab
-from celery.signals import beat_init, worker_process_init
+from celery.signals import beat_init, worker_process_init, worker_process_shutdown
 from kombu import Queue
 
 from autobot_shared.logging_manager import get_logger as _get_logger
@@ -432,6 +432,30 @@ def _reset_async_redis_pools_on_worker_init(sender=None, **kwargs):
             "worker_process_init: async Redis pool reset failed (worker will still start)",
             exc_info=True,
         )
+
+
+# #20887: one persistent event loop per worker process. Every task drives its coroutine through
+# autobot_shared.worker_loop.run_in_worker_loop, so the engine, session factory and async Redis
+# pools are created once on this loop and never see a closed one. The inherited engine is dropped
+# first (synchronously: the parent's connections belong to the parent), then the loop is started.
+@worker_process_init.connect
+def _start_worker_loop_on_worker_init(sender=None, **kwargs):
+    """Drop fork-inherited async state and start this worker's event loop."""
+    from autobot_shared.worker_loop import start_worker_loop
+    from user_management.database import reset_after_fork
+
+    reset_after_fork()
+    start_worker_loop()
+    logger.info("worker_process_init: persistent worker event loop started (#20887)")
+
+
+@worker_process_shutdown.connect
+def _stop_worker_loop_on_worker_shutdown(sender=None, **kwargs):
+    """Dispose the engine and Redis pools on the worker loop, then stop it."""
+    from autobot_shared.worker_loop import stop_worker_loop
+
+    stop_worker_loop()
+    logger.info("worker_process_shutdown: worker event loop stopped (#20887)")
 
 
 # #18094: a worker resolves provider keys (knowledge tasks build a KnowledgeBase, whose LLM and
