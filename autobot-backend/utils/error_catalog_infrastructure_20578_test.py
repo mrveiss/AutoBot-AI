@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import importlib
+from pathlib import Path
 from types import SimpleNamespace
 
 from autobot_shared import paths
@@ -45,3 +46,17 @@ def test_man_page_indexer_is_under_code_source(tmp_path, monkeypatch) -> None:
     finally:
         monkeypatch.undo()
         importlib.reload(man_page_indexing)
+
+
+def test_candidates_survive_an_undeterminable_project_root(tmp_path, monkeypatch) -> None:
+    def undeterminable():
+        raise paths.ProjectRootUndeterminable("no root")
+
+    monkeypatch.delenv(paths.CODE_SOURCE_ENV, raising=False)
+    monkeypatch.delenv(paths.BASE_DIR_ENV, raising=False)
+    monkeypatch.setattr(paths, "project_root", undeterminable)
+    monkeypatch.setattr(error_catalog, "PATH", SimpleNamespace(STATIC_DIR=tmp_path / "x", CONFIG_DIR=tmp_path / "y"))
+    candidates = ErrorCatalog()._candidate_paths()
+    install_root = Path(error_catalog.__file__).resolve().parents[2]
+    expected = install_root / paths.INFRASTRUCTURE_DIR_NAME / "shared" / "config" / CATALOG_FILENAME
+    assert expected in candidates

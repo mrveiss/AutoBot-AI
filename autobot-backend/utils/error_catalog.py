@@ -479,7 +479,7 @@ class ErrorCatalog:
             PATH.STATIC_DIR / CATALOG_FILENAME,
             backend_dir / "static" / CATALOG_FILENAME,
             PATH.CONFIG_DIR / CATALOG_FILENAME,
-            infrastructure_dir() / "shared" / "config" / CATALOG_FILENAME,  # #20578
+            infrastructure_dir(fallback_root=install_root) / "shared" / "config" / CATALOG_FILENAME,  # #20578
             install_root / "infrastructure" / "shared" / "config" / CATALOG_FILENAME,
         ]
         ordered: list[Path] = []
