@@ -86,9 +86,9 @@ onMounted(load)
   <div class="p-6 space-y-6">
     <BaseAlert v-if="error" variant="error" :message="error" />
 
-    <section class="bg-white rounded-lg shadow-xs border border-gray-200 p-6" data-test="relaxed-section">
-      <h2 class="text-lg font-semibold text-gray-900 mb-2">{{ $t('settings.chatApprovalSettings.relaxedTitle') }}</h2>
-      <p class="text-sm text-gray-500 mb-6">{{ $t('settings.chatApprovalSettings.relaxedHelp') }}</p>
+    <section class="bg-white rounded-lg shadow-xs border border-(--aui-color-border) p-6" data-test="relaxed-section">
+      <h2 class="text-lg font-semibold text-(--aui-color-text) mb-2">{{ $t('settings.chatApprovalSettings.relaxedTitle') }}</h2>
+      <p class="text-sm text-(--aui-color-text-muted) mb-6">{{ $t('settings.chatApprovalSettings.relaxedHelp') }}</p>
 
       <BaseAlert
         v-if="relaxedSetting.saved.value"
@@ -99,7 +99,7 @@ onMounted(load)
 
       <ul class="space-y-3">
         <li v-for="category in APPROVAL_CATEGORIES" :key="category" class="flex items-center justify-between">
-          <span class="text-sm text-gray-900">{{ $t(`settings.chatApprovalSettings.categories.${category}`) }}</span>
+          <span class="text-sm text-(--aui-color-text)">{{ $t(`settings.chatApprovalSettings.categories.${category}`) }}</span>
           <BaseSwitch
             :model-value="isRelaxed(category)"
             :label="$t(`settings.chatApprovalSettings.categories.${category}`)"
@@ -110,16 +110,16 @@ onMounted(load)
         </li>
       </ul>
 
-      <div class="mt-8 pt-6 border-t border-gray-200 flex justify-end">
+      <div class="mt-8 pt-6 border-t border-(--aui-color-border) flex justify-end">
         <BaseButton data-test="save-relaxed" :disabled="!loaded" :loading="relaxedSetting.saving.value" @click="saveRelaxed">
           {{ $t('settings.chatApprovalSettings.save') }}
         </BaseButton>
       </div>
     </section>
 
-    <section class="bg-white rounded-lg shadow-xs border border-gray-200 p-6" data-test="auto-approve-section">
-      <h2 class="text-lg font-semibold text-gray-900 mb-2">{{ $t('settings.chatApprovalSettings.autoApproveTitle') }}</h2>
-      <p class="text-sm text-gray-500 mb-4">{{ $t('settings.chatApprovalSettings.autoApproveHelp') }}</p>
+    <section class="bg-white rounded-lg shadow-xs border border-(--aui-color-border) p-6" data-test="auto-approve-section">
+      <h2 class="text-lg font-semibold text-(--aui-color-text) mb-2">{{ $t('settings.chatApprovalSettings.autoApproveTitle') }}</h2>
+      <p class="text-sm text-(--aui-color-text-muted) mb-4">{{ $t('settings.chatApprovalSettings.autoApproveHelp') }}</p>
 
       <BaseAlert
         variant="warning"
@@ -135,7 +135,7 @@ onMounted(load)
       />
 
       <div class="flex items-center justify-between">
-        <span class="text-sm font-medium text-gray-900">{{ $t('settings.chatApprovalSettings.autoApproveLabel') }}</span>
+        <span class="text-sm font-medium text-(--aui-color-text)">{{ $t('settings.chatApprovalSettings.autoApproveLabel') }}</span>
         <BaseSwitch
           :model-value="autoApprove"
           :disabled="!loaded"
@@ -145,7 +145,7 @@ onMounted(load)
         />
       </div>
 
-      <div class="mt-8 pt-6 border-t border-gray-200 flex justify-end">
+      <div class="mt-8 pt-6 border-t border-(--aui-color-border) flex justify-end">
         <BaseButton data-test="save-auto-approve" :disabled="!loaded" :loading="autoSetting.saving.value" @click="saveAutoApprove">
           {{ $t('settings.chatApprovalSettings.save') }}
         </BaseButton>
