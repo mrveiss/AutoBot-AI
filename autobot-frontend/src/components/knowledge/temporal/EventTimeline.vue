@@ -146,10 +146,13 @@ const { isExpanded: isEventExpanded, expand: expandEvent, collapseAll: collapseA
 
 const formatMarkerDate = createDateFormatter({ kind: 'date', intl: { year: 'numeric', month: 'long', day: 'numeric' } })
 
-/** The event's moment, or its temporal expression when it has no timestamp. */
+/** The event's moment, else its temporal expression, else the unknown-time text. */
 function eventTimeText(event: TemporalEvent): string {
-  if (event.timestamp) return formatISOString(event.timestamp)
-  return event.temporal_expression ?? t('knowledge.temporal.events.unknownTime')
+  return (
+    formatISOString(event.timestamp) ||
+    event.temporal_expression ||
+    t('knowledge.temporal.events.unknownTime')
+  )
 }
 
 /** The day heading for an event, or its temporal expression when it has no timestamp. */
