@@ -6,13 +6,11 @@
 
 from __future__ import annotations
 
-import os
-import subprocess
 from pathlib import Path
 
 import pytest
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import git, make_repo
 from services.rollback_migrations import (
     BLOCKED,
     CLEAR,
@@ -22,25 +20,9 @@ from services.rollback_migrations import (
     parse_slm_migrations,
 )
 
-_GIT_ENV = {
-    "GIT_AUTHOR_NAME": "t",
-    "GIT_AUTHOR_EMAIL": "t@example.invalid",
-    "GIT_COMMITTER_NAME": "t",
-    "GIT_COMMITTER_EMAIL": "t@example.invalid",
-    "GIT_CONFIG_GLOBAL": "/dev/null",
-    "GIT_CONFIG_SYSTEM": "/dev/null",
-}
-
 
 def _git(repo: Path, *args: str) -> str:
-    out = subprocess.run(
-        ["git", "-C", str(repo), *args],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=scrubbed_git_env({**os.environ, **_GIT_ENV}),
-    )
-    return out.stdout.strip()
+    return git(repo, *args).stdout.strip()
 
 
 def _write(repo: Path, rel: str, text: str) -> None:
@@ -71,9 +53,7 @@ def _snapshot(repo: Path, slm: tuple[str, ...] | None, backend: dict[str, str | 
 
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
-    root = tmp_path / "code_source"
-    root.mkdir()
-    _git(root, "init", "-q", "-b", "main")
+    root = make_repo(tmp_path / "code_source")
     return root
 
 

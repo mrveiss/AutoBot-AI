@@ -71,7 +71,7 @@ onMounted(() => rollback.loadCandidates())
 <template>
   <BaseCard v-if="rollback.enabled.value" :title="$t('codeRollback.title')" :subtitle="$t('codeRollback.description')">
     <BaseAlert v-if="failureText" variant="error" size="compact" class="mb-3" :message="failureText" />
-    <p v-if="!rollback.loading.value && options.length === 0 && !failureText" class="text-sm text-gray-500">
+    <p v-if="!rollback.loading.value && options.length === 0 && !failureText" class="text-sm text-(--aui-color-text-muted)">
       {{ $t('codeRollback.empty') }}
     </p>
     <div v-else class="flex items-center gap-3">

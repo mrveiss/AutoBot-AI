@@ -18,6 +18,7 @@ from typing import Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.ssot_config import config
 from models.database import Node, NodeCodeSource, NodeRole, Role, RoleStatus
 from services.database import db_service
@@ -49,7 +50,7 @@ class SyncNodeContext:
 from autobot_shared.git_probe import start_git
 
 #: Bound on the checkout that puts a detached code_source back on its branch (#20214).
-BRANCH_CHECKOUT_TIMEOUT_S = float(os.environ.get("SLM_BRANCH_CHECKOUT_TIMEOUT_S", "60"))
+BRANCH_CHECKOUT_TIMEOUT_S = env_float_clamped("SLM_BRANCH_CHECKOUT_TIMEOUT_S", 60.0, min_v=1.0, positive_finite=True)
 CODE_CACHE_DIR = Path(os.environ.get("SLM_CODE_CACHE", "/var/lib/slm/code-cache"))
 
 SSH_KEY_PATH = config.path.ssh_key_path  # canonical inter-node key (#12429)

@@ -7,8 +7,6 @@
 from __future__ import annotations
 
 import ast
-import os
-import subprocess
 import sys
 import typing
 from pathlib import Path
@@ -18,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import HTTPException
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import git, make_repo
 
 _ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_ROOT))
@@ -43,27 +41,12 @@ from services import rollback_audit  # noqa: E402
 from services.rollback_commits import ROLLBACK_SUPPORT_PATH  # noqa: E402
 from services.rollback_migrations import BLOCKED, CLEAR, MigrationCheck  # noqa: E402
 
-_GIT_ENV = {
-    "GIT_AUTHOR_NAME": "t",
-    "GIT_AUTHOR_EMAIL": "t@example.invalid",
-    "GIT_COMMITTER_NAME": "t",
-    "GIT_COMMITTER_EMAIL": "t@example.invalid",
-    "GIT_CONFIG_GLOBAL": "/dev/null",
-    "GIT_CONFIG_SYSTEM": "/dev/null",
-}
 USER = {"sub": "alice"}
 DEPLOYED = "d" * 40
 
 
 def _git(repo: Path, *args: str) -> str:
-    out = subprocess.run(
-        ["git", "-C", str(repo), *args],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=scrubbed_git_env({**os.environ, **_GIT_ENV}),
-    )
-    return out.stdout.strip()
+    return git(repo, *args).stdout.strip()
 
 
 def _commit(repo: Path, name: str, support: bool = True) -> str:
@@ -81,9 +64,7 @@ def _commit(repo: Path, name: str, support: bool = True) -> str:
 @pytest.fixture
 def world(tmp_path, monkeypatch):
     """A real repo (origin/main = three commits, plus a side commit), with the collaborators around it faked."""
-    root = tmp_path / "code_source"
-    root.mkdir()
-    _git(root, "init", "-q", "-b", "main")
+    root = make_repo(tmp_path / "code_source")
     old = _commit(root, "o", support=False)
     first, second, third = (_commit(root, n) for n in ("a", "b", "c"))
     _git(root, "update-ref", "refs/remotes/origin/main", third)

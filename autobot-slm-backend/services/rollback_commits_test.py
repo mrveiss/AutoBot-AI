@@ -6,13 +6,11 @@
 
 from __future__ import annotations
 
-import os
-import subprocess
 from pathlib import Path
 
 import pytest
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import git, make_repo
 from services.rollback_commits import (
     ROLLBACK_SUPPORT_PATH,
     RollbackRefused,
@@ -20,25 +18,9 @@ from services.rollback_commits import (
     resolve_target,
 )
 
-_GIT_ENV = {
-    "GIT_AUTHOR_NAME": "t",
-    "GIT_AUTHOR_EMAIL": "t@example.invalid",
-    "GIT_COMMITTER_NAME": "t",
-    "GIT_COMMITTER_EMAIL": "t@example.invalid",
-    "GIT_CONFIG_GLOBAL": "/dev/null",
-    "GIT_CONFIG_SYSTEM": "/dev/null",
-}
-
 
 def _git(repo: Path, *args: str) -> str:
-    out = subprocess.run(
-        ["git", "-C", str(repo), *args],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=scrubbed_git_env({**os.environ, **_GIT_ENV}),
-    )
-    return out.stdout.strip()
+    return git(repo, *args).stdout.strip()
 
 
 def _commit(repo: Path, name: str, subject: str, support: bool = True) -> str:
@@ -56,9 +38,7 @@ def _commit(repo: Path, name: str, subject: str, support: bool = True) -> str:
 @pytest.fixture
 def repo(tmp_path: Path) -> dict:
     """main has three commits (origin/main points at the third); a side branch has one more that is not on main."""
-    root = tmp_path / "code_source"
-    root.mkdir()
-    _git(root, "init", "-q", "-b", "main")
+    root = make_repo(tmp_path / "code_source")
     old = _commit(root, "o.txt", "before rollback support", support=False)
     first = _commit(root, "a.txt", "first change")
     second = _commit(root, "b.txt", "second change")
