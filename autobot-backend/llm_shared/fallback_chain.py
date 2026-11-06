@@ -23,9 +23,33 @@ from typing import Dict, List, NamedTuple, Optional
 from autobot_shared.llm_provider_order import ORDER_ENV_VAR, provider_is_permitted
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.ssot_claude_models import CLAUDE_HAIKU, CLAUDE_OPUS, CLAUDE_SONNET, resolve_claude_model
+from autobot_shared.ssot_claude_models import (
+    CLAUDE_HAIKU,
+    CLAUDE_OPUS,
+    CLAUDE_SONNET,
+    legacy_claude_model,
+    resolve_claude_model,
+)
 
 logger = get_logger(__name__)
+
+
+def _canonical_model(name: str, env_key: str) -> str:
+    """*name* as the current model ID: a legacy short name (see ``LEGACY_CLAUDE_KEYS``) or a tier alias is mapped.
+
+    A legacy name is still honoured so an update keeps an operator's configured chain, with a
+    deprecation warning naming the variable to change (#20884).
+    """
+    current = legacy_claude_model(name)
+    if current is None:
+        return resolve_claude_model(name)
+    logger.warning(
+        "%s: model name %r is deprecated and was mapped to %r; update the variable to the new name",
+        env_key,
+        name,
+        current,
+    )
+    return current
 
 
 class FallbackHop(NamedTuple):
@@ -166,8 +190,8 @@ class FallbackChainManager:
             if not key.startswith("AUTOBOT_FALLBACK_CHAIN_"):
                 continue
 
-            primary_model_key = resolve_claude_model(
-                key.replace("AUTOBOT_FALLBACK_CHAIN_", "").lower().replace("_", "-")
+            primary_model_key = _canonical_model(
+                key.replace("AUTOBOT_FALLBACK_CHAIN_", "").lower().replace("_", "-"), key
             )
             fallback_spec = value.strip()
 
@@ -183,10 +207,10 @@ class FallbackChainManager:
                 if ":" in part:
                     provider, model = part.split(":", 1)
                     fallback_providers.append(provider.strip())
-                    fallback_models.append(resolve_claude_model(model.strip()))
+                    fallback_models.append(_canonical_model(model.strip(), key))
                 else:
                     fallback_providers.append(None)  # type: ignore[arg-type]
-                    fallback_models.append(resolve_claude_model(part))
+                    fallback_models.append(_canonical_model(part, key))
 
             chain = FallbackChain(
                 primary_model=primary_model_key,

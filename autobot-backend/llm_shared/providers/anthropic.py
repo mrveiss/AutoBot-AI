@@ -82,6 +82,7 @@ async def _apply_adapter_pre_send(request: LLMRequest, context_type: str) -> Non
         logger.debug("Claude adapter pre-send optimization skipped (fail-safe): %s", exc)
 
 
+from autobot_shared.ssot_claude_models import CLAUDE_MODEL_IDS
 from autobot_shared.ssot_config import config
 from autobot_shared.ssot_hosted_models import hosted_default_model
 from constants.model_constants import (
@@ -115,6 +116,7 @@ from .cache_utils import sorted_for_cache
 logger = get_logger(__name__)
 
 _ANTHROPIC_MODELS = [
+    *CLAUDE_MODEL_IDS,  # the current generation first (#20884)
     ANTHROPIC_CLAUDE_OPUS4_6,
     ANTHROPIC_CLAUDE_SONNET4_6,
     ANTHROPIC_CLAUDE_SONNET4,

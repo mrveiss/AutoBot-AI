@@ -35,6 +35,16 @@ CLAUDE_TIER_MODELS: dict[str, str] = {
 
 CLAUDE_MODEL_IDS: tuple[str, ...] = tuple(CLAUDE_TIER_MODELS.values())
 
+#: Short chain names that earlier releases keyed fallback chains on (``AUTOBOT_FALLBACK_CHAIN_CLAUDE_OPUS_4``
+#: and friends) -> the pinned ID that replaces each. An update must not drop an operator's configured chain,
+#: so the env loader maps these through ``legacy_claude_model`` and warns. One table, here, and nowhere else.
+LEGACY_CLAUDE_KEYS: dict[str, str] = {
+    "claude-opus-4": CLAUDE_OPUS,
+    "claude-sonnet-4": CLAUDE_SONNET,
+    "claude-haiku-4": CLAUDE_HAIKU,
+    "claude-opus-4-cross": f"{CLAUDE_OPUS}-cross",
+}
+
 #: Every current model has a 1M-token context window.
 CLAUDE_CONTEXT_WINDOW = 1_000_000
 
@@ -64,3 +74,8 @@ def resolve_claude_models(node: Any) -> Any:
     if isinstance(node, list):
         return [resolve_claude_models(item) for item in node]
     return node
+
+
+def legacy_claude_model(value: str) -> str | None:
+    """The current ID replacing a legacy short chain name (case-insensitive), or ``None`` if it is not one."""
+    return LEGACY_CLAUDE_KEYS.get(value.strip().lower())

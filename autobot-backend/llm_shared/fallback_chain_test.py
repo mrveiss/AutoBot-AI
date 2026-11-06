@@ -184,3 +184,25 @@ class TestSingleton:
         manager2 = get_fallback_chain_manager()
 
         assert manager1 is manager2
+
+
+class TestLegacyEnvKeys:
+    """An update must not drop a chain configured under the pre-#20884 short names."""
+
+    def test_old_style_variable_still_yields_its_chain_on_the_new_ids(self, monkeypatch, caplog):
+        monkeypatch.setenv("AUTOBOT_FALLBACK_CHAIN_CLAUDE_OPUS_4", "anthropic:claude-sonnet-4,openai:gpt-4o-mini")
+        with caplog.at_level("WARNING"):
+            chain = FallbackChainManager().get_chain(CLAUDE_OPUS)
+
+        assert chain is not None
+        assert chain.operator_configured
+        assert chain.fallback_models == [CLAUDE_SONNET, "gpt-4o-mini"]
+        assert any("deprecated" in r.getMessage() for r in caplog.records)
+
+    def test_a_tier_alias_variable_resolves_without_a_warning(self, monkeypatch, caplog):
+        monkeypatch.setenv("AUTOBOT_FALLBACK_CHAIN_OPUS", "anthropic:sonnet")
+        with caplog.at_level("WARNING"):
+            chain = FallbackChainManager().get_chain(CLAUDE_OPUS)
+
+        assert chain is not None and chain.fallback_models == [CLAUDE_SONNET]
+        assert not any("deprecated" in r.getMessage() for r in caplog.records)
