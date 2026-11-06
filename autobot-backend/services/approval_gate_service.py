@@ -73,13 +73,17 @@ class ApprovalGateService:
         payload_hash: str | None = None,
         resume_ref: str | None = None,
         owner_user: str | None = None,
+        approval_id: uuid.UUID | None = None,
     ) -> Approval:
         """Create a new approval gate request (company-scoped when *company_id* is given, #18430).
+
+        *approval_id* lets a caller that must write its audit row FIRST name the row it will describe (#17038).
 
         The keyword-only record fields (#13421) are for server-side emitters; they are validated
         by ``record_fields`` and are deliberately not accepted from the HTTP create route.
         """
         approval = Approval(
+            **({"id": approval_id} if approval_id else {}),
             company_id=company_id,
             title=title,
             description=description,

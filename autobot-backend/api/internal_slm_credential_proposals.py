@@ -13,10 +13,11 @@ the action and the node, never a value; a second call for a node whose approval 
 or approved and unused) returns that one. Nothing changes here: a human approves it in the Approvals
 inbox, the applying side claims it (verified, then spent once), applies the change, and reports.
 
-Each realign step's audit row is durable and written FIRST: a claim whose row cannot be written spends
-nothing (503), and an outcome whose row cannot be written is not stamped (503), so the report can be
-retried. A run that dies between the claim and the outcome leaves an approval that is spent with no
-outcome; it is never reused, so the next update proposes a fresh one and needs a NEW human decision.
+Each realign step's audit row is durable and written FIRST: a proposal whose row cannot be written
+creates nothing (503), a claim whose row cannot be written spends nothing (503), and an outcome whose row
+cannot be written is not stamped (503), so the report can be retried. A run that dies between the claim
+and the outcome leaves an approval that is spent with no outcome; it is never reused, so the next update
+proposes a fresh one and needs a NEW human decision.
 """
 
 import uuid
@@ -48,7 +49,7 @@ from services.slm_credential_claim import (
     clean_detail,
     record_outcome,
 )
-from services.slm_credential_texts import proposal_text, record_realign_step
+from services.slm_credential_texts import proposal_text, record_realign_proposal, record_realign_step
 from services.slm_internal_key_realign_action import register_internal_key_realign_action
 from services.slm_ssh_password_action import register_ssh_password_action
 
@@ -93,16 +94,6 @@ def _claim_recorder(action: CredentialAction):
     return lambda approval: record_realign_step("claimed", approval, "success")
 
 
-async def _reject_unrecorded(service: ApprovalGateService, approval: Approval) -> None:
-    """A proposal whose audit row failed must not wait for a human unrecorded: withdraw it (rejecting is safe)."""
-    try:
-        await service.reject(
-            approval.id, "system", "Withdrawn: the proposal could not be recorded.", author_type="system"
-        )
-    except Exception:  # the 503 still reports it; the approval cannot be claimed without its trail either
-        logger.exception("could not withdraw unrecorded proposal %s", approval.id)
-
-
 @router.post("/credential-proposals", response_model=CredentialProposalResponse, status_code=status.HTTP_201_CREATED)
 @service_opt_in(_CALLER)
 async def propose_credential_change(
@@ -113,17 +104,19 @@ async def propose_credential_change(
     service = ApprovalGateService(session)
     if existing := await _open_approval(service, action, body.node_id):
         return CredentialProposalResponse(approval_id=str(existing.id), status=existing.status, created=False)
+    approval_id = uuid.uuid4()
+    proposer = action.proposer_id(body.node_id)
+    if action is INTERNAL_KEY_REALIGN and not await record_realign_proposal(approval_id, body.node_id, proposer):
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, _NOT_RECORDED)  # no row, so no proposal
     title, description = proposal_text(action, body.node_id)
     approval = await service.create_approval(
         title=title,
         approval_type=ApprovalType.DESTRUCTIVE_ACTION.value,
         description=description,
-        requested_by_agent=action.proposer_id(body.node_id),
+        requested_by_agent=proposer,
         context={"action": action.name, "node_id": body.node_id, "credential_kind": action.credential_kind},
+        approval_id=approval_id,
     )
-    if action is INTERNAL_KEY_REALIGN and not await record_realign_step("proposed", approval, "success"):
-        await _reject_unrecorded(service, approval)
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, _NOT_RECORDED)
     return CredentialProposalResponse(approval_id=str(approval.id), status=approval.status, created=True)
 
 

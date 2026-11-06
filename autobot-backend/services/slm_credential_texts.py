@@ -10,6 +10,7 @@ happens and what depends on the credential. So each action's text names all thre
 
 from __future__ import annotations
 
+import uuid
 from typing import TYPE_CHECKING
 
 from autobot_shared.slm_credential_actions import INTERNAL_KEY_REALIGN, SSH_PASSWORD_DELETE, CredentialAction
@@ -57,17 +58,29 @@ def proposal_text(action: CredentialAction, node_id: str) -> tuple[str, str]:
     return title.format(node=node_id), description.format(node=node_id)
 
 
-async def record_realign_step(step: str, approval: "Approval", result: str, detail: str = "") -> bool:
-    """One durable audit entry per realign step: proposed, claimed, applied, apply-failed. Never a key value."""
-    context = approval.context or {}
-    details = {"approval_id": str(approval.id), "credential_kind": INTERNAL_KEY_REALIGN.credential_kind}
+async def _write_step(
+    step: str, approval_id: object, node_id: object, user_id: object, result: str, detail: str
+) -> bool:
+    details = {"approval_id": str(approval_id), "credential_kind": INTERNAL_KEY_REALIGN.credential_kind}
     if detail:
         details["detail"] = detail
     return await audit_log(
         _REALIGN_AUDIT[step].value,
         result=result,
         durable=True,
-        user_id=approval.decided_by_user or approval.requested_by_agent,
-        resource=f"node:{context.get('node_id')}",
+        user_id=user_id,
+        resource=f"node:{node_id}",
         details=details,
     )
+
+
+async def record_realign_step(step: str, approval: "Approval", result: str, detail: str = "") -> bool:
+    """One durable audit entry per realign step: proposed, claimed, applied, apply-failed. Never a key value."""
+    node_id = (approval.context or {}).get("node_id")
+    user_id = approval.decided_by_user or approval.requested_by_agent
+    return await _write_step(step, approval.id, node_id, user_id, result, detail)
+
+
+async def record_realign_proposal(approval_id: uuid.UUID, node_id: str, proposer: str) -> bool:
+    """The "proposed" row, written BEFORE the approval exists, so it names the id the approval will take."""
+    return await _write_step("proposed", approval_id, node_id, proposer, "success", "")

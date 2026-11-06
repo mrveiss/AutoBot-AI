@@ -220,10 +220,28 @@ def test_an_outcome_whose_audit_row_fails_is_not_stamped() -> None:
     session.commit.assert_not_awaited()
 
 
-def test_a_proposal_whose_audit_row_fails_is_withdrawn_and_is_503() -> None:
-    client, service, _ = _client()
+def test_a_proposal_whose_audit_row_fails_creates_nothing_and_is_503() -> None:
+    """Paper trail first (#17038): no audit row means no proposal row, and nothing is withdrawn."""
+    client, service, session = _client()
     service.reject = AsyncMock()
-    with patch("services.slm_credential_texts.audit_log", AsyncMock(return_value=False)):
+    with patch("services.slm_credential_texts.audit_log", AsyncMock(return_value=False)) as recorded:
         response = _post(client, service, PROPOSAL_PATH, {"action": _REALIGN, "node_id": "node-b"})
     assert response.status_code == 503
-    service.reject.assert_awaited_once()
+    recorded.assert_awaited_once()
+    service.create_approval.assert_not_awaited()
+    service.reject.assert_not_awaited()
+    session.commit.assert_not_awaited()
+
+
+def test_a_proposal_writes_its_audit_row_before_the_approval_and_names_its_id() -> None:
+    client, service, _ = _client()
+    order: list[str] = []
+    recorded = AsyncMock(side_effect=lambda *a, **kw: order.append("audit") or True)
+    created = service.create_approval.side_effect
+    service.create_approval = AsyncMock(side_effect=lambda **kw: order.append("approval") or created(**kw))
+    with patch("services.slm_credential_texts.audit_log", recorded):
+        response = _post(client, service, PROPOSAL_PATH, {"action": _REALIGN, "node_id": "node-b"})
+    assert response.status_code == 201
+    assert order == ["audit", "approval"]
+    named = recorded.await_args.kwargs["details"]["approval_id"]
+    assert named == str(service.create_approval.await_args.kwargs["approval_id"])
