@@ -174,3 +174,25 @@ async def test_unknown_model_refuses_rather_than_costing_zero() -> None:
     # raise precedes the UPDATE; the regression it guards is the refusal moving
     # after a partial write, which is exactly when it would matter.
     assert session.execute.call_count == 0, "an unpriced event still reached the database"
+
+
+@pytest.mark.asyncio
+async def test_hard_stop_commits_the_recorded_spend_before_raising() -> None:
+    session = _make_session(_make_row(spent=10.5, limit=10.0))
+
+    with patch("llc.services.budget.get_async_redis_client", new_callable=AsyncMock):
+        with pytest.raises(BudgetExhausted):
+            await BudgetService().ingest_cost_event(
+                session, "agent-001", "00000000-0000-4000-8000-0000000000c1", 1000, 500, "claude-sonnet-4-6"
+            )
+    session.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_under_limit_ingest_leaves_the_commit_to_the_caller() -> None:
+    session = _make_session(_make_row(spent=0.5, limit=10.0))
+    with patch("llc.services.budget.get_async_redis_client", new_callable=AsyncMock):
+        await BudgetService().ingest_cost_event(
+            session, "agent-001", "00000000-0000-4000-8000-0000000000c1", 100, 50, "claude-sonnet-4-6"
+        )
+    session.commit.assert_not_awaited()

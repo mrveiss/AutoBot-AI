@@ -241,3 +241,17 @@ Index(
     unique=True,
     postgresql_where=text(PENDING_FILE_CLEANUP_WHERE),
 ).ddl_if(dialect="postgresql")
+
+
+#: One PENDING owner proposal per chat session, enforced by the database (#20030). Two admins' requests
+#: can both pass the application-level "already pending" read; only a unique index makes the second
+#: insert fail, and the route answers it 409. Partial, so it constrains nothing but pending rows of
+#: this one action. PostgreSQL only, like the file-cleanup index above.
+PENDING_SESSION_OWNER_INDEX = "uq_approvals_pending_chat_session_owner"
+PENDING_SESSION_OWNER_WHERE = "status = 'pending' AND context ->> 'action' = 'chat_session_owner_assign'"
+Index(
+    PENDING_SESSION_OWNER_INDEX,
+    Approval.context["session_id"].astext,
+    unique=True,
+    postgresql_where=text(PENDING_SESSION_OWNER_WHERE),
+).ddl_if(dialect="postgresql")

@@ -297,3 +297,17 @@ describe('useSlmApi — migrated onto slmApiClient (#12420 Phase 2 batch 5)', ()
     })
   })
 })
+
+describe('getRoleOwners (#19706)', () => {
+  beforeEach(() => mockRaw.mockReset())
+
+  it('returns the one owner of a single-node role and leaves out multi-node roles', async () => {
+    mockRaw.mockResolvedValueOnce(
+      jsonResponse({
+        owners: { redis: ['node-1'], 'slm-agent': ['node-1', 'node-2'] },
+        multi_node_roles: ['autobot_shared', 'slm-agent'],
+      }),
+    )
+    await expect(useSlmApi().getRoleOwners()).resolves.toEqual({ redis: 'node-1' })
+  })
+})
