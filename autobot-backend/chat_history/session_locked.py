@@ -12,7 +12,7 @@ was loaded before it waited.
 
 import os
 import time
-from typing import Any, Awaitable, Callable, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Dict, Optional, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
@@ -39,6 +39,31 @@ def _stat_signature(name: str, directory: str) -> Optional[Tuple[int, int]]:
 
 class SessionLockMixin:
     """Lease-guarded session mutations; requires the session and file-I/O mixins."""
+
+    if TYPE_CHECKING:  # provided by SessionMixin / the manager; declared so the types of this mixin check
+
+        @staticmethod
+        def _sanitize_session_id(session_id: str) -> None: ...
+
+        def _get_chats_directory(self) -> str: ...
+
+        async def _ensure_chats_directory_exists(self, chats_directory: str) -> None: ...
+
+        async def _resolve_session_file_path(self, session_id: str, chats_directory: str) -> str | None: ...
+
+        async def _load_existing_chat_data(
+            self, session_id: str, chat_file: str, chats_directory: str
+        ) -> Dict[str, Any]: ...
+
+        async def _write_session_to_storage(self, chat_file: str, chat_data: Dict[str, Any]) -> None: ...
+
+        async def _update_redis_session_cache(self, session_id: str, chat_data: Dict[str, Any]) -> None: ...
+
+        async def _delete_session_files(self, session_id: str, chats_directory: str) -> bool: ...
+
+        async def _delete_companion_files(self, session_id: str, chats_directory: str) -> None: ...
+
+        async def _clear_session_redis_cache(self, session_id: str) -> None: ...
 
     async def _stored_generation(
         self, session_id: str, chats_directory: str, read_generation: int, read_signature: Any
