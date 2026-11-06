@@ -19540,6 +19540,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/env-copies-cleanup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Env Copies Status
+         * @description Read only: counts, never a file's contents.
+         */
+        get: operations["env_copies_status_api_admin_env_copies_cleanup_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/env-copies-cleanup/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Env Copies Cleanup
+         * @description Propose keeping only the newest ``.env.*~`` copy -- a request, not an execution.
+         */
+        post: operations["propose_env_copies_cleanup_api_admin_env_copies_cleanup_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/analytics/dashboard/overview": {
         parameters: {
             query?: never;
@@ -89278,6 +89318,34 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * CleanupRequestResponse
+         * @description The approval a proposal created.
+         */
+        CleanupRequestResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Status */
+            status: string;
+            /** Action */
+            action: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CleanupStatus
+         * @description What one cleanup would remove on this node. Counts and names only, never a file's contents.
+         */
+        CleanupStatus: {
+            /** Count */
+            count: number;
+            /** Detail */
+            detail: string;
+            /** Refused */
+            refused?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * OrgTierColumnRequestResponse
          * @description The approval a proposal created.
          */
@@ -133966,6 +134034,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    env_copies_status_api_admin_env_copies_cleanup_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CleanupStatus"];
+                };
+            };
+        };
+    };
+    propose_env_copies_cleanup_api_admin_env_copies_cleanup_requests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CleanupRequestResponse"];
                 };
             };
         };

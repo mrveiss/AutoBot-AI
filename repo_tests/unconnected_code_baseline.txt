@@ -181,7 +181,6 @@ route:autobot-backend/api/adapters.py:GET /{adapter_type}/models	#10603
 route:autobot-backend/api/adapters.py:GET /{adapter_type}/test	#10603
 route:autobot-backend/api/adapters.py:POST /ollama/pull	#10603
 route:autobot-backend/api/admin_oauth_bundle_strip.py:POST /oauth-bundle-strip/requests	#10603
-route:autobot-backend/api/admin_org_tier_column.py:POST /org-tier-column/requests	#10603
 route:autobot-backend/api/admin_orphan_storage.py:POST /orphan-storage/deletion-requests	#10603
 route:autobot-backend/api/admin_retention_policies.py:DELETE /retention-policies/{policy_type}	#10603
 route:autobot-backend/api/admin_retention_policies.py:GET /retention-policies/{policy_type}	#10603
