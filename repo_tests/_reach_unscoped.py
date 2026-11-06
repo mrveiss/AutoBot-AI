@@ -38,6 +38,9 @@ UNSCOPED = frozenset(
         "role-registry-installed-units",
         # #19413: every tracked file, so a ChromaDB heartbeat path written anywhere is seen.
         "chromadb-heartbeat-one-home-sweep",
+        # #20894: every tracked non-test python file, since an in-repo log path can be written in any
+        # component; the population is the whole tree by suffix, not a set of prefixes.
+        "no-in-repo-log-path-20894",
         # #19318: every tracked code/config file by suffix (.py, .sh, .yml, .j2, .env*, Dockerfile*),
         # wherever a copy of the SLM admin password default could be written -- no prefix describes it.
         "slm-admin-password-one-home-sweep",
