@@ -99,12 +99,11 @@ describe('useKanbanBoardsApi', () => {
     post.mockResolvedValueOnce(moved)
     const { moveItem } = useKanbanBoardsApi()
 
-    const result = await moveItem('b1', 'w1', 'col-2', 'actor-3')
+    const result = await moveItem('b1', 'w1', 'col-2')
 
     expect(post).toHaveBeenCalledWith('/api/llc/boards/b1/move', {
       work_item_id: 'w1',
       column_id: 'col-2',
-      actor_id: 'actor-3',
     })
     expect(result).toEqual(moved)
   })

@@ -20,6 +20,7 @@ import pytest
 
 from api.knowledge_search_aggregator import _get_facts_for_graph, _search_facts, get_llm_context
 from api.schemas_knowledge import ContextRequest
+from knowledge.ownership import KnowledgeOwnership
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 
 # #16665 added user_id/user_org_id/user_group_ids/is_admin params for
@@ -41,9 +42,10 @@ async def test_search_facts_applies_quarantine_filter():
 
 
 @pytest.mark.asyncio
-async def test_get_facts_for_graph_applies_quarantine_filter():
+async def test_get_facts_for_graph_lists_facts_with_quarantined_ones_left_out():
+    """#19727: listed, not searched for "*"; get_all_facts excludes research quarantine by default (#13009)."""
     mock_kb = AsyncMock()
-    mock_kb.search.return_value = {"results": []}
+    mock_kb.get_all_facts.return_value = []
 
     await _get_facts_for_graph(
         mock_kb,
@@ -55,7 +57,34 @@ async def test_get_facts_for_graph_applies_quarantine_filter():
         is_admin=False,
     )
 
-    mock_kb.search.assert_called_once_with("*", top_k=25, filters=RESEARCH_QUARANTINE_FILTER)
+    mock_kb.get_all_facts.assert_awaited_once_with(limit=25)
+    mock_kb.search.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_the_graph_has_facts_when_search_falls_back_and_star_matches_nothing():
+    """#19727: with no embedding, search falls back to keywords, where "*" matches no fact."""
+    facts = [
+        {"fact_id": "f1", "content": "one", "metadata": {"category": "docs", "source": "a"}, "timestamp": ""},
+        {"fact_id": "f2", "content": "two", "metadata": {"source": "b"}, "timestamp": ""},
+    ]
+    mock_kb = AsyncMock()
+    mock_kb.search.return_value = {"results": []}  # what the keyword fallback answers for "*"
+    mock_kb.get_all_facts.return_value = facts
+    mock_kb.ownership_manager = KnowledgeOwnership(None)  # the real access check, as the read-path fakes use
+
+    got = await _get_facts_for_graph(
+        mock_kb,
+        category_filter=None,
+        max_facts=25,
+        user_id=_USER_ID,
+        user_org_id=None,
+        user_group_ids=[],
+        is_admin=True,
+    )
+
+    assert [fact["id"] for fact in got] == ["f1", "f2"], "the permission check needs the id search would give"
+    assert [fact["category"] for fact in got] == ["docs", "general"]
 
 
 @pytest.mark.asyncio

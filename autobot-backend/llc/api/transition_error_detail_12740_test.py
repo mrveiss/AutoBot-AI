@@ -33,14 +33,42 @@ def _handlers_for(module: str, exc_name: str):
                 yield node
 
 
+def _http_call(node: ast.AST) -> tuple[int | None, str] | None:
+    """(status_code, detail-source) of an ``HTTPException(...)`` call node, else None."""
+    if not (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "HTTPException"):
+        return None
+    kw = {k.arg: k.value for k in node.keywords}
+    code = kw.get("status_code")
+    status = (
+        {"HTTP_409_CONFLICT": 409}.get(code.attr) if isinstance(code, ast.Attribute) else getattr(code, "value", None)
+    )
+    detail = kw.get("detail")
+    return status, ast.unparse(detail) if detail is not None else ""
+
+
+def _helper_http(name: str) -> tuple[int | None, str]:
+    """The HTTPException the shared helper *name* in ``_common.py`` builds (#20478 moved the mapping there)."""
+    tree = ast.parse((_API / "_common.py").read_text(encoding="utf-8"))
+    for fn in ast.walk(tree):
+        if isinstance(fn, ast.FunctionDef) and fn.name == name:
+            for node in ast.walk(fn):
+                found = _http_call(node)
+                if found:
+                    return found
+    raise AssertionError(f"helper {name} builds no HTTPException in _common.py")
+
+
 def _raises_http(handler) -> tuple[int | None, str]:
-    """Return (status_code, detail-source) from the handler's raise."""
+    """Return (status_code, detail-source) from the handler's raise, following ``raise refused_transition(exc)``."""
     for node in ast.walk(handler):
         if isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call):
-            kw = {k.arg: k.value for k in node.exc.keywords}
-            status = getattr(kw.get("status_code"), "value", None)
-            detail = kw.get("detail")
-            return status, ast.unparse(detail) if detail is not None else ""
+            found = _http_call(node.exc)
+            if found:
+                return found
+            helper = getattr(node.exc.func, "id", None)
+            if helper == "refused_transition":
+                return _helper_http(helper)
+            return None, ""
     return None, ""
 
 
