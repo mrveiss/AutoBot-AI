@@ -53,8 +53,8 @@ from .actor import ActivityRecordError, audit, resolve_actor, resolve_actor_as
 from .base import LLCServiceBase
 from .wake_events import wake_for_comment, wake_for_item_changes
 from .work_item_actor_role import (  # noqa: F401 -- resolve_actor_role is re-exported for the API and tests
-    _COWORKING_ALLOWED_ROLES,
     _coworking_state,
+    coworking_denial,
     resolve_actor_role,
 )
 from .work_item_approval_categories import validated_approval_categories as _validated_approval_categories
@@ -646,11 +646,8 @@ class WorkItemService(LLCServiceBase):
         Raises CoWorkingPermissionError if caller_role is insufficient.
         Raises ValueError if work_item_id not found or co-worker identity is missing.
         """
-        if caller_role not in _COWORKING_ALLOWED_ROLES:
-            raise CoWorkingPermissionError(
-                f"Role {caller_role!r} does not have permission to manage co-working. "
-                f"Required: {sorted(_COWORKING_ALLOWED_ROLES)}"
-            )
+        if denied := coworking_denial(caller_role):
+            raise CoWorkingPermissionError(denied)
         # #13970: one vocabulary for the actor axis. A legacy "human" from an
         # older caller is still accepted and normalised to "user" rather than
         # rejected — the stored rows are migrated by 20260815_075, but an
@@ -711,11 +708,8 @@ class WorkItemService(LLCServiceBase):
         Raises CoWorkingPermissionError if caller_role is insufficient.
         Raises ValueError if work_item_id not found.
         """
-        if caller_role not in _COWORKING_ALLOWED_ROLES:
-            raise CoWorkingPermissionError(
-                f"Role {caller_role!r} does not have permission to manage co-working. "
-                f"Required: {sorted(_COWORKING_ALLOWED_ROLES)}"
-            )
+        if denied := coworking_denial(caller_role):
+            raise CoWorkingPermissionError(denied)
 
         result = await session.execute(
             select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
