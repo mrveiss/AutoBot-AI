@@ -166,3 +166,33 @@ describe('BaseTabs RTL', () => {
     expect(document.activeElement).toBe(tabs()[0])
   })
 })
+
+describe('BaseTabs items and defaults (#20382)', () => {
+  it('selects the first enabled tab when the first item is disabled', async () => {
+    await render({
+      items: [
+        { value: 'x', label: 'X', disabled: true },
+        { value: 'y', label: 'Y' },
+      ],
+    })
+    expect(selected()).toBe(1)
+  })
+
+  it('activates a panel once items arrive after mount in uncontrolled use', async () => {
+    await render({ items: [] })
+    expect(document.querySelector('[role="tabpanel"]:not([hidden])')).toBeNull()
+    await wrapper?.setProps({ items: ITEMS })
+    await flushPromises()
+    expect(selected()).toBe(0)
+    expect(document.querySelector('[role="tabpanel"]:not([hidden])')?.textContent).toContain('Panel one')
+  })
+
+  it('keeps a tab the user chose when the items change', async () => {
+    await render()
+    tabs()[2].click()
+    await flushPromises()
+    await wrapper?.setProps({ items: [...ITEMS] })
+    await flushPromises()
+    expect(selected()).toBe(2)
+  })
+})

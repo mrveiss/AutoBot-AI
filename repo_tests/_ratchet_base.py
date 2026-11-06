@@ -127,8 +127,8 @@ def literal_in(source: str, name: str) -> object:
         )
         if any(isinstance(t, ast.Name) and t.id == name for t in targets) and node.value is not None:
             value = constants.visit(node.value)
-            if isinstance(value, ast.Call) and getattr(value.func, "id", "") == "frozenset" and len(value.args) == 1:
-                return frozenset(ast.literal_eval(value.args[0]))
+            if isinstance(value, ast.Call) and getattr(value.func, "id", "") == "frozenset" and len(value.args) <= 1:
+                return frozenset(ast.literal_eval(value.args[0]) if value.args else ())
             return ast.literal_eval(value)
     raise BaseUnavailable(f"no literal {name} = ... in the base source")
 
