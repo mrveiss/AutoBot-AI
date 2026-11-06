@@ -549,9 +549,9 @@ server {
     server_name _;
 
     # Frontend — static files
-    root ${INSTALL_DIR}/frontend;
-    index index.html;
+    root ${INSTALL_DIR}/frontend; index index.html;
 
+    location ^~ /api/internal/ { return 404; }  # #20046: service-to-service only
     # Backend API
     location /api/ {
         proxy_pass http://backend;
@@ -572,8 +572,8 @@ server {
         proxy_read_timeout 86400s;
     }
 
-    # SLM API
-    location /slm/ {
+    location ^~ /slm/api/internal/ { return 404; }  # #20046: service-to-service only
+    location /slm/ {  # SLM API
         proxy_pass http://slm/;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;

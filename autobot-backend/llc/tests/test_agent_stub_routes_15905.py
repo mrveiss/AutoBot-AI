@@ -138,6 +138,7 @@ async def _seed_item(
         type=WorkItemType.TASK,
         title=title,
         priority=priority,
+        project_id=await harness.seed_project(session, company_id),
     )
     item.status = status
     if position is not None:
