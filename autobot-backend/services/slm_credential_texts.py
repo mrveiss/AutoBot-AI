@@ -13,6 +13,7 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
+from autobot_shared.secret_redaction import redact_text
 from autobot_shared.slm_credential_actions import INTERNAL_KEY_REALIGN, SSH_PASSWORD_DELETE, CredentialAction
 from services.audit.taxonomy import AuditAction
 from services.audit_logger import audit_log
@@ -49,6 +50,7 @@ _REALIGN_AUDIT = {
     "claimed": AuditAction.INTERNAL_KEY_REALIGN_CLAIMED,
     "applied": AuditAction.INTERNAL_KEY_REALIGN_APPLIED,
     "apply_failed": AuditAction.INTERNAL_KEY_REALIGN_APPLY_FAILED,
+    "proposal_failed": AuditAction.INTERNAL_KEY_REALIGN_PROPOSAL_FAILED,
 }
 
 
@@ -84,3 +86,19 @@ async def record_realign_step(step: str, approval: "Approval", result: str, deta
 async def record_realign_proposal(approval_id: uuid.UUID, node_id: str, proposer: str) -> bool:
     """The "proposed" row, written BEFORE the approval exists, so it names the id the approval will take."""
     return await _write_step("proposed", approval_id, node_id, proposer, "success", "")
+
+
+_REASON_CAP = 200
+
+
+def _safe_reason(exc: BaseException) -> str:
+    """The failure's class and a redacted, one-line, capped message -- never a traceback or a raw dump."""
+    text = redact_text(" ".join(f"{type(exc).__name__}: {exc}".split()))
+    return text[:_REASON_CAP]
+
+
+async def record_realign_proposal_failed(
+    approval_id: uuid.UUID, node_id: str, proposer: str, exc: BaseException
+) -> bool:
+    """Compensates "proposed" when the approval was never created: same approval_id, plus why."""
+    return await _write_step("proposal_failed", approval_id, node_id, proposer, "failure", _safe_reason(exc))

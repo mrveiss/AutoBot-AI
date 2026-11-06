@@ -152,6 +152,8 @@ class AuditAction(str, Enum):
     INTERNAL_KEY_REALIGN_CLAIMED = "credential.internal_key.realign_claimed"  # pragma: allowlist secret
     INTERNAL_KEY_REALIGN_APPLIED = "credential.internal_key.realign_applied"  # pragma: allowlist secret
     INTERNAL_KEY_REALIGN_APPLY_FAILED = "credential.internal_key.realign_apply_failed"  # pragma: allowlist secret
+    # #20750: compensates a "proposed" row whose approval could not be created, same approval_id.
+    INTERNAL_KEY_REALIGN_PROPOSAL_FAILED = "credential.internal_key.realign_proposal_failed"  # pragma: allowlist secret
 
 
 class ComplianceEventType(str, Enum):

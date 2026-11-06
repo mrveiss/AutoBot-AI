@@ -163,11 +163,12 @@ async def test_approving_changes_nothing_and_says_it_waits_for_the_next_update()
 def test_the_realign_audit_members_close_the_block() -> None:
     """Appended at the END of AuditAction, as the vocabulary's convention asks."""
     names = [member.name for member in AuditAction]
-    assert names[-4:] == [
+    assert names[-5:] == [
         "INTERNAL_KEY_REALIGN_PROPOSED",
         "INTERNAL_KEY_REALIGN_CLAIMED",
         "INTERNAL_KEY_REALIGN_APPLIED",
         "INTERNAL_KEY_REALIGN_APPLY_FAILED",
+        "INTERNAL_KEY_REALIGN_PROPOSAL_FAILED",
     ]
 
 
@@ -245,3 +246,33 @@ def test_a_proposal_writes_its_audit_row_before_the_approval_and_names_its_id() 
     assert order == ["audit", "approval"]
     named = recorded.await_args.kwargs["details"]["approval_id"]
     assert named == str(service.create_approval.await_args.kwargs["approval_id"])
+
+
+def _failing_create(client_service) -> None:
+    client_service.create_approval = AsyncMock(side_effect=RuntimeError("db down password=hunter2"))
+
+
+def test_a_proposal_whose_approval_fails_is_compensated_with_the_same_id_and_is_503(audit) -> None:
+    client, service, session = _client()
+    _failing_create(service)
+    response = _post(client, service, PROPOSAL_PATH, {"action": _REALIGN, "node_id": "node-b"})
+    assert response.status_code == 503
+    first, second = audit.await_args_list
+    assert first.args[0] == AuditAction.INTERNAL_KEY_REALIGN_PROPOSED.value
+    assert second.args[0] == AuditAction.INTERNAL_KEY_REALIGN_PROPOSAL_FAILED.value
+    assert second.kwargs["details"]["approval_id"] == first.kwargs["details"]["approval_id"]
+    reason = second.kwargs["details"]["detail"]
+    assert reason.startswith("RuntimeError: ") and "hunter2" not in reason
+    session.commit.assert_not_awaited()
+
+
+def test_a_failing_compensating_write_is_logged_and_still_503(caplog) -> None:
+    client, service, session = _client()
+    _failing_create(service)
+    rows = AsyncMock(side_effect=[True, RuntimeError("audit down")])
+    with patch("services.slm_credential_texts.audit_log", rows), caplog.at_level("ERROR"):
+        response = _post(client, service, PROPOSAL_PATH, {"action": _REALIGN, "node_id": "node-b"})
+    assert response.status_code == 503
+    assert rows.await_count == 2
+    assert "NO compensating row" in caplog.text
+    session.commit.assert_not_awaited()

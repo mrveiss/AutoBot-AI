@@ -49,7 +49,12 @@ from services.slm_credential_claim import (
     clean_detail,
     record_outcome,
 )
-from services.slm_credential_texts import proposal_text, record_realign_proposal, record_realign_step
+from services.slm_credential_texts import (
+    proposal_text,
+    record_realign_proposal,
+    record_realign_proposal_failed,
+    record_realign_step,
+)
 from services.slm_internal_key_realign_action import register_internal_key_realign_action
 from services.slm_ssh_password_action import register_ssh_password_action
 
@@ -94,6 +99,43 @@ def _claim_recorder(action: CredentialAction):
     return lambda approval: record_realign_step("claimed", approval, "success")
 
 
+async def _create_proposal(
+    service: ApprovalGateService,
+    action: CredentialAction,
+    body: CredentialProposal,
+    approval_id: uuid.UUID,
+    proposer: str,
+) -> Approval:
+    """Create the approval; a realign whose "proposed" row exists but whose approval cannot be made is compensated."""
+    title, description = proposal_text(action, body.node_id)
+    try:
+        return await service.create_approval(
+            title=title,
+            approval_type=ApprovalType.DESTRUCTIVE_ACTION.value,
+            description=description,
+            requested_by_agent=proposer,
+            context={"action": action.name, "node_id": body.node_id, "credential_kind": action.credential_kind},
+            approval_id=approval_id,
+        )
+    except Exception as exc:
+        if action is not INTERNAL_KEY_REALIGN:
+            raise
+        await _record_proposal_failed(approval_id, body.node_id, proposer, exc)
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, _NOT_RECORDED) from exc
+
+
+async def _record_proposal_failed(approval_id: uuid.UUID, node_id: str, proposer: str, exc: Exception) -> None:
+    """The compensating row; if it cannot be written that is logged loudly, never swallowed."""
+    logger.error("Credential proposal %s: approval creation failed (%s)", approval_id, type(exc).__name__)
+    try:
+        written = await record_realign_proposal_failed(approval_id, node_id, proposer, exc)
+    except Exception:
+        written = False
+        logger.exception("Credential proposal %s: the proposal_failed audit write raised", approval_id)
+    if not written:
+        logger.error("Credential proposal %s: the 'proposed' audit row has NO compensating row", approval_id)
+
+
 @router.post("/credential-proposals", response_model=CredentialProposalResponse, status_code=status.HTTP_201_CREATED)
 @service_opt_in(_CALLER)
 async def propose_credential_change(
@@ -108,15 +150,7 @@ async def propose_credential_change(
     proposer = action.proposer_id(body.node_id)
     if action is INTERNAL_KEY_REALIGN and not await record_realign_proposal(approval_id, body.node_id, proposer):
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, _NOT_RECORDED)  # no row, so no proposal
-    title, description = proposal_text(action, body.node_id)
-    approval = await service.create_approval(
-        title=title,
-        approval_type=ApprovalType.DESTRUCTIVE_ACTION.value,
-        description=description,
-        requested_by_agent=proposer,
-        context={"action": action.name, "node_id": body.node_id, "credential_kind": action.credential_kind},
-        approval_id=approval_id,
-    )
+    approval = await _create_proposal(service, action, body, approval_id, proposer)
     return CredentialProposalResponse(approval_id=str(approval.id), status=approval.status, created=True)
 
 
