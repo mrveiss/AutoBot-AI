@@ -502,6 +502,9 @@ python:
   # #19611: `operational_docs_name_real_playbooks_19611_test.py` reads this guide by concrete
   # literal for its one declared exemption. One file, not `docs/**`.
   - 'docs/guides/slm-docker-ansible-deployment.md'
+  # #20903: `python_version_declaration_drift_test.py` sweeps this file's python floor
+  # lines by concrete literal. One file, not `docs/**` (the #17930 owner decision above).
+  - 'docs/DEPENDENCIES.md'
   # #18266: `social_preview_18266_test.py` pins the repository social-preview
   # image's dimensions and size. A change confined to the image -- replacing it
   # with one of the wrong shape -- is exactly what the guard exists to catch.
