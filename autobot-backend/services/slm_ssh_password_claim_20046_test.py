@@ -144,5 +144,5 @@ async def test_the_spending_update_names_the_unspent_state() -> None:
     session = _session(_approval())
     await claim.claim_deletion_approval(session, _ID, "node-a")
     sql = str(session.execute.await_args.args[0].compile(dialect=postgresql.dialect()))
-    assert "UPDATE approvals" in sql and "->> " in sql and "IS NULL" in sql and "||" in sql
+    assert "approvals.id =" in sql and "UPDATE approvals" in sql and "->> " in sql and "IS NULL" in sql and "||" in sql
     assert "consumed_at" in str(session.execute.await_args.args[0].compile(dialect=postgresql.dialect()).params)

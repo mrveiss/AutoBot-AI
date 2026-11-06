@@ -87,3 +87,10 @@ def test_both_handlers_name_their_caller() -> None:
     module = importlib.import_module("api.internal_slm_credential_proposals")
     for handler in (module.propose_ssh_password_deletion, module.claim_ssh_password_deletion_approval):
         assert getattr(handler, auth_service_opt_in.SERVICE_OPT_IN_ATTR) == module.SLM_CALLER
+
+
+@pytest.mark.parametrize("node_id", [".", ".."])
+def test_a_dot_segment_node_id_is_refused_before_it_can_vanish_from_the_delete_path(world, node_id) -> None:
+    response = world.client.post(PROPOSE, json={**NODE, "node_id": node_id}, headers=KEY_HEADERS)
+    assert response.status_code == 422
+    world.service.create_approval.assert_not_awaited()

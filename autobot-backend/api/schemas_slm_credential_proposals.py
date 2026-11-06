@@ -8,11 +8,14 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+# Never "." or "..": URL normalisation would drop such a segment from the SLM delete path (#20046).
+NODE_ID_PATTERN = r"^([A-Za-z0-9_-][A-Za-z0-9._-]*|\.[A-Za-z0-9_-][A-Za-z0-9._-]*|\.\.[A-Za-z0-9._-]+)$"
+
 
 class SshPasswordDeletionProposal(BaseModel):
     """What the SLM proposes: a node and a credential kind, never a value."""
 
-    node_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9._-]+$")
+    node_id: str = Field(min_length=1, max_length=64, pattern=NODE_ID_PATTERN)
     credential_kind: Literal["ssh_password"] = "ssh_password"  # nosec B105  # pragma: allowlist secret
 
 
@@ -27,7 +30,7 @@ class SshPasswordDeletionProposalResponse(BaseModel):
 class SshPasswordDeletionClaim(BaseModel):
     """The SLM names the node it is about to delete a password for; the approval must name the same one."""
 
-    node_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9._-]+$")
+    node_id: str = Field(min_length=1, max_length=64, pattern=NODE_ID_PATTERN)
 
 
 class SshPasswordDeletionClaimResponse(BaseModel):

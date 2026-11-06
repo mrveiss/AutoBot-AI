@@ -37,6 +37,7 @@ async def test_status_counts_and_proposal_does_not_remove(tmp_path: Path) -> Non
         status = await routes.env_copies_status()
         reply = await routes.propose_env_copies_cleanup({"id": "u1"}, MagicMock())
     assert status.count == 1 and reply.action == acts.ENV_COPIES_ACTION
+    assert reply.status == "pending"
     assert create.await_args.kwargs["context"] == {"action": acts.ENV_COPIES_ACTION}
     assert len(await asyncio.to_thread(lambda: list((tmp_path / "autobot-backend").glob(".env.*~")))) == 2
 
