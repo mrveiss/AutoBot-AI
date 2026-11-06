@@ -13,7 +13,10 @@ Issue #2153 — Secret management for workflow credentials.
 """
 
 import re
+import sqlite3
 from typing import Dict, FrozenSet, List, Mapping, NoReturn
+
+from cryptography.fernet import InvalidToken
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secret_redaction import LOG_MASK
@@ -30,6 +33,13 @@ WORKFLOW_SCOPE = "workflow"
 
 # Placeholder used in logs/responses in place of a resolved secret value.
 REDACTED = LOG_MASK  # the one in-text mask (#19337)
+
+
+#: What reading a secret can raise: opening or querying the secrets database (``sqlite3.Error``), its data
+#: directory or key file (``OSError``), a stored row that does not parse (``ValueError``, which covers
+#: ``json.JSONDecodeError`` and ``UnicodeDecodeError``) and a value its key cannot decrypt (``InvalidToken``).
+#: Anything else is a defect, not an unreadable store, and propagates.
+SECRET_STORE_ERRORS = (sqlite3.Error, OSError, ValueError, InvalidToken)
 
 
 class StepSecrets:

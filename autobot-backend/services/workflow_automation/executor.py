@@ -35,7 +35,7 @@ from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 from monitoring.prometheus_metrics import get_metrics_manager
 from orchestration.success_criteria import SuccessCriteriaEvaluator
-from services.workflow_secret_service import StepSecrets, get_workflow_secret_service
+from services.workflow_secret_service import SECRET_STORE_ERRORS, StepSecrets, get_workflow_secret_service
 from type_defs.common import Metadata
 
 from .command_step import run_command_step, secret_value_redactor
@@ -101,7 +101,7 @@ def _resolve_command_secrets(command: str, owner_id: str | None) -> tuple[str, S
         return (
             get_workflow_secret_service().resolve_secrets(command, owner_id) if owner_id else (command, StepSecrets())
         )
-    except Exception as exc:  # pragma: no cover
+    except SECRET_STORE_ERRORS as exc:
         logger.error("Secret resolution failed for workflow command: %s", type(exc).__name__)
         return command, StepSecrets()
 

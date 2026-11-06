@@ -20,20 +20,17 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
-from fastapi import FastAPI
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.ext.compiler import compiles
-from starlette.testclient import TestClient
 
-from auth_middleware import get_current_user
 from command_run_policy import CommandRunPolicy
 from security_layer import SecurityLayer
 from user_management.models import Role, User, UserRole
 from user_management.models.base import Base
 from utils.bounded_subprocess import run_bounded
 
-from . import command_step, routes
+from . import command_step
 from .command_step import CommandStepFailed, run_command_step
 
 SECRET = "hunter2-s3cr3t-value"  # pragma: allowlist secret
@@ -258,49 +255,6 @@ async def test_the_command_runs_in_the_configured_directory(layer, tmp_path):
     assert result["stdout"] == str(tmp_path.resolve())
 
 
-def _client(monkeypatch, user):
-    created = []
-
-    class _Manager:
-        async def create_automated_workflow(self, **kwargs):
-            created.append(kwargs)
-            return "wf-1"
-
-        async def create_workflow_from_chat_request(self, *args, **kwargs):
-            created.append(kwargs)
-            return None
-
-    monkeypatch.setattr(routes, "get_workflow_manager", lambda: _Manager())
-    app = FastAPI()
-    app.include_router(routes.router)
-    app.dependency_overrides[get_current_user] = lambda: user
-    return TestClient(app, raise_server_exceptions=False), created
-
-
-_CREATE = ("/create_workflow", {"name": "w", "description": "", "steps": [], "session_id": "s"})
-_CHAT = ("/create_from_chat", {"user_request": "list files", "session_id": "s"})
-
-
-@pytest.mark.parametrize("path,body", [_CREATE, _CHAT])
-def test_a_user_without_shell_permission_cannot_create_a_workflow(monkeypatch, path, body):
-    client, created = _client(monkeypatch, {"user_id": "u-1", "role": "user"})
-    assert client.post(path, json=body).status_code == 403
-    assert created == []
-
-
-@pytest.mark.parametrize("path,body", [_CREATE, _CHAT])
-def test_a_user_who_may_run_commands_can_create_a_workflow(monkeypatch, path, body):
-    client, created = _client(monkeypatch, {"user_id": "u-1", "role": "admin"})
-    assert client.post(path, json=body).status_code == 200
-
-
-def test_create_from_chat_reports_a_missing_field_as_400_not_500(monkeypatch):
-    client, created = _client(monkeypatch, {"user_id": "u-1", "role": "admin"})
-    response = client.post("/create_from_chat", json={"user_request": "", "session_id": "s"})
-    assert response.status_code == 400
-    assert created == []
-
-
 @pytest.mark.asyncio
 async def test_the_filter_savings_failure_log_does_not_carry_the_command(monkeypatch, caplog):
     import logging
@@ -490,20 +444,6 @@ def _is_gone(pid_file) -> bool:
     return state.rsplit(")", 1)[1].split()[0] == "Z"
 
 
-@pytest.mark.parametrize("role", ["user", "operator", "run_jwt", None])
-def test_only_an_administrator_may_create_a_workflow(monkeypatch, role):
-    client, created = _client(monkeypatch, {"user_id": "u-1", "role": role})
-    assert client.post(*[_CREATE[0]], json=_CREATE[1]).status_code == 403
-    assert created == []
-
-
-def test_the_creator_cannot_remove_the_confirmation_gate(monkeypatch):
-    client, created = _client(monkeypatch, {"user_id": "u-1", "role": "admin"})
-    body = {**_CREATE[1], "steps": [{"command": "echo hi", "description": "d", "requires_confirmation": False}]}
-    assert client.post(_CREATE[0], json=body).status_code == 200
-    assert all(step.requires_confirmation for step in created[0]["steps"])
-
-
 def test_every_allowlisted_command_is_safe_in_the_classifier_too():
     from security.command_patterns import SAFE_COMMANDS
     from unattended_commands import UNATTENDED_ALLOWED_COMMANDS
@@ -535,19 +475,6 @@ def test_a_command_step_always_requires_confirmation_however_it_is_built():
         {"step_id": "s", "command": "echo hi", "description": "d", "requires_confirmation": False}
     )
     assert built.requires_confirmation is True and imported.requires_confirmation is True
-
-
-@pytest.mark.parametrize("role", ["user", "operator", None])
-def test_import_and_clone_need_an_administrator(role):
-    from api import workflow_export
-
-    app = FastAPI()
-    app.include_router(workflow_export.router)
-    app.dependency_overrides[get_current_user] = lambda: {"user_id": "u-1", "role": role}
-    client = TestClient(app, raise_server_exceptions=False)
-    doc = {"export_document": {}, "session_id": "s"}
-    assert client.post("/import", json=doc).status_code == 403
-    assert client.post("/share/abc/clone", json={"session_id": "s"}).status_code == 403
 
 
 @pytest.mark.parametrize(

@@ -5,10 +5,12 @@
 """The values injected into a step are what gets masked, even after the stored secret changes (#20868)."""
 
 import pickle
+import sqlite3
 import time
 from types import SimpleNamespace
 
 import pytest
+from cryptography.fernet import InvalidToken
 
 from services.workflow_secret_service import StepSecrets, WorkflowSecretService
 
@@ -82,3 +84,24 @@ def test_the_holder_neither_prints_nor_pickles_the_value():
     assert _VALUE not in repr(injected) and _VALUE not in str(injected)
     with pytest.raises(TypeError):
         pickle.dumps(injected)
+
+
+@pytest.mark.parametrize(
+    "error", [sqlite3.OperationalError("locked"), OSError("disk"), ValueError("row"), InvalidToken()]
+)
+def test_an_unreadable_secret_store_leaves_the_token_unresolved(monkeypatch, error):
+    def _unreadable():
+        raise error
+
+    monkeypatch.setattr(executor, "get_workflow_secret_service", _unreadable)
+    command, injected = executor._resolve_command_secrets(_COMMAND, "owner")
+    assert command == _COMMAND and not injected
+
+
+def test_a_defect_in_secret_resolution_is_not_swallowed(monkeypatch):
+    def _broken():
+        raise RuntimeError("a bug, not an unreadable store")
+
+    monkeypatch.setattr(executor, "get_workflow_secret_service", _broken)
+    with pytest.raises(RuntimeError):
+        executor._resolve_command_secrets(_COMMAND, "owner")
