@@ -36,7 +36,7 @@ def make_ready_task(scn: Scenario, title: str, assignee_node_id: str) -> str:
             "type": "task",
             "title": title,
             "project_id": scn.ids["project"],
-            "parent_id": scn.ids["epic"],
+            "parent_id": scn.ids["pbi"],
             "goal_id": scn.ids["goal"],
         },
     )
