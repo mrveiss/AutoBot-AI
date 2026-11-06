@@ -13,12 +13,27 @@ per call. Both are defects; this guard finds them in every tracked Python file.
 from __future__ import annotations
 
 import ast
-import subprocess
 from pathlib import Path
 
-from autobot_shared.paths import scrubbed_git_env
+from repo_tests._reach import declare
+
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _FACTORIES = {"lazy_singleton", "async_lazy_singleton"}
+_ROOTS = (
+    ".claude",
+    "autobot-backend",
+    "autobot-infrastructure",
+    "autobot-npu-worker",
+    "autobot-slm-backend",
+    "autobot_shared",
+    "libs",
+    "pipeline-scripts",
+    "plugins",
+    "repo_tests",
+    "scripts",
+    "tools",
+)
 _ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -41,16 +56,21 @@ def inline_uses(source: str) -> list[int]:
     return sorted(hits)
 
 
-def _tracked_python_files() -> list[Path]:
-    out = subprocess.run(
-        ["git", "ls-files", "*.py"],
-        cwd=_ROOT,
-        env=scrubbed_git_env(),
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.split("\n")
-    return [_ROOT / p for p in out if p]
+def _tracked_python(root: Path = _ROOT) -> list[str]:
+    """Tracked Python files; empty on an empty tree so the reach floor can fire."""
+    try:
+        return tracked_paths(root, *(f"{r}/*.py" for r in _ROOTS))
+    except EmptyEnumeration:
+        return []
+
+
+REACH = declare(
+    "inline-lazy-singleton",
+    discover=_tracked_python,
+    floor=7500,
+    what="tracked python files",
+    roots=_ROOTS,
+)
 
 
 def test_control_strings_are_detected():
@@ -65,7 +85,8 @@ def test_control_strings_are_detected():
 
 def test_no_inline_lazy_singleton_use():
     offenders = []
-    for path in _tracked_python_files():
+    for rel in REACH.examined(_ROOT):
+        path = _ROOT / rel
         try:
             source = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
