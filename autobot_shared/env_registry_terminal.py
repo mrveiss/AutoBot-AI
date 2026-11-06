@@ -43,7 +43,7 @@ register_env_var(
         default=300,
         description=(
             "Seconds a workflow command step may run before its whole process group is killed "
-            "and the step fails with exit code 124 (#19807). Raising it lets long builds finish; "
+            "and the step fails with exit code 124 (#19807). Raising it gives slow allowlisted commands more time; "
             "lowering it kills stuck commands sooner (services/workflow_automation/command_step.py)."
         ),
         component="terminal",

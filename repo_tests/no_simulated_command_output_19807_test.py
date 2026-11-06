@@ -49,11 +49,7 @@ def test_the_detector_sees_the_literal_and_ignores_other_text():
 
 
 def test_no_production_code_returns_simulated_command_output():
-    files = _production_python_files()
-    assert len(files) >= _MIN_FILES_SCANNED, f"scanned only {len(files)} files; the listing is broken"
-    offenders = [
-        path
-        for path in files
-        if (REPO_ROOT / path).is_file() and contains_literal((REPO_ROOT / path).read_text(encoding="utf-8"))
-    ]
+    read = [path for path in _production_python_files() if (REPO_ROOT / path).is_file()]
+    assert len(read) >= _MIN_FILES_SCANNED, f"read only {len(read)} files; the listing is broken"
+    offenders = [path for path in read if contains_literal((REPO_ROOT / path).read_text(encoding="utf-8"))]
     assert offenders == [], f"canned command output in non-test code: {offenders}"

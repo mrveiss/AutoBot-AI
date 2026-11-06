@@ -43,7 +43,7 @@ class CommandRunPolicy:
 
     def refusal(self, command: str) -> str | None:
         """Why this unattended run may not execute *command* (``unattended_commands``), or None."""
-        return unattended_refusal(command)
+        return unattended_refusal(command, self.cwd)
 
     def show_output(self, output: str) -> str:
         """The form of command *output* that may reach disk or a log."""

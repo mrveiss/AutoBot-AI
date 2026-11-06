@@ -30,6 +30,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from autobot_shared.security.path_validator import validate_relative_path
+
 #: Commands that cannot execute other code, read file contents or write files. Each is also SAFE
 #: in the classifier (a test pins that), which still runs after this list.
 UNATTENDED_ALLOWED_COMMANDS: frozenset[str] = frozenset(
@@ -54,6 +56,8 @@ class ArgSpec:
 
     short: str = ""
     positional: Callable[[str], bool] = lambda word: False
+    #: Positional words are paths that must stay inside the run's working directory once symlinks resolve.
+    within_cwd: bool = False
 
 
 def _any_word(word: str) -> bool:
@@ -75,6 +79,15 @@ def _local_path(word: str) -> bool:
     return not word.startswith(("/", "~", "-")) and ".." not in Path(word).parts
 
 
+def _resolves_within(word: str, cwd: str) -> bool:
+    """Whether *word*, symlinks followed as ``ls`` follows them, still lies under *cwd*."""
+    try:
+        validate_relative_path(word, cwd)
+    except ValueError:
+        return False
+    return True
+
+
 #: Per command, what it may be given. Flags that name a file or change state are simply absent.
 _ARG_SPECS: dict[str, ArgSpec] = {
     "echo": ArgSpec(short="neE", positional=_any_word),
@@ -85,11 +98,11 @@ _ARG_SPECS: dict[str, ArgSpec] = {
     "uptime": ArgSpec(short="ps"),
     "id": ArgSpec(short="ugGnr", positional=_user_name),
     "date": ArgSpec(short="uIR", positional=_date_format),
-    "ls": ArgSpec(short="lAahtrS1dF", positional=_local_path),
+    "ls": ArgSpec(short="lAahtrS1dF", positional=_local_path, within_cwd=True),
 }
 
 
-def _arguments_refused(command: str, args: list[str]) -> bool:
+def _arguments_refused(command: str, args: list[str], cwd: str) -> bool:
     """Whether any of *args* falls outside what *command*'s spec permits."""
     spec = _ARG_SPECS[command]
     for arg in args:
@@ -98,13 +111,13 @@ def _arguments_refused(command: str, args: list[str]) -> bool:
         if arg.startswith("-"):
             if not set(arg[1:]) <= set(spec.short):
                 return True
-        elif not spec.positional(arg):
+        elif not spec.positional(arg) or (spec.within_cwd and not _resolves_within(arg, cwd)):
             return True
     return False
 
 
-def unattended_refusal(command: str) -> str | None:
-    """Why an unattended caller may not run *command*, or None. The reason never quotes the command."""
+def unattended_refusal(command: str, cwd: str) -> str | None:
+    """Why an unattended caller may not run *command* in *cwd*, or None. The reason never quotes the command."""
     if _SHELL_META.search(command):
         return "it chains, substitutes, redirects, escapes or continues over lines"
     try:
@@ -115,6 +128,6 @@ def unattended_refusal(command: str) -> str | None:
         return "it is empty"
     if words[0] not in UNATTENDED_ALLOWED_COMMANDS:
         return "its command is not on the unattended allowlist"
-    if _arguments_refused(words[0], words[1:]):
+    if _arguments_refused(words[0], words[1:], cwd):
         return "it carries an argument outside what the command may be given unattended"
     return None

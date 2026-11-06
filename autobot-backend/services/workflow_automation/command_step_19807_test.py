@@ -455,10 +455,10 @@ async def _refused_with_nothing_run_for(command: str):
 
 
 @pytest.mark.parametrize("command", ["echo hi", "pwd", "ls", "date +%Y"])
-def test_the_allowlist_admits_inert_commands(command):
+def test_the_allowlist_admits_inert_commands(command, tmp_path):
     from unattended_commands import unattended_refusal
 
-    assert unattended_refusal(command) is None
+    assert unattended_refusal(command, str(tmp_path)) is None
 
 
 @pytest.mark.asyncio
@@ -566,10 +566,10 @@ def test_import_and_clone_need_an_administrator(role):
         "uptime -p",
     ],
 )
-def test_the_positive_allowlist_admits_the_named_safe_forms(command):
+def test_the_positive_allowlist_admits_the_named_safe_forms(command, tmp_path):
     from unattended_commands import unattended_refusal
 
-    assert unattended_refusal(command) is None
+    assert unattended_refusal(command, str(tmp_path)) is None
 
 
 @pytest.mark.parametrize("step_type", ["command_execution", "shell", "anything-the-executor-treats-as-a-command"])

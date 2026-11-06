@@ -25,7 +25,7 @@ from typing import Callable, FrozenSet
 from fastapi import HTTPException
 
 from autobot_shared.auth.permissions import is_admin_role
-from autobot_shared.env_utils import env_int, env_str
+from autobot_shared.env_utils import env_int_clamped, env_str
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secret_redaction import REDACTED_PLACEHOLDER, redact_text
 from autobot_shared.singleton_factory import lazy_singleton
@@ -40,9 +40,11 @@ from user_management.services.user_service import UserService
 logger = get_logger(__name__)
 
 #: Seconds a workflow command may run before its process group is killed.
-WORKFLOW_COMMAND_TIMEOUT_S = env_int("AUTOBOT_WORKFLOW_COMMAND_TIMEOUT_S", 300)
+WORKFLOW_COMMAND_TIMEOUT_S = env_int_clamped("AUTOBOT_WORKFLOW_COMMAND_TIMEOUT_S", 300, min_v=1, max_v=3600)
 #: Bytes of stdout, and of stderr, a workflow command keeps.
-WORKFLOW_COMMAND_MAX_OUTPUT_BYTES = env_int("AUTOBOT_WORKFLOW_COMMAND_MAX_OUTPUT_BYTES", 1048576)
+WORKFLOW_COMMAND_MAX_OUTPUT_BYTES = env_int_clamped(
+    "AUTOBOT_WORKFLOW_COMMAND_MAX_OUTPUT_BYTES", 1048576, min_v=1024, max_v=104857600
+)
 #: Directory workflow commands run in; empty selects a dedicated temp subdirectory.
 WORKFLOW_COMMAND_CWD = env_str("AUTOBOT_WORKFLOW_COMMAND_CWD", "")
 _DEFAULT_CWD_NAME = "autobot-workflow-commands"
@@ -106,26 +108,33 @@ def secret_value_redactor(owner_id: str | None, names: FrozenSet[str]) -> Callab
     return redact
 
 
+def output_redactor(value_redactor: Callable[[str], str]) -> Callable[[str], str]:
+    """Mask injected secret values, then any credential text ``redact_text`` recognises."""
+    return lambda text: redact_text(value_redactor(text))
+
+
 def build_policy(value_redactor: Callable[[str], str]) -> CommandRunPolicy:
-    """The policy for a workflow step; the command is recorded with values and credential text masked."""
+    """The policy for a workflow step; command and output are recorded with values and credential text masked."""
+    mask = output_redactor(value_redactor)
     return CommandRunPolicy(
         timeout_s=WORKFLOW_COMMAND_TIMEOUT_S,
         max_output_bytes=WORKFLOW_COMMAND_MAX_OUTPUT_BYTES,
         cwd=_work_dir(),
         refuse_approval=True,
-        redact=lambda command: redact_text(value_redactor(command)),
-        redact_output=value_redactor,
+        redact=mask,
+        redact_output=mask,
     )
 
 
 def _step_result(raw: Metadata, value_redactor: Callable[[str], str], started: float) -> Metadata:
     """The step result from the security layer's: real exit code and streams, secrets masked."""
     return_code = raw.get("return_code")
+    mask = output_redactor(value_redactor)
     return {
         "command": REDACTED_PLACEHOLDER,
         "exit_code": -1 if return_code is None else return_code,
-        "stdout": value_redactor(raw.get("stdout") or ""),
-        "stderr": value_redactor(raw.get("stderr") or ""),
+        "stdout": mask(raw.get("stdout") or ""),
+        "stderr": mask(raw.get("stderr") or ""),
         "execution_time": time.monotonic() - started,
         "truncated": bool(raw.get("truncated")),
     }
