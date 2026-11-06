@@ -177,6 +177,8 @@ export { saveBlob, saveTextFile, saveUrl } from './src/utils/saveFile'
 // Scoped console logger (#14908) — canonical LogLevel/log/createLogger. The SLM
 // imports them from the kit; the user app's utils/debugUtils.ts re-exports them.
 export { log, createLogger } from './src/utils/logger'
+// Credential-shaped URL/error redaction for log lines -- the one copy (#18550).
+export { redactUrlForLogging, redactErrorForLogging } from './src/utils/redactUrlForLogging'
 // Managed polling with scoped disposal and a consecutive-error stop (#19482).
 export { usePollingJob } from './src/composables/usePollingJob'
 export type { UsePollingJobOptions, UsePollingJobReturn } from './src/composables/usePollingJob'

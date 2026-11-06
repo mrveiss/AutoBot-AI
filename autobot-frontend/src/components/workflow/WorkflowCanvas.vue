@@ -2496,14 +2496,14 @@ const contextMenuActions = computed<CanvasContextMenuAction[]>(() => {
     });
   }
 
-  if (node.type === 'org-process') {
+  if (!props.readonly && node.type === 'org-process') {
     actions.push({
       id: 'detach-process',
       label: processDetachLabel(node),
       run: () => emit('process-detached', nodeText(node, 'role_id'), nodeText(node, 'workflow_id')),
     });
   }
-  if (node.type === 'org-tool') {
+  if (!props.readonly && node.type === 'org-tool') {
     for (const role of toolRoles(node)) {
       actions.push({
         id: `detach-tool-${role.role_id}`,
