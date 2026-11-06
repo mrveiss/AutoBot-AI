@@ -14,9 +14,11 @@ import secrets
 import uuid
 from dataclasses import dataclass
 
+from fastapi import Request
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.system_health import ComponentHealth, KnownProbes, register_health_probe
 from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.node_proxy import internal_api_key
@@ -157,3 +159,36 @@ async def link_first_slm_admin_at_startup() -> str:
         logger.error("Person link: could not link the SLM's first admin: %s", type(exc).__name__)
     last_link_status = status
     return status
+
+
+_PROBE_NAME = KnownProbes.FIRST_ADMIN_LINK
+
+_HEALTH_BY_STATUS: dict[str, tuple[str, str | None]] = {
+    LINK_OK: ("ok", None),
+    LINK_KEY_MISSING: (
+        "down",
+        "no internal API key is configured, so the SLM's first admin was not linked",
+    ),
+    LINK_REFUSED: (
+        "down",
+        "the SLM refused the internal API key; the key differs between the backend and the SLM",
+    ),
+    LINK_FAILED: (
+        "degraded",
+        "the SLM's first admin could not be read; the admin was not linked and a default was seeded",
+    ),
+}
+
+
+def _status_for(status: str | None) -> tuple[str, str | None]:
+    """Map ``last_link_status`` onto (health status, detail) for the system health aggregator."""
+    if status is None:
+        return "idle", "first-admin link has not run yet"
+    return _HEALTH_BY_STATUS.get(status, ("degraded", f"unrecognised first-admin link status: {status}"))
+
+
+@register_health_probe(_PROBE_NAME)
+async def probe_first_admin_link(request: Request | None = None) -> ComponentHealth:
+    """Report the outcome of the startup first-admin link (#10200)."""
+    health, detail = _status_for(last_link_status)
+    return ComponentHealth(name=_PROBE_NAME, status=health, detail=detail, data={"link_status": last_link_status})
