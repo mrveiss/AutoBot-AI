@@ -14,8 +14,8 @@ import pytest
 pytest.importorskip("fastapi")
 
 from api.system_health import _PROBES, KnownProbes  # noqa: E402
+from services import first_admin_link_probe as probe  # noqa: E402
 from user_management.services import person_link_service as link  # noqa: E402
-from user_management.services import person_link_service as probe
 
 
 @pytest.mark.parametrize(
@@ -50,20 +50,14 @@ def test_importing_the_service_registers_nothing():
     )
 
 
-def test_register_function_registers_the_probe(monkeypatch):
-    monkeypatch.setattr("api.system_health._PROBES", dict(_PROBES))
-    probe.register_first_admin_link_probe()
-    from api import system_health
-
-    assert system_health._PROBES[KnownProbes.FIRST_ADMIN_LINK] is probe.probe_first_admin_link
+def test_probe_is_registered_once_the_module_is_imported():
+    assert _PROBES[KnownProbes.FIRST_ADMIN_LINK] is probe.probe_first_admin_link
 
 
-def test_lifespan_registers_the_probe_before_the_link_attempt():
+def test_lifespan_imports_the_probe_module():
     source = (Path(__file__).resolve().parents[2] / "initialization" / "lifespan.py").read_text(encoding="utf-8")
-    body = source.split("async def _seed_default_admin()")[1]
-    register_pos = body.index("register_first_admin_link_probe()")
-    link_pos = body.index("link_first_slm_admin_at_startup()")
-    assert register_pos < link_pos
+    assert "from services import first_admin_link_probe" in source
+    assert "register_first_admin_link_probe" not in source
 
 
 @pytest.mark.asyncio
