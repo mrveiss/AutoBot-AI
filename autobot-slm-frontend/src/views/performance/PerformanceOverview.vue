@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BaseAlert, PollingPausedAlert } from '@autobot/ui'
+import { BaseAlert, PollingPausedAlert, formatDuration } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -14,7 +14,6 @@ import { BaseAlert, PollingPausedAlert } from '@autobot/ui'
 
 import { onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { formatDuration } from '@/utils/formatHelpers'
 import { usePerformanceMonitoring } from '@/composables/usePerformanceMonitoring'
 import { injectPerformanceMonitoring } from '@/composables/monitoringPollContext'
 import { formatFleetDateTime } from '@/composables/useTimezone'
