@@ -11,70 +11,24 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import delete, event, func, select
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.ext.compiler import compiles
 
 from user_management.models import AuditLog, Role, User
-from user_management.models.base import Base
 from user_management.models.person_link import PersonLink
 from user_management.services import person_link_service as service
+from user_management.sqlite_test_engine import real_savepoint_session_factory
 
-_SQLITE_URL = "sqlite+aiosqlite://"  # canonical: ignore py-adhoc-db-engine (test-local engine, in-memory only)
 _PERSON = service.SlmPerson(uuid.uuid4(), "root", "root@example.test", "Root", "$2b$kept-hash")
 
 
-@compiles(JSONB, "sqlite")
-def _compile_jsonb_as_json_on_sqlite(element, compiler, **kw):  # noqa: ANN001
-    return "JSON"
-
-
-_WRITES = ("SAVEPOINT", "INSERT", "UPDATE", "DELETE")
-
-
-def _begin_transactions_properly(engine) -> None:
-    """Open the transaction at the first write, as a server database does, instead of pysqlite's quirks.
-
-    pysqlite only opens one at the first INSERT, so a SAVEPOINT taken first is released as a commit. An
-    IMMEDIATE begin at the first write also makes a second writer wait and then see the first's rows,
-    which is how the unique conflict is reached instead of "database is locked".
-    """
-    sync_engine = engine.sync_engine
-
-    @event.listens_for(sync_engine, "connect")
-    def _autocommit(dbapi_connection, _record) -> None:  # noqa: ANN001
-        dbapi_connection.isolation_level = None
-
-    @event.listens_for(sync_engine, "checkout")
-    def _fresh(_dbapi_connection, record, _proxy) -> None:  # noqa: ANN001
-        record.info["open"] = False
-
-    @event.listens_for(sync_engine, "before_cursor_execute")
-    def _begin_at_first_write(conn, cursor, statement, *_rest) -> None:  # noqa: ANN001
-        info = conn.connection.info
-        if not info.get("open") and statement.lstrip().upper().startswith(_WRITES):
-            cursor.execute("BEGIN IMMEDIATE")
-            info["open"] = True
-
-    @event.listens_for(sync_engine, "commit")
-    @event.listens_for(sync_engine, "rollback")
-    def _closed(conn) -> None:  # noqa: ANN001
-        conn.connection.info["open"] = False
+_TABLES = [User.__table__, Role.__table__, AuditLog.__table__, PersonLink.__table__]
 
 
 @pytest_asyncio.fixture
 async def factory() -> AsyncIterator:
-    engine = create_async_engine(_SQLITE_URL)  # canonical: ignore py-adhoc-db-engine (test-local, in-memory)
-    _begin_transactions_properly(engine)
-    async with engine.begin() as conn:
-        tables = [User.__table__, Role.__table__, AuditLog.__table__, PersonLink.__table__]
-        await conn.run_sync(Base.metadata.create_all, tables=tables)
-    try:
-        yield async_sessionmaker(bind=engine, expire_on_commit=False)  # canonical: ignore py-adhoc-db-engine (as above)
-    finally:
-        await engine.dispose()
+    async for session_factory in real_savepoint_session_factory(_TABLES):
+        yield session_factory
 
 
 def _slm_and_db(factory, person=_PERSON):
@@ -149,15 +103,8 @@ async def test_a_deleted_user_is_not_brought_back_on_the_next_start(factory) -> 
 async def file_factory(tmp_path) -> AsyncIterator:
     """A file database: the in-memory one shares a single connection, so it cannot race."""
     url = f"sqlite+aiosqlite:///{tmp_path / 'race.db'}"
-    engine = create_async_engine(url)  # canonical: ignore py-adhoc-db-engine (test-local, tmp file)
-    _begin_transactions_properly(engine)
-    async with engine.begin() as conn:
-        tables = [User.__table__, Role.__table__, AuditLog.__table__, PersonLink.__table__]
-        await conn.run_sync(Base.metadata.create_all, tables=tables)
-    try:
-        yield async_sessionmaker(bind=engine, expire_on_commit=False)  # canonical: ignore py-adhoc-db-engine (as above)
-    finally:
-        await engine.dispose()
+    async for session_factory in real_savepoint_session_factory(_TABLES, url):
+        yield session_factory
 
 
 @pytest.mark.asyncio
