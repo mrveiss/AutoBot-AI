@@ -16,6 +16,7 @@ never auto-approved (#17038). Only this node's files are handled. The executors 
 import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_cleanup_proposals import CleanupRequestResponse, CleanupStatus
@@ -27,6 +28,7 @@ from services.approval_gate_service import ApprovalGateService
 from services.install_cleanup_actions import (
     ENV_COPIES_ACTION,
     CleanupPlan,
+    node_identity,
     plan_env_copies,
     register_install_cleanup_actions,
 )
@@ -53,6 +55,9 @@ async def env_copies_status() -> CleanupStatus:
     return _env_status(await asyncio.to_thread(plan_env_copies))
 
 
+_ALREADY_PENDING = "This cleanup is already waiting for review"
+
+
 async def _propose(
     plan: CleanupPlan, *, action: str, title: str, description: str, current_user: dict, session: AsyncSession
 ) -> CleanupRequestResponse:
@@ -64,21 +69,26 @@ async def _propose(
     if not plan.targets:
         raise HTTPException(status.HTTP_409_CONFLICT, "There is nothing to remove")
     service = ApprovalGateService(session)
+    node = node_identity()
     pending = await service.list_approvals(
         status=ApprovalStatus.PENDING.value,
         approval_type=ApprovalType.DESTRUCTIVE_ACTION.value,
-        extra_where=(Approval.context["action"].astext == action,),
+        extra_where=(Approval.context["action"].astext == action, Approval.context["node"].astext == node),
         limit=1,
     )
     if pending:
-        raise HTTPException(status.HTTP_409_CONFLICT, "This cleanup is already waiting for review")
-    approval = await service.create_approval(
-        title=title,
-        approval_type=ApprovalType.DESTRUCTIVE_ACTION.value,
-        description=description,
-        requested_by_agent=f"cleanup-proposal:{requester}",
-        context={"action": action},
-    )
+        raise HTTPException(status.HTTP_409_CONFLICT, _ALREADY_PENDING)
+    try:
+        approval = await service.create_approval(
+            title=title,
+            approval_type=ApprovalType.DESTRUCTIVE_ACTION.value,
+            description=description,
+            requested_by_agent=f"cleanup-proposal:{requester}",
+            context={"action": action, "node": node},
+        )
+    except IntegrityError:  # uq_approvals_pending_env_copies_cleanup: a concurrent request won
+        await session.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, _ALREADY_PENDING) from None
     return CleanupRequestResponse(approval_id=str(approval.id), status=approval.status, action=action)
 
 

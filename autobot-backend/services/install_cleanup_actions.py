@@ -19,9 +19,11 @@ from __future__ import annotations
 
 import asyncio
 import os
+import platform
+import stat as stat_module
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from autobot_shared.ssot_config import config
 from models.approval import ApprovalComment
@@ -51,6 +53,8 @@ class CleanupPlan:
     targets: tuple[Path, ...] = ()
     kept: Path | None = None
     refused: str | None = None
+    #: (st_dev, st_ino) of the backend directory when planned; removal refuses a directory that is not that one.
+    backend_id: tuple[int, int] | None = None
 
     @property
     def count(self) -> int:
@@ -67,6 +71,11 @@ def install_root() -> Path:
     return Path(config.path.base_dir)
 
 
+def node_identity() -> str:
+    """Which installation this is. A proposal carries it, and only the same node may execute the approval."""
+    return platform.node()
+
+
 def _inside(path: Path, root: Path) -> bool:
     """Whether *path* resolves under *root* (both resolved, symlinks followed)."""
     try:
@@ -76,38 +85,63 @@ def _inside(path: Path, root: Path) -> bool:
     return True
 
 
+def _is_checkout(root: Path) -> bool:
+    """A git checkout holds `.git` at its top; AUTOBOT_BASE_DIR may name the ``autobot-backend`` directory inside it."""
+    if os.path.lexists(root / ".git"):
+        return True
+    return root.name == BACKEND_DIR_NAME and os.path.lexists(root.parent / ".git")
+
+
 def plan_env_copies(root: Path | None = None) -> CleanupPlan:
     """Which ``.env.*~`` copies to remove: all but the newest. Reads names and mtimes only."""
     root = root or install_root()
-    if os.path.lexists(root / ".git"):
+    if _is_checkout(root):
         return CleanupPlan(refused="the install root is a checkout, so these are not deployed files")
     backend = _backend_dir(root)
     if backend.is_symlink() or not _inside(backend, root):
         return CleanupPlan(refused="the backend directory is a symlink or outside the install root")
     if not backend.is_dir():
         return CleanupPlan()
+    stat = backend.stat()
     found = sorted(backend.glob(ENV_COPY_GLOB), key=lambda p: p.name)
     for path in found:
         if path.is_symlink() or not path.is_file() or not _inside(path, backend):
             return CleanupPlan(refused=f"{path.name} is a symlink, not a regular file, or outside the install root")
     ranked = sorted(found, key=lambda p: (p.stat().st_mtime, p.name))
     if len(ranked) < 2:
-        return CleanupPlan(kept=ranked[0] if ranked else None)
-    return CleanupPlan(targets=tuple(ranked[:-1]), kept=ranked[-1])
+        return CleanupPlan(kept=ranked[0] if ranked else None, backend_id=(stat.st_dev, stat.st_ino))
+    return CleanupPlan(targets=tuple(ranked[:-1]), kept=ranked[-1], backend_id=(stat.st_dev, stat.st_ino))
+
+
+def _open_pinned_backend(backend: Path, expected: tuple[int, int] | None) -> int:
+    """An fd on the backend directory itself: a symlink is refused (``O_NOFOLLOW``) and it must be the planned one."""
+    fd = os.open(backend, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    stat = os.fstat(fd)
+    if expected is None or (stat.st_dev, stat.st_ino) != expected:
+        os.close(fd)
+        raise ValueError("the backend directory changed after it was planned; nothing removed")
+    return fd
 
 
 def _remove_env_copies(plan: CleanupPlan, root: Path) -> int:
-    backend = _backend_dir(root)
+    """Unlink each target relative to the pinned directory fd, so a swapped path cannot redirect the removal."""
+    fd = _open_pinned_backend(_backend_dir(root), plan.backend_id)
     removed = 0
-    for path in plan.targets:
-        if path.is_symlink() or not _inside(path, backend):
-            raise ValueError(f"{path.name} changed to a symlink or left the install root; nothing further removed")
-        path.unlink()
-        removed += 1
+    try:
+        for path in plan.targets:
+            info = os.stat(path.name, dir_fd=fd, follow_symlinks=False)
+            if not stat_module.S_ISREG(info.st_mode):
+                raise ValueError(f"{path.name} changed to a symlink or left the install root; nothing further removed")
+            os.unlink(path.name, dir_fd=fd)
+            removed += 1
+    finally:
+        os.close(fd)
     return removed
 
 
-async def _audit(approval: "Approval", action: AuditAction, result: str, **details: object) -> bool:
+async def _audit(
+    approval: "Approval", action: AuditAction, result: Literal["success", "denied", "failed"], **details: object
+) -> bool:
     """Whether the entry was written. Durable, as the entry before a removal must not be lost (#17038)."""
     return await audit_log(
         action.value,
@@ -133,6 +167,12 @@ async def execute_env_copies_cleanup(approval: "Approval", session: "AsyncSessio
         ".env.*~ copies",
     )
     self_approval = await is_self_approval(approval, session, what="the .env.*~ cleanup")
+    context: dict[str, object] = dict(approval.context or {})
+    if context.get("node") != node_identity():
+        reason = "the approval was raised for another installation"
+        await _audit(approval, audit_action, "denied", reason=reason, self_approval=self_approval)
+        await _record(approval, session, f"Nothing removed: {reason}.")
+        raise ValueError(reason)
     root = install_root()
     plan = await asyncio.to_thread(planner, root)
     if plan.refused:
@@ -173,6 +213,7 @@ __all__ = [
     "CleanupPlan",
     "execute_env_copies_cleanup",
     "install_root",
+    "node_identity",
     "plan_env_copies",
     "register_install_cleanup_actions",
 ]

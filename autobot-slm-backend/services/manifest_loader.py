@@ -35,7 +35,7 @@ import os
 import re
 import time
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Callable, Dict, List, Tuple
 
 import yaml
 
@@ -75,6 +75,24 @@ def resolve_infra_base(
     return candidates[0]
 
 
+def candidate_infra_roots(
+    override: str | None = None, code_source: Path | None = None, base_dir: Path | None = None
+) -> list[Path]:
+    """Every directory a role manifest may be read from, best first, re-read from disk on each call.
+
+    The override alone when set; else each existing ``autobot-infrastructure`` of code_source then the install.
+    A role missing from the first is looked up in the next (an incomplete tree must not hide the install's
+    copy and silently skip a role's conflict checks), and a code_source populated after start is seen at once.
+    """
+    override = override if override is not None else os.environ.get("SLM_INFRA_BASE_DIR")
+    if override:
+        return [Path(override)]
+    code_source = code_source if code_source is not None else ssot_config.path.code_source_path
+    base_dir = base_dir if base_dir is not None else Path(ssot_config.path.base_dir)
+    existing = [c for c in (code_source / INFRA_DIR_NAME, base_dir / INFRA_DIR_NAME) if c.is_dir()]
+    return existing or [code_source / INFRA_DIR_NAME]
+
+
 _INFRA_BASE = resolve_infra_base()
 
 # Cache TTL in seconds, env-backed rather than a bare literal (#16026): a
@@ -97,9 +115,26 @@ class ManifestLoader:
     Singleton — use get_manifest_loader() rather than instantiating directly.
     """
 
-    def __init__(self, infra_base: Path = _INFRA_BASE) -> None:
-        self._infra_base = infra_base
+    def __init__(self, infra_base: Path | None = None, roots: Callable[[], List[Path]] | None = None) -> None:
+        """*infra_base* pins one directory; *roots* supplies the candidates; neither reads them live from disk."""
+        self._roots_source: Callable[[], List[Path]] = (
+            (lambda: [infra_base]) if infra_base is not None else (roots or candidate_infra_roots)
+        )
+        self._roots_seen: Tuple[Path, ...] = ()
         self._cache: Dict[str, Tuple[RoleManifest, float]] = {}
+
+    @property
+    def _infra_base(self) -> Path:
+        """The first (preferred) root."""
+        return self._roots_source()[0]
+
+    def _current_roots(self) -> List[Path]:
+        """The roots now; when they differ from last time the cached manifests came from elsewhere, so drop them."""
+        roots = self._roots_source()
+        if tuple(roots) != self._roots_seen:
+            self._cache.clear()
+            self._roots_seen = tuple(roots)
+        return roots
 
     #: A role directory name. Ansible role names are lowercase with underscores
     #: or hyphens; nothing legitimate contains a separator, a dot or whitespace.
@@ -131,14 +166,7 @@ class ManifestLoader:
             logger.warning("Rejected manifest lookup for a non-role name: %r (#17300)", role_name)
             return None
 
-        base = self._infra_base.resolve()
-        try:
-            entries = {entry.name: entry for entry in base.iterdir() if entry.is_dir()}
-        except OSError as exc:
-            logger.warning("Cannot list the infra base %s: %s", base, exc)
-            return None
-
-        entry = entries.get(role_name)
+        base, entry = self._find_role_dir(role_name)
         if entry is None:
             return None
 
@@ -149,6 +177,19 @@ class ManifestLoader:
             logger.warning("Rejected manifest path outside the infra base: %r (#17300)", role_name)
             return None
         return candidate
+
+    def _find_role_dir(self, role_name: str) -> Tuple[Path, Path | None]:
+        """(root, role directory) from the first root that holds *role_name*; (first root, None) when none does."""
+        roots = [root.resolve() for root in self._current_roots()]
+        for base in roots:
+            try:
+                entries = {entry.name: entry for entry in base.iterdir() if entry.is_dir()}
+            except OSError as exc:
+                logger.warning("Cannot list the infra base %s: %s", base, exc)
+                continue
+            if role_name in entries:
+                return base, entries[role_name]
+        return roots[0], None
 
     def _load_from_disk(self, role_name: str) -> RoleManifest | None:
         """Load and parse manifest.yml for role_name."""
@@ -166,6 +207,7 @@ class ManifestLoader:
 
     def load(self, role_name: str, *, force_reload: bool = False) -> RoleManifest | None:
         """Return the RoleManifest for role_name, using cache if fresh."""
+        self._current_roots()
         cached = self._cache.get(role_name)
         if cached and not force_reload and _CACHE_TTL > 0:
             manifest, loaded_at = cached
@@ -195,14 +237,17 @@ class ManifestLoader:
         caller cannot get at is not an override.
         """
         result: Dict[str, RoleManifest] = {}
-        if not self._infra_base.exists():
+        roots = [root for root in self._current_roots() if root.exists()]
+        if not roots:
             logger.warning("Infrastructure base dir not found: %s", self._infra_base)
             return result
-        for child in sorted(self._infra_base.iterdir()):
-            if child.is_dir() and child.name.startswith("autobot-"):
-                manifest = self.load(child.name, force_reload=force_reload)
-                if manifest:
-                    result[child.name] = manifest
+        names = sorted(
+            {c.name for root in roots for c in root.iterdir() if c.is_dir() and c.name.startswith("autobot-")}
+        )
+        for name in names:
+            manifest = self.load(name, force_reload=force_reload)
+            if manifest:
+                result[name] = manifest
         return result
 
     def invalidate(self, role_name: str) -> None:
@@ -297,6 +342,6 @@ def get_manifest_loader() -> ManifestLoader:
 def init_manifest_loader(infra_base: Path | None = None) -> ManifestLoader:
     """Initialize (or reinitialize) the global ManifestLoader."""
     global _loader
-    _loader = ManifestLoader(infra_base=infra_base or _INFRA_BASE)
+    _loader = ManifestLoader(infra_base=infra_base)
     logger.info("ManifestLoader initialized (base: %s)", _loader._infra_base)
     return _loader

@@ -11,6 +11,12 @@ it cannot be read back. The durable facts are the status, the decider's name, th
 context, and the fact that the only route that approves a platform-general gate (``api.approval_gates``)
 refuses anything that is not an interactive human login. Acceptance consumes the approval atomically:
 the update names the unconsumed state, so two racing claims spend it once.
+
+Failure mode, by design: the spend commits BEFORE the SLM deletes (so a crash can never leave a usable
+approval behind). If the deletion then fails (SLM down, node unreachable), the approval stays spent and the
+password stays stored; nothing re-opens a spent approval, because that would be a second approval-gated
+destructive action of its own. The way back is a fresh proposal for the node (a spent approval is no longer
+pending, so the one-pending-per-node index does not block it) and a human's new approval.
 """
 
 from __future__ import annotations

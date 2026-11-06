@@ -31,10 +31,15 @@ from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 _TEXT_SUFFIXES = (".conf", ".j2", ".sh", ".py", ".yml", ".yaml", ".tmpl", ".template")
 #: A real ``location`` line whose path starts with a public API prefix, and is not itself the deny.
 _PROXIES = re.compile(
-    r"^[ \t]*location[ \t]+(?:\^~[ \t]+|=[ \t]+|~\*?[ \t]+)?\^?(?P<path>/(?:slm/|autobot-)?api[^\s{]*)",
+    r"^[ \t]*location[ \t]+(?:\^~[ \t]+|=[ \t]+|~\*?[ \t]+)?\^?(?P<path>/(?:slm/|autobot-)?api[^\s{]*|/slm/(?=[ \t]*\{))",
     re.MULTILINE,
 )
-_PREFIX_TO_DENY = {"/slm/api": "/slm/api/internal/", "/autobot-api": "/autobot-api/internal/", "/api": "/api/internal/"}
+_PREFIX_TO_DENY = {
+    "/slm/api": "/slm/api/internal/",
+    "/slm/": "/slm/api/internal/",  # a bare `location /slm/` proxies the SLM API too
+    "/autobot-api": "/autobot-api/internal/",
+    "/api": "/api/internal/",
+}
 
 
 def _is_candidate(rel: str) -> bool:
@@ -42,10 +47,27 @@ def _is_candidate(rel: str) -> bool:
     return rel.endswith(_TEXT_SUFFIXES) and not (name.endswith("_test.py") or name.startswith("test_"))
 
 
-def _proxied_prefixes(text: str) -> set[str]:
-    """The public prefixes (``/api``, ``/slm/api``, ``/autobot-api``) *text* proxies; a deny line does not count."""
+_SERVER_START = re.compile(r"^[ \t]*server[ \t]*\{\{?", re.MULTILINE)
+_COMMENT = re.compile(r"(?:^|[ \t])#[^\n]*")
+
+
+def _uncommented(text: str) -> str:
+    """*text* without ``#`` comments: a commented-out deny or location must neither satisfy nor trigger the guard."""
+    return _COMMENT.sub("", text)
+
+
+def _server_blocks(text: str) -> list[str]:
+    """One chunk per ``server {`` (to the next one); a file with none is a single chunk, as a fragment is."""
+    starts = [m.start() for m in _SERVER_START.finditer(text)]
+    if not starts:
+        return [text]
+    bounds = [0 if starts[0] == 0 else starts[0], *starts[1:], len(text)]
+    return [text[a:b] for a, b in zip(bounds, bounds[1:])]
+
+
+def _chunk_prefixes(chunk: str) -> set[str]:
     found = set()
-    for match in _PROXIES.finditer(text):
+    for match in _PROXIES.finditer(chunk):
         path = match.group("path")
         if path.endswith("/internal/"):
             continue
@@ -53,14 +75,26 @@ def _proxied_prefixes(text: str) -> set[str]:
     return found
 
 
+def _proxied_prefixes(text: str) -> set[str]:
+    """The public prefixes (``/api``, ``/slm/api``, ``/autobot-api``) *text* proxies; a deny line does not count."""
+    return {prefix for chunk in _server_blocks(_uncommented(text)) for prefix in _chunk_prefixes(chunk)}
+
+
 def _denied(text: str, prefix: str) -> bool:
-    """A ``location ^~ <prefix> { return 404; }`` block, in a plain config, an f-string (``{{``) or a script."""
-    pattern = rf"location[ \t]+\^~[ \t]+{re.escape(prefix)}[ \t]*\{{\{{?\s*return[ \t]+404;"
+    """A ``location ^~ <prefix> { ... return 404; }`` block in *text* (plain config, f-string ``{{`` or script).
+
+    Other directives may precede the ``return``; the block may not close first (no ``}`` before it).
+    """
+    pattern = rf"location[ \t]+\^~[ \t]+{re.escape(prefix)}[ \t]*\{{\{{?[^{{}}]*?\breturn[ \t]+404;"
     return re.search(pattern, text) is not None
 
 
 def _violations(text: str) -> list[str]:
-    return [_PREFIX_TO_DENY[p] for p in sorted(_proxied_prefixes(text)) if not _denied(text, _PREFIX_TO_DENY[p])]
+    """Per proxying server block: the internal prefixes it proxies without denying them in that same block."""
+    missing: set[str] = set()
+    for chunk in _server_blocks(_uncommented(text)):
+        missing |= {_PREFIX_TO_DENY[p] for p in _chunk_prefixes(chunk) if not _denied(chunk, _PREFIX_TO_DENY[p])}
+    return sorted(missing)
 
 
 def _proxying_files(root: Path) -> list[str]:
@@ -140,3 +174,29 @@ def test_contrast_every_spelling_of_the_location_line_is_seen() -> None:
     assert _violations("location ^~ /api/internal/ {{\n        return 404;\n    }}\nlocation /api/ {{\n") == []
     assert _proxied_prefixes("# location /api/ { is described here\n") == set()  # a comment is not a proxy
     assert _proxied_prefixes(_DENY) == set()  # the deny itself is not a proxy
+
+
+def test_contrast_a_deny_in_another_server_block_does_not_protect_this_one() -> None:
+    two = "server {\n" + _DENY + _PLAIN + "}\nserver {\n" + _PLAIN + "}\n"
+    assert _violations(two) == ["/api/internal/"]
+    assert _violations("server {\n" + _DENY + _PLAIN + "}\nserver {\n" + _DENY + _PLAIN + "}\n") == []
+
+
+def test_contrast_a_commented_deny_does_not_count() -> None:
+    assert _violations("# location ^~ /api/internal/ { return 404; }\n" + _PLAIN) == ["/api/internal/"]
+    assert _violations("    # location ^~ /api/internal/ {\n    #   return 404;\n" + _PLAIN) == ["/api/internal/"]
+
+
+def test_contrast_a_deny_with_another_directive_before_the_return_counts() -> None:
+    logged = "    location ^~ /api/internal/ {\n        access_log off;\n        return 404;\n    }\n"
+    assert _violations(logged + _PLAIN) == []
+    closed_first = "    location ^~ /api/internal/ {\n    }\n    location /x { return 404; }\n"
+    assert _violations(closed_first + _PLAIN) == ["/api/internal/"]
+
+
+def test_contrast_a_bare_slm_location_needs_the_slm_internal_deny() -> None:
+    bare = "server {\n    location /slm/ {\n        proxy_pass http://slm/;\n    }\n}\n"
+    assert _violations(bare) == ["/slm/api/internal/"]
+    assert (
+        _violations("server {\n    location ^~ /slm/api/internal/ { return 404; }\n" + bare[len("server {\n") :]) == []
+    )

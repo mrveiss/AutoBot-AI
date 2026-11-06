@@ -15,6 +15,7 @@ the Approvals inbox, and ``services.slm_ssh_password_action`` then asks the SLM 
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_slm_credential_proposals import (
@@ -46,6 +47,17 @@ router = APIRouter(prefix="/internal/slm", dependencies=[Depends(require_interna
 register_ssh_password_action()
 
 
+async def _pending_for(service: ApprovalGateService, node_id: str) -> Approval | None:
+    """The node's pending proposal, if any."""
+    pending = await service.list_approvals(
+        status=ApprovalStatus.PENDING.value,
+        agent_id=proposer_id(node_id),
+        extra_where=(Approval.context["action"].astext == ACTION,),
+        limit=1,
+    )
+    return pending[0] if pending else None
+
+
 @router.post(
     "/ssh-password-deletion-proposals",
     response_model=SshPasswordDeletionProposalResponse,
@@ -57,26 +69,26 @@ async def propose_ssh_password_deletion(
 ) -> SshPasswordDeletionProposalResponse:
     """Propose the deletion -- a request, not an execution; one pending proposal per node."""
     service = ApprovalGateService(session)
-    pending = await service.list_approvals(
-        status=ApprovalStatus.PENDING.value,
-        agent_id=proposer_id(body.node_id),
-        extra_where=(Approval.context["action"].astext == ACTION,),
-        limit=1,
-    )
+    pending = await _pending_for(service, body.node_id)
     if pending:
-        return SshPasswordDeletionProposalResponse(
-            approval_id=str(pending[0].id), status=pending[0].status, created=False
+        return SshPasswordDeletionProposalResponse(approval_id=str(pending.id), status=pending.status, created=False)
+    try:
+        approval = await service.create_approval(
+            title=f"Delete the stored SSH password of node {body.node_id}",
+            approval_type=ApprovalType.DESTRUCTIVE_ACTION.value,
+            description=(
+                f"Node {body.node_id} enrolled and now uses key authentication, so its stored SSH password is no "
+                "longer needed. Approving deletes the stored password for good; rejecting keeps it."
+            ),
+            requested_by_agent=proposer_id(body.node_id),
+            context={"action": ACTION, "node_id": body.node_id, "credential_kind": CREDENTIAL_KIND},
         )
-    approval = await service.create_approval(
-        title=f"Delete the stored SSH password of node {body.node_id}",
-        approval_type=ApprovalType.DESTRUCTIVE_ACTION.value,
-        description=(
-            f"Node {body.node_id} enrolled and now uses key authentication, so its stored SSH password is no "
-            "longer needed. Approving deletes the stored password for good; rejecting keeps it."
-        ),
-        requested_by_agent=proposer_id(body.node_id),
-        context={"action": ACTION, "node_id": body.node_id, "credential_kind": CREDENTIAL_KIND},
-    )
+    except IntegrityError:  # uq_approvals_pending_ssh_password_deletion: a concurrent request won
+        await session.rollback()
+        winner = await _pending_for(service, body.node_id)
+        if winner is None:
+            raise
+        return SshPasswordDeletionProposalResponse(approval_id=str(winner.id), status=winner.status, created=False)
     return SshPasswordDeletionProposalResponse(approval_id=str(approval.id), status=approval.status, created=True)
 
 

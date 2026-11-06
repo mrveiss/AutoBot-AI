@@ -353,7 +353,7 @@ async def test_the_probe_runs_a_key_only_passwordless_sudo_check() -> None:
     argv = spawn.await_args.args[0]
     assert {"BatchMode=yes", "PasswordAuthentication=no", "IdentitiesOnly=yes"} <= set(argv) and argv[
         -1
-    ] == "sudo -n true"
+    ] == "sudo -n -k /bin/sh -c true"
     assert {"ControlMaster=no", "ControlPath=none"} <= set(argv)  # a live master must not vouch for the key
     assert spawn.await_args.kwargs["timeout"] == probe.KEY_PROBE_TIMEOUT_SECONDS <= 60
     assert "sshpass" not in argv and "autobot@192.0.2.10" in argv
@@ -469,6 +469,37 @@ async def test_a_timed_out_ssh_is_killed_and_reaped() -> None:
     assert process.returncode is not None, "the child was left running"
     with pytest.raises(ProcessLookupError):
         os.kill(process.pid, 0)
+
+
+async def test_a_child_that_never_reaps_does_not_hold_the_caller_past_the_ceiling() -> None:
+    """Python 3.14: wait() can block on pipes an ssh helper inherited; the timeout must still reach the caller."""
+    import asyncio
+
+    module = _load_orchestrator_ssh()
+
+    class _Stuck:
+        returncode = None
+        pid = 4242
+
+        def kill(self) -> None:
+            pass
+
+        async def wait(self) -> int:
+            await asyncio.sleep(3600)
+            return 0
+
+        async def communicate(self):
+            await asyncio.sleep(3600)
+
+    async def _spawn(*_a, **_k):
+        return _Stuck()
+
+    with (
+        patch.object(module.asyncio, "create_subprocess_exec", _spawn),
+        patch.object(module, "_REAP_TIMEOUT_S", 0.2),
+        pytest.raises(asyncio.TimeoutError),
+    ):
+        await asyncio.wait_for(module.spawn_ssh(["ssh"], timeout=0.2), timeout=5)
 
 
 async def test_a_fast_command_still_returns_its_output() -> None:
