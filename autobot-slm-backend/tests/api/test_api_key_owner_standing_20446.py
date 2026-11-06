@@ -91,3 +91,19 @@ async def test_a_valid_key_of_an_unfit_owner_is_refused_401(authenticate, owner)
     with pytest.raises(HTTPException) as caught:
         await authenticate(owner)
     assert caught.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_an_expired_old_format_key_is_refused_401_and_audited(authenticate, monkeypatch):
+    """#20611: the cutoff refusal names the reissue and goes through the key audit writer."""
+    from services.api_key_scheme_clock import APIKeyLegacyFormatExpiredError
+
+    key_id = uuid.uuid4()
+    sys.modules["user_management.services.api_key_service"].APIKeyService.return_value.validate_key = AsyncMock(
+        side_effect=APIKeyLegacyFormatExpiredError(key_id)
+    )
+    with pytest.raises(HTTPException) as exc:
+        await authenticate(_Owner())
+    assert exc.value.status_code == 401 and exc.value.detail == "API key expired: reissue it"
+    kwargs = _auth.audit_key_request.await_args.kwargs
+    assert kwargs["action"] == "api_key_rejected" and kwargs["api_key_id"] == str(key_id)

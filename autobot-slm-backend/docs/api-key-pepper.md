@@ -1,6 +1,6 @@
 # API-key pepper (#16299, #19120)
 
-SLM API keys are stored as `HMAC-SHA256(pepper, key)`. The pepper is a rotatable
+SLM API keys are stored as `PBKDF2-HMAC-SHA256(key, salt=pepper)` (#20611; `SLM_API_KEY_PBKDF2_ITERATIONS`). The pepper is a rotatable
 credential, so it lives in the SLM secrets store (`SystemSecret`), not in an env file.
 
 ## Setting it
@@ -24,3 +24,11 @@ generates the value for you; pick a long random string and keep it in your own v
 The store holds one value and no previous one, so there is no dual-verify window.
 Changing `slm_hmac_api_key_secret` makes every key hashed under the old value stop
 verifying (the key owner must be issued a new key). Rotate only when that is acceptable.
+
+## Old key formats and the 30-day cutoff (#20611)
+
+Keys stored as HMAC-SHA256 (current or legacy pepper) or bare SHA-256 still verify and are
+re-hashed to PBKDF2 in the same row on their next successful use. The instant the PBKDF2
+scheme became active is stored once in the `settings` table (`api_key_pbkdf2_active_since`).
+`SLM_API_KEY_LEGACY_CUTOFF_DAYS` (default 30) after it, an old-format key that was never
+re-hashed is refused with `API key expired: reissue it`, and the refusal is audited.

@@ -10,6 +10,7 @@ source is loaded by path against a stand-in ``settings`` and an in-memory
 """
 
 import asyncio
+import datetime as _dt
 import hashlib
 import hmac
 import importlib.util
@@ -145,7 +146,16 @@ def svc(monkeypatch):
     pepper = _load("_api_key_pepper_19120", "services/api_key_pepper.py", monkeypatch)
     pepper.invalidate_pepper_cache()
     monkeypatch.setitem(sys.modules, "services.api_key_pepper", pepper)
+    clock = _load("_api_key_scheme_clock_20611", "services/api_key_scheme_clock.py", monkeypatch)
+    clock.active_since = _dt.datetime.now(_dt.timezone.utc)  # the scheme became active just now
+
+    async def _active_since():
+        return clock.active_since
+
+    clock.scheme_active_since = _active_since
+    monkeypatch.setitem(sys.modules, "services.api_key_scheme_clock", clock)
     mod = _load("_api_key_service_16299", "user_management/services/api_key_service.py", monkeypatch)
+    mod.clock = clock
     return mod, cfg, store, pepper
 
 
@@ -155,6 +165,10 @@ def _resolve(pepper):
 
 def _hm(secret: str, key: str) -> str:
     return hmac.new(secret.encode(), key.encode(), hashlib.sha256).hexdigest()
+
+
+def _pb(secret: str, key: str, mod) -> str:
+    return hashlib.pbkdf2_hmac("sha256", key.encode(), secret.encode(), mod.PBKDF2_ITERATIONS).hex()
 
 
 def _service(mod, rows, store):
@@ -221,7 +235,7 @@ def test_neither_set_fails_closed_and_warning_names_the_page(svc, caplog):
 def test_new_hash_never_uses_the_literal(svc):
     mod, *_ = svc
     h = mod.APIKeyService._hash_key("abot_x", "s1")  # pragma: allowlist secret
-    assert h == _hm("s1", "abot_x") and h != _hm(_LITERAL, "abot_x")
+    assert h == _pb("s1", "abot_x", mod) and h != _hm(_LITERAL, "abot_x") and h != _hm("s1", "abot_x")
     with pytest.raises(RuntimeError):
         mod.APIKeyService._hash_key("abot_x", "")
 
@@ -233,7 +247,7 @@ def test_literal_hashed_key_verifies_and_is_rehashed(svc):
     row.key_hash = _hm(_LITERAL, "abot_x")
     s = _service(mod, {row.key_hash: row}, store)
     assert asyncio.run(s.validate_key("abot_x")) is row
-    assert row.key_hash == _hm("s1", "abot_x")
+    assert row.key_hash == _pb("s1", "abot_x", mod)
 
 
 def test_bare_sha256_key_still_verifies_and_is_rehashed(svc):
@@ -243,7 +257,7 @@ def test_bare_sha256_key_still_verifies_and_is_rehashed(svc):
     row.key_hash = hashlib.sha256(b"abot_x").hexdigest()
     s = _service(mod, {row.key_hash: row}, store)
     assert asyncio.run(s.validate_key("abot_x")) is row
-    assert row.key_hash == _hm("s1", "abot_x")
+    assert row.key_hash == _pb("s1", "abot_x", mod)
 
 
 def test_no_pepper_verify_works_warns_and_does_not_rehash(svc, caplog):
@@ -307,3 +321,63 @@ def test_literal_lives_only_in_the_named_constant():
     src = (_ROOT / "user_management/services/api_key_service.py").read_text(encoding="utf-8")
     assert src.count(_LITERAL) == 1
     assert f'_LEGACY_PUBLIC_PEPPER = "{_LITERAL}"' in src
+
+
+def test_new_key_round_trips_and_digest_is_stable(svc):
+    mod, _, store, pepper = svc
+    store.rows[pepper.HMAC_PEPPER_KEY] = "s1"  # pragma: allowlist secret
+    s = _service(mod, {}, store)
+    s._build_api_key = lambda uid, h, p, n, d, sc, e: SimpleNamespace(
+        id=1, key_hash=h, is_valid=True, record_usage=lambda: None
+    )
+    row, plain = asyncio.run(_create(s))
+    assert row.key_hash == _pb("s1", plain, mod)
+    assert mod.APIKeyService._hash_key(plain, "s1") == mod.APIKeyService._hash_key(plain, "s1")  # nosec
+    assert mod.APIKeyService._hash_key(plain, "s1") != mod.APIKeyService._hash_key(plain, "s2")  # nosec
+    s._find_by_hash = _finder({row.key_hash: row})
+    assert asyncio.run(s.validate_key(plain)) is row
+
+
+async def _create(s):
+    s.session = SimpleNamespace(add=lambda row: None, flush=_noop)
+    return await s.create_key(None, "n", [])
+
+
+def _finder(rows):
+    async def find(h):
+        return rows.get(h)
+
+    return find
+
+
+def test_current_pepper_hmac_key_is_rehashed_to_pbkdf2(svc):
+    mod, _, store, pepper = svc
+    store.rows[pepper.HMAC_PEPPER_KEY] = "s1"  # pragma: allowlist secret
+    row = _row()
+    row.key_hash = _hm("s1", "abot_x")
+    s = _service(mod, {row.key_hash: row}, store)
+    assert asyncio.run(s.validate_key("abot_x")) is row
+    assert row.key_hash == _pb("s1", "abot_x", mod)
+
+
+def test_old_key_past_the_cutoff_is_refused_not_rehashed(svc):
+    mod, _, store, pepper = svc
+    store.rows[pepper.HMAC_PEPPER_KEY] = "s1"  # pragma: allowlist secret
+    mod.clock.active_since = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=mod.clock.LEGACY_CUTOFF_DAYS + 1)
+    for old in (_hm("s1", "abot_x"), _hm(_LITERAL, "abot_x"), hashlib.sha256(b"abot_x").hexdigest()):
+        row = _row()
+        row.key_hash = old
+        s = _service(mod, {old: row}, store)
+        with pytest.raises(mod.APIKeyLegacyFormatExpiredError, match="API key expired: reissue it") as exc:
+            asyncio.run(s.validate_key("abot_x"))
+        assert exc.value.api_key_id == 1 and row.key_hash == old
+
+
+def test_pbkdf2_key_still_verifies_after_the_cutoff(svc):
+    mod, _, store, pepper = svc
+    store.rows[pepper.HMAC_PEPPER_KEY] = "s1"  # pragma: allowlist secret
+    mod.clock.active_since = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=400)
+    row = _row()
+    row.key_hash = _pb("s1", "abot_x", mod)
+    s = _service(mod, {row.key_hash: row}, store)
+    assert asyncio.run(s.validate_key("abot_x")) is row

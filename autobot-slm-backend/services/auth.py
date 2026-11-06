@@ -390,6 +390,7 @@ async def get_api_key_user(
     Raises:
         HTTPException: If API key is invalid or missing
     """
+    from services.api_key_scheme_clock import EXPIRED_DETAIL, APIKeyLegacyFormatExpiredError
     from user_management.services.api_key_service import APIKeyService
     from user_management.services.base_service import TenantContext
 
@@ -403,7 +404,10 @@ async def get_api_key_user(
     context = TenantContext(is_platform_admin=True)
     api_key_service = APIKeyService(db, context)
 
-    api_key = await api_key_service.validate_key(x_api_key)
+    try:
+        api_key = await api_key_service.validate_key(x_api_key)
+    except APIKeyLegacyFormatExpiredError as exc:
+        await _reject_key(request, x_api_key, EXPIRED_DETAIL, api_key_id=str(exc.api_key_id))
     if not api_key:
         await _reject_key(request, x_api_key, "Invalid or expired API key")
 

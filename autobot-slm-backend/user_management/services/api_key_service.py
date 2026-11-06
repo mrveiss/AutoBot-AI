@@ -17,10 +17,16 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
+from autobot_shared.env_utils import env_int_clamped
 from services.api_key_pepper import (
     HMAC_PEPPER_KEY,
     SECRETS_PAGE_PATH,
     resolve_hmac_api_key_secret,
+)
+from services.api_key_scheme_clock import (  # noqa: F401
+    APIKeyLegacyFormatExpiredError,
+    cutoff_passed,
+    scheme_active_since,
 )
 from user_management.models.api_key import APIKey
 from user_management.services.base_service import BaseService
@@ -33,6 +39,10 @@ logger = logging.getLogger(__name__)
 # removed; it must never hash a new key. Remove once every install has set
 # the pepper (secrets page) and its keys have been re-hashed on use or reissued.
 _LEGACY_PUBLIC_PEPPER = "autobot-api-key-v1"
+
+#: PBKDF2-HMAC-SHA256 rounds for a stored key digest (#20611). 20000 rounds measured a median of
+#: 5.9 ms (p90 9.0 ms) per hash on the development host, inside the 5-10 ms per-verify budget.
+PBKDF2_ITERATIONS = env_int_clamped("SLM_API_KEY_PBKDF2_ITERATIONS", 20000, 1000, 10_000_000)
 
 
 class APIKeyServiceError(Exception):
@@ -86,20 +96,24 @@ class APIKeyService(BaseService):
         return result.scalar_one_or_none()
 
     async def validate_key(self, plaintext_key: str) -> APIKey | None:
-        """Validate an API key and record usage (#2083, #16299).
+        """Validate an API key and record usage (#2083, #16299, #20611).
 
-        Order: current secret -> legacy public-pepper HMAC -> bare SHA-256.
-        A legacy match is re-hashed with the current secret when one is set.
+        Order: PBKDF2 digest -> HMAC under the current secret -> HMAC under the legacy
+        public pepper -> bare SHA-256. An old-format match is re-hashed to PBKDF2 in the
+        same row when a secret is set, and refused once the cutoff has passed.
         """
         pepper = await resolve_hmac_api_key_secret()
         api_key = None
         if pepper:
             api_key = await self._find_by_hash(self._hash_key(plaintext_key, pepper))
-        if api_key is None:
-            api_key = await self._try_legacy_hash(plaintext_key, pepper)
+        legacy = api_key is None
+        if legacy:
+            api_key = await self._find_legacy(plaintext_key, pepper)
 
         if not api_key or not api_key.is_valid:
             return None
+        if legacy and pepper:
+            await self._rehash_or_expire(api_key, plaintext_key, pepper)
 
         api_key.record_usage()
         await self.session.flush()
@@ -118,26 +132,27 @@ class APIKeyService(BaseService):
                 f"API-key pepper is not configured: add the secret '{HMAC_PEPPER_KEY}' on "
                 f"the SLM page {SECRETS_PAGE_PATH}. Refusing to hash with a built-in default."
             )
+        await scheme_active_since()  # the PBKDF2 scheme is active from the first hash it can make
         return pepper
 
-    async def _try_legacy_hash(self, plaintext_key: str, pepper: str | None) -> APIKey | None:
-        """Verify read-only against legacy hashes; re-hash on match (#2083, #16299)."""
-        for legacy_hash in (
-            self._hash_key_public_pepper(plaintext_key),
-            self._hash_key_legacy(plaintext_key),
-        ):
+    async def _find_legacy(self, plaintext_key: str, pepper: str | None) -> APIKey | None:
+        """Verify read-only against the old formats (#2083, #16299, #20611)."""
+        digests = [self._hash_key_public_pepper(plaintext_key), self._hash_key_legacy(plaintext_key)]
+        if pepper:
+            digests.insert(0, self._hmac_hex(pepper, plaintext_key))
+        for legacy_hash in digests:
             api_key = await self._find_by_hash(legacy_hash)
             if api_key is not None:
-                await self._rehash_if_configured(api_key, plaintext_key, pepper)
                 return api_key
         return None
 
-    async def _rehash_if_configured(self, api_key: APIKey, plaintext_key: str, pepper: str | None) -> None:
-        if not pepper:
-            return
+    async def _rehash_or_expire(self, api_key: APIKey, plaintext_key: str, pepper: str) -> None:
+        """Re-hash an old-format key to PBKDF2, or refuse it after the cutoff (#20611)."""
+        if cutoff_passed(await scheme_active_since()):
+            raise APIKeyLegacyFormatExpiredError(api_key.id)
         api_key.key_hash = self._hash_key(plaintext_key, pepper)
         await self.session.flush()
-        logger.info("Migrated API key %s to the configured HMAC secret", api_key.id)
+        logger.info("Migrated API key %s to the PBKDF2 hash", api_key.id)
 
     async def revoke_key(self, key_id: uuid.UUID, user_id: uuid.UUID) -> bool:
         """Revoke an API key."""
@@ -185,13 +200,14 @@ class APIKeyService(BaseService):
 
     @staticmethod
     def _hash_key(key: str, pepper: str) -> str:
-        """Hash an API key with the resolved pepper (#1721, #2083, #16299, #19120).
+        """Hash an API key: PBKDF2-HMAC-SHA256, the pepper as salt (#1721, #19120, #20611).
 
-        Used for every NEW hash; the legacy pepper is never used here.
+        The one place keys are hashed. Deterministic for a given key and pepper, so the
+        digest stays a unique lookup value. The legacy pepper is never used here.
         """
         if not pepper:
             raise RuntimeError("API-key pepper is empty: refusing to hash")
-        return APIKeyService._hmac_hex(pepper, key)
+        return hashlib.pbkdf2_hmac("sha256", key.encode("utf-8"), pepper.encode("utf-8"), PBKDF2_ITERATIONS).hex()
 
     @staticmethod
     def _hash_key_public_pepper(key: str) -> str:

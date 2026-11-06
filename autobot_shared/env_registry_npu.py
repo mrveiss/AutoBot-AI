@@ -107,6 +107,22 @@ _register(
     "slm",
 )
 _register(
+    "SLM_API_KEY_LEGACY_CUTOFF_DAYS",
+    int,
+    30,
+    "Days after the PBKDF2 API-key hash scheme became active that an old-format key which was never "
+    "re-hashed is still accepted; after that it is refused and must be reissued (#20611).",
+    "slm",
+)
+_register(
+    "SLM_API_KEY_PBKDF2_ITERATIONS",
+    int,
+    20000,
+    "PBKDF2-HMAC-SHA256 rounds for a stored API-key digest (#20611). 20000 measured a median 5.9 ms "
+    "per hash; changing it makes existing PBKDF2 digests stop matching, so set it once.",
+    "slm",
+)
+_register(
     "SLM_HMAC_API_KEY_SECRET",
     str,
     "",
