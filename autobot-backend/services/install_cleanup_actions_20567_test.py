@@ -33,7 +33,7 @@ def _approval(action: str, decider=_OTHER, context: dict | None = None) -> Simpl
     approval = SimpleNamespace(
         id=uuid.uuid4(),
         decided_by_user="owner",
-        context=context or {"action": action},
+        context=context or {"action": action, "node": acts.node_identity()},
         requested_by_agent=f"cleanup-proposal:{_ADMIN}",
     )
     approval_execution.set_verified_decider(approval, decider)
@@ -100,7 +100,10 @@ async def test_a_context_path_is_ignored(tmp_path: Path) -> None:
     victim = tmp_path / "victim.txt"
     await asyncio.to_thread(victim.write_text, "x", encoding="utf-8")
     await asyncio.to_thread(_make_env, tmp_path, {".env.1~": 100, ".env.2~": 200})
-    approval = _approval(acts.ENV_COPIES_ACTION, context={"action": acts.ENV_COPIES_ACTION, "path": str(victim)})
+    approval = _approval(
+        acts.ENV_COPIES_ACTION,
+        context={"action": acts.ENV_COPIES_ACTION, "node": acts.node_identity(), "path": str(victim)},
+    )
     await _run(acts.execute_env_copies_cleanup, approval, tmp_path)
     assert await asyncio.to_thread(victim.exists)
 
@@ -166,3 +169,50 @@ async def test_a_deployed_base_dir_is_the_backend_directory_itself(tmp_path: Pat
 def test_contrast_an_install_root_still_finds_the_backend_directory(tmp_path: Path) -> None:
     _make_env(tmp_path, {".env.1~": 100, ".env.2~": 200})
     assert [p.name for p in acts.plan_env_copies(tmp_path).targets] == [".env.1~"]
+
+
+def test_a_backend_directory_inside_a_checkout_refuses(tmp_path: Path) -> None:
+    """AUTOBOT_BASE_DIR=<checkout>/autobot-backend has no `.git` of its own; its parent does."""
+    backend = _make_env(tmp_path, {".env.1~": 100, ".env.2~": 200})
+    (tmp_path / ".git").mkdir()
+    assert "checkout" in acts.plan_env_copies(backend).refused
+    assert "checkout" in acts.plan_env_copies(tmp_path).refused
+
+
+def test_a_directory_swapped_for_a_symlink_after_planning_removes_nothing(tmp_path: Path) -> None:
+    """The plan pins the directory: replacing it with a symlink to another one must not redirect the unlinks."""
+    backend = _make_env(tmp_path, {".env.1~": 100, ".env.2~": 200})
+    plan = acts.plan_env_copies(tmp_path)
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    (outside / ".env.1~").write_text(_SECRET, encoding="utf-8")
+    backend.rename(tmp_path / "moved")
+    backend.symlink_to(outside, target_is_directory=True)
+    with pytest.raises(OSError):
+        acts._remove_env_copies(plan, tmp_path)
+    assert (outside / ".env.1~").exists()
+
+
+def test_a_different_directory_at_the_same_path_removes_nothing(tmp_path: Path) -> None:
+    backend = _make_env(tmp_path, {".env.1~": 100, ".env.2~": 200})
+    plan = acts.plan_env_copies(tmp_path)
+    backend.rename(tmp_path / "moved")
+    _make_env(tmp_path, {".env.1~": 100, ".env.2~": 200})
+    with pytest.raises(ValueError, match="changed after"):
+        acts._remove_env_copies(plan, tmp_path)
+    assert ".env.1~" in _names(backend)
+
+
+def test_contrast_the_unchanged_directory_is_removed_from(tmp_path: Path) -> None:
+    backend = _make_env(tmp_path, {".env.1~": 100, ".env.2~": 200})
+    assert acts._remove_env_copies(acts.plan_env_copies(tmp_path), tmp_path) == 1
+    assert ".env.1~" not in _names(backend)
+
+
+async def test_an_approval_raised_for_another_node_removes_nothing(tmp_path: Path) -> None:
+    """Shared approval store: approving node A's request on node B must not delete B's copies."""
+    backend = _make_env(tmp_path, {".env.1~": 100, ".env.2~": 200})
+    other = _approval(acts.ENV_COPIES_ACTION, context={"action": acts.ENV_COPIES_ACTION, "node": "another-node"})
+    with pytest.raises(ValueError, match="another installation"):
+        await _run(acts.execute_env_copies_cleanup, other, tmp_path)
+    assert ".env.1~" in _names(backend)

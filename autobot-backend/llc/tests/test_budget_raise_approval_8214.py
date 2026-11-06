@@ -13,12 +13,15 @@ from typing import AsyncIterator
 
 import httpx
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from llc.models.budget import LLCAgentBudget
+from llc.api.budget import UpdateLimitRequest
+from llc.models.budget import TOKEN_LIMIT_MAX, LLCAgentBudget
 from llc.models.enums import ApprovalStatus
 from llc.services.approval import ApprovalHookError
+from llc.services.approval_hooks import BudgetOverridePayload
 from llc.tests.approval_enforcement_support_test import _edges  # noqa: F401 -- autouse fixture
 from llc.tests.approval_enforcement_support_test import activity  # noqa: F401 -- fixture
 from llc.tests.approval_enforcement_support_test import session_factory  # noqa: F401 -- fixture
@@ -207,3 +210,12 @@ async def test_a_first_limit_at_or_below_the_default_is_created_as_asked(session
     assert resp.status_code == 201, resp.text
     assert (await _budget(session_factory)).budget_limit == Decimal("3")
     assert await _rows(session_factory, Approval) == []
+
+
+def test_a_token_limit_the_column_cannot_store_is_refused_at_the_request() -> None:
+    with pytest.raises(ValidationError):
+        UpdateLimitRequest(token_limit=TOKEN_LIMIT_MAX + 1)
+    with pytest.raises(ValidationError):
+        BudgetOverridePayload(agent_id="a1", token_limit=TOKEN_LIMIT_MAX + 1)
+    assert UpdateLimitRequest(token_limit=TOKEN_LIMIT_MAX).token_limit == TOKEN_LIMIT_MAX
+    assert BudgetOverridePayload(agent_id="a1", token_limit=TOKEN_LIMIT_MAX).token_limit == TOKEN_LIMIT_MAX

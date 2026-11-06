@@ -25,7 +25,7 @@ import { computed, ref, useAttrs, useId, warn, watchEffect } from 'vue'
 defineOptions({ inheritAttrs: false })
 
 export type InputSize = 'sm' | 'md' | 'lg'
-export type InputType = 'text' | 'email' | 'password' | 'search' | 'tel' | 'url'
+export type InputType = 'text' | 'email' | 'password' | 'search' | 'tel' | 'url' | 'number'
 
 const props = withDefaults(
   defineProps<{
