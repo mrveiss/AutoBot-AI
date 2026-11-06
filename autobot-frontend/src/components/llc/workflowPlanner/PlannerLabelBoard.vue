@@ -113,9 +113,10 @@ function addCase(label: Label) {
               <BaseButton size="xs" variant="ghost" :disabled="busy" @click="emit('classify', s.key, null)">{{ t('llc.workflowPlanner.label.unlabel') }}</BaseButton>
             </li>
             <li v-for="c in cases.filter((e) => e.classification === l)" :key="c.key" class="flex items-center gap-2 py-1 text-sm italic text-autobot-text-muted">
-              <input
-                :value="c.description"
-                class="min-w-0 flex-1 rounded-md border border-autobot-border bg-autobot-bg-card px-2 py-1 text-sm text-autobot-text-primary"
+              <BaseInput
+                :model-value="c.description"
+                size="sm"
+                class="min-w-0 flex-1"
                 :aria-label="t('llc.workflowPlanner.label.edgeCaseField')"
                 :disabled="busy"
                 :data-testid="`edit-edge-case-${c.key}`"

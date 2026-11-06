@@ -9357,7 +9357,7 @@
         "renameLane": "Lane name",
         "deleteLane": "Delete lane",
         "deleteLaneTitle": "Delete this lane?",
-        "deleteLaneMessage": "Lane \"{name}\" will be removed from the plan.",
+        "deleteLaneMessage": "Lane \"{name}\" will be removed from the plan. A lane that still holds steps is refused and nothing changes: move or delete its steps first. A plan always keeps at least one lane.",
         "renameStep": "Step name",
         "deleteStep": "Delete step",
         "deleteStepTitle": "Delete this step?",

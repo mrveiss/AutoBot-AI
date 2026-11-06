@@ -8,7 +8,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BaseButton } from '@autobot/ui'
+import { BaseButton, BaseInput, BaseSelectMenu } from '@autobot/ui'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import type { Edge, EdgePatch, Plan } from '@/composables/llc/workflowPlanTypes'
 
@@ -25,6 +25,7 @@ const from = ref('')
 const to = ref('')
 const steps = computed(() => props.plan.steps ?? [])
 const edges = computed(() => props.plan.edges ?? [])
+const stepOptions = computed(() => steps.value.map((s) => ({ value: s.key, label: s.label })))
 
 function label(key: string): string {
   return steps.value.find((s) => s.key === key)?.label ?? key
@@ -57,9 +58,10 @@ async function cut(e: Edge) {
     <ul>
       <li v-for="e in edges" :key="`${e.from_step}>${e.to_step}`" class="flex flex-wrap items-center gap-2 py-1 text-sm text-autobot-text-secondary">
         <span>{{ label(e.from_step) }} &rarr; {{ label(e.to_step) }}</span>
-        <input
-          :value="e.condition ?? ''"
-          class="min-w-48 flex-1 rounded-md border border-autobot-border bg-autobot-bg-card px-2 py-1 text-sm text-autobot-text-primary"
+        <BaseInput
+          :model-value="e.condition ?? ''"
+          size="sm"
+          class="min-w-48 flex-1"
           :aria-label="t('llc.workflowPlanner.map.edgeCondition')"
           :placeholder="t('llc.workflowPlanner.map.edgeCondition')"
           :disabled="busy"
@@ -72,14 +74,8 @@ async function cut(e: Edge) {
       </li>
     </ul>
     <div class="mt-2 flex flex-wrap items-end gap-3">
-      <select v-model="from" class="rounded-md border border-autobot-border bg-autobot-bg-card px-2 py-1.5 text-sm text-autobot-text-primary" :aria-label="t('llc.workflowPlanner.map.edgeFrom')" data-testid="edge-from">
-        <option value="" disabled>{{ t('llc.workflowPlanner.map.edgeFrom') }}</option>
-        <option v-for="s in steps" :key="s.key" :value="s.key">{{ s.label }}</option>
-      </select>
-      <select v-model="to" class="rounded-md border border-autobot-border bg-autobot-bg-card px-2 py-1.5 text-sm text-autobot-text-primary" :aria-label="t('llc.workflowPlanner.map.edgeTo')" data-testid="edge-to">
-        <option value="" disabled>{{ t('llc.workflowPlanner.map.edgeTo') }}</option>
-        <option v-for="s in steps" :key="s.key" :value="s.key">{{ s.label }}</option>
-      </select>
+      <BaseSelectMenu v-model="from" :options="stepOptions" size="sm" :label="t('llc.workflowPlanner.map.edgeFrom')" :placeholder="t('llc.workflowPlanner.map.edgeFrom')" data-testid="edge-from" />
+      <BaseSelectMenu v-model="to" :options="stepOptions" size="sm" :label="t('llc.workflowPlanner.map.edgeTo')" :placeholder="t('llc.workflowPlanner.map.edgeTo')" data-testid="edge-to" />
       <BaseButton size="sm" variant="secondary" :disabled="busy || !from || !to || from === to" data-testid="add-edge" @click="connect">
         {{ t('llc.workflowPlanner.map.addEdge') }}
       </BaseButton>

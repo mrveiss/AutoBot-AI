@@ -22,6 +22,7 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
+import { defineComponent, h } from 'vue'
 import WorkflowPlanDetail from '../WorkflowPlanDetail.vue'
 import { useWorkflowPlans } from '@/composables/llc/useWorkflowPlans'
 
@@ -55,11 +56,27 @@ const GATE = { status: 'labeled', next_status: 'approved', missing: [] }
 async function open(tab: string): Promise<VueWrapper> {
   get.mockImplementation((url: string) => Promise.resolve(url === `${BASE}/gate` ? GATE : PLAN))
   for (const verb of [post, patch, del]) verb.mockResolvedValue(PLAN)
-  const w = mount(WorkflowPlanDetail, { props: { planKey: 'quote', api: useWorkflowPlans() }, global: { plugins: [i18n] } })
+  const w = mount(WorkflowPlanDetail, { props: { planKey: 'quote', api: useWorkflowPlans() }, global: { plugins: [i18n], stubs: { BaseSelectMenu: SelectStub } } })
   await flushPromises()
   await w.find(`[data-testid="step-${tab}"]`).trigger('click')
   return w
 }
+
+/** The kit select drives a headless listbox; the tests need only its v-model contract. */
+const SelectStub = defineComponent({
+  props: { modelValue: { type: String, default: '' }, options: { type: Array, default: () => [] }, label: { type: String, default: '' } },
+  emits: ['update:modelValue'],
+  setup(props, { emit, attrs }) {
+    return () =>
+      h('select', { ...attrs, 'aria-label': props.label, value: props.modelValue, onChange: (e: Event) => emit('update:modelValue', (e.target as HTMLSelectElement).value) }, [
+        h('option', { value: '' }),
+        ...(props.options as { value: string; label: string }[]).map((o) => h('option', { value: o.value }, o.label)),
+      ])
+  },
+})
+
+/** The inline edit fields; the add-row fields are the inputs outside them. */
+const EDIT_FIELDS = '[data-testid^="rename-"], [data-testid^="edge-condition-"], [data-testid^="edit-edge-case-"]'
 
 const settle = () => flushPromises()
 
@@ -72,7 +89,7 @@ describe('map step edits one lane, step or edge at a time', () => {
   it('POST /lanes adds a lane', async () => {
     const w = await open('map')
     // the first input without a test id is the "Lane name" field of the add row
-    await w.findAll('input').find((i) => !i.attributes('data-testid'))!.setValue('Sales')
+    await w.findAll('input').find((i) => !i.element.closest(EDIT_FIELDS))!.setValue('Sales')
     await w.find('[data-testid="add-lane"]').trigger('click')
     await settle()
     expect(post).toHaveBeenCalledWith(`${BASE}/lanes`, { key: 'lane-2', name: 'Sales', holder_kind: 'user', position: 1 })
@@ -80,7 +97,7 @@ describe('map step edits one lane, step or edge at a time', () => {
 
   it('PATCH /lanes/{lane_key} renames a lane', async () => {
     const w = await open('map')
-    const input = w.find('[data-testid="rename-lane-lane-1"]')
+    const input = w.find('[data-testid="rename-lane-lane-1"] input')
     await input.setValue('Founder')
     await input.trigger('change')
     await settle()
@@ -100,7 +117,7 @@ describe('map step edits one lane, step or edge at a time', () => {
 
   it('POST /steps adds a step that is connected to nothing', async () => {
     const w = await open('map')
-    const fields = w.findAll('input').filter((i) => !i.attributes('data-testid'))
+    const fields = w.findAll('input').filter((i) => !i.element.closest(EDIT_FIELDS))
     await fields[2].setValue('Site visit') // lane name, step, then the unconnected-step field
     await w.find('[data-testid="add-loose-step"]').trigger('click')
     await settle()
@@ -110,7 +127,7 @@ describe('map step edits one lane, step or edge at a time', () => {
 
   it('PATCH /steps/{step_key} renames a step', async () => {
     const w = await open('map')
-    const input = w.find('[data-testid="rename-step-step-1"]')
+    const input = w.find('[data-testid="rename-step-step-1"] input')
     await input.setValue('Ask about the job')
     await input.trigger('change')
     await settle()
@@ -135,7 +152,7 @@ describe('map step edits one lane, step or edge at a time', () => {
 
   it('PATCH /edges/{from}/{to} sets the condition of a path', async () => {
     const w = await open('map')
-    const input = w.find('[data-testid="edge-condition-step-1-step-2"]')
+    const input = w.find('[data-testid="edge-condition-step-1-step-2"] input')
     await input.setValue('  if approved ')
     await input.trigger('change')
     await settle()
@@ -150,10 +167,26 @@ describe('map step edits one lane, step or edge at a time', () => {
   })
 })
 
+describe('a declined confirmation never reaches the API', () => {
+  it.each([
+    ['map', 'delete-lane-lane-1'],
+    ['map', 'delete-step-step-2'],
+    ['map', 'delete-edge-step-1-step-2'],
+    ['label', 'delete-edge-case-edge-1'],
+  ])('%s: %s', async (tab, testid) => {
+    const w = await open(tab)
+    confirmFn.mockResolvedValue(false)
+    await w.find(`[data-testid="${testid}"]`).trigger('click')
+    await settle()
+    expect(confirmFn).toHaveBeenCalledTimes(1)
+    expect(del).not.toHaveBeenCalled()
+  })
+})
+
 describe('label step edits and deletes an edge case', () => {
   it('PATCH /edge-cases/{edge_case_key} rewords an edge case', async () => {
     const w = await open('label')
-    const input = w.find('[data-testid="edit-edge-case-edge-1"]')
+    const input = w.find('[data-testid="edit-edge-case-edge-1"] input')
     await input.setValue('Customer walks away')
     await input.trigger('change')
     await settle()

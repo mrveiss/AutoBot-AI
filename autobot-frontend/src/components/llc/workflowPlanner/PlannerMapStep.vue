@@ -100,9 +100,9 @@ function noteOf(e: Event): string | null {
     <EmptyState v-if="!lanes.length" :title="t('llc.workflowPlanner.map.empty')" :description="t('llc.workflowPlanner.map.emptyHint')" />
     <div v-for="lane in lanes" :key="lane.key" class="mb-2 flex gap-3 rounded-md border border-autobot-border p-3" :data-testid="`lane-${lane.key}`">
       <div class="flex w-48 shrink-0 flex-col gap-1">
-        <input
-          :value="lane.name"
-          class="rounded-md border border-autobot-border bg-autobot-bg-card px-2 py-1 text-sm font-semibold text-autobot-text-primary"
+        <BaseInput
+          :model-value="lane.name"
+          size="sm"
           :aria-label="t('llc.workflowPlanner.map.renameLane')"
           :disabled="busy"
           :data-testid="`rename-lane-${lane.key}`"
@@ -114,9 +114,9 @@ function noteOf(e: Event): string | null {
       </div>
       <ul class="flex flex-wrap gap-2">
         <li v-for="s in stepsIn(lane.key)" :key="s.key" class="flex items-center gap-1 rounded-md bg-autobot-bg-card px-2 py-1 text-sm text-autobot-text-secondary">
-          <input
-            :value="s.label"
-            class="rounded-md border border-autobot-border bg-autobot-bg-card px-2 py-1 text-sm text-autobot-text-primary"
+          <BaseInput
+            :model-value="s.label"
+            size="sm"
             :aria-label="t('llc.workflowPlanner.map.renameStep')"
             :disabled="busy"
             :data-testid="`rename-step-${s.key}`"
