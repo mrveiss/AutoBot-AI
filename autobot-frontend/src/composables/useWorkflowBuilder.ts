@@ -21,6 +21,7 @@ import type { ApiResponse } from '@/types/api';
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
 import type { WorkflowTemplateDetail } from '@/types/workflowTemplates';
 import { useWebSocket } from '@/composables/useWebSocket';
+import { refreshIfDisplayed, useWorkflowSocketNotices } from '@/composables/useWorkflowSocketNotices';
 import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl';
 import { useLoadingState } from '@/composables/useLoadingState';
 
@@ -567,6 +568,7 @@ const apiClient = new WorkflowBuilderApiClient();
 // ==================================================================================
 
 export function useWorkflowBuilder() {
+  const { showWorkflowNotice } = useWorkflowSocketNotices();
   // ==================================================================================
   // STATE
   // ==================================================================================
@@ -1146,37 +1148,28 @@ export function useWorkflowBuilder() {
         : 'executing';
   }
 
+  /** Tell the user, then refresh the workflow the step belongs to (#17677). */
+  function onWorkflowNotice(data: Record<string, unknown>): void {
+    const workflowId = showWorkflowNotice(data);
+    if (data.type === 'automation_control_refused') return;
+    if (workflowId) void refreshIfDisplayed(currentWorkflow, workflowId, (id) => apiClient.getWorkflowStatus(id)); // the step's new status lives on the workflow
+    loadActiveWorkflows();
+  }
+
   /**
    * Handle WebSocket messages.
    *
-   * #17643: these cases are reconciled against **this** transport's producer,
-   * which is `services/workflow_automation/*` sending `{"type": ...}` over
-   * `workflow_ws/{session_id}` -- not `api/workflow.py`'s bus publishes, which
-   * reach the live dashboard instead. The two vocabularies are disjoint, and
-   * three of the four cases here were matching names that producer never
-   * sends:
+   * #17643: the cases are reconciled against **this** transport's producer,
+   * `services/workflow_automation/*` over `workflow_ws/{session_id}` -- not
+   * `api/workflow.py`'s bus publishes, which reach the live dashboard. The
+   * vocabularies are disjoint. Names this producer never sends and that were
+   * dropped: `workflow_status_update` (no producer anywhere; the capability is
+   * `applyWorkflowProgress`), `step_completed` and `approval_required` (the
+   * plan approval is `workflow_plan_presented`, request under `plan`).
    *
-   *   `workflow_status_update`  no producer on any transport. It carried the
-   *                             in-place update of `currentWorkflow`; nothing
-   *                             on this socket sends a whole workflow object,
-   *                             so there is no data source to wire it to. The
-   *                             capability itself is delivered by
-   *                             `applyWorkflowProgress` above, on the
-   *                             transport that does carry the fields.
-   *   `step_completed`          this producer's step events are `step_failed`,
-   *                             `step_confirmation_required` and
-   *                             `step_rejected_by_judge`; there is no
-   *                             `step_completed`.
-   *   `approval_required`       the plan approval arrives as
-   *                             `workflow_plan_presented`, with the request
-   *                             under `plan` rather than `approval`.
-   *
-   * `start_workflow`, `step_confirmation_required`, `step_rejected_by_judge`
-   * and `automation_control_refused` are sent by the producer and still
-   * unhandled here -- they need user-facing surfaces that do not exist yet, so
-   * they are filed as #17677 rather than stubbed. `step_confirmation_required`
-   * is the consequential one: the executor blocks waiting for a confirmation
-   * this UI never asks for.
+   * #17677: `step_confirmation_required`, `step_rejected_by_judge` and
+   * `automation_control_refused` raise a notice and are never answered here;
+   * `start_workflow` is server-to-client only and refreshes the list.
    */
   function handleWebSocketMessage(data: Record<string, unknown>): void {
     const messageType = data.type as string;
@@ -1185,6 +1178,12 @@ export function useWorkflowBuilder() {
       case 'workflow_plan_presented':
         pendingApproval.value = data.plan as PlanApprovalRequest;
         break;
+      case 'step_confirmation_required':
+      case 'step_rejected_by_judge':
+      case 'automation_control_refused':
+        onWorkflowNotice(data);
+        break;
+      case 'start_workflow':
       case 'step_failed':
       case 'workflow_completed':
       case 'workflow_cancelled':
@@ -1193,7 +1192,7 @@ export function useWorkflowBuilder() {
         loadActiveWorkflows();
         break;
       default:
-        logger.debug('Unhandled WebSocket message:', data);
+        logger.warn('Unhandled WebSocket message:', data);
     }
   }
 

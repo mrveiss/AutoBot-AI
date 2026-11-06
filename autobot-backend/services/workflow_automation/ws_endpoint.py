@@ -68,6 +68,13 @@ async def _control(websocket: WebSocket, manager, message: dict, user: dict) -> 
         return
     if not may_control(manager, workflow_id, user):
         logger.warning("Refused %s: %s on workflow %s", user.get("username"), action, workflow_id)
-        await websocket.send_json({"type": "automation_control_refused", "workflow_id": workflow_id})
+        await websocket.send_json(
+            {
+                "type": "automation_control_refused",
+                "workflow_id": workflow_id,
+                "action": action,
+                "reason": "not_admin_or_owner",
+            }
+        )
         return
     await manager.handle_workflow_control(WorkflowControlRequest(workflow_id=workflow_id, action=action))
