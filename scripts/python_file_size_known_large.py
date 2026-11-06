@@ -421,7 +421,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/api/nodes_execution_test.py": 756,
     "autobot-slm-backend/api/orchestration.py": 769,
     "autobot-slm-backend/api/performance.py": 894,
-    "autobot-slm-backend/api/roles.py": 685,
+    "autobot-slm-backend/api/roles.py": 681,
     "autobot-slm-backend/api/security.py": 962,
     "autobot-slm-backend/api/services.py": 1016,
     "autobot-slm-backend/api/setup_wizard.py": 1327,
@@ -447,7 +447,7 @@ KNOWN_LARGE: dict[str, int] = {
     # as a live violation, not #5060 backlog -- see #14630.
     "autobot-slm-backend/services/reconciler_remediation_tracker_expiry_14465_test.py": 783,
     "autobot-slm-backend/services/replication.py": 785,
-    "autobot-slm-backend/services/role_registry.py": 704,
+    "autobot-slm-backend/services/role_registry.py": 690,
     "autobot-slm-backend/services/service_orchestrator.py": 913,
     "autobot-slm-backend/slm/agent/agent.py": 630,
     "autobot-slm-backend/tests/api/test_code_sync_deploy_bugs.py": 1990,  # #18052: resolver test moved out
