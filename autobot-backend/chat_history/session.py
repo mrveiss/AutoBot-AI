@@ -421,8 +421,8 @@ class SessionMixin(SessionLockMixin):
     ) -> None:
         """Atomic write under the session lease and file lock (#665, #20862); a failure is raised.
 
-        No direct-write fallback: truncating the file in place leaves it unreadable if the process dies
-        mid-write. ``before_replace`` runs right before the replace; if it raises, nothing is written.
+        A filesystem refusal of the atomic path falls back to an in-place write, still locked and
+        fenced by ``before_replace`` (``file_io.atomic_write``); if that raises, nothing is written.
         """
         await self._atomic_write(chat_file, self._encrypt_data(chat_data), before_replace)
 

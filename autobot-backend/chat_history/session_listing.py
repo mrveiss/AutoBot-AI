@@ -17,7 +17,7 @@ when the main asyncio thread pool is saturated by indexing operations.
 import json
 import os
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Dict, List
 
 import aiofiles
 
@@ -92,7 +92,14 @@ class SessionListingMixin:
     - self._get_chats_directory(): method
     - self._decrypt_data(): method
     - self._cleanup_old_session_files(): method
+    - self._write_session_to_storage(): method (SessionMixin)
     """
+
+    if TYPE_CHECKING:  # the host interface the orphan import calls, declared like SessionLockMixin does
+
+        async def _write_session_to_storage(
+            self, chat_file: str, chat_data: Dict[str, Any], before_replace: Callable[[], Awaitable[None]] | None = None
+        ) -> None: ...
 
     async def _ensure_chats_directory_exists(self, chats_directory: str) -> bool:
         """Ensure chats directory exists, creating if necessary. Issue #620.

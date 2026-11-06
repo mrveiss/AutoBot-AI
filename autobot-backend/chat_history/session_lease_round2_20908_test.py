@@ -146,7 +146,15 @@ async def test_a_failed_stub_write_leaves_no_chat_file(tmp_path, monkeypatch):
     def refuse(*_args):
         raise OSError("disk full")
 
+    real_open = file_io.aiofiles.open
+
+    def open_only_the_temp(path, *args, **kwargs):  # the in-place fallback hits the same full disk
+        if not os.path.basename(path).startswith(".tmp_chat_"):
+            raise OSError("disk full")
+        return real_open(path, *args, **kwargs)
+
     monkeypatch.setattr(os, "replace", refuse)
+    monkeypatch.setattr(file_io.aiofiles, "open", open_only_the_temp)
     with pytest.raises(OSError):
         await TerminalLogger(data_dir=str(tmp_path))._ensure_chat_json_exists("t2")
     assert not (tmp_path / "t2_chat.json").exists()

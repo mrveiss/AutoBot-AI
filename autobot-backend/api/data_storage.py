@@ -425,8 +425,8 @@ async def delete_conversation(
         if "/" in conversation_id or "\\" in conversation_id or ".." in conversation_id:
             raise HTTPException(status_code=400, detail="Invalid conversation ID")
 
-        files_deleted = []
-        errors = []
+        files_deleted: list[str] = []
+        errors: list[str] = []
 
         # #18293: a legacy transcript is protected exactly like its bulk category -- its
         # disposal goes through the #17038 review queue, never through this route.

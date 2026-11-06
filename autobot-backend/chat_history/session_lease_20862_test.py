@@ -12,10 +12,12 @@ import asyncio
 import contextvars
 import json
 import threading
+from contextlib import asynccontextmanager
 
 import fakeredis.aioredis
 import pytest
 
+from chat_history import file_io
 from chat_history import session_lease as lease_mod
 from chat_history.deduplication import DeduplicationMixin
 from chat_history.file_io import FileIOMixin
@@ -410,3 +412,96 @@ def test_merging_a_large_snapshot_is_linear():
 
 
 bound_async_tests(globals())  # no pytest-timeout in the repo: bound each test here
+
+
+def _refuse_replace(monkeypatch, error: BaseException) -> None:
+    def refuse(*_args):
+        raise error
+
+    monkeypatch.setattr("chat_history.file_io.os.replace", refuse)
+
+
+async def test_a_refused_replace_falls_back_to_a_locked_fenced_in_place_write(manager, tmp_path, monkeypatch):
+    await manager.save_session("s40", messages=[_msg("first", "t0")])
+    inode = (tmp_path / "s40_chat.json").stat().st_ino
+    seen = {}
+    real_lock = file_io.session_file_lock
+
+    @asynccontextmanager
+    async def watched_lock(path):
+        async with real_lock(path):
+            seen["locked"] = True
+            yield
+            seen["locked"] = False
+
+    real_in_place = file_io._write_in_place
+
+    async def in_place(path, content):
+        seen["locked_during_write"] = seen.get("locked")
+        await real_in_place(path, content)
+
+    monkeypatch.setattr(file_io, "session_file_lock", watched_lock)
+    monkeypatch.setattr(file_io, "_write_in_place", in_place)
+    _refuse_replace(monkeypatch, PermissionError("replace refused"))
+    await manager.save_session("s40", messages=[_msg("first", "t0"), _msg("second", "t1")])
+    assert _texts(tmp_path, "s40") == ["first", "second"]
+    assert seen["locked_during_write"] is True
+    assert (tmp_path / "s40_chat.json").stat().st_ino == inode  # written in place
+    assert not [p for p in tmp_path.iterdir() if p.name.startswith(".tmp_chat_")]
+
+
+async def test_the_fallback_is_refused_for_a_stale_generation(manager, tmp_path, monkeypatch):
+    await manager.save_session("s41", messages=[_msg("first", "t0")])
+    before = _raw(tmp_path, "s41")
+    real_stored, real_stage = manager._stored_generation, file_io._stage_temp
+    staged = []
+
+    async def stage_then_another_writer_lands(*args):
+        staged.append(True)  # past the lease fence; the file now moves on
+        return await real_stage(*args)
+
+    async def newer_at_the_file(*args):
+        return 10**9 if staged else await real_stored(*args)
+
+    monkeypatch.setattr(file_io, "_stage_temp", stage_then_another_writer_lands)
+    manager._stored_generation = newer_at_the_file
+    _refuse_replace(monkeypatch, PermissionError("replace refused"))
+    with pytest.raises(StaleGenerationError):
+        await manager.save_session("s41", messages=[_msg("first", "t0"), _msg("late", "t9")])
+    assert _raw(tmp_path, "s41") == before
+
+
+async def test_the_fallback_does_not_recreate_a_deleted_file(manager, tmp_path, monkeypatch):
+    await manager.save_session("s42", messages=[_msg("first", "t0")])
+    _refuse_replace(monkeypatch, PermissionError("replace refused"))
+    real_write = manager._atomic_write
+
+    async def delete_then_write(file_path, content, before_replace=None):
+        (tmp_path / "s42_chat.json").unlink()
+        await real_write(file_path, content, before_replace)
+
+    manager._atomic_write = delete_then_write
+    with pytest.raises(lease_mod.SessionLeaseLost):
+        await manager.save_session("s42", messages=[_msg("first", "t0"), _msg("late", "t9")])
+    assert not (tmp_path / "s42_chat.json").exists()
+
+
+async def test_an_error_that_is_not_a_filesystem_refusal_does_not_fall_back(manager, tmp_path, monkeypatch):
+    await manager.save_session("s43", messages=[_msg("first", "t0")])
+    before = _raw(tmp_path, "s43")
+    _refuse_replace(monkeypatch, RuntimeError("not a filesystem refusal"))
+    with pytest.raises(RuntimeError):
+        await manager.save_session("s43", messages=[_msg("first", "t0"), _msg("late", "t9")])
+    assert _raw(tmp_path, "s43") == before
+
+
+async def test_a_failed_fallback_raises(manager, tmp_path, monkeypatch):
+    await manager.save_session("s44", messages=[_msg("first", "t0")])
+    _refuse_replace(monkeypatch, PermissionError("replace refused"))
+
+    async def refuse_in_place(path, content):
+        raise PermissionError("in place refused too")
+
+    monkeypatch.setattr(file_io, "_write_in_place", refuse_in_place)
+    with pytest.raises(PermissionError, match="in place"):
+        await manager.save_session("s44", messages=[_msg("first", "t0"), _msg("late", "t9")])

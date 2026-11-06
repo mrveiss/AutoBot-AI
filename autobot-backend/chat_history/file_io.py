@@ -15,6 +15,7 @@ when the main asyncio thread pool is saturated by indexing operations.
 """
 
 import asyncio
+import contextlib
 import fcntl
 import functools
 import json
@@ -178,29 +179,77 @@ async def atomic_write(
     *,
     run: Callable[..., Awaitable[Any]] = run_in_chat_io_executor,
 ) -> None:
-    """Write *content* to *file_path* atomically: the one write path for a session file (#20862).
+    """Write *content* to *file_path*: the one write path for a session file (#20862).
 
     The content goes to a temp file beside the target (same filesystem, so ``os.replace`` is atomic),
     then, under the file's sidecar lock, *before_replace* runs (the caller's last check; if it raises,
-    nothing is replaced) and the temp file is renamed over the target. A reader sees the old file or
+    nothing is written) and the temp file is renamed over the target. A reader sees the old file or
     the new one, never a partial one. Issue #718: blocking calls go through *run*, the chat I/O executor.
+
+    Fallback (#665): when the filesystem refuses the temp file or the rename (an ``OSError`` on the
+    atomic path only), the content is written in place, in the same locked step and after the same
+    *before_replace* check, so it is fenced and cannot resurrect a deleted file. Lock, lease and
+    check failures never fall back; a failed in-place write raises.
     """
-    fd, temp_path = await run(tempfile.mkstemp, ".json", ".tmp_chat_", os.path.dirname(file_path))
+    temp_path = await _stage_temp(file_path, content, run)
     try:
-        await run(fcntl.flock, fd, fcntl.LOCK_EX)
-        os.close(fd)  # closed so aiofiles can open the path
-        async with aiofiles.open(temp_path, "w", encoding="utf-8") as f:
-            await f.write(content)
         async with session_file_lock(file_path):
             if before_replace is not None:
                 await before_replace()
-            await run(os.replace, temp_path, file_path)
+            if temp_path is None or not await _replace(temp_path, file_path, run):
+                await _write_in_place(file_path, content)
         logger.debug("Atomic write completed: %s", file_path)
     except Exception as e:
-        logger.error("Atomic write failed for %s: %s", file_path, e)
+        logger.error("Session write failed for %s: %s", file_path, e)
         raise
     finally:
-        await _discard_temp(temp_path, run)
+        if temp_path is not None:
+            await _discard_temp(temp_path, run)
+
+
+async def _stage_temp(file_path: str, content: str, run: Callable[..., Awaitable[Any]]) -> str | None:
+    """Write *content* to a temp file beside *file_path*; None when the filesystem refuses (OSError)."""
+    temp_path = None
+    try:
+        fd, temp_path = await run(tempfile.mkstemp, ".json", ".tmp_chat_", os.path.dirname(file_path))
+        try:
+            await run(fcntl.flock, fd, fcntl.LOCK_EX)
+        finally:
+            os.close(fd)  # closed so aiofiles can open the path
+        async with aiofiles.open(temp_path, "w", encoding="utf-8") as f:
+            await f.write(content)
+    except OSError as e:
+        logger.warning("Atomic write of %s unavailable, will write in place: %s", file_path, e)
+        if temp_path is not None:
+            await _discard_temp(temp_path, run)
+        return None
+    return temp_path
+
+
+async def _replace(temp_path: str, file_path: str, run: Callable[..., Awaitable[Any]]) -> bool:
+    """Rename *temp_path* over *file_path*; False when the filesystem refuses (OSError)."""
+    try:
+        await run(os.replace, temp_path, file_path)
+    except OSError as e:
+        logger.warning("Atomic replace of %s failed, will write in place: %s", file_path, e)
+        return False
+    return True
+
+
+async def _write_in_place(file_path: str, content: str) -> None:
+    """The fallback write; only called inside the session file lock, after the caller's check.
+
+    A write that fails on a file this call created removes it, so no partial file is left behind.
+    """
+    existed = os.path.exists(file_path)
+    try:
+        async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
+            await f.write(content)
+    except BaseException:
+        if not existed:
+            with contextlib.suppress(OSError):
+                os.unlink(file_path)
+        raise
 
 
 async def _discard_temp(temp_path: str, run: Callable[..., Awaitable[Any]]) -> None:

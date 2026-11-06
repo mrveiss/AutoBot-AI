@@ -12,7 +12,7 @@ was loaded before it waited.
 
 import os
 import time
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Dict, List, Literal, Optional, Tuple, overload
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
@@ -57,6 +57,8 @@ class SessionLockMixin:
         def _get_chats_directory(self) -> str: ...
 
         async def _ensure_chats_directory_exists(self, chats_directory: str) -> None: ...
+
+        def _dedupe_streaming_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]: ...
 
         async def _resolve_session_file_path(self, session_id: str, chats_directory: str) -> str | None: ...
 
@@ -119,6 +121,28 @@ class SessionLockMixin:
                 raise StaleGenerationError(session_id, lease.generation, on_disk)
 
         return check
+
+    @overload
+    async def _locked_update(
+        self,
+        session_id: str,
+        operation: str,
+        mutate: Callable[[Dict[str, Any]], None],
+        *,
+        must_exist: Literal[False] = False,
+        after: Optional[AfterWrite] = None,
+    ) -> Dict[str, Any]: ...
+
+    @overload
+    async def _locked_update(
+        self,
+        session_id: str,
+        operation: str,
+        mutate: Mutation,
+        *,
+        must_exist: bool = False,
+        after: Optional[AfterWrite] = None,
+    ) -> Optional[Dict[str, Any]]: ...
 
     async def _locked_update(
         self,
