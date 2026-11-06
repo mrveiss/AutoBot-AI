@@ -302,6 +302,42 @@ async def test_recovery_for_a_stuck_item_with_no_project_is_noted_on_the_item_no
     assert bugs == [] and len(notes) == 1 and "Recovery" in notes[0].body
 
 
+async def _unfiled_run_recovery(session, admins):
+    """Time out a run with no work item in a company with no project; return (publish mock, company)."""
+    empty_company = str(uuid.uuid4())
+    redis = AsyncMock()
+    run = SimpleNamespace(id=uuid.uuid4())
+    monitor = LivenessMonitor(poll_interval=9999)
+    with (
+        patch.object(LivenessMonitor, "_resolve_manager", new=AsyncMock(return_value=None)),
+        patch("llc.scheduler.liveness_monitor.active_admin_ids", new=AsyncMock(return_value=admins)),
+        patch("llc.scheduler.liveness_monitor.get_async_redis_client", new=AsyncMock(return_value=redis)),
+    ):
+        await monitor._create_recovery_item(session, run, None, empty_company, "agent-007")
+    return redis.publish, empty_company, run
+
+
+async def test_unfiled_recovery_with_no_work_item_notifies_the_company_admins(session):
+    import json
+
+    admin = uuid.uuid4()
+    publish, company, run = await _unfiled_run_recovery(session, {admin})
+    publish.assert_awaited_once()
+    channel, raw = publish.await_args.args
+    event = json.loads(raw)
+    assert channel == "llc:agent:agent-007" and event["company_id"] == company
+    assert event["event_type"] == "heartbeat_missed" and event["payload"]["reason"] == "recovery_unfiled"
+    assert event["payload"]["recipient_user_ids"] == [str(admin)]
+    assert "agent-007" in event["payload"]["message"] and str(run.id) in event["payload"]["message"]
+
+
+async def test_unfiled_recovery_with_no_work_item_creates_no_project_or_work_item(session):
+    _, company, _ = await _unfiled_run_recovery(session, set())
+    items = (await session.execute(select(LLCWorkItem).where(LLCWorkItem.company_id == uuid.UUID(company)))).scalars()
+    projects = (await session.execute(select(LLCProject).where(LLCProject.company_id == uuid.UUID(company)))).scalars()
+    assert items.all() == [] and projects.all() == []
+
+
 async def test_agent_create_task_without_a_project_gets_an_error_it_can_act_on(session):
     with patch("llc.agent_tools._project_choices", new=AsyncMock(return_value=". Retry with a project_id from: P = 1")):
         with pytest.raises(LLCToolError, match="requires a project_id.*Retry with a project_id"):

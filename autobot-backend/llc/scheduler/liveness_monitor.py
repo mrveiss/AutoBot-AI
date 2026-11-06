@@ -18,6 +18,7 @@ Each run recovers inside its own SAVEPOINT. A failure, the audit write included,
 run alone and is logged; the other runs in the scan, and the transaction they share, are untouched.
 """
 
+import json
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -37,6 +38,7 @@ from ..models.sprint import LLCProject
 from ..models.work_item import LLCWorkItem
 from ..services.activity_log import LLCActivityLogService
 from ..services.actor import audit
+from ..services.authz import active_admin_ids
 from ..services.work_item_hierarchy import HierarchyViolation, parent_if_allowed
 from ..services.work_item_service import WorkItemService
 from .base import PollLoopScheduler
@@ -218,7 +220,9 @@ class LivenessMonitor(PollLoopScheduler):
                 goal_id=str(work_item.goal_id) if work_item and work_item.goal_id else None,
             )
         except HierarchyViolation as exc:
-            await _note_unfiled_recovery(session, svc, work_item, company_id, f"{title}. {description}", exc)
+            await _note_unfiled_recovery(
+                session, svc, work_item, company_id, f"{title}. {description}", exc, run, agent_id
+            )
 
     async def _resolve_manager(self, session: AsyncSession, company_id: str, agent_id: str) -> Optional[str]:
         """Best-effort lookup for the agent's manager agent_id."""
@@ -272,12 +276,49 @@ async def _recovery_project(session: AsyncSession, work_item: Optional[LLCWorkIt
     return str(found) if found else None
 
 
-async def _note_unfiled_recovery(session, svc, work_item, company_id: str, text_: str, exc: Exception) -> None:
+async def _note_unfiled_recovery(
+    session, svc, work_item, company_id: str, text_: str, exc: Exception, run: LLCHeartbeatRun, agent_id: str
+) -> None:
     """The recovery Bug was refused (a stuck item from before the every-item-has-a-project rule may have no
-    project, #18978): record it on the stuck item itself so the recovery is not lost."""
+    project, #18978): record it on the stuck item itself so the recovery is not lost. A run with no work item has
+    nowhere to comment, so the company's admins are told through the notification router instead (#20687);
+    nothing is created for it."""
     logger.error("Recovery item not created (%s); noting it on the stuck work item", exc)
     if work_item is not None:
         await svc.add_comment(session, str(work_item.id), company_id, f"{text_} ({exc})")
+        return
+    await _notify_admins_unfiled_recovery(session, company_id, agent_id, run, exc)
+
+
+async def _notify_admins_unfiled_recovery(
+    session, company_id: str, agent_id: str, run: LLCHeartbeatRun, exc: Exception
+) -> None:
+    """Tell the company's admins: ``heartbeat_missed`` (reason ``recovery_unfiled``) on the router's ``llc:agent:*``.
+
+    The router fans out per company, never per user (``notifications/router.py`` ``_dispatch`` ->
+    ``publisher.py`` ``company:{id}``), so the admins ride in the payload as ``recipient_user_ids``."""
+    admins = await active_admin_ids(session, uuid.UUID(str(company_id)))
+    redis = await get_async_redis_client()
+    if redis is None:
+        logger.warning("Redis unavailable; admins of company %s not told of the unfiled recovery", company_id)
+        return
+    event = {
+        "company_id": str(company_id),
+        "event_type": "heartbeat_missed",
+        "entity_type": "heartbeat_run",
+        "entity_id": str(run.id),
+        "payload": {
+            "agent_id": str(agent_id),
+            "run_id": str(run.id),
+            "reason": "recovery_unfiled",
+            "recipient_user_ids": sorted(str(a) for a in admins),
+            "message": f"Agent {agent_id} timed out on run {run.id}; no recovery item could be filed ({exc})",
+        },
+    }
+    try:
+        await redis.publish(f"llc:agent:{agent_id}", json.dumps(event))
+    except Exception as err:
+        logger.warning("Failed to notify admins of company %s of the unfiled recovery: %s", company_id, err)
 
 
 def run_id_label(run_id: str) -> str:
