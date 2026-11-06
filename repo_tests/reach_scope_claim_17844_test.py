@@ -193,9 +193,8 @@ def test_the_scope_check_is_satisfiable() -> None:
 def test_a_declared_scope_that_the_sweep_does_not_reach_is_refused() -> None:
     """The synthetic control for `verify_scope`: it must be able to fail.
 
-    The real-fixture mutation above is the one #17844 asks for; this is the cheap half that
-    keeps `reach_declarations_test`'s parametrised sweep from passing vacuously if
-    `verify_scope` ever became a no-op.
+    The real-fixture mutation above is the one #17844 asks for; this is the cheap half that keeps
+    `reach_declarations_test`'s parametrised sweep from passing vacuously if `verify_scope` ever became a no-op.
     """
     overclaiming = Reach(
         name="self-check::overclaiming-scope",
