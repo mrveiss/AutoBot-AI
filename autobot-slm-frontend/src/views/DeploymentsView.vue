@@ -15,9 +15,8 @@ import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useFleetStore } from '@/stores/fleet'
 import { formatFleetDateTime } from '@/composables/useTimezone'
-import { createLogger } from '@/utils/debugUtils'
 import type { Deployment, BlueGreenDeployment, BlueGreenDeploymentCreate, BlueGreenStatus, NodeRole } from '@/types/slm'
-import { BaseAlert, BaseModal, useToast } from '@autobot/ui'
+import { BaseAlert, BaseModal, useToast, createLogger } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 const { t } = useI18n()
 const { showToast } = useToast()
