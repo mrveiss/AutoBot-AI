@@ -20,6 +20,7 @@ from typing import Any, Dict, FrozenSet, List
 import aiofiles
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.path_validator import validate_relative_path
 
 # Issue #765: Use centralized strip_ansi_codes from encoding_utils
 from utils.encoding_utils import strip_ansi_codes
@@ -60,6 +61,10 @@ class TerminalLogger:
             f"TerminalLogger initialized - data_dir: {self.data_dir}, " f"redis_enabled: {redis_client is not None}"
         )
 
+    def _session_file(self, session_id: str, suffix: str) -> Path:
+        """Path of ``<session_id>_<suffix>`` under the data dir; ValueError if it would escape (#20611)."""
+        return validate_relative_path(f"{session_id}_{suffix}", self.data_dir)
+
     async def _ensure_chat_json_exists(self, session_id: str):
         """
         CRITICAL: Ensure chat.json exists before creating terminal.log.
@@ -73,7 +78,7 @@ class TerminalLogger:
         """
         import json
 
-        chat_file = self.data_dir / f"{session_id}_chat.json"
+        chat_file = self._session_file(session_id, "chat.json")
 
         # Only create if it doesn't exist
         # Issue #358 - avoid blocking
@@ -122,7 +127,7 @@ class TerminalLogger:
 
     async def _write_log_to_file(self, session_id: str, log_line: str) -> None:
         """Write a formatted log line to the session terminal log file. Issue #620."""
-        log_file = self.data_dir / f"{session_id}_terminal.log"
+        log_file = self._session_file(session_id, "terminal.log")
         try:
             async with aiofiles.open(log_file, "a", encoding="utf-8") as f:
                 await f.write(log_line + "\n")
@@ -256,7 +261,7 @@ class TerminalLogger:
 
     async def _read_from_file(self, session_id: str, limit: int = 100) -> List[Dict[str, Any]]:
         """Read recent commands from log file."""
-        log_file = self.data_dir / f"{session_id}_terminal.log"
+        log_file = self._session_file(session_id, "terminal.log")
 
         # Issue #358 - avoid blocking
         if not await asyncio.to_thread(log_file.exists):
@@ -389,7 +394,7 @@ class TerminalLogger:
         """
         try:
             # Delete file
-            log_file = self.data_dir / f"{session_id}_terminal.log"
+            log_file = self._session_file(session_id, "terminal.log")
             # Issue #358 - avoid blocking
             if await asyncio.to_thread(log_file.exists):
                 await asyncio.to_thread(log_file.unlink)
