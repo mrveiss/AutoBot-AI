@@ -3,7 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { BaseAlert, BaseSwitch } from '@autobot/ui'
+import { BaseAlert, BaseSwitch, formatBytes } from '@autobot/ui'
 /**
  * CacheSettings - Cache Management Component
  *
@@ -13,7 +13,6 @@ import { BaseAlert, BaseSwitch } from '@autobot/ui'
 
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { formatBytes } from '@/utils/formatHelpers'
 import {
   useAutobotApi,
   autobotApiErrorMessage,
