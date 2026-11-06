@@ -181,13 +181,14 @@ REMEASURE_REL = "repo_tests/unconnected_code_remeasure_20910.txt"
 
 def _remeasure_keys(text: str) -> set[str]:
     """The frozen one-time re-measure (#20910): comment lines dropped."""
-    return {ln for ln in text.split("\n") if ln and not ln.startswith("#")}
+    # rstrip: a key ending in a space (a route with an empty path) loses it to the whitespace hook in this file
+    return {ln.rstrip() for ln in text.split("\n") if ln and not ln.startswith("#")}
 
 
 def _additions_beyond_the_base(current: dict[str, str], base: str, frozen: set[str]) -> list[str]:
     """Baseline keys absent from *base* that the frozen re-measure does not name. The issue an entry links never matters."""
     old_keys = uc.parse_baseline(base)
-    return sorted(k for k in current if k not in old_keys and k not in frozen)
+    return sorted(k for k in current if k not in old_keys and k.rstrip() not in frozen)
 
 
 def test_the_baseline_only_shrinks_against_the_base() -> None:
