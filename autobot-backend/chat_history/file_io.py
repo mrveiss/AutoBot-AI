@@ -109,7 +109,7 @@ async def _lock_current_inode(lock_path: str) -> int:
     descriptor's inode is compared with the path's; a mismatch or a missing path closes and retries.
     """
     while True:
-        fd = await run_in_chat_io_executor(os.open, lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+        fd = await _open_sidecar(lock_path)
         try:
             while not _try_flock(fd):
                 await asyncio.sleep(CHAT_LEASE_POLL_S)
@@ -119,6 +119,26 @@ async def _lock_current_inode(lock_path: str) -> int:
             os.close(fd)
             raise
         os.close(fd)
+
+
+async def _open_sidecar(lock_path: str) -> int:
+    """Open the sidecar in the chat I/O executor without leaking the descriptor on timeout or cancel.
+
+    The open runs to completion in its thread even when the awaiting task is cancelled, so it is
+    shielded and a done-callback closes the descriptor nobody is left to receive.
+    """
+    opening = asyncio.ensure_future(run_in_chat_io_executor(os.open, lock_path, os.O_CREAT | os.O_RDWR, 0o600))
+    try:
+        return await asyncio.shield(opening)
+    except BaseException:
+        opening.add_done_callback(_close_orphaned_fd)
+        raise
+
+
+def _close_orphaned_fd(opened: "asyncio.Future[int]") -> None:
+    """Close the descriptor of an open whose caller gave up."""
+    if not opened.cancelled() and opened.exception() is None:
+        os.close(opened.result())
 
 
 def _is_current_inode(fd: int, lock_path: str) -> bool:

@@ -14,13 +14,28 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from autobot_shared.logging_manager import get_logger
-from chat_history.session_lease import SessionLeaseError
+from chat_history.session_lease import ChatFileUnreadable, SessionLeaseError
 
 logger = get_logger(__name__)
 
 
+CHAT_SESSION_UNREADABLE = {
+    "code": "chat_session_unreadable",
+    "message": "The stored chat session could not be read, so it was not changed.",
+}
+
+
 def register_session_lease_handlers(app: FastAPI) -> None:
-    """Map every ``SessionLeaseError`` (timeout, lost lease or file lock, stale generation) onto a 409."""
+    """Lease contention (timeout, lost lease or file lock, stale generation) is a 409; an unreadable file a 500.
+
+    ``ChatFileUnreadable`` is a ``SessionLeaseError`` but permanent, so retrying cannot help: it gets its
+    own handler (Starlette picks the most specific class) with a typed code and no decode cause in the body.
+    """
+
+    @app.exception_handler(ChatFileUnreadable)
+    async def _chat_unreadable(request: Request, exc: ChatFileUnreadable) -> JSONResponse:
+        logger.error("chat session file unreadable on %s %s: %s", request.method, request.url.path, exc)
+        return JSONResponse(status_code=500, content={"detail": CHAT_SESSION_UNREADABLE})
 
     @app.exception_handler(SessionLeaseError)
     async def _session_conflict(request: Request, exc: SessionLeaseError) -> JSONResponse:

@@ -53,8 +53,14 @@ def test_a_stale_generation_is_a_409(client):
     assert "older than the file's 7" in response.json()["detail"]
 
 
-@pytest.mark.parametrize("path", ["/lost", "/unreadable"])
-def test_every_other_lease_error_is_covered_by_the_same_handler(client, path):
-    response = client.get(path)
+def test_a_lost_lease_or_file_lock_is_still_a_409(client):
+    response = client.get("/lost")
     assert response.status_code == 409
     assert "s1" in response.json()["detail"]
+
+
+def test_an_unreadable_chat_file_is_a_typed_500_without_the_decode_cause(client):
+    response = client.get("/unreadable")
+    assert response.status_code == 500
+    assert response.json()["detail"]["code"] == "chat_session_unreadable"
+    assert "bad" not in response.text and "ValueError" not in response.text

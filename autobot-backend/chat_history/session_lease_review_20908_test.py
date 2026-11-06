@@ -312,4 +312,32 @@ async def test_a_stale_write_cannot_resurrect_a_deleted_session(manager, tmp_pat
     assert not (tmp_path / "dl3_chat.json").exists()
 
 
+async def test_a_cancel_while_the_sidecar_opens_does_not_leak_the_descriptor(tmp_path, monkeypatch):
+    opened_fd: list = []
+    opened, gate = asyncio.Event(), asyncio.Event()
+
+    async def slow_open(func, *args, **kwargs):
+        opened_fd.append(func(*args, **kwargs))  # the thread's open finished ...
+        opened.set()
+        await gate.wait()  # ... but its result is not delivered yet
+        return opened_fd[0]
+
+    monkeypatch.setattr(file_io, "run_in_chat_io_executor", slow_open)
+
+    async def take():
+        async with file_io.session_file_lock(str(tmp_path / "leak_chat.json")):
+            pytest.fail("the cancelled opener got the lock")
+
+    task = asyncio.create_task(take())
+    await opened.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    gate.set()
+    for _ in range(3):
+        await asyncio.sleep(0)  # let the open finish and its done-callback run
+    with pytest.raises(OSError):
+        os.fstat(opened_fd[0])  # closed, not leaked
+
+
 bound_async_tests(globals())  # no pytest-timeout in the repo: bound each test here
