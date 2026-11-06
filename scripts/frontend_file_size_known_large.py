@@ -43,7 +43,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/analytics/panels/CodebaseCrossLanguagePanel.vue": 640,
     "autobot-frontend/src/components/analytics/panels/CodebaseIntelligenceScoresPanel.vue": 1325,
     "autobot-frontend/src/components/analytics/panels/CodebaseOwnershipPanel.vue": 1035,
-    "autobot-frontend/src/components/audit/AuditLogTable.vue": 737,  # #14780 BasePagination: 758 -> 741
+    "autobot-frontend/src/components/audit/AuditLogTable.vue": 720,  # #14780: 758 -> 741; #20176: 725
     "autobot-frontend/src/components/browser/BrowserSessionManager.vue": 640,  # #18849: 654 -> 653
     "autobot-frontend/src/components/charts/BaseChart.vue": 602,
     "autobot-frontend/src/components/charts/FunctionCallGraph.vue": 2153,  # #19906: 2165 -> 2153
@@ -63,7 +63,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/feature-flags/AccessMetrics.vue": 719,
     "autobot-frontend/src/components/feature-flags/EndpointEnforcement.vue": 639,
     "autobot-frontend/src/components/file-browser/FileBrowser.vue": 732,
-    "autobot-frontend/src/components/knowledge/ChromaDBExplorer.vue": 1155,
+    "autobot-frontend/src/components/knowledge/ChromaDBExplorer.vue": 1146,
     "autobot-frontend/src/components/knowledge/EntityExtractor.vue": 776,
     "autobot-frontend/src/components/knowledge/EntityGraphManager.vue": 692,
     "autobot-frontend/src/components/knowledge/GraphConnectionPath.vue": 701,
@@ -139,7 +139,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/BudgetPolicies.vue": 879,
     "autobot-frontend/src/views/BusinessIntelligenceView.vue": 982,  # #20004: 988 -> 987
     "autobot-frontend/src/views/CustomDashboard.vue": 878,  # #18242: 1106 -> 884; train-42 review: -5, then -1
-    "autobot-frontend/src/views/DevSpeedupView.vue": 644,
     "autobot-frontend/src/views/ErrorMonitoringView.vue": 839,
     "autobot-frontend/src/views/EvolutionView.vue": 771,
     "autobot-frontend/src/views/FailureAnalysisDashboard.vue": 768,  # #13422: 799 -> 782; #19906: -> 768
@@ -148,7 +147,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/PluginsView.vue": 1058,
     "autobot-frontend/src/views/SettingsView.vue": 739,
     "autobot-frontend/src/views/VisionAutomationView.vue": 848,
-    "autobot-frontend/src/views/WorkflowBuilderView.vue": 2201,  # #13422: 2300 -> 2267 (kit RiskBadge)
+    "autobot-frontend/src/views/WorkflowBuilderView.vue": 2169,  # #13421: 2201 -> 2169; #13422: 2300 -> 2267
     "autobot-frontend/src/views/llc/BacklogView.vue": 823,
     "autobot-frontend/src/views/llc/CompanyCreationWizard.vue": 909,
     "autobot-frontend/src/views/llc/CompanyPortabilityView.vue": 761,

@@ -42,7 +42,7 @@ async def _propose(user=None, ownerless=True, active="user-1", pending=None):
 async def test_a_valid_proposal_creates_a_pending_approval_and_writes_no_owner() -> None:
     response, gate = await _propose()
     context = gate.return_value.create_approval.await_args.kwargs["context"]
-    assert context == {"action": route.ACTION, "session_id": "s1", "owner": "alice"}
+    assert context == {"action": route.ACTION, "session_id": "s1", "owner": "alice", "owner_id": "user-1"}
     assert response.status == "pending"
 
 

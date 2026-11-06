@@ -70,7 +70,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/api_endpoint_migrations_test.py": 31017,
     "autobot-backend/api/auth.py": 650,
     "autobot-backend/api/batch_jobs.py": 916,
-    "autobot-backend/api/browser_mcp.py": 1323,
+    "autobot-backend/api/browser_mcp.py": 1320,
     "autobot-backend/api/cache_management.py": 692,
     "autobot-backend/api/chat.py": 2644,  # #20195: graph resume stream moved to chat_streaming; #16845: 2644
     "autobot-backend/api/chat_sessions.py": 1859,  # #18293: legacy transcripts only ever proposed
@@ -81,7 +81,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/chromadb_storage.py": 1389,  # #18055: split to problem_storage.py
     "autobot-backend/api/codebase_analytics/duplicate_detector.py": 1119,
     "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 744,
-    "autobot-backend/api/codebase_analytics/endpoints/environment.py": 698,  # #13602: sanitised traversal log
+    "autobot-backend/api/codebase_analytics/endpoints/environment.py": 695,  # #13602: sanitised traversal log
     "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 817,
     "autobot-backend/api/codebase_analytics/endpoints/report.py": 2262,
     "autobot-backend/api/codebase_analytics/endpoints/stats.py": 659,
@@ -132,7 +132,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/security_assessment.py": 913,
     "autobot-backend/api/settings.py": 881,
     "autobot-backend/api/system.py": 995,
-    "autobot-backend/api/terminal.py": 1294,
+    "autobot-backend/api/terminal.py": 1282,
     "autobot-backend/api/terminal_handlers.py": 1225,
     "autobot-backend/api/validation_dashboard.py": 665,
     "autobot-backend/api/vnc_manager.py": 1651,
@@ -238,7 +238,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llc/api/roles.py": 713,
     "autobot-backend/llc/api/sprints.py": 1215,
     "autobot-backend/llc/api/work_items.py": 1302,  # #19582: comment wake moved into the service
-    "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 980,  # #19240 (run key moved out)
+    "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 979,  # #19240 (run key moved out)
     "autobot-backend/llc/services/template.py": 642,
     "autobot-backend/llc/services/work_item_service.py": 1023,  # #20102: completion effects moved out
     "autobot-backend/llc/tests/conftest.py": 832,
@@ -297,7 +297,7 @@ KNOWN_LARGE: dict[str, int] = {
     # #16354: invisible-char table moved to security/unicode_normalization.py
     "autobot-backend/security/prompt_injection_detector.py": 703,
     "autobot-backend/security/security_edge_cases_test.py": 613,
-    "autobot-backend/security/session_ownership.py": 814,
+    "autobot-backend/security/session_ownership.py": 813,
     "autobot-backend/security/threat_detection_refactor_test.py": 880,
     "autobot-backend/security/threat_intelligence.py": 762,
     "autobot-backend/security_layer.py": 715,
