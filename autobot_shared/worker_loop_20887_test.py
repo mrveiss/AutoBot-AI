@@ -262,3 +262,26 @@ def test_startup_main_loop_registration_feeds_run_or_schedule():
     finally:
         audit_middleware._main_event_loop = None
         loop.close()
+
+
+def test_fallback_on_the_main_loop_thread_warns_once_per_call_site(monkeypatch):
+    """The residue is visible: a fixed message plus the caller, once per site, and the work still runs."""
+    logged: list[tuple] = []
+    monkeypatch.setattr(async_compat, "_log_threadsafe", lambda level, msg, *a: logged.append((level, msg, a)))
+    monkeypatch.setattr(async_compat, "_FALLBACK_WARNED", set())
+
+    def sync_caller():
+        async def inner():
+            return 7
+
+        return async_compat.run_or_schedule(inner())
+
+    async def go():
+        async_compat.register_main_loop(asyncio.get_running_loop())
+        return [sync_caller(), sync_caller()]
+
+    assert asyncio.run(asyncio.wait_for(go(), 10)) == [7, 7]
+    assert len(logged) == 1
+    level, msg, args = logged[0]
+    assert level == "warning" and "falling back" in msg
+    assert args == (__name__, "sync_caller")

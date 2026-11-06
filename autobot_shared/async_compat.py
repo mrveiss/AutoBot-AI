@@ -72,6 +72,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import inspect
 import threading
 from typing import Any, Coroutine, TypeVar
 
@@ -112,6 +113,26 @@ def _run_in_fresh_loop_thread(coro: Coroutine[Any, Any, T]) -> T:
         return pool.submit(asyncio.run, coro).result()
 
 
+# Call sites (module, function) already warned about in this process.
+_FALLBACK_WARNED: set[tuple[str, str]] = set()
+
+
+def _warn_fallback_once() -> None:
+    """Log (once per call site per process) that a sync caller blocks the loop it needs (#20887)."""
+    # frame 0 = here, 1 = _run_under_running_loop, 2 = run_or_schedule, 3 = the caller
+    frame = inspect.stack()[3]
+    site = (frame.frame.f_globals.get("__name__", "?"), frame.function)
+    if site in _FALLBACK_WARNED:
+        return
+    _FALLBACK_WARNED.add(site)
+    _log_threadsafe(
+        "warning",
+        "run_or_schedule called synchronously on the API loop thread; falling back to a "
+        "private-loop thread (loop-bound singletons are unsafe there). Caller: %s.%s",
+        *site,
+    )
+
+
 def _run_under_running_loop(coro: Coroutine[Any, Any, T], running: asyncio.AbstractEventLoop) -> T:
     """Delegate while the caller's thread is running ``running`` (#20887)."""
     from autobot_shared import worker_loop
@@ -120,6 +141,7 @@ def _run_under_running_loop(coro: Coroutine[Any, Any, T], running: asyncio.Abstr
     if target is None or target is running:
         # Blocking this thread on its own loop would deadlock, and there is no
         # other shared loop: keep the pre-#20887 detour rather than hang.
+        _warn_fallback_once()
         return _run_in_fresh_loop_thread(coro)
     return worker_loop.run_on_loop(coro, target)
 
