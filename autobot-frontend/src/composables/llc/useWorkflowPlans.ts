@@ -16,6 +16,7 @@ import { describeApiError } from '@/composables/llc/apiErrorMessage'
 import {
   isNotFoundError,
   type BreakdownBody,
+  type EdgeCaseBody,
   type MapBody,
   type OneNumberBody,
   type PlanCreate,
@@ -58,6 +59,8 @@ export function useWorkflowPlans() {
     planRequest(api, 'put', '/api/llc/company-os/workflow-plans/{plan_key}/one-number', { plan_key: key }, body)
   const putBreakdown = (key: string, step: string, body: BreakdownBody) =>
     planRequest(api, 'put', '/api/llc/company-os/workflow-plans/{plan_key}/steps/{step_key}/breakdown', { plan_key: key, step_key: step }, body)
+  const addEdgeCase = (key: string, step: string, body: EdgeCaseBody) =>
+    planRequest(api, 'post', '/api/llc/company-os/workflow-plans/{plan_key}/steps/{step_key}/edge-cases', { plan_key: key, step_key: step }, body)
   const classifySubStep = (key: string, sub: string, classification: Label | null) =>
     planRequest(api, 'patch', '/api/llc/company-os/workflow-plans/{plan_key}/sub-steps/{sub_step_key}', { plan_key: key, sub_step_key: sub }, { classification })
   const acknowledgeByHand = (key: string) =>
@@ -85,6 +88,7 @@ export function useWorkflowPlans() {
     deleteMetric,
     putOneNumber,
     putBreakdown,
+    addEdgeCase,
     classifySubStep,
     acknowledgeByHand,
     previewConversion,

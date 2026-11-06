@@ -148,7 +148,7 @@ onMounted(load)
         <PlannerMapStep v-if="step === 'map'" :plan="plan" :busy="busy" :warnings="warnings" @map="saveMap" @wait-note="(k, n) => run(() => api.setWaitNote(planKey, k, n))" />
         <PlannerMeasureStep v-else-if="step === 'measure'" :plan="plan" :busy="busy" @save="(k, b) => run(() => api.putMetric(planKey, k, b))" @clear="(k) => run(() => api.deleteMetric(planKey, k))" />
         <PlannerOneNumberStep v-else-if="step === 'oneNumber'" :plan="plan" :busy="busy" @save="(b) => run(() => api.putOneNumber(planKey, b))" />
-        <PlannerLabelBoard v-else :plan="plan" :busy="busy" @breakdown="(k, b) => run(() => api.putBreakdown(planKey, k, b))" @classify="(k, l) => run(() => api.classifySubStep(planKey, k, l))" @acknowledge="run(() => api.acknowledgeByHand(planKey))" />
+        <PlannerLabelBoard v-else :plan="plan" :busy="busy" @breakdown="(k, b) => run(() => api.putBreakdown(planKey, k, b))" @add-edge-case="(k, b) => run(() => api.addEdgeCase(planKey, k, b))" @classify="(k, l) => run(() => api.classifySubStep(planKey, k, l))" @acknowledge="run(() => api.acknowledgeByHand(planKey))" />
       </fieldset>
 
       <div v-if="gate?.missing.length && step !== 'convert'" class="mt-4" data-testid="gate-missing">

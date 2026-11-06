@@ -12,11 +12,13 @@ import { useI18n } from 'vue-i18n'
 import { BaseButton, BaseInput } from '@autobot/ui'
 import {
   breakdownWith,
+  edgeCaseWith,
   edgeCasesFor,
   LABEL_COLOR_VAR,
   LABELS,
   subStepsFor,
   type BreakdownBody,
+  type EdgeCaseBody,
   type Label,
   type Plan,
 } from '@/composables/llc/workflowPlanTypes'
@@ -24,12 +26,14 @@ import {
 const props = defineProps<{ plan: Plan; busy: boolean }>()
 const emit = defineEmits<{
   breakdown: [stepKey: string, body: BreakdownBody]
+  addEdgeCase: [stepKey: string, body: EdgeCaseBody]
   classify: [subStepKey: string, label: Label | null]
   acknowledge: []
 }>()
 const { t } = useI18n()
 
 const newSub = ref('')
+const newCase = ref('')
 const stepKey = computed(() => props.plan.one_number?.step_key ?? '')
 const subs = computed(() => subStepsFor(props.plan, stepKey.value))
 const cases = computed(() => edgeCasesFor(props.plan, stepKey.value))
@@ -48,6 +52,13 @@ function addSub() {
   emit('breakdown', stepKey.value, breakdownWith(props.plan, stepKey.value, label))
   newSub.value = ''
 }
+
+function addCase(label: Label) {
+  const description = newCase.value.trim()
+  if (!description || !stepKey.value) return
+  emit('addEdgeCase', stepKey.value, edgeCaseWith(props.plan, description, label))
+  newCase.value = ''
+}
 </script>
 
 <template>
@@ -58,6 +69,13 @@ function addSub() {
         <BaseInput v-model="newSub" size="sm" :label="t('llc.workflowPlanner.label.subStep')" />
         <BaseButton size="sm" variant="secondary" :disabled="busy || !newSub.trim()" data-testid="add-sub-step" @click="addSub">
           {{ t('llc.workflowPlanner.label.addSubStep') }}
+        </BaseButton>
+      </div>
+
+      <div class="mb-3 flex flex-wrap items-end gap-3">
+        <BaseInput v-model="newCase" size="sm" :label="t('llc.workflowPlanner.label.edgeCaseField')" />
+        <BaseButton v-for="l in LABELS" :key="l" size="xs" variant="outline" :disabled="busy || !newCase.trim()" :data-testid="`add-edge-case-${l}`" @click="addCase(l)">
+          {{ t('llc.workflowPlanner.label.addEdgeCase', { label: t(`llc.workflowPlanner.labels.${l}`) }) }}
         </BaseButton>
       </div>
 

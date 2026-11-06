@@ -9392,6 +9392,8 @@
         "addSubStep": "Add sub-step",
         "unlabel": "Remove label",
         "edgeCase": "Edge case: {text}",
+        "edgeCaseField": "Edge case",
+        "addEdgeCase": "Add as {label}",
         "byHandNote": "These stay with people. AI never acts on them.",
         "acknowledge": "I have read the By Hand list",
         "acknowledged": "By Hand list read"

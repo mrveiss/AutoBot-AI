@@ -21,6 +21,7 @@ export type Step = S['Step']
 export type Edge = S['Edge']
 export type SubStep = S['SubStep']
 export type EdgeCase = S['EdgeCase']
+export type EdgeCaseBody = S['EdgeCaseBody']
 export type StepMetric = S['StepMetric']
 export type Label = S['Label']
 export type MetricSource = S['MetricSource']
@@ -139,6 +140,11 @@ export function breakdownWith(plan: Plan, stepKey: string, label: string): Break
     sub_step_key: c.sub_step_key ?? null,
   }))
   return { sub_steps: [...kept, added], edge_cases: cases }
+}
+
+/** A new edge case on a step: keyed by the next free slug, labelled by the owner's choice. */
+export function edgeCaseWith(plan: Plan, description: string, classification: Label): EdgeCaseBody {
+  return { key: slugKey('edge', (plan.edge_cases ?? []).map((c) => c.key)), description, classification }
 }
 
 const ENTRY_POINTS: readonly PlanCreate['entry_point'][] = ['org_chart', 'wizard_exit', 'workflow_area', 'replan']
