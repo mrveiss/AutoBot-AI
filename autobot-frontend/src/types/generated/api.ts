@@ -16892,7 +16892,7 @@ export interface paths {
         };
         /**
          * Get Approval
-         * @description Get a single approval gate by ID (#1402).
+         * @description Get a single approval gate by ID; another user's approval is a 404 (#1402, #18413).
          */
         get: operations["get_approval_api_approval_gates__approval_id__get"];
         put?: never;
@@ -19494,6 +19494,46 @@ export interface paths {
          * @description Propose the drop -- a request, not an execution. Refused when the column is already gone.
          */
         post: operations["propose_org_tier_column_drop_api_admin_org_tier_column_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/ownerless-chat-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ownerless Chat Sessions
+         * @description Read only: which sessions record no owner.
+         */
+        get: operations["ownerless_chat_sessions_api_admin_ownerless_chat_sessions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/ownerless-chat-sessions/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Chat Session Owner
+         * @description Propose an owner -- a request, not an execution. Refused unless the session is ownerless and the user exists.
+         */
+        post: operations["propose_chat_session_owner_api_admin_ownerless_chat_sessions_requests_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -27882,10 +27922,8 @@ export interface paths {
          * Execute command (SLM admin terminal)
          * @description Execute a single shell command and return stdout/stderr/exit_code.
          *
-         *     Runs on the local backend machine. No auth required — accessible via
-         *     the /autobot-api/ nginx proxy (Issue #983).
-         *
-         *     Blocks commands matching RISKY_COMMAND_PATTERNS.
+         *     Runs on the local backend machine. Admin-only: ``admin_router`` requires
+         *     ``check_admin_permission`` (Issue #983). Blocks commands matching RISKY_COMMAND_PATTERNS.
          */
         post: operations["admin_execute_command_api_terminal_execute_post"];
         delete?: never;
@@ -89661,6 +89699,46 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * OwnerlessChatSessionRequest
+         * @description The session and the owner a human has picked for it.
+         */
+        OwnerlessChatSessionRequest: {
+            /** Session Id */
+            session_id: string;
+            /** Owner */
+            owner: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OwnerlessChatSessionRequestResponse
+         * @description The approval a proposal created.
+         */
+        OwnerlessChatSessionRequestResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Status */
+            status: string;
+            /** Action */
+            action: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OwnerlessChatSessionsReport
+         * @description Sessions with no recorded owner, and those whose owner could not be read.
+         */
+        OwnerlessChatSessionsReport: {
+            /** Count */
+            count: number;
+            /** Session Ids */
+            session_ids: string[];
+            /** Unreadable */
+            unreadable: string[];
+        } & {
+            [key: string]: unknown;
+        };
         /** PMConfigRead */
         PMConfigRead: {
             /** Pm Type */
@@ -108744,7 +108822,7 @@ export interface operations {
                 /** @description VM filter */
                 vm_name?: string | null;
                 /** @description Result filter */
-                result?: ("success" | "denied" | "failed" | "error") | null;
+                result?: ("success" | "denied" | "failed" | "error" | "attempted") | null;
                 /** @description Maximum number of items to return */
                 limit?: number;
                 /** @description Number of items to skip before returning results */
@@ -108867,7 +108945,7 @@ export interface operations {
                 /** @description Hours of history to check */
                 hours?: number;
                 /** @description Result type to filter */
-                result_filter?: "success" | "denied" | "failed" | "error";
+                result_filter?: "success" | "denied" | "failed" | "error" | "attempted";
             };
             header?: never;
             path?: never;
@@ -133831,6 +133909,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrgTierColumnRequestResponse"];
+                };
+            };
+        };
+    };
+    ownerless_chat_sessions_api_admin_ownerless_chat_sessions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerlessChatSessionsReport"];
+                };
+            };
+        };
+    };
+    propose_chat_session_owner_api_admin_ownerless_chat_sessions_requests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OwnerlessChatSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerlessChatSessionRequestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

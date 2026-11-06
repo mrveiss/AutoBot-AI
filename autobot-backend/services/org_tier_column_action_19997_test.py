@@ -83,7 +83,9 @@ async def test_a_failed_drop_records_no_success() -> None:
     session.execute = _fail
     with patch.object(action, "audit_log", AsyncMock()) as audit, pytest.raises(RuntimeError):
         await action.execute_tier_column_drop(_approval(), session)
-    assert [c.kwargs["details"]["stage"] for c in audit.await_args_list] == ["started"]
+    assert [(c.kwargs["result"], c.kwargs["details"]["stage"]) for c in audit.await_args_list] == [
+        ("attempted", "started")
+    ]
 
 
 @pytest.mark.parametrize(

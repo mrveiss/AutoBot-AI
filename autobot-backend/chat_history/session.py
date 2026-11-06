@@ -24,7 +24,7 @@ import aiofiles
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
 from chat_history.cache import _CHAT_RECENT_MAX_ENTRIES
-from chat_history.file_io import run_in_chat_io_executor
+from chat_history.file_io import existing_chat_path, run_in_chat_io_executor
 from chat_history.graph_owner import create_entity_on_missing, session_owner_scope
 from constants.redis_constants import REDIS_KEY
 from security.session_owner_errors import SessionOwnerUnreadable
@@ -893,9 +893,9 @@ class SessionMixin:
     async def _existing_chat_file(self, session_id: str) -> str | None:
         """The session's chat file under its current name, then its older one (#20030)."""
         self._sanitize_session_id(session_id)
+        directory = self._get_chats_directory()
         for name in (f"{session_id}_chat.json", f"chat_{session_id}.json"):
-            chat_file = str(validate_relative_path(name, self._get_chats_directory()))
-            if await run_in_chat_io_executor(os.path.exists, chat_file):
+            if chat_file := await run_in_chat_io_executor(existing_chat_path, name, directory):
                 return chat_file
         return None
 
@@ -908,6 +908,10 @@ class SessionMixin:
             chat_file = await self._existing_chat_file(session_id)
             if chat_file is None:
                 return None
+            # Inline, so CodeQL sees the containment at the read (the shape in code_sync_paths.py)
+            chat_file, root = os.path.realpath(chat_file), os.path.realpath(self._get_chats_directory())
+            if not chat_file.startswith(root + os.sep):
+                raise ValueError("the chat file resolved outside the chats directory")
             async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
                 file_content = await f.read()
             metadata = self._decrypt_data(file_content).get("metadata", {})
