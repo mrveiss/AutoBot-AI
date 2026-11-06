@@ -298,6 +298,10 @@
         </div>
       </header>
 
+      <!-- Steps waiting for approval: every tab; the runner tab shows them inline (#17677) -->
+      <StepApprovalCard v-for="s in activeSection === 'runner' ? [] : stepsAwaitingApproval" :key="s.step_id" :step="s"
+        :workflow-id="currentWorkflow?.workflow_id ?? ''" :approve="handleApproveStep" :skip="handleSkipStep" />
+
       <!-- Loading State -->
       <div v-if="loading && !hasData" class="loading-container">
         <LoadingSpinner size="lg" />
@@ -542,8 +546,8 @@
             @pause-workflow="handlePauseWorkflow"
             @resume-workflow="handleResumeWorkflow"
             @cancel-workflow="handleCancelWorkflow"
-            @approve-step="handleApproveStep"
-            @skip-step="handleSkipStep"
+            :approve-step="handleApproveStep"
+            :skip-step="handleSkipStep"
             @refresh="loadActiveWorkflows"
           />
         </section>
@@ -701,6 +705,7 @@ import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import Icon, { type IconName } from '@/components/ui/Icon.vue';
 import ApprovalEnvelope from '@/components/approvals/ApprovalEnvelope.vue';
+import StepApprovalCard from '@/components/workflow/StepApprovalCard.vue';
 import WorkflowCanvas from '@/components/workflow/WorkflowCanvas.vue';
 import WorkflowTemplateGallery from '@/components/workflow/WorkflowTemplateGallery.vue';
 import WorkflowRunner from '@/components/workflow/WorkflowRunner.vue';
@@ -799,6 +804,7 @@ const {
   pauseWorkflow,
   resumeWorkflow,
   cancelWorkflow,
+  stepsAwaitingApproval,
   approveStep,
   skipStep,
   approvePlan,
@@ -1171,17 +1177,11 @@ async function handleCancelWorkflow(workflowId: string): Promise<void> {
 }
 
 async function handleApproveStep(workflowId: string, stepId: string): Promise<void> {
-  const success = await approveStep(workflowId, stepId);
-  if (success) {
-    showToast(t('workflow.builder.stepApproved'), 'success');
-  }
+  if (await approveStep(workflowId, stepId)) showToast(t('workflow.builder.stepApproved'), 'success');
 }
 
 async function handleSkipStep(workflowId: string, stepId: string): Promise<void> {
-  const success = await skipStep(workflowId, stepId);
-  if (success) {
-    showToast(t('workflow.builder.stepSkipped'), 'info');
-  }
+  if (await skipStep(workflowId, stepId)) showToast(t('workflow.builder.stepSkipped'), 'info');
 }
 
 /**

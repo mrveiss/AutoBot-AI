@@ -8,16 +8,27 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
 
 const approvePlan = vi.fn().mockResolvedValue(true)
 const rejectPlan = vi.fn().mockResolvedValue(true)
 const pendingApproval = ref<unknown>(null)
+const controlWorkflow = vi.fn().mockResolvedValue({ success: true })
+const routeParams = { section: 'natural-language' }
+const currentWorkflow = ref<{ workflow_id: string; steps: Array<Record<string, unknown>> } | null>(null)
+const stepsAwaitingApproval = computed(
+  () => currentWorkflow.value?.steps.filter((s) => s.status === 'waiting_approval') ?? [],
+)
+// The real composable's approveStep: control call, then a status refresh the test controls.
+const approveStep = vi.fn(async (wf: string, step: string) => {
+  const r = await controlWorkflow(wf, 'approve_step', step)
+  return r.success
+})
 
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: { section: 'natural-language' }, meta: {}, matched: [], query: {} }),
+  useRoute: () => ({ params: routeParams, meta: {}, matched: [], query: {} }),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }))
 
@@ -31,7 +42,9 @@ vi.mock('@/composables/useWorkflowBuilder', async () => {
       error: r(null),
       activeWorkflows: r([]),
       completedWorkflows: r([]),
-      currentWorkflow: r(null),
+      currentWorkflow,
+      stepsAwaitingApproval,
+      approveStep,
       pendingApproval,
       orchestrationStatus: r(null),
       executionStrategies: r([]),
@@ -127,5 +140,54 @@ describe('WorkflowBuilderView plan approval', () => {
     pendingApproval.value = null
     const wrapper = mountView()
     expect(wrapper.text()).not.toContain('Rotate the logs')
+  })
+})
+
+const WAITING = {
+  step_id: 's1',
+  description: 'Restart nginx',
+  command: 'systemctl restart nginx',
+  status: 'waiting_approval',
+  requires_confirmation: true,
+  risk_level: 'high',
+  risk_tier: 'high',
+}
+
+describe('WorkflowBuilderView step approval card (#17677)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    pendingApproval.value = null
+    routeParams.section = 'canvas'
+    currentWorkflow.value = { workflow_id: 'wf-1', steps: [{ ...WAITING }] }
+  })
+
+  const card = (w: ReturnType<typeof mountView>) => w.findAll('.step-approval-card')
+
+  it('shows one card on the canvas tab and persists across a refresh that still says waiting', async () => {
+    const wrapper = mountView()
+    expect(card(wrapper)).toHaveLength(1)
+    expect(wrapper.text()).toContain('Restart nginx')
+    currentWorkflow.value = { workflow_id: 'wf-1', steps: [{ ...WAITING }] } // a refresh, same status
+    await wrapper.vm.$nextTick()
+    expect(card(wrapper)).toHaveLength(1)
+  })
+
+  it('approves once through controlWorkflow and ignores a second click while deciding', async () => {
+    let release!: () => void
+    controlWorkflow.mockImplementationOnce(() => new Promise((r) => { release = () => r({ success: true }) }))
+    const wrapper = mountView()
+    const approve = () => wrapper.findAll('.step-approval-card button').find((b) => b.text() === 'Approve')!
+    await approve().trigger('click')
+    await approve().trigger('click')
+    expect(controlWorkflow).toHaveBeenCalledTimes(1)
+    expect(controlWorkflow).toHaveBeenCalledWith('wf-1', 'approve_step', 's1')
+    release()
+  })
+
+  it('removes the card when the step status leaves waiting_approval', async () => {
+    const wrapper = mountView()
+    currentWorkflow.value = { workflow_id: 'wf-1', steps: [{ ...WAITING, status: 'executing' }] }
+    await wrapper.vm.$nextTick()
+    expect(card(wrapper)).toHaveLength(0)
   })
 })

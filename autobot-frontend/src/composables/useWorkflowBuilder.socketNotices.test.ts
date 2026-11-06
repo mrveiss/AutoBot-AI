@@ -53,6 +53,14 @@ describe('useWorkflowBuilder workflow socket notices (#17677)', () => {
     expect(http.post).not.toHaveBeenCalled();
   });
 
+  it('stepsAwaitingApproval follows the server status, not the toast', () => {
+    const { currentWorkflow, stepsAwaitingApproval } = useWorkflowBuilder();
+    currentWorkflow.value = { workflow_id: 'wf-1', steps: [{ step_id: 'a', status: 'waiting_approval' }, { step_id: 'b', status: 'pending' }] } as never;
+    expect(stepsAwaitingApproval.value.map((s) => s.step_id)).toEqual(['a']);
+    currentWorkflow.value = { workflow_id: 'wf-1', steps: [{ step_id: 'a', status: 'executing' }] } as never;
+    expect(stepsAwaitingApproval.value).toEqual([]);
+  });
+
   it('a notice for another workflow does not fetch or replace the displayed one', async () => {
     const { currentWorkflow } = useWorkflowBuilder();
     currentWorkflow.value = { workflow_id: 'wf-1' } as never;
