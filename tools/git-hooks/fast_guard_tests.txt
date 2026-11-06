@@ -20,4 +20,3 @@ scripts/check_nosec_format_test.py
 repo_tests/symbol_fork_ratchet_17312_test.py
 repo_tests/frontend_api_contract_ratchet_test.py
 repo_tests/migration_gate_filter_covers_what_its_tests_import_test.py
-repo_tests/lint/canonical/rules/test_py_celery_private_event_loop.py
