@@ -5,10 +5,13 @@
 """Review findings on the session lease (#20862, PR #20908), each pinned by a test that fails without its fix."""
 
 import asyncio
+import fcntl
 import json
+import os
 
 import pytest
 
+from chat_history import file_io
 from chat_history import session_lease as lease_mod
 from chat_history.session_lease import (
     SessionLease,
@@ -198,6 +201,16 @@ def _gen_checked_write(manager, path, content: str, my_generation: int, pause=No
     return asyncio.create_task(manager._atomic_write(str(path), content, check))
 
 
+def _assert_sidecar_is_held(path) -> None:
+    """A non-blocking flock on a fresh descriptor of the sidecar must fail while a writer is inside."""
+    fd = os.open(str(path) + ".lock", os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        with pytest.raises(BlockingIOError):
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    finally:
+        os.close(fd)
+
+
 def _doc(generation: int, text: str) -> str:
     return json.dumps({"write_generation": generation, "text": text})
 
@@ -210,9 +223,8 @@ async def test_check_and_replace_is_one_step_against_a_racing_writer(manager, tm
     holder_gen, other_gen = (3, 2) if holder_is_newer else (2, 3)
     holder = _gen_checked_write(manager, path, _doc(holder_gen, "holder"), holder_gen, pause=(paused, release))
     await paused.wait()  # the holder passed its generation check and has not replaced yet
+    _assert_sidecar_is_held(path)  # a probe, not a timing window: the holder is inside check-then-replace
     other = _gen_checked_write(manager, path, _doc(other_gen, "other"), other_gen)
-    done, _ = await asyncio.wait({other}, timeout=0.5)  # a racing writer must not get through the holder's window
-    assert not done, "a second writer checked and replaced inside the first writer's check-then-replace"
     release.set()
     results = await asyncio.gather(holder, other, return_exceptions=True)
     assert _read_json(path)["write_generation"] == 3  # the newer generation survives in this interleaving
@@ -220,6 +232,84 @@ async def test_check_and_replace_is_one_step_against_a_racing_writer(manager, tm
         assert isinstance(results[1], StaleGenerationError)  # the older writer was refused after the newer landed
     else:
         assert results == [None, None]
+
+
+async def test_a_waiter_relocks_the_new_sidecar_after_a_delete_recreates_it(tmp_path, monkeypatch):
+    path = str(tmp_path / "inode_chat.json")
+    lock_path = path + ".lock"
+    inside: list = []
+    entered = {name: asyncio.Event() for name in "XYN"}
+    leave = {name: asyncio.Event() for name in "XYN"}
+    waiting, blocked_on_new = asyncio.Event(), asyncio.Event()
+    new_inode: list = []
+    real_try = file_io._try_flock
+
+    def watching(fd) -> bool:
+        got = real_try(fd)
+        if not got:
+            waiting.set()  # a writer is polling a lock someone else holds
+            if new_inode and os.fstat(fd).st_ino == new_inode[0]:
+                blocked_on_new.set()  # ... and it is polling the recreated sidecar
+        return got
+
+    monkeypatch.setattr(file_io, "_try_flock", watching)
+
+    async def writer(name: str) -> None:
+        async with file_io.session_file_lock(path):
+            # X and N overlap by construction (X holds the unlinked inode); Y must never join either of them
+            assert name != "Y" or not inside, "the waiter entered while another writer held the session file lock"
+            inside.append(name)
+            entered[name].set()
+            await leave[name].wait()
+            inside.remove(name)
+
+    x = asyncio.create_task(writer("X"))
+    await entered["X"].wait()
+    y = asyncio.create_task(writer("Y"))  # waits on X's inode
+    await waiting.wait()
+    os.unlink(lock_path)  # what a delete does
+    n = asyncio.create_task(writer("N"))  # creates and locks a new inode while X still holds the old one
+    await entered["N"].wait()
+    new_inode.append(os.stat(lock_path).st_ino)
+    leave["X"].set()
+    await x
+    probes = {asyncio.create_task(blocked_on_new.wait()), asyncio.create_task(entered["Y"].wait())}
+    await asyncio.wait(probes, return_when=asyncio.FIRST_COMPLETED)
+    assert blocked_on_new.is_set() and not entered["Y"].is_set()  # Y re-locked N's inode, not the dead one
+    leave["N"].set()
+    await n
+    await entered["Y"].wait()
+    leave["Y"].set()
+    await y
+    assert not inside
+
+
+async def test_delete_session_takes_the_file_lock_and_removes_the_sidecar(manager, tmp_path, monkeypatch):
+    await manager.save_session("dl1", messages=[_msg("x", "t0")])
+    assert (tmp_path / "dl1_chat.json.lock").exists()
+    await manager.delete_session("dl1")
+    assert not (tmp_path / "dl1_chat.json").exists() and not (tmp_path / "dl1_chat.json.lock").exists()
+    await manager.save_session("dl2", messages=[_msg("x", "t0")])
+    monkeypatch.setattr(lease_mod, "CHAT_LEASE_WAIT_S", 0.2)
+    monkeypatch.setattr(file_io, "CHAT_LEASE_WAIT_S", 0.2)
+    async with file_io.session_file_lock(str(tmp_path / "dl2_chat.json")):
+        with pytest.raises(SessionLeaseError):  # the delete waits for the file lock, then refuses
+            await manager.delete_session("dl2")
+    assert (tmp_path / "dl2_chat.json").exists()
+
+
+async def test_a_stale_write_cannot_resurrect_a_deleted_session(manager, tmp_path):
+    await manager.save_session("dl3", messages=[_msg("first", "t0")])
+    real_write = manager._atomic_write
+
+    async def delete_lands_first(file_path, content, before_replace=None):
+        os.unlink(file_path)  # the delete finished after this writer read the file, before its rename
+        await real_write(file_path, content, before_replace)
+
+    manager._atomic_write = delete_lands_first
+    with pytest.raises(SessionLeaseError):
+        await manager.save_session("dl3", messages=[_msg("first", "t0"), _msg("late", "t9")])
+    assert not (tmp_path / "dl3_chat.json").exists()
 
 
 bound_async_tests(globals())  # no pytest-timeout in the repo: bound each test here

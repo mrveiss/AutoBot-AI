@@ -43,6 +43,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_http import require_contained_relative_path
 from autobot_shared.security.path_validator import validate_relative_path
 from autobot_shared.store_authority import legacy_conversation_transcripts_dir
+from chat_history.file_io import is_session_lock_file
 from chat_history.legacy_transcripts import legacy_transcript_file
 from chat_history.session_lease import SessionLeaseError
 from utils.catalog_http_exceptions import raise_server_error
@@ -85,7 +86,7 @@ def get_dir_size(path: Path) -> tuple[int, int]:
 
     try:
         for entry in path.rglob("*"):
-            if entry.is_file():
+            if entry.is_file() and not is_session_lock_file(entry):
                 try:
                     total_size += entry.stat().st_size
                     file_count += 1
@@ -288,7 +289,7 @@ def _scan_and_remove_files(dir_path: Path, cutoff_time: float | None, dry_run: b
     bytes_freed = 0
     errors = []
     for item in dir_path.rglob("*"):
-        if item.is_file():
+        if item.is_file() and not is_session_lock_file(item):
             try:
                 stat = item.stat()
                 if cutoff_time and stat.st_mtime > cutoff_time:

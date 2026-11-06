@@ -88,19 +88,50 @@ async def session_file_lock(file_path: str) -> AsyncIterator[None]:
     """
     directory, name = os.path.split(file_path)
     lock_path = str(validate_relative_path(name + SESSION_FILE_LOCK_SUFFIX, directory))
-    fd = await run_in_chat_io_executor(os.open, lock_path, os.O_CREAT | os.O_RDWR, 0o600)
     try:
-        try:
-            async with asyncio.timeout(CHAT_LEASE_WAIT_S):
-                while not _try_flock(fd):
-                    await asyncio.sleep(CHAT_LEASE_POLL_S)
-        except TimeoutError:
-            raise SessionLeaseLost(
-                "file lock on %s was not free within %.1fs; nothing written" % (name, CHAT_LEASE_WAIT_S)
-            ) from None
+        async with asyncio.timeout(CHAT_LEASE_WAIT_S):
+            fd = await _lock_current_inode(lock_path)
+    except TimeoutError:
+        raise SessionLeaseLost(
+            "file lock on %s was not free within %.1fs; nothing written" % (name, CHAT_LEASE_WAIT_S)
+        ) from None
+    try:
         yield
     finally:
         os.close(fd)  # closing the descriptor releases the flock
+
+
+async def _lock_current_inode(lock_path: str) -> int:
+    """Open and flock the sidecar, retrying until the locked inode is the one now at *lock_path*.
+
+    A delete unlinks the sidecar (while holding its flock). A waiter that locked the unlinked inode
+    would share nothing with a writer that creates a fresh sidecar, so after the flock succeeds the
+    descriptor's inode is compared with the path's; a mismatch or a missing path closes and retries.
+    """
+    while True:
+        fd = await run_in_chat_io_executor(os.open, lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+        try:
+            while not _try_flock(fd):
+                await asyncio.sleep(CHAT_LEASE_POLL_S)
+            if _is_current_inode(fd, lock_path):
+                return fd
+        except BaseException:
+            os.close(fd)
+            raise
+        os.close(fd)
+
+
+def _is_current_inode(fd: int, lock_path: str) -> bool:
+    """True when descriptor *fd* still refers to the file at *lock_path*."""
+    try:
+        return os.fstat(fd).st_ino == os.stat(lock_path).st_ino
+    except FileNotFoundError:
+        return False
+
+
+def is_session_lock_file(path) -> bool:
+    """True for a session sidecar lock, which listings, size walks and cleanups must leave alone."""
+    return str(path).endswith(SESSION_FILE_LOCK_SUFFIX)
 
 
 def remove_session_lock(name: str, directory: str) -> None:

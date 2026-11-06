@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from chat_history.session_lease import SessionLeaseTimeout, StaleGenerationError
+from chat_history.session_lease import ChatFileUnreadable, SessionLeaseLost, SessionLeaseTimeout, StaleGenerationError
 from initialization.session_lease_handlers import register_session_lease_handlers
 
 
@@ -28,6 +28,16 @@ def client():
     async def stale():
         raise StaleGenerationError("s1", 3, 7)
 
+    @app.get("/lost")
+    @with_error_handling(category=ErrorCategory.SERVER_ERROR, operation="lost", error_code_prefix="T")
+    async def lost():
+        raise SessionLeaseLost("file lock on s1_chat.json was not free within 30.0s; nothing written")
+
+    @app.get("/unreadable")
+    @with_error_handling(category=ErrorCategory.SERVER_ERROR, operation="unreadable", error_code_prefix="T")
+    async def unreadable():
+        raise ChatFileUnreadable("s1", ValueError("bad"))
+
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -41,3 +51,10 @@ def test_a_stale_generation_is_a_409(client):
     response = client.get("/stale")
     assert response.status_code == 409
     assert "older than the file's 7" in response.json()["detail"]
+
+
+@pytest.mark.parametrize("path", ["/lost", "/unreadable"])
+def test_every_other_lease_error_is_covered_by_the_same_handler(client, path):
+    response = client.get(path)
+    assert response.status_code == 409
+    assert "s1" in response.json()["detail"]

@@ -14,16 +14,15 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from autobot_shared.logging_manager import get_logger
-from chat_history.session_lease import SessionLeaseTimeout, StaleGenerationError
+from chat_history.session_lease import SessionLeaseError
 
 logger = get_logger(__name__)
 
 
 def register_session_lease_handlers(app: FastAPI) -> None:
-    """Map ``SessionLeaseTimeout`` and ``StaleGenerationError`` onto a 409 for every router."""
+    """Map every ``SessionLeaseError`` (timeout, lost lease or file lock, stale generation) onto a 409."""
 
-    @app.exception_handler(SessionLeaseTimeout)
-    @app.exception_handler(StaleGenerationError)
-    async def _session_conflict(request: Request, exc: SessionLeaseTimeout | StaleGenerationError) -> JSONResponse:
+    @app.exception_handler(SessionLeaseError)
+    async def _session_conflict(request: Request, exc: SessionLeaseError) -> JSONResponse:
         logger.warning("chat session write conflict on %s %s: %s", request.method, request.url.path, exc)
         return JSONResponse(status_code=409, content={"detail": str(exc)})

@@ -16,11 +16,12 @@ from typing import TYPE_CHECKING, Any, Awaitable, Callable, Dict, Optional, Tupl
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
-from chat_history.file_io import remove_session_lock, run_in_chat_io_executor
+from chat_history.file_io import remove_session_lock, run_in_chat_io_executor, session_file_lock
 from chat_history.session_lease import (
     ChatFileUnreadable,
     SessionLease,
     SessionLeaseError,
+    SessionLeaseLost,
     StaleGenerationError,
     file_generation,
     session_lease,
@@ -103,11 +104,15 @@ class SessionLockMixin:
 
         The lease can be lost, and another writer land a newer generation, between the fence and the
         rename. Re-reading the file's generation here, as the write's last step before the rename, refuses
-        the write (nothing is replaced) instead of overwriting the newer content.
+        the write (nothing is replaced) instead of overwriting the newer content. A file that existed when
+        it was read but is gone now was deleted meanwhile; the write is refused rather than recreate it.
         """
+        name = f"{session_id}_chat.json"
 
         async def check() -> None:
             await lease.verify()
+            if signature is not None and await run_in_chat_io_executor(_stat_signature, name, chats_directory) is None:
+                raise SessionLeaseLost("chat session %s was deleted since it was read; not recreating it" % session_id)
             on_disk = await self._stored_generation(session_id, chats_directory, read_generation, signature)
             if on_disk > lease.generation:
                 raise StaleGenerationError(session_id, lease.generation, on_disk)
@@ -233,12 +238,14 @@ class SessionLockMixin:
         try:
             self._sanitize_session_id(session_id)
             chats_directory = self._get_chats_directory()
+            chat_file = str(validate_relative_path(f"{session_id}_chat.json", chats_directory))
             async with session_lease(session_id, "delete_session") as lease:
                 await lease.begin(await self._peek_generation(session_id, chats_directory))
                 await lease.fence({}, await self._peek_generation(session_id, chats_directory))
-                deleted = await self._delete_session_files(session_id, chats_directory)
-                await self._delete_companion_files(session_id, chats_directory)
-                await run_in_chat_io_executor(remove_session_lock, f"{session_id}_chat.json", chats_directory)
+                async with session_file_lock(chat_file):  # the sidecar is unlinked only while its flock is held
+                    deleted = await self._delete_session_files(session_id, chats_directory)
+                    await self._delete_companion_files(session_id, chats_directory)
+                    await run_in_chat_io_executor(remove_session_lock, f"{session_id}_chat.json", chats_directory)
                 await self._clear_session_redis_cache(session_id)
             if not deleted:
                 logger.warning("Chat session %s not found for deletion", session_id)

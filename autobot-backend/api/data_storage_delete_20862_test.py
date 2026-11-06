@@ -91,4 +91,12 @@ async def test_the_route_lets_a_stale_generation_reach_the_app_wide_handler(rout
         await data_storage.delete_conversation("c3", MagicMock(), None)
 
 
+def test_size_and_cleanup_walks_leave_the_session_lock_sidecars_alone(tmp_path):
+    (tmp_path / "a_chat.json").write_text("12345", encoding="utf-8")
+    (tmp_path / "a_chat.json.lock").write_text("", encoding="utf-8")
+    assert data_storage.get_dir_size(tmp_path) == (5, 1)
+    removed, _freed, _errors = data_storage._scan_and_remove_files(tmp_path, None, False)[:3]
+    assert removed == 1 and (tmp_path / "a_chat.json.lock").exists()
+
+
 bound_async_tests(globals())  # no pytest-timeout in the repo: bound each test here
