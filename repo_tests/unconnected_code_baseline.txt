@@ -152,7 +152,6 @@ route:autobot-backend/api/admin_ownerless_chat_sessions.py:POST /ownerless-chat-
 route:autobot-backend/api/conversation_files.py:GET /conversation/{session_id}/preview/{file_id}	#20906
 route:autobot-backend/api/knowledge_chunked_upload.py:DELETE /expired/{upload_id}	#20905
 route:autobot-backend/api/monitoring.py:GET /alerts/check	#19484
-route:autobot-backend/api/monitoring.py:GET /dashboard/overview	#19484
 route:autobot-backend/api/monitoring.py:GET /hardware/gpu	#19484
 route:autobot-backend/api/monitoring.py:GET /hardware/npu	#19484
 route:autobot-backend/api/monitoring.py:GET /optimization/recommendations	#19484
@@ -421,11 +420,8 @@ route:autobot-backend/api/elevation.py:GET /status/{request_id}	#10603
 route:autobot-backend/api/elevation.py:POST /execute/{session_token}	#10603
 route:autobot-backend/api/embeddings.py:GET /switch/status	#10603
 route:autobot-backend/api/embeddings.py:POST /providers/{provider_name}/refresh-models	#10603
-route:autobot-backend/api/enterprise_features.py:GET /phase4/validation	#10603
 route:autobot-backend/api/enterprise_features.py:POST /deployment/zero-downtime	#10603
 route:autobot-backend/api/enterprise_features.py:POST /features/bulk-enable	#10603
-route:autobot-backend/api/enterprise_features.py:POST /features/enable	#10603
-route:autobot-backend/api/enterprise_features.py:POST /features/enable-all	#10603
 route:autobot-backend/api/enterprise_features.py:POST /performance/optimize	#10603
 route:autobot-backend/api/envelope_secrets.py:DELETE /{secret_id}/dependencies/{dependent_kind}/{dependent_id}	#10603
 route:autobot-backend/api/envelope_secrets.py:GET /{secret_id}/access	#10603
@@ -703,7 +699,6 @@ route:autobot-backend/api/personality.py:POST /profiles/{pid}/activate	#10603
 route:autobot-backend/api/personality.py:POST /profiles/{pid}/reset	#10603
 route:autobot-backend/api/phases.py:POST /validation/run	#10603
 route:autobot-backend/api/playwright.py:POST /automation/quick-test	#10603
-route:autobot-backend/api/process_management.py:WEBSOCKET /processes/{process_id}/stream	#10603
 route:autobot-backend/api/project_state.py:POST /phase/{phase_id}/activate	#10603
 route:autobot-backend/api/prompts.py:POST /cache/clear	#10603
 route:autobot-backend/api/redis_mcp/router.py:POST /mcp/call	#10603
@@ -823,9 +818,7 @@ route:autobot-backend/api/vnc_mcp.py:POST /mcp/desktop_screenshot	#10603
 route:autobot-backend/api/vnc_mcp.py:POST /mcp/desktop_special_key	#10603
 route:autobot-backend/api/vnc_mcp.py:POST /mcp/get_browser_vnc_context	#10603
 route:autobot-backend/api/vnc_mcp.py:POST /mcp/observe_vnc_activity	#10603
-route:autobot-backend/api/vnc_mcp.py:POST /observations/{vnc_type}	#10603
 route:autobot-backend/api/vnc_proxy.py:GET /{vnc_type}/control/status	#10603
-route:autobot-backend/api/vnc_proxy.py:GET /{vnc_type}/status	#10603
 route:autobot-backend/api/vnc_proxy.py:POST /{vnc_type}/control/acquire	#10603
 route:autobot-backend/api/vnc_proxy.py:POST /{vnc_type}/control/release	#10603
 route:autobot-backend/api/vnc_proxy.py:WEBSOCKET /{vnc_type}/websockify	#10603
@@ -945,11 +938,9 @@ route:autobot-slm-backend/api/security.py:GET /audit-logs/{log_id}	#10603
 route:autobot-slm-backend/api/security.py:GET /certificates/expiring	#10603
 route:autobot-slm-backend/api/security.py:GET /policies/{policy_id}	#10603
 route:autobot-slm-backend/api/security.py:PATCH /policies/{policy_id}	#10603
-route:autobot-slm-backend/api/security.py:POST /certificates/report	#10603
 route:autobot-slm-backend/api/services.py:GET /{service_name}/conflicts	#10603
 route:autobot-slm-backend/api/services.py:POST /{node_id}/services/scan	#10603
 route:autobot-slm-backend/api/settings.py:GET /time/config	#10603
-route:autobot-slm-backend/api/settings.py:POST /time/sync	#10603
 route:autobot-slm-backend/api/settings.py:PUT /time/config	#10603
 route:autobot-slm-backend/api/sso.py:POST /{provider_id}/rotate-kek	#10603
 route:autobot-slm-backend/api/sso.py:POST /{provider_id}/rotate-value	#10603
@@ -1143,8 +1134,6 @@ route:autobot-backend/api/embeddings.py:GET /status	#20975
 route:autobot-backend/api/embeddings.py:POST /switch	#20975
 route:autobot-backend/api/embeddings.py:PUT /settings	#20975
 route:autobot-backend/api/enterprise_features.py:GET /features	#20971
-route:autobot-backend/api/enterprise_features.py:GET /infrastructure	#20971
-route:autobot-backend/api/enterprise_features.py:GET /status	#20971
 route:autobot-backend/api/entity_extraction.py:POST /extract-batch	#20975
 route:autobot-backend/api/envelope_secrets.py:DELETE /system/{secret_id}	#20971
 route:autobot-backend/api/envelope_secrets.py:GET /system/{secret_id}	#20971

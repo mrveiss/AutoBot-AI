@@ -185,8 +185,6 @@ route:autobot-backend/api/embeddings.py:GET /status
 route:autobot-backend/api/embeddings.py:POST /switch
 route:autobot-backend/api/embeddings.py:PUT /settings
 route:autobot-backend/api/enterprise_features.py:GET /features
-route:autobot-backend/api/enterprise_features.py:GET /infrastructure
-route:autobot-backend/api/enterprise_features.py:GET /status
 route:autobot-backend/api/entity_extraction.py:POST /extract-batch
 route:autobot-backend/api/envelope_secrets.py:DELETE /system/{secret_id}
 route:autobot-backend/api/envelope_secrets.py:GET /system/{secret_id}
