@@ -106,6 +106,6 @@ venv/bin/python -m alembic -c migrations/alembic.ini current   # == heads
 venv/bin/python -m migrations.baseline --dry-run               # state 2, exit 0
 ```
 
-The CI **Migration Gate** (`.github/workflows/migration-gate.yml`) runs the
+The CI **Migration Gate** (`.github/workflows/_gate-migration.yml`) runs the
 empty / stamped-intermediate / unstamped-adoption / downgrade-roundtrip
 matrix on every change to migrations, models or the deploy playbooks.

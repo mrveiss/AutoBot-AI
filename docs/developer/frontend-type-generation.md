@@ -68,7 +68,7 @@ The `verify:types` script performs `git diff --exit-code` against
 `src/types/generated/api.ts`. If the committed file drifts from what the
 backend would produce, CI fails.
 
-See `.github/workflows/frontend-test.yml` for the wired step. The contract is:
+See `.github/workflows/_gate-frontend-test.yml` for the wired step. The contract is:
 
 > **If CI says "generated types are out of date", run `npm run gen:types`, commit
 > the diff, and push.**

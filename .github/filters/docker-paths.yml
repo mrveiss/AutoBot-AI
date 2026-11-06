@@ -1,24 +1,12 @@
 # Canonical path set for "does this change require the Docker smoke test?"
 #
-# SINGLE SOURCE OF TRUTH — do not inline a copy back into either workflow.
+# SINGLE SOURCE OF TRUTH -- do not inline a copy back into a workflow.
 #
-# Two workflows load this file with dorny/paths-filter, and between them they
-# publish exactly one conclusion for the `smoke-test` status context:
-#
-#   .github/workflows/docker-smoke-test.yml
-#       job `smoke-test`, runs when `docker == 'true'` (the real gate)
-#
-#   .github/workflows/docker-smoke-required-context.yml
-#       job `smoke-test`, runs when `docker != 'true'` (reports the context
-#       green when the image build does not apply)
-#
-# The two `if:` conditions are exact complements, so the split is only correct
-# while both workflows compute the SAME value for `docker`. If they disagreed in
-# one particular direction — the shim seeing "no Docker change" while the real
-# workflow sees one — a pull request would take the shim's green while the image
-# was never built. That is a silent gate bypass, not a flake, which is why the
-# set lives here once rather than twice (#14353 established this rule for
-# python-paths.yml; #15299 applies it here).
+# Read once, by ci.yml's `changes` job, and published as `run_docker_smoke`. The
+# `smoke-test` gate job in ci.yml reports the REQUIRED context green ("not
+# affected") when this set does not match and requires the image build and
+# compose smoke test when it does (#15299, #18208). The complement shim that
+# used to read this file from a second workflow is gone.
 #
 # Deliberately broad: the smoke test builds the images and starts the compose
 # stack, so any application source that ends up inside an image belongs here.
@@ -49,8 +37,6 @@ docker:
   - 'autobot_shared/**'
   - 'libs/**'
   - 'plugins/**'
-  - '.github/workflows/docker-smoke-test.yml'
-  - '.github/workflows/docker-smoke-required-context.yml'
   - '.github/filters/docker-paths.yml'
   # #19527: the composite actions the smoke job builds and sizes its disk with.
   - '.github/actions/build-smoke-images/**'

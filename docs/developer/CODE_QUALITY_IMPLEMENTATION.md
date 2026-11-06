@@ -78,7 +78,7 @@ repos:
 - Confidence: MEDIUM and above
 - Skipped tests: assert_used (B101), paramiko_calls (B601), subprocess checks (B603)
 
-### 3. CI/CD Pipeline (`.github/workflows/code-quality.yml`)
+### 3. CI/CD Pipeline (`.github/workflows/_gate-code-quality.yml`)
 
 **Purpose**: Enforce quality in CI/CD
 
@@ -122,7 +122,7 @@ bash scripts/install-pre-commit-hooks.sh
 |------|---------|------|
 | `.pre-commit-config.yaml` | Pre-commit hooks configuration | 2.5 KB |
 | `.bandit` | Security scanning config | 595 B |
-| `.github/workflows/code-quality.yml` | CI/CD pipeline | 2.9 KB |
+| `.github/workflows/_gate-code-quality.yml` | CI/CD pipeline | 2.9 KB |
 | `scripts/install-pre-commit-hooks.sh` | Installation script | 3.2 KB |
 | `docs/developer/CODE_QUALITY_ENFORCEMENT.md` | Complete documentation | 12+ KB |
 | `archive/scripts-code-quality-fixes-2025-10-09/README.md` | Archive documentation | 5.2 KB |
@@ -238,8 +238,8 @@ $ ls -l scripts/install-pre-commit-hooks.sh
 
 ```bash
 # Check GitHub Actions workflow exists
-$ ls -la .github/workflows/code-quality.yml
--rw-r--r-- 1 kali kali 2889 Oct  9 21:12 .github/workflows/code-quality.yml
+$ ls -la .github/workflows/_gate-code-quality.yml
+-rw-r--r-- 1 kali kali 2889 Oct  9 21:12 .github/workflows/_gate-code-quality.yml
 ```
 
 ### Archived Scripts
@@ -300,7 +300,7 @@ All ✅ verified!
 |-----------|--------|----------|
 | Pre-commit hooks configured | ✅ | `.pre-commit-config.yaml` created |
 | Security scanning configured | ✅ | `.bandit` created |
-| CI/CD pipeline created | ✅ | `.github/workflows/code-quality.yml` created |
+| CI/CD pipeline created | ✅ | `.github/workflows/_gate-code-quality.yml` created |
 | Installation script created | ✅ | `scripts/install-pre-commit-hooks.sh` executable |
 | Documentation complete | ✅ | `docs/developer/CODE_QUALITY_ENFORCEMENT.md` created |
 | Obsolete scripts archived | ✅ | 9 scripts in `archive/scripts-code-quality-fixes-2025-10-09/` |

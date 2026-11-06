@@ -13,10 +13,11 @@
 #
 # Two kinds of consumer, and only one of them can read this file:
 #
-#   1. A `changes` job's dorny/paths-filter step. It loads this file by path,
-#      so it tracks `backend-python` automatically. Every such job reads its
-#      own key below; the keys are globally unique, so one file serves them all
-#      and the extra outputs each job ignores cost nothing.
+#   1. The dorny/paths-filter step of ci.yml's one `changes` job (#18208). It
+#      loads this file by path, so it tracks `backend-python` automatically.
+#      Every consumer reads its own key below. The keys are unique across ALL
+#      files in this directory (repo_tests/filter_keys_are_unique_18208_test.py),
+#      so one `changes` job can load every file and name its outputs by concept.
 #
 #   2. A workflow's `on.push.paths` / `on.pull_request.paths` trigger. GitHub
 #      offers NO include mechanism for event path filters — they must be
@@ -49,50 +50,46 @@ backend-python: &backend_python
   # must run all of them.
   - '.github/filters/backend-python-paths.yml'
 
-# ── composed filters, one per consuming `changes` job ────────────────────────
-# Key names are unchanged from the inline copies they replace, so each
-# workflow's `steps.filter.outputs.<name>` keeps working verbatim.
+# ── composed filters, one per consuming gate ─────────────────────────────────
+# Each key is a distinct concept and carries a name no other filter file uses:
+# before #18208 `backend` here and `backend` in code-quality-paths.yml, and
+# `python` here and `python` in python-paths.yml, were different sets under one
+# name. Each was read by a different workflow, so they never met; one `changes`
+# job reads them all, so they would have. The self-reference to a gate's own
+# workflow file is gone too: `.github/filters/gate-paths.yml` `self` forces every
+# gate when ci.yml or a `_gate-*.yml` body changes.
 
-# .github/workflows/security.yml — job `changes`, output `python`.
-python:
+# ci.yml `static-analysis` gate (SAST), output `static_analysis`.
+static_analysis:
   - *backend_python
-  - '.github/workflows/security.yml'
 
-# .github/workflows/security.yml — job `changes`, output `deps`.
-# Not a backend-Python filter, and it lives here only because a single
-# dorny/paths-filter step reads exactly one `filters` source: security.yml's
-# step needs `python` and `deps` together. Left byte-identical to the inline
-# copy it replaces.
+# ci.yml dependency scan, output `deps`.
+# Not a backend-Python filter, and it lives here only because it was always read
+# alongside the SAST set. Left byte-identical to the inline copy it replaces.
 deps:
   - '**/requirements*.txt'
   - 'requirements-ci/**'
   - 'pyproject.toml'
   - 'autobot_shared/pyproject.toml'
   - 'autobot-frontend/package*.json'
-  - '.github/workflows/security.yml'
 
-# .github/workflows/ai-security-review.yml — job `changes`, output `reviewable`.
+# ci.yml AI security review gate, output `reviewable`.
 reviewable:
   - *backend_python
   - 'ansible/**'
-  - '.github/workflows/ai-security-review.yml'
 
-# .github/workflows/startup-import-smoke.yml — job `changes`, output `backend`.
-backend:
+# ci.yml `startup-import-smoke` gate, output `startup_smoke`.
+startup_smoke:
   - *backend_python
   - '**/requirements*.txt'
   - 'requirements-ci/**'
-  - '.github/workflows/startup-import-smoke.yml'
-  # The complement shim publishing the same required context. Editing it must
-  # run the REAL gate, not the shim reporting green on its own change.
-  - '.github/workflows/backend-required-context.yml'
 
-# .github/workflows/api-wiring.yml — job `changes`, output `wiring`.
+# ci.yml `api-wiring` gate, output `wiring`.
 #
 # #12986: this filter used to omit autobot_shared/**/*.py while
 # scripts/audit_api_wiring.py imports two modules from that tree. Editing
 # autobot_shared/api_routing/router_prefixes.py therefore changed what the gate
-# computes while the gate itself self-skipped — the required `api-wiring`
+# computes while the gate itself self-skipped -- the required `api-wiring`
 # context reported green over an audit that never ran. Adopting the canonical
 # set closes that; it widens when the gate runs, which is the safe direction.
 wiring:
@@ -101,4 +98,3 @@ wiring:
   - 'scripts/audit_api_wiring.py'
   - 'scripts/api_wiring_baseline.txt'
   - 'requirements*.txt'
-  - '.github/workflows/api-wiring.yml'

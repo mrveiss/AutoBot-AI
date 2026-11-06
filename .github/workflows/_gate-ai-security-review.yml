@@ -1,3 +1,6 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
 # AI security review (#12973)
 #
 # Runs the `secreview` skill headless against the PR diff and posts its findings
@@ -20,54 +23,24 @@
 #
 # Until the secret exists the job skips with a notice rather than failing, so it
 # cannot red every PR.
+#
+# #18208: this file is the reusable BODY of one gate. ci.yml calls it; the triggers, the
+# `changes` job, the concurrency group and any required-context job that used to live here
+# are in ci.yml now. Nothing in this file may publish a required context: a job in a called
+# workflow reports as `<caller job> / <job>`, which is not the name branch protection matches.
 
-name: AI Security Review
+name: AI Security Review (reusable body)
 
 on:
-  pull_request:
-    branches: [ release, main ]
-    # #13388: SAFE — advisory only, never a required context (see header), so a
-    # run that never starts cannot block a merge. Mirrors the `reviewable` filter
-    # in `changes` below exactly; previously every docs-only pull request paid a
-    # checkout and a queue slot only to skip `review`. Keep the two lists in sync.
-    #
-    # #12986: the backend-Python entries are the canonical `backend-python` set
-    # from .github/filters/backend-python-paths.yml; GitHub cannot include a file here, so
-    # pipeline-scripts/check_workflow_path_filters.py enforces the match.
-    paths:
-      - 'autobot-backend/**/*.py'
-      - 'autobot-slm-backend/**/*.py'
-      - 'autobot_shared/**/*.py'
-      - '.github/filters/backend-python-paths.yml'
-      - 'ansible/**'
-      - '.github/workflows/ai-security-review.yml'
-      - '.github/workflows/_changes.yml'
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  workflow_call:
 
 permissions:
   contents: read
   pull-requests: write
 
 jobs:
-  changes:
-    name: Detect changed paths
-    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and
-    # every `always()` aggregate below reads `needs.changes.result`.
-    # Gating it makes those read `skipped` and exit 1, so a REQUIRED
-    # context would report FAILED on every draft -- worse than no gate.
-    # Gate the expensive jobs, never the cheap thing others read.
-    uses: ./.github/workflows/_changes.yml
-    with:
-      # #12986: `reviewable` is defined in the canonical filter file.
-      filters: .github/filters/backend-python-paths.yml
-
   review:
     name: Security Review
-    needs: changes
-    if: needs.changes.outputs.reviewable == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
