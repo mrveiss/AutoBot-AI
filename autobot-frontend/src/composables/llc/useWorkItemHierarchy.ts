@@ -7,7 +7,7 @@
  *
  *   - `GET /api/llc/work-items/hierarchy-rules`       the parent-type rule table (any member)
  *   - `GET /api/llc/work-items/hierarchy-violations`  rows that already break it (company owners/admins and
- *                                                     platform admins; a 401/403 means the caller is neither)
+ *                                                     platform admins; a 403 means the caller is neither)
  * Both are typed from the generated contract (`paths`). The server owns the rules and the admin gate: this adds
  * no access of its own, it only hides the report from a caller the server refuses (as StuckFileCleanupPanel does).
  */
@@ -33,9 +33,12 @@ export type HierarchyViolationRow = HierarchyViolationsResponse['violations'][nu
 
 const logger = createLogger('useWorkItemHierarchy')
 
-/** 401/403: the caller is not a company or platform admin, so there is no report to show. */
+/**
+ * 403: the caller is not a company or platform admin, so there is no report to show. A 401 is an expired
+ * session, not a role: the shared client's 401 policy re-authenticates, and the section stays visible.
+ */
 export function isNotAdmin(err: unknown): boolean {
-  return isHttpError(err) && (err.status === 401 || err.status === 403)
+  return isHttpError(err) && err.status === 403
 }
 
 export function useWorkItemHierarchy(companyId: Readonly<Ref<string>>) {
@@ -45,9 +48,23 @@ export function useWorkItemHierarchy(companyId: Readonly<Ref<string>>) {
   const rulesFailed = ref(false)
   const violationsFailed = ref(false)
   const reportRefused = ref(false)
+  const truncated = ref(false)
   const reportChecked = ref(false) // until the server has answered, the report stays hidden: no flash for a member
   let rulesSeq = 0
   let violationsSeq = 0
+
+  /** The answers belong to one company: drop them before the next company's request, so no old row shows. */
+  function reset(): void {
+    rulesSeq++
+    violationsSeq++
+    rules.value = []
+    violations.value = []
+    truncated.value = false
+    rulesFailed.value = false
+    violationsFailed.value = false
+    reportRefused.value = false
+    reportChecked.value = false
+  }
 
   const url = (path: string) => `${path}?${new URLSearchParams({ company_id: companyId.value })}`
 
@@ -73,11 +90,13 @@ export function useWorkItemHierarchy(companyId: Readonly<Ref<string>>) {
       const res = (await api.get(url(VIOLATIONS_PATH))) as HierarchyViolationsResponse
       if (seq !== violationsSeq) return
       violations.value = res.violations ?? []
+      truncated.value = res.truncated ?? false
       reportRefused.value = false
       reportChecked.value = true
     } catch (err) {
       if (seq !== violationsSeq) return
       violations.value = []
+      truncated.value = false
       reportChecked.value = true
       reportRefused.value = isNotAdmin(err)
       violationsFailed.value = !reportRefused.value
@@ -86,5 +105,15 @@ export function useWorkItemHierarchy(companyId: Readonly<Ref<string>>) {
   }
 
   const canSeeViolations = computed(() => reportChecked.value && !reportRefused.value)
-  return { rules, violations, rulesFailed, violationsFailed, canSeeViolations, loadRules, loadViolations }
+  return {
+    rules,
+    violations,
+    truncated,
+    rulesFailed,
+    violationsFailed,
+    canSeeViolations,
+    loadRules,
+    loadViolations,
+    reset,
+  }
 }

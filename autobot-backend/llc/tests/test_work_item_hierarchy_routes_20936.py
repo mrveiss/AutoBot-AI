@@ -24,7 +24,16 @@ USER_ID = uuid.uuid4()
 ORG = str(uuid.uuid4())
 RULES = "/work-items/hierarchy-rules"
 VIOLATIONS = "/work-items/hierarchy-violations"
-FOUND = [{"id": str(uuid.uuid4()), "identifier": "WI-7", "reason": "a task has no project_id"}]
+FOUND = [
+    {
+        "id": str(uuid.uuid4()),
+        "identifier": "WI-7",
+        "code": "project_required",
+        "reason": "a task has no project_id",
+        "type": "task",
+        "parent_type": None,
+    }
+]
 
 
 def _client(*, org: str = ORG, role=None, platform_admin: bool = False) -> TestClient:
@@ -123,7 +132,7 @@ def _violations(client: TestClient, company: str = ORG):
 
 def _report_mock():
     return patch(
-        "llc.api.work_item_hierarchy_routes.find_hierarchy_violations", new=AsyncMock(return_value=FOUND)
+        "llc.api.work_item_hierarchy_routes.find_hierarchy_violations", new=AsyncMock(return_value=(FOUND, False))
     ).start()
 
 
@@ -142,7 +151,7 @@ def test_a_company_owner_or_admin_gets_the_report(role):
     _report_mock()
     resp = _violations(_client(role=role))
     assert resp.status_code == 200, resp.text
-    assert resp.json() == {"violations": FOUND, "count": 1}
+    assert resp.json() == {"violations": FOUND, "count": 1, "truncated": False}
 
 
 def test_a_platform_admin_gets_the_report_without_a_membership():

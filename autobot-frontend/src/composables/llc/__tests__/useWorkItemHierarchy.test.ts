@@ -18,7 +18,15 @@ vi.mock('@/utils/debugUtils', () => ({
 import { useWorkItemHierarchy } from '../useWorkItemHierarchy'
 
 const RULES = { rules: [{ type: 'task', allowed_parent_types: ['pbi'], project_required: true }] }
-const FOUND = { violations: [{ id: 'w1', identifier: 'WI-1', reason: 'a task has no project_id' }], count: 1 }
+const ROW = {
+  id: 'w1',
+  identifier: 'WI-1',
+  code: 'project_required',
+  reason: 'a task has no project_id',
+  type: 'task',
+  parent_type: null,
+}
+const FOUND = { violations: [ROW], count: 1, truncated: false }
 
 function refused(status: number): Error {
   return new HttpError(status, 'refused')
@@ -48,12 +56,47 @@ describe('useWorkItemHierarchy', () => {
     expect(h.canSeeViolations.value).toBe(false)
   })
 
-  it.each([401, 403])('hides the report on a %i, without an error state', async status => {
-    get.mockReset().mockRejectedValueOnce(refused(status))
+  it('hides the report on a 403, without an error state', async () => {
+    get.mockReset().mockRejectedValueOnce(refused(403))
     const h = useWorkItemHierarchy(ref('co1'))
     await h.loadViolations()
     expect(h.canSeeViolations.value).toBe(false)
     expect(h.violationsFailed.value).toBe(false)
+  })
+
+  it('does not read a 401 (expired session) as "not an admin": the section stays, as a retryable failure', async () => {
+    get.mockReset().mockRejectedValueOnce(refused(401))
+    const h = useWorkItemHierarchy(ref('co1'))
+    await h.loadViolations()
+    expect(h.canSeeViolations.value).toBe(true)
+    expect(h.violationsFailed.value).toBe(true)
+  })
+
+  it('clears the old company before the next fetch, and ignores a late answer for it', async () => {
+    let lateRules!: (v: unknown) => void
+    const company = ref('co1')
+    get.mockReset().mockResolvedValueOnce(RULES).mockResolvedValueOnce(FOUND)
+    const h = useWorkItemHierarchy(company)
+    await h.loadRules()
+    await h.loadViolations()
+
+    get.mockReset().mockReturnValueOnce(new Promise(r => (lateRules = r))).mockResolvedValueOnce(FOUND)
+    void h.loadRules()
+    h.reset()
+    expect(h.rules.value).toEqual([])
+    expect(h.violations.value).toEqual([])
+    expect(h.canSeeViolations.value).toBe(false)
+
+    lateRules(RULES)
+    await nextTick()
+    expect(h.rules.value).toEqual([])
+  })
+
+  it('keeps the truncated flag from the answer', async () => {
+    get.mockReset().mockResolvedValueOnce({ ...FOUND, truncated: true })
+    const h = useWorkItemHierarchy(ref('co1'))
+    await h.loadViolations()
+    expect(h.truncated.value).toBe(true)
   })
 
   it('shows any other failure as a failure the admin can retry', async () => {

@@ -12,7 +12,7 @@ be swallowed by that router's ``/{work_item_id}`` capture.
 """
 
 import uuid
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -47,12 +47,16 @@ class HierarchyRulesResponse(BaseModel):
 class HierarchyViolationRow(BaseModel):
     id: str
     identifier: str
-    reason: str
+    code: str  # stable: the GUI renders its own text for it
+    reason: str  # English, for logs and API consumers
+    type: str
+    parent_type: Optional[str] = None
 
 
 class HierarchyViolationsResponse(BaseModel):
     violations: List[HierarchyViolationRow]
     count: int
+    truncated: bool = False  # more rows break the rules than the report's limit returns
 
 
 def hierarchy_rules() -> HierarchyRulesResponse:
@@ -94,5 +98,7 @@ async def get_hierarchy_violations(
     except NotAuthorisedError as exc:
         logger.warning("Refused hierarchy-violations report for company %s: %s", company_id, exc)
         raise HTTPException(status_code=403, detail="Only a company owner or admin may read the violation report")
-    rows = await find_hierarchy_violations(session, company_id)
-    return HierarchyViolationsResponse(violations=[HierarchyViolationRow(**r) for r in rows], count=len(rows))
+    rows, truncated = await find_hierarchy_violations(session, company_id)
+    return HierarchyViolationsResponse(
+        violations=[HierarchyViolationRow(**r) for r in rows], count=len(rows), truncated=truncated
+    )

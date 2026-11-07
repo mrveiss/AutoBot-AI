@@ -25,7 +25,15 @@ const RULES = {
     { type: 'task', allowed_parent_types: ['pbi'], project_required: true },
   ],
 }
-const FOUND = { violations: [{ id: 'w1', identifier: 'WI-1', reason: 'a task has no project_id' }], count: 1 }
+const ROW = {
+  id: 'w1',
+  identifier: 'WI-1',
+  code: 'parent_type_not_allowed',
+  reason: 'server english text',
+  type: 'task',
+  parent_type: 'epic',
+}
+const FOUND = { violations: [ROW], count: 1, truncated: false }
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
 
 function answer(report: unknown) {
@@ -65,7 +73,45 @@ describe('BacklogHierarchyPanel', () => {
 
     expect(wrapper.text()).toContain('Hierarchy violations (1)')
     expect(wrapper.get('[data-testid="hierarchy-violations"]').text()).toContain('WI-1')
-    expect(wrapper.text()).toContain('a task has no project_id')
+    expect(wrapper.text()).toContain('A Task cannot sit under a Epic.')
+    expect(wrapper.text()).not.toContain('server english text')
+  })
+
+  it('falls back to the server text for a code it has no translation for', async () => {
+    answer({ ...FOUND, violations: [{ ...ROW, code: 'something_new' }] })
+    const wrapper = await mountPanel()
+    expect(wrapper.text()).toContain('server english text')
+  })
+
+  it('tells the admin when the list is cut at the limit', async () => {
+    answer({ ...FOUND, truncated: true })
+    const wrapper = await mountPanel()
+    expect(wrapper.get('[data-testid="violations-truncated"]').text()).toBe(
+      'Showing the first 1 violations; more rows break the rules.',
+    )
+  })
+
+  it('shows no truncation note for a complete list', async () => {
+    answer(FOUND)
+    const wrapper = await mountPanel()
+    expect(wrapper.find('[data-testid="violations-truncated"]').exists()).toBe(false)
+  })
+
+  it('clears the previous company rows before the new company answers', async () => {
+    answer(FOUND)
+    const wrapper = await mountPanel()
+    expect(wrapper.find('[data-testid="hierarchy-violations"]').exists()).toBe(true)
+    get.mockReset().mockReturnValue(new Promise(() => {}))
+    await wrapper.setProps({ companyId: 'c2' })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="hierarchy-violations"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="hierarchy-rules"] li').exists()).toBe(false)
+  })
+
+  it('does not hide the section on a 401', async () => {
+    answer(new HttpError(401, 'expired'))
+    const wrapper = await mountPanel()
+    expect(wrapper.text()).toContain(en.llc.backlog.hierarchyViolationsFailed)
   })
 
   it('says so when an admin has no violations', async () => {

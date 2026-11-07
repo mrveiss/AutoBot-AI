@@ -79953,8 +79953,14 @@ export interface components {
             id: string;
             /** Identifier */
             identifier: string;
+            /** Code */
+            code: string;
             /** Reason */
             reason: string;
+            /** Type */
+            type: string;
+            /** Parent Type */
+            parent_type?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -79964,6 +79970,11 @@ export interface components {
             violations: components["schemas"]["HierarchyViolationRow"][];
             /** Count */
             count: number;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
         } & {
             [key: string]: unknown;
         };

@@ -57,13 +57,13 @@
 
     <BaseAlert v-if="loadFailed" variant="error" :message="t('llc.backlog.fetchFailed')">
       <template #actions>
-        <button class="underline" data-testid="retry-load" @click="fetchBacklog">{{ t('common.retry') }}</button>
+        <BaseButton size="sm" variant="secondary" data-testid="retry-load" @click="fetchBacklog">{{ t('common.retry') }}</BaseButton>
       </template>
     </BaseAlert>
 
     <BaseAlert v-if="createdRefreshFailed" variant="warning" :message="t('llc.backlog.createdRefreshFailed')">
       <template #actions>
-        <button class="underline" data-testid="retry-refresh" @click="onItemCreated">{{ t('common.retry') }}</button>
+        <BaseButton size="sm" variant="secondary" data-testid="retry-refresh" @click="onItemCreated">{{ t('common.retry') }}</BaseButton>
       </template>
     </BaseAlert>
 
@@ -183,7 +183,7 @@ import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
 import BacklogCreateModal from '@/components/llc/BacklogCreateModal.vue'
 import BacklogBulkAssignModal from '@/components/llc/BacklogBulkAssignModal.vue'
 import BacklogHierarchyPanel from '@/components/llc/BacklogHierarchyPanel.vue'
-import { BaseAlert, BaseAvatar } from '@autobot/ui'
+import { BaseAlert, BaseAvatar, BaseButton } from '@autobot/ui'
 
 const logger = createLogger('BacklogView')
 const api = useApiClient()

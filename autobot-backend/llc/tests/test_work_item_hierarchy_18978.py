@@ -249,7 +249,9 @@ async def test_the_read_only_report_names_invalid_rows_and_changes_nothing(sessi
     epic = await _make(session, T.EPIC, project=PROJECT)
     bad = await _legacy(session, T.TASK, parent_id=epic.id, project_id=PROJECT)
     no_project = await _legacy(session, T.EPIC)
-    found = {v["id"]: v["reason"] for v in await find_hierarchy_violations(session, COMPANY)}
+    rows, truncated = await find_hierarchy_violations(session, COMPANY)
+    found = {v["id"]: v["reason"] for v in rows}
+    assert truncated is False
     assert set(found) == {str(bad.id), str(no_project.id)}
     await session.refresh(bad)
     assert bad.parent_id == epic.id

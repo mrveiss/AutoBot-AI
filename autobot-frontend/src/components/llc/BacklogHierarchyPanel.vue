@@ -35,9 +35,12 @@
       <ul v-else class="m-0 flex list-none flex-col gap-1 p-0 text-sm" data-testid="hierarchy-violations">
         <li v-for="row in violations" :key="row.id" class="flex gap-3">
           <span class="min-w-24 font-semibold">{{ row.identifier }}</span>
-          <span>{{ row.reason }}</span>
+          <span>{{ reasonText(row) }}</span>
         </li>
       </ul>
+      <p v-if="truncated" class="mt-2 text-xs text-autobot-text-secondary" data-testid="violations-truncated">
+        {{ t('llc.backlog.hierarchyViolationsTruncated', { count: violations.length }) }}
+      </p>
     </template>
   </BaseAccordion>
 </template>
@@ -48,13 +51,13 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BaseAccordion, BaseAlert, BaseButton } from '@autobot/ui'
-import { useWorkItemHierarchy, type HierarchyRule } from '@/composables/llc/useWorkItemHierarchy'
+import { useWorkItemHierarchy, type HierarchyRule, type HierarchyViolationRow } from '@/composables/llc/useWorkItemHierarchy'
 import { WORK_ITEM_TYPES } from '@/views/llc/workItemTypes'
 
 const props = defineProps<{ companyId: string }>()
 const { t } = useI18n()
 const companyId = computed(() => props.companyId)
-const { rules, violations, rulesFailed, violationsFailed, canSeeViolations, loadRules, loadViolations } =
+const { rules, violations, truncated, rulesFailed, violationsFailed, canSeeViolations, loadRules, loadViolations, reset } =
   useWorkItemHierarchy(companyId)
 
 const open = ref<string[]>([])
@@ -75,7 +78,25 @@ function parentsText(rule: HierarchyRule): string {
   return t('llc.backlog.hierarchyUnder', { parents: rule.allowed_parent_types.map(typeLabel).join(', ') })
 }
 
+const REASON_CODES = [
+  'parent_cycle',
+  'parent_missing',
+  'parent_type_not_allowed',
+  'project_mismatch',
+  'project_required',
+]
+
+/** The translated reason for a row's stable code; an unknown code falls back to the server's English text. */
+function reasonText(row: HierarchyViolationRow): string {
+  if (!REASON_CODES.includes(row.code)) return row.reason
+  return t(`llc.backlog.hierarchyReason.${row.code}`, {
+    type: typeLabel(row.type),
+    parentType: row.parent_type ? typeLabel(row.parent_type) : '',
+  })
+}
+
 function loadAll(): void {
+  reset() // a company change never shows the previous company's rows while the new ones load
   void loadRules()
   void loadViolations()
 }
