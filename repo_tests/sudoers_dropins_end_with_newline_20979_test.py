@@ -103,22 +103,62 @@ def _problems(docs: list[tuple[str, object]]) -> list[str]:
 
 
 def _load_all(path: Path) -> list[tuple[str, object]]:
+    return _parse(path)[0]
+
+
+def _parse(path: Path) -> tuple[list[tuple[str, object]], str | None]:
+    """Return (docs, problem). An unparseable file is skipped (a Jinja-templated file
+    is not YAML until rendered) unless it mentions the sudoers drop-in directory, in
+    which case it is a problem: the guard cannot see its tasks."""
+    text = path.read_text(encoding="utf-8")
     try:
-        loaded = list(yaml.safe_load_all(path.read_text(encoding="utf-8")))
+        loaded = list(yaml.safe_load_all(text))
     except yaml.YAMLError:
-        return []  # a Jinja-templated file is not YAML until rendered
-    return [(str(path), doc) for doc in loaded]
+        if _SUDOERS_DIR in text:
+            return [], f"{path}: unparseable YAML that mentions {_SUDOERS_DIR} -- the guard cannot check it"
+        return [], None
+    return [(str(path), doc) for doc in loaded], None
 
 
-def _repo_docs() -> list[tuple[str, object]]:
-    docs = []
-    for ansible_dir in repo_root().rglob("ansible"):
+def _ansible_files(root: Path):
+    for ansible_dir in root.rglob("ansible"):
         if not ansible_dir.is_dir() or _SKIP_PARTS & set(ansible_dir.parts):
             continue
         for path in sorted(ansible_dir.rglob("*.y*ml")):
             if path.is_file() and path.suffix in (".yml", ".yaml"):
-                docs.extend(_load_all(path))
-    return docs
+                yield path
+
+
+def _scan(root: Path) -> tuple[list[tuple[str, object]], list[str]]:
+    docs, unparseable = [], []
+    for path in _ansible_files(root):
+        loaded, problem = _parse(path)
+        docs.extend(loaded)
+        if problem:
+            unparseable.append(problem)
+    return docs, unparseable
+
+
+def _repo_docs() -> list[tuple[str, object]]:
+    return _scan(repo_root())[0]
+
+
+def test_repo_has_no_unparseable_playbook_touching_sudoers_d():
+    assert _scan(repo_root())[1] == []
+
+
+def test_unparseable_file_mentioning_sudoers_d_fails(tmp_path):
+    d = tmp_path / "ansible"
+    d.mkdir()
+    (d / "bad.yml").write_text("- copy: {dest: /etc/sudoers.d/x\n  : [unclosed\n", encoding="utf-8")
+    assert any("bad.yml" in p for p in _scan(tmp_path)[1])
+
+
+def test_unparseable_file_not_mentioning_sudoers_d_is_still_skipped(tmp_path):
+    d = tmp_path / "ansible"
+    d.mkdir()
+    (d / "other.yml").write_text("- copy: {dest: /etc/motd\n  : [unclosed\n", encoding="utf-8")
+    assert _scan(tmp_path) == ([], [])
 
 
 def test_repo_sudoers_dropins_end_with_newline_and_are_validated():
