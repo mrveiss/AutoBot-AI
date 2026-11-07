@@ -158,14 +158,14 @@ async def _project_choices(session, company_id: str) -> str:
 
 async def _create_task(session, company_id: str, user_id: str | None, params: Dict[str, Any]) -> Dict[str, Any]:
     from .models.enums import WorkItemPriority, WorkItemType
+    from .services.accessors import get_work_item_service
     from .services.work_item_hierarchy import HierarchyViolation, ProjectRequired
-    from .services.work_item_service import WorkItemService
 
     title = (params.get("title") or "").strip()
     if not title:
         raise LLCToolError("create_task requires a non-empty 'title'")
     try:
-        item = await WorkItemService().create(
+        item = await get_work_item_service().create(
             session,
             company_id=company_id,
             type=_enum_or_error(WorkItemType, params.get("type", "task"), "type"),
