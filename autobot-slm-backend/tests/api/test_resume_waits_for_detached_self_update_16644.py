@@ -117,7 +117,7 @@ def test_execute_resume_does_not_start_fleet_stage_when_wait_refuses():
         patch("api.code_sync._resume_verify_slm_stage", AsyncMock()) as verify,
         patch("api.code_sync._run_fleet_stage", AsyncMock()) as fleet,
     ):
-        _run(_execute_resume(job, "abc", ["n1"]))
+        _run(_execute_resume(job, "abc", ["n1"], {}))
     verify.assert_not_awaited()
     fleet.assert_not_awaited()
 
@@ -142,5 +142,5 @@ def test_execute_resume_waits_before_verifying_and_running_fleet():
         patch("api.code_sync._resume_verify_slm_stage", verified),
         patch("api.code_sync._run_fleet_stage", fleet),
     ):
-        _run(_execute_resume(job, "abc", ["n1"]))
+        _run(_execute_resume(job, "abc", ["n1"], {}))
     assert order == ["wait", "verify", "fleet"]
