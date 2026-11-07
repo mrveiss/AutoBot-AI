@@ -81,7 +81,7 @@ ISSUE_17822_ENTRIES = tuple(
         (Path(__file__).parent / "fixtures" / "issue_17822_migration_gate_entries.json").read_text(encoding="utf-8")
     )
 )
-# 35 = the eleven #17822 entries plus `services/__init__.py`, `services/approval_gate_service.py` and
+# 36 = the eleven #17822 entries plus `services/__init__.py`, `services/approval_gate_service.py` and
 # `llc/services/workspace_lease.py` (#17996), `llc/services/company.py` + `company_ceo.py` (#15907's
 # concurrent-move test), `llc/services/authz.py` + `membership_service.py` (the move's authorization,
 # #19634), `llc/services/company_move_lock.py` (the move's row locks, #19593), `autobot_shared/db_errors.py`
@@ -90,10 +90,10 @@ ISSUE_17822_ENTRIES = tuple(
 # `llc/services/budget.py` + `llc/exceptions.py` (#20168's cost event foreign key test), and
 # `llc/services/company_os/**` + `llc/services/goal.py` (#20115's two-session plan convert lock test), and
 # `services/ai_line_change_proposal.py` + `autobot_shared/ai_lines.py` (imported by `plan_convert_lines.py`, which that test runs, #20086), and the seven
-# `autobot_shared/user_management/` modules the admin-status two-user test imports (#20670).
+# `autobot_shared/user_management/` modules and its package `__init__` the admin-status two-user test imports (#20670).
 assert (
-    len(ISSUE_17822_ENTRIES) == 35
-), "the pinned migration-gate set is 35 entries; an emptied fixture would pin nothing"
+    len(ISSUE_17822_ENTRIES) == 36
+), "the pinned migration-gate set is 36 entries; an emptied fixture would pin nothing"
 ISSUE_17822_WORKFLOW = "migration-gate"
 EVENTS = ("push", "pull_request", "merge_group", "schedule", "workflow_dispatch")
 MG_SHA = "merge-group-base-sha"  # a stand-in value; only its presence or absence is compared

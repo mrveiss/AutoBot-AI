@@ -70,6 +70,7 @@ on:
       - 'autobot_shared/user_management/user_service.py'
       - 'autobot_shared/user_management/user_service_lifecycle.py'
       - 'autobot_shared/user_management/revocation_outcome.py'
+      - 'autobot_shared/user_management/__init__.py'
       - '.github/workflows/_changes.yml'
   # NOTE (#11346): no pull_request.paths filter — this workflow ALWAYS runs on PRs
   # so its required-check context ("migration-matrix") always reports a conclusion.
@@ -171,6 +172,7 @@ jobs:
           - 'autobot_shared/user_management/user_service.py'
           - 'autobot_shared/user_management/user_service_lifecycle.py'
           - 'autobot_shared/user_management/revocation_outcome.py'
+          - 'autobot_shared/user_management/__init__.py'
 
   migration-tests:
     needs: changes
