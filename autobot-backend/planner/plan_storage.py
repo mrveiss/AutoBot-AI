@@ -5,7 +5,7 @@
 """Where a stored plan lives in Redis, and for how long (#21023).
 
 A chat turn scopes its plans by session id (``autobot:plans:<session>:<id>``), so one session cannot read
-another's plan; an empty scope keeps the legacy unscoped key ``autobot:plans:<id>``.
+another's plan. An empty scope is rejected: there is no unscoped key.
 """
 
 from __future__ import annotations

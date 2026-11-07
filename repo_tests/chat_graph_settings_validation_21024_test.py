@@ -35,3 +35,27 @@ def test_llm_config_inherits_the_one_config_dict():
     for key in ("env_file", "env_file_encoding", "extra"):
         assert LLMConfig.model_config[key] == ChatGraphSettings.model_config[key]
     assert LLMConfig.model_config["extra"] == "ignore"
+
+
+def test_unset_provider_keeps_ollama_and_logs_no_warning(monkeypatch):
+    """An install that never set AUTOBOT_LLM_PROVIDER gets the default silently (#21023)."""
+    import logging
+
+    from autobot_shared import ssot_chat_graph_settings as mod
+    from autobot_shared.ssot_config import LLMConfig
+
+    seen: list[logging.LogRecord] = []
+
+    class _Collect(logging.Handler):
+        def emit(self, record):
+            seen.append(record)
+
+    handler = _Collect(level=logging.WARNING)
+    mod.logger.addHandler(handler)
+    monkeypatch.delenv("AUTOBOT_LLM_PROVIDER", raising=False)
+    monkeypatch.setattr(mod, "_PROVIDER_WARNED", False)
+    try:
+        assert LLMConfig().provider == "ollama"
+    finally:
+        mod.logger.removeHandler(handler)
+    assert seen == []

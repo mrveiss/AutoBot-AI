@@ -10,16 +10,16 @@
 ask-human defaults from here instead of carrying its own literals.
 """
 
-import logging
 from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import project_root
 from autobot_shared.status_enums import LLMProvider
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 DEFAULT_LLM_PROVIDER = "ollama"
 _PROVIDER_WARNED = False
