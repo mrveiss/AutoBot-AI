@@ -185,6 +185,8 @@ export const adminMenuItems: NavItem[] = [
   // feature yet, unlike the two entries above.
   // Issue #17832: org conversation review -- the server gates and audits; this entry is presentation only.
   { to: '/admin/conversations', labelKey: 'nav.adminConversations', icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z', iconViewBox: '0 0 24 24', iconStroke: true },
+  // Issue #20567: propose the decided install cleanups -- the server gates and audits; this entry is presentation only.
+  { to: '/admin/cleanup-proposals', labelKey: 'nav.adminCleanupProposals', icon: 'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16', iconViewBox: '0 0 24 24', iconStroke: true },
   { to: '/admin/permission-scopes', labelKey: 'nav.adminPermissionScopes', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z', iconViewBox: '0 0 24 24', iconStroke: true },
 ];
 

@@ -2603,6 +2603,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/internal/nodes/{node_id}/ssh-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Node Ssh Password
+         * @description Delete the node's stored SSH password under a human's approval; ``deleted`` is False when it held none.
+         */
+        delete: operations["delete_node_ssh_password_api_internal_nodes__node_id__ssh_password_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/live": {
         parameters: {
             query?: never;
@@ -5481,9 +5501,7 @@ export interface paths {
         };
         /**
          * Get Role Owners Endpoint
-         * @description Return role -> node_id mapping for all assigned service roles (#1389).
-         *
-         *     Used by deployment/migration UIs to show which node owns each role.
+         * @description Return role -> node ids, and which roles may hold several (#1389, #19706).
          */
         get: operations["get_role_owners_endpoint_api_roles_owners_get"];
         put?: never;
@@ -9657,6 +9675,11 @@ export interface components {
             optional_down: string[];
             /** Required Down */
             required_down: string[];
+            /**
+             * Roles With Nodes Down
+             * @default []
+             */
+            roles_with_nodes_down: components["schemas"]["RoleNodeHealth"][];
         } & {
             [key: string]: unknown;
         };
@@ -11474,6 +11497,18 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * NodeSshPasswordDeleteResponse
+         * @description What a deletion removed. Carries the node and a flag, never a value.
+         */
+        NodeSshPasswordDeleteResponse: {
+            /** Deleted */
+            deleted: boolean;
+            /** Node Id */
+            node_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * NodeStatus
          * @description Node status enumeration.
          * @enum {string}
@@ -12494,6 +12529,20 @@ export interface components {
         RoleListResponse: {
             /** Roles */
             roles: components["schemas"]["RoleInfo"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * RoleNodeHealth
+         * @description A multi-node role with at least one of its nodes down.
+         */
+        RoleNodeHealth: {
+            /** Nodes Down */
+            nodes_down: string[];
+            /** Nodes Up */
+            nodes_up: string[];
+            /** Role */
+            role: string;
         } & {
             [key: string]: unknown;
         };
@@ -19614,6 +19663,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlaybookInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_node_ssh_password_api_internal_nodes__node_id__ssh_password_delete: {
+        parameters: {
+            query: {
+                approval_id: string;
+            };
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path: {
+                node_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NodeSshPasswordDeleteResponse"];
                 };
             };
             /** @description Validation Error */

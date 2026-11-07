@@ -3,7 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { BaseAlert, BaseSwitch, PollingPausedAlert, useToast } from '@autobot/ui'
+import { BaseAlert, BaseSwitch, PollingPausedAlert, useToast, createLogger } from '@autobot/ui'
 /**
  * LoadBalancingView - NPU Worker Load Balancing Visualization
  *
@@ -20,7 +20,6 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFleetStore } from '@/stores/fleet'
 import { throwIfFailed, useDashboardPoller } from '@/composables/useDashboardPoller'
-import { createLogger } from '@/utils/debugUtils'
 import type {
   NPULoadBalancingConfig,
   NPUFleetMetrics,

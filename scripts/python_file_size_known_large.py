@@ -221,7 +221,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/knowledge/connectors/gdrive.py": 660,
     "autobot-backend/knowledge/connectors/gitlab.py": 836,
     "autobot-backend/knowledge/connectors/tests/test_credential_store.py": 1021,
-    "autobot-backend/knowledge/facts.py": 1726,
+    "autobot-backend/knowledge/facts.py": 1709,
     "autobot-backend/knowledge/ownership.py": 757,
     "autobot-backend/knowledge/pipeline/cognifiers/cognifiers_test.py": 806,
     "autobot-backend/knowledge/rag_benchmarks.py": 1607,
@@ -237,10 +237,10 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llc/api/companies.py": 1605,
     "autobot-backend/llc/api/roles.py": 713,
     "autobot-backend/llc/api/sprints.py": 1215,
-    "autobot-backend/llc/api/work_items.py": 1302,  # #19582: comment wake moved into the service
+    "autobot-backend/llc/api/work_items.py": 1286,  # #18978: 1302 -> 1287; #19582: comment wake moved into the service
     "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 979,  # #19240 (run key moved out)
     "autobot-backend/llc/services/template.py": 642,
-    "autobot-backend/llc/services/work_item_service.py": 1023,  # #20102: completion effects moved out
+    "autobot-backend/llc/services/work_item_service.py": 998,  # #18978: -19; #20102: completion effects moved out
     "autobot-backend/llc/tests/conftest.py": 832,
     "autobot-backend/llc/tests/test_autobot_agent_adapter.py": 663,
     "autobot-backend/llc/tests/test_heartbeat_scheduler.py": 1009,
@@ -285,7 +285,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/prompt_manager.py": 1462,
     "autobot-backend/protocols/agent_communication.py": 654,
     "autobot-backend/research_browser_manager.py": 704,
-    "autobot-backend/secure_command_executor.py": 1215,
+    "autobot-backend/secure_command_executor.py": 1089,
     "autobot-backend/secure_sandbox_executor.py": 1017,
     "autobot-backend/security/command_patterns.py": 609,
     "autobot-backend/security/domain_security.py": 715,
@@ -300,7 +300,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/security/session_ownership.py": 813,
     "autobot-backend/security/threat_detection_refactor_test.py": 880,
     "autobot-backend/security/threat_intelligence.py": 762,
-    "autobot-backend/security_layer.py": 715,
+    "autobot-backend/security_layer.py": 670,
     "autobot-backend/services/agent_analytics.py": 686,
     "autobot-backend/services/agent_terminal/service.py": 922,
     "autobot-backend/services/ai_stack_client.py": 764,
@@ -352,7 +352,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/tool_output_filter.py": 639,
     "autobot-backend/services/trigger_service.py": 842,
     "autobot-backend/services/wake_word_service.py": 615,
-    "autobot-backend/services/workflow_automation/executor.py": 1104,
+    "autobot-backend/services/workflow_automation/executor.py": 1078,
     "autobot-backend/services/workflow_export_test.py": 611,
     "autobot-backend/services/workflow_io.py": 693,
     "autobot-backend/slash_command_handler.py": 1662,
@@ -421,14 +421,14 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/api/nodes_execution_test.py": 756,
     "autobot-slm-backend/api/orchestration.py": 769,
     "autobot-slm-backend/api/performance.py": 894,
-    "autobot-slm-backend/api/roles.py": 685,
+    "autobot-slm-backend/api/roles.py": 681,
     "autobot-slm-backend/api/security.py": 962,
     "autobot-slm-backend/api/services.py": 1016,
     "autobot-slm-backend/api/setup_wizard.py": 1327,
     "autobot-slm-backend/api/stateful.py": 685,
     "autobot-slm-backend/api/tls.py": 994,
     "autobot-slm-backend/api/updates.py": 1107,
-    "autobot-slm-backend/main.py": 773,  # #19368: admin seed password into services/admin_seed_password.py
+    "autobot-slm-backend/main.py": 772,  # #19368: admin seed password into services/admin_seed_password.py
     "autobot-slm-backend/models/database.py": 1140,
     "autobot-slm-backend/models/schemas.py": 2144,
     "autobot-slm-backend/monitoring/business_intelligence_dashboard.py": 1159,
@@ -447,7 +447,7 @@ KNOWN_LARGE: dict[str, int] = {
     # as a live violation, not #5060 backlog -- see #14630.
     "autobot-slm-backend/services/reconciler_remediation_tracker_expiry_14465_test.py": 783,
     "autobot-slm-backend/services/replication.py": 785,
-    "autobot-slm-backend/services/role_registry.py": 704,
+    "autobot-slm-backend/services/role_registry.py": 690,
     "autobot-slm-backend/services/service_orchestrator.py": 913,
     "autobot-slm-backend/slm/agent/agent.py": 630,
     "autobot-slm-backend/tests/api/test_code_sync_deploy_bugs.py": 1990,  # #18052: resolver test moved out
@@ -473,7 +473,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot_shared/security/ssrf_guard_test.py": 633,
     "autobot_shared/ssot_config.py": 3206,  # splits: #19319, #15501, #19934, #18057
     "autobot_shared/ssot_config_test.py": 776,
-    "autobot_shared/ssot_constants.py": 861,
+    "autobot_shared/ssot_constants.py": 859,
     "autobot_shared/user_management/team_service.py": 659,
     "pipeline-scripts/check-pre-commit-hook-pr_test.py": 747,
     "pipeline-scripts/ci_dispatch_watchdog.py": 1244,  # #13439: supersession split to ci_run_supersession.py

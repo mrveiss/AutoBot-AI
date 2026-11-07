@@ -218,6 +218,7 @@ def test_a_declared_scope_that_the_sweep_does_not_reach_is_refused() -> None:
 #: Compared as a SET in both directions. Adding a scoped declaration means adding a line here,
 #: and that is the point -- the scope is a decision, so it is written twice on purpose.
 _DECLARED_SCOPES = {
+    "edge-configs-proxying-api-20046": ("autobot-infrastructure", "autobot-slm-backend", "docker"),
     "slm-users-db-scan": ("autobot-slm-backend",),
     "windows-install-scripts-stage-constraints-19681": ("autobot-npu-worker/resources/windows-npu-worker",),
     "role-source-paths-depth-proof-20509": ("autobot-slm-backend/ansible/roles",),
@@ -270,6 +271,9 @@ _DECLARED_SCOPES = {
     "workflow-visible-name-sweep": (".github/workflows",),
     "anti-pattern-type-emitters": ("autobot-backend/code_analysis", "autobot-backend/code_intelligence"),
     "compat-module-needs-importer": ("autobot-backend",),
+    "unconnected-code-modules": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
+    "unconnected-code-routes": ("autobot-backend", "autobot-slm-backend"),
+    "unconnected-code-stores": ("autobot-backend", "autobot-slm-backend", "autobot_shared", "autobot-infrastructure"),
     "compose-nodes-restated-default": ("autobot-slm-backend", "autobot-infrastructure", "docker", "docker-compose.yml"),
     "chat-history-async-calls-awaited": ("autobot-backend/api",),
     "chat-single-delete-implementation": ("autobot-backend/api",),
