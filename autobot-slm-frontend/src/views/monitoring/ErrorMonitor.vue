@@ -20,7 +20,7 @@ import type {
   ErrorCategoryShare,
   ComponentBreakdown,
 } from '@/types/api-responses'
-import { formatRelativeTime } from '@/utils/dateUtils'
+import { formatCompactRelativeTime } from '@/utils/dateUtils'
 import { getTimezoneOption } from '@/composables/useTimezone'
 
 const logger = createLogger('ErrorMonitor')
@@ -365,7 +365,7 @@ onMounted(() => dataPoller.start(''))
                   </p>
                   <p class="text-xs text-gray-500 mt-1">
                     {{ error.event_type }} ·
-                    {{ formatRelativeTime(error.timestamp) }}
+                    {{ formatCompactRelativeTime(error.timestamp) }}
                   </p>
                 </div>
               </div>
