@@ -4,6 +4,8 @@
 // Author: mrveiss
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { createI18n } from 'vue-i18n'
+import en from '@/i18n/locales/en.json'
 import AsrProviderSelector from '@/components/transcriber/AsrProviderSelector.vue'
 
 // --- API mock ---------------------------------------------------------------
@@ -24,8 +26,10 @@ const PROVIDERS = [
   { id: 'google', name: 'Google Cloud STT v2', configured: false, languages: ['en'] },
 ]
 
+const i18n = createI18n({ legacy: false, locale: 'en', messages: { en }, missingWarn: false, fallbackWarn: false })
+
 function mountSelector() {
-  return mount(AsrProviderSelector)
+  return mount(AsrProviderSelector, { global: { plugins: [i18n] } })
 }
 
 describe('AsrProviderSelector.vue', () => {
@@ -111,6 +115,6 @@ describe('AsrProviderSelector.vue', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('network down')
-    expect(wrapper.find('[role="alert"] .btn').exists()).toBe(true)
+    expect(wrapper.find('[role="alert"] button').exists()).toBe(true)
   })
 })

@@ -34,7 +34,7 @@ def _make_session(existing_admin=None, existing_role=None):
 
     # We need execute to return different results for different queries.
     # seed_default_admin calls execute twice: once for _any_admin_exists (User
-    # query) and once for _find_admin_role_id (Role query).
+    # query) and once for find_admin_role_id (Role query).
     execute_results = []
 
     # First call: _any_admin_exists  — scalar_one_or_none returns existing_admin
@@ -42,7 +42,7 @@ def _make_session(existing_admin=None, existing_role=None):
     first_result.scalar_one_or_none.return_value = existing_admin
     execute_results.append(first_result)
 
-    # Second call: _find_admin_role_id — scalar_one_or_none returns existing_role
+    # Second call: find_admin_role_id — scalar_one_or_none returns existing_role
     second_result = MagicMock()
     second_result.scalar_one_or_none.return_value = existing_role
     execute_results.append(second_result)
