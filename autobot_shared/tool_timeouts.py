@@ -15,5 +15,6 @@ from autobot_shared.env_utils import env_int_clamped
 TOOL_CALL_TIMEOUT_MS: int = env_int_clamped("AUTOBOT_TOOL_CALL_TIMEOUT_MS", 30000, min_v=1)
 
 #: The budget for one group of calls (one agent-loop iteration), in milliseconds.
-#: Override with AUTOBOT_TOOL_GROUP_TIMEOUT_MS.
-TOOL_GROUP_TIMEOUT_MS: int = env_int_clamped("AUTOBOT_TOOL_GROUP_TIMEOUT_MS", 60000, min_v=1)
+#: Override with AUTOBOT_TOOL_GROUP_TIMEOUT_MS. Never below TOOL_CALL_TIMEOUT_MS (#19900):
+#: the group wait_for would otherwise cancel every call before its own budget.
+TOOL_GROUP_TIMEOUT_MS: int = env_int_clamped("AUTOBOT_TOOL_GROUP_TIMEOUT_MS", 60000, min_v=TOOL_CALL_TIMEOUT_MS)
