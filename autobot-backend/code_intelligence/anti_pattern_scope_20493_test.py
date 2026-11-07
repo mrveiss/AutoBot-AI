@@ -37,12 +37,22 @@ def _load_real(leaf: str, monkeypatch: pytest.MonkeyPatch):
 
 @pytest.fixture
 def real_shared_caches(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Point the analyzer's cached path at the real AST and file-list caches."""
+    """Point the analyzer's cached path at the real AST and file-list caches.
+
+    ``raising=False``: when the analyzer was first imported while the shared
+    caches were stubbed out, its ImportError branch never bound these names.
+    """
     monkeypatch.setattr(
-        _analyzer_module, "get_ast_with_content", _load_real("ast_cache", monkeypatch).get_ast_with_content
+        _analyzer_module,
+        "get_ast_with_content",
+        _load_real("ast_cache", monkeypatch).get_ast_with_content,
+        raising=False,
     )
     monkeypatch.setattr(
-        _analyzer_module, "get_cached_python_files", _load_real("file_cache", monkeypatch).get_python_files
+        _analyzer_module,
+        "get_cached_python_files",
+        _load_real("file_cache", monkeypatch).get_python_files,
+        raising=False,
     )
     monkeypatch.setattr(_analyzer_module, "HAS_SHARED_CACHE", True)
 
