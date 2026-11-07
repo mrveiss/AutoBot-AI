@@ -12,11 +12,13 @@ import ast
 import re
 from pathlib import Path
 
+from repo_tests._paths import repo_root
+
 from tools.lint import _parse_cache as parse_cache
 from tools.lint.canonical.context import Context
 from tools.lint.canonical.rules import py_celery_private_event_loop as rule
 
-REPO = Path(__file__).resolve().parents[4]
+REPO = repo_root()
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "py_celery_private_event_loop"
 
 

@@ -74,7 +74,7 @@ _KNOWN_UNSCOPED_FALLBACKS: frozenset[str] = frozenset(
         "autobot-backend/api/codebase_analytics/endpoints/ownership.py:423",
         "autobot-backend/api/codebase_analytics/endpoints/ownership.py:479",
         "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:634",
-        "autobot-backend/tasks/analytics_tasks.py:38",
+        "autobot-backend/tasks/analytics_tasks.py:42",
         "autobot-backend/api/codebase_analytics/chromadb_storage.py:616",
         "autobot-backend/api/codebase_analytics/endpoints/stats.py:221",
         "autobot-backend/api/codebase_analytics/endpoints/stats.py:281",

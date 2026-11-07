@@ -146,7 +146,7 @@
     },
     "processMonitorTab": {
       "durationSeconds": "s",
-      "durationMinutes": "m",
+      "durationMinutes": "min",
       "actions": "Aktionen",
       "agentID": "Agenten-ID",
       "all": "All",
