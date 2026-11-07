@@ -57,8 +57,9 @@ exactly as the `verify-generated-types` CI job does, then fed to `openapi-typesc
 
 ```bash
 cd autobot-frontend
-npm run gen:types:openapi   # python3 ../scripts/audit_api_wiring.py --dump-openapi openapi.json --no-websocket-paths
-npm run gen:types           # openapi-typescript openapi.json -o src/types/generated/api.ts --additional-properties
+npm run gen:types           # runs gen:types:openapi first (a fresh schema, never a stale or missing openapi.json), then:
+                            #   python3 ../scripts/audit_api_wiring.py --dump-openapi openapi.json --no-websocket-paths
+                            #   openapi-typescript openapi.json -o src/types/generated/api.ts --additional-properties
 ```
 
 `--no-websocket-paths` omits the audit-only `x-websocket-paths` key, so `openapi.json` is exactly the schema a

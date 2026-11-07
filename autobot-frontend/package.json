@@ -45,7 +45,7 @@
     "lint:fix": "run-s lint:fix:oxlint lint:fix:eslint",
     "format": "prettier --write src/",
     "gen:types:openapi": "python3 ../scripts/audit_api_wiring.py --dump-openapi openapi.json --no-websocket-paths",
-    "gen:types": "openapi-typescript openapi.json -o src/types/generated/api.ts --additional-properties",
+    "gen:types": "npm run gen:types:openapi && openapi-typescript openapi.json -o src/types/generated/api.ts --additional-properties",
     "verify:types": "git diff --exit-code src/types/generated/api.ts",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
