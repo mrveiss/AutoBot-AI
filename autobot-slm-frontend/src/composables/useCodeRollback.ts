@@ -17,7 +17,7 @@
 
 import { ref } from 'vue'
 import slmApiClient from '@/utils/ApiClient'
-import { createLogger } from '@/utils/debugUtils'
+import { createLogger } from '@autobot/ui'
 import type { components } from '@/types/generated/api'
 import type { UpdateAllJob } from '@/composables/useCodeSync'
 

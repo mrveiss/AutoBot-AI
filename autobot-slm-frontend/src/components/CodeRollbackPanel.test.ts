@@ -20,9 +20,6 @@ const rawRequest = vi.fn()
 vi.mock('@/utils/ApiClient', () => ({ default: { rawRequest: (...args: unknown[]) => rawRequest(...args) } }))
 
 vi.mock('@/composables/useTimezone', () => ({ formatFleetDateTime: (d: string) => `on ${d.slice(0, 10)}` }))
-vi.mock('@/utils/debugUtils', () => ({
-  createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
-}))
 
 // @autobot/ui drags in reka-ui, which does not load under vitest here: stand in for the kit components.
 vi.mock('@autobot/ui', () => {
@@ -44,7 +41,8 @@ vi.mock('@autobot/ui', () => {
       h('select', { disabled: p.disabled, onChange: (e: Event) => emit('update:modelValue', (e.target as HTMLSelectElement).value) },
         (p.options as { value: string; label: string; disabled?: boolean }[]).map((o) => h('option', { value: o.value, disabled: o.disabled }, o.label))),
   })
-  return { BaseCard, BaseAlert, BaseButton, BaseModal, BaseSelectMenu }
+  const createLogger = () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() })
+  return { BaseCard, BaseAlert, BaseButton, BaseModal, BaseSelectMenu, createLogger }
 })
 
 const i18n = createI18n({ legacy: true, locale: 'en', fallbackLocale: 'en', messages: { en } })
