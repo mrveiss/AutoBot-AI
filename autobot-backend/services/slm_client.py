@@ -371,15 +371,24 @@ class SLMClient(SLMDeploymentsMixin):
         # HTTP session
         self._http_session: aiohttp.ClientSession | None = None
 
+    def _resolve_auth_token(self) -> str | None:
+        """Static token if configured, else a freshly minted service JWT (GH#9852); None without a secret."""
+        if self.auth_token:
+            return self.auth_token
+        secret = _get_slm_signing_secret()
+        return _mint_service_jwt(secret) if secret else None
+
     async def _get_session(self) -> aiohttp.ClientSession:
-        """Get or create HTTP session."""
+        """Get or create the HTTP session; its bearer is re-resolved per call so a minted JWT never expires (#20943)."""
         if self._http_session is None or self._http_session.closed:
-            headers = {}
-            if self.auth_token:
-                headers["Authorization"] = f"Bearer {self.auth_token}"
             # Accept self-signed certs for internal HTTPS (#1048, #6654)
             connector = aiohttp.TCPConnector(ssl=_create_permissive_ssl_context(self.slm_url))
-            self._http_session = aiohttp.ClientSession(headers=headers, connector=connector)
+            self._http_session = aiohttp.ClientSession(connector=connector)
+        token = self._resolve_auth_token()
+        if token:
+            self._http_session.headers["Authorization"] = f"Bearer {token}"
+        else:
+            self._http_session.headers.pop("Authorization", None)
         return self._http_session
 
     def _rest_url(self, path: str) -> str:
@@ -638,23 +647,14 @@ class SLMClient(SLMDeploymentsMixin):
             _is_direct_uvicorn_url(self.slm_url),
         )
 
-        # Resolve the auth token for this connection attempt.
-        # Operator-provided static token takes precedence; when absent, mint a
-        # short-lived service JWT from the shared HS256 secret so the SLM's
-        # auth_service.decode_token can verify it (GH#9852).
-        token = self.auth_token
+        token = self._resolve_auth_token()
         if not token:
-            secret = _get_slm_signing_secret()
-            if secret:
-                token = _mint_service_jwt(secret)
-                logger.debug("Minted service JWT for SLM WebSocket connection")
-            else:
-                logger.warning(
-                    "No SLM auth token and no signing secret available "
-                    "(AUTOBOT_JWT_SECRET / SECRET_KEY unset); "
-                    "skipping WebSocket connection to SLM"
-                )
-                return
+            logger.warning(
+                "No SLM auth token and no signing secret available "
+                "(AUTOBOT_JWT_SECRET / SECRET_KEY unset); "
+                "skipping WebSocket connection to SLM"
+            )
+            return
 
         logger.info("Connecting to WebSocket at %s", ws_url)
 
