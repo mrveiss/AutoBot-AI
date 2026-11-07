@@ -320,7 +320,7 @@
 </template>
 
 <script setup lang="ts">
-import { BaseButton, BaseCard, saveBlob } from '@autobot/ui'
+import { BaseButton, BaseCard, httpErrorFrom, saveBlob } from '@autobot/ui'
 import type { IconName } from '@/components/ui/Icon.vue'
 import { formatDuration } from '@/utils/formatHelpers'
 import Icon from '@/components/ui/Icon.vue'
@@ -583,7 +583,7 @@ const downloadExport = async (path: string) => {
   try {
     // The server names the export route (from /analytics/export/formats), so the path is dynamic: a raw request.
     const response = await apiClient.rawRequest(path)
-    if (!response.ok) throw new Error(`Export failed: HTTP ${response.status}`)
+    if (!response.ok) throw await httpErrorFrom(response)
     // Extract filename from path
     const filename = path.split('/').pop() + (path.includes('csv') ? '.csv' : '.json')
     saveBlob(await response.blob(), filename)
