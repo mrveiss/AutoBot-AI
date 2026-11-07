@@ -47,9 +47,9 @@ class ProposalStateError(Exception):
 
 async def _work_item_service_create(session: AsyncSession, company_id: str, type, title: str, **kwargs):
     """Thin wrapper around WorkItemService.create so tests can patch at module level."""
-    from llc.services.work_item_service import WorkItemService  # noqa: PLC0415
+    from llc.services.accessors import get_work_item_service
 
-    return await WorkItemService().create(session, company_id=company_id, type=type, title=title, **kwargs)
+    return await get_work_item_service().create(session, company_id=company_id, type=type, title=title, **kwargs)
 
 
 async def _approval_service_request(session: AsyncSession, *, company_id, gate_type, payload, requested_by):

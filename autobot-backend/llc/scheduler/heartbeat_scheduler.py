@@ -58,7 +58,7 @@ from ..exceptions import (
 from ..models.enums import HeartbeatInvocationSource, LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
 from ..org_role_authority import apply_org_role_bound, role_bound_enforced
-from ..services.budget import BudgetService
+from ..services.accessors import get_budget_service
 from ..services.controls_service import ControlsService
 from ..services.work_item_queue import has_pending_work
 
@@ -944,7 +944,7 @@ async def _ingest_adapter_usage(agent: Dict[str, Any], result: AdapterRunStatus)
         async with factory() as session:
             company = str(agent.get("company_id") or "")
             usage = (int(result.tokens_in or 0), int(result.tokens_out or 0))
-            await ingest_run_cost(BudgetService(), session, result, agent_id, company, usage, model)
+            await ingest_run_cost(get_budget_service(), session, result, agent_id, company, usage, model)
             await session.commit()
     except BudgetExhausted:
         raise  # GH#8215 hard-stop — propagate so the run is recorded FAILED
