@@ -19,11 +19,12 @@ function is counted once, by name or by behaviour. ``Intl.DateTimeFormat().resol
 counted. The kit (``libs/autobot-ui``) and ``utils/`` hold the canonical helpers and are not scanned.
 Baseline re-measured for #20004 on main at 5b0014f63a plus that PR's migrations.
 
-**What the pin holds.** Only declarations in files an open PR held when this landed:
-``SecretAuditLog.vue`` (#20479), ``TerminalWindow.vue`` (#20779), and the SLM's
-``NodeLifecyclePanel.vue``, ``AlertsMonitor.vue`` and ``LLMFallbacksView.vue`` (#20660). The
-relative-time group moved to the kit's ``createRecencyFormatter`` (#19606) and the durations to its
-``formatDuration`` (#19680). The pin goes down to 0 as each held file is moved.
+**What the pin holds.** Nothing: every held file has moved (``SecretAuditLog.vue``, the SLM's
+``AlertsMonitor.vue`` and ``LLMFallbacksView.vue`` to the kit's ``createRecencyFormatter`` and
+``createDateFormatter`` for #19606; ``TerminalWindow.vue`` #20779 and ``NodeLifecyclePanel.vue``
+#20660 earlier). ``NAMED`` is 0, so any new declaration under a name below fails; ``formatTimeAgo``
+stays in the name list although the kit no longer exports one, so a re-introduced copy is still
+caught. ``BEHAVIOUR`` still holds the functions only the behavioural detector finds.
 
 **One number, not a per-file table**, for the reason given in
 ``slm_raw_setinterval_ratchet_19482_test.py``. The pin is down-only against the base (#19283). The
@@ -64,10 +65,11 @@ _COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*).*$", re.M)
 # Measured on 5b0014f63a plus #20004's migrations; 23 and 20 down to 7 and 3 once the fixed-field
 # formatters moved to createDateFormatter / formatLocal* (#19905) and the relative-time ones to the
 # kit's createRecencyFormatter (#19606) -- measured on the merged tree, not added up from each side.
-# Then 7 and 3 down to 3 and 2 when SecretsManager, ProgressBar, useCaptchaStatus and SettingsView moved.
+# Then 7 and 3 down to 3 and 2 when SecretsManager, ProgressBar, useCaptchaStatus and SettingsView moved,
+# and NAMED 3 down to 0 when SecretAuditLog, AlertsMonitor and LLMFallbacksView moved to the kit (#19606).
 NAMED = "local_date_formatter_declarations"
 BEHAVIOUR = "local_date_formatter_functions_by_behaviour"
-PINS = {NAMED: 3, BEHAVIOUR: 2}
+PINS = {NAMED: 0, BEHAVIOUR: 2}
 
 
 def _sources(src: Path) -> list[Path]:
@@ -128,7 +130,11 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
 
     def test_it_counts_each_declaration_shape(self, tmp_path: Path) -> None:
         self._w(tmp_path, "components/A.vue", "function formatDate(d: string): string {\n")
-        self._w(tmp_path, "components/B.vue", "const formatTime = (ts: number): string => {\n")
+        self._w(
+            tmp_path,
+            "components/B.vue",
+            "const formatTime = (ts: number): string => {\n",
+        )
         self._w(tmp_path, "composables/c.ts", "  function formatTimestamp(ts: string) {\n")
         self._w(tmp_path, "views/D.vue", "const formatRelativeTime = function (b) {\n")
         self._w(tmp_path, "views/E.vue", "const formatTimeAgo = async (b) => b\n")
@@ -136,13 +142,37 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
         assert scan(tmp_path)[0] == 6
 
     def test_it_counts_method_property_multiline_and_generic_forms(self, tmp_path: Path) -> None:
-        self._w(tmp_path, "components/A.vue", "const api = {\n  formatDate(d: string) {\n    return 1\n  },\n}\n")
-        self._w(tmp_path, "components/B.vue", "const o = {\n  formatTime: (b: number) => b,\n}\n")
-        self._w(tmp_path, "components/C.vue", "const formatTimestamp =\n  (ts: string): string => {\n")
+        self._w(
+            tmp_path,
+            "components/A.vue",
+            "const api = {\n  formatDate(d: string) {\n    return 1\n  },\n}\n",
+        )
+        self._w(
+            tmp_path,
+            "components/B.vue",
+            "const o = {\n  formatTime: (b: number) => b,\n}\n",
+        )
+        self._w(
+            tmp_path,
+            "components/C.vue",
+            "const formatTimestamp =\n  (ts: string): string => {\n",
+        )
         self._w(tmp_path, "components/D.vue", "const formatDateTime = <T,>(s: T) => s\n")
-        self._w(tmp_path, "components/E.vue", "const formatTimeAgo: (b: number) => string = (b) => `${b}`\n")
-        self._w(tmp_path, "components/F.vue", "class K {\n  private formatDate(d: string) {\n    return d\n  }\n}\n")
-        self._w(tmp_path, "components/G.vue", "class L {\n  static formatTime: (b: number) => number = (b) => b\n}\n")
+        self._w(
+            tmp_path,
+            "components/E.vue",
+            "const formatTimeAgo: (b: number) => string = (b) => `${b}`\n",
+        )
+        self._w(
+            tmp_path,
+            "components/F.vue",
+            "class K {\n  private formatDate(d: string) {\n    return d\n  }\n}\n",
+        )
+        self._w(
+            tmp_path,
+            "components/G.vue",
+            "class L {\n  static formatTime: (b: number) => number = (b) => b\n}\n",
+        )
         assert scan(tmp_path)[0] == 7
 
     def test_a_kit_formatter_an_alias_a_use_and_an_import_are_not_declarations(self, tmp_path: Path) -> None:
@@ -162,7 +192,11 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
     def test_it_skips_tests_stories_comments_and_other_folders(self, tmp_path: Path) -> None:
         self._w(tmp_path, "components/A.test.ts", "function formatDate(d) {\n")
         self._w(tmp_path, "components/__tests__/B.ts", "function formatTime(b) {\n")
-        self._w(tmp_path, "components/C.vue", "// function formatDate(b) {\n * function formatTime(b) {\n")
+        self._w(
+            tmp_path,
+            "components/C.vue",
+            "// function formatDate(b) {\n * function formatTime(b) {\n",
+        )
         self._w(tmp_path, "utils/formatHelpers.ts", "function formatDate(d) {\n")
         assert scan(tmp_path) == (0, 1)
 
@@ -170,7 +204,11 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
 def test_a_hand_rolled_formatter_is_found_whatever_it_is_called(tmp_path: Path) -> None:
     """Controls for #20004: the name never decides, the body does."""
     w = TestTheDetectorWorksBeforeItsOutputIsRead()._w
-    w(tmp_path, "components/A.vue", "const zzStampify = (v: string) => new Date(v).toLocaleString()\n")
+    w(
+        tmp_path,
+        "components/A.vue",
+        "const zzStampify = (v: string) => new Date(v).toLocaleString()\n",
+    )
     w(
         tmp_path,
         "components/B.vue",
@@ -186,26 +224,44 @@ def test_a_hand_rolled_formatter_is_found_whatever_it_is_called(tmp_path: Path) 
         "components/D.vue",
         "const o = {\n  wibble: (iso: string) => new Intl.DateTimeFormat('en').format(new Date(iso)),\n}\n",
     )
-    w(tmp_path, "components/E.vue", "const f = (v: string) =>\n  new Date(v)\n    .toLocaleString()\n")
+    w(
+        tmp_path,
+        "components/E.vue",
+        "const f = (v: string) =>\n  new Date(v)\n    .toLocaleString()\n",
+    )
     assert scan(tmp_path)[0] == 5
 
 
-def test_a_number_a_timezone_probe_a_nested_use_and_a_kit_call_are_not_date_formatters(tmp_path: Path) -> None:
+def test_a_number_a_timezone_probe_a_nested_use_and_a_kit_call_are_not_date_formatters(
+    tmp_path: Path,
+) -> None:
     w = TestTheDetectorWorksBeforeItsOutputIsRead()._w
     w(tmp_path, "components/A.vue", "const group = (n: number) => n.toLocaleString()\n")
-    w(tmp_path, "components/B.vue", "function zone() {\n  return Intl.DateTimeFormat().resolvedOptions().timeZone\n}\n")
+    w(
+        tmp_path,
+        "components/B.vue",
+        "function zone() {\n  return Intl.DateTimeFormat().resolvedOptions().timeZone\n}\n",
+    )
     w(
         tmp_path,
         "components/C.vue",
         "const shown = createDateFormatter({ kind: 'time' })\nconst x = (a).toLocaleString()\n",
     )
-    w(tmp_path, "components/D.vue", "function outer() {\n  return items.map((n) => n.toLocaleString())\n}\n")
+    w(
+        tmp_path,
+        "components/D.vue",
+        "function outer() {\n  return items.map((n) => n.toLocaleString())\n}\n",
+    )
     assert scan(tmp_path)[0] == 0
 
 
 def test_a_formatter_counts_once_when_it_is_named_and_formats(tmp_path: Path) -> None:
     w = TestTheDetectorWorksBeforeItsOutputIsRead()._w
-    w(tmp_path, "components/A.vue", "function formatDate(d: string) {\n  return new Date(d).toLocaleDateString()\n}\n")
+    w(
+        tmp_path,
+        "components/A.vue",
+        "function formatDate(d: string) {\n  return new Date(d).toLocaleDateString()\n}\n",
+    )
     assert scan(tmp_path)[0] == 1
 
 
@@ -218,14 +274,18 @@ def test_the_apps_do_not_hand_roll_more_date_formatters_than_pinned() -> None:
     for key, pinned in PINS.items():
         assert now[key] <= pinned, (
             f"{now[key]} {key}, pin allows {pinned} (#19905, #20004). "
-            "Use formatDate / formatDateTime / formatISOString / formatTimeAgo or createDateFormatter "
-            "from utils/formatHelpers (@autobot/ui)."
+            "Use formatDate / formatDateTime / formatISOString, createDateFormatter or createRecencyFormatter "
+            "(@autobot/ui; formatHelpers re-exports the date ones)."
         )
         assert now[key] == pinned, f"{now[key]} {key}, pin says {pinned}: lower PINS[{key!r}] to {now[key]} (#20004)."
 
 
 def test_the_pin_was_not_raised_against_the_base() -> None:
-    base = base_table(repo_root(), ("repo_tests/frontend_local_date_formatter_ratchet_19905_test.py",), "PINS")
+    base = base_table(
+        repo_root(),
+        ("repo_tests/frontend_local_date_formatter_ratchet_19905_test.py",),
+        "PINS",
+    )
     if not base:
         return  # the guard is new at this base; nothing to compare against yet
     for key, pinned in PINS.items():
