@@ -89,6 +89,14 @@ async def _assert_project_in_company(session: AsyncSession, company_id: str, pro
         raise HierarchyViolation(f"project {project_id} not found in this company")
 
 
+def _same_project(first: object, second: object) -> bool:
+    """Whether two project ids name one project: compared as UUIDs, so an un-hyphenated spelling still matches."""
+    try:
+        return uuid.UUID(str(first)) == uuid.UUID(str(second))
+    except ValueError:
+        return str(first) == str(second)
+
+
 def _resolve_project(
     item_type: WorkItemType, parent: Optional[LLCWorkItem], project_id: Optional[str], current: Optional[str] = None
 ):
@@ -97,7 +105,7 @@ def _resolve_project(
     ``current`` is a moved item's existing project: it counts only when neither parent nor caller names one.
     """
     parent_project = str(parent.project_id) if parent is not None and parent.project_id else None
-    if parent_project and project_id and str(project_id) != parent_project:
+    if parent_project and project_id and not _same_project(project_id, parent_project):
         raise HierarchyViolation("a child must sit in the same project as its parent")
     resolved = parent_project or project_id or current
     if resolved is None and item_type in PROJECT_REQUIRED_TYPES:
@@ -175,41 +183,48 @@ async def parent_if_allowed(
     return parent_id
 
 
-async def move_subtree_to_project(
-    session: AsyncSession, root_id: uuid.UUID, project_id: uuid.UUID, company_id: uuid.UUID
-) -> int:
-    """Set ``project_id`` on every descendant of *root_id* in *company_id*; bounded, cycle-safe. Returns the count."""
+async def _descendant_ids(session: AsyncSession, root_id: uuid.UUID, company_id: uuid.UUID) -> List[uuid.UUID]:
+    """Every descendant of *root_id* in *company_id*, to any depth. Cycle-safe: a row is visited once."""
     seen = {root_id}
+    found: List[uuid.UUID] = []
     frontier = [root_id]
-    moved = 0
-    for _ in range(MAX_HIERARCHY_DEPTH):
+    while frontier:
         rows = await session.execute(
             select(LLCWorkItem.id).where(LLCWorkItem.parent_id.in_(frontier), LLCWorkItem.company_id == company_id)
         )
         frontier = [i for i in rows.scalars().all() if i not in seen]
-        if not frontier:
-            break
         seen.update(frontier)
+        found.extend(frontier)
+    return found
+
+
+async def move_subtree_to_project(
+    session: AsyncSession, root_id: uuid.UUID, project_id: uuid.UUID, company_id: uuid.UUID
+) -> int:
+    """Set ``project_id`` on every descendant of *root_id* in *company_id*, at any depth. Returns the count.
+
+    The whole subtree is read before anything is written, so a move can never stop half way down.
+    """
+    descendants = await _descendant_ids(session, root_id, company_id)
+    if descendants:
         await session.execute(
             update(LLCWorkItem)
-            .where(LLCWorkItem.id.in_(frontier), LLCWorkItem.company_id == company_id)
+            .where(LLCWorkItem.id.in_(descendants), LLCWorkItem.company_id == company_id)
             .values(project_id=project_id)
         )
-        moved += len(frontier)
-    return moved
+    return len(descendants)
 
 
 async def reparent(
     session: AsyncSession, get: ItemGetter, item: LLCWorkItem, parent_id: Optional[str]
 ) -> Optional[uuid.UUID]:
-    """Validate moving *item* under *parent_id* and return the UUID to store.
+    """Validate moving *item* under *parent_id* (None detaches it) and return the UUID to store.
 
-    The item and its subtree take the new parent's project. A no-op when the parent is unchanged
-    or being cleared, so an update that leaves ``parent_id`` alone never revisits an invalid row.
+    The item and its subtree take the new parent's project. A no-op when the parent is unchanged,
+    so an update that leaves ``parent_id`` alone never revisits an invalid row. A detach is a real
+    change, so a type that requires a project must still have one.
     """
-    if parent_id is None:
-        return None
-    new_parent = uuid.UUID(str(parent_id))
+    new_parent = uuid.UUID(str(parent_id)) if parent_id is not None else None
     if new_parent == item.parent_id:
         return new_parent
     project, _ = await validate_parent(
@@ -218,11 +233,11 @@ async def reparent(
         company_id=str(item.company_id),
         item_type=item.type,
         item_id=str(item.id),
-        parent_id=str(new_parent),
+        parent_id=str(new_parent) if new_parent is not None else None,
         project_id=None,
         current_project=str(item.project_id) if item.project_id else None,
     )
-    if project is not None and str(item.project_id) != project:
+    if project is not None and not (item.project_id and _same_project(item.project_id, project)):
         item.project_id = uuid.UUID(project)
         await move_subtree_to_project(session, item.id, item.project_id, item.company_id)
     return new_parent

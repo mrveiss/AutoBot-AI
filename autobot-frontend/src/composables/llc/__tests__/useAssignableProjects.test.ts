@@ -6,7 +6,7 @@
 // #18978: overlapping project loads land newest-first; a late older response is dropped.
 
 import { describe, it, expect, vi } from 'vitest'
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 
 const get = vi.fn()
 vi.mock('@/plugins/api', () => ({ useApiClient: () => ({ get }) }))
@@ -61,5 +61,26 @@ describe('useAssignableProjects load ordering', () => {
 
     expect(projectsFailed.value).toBe(false)
     expect(projects.value.map(p => p.id)).toEqual(['new'])
+  })
+})
+
+describe('useAssignableProjects company change (#20930)', () => {
+  it('clears the old list, ignores a load still in flight, and loads the new company', async () => {
+    const stale = deferred<unknown[]>()
+    get.mockReset()
+    get.mockReturnValueOnce(stale.promise).mockResolvedValueOnce([project('fresh')])
+    const company = ref('co1')
+    const { projects, isLoadingProjects, loadProjects } = useAssignableProjects(company)
+
+    const inFlight = loadProjects()
+    company.value = 'co2'
+    await nextTick()
+    stale.resolve([project('old-company')])
+    await inFlight
+    await new Promise(resolve => setTimeout(resolve))
+
+    expect(get).toHaveBeenLastCalledWith('/api/llc/companies/co2/projects')
+    expect(projects.value.map(p => p.id)).toEqual(['fresh'])
+    expect(isLoadingProjects.value).toBe(false)
   })
 })

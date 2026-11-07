@@ -16,7 +16,11 @@ from typing import Any, Awaitable, Callable
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.tool_catalogue import ToolEffect, tools_with_all
-from autobot_shared.tool_timeouts import TOOL_CALL_TIMEOUT_MS, TOOL_GROUP_TIMEOUT_MS
+from autobot_shared.tool_timeouts import (
+    TOOL_CALL_TIMEOUT_MS,
+    TOOL_GROUP_TIMEOUT_MS,
+    clamp_group_timeout,
+)
 from autobot_shared.tracing import tool_span
 from code_intelligence.code_generation.diff import DiffGenerator
 from constants.status_enums import TaskStatus
@@ -78,6 +82,18 @@ class ParallelExecutorConfig:
     retry_failed: bool = True
     max_retries: int = RetryConfig.MIN_RETRIES  # 2
     collect_metrics: bool = True
+
+    def __post_init__(self) -> None:
+        """Hold the group-budget rule for directly constructed configs (#19900)."""
+        clamped = clamp_group_timeout(self.per_call_timeout_ms, self.group_timeout_ms)
+        if clamped != self.group_timeout_ms:
+            logger.warning(
+                "group_timeout_ms=%s is below per_call_timeout_ms=%s; raised to %s",
+                self.group_timeout_ms,
+                self.per_call_timeout_ms,
+                clamped,
+            )
+            self.group_timeout_ms = clamped
 
 
 # =============================================================================
