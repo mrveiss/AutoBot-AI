@@ -141,11 +141,7 @@ def _tracked(pathspecs: tuple[str, ...]) -> list[str]:
         check=True,
         env=scrubbed_git_env(),
     ).stdout
-    return [
-        rel
-        for rel in out.split("\0")
-        if rel and not any(part in _SKIP_PARTS for part in Path(rel).parts)
-    ]
+    return [rel for rel in out.split("\0") if rel and not any(part in _SKIP_PARTS for part in Path(rel).parts)]
 
 
 def versions_in_text(text: str, pattern: re.Pattern[str]) -> list[tuple[int, str]]:
@@ -226,20 +222,16 @@ def test_every_declared_python_version_agrees_with_the_python_version_file() -> 
     reference = _reference_version()
     declarations = _all_declarations()
     assert len(declarations) >= 5, (
-        f"only {len(declarations)} declarations collected — FIX THE SWEEP, "
-        "this comparison would pass vacuously"
+        f"only {len(declarations)} declarations collected — FIX THE SWEEP, " "this comparison would pass vacuously"
     )
     drifted = [
-        f"{d.relative_path}:{d.line}  declares {d.version}  ({d.label})"
-        for d in declarations
-        if d.version != reference
+        f"{d.relative_path}:{d.line}  declares {d.version}  ({d.label})" for d in declarations if d.version != reference
     ]
     assert not drifted, (
         f"these declare a Python interpreter version other than the {reference} in "
         f"{_REFERENCE_FILE}. Every one of them is a tree that builds, deploys or "
         "type-checks against a different interpreter than the rest of the "
-        "repository, with no check anywhere that would notice (#13842):\n  "
-        + "\n  ".join(drifted)
+        "repository, with no check anywhere that would notice (#13842):\n  " + "\n  ".join(drifted)
     )
 
 
@@ -399,8 +391,7 @@ def test_startup_validator_derives_the_floor_at_runtime() -> None:
         [
             sys.executable,
             "-c",
-            "from startup_validator import _minimum_python_version; "
-            "print('%d.%d' % _minimum_python_version())",
+            "from startup_validator import _minimum_python_version; " "print('%d.%d' % _minimum_python_version())",
         ],
         env=env,
         capture_output=True,
