@@ -1213,7 +1213,7 @@ onMounted(async () => {
 
 .progress-step.current .step-indicator {
   background: var(--color-primary);
-  color: var(--color-white);
+  color: var(--text-on-primary);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
 }
 
