@@ -38,14 +38,14 @@
         <BaseFormField :label="t('llc.backlog.fieldType')" class="flex-1">
           <template #default="{ id }">
             <select :id="id" v-model="newItem.type" :class="CONTROL_CLASS">
-              <option v-for="wt in WORK_ITEM_TYPES" :key="wt.value" :value="wt.value">{{ wt.label }}</option>
+              <option v-for="wt in WORK_ITEM_TYPES" :key="wt.value" :value="wt.value">{{ t(wt.labelKey) }}</option>
             </select>
           </template>
         </BaseFormField>
         <BaseFormField :label="t('llc.backlog.fieldPriority')" class="flex-1">
           <template #default="{ id }">
             <select :id="id" v-model="newItem.priority" :class="CONTROL_CLASS">
-              <option v-for="p in PRIORITIES" :key="p.value" :value="p.value">{{ p.label }}</option>
+              <option v-for="p in PRIORITIES" :key="p.value" :value="p.value">{{ t(p.labelKey) }}</option>
             </select>
           </template>
         </BaseFormField>
@@ -53,7 +53,9 @@
           v-model="storyPoints"
           type="number"
           min="0"
+          step="1"
           :label="t('llc.backlog.fieldStoryPoints')"
+          :error="storyPointsError"
           class="flex-1"
         />
       </div>
@@ -153,7 +155,15 @@ const storyPoints = computed({
   set: (v: string) => { newItem.value.story_points = v === '' ? null : Number(v) },
 })
 
-const canCreate = computed(() => !!newItem.value.title && !!newItem.value.project_id && !isCreating.value)
+// Story points are counted in whole units; a fraction or a negative would only come back as a server error (#20930).
+const storyPointsError = computed(() => {
+  const points = newItem.value.story_points
+  return points === null || (Number.isInteger(points) && points >= 0) ? '' : t('llc.backlog.storyPointsWholeNumber')
+})
+
+const canCreate = computed(
+  () => !!newItem.value.title && !!newItem.value.project_id && !storyPointsError.value && !isCreating.value,
+)
 
 // Prefill from the backlog's project filter each time the form opens: a Cancel
 // keeps the form's state, and the earlier choice must not outlive it.
@@ -163,10 +173,12 @@ watch(
     if (open) newItem.value.project_id = props.defaultProjectId
   },
 )
-// A project listed after the form is already open can still be the default.
+// A project listed after the form is already open can still be the default; a chosen project that the list no
+// longer holds (another company's list replaced it) is dropped (#20930).
 watch(
-  () => props.projects.length,
-  () => {
+  () => props.projects,
+  (listed) => {
+    if (!listed.some(p => p.id === newItem.value.project_id)) newItem.value.project_id = ''
     if (props.modelValue && !newItem.value.project_id) newItem.value.project_id = props.defaultProjectId
   },
 )

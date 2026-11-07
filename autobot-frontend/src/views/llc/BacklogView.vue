@@ -34,7 +34,7 @@
       </select>
       <select v-model="filters.type" class="filter-select">
         <option value="">{{ t('llc.backlog.allTypes') }}</option>
-        <option v-for="wt in WORK_ITEM_TYPES" :key="wt.value" :value="wt.value">{{ wt.label }}</option>
+        <option v-for="wt in WORK_ITEM_TYPES" :key="wt.value" :value="wt.value">{{ t(wt.labelKey) }}</option>
       </select>
       <select v-model="filters.status" class="filter-select">
         <option value="">{{ t('llc.backlog.allStatuses') }}</option>
@@ -43,7 +43,7 @@
       </select>
       <select v-model="filters.priority" class="filter-select">
         <option value="">{{ t('llc.backlog.allPriorities') }}</option>
-        <option v-for="p in PRIORITIES" :key="p.value" :value="p.value">{{ p.label }}</option>
+        <option v-for="p in PRIORITIES" :key="p.value" :value="p.value">{{ t(p.labelKey) }}</option>
       </select>
       <input
         v-model="filters.search"
@@ -52,6 +52,12 @@
         type="text"
       />
     </div>
+
+    <BaseAlert v-if="createdRefreshFailed" variant="warning" :message="t('llc.backlog.createdRefreshFailed')">
+      <template #actions>
+        <button class="underline" data-testid="retry-refresh" @click="onItemCreated">{{ t('common.retry') }}</button>
+      </template>
+    </BaseAlert>
 
     <!-- Table -->
     <div class="backlog-table-wrapper">
@@ -190,11 +196,12 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { useAssignableProjects } from '@/composables/llc/useAssignableProjects'
+import { useBacklogItems } from '@/composables/llc/useBacklogItems'
 import { createLogger } from '@/utils/debugUtils'
 import WorkItemDetail from './WorkItemDetail.vue'
 import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
 import BacklogCreateModal from '@/components/llc/BacklogCreateModal.vue'
-import { BaseAvatar, BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseAvatar, BaseModal } from '@autobot/ui'
 
 const logger = createLogger('BacklogView')
 const api = useApiClient()
@@ -205,22 +212,18 @@ const companyId = computed(() => route.params.companyId as string)
 
 import { WORK_ITEM_TYPES, PRIORITIES, type WorkItem } from './workItemTypes'
 
-const items = ref<WorkItem[]>([])
-const isLoading = ref(false)
 const detailItem = ref<WorkItem | null>(null)
 const selectedIds = ref<Set<string>>(new Set())
 const draggedItem = ref<WorkItem | null>(null)
 
 const filters = ref({ type: '', status: '', priority: '', search: '' })
 
-// #17680: kept out of `filters` on purpose -- everything in there is applied
-// client-side by `filteredItems`, and this one is applied by the server. A
-// project filter cannot be client-side: the route pages at `limit=50`, so
-// narrowing an already-truncated page returns an arbitrary subset of the
-// project rather than the project.
+// #17680: applied by the server, so kept out of `filters` (those are client-side): a client-side project
+// filter would narrow an already-truncated 50-row page to an arbitrary subset.
 const projectFilterId = ref('')
 
 const showCreateForm = ref(false)
+const createdRefreshFailed = ref(false) // a create worked, the list refresh after it did not (#20930)
 
 const showBulkAssign = ref(false)
 const isBulkAssigning = ref(false)
@@ -229,6 +232,7 @@ const bulkSprintId = ref('')
 interface SprintOpt { id: string; name: string; status: string }
 
 const { projects, isLoadingProjects, projectsFailed, loadProjects } = useAssignableProjects(companyId)
+const { items, isLoading, fetchBacklog } = useBacklogItems(companyId, projectFilterId)
 const sprints = ref<SprintOpt[]>([])
 const selectedProjectId = ref('')
 const isLoadingSprints = ref(false)
@@ -317,9 +321,10 @@ function openCreateForm() {
 }
 
 // Refetched, not prepended: the form can pick any project and the list is filtered by the server.
-function onItemCreated() {
+// Also the Retry of a failed refresh: the form is already closed then.
+async function onItemCreated() {
   showCreateForm.value = false
-  fetchBacklog()
+  createdRefreshFailed.value = !(await fetchBacklog())
 }
 
 // Cascade picker for bulk sprint assignment: pick a Project, then a Sprint from
@@ -345,9 +350,7 @@ async function onProjectSelect(projectId: string) {
 
 function openBulkAssign() {
   showBulkAssign.value = true
-  selectedProjectId.value = ''
-  sprints.value = []
-  bulkSprintId.value = ''
+  onProjectSelect('')
   if (projects.value.length === 0) loadProjects()
 }
 
@@ -370,34 +373,24 @@ async function bulkAssign() {
   }
 }
 
-async function fetchBacklog() {
-  isLoading.value = true
-  try {
-    // #17680: `GET /api/llc/backlog` has accepted and honoured `project_id`
-    // since it was written, and this was its only caller -- sending
-    // `company_id` alone. So "the project backlog" was always the whole
-    // company's backlog, for every project.
-    const query = new URLSearchParams({ company_id: companyId.value })
-    if (projectFilterId.value) query.set('project_id', projectFilterId.value)
-    const result = await api.get<{ items: WorkItem[] }>(`/api/llc/backlog?${query.toString()}`)
-    items.value = result.items ?? []
-  } catch (err) {
-    logger.error('Failed to load backlog', err)
-  } finally {
-    isLoading.value = false
-  }
-}
-
 // Server-side filter, so a change is a refetch rather than a recompute.
 watch(projectFilterId, () => {
   selectedIds.value = new Set()
   fetchBacklog()
 })
 
+// Another company has other projects, sprints and items: nothing chosen for the last one may carry over (#20930).
+watch(companyId, () => {
+  const refetchedByFilter = projectFilterId.value !== ''
+  selectedIds.value = new Set()
+  projectFilterId.value = ''
+  onProjectSelect('')
+  if (!refetchedByFilter) fetchBacklog()
+})
+
 onMounted(() => {
   fetchBacklog()
-  // The filter needs the project list on load; the bulk-assign modal used to
-  // be the only thing that fetched it, so it arrived only after opening that.
+  // The project filter needs the project list on load.
   loadProjects()
 })
 </script>
