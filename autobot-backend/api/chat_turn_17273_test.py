@@ -78,18 +78,31 @@ async def _register_turn(session_id: str):
 
 
 @pytest.mark.asyncio
-async def test_a_non_owner_gets_403_and_the_turn_and_checkpoint_survive(monkeypatch):
+async def test_a_non_owner_gets_404_and_the_turn_and_checkpoint_survive(monkeypatch):
     _as_user(monkeypatch, "bob", owner="alice")
     turn, state = await _register_turn("alices-chat")
     try:
         response = await _post("alices-chat")
 
-        assert response.status_code == 403
+        assert response.status_code == 404
         assert not turn.task.done() and "cancelled" not in state, "a refused caller must not stop the run"
         graph_module.delete_thread_checkpoints.assert_not_awaited()
     finally:
         turn.task.cancel()
         turn_control._REGISTRY.remove(turn)
+
+
+@pytest.mark.asyncio
+async def test_a_foreign_conversation_answers_exactly_like_an_unknown_one(monkeypatch):
+    """#20413: status and body are byte-identical, so the caller cannot tell which ids exist."""
+    _as_user(monkeypatch, "bob", owner="alice")
+    not_yours = await _post("alices-chat")
+    _as_user(monkeypatch, "bob", owner=None)
+    monkeypatch.setattr("chat_history.session_file.session_file_exists", AsyncMock(return_value=False))
+    missing = await _post("no-such-chat")
+
+    assert not_yours.status_code == missing.status_code == 404
+    assert not_yours.content == missing.content
 
 
 @pytest.mark.asyncio
@@ -137,21 +150,17 @@ async def test_an_unreadable_owner_is_denied(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_the_route_asks_for_the_strict_posture():
+async def test_the_route_goes_through_the_strict_validator(monkeypatch):
     """Behaviour is tested above; this pins the seam so the default posture cannot slip back in."""
-    from security.session_posture import SessionPosture
+    seen = []
 
-    seen = {}
-
-    async def spy(session_id, request, posture=SessionPosture.DEFAULT):
-        seen["posture"] = posture
+    async def spy(session_id, user_data, request):
+        seen.append(session_id)
         return {"authorized": True}
 
-    original = chat_turn.validate_session_ownership
-    chat_turn.validate_session_ownership = spy
-    try:
-        await _post("alices-chat")
-    finally:
-        chat_turn.validate_session_ownership = original
+    monkeypatch.setattr("security.session_posture.validate_strict", spy)
+    _as_user(monkeypatch, "bob", owner="alice")
 
-    assert seen["posture"] is SessionPosture.STRICT
+    await _post("alices-chat")
+
+    assert seen == ["alices-chat"]

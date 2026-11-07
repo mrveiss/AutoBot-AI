@@ -47,7 +47,7 @@ from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from security.session_ownership import validate_session_ownership
-from security.session_posture import NotSessionOwner, SessionPosture
+from security.session_posture import NotSessionOwner, SessionPosture, session_not_found
 from security.upload_filename_policy import ALLOWED_EXTENSIONS, is_safe_file  # noqa: F401 -- re-exported for tests
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 
@@ -85,9 +85,9 @@ async def _authorize_file_operation(
     try:
         ownership = await validate_session_ownership(session_id, request, posture=SessionPosture.STRICT)
     except NotSessionOwner as denied:  # #20195: an owner route answers 404 as for an unknown id (no existence leak)
-        raise (HTTPException(status_code=404, detail="Chat session not found") if existing_only else denied) from None
+        raise (session_not_found() if existing_only else denied) from None
     if existing_only and ownership.get("reason") == "legacy_unowned":
-        raise HTTPException(status_code=404, detail="Chat session not found")
+        raise session_not_found()
     return user_data
 
 
