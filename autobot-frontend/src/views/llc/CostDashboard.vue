@@ -141,7 +141,7 @@
           />
         </div>
 
-        <div v-if="settingsModal.error" class="modal-error">{{ settingsModal.error }}</div>
+        <div v-if="settingsModal.error" class="modal-error" role="alert">{{ settingsModal.error }}</div>
         <p v-if="settingsModal.notice" class="field-hint" role="status" data-testid="budget-raise-pending">{{ settingsModal.notice }}</p>
 
         <template #actions>
