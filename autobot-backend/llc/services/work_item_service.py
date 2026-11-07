@@ -35,7 +35,6 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.redis_utils import delete_if_value
 from autobot_shared.ssot_constants import QueryDefaults
 
 from ..models.activity import ActorType
@@ -62,6 +61,10 @@ from .work_item_completion_effects import release_workspace_for_task
 from .work_item_hierarchy import reparent, validate_create
 from .work_item_own_task import (
     InvalidTransition,
+    checkout_fence_value,
+    claim_conflict_holder,
+    drop_fence,
+    fence_agent,
     is_own_task,
     other_checkout_holder,
     refuse_past_reviewer,
@@ -424,14 +427,16 @@ class WorkItemService(LLCServiceBase):
         The work_intent parameter is optional; omitting it preserves existing behaviour exactly.
         """
         redis_key = f"llc:checkout:{work_item_id}"
+        run_id = run_id or str(uuid.uuid4())
+        fence_value = checkout_fence_value(agent_id, run_id)
         redis = await get_async_redis_client()
 
         acquired = False
         if redis is not None:
-            acquired = await redis.set(redis_key, agent_id, nx=True, ex=_CHECKOUT_TTL)
+            acquired = await redis.set(redis_key, fence_value, nx=True, ex=_CHECKOUT_TTL)
             if not acquired:
                 existing = await redis.get(redis_key)
-                if existing and existing != agent_id:
+                if existing and fence_agent(existing) != agent_id:
                     raise CheckoutConflict(f"Work item {work_item_id} already checked out by agent {existing}")
 
         # DB-level lock
@@ -440,16 +445,16 @@ class WorkItemService(LLCServiceBase):
         )
         item = result.scalar_one_or_none()
         if item is None:
-            if acquired:
-                await redis.delete(redis_key)
+            await drop_fence(redis, redis_key, fence_value, acquired)
             raise ValueError(f"Work item {work_item_id} not found")
 
         if holder := other_checkout_holder(item, agent_id):
-            if acquired:
-                await redis.delete(redis_key)
+            await drop_fence(redis, redis_key, fence_value, acquired)
             raise CheckoutConflict(f"Work item {work_item_id} already checked out by {holder}")
 
         stamp_agent_checkout(item, agent_id, run_id, work_intent)
+        if redis is not None and not acquired:  # same agent again: the fence names THIS generation
+            await redis.set(redis_key, fence_value, ex=_CHECKOUT_TTL)
 
         await session.flush()
 
@@ -505,9 +510,7 @@ class WorkItemService(LLCServiceBase):
     ) -> LLCWorkItem:
         """Atomically claim a work item for a human user.
 
-        Redis key stores ``user:{user_id}`` (not bare UUID) so the NX check
-        is mutually exclusive with agent checkout which stores a bare UUID.
-
+        The fence stores ``user:{user_id}``, so its NX check excludes agent checkouts (``<agent>#<run>``).
         Raises CheckoutConflict if the item is already held by anyone else.
         Raises ValueError if the item is not found.
         """
@@ -528,15 +531,13 @@ class WorkItemService(LLCServiceBase):
         )
         item = result.scalar_one_or_none()
         if item is None:
-            if redis is not None:
-                await redis.delete(redis_key)
+            await drop_fence(redis, redis_key, redis_value, acquired)
             raise ValueError(f"Work item {work_item_id} not found")
 
-        # DB-level conflict guard — reject if already held by a different user
-        if item.assignee_user_id is not None and str(item.assignee_user_id) != user_id:
-            if redis is not None:
-                await redis.delete(redis_key)
-            raise CheckoutConflict(f"Work item {work_item_id} is already claimed by user {item.assignee_user_id}")
+        # Row lock is the authority (the fence may have expired): a live agent checkout is never overwritten.
+        if holder := claim_conflict_holder(item, user_id):
+            await drop_fence(redis, redis_key, redis_value, acquired)  # only a fence THIS call took
+            raise CheckoutConflict(f"Work item {work_item_id} is already claimed by {holder}")
 
         item.assignee_user_id = uuid.UUID(user_id)
         item.assignee_agent_id = None
@@ -563,8 +564,7 @@ class WorkItemService(LLCServiceBase):
                 after={"assignee_user_id": user_id, "assignee_type": AssigneeType.USER.value},
             )
         except ActivityRecordError:
-            if acquired:  # the DB claim rolls back; only a lock THIS call took goes with it (#20102)
-                await delete_if_value(redis, redis_key, redis_value)
+            await drop_fence(redis, redis_key, redis_value, acquired)  # the DB claim rolls back (#20102)
             raise
 
         return item

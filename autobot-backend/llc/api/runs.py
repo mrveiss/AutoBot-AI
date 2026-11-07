@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.redis_utils import delete_if_value
+from autobot_shared.redis_utils import delete_if_holder
 from user_management.database import get_async_session
 from user_management.services import TenantContext
 
@@ -175,7 +175,7 @@ async def cancel_run(
         redis = await get_async_redis_client()
         if redis is not None:
             try:
-                await delete_if_value(redis, f"llc:checkout:{run.work_item_id}", str(run.agent_id))
+                await delete_if_holder(redis, f"llc:checkout:{run.work_item_id}", str(run.agent_id))
             except Exception as exc:  # the fence expires on its TTL; the cancel stands
                 logger.warning("Run cancel could not drop checkout fence for %s: %s", run.work_item_id, exc)
 
