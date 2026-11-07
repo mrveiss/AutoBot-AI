@@ -64,6 +64,10 @@ CANONICAL_KEY = "backend-python"
 
 WORKFLOWS = Path(".github/workflows")
 
+# The one reusable `changes` job (#15360). A caller job `uses:` it and passes its
+# filter source as `with.filters`, which is as good as a dorny step of its own.
+REUSABLE_CHANGES = "./.github/workflows/_changes.yml"
+
 # workflow filename -> event names whose `paths:` must carry the canonical set.
 #
 # This table is the declaration of intent. A workflow is either here, with the
@@ -97,6 +101,14 @@ NOT_CONSUMERS: dict[str, str] = {
         "publisher that filters its trigger never starts on the pull requests it "
         "is meant to rescue, which is the deadlock it exists to prevent. There "
         "is no inline list here to keep in step with the canonical set."
+    ),
+    "llm-optimization-real-torch.yml": (
+        "a narrow, non-required lane (#13049, #19170) that runs three "
+        "llm_shared/optimization oracle tests against real CPU torch. Its `paths:` "
+        "is the import-time closure of those tests (llm_shared plus the specific "
+        "autobot_shared modules they load), not 'backend Python changed', so the "
+        "canonical set would run a 20-minute torch install on unrelated changes. "
+        "It is not a required context, so path-filtering it cannot deadlock a PR."
     ),
 }
 
@@ -215,19 +227,31 @@ def _event_paths(parsed: dict, path: Path, event: str) -> list[str] | None:
     return [p for p in paths if isinstance(p, str)]
 
 
-def _loads_canonical_file(parsed: dict, canonical_file: Path = CANONICAL_FILE) -> bool:
-    """True when any dorny/paths-filter step in *parsed* reads *canonical_file*."""
+def _filter_sources(parsed: dict) -> list:
+    """Every raw dorny `filters` value in *parsed*, from either supported shape.
+
+    A workflow either runs the dorny/paths-filter step itself, or calls the one
+    reusable ``_changes.yml`` job (#15360) and hands its filter source in as
+    ``with.filters``. Both mean "this is where the path set lives", so both are
+    yielded; the values are returned raw (possibly absent or non-string) so each
+    caller keeps its own fatal on a malformed one.
+    """
+    sources: list = []
     for job in (parsed.get("jobs") or {}).values():
         if not isinstance(job, dict):
             continue
+        if str(job.get("uses", "")).strip() == REUSABLE_CHANGES:
+            sources.append((job.get("with") or {}).get("filters"))
+            continue
         for step in job.get("steps") or []:
-            if not isinstance(step, dict):
-                continue
-            if "dorny/paths-filter" not in str(step.get("uses", "")):
-                continue
-            if str((step.get("with") or {}).get("filters", "")).strip() == str(canonical_file):
-                return True
-    return False
+            if isinstance(step, dict) and "dorny/paths-filter" in str(step.get("uses", "")):
+                sources.append((step.get("with") or {}).get("filters"))
+    return sources
+
+
+def _loads_canonical_file(parsed: dict, canonical_file: Path = CANONICAL_FILE) -> bool:
+    """True when any filter source in *parsed* reads *canonical_file*."""
+    return any(str(raw if raw is not None else "").strip() == str(canonical_file) for raw in _filter_sources(parsed))
 
 
 def check_inline_consumers(
@@ -250,7 +274,9 @@ def check_inline_consumers(
             if missing:
                 failures.append(f"{workflow}: `on.{event}.paths` is missing {missing}")
             else:
-                print(f"  OK     {workflow} on.{event}.paths carries all {len(canonical)} canonical entries")  # noqa: print
+                print(
+                    f"  OK     {workflow} on.{event}.paths carries all {len(canonical)} canonical entries"
+                )  # noqa: print
     return failures, checked
 
 
@@ -308,31 +334,26 @@ def _dorny_filters(parsed: dict, path: Path) -> dict:
     check" and "checked and it was fine" are indistinguishable.
     """
     found: list[dict] = []
-    for job in (parsed.get("jobs") or {}).values():
-        if not isinstance(job, dict):
-            continue
-        for step in job.get("steps") or []:
-            if not isinstance(step, dict) or "dorny/paths-filter" not in str(step.get("uses", "")):
-                continue
-            raw = (step.get("with") or {}).get("filters")
-            if not isinstance(raw, str):
-                sys.exit(f"FATAL: {path}'s dorny/paths-filter step has no inline `filters:` block")
-            try:
-                block = yaml.safe_load(raw)
-            except yaml.YAMLError as exc:
-                sys.exit(f"FATAL: {path}'s inline `filters:` block is not parseable YAML: {exc}")
-            if not isinstance(block, dict) or not block:
-                sys.exit(f"FATAL: {path}'s inline `filters:` block did not parse to a non-empty mapping")
-            found.append(block)
+    for raw in _filter_sources(parsed):
+        if not isinstance(raw, str):
+            sys.exit(f"FATAL: {path}'s path-filter source has no inline `filters:` block")
+        try:
+            block = yaml.safe_load(raw)
+        except yaml.YAMLError as exc:
+            sys.exit(f"FATAL: {path}'s inline `filters:` block is not parseable YAML: {exc}")
+        if not isinstance(block, dict) or not block:
+            sys.exit(f"FATAL: {path}'s inline `filters:` block did not parse to a non-empty mapping")
+        found.append(block)
     if not found:
-        sys.exit(f"FATAL: {path} has no dorny/paths-filter step, but this guard's table says it should")
+        sys.exit(f"FATAL: {path} has no path-filter source, but this guard's table says it should")
     # EXACTLY one, asserted rather than assumed. Returning the first of several
     # would silently pick a block that may not hold the keys being checked; a
     # workflow that splits its filter keys across two steps must be looked at,
     # not guessed at.
     if len(found) > 1:
         sys.exit(
-            f"FATAL: {path} has {len(found)} dorny/paths-filter steps. This guard assumes exactly one "
+            f"FATAL: {path} has {len(found)} path-filter sources (dorny steps or `_changes.yml` calls). "
+            "This guard assumes exactly one "
             "per registered workflow — which block holds a given filter key can no longer be determined"
         )
     return found[0]

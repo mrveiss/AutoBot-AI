@@ -13,7 +13,7 @@ security:
   firewall_rules:
     # Browser worker service (infrastructure only)
     - rule: allow
-      port: 3000
+      port: 9001  # #19324: PLAYWRIGHT_PORT (roles/browser); 3000 is Grafana
       proto: tcp
       src: "{{ network_subnet }}"
       comment: "Browser Worker API"
@@ -137,7 +137,7 @@ playwright:
   service:
     name: "autobot-playwright"
     host: "0.0.0.0"
-    port: 3000
+    port: 9001  # #19324: PLAYWRIGHT_PORT (roles/browser); 3000 is Grafana
     workers: 2
 
   # Browser configuration
@@ -402,7 +402,7 @@ ufw_rules:
 
   # Playwright API
   - rule: allow
-    port: 3000
+    port: 9001  # #19324: PLAYWRIGHT_PORT (roles/browser); 3000 is Grafana
     protocol: tcp
     src: "{{ network_subnet }}"
     comment: "Playwright automation API"
@@ -429,7 +429,7 @@ monitoring:
 
     # Playwright health check
     - name: "playwright-health"
-      url: "http://127.0.0.1:3000/health"
+      url: "http://127.0.0.1:9001/health"
       expected_status: 200
       interval: 30
 

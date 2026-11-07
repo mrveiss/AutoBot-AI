@@ -41,9 +41,10 @@ unused, so such a model is skipped explicitly rather than reported: see
 from __future__ import annotations
 
 import ast
-from pathlib import Path
 
 import pytest
+
+from tools.lint import _parse_cache as parse_cache
 
 from ._paths import repo_root
 
@@ -62,14 +63,15 @@ _KNOWN_UNREAD: dict[str, tuple[str, str]] = {
     # #16017 removed: StatusUpdate.comment now reaches `add_comment` in the same
     # commit as the transition. The ratchet worked as designed -- wiring the field
     # failed this test, which is what forced the entry out in the same PR.
-    "CostEvent": ("work_item_id", "#16016"),
+    # #16016 removed: CostEvent.work_item_id now reaches `ingest_cost_event`, which writes a
+    # `company_os_cost_events` row tied to it.
 }
 
 
 def _module() -> ast.Module:
     if not MODULE.exists():
         pytest.skip(f"{MODULE} not present in this checkout")
-    return ast.parse(MODULE.read_text(encoding="utf-8"))
+    return parse_cache.parse(MODULE.read_text(encoding="utf-8"))
 
 
 def _model_fields(tree: ast.Module) -> dict[str, list[str]]:
@@ -105,11 +107,7 @@ def _handlers_by_model(tree: ast.Module) -> dict[str, ast.AST]:
 
 
 def _read_attributes(func: ast.AST) -> set[str]:
-    return {
-        node.attr
-        for node in ast.walk(func)
-        if isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Load)
-    }
+    return {node.attr for node in ast.walk(func) if isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Load)}
 
 
 def _cases() -> list[tuple[str, list[str], ast.AST]]:
@@ -123,9 +121,7 @@ def _cases() -> list[tuple[str, list[str], ast.AST]]:
 
 
 @pytest.mark.parametrize("model,fields,handler", _cases(), ids=lambda v: v if isinstance(v, str) else "")
-def test_every_declared_field_is_read_by_its_handler(
-    model: str, fields: list[str], handler: ast.AST
-) -> None:
+def test_every_declared_field_is_read_by_its_handler(model: str, fields: list[str], handler: ast.AST) -> None:
     """A declared field the handler never reads is a promise the API does not keep."""
     read = _read_attributes(handler)
     known = _KNOWN_UNREAD.get(model)
@@ -154,9 +150,7 @@ def test_the_sweep_actually_found_models_to_check() -> None:
 
 
 @pytest.mark.parametrize("model,fields,handler", _cases(), ids=lambda v: v if isinstance(v, str) else "")
-def test_known_unread_entries_are_still_unread(
-    model: str, fields: list[str], handler: ast.AST
-) -> None:
+def test_known_unread_entries_are_still_unread(model: str, fields: list[str], handler: ast.AST) -> None:
     """A tracked field that starts being read must leave `_KNOWN_UNREAD`.
 
     Without this, the dict above is an exemption list — it would silently keep
@@ -170,9 +164,7 @@ def test_known_unread_entries_are_still_unread(
         pytest.skip(f"{model} has no tracked unread field")
     field, issue = known
     if field not in fields:
-        pytest.fail(
-            f"{model}.{field} no longer exists; remove its _KNOWN_UNREAD entry ({issue})"
-        )
+        pytest.fail(f"{model}.{field} no longer exists; remove its _KNOWN_UNREAD entry ({issue})")
     assert field not in _read_attributes(handler), (
         f"{model}.{field} is now read by {getattr(handler, 'name', '?')}() — {issue} appears "
         f"to be fixed. Remove the _KNOWN_UNREAD entry so the model is fully guarded again."

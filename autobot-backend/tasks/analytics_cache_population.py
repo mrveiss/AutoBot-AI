@@ -127,8 +127,8 @@ def populate_all_caches(self) -> dict:
     started = datetime.now(tz=timezone.utc).isoformat()
 
     async def _work():
-        from api.codebase_analytics.endpoints.shared import resolve_project_root
+        from api.codebase_analytics.endpoints.shared import resolve_git_repo_root
 
-        return await _populate_all(resolve_project_root())
+        return await _populate_all(resolve_git_repo_root())
 
     return _wrap(_run_async(_work()), started)

@@ -31,19 +31,22 @@ from pathlib import Path
 import pytest
 
 from api.codebase_analytics.api_endpoint_scanner import FrontendAPICallScanner
+from autobot_shared.paths import git_repo_root
 
 #: Each case is (relative path, the JSDoc/comment lines that must go, the real
 #: call lines that must stay). Taken from the live panel's four findings.
 _CASES = [
-    ("autobot-frontend/src/composables/useFileDownload.ts", [11, 16], []),
+    # useFileDownload.ts went with #20770 (one kit save helper); useErrorHandler.ts carries the same
+    # shape -- a JSDoc usage example with a literal path call.
+    ("autobot-frontend/src/composables/useErrorHandler.ts", [35], []),
     ("autobot-frontend/src/utils/apiErrorHandler.ts", [222], []),
     ("autobot-frontend/src/views/slm/ThemeManagerView.vue", [], [35]),
 ]
 
 
 def _repo_root() -> Path:
-    # api/codebase_analytics/<this file> -> autobot-backend -> repo root
-    return Path(__file__).resolve().parents[3]
+    """The checkout this test file sits in, asked of git (#18101), not read off a path depth."""
+    return git_repo_root(Path(__file__).resolve().parent).resolve()
 
 
 def _scan_production(rel: str) -> dict[int, str]:

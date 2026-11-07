@@ -3,36 +3,8 @@
 /* Font Awesome and Inter font are imported from local npm packages in main.ts */
 /* This avoids CDN requests that trigger browser tracking prevention warnings */
 
-:root {
-  /* Vue Notus Color Palette */
-  --blue-gray-50: #f8fafc;
-  --blue-gray-100: #f1f5f9;
-  --blue-gray-200: #e2e8f0;
-  --blue-gray-300: #cbd5e1;
-  --blue-gray-400: #94a3b8;
-  --blue-gray-500: #64748b;
-  --blue-gray-600: #475569;
-  --blue-gray-700: #334155;
-  --blue-gray-800: #1e293b;
-  --blue-gray-900: #0f172a;
-
-  --indigo-50: #eef2ff;
-  --indigo-100: #e0e7ff;
-  --indigo-500: #6366f1;
-  --indigo-600: #4f46e5;
-  --indigo-700: #4338ca;
-
-  --emerald-50: #ecfdf5;
-  --emerald-500: #10b981;
-  --emerald-700: #047857;
-
-  --red-500: #ef4444;
-  --red-700: #dc2626;
-
-  --orange-500: #ff7849;
-  --yellow-500: #eab308;
-  --yellow-50: #fefce8;
-}
+/* The palette primitives (--blue-gray-*, --indigo-*, --red-500, ...) are declared
+   in css/design-tokens.css, the one base token source (#14785). */
 
 /* Reset and Base */
 * {
@@ -113,11 +85,11 @@ body {
 .shadow-xl { box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); }
 
 /* Typography */
-.text-xs { font-size: 0.75rem; line-height: 1rem; }
-.text-sm { font-size: 0.875rem; line-height: 1.25rem; }
-.text-lg { font-size: 1.125rem; line-height: 1.75rem; }
-.text-xl { font-size: 1.25rem; line-height: 1.75rem; }
-.text-2xl { font-size: 1.5rem; line-height: 2rem; }
+.text-xs { font-size: var(--text-xs); line-height: 1rem; }
+.text-sm { font-size: var(--text-sm); line-height: 1.25rem; }
+.text-lg { font-size: var(--text-lg); line-height: 1.75rem; }
+.text-xl { font-size: var(--text-xl); line-height: 1.75rem; }
+.text-2xl { font-size: var(--text-2xl); line-height: 2rem; }
 .font-semibold { font-weight: 600; }
 .font-bold { font-weight: 700; }
 .uppercase { text-transform: uppercase; }
@@ -144,7 +116,7 @@ body {
   padding: 0.5rem 1rem;
   border-radius: 0.25rem;
   font-weight: 700;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   transition: all 0.15s ease-linear;
   cursor: pointer;
   border: none;
@@ -235,7 +207,7 @@ body {
   background-color: white;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
   overflow-y: auto;
-  z-index: 10;
+  z-index: var(--z-10);
   padding: 1rem 1.5rem;
 }
 
@@ -246,7 +218,7 @@ body {
   margin-bottom: 0.5rem;
   color: var(--blue-gray-700);
   text-decoration: none;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 700;
   text-transform: uppercase;
   border-radius: 0.5rem;
@@ -265,7 +237,7 @@ body {
 
 .nav-link i {
   margin-right: 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 /* Main Content Area */
@@ -277,7 +249,7 @@ body {
 
 /* Header Styles */
 .header-gradient {
-  background: linear-gradient(135deg, var(--indigo-600), var(--indigo-800));
+  background: linear-gradient(135deg, var(--indigo-600), var(--indigo-700));
   padding-top: 8rem;
   padding-bottom: 8rem;
 }
@@ -318,7 +290,7 @@ body {
   border: 0;
   background-color: white;
   border-radius: 0.25rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
   transition: all 0.15s ease-linear;
 }

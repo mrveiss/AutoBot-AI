@@ -59,7 +59,6 @@ HARDCODED_COLOUR_LITERALS: dict[str, int] = {
     "#10b981": 2,
     "#1a1b26": 1,
     "#1e1e1e": 2,
-    "#1f2937": 1,
     "#264f78": 1,
     "#2ecc71": 1,
     "#313244": 1,
@@ -86,13 +85,14 @@ HARDCODED_COLOUR_LITERALS: dict[str, int] = {
     "#fecaca": 1,
     "#fef2f2": 1,
     "#ffeaa7": 1,
-    "#fff": 5,
+    "#fff": 3,
     "#fff3cd": 1,
-    "#ffffff": 4,
+    "#ffffff": 3,
 }
 
-#: Frozen total, asserted separately so a per-literal edit cannot drift it unseen.
-TOTAL_OCCURRENCES = 55
+# No hand-maintained totals here (#19283): each entry is compared with this table at the base
+# commit (repo_tests/_ratchet_base.py), so a raised entry still fails and PRs lowering different
+# entries never edit a shared line.
 
 
 #: ``path under autobot-frontend/src -> `!important` declarations in its <style>``.
@@ -111,27 +111,26 @@ TOTAL_OCCURRENCES = 55
 #: them and the trade recorded against `MAX_UNCOVERED_READS` in
 #: `python_filter_uncovered_reads.py` is untouched.
 #:
-#: Shrink-only. Note the top three are chart components, where `!important` is
-#: usually fighting a third-party library's injected styles rather than
-#: overriding the design system -- so these want per-file reasoning at the time
-#: that component is opened, not a sweep. The ratchet stops growth; it does not
-#: claim each one is a defect.
+#: Shrink-only. Rules whose selector targets a vendor-injected class
+#: (`VENDOR_SELECTORS` in `_hardcoded_colour_detect.py`, each with its reason:
+#: `.apexcharts-*`, `.xterm*`) are not counted, so `BaseChart.vue` (19) and
+#: `SSHTerminal.vue` (1) left this table. What remains is not claimed to be all
+#: defects; the ratchet stops growth and the top entries want per-file reasoning
+#: at the time the component is opened.
 IMPORTANT_DECLARATIONS: dict[str, int] = {
     "components/audit/AuditLogTable.vue": 1,
-    "components/charts/BaseChart.vue": 19,
     "components/charts/FunctionCallGraph.vue": 12,
     "components/chat/ChatInterface.vue": 5,
     "components/knowledge/KnowledgeGraph.vue": 10,
-    "components/knowledge/panels/SourcePreviewPanel.vue": 1,
     "components/knowledge/pipeline/PipelineRunner.vue": 1,
     "components/operations/OperationsList.vue": 1,
     "components/security/SecretsManager.vue": 2,
-    "components/terminal/SSHTerminal.vue": 1,
     "components/ui/ProgressBar.vue": 2,
     "components/visualizations/ServiceMessageTimeline.vue": 1,
     "views/AdminUsersView.vue": 1,
-    "views/CustomDashboard.vue": 1,
+    # The control plane (#17567). Prefixed so its paths cannot collide with the
+    # user frontend's. Keyed like the rest; no per-file reason is claimed.
+    "slm:components/agents/OrgChartTab.vue": 1,
+    "slm:components/monitoring/GrafanaDashboard.vue": 1,
+    "slm:views/AgentsView.vue": 2,
 }
-
-#: Frozen total, asserted separately.
-TOTAL_IMPORTANT = 58

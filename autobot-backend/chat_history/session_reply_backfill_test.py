@@ -10,24 +10,22 @@ the user but never persisted to ``chat:session:{id}``: the batch that
 a plain conversational turn wrote an empty batch and the session reads back
 with the user's message and no assistant reply.
 
-``chat:conversation:{id}`` (the short-lived ``{user, assistant}`` pair cache
-used for LLM context) and ``data/conversation_transcripts/{id}.json`` (the
-durable file transcript) are both written by ``_persist_conversation``
-regardless of the bug, and are the two sources this module backfills from —
-Redis first (fast, likely TTL-expired for anything old enough to need this),
-falling back to the transcript file (the actual source of truth once Redis
-has expired).
+The reply survives in the legacy per-turn transcript
+(``data/conversation_transcripts/{id}.json``), which ``_persist_conversation``
+wrote regardless of the bug until #18293 retired it. ``chat_sessions`` is the
+system of record; the transcript is the read-only legacy witness this module
+backfills from. ``chat:conversation:{id}`` is no longer read: since #18293 it is
+re-projected from ``chat_sessions``, so it cannot hold a reply that store lacks.
 
 These tests prove ``repair_session``/``compute_backfilled_messages`` correctly
-reconstructs damaged sessions from both sources, correctly identifies a
+reconstructs damaged sessions from the transcript, correctly identifies a
 "damaged" turn by scanning its full message window (not just the next slot —
 a healthy tool-using turn is ``[user, system, assistant]`` and must not be
 misjudged damaged), and leaves already-healthy sessions/turns untouched.
 
-This is a repair PATH, not a live run: every test below uses an in-memory
-fake Redis client, a real ``MessagesMixin``-backed in-memory store, and (for
-the transcript-fallback tests) a ``tmp_path``-scoped transcript directory —
-nothing here touches a real Redis instance or production filesystem.
+This is a repair PATH, not a live run: every test below uses a real
+``MessagesMixin``-backed in-memory store and a ``tmp_path``-scoped transcript
+directory — nothing here touches Redis or the production filesystem.
 """
 
 import json
@@ -35,6 +33,7 @@ from typing import Any, Dict, List
 
 import pytest
 
+import chat_history.session_reply_backfill as backfill_module
 from chat_history.messages import MessagesMixin
 from chat_history.session_reply_backfill import (
     compute_backfilled_messages,
@@ -199,16 +198,6 @@ class TestComputeBackfilledMessagesPureLogic:
         assert once == twice
 
 
-class _FakeAsyncRedis:
-    """Minimal async Redis stand-in exposing only ``.get`` (what repair_session uses)."""
-
-    def __init__(self, values: Dict[str, str] | None = None) -> None:
-        self.values = values or {}
-
-    async def get(self, key: str) -> str | None:
-        return self.values.get(key)
-
-
 class _InMemoryChatHistory(MessagesMixin):
     """In-memory chat-history store.
 
@@ -242,158 +231,115 @@ def _write_transcript(tmp_path, session_id: str, exchanges: List[Dict[str, str]]
     return str(transcript_dir)
 
 
+def _write_raw_transcript(tmp_path, session_id: str, content: str):
+    """Write *content* verbatim as a transcript file; returns its path."""
+    transcript_dir = tmp_path / "conversation_transcripts"
+    transcript_dir.mkdir(parents=True, exist_ok=True)
+    path = transcript_dir / f"{session_id}.json"
+    path.write_text(content, encoding="utf-8")
+    return path
+
+
+def _read_raw(path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
 class TestRepairSessionEndToEnd:
-    """Exercises the Redis-read + transcript-fallback + load/save seam repair_session owns."""
+    """Exercises the transcript-read + load/save seam repair_session owns."""
 
     @pytest.mark.asyncio
-    async def test_damaged_session_is_backfilled_from_redis_and_saved(self):
-        chat_mgr = _InMemoryChatHistory(sessions={SESSION_ID: [_user("What is the deploy status?")]})
-        redis_client = _FakeAsyncRedis(
-            {"chat:conversation:sess-13293": ('[{"user": "What is the deploy status?", "assistant": "All green."}]')}
+    async def test_damaged_session_is_backfilled_from_transcript_and_saved(self, tmp_path):
+        transcript_dir = _write_transcript(
+            tmp_path, SESSION_ID, [{"user": "What is the deploy status?", "assistant": "All green."}]
         )
+        chat_mgr = _InMemoryChatHistory(sessions={SESSION_ID: [_user("What is the deploy status?")]})
 
-        count = await repair_session(SESSION_ID, chat_mgr, redis_client=redis_client)
+        count = await repair_session(SESSION_ID, chat_mgr, transcript_dir=transcript_dir)
 
         assert count == 1
         saved = chat_mgr.sessions[SESSION_ID]
         assert [m["sender"] for m in saved] == ["user", "assistant"]
         assert saved[1]["text"] == "All green."
         assert saved[1]["sources"] == []
-        assert saved[1]["metadata"]["backfilled_from"] == "chat:conversation"
+        assert saved[1]["metadata"]["backfilled_from"] == "legacy_conversation_transcripts"
 
     @pytest.mark.asyncio
-    async def test_healthy_tool_turn_is_not_double_posted_end_to_end(self):
+    async def test_healthy_tool_turn_is_not_double_posted_end_to_end(self, tmp_path):
         """#13303 review: the double-post bug reproduced against the full seam."""
         original = [
             _user("what is uptime?"),
             _system("uptime: 3 days"),
             _assistant("Uptime is 3 days."),
         ]
-        chat_mgr = _InMemoryChatHistory(sessions={SESSION_ID: list(original)})
-        redis_client = _FakeAsyncRedis(
-            {"chat:conversation:sess-13293": '[{"user": "what is uptime?", "assistant": "Uptime is 3 days."}]'}
+        transcript_dir = _write_transcript(
+            tmp_path, SESSION_ID, [{"user": "what is uptime?", "assistant": "Uptime is 3 days."}]
         )
+        chat_mgr = _InMemoryChatHistory(sessions={SESSION_ID: list(original)})
 
-        count = await repair_session(SESSION_ID, chat_mgr, redis_client=redis_client)
+        count = await repair_session(SESSION_ID, chat_mgr, transcript_dir=transcript_dir)
 
         assert count == 0
         assert chat_mgr.sessions[SESSION_ID] == original
 
     @pytest.mark.asyncio
-    async def test_healthy_session_is_not_saved(self):
+    async def test_healthy_session_is_not_saved(self, tmp_path):
         """No write at all when nothing needed repair — avoids no-op session churn."""
+        transcript_dir = _write_transcript(tmp_path, SESSION_ID, [{"user": "hi", "assistant": "hello"}])
         chat_mgr = _InMemoryChatHistory(sessions={SESSION_ID: [_user("hi"), _assistant("hello")]})
-        redis_client = _FakeAsyncRedis({"chat:conversation:sess-13293": '[{"user": "hi", "assistant": "hello"}]'})
         original = list(chat_mgr.sessions[SESSION_ID])
 
-        count = await repair_session(SESSION_ID, chat_mgr, redis_client=redis_client)
+        count = await repair_session(SESSION_ID, chat_mgr, transcript_dir=transcript_dir)
 
         assert count == 0
         assert chat_mgr.sessions[SESSION_ID] == original
 
     @pytest.mark.asyncio
-    async def test_expired_redis_key_falls_back_to_transcript_file(self, tmp_path):
-        """Blocker #3: chat:conversation:* TTL'd out — repair must still succeed from disk."""
-        transcript_dir = _write_transcript(
-            tmp_path, SESSION_ID, [{"user": "What is the deploy status?", "assistant": "All green."}]
-        )
-        chat_mgr = _InMemoryChatHistory(sessions={SESSION_ID: [_user("What is the deploy status?")]})
-        redis_client = _FakeAsyncRedis({})  # key absent — simulates TTL expiry
-
-        count = await repair_session(SESSION_ID, chat_mgr, redis_client=redis_client, transcript_dir=transcript_dir)
-
-        assert count == 1
-        saved = chat_mgr.sessions[SESSION_ID]
-        assert [m["sender"] for m in saved] == ["user", "assistant"]
-        assert saved[1]["text"] == "All green."
-
-    @pytest.mark.asyncio
-    async def test_no_redis_client_available_falls_back_to_transcript_file(self, tmp_path, monkeypatch):
-        """Redis fully unavailable (get_async_redis_client() -> None) — must still repair from disk."""
-
-        async def _no_redis(database: str = "main"):
-            return None
-
-        monkeypatch.setattr("chat_history.session_reply_backfill.get_async_redis_client", _no_redis)
-        transcript_dir = _write_transcript(tmp_path, SESSION_ID, [{"user": "hi", "assistant": "hello there"}])
-        chat_mgr = _InMemoryChatHistory(sessions={SESSION_ID: [_user("hi")]})
-
-        count = await repair_session(SESSION_ID, chat_mgr, redis_client=None, transcript_dir=transcript_dir)
-
-        assert count == 1
-        assert chat_mgr.sessions[SESSION_ID][1]["text"] == "hello there"
-
-    @pytest.mark.asyncio
-    async def test_no_redis_client_and_no_transcript_does_not_raise(self, tmp_path, monkeypatch):
-        async def _no_redis(database: str = "main"):
-            return None
-
-        monkeypatch.setattr("chat_history.session_reply_backfill.get_async_redis_client", _no_redis)
-        chat_mgr = _InMemoryChatHistory(sessions={SESSION_ID: [_user("hi")]})
-
-        count = await repair_session(
-            SESSION_ID, chat_mgr, redis_client=None, transcript_dir=str(tmp_path / "does-not-exist")
-        )
-
-        assert count == 0
-
-    @pytest.mark.asyncio
-    async def test_redis_pair_preferred_over_transcript_when_both_present(self, tmp_path):
-        """Redis is the fast path — used first when it has the answer, transcript untouched."""
-        transcript_dir = _write_transcript(tmp_path, SESSION_ID, [{"user": "hi", "assistant": "stale transcript"}])
-        chat_mgr = _InMemoryChatHistory(sessions={SESSION_ID: [_user("hi")]})
-        redis_client = _FakeAsyncRedis({"chat:conversation:sess-13293": '[{"user": "hi", "assistant": "fresh redis"}]'})
-
-        count = await repair_session(SESSION_ID, chat_mgr, redis_client=redis_client, transcript_dir=transcript_dir)
-
-        assert count == 1
-        assert chat_mgr.sessions[SESSION_ID][1]["text"] == "fresh redis"
-
-    @pytest.mark.asyncio
-    async def test_no_source_available_is_a_no_op(self, tmp_path):
-        """Neither Redis nor a transcript file exists — nothing to repair from, no error."""
+    async def test_no_transcript_is_a_no_op(self, tmp_path):
+        """No transcript file exists — nothing to repair from, no error, session untouched."""
         chat_mgr = _InMemoryChatHistory(sessions={SESSION_ID: [_user("orphaned")]})
-        redis_client = _FakeAsyncRedis({})
 
-        count = await repair_session(
-            SESSION_ID, chat_mgr, redis_client=redis_client, transcript_dir=str(tmp_path / "does-not-exist")
-        )
+        count = await repair_session(SESSION_ID, chat_mgr, transcript_dir=str(tmp_path / "does-not-exist"))
 
         assert count == 0
-        assert SESSION_ID in chat_mgr.sessions  # unchanged, not deleted
+        assert chat_mgr.sessions[SESSION_ID] == [_user("orphaned")]
 
     @pytest.mark.asyncio
-    async def test_malformed_conversation_payload_falls_back_to_transcript(self, tmp_path):
-        transcript_dir = _write_transcript(tmp_path, SESSION_ID, [{"user": "hi", "assistant": "from transcript"}])
+    async def test_malformed_transcript_is_a_no_op_and_left_in_place(self, tmp_path):
+        bad = _write_raw_transcript(tmp_path, SESSION_ID, "{not valid json")
         chat_mgr = _InMemoryChatHistory(sessions={SESSION_ID: [_user("hi")]})
-        redis_client = _FakeAsyncRedis({"chat:conversation:sess-13293": "{not valid json"})
 
-        count = await repair_session(SESSION_ID, chat_mgr, redis_client=redis_client, transcript_dir=transcript_dir)
+        count = await repair_session(SESSION_ID, chat_mgr, transcript_dir=str(bad.parent))
 
-        assert count == 1
-        assert chat_mgr.sessions[SESSION_ID][1]["text"] == "from transcript"
+        assert count == 0
+        assert _read_raw(bad) == "{not valid json"  # never renamed or rewritten
 
     @pytest.mark.asyncio
-    async def test_unknown_session_is_a_no_op(self):
+    async def test_session_with_no_chat_sessions_turns_is_not_created(self, tmp_path):
+        """A B-only session is served read-only for LLM context, never moved by this repair."""
+        transcript_dir = _write_transcript(tmp_path, SESSION_ID, [{"user": "hi", "assistant": "hi back"}])
         chat_mgr = _InMemoryChatHistory(sessions={})
-        redis_client = _FakeAsyncRedis({"chat:conversation:sess-13293": '[{"user": "hi", "assistant": "hi back"}]'})
 
-        count = await repair_session(SESSION_ID, chat_mgr, redis_client=redis_client)
+        count = await repair_session(SESSION_ID, chat_mgr, transcript_dir=transcript_dir)
 
         assert count == 0
         assert SESSION_ID not in chat_mgr.sessions
 
     @pytest.mark.asyncio
-    async def test_repair_twice_is_idempotent_end_to_end(self):
+    async def test_repair_twice_is_idempotent_end_to_end(self, tmp_path):
         """Blocker D: calling repair_session twice must not duplicate the backfilled turn."""
-        chat_mgr = _InMemoryChatHistory(sessions={SESSION_ID: [_user("what is uptime?"), _system("uptime: 3 days")]})
-        redis_client = _FakeAsyncRedis(
-            {"chat:conversation:sess-13293": '[{"user": "what is uptime?", "assistant": "Uptime is 3 days."}]'}
+        transcript_dir = _write_transcript(
+            tmp_path, SESSION_ID, [{"user": "what is uptime?", "assistant": "Uptime is 3 days."}]
         )
+        chat_mgr = _InMemoryChatHistory(sessions={SESSION_ID: [_user("what is uptime?"), _system("uptime: 3 days")]})
 
-        first = await repair_session(SESSION_ID, chat_mgr, redis_client=redis_client)
-        second = await repair_session(SESSION_ID, chat_mgr, redis_client=redis_client)
+        first = await repair_session(SESSION_ID, chat_mgr, transcript_dir=transcript_dir)
+        second = await repair_session(SESSION_ID, chat_mgr, transcript_dir=transcript_dir)
 
         assert first == 1
         assert second == 0
         assert [m["sender"] for m in chat_mgr.sessions[SESSION_ID]] == ["user", "system", "assistant"]
+
+    def test_the_llm_context_cache_is_not_a_witness(self):
+        """#18293: chat:conversation:* is re-projected from chat_sessions, so it is never read here."""
+        assert not hasattr(backfill_module, "get_async_redis_client")
+        assert "redis_client" not in repair_session.__code__.co_varnames

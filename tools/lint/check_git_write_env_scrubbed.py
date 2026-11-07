@@ -90,15 +90,14 @@ from typing import List, Set, Tuple
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _scan_helpers import enforce_reach, iter_python_files  # noqa: E402
+from _subprocess_ast import _is_subprocess_call  # noqa: E402
 from check_git_toplevel_env_scrubbed import subprocess_names  # noqa: E402
 
-#: The two scrub helpers this codebase has today. See the module docstring's
+#: The scrub helpers this codebase has today (``isolated_git_env`` is #18940's, built on
+#: ``scrubbed_git_env``). See the module docstring's
 #: "shadowed scrub helper" gap for what recognising them by name does not
 #: verify.
-RECOGNIZED_SCRUB_NAMES = frozenset({"scrubbed_git_env", "hermetic_git_env"})
-
-#: `subprocess` entry points that start a process.
-_SUBPROCESS_CALLS = frozenset({"run", "Popen", "call", "check_call", "check_output"})
+RECOGNIZED_SCRUB_NAMES = frozenset({"scrubbed_git_env", "hermetic_git_env", "isolated_git_env"})
 
 #: See the module docstring's SCOPE section for how each verb earned its
 #: place here.
@@ -157,15 +156,6 @@ TEST_FILE_FLOOR = 1500
 
 def _is_test_file(rel_posix: str) -> bool:
     return rel_posix.endswith("_test.py") or Path(rel_posix).name.startswith("test_")
-
-
-def _is_subprocess_call(node: ast.Call, modules: Set[str], functions: Set[str]) -> bool:
-    func = node.func
-    if isinstance(func, ast.Attribute) and func.attr in _SUBPROCESS_CALLS:
-        return isinstance(func.value, ast.Name) and func.value.id in modules
-    if isinstance(func, ast.Name):
-        return func.id in functions
-    return False
 
 
 #: One slot per argv element: its literal string if the element is a plain

@@ -16,7 +16,7 @@ import aiohttp
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from tests.test_helpers import get_test_backend_url
+from tests.test_helpers import live_backend_url
 
 # #13284: this module boots the whole backend — `subprocess.Popen([python,
 # "main.py"])` in its own process group — then polls /api/hello for up to 20
@@ -34,7 +34,7 @@ async def _poll_server_ready(timeout: float = 2.0) -> bool:
     try:
         client_timeout = aiohttp.ClientTimeout(total=timeout)
         async with aiohttp.ClientSession(timeout=client_timeout) as session:
-            async with session.get(get_test_backend_url() + "/api/hello") as resp:
+            async with session.get(live_backend_url() + "/api/hello") as resp:
                 return resp.status == 200
     except Exception:
         return False
@@ -93,7 +93,7 @@ async def test_security_endpoints():
             # Test security status endpoint
             print("\n🔍 Testing security status endpoint...")  # noqa: print
             try:
-                status, data, text = await _get_json(session, get_test_backend_url() + "/api/security/status")
+                status, data, text = await _get_json(session, live_backend_url() + "/api/security/status")
                 print(f"   Status code: {status}")  # noqa: print
                 if status == 200:
                     print("✅ Security status endpoint working")  # noqa: print
@@ -110,7 +110,7 @@ async def test_security_endpoints():
             # Test command history endpoint
             print("\n📋 Testing command history endpoint...")  # noqa: print
             try:
-                status, data, text = await _get_json(session, get_test_backend_url() + "/api/security/command-history")
+                status, data, text = await _get_json(session, live_backend_url() + "/api/security/command-history")
                 print(f"   Status code: {status}")  # noqa: print
                 if status == 200:
                     print("✅ Command history endpoint working")  # noqa: print
@@ -130,9 +130,7 @@ async def test_security_endpoints():
             # Test pending approvals endpoint
             print("\n⏳ Testing pending approvals endpoint...")  # noqa: print
             try:
-                status, data, text = await _get_json(
-                    session, get_test_backend_url() + "/api/security/pending-approvals"
-                )
+                status, data, text = await _get_json(session, live_backend_url() + "/api/security/pending-approvals")
                 print(f"   Status code: {status}")  # noqa: print
                 if status == 200:
                     print("✅ Pending approvals endpoint working")  # noqa: print
@@ -146,7 +144,7 @@ async def test_security_endpoints():
             # Test audit log endpoint
             print("\n📜 Testing audit log endpoint...")  # noqa: print
             try:
-                status, data, text = await _get_json(session, get_test_backend_url() + "/api/security/audit-log")
+                status, data, text = await _get_json(session, live_backend_url() + "/api/security/audit-log")
                 print(f"   Status code: {status}")  # noqa: print
                 if status == 200:
                     print("✅ Audit log endpoint working")  # noqa: print
@@ -163,7 +161,7 @@ async def test_security_endpoints():
             # Just check if the endpoint is available (can't easily test WebSocket here)
             pass
 
-            ws_url = get_test_backend_url().replace("http://", "ws://") + "/api/terminal/ws/secure/test_session"
+            ws_url = live_backend_url().replace("http://", "ws://") + "/api/terminal/ws/secure/test_session"
             print(f"   WebSocket URL: {ws_url}")  # noqa: print
             print("   ℹ️  WebSocket functionality requires separate testing")  # noqa: print
         except Exception as e:

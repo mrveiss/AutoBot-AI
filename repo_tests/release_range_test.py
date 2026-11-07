@@ -21,7 +21,7 @@ import subprocess
 import yaml
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import git, isolated_git_env, make_repo
 
 WORKFLOW = repo_root() / ".github" / "workflows" / "release.yml"
 
@@ -49,15 +49,15 @@ def _step(step_id: str) -> dict:
 
 
 def _git(repo, *args):
-    """#15246: env scrubbed -- an inherited GIT_DIR would run this against the
+    """#15246/#18940: isolated env -- an inherited GIT_DIR would run this against the
     real repository instead of the throwaway one at ``repo``.
     """
-    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, env=scrubbed_git_env())
+    git(repo, *args)
 
 
 def _run_range_logic(repo) -> tuple:
     out = subprocess.run(
-        ["bash", "-c", RANGE_LOGIC], cwd=str(repo), capture_output=True, text=True, check=True, env=scrubbed_git_env()
+        ["bash", "-c", RANGE_LOGIC], cwd=str(repo), capture_output=True, text=True, check=True, env=isolated_git_env()
     )
     rng, count = out.stdout.strip().split("|")
     return rng, int(count)
@@ -89,9 +89,12 @@ def test_nothing_to_release_with_commits_in_range_fails_the_run():
     A range that is genuinely empty is a legitimate no-op; a non-empty one means
     the version decision could not see the commits, and that must not exit 0.
     """
-    body = _step("check")["run"]
+    step = _step("check")
+    body = step["run"]
 
-    assert "commit_count" in body, "the guard does not consult the range size"
+    # The range size reaches the script through env (#18666 review), never as `${{ }}` text.
+    assert step.get("env", {}).get("COMMIT_COUNT") == "${{ steps.range.outputs.commit_count }}"
+    assert '"$COMMIT_COUNT" -gt 0' in body, "the guard does not consult the range size"
     assert "exit 1" in body, "a version decision that misses its range still exits 0"
     assert "::error::" in body
 
@@ -107,9 +110,7 @@ def test_an_empty_range_is_still_a_clean_no_op():
 
 
 def test_a_tagged_repo_yields_the_range_since_its_latest_tag(tmp_path):
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, env=scrubbed_git_env())
-    _git(tmp_path, "config", "user.email", "a@b.c")
-    _git(tmp_path, "config", "user.name", "t")
+    make_repo(tmp_path)
     (tmp_path / "f.txt").write_text("1\n", encoding="utf-8")
     _git(tmp_path, "add", "-A")
     _git(tmp_path, "commit", "-qm", "feat: one")
@@ -130,9 +131,7 @@ def test_a_merge_commit_range_reports_every_commit_not_just_the_merge(tmp_path):
     range must report the whole set, or the version decision has nothing to work
     from.
     """
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, env=scrubbed_git_env())
-    _git(tmp_path, "config", "user.email", "a@b.c")
-    _git(tmp_path, "config", "user.name", "t")
+    make_repo(tmp_path)
     (tmp_path / "f.txt").write_text("1\n", encoding="utf-8")
     _git(tmp_path, "add", "-A")
     _git(tmp_path, "commit", "-qm", "chore: base")
@@ -142,37 +141,18 @@ def test_a_merge_commit_range_reports_every_commit_not_just_the_merge(tmp_path):
         (tmp_path / f"n{i}.txt").write_text("x\n", encoding="utf-8")
         _git(tmp_path, "add", "-A")
         _git(tmp_path, "commit", "-qm", f"feat: change {i}")
-    _git(tmp_path, "checkout", "-q", "master") if _has_master(tmp_path) else _git(tmp_path, "checkout", "-q", "main")
+    _git(tmp_path, "checkout", "-q", "main")
     _git(tmp_path, "merge", "--no-ff", "-q", "-m", "Merge pull request #1 from feature", "feature")
 
-    first_parent = subprocess.run(
-        ["git", "-C", str(tmp_path), "rev-list", "--count", "--first-parent", "v1.0.0..HEAD"],
-        capture_output=True,
-        text=True,
-        check=True,
-        env=scrubbed_git_env(),
-    ).stdout.strip()
+    first_parent = git(tmp_path, "rev-list", "--count", "--first-parent", "v1.0.0..HEAD").stdout.strip()
     rng, count = _run_range_logic(tmp_path)
 
     assert first_parent == "1", "fixture no longer reproduces the merge shape"
     assert count == 4, f"the range saw {count} commits, not the 3 changes plus the merge"
 
 
-def _has_master(repo) -> bool:
-    out = subprocess.run(
-        ["git", "-C", str(repo), "branch", "--list", "master"],
-        capture_output=True,
-        text=True,
-        check=True,
-        env=scrubbed_git_env(),
-    )
-    return bool(out.stdout.strip())
-
-
 def test_an_untagged_repo_falls_back_to_all_history(tmp_path):
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, env=scrubbed_git_env())
-    _git(tmp_path, "config", "user.email", "a@b.c")
-    _git(tmp_path, "config", "user.name", "t")
+    make_repo(tmp_path)
     (tmp_path / "f.txt").write_text("1\n", encoding="utf-8")
     _git(tmp_path, "add", "-A")
     _git(tmp_path, "commit", "-qm", "feat: only")

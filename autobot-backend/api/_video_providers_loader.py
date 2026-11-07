@@ -50,6 +50,22 @@ def _candidate_paths() -> list[Path]:
     return candidates
 
 
+def _bind_credentials(module: ModuleType, path: Path) -> None:
+    """Install the vault-backed video resolver, bound to the plugin's origin like the plugin hosts (#18094).
+
+    A copy found outside a trusted built-in root (e.g. the CWD fallback) gets no resolver and
+    reads the environment by name, exactly as the plugin loader treats it.
+    """
+    from autobot_shared.plugin_sdk.credential_binding import bound_resolver
+    from plugin_paths import trusted_plugin_roots
+    from services.provider_key_vault import plugin_credential_resolvers
+
+    name = "video-generation-plugin"
+    module.set_credential_resolver(
+        bound_resolver(name, path.parents[1], plugin_credential_resolvers(), trusted_plugin_roots())
+    )
+
+
 def load_video_providers() -> Optional[ModuleType]:
     """Load and cache the video providers module, or None if unavailable."""
     global _cached, _loaded
@@ -70,6 +86,7 @@ def load_video_providers() -> Optional[ModuleType]:
             # Register before exec so dataclasses can resolve the module.
             sys.modules[_MODULE_NAME] = module
             spec.loader.exec_module(module)
+            _bind_credentials(module, path)
             _cached = module
             logger.info("Video providers loaded from %s", path)
             return _cached

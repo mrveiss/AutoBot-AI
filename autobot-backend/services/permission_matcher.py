@@ -47,9 +47,9 @@ logger = get_logger(__name__)
 class MatchResult(Enum):
     """Result of permission rule matching."""
 
-    ALLOW = "allow"  # Auto-approve without prompting
-    ASK = "ask"  # Always prompt for approval
-    DENY = "deny"  # Block completely
+    ALLOW = PermissionAction.ALLOW.value  # Auto-approve without prompting (#19730)
+    ASK = PermissionAction.ASK.value  # Always prompt for approval
+    DENY = PermissionAction.DENY.value  # Block completely
     DEFAULT = "default"  # Fall back to risk-based assessment
 
 

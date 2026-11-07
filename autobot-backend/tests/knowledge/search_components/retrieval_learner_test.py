@@ -648,21 +648,21 @@ class TestBenchmarkFeedbackRoundTrip:
         """publish_feedback_events() calls xadd once per result with precision_at_k > 0."""
         from unittest.mock import AsyncMock
 
-        from knowledge.rag_benchmarks import BenchmarkResult, publish_feedback_events
+        from knowledge.rag_benchmarks import RetrievalBenchmarkResult, publish_feedback_events
 
         redis = AsyncMock()
         redis.xadd = AsyncMock()
         redis.expire = AsyncMock()
 
         results = [
-            BenchmarkResult(
+            RetrievalBenchmarkResult(
                 query="Python list comprehensions",
                 retrieved_ids=["python_02", "python_04", "python_01"],
                 ranked_ids=["python_02", "python_04", "python_01"],
                 precision_at_k=0.4,
                 complexity="moderate",
             ),
-            BenchmarkResult(
+            RetrievalBenchmarkResult(
                 query="unknown topic query",
                 retrieved_ids=["net_01"],
                 ranked_ids=["net_01"],
@@ -685,13 +685,13 @@ class TestBenchmarkFeedbackRoundTrip:
         import json
         from unittest.mock import AsyncMock
 
-        from knowledge.rag_benchmarks import BenchmarkResult, publish_feedback_events
+        from knowledge.rag_benchmarks import RetrievalBenchmarkResult, publish_feedback_events
 
         redis = AsyncMock()
         redis.xadd = AsyncMock()
         redis.expire = AsyncMock()
 
-        result = BenchmarkResult(
+        result = RetrievalBenchmarkResult(
             query="RAG retrieval augmented generation",
             retrieved_ids=["ml_02", "ml_09", "ml_01"],
             ranked_ids=["ml_02", "ml_09", "ml_01"],
@@ -715,13 +715,13 @@ class TestBenchmarkFeedbackRoundTrip:
         """Stream key must use '__global__' sentinel so all users benefit."""
         from unittest.mock import AsyncMock
 
-        from knowledge.rag_benchmarks import BenchmarkResult, publish_feedback_events
+        from knowledge.rag_benchmarks import RetrievalBenchmarkResult, publish_feedback_events
 
         redis = AsyncMock()
         redis.xadd = AsyncMock()
         redis.expire = AsyncMock()
 
-        result = BenchmarkResult(
+        result = RetrievalBenchmarkResult(
             query="cosine similarity evaluation",
             retrieved_ids=["ml_04", "ml_05"],
             ranked_ids=["ml_04", "ml_05"],
@@ -776,15 +776,15 @@ class TestBenchmarkFeedbackRoundTrip:
         """When all results have precision_at_k == 0, nothing is written to Redis."""
         from unittest.mock import AsyncMock
 
-        from knowledge.rag_benchmarks import BenchmarkResult, publish_feedback_events
+        from knowledge.rag_benchmarks import RetrievalBenchmarkResult, publish_feedback_events
 
         redis = AsyncMock()
         redis.xadd = AsyncMock()
         redis.expire = AsyncMock()
 
         results = [
-            BenchmarkResult("q1", ["doc1"], ["doc1"], precision_at_k=0.0),
-            BenchmarkResult("q2", ["doc2"], ["doc2"], precision_at_k=0.0),
+            RetrievalBenchmarkResult("q1", ["doc1"], ["doc1"], precision_at_k=0.0),
+            RetrievalBenchmarkResult("q2", ["doc2"], ["doc2"], precision_at_k=0.0),
         ]
 
         published = await publish_feedback_events(redis, results)

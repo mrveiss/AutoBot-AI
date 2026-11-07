@@ -24,7 +24,7 @@ from .pii_pipeline import PIIBlocked, scrub_outbound
 from .self_evaluator import DEFAULT_EVAL_THRESHOLD, evaluate_task_output
 from .task_manager import _TERMINAL_STATES, get_task_manager
 from .trust_score import authority_for_level, get_trust_manager
-from .types import TaskArtifact, TaskState
+from .types import A2ATaskArtifact, TaskState
 
 logger = get_logger(__name__)
 
@@ -152,7 +152,7 @@ def _report_bad_scope(manager, task_id: str, declared: list, exc: Exception) -> 
     logger.warning("task %s declared an unparseable scope: %s", task_id, exc)
     manager.add_artifact(
         task_id,
-        TaskArtifact(
+        A2ATaskArtifact(
             artifact_type="json",
             content={"declared_scopes": list(declared), "reason": str(exc)},
         ),
@@ -178,7 +178,7 @@ def _report_refusal(manager, task_id: str, conflict) -> None:
     already renders holder, task, mode, expiry and intent. The artifact is the
     shared refusal shape (#16208).
     """
-    manager.add_artifact(task_id, TaskArtifact(artifact_type="json", content=conflict_payload(conflict)))
+    manager.add_artifact(task_id, A2ATaskArtifact(artifact_type="json", content=conflict_payload(conflict)))
     manager.update_state(task_id, TaskState.FAILED, message="scope_conflict")
     manager.publish_event(
         task_id,
@@ -267,7 +267,7 @@ def _fail_on_eval(task_id: str, eval_result, eval_threshold: float, peer_id: str
     threshold are both recorded because a failure that reports one without the
     other cannot be judged -- 0.55 is a pass or a fail depending on the bar.
     """
-    eval_artifact = TaskArtifact(
+    eval_artifact = A2ATaskArtifact(
         artifact_type="json",
         content={
             "eval_reason": eval_result.eval_reason,
@@ -379,7 +379,7 @@ def _store_response_artifacts(
             },
         )
         return None
-    artifact_text = TaskArtifact(artifact_type="text", content=response_text)
+    artifact_text = A2ATaskArtifact(artifact_type="text", content=response_text)
     manager.add_artifact(task_id, artifact_text)
     manager.publish_event(
         task_id,
@@ -389,7 +389,7 @@ def _store_response_artifacts(
     # Artifact 2: routing metadata (agent used, model, timing, etc.)
     metadata = _extract_routing_metadata(result)
     if metadata:
-        artifact_meta = TaskArtifact(artifact_type="json", content=metadata)
+        artifact_meta = A2ATaskArtifact(artifact_type="json", content=metadata)
         manager.add_artifact(task_id, artifact_meta)
         manager.publish_event(
             task_id,
@@ -460,7 +460,7 @@ async def _execute_claimed(
         logger.error("A2A task %s failed: %s", task_id, exc)
         manager.add_artifact(
             task_id,
-            TaskArtifact(artifact_type="error", content=type(exc).__name__),
+            A2ATaskArtifact(artifact_type="error", content=type(exc).__name__),
         )
         manager.update_state(task_id, TaskState.FAILED, message=type(exc).__name__)
         manager.publish_event(

@@ -49,7 +49,8 @@ Exit code
 ---------
   0 — clean (no banned patterns found in scanned files)
   1 — banned patterns found (PR/commit blocked)
-  2 — usage error
+  2 — vacuous scan: root not a git toplevel, git failed, nothing reached,
+      or a full-repo sweep landed under its floor (#14896)
 """
 
 from __future__ import annotations
@@ -64,7 +65,8 @@ from typing import NamedTuple
 # regardless of invocation mode (script / importlib from tests).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _scan_helpers import PY_FLOOR, enforce_reach, scan_python_files  # noqa: E402
+from _check_harness import format_finding, run_anchored  # noqa: E402
+from _scan_helpers import PY_FLOOR, scan_python_files  # noqa: E402
 
 
 class _ResolutionCache(NamedTuple):
@@ -226,48 +228,45 @@ def _scan_file(path: Path, source: str) -> list[tuple[int, str]]:
     return findings
 
 
+_HOOK = "no-src-mock-path"
+
+
+def _summary(n: int) -> str:
+    return f"\n[{_HOOK}] {n} banned patch target(s) found. See per-line fix suggestions above. Rationale: #6987."
+
+
+def _rel_posix(path: Path, repo_root: Path) -> str:
+    """*path* relative to the repo (POSIX) when it is inside it, else as given."""
+    try:
+        rel = path.resolve().relative_to(repo_root)
+    except ValueError:
+        rel = path
+    return str(rel).replace("\\", "/")
+
+
+def _file_findings(path: Path, repo_root: Path) -> list[str]:
+    """Finding lines for one file; an allowlisted, non-test or unreadable file has none."""
+    rel = _rel_posix(path, repo_root)
+    if rel in ALLOWLIST or not _is_test_file(rel):
+        return []
+    try:
+        source = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return []
+    return [f"[{_HOOK}] " + format_finding(rel, line_no, message) for line_no, message in _scan_file(path, source)]
+
+
+def _collect(args: list[str], repo_root: Path) -> tuple[int, list[str]]:
+    """``(files reached, finding lines)`` for *args* (empty = whole repo)."""
+    files, _ = scan_python_files(args, repo_root)
+    return len(files), [line for path in files for line in _file_findings(path, repo_root)]
+
+
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    repo_root = Path(__file__).resolve().parents[2]
-    files, full_repo = scan_python_files(args, repo_root)
     # Vacuity floor (#14896): full-repo mode only -- pre-commit legitimately
-    # hands this hook an argv with no Python in it.
-    if enforce_reach(len(files), PY_FLOOR, hook="no-src-mock-path", full_repo=full_repo):
-        return 1
-
-    total_violations = 0
-    for f in files:
-        try:
-            rel = f.resolve().relative_to(repo_root)
-        except ValueError:
-            rel = f
-        rel_str = str(rel).replace("\\", "/")
-
-        if rel_str in ALLOWLIST:
-            continue
-        if not _is_test_file(rel_str):
-            continue
-
-        try:
-            source = f.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-
-        for line_no, message in _scan_file(f, source):
-            print(
-                f"[no-src-mock-path] {rel_str}:{line_no}: {message}",
-                file=sys.stderr,
-            )
-            total_violations += 1
-
-    if total_violations:
-        print(
-            f"\n[no-src-mock-path] {total_violations} banned patch target(s) found. "
-            f"See per-line fix suggestions above. Rationale: #6987.",
-            file=sys.stderr,
-        )
-        return 1
-    return 0
+    # hands this hook an argv with no Python in it. Exit 2 = the scan proved nothing.
+    return run_anchored(_HOOK, _collect, args, anchor=Path(__file__), floor=PY_FLOOR, summary=_summary)
 
 
 if __name__ == "__main__":

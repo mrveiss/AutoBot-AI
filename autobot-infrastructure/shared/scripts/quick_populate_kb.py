@@ -12,7 +12,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-from knowledge_base import KnowledgeBase
+from knowledge_factory import get_knowledge_base_async
 
 logging.basicConfig(level=logging.INFO)
 
@@ -170,7 +170,9 @@ async def _verify_and_test_kb(kb) -> None:
 async def main():
     """Populate knowledge base with test documents."""
     try:
-        kb = KnowledgeBase()
+        kb = await get_knowledge_base_async()
+        if kb is None:
+            raise RuntimeError("Knowledge base unavailable: initialization failed or retry cooldown active")
 
         if not await _wait_for_kb_initialization(kb):
             return

@@ -15,10 +15,10 @@
 import { ref, computed, toValue, watch, onUnmounted, type MaybeRef } from 'vue'
 import { useSlmApi } from './useSlmApi'
 import { useSlmWebSocket } from './useSlmWebSocket'
-import type { NodeHealth, HealthStatus } from '@/types/slm'
+import type { NodeHealth, NodeHealthStatus } from '@/types/slm'
 
 export interface DeepHealthResult {
-  status: HealthStatus
+  status: NodeHealthStatus
   cpu_percent: number
   memory_percent: number
   disk_percent: number

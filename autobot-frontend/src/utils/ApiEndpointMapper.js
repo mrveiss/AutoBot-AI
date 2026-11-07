@@ -5,7 +5,9 @@
  * Provides graceful fallback handling and caching for API endpoint calls
  */
 
+import { HttpError } from '@autobot/ui';
 import { createLogger } from '@/utils/debugUtils';
+import { fetchWithAuth } from '@/utils/fetchWithAuth';
 
 // Create scoped logger for ApiEndpointMapper
 const logger = createLogger('ApiEndpointMapper');
@@ -44,7 +46,7 @@ class ApiEndpointMapper {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), timeout)
 
-      const response = await fetch(url, {
+      const response = await fetchWithAuth(url, {
         ...fetchOptions,
         signal: controller.signal
       })
@@ -52,7 +54,7 @@ class ApiEndpointMapper {
       clearTimeout(timeoutId)
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        throw new HttpError(response.status, response.statusText)
       }
 
       // Clone response to cache it

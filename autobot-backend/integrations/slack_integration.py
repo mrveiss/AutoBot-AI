@@ -555,8 +555,8 @@ class SlackNotificationIntegration(SlackIntegration):
             Never raises; logs error and returns False instead.
         """
         try:
-            client = await get_async_redis_client(database="main")
-            if client is None:
+            redis_client = await get_async_redis_client(database="main")
+            if redis_client is None:
                 logger.warning(
                     "Redis client unavailable for saving channel mapping (project_id=%s)",
                     mapping.project_id,
@@ -564,7 +564,7 @@ class SlackNotificationIntegration(SlackIntegration):
                 return False
 
             key = f"{_CHANNEL_MAPPING_KEY_PREFIX}{mapping.project_id}"
-            await client.set(key, json.dumps(mapping.to_dict(), ensure_ascii=False))
+            await redis_client.set(key, json.dumps(mapping.to_dict(), ensure_ascii=False))
             logger.debug(
                 "Saved channel mapping for project_id=%s",
                 mapping.project_id,
@@ -598,8 +598,8 @@ class SlackNotificationIntegration(SlackIntegration):
             Never raises; logs error and returns None instead.
         """
         try:
-            client = await get_async_redis_client(database="main")
-            if client is None:
+            redis_client = await get_async_redis_client(database="main")
+            if redis_client is None:
                 logger.warning(
                     "Redis client unavailable for loading channel mapping (project_id=%s)",
                     project_id,
@@ -607,7 +607,7 @@ class SlackNotificationIntegration(SlackIntegration):
                 return None
 
             key = f"{_CHANNEL_MAPPING_KEY_PREFIX}{project_id}"
-            raw = await client.get(key)
+            raw = await redis_client.get(key)
             if not raw:
                 logger.debug(
                     "No channel mapping found in Redis for project_id=%s",
@@ -651,8 +651,8 @@ class SlackNotificationIntegration(SlackIntegration):
             Never raises; logs error and returns False instead.
         """
         try:
-            client = await get_async_redis_client(database="main")
-            if client is None:
+            redis_client = await get_async_redis_client(database="main")
+            if redis_client is None:
                 logger.warning(
                     "Redis client unavailable for storing approval thread (approval_id=%s)",
                     approval_id,
@@ -664,7 +664,7 @@ class SlackNotificationIntegration(SlackIntegration):
                 {"channel": channel, "thread_ts": thread_ts},
                 ensure_ascii=False,
             )
-            await client.set(key, value, ex=_APPROVAL_THREAD_TTL)
+            await redis_client.set(key, value, ex=_APPROVAL_THREAD_TTL)
             logger.debug(
                 "Stored approval thread (approval_id=%s, channel=%s, thread_ts=%s)",
                 approval_id,
@@ -700,8 +700,8 @@ class SlackNotificationIntegration(SlackIntegration):
             Never raises; logs error and returns None instead.
         """
         try:
-            client = await get_async_redis_client(database="main")
-            if client is None:
+            redis_client = await get_async_redis_client(database="main")
+            if redis_client is None:
                 logger.warning(
                     "Redis client unavailable for loading approval thread (approval_id=%s)",
                     approval_id,
@@ -709,7 +709,7 @@ class SlackNotificationIntegration(SlackIntegration):
                 return None
 
             key = f"{_APPROVAL_THREAD_KEY_PREFIX}{approval_id}"
-            raw = await client.get(key)
+            raw = await redis_client.get(key)
             if not raw:
                 logger.debug(
                     "No approval thread found in Redis (approval_id=%s)",

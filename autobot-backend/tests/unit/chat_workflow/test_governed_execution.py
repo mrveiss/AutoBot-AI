@@ -16,6 +16,7 @@ import pytest
 
 from chat_workflow.models import build_governed_identity
 from chat_workflow.tool_handler import ToolHandlerMixin, _approval_category_for
+from tests.unit.chat_workflow.test_ai_line_support import VERIFIED_COMPANY, ai_line_world, run_guard
 
 
 def _mixin() -> ToolHandlerMixin:
@@ -82,23 +83,26 @@ def test_governed_agent_context_blocks_forbidden_tool():
 
 
 def test_work_item_approval_holds_declared_category():
-    mixin = _mixin()
     results: list[dict] = []
-    msg = mixin._enforce_work_item_approval(
-        {"name": "git_push"}, _ctx(categories=["pushing commits"], work_item_id="wi-1"), results
+    msg, filed = run_guard(
+        {"name": "git_push"},
+        _ctx(categories=["pushing commits"], work_item_id="wi-1"),
+        results,
+        slm_relaxed=["pushing commits"],
     )
     assert msg is not None
-    assert msg.type == "approval_required"
+    assert msg.type == "approval_required" and filed == 1
     assert msg.metadata["category"] == "pushing commits"
     assert results[0]["status"] == "pending_approval"
     assert results[0]["work_item_id"] == "wi-1"
 
 
-def test_work_item_approval_noop_without_declaration():
-    mixin = _mixin()
+def test_work_item_approval_adds_nothing_when_the_category_is_not_declared():
+    """Contrast: with the category relaxed and not declared, only the unset default (line 2) remains."""
     results: list[dict] = []
-    assert mixin._enforce_work_item_approval({"name": "git_push"}, _ctx(), results) is None
-    assert results == []
+    msg, _ = run_guard({"name": "git_push"}, _ctx(), results, slm_relaxed=["pushing commits"])
+    assert msg is not None and msg.metadata["category"] is None  # held by the unset-line default alone
+    assert run_guard({"name": "web_search"}, _ctx(), [], slm_relaxed=["pushing commits"]) == (None, 0)
 
 
 @pytest.mark.asyncio
@@ -127,17 +131,13 @@ async def test_dispatch_holds_approval_gated_tool():
     mixin = _mixin()
     results: list[dict] = []
     messages = []
-    async for item in mixin._dispatch_tool_call(
-        {"name": "bash", "params": {"command": "rm -rf /"}},
-        "s",
-        "t",
-        "http://x",
-        "m",
-        results,
-        [],
-        ctx=_ctx(categories=["destructive operations"], work_item_id="wi-9"),
-    ):
-        messages.append(item)
+    ctx = _ctx(categories=["destructive operations"], work_item_id="wi-9")
+    ctx.context = {"verified_company_id": VERIFIED_COMPANY}
+    with ai_line_world():
+        async for item in mixin._dispatch_tool_call(
+            {"name": "bash", "params": {"command": "rm -rf /"}}, "s", "t", "http://x", "m", results, [], ctx=ctx
+        ):
+            messages.append(item)
     assert len(messages) == 1
     assert messages[0].type == "approval_required"
     assert results[0]["status"] == "pending_approval"

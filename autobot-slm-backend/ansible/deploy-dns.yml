@@ -41,8 +41,8 @@
           - "Fleet entries: {{ fleet_host_entries | length }}"
           - ""
           - "Management scripts:"
-          - "  Test DNS: /opt/autobot/scripts/dns/test-dns-resolution.sh"
-          - "  Show entries: /opt/autobot/scripts/dns/show-dns-entries.sh"
-          - "  Refresh DNS: /opt/autobot/scripts/dns/refresh-dns.sh"
+          - "  Test DNS: {{ autobot.base_dir }}/scripts/dns/test-dns-resolution.sh"
+          - "  Show entries: {{ autobot.base_dir }}/scripts/dns/show-dns-entries.sh"
+          - "  Refresh DNS: {{ autobot.base_dir }}/scripts/dns/refresh-dns.sh"
       tags:
         - always

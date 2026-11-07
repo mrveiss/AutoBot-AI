@@ -4,13 +4,13 @@
 # Author: mrveiss
 from content_reach.base import ContentBackend
 from content_reach.chain import ContentSourceChain
-from source_attribution import SourceType
+from source_attribution import SourceKind
 
 
 def _stub(backend_name: str) -> ContentBackend:
     class _B(ContentBackend):
         name = backend_name
-        source_type = SourceType.WEB_SEARCH
+        source_type = SourceKind.WEB_SEARCH
 
         async def probe(self):
             return True
@@ -24,7 +24,7 @@ def _stub(backend_name: str) -> ContentBackend:
 def _chain():
     return ContentSourceChain(
         source="web_search",
-        source_type=SourceType.WEB_SEARCH,
+        source_type=SourceKind.WEB_SEARCH,
         backends=[_stub("ddgs"), _stub("jina"), _stub("browser")],
     )
 

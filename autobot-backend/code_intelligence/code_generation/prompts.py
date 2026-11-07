@@ -11,14 +11,14 @@ Contains PromptTemplateManager with templates for LLM-based code generation.
 
 from typing import Dict, List, Tuple
 
-from .types import PromptTemplate, RefactoringType
+from .types import CodeRefactoringType, RefactoringPromptTemplate
 
 
 class PromptTemplateManager:
     """Manages prompt templates for code generation."""
 
-    TEMPLATES: Dict[RefactoringType, PromptTemplate] = {
-        RefactoringType.ADD_DOCSTRING: PromptTemplate(
+    TEMPLATES: Dict[CodeRefactoringType, RefactoringPromptTemplate] = {
+        CodeRefactoringType.ADD_DOCSTRING: RefactoringPromptTemplate(
             name="add_docstring",
             system_prompt="""You are an expert Python developer specializing in code documentation.
 Your task is to add comprehensive docstrings following Google-style format.
@@ -41,10 +41,10 @@ Requirements:
 - Document all public functions, classes, and methods
 - Include type information
 - Keep existing functionality unchanged""",
-            refactoring_types=[RefactoringType.ADD_DOCSTRING],
+            refactoring_types=[CodeRefactoringType.ADD_DOCSTRING],
             variables=["code"],
         ),
-        RefactoringType.ADD_TYPE_HINTS: PromptTemplate(
+        CodeRefactoringType.ADD_TYPE_HINTS: RefactoringPromptTemplate(
             name="add_type_hints",
             system_prompt="""You are an expert Python developer specializing in type annotations.
 Your task is to add comprehensive type hints following PEP 484 and PEP 585.
@@ -66,10 +66,10 @@ Requirements:
 - Add type hints to class attributes
 - Use modern Python 3.9+ syntax
 - Preserve existing functionality""",
-            refactoring_types=[RefactoringType.ADD_TYPE_HINTS],
+            refactoring_types=[CodeRefactoringType.ADD_TYPE_HINTS],
             variables=["code"],
         ),
-        RefactoringType.EXTRACT_FUNCTION: PromptTemplate(
+        CodeRefactoringType.EXTRACT_FUNCTION: RefactoringPromptTemplate(
             name="extract_function",
             system_prompt="""You are an expert Python developer specializing in code refactoring.
 Your task is to extract a portion of code into a well-named, reusable function.
@@ -96,10 +96,10 @@ Requirements:
 - Ensure the original behavior is preserved
 - Add appropriate parameters for any external dependencies
 - Return necessary values""",
-            refactoring_types=[RefactoringType.EXTRACT_FUNCTION],
+            refactoring_types=[CodeRefactoringType.EXTRACT_FUNCTION],
             variables=["code", "target_code", "new_name"],
         ),
-        RefactoringType.ADD_ERROR_HANDLING: PromptTemplate(
+        CodeRefactoringType.ADD_ERROR_HANDLING: RefactoringPromptTemplate(
             name="add_error_handling",
             system_prompt="""You are an expert Python developer.
 Your task is to add comprehensive error handling to code.
@@ -122,10 +122,10 @@ Requirements:
 - Include logging statements
 - Preserve existing functionality
 - Consider edge cases""",
-            refactoring_types=[RefactoringType.ADD_ERROR_HANDLING],
+            refactoring_types=[CodeRefactoringType.ADD_ERROR_HANDLING],
             variables=["code"],
         ),
-        RefactoringType.APPLY_DECORATOR: PromptTemplate(
+        CodeRefactoringType.APPLY_DECORATOR: RefactoringPromptTemplate(
             name="apply_decorator",
             system_prompt="""You are an expert Python developer specializing in decorator patterns.
 Your task is to create or apply decorators to code.
@@ -150,10 +150,10 @@ Requirements:
 - Apply to specified functions
 - Preserve function signatures
 - Add appropriate error handling""",
-            refactoring_types=[RefactoringType.APPLY_DECORATOR],
+            refactoring_types=[CodeRefactoringType.APPLY_DECORATOR],
             variables=["code", "pattern_template", "target_name"],
         ),
-        RefactoringType.SIMPLIFY_CONDITIONAL: PromptTemplate(
+        CodeRefactoringType.SIMPLIFY_CONDITIONAL: RefactoringPromptTemplate(
             name="simplify_conditional",
             system_prompt="""You are an expert Python developer specializing in code simplification.
 Your task is to simplify complex conditional logic.
@@ -175,10 +175,10 @@ Requirements:
 - Use early returns where appropriate
 - Maintain the same behavior
 - Improve readability""",
-            refactoring_types=[RefactoringType.SIMPLIFY_CONDITIONAL],
+            refactoring_types=[CodeRefactoringType.SIMPLIFY_CONDITIONAL],
             variables=["code"],
         ),
-        RefactoringType.REMOVE_DUPLICATE: PromptTemplate(
+        CodeRefactoringType.REMOVE_DUPLICATE: RefactoringPromptTemplate(
             name="remove_duplicate",
             system_prompt="""You are an expert Python developer following DRY principles.
 Your task is to identify and remove duplicate code.
@@ -202,10 +202,10 @@ Requirements:
 - Maintain the same functionality
 - Ensure all call sites are updated
 - Add appropriate documentation""",
-            refactoring_types=[RefactoringType.REMOVE_DUPLICATE],
+            refactoring_types=[CodeRefactoringType.REMOVE_DUPLICATE],
             variables=["code", "pattern_template"],
         ),
-        RefactoringType.CUSTOM: PromptTemplate(
+        CodeRefactoringType.CUSTOM: RefactoringPromptTemplate(
             name="custom",
             system_prompt="""You are an expert Python developer specializing in code refactoring.
 Your task is to perform a custom refactoring operation as described.
@@ -228,18 +228,18 @@ Requirements:
 - Follow the specified refactoring instructions
 - Maintain existing functionality unless otherwise specified
 - Follow Python best practices""",
-            refactoring_types=[RefactoringType.CUSTOM],
+            refactoring_types=[CodeRefactoringType.CUSTOM],
             variables=["code", "description", "constraints"],
         ),
     }
 
     @classmethod
-    def get_template(cls, refactoring_type: RefactoringType) -> PromptTemplate | None:
+    def get_template(cls, refactoring_type: CodeRefactoringType) -> RefactoringPromptTemplate | None:
         """Get the prompt template for a refactoring type."""
         return cls.TEMPLATES.get(refactoring_type)
 
     @classmethod
-    def format_prompt(cls, refactoring_type: RefactoringType, **kwargs) -> Tuple[str, str]:
+    def format_prompt(cls, refactoring_type: CodeRefactoringType, **kwargs) -> Tuple[str, str]:
         """
         Format a prompt template with the provided variables.
 

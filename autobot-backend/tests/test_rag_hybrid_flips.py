@@ -19,7 +19,7 @@ Every assertion pairs an ON case (behaviour changes) with an OFF/default case
 import asyncio
 import unittest
 
-from advanced_rag_optimizer import AdvancedRAGOptimizer, SearchResult
+from advanced_rag_optimizer import AdvancedRAGOptimizer, RankedResult
 from knowledge.search_components.reranking import (
     apply_mmr_reorder_by_content,
     is_reranking_active,
@@ -38,8 +38,8 @@ def _fact(content: str, path: str = "p") -> dict:
     return {"content": content, "metadata": {"relative_path": path, "chunk_index": 0}}
 
 
-def _sr(content: str, score: float) -> SearchResult:
-    return SearchResult(
+def _sr(content: str, score: float) -> RankedResult:
+    return RankedResult(
         content=content,
         metadata={},
         semantic_score=score,
@@ -161,7 +161,7 @@ class _FakeKB:
         self._facts = facts
 
     async def search(self, query, top_k=20):
-        # Assign descending scores; return SearchResult-shaped fact dicts.
+        # Assign descending scores; return RankedResult-shaped fact dicts.
         out = []
         for i, f in enumerate(self._facts):
             out.append({"content": f["content"], "metadata": f["metadata"], "score": 0.9 - 0.3 * i})

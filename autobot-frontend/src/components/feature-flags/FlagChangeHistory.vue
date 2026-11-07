@@ -87,8 +87,10 @@ import Icon from '@/components/ui/Icon.vue'
 import { useI18n } from 'vue-i18n';
 import type { EnforcementMode } from '@/utils/FeatureFlagsApiClient';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
+import { createDateFormatter } from '@/utils/formatHelpers'
+import { createRecencyFormatter } from '@autobot/ui'
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 interface HistoryEntry {
   timestamp: string;
@@ -129,33 +131,15 @@ const getActionText = (mode: EnforcementMode) => {
   return texts[mode] || t('featureFlags.changeHistory.actionUpdated');
 };
 
-const formatTimestamp = (timestamp: string) => {
-  const date = new Date(timestamp);
-  return date.toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-};
+const formatTimestamp = createDateFormatter({ locale: 'en-US', intl: { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' } });
 
-const formatRelativeTime = (timestamp: string) => {
-  const date = new Date(timestamp);
-  const now = new Date();
-  const diff = now.getTime() - date.getTime();
-
-  const minutes = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-
-  if (minutes < 1) return t('featureFlags.changeHistory.justNow');
-  if (minutes < 60) return t('featureFlags.changeHistory.minutesAgo', { count: minutes });
-  if (hours < 24) return t('featureFlags.changeHistory.hoursAgo', { count: hours });
-  if (days < 30) return t('featureFlags.changeHistory.daysAgo', { count: days });
-  return formatTimestamp(timestamp);
-};
+const formatRelativeTime = createRecencyFormatter({
+  justNow: () => t('featureFlags.changeHistory.justNow'),
+  locale: () => locale.value,
+  maxUnit: 'day',
+  olderThanMs: 30 * 86_400_000,
+  older: formatTimestamp,
+});
 </script>
 
 <style scoped>
@@ -180,7 +164,7 @@ const formatRelativeTime = (timestamp: string) => {
   gap: var(--spacing-2-5);
 }
 
-.section-header h3 i {
+.section-header h3 .icon {
   color: var(--color-primary);
 }
 

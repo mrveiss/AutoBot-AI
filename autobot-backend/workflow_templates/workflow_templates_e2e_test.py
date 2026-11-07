@@ -13,8 +13,8 @@ from autobot_shared.ssot_config import config
 sys.path.append(config.project_root)
 
 from autobot_types import TaskComplexity
-from tests.test_helpers import get_test_backend_url
-from workflow_templates import TemplateCategory, workflow_template_manager
+from tests.test_helpers import live_backend_url
+from workflow_templates import WorkflowTemplateCategory, workflow_template_manager
 
 
 async def test_template_management():
@@ -39,8 +39,8 @@ async def test_template_management():
     # Test 2: Filter by category
     print("\n📝 Test 2: Filter by Category...")  # noqa: print
 
-    security_templates = workflow_template_manager.list_templates(category=TemplateCategory.SECURITY)
-    research_templates = workflow_template_manager.list_templates(category=TemplateCategory.RESEARCH)
+    security_templates = workflow_template_manager.list_templates(category=WorkflowTemplateCategory.SECURITY)
+    research_templates = workflow_template_manager.list_templates(category=WorkflowTemplateCategory.RESEARCH)
 
     print(f"✅ Security templates: {len(security_templates)}")  # noqa: print
     print(f"✅ Research templates: {len(research_templates)}")  # noqa: print
@@ -137,7 +137,7 @@ async def test_template_categories():
     print("\n📝 Test 1: Templates by Category...")  # noqa: print
 
     categories_count = {}
-    for category in TemplateCategory:
+    for category in WorkflowTemplateCategory:
         templates = workflow_template_manager.list_templates(category=category)
         categories_count[category.value] = len(templates)
         print(f"  {category.value.replace('_', ' ').title()}: {len(templates)} templates")  # noqa: print
@@ -247,7 +247,7 @@ async def test_template_api_integration():
         async with aiohttp.ClientSession() as session:
             for endpoint in endpoints_to_test:
                 try:
-                    async with session.get(get_test_backend_url() + endpoint) as response:
+                    async with session.get(live_backend_url() + endpoint) as response:
                         if response.status == 200:
                             print(f"✅ {endpoint}: OK")  # noqa: print
                         else:

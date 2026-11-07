@@ -43,6 +43,8 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_text
+
 _ROLE = repo_root() / "autobot-slm-backend/ansible/roles/slm_manager"
 _MAIN = _ROLE / "tasks/main.yml"
 _BIND = _ROLE / "tasks/bind_self_update_socket.yml"
@@ -86,7 +88,8 @@ def _directives(block: str) -> str:
     contract ratchet hit earlier: **a text scan cannot tell code from prose
     about code.**
     """
-    return "\n".join(line for line in block.splitlines() if not line.lstrip().startswith("#"))
+    # #17941: one shared stripper rather than this file's own copy.
+    return code_text(block, name="x.sh")
 
 
 def _offset_of(text: str, predicate) -> int | None:

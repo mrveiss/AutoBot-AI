@@ -10,11 +10,11 @@ Enables incremental updates, host-specific tracking, and change detection.
 """
 
 import asyncio
-import hashlib
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
 
+from autobot_shared.content_digest import content_digest
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from type_defs.common import Metadata
 
@@ -74,7 +74,7 @@ class DocumentVersion:
         Returns:
             Hex string of SHA256 hash
         """
-        return hashlib.sha256(content.encode("utf-8")).hexdigest()
+        return content_digest(content)
 
     @staticmethod
     def detect_change_type(old_hash: str | None, new_hash: str | None) -> ChangeType:

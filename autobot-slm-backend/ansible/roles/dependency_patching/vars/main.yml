@@ -14,7 +14,7 @@ service_definitions:
     health_endpoint: "/api/health"
     health_port: 8001
     has_python_venv: true
-    venv_path: "/opt/autobot/venv"
+    venv_path: "{{ autobot.base_dir }}/venv"
 
   frontend:
     service_name: "autobot-frontend"
@@ -27,14 +27,14 @@ service_definitions:
     health_endpoint: "/health"
     health_port: 8080
     has_python_venv: true
-    venv_path: "/opt/autobot/venv"
+    venv_path: "{{ autobot.base_dir }}/venv"
 
   npu:
     service_name: "autobot-npu"
     health_endpoint: "/health"
     health_port: 8081
     has_python_venv: true
-    venv_path: "/opt/autobot/venv"
+    venv_path: "{{ autobot.base_dir }}/venv"
 
   database:
     service_name: "redis-stack-server"
@@ -45,7 +45,7 @@ service_definitions:
   browser:
     service_name: "autobot-playwright"
     health_endpoint: "/health"
-    health_port: 3000
+    health_port: 9001
     has_python_venv: false  # Playwright uses Node.js
 
 # Update order - defines the sequence for rolling updates

@@ -36,7 +36,7 @@ from security_layer import SecurityLayer
 from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
-from .payloads import AgentStatus, CommandPayload
+from .payloads import AgentOutcome, CommandPayload
 from .standardized_agent import ActionHandler, StandardizedAgent
 
 # Issue #380: Module-level frozenset for dangerous rm flags
@@ -324,7 +324,7 @@ class SystemCommandAgent(StandardizedAgent):
             pm = await self.detect_package_manager()
             if not pm:
                 return None, {
-                    "status": AgentStatus.ERROR.value,
+                    "status": AgentOutcome.ERROR.value,
                     "message": "Could not detect package manager",
                 }
             pm_info = self.PACKAGE_MANAGERS[pm]
@@ -339,7 +339,7 @@ class SystemCommandAgent(StandardizedAgent):
         pm_info = self.PACKAGE_MANAGERS.get(install_method)
         if not pm_info:
             return None, {
-                "status": AgentStatus.ERROR.value,
+                "status": AgentOutcome.ERROR.value,
                 "message": f"Unknown install method: {install_method}",
             }
         return pm_info["install"].format(package=package_name), None
@@ -351,7 +351,7 @@ class SystemCommandAgent(StandardizedAgent):
         verify_result = await self.check_tool_installed(tool_name)
         if verify_result["installed"]:
             return {
-                "status": AgentStatus.SUCCESS.value,
+                "status": AgentOutcome.SUCCESS.value,
                 "message": f"{tool_name} installed successfully",
                 "exit_code": result.get("exit_code", 0),
             }
@@ -409,7 +409,7 @@ class SystemCommandAgent(StandardizedAgent):
         """Build execution result dict (Issue #398: extracted)."""
         exit_code = result["exit_code"]
         return {
-            "status": (AgentStatus.SUCCESS.value if exit_code == 0 else AgentStatus.ERROR.value),
+            "status": (AgentOutcome.SUCCESS.value if exit_code == 0 else AgentOutcome.ERROR.value),
             "exit_code": exit_code,
             "duration": result["duration"],
             "output_lines": result["line_count"],
@@ -454,7 +454,7 @@ class SystemCommandAgent(StandardizedAgent):
         except Exception as e:
             logger.error("Error executing command: %s", e)
             return {
-                "status": AgentStatus.ERROR.value,
+                "status": AgentOutcome.ERROR.value,
                 "error": "Command execution failed",
                 "message": "Command execution failed",
             }
@@ -817,7 +817,7 @@ class SystemCommandAgent(StandardizedAgent):
 
     def _build_command_payload(self, command_info: Dict[str, Any]) -> Dict[str, Any]:
         """Build a typed CommandPayload dict from LLM command info."""
-        status = AgentStatus.SUCCESS if command_info.get("is_safe", False) else AgentStatus.WARNING
+        status = AgentOutcome.SUCCESS if command_info.get("is_safe", False) else AgentOutcome.WARNING
         return CommandPayload(
             status=status,
             agent_type="system_commands",
@@ -853,7 +853,7 @@ class SystemCommandAgent(StandardizedAgent):
         except Exception as exc:
             logger.error("SystemCommandAgent LLM generation error: %s", exc)
             return {
-                "status": AgentStatus.ERROR.value,
+                "status": AgentOutcome.ERROR.value,
                 "command": "",
                 "explanation": "Failed to process command request",
                 "is_safe": False,

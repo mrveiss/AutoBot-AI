@@ -368,3 +368,17 @@ surfaces). Seven children, attached natively as sub-issues at filing time:
 #16105 (the prompt-profile safety-bypass directives) was filed separately by a peer session and is
 cross-referenced from the umbrella rather than parented under it — it is a security defect that
 predates this audit, not an adoption.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #16105 — security(prompts): four shipped prompt profiles instruct the model to never refuse on safety grounds
+- #16108 — Umbrella: self-correction, compaction-fidelity and measurement gaps from a comparative prompt/skill-library audit
+- #16110 — bug(kb): summary quality is scored against text[:200] — a 300-word summary judged on a 200-character window (closed)
+- #16111 — feat(kb): no compaction path verifies the source is recoverable from the summary — add a fidelity check
+- #16112 — feat(rlm): reflection is a single scalar — no itemized checks and no re-audit after repair
+- #16113 — feat(tools): tool constraints are per-tool only — no combination or ordering rules at the live gate
+- #16114 — chore(rlm): ReflectionResult records no provenance — no scoring model id, no evidence refs
+- #16115 — eval: the trajectory-eval gate is non-blocking with 3 goldens — broaden the corpus so review can safely shorten
+- #16116 — tech-debt(agent_loop): docstring asserts schema self-correction is unported — it shipped in #4482

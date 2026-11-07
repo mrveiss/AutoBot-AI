@@ -69,7 +69,7 @@ class NamingDetector:
     def __init__(
         self,
         complex_conditional_threshold: int = Thresholds.COMPLEX_CONDITIONAL_THRESHOLD,
-        magic_number_threshold: int = 2,  # Min occurrences to flag
+        magic_number_threshold: int = Thresholds.MAGIC_NUMBER_THRESHOLD,
     ):
         """
         Initialize naming detector with configurable thresholds.

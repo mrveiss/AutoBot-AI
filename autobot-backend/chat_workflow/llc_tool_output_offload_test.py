@@ -76,10 +76,10 @@ async def _dispatch_create_task(title: str):
     item = MagicMock(id=uuid.uuid4())
     svc = MagicMock()
     svc.create = AsyncMock(return_value=item)
-    ctx = SimpleNamespace(context={"company_id": _COMPANY, "user_id": _USER})
+    ctx = SimpleNamespace(context={"verified_company_id": _COMPANY, "verified_user_id": _USER})
     tool_call = {"name": "create_task", "params": {"title": title, "priority": "high"}}
 
-    with _patch_session(), patch("llc.services.work_item_service.WorkItemService", return_value=svc):
+    with _patch_session(), patch("llc.services.accessors.get_work_item_service", return_value=svc):
         messages = [m async for m in handler._handle_llc_tool("create_task", tool_call, execution_results, ctx)]
 
     return execution_results, messages

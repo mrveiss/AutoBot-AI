@@ -35,11 +35,28 @@ class StrictKnowledgeBase:
 
     ``add_fact`` and ``add_documents`` raise AttributeError here exactly as they do
     on the real object, so a call to either fails this test instead of passing.
+
+    ``list_collections`` IS on the real object, so it is here too -- a double that
+    is missing a real method fails for the opposite reason to the one intended.
     """
 
-    def __init__(self, result=None):
+    def __init__(self, result=None, collections=None):
         self.calls = []
         self._result = result or {"status": "success", "fact_id": "fact-1"}
+        # #17533: the ingest resolves the configured collection NAME to its id
+        # before writing, so this double needs the lookup the real KnowledgeBase
+        # has (`knowledge/collections.py`). Omitting it made the resolver raise
+        # AttributeError, which this double exists to do for methods that do NOT
+        # exist -- the opposite of its purpose.
+        self._collections = collections if collections is not None else [{"name": CONFIG.collection, "id": "col-1"}]
+
+    async def list_collections(self, limit=100, offset=0, sort_by="name"):
+        window = self._collections[offset : offset + limit]
+        return {
+            "success": True,
+            "collections": window,
+            "has_more": offset + limit < len(self._collections),
+        }
 
     async def add_document(self, content, metadata=None, doc_id=None):
         self.calls.append({"content": content, "metadata": metadata, "doc_id": doc_id})

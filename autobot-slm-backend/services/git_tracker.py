@@ -17,8 +17,9 @@ from typing import Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from autobot_shared.paths import scrubbed_git_env
-from models.database import CodeSource, Setting
+from autobot_shared.fleet_constants import FLEET_CODE_SOURCE_DIR
+from models.database import NodeCodeSource, Setting
+from services.git_subprocess import GIT_TIMEOUT_S, GIT_TRANSPORT_TIMEOUT_S, run_git_capture
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,9 @@ except ImportError:
 
 # Configuration
 VERSION_CHECK_INTERVAL = 300  # 5 minutes
-DEFAULT_REPO_PATH = os.environ.get("SLM_REPO_PATH", "/opt/autobot/code_source")
+# The code_source CHECKOUT root, never the install root (FLEET_INSTALL_ROOT). SLM_REPO_PATH is documented in
+# autobot_shared/env_registry_npu.py; this is its one read, and every SLM module imports it from here (#15708).
+DEFAULT_REPO_PATH = os.environ.get("SLM_REPO_PATH", FLEET_CODE_SOURCE_DIR)
 DEFAULT_BRANCH = os.environ.get("SLM_REPO_BRANCH", "main")
 
 # Log the "no local code source" condition once, not every interval (#9716).
@@ -81,8 +84,6 @@ class GitTracker:
         Returns:
             Tuple of (stdout, return_code)
         """
-        cmd = ["git", "-C", self.repo_path, *args]
-
         # Deployments without a local checkout (docker compose / rsync) have no
         # code_source dir. Skip the git invocation and let callers fall back to
         # the DB commit setting, instead of warn-spamming every reconcile cycle
@@ -92,27 +93,11 @@ class GitTracker:
             logger.debug("git_tracker: %s is not a git repo — skipping 'git %s'", self.repo_path, " ".join(args))
             return "", 1
 
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=scrubbed_git_env(),  # #16179
-            )
-            stdout, stderr = await proc.communicate()
-
-            if proc.returncode != 0:
-                logger.warning(
-                    "Git command failed: %s, stderr: %s",
-                    " ".join(cmd),
-                    stderr.decode().strip(),
-                )
-
-            return stdout.decode().strip(), proc.returncode
-
-        except Exception as e:
-            logger.error("Error running git command: %s", e)
-            return "", 1
+        # Strict env + bounded timeout via the shared runner (#17855); fetch and
+        # pull download history, so they get the transport bound.
+        timeout = GIT_TRANSPORT_TIMEOUT_S if args[0] in ("fetch", "pull") else GIT_TIMEOUT_S
+        stdout, returncode = await run_git_capture(self.repo_path, *args, timeout=timeout)
+        return stdout.strip(), returncode
 
     async def get_local_commit(self) -> str | None:
         """
@@ -240,7 +225,7 @@ def get_git_tracker(
     Get or create the GitTracker singleton instance.
 
     Resets the singleton when repo_path or branch changes so that
-    version_check_task always tracks the active CodeSource config.
+    version_check_task always tracks the active NodeCodeSource config.
 
     Issue #1185: accept branch param and reset on config change.
 
@@ -272,7 +257,7 @@ def get_git_tracker(
 
 
 async def _get_active_code_source_config() -> Tuple[str, str]:
-    """Read repo_path and branch from the active CodeSource DB record.
+    """Read repo_path and branch from the active NodeCodeSource DB record.
 
     Falls back to DEFAULT_REPO_PATH / DEFAULT_BRANCH when no active
     source exists or DB is unavailable.
@@ -283,12 +268,12 @@ async def _get_active_code_source_config() -> Tuple[str, str]:
         return DEFAULT_REPO_PATH, DEFAULT_BRANCH
     try:
         async with db_service.session() as db:
-            result = await db.execute(select(CodeSource).where(CodeSource.is_active.is_(True)))
+            result = await db.execute(select(NodeCodeSource).where(NodeCodeSource.is_active.is_(True)))
             source = result.scalar_one_or_none()
             if source:
                 return source.repo_path, source.branch
     except Exception as e:
-        logger.debug("Failed to read CodeSource config from DB: %s", e)
+        logger.debug("Failed to read NodeCodeSource config from DB: %s", e)
     return DEFAULT_REPO_PATH, DEFAULT_BRANCH
 
 
@@ -325,10 +310,10 @@ async def version_check_task(
     """
     Background task that periodically checks for code updates.
 
-    Reads repo_path and branch from the active CodeSource DB record on
+    Reads repo_path and branch from the active NodeCodeSource DB record on
     each iteration so config changes take effect without restart.
 
-    Issue #1185: use dynamic CodeSource config instead of static env var.
+    Issue #1185: use dynamic NodeCodeSource config instead of static env var.
 
     Args:
         interval: Check interval in seconds (default: 300 = 5 min)
@@ -383,7 +368,7 @@ def start_version_checker(
     """
     Start the version checker background task.
 
-    Repo path and branch are read from the active CodeSource DB record
+    Repo path and branch are read from the active NodeCodeSource DB record
     on each check iteration (issue #1185).
 
     Args:

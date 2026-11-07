@@ -14,7 +14,7 @@ AUTOBOT_CHAT_RETENTION_DAYS is set to a positive integer.
 
 import json
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict
+from typing import Dict
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
@@ -22,8 +22,7 @@ from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.ssot_constants import REDIS_KEY
 from celery_app import celery_app
-from services.audit.audit import AuditCategory, AuditEvent
-from services.audit.audit import emit as audit_emit
+from tasks.retention_audit import emit_deletion_audit as _emit_deletion_audit
 
 logger = get_logger(__name__)
 
@@ -66,20 +65,6 @@ def _parse_created_at(raw: bytes) -> datetime | None:
         return dt
     except Exception:
         return None
-
-
-def _emit_deletion_audit(resource_id: str, resource_type: str, extra: Dict[str, Any]) -> None:
-    """Fire-and-forget audit event for a retention deletion."""
-    audit_emit(
-        AuditEvent(
-            category=AuditCategory.SECURITY,
-            action="retention_purge",
-            actor_id="system:retention_worker",
-            resource_type=resource_type,
-            resource_id=resource_id,
-            metadata=extra,
-        )
-    )
 
 
 async def _async_cleanup_expired_chats(retention_days: int, dry_run: bool = False) -> Dict[str, int]:

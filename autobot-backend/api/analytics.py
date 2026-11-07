@@ -18,7 +18,6 @@ from typing import Any, Dict, List, Tuple
 import httpx
 
 # Import root cause analyzer for causal failure analysis
-from celery.result import AsyncResult
 from fastapi import (
     APIRouter,
     Depends,
@@ -31,8 +30,10 @@ from fastapi import (
 from api.analytics_controller import (
     analytics_controller,
     analytics_state,
-    get_service_address,
 )
+
+# Import controller class (extracted from this file - Issue #212)
+from api.codebase_analytics.task_routes import add_clear_stuck_route
 from api.schemas_analytics import (
     AnalyticsClearStuckTasksResponse,
     AnalyticsCollectionStartResponse,
@@ -50,20 +51,20 @@ from api.schemas_analytics import (
     RealTimeEvent,
 )
 from api.schemas_analytics_collector import AnalyticsPerformanceMetricsResponse, AnalyticsUsageStatisticsResponse
-
-# Import controller class (extracted from this file - Issue #212)
 from api.ws_security import open_authenticated_ws
 from auth_middleware import get_current_user
+from autobot_shared.deployment_profile import try_frontend_url
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
+from autobot_shared.ssot_config import config
 from autobot_shared.status_enums import Severity
 from autobot_shared.time_utils import parse_utc_iso
-from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
 from services.root_cause_analyzer import RootCauseAnalyzer
 from tasks.analytics_tasks import run_dashboard_analysis
-from utils.celery_task_status import celery_result_to_status, store_latest_task_id
+from utils.celery_task_status import known_task_status_or_404, store_latest_task_id
 
 # Import existing monitoring infrastructure (extracted to monitoring_hardware.py - Issue #213)
 from .monitoring_hardware import local_hardware_monitor
@@ -112,15 +113,11 @@ async def _get_realtime_metrics() -> Dict[str, Any]:
 
 async def _get_code_analysis_status() -> Dict[str, Any]:
     """Get code analysis tool status (Issue #398: extracted)."""
-    code_analysis_exists = await asyncio.to_thread(analytics_controller.code_analysis_path.exists)
-    code_index_exists = await asyncio.to_thread(analytics_controller.code_index_path.exists)
+    tools_available = await analytics_controller.code_tools_available()
     return {
         "last_analysis": analytics_state.get("last_analysis_time"),
         "cache_available": bool(analytics_state.get("code_analysis_cache")),
-        "tools_available": {
-            "code_analysis_suite": code_analysis_exists,
-            "code_index_mcp": code_index_exists,
-        },
+        "tools_available": tools_available,
     }
 
 
@@ -177,6 +174,7 @@ async def _check_service(client, service_name: str, service_url: str) -> Tuple[s
     """Check connectivity for a single service (Issue #398: extracted)."""
     try:
         start_time = time.time()
+        await assert_egress_policy(f"{service_url}/health")  # SSOT origins; httpx does not follow redirects
         response = await client.get(f"{service_url}/health")
         response_time = time.time() - start_time
         return service_name, {
@@ -253,11 +251,7 @@ async def get_detailed_system_health(current_user: Dict = Depends(get_current_us
         db_name, status = result
         detailed_health["analytics_health"]["redis_connectivity"][db_name] = status
 
-    # Issue #370: Check service connectivity in parallel
-    services = {
-        "ollama": get_service_address("ollama", NetworkConstants.OLLAMA_PORT),
-        "frontend": get_service_address("frontend", NetworkConstants.FRONTEND_PORT),
-    }
+    services = {n: u for n, u in {"ollama": config.ollama_url, "frontend": try_frontend_url(config)}.items() if u}
 
     async with httpx.AsyncClient(timeout=5.0) as client:
         service_results = await asyncio.gather(
@@ -810,15 +804,11 @@ async def get_analytics_status(current_user: Dict = Depends(get_current_user)):
     """Get comprehensive analytics system status (Issue #398: refactored)."""
     status = _build_analytics_status_base(analytics_controller.metrics_collector)
     # Issue #664: Parallelize independent async operations
-    code_analysis_exists, code_index_exists, redis_connectivity = await asyncio.gather(
-        asyncio.to_thread(analytics_controller.code_analysis_path.exists),
-        asyncio.to_thread(analytics_controller.code_index_path.exists),
+    code_analysis_tools, redis_connectivity = await asyncio.gather(
+        analytics_controller.code_tools_available(),
         _check_analytics_redis_connectivity(),
     )
-    status["integration_status"]["code_analysis_tools"] = {
-        "code_analysis_suite": code_analysis_exists,
-        "code_index_mcp": code_index_exists,
-    }
+    status["integration_status"]["code_analysis_tools"] = code_analysis_tools
     status["integration_status"]["redis_connectivity"] = redis_connectivity
     return status
 
@@ -1264,22 +1254,16 @@ async def start_dashboard_analysis(
     operation="get_dashboard_status",
     error_code_prefix="ANALYTICS",
 )
-async def get_dashboard_status(task_id: str):
+async def get_dashboard_status(task_id: str, _user: Dict = Depends(get_current_user)):
     """Get dashboard overview task status (#1304, GH#8433)."""
-    status = celery_result_to_status(AsyncResult(task_id))
-    if status is None or status["status"] == "pending":
-        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-    return status
+    return known_task_status_or_404(task_id)
 
 
-@router.post("/dashboard/overview/tasks/clear-stuck", response_model=AnalyticsClearStuckTasksResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="clear_stuck_dashboard_tasks",
-    error_code_prefix="ANALYTICS",
+add_clear_stuck_route(
+    router,
+    "/dashboard/overview/tasks/clear-stuck",
+    name="clear_stuck_dashboard_tasks",
+    error_prefix="ANALYTICS",
+    response_model=AnalyticsClearStuckTasksResponse,
+    description="Clear stuck dashboard overview tasks — no-op, Celery handles recovery (GH#8433).",
 )
-async def clear_stuck_dashboard_tasks(
-    force: bool = Query(default=False, description="Force clear ALL running tasks"),
-):
-    """Clear stuck dashboard overview tasks — no-op, Celery handles recovery (GH#8433)."""
-    return {"cleared_count": 0, "message": "Celery handles task recovery automatically"}

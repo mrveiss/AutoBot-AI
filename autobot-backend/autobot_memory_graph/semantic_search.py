@@ -11,7 +11,7 @@ parallel knowledge/memory_graph/ package is never needed.
 Architecture:
     MemoryGraphQueryProcessor  - natural-language → structured search pipeline
     HybridScorer               - cosine similarity + BM25 re-ranking
-    SearchResult               - result dataclass (entity + scores)
+    EntitySearchResult               - result dataclass (entity + scores)
     QueryIntent                - extracted intent dataclass
 """
 
@@ -24,8 +24,9 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Sequence
 
+from autobot_shared.embedding_model import active_embedding_model
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config as ssot_config
+from knowledge.search_components.bm25 import bm25_score_terms
 
 from .core import ENTITY_TYPES as _ENTITY_TYPES  # noqa: F401 — re-exported via package
 
@@ -89,7 +90,7 @@ class QueryIntent:
 
 
 @dataclass
-class SearchResult:
+class EntitySearchResult:
     """A single ranked search result from the memory graph."""
 
     entity: Dict[str, Any]
@@ -134,25 +135,14 @@ class HybridScorer:
         Returns:
             Non-negative BM25 score.
         """
-        if not query_terms or not document_terms:
-            return 0.0
-
-        doc_len = len(document_terms)
-        term_freqs: Dict[str, int] = {}
-        for term in document_terms:
-            term_freqs[term] = term_freqs.get(term, 0) + 1
-
-        score = 0.0
-        for term in set(query_terms):
-            tf = term_freqs.get(term, 0)
-            if tf == 0:
-                continue
-            idf = math.log(1 + (1.0 / (tf + 0.5)))
-            numerator = tf * (self._BM25_K1 + 1)
-            denominator = tf + self._BM25_K1 * (1 - self._BM25_B + self._BM25_B * doc_len / max(avg_doc_len, 1))
-            score += idf * (numerator / denominator)
-
-        return score
+        return bm25_score_terms(
+            query_terms,
+            document_terms,
+            avg_doc_len,
+            self._BM25_K1,
+            self._BM25_B,
+            lambda _term, tf: math.log(1 + (1.0 / (tf + 0.5))),
+        )
 
     @staticmethod
     def cosine_similarity(vec_a: Sequence[float], vec_b: Sequence[float]) -> float:
@@ -209,16 +199,15 @@ class MemoryGraphQueryProcessor:
                              alias).  RediSearch FT.SEARCH requires DB 0; entity
                              data keys also live on DB 0 after #9943.
             embedding_model: Ollama model name.  Falls back to
-                             config["knowledge.embedding_model"] or
-                             "nomic-embed-text".
+                             the SSOT-configured embedding model
+                             (``active_embedding_model()``).
         """
         self._redis = redis_client
         self._scorer = HybridScorer()
         if embedding_model:
             self._embedding_model = embedding_model
         else:
-            # ssot_config is a Pydantic model; use getattr with fallback
-            self._embedding_model = getattr(ssot_config, "embedding_model", "nomic-embed-text")
+            self._embedding_model = active_embedding_model()
 
     # ------------------------------------------------------------------
     # Public API
@@ -229,7 +218,7 @@ class MemoryGraphQueryProcessor:
         query: str,
         filters: Dict[str, Any] | None = None,
         limit: int = 10,
-    ) -> List[SearchResult]:
+    ) -> List[EntitySearchResult]:
         """
         Execute a hybrid memory graph search.
 
@@ -239,7 +228,7 @@ class MemoryGraphQueryProcessor:
             limit:   Maximum number of results to return.
 
         Returns:
-            Ranked list of SearchResult objects.
+            Ranked list of EntitySearchResult objects.
         """
         if not query or not query.strip():
             return []
@@ -507,12 +496,12 @@ class MemoryGraphQueryProcessor:
         query_embedding: List[float],
         intent: QueryIntent,
         limit: int,
-    ) -> List[SearchResult]:
+    ) -> List[EntitySearchResult]:
         """Score candidates with hybrid scorer and return top-N."""
         if not candidates:
             return []
 
-        scored: List[SearchResult] = []
+        scored: List[EntitySearchResult] = []
         query_terms = intent.keywords
 
         for entity in candidates:
@@ -537,7 +526,7 @@ class MemoryGraphQueryProcessor:
             )
 
             scored.append(
-                SearchResult(
+                EntitySearchResult(
                     entity=entity,
                     score=combined,
                     semantic_score=sem_score,
@@ -711,7 +700,7 @@ async def _index_exists(redis_client: Any, index_name: str) -> bool:
 __all__ = [
     "MemoryGraphQueryProcessor",
     "HybridScorer",
-    "SearchResult",
+    "EntitySearchResult",
     "QueryIntent",
     "ensure_indexes",
 ]

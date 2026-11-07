@@ -22,7 +22,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from llm_shared import BaseProvider, ProviderRegistry
-from llm_shared.models import ChatMessage, LLMRequest, LLMResponse
+from llm_shared.models import LLMChatMessage, LLMRequest, LLMResponse
 from services.llm_cost_tracker import LLMCostTracker
 
 # ============================================================================
@@ -173,7 +173,7 @@ class TestFallbackChains:
         registry.set_fallback_chain(["primary", "secondary"])
 
         request = LLMRequest(
-            messages=[ChatMessage(role="user", content="test")],
+            messages=[LLMChatMessage(role="user", content="test")],
             model_name="test-model",
         )
         selected = await registry.get_provider_for_request(request=request)
@@ -194,7 +194,7 @@ class TestFallbackChains:
         registry.set_fallback_chain(["primary", "secondary"])
 
         request = LLMRequest(
-            messages=[ChatMessage(role="user", content="test")],
+            messages=[LLMChatMessage(role="user", content="test")],
             model_name="test-model",
         )
         selected = await registry.get_provider_for_request(request=request)
@@ -215,7 +215,7 @@ class TestFallbackChains:
         registry.set_fallback_chain(["primary", "secondary"])
 
         request = LLMRequest(
-            messages=[ChatMessage(role="user", content="test")],
+            messages=[LLMChatMessage(role="user", content="test")],
             model_name="test-model",
         )
         selected = await registry.get_provider_for_request(request=request)
@@ -265,7 +265,7 @@ class TestConversationOverrides:
         registry.set_conversation_provider("conv-123", "override")
 
         request = LLMRequest(
-            messages=[ChatMessage(role="user", content="test")],
+            messages=[LLMChatMessage(role="user", content="test")],
             model_name="test-model",
         )
         selected = await registry.get_provider_for_request(conversation_id="conv-123", request=request)
@@ -357,7 +357,7 @@ class TestProviderSelection:
         registry.register(provider)
 
         request = LLMRequest(
-            messages=[ChatMessage(role="user", content="test")],
+            messages=[LLMChatMessage(role="user", content="test")],
             model_name="gpt-4",
         )
 
@@ -389,7 +389,7 @@ class TestCostTracking:
 
         # Make a request
         request = LLMRequest(
-            messages=[ChatMessage(role="user", content="test")],
+            messages=[LLMChatMessage(role="user", content="test")],
             model_name="test-model",
         )
         await provider.chat_completion(request)
@@ -455,7 +455,7 @@ class TestProviderIntegration:
         registry.set_fallback_chain(["mock_test"])
 
         request = LLMRequest(
-            messages=[ChatMessage(role="user", content="Hello")],
+            messages=[LLMChatMessage(role="user", content="Hello")],
             model_name="mock-model",
         )
 
@@ -474,7 +474,7 @@ class TestProviderIntegration:
         registry.register(provider)
 
         request = LLMRequest(
-            messages=[ChatMessage(role="user", content="Hello")],
+            messages=[LLMChatMessage(role="user", content="Hello")],
             model_name="mock-model",
         )
 
@@ -503,7 +503,7 @@ class TestProviderIntegration:
 
         # Initially use primary
         request = LLMRequest(
-            messages=[ChatMessage(role="user", content="test")],
+            messages=[LLMChatMessage(role="user", content="test")],
             model_name="test",
         )
         selected = await registry.get_provider_for_request(conversation_id=conv_id, request=request)
@@ -537,7 +537,7 @@ class TestEdgeCases:
         registry.set_fallback_chain([])
 
         request = LLMRequest(
-            messages=[ChatMessage(role="user", content="test")],
+            messages=[LLMChatMessage(role="user", content="test")],
             model_name="test",
         )
         # Should still find provider even without fallback chain
@@ -570,7 +570,7 @@ class TestEdgeCases:
         registry.set_conversation_provider("conv-id", "nonexistent")
 
         request = LLMRequest(
-            messages=[ChatMessage(role="user", content="test")],
+            messages=[LLMChatMessage(role="user", content="test")],
             model_name="test",
         )
         # Should gracefully fall back to available providers

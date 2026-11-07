@@ -29,12 +29,13 @@ from autobot_shared.logging_manager import get_logger
 
 from .attention_backend import (
     AttentionBackendSelector,
+    AttentionModelConfig,
 )
-from .attention_backend import ModelConfig as AttentionModelConfig
 from .hf_quantizer import HfQuantizerWrapper
 from .kv_cache import KVCacheConfig, KVCacheManager, LayerKVCache
 from .layer_inference import LayerInferenceConfig, LayerInferenceEngine
 from .meta_eviction import MetaDeviceEvictionManager, clean_memory
+from .taxonomy import Compression
 
 logger = get_logger(__name__)
 
@@ -79,6 +80,7 @@ class PipelineConfig:
             raise ValueError("max_seq_len must be >= 1")
         if self.batch_size < 1:
             raise ValueError("batch_size must be >= 1")
+        Compression.validate(self.compression)
 
 
 # ---------------------------------------------------------------------------

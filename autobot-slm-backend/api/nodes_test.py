@@ -31,13 +31,27 @@ keeps the test's dependency surface at zero either way.
 """
 
 import ast
+import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 _SOURCE_PY = Path(__file__).parent / "node_ssh_helpers.py"
+_SSH_UTILS_PY = Path(__file__).parents[1] / "services" / "ssh_utils.py"
 _WANTED_FUNCTIONS = {"_build_key_ssh_command", "_build_password_ssh_command"}
+
+
+def _real_ssh_destination_args():
+    """The REAL ``services.ssh_utils.ssh_destination_args``, loaded by path.
+
+    ``services`` is a stub package under the root conftest, so it cannot be imported by name; the
+    builders must be exercised against the genuine validator, not a stand-in (#18366).
+    """
+    spec = importlib.util.spec_from_file_location("_ssh_utils_for_nodes_test", _SSH_UTILS_PY)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.ssh_destination_args
 
 
 def _load_pure_functions() -> dict:
@@ -52,7 +66,7 @@ def _load_pure_functions() -> dict:
     ast.fix_missing_locations(module)
     # Annotations reference ConnectionTestRequest -- only needed for the
     # `def` signature to evaluate; the functions themselves never touch it.
-    namespace: dict = {"ConnectionTestRequest": object}
+    namespace: dict = {"ConnectionTestRequest": object, "ssh_destination_args": _real_ssh_destination_args()}
     exec(compile(module, filename=str(_SOURCE_PY), mode="exec"), namespace)  # noqa: S102
     return namespace
 
@@ -106,6 +120,7 @@ class TestBuildKeySshCommand:
             "BatchMode=yes",
             "-p",
             "22",
+            "--",
             "autobot@10.0.0.5",
             "uname -a",
         ]
@@ -134,6 +149,7 @@ class TestBuildPasswordSshCommand:
             "PubkeyAuthentication=no",
             "-p",
             "22",
+            "--",
             "autobot@10.0.0.5",
             "uname -a",
         ]

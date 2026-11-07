@@ -2,299 +2,104 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Integration tests for comment-driven agent wake (GH#9624)."""
+"""Comment-driven agent wake (GH#9624), now a caller of the one dispatcher (#19582).
+
+The comment rules stay here: an agent assignee is required, the commenter is not the
+assignee, and the comment travels as context. The two gates the service used to have
+(``adapter_type == "claude_code"`` and ``heartbeat_enabled``) are gone -- the
+``adapter`` parametrisation below is the regression test for that.
+"""
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
-from ..models.enums import HeartbeatInvocationSource, LLCRunStatus
-from ..models.heartbeat_run import LLCHeartbeatRun
-from ..models.work_item import LLCWorkItemComment
-from ..services.comment_wake_service import CommentWakeService
+from llc.models.enums import HeartbeatInvocationSource, LLCRunStatus
+from llc.models.heartbeat_run import LLCHeartbeatRun
+from llc.models.work_item import LLCWorkItemComment
+from llc.services.comment_wake_service import CommentWakeService
+from llc.tests.test_event_wakes_19582 import _COMPANY, _USER, _agent, _item, _tick_run, dispatched, factory
 
-
-@pytest.fixture
-def mock_session():
-    """Async session stub for the comment-wake flow."""
-    session = AsyncMock()
-    session.add = MagicMock()
-    session.flush = AsyncMock()
-    return session
+__all__ = ["dispatched", "factory"]  # pytest fixtures, imported for this module's tests
 
 
-@pytest.fixture
-def mock_agent_org_node():
-    """Mock agent_org_nodes row. agent_id is the slug (#10032): the node is
-    looked up by PK but keyed downstream by this slug."""
-    return {
-        "agent_id": "test-agent",
-        "adapter_type": "claude_code",
-        "adapter_config": {"model": "claude-sonnet-4-6"},
-        "context_mode": "fat",
-        "heartbeat_enabled": True,
-    }
+async def _comment_on(
+    factory, item_id: uuid.UUID, body: str = "Test comment body", **author
+) -> uuid.UUID:  # noqa: ANN001
+    async with factory() as session:
+        comment = LLCWorkItemComment(id=uuid.uuid4(), company_id=_COMPANY, work_item_id=item_id, body=body, **author)
+        session.add(comment)
+        await session.commit()
+        return comment.id
 
 
-@pytest.fixture
-def comment_wake_service():
-    return CommentWakeService()
+async def _wake(factory, item_id: uuid.UUID, comment_id: uuid.UUID):  # noqa: ANN001, ANN202
+    async with factory() as session:
+        run_id = await CommentWakeService().trigger_comment_wake(session, str(item_id), str(comment_id))
+        await session.commit()
+    return run_id
+
+
+async def _assigned_item(factory, node) -> uuid.UUID:  # noqa: ANN001
+    """An item assigned to *node* whose assignment wake has already finished."""
+    item_id = await _item(factory, assignee=str(node.id))
+    async with factory() as session:
+        for run in (await session.execute(select(LLCHeartbeatRun))).scalars():
+            run.status = LLCRunStatus.COMPLETED.value
+        await session.commit()
+    return item_id
 
 
 @pytest.mark.asyncio
-async def test_comment_triggers_wake_for_claude_code_agent(
-    mock_session: AsyncSession,
-    comment_wake_service: CommentWakeService,
-    mock_agent_org_node: dict,
-):
-    """Test that commenting on a work item triggers a wake for claude_code agent."""
-    work_item_id = uuid.uuid4()
-    company_id = uuid.uuid4()
-    assignee_agent_id = "test-agent"
-    comment_id = uuid.uuid4()
+@pytest.mark.parametrize("adapter", [None, "claude_code", "claude_code_subscription"])
+async def test_a_comment_wakes_the_assignee_whatever_its_adapter(factory, dispatched, adapter) -> None:  # noqa: ANN001
+    node = await _agent(factory, adapter=adapter)
+    item_id = await _assigned_item(factory, node)
+    comment_id = await _comment_on(factory, item_id, author_user_id=_USER)
+    run_id = await _wake(factory, item_id, comment_id)
+    assert run_id is not None
+    async with factory() as session:
+        run = await session.get(LLCHeartbeatRun, run_id)
+    assert run.agent_id == node.agent_id  # keyed by the slug, not the PK (#10032)
+    assert run.invocation_source == HeartbeatInvocationSource.WORK_ITEM_COMMENTED.value
+    assert [agent["adapter_type"] for agent, rid, _ in dispatched if rid == run_id] == [adapter]
 
-    # Mock work item query
-    work_item_result = MagicMock()
-    work_item_result.first.return_value = MagicMock(
-        assignee_agent_id=assignee_agent_id,
-        company_id=company_id,
-    )
 
-    # Mock agent query
-    agent_result = MagicMock()
-    agent_result.mappings.return_value.first.return_value = mock_agent_org_node
-
-    # Mock active run query (no active runs)
-    active_run_result = MagicMock()
-    active_run_result.scalar_one_or_none.return_value = None
-
-    # Mock comment query
-    comment_result = MagicMock()
-    comment = LLCWorkItemComment(
-        id=comment_id,
-        company_id=company_id,
-        work_item_id=work_item_id,
-        body="Test comment body",
-        author_user_id=uuid.uuid4(),
-    )
-    comment_result.scalar_one_or_none.return_value = comment
-
-    mock_session.execute = AsyncMock(
-        side_effect=[
-            work_item_result,
-            agent_result,
-            active_run_result,
-            comment_result,
-        ]
-    )
-    mock_session.add = MagicMock()
-    mock_session.flush = AsyncMock()
-
-    # Trigger wake
-    result = await comment_wake_service.trigger_comment_wake(
-        mock_session,
-        work_item_id=str(work_item_id),
-        comment_id=str(comment_id),
-    )
-
-    # Assertions
-    assert result is not None
-    run_id, agent_config, context = result
-
-    assert isinstance(run_id, uuid.UUID)
-    assert agent_config["agent_id"] == assignee_agent_id
-    assert agent_config["adapter_type"] == "claude_code"
+@pytest.mark.asyncio
+async def test_the_wake_carries_the_comment(factory, dispatched) -> None:  # noqa: ANN001
+    node = await _agent(factory)
+    item_id = await _assigned_item(factory, node)
+    other_agent = uuid.uuid4()
+    comment_id = await _comment_on(factory, item_id, "detailed info", author_agent_id=other_agent)
+    run_id = await _wake(factory, item_id, comment_id)
+    (context,) = [ctx for _, rid, ctx in dispatched if rid == run_id]
     assert context["wake_reason"] == "work_item_commented"
     assert context["wake_comment_id"] == str(comment_id)
-    assert context["comment_body"] == "Test comment body"
-
-    # Verify run was created
-    mock_session.add.assert_called_once()
-    added_run = mock_session.add.call_args[0][0]
-    assert isinstance(added_run, LLCHeartbeatRun)
-    assert added_run.agent_id == assignee_agent_id
-    assert added_run.invocation_source == HeartbeatInvocationSource.WORK_ITEM_COMMENTED.value
-    assert added_run.status == LLCRunStatus.QUEUED.value
-    assert added_run.context_snapshot == context
-
-
-@pytest.mark.asyncio
-async def test_comment_wake_skips_non_claude_code_agent(
-    mock_session: AsyncSession,
-    comment_wake_service: CommentWakeService,
-):
-    """Test that wake is skipped for non-claude_code adapters."""
-    work_item_id = uuid.uuid4()
-    assignee_agent_id = "test-agent"
-    comment_id = uuid.uuid4()
-
-    work_item_result = MagicMock()
-    work_item_result.first.return_value = MagicMock(
-        assignee_agent_id=assignee_agent_id,
-        company_id=uuid.uuid4(),
-    )
-
-    # Mock agent with different adapter type
-    agent_result = MagicMock()
-    agent_result.mappings.return_value.first.return_value = {
-        "adapter_type": "http",
-        "adapter_config": {},
-        "context_mode": "fat",
-        "heartbeat_enabled": True,
-    }
-
-    mock_session.execute = AsyncMock(side_effect=[work_item_result, agent_result])
-
-    result = await comment_wake_service.trigger_comment_wake(
-        mock_session,
-        work_item_id=str(work_item_id),
-        comment_id=str(comment_id),
-    )
-
-    assert result is None
-
-
-@pytest.mark.asyncio
-async def test_comment_wake_dedup_prevents_parallel_runs(
-    mock_session: AsyncSession,
-    comment_wake_service: CommentWakeService,
-    mock_agent_org_node: dict,
-):
-    """Test that dedup guard prevents parallel runs when one is already active."""
-    work_item_id = uuid.uuid4()
-    company_id = uuid.uuid4()
-    assignee_agent_id = "test-agent"
-    comment_id = uuid.uuid4()
-
-    work_item_result = MagicMock()
-    work_item_result.first.return_value = MagicMock(
-        assignee_agent_id=assignee_agent_id,
-        company_id=company_id,
-    )
-
-    agent_result = MagicMock()
-    agent_result.mappings.return_value.first.return_value = mock_agent_org_node
-
-    # Mock active run query (has an active run)
-    active_run_result = MagicMock()
-    active_run = LLCHeartbeatRun(
-        id=uuid.uuid4(),
-        company_id=company_id,
-        agent_id=assignee_agent_id,
-        invocation_source=HeartbeatInvocationSource.SCHEDULER.value,
-        status=LLCRunStatus.RUNNING.value,
-    )
-    active_run_result.scalar_one_or_none.return_value = active_run
-
-    mock_session.execute = AsyncMock(
-        side_effect=[
-            work_item_result,
-            agent_result,
-            active_run_result,
-        ]
-    )
-    mock_session.add = MagicMock()
-
-    result = await comment_wake_service.trigger_comment_wake(
-        mock_session,
-        work_item_id=str(work_item_id),
-        comment_id=str(comment_id),
-    )
-
-    # Should return None due to dedup guard
-    assert result is None
-    # Should not create a new run
-    mock_session.add.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_comment_wake_skips_when_no_assignee(
-    mock_session: AsyncSession,
-    comment_wake_service: CommentWakeService,
-):
-    """Test that wake is skipped when work item has no assignee."""
-    work_item_id = uuid.uuid4()
-    comment_id = uuid.uuid4()
-
-    work_item_result = MagicMock()
-    work_item_result.first.return_value = MagicMock(
-        assignee_agent_id=None,  # No assignee
-        company_id=uuid.uuid4(),
-    )
-
-    mock_session.execute = AsyncMock(side_effect=[work_item_result])
-
-    result = await comment_wake_service.trigger_comment_wake(
-        mock_session,
-        work_item_id=str(work_item_id),
-        comment_id=str(comment_id),
-    )
-
-    assert result is None
-
-
-@pytest.mark.asyncio
-async def test_comment_wake_context_includes_comment_metadata(
-    mock_session: AsyncSession,
-    comment_wake_service: CommentWakeService,
-    mock_agent_org_node: dict,
-):
-    """Test that wake context includes full comment metadata."""
-    work_item_id = uuid.uuid4()
-    company_id = uuid.uuid4()
-    assignee_agent_id = "test-agent"
-    comment_id = uuid.uuid4()
-    author_agent_id = uuid.uuid4()
-
-    work_item_result = MagicMock()
-    work_item_result.first.return_value = MagicMock(
-        assignee_agent_id=assignee_agent_id,
-        company_id=company_id,
-    )
-
-    agent_result = MagicMock()
-    agent_result.mappings.return_value.first.return_value = mock_agent_org_node
-
-    active_run_result = MagicMock()
-    active_run_result.scalar_one_or_none.return_value = None
-
-    comment_result = MagicMock()
-    comment = LLCWorkItemComment(
-        id=comment_id,
-        company_id=company_id,
-        work_item_id=work_item_id,
-        body="Test comment with detailed info",
-        author_agent_id=author_agent_id,
-        author_user_id=None,
-    )
-    comment_result.scalar_one_or_none.return_value = comment
-
-    mock_session.execute = AsyncMock(
-        side_effect=[
-            work_item_result,
-            agent_result,
-            active_run_result,
-            comment_result,
-        ]
-    )
-    mock_session.add = MagicMock()
-    mock_session.flush = AsyncMock()
-
-    result = await comment_wake_service.trigger_comment_wake(
-        mock_session,
-        work_item_id=str(work_item_id),
-        comment_id=str(comment_id),
-    )
-
-    assert result is not None
-    _, _, context = result
-
-    assert context["wake_reason"] == "work_item_commented"
-    assert context["wake_comment_id"] == str(comment_id)
-    assert context["work_item_id"] == str(work_item_id)
-    assert context["comment_body"] == "Test comment with detailed info"
-    assert context["comment_author_agent_id"] == str(author_agent_id)
+    assert context["work_item_id"] == str(item_id)
+    assert context["comment_body"] == "detailed info"
+    assert context["comment_author_agent_id"] == str(other_agent)
     assert context["comment_author_user_id"] is None
     assert "comment_created_at" in context
+
+
+@pytest.mark.asyncio
+async def test_no_assignee_no_wake(factory, dispatched) -> None:  # noqa: ANN001
+    item_id = await _item(factory)
+    assert await _wake(factory, item_id, await _comment_on(factory, item_id, author_user_id=_USER)) is None
+    assert dispatched == []
+
+
+@pytest.mark.asyncio
+async def test_an_active_run_is_not_doubled(factory, dispatched) -> None:  # noqa: ANN001
+    node = await _agent(factory)
+    item_id = await _assigned_item(factory, node)
+    await _tick_run(factory, node, LLCRunStatus.RUNNING.value)
+    assert await _wake(factory, item_id, await _comment_on(factory, item_id, author_user_id=_USER)) is None
+
+
+@pytest.mark.asyncio
+async def test_an_unknown_comment_wakes_no_one(factory, dispatched) -> None:  # noqa: ANN001
+    node = await _agent(factory)
+    item_id = await _assigned_item(factory, node)
+    assert await _wake(factory, item_id, uuid.uuid4()) is None

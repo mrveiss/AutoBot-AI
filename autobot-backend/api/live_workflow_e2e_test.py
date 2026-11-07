@@ -13,7 +13,7 @@ from pathlib import Path
 import aiohttp
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from tests.test_helpers import get_test_backend_url
+from tests.test_helpers import live_backend_url
 
 
 async def test_live_workflow_system():
@@ -22,7 +22,7 @@ async def test_live_workflow_system():
     print("🚀 Testing Live AutoBot Workflow Orchestration")  # noqa: print
     print("=" * 60)  # noqa: print
 
-    base_url = get_test_backend_url()
+    base_url = live_backend_url()
 
     async with aiohttp.ClientSession() as session:
         # Step 1: Test basic connectivity
@@ -125,11 +125,11 @@ async def test_live_workflow_system():
 
             sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-            from agents.web_researcher import ResearchRequest, get_web_researcher
+            from agents.web_researcher import WebResearchRequest, get_web_researcher
 
             research_agent = get_web_researcher()
 
-            request = ResearchRequest(**research_request)
+            request = WebResearchRequest(**research_request)
             result = await research_agent.research_specific_tools(request)
 
             print("✅ Research agent working")  # noqa: print
@@ -186,7 +186,7 @@ async def test_chat_integration():
     print("\n5. Testing Chat Integration")  # noqa: print
     print("-" * 40)  # noqa: print
 
-    base_url = get_test_backend_url()
+    base_url = live_backend_url()
 
     async with aiohttp.ClientSession() as session:
         try:

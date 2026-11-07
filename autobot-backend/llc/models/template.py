@@ -105,7 +105,7 @@ class TemplateSearchResult(BaseModel):
     score: float
 
 
-class TemplateSearchResponse(BaseModel):
+class LLCTemplateSearchResponse(BaseModel):
     """Response for GET /llc/templates/search (GH#8260)."""
 
     query: str

@@ -149,13 +149,13 @@ class ImagePipeline(BasePipeline):
     ) -> Dict[str, Any]:
         """Delegate to VisionProcessor for AI-powered image analysis."""
         from multimodal_processor.models import MultiModalInput
-        from multimodal_processor.types import ModalityType, ProcessingIntent
+        from multimodal_processor.types import ModalityType, MultimodalProcessingIntent
 
         mm_input = MultiModalInput(
             input_id=media_input.media_id,
             modality_type=ModalityType.IMAGE,
             data=pil_image,
-            intent=ProcessingIntent.VISUAL_QA,
+            intent=MultimodalProcessingIntent.VISUAL_QA,
         )
         try:
             vp_result = await vp.process(mm_input)

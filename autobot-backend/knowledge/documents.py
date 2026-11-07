@@ -11,10 +11,12 @@ and file operations.
 
 import asyncio
 import json
+import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from knowledge.quarantine import EXPORT_AUDIT_ACTOR, read_every_fact
 
 if TYPE_CHECKING:
     pass
@@ -27,14 +29,15 @@ class DocumentsMixin:
     Document management mixin for knowledge base.
 
     Provides document operations:
-    - Add documents with chunking
+    - Add documents, split into chunks that share a document id (#17830)
     - Process files (PDF, TXT, MD)
     - Directory ingestion
     - Export all data
     - Librarian functionality
 
     Key Features:
-    - Automatic chunking and vectorization
+    - Automatic chunking (``autobot_shared.doc_chunking``) and vectorization
+    - Partial-success ingest: a time-budget overrun keeps stored chunks (#17986)
     - Multiple file format support
     - Category extraction
     """
@@ -54,22 +57,27 @@ class DocumentsMixin:
             doc_id: Optional document ID
 
         Returns:
-            Result dictionary with status and details
+            Result dictionary: ``status`` ("success" | "partial" | "timeout" | "error"),
+            plus ``chunks_stored`` / ``chunks_total`` for multi-chunk
+            documents. A ``partial`` document keeps its stored chunks; retrying with the
+            same ``doc_id`` resumes after them.
         """
+        from knowledge.document_ingest import ingest_document
         from utils.knowledge_base_timeouts import kb_timeouts
 
         if not content.strip():
             return {"status": "error", "message": "Empty content provided"}
 
         try:
-            # Use asyncio.wait_for for timeout protection
-            return await asyncio.wait_for(
-                self._add_document_internal(content, metadata, doc_id),
-                timeout=kb_timeouts.document_add,
+            # The budget is per document, enforced between and inside chunks, so a
+            # timeout keeps the chunks already stored and reports "partial" (#17986).
+            return await ingest_document(
+                self,
+                content,
+                metadata if metadata is not None else {},
+                doc_id or str(uuid.uuid4()),
+                kb_timeouts.document_add,
             )
-        except asyncio.TimeoutError:
-            logger.warning("Document addition timed out")
-            return {"status": "timeout", "message": "Document addition timed out"}
         except Exception as e:
             logger.error("Document addition failed: %s", e)
             return {"status": "error", "message": "Document operation failed"}
@@ -91,12 +99,15 @@ class DocumentsMixin:
         metadata.setdefault("verification_status", "unverified")
         return await self.store_fact(content, metadata, doc_id)
 
-    async def export_all_data(self, output_dir: str = "data/exports") -> Dict[str, Any]:
+    async def export_all_data(
+        self, output_dir: str = "data/exports", audit_actor: str = EXPORT_AUDIT_ACTOR
+    ) -> Dict[str, Any]:
         """
         Export all knowledge base data to JSON files.
 
         Args:
             output_dir: Directory to save exports
+            audit_actor: The human who asked; named in the quarantine-read audit entry (#19163)
 
         Returns:
             Dict with export status and file paths
@@ -107,7 +118,7 @@ class DocumentsMixin:
             await asyncio.to_thread(output_path.mkdir, parents=True, exist_ok=True)
 
             # Export facts
-            facts = await self.get_all_facts()
+            facts = await read_every_fact(self, audit_actor)
             facts_file = output_path / "facts.json"
             await asyncio.to_thread(
                 facts_file.write_text,
@@ -308,6 +319,30 @@ class DocumentsMixin:
         except Exception as e:
             logger.error("Failed to get librarian info: %s", e)
             return {"status": "error", "message": "Document operation failed"}
+
+    async def get_document_count(self) -> int:
+        """Return how many documents the knowledge base holds (#13569).
+
+        Delegates to ``get_stats()["total_documents"]`` instead of counting
+        independently. "Document count" already has one definition in this
+        codebase and a second one would be free to drift from it:
+        ``StatsMixin._populate_redis_stats`` sets ``total_documents``,
+        ``total_vectors`` and ``total_chunks`` from the same vector-store entry
+        count, because ``add_document`` routes through ``store_fact`` and writes
+        exactly one embedding per document -- so documents, chunks and
+        collection entries are one number on this class, not three.
+
+        The other counter here answers a different question: ``_count_facts``
+        scans Redis ``fact:*`` keys, which ``get_stats`` publishes separately as
+        ``total_facts``. Returning that from a method named for documents would
+        be correct about facts and wrong about the thing it is called.
+
+        Returns:
+            Document count; ``0`` when stats are unavailable (``get_stats``
+            already degrades to a zeroed payload rather than raising).
+        """
+        stats = await self.get_stats()
+        return stats.get("total_documents", 0)
 
     # Method references needed from other mixins
     async def store_fact(self, content: str, metadata: Dict[str, Any], fact_id: str):

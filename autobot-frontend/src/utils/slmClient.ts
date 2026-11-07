@@ -29,6 +29,7 @@
  *  - Errors surface as `Error(detail | message | error | "HTTP <status>: <text>")`.
  */
 
+import { HttpError } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { getSLMUrl } from '@/config/ssot-config'
 
@@ -114,7 +115,7 @@ export class SlmClient {
       ?? (data as Record<string, unknown>).message
       ?? (data as Record<string, unknown>).error
     if (typeof raw === 'string' && raw.length > 0) return new Error(raw)
-    return new Error(`HTTP ${response.status}: ${response.statusText}`)
+    return new HttpError(response.status, response.statusText)
   }
 
   // Parse a body that may legitimately be empty (204 / no JSON content-type).

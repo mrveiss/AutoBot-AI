@@ -25,6 +25,17 @@ export const ADMIN_ROLES = ['admin', 'superadmin'] as const satisfies readonly R
 export type AdminRole = (typeof ADMIN_ROLES)[number]
 
 /**
+ * The highest administrative role (#19125). Platform-wide actions are gated on it
+ * alone on the backend with `require_role(Role.SUPERADMIN)` -- e.g. revoking the
+ * LLM sign-in token every org may share (#19241).
+ */
+export const SUPERADMIN_ROLE = 'superadmin' as const satisfies Role
+
+export function isSuperadminRole(role: string | null | undefined): boolean {
+  return role === SUPERADMIN_ROLE
+}
+
+/**
  * The roles an administrator may assign in the UI (#14937). The owner kept this to
  * admin/user/readonly: `set_user_role` is guarded by `require_platform_admin`, so
  * offering `superadmin` would let an admin grant a role above their own. The

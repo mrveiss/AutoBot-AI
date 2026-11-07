@@ -41,7 +41,7 @@ const stats = computed(() => [
     label: 'Unhealthy',
     value: summary.value.unhealthy_nodes,
     icon: 'error',
-    color: 'text-danger-600',
+    color: 'text-error-600',
     bgColor: 'bg-red-100',
   },
   {

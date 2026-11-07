@@ -7,6 +7,7 @@ import { NetworkConstants } from '@/constants/network'
 import { createLogger } from '@/utils/debugUtils'
 import type { ChatMessage } from '@/types/api'
 import apiClient from '@/utils/ApiClient'
+import type { SecretType } from '@/types/secretKind'
 
 // Issue #2066: ChatMessage is now the canonical type from types/api.ts.
 // Re-export so existing consumers that import from this store still work.
@@ -37,7 +38,8 @@ export interface SessionActivity {
 export interface SessionSecret {
   id: string
   name: string
-  type: 'api_key' | 'token' | 'password' | 'ssh_key' | 'certificate'
+  // #17976: every canonical kind (#15008), not a 5-kind subset
+  type: SecretType
   scope: 'user' | 'session' | 'shared'
   ownerId: string
   usageCount: number

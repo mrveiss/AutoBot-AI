@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import CommandRisk
+from security.command_segments import command_line_pattern
 from type_defs.common import Metadata
 
 # Permission system v2 imports (lazy to avoid circular imports)
@@ -396,8 +397,8 @@ class CommandApprovalManager:
 
         Examples:
             "ls -la /home" -> "ls *"
-            "cat file.txt" -> "cat *"
-            "git status" -> "git status"
+            "git status -s" -> "git status *"
+            "cat a && sh" -> "cat * && sh" (#19462: never matches a "cat *" rule)
 
         Args:
             command: Full command string
@@ -405,24 +406,7 @@ class CommandApprovalManager:
         Returns:
             Command pattern for matching
         """
-        parts = command.split()
-        if len(parts) == 0:
-            return command
-
-        # First word is the base command
-        base_cmd = parts[0]
-
-        # If there are arguments, use wildcard pattern
-        if len(parts) > 1:
-            # For commands with subcommands (like git status), preserve them (Issue #326)
-            if base_cmd in SUBCOMMAND_TOOLS:
-                if len(parts) >= 2:
-                    return f"{base_cmd} {parts[1]} *"
-            # For simple commands, use wildcard
-            return f"{base_cmd} *"
-
-        # No arguments - exact match
-        return base_cmd
+        return command_line_pattern(command, SUBCOMMAND_TOOLS)
 
     def get_user_rules(self, user_id: str) -> List[AutoApproveRule]:
         """

@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 
 logger = get_logger(__name__)
 
@@ -55,14 +56,10 @@ _EMPTY_STMT_TYPES = (ast.Pass, ast.Expr)
 # =============================================================================
 
 
-class TestPatternSeverity(Enum):
-    """Severity levels for test pattern issues."""
-
-    INFO = "info"
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
+#: An exact subset of the canonical ladder, so an alias rather than a class (#18098).
+#: Breakdowns that used to iterate this enum iterate `Severity.finding_ladder()` so the
+#: wire keeps its five keys.
+TestPatternSeverity = Severity
 
 
 class TestAntiPatternType(Enum):
@@ -1139,7 +1136,7 @@ def analyze_tests(path: str) -> TestAnalysisReport:
             coverage_gaps=report.coverage_gaps,
             quality_metrics=report.metrics,
             severity_distribution={
-                s.value: sum(1 for p in report.anti_patterns if p.severity == s) for s in TestPatternSeverity
+                s.value: sum(1 for p in report.anti_patterns if p.severity == s) for s in Severity.finding_ladder()
             },
             suggestions=report.suggestions,
         )
@@ -1159,4 +1156,4 @@ def get_test_quality_metrics() -> List[str]:
 
 def get_test_severity_levels() -> List[str]:
     """Get list of all severity levels."""
-    return [s.value for s in TestPatternSeverity]
+    return [s.value for s in Severity.finding_ladder()]

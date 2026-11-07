@@ -18,6 +18,7 @@ import time
 from typing import TYPE_CHECKING, Any, List
 
 from autobot_shared.logging_manager import get_logger
+from knowledge.platform_docs import PLATFORM_DOCS_GRANT
 
 if TYPE_CHECKING:
     from services.knowledge.synthesis_schema_loader import CollectionConfig
@@ -117,7 +118,10 @@ class KBSynthesizer:
         collection = await self._get_collection(collection_name)
         ids = [d["id"] for d in docs]
         documents = [d["summary"] for d in docs]
-        metadatas = [{k: v for k, v in d.items() if k not in ("id", "summary")} for d in docs]
+        # #18944: summaries are built only from indexed platform docs, so they carry the docs grant
+        metadatas = [
+            {**PLATFORM_DOCS_GRANT, **{k: v for k, v in d.items() if k not in ("id", "summary")}} for d in docs
+        ]
         try:
             await collection.upsert(ids=ids, documents=documents, metadatas=metadatas)
             logger.info(

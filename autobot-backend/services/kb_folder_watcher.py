@@ -20,11 +20,9 @@ Features:
 import asyncio
 import concurrent.futures
 import json
-import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
 from autobot_shared.async_compat import fire_and_forget_threadsafe
@@ -32,6 +30,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.time_utils import utc_timestamp
+from services.kb_folder_events import KBFolderChangeHandler
 from services.kb_watch_ingest import ingest_stored, ingest_watched_file
 
 logger = get_logger(__name__)
@@ -41,11 +40,9 @@ WATCH_FOLDERS_KEY = "kb:watch_folders"
 WATCH_FOLDER_CONFIG_PREFIX = "kb:watch_folder:"
 
 # Debounce settings
-DEBOUNCE_SECONDS = 2.0  # Wait for file to stabilize before ingesting
 BATCH_WINDOW_SECONDS = 5.0  # Batch multiple changes within this window
 
 # Supported file extensions
-SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt", ".md", ".markdown", ".csv", ".html", ".htm"}
 
 
 class WatchFolderConfig:
@@ -99,58 +96,6 @@ class WatchFolderConfig:
             category=data.get("category", "uploads"),
             tags=data.get("tags", []),
         )
-
-
-class KBFolderChangeHandler(FileSystemEventHandler):
-    """Handles file system events for watched KB folders."""
-
-    def __init__(self, watcher: "KBFolderWatcherService", config: WatchFolderConfig) -> None:
-        self.watcher = watcher
-        self.config = config
-        self._last_event_time: Dict[str, float] = {}
-
-    def on_created(self, event: FileSystemEvent) -> None:
-        """Handle file creation events."""
-        if event.is_directory:
-            return
-        self._handle_change(event.src_path, "created")
-
-    def on_modified(self, event: FileSystemEvent) -> None:
-        """Handle file modification events."""
-        if event.is_directory:
-            return
-        # Only process modifications for existing files we're tracking
-        if event.src_path in self._last_event_time:
-            self._handle_change(event.src_path, "modified")
-
-    def _handle_change(self, file_path: str, change_type: str) -> None:
-        """Process a file change event with debouncing."""
-        path = Path(file_path)
-
-        # Check if file extension is supported
-        if path.suffix.lower() not in SUPPORTED_EXTENSIONS:
-            return
-
-        # Check if file type is enabled for this folder
-        file_ext = path.suffix.lower().lstrip(".")
-        if file_ext not in self.config.file_types:
-            return
-
-        # Debounce rapid changes
-        now = time.time()
-        last_seen = self._last_event_time.get(file_path)
-        if last_seen is not None and now - last_seen < DEBOUNCE_SECONDS:
-            return
-
-        # #15636: this runs on the watchdog Observer thread, which has no running
-        # event loop, so ``asyncio.create_task`` raised RuntimeError on every
-        # event and nothing was ever queued. The debounce stamp used to be
-        # written before that failing call, which made the handler look alive;
-        # it is now written only after the cross-thread hand-off succeeded.
-        if self.watcher.dispatch_change(self.config.folder_id, path, change_type) is None:
-            return
-
-        self._last_event_time[file_path] = now
 
 
 class KBFolderWatcherService:
@@ -466,6 +411,15 @@ class KBFolderWatcherService:
                 folder_id,
             )
 
+            # #17546: a delete is dispatched precisely because the file is gone, so
+            # the existence check below would discard every one of them. Handled
+            # before it, and `change_type` is now branched on rather than logged --
+            # it reached here and appeared in one log string, which is the
+            # declared-vocabulary-with-no-consumer shape filed as #17693.
+            if change_type == "deleted":
+                await self._remove_ingested_file(folder_id, file_path)
+                return
+
             # Read file content
             if not file_path.exists():
                 logger.warning("File no longer exists: %s", file_path)
@@ -508,6 +462,34 @@ class KBFolderWatcherService:
             # attribute are one indistinguishable log line (#17531).
             logger.error("Error processing file change %s: %s", file_path, e, exc_info=True)
             self._record_error(folder_id, f"{type(e).__name__}: {e}")
+
+    async def _remove_ingested_file(self, folder_id: str, file_path: Path) -> None:
+        """Remove what a deleted or renamed watched file left in the Knowledge Base (#17546).
+
+        Every outcome is recorded. `not_found` is reported rather than passed over:
+        `search_by_metadata` scans a bounded prefix of fact keys, so "no document
+        records this path" and "the document exists beyond the scan" produce the same
+        empty list, and the second is a document that can no longer be removed by any
+        automatic path. A silent return would make an unremovable document
+        indistinguishable from a file that was never ingested.
+        """
+        from services.kb_watch_ingest import remove_watched_file
+
+        result = await remove_watched_file(file_path)
+        status = result.get("status")
+
+        if status == "removed":
+            if folder_id in self._stats:
+                self._stats[folder_id]["files_removed"] = (
+                    self._stats[folder_id].get("files_removed", 0) + result["removed"]
+                )
+                self._stats[folder_id]["last_change"] = utc_timestamp()
+            logger.info("Removed %d KB document(s) for deleted file %s", result["removed"], file_path.name)
+            return
+
+        detail = f"removing {file_path.name}: {result.get('message', status)}"
+        logger.warning("KB removal did not complete for %s -- %s", file_path.name, detail)
+        self._record_error(folder_id, detail)
 
     async def start_all(self) -> bool:
         """Start watching all enabled folders."""

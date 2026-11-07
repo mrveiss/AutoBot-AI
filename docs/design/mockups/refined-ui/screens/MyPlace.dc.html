@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>My place</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.sub2{font-size:12.5px;color:var(--muted)}
+.av{width:32px;height:32px;border-radius:99px;border:var(--bw) solid var(--tile-b);background:var(--tile);display:grid;place-items:center;font-weight:600;font-size:12px;flex:none;box-sizing:border-box;color:var(--text)}
+.r-owner,.r-admin,.r-lead,.r-member,.r-guest{color:var(--text);border:var(--bw) solid var(--border)}
+.r-owner{background:var(--i3t)}.r-admin{background:var(--i2t)}.r-lead{background:var(--i1t)}.r-member{background:var(--surface)}.r-guest{background:var(--surface2);border-style:dashed;color:var(--text2)}
+.th .btn.dng{color:var(--alert-text);border-color:var(--danger-tile-b)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.fld{display:flex;flex-direction:column;gap:6px}
+.fld label{font-size:13px;font-weight:600}
+.fld select{height:36px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);font:inherit;font-size:13.5px;padding:0 10px;color:var(--text)}
+.hint{margin:0;font-size:12px;color:var(--muted)}
+.th[data-ui="minimal"] .adv{display:none !important}
+.th[data-ui="minimal"] .adv-only-full{display:none !important}
+.th .only-min{display:none !important}
+.th[data-ui="minimal"] .only-min{display:flex !important}
+.th[data-ui="minimal"] .only-min.blk{display:block !important}
+.uimode{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border);margin-right:8px}
+.uimode .seg{height:28px;font-size:12px}
+.uitog{height:40px;padding:0 10px;margin:0 2px;border-radius:8px;border:var(--bw) solid transparent;background:transparent;color:var(--text2);font:inherit;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;cursor:pointer}.uitog:hover{background:var(--surface2);color:var(--text)}.uitog.on{background:var(--surface2);color:var(--text);font-weight:600;border-color:var(--accent)}
+.minnote{align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.linkbtn{border:0;background:transparent;padding:0;font:inherit;font-size:12.5px;font-weight:600;color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer;min-height:24px}
+.linkbtn:hover{color:var(--link-h)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.th{--tooltip-delay:500ms;--tooltip-hide-delay:100ms;--tooltip-offset:8px;--tooltip-max:280px}
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{position:absolute;left:50%;pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease-out var(--tooltip-hide-delay),visibility 0s linear calc(var(--tooltip-hide-delay) + 120ms);z-index:50}
+[data-tip]::after{content:attr(data-tip);bottom:calc(100% + var(--tooltip-offset));transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:var(--tooltip-max);padding:6px 10px;border-radius:6px;background:var(--primary);color:var(--on-primary);border:var(--bw) solid var(--primary);font:500 12.5px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}
+[data-tip]::before{content:"";bottom:calc(100% + var(--tooltip-offset) - 4px);width:8px;height:8px;margin-left:-4px;background:var(--primary);transform:rotate(45deg)}
+[data-tip]:hover::before,[data-tip]:hover::after{opacity:1;visibility:visible;transition-delay:var(--tooltip-delay),var(--tooltip-delay)}
+[data-tip]:focus-visible::before,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s,0s}
+[data-tip-pos="bottom"]::after{bottom:auto;top:calc(100% + var(--tooltip-offset))}
+[data-tip-pos="bottom"]::before{bottom:auto;top:calc(100% + var(--tooltip-offset) - 4px)}
+[data-tip-pos="right"]::after{left:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="right"]::before{left:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+[data-tip-pos="left"]::after{left:auto;right:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="left"]::before{left:auto;right:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+@media (prefers-reduced-motion: reduce){[data-tip]::before,[data-tip]::after{transition:none}}
+@media (hover: none){[data-tip]::before,[data-tip]::after{display:none}}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" data-ui="{{ui}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html" class="on" aria-current="page">Company OS</a>
+    <a href="Analytics.dc.html" class="adv">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <span class="sr" role="status" aria-live="polite">{{uiAnnounce}}</span>
+    <a href="Secrets.dc.html" class="icon adv" aria-label="Secrets" data-tip="Secrets" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" data-tip="Preferences" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg></a>
+    <button type="button" class="uitog {{uiTogCls}}" onClick="{{toggleUi}}" aria-pressed="{{uiMinPressed}}" data-tip="Minimal interface — hide advanced features" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button>
+    <a href="AdminUsers.dc.html" class="icon adv" aria-label="Platform admin, opens the SLM console" data-tip="Platform admin — opens the SLM console ↗" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <a href="Preferences.dc.html" aria-label="Profile settings" data-tip="Profile settings" data-tip-pos="left" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer; display: grid; place-items: center; text-decoration: none">JD</a>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+
+    <aside class="sub" aria-label="Company OS" style="flex: 1 1 220px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+      <button type="button" data-tip="Switch company" data-tip-pos="bottom" style="margin: 0 0 6px; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: 8px; border: var(--bw) solid var(--border); background: var(--surface2); font: inherit; font-size: 14px; font-weight: 600; color: var(--text); cursor: pointer; text-align: left">
+        <span style="width: 26px; height: 26px; border-radius: 6px; background: var(--brand-bg); color: var(--brand-fg); display: grid; place-items: center; font-size: 12px">AL</span><span style="flex-grow: 1; display: flex; flex-direction: column; line-height: 1.2">AutoBot Labs<span style="font-size: 11.5px; font-weight: 400; color: var(--muted)">Company OS</span></span><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>
+      <p class="sect">Overview</p>
+      <a href="CompanyOS.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5" class="i3"/><rect x="13" y="3" width="8" height="5" rx="1.5" class="i1"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5" class="i2"/></svg>Dashboard</a>
+      <a href="MyPlace.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9H4z"/><circle cx="12" cy="14" r="2.5" class="i2"/></svg>My place</a>
+      <a href="ReviewInbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 13h5l1 2h4l1-2h5"/></svg>My Reviews</a>
+      <a href="Approvals.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Approvals<span class="pill warn" data-tip="3 approvals waiting on you" data-tip-pos="right" style="margin-left: auto">3</span></a>
+      <a href="Activity.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18l5-6 4 3 7-9"/></svg>Activity</a>
+      <a href="RunSupervision.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M10 9l4 2-4 2z" class="i2"/><path d="M8 21h8"/></svg>Run supervision</a>
+      <a href="OperationHistory.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v5h5"/><path d="M12 8v4l3 2"/></svg>Operation history</a>
+      <a href="AgentLedger.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2" class="it2"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>Agent ledger</a>
+      <a href="CeoChat.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-4 4v-4H4z" class="it3"/></svg>CEO Chat</a>
+      <a href="CompanyMailbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6" class="it2"/></svg>Mailbox</a>
+      <p class="sect">Work</p>
+      <a href="Backlog.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Backlog</a>
+      <a href="Boards.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1" class="it1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1" class="it2"/></svg>Boards</a>
+      <a href="Portfolios.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2" class="it2"/><path d="M9 7V5h6v2M3 12h18"/></svg>Portfolios</a>
+      <a href="Timeline.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h9M8 12h12M4 18h7"/></svg>Timeline</a>
+      <a href="Goals.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4" class="it3"/></svg>Goals</a>
+      <a href="Automation.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L5 14h6l-1 8 8-12h-6z" class="it2"/></svg>Automation</a>
+      <a href="ProcessCanvas.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="6" height="5" rx="1" class="it2"/><rect x="15" y="15" width="6" height="5" rx="1"/><path d="M9 6.5h4a2 2 0 0 1 2 2V15"/></svg>Process canvas</a>
+      <a href="Routines.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>Routines</a>
+      <a href="TranscriberProjects.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" class="it3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Transcriber</a>
+      <p class="sect">Organization</p>
+      <a href="OrgChart.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="5" rx="1" class="it2"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-4h12v4"/></svg>Org Chart</a>
+      <a href="Members.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0"/></svg>Members</a>
+      <a href="Teams.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="3"/><circle cx="16" cy="9" r="3" class="i2"/><path d="M2 20a6 6 0 0 1 12 0M10 20a6 6 0 0 1 12 0"/></svg>Teams</a>
+      <a href="Roles.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M14 10h4M14 14h3"/></svg>Roles</a>
+      <a href="Handbook.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z" class="it2"/><path d="M5 17a3 3 0 0 1 3-3h10M9 8h5"/></svg>Handbook</a>
+      <a href="Costs.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it2"/><path d="M12 7v10"/></svg>Costs &amp; Budget</a>
+      <a href="BusinessIntelligence.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><path d="M5 16l4-5 4 3 6-8" /><circle cx="19" cy="6" r="1.6" class="i2"/></svg>Business intelligence</a>
+      <a href="HeartbeatMonitor.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-4 4 8 2-4h6"/></svg>Heartbeat</a>
+      <a href="Portability.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12h8M13 9l3 3-3 3"/><rect x="4" y="4" width="16" height="16" rx="2"/></svg>Portability</a>
+      <a href="CompanySecrets.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4"/><path d="M12 12h9M18 12v3"/></svg>Secrets</a>
+      <a href="CompanySettings.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>Company settings</a>
+      <div class="only-min minnote" style="margin: 16px 10px 0; padding-top: 12px; border-top: var(--bw) solid var(--line)"><span>Showing essentials</span><button type="button" class="linkbtn" onClick="{{showAll}}">Show all features</button></div>
+    </aside>
+
+    <main style="flex: 999 1 520px; min-width: 0; box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 40px; display: flex; flex-direction: column; gap: 20px">
+      <header style="display: flex; flex-wrap: wrap; gap: 14px; align-items: center">
+        <span class="av" aria-hidden="true" style="width: 52px; height: 52px; font-size: 17px; background: var(--i3t)">TR</span>
+        <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 320px; min-width: 0">
+          <span class="sub2"><a href="CompanyOS.dc.html" style="color: var(--muted); text-decoration: none">Company OS</a> / Overview</span>
+          <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em">My place</h1>
+          <p class="sub2" style="margin: 0">Welcome to AutoBot Labs, Taylor. Here’s where you fit, what you can use and what to do first.</p>
+        </div>
+        <div class="card" style="padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; flex: 0 1 240px; min-width: 200px">
+          <span style="display: flex; justify-content: space-between; font-size: 13px"><strong style="font-weight: 600">First week</strong><span class="sub2">{{doneText}}</span></span>
+          <div class="bar" role="progressbar" aria-label="First-week checklist" aria-valuemin="0" aria-valuemax="7" aria-valuenow="{{doneCount}}"><div class="bf" style="width: {{donePct}}"></div></div>
+          <span class="sub2">Started Mon 5 Oct 2026</span>
+        </div>
+      </header>
+
+      <span class="sr" role="status" aria-live="polite">{{toast}}</span>
+      <sc-if value="{{hasToast}}" hint-placeholder-val="{{ false }}">
+        <div class="card" style="padding: 10px 14px; display: flex; align-items: center; gap: 10px; border-color: var(--ok-fg)">
+          <span class="pill ok">Sent</span>
+          <span style="flex-grow: 1; font-size: 13.5px">{{toast}}</span>
+          <button type="button" class="btn sm" onClick="{{dismiss}}" aria-label="Dismiss message" data-tip="Dismiss" data-tip-pos="left" style="width: 32px; padding: 0; justify-content: center"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        </div>
+      </sc-if>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+        <section class="card" aria-labelledby="pl-h" style="flex: 999 1 460px; min-width: 0">
+          <div class="ch">
+            <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="5" rx="1" class="it2"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1" class="i3"/><path d="M12 8v4M6 16v-4h12v4"/></svg></span>
+            <h2 id="pl-h">My role and placement</h2>
+          </div>
+          <div style="padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 14px">
+            <ol aria-label="Where you sit in the org" style="list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px">
+              <li style="padding: 5px 10px; border-radius: 6px; background: var(--surface2); border: var(--bw) solid var(--border)">AutoBot Labs</li>
+              <li aria-hidden="true" style="color: var(--muted)">›</li>
+              <li style="padding: 5px 10px; border-radius: 6px; background: var(--surface2); border: var(--bw) solid var(--border)">Research &amp; docs team</li>
+              <li aria-hidden="true" style="color: var(--muted)">›</li>
+              <li style="padding: 5px 10px; border-radius: 6px; background: var(--surface2); border: var(--bw) dashed var(--muted)">Jane Doe · manager</li>
+              <li aria-hidden="true" style="color: var(--muted)">›</li>
+              <li style="padding: 5px 10px; border-radius: 6px; background: var(--surface); border: 2px solid var(--primary); font-weight: 600">You · Technical Writer</li>
+            </ol>
+            <div>
+              <div style="display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: var(--bw) solid var(--line); font-size: 13px"><span style="color: var(--muted)">Role</span><span style="text-align: right; white-space: normal"><a href="Roles.dc.html" style="font-weight: 600">Technical Writer</a><span class="sub2"> · shared with documentation-engineer (AI agent)</span></span></div>
+              <div style="display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: var(--bw) solid var(--line); font-size: 13px"><span style="color: var(--muted)">Manager</span><span><strong style="font-weight: 600">Jane Doe</strong><span class="sub2"> · Founder &amp; CEO</span></span></div>
+              <div style="display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: var(--bw) solid var(--line); font-size: 13px"><span style="color: var(--muted)">Team</span><span><a href="Teams.dc.html" style="font-weight: 600">Research &amp; docs</a><span class="sub2"> · 2 people, 2 agents</span></span></div>
+              <div style="display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; font-size: 13px; align-items: flex-start"><span style="color: var(--muted)">Projects</span>
+                <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; align-items: flex-end">
+                  <li><a href="ProjectDetail.dc.html" style="font-weight: 600">NPU inference worker</a><span class="sub2"> · Contributor, </span><span class="sub2" tabindex="0" data-tip="Extra access that applies inside this project only" data-tip-pos="left">Editor in this project</span></li>
+                  <li><a href="Projects.dc.html" style="font-weight: 600">Model cache service</a><span class="sub2"> · Contributor</span></li>
+                </ul>
+              </div>
+            </div>
+            <p class="hint">Your role keeps its tools and workflows even if people move on. Ask your manager if any of this looks wrong.</p>
+          </div>
+        </section>
+
+        <section class="card" aria-labelledby="ck-h" style="flex: 1 1 340px; min-width: 0">
+          <div class="ch">
+            <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3" class="it1"/><path d="M8 12l3 3 5-6"/></svg></span>
+            <h2 id="ck-h">First-week checklist</h2>
+            <span class="pill {{doneCls}}">{{doneText}}</span>
+          </div>
+          <ul style="list-style: none; margin: 0; padding: 6px 0">
+            <sc-for list="{{checks}}" as="c" hint-placeholder-count="7">
+              <li style="display: flex; align-items: flex-start; gap: 10px; padding: 8px 16px">
+                <button type="button" role="checkbox" aria-checked="{{c.checked}}" aria-label="{{c.label}}" onClick="{{c.toggle}}" style="width: 22px; height: 22px; margin-top: 1px; border-radius: 5px; border: var(--bw) solid var(--stroke); background: {{c.box}}; display: grid; place-items: center; padding: 0; cursor: pointer; flex: none"><sc-if value="{{c.done}}" hint-placeholder-val="{{ true }}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" fill="none" style="stroke: var(--on-primary)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg></sc-if></button>
+                <span style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 0">
+                  <span style="font-size: 13.5px; color: {{c.color}}">{{c.label}}</span>
+                  <span class="sub2">{{c.note}}</span>
+                </span>
+                <sc-if value="{{c.hasLink}}" hint-placeholder-val="{{ false }}"><a href="{{c.href}}" style="font-size: 12.5px; font-weight: 600; white-space: nowrap">{{c.linkText}}</a></sc-if>
+              </li>
+            </sc-for>
+          </ul>
+        </section>
+      </div>
+
+      <section class="card" aria-labelledby="tl-h">
+        <div class="ch" style="flex-wrap: wrap">
+          <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4a5 5 0 0 0-4.6 7L4 16.5V20h3.5l5.5-5.4A5 5 0 0 0 20 10l-3 1-2-2 1-3z" class="i2"/></svg></span>
+          <div style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 1px">
+            <h2 id="tl-h">My tools</h2>
+            <span class="sub2">What your Technical Writer role gives you, and what you can ask for.</span>
+          </div>
+          <span class="pill ok">4 ready</span>
+          <span class="pill {{pendCls}}">{{pendText}}</span>
+        </div>
+        <div style="overflow-x: auto">
+          <table style="border-collapse: collapse; width: 100%">
+            <thead><tr><th scope="col">Tool</th><th scope="col">What it’s for</th><th scope="col">Access</th><th scope="col" style="text-align: right">Actions</th></tr></thead>
+            <tbody>
+              <sc-for list="{{tools}}" as="t" hint-placeholder-count="7">
+                <tr>
+                  <td><span style="display: flex; flex-direction: column"><strong style="font-weight: 600">{{t.name}}</strong><span class="mono sub2 adv" style="font-size: 12px" tabindex="0" data-tip="Permission this tool needs">{{t.key}}</span></span></td>
+                  <td style="white-space: normal; min-width: 200px">{{t.purpose}}</td>
+                  <td><span class="pill {{t.cls}}" tabindex="0" data-tip="{{t.tip}}" data-tip-pos="left">{{t.status}}</span></td>
+                  <td style="text-align: right">
+                    <sc-if value="{{t.canOpen}}" hint-placeholder-val="{{ true }}"><a href="{{t.href}}" class="btn sm" aria-label="{{t.openLabel}}">Open</a></sc-if>
+                    <sc-if value="{{t.canRequest}}" hint-placeholder-val="{{ false }}"><button type="button" class="btn sm pri" onClick="{{t.request}}" aria-label="{{t.reqLabel}}">Request access</button></sc-if>
+                    <sc-if value="{{t.isPending}}" hint-placeholder-val="{{ false }}"><span class="sub2">Waiting on Jane Doe</span></sc-if>
+                    <sc-if value="{{t.isBlocked}}" hint-placeholder-val="{{ false }}"><span class="sub2">Ask Alex Smith if you need it</span></sc-if>
+                  </td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+        <section class="card" aria-labelledby="pr-h" style="flex: 999 1 460px; min-width: 0">
+          <div class="ch">
+            <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="6" height="5" rx="1.5" class="it1"/><rect x="15" y="15" width="6" height="5" rx="1.5" class="it3"/><path d="M9 6.5h4a2 2 0 0 1 2 2v6.5"/></svg></span>
+            <h2 id="pr-h">Processes I take part in</h2>
+          </div>
+          <ul style="list-style: none; margin: 0; padding: 0">
+            <li style="padding: 14px 16px; border-bottom: var(--bw) solid var(--line); display: flex; flex-direction: column; gap: 8px">
+              <span style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px"><strong style="font-weight: 600; font-size: 14px">Release notes</strong><span class="sub2">Every Friday</span><span class="mono sub2 adv" style="font-size: 12px; margin-left: auto" tabindex="0" data-tip="Workflow id">release-notes-weekly</span></span>
+              <ol aria-label="Release notes steps" style="list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px">
+                <li style="padding: 4px 8px; border-radius: 6px; border: var(--bw) solid var(--border)"><span class="mono">documentation-engineer</span> drafts</li><li aria-hidden="true" style="color: var(--muted)">→</li>
+                <li style="padding: 4px 8px; border-radius: 6px; border: 2px solid var(--primary); font-weight: 600">You edit the draft</li><li aria-hidden="true" style="color: var(--muted)">→</li>
+                <li style="padding: 4px 8px; border-radius: 6px; border: var(--bw) solid var(--border)"><span class="mono">code-reviewer</span> checks links</li><li aria-hidden="true" style="color: var(--muted)">→</li>
+                <li style="padding: 4px 8px; border-radius: 6px; border: var(--bw) dashed var(--muted)">Jane Doe approves</li>
+              </ol>
+              <span class="sub2">Next run Fri 16 Oct · your first one</span>
+            </li>
+            <li style="padding: 14px 16px; border-bottom: var(--bw) solid var(--line); display: flex; flex-direction: column; gap: 8px">
+              <span style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px"><strong style="font-weight: 600; font-size: 14px">Docs for merged changes</strong><span class="sub2">After each merged pull request</span><span class="mono sub2 adv" style="font-size: 12px; margin-left: auto" tabindex="0" data-tip="Workflow id">docs-on-merge</span></span>
+              <ol aria-label="Docs for merged changes steps" style="list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px">
+                <li style="padding: 4px 8px; border-radius: 6px; border: var(--bw) solid var(--border)"><span class="mono">code-agent</span> merges</li><li aria-hidden="true" style="color: var(--muted)">→</li>
+                <li style="padding: 4px 8px; border-radius: 6px; border: var(--bw) solid var(--border)"><span class="mono">documentation-engineer</span> drafts</li><li aria-hidden="true" style="color: var(--muted)">→</li>
+                <li style="padding: 4px 8px; border-radius: 6px; border: 2px solid var(--primary); font-weight: 600">You review and publish</li>
+              </ol>
+              <span class="sub2">2 drafts waiting in <a href="ReviewInbox.dc.html">My reviews</a></span>
+            </li>
+            <li style="padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+              <span style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px"><strong style="font-weight: 600; font-size: 14px">API reference refresh</strong><span class="sub2">First Monday of the month</span><span class="mono sub2 adv" style="font-size: 12px; margin-left: auto" tabindex="0" data-tip="Workflow id">api-reference-refresh</span></span>
+              <ol aria-label="API reference refresh steps" style="list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px">
+                <li style="padding: 4px 8px; border-radius: 6px; border: var(--bw) solid var(--border)"><span class="mono">research-agent</span> lists changes</li><li aria-hidden="true" style="color: var(--muted)">→</li>
+                <li style="padding: 4px 8px; border-radius: 6px; border: 2px solid var(--primary); font-weight: 600">You update the reference</li><li aria-hidden="true" style="color: var(--muted)">→</li>
+                <li style="padding: 4px 8px; border-radius: 6px; border: var(--bw) dashed var(--muted)">Sam Lee reviews</li>
+              </ol>
+              <span class="sub2">Next run Mon 2 Nov</span>
+            </li>
+          </ul>
+        </section>
+
+        <section class="card" aria-labelledby="wa-h" style="flex: 1 1 340px; min-width: 0">
+          <div class="ch">
+            <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-4 4v-4H4z" class="it3"/><path d="M10 9.5a2 2 0 1 1 2 2v1M12 14.5v.5"/></svg></span>
+            <h2 id="wa-h">Who to ask</h2>
+          </div>
+          <ul style="list-style: none; margin: 0; padding: 0">
+            <li class="row" style="align-items: flex-start"><span class="av" aria-hidden="true" style="background: var(--i2t)">JD</span><span style="display: flex; flex-direction: column; gap: 1px; flex-grow: 1; min-width: 0"><strong style="font-weight: 600; font-size: 13.5px">Jane Doe</strong><span class="sub2">Your manager · priorities and approvals</span></span><a href="Chat.dc.html" class="btn sm" aria-label="Message Jane Doe">Message</a></li>
+            <li class="row" style="align-items: flex-start"><span class="av" aria-hidden="true" style="background: var(--i1t)">AS</span><span style="display: flex; flex-direction: column; gap: 1px; flex-grow: 1; min-width: 0"><strong style="font-weight: 600; font-size: 13.5px">Alex Smith</strong><span class="sub2">Head of Operations · accounts, access and tools</span></span><a href="Chat.dc.html" class="btn sm" aria-label="Message Alex Smith">Message</a></li>
+            <li class="row" style="align-items: flex-start"><span class="av" aria-hidden="true" style="background: var(--i3t)">SL</span><span style="display: flex; flex-direction: column; gap: 1px; flex-grow: 1; min-width: 0"><strong style="font-weight: 600; font-size: 13.5px">Sam Lee</strong><span class="sub2">Project lead, NPU inference worker · technical questions</span></span><a href="Chat.dc.html" class="btn sm" aria-label="Message Sam Lee">Message</a></li>
+            <li class="row" style="align-items: flex-start"><span class="av" aria-hidden="true" style="background: var(--info-bg)"><svg class="ic" width="18" height="18" viewBox="0 0 30 30" aria-hidden="true"><rect x="5" y="9" width="20" height="15" rx="4" class="iw"/><path d="M10 14h10M10 18h7M15 9V5"/></svg></span><span style="display: flex; flex-direction: column; gap: 1px; flex-grow: 1; min-width: 0"><strong class="mono" style="font-weight: 500; font-size: 13px">documentation-engineer</strong><span class="sub2"><span class="pill info" style="font-size: 10.5px; padding: 1px 6px">Agent</span> Also a Technical Writer · first drafts and the style guide</span></span><a href="Chat.dc.html" class="btn sm" aria-label="Open chat with documentation-engineer">Open chat</a></li>
+          </ul>
+          <p class="hint" style="padding: 10px 16px 14px; border-top: var(--bw) solid var(--line)">Not sure who to ask? Post in <a href="CeoChat.dc.html">CEO Chat</a> and it will be routed.</p>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"ui":{"editor":"enum","options":["full","minimal"],"default":"full"},"$preview":{"width":1440,"height":1600}}'>
+const CHECKS = [
+  { id: 'c1', label: 'Set up your profile and two-step sign-in', note: 'Done Mon 5 Oct', done: true, href: 'AccountSecurity.dc.html', linkText: 'Security' },
+  { id: 'c2', label: 'Read the company handbook', note: 'Done Mon 5 Oct', done: true, href: 'Knowledge.dc.html', linkText: 'Knowledge' },
+  { id: 'c3', label: 'Meet your manager, Jane Doe', note: 'Done Tue 6 Oct', done: true, href: '', linkText: '' },
+  { id: 'c4', label: 'Meet the Research & docs team', note: 'Due Mon 12 Oct', done: false, href: 'Teams.dc.html', linkText: 'Team' },
+  { id: 'c5', label: 'Review your first draft from documentation-engineer', note: 'Due Tue 13 Oct', done: false, href: 'ReviewInbox.dc.html', linkText: 'My reviews' },
+  { id: 'c6', label: 'Request access to any tool you’re missing', note: 'Due Wed 14 Oct', done: false, href: '', linkText: '' },
+  { id: 'c7', label: 'Publish your first release note', note: 'Due Fri 16 Oct', done: false, href: '', linkText: '' }
+];
+const TOOLS = [
+  { id: 'kb', name: 'Knowledge base', key: 'knowledge.write', purpose: 'Read and edit company docs and the style guide', state: 'granted', href: 'Knowledge.dc.html' },
+  { id: 'repo', name: 'Docs repository', key: 'repo.docs', purpose: 'Edit example-org/docs and open pull requests', state: 'granted', href: 'Projects.dc.html' },
+  { id: 'bl', name: 'Backlog', key: 'backlog.write', purpose: 'Track your work items and pick up docs tasks', state: 'granted', href: 'Backlog.dc.html' },
+  { id: 'chat', name: 'Chat with agents', key: 'chat.agents', purpose: 'Ask documentation-engineer for drafts and lookups', state: 'granted', href: 'Chat.dc.html' },
+  { id: 'appr', name: 'Release notes approval', key: 'work.approve', purpose: 'Approve release notes before they go out', state: 'none', href: '' },
+  { id: 'usage', name: 'Usage and costs', key: 'usage.read', purpose: 'See what the docs agents spend each month', state: 'pending', href: '' },
+  { id: 'sec', name: 'Company secrets', key: 'secrets.read', purpose: 'Stored keys and credentials', state: 'blocked', href: '' }
+];
+const TOOL_PILL = {
+  granted: ['ok', 'Granted', 'You can use this now'],
+  none: ['idle', 'Not granted', 'Your role doesn’t include this. You can ask for it.'],
+  pending: ['warn', 'Requested', 'Waiting for Jane Doe to approve in Approvals'],
+  blocked: ['idle', 'Not for your role', 'Not available to Technical Writers']
+};
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+    try { const u = window.localStorage.getItem('autobot-ui-mode'); if (u === 'full' || u === 'minimal') this.setState({ ui: u }); } catch (e) {}
+  }
+  setUi(id) {
+    try { window.localStorage.setItem('autobot-ui-mode', id); } catch (e) {}
+    this.setState({ ui: id, uiAnnounce: id === 'minimal' ? 'Minimal interface on. Advanced features hidden.' : 'Full interface on. All features shown.' });
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const ui = st.ui || this.props.ui || 'full';
+    const defs = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+    const doneMap = st.done || {};
+    const isDone = (c) => (doneMap[c.id] === undefined ? c.done : doneMap[c.id]);
+    const doneCount = CHECKS.filter(isDone).length;
+    const checks = CHECKS.map((c) => {
+      const d = isDone(c);
+      return {
+        label: c.label, note: d ? (c.done ? c.note : 'Done today') : (c.done ? 'Marked not done' : c.note),
+        done: d, checked: d ? 'true' : 'false',
+        box: d ? 'var(--primary)' : 'var(--surface)',
+        color: d ? 'var(--muted)' : 'var(--text)',
+        hasLink: !!c.href, href: c.href || '#', linkText: c.linkText,
+        toggle: () => { const m = Object.assign({}, doneMap); m[c.id] = !d; this.setState({ done: m }); }
+      };
+    });
+    const req = st.req || {};
+    const stateOf = (t) => (req[t.id] ? 'pending' : t.state);
+    const tools = TOOLS.map((t) => {
+      const s = stateOf(t);
+      const p = TOOL_PILL[s];
+      return {
+        name: t.name, key: t.key, purpose: t.purpose, href: t.href || '#',
+        cls: p[0], status: p[1], tip: p[2],
+        canOpen: s === 'granted', canRequest: s === 'none', isPending: s === 'pending', isBlocked: s === 'blocked',
+        openLabel: 'Open ' + t.name, reqLabel: 'Request access to ' + t.name,
+        request: () => { const r = Object.assign({}, req); r[t.id] = true; this.setState({ req: r, toast: 'Access requested. Jane Doe will see it in Approvals.' }); }
+      };
+    });
+    const pending = TOOLS.filter((t) => stateOf(t) === 'pending').length;
+    return {
+      theme: cur,
+      ui: ui,
+      uiAnnounce: st.uiAnnounce || '',
+      showAll: () => this.setUi('full'),
+      toggleUi: () => this.setUi(ui === 'minimal' ? 'full' : 'minimal'),
+      uiMinPressed: ui === 'minimal' ? 'true' : 'false',
+      uiTogCls: ui === 'minimal' ? 'on' : '',
+      toast: st.toast || '',
+      hasToast: !!st.toast,
+      dismiss: () => this.setState({ toast: '' }),
+      checks: checks,
+      doneCount: String(doneCount),
+      doneText: doneCount + ' of ' + CHECKS.length + ' done',
+      doneCls: doneCount === CHECKS.length ? 'ok' : 'idle',
+      donePct: Math.round((doneCount / CHECKS.length) * 100) + '%',
+      tools: tools,
+      pendCls: pending ? 'warn' : 'idle',
+      pendText: pending === 1 ? '1 request waiting' : pending + ' requests waiting',
+      themes: defs.map(([id, label]) => ({
+        label: label,
+        cls: id === cur ? 'on' : '',
+        pressed: id === cur ? 'true' : 'false',
+        pick: () => { try { window.localStorage.setItem('autobot-theme', id); } catch (e) {} this.setState({ theme: id }); }
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -30,7 +30,7 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import git, isolated_git_env, make_repo
 
 _SERVICES_DIR = Path(__file__).parent.parent.parent / "services"
 
@@ -67,23 +67,16 @@ is_shallow_repository = _gs.is_shallow_repository
 ensure_full_history = _gs.ensure_full_history
 ShallowCheck = _gs.ShallowCheck
 
-_GIT_ENV = {
-    **scrubbed_git_env(),
-    "GIT_AUTHOR_NAME": "t",
-    "GIT_AUTHOR_EMAIL": "t@e",
-    "GIT_COMMITTER_NAME": "t",
-    "GIT_COMMITTER_EMAIL": "t@e",
-}
+_GIT_ENV = isolated_git_env()
 
 
 def _git(repo: Path, *args: str) -> str:
-    result = subprocess.run(["git", "-C", str(repo), *args], check=True, env=_GIT_ENV, capture_output=True, text=True)
-    return result.stdout.strip()
+    return git(repo, *args).stdout.strip()
 
 
 def _init_repo(repo: Path) -> None:
     repo.mkdir(parents=True, exist_ok=True)
-    subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True, env=_GIT_ENV)
+    make_repo(repo, default_branch="main")
 
 
 def _commit_all(repo: Path, message: str) -> str:

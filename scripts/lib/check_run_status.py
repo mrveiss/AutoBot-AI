@@ -39,13 +39,27 @@ Use :func:`check_run_status` unless you specifically need the raw runs.
 from __future__ import annotations
 
 import json
+import os
+import re
 import subprocess
+import sys
+import time
 from datetime import datetime, timezone
 from typing import Iterable
 
 #: A conclusion that does not block. `skipped` and `neutral` are here because
 #: several contexts are published by path-filtered shims that legitimately
 #: decline to run.
+#:
+#: `skipped` has a SECOND cause that is not acceptable, and it cannot be told
+#: apart here: this repository parks CI by leaving a PR in draft, and `ci.yml` /
+#: `code-quality.yml` gate their heavy jobs on `draft == false`, so on a draft
+#: every required context publishes `skipped` too. "Nothing to do here" and
+#: "not allowed to start yet" arrive as the same string, so the distinction is
+#: not available at this layer -- a conclusion carries no reason. It is drawn
+#: one level up, from the PR itself, by `pr_required_gate.DRAFT`. Do not try to
+#: fix it by dropping `skipped` from this set: that would block every
+#: legitimately path-filtered PR, which is the bug this set exists to avoid.
 ACCEPTABLE = frozenset({"success", "skipped", "neutral"})
 
 #: Not a verdict -- still running. Kept apart from failing because **a PR that
@@ -174,10 +188,168 @@ def all_pages(endpoint: str, key: str | None = None) -> list[dict]:
     return [item for page in pages for item in page.get(key, [])]
 
 
+#: One request's worth of check runs. 100 is the endpoint's own maximum, so a
+#: smaller number only adds round trips.
+CHECK_RUNS_PER_PAGE = 100
+
+#: A walk past this many pages is a loop, not a listing. Bounded rather than
+#: trusted: a verdict read off an unbounded walk is not one we can defend.
+MAX_CHECK_RUN_PAGES = 100
+
+
+def check_runs_endpoint(repository: str, sha: str, *, page: int | None = None) -> str:
+    """The ONE place ``/commits/{sha}/check-runs`` is spelled (#16120).
+
+    The acceptance criterion this serves is *"no direct check-runs query remains
+    outside the helper, verified by a grep"* -- which a caller that imports the
+    grouping rules and then builds the URL itself still fails. Two callers did
+    exactly that, so the string moved here rather than the advice.
+    """
+    endpoint = f"/repos/{repository}/commits/{sha}/check-runs?per_page={CHECK_RUNS_PER_PAGE}"
+    return endpoint if page is None else f"{endpoint}&page={page}"
+
+
+class CheckRunsIncomplete(RuntimeError):
+    """The walk read fewer (or more) runs than the API said exist (#19085)."""
+
+
+#: Seconds before the one retry of a short read. ``total_count`` can lead the
+#: runs listing while runs are still being created, so a first mismatch is
+#: usually a race, not a fault; a second one is reported, never papered over.
+#: Read at call time, not import: this module is stdlib-only (CI runs it as a bare
+#: script, without autobot_shared on the path), and a malformed value must fall back
+#: to the default rather than break the import -- the env_utils contract (#19085).
+SHORT_READ_RETRY_DELAY_DEFAULT_SECONDS = 2.0
+#: Ceiling on the env override: ``inf`` would make ``time.sleep`` raise OverflowError
+#: and a huge finite value would stall the gate.
+SHORT_READ_RETRY_DELAY_MAX_SECONDS = 30.0
+
+
+def _short_read_retry_delay() -> float:
+    raw = os.environ.get("AUTOBOT_CHECK_RUNS_RETRY_DELAY")
+    try:
+        delay = float(raw) if raw is not None else SHORT_READ_RETRY_DELAY_DEFAULT_SECONDS
+    except ValueError:
+        return SHORT_READ_RETRY_DELAY_DEFAULT_SECONDS
+    # One chained comparison: every comparison with nan is False, and inf exceeds the max.
+    if not (0.0 <= delay <= SHORT_READ_RETRY_DELAY_MAX_SECONDS):
+        return SHORT_READ_RETRY_DELAY_DEFAULT_SECONDS
+    return delay
+
+
+def _read_check_runs_once(repository: str, sha: str) -> list[dict]:
+    pages = json.loads(
+        subprocess.run(
+            ["gh", "api", "--paginate", "--slurp", check_runs_endpoint(repository, sha)],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+    )
+    runs = [run for page in pages for run in page.get("check_runs", [])]
+    totals = {page.get("total_count") for page in pages}
+    if not pages or len(totals) != 1 or not all(isinstance(t, int) for t in totals) or totals != {len(runs)}:
+        raise CheckRunsIncomplete(
+            f"check-run listing for {sha} read {len(runs)} run(s) across {len(pages)} page(s) "
+            f"but the API reported total_count={sorted(totals, key=str)} -- an incomplete read is not a verdict"
+        )
+    return runs
+
+
 def check_runs_for(repository: str, sha: str) -> list[dict]:
-    """Every check run on ``sha``, across all pages. Raw, ungrouped."""
-    endpoint = f"/repos/{repository}/commits/{sha}/check-runs?per_page=100"
-    return all_pages(endpoint, key="check_runs")
+    """Every check run on ``sha``, across all pages. Raw, ungrouped.
+
+    Fails closed: when the API's own ``total_count`` is not the number of runs
+    read, the read is retried once after a short backoff, and a second mismatch
+    raises :class:`CheckRunsIncomplete` rather than returning a short list that
+    a caller would read as the whole population (#19085). Callers either catch
+    it and report a distinct could-not-determine state, or let it propagate.
+    """
+    try:
+        return _read_check_runs_once(repository, sha)
+    except CheckRunsIncomplete:
+        time.sleep(_short_read_retry_delay())
+        return _read_check_runs_once(repository, sha)
+
+
+def count_runs_named(repository: str, sha: str, pattern: str, *, pending_only: bool = False) -> int:
+    """How many check runs on ``sha`` have a name matching ``pattern`` (case-insensitive).
+
+    With ``pending_only``, only those not yet ``completed`` (queued, in progress, waiting):
+    the CodeQL ceiling gate waits on these instead of failing on a scan still running (#18123).
+    """
+    rx = re.compile(pattern, re.IGNORECASE)
+    return sum(
+        1
+        for run in check_runs_for(repository, sha)
+        if rx.search(run.get("name", "")) and not (pending_only and run.get("status") == "completed")
+    )
+
+
+def main(argv: list[str]) -> int:
+    """``count-named|pending-named REPO SHA REGEX`` -- prints the count; nonzero exit on any failed read."""
+    if len(argv) != 4 or argv[0] not in ("count-named", "pending-named"):
+        print("usage: check_run_status.py count-named|pending-named REPO SHA REGEX", file=sys.stderr)
+        return 2
+    try:
+        print(count_runs_named(argv[1], argv[2], argv[3], pending_only=argv[0] == "pending-named"))
+    except (CheckRunsIncomplete, subprocess.CalledProcessError, ValueError, re.error) as exc:
+        print(f"check_run_status: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def walk_check_runs(
+    repository: str,
+    sha: str,
+    fetch_page,
+    *,
+    max_pages: int = MAX_CHECK_RUN_PAGES,
+) -> tuple[list[dict], str]:
+    """:func:`check_runs_for` for a caller that is not using the ``gh`` CLI.
+
+    ``fetch_page(path)`` returns ``(status, body)``. A tool holding a
+    token-authenticated HTTP client -- an Actions job, where ``gh`` is not the
+    transport and the API root is configurable -- cannot call
+    :func:`check_runs_for`, and the one that could not **re-derived the whole
+    walk**: its own path string, its own page loop, its own ceiling. That second
+    copy is what #16120 is about, so the walk is shared and only the transport
+    is the caller's.
+
+    Returns ``(runs, error)``. ``error`` is non-empty when the listing could not
+    be completed, and the runs collected so far are returned alongside it rather
+    than discarded: a short read is **reported**, never handed back as if it
+    were the whole population. ``total_count`` is the endpoint's own statement
+    of that population, so it is also the check on whether the walk reached it.
+    """
+    collected: list[dict] = []
+    expected = None
+    page = 1
+    while True:
+        status, body = fetch_page(check_runs_endpoint(repository, sha, page=page))
+        if status != 200 or not isinstance(body, dict):
+            return [], f"cannot list check runs for {sha} (HTTP {status})"
+        if expected is None:
+            expected = body.get("total_count")
+        runs = body.get("check_runs")
+        batch = list(runs) if isinstance(runs, list) else []
+        collected.extend(batch)
+        if len(batch) < CHECK_RUNS_PER_PAGE:
+            break
+        page += 1
+        if page > max_pages:
+            return collected, (
+                f"check-run listing for {sha} exceeded {max_pages} pages -- "
+                "refusing to walk further rather than loop, since a verdict from "
+                "an unbounded read is not one we can defend"
+            )
+    if isinstance(expected, int) and len(collected) < expected:
+        return collected, (
+            f"check-run listing for {sha} reached {len(collected)} of {expected} "
+            "runs -- the walk stopped short, so any 'no red checks' verdict from "
+            "this list is unearned"
+        )
+    return collected, ""
 
 
 def check_run_status(repository: str, sha: str) -> dict[str, str]:
@@ -189,6 +361,10 @@ def check_run_status(repository: str, sha: str) -> dict[str, str]:
     Returns a mapping of context name to conclusion. A name absent from the
     result was **never reported**, which is a different state from reported and
     not green -- see :func:`split_by_state`.
+
+    Propagates :class:`CheckRunsIncomplete`: there is no honest per-name map of
+    a listing known to be short, so the caller must decide (the merge gate
+    reports GATE-ERROR, exit 2).
     """
     return latest_per_name(check_runs_for(repository, sha))
 
@@ -233,7 +409,11 @@ def pending_ages(observations: Iterable[dict]) -> dict[str, float]:
 
 
 def pending_check_ages(repository: str, sha: str) -> dict[str, float]:
-    """Live counterpart to :func:`pending_ages`, fetching ``sha``'s check runs."""
+    """Live counterpart to :func:`pending_ages`, fetching ``sha``'s check runs.
+
+    Propagates :class:`CheckRunsIncomplete` (after the one retry): an age map of
+    a short listing would omit running contexts, which reads as "nothing stuck".
+    """
     return pending_ages(check_runs_for(repository, sha))
 
 
@@ -261,3 +441,7 @@ def split_by_state(observed: dict[str, str], expected: Iterable[str]) -> dict[st
         else:
             buckets["failing"].append(name)
     return buckets
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

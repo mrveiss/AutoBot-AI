@@ -11,7 +11,7 @@ does the part that can be justified: for every key whose English source appears
 **verbatim** in `autobot-frontend`'s locales, it takes that app's existing
 translation; everything else keeps the English source, which is exactly what the
 main app's own locales do for an untranslated key and what
-`repo_tests/i18n_untranslated_ratchet_test.py` exists to count and shrink.
+`scripts/list_untranslated.py` reports as the backlog.
 
 THE LIFTING RULE, and its two refusals, because a wrong translation is worse
 than a visible English one:
@@ -64,6 +64,10 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from autobot_shared.locale_tree import flatten  # noqa: E402
+
 #: The app whose locales are the translation source.
 SOURCE_LOCALES = Path("autobot-frontend") / "src" / "i18n" / "locales"
 
@@ -83,32 +87,6 @@ MAJORITY_THRESHOLD = 0.8
 RTL_LOCALES = frozenset({"ar", "fa", "he", "ur"})
 
 
-def flatten(node: dict, prefix: str = "") -> dict[str, Any]:
-    """Key every message in a locale tree by its dotted path to the root.
-
-    Recurses only into dict values; anything else is a leaf, so a list of
-    strings stays one entry rather than becoming indexed children. That matters
-    for the lifting rule below, which matches a message by its exact English
-    text -- a list flattened into `k.0`, `k.1` would compare fragments against
-    whole strings and find nothing.
-
-    The dotted path is what lets two apps' locale files be compared at all:
-    `en.json` nests by feature, so only a path-keyed view can ask "does this
-    app's `addNodeModal.cancel` have the same English text as some key in the
-    main app's bundle".
-
-        {"addNodeModal": {"cancel": "Cancel"}}  ->  {"addNodeModal.cancel": "Cancel"}
-    """
-    out: dict[str, Any] = {}
-    for key, value in node.items():
-        path = f"{prefix}.{key}" if prefix else key
-        if isinstance(value, dict):
-            out.update(flatten(value, path))
-        else:
-            out[path] = value
-    return out
-
-
 def _placeholders(text: str) -> tuple[str, ...]:
     """The `{name}` tokens in *text*, sorted -- a translation must keep them all."""
     return tuple(sorted(part.split("}")[0] for part in text.split("{")[1:] if "}" in part))
@@ -124,6 +102,37 @@ def _lift(source: str, candidates: list[str]) -> str | None:
     if len(counted) == 1 or hits / len(usable) >= MAJORITY_THRESHOLD:
         return best
     return None
+
+
+def refusal_reason(source: str, candidates: list[str]) -> str | None:
+    """Why *source* keeps its English, or None when it lifts (#20199).
+
+    `short` and `no-source` are decided before candidates exist; this covers the
+    two refusals that need them: `no-translation` (no usable candidate) and
+    `tie` (candidates disagree below the majority threshold).
+    """
+    if _lift(source, candidates) is not None:
+        return None
+    usable = [c for c in candidates if c and c != source and _placeholders(c) == _placeholders(source)]
+    return "tie" if usable else "no-translation"
+
+
+def collect_refusals(app_en_flat: dict, by_text: dict[str, list[str]], source_locale: dict) -> dict[str, list[str]]:
+    """App keys that keep English, grouped by reason, for one locale (#20199)."""
+    out: dict[str, list[str]] = {"short": [], "no-source": [], "no-translation": [], "tie": []}
+    for key, value in app_en_flat.items():
+        if not isinstance(value, str):
+            continue
+        if len(value) < MIN_SOURCE_LENGTH:
+            out["short"].append(key)
+        elif value not in by_text:
+            out["no-source"].append(key)
+        else:
+            cands = [source_locale.get(k) for k in by_text[value] if isinstance(source_locale.get(k), str)]
+            reason = refusal_reason(value, cands)
+            if reason:
+                out[reason].append(key)
+    return out
 
 
 def build_locale(app_en: dict, source_en_by_text: dict[str, list[str]], source_locale: dict[str, Any]) -> dict:
@@ -152,10 +161,22 @@ def build_locale(app_en: dict, source_en_by_text: dict[str, list[str]], source_l
     return walk(app_en)
 
 
+def _print_refusals(app_en_flat: dict, by_text: dict[str, list[str]], source_dir: Path) -> None:
+    """One line per locale: how many keys stay English, by refusal reason."""
+    for locale in TARGET_LOCALES:
+        source_locale = flatten(json.loads((source_dir / f"{locale}.json").read_text(encoding="utf-8")))
+        groups = collect_refusals(app_en_flat, by_text, source_locale)
+        counts = " ".join(f"{reason}={len(keys)}" for reason, keys in groups.items())
+        print(f"{locale}: {counts}")  # noqa: print -- stdout IS this CLI's interface
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--app", required=True, help="the app's locales directory (must contain en.json)")
     parser.add_argument("--repo-root", default=".", help="repository root (default: cwd)")
+    parser.add_argument(
+        "--refusals", action="store_true", help="print per-locale counts of keys kept in English, by reason"
+    )
     parser.add_argument("--check", action="store_true", help="fail instead of writing when a file would change")
     args = parser.parse_args(argv)
 
@@ -171,6 +192,10 @@ def main(argv: list[str] | None = None) -> int:
     for key, value in source_en.items():
         if isinstance(value, str):
             by_text.setdefault(value, []).append(key)
+
+    if args.refusals:
+        _print_refusals(app_en_flat, by_text, source_dir)
+        return 0
 
     drifted: list[str] = []
     for locale in TARGET_LOCALES:

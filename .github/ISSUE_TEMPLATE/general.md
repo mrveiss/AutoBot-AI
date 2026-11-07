@@ -1,6 +1,8 @@
 ---
 name: General Issue
-description: Report a bug, suggest an idea, or start a discussion
+about: Report a bug, suggest an idea, or start a discussion
+title: ""
+labels: triage
 ---
 
 ## What's This About?

@@ -38,6 +38,10 @@ Environment="PYTHONUNBUFFERED=1"
 # Tell it explicitly — it already is /opt/autobot here, but that must be
 # said, not assumed.
 Environment="AUTOBOT_PROJECT_ROOT={{ slm_base_dir }}"
+# #18281: where the backend keeps its secrets store and who runs it, for the secrets-store backup.
+# Rendered from the backend role's own variables so ansible is the one source.
+Environment="SLM_BACKEND_DATA_DIR={{ backend_data_dir | default(slm_backend_data_dir_fallback) }}"
+Environment="SLM_BACKEND_SERVICE_USER={{ backend_user | default(slm_backend_user_fallback) }}"
 # #14299: this process cannot import config.registry.ConfigRegistry (its own
 # config.py is a single file, not a package — see connection_manager.py's
 # _ssot_redis_host docstring), so REDIS_HOST/AUTOBOT_REDIS_HOST must be set

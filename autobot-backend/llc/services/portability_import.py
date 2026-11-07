@@ -1,0 +1,215 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""Import entity helpers for :class:`~llc.services.portability.PortabilityService`.
+
+Split out of ``portability.py`` (#19643) so each module stays under the file-size
+ceiling. Pure move: reporting-line linking, secret resolution and the goal,
+project and work-item inserts. ``_import_agent`` stays on the service.
+"""
+
+import re
+import uuid
+from typing import Any, Dict, List, Optional
+
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from autobot_shared.logging_manager import get_logger
+from llc.models.goal import LLCGoal
+from llc.models.sprint import LLCProject
+
+logger = get_logger(__name__)
+
+_PLACEHOLDER_RE = re.compile(r"\{\{(\w+)\}\}")
+
+
+def _template_work_items(template: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """The work items a template carries: a template export's ``seed_work_items`` and a snapshot's ``work_items``."""
+    return [*template.get("seed_work_items", []), *template.get("work_items", [])]
+
+
+class PortabilityImportMixin:
+    """Reporting lines, secrets and entity inserts; mixed into ``PortabilityService``."""
+
+    session: AsyncSession
+
+    async def _link_reporting_lines(
+        self,
+        agents_list: List[Dict[str, Any]],
+        landed: Dict[str, str],
+        dropped_links: List[Dict[str, str]],
+        company_id: Any,
+    ) -> None:
+        """Attach reports_to for agents whose manager was actually inserted (#14811).
+
+        Runs inside execute_import's savepoint, so a failure here rolls the whole
+        import back with everything else.
+
+        A manager that was skipped leaves its subordinate as a root rather than
+        pointing at a row that does not exist. That is not a silent downgrade:
+        the unresolvable edge is recorded in `dropped_links` and returned to the
+        caller. The alternative — keeping the pointer — made the subordinate
+        vanish from the org tree entirely, because that tree matches children by
+        agent_id and roots by a NULL reports_to, so an agent referencing a
+        nonexistent manager is neither.
+        """
+        names_by_source_id = {str(a["agent_id"]): a.get("name", "") for a in agents_list if a.get("agent_id")}
+
+        for agent in agents_list:
+            source_id = str(agent.get("agent_id") or "")
+            manager_source_id = str(agent.get("reports_to") or "")
+            if not source_id or not manager_source_id or source_id not in landed:
+                continue
+
+            manager_dest_id = landed.get(manager_source_id)
+            if manager_dest_id is None:
+                dropped_links.append(
+                    {
+                        "agent_name": agent.get("name", ""),
+                        "agent_id": landed[source_id],
+                        "manager_name": names_by_source_id.get(manager_source_id, ""),
+                        "manager_source_agent_id": manager_source_id,
+                    }
+                )
+                continue
+
+            # Scoped by company as well as agent_id. `agent_id` carries a
+            # table-wide UNIQUE constraint today, so the company clause is
+            # redundant — but that constraint is declared in a migration three
+            # files away, and if it ever became per-company (the natural change
+            # when two tenants want the same agent slug) this UPDATE would
+            # silently start crossing tenants. Every sibling query on this table
+            # scopes by company_id; this one was the outlier.
+            await self.session.execute(
+                text(
+                    "UPDATE agent_org_nodes SET reports_to = :mgr " "WHERE agent_id = :aid AND company_id = :cid"
+                ).bindparams(mgr=manager_dest_id, aid=landed[source_id], cid=company_id)
+            )
+
+    def _resolve_secrets(
+        self,
+        config: Any,
+        secret_mapping: Dict[str, str],
+        agent_name: str,
+        warnings: List[str],
+    ) -> Any:
+        """Replace {{SECRET_NAME}} placeholders in config by walking the structure.
+
+        Operates on the decoded Python object (not the JSON string) to prevent
+        injection when secret values contain quote characters.
+        """
+        unresolved: set[str] = set()
+
+        def _walk(node: Any) -> Any:
+            if isinstance(node, str):
+
+                def _replace(m: re.Match) -> str:
+                    key = m.group(1)
+                    if key in secret_mapping:
+                        return secret_mapping[key]
+                    unresolved.add(key)
+                    return m.group(0)
+
+                return _PLACEHOLDER_RE.sub(_replace, node)
+            if isinstance(node, dict):
+                return {k: _walk(v) for k, v in node.items()}
+            if isinstance(node, list):
+                return [_walk(v) for v in node]
+            return node
+
+        result = _walk(config)
+        if unresolved:
+            warnings.append(f"Agent {agent_name!r}: unresolved secret placeholders {sorted(unresolved)}")
+        return result
+
+    async def _import_goal(self, goal: Dict[str, Any], company_id: uuid.UUID) -> Optional[uuid.UUID]:
+        title = goal.get("title", "")
+        existing = await self._goal_titles_exist([title], company_id)
+        if existing:
+            return None
+
+        new_id = uuid.uuid4()
+        obj = LLCGoal(
+            id=new_id,
+            company_id=str(company_id),
+            title=title,
+            description=goal.get("description"),
+            level=goal.get("level", "objective"),
+            status=goal.get("status", "draft"),
+            owner_agent_id=None,
+            due_date=None,
+        )
+        self.session.add(obj)
+        await self.session.flush()
+        return new_id
+
+    async def _import_project(self, project: Dict[str, Any], company_id: uuid.UUID) -> Optional[uuid.UUID]:
+        new_id = uuid.uuid4()
+        obj = LLCProject(
+            id=new_id,
+            company_id=company_id,
+            name=project.get("name", "Imported Project"),
+            description=project.get("description"),
+            status=project.get("status", "planning"),
+        )
+        self.session.add(obj)
+        await self.session.flush()
+        return new_id
+
+    async def _import_work_item(
+        self, item: Dict[str, Any], company_id: uuid.UUID, project_id: str
+    ) -> Optional[uuid.UUID]:
+        """Create a seed work item through ``WorkItemService``, so the hierarchy rules apply (#20472)."""
+        from llc.models.enums import WorkItemPriority, WorkItemType  # noqa: PLC0415
+        from llc.services.accessors import get_work_item_service  # noqa: PLC0415
+
+        created = await get_work_item_service().create(
+            self.session,
+            company_id=str(company_id),
+            type=WorkItemType(item.get("type", "epic")),
+            title=item.get("title", ""),
+            description=item.get("description"),
+            priority=WorkItemPriority(item.get("priority", "medium")),
+            labels=item.get("labels", []),
+            project_id=project_id,
+        )
+        return created.id
+
+    async def _import_seed_items(
+        self,
+        template: Dict[str, Any],
+        company_id: uuid.UUID,
+        project_ids: Dict[str, str],
+        created_entities: Dict[str, Any],
+        skipped: Dict[str, Any],
+        warnings: List[str],
+    ) -> None:
+        """Import the template's seed items, each into the project it names; one naming none goes to the first.
+
+        Every work item needs a project, so a seed that cannot be placed is skipped, and the import says so. One
+        whose named project was not imported is never moved to an unrelated project.
+        """
+        fallback = next(iter(project_ids.values()), None)
+        for item in _template_work_items(template):
+            if not item.get("is_seed"):
+                continue
+            named = item.get("project_id")
+            project_id = project_ids.get(str(named)) if named else fallback
+            if project_id is None:
+                reason = "the project it names was not imported" if named else "the template has no project for it"
+                skipped["work_items"].append(item.get("title", ""))
+                warnings.append(f"Work item {item.get('title', '')!r} skipped: {reason}")
+                continue
+            item_id = await self._import_work_item(item, company_id, project_id)
+            created_entities["work_items"].append(str(item_id))
+
+    async def _goal_titles_exist(self, titles: List[str], company_id: Optional[uuid.UUID] = None) -> List[str]:
+        if not titles:
+            return []
+        q = select(LLCGoal.title).where(LLCGoal.title.in_(titles))
+        if company_id is not None:
+            q = q.where(LLCGoal.company_id == str(company_id))
+        result = await self.session.execute(q)
+        return [r[0] for r in result]

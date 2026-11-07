@@ -10,7 +10,7 @@ from typing import Dict, List
 
 import pytest
 
-from agents.base_agent import AgentRequest, AgentResponse, LocalAgent
+from agents.base_agent import AgentRequest, LocalAgent, StandardizedAgentResponse
 from protocols.agent_communication import (
     AgentCommunicationProtocol,
     AgentIdentity,
@@ -127,10 +127,12 @@ class _Relay(LocalAgent):
         self.seen: AgentRequest | None = None
         self.onward = _header()
 
-    async def process_request(self, request: AgentRequest) -> AgentResponse:
+    async def process_request(self, request: AgentRequest) -> StandardizedAgentResponse:
         self.seen = request
         stamp(self.onward, "relay_b")
-        return AgentResponse(request_id=request.request_id, agent_type=self.agent_type, status="success", result={})
+        return StandardizedAgentResponse(
+            request_id=request.request_id, agent_type=self.agent_type, status="success", result={}
+        )
 
     def get_capabilities(self) -> List[str]:
         return []
@@ -189,13 +191,15 @@ class _Hop(LocalAgent):
         super().__init__(agent_type)
         self.onward, self.seen, self.origin_while_handling = onward, None, None
 
-    async def process_request(self, request: AgentRequest) -> AgentResponse:
+    async def process_request(self, request: AgentRequest) -> StandardizedAgentResponse:
         self.seen, self.origin_while_handling = request, current_origin()
         result = {"handled_by": self.agent_type}
         if self.onward:
             reply = await self.communication_protocol.send_request(_request_to(self.onward), timeout=5)
             result["onward_reply"] = reply.payload.content if reply else None
-        return AgentResponse(request_id=request.request_id, agent_type=self.agent_type, status="success", result=result)
+        return StandardizedAgentResponse(
+            request_id=request.request_id, agent_type=self.agent_type, status="success", result=result
+        )
 
     def get_capabilities(self) -> List[str]:
         return []

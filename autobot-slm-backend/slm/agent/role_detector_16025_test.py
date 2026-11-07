@@ -23,7 +23,10 @@ def _detect(systemd_service, running_units):
     """Detect a single-field role with the given units, faking systemctl."""
     role = RoleDefinition(name="x", target_path="", systemd_service=systemd_service)
     detector = RoleDetector()
-    with patch.object(RoleDetector, "_check_service", side_effect=lambda unit: unit in running_units):
+    with (
+        patch.object(RoleDetector, "_check_service", side_effect=lambda unit: unit in running_units),
+        patch.object(RoleDetector, "_unit_installed", return_value=True),
+    ):
         return detector._detect_role(role, listening_ports=set())
 
 

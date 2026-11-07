@@ -5,6 +5,8 @@
  * Test silent chat deletion with improved error handling
  */
 
+const BROWSER_PORT = process.env.AUTOBOT_BROWSER_SERVICE_PORT || '9001';  // port.browser (#19418)
+
 async function testSilentChatDeletion() {
     console.log('🔇 TESTING SILENT CHAT DELETION WITH IMPROVED ERROR HANDLING');
     console.log('='.repeat(70));
@@ -37,7 +39,7 @@ async function testSilentChatDeletion() {
         // Test 2: Test frontend GUI behavior with Playwright
         console.log('\n📱 Test 2: Frontend GUI Silent Deletion Test...');
 
-        const playwrightResponse = await fetch('http://localhost:3000/send-test-message', {
+        const playwrightResponse = await fetch(`http://localhost:${BROWSER_PORT}/send-test-message`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

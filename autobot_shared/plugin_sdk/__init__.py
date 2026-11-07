@@ -13,10 +13,10 @@ Issue #9049 - Plugin capability manifest system.
 
 from .base import BasePlugin, PluginLoadError, PluginManifest, PluginRegistry
 from .capabilities import (
-    Capability,
     CapabilityChecker,
     CapabilityContext,
     CapabilityError,
+    PluginCapability,
     TrustTier,
 )
 from .extension_manifest import ExtensionManifest
@@ -28,7 +28,7 @@ from .registry import Registry, get_registry
 
 __all__ = [
     "BasePlugin",
-    "Capability",
+    "PluginCapability",
     "CapabilityChecker",
     "CapabilityContext",
     "CapabilityError",

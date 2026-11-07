@@ -54,7 +54,7 @@
       v-if="analyzeError"
       variant="error"
       :message="analyzeError"
-      dismissible
+      dismissible :dismiss-label="t('ui.alert.dismissAlert')"
       @dismiss="analyzeError = null"
     />
 
@@ -208,9 +208,9 @@
 </template>
 
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue';
-import BaseAlert from '@/components/ui/BaseAlert.vue';
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
@@ -221,6 +221,7 @@ import {
   type UIElement,
   type ElementTypeInfo,
 } from '@/utils/VisionMultimodalApiClient';
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const { t } = useI18n();
 const logger = createLogger('ScreenCaptureViewer');
@@ -310,9 +311,7 @@ const selectElement = (element: UIElement) => {
   selectedElement.value = element;
 };
 
-const formatTimestamp = (timestamp: number): string => {
-  return new Date(timestamp * 1000).toLocaleTimeString();
-};
+const formatTimestamp = createDateFormatter({ kind: 'time', unit: 'seconds' });
 
 const truncateText = (text: string, maxLength: number): string => {
   if (text.length <= maxLength) return text;
@@ -671,8 +670,8 @@ onUnmounted(() => {
   gap: var(--spacing-2);
 }
 
-.no-elements i {
-  font-size: var(--text-2xl);
+.no-elements .icon {
+  width: var(--text-2xl); height: var(--text-2xl);
 }
 
 /* Text Regions */

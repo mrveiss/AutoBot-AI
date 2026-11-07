@@ -536,17 +536,12 @@ async def get_async_chromadb_client(
             )
             return async_client
 
-        # Fallback: local PersistentClient
-        chroma_path = Path(db_path or "data/chromadb")
-        await asyncio.to_thread(chroma_path.mkdir, parents=True, exist_ok=True)
+        # Fallback: local store. #18789: reuse the sync client's single local open
+        # (repairs once per path + one PersistentClient per path), off the event loop.
+        from utils.chromadb_client import get_chromadb_client
 
-        sync_client = chromadb.PersistentClient(
-            path=str(chroma_path),
-            settings=ChromaSettings(
-                allow_reset=allow_reset,
-                anonymized_telemetry=anonymized_telemetry,
-            ),
-        )
+        chroma_path = Path(db_path or "data/chromadb")
+        sync_client = await asyncio.to_thread(get_chromadb_client, str(chroma_path), allow_reset, anonymized_telemetry)
         async_client = AsyncChromaClient(sync_client)
         _async_client_cache[cache_key] = async_client
         logger.info("Async ChromaDB persistent client at: %s", chroma_path)

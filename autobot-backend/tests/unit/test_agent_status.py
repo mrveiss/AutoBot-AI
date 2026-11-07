@@ -3,10 +3,10 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Unit tests for AgentStatus and heartbeat_enabled hybrid property (GH#6476).
+Unit tests for HeartbeatStatus and heartbeat_enabled hybrid property (GH#6476).
 
 Verifies:
-- AgentStatus enum values
+- HeartbeatStatus enum values
 - heartbeat_enabled hybrid property getter/setter
 - Scheduler skips PAUSED agents (_is_agent_paused)
 - Scheduler start() loads only ACTIVE agents
@@ -93,29 +93,29 @@ _hb_mod, _sched_mod = _load_models_and_scheduler()
 # Undo the sys.modules stubs so later test modules import the real code
 # (GH#11604 — the stubs shadowed services.task_claim for the whole session).
 _stubs.restore()
-AgentStatus = _hb_mod.AgentStatus
+HeartbeatStatus = _hb_mod.HeartbeatStatus
 AgentRuntimeState = _hb_mod.AgentRuntimeState
 HeartbeatScheduler = _sched_mod.HeartbeatScheduler
 
 
 # ---------------------------------------------------------------------------
-# AgentStatus enum
+# HeartbeatStatus enum
 # ---------------------------------------------------------------------------
 
 
 class TestAgentStatusEnum:
     def test_values(self):
-        assert AgentStatus.ACTIVE == "active"
-        assert AgentStatus.DISABLED == "disabled"
-        assert AgentStatus.PAUSED == "paused"
-        assert AgentStatus.ERROR == "error"
-        assert AgentStatus.TERMINATED == "terminated"
+        assert HeartbeatStatus.ACTIVE == "active"
+        assert HeartbeatStatus.DISABLED == "disabled"
+        assert HeartbeatStatus.PAUSED == "paused"
+        assert HeartbeatStatus.ERROR == "error"
+        assert HeartbeatStatus.TERMINATED == "terminated"
 
     def test_value(self):
-        assert AgentStatus.ACTIVE.value == "active"
+        assert HeartbeatStatus.ACTIVE.value == "active"
 
     def test_error_value(self):
-        assert AgentStatus.ERROR.value == "error"
+        assert HeartbeatStatus.ERROR.value == "error"
 
 
 # ---------------------------------------------------------------------------
@@ -130,43 +130,43 @@ class TestHeartbeatEnabledHybridProperty:
         return state
 
     def test_active_is_enabled(self):
-        state = self._make_state(AgentStatus.ACTIVE.value)
+        state = self._make_state(HeartbeatStatus.ACTIVE.value)
         assert state.heartbeat_enabled is True
 
     def test_disabled_is_not_enabled(self):
-        state = self._make_state(AgentStatus.DISABLED.value)
+        state = self._make_state(HeartbeatStatus.DISABLED.value)
         assert state.heartbeat_enabled is False
 
     def test_paused_is_not_enabled(self):
-        state = self._make_state(AgentStatus.PAUSED.value)
+        state = self._make_state(HeartbeatStatus.PAUSED.value)
         assert state.heartbeat_enabled is False
 
     def test_error_is_not_enabled(self):
-        state = self._make_state(AgentStatus.ERROR.value)
+        state = self._make_state(HeartbeatStatus.ERROR.value)
         assert state.heartbeat_enabled is False
 
     def test_terminated_is_not_enabled(self):
-        state = self._make_state(AgentStatus.TERMINATED.value)
+        state = self._make_state(HeartbeatStatus.TERMINATED.value)
         assert state.heartbeat_enabled is False
 
     def test_setter_true_makes_active(self):
-        state = self._make_state(AgentStatus.DISABLED.value)
+        state = self._make_state(HeartbeatStatus.DISABLED.value)
         state.heartbeat_enabled = True
-        assert state.status == AgentStatus.ACTIVE.value
+        assert state.status == HeartbeatStatus.ACTIVE.value
 
     def test_setter_false_makes_disabled(self):
-        state = self._make_state(AgentStatus.ACTIVE.value)
+        state = self._make_state(HeartbeatStatus.ACTIVE.value)
         state.heartbeat_enabled = False
-        assert state.status == AgentStatus.DISABLED.value
+        assert state.status == HeartbeatStatus.DISABLED.value
 
     def test_setter_true_clears_pause_metadata(self):
         """Re-enabling via setter must clear pause fields (P1 GH#6476)."""
-        state = self._make_state(AgentStatus.PAUSED.value)
+        state = self._make_state(HeartbeatStatus.PAUSED.value)
         state.paused_reason = "budget exceeded"
         state.paused_at = "2026-01-01T00:00:00"
         state.paused_by = "system:budget"
         state.heartbeat_enabled = True
-        assert state.status == AgentStatus.ACTIVE.value
+        assert state.status == HeartbeatStatus.ACTIVE.value
         assert state.paused_reason is None
         assert state.paused_at is None
         assert state.paused_by is None
@@ -195,20 +195,20 @@ class TestIsAgentPaused:
     @pytest.mark.asyncio
     async def test_paused_returns_true(self):
         sched = self._make_scheduler()
-        self._make_cm(sched, AgentStatus.PAUSED.value)
+        self._make_cm(sched, HeartbeatStatus.PAUSED.value)
         assert await sched._is_agent_paused("agent-1") is True
 
     @pytest.mark.asyncio
     async def test_active_returns_false(self):
         sched = self._make_scheduler()
-        self._make_cm(sched, AgentStatus.ACTIVE.value)
+        self._make_cm(sched, HeartbeatStatus.ACTIVE.value)
         assert await sched._is_agent_paused("agent-1") is False
 
     @pytest.mark.asyncio
     async def test_terminated_returns_false(self):
         """Terminated agents are not 'paused'; they simply never run."""
         sched = self._make_scheduler()
-        self._make_cm(sched, AgentStatus.TERMINATED.value)
+        self._make_cm(sched, HeartbeatStatus.TERMINATED.value)
         assert await sched._is_agent_paused("agent-1") is False
 
 
@@ -234,31 +234,31 @@ class TestShouldSkipHeartbeat:
     @pytest.mark.asyncio
     async def test_paused_skips(self):
         sched = self._make_scheduler()
-        self._make_cm(sched, AgentStatus.PAUSED.value)
+        self._make_cm(sched, HeartbeatStatus.PAUSED.value)
         assert await sched._should_skip_heartbeat("agent-1") is True
 
     @pytest.mark.asyncio
     async def test_error_skips(self):
         """ERROR agents must be suppressed until recovered (MVA-1411)."""
         sched = self._make_scheduler()
-        self._make_cm(sched, AgentStatus.ERROR.value)
+        self._make_cm(sched, HeartbeatStatus.ERROR.value)
         assert await sched._should_skip_heartbeat("agent-1") is True
 
     @pytest.mark.asyncio
     async def test_active_does_not_skip(self):
         sched = self._make_scheduler()
-        self._make_cm(sched, AgentStatus.ACTIVE.value)
+        self._make_cm(sched, HeartbeatStatus.ACTIVE.value)
         assert await sched._should_skip_heartbeat("agent-1") is False
 
     @pytest.mark.asyncio
     async def test_terminated_does_not_skip_via_should_skip(self):
         """Terminated agents are cancelled at task level, not via skip guard."""
         sched = self._make_scheduler()
-        self._make_cm(sched, AgentStatus.TERMINATED.value)
+        self._make_cm(sched, HeartbeatStatus.TERMINATED.value)
         assert await sched._should_skip_heartbeat("agent-1") is False
 
     @pytest.mark.asyncio
     async def test_disabled_does_not_skip(self):
         sched = self._make_scheduler()
-        self._make_cm(sched, AgentStatus.DISABLED.value)
+        self._make_cm(sched, HeartbeatStatus.DISABLED.value)
         assert await sched._should_skip_heartbeat("agent-1") is False

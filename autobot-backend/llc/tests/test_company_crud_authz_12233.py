@@ -41,6 +41,7 @@ def _org() -> SimpleNamespace:
         spent_monthly_cents=0,
         brand_color=None,
         require_approval_for_hires=False,
+        require_approval_for_budget_raises=False,
         parent_org_id=None,
         llc_status="active",
         pause_reason=None,
@@ -297,8 +298,10 @@ async def test_create_root_records_creator_as_owner(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_create_sub_company_cross_tenant_parent_is_404():
-    """A non-member cannot graft a sub-company under another tenant's company."""
+async def test_create_sub_company_cross_tenant_parent_is_404(monkeypatch):
+    """A caller who may not attach under the parent cannot graft a sub-company under it."""
+    gate = AsyncMock(return_value=False)
+    monkeypatch.setattr(companies, "may_attach_under", gate)
     svc = _create_svc()
     membership = _membership(is_member=False)
     app = _collection_app(svc, membership)
@@ -310,11 +313,13 @@ async def test_create_sub_company_cross_tenant_parent_is_404():
     assert resp.status_code == 404
     svc.create.assert_not_called()
     membership.add_member.assert_not_awaited()
+    assert gate.await_args.kwargs == {"platform_admin": False}  # the shared #19634 rule decides
 
 
 @pytest.mark.asyncio
 async def test_create_sub_company_owned_parent_ok(monkeypatch):
     monkeypatch.setattr(companies.KbCollectionManager, "ensure_collection", AsyncMock())
+    monkeypatch.setattr(companies, "may_attach_under", AsyncMock(return_value=True))
     svc = _create_svc()
     membership = _membership(is_member=True)
     app = _collection_app(svc, membership)

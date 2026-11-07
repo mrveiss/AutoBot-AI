@@ -16,6 +16,7 @@
 import type { IconName } from '@/components/ui/Icon.vue'
 import { ref, computed, onScopeDispose, getCurrentScope } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { createRecencyFormatter } from '@autobot/ui'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
@@ -99,7 +100,7 @@ function persistState(state: PersistedState): void {
 }
 
 export function useDocumentChanges() {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
 
   // Restore persisted state
   const persisted = loadPersistedState()
@@ -266,19 +267,13 @@ export function useDocumentChanges() {
   /**
    * Format timestamp relative to now (i18n)
    */
-  const formatRelativeTime = (timestamp: Date): string => {
-    const now = new Date()
-    const diffMs = now.getTime() - timestamp.getTime()
-    const diffSec = Math.floor(diffMs / 1000)
-    const diffMin = Math.floor(diffSec / 60)
-    const diffHour = Math.floor(diffMin / 60)
-    const diffDay = Math.floor(diffHour / 24)
-
-    if (diffSec < 60) return t('knowledge.changeFeed.timeJustNow')
-    if (diffMin < 60) return t('knowledge.changeFeed.timeMinutesAgo', { count: diffMin })
-    if (diffHour < 24) return t('knowledge.changeFeed.timeHoursAgo', { count: diffHour })
-    return t('knowledge.changeFeed.timeDaysAgo', { count: diffDay })
-  }
+  const formatRelativeTime = createRecencyFormatter({
+    justNow: () => t('knowledge.changeFeed.timeJustNow'),
+    locale: () => locale.value,
+    style: 'narrow',
+    maxUnit: 'day',
+    invalidText: '—',
+  })
 
   /**
    * Clear all tracked changes

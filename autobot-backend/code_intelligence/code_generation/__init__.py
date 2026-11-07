@@ -9,7 +9,7 @@ Issue #381: Extracted from llm_code_generator.py god class refactoring.
 Provides LLM-powered code generation and refactoring capabilities.
 
 Package Structure:
-- types.py: Enums and data classes (RefactoringType, ValidationStatus, etc.)
+- types.py: Enums and data classes (CodeRefactoringType, ValidationStatus, etc.)
 - validator.py: CodeValidator for AST-based code validation
 - diff.py: DiffGenerator for unified diff generation
 - prompts.py: PromptTemplateManager with LLM prompt templates
@@ -42,12 +42,12 @@ from .types import (
     MUTABLE_DEFAULT_TYPES,
     TYPE_HINT_SUB_RE,
     CodeContext,
+    CodeRefactoringRequest,
+    CodeRefactoringType,
     GeneratedCode,
     GenerationStatus,
-    PromptTemplate,
-    RefactoringRequest,
+    RefactoringPromptTemplate,
     RefactoringResult,
-    RefactoringType,
     ValidationResult,
     ValidationStatus,
 )
@@ -57,15 +57,15 @@ from .validator import CodeValidator
 
 __all__ = [
     # Types and constants
-    "RefactoringType",
+    "CodeRefactoringType",
     "ValidationStatus",
     "GenerationStatus",
     "CodeContext",
-    "RefactoringRequest",
+    "CodeRefactoringRequest",
     "ValidationResult",
     "GeneratedCode",
     "RefactoringResult",
-    "PromptTemplate",
+    "RefactoringPromptTemplate",
     # Pre-compiled patterns (backward compatibility)
     "DEF_FUNCTION_RE",
     "TYPE_HINT_SUB_RE",

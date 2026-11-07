@@ -17,17 +17,16 @@ Plugin lifecycle:
 from __future__ import annotations
 
 import logging
-import os
 from typing import Dict, Optional
-
-from plugin_sdk.base import BasePlugin, PluginManifest
 
 # Fully-qualified (#14373): the bare `tool_sdk` path is not guaranteed to be
 # importable at plugin-load time and, where it is, resolves to a second
 # module identity with its own, independently empty, registry singleton.
+from autobot_shared.plugin_sdk.credential_binding import CredentialUnavailableError
 from autobot_shared.tool_sdk.registry import get_tool_registry
+from plugin_sdk.base import BasePlugin, PluginManifest
 
-from .tools import GenerateImageTool
+from .tools import GenerateImageTool, read_provider_key, set_credential_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -42,11 +41,14 @@ class ImageGenerationPlugin(BasePlugin):
     async def initialize(self) -> None:
         self._logger.info("ImageGenerationPlugin: initializing")
 
-        openai_key = os.environ.get("OPENAI_API_KEY", "")
-        flux_key = os.environ.get("FLUX_API_KEY", "")
-        stability_key = os.environ.get("STABILITY_API_KEY", "")
+        set_credential_resolver(self.credential_resolver)
+        usable = [
+            self._key_usable("OPENAI_API_KEY"),
+            self._key_usable("FLUX_API_KEY"),
+            self._key_usable("STABILITY_API_KEY"),
+        ]
 
-        if not any([openai_key, flux_key, stability_key]):
+        if not any(usable):
             self._logger.warning(
                 "ImageGenerationPlugin: no API keys configured — "
                 "tool registered but all providers will fail at call time. "
@@ -58,14 +60,25 @@ class ImageGenerationPlugin(BasePlugin):
         self._registered = True
         self._logger.info("ImageGenerationPlugin: registered generate_image tool")
 
+    def _key_usable(self, name: str) -> bool:
+        """Whether *name* resolves to a key. A host refusal (vault unreadable, #18094) is logged, not fatal;
+        the same refusal is returned as the tool error at call time."""
+        try:
+            return bool(read_provider_key(name))
+        except CredentialUnavailableError as exc:
+            self._logger.error("ImageGenerationPlugin: %s unavailable at load: %s", name, exc)
+            return False
+
     async def shutdown(self) -> None:
         self._logger.info("ImageGenerationPlugin: shutting down")
+        set_credential_resolver(None)
         if self._registered:
             try:
                 registry = get_tool_registry()
                 registry.unregister(GenerateImageTool.metadata.name)
             except Exception:
                 pass
+
 
 # Loader entry-point alias (#10294)
 Plugin = ImageGenerationPlugin

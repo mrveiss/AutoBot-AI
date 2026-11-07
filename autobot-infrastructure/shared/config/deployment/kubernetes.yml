@@ -39,7 +39,7 @@ services:
 
   playwright-vnc:
     host: playwright-service.autobot-system.svc.cluster.local
-    port: 3000
+    port: 9001
     scheme: http
     health_endpoint: /health
 

@@ -106,7 +106,7 @@ async def _spawn_and_register(
         "pid": proc.pid,
         "output_file": output_file,
         "started_at": time.time(),
-        "create_time": psutil.Process(proc.pid).create_time(),  # PR#16284 review
+        "create_time": psutil.Process(proc.pid)._ident[1],  # PR#16284 review
         "timeout_seconds": 3600,
         "first_output_deadline_seconds": resolve_first_output_deadline(cfg),
         "stall_deadline_seconds": resolve_stall_deadline(cfg),

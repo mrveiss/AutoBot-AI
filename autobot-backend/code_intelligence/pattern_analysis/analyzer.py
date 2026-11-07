@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
+from code_intelligence.python_files import collect_python_files
+from utils.file_categorization import SKIP_DIRS
 from utils.io_executor import get_analytics_executor
 
 from .complexity_analyzer import ComplexityAnalyzer
@@ -23,12 +25,12 @@ from .regex_detector import RegexPatternDetector
 from .storage import store_patterns_batch
 from .types import (
     CodeLocation,
-    CodePattern,
+    CodePatternType,
+    DetectedCodePattern,
     DuplicatePattern,
     ModularizationSuggestion,
     PatternAnalysisReport,
     PatternSeverity,
-    PatternType,
 )
 
 logger = get_logger(__name__)
@@ -43,7 +45,7 @@ except ImportError:
     logger.warning("Fingerprinting module not available")
 
 try:
-    from code_intelligence.anti_pattern_detection import AntiPatternDetector
+    from code_intelligence.anti_pattern_detection import AntiPatternSuiteAnalyzer
 
     ANTI_PATTERN_AVAILABLE = True
 except ImportError:
@@ -52,6 +54,8 @@ except ImportError:
 
 
 # Embedding generation (uses existing infrastructure)
+from knowledge.index_embedding_space import index_embedding_space
+
 try:
     from knowledge.embedding_cache import EmbeddingCache
 
@@ -59,11 +63,8 @@ try:
 except ImportError:
     EMBEDDING_CACHE_AVAILABLE = False
 
-# Issue #12407: Real embedding model used by the canonical
-# ``services.npu_client.generate_embedding_with_fallback`` helper. Mirrors
-# ``DEFAULT_EMBEDDING_MODEL`` in analytics_infrastructure.py / the
-# ``embedding_model`` default in cross_language_patterns/detector.py.
-EMBEDDING_MODEL = "nomic-embed-text"
+# #18143: ``code_patterns`` holds stored vectors: embed in the model its index was built with, never the active one.
+PATTERN_INDEX = "code_patterns"
 
 
 class CodePatternAnalyzer:
@@ -87,21 +88,8 @@ class CodePatternAnalyzer:
         7. Produce comprehensive report
     """
 
-    # Default exclusions
-    DEFAULT_EXCLUDE_DIRS = frozenset(
-        {
-            ".venv",
-            "venv",
-            "node_modules",
-            "__pycache__",
-            ".git",
-            "archives",
-            ".mypy_cache",
-            ".pytest_cache",
-            "dist",
-            "build",
-        }
-    )
+    # Canonical skip dirs plus extras: archived copies and the type checker's cache.
+    DEFAULT_EXCLUDE_DIRS = frozenset(SKIP_DIRS | {"archives", ".mypy_cache"})
 
     def _init_feature_flags(
         self,
@@ -128,7 +116,7 @@ class CodePatternAnalyzer:
             CloneDetector(exclude_dirs=list(self.exclude_dirs)) if self.enable_clone_detection else None
         )
         self._anti_pattern_detector = (
-            AntiPatternDetector(exclude_dirs=list(self.exclude_dirs)) if self.enable_anti_pattern_detection else None
+            AntiPatternSuiteAnalyzer(exclude_dirs=[*self.exclude_dirs]) if self.enable_anti_pattern_detection else None
         )
         self._regex_detector = (
             RegexPatternDetector(exclude_dirs=self.exclude_dirs) if self.enable_regex_detection else None
@@ -216,18 +204,8 @@ class CodePatternAnalyzer:
             self._merge_results(report, result)
 
     def collect_python_files(self, directory: str) -> List[str]:
-        """Collect all Python files excluding configured directories.
-
-        Returns:
-            Sorted list of absolute file paths.
-        """
-        files = []
-        dir_path = Path(directory)
-        for py_file in dir_path.rglob("*.py"):
-            if any(exc in py_file.parts for exc in self.exclude_dirs):
-                continue
-            files.append(str(py_file))
-        return sorted(files)
+        """Sorted Python files in *directory* minus ``exclude_dirs`` (shared collector, #18731)."""
+        return collect_python_files(directory, self.exclude_dirs)
 
     async def _run_batch_regex(self, file_paths: List[str]) -> List:
         """Run regex detection on a batch of files."""
@@ -552,7 +530,7 @@ class CodePatternAnalyzer:
         dir_path = Path(directory)
 
         for py_file in dir_path.rglob("*.py"):
-            if any(exc in py_file.parts for exc in self.exclude_dirs):
+            if any(exc in py_file.relative_to(dir_path).parts for exc in self.exclude_dirs):
                 continue
 
             try:
@@ -706,7 +684,7 @@ class CodePatternAnalyzer:
                     if mod_suggestion:
                         modularization.append(mod_suggestion)
                 else:
-                    # Convert to generic CodePattern
+                    # Convert to generic DetectedCodePattern
                     code_pattern = self._anti_pattern_to_code_pattern(pattern)
                     if code_pattern:
                         other_patterns.append(code_pattern)
@@ -787,7 +765,7 @@ class CodePatternAnalyzer:
             canonical = group.instances[0].fragment.source_code or ""
 
         return DuplicatePattern(
-            pattern_type=PatternType.DUPLICATE_CODE,
+            pattern_type=CodePatternType.DUPLICATE_CODE,
             severity=severity,
             description=f"{group.clone_type.value} clone: {len(group.instances)} occurrences",
             locations=locations,
@@ -841,7 +819,7 @@ class CodePatternAnalyzer:
         )
 
         return ModularizationSuggestion(
-            pattern_type=PatternType.MODULARIZATION,
+            pattern_type=CodePatternType.MODULARIZATION,
             severity=severity_map.get(pattern.severity.value.lower(), PatternSeverity.MEDIUM),
             description=pattern.description,
             locations=[location],
@@ -857,14 +835,14 @@ class CodePatternAnalyzer:
             ],
         )
 
-    def _anti_pattern_to_code_pattern(self, pattern) -> CodePattern | None:
-        """Convert anti-pattern to generic CodePattern.
+    def _anti_pattern_to_code_pattern(self, pattern) -> DetectedCodePattern | None:
+        """Convert anti-pattern to generic DetectedCodePattern.
 
         Args:
             pattern: AntiPatternResult
 
         Returns:
-            CodePattern or None
+            DetectedCodePattern or None
         """
         severity_map = {
             "critical": PatternSeverity.CRITICAL,
@@ -876,12 +854,12 @@ class CodePatternAnalyzer:
 
         # Map anti-pattern types to our pattern types
         type_map = {
-            "dead_code": PatternType.DEAD_CODE,
-            "circular_dependency": PatternType.COUPLING_ISSUE,
-            "message_chain": PatternType.COUPLING_ISSUE,
+            "dead_code": CodePatternType.DEAD_CODE,
+            "circular_dependency": CodePatternType.COUPLING_ISSUE,
+            "message_chain": CodePatternType.COUPLING_ISSUE,
         }
 
-        pattern_type = type_map.get(pattern.pattern_type.value.lower(), PatternType.COUPLING_ISSUE)
+        pattern_type = type_map.get(pattern.pattern_type.value.lower(), CodePatternType.COUPLING_ISSUE)
 
         location = CodeLocation(
             file_path=pattern.file_path,
@@ -890,7 +868,7 @@ class CodePatternAnalyzer:
             function_name=pattern.entity_name,
         )
 
-        return CodePattern(
+        return DetectedCodePattern(
             pattern_type=pattern_type,
             severity=severity_map.get(pattern.severity.value.lower(), PatternSeverity.MEDIUM),
             description=pattern.description,
@@ -1009,8 +987,9 @@ class CodePatternAnalyzer:
             pseudo-embedding only as a last-resort fallback).
         """
         if EMBEDDING_CACHE_AVAILABLE and self._embedding_cache is not None:
+            space = index_embedding_space(PATTERN_INDEX)
             try:
-                cached = await self._embedding_cache.get(code, model=EMBEDDING_MODEL)
+                cached = await self._embedding_cache.get(code, model=space.space_id)
                 if cached:
                     return cached
             except Exception as e:
@@ -1026,13 +1005,13 @@ class CodePatternAnalyzer:
             try:
                 from services.npu_client import generate_embedding_with_fallback
 
-                embedding = await generate_embedding_with_fallback(code, model_name=EMBEDDING_MODEL)
+                embedding = await generate_embedding_with_fallback(code, model_name=space.model_id)
             except Exception as e:
                 logger.warning("Embedding generation failed, using hash fallback: %s", e)
 
             if embedding:
                 try:
-                    await self._embedding_cache.put(code, embedding, model=EMBEDDING_MODEL)
+                    await self._embedding_cache.put(code, embedding, model=space.space_id)
                 except Exception as e:
                     logger.warning("Embedding cache write failed, returning the embedding anyway: %s", e)
                 return embedding
@@ -1052,9 +1031,9 @@ class CodePatternAnalyzer:
         callers get a well-shaped vector when embedding infrastructure is
         unavailable, never as a substitute for one (#12407, #13437).
         """
-        import hashlib
+        from autobot_shared.content_digest import content_digest
 
-        hash_bytes = hashlib.sha256(code.encode()).digest()
+        hash_bytes = bytes.fromhex(content_digest(code))
         # 768 dimensions to match nomic-embed-text.
         return [(hash_bytes[i % 32] - 128) / 128.0 for i in range(768)]
 

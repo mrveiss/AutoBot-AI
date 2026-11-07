@@ -1,0 +1,104 @@
+/* Copyright 2025-2026 mrveiss
+   SPDX-License-Identifier: Apache-2.0 */
+/**
+ * AutoBot - AI-Powered Automation Platform
+ * Author: mrveiss
+ *
+ * mono.css - Monochrome Theme (#18223)
+ * Issue #14785: one token system. Follows themes/_template.css.
+ *
+ * Corporate theme: neutral zinc greys, no hue; the accent is the ink colour.
+ * Activated via [data-theme="mono"] on document root (useTheme.ts).
+ * Light-based: themes/light.css supplies the non-colour-name tokens (charts,
+ * badges, scrollbars) for this theme too; code syntax is this theme's own.
+ * Surfaces, text and borders reach the existing names through
+ * themes/refined-map.css.
+ */
+
+[data-theme="mono"] {
+  /* Surfaces and borders */
+  --bg: #F4F4F5;
+  --surface: #FFFFFF;
+  --surface2: #FAFAFA;
+  --border: #E4E4E7;
+  --line: #F0F0F2;
+  /* Text and links */
+  --text: #18181B;
+  --text2: #3F3F46;
+  --muted: #52525B;
+  --link: #18181B;
+  --link-h: #000000;
+  /* Brand, accent and focus */
+  --primary: #18181B;
+  --primary-h: #27272A;
+  --on-primary: #FFFFFF;
+  --accent: #18181B;
+  --focus: #18181B;
+  --brand-bg: #18181B;
+  --brand-fg: #FFFFFF;
+  /* Illustration */
+  --tile: #F4F4F5;
+  --tile-b: #E4E4E7;
+  --stroke: #18181B;
+  --i1: #D4D4D8;
+  --i2: #E4E4E7;
+  --i3: #A1A1AA;
+  --i1t: #EDEDEF;
+  --i2t: #F4F4F5;
+  --i3t: #E4E4E7;
+  /* Bars and alert text */
+  --bar: #A1A1AA;
+  --bar-alert: #18181B;
+  --bar-track: #EDEDEF;
+  --alert-text: #18181B;
+  /* Status pills */
+  --ok-bg: #F4F4F5;
+  --ok-fg: #18181B;
+  --warn-bg: #E4E4E7;
+  --warn-fg: #18181B;
+  --bad-bg: #18181B;
+  --bad-fg: #FFFFFF;
+  --idle-bg: #F4F4F5;
+  --idle-fg: #52525B;
+  --info-bg: #F4F4F5;
+  --info-fg: #3F3F46;
+  --pill-b: 1px solid #D4D4D8;
+  /* Status dots */
+  --dot-ok: #18181B;
+  --dot-idle: #D4D4D8;
+  --dot-warn: #71717A;
+  --dot-bad: #18181B;
+  /* Danger tile */
+  --danger-tile: #F4F4F5;
+  --danger-tile-b: #18181B;
+
+  /* Light supplies a slate strong border; mono borders stay neutral grey, strong is the ink. */
+  --border-strong: var(--stroke);
+  /* Code syntax (#18497): no hue -- this theme's three inks, with keywords set
+     bold and comments italic so categories still read apart. */
+  --code-bg: #FAFAFA;
+  --code-text: #18181B;
+  --code-keyword: #18181B;
+  --code-operator: #18181B;
+  --code-string: #3F3F46;
+  --code-number: #3F3F46;
+  --code-comment: #52525B;
+  --code-function: #18181B;
+  --code-variable: #3F3F46;
+  --code-class: #18181B;
+  --code-tag: #18181B;
+  --code-attribute: #3F3F46;
+  --code-keyword-weight: 700;
+}
+
+/* Monochrome means no hue: the accent preset (accents.css) does not apply. */
+[data-theme="mono"],
+[data-theme="mono"][data-accent] {
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-h);
+  --color-primary-active: var(--primary-h);
+  --color-primary-light: var(--muted);
+  --color-primary-dark: var(--primary-h);
+  --color-primary-bg: color-mix(in srgb, var(--primary) 10%, transparent);
+  --color-primary-bg-hover: color-mix(in srgb, var(--primary) 15%, transparent);
+}

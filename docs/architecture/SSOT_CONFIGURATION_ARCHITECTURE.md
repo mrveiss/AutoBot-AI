@@ -310,7 +310,7 @@ AUTOBOT_PORT_VNC=6080
 AUTOBOT_PORT_BROWSER=3000
 AUTOBOT_PORT_AISTACK=8080
 AUTOBOT_PORT_NPU=8081
-AUTOBOT_PORT_NPU_WINDOWS=8082
+AUTOBOT_NPU_WORKER_WINDOWS_PORT=8082
 AUTOBOT_PORT_PROMETHEUS=9090
 AUTOBOT_PORT_GRAFANA=3000
 
@@ -509,13 +509,6 @@ interface PortConfig {
   npu: number;
 }
 
-interface LLMConfig {
-  defaultModel: string;
-  embeddingModel: string;
-  provider: string;
-  timeout: number;
-}
-
 interface TimeoutConfig {
   http: number;
   httpLong: number;
@@ -535,7 +528,6 @@ interface FeatureConfig {
 export interface AutoBotConfig {
   vm: VMConfig;
   port: PortConfig;
-  llm: LLMConfig;
   timeout: TimeoutConfig;
   feature: FeatureConfig;
   deploymentMode: string;
@@ -591,12 +583,8 @@ export function getConfig(): AutoBotConfig {
     npu: getEnvNumber('VITE_PORT_NPU', 8081),
   };
 
-  const llm: LLMConfig = {
-    defaultModel: getEnv('VITE_LLM_DEFAULT_MODEL', 'qwen3.5:9b'),
-    embeddingModel: getEnv('VITE_LLM_EMBEDDING_MODEL', 'nomic-embed-text:latest'),
-    provider: getEnv('VITE_LLM_PROVIDER', 'ollama'),
-    timeout: getEnvNumber('VITE_LLM_TIMEOUT', 120),
-  };
+  // No `llm` block: the frontend holds no model name. Model names are served by
+  // the backend from the source-of-truth tier map (#15502).
 
   const timeout: TimeoutConfig = {
     http: getEnvNumber('VITE_TIMEOUT_HTTP', 30000),

@@ -48,7 +48,7 @@ import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 import pytest
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env
 
 REPO_ROOT = repo_root()
 FLAKE8_CONFIG = REPO_ROOT / ".flake8"
@@ -97,7 +97,7 @@ def tracked_py_files() -> list[str]:
         capture_output=True,
         text=True,
         check=True,
-        env=scrubbed_git_env(),
+        env=isolated_git_env(),
     )
     paths = [line for line in completed.stdout.splitlines() if line.strip()]
     assert len(paths) >= _TRACKED_PY_FLOOR, (
@@ -290,7 +290,7 @@ def test_audit_entrypoint_fails_on_the_pre_fix_config(tmp_path):
         capture_output=True,
         text=True,
         check=True,
-        env=scrubbed_git_env(),
+        env=isolated_git_env(),
     )
     reached, problems = checker.audit_excludes(tmp_path)
 
@@ -338,6 +338,19 @@ def test_the_checker_needs_no_third_party_import():
         # SSOT for the git enumeration this checker needs (#14896), so
         # excluding it would mean re-pasting the scrubbed `git ls-files` call
         # here -- the duplication the helper exists to end.
-        not in {"argparse", "configparser", "logging", "pathlib", "re", "subprocess", "sys", "_scan_helpers"}
+        # `_exclude_anchoring` is the repo-local, stdlib-only home of the decision both
+        # exclude-anchoring guards shared byte-for-byte (#14896).
+        not in {
+            "argparse",
+            "configparser",
+            "functools",
+            "logging",
+            "pathlib",
+            "re",
+            "subprocess",
+            "sys",
+            "_scan_helpers",
+            "_exclude_anchoring",
+        }
     ]
     assert third_party == [], f"the checker imports non-stdlib modules: {third_party}"

@@ -10,15 +10,20 @@ basic AutoBot functionality. These routers should always be available
 and are imported at module level to fail fast if missing.
 """
 
+import api.embedding_model_health  # noqa: F401 — registers KnownProbes.EMBEDDING_MODEL (#18834)
 import api.pricing_health  # noqa: F401 — registers KnownProbes.PRICING probe (GH#6480)
 import api.secrets_store_health  # noqa: F401 — registers KnownProbes.SECRETS_STORE probe (#14126)
 import content_reach.health  # noqa: F401 — registers KnownProbes.CONTENT_REACH probe (#10932)
 
 # Core router imports - these are required for basic functionality
 from api.adapters import router as adapters_router  # Issue #1403
+from api.admin_cleanup_proposals import router as admin_cleanup_proposals_router  # #20567
 from api.admin_event_logs import router as admin_event_logs_router  # Issue #4461
+from api.admin_oauth_bundle_strip import router as admin_oauth_bundle_strip_router  # #13630
+from api.admin_org_tier_column import router as admin_org_tier_column_router  # #19997
 from api.admin_orphan_repair import router as admin_orphan_repair_router  # #15779, #16927
 from api.admin_orphan_storage import router as admin_orphan_storage_router  # #17038, #17039
+from api.admin_ownerless_chat_sessions import router as admin_ownerless_chat_sessions_router  # #20030
 from api.admin_pricing import router as admin_pricing_router  # GH#6480
 from api.admin_retention_policies import router as admin_retention_policies_router  # MVA-3145, GH#8995
 from api.agent import router as agent_router
@@ -35,10 +40,14 @@ from api.chat import router as chat_router
 from api.chat_compare import router as chat_compare_router  # Issue #4414
 from api.chat_embed import router as chat_embed_router  # GH#9047
 from api.chat_presets import router as chat_presets_router  # GH#8595
+from api.chat_trace import router as chat_trace_router  # #19963
 from api.collaboration import router as collaboration_router
 from api.collaboration_events import router as collaboration_events_router  # #16460
 from api.config_revisions import router as config_revisions_router  # #1404
+from api.conversation_file_cleanup_admin import router as conversation_file_cleanup_router  # #20234
 from api.coordination import router as coordination_router  # #15949
+from api.coordination_issue_claims import router as coordination_issue_claims_router  # #18811
+from api.coordination_issue_claims_credential import router as issue_claims_credential_router  # #18811
 from api.data_storage import router as data_storage_router
 from api.database_mcp import router as database_mcp_router
 from api.developer import router as developer_router
@@ -49,12 +58,12 @@ from api.frontend_config import router as frontend_config_router
 from api.git_mcp import router as git_mcp_router
 from api.http_client_mcp import router as http_client_mcp_router
 from api.intelligent_agent import router as intelligent_agent_router
+from api.internal_slm_credential_proposals import router as internal_slm_credential_proposals_router  # #20046
 from api.jwks import auth_router as jwks_auth_router  # #10196
 from api.knowledge import router as knowledge_router
 from api.knowledge_ai_stack import router as knowledge_ai_stack_router
 from api.knowledge_ai_stack_extraction import router as knowledge_ai_stack_extraction_router
 from api.knowledge_audit import router as knowledge_audit_router
-from api.knowledge_boards import router as knowledge_boards_router
 from api.knowledge_categories import router as knowledge_categories_router
 from api.knowledge_chroma import router as knowledge_chroma_router  # MVA-2046
 from api.knowledge_claude_memory import router as knowledge_claude_memory_router
@@ -72,7 +81,6 @@ from api.knowledge_ownership import router as knowledge_ownership_router
 from api.knowledge_population import router as knowledge_population_router
 from api.knowledge_rag_feedback import router as knowledge_rag_feedback_router
 from api.knowledge_search import router as knowledge_search_router
-from api.knowledge_search_aggregator import router as knowledge_search_aggregator_router
 from api.knowledge_search_analytics import router as knowledge_search_analytics_router
 from api.knowledge_search_documentation import router as knowledge_search_documentation_router
 from api.knowledge_search_scoped import router as knowledge_search_scoped_router
@@ -131,25 +139,10 @@ from services.knowledge_sync_service import router as knowledge_sync_router
 def _get_system_routers() -> list:
     """Get system and settings routers (Issue #560: extracted, #1281: audit, #4461: event-logs)."""
     return [
-        (
-            admin_event_logs_router,
-            "",
-            ["admin", "compliance"],
-            "admin_event_logs",
-        ),  # Issue #4461
+        (admin_event_logs_router, "", ["admin", "compliance"], "admin_event_logs"),  # Issue #4461
         (admin_pricing_router, "", ["admin", "pricing"], "admin_pricing"),  # GH#6480
-        (
-            admin_orphan_repair_router,
-            "",
-            ["admin", "orphan-repair"],
-            "admin_orphan_repair",
-        ),  # #15779
-        (
-            admin_orphan_storage_router,
-            "",
-            ["admin", "orphan-storage"],
-            "admin_orphan_storage",
-        ),  # #17038, #17039
+        (admin_orphan_repair_router, "", ["admin", "orphan-repair"], "admin_orphan_repair"),  # #15779
+        (admin_orphan_storage_router, "", ["admin", "orphan-storage"], "admin_orphan_storage"),  # #17038, #17039
         (
             admin_retention_policies_router,
             "",
@@ -160,44 +153,27 @@ def _get_system_routers() -> list:
         (auth_router, "/auth", ["auth"], "auth"),
         (jwks_auth_router, "/auth", ["auth", "jwks"], "jwks_auth"),  # #10196 /api/auth/jwks
         (service_messages_router, "", ["service-messages"], "service_messages"),
+        # #18720: before chat -- chat's POST /chats/{chat_id}/message would capture /chats/embed/message
+        (chat_embed_router, "", ["chat", "embed"], "chat_embed"),  # GH#9047
         (chat_router, "", ["chat"], "chat"),
         (chat_compare_router, "", ["chat", "compare"], "chat_compare"),  # Issue #4414
-        (chat_embed_router, "", ["chat", "embed"], "chat_embed"),  # GH#9047
         (chat_presets_router, "", ["chat"], "chat_presets"),  # GH#8595
+        (chat_trace_router, "", ["chat"], "chat_trace"),  # #19963: read-only trace of one session
         (benchmarks_router, "", ["benchmarks"], "benchmarks"),  # Issue #9024
         (collaboration_router, "", ["collaboration"], "collaboration"),
         (collaboration_events_router, "", ["collaboration"], "collaboration_events"),  # #16460
-        (
-            telegram_bot_router,
-            "",
-            ["telegram-bot", "integrations"],
-            "telegram_bot",
-        ),  # MVA-2074
+        (telegram_bot_router, "", ["telegram-bot", "integrations"], "telegram_bot"),  # MVA-2074
         (system_router, "/system", ["system"], "system"),
         (settings_router, "/settings", ["settings"], "settings"),
         (usage_router, "/usage", ["usage", "analytics"], "usage"),  # Issue #1807
-        (
-            user_management_router,
-            "",
-            ["user-management"],
-            "user_management",
-        ),  # Issue #1801
-        (
-            user_provider_credentials_router,
-            "",
-            ["user-provider-credentials"],
-            "user_provider_credentials",
-        ),  # GH#9037
+        (user_management_router, "", ["user-management"], "user_management"),  # Issue #1801
+        (user_provider_credentials_router, "", ["user-provider-credentials"], "user_provider_credentials"),  # GH#9037
         # GH#10352 — users_router carries its own prefix="/users" → register with
         # empty prefix so the loop yields /api/users/* (was never registered → 404)
         (users_router, "", ["users"], "users"),
-        (
-            mobile_devices_router,
-            "/devices",
-            ["devices", "integrations"],
-            "mobile_devices",
-        ),  # GH#4463
+        (mobile_devices_router, "/devices", ["devices", "integrations"], "mobile_devices"),  # GH#4463
         (data_storage_router, "", ["data-storage"], "data_storage"),
+        (conversation_file_cleanup_router, "/conversation-files", ["conversation-files"], "conversation_file_cleanup"),
         (prompts_router, "/prompts", ["prompts"], "prompts"),
         (frontend_config_router, "", ["frontend-config"], "frontend_config"),
     ]
@@ -368,12 +344,8 @@ def _get_knowledge_feature_routers() -> list:
             ["knowledge-ai-extraction"],
             "knowledge_ai_stack_extraction",
         ),
-        (
-            knowledge_boards_router,
-            "/knowledge_base",
-            ["knowledge-boards"],
-            "knowledge_boards",
-        ),
+        # NOTE (#17325): knowledge_boards and knowledge_search_aggregator are not mounted here --
+        # api/knowledge.py includes both into the knowledge router mounted above, which registers first.
         (
             knowledge_debug_router,
             "/knowledge_base",
@@ -385,12 +357,6 @@ def _get_knowledge_feature_routers() -> list:
             "/knowledge_base",
             ["knowledge-grounding"],
             "knowledge_grounding",
-        ),
-        (
-            knowledge_search_aggregator_router,
-            "/knowledge_base",
-            ["knowledge-multi-source", "knowledge-search"],
-            "knowledge_search_aggregator",
         ),
         (
             knowledge_search_documentation_router,
@@ -532,6 +498,10 @@ def _get_agent_routers() -> list:
         (agent_org_router, "/agents", ["agent-org"], "agent_org"),
         (agent_presence_router, "", ["agent-presence"], "agent_presence"),  # #16965
         (coordination_router, "/coordination", ["coordination", "agent"], "coordination"),
+        # Beside, not inside, coordination_router: they admit the issue-claims credential (#18811).
+        # Credentials first, so /issue-claims/credentials is never matched as an issue {number}.
+        (issue_claims_credential_router, "/coordination", ["coordination"], "issue_claims_credential"),
+        (coordination_issue_claims_router, "/coordination", ["coordination"], "coordination_issue_claims"),
         (files_router, "/files", ["files"], "files"),
         (developer_router, "/developer", ["developer"], "developer"),
         (memory_router, "/memory", ["memory"], "memory"),
@@ -565,6 +535,22 @@ def _get_canvas_routers() -> list:
     ]
 
 
+def _get_credential_admin_routers() -> list:
+    """Admin routers that PROPOSE rewriting stored data; execution needs human approval (#13630, #17038, #19997)."""
+    return [
+        (admin_oauth_bundle_strip_router, "", ["admin", "oauth-bundle-strip"], "admin_oauth_bundle_strip"),
+        (admin_org_tier_column_router, "", ["admin", "org-tier-column"], "admin_org_tier_column"),
+        (internal_slm_credential_proposals_router, "", ["internal", "slm"], "internal_slm_credential_proposals"),
+        (admin_cleanup_proposals_router, "", ["admin", "cleanup-proposals"], "admin_cleanup_proposals"),
+        (
+            admin_ownerless_chat_sessions_router,
+            "",
+            ["admin", "ownerless-chat-sessions"],
+            "admin_ownerless_chat_sessions",
+        ),
+    ]
+
+
 def load_core_routers():
     """
     Load and return core API routers (Issue #560: decomposed, #730: plugins).
@@ -587,4 +573,5 @@ def load_core_routers():
     routers.extend(_get_agent_routers())
     routers.extend(_get_plugin_routers())
     routers.extend(_get_canvas_routers())
+    routers.extend(_get_credential_admin_routers())  # #13630
     return routers

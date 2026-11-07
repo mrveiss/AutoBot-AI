@@ -31,44 +31,41 @@ import uuid
 from typing import Any, List
 
 from sqlalchemy import func, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from autobot_shared.db_session import run_after_commit
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.membership_epoch import MembershipEpochBump
 from autobot_shared.time_utils import now_utc
-from autobot_shared.user_management.base_service import BaseService, TenantContext
+from autobot_shared.user_management.audit_rows import audit_row
+from autobot_shared.user_management.base_service import BaseService
 from autobot_shared.user_management.models.audit import (
-    AuditAction,
-    AuditLog,
     AuditResourceType,
+    IdentityAuditAction,
 )
 from autobot_shared.user_management.models.team import Team, TeamMembership
+from autobot_shared.user_management.team_membership_requests import (  # noqa: F401 -- the errors are re-exported
+    DuplicateTeamError,
+    MembershipError,
+    TeamMembershipRequestMixin,
+    TeamNotFoundError,
+    TeamServiceError,
+)
 
 logger = get_logger(__name__)
 
 
-class TeamServiceError(Exception):
-    """Base exception for team service errors."""
-
-
-class TeamNotFoundError(TeamServiceError):
-    """Raised when team is not found."""
-
-
-class DuplicateTeamError(TeamServiceError):
-    """Raised when attempting to create a duplicate team."""
-
-
-class MembershipError(TeamServiceError):
-    """Raised for membership-related errors."""
-
-
-class TeamService(BaseService):
+class TeamService(TeamMembershipRequestMixin, BaseService):
     """
     Team management service.
 
     Provides CRUD operations for teams and team membership management
     with multi-tenancy support.
+
+    ``remove_member`` and ``delete_team`` queue a post-commit bump of the organisation's
+    membership epoch (``autobot_shared.membership_epoch``), so every worker drops its cached
+    team memberships (#19630). Membership changes that bypass this service (user delete and
+    deactivate cascades) are tracked in #19670.
     """
 
     # Team membership roles
@@ -77,10 +74,6 @@ class TeamService(BaseService):
     ROLE_MEMBER = "member"
 
     VALID_ROLES = {ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER}
-
-    def __init__(self, session: AsyncSession, context: TenantContext | None = None):
-        """Initialize team service."""
-        super().__init__(session, context)
 
     # -------------------------------------------------------------------------
     # Team CRUD Operations
@@ -118,7 +111,7 @@ class TeamService(BaseService):
     ) -> None:
         """Log audit entry for team creation. Issue #620."""
         await self._audit_log(
-            action=AuditAction.TEAM_CREATED,
+            action=IdentityAuditAction.TEAM_CREATED,
             resource_type=AuditResourceType.TEAM,
             resource_id=team.id,
             details={
@@ -320,7 +313,7 @@ class TeamService(BaseService):
 
         if changes:
             await self._audit_log(
-                action=AuditAction.TEAM_UPDATED,
+                action=IdentityAuditAction.TEAM_UPDATED,
                 resource_type=AuditResourceType.TEAM,
                 resource_id=team_id,
                 details={"changes": changes},
@@ -353,11 +346,12 @@ class TeamService(BaseService):
         await self.session.flush()
 
         await self._audit_log(
-            action=AuditAction.TEAM_DELETED,
+            action=IdentityAuditAction.TEAM_DELETED,
             resource_type=AuditResourceType.TEAM,
             resource_id=team_id,
             details={"hard_delete": hard_delete, "name": team.name},
         )
+        run_after_commit(self.session, MembershipEpochBump(team.org_id))  # a revocation for every member
 
         logger.info("Deleted team: %s (hard=%s)", team_id, hard_delete)
         return True
@@ -365,69 +359,6 @@ class TeamService(BaseService):
     # -------------------------------------------------------------------------
     # Membership Management
     # -------------------------------------------------------------------------
-
-    async def _validate_membership_request(
-        self,
-        team_id: uuid.UUID,
-        user_id: uuid.UUID,
-        role: str,
-    ) -> Team:
-        """
-        Validate a membership request before adding a member.
-
-        Checks role validity, team existence, and existing membership. Issue #620.
-
-        Args:
-            team_id: Team ID
-            user_id: User ID to add
-            role: Requested role
-
-        Returns:
-            Team instance if validation passes
-
-        Raises:
-            MembershipError: If role invalid or user already a member
-            TeamNotFoundError: If team not found
-        """
-        if role not in self.VALID_ROLES:
-            raise MembershipError(f"Invalid role '{role}'. Must be one of: {self.VALID_ROLES}")
-
-        team = await self.get_team(team_id)
-        if not team:
-            raise TeamNotFoundError(f"Team {team_id} not found")
-
-        existing = await self._get_membership(team_id, user_id)
-        if existing:
-            raise MembershipError(f"User {user_id} is already a member of team {team_id}")
-
-        return team
-
-    def _create_membership_instance(
-        self,
-        team_id: uuid.UUID,
-        user_id: uuid.UUID,
-        role: str,
-    ) -> TeamMembership:
-        """
-        Create a new TeamMembership instance.
-
-        Issue #620.
-
-        Args:
-            team_id: Team ID
-            user_id: User ID
-            role: Membership role
-
-        Returns:
-            New TeamMembership instance
-        """
-        return TeamMembership(
-            id=uuid.uuid4(),
-            team_id=team_id,
-            user_id=user_id,
-            role=role,
-            joined_at=now_utc(),
-        )
 
     async def add_member(
         self,
@@ -457,7 +388,7 @@ class TeamService(BaseService):
         await self.session.flush()
 
         await self._audit_log(
-            action=AuditAction.TEAM_MEMBER_ADDED,
+            action=IdentityAuditAction.TEAM_MEMBER_ADDED,
             resource_type=AuditResourceType.TEAM,
             resource_id=team_id,
             details={"user_id": str(user_id), "role": role},
@@ -483,6 +414,9 @@ class TeamService(BaseService):
         membership = await self._get_membership(team_id, user_id)
         if not membership:
             raise MembershipError(f"User {user_id} is not a member of team {team_id}")
+        team = await self.get_team(team_id)
+        if not team:
+            raise TeamNotFoundError(f"Team {team_id} not found")
 
         # Prevent removing the last owner
         if membership.role == self.ROLE_OWNER:
@@ -494,11 +428,12 @@ class TeamService(BaseService):
         await self.session.flush()
 
         await self._audit_log(
-            action=AuditAction.TEAM_MEMBER_REMOVED,
+            action=IdentityAuditAction.TEAM_MEMBER_REMOVED,
             resource_type=AuditResourceType.TEAM,
             resource_id=team_id,
             details={"user_id": str(user_id), "previous_role": membership.role},
         )
+        run_after_commit(self.session, MembershipEpochBump(team.org_id))
 
         logger.info("Removed user %s from team %s", user_id, team_id)
         return True
@@ -532,7 +467,7 @@ class TeamService(BaseService):
         Issue #620.
         """
         await self._audit_log(
-            action=AuditAction.TEAM_MEMBER_ROLE_CHANGED,
+            action=IdentityAuditAction.TEAM_MEMBER_ROLE_CHANGED,
             resource_type=AuditResourceType.TEAM,
             resource_id=team_id,
             details={
@@ -712,13 +647,12 @@ class TeamService(BaseService):
         outcome: str = "success",
     ) -> None:
         """Create audit log entry."""
-        audit_entry = AuditLog(
-            id=uuid.uuid4(),
+        audit_entry = audit_row(
             org_id=self.context.org_id,
             user_id=self.context.user_id,
             action=action,
             resource_type=resource_type,
-            resource_id=resource_id,
+            resource=resource_id,
             outcome=outcome,
             details=details,
         )

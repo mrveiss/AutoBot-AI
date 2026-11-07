@@ -8,6 +8,7 @@ Supports: PDF, DOC, DOCX, XLSX, PPT, PPTX, ODT, ODS, ODP, ODG
 """
 
 import asyncio
+from concurrent.futures import Executor
 from pathlib import Path
 from typing import Dict, Tuple
 
@@ -15,11 +16,11 @@ from autobot_shared.logging_manager import get_logger
 from media.document.extraction import extract_docx, extract_pdf
 from media.document.provenance import render_text_and_tables
 from media.document.zip_formats import SUFFIX_BY_FORMAT, sniff_zip_format
+from utils.file_types import DOCX_EXTENSIONS
 
 logger = get_logger(__name__)
 
 # Performance optimization: O(1) lookup for file extension checks (Issue #326)
-DOCX_EXTENSIONS = {".docx"}
 POWERPOINT_EXTENSIONS = {".ppt", ".pptx"}
 OPENDOCUMENT_GRAPHICS_EXTENSIONS = {".odp", ".odg"}
 
@@ -45,13 +46,17 @@ class DocumentParser:
             ".odg": "application/vnd.oasis.opendocument.graphics",
         }
 
-    async def extract_text(self, file_path: Path, mime_type: str | None = None) -> Tuple[str, Dict[str, any]]:
+    async def extract_text(
+        self, file_path: Path, mime_type: str | None = None, executor: Executor | None = None
+    ) -> Tuple[str, Dict[str, any]]:
         """
         Extract text from document
 
         Args:
             file_path: Path to document file
             mime_type: Optional MIME type (will be inferred from extension if not provided)
+            executor: Optional executor for the blocking parse (default: the loop's shared one). A caller that
+                needs a bound on concurrent parses (chat attachments, #20195) passes its own.
 
         Returns:
             Tuple of (extracted_text, metadata_dict)
@@ -71,7 +76,7 @@ class DocumentParser:
 
         # Run extraction in thread pool to avoid blocking
         text, metadata = await asyncio.get_running_loop().run_in_executor(
-            None, self._extract_text_sync, file_path, candidates
+            executor, self._extract_text_sync, file_path, candidates
         )
 
         return text, metadata
@@ -320,6 +325,7 @@ class DocumentParser:
             return ""
         except Exception as e:
             logger.error("Failed to parse .doc file: %s", e)
+            metadata["warning"] = f".doc parse failed: {e}"  # the caller rejects it, never an empty ingest
             return ""
 
 

@@ -10,8 +10,10 @@
  * Author: mrveiss
  */
 
+import { backoffDelay } from '@autobot/ui'
 import { ref, watch, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import config, { getApiBase } from '@/config/ssot-config'
 import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl'
 import { useUserStore } from '@/stores/useUserStore'
@@ -306,10 +308,11 @@ class LiveEventService {
       return
     }
     this.reconnectAttempts++
-    const delay = Math.min(
-      this.baseDelay * Math.pow(2, this.reconnectAttempts - 1) + (crypto.getRandomValues(new Uint16Array(1))[0] % 1000),
-      this.maxDelay
-    )
+    const delay = backoffDelay(this.reconnectAttempts - 1, {
+      base: this.baseDelay,
+      max: this.maxDelay,
+      jitterMs: 1000,
+    })
     logger.debug(
       `LiveEventService: reconnecting in ${Math.round(delay)}ms (${this.reconnectAttempts}/${this.maxReconnectAttempts})`
     )
@@ -394,7 +397,7 @@ class LiveEventService {
    */
   async sendSteeringMessage(msg: SteeringMessage): Promise<Record<string, unknown>> {
     const url = `${getApiBase()}/agent-terminal/tasks/${encodeURIComponent(msg.task_id)}/steer`
-    const resp = await fetch(url, {
+    const resp = await fetchWithAuth(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ guidance: msg.guidance, task_id: msg.task_id }),

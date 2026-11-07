@@ -10,7 +10,8 @@ imported `start_phase9_monitoring`/`stop_phase9_monitoring`, renamed to
 `start_hardware_monitoring`/`stop_hardware_monitoring` in #10666/#10733, and computed
 its `sys.path` insertion two directories short of `autobot-backend/` (landing on
 `autobot-infrastructure/shared/`, which has no `utils` package). Both operator entry
-points were unimportable.
+points were unimportable. (#17906 folded `start_hardware_monitoring.py` into
+`monitoring/start_monitoring.py --backend hardware`; the survivor is what is checked now.)
 
 Nothing caught either: `.pre-commit-config.yaml`'s flake8 hook excluded
 `autobot-infrastructure/` entirely, so F821 never gated a commit here, and neither
@@ -39,7 +40,7 @@ Three checks:
    on PYTHONPATH (the convention every other script under this tree assumes; see
    `autobot-infrastructure/shared/scripts/restore_kb_backup.sh`), for the two scripts
    #14129 fixed. Catches a name that IS imported but does not exist in the target module
-   (the `start_hardware_monitoring.py` class of bug) — undetectable by static analysis
+   (the former `start_hardware_monitoring.py` class of bug) — undetectable by static analysis
    alone, since pyflakes never loads the module a `from X import Y` names.
 """
 
@@ -74,23 +75,22 @@ def _load_checker():
 
 checker = _load_checker()
 
-# The two scripts #14129 made importable. Exercised with a real subprocess import
+# The two scripts #14129 made importable; the hardware launcher's logic now lives in
+# `start_monitoring.py` (#17906), so the survivor stands in for it. Exercised with a real subprocess import
 # (Verification bar: "in a subprocess with a realistic path, not via a fixture that
 # pre-stubs the missing name") rather than in-process importlib, which would let an
 # already-imported `utils`/`knowledge`/`agents` module in the pytest session's own
 # sys.modules mask a sys.path regression these scripts are prone to (#14129).
 _OPERATOR_ENTRYPOINTS = (
     "utilities/manage_system_knowledge.py",
-    "monitoring/start_hardware_monitoring.py",
+    "monitoring/start_monitoring.py",
 )
 
 
 def _discover_scripts() -> list[Path]:
     # #15510: relative to the scan root, so an ancestor named `__pycache__`
     # above the checkout cannot empty the sweep.
-    return sorted(
-        p for p in _SCRIPTS_DIR.rglob("*.py") if "__pycache__" not in p.relative_to(_SCRIPTS_DIR).parts
-    )
+    return sorted(p for p in _SCRIPTS_DIR.rglob("*.py") if "__pycache__" not in p.relative_to(_SCRIPTS_DIR).parts)
 
 
 def _relative_key(path: Path) -> str:
@@ -139,7 +139,8 @@ def test_operator_script_imports_in_a_realistic_subprocess(relative_path: str):
     `autobot_shared` — see restore_kb_backup.sh) — not via a fixture that stubs
     the name out.
 
-    This is what `start_hardware_monitoring.py` failed before #14129:
+    This is what `start_hardware_monitoring.py` (folded into `start_monitoring.py`
+    by #17906) failed before #14129:
     `from utils.hardware_metrics import start_phase9_monitoring` named a function
     that had been renamed to `start_hardware_monitoring` in #10666/#10733, and the
     script's own `sys.path` calculation landed two directories short of
@@ -169,3 +170,36 @@ def test_operator_script_imports_in_a_realistic_subprocess(relative_path: str):
         check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+# Scripts that import ``autobot_shared`` (and, for monitoring_system, backend
+# packages) must bootstrap their own path: nothing puts the repo root on it when
+# they are run standalone (#18094). Run WITHOUT PYTHONPATH, with the network
+# probes some of them issue at import time stubbed out.
+_STANDALONE_BOOTSTRAP_SCRIPTS = (
+    "diagnose_backend.py",
+    "monitoring_system.py",
+    "profile_api_endpoints.py",
+    "automated_testing_procedure.py",
+    "test_configuration.py",
+    "validate_configuration.py",
+)
+
+
+@pytest.mark.parametrize("name", _STANDALONE_BOOTSTRAP_SCRIPTS)
+def test_script_imports_without_pythonpath(name: str, tmp_path: Path):
+    script = _SCRIPTS_DIR / name
+    code = (
+        "import runpy, requests\n"
+        "def _blocked(*a, **k):\n"
+        "    raise OSError('network blocked by the import probe')\n"
+        "requests.get = requests.post = _blocked\n"
+        f"runpy.run_path({str(script)!r}, run_name='import_probe')\n"
+    )
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, cwd=tmp_path, env=env, check=False
+    )
+
+    assert result.returncode == 0, result.stderr[-2000:]

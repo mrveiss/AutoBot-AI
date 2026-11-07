@@ -26,10 +26,11 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Path
 from pydantic import BaseModel, Field
 
-from auth_rbac import require_role
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.secret_redaction import REDACTED_PLACEHOLDER
 
 logger = get_logger(__name__)
 
@@ -55,7 +56,7 @@ class TokenRecord(BaseModel):
     scopes: List[str]
     created_at: float
     last_used: float | None
-    masked_secret: str  # first 4 chars + "..."
+    masked_secret: str  # fixed-width; token_id and label identify the token (#18221)
 
 
 class CreateTokenResponse(BaseModel):
@@ -117,7 +118,7 @@ _INDEX_KEY = "mcp:tokens:index"
 )
 async def create_mcp_token(
     body: CreateTokenRequest,
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
 ) -> CreateTokenResponse:
     """Generate a new scoped MCP client token.
 
@@ -183,7 +184,7 @@ async def create_mcp_token(
     error_code_prefix="MCP",
 )
 async def list_mcp_tokens(
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
 ) -> ListTokensResponse:
     """List all active MCP tokens.
 
@@ -213,7 +214,7 @@ async def list_mcp_tokens(
                 scopes=data.get("scopes", []),
                 created_at=data["created_at"],
                 last_used=data.get("last_used"),
-                masked_secret=secret[:4] + "...",
+                masked_secret=REDACTED_PLACEHOLDER,
             )
         )
 
@@ -234,7 +235,7 @@ async def list_mcp_tokens(
 )
 async def revoke_mcp_token(
     token_id: str = Path(..., description="Token ID to revoke"),
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
 ) -> RevokeTokenResponse:
     """Revoke an MCP token by its ID.
 

@@ -363,7 +363,7 @@ from src.utils.logging_manager import (
     get_frontend_logger,  # frontend category
     get_llm_logger,       # llm category
     get_debug_logger,     # debug category
-    get_audit_logger,     # audit category
+    get_audit_channel_logger,  # audit log channel (not the audit store)
 )
 
 # Usage:

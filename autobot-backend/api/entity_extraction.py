@@ -39,6 +39,7 @@ from api.schemas_knowledge import (
     ExtractionMessage,
 )
 from auth_middleware import get_current_user
+from autobot_memory_graph.owner_scope import OwnerScope, OwnerScopeRequired
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
@@ -176,6 +177,7 @@ async def extract_entities(
         JSONResponse with extraction results and metrics
     """
     request_id = generate_request_id()
+    owner = _owner_scope(current_user)
 
     try:
         logger.info(
@@ -191,6 +193,7 @@ async def extract_entities(
             conversation_id=extraction_request.conversation_id,
             messages=messages_dict,
             session_metadata=extraction_request.session_metadata,
+            owner=owner,
         )
 
         # Log completion (Issue #665: uses helper)
@@ -208,7 +211,17 @@ async def extract_entities(
         raise HTTPException(status_code=500, detail="Entity extraction failed")
 
 
-def _build_extraction_tasks(batch_request: "BatchExtractionRequest", extractor: GraphEntityExtractor) -> List:
+def _owner_scope(current_user: dict) -> OwnerScope:
+    """Memory-graph owner for extracted entities: the authenticated principal only (403 without one). #18825."""
+    try:
+        return OwnerScope.from_auth_user(current_user)
+    except OwnerScopeRequired:
+        raise HTTPException(status_code=403, detail="Authenticated user required")
+
+
+def _build_extraction_tasks(
+    batch_request: "BatchExtractionRequest", extractor: GraphEntityExtractor, owner: OwnerScope
+) -> List:
     """
     Build extraction tasks for batch processing.
 
@@ -229,6 +242,7 @@ def _build_extraction_tasks(batch_request: "BatchExtractionRequest", extractor: 
             conversation_id=conv_request.conversation_id,
             messages=messages_dict,
             session_metadata=conv_request.session_metadata,
+            owner=owner,
         )
         tasks.append(task)
     return tasks
@@ -309,12 +323,13 @@ async def extract_entities_batch(
 
     request_id = generate_request_id()
     start_time = time.perf_counter()
+    owner = _owner_scope(current_user)  # outside the try: a 403 must not become a 500
 
     try:
         logger.info(f"[{request_id}] Batch extraction: {len(batch_request.conversations)} conversations")
 
         # Build extraction tasks (Issue #281: uses helper)
-        tasks = _build_extraction_tasks(batch_request, extractor)
+        tasks = _build_extraction_tasks(batch_request, extractor, owner)
 
         # Wait for all extractions to complete
         results: List[ExtractionResult] = await asyncio.gather(*tasks, return_exceptions=True)

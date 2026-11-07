@@ -11,13 +11,22 @@
  */
 
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { PollingPausedAlert } from '@autobot/ui'
 import GrafanaDashboard from '@/components/monitoring/GrafanaDashboard.vue'
 import MetricsDetailsView from './MetricsDetailsView.vue'
 import NodeGpuSummary from '@/components/monitoring/NodeGpuSummary.vue'
 import { useFleetStore } from '@/stores/fleet'
-import { usePrometheusMetrics } from '@/composables/usePrometheusMetrics'
+import { useFleetMetrics } from '@/composables/useFleetMetrics'
+import { injectFleetMetrics } from '@/composables/monitoringPollContext'
 
+const { t } = useI18n()
 const fleetStore = useFleetStore()
+// #19851: MonitoringView owns the poll and shows the paused notice; this view only
+// polls (and shows its own notice) when rendered without that layout.
+const { state: fleetMetrics, ownsPoll } = injectFleetMetrics(() =>
+  useFleetMetrics({ autoFetch: true, pollInterval: 30000 })
+)
 const {
   cpuUsage,
   memoryUsage,
@@ -25,7 +34,8 @@ const {
   systemHealth,
   gpuNodes,
   gpuUnavailable,
-} = usePrometheusMetrics({ autoFetch: true, pollInterval: 30000 })
+  poller,
+} = fleetMetrics
 
 // #15226: each node's GPUs, matched to its card by node_id
 const gpuByNode = computed(() => new Map(gpuNodes.value.map((gpuNode) => [gpuNode.node_id, gpuNode])))
@@ -61,14 +71,14 @@ function getStatusColor(status: string): string {
   switch (status) {
     case 'healthy': return 'bg-success-500'
     case 'degraded': return 'bg-warning-500'
-    case 'unhealthy': return 'bg-danger-500'
+    case 'unhealthy': return 'bg-error-500'
     case 'offline': return 'bg-gray-400'
     default: return 'bg-gray-400'
   }
 }
 
 function getMetricColor(value: number): string {
-  if (value >= 90) return 'text-danger-500'
+  if (value >= 90) return 'text-error-500'
   if (value >= 70) return 'text-warning-500'
   return 'text-success-500'
 }
@@ -76,6 +86,7 @@ function getMetricColor(value: number): string {
 
 <template>
   <div class="p-6">
+    <PollingPausedAlert v-if="ownsPoll" :poller="poller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" class="mb-6" @retry="poller.start('')" />
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <h2 class="text-xl font-bold text-gray-900">{{ $t('monitoring.systemMonitor.systemMonitoring') }}</h2>
@@ -181,7 +192,7 @@ function getMetricColor(value: number): string {
           <p class="text-2xl font-bold capitalize" :class="{
             'text-success-600': systemHealth === 'healthy',
             'text-warning-600': systemHealth === 'degraded',
-            'text-danger-600': systemHealth === 'critical',
+            'text-error-600': systemHealth === 'critical',
             'text-gray-400': systemHealth === 'unknown',
           }">{{ systemHealth }}</p>
         </div>

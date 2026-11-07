@@ -606,7 +606,7 @@ def _install_source_stubs(fake_create: AsyncMock, fake_get: AsyncMock) -> dict:
     sys.modules["api.codebase_analytics.source_service"] = src_svc
 
     src_storage = types.ModuleType("api.codebase_analytics.source_storage")
-    src_storage.get_source = fake_get  # type: ignore[attr-defined]
+    src_storage.get_source = src_storage.get_source_or_none_if_unreadable = fake_get  # type: ignore[attr-defined]
     src_storage.delete_source = AsyncMock()  # type: ignore[attr-defined]
     sys.modules["api.codebase_analytics.source_storage"] = src_storage
 

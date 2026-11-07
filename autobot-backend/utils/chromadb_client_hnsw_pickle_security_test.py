@@ -4,7 +4,7 @@
 # Author: mrveiss
 """#14187: index_metadata.pickle deserialization must not run arbitrary code.
 
-``utils.chromadb_client._fix_hnsw_pickle_format`` reads ChromaDB's own
+``utils.chromadb_store_repairs._fix_hnsw_pickle_format`` reads ChromaDB's own
 ``index_metadata.pickle`` (chromadb's ``PersistentLocalHnswSegment``
 format) to patch legacy metadata shapes before ChromaDB's own loader runs
 (#1390). It used a plain ``pickle.load()`` -- any writable path to that
@@ -38,7 +38,7 @@ installs or removes that key.
 
 from __future__ import annotations
 
-import importlib.util
+import importlib
 import io
 import logging
 import os
@@ -53,32 +53,7 @@ _MODULE_NAME = "chromadb.segment.impl.vector.local_persistent_hnsw"
 _CLASS_NAME = "PersistentData"
 
 
-def _load_real_chromadb_client_module():
-    """Return the real ``utils.chromadb_client`` module.
-
-    #13162 established that some test modules install a permanent MagicMock
-    placeholder for ``utils.chromadb_client`` / ``utils.async_chromadb_client``
-    in ``sys.modules`` and never remove it, so whichever test collects first
-    wins the shared module. Load the real file under a private name when
-    that has happened, mirroring
-    ``chromadb_client_cache_key_test.py::_load_real_chromadb_modules``.
-    """
-    cached = sys.modules.get("utils.chromadb_client")
-    if cached is not None and getattr(cached, "__file__", None):
-        return cached
-    private = "_real_14187_chromadb_client"
-    cached_private = sys.modules.get(private)
-    if cached_private is not None:
-        return cached_private
-    here = Path(__file__).resolve().parent
-    spec = importlib.util.spec_from_file_location(private, here / "chromadb_client.py")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[private] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-sync_mod = _load_real_chromadb_client_module()
+repairs_mod = importlib.import_module("utils.chromadb_store_repairs")
 
 
 class PersistentData:
@@ -170,7 +145,7 @@ def _disallowed_class_bytes() -> bytes:
 
 def test_restricted_unpickler_accepts_the_allowlisted_class(chromadb_hnsw_stub):
     """A legitimate PersistentData payload still round-trips."""
-    loaded = sync_mod._RestrictedHnswUnpickler(io.BytesIO(_persistent_data_bytes())).load()
+    loaded = repairs_mod._RestrictedHnswUnpickler(io.BytesIO(_persistent_data_bytes())).load()
     assert isinstance(loaded, PersistentData)
     assert loaded.dimensionality == 8
     assert loaded.id_to_label == {"doc-a": 0, "doc-b": 1}
@@ -180,7 +155,7 @@ def test_restricted_unpickler_accepts_the_allowlisted_class(chromadb_hnsw_stub):
 def test_restricted_unpickler_rejects_disallowed_class():
     """A class reference outside the allowlist is refused, not executed."""
     with pytest.raises(pickle.UnpicklingError):
-        sync_mod._RestrictedHnswUnpickler(io.BytesIO(_disallowed_class_bytes())).load()
+        repairs_mod._RestrictedHnswUnpickler(io.BytesIO(_disallowed_class_bytes())).load()
 
 
 # ---------------------------------------------------------------------------
@@ -215,10 +190,10 @@ def test_fix_hnsw_pickle_format_migrates_legacy_dict_without_data_loss(tmp_path,
     with open(pkl_file, "wb") as f:
         pickle.dump(legacy_shape, f)
 
-    sync_mod._fix_hnsw_pickle_format(tmp_path)
+    repairs_mod._fix_hnsw_pickle_format(tmp_path)
 
     with open(pkl_file, "rb") as f:
-        migrated = sync_mod._RestrictedHnswUnpickler(f).load()
+        migrated = repairs_mod._RestrictedHnswUnpickler(f).load()
     assert isinstance(migrated, PersistentData)
     assert migrated.dimensionality == 8
     assert migrated.id_to_label == {"doc-a": 0}
@@ -240,7 +215,7 @@ def test_fix_hnsw_pickle_format_skips_disallowed_pickle_without_raising(tmp_path
         f.write(original_bytes)
 
     with caplog.at_level(logging.WARNING):
-        sync_mod._fix_hnsw_pickle_format(tmp_path)  # must not raise
+        repairs_mod._fix_hnsw_pickle_format(tmp_path)  # must not raise
 
     untouched = pkl_file.read_bytes() == original_bytes
     assert untouched, "disallowed pickle must be left untouched, not rewritten"

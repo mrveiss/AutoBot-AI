@@ -34,7 +34,7 @@ Issue #4273: Wire orphaned components EnforcementModeSelector, FlagChangeHistory
         v-if="operationError"
         variant="error"
         :message="operationError"
-        dismissible
+        dismissible :dismiss-label="t('ui.alert.dismissAlert')"
         @dismiss="operationError = null"
       />
 
@@ -86,6 +86,7 @@ Issue #4273: Wire orphaned components EnforcementModeSelector, FlagChangeHistory
 </template>
 
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 import { ref, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
@@ -101,7 +102,6 @@ import FlagChangeHistory from '@/components/feature-flags/FlagChangeHistory.vue'
 import AccessMetrics from '@/components/feature-flags/AccessMetrics.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import Icon from '@/components/ui/Icon.vue';
-import BaseAlert from '@/components/ui/BaseAlert.vue';
 
 const logger = createLogger('FeatureFlagsSettingsPanel');
 const { t } = useI18n();
@@ -323,11 +323,6 @@ onMounted(() => {
   padding: var(--spacing-10);
 }
 
-.error-state i {
-  font-size: 32px;
-  margin-bottom: var(--spacing-3);
-}
-
 .error-state p {
   margin: var(--spacing-0) var(--spacing-0) var(--spacing-4);
   font-size: var(--text-sm);
@@ -338,7 +333,7 @@ onMounted(() => {
   align-items: center;
   gap: var(--spacing-2);
   padding: var(--spacing-2-5) var(--spacing-4);
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-error);
   border: none;
   border-radius: var(--radius-md);

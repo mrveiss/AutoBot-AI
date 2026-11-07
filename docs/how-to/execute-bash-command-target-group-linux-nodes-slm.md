@@ -224,5 +224,5 @@ Use `$HOSTNAME` (environment variable) instead of `$(hostname)` (command substit
 ## Architecture reference
 
 - **Single-node execute endpoint** — `autobot-slm-backend/api/nodes_execution.py`
-- **Distributed shell step handler** — `autobot-backend/orchestration/dag_executor.py` (`NodeType.DISTRIBUTED_SHELL`, `execute_distributed_shell()`)
+- **Distributed shell step handler** — `autobot-backend/orchestration/dag_executor.py` (`DagNodeType.DISTRIBUTED_SHELL`, `execute_distributed_shell()`)
 - **Per-node HTTP call** — `autobot-backend/orchestration/dag_executor.py` (`_execute_on_node()`)

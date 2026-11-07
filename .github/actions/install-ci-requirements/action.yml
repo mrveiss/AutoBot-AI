@@ -1,0 +1,40 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# The one way a job installs requirements-ci.txt on the runner's Python (#20191).
+#
+# torch and its CUDA packages can fill a stock runner's disk, and the job then fails later with
+# an error that names torch rather than the disk. So disk is freed first, and a failed install
+# fails here, with pip's own error. A job that can go on without the install sets
+# `continue-on-error` on this step; it never swallows the failure with `|| true`.
+#
+# setup-python-suite and generated-types-autofix install into their own venvs and are not callers.
+name: Install CI requirements
+description: Free disk space, then install requirements-ci.txt on the job's Python.
+
+inputs:
+  constraints:
+    description: Constraints file for the install. Empty for none.
+    required: false
+    default: ''
+  min-free-gb:
+    description: Free disk required before installing, passed to free-disk-space.
+    required: false
+    default: '20'
+
+runs:
+  using: composite
+  steps:
+    - name: Free disk space
+      uses: ./.github/actions/free-disk-space
+      with:
+        min-free-gb: ${{ inputs.min-free-gb }}
+
+    - name: Install requirements-ci.txt
+      shell: bash
+      env:
+        CONSTRAINTS: ${{ inputs.constraints }}
+      run: |
+        set -euo pipefail
+        python -m pip install --upgrade pip setuptools wheel
+        python -m pip install ${CONSTRAINTS:+-c "$CONSTRAINTS"} -r requirements-ci.txt --prefer-binary

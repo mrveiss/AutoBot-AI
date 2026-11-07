@@ -254,6 +254,40 @@ def _resolve_via_import_context(
     return None, False
 
 
+def extract_dotted_callee(node) -> str | None:
+    """Full dotted chain of an ``ast.Call`` on an attribute, when it has one.
+
+    ``json.loads(...)`` -> ``"json.loads"``, ``os.path.join(...)`` ->
+    ``"os.path.join"``, ``self.helper(...)`` -> ``"self.helper"``. Returns
+    ``None`` when the receiver is not a plain name chain
+    (``get_client().send()``, ``items[0].run()``), because there is then no
+    base name to test against :data:`STDLIB_MODULES` / :data:`COMMON_THIRD_PARTY`.
+
+    Lives here rather than in a caller because the external-library check it
+    feeds is this module's (#13492), and ``code_indexer`` strips attribute
+    calls the same way ``call_graph`` did (#13491).
+
+    This is deliberately *not* what a callee name for resolution looks like:
+    :func:`resolve_callee` builds candidate ids as
+    ``f"{module_path}.{callee_name}"``, so handing it ``"self.helper"`` would
+    search for ``module.Class.self.helper`` and resolve nothing. Callers keep
+    passing the bare final component for resolution and this alongside it.
+    """
+    import ast
+
+    func = getattr(node, "func", None)
+    if not isinstance(func, ast.Attribute):
+        return None
+    parts = []
+    while isinstance(func, ast.Attribute):
+        parts.append(func.attr)
+        func = func.value
+    if not isinstance(func, ast.Name):
+        return None
+    parts.append(func.id)
+    return ".".join(reversed(parts))
+
+
 def resolve_callee(
     callee_name: str,
     module_path: str,

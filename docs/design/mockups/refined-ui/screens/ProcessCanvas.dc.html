@@ -1,0 +1,1990 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot Process Canvas</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.th a.seg{display:inline-flex;align-items:center;text-decoration:none;box-sizing:border-box;color:var(--text2)}
+.th a.seg:hover{color:var(--text)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.btn.xs{height:28px;padding:0 10px;font-size:12.5px;gap:6px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.sub2{font-size:12.5px;color:var(--muted)}
+.th .btn.dng{color:var(--alert-text);border-color:var(--danger-tile-b)}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:var(--bw) solid var(--line);font-size:13px}
+.kv span:first-child{color:var(--muted)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.ib{width:28px;height:28px;border-radius:6px;border:var(--bw) solid transparent;background:transparent;display:inline-grid;place-items:center;cursor:pointer;padding:0;color:var(--text);flex:none}
+.ib:hover{background:var(--surface2);border-color:var(--border)}
+.ib[aria-expanded="true"]{background:var(--surface2);border-color:var(--primary)}
+.grip{cursor:grab;color:var(--muted)}
+.fld{display:flex;flex-direction:column;gap:5px}
+.fld>label,.lb{font-size:12.5px;font-weight:600;color:var(--text)}
+.inp{height:34px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);font:inherit;font-size:13.5px;padding:0 10px;color:var(--text);box-sizing:border-box;width:100%;min-width:0}
+textarea.inp{height:auto;padding:8px 10px;resize:vertical;line-height:1.4}
+select.inp{padding:0 8px}
+.hint{margin:0;font-size:12px;color:var(--muted)}
+.cnt{font-size:11px;font-weight:600;padding:1px 6px;border-radius:99px;background:var(--idle-bg);color:var(--idle-fg)}
+.tree{list-style:none;margin:0;padding:6px 6px 10px;display:flex;flex-direction:column;gap:2px}
+.rf{display:flex;align-items:center;gap:2px}
+.rbtn{flex:1;min-width:0;display:flex;align-items:center;gap:6px;height:32px;border:0;background:transparent;font:inherit;font-size:13px;font-weight:600;color:var(--text);padding:0 4px;border-radius:5px;cursor:pointer;text-align:left}
+.rbtn:hover{background:var(--surface2)}
+.rbtn .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hold{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:0 4px 3px 52px;font-size:11.5px;color:var(--muted)}
+.hold .pill{font-size:10px;padding:1px 6px}
+.wfl{list-style:none;margin:0;padding:0 0 6px}
+.wfb{display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 8px 0 34px;border:0;border-left:3px solid transparent;background:transparent;font:inherit;font-size:13px;color:var(--text2);cursor:pointer;text-align:left;box-sizing:border-box;border-radius:0 5px 5px 0}
+.wfb:hover{background:var(--surface2);color:var(--text)}
+.wfb.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.wfb .nm{flex-grow:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cv{position:relative;margin:0 12px}
+.sw{width:10px;height:10px;border-radius:3px;border:1px solid var(--stroke);flex:none;box-sizing:border-box}
+.tchip{position:absolute;transform:translate(-50%,-50%);font-family:inherit;cursor:pointer;z-index:5;max-width:230px}
+.tchip.sel{outline:2px solid var(--primary);outline-offset:2px}
+.tn{position:absolute;display:grid;place-items:center;border-radius:99px;border:0;background:var(--primary);color:var(--on-primary);font:inherit;font-size:12px;font-weight:600;box-sizing:border-box;cursor:pointer}
+.tn.sel{outline:3px solid var(--accent);outline-offset:2px}
+.tcap{position:absolute;font-size:11px;line-height:1.3;color:var(--text2)}
+.lib{flex-wrap:wrap;padding-top:4px}
+.aip{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;padding:1px 6px;border-radius:99px;line-height:1.25}
+.aip.abs{position:absolute;left:10px;bottom:-11px;z-index:6;white-space:nowrap}
+.pc.meta{outline:1.5px solid var(--border);outline-offset:3px}
+.skm{position:absolute;left:-10px;top:-9px;width:20px;height:20px;border-radius:99px;background:var(--warn-bg);color:var(--warn-fg);border:1.5px solid var(--warn-fg);display:grid;place-items:center;font:700 11px 'IBM Plex Sans',sans-serif;z-index:7;box-sizing:border-box}
+.lsub{flex-basis:100%;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);font-weight:400;padding:0 0 4px 0;min-width:0}
+.rtb{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;padding:1px 6px;border-radius:99px;background:var(--info-bg);color:var(--info-fg);border:var(--pill-b);white-space:nowrap}
+.rtb.abs{position:absolute;right:16px;top:-11px;z-index:6}
+.rtbox{display:flex;flex-direction:column;border:var(--bw) solid var(--border);border-radius:8px}
+.rtbox .row{padding:7px 10px;gap:8px;font-size:13px;flex-wrap:wrap}
+.rtbox .row:last-child{border-bottom:0}
+.rtbox .k{flex:0 0 78px;color:var(--muted);font-size:12px}
+.shr{position:absolute;left:14px;top:-11px;z-index:6;font-size:10.5px;padding:2px 6px;max-width:150px;overflow:hidden;text-overflow:ellipsis}
+.libl{list-style:none;margin:0;padding:0 6px 8px;display:flex;flex-direction:column;gap:1px;max-height:340px;overflow-y:auto}
+.lib{display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:0 6px 0 8px;border:0;border-left:3px solid transparent;background:transparent;font:inherit;font-size:13px;color:var(--text2);cursor:pointer;text-align:left;box-sizing:border-box;border-radius:0 5px 5px 0}
+.lib:hover{background:var(--surface2);color:var(--text)}
+.lib.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.lib .nm{flex-grow:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lib .cnt{font-size:10.5px;white-space:nowrap}
+.en{position:absolute;box-sizing:border-box;border-radius:8px;border:var(--bw) solid var(--border);padding:5px 8px;display:flex;flex-direction:column;gap:1px;font-size:12px;line-height:1.25;justify-content:center}
+.en b{font-weight:600}
+.en span{font-size:11px;white-space:normal}
+.warnm{position:absolute;right:-9px;top:-9px;width:20px;height:20px;border-radius:99px;background:var(--warn-bg);color:var(--warn-fg);border:1.5px solid var(--warn-fg);display:grid;place-items:center;font:700 12px 'IBM Plex Sans',sans-serif;z-index:6;box-sizing:border-box}
+.lgd{display:inline-flex;align-items:center;gap:6px}
+.pc{position:absolute;box-sizing:border-box;border:var(--bw) solid var(--border);border-left-width:4px;border-radius:8px;background:var(--surface);padding:6px 6px 8px 10px;display:flex;flex-direction:column;gap:3px}
+.pc.sel{border-top:2px solid var(--primary);border-right:2px solid var(--primary);border-bottom:2px solid var(--primary)}
+.pc.drop{outline:2px dashed var(--accent);outline-offset:3px}
+.pch{display:flex;align-items:center;gap:4px}
+.pct{flex-grow:1;min-width:0;border:0;background:transparent;padding:2px 0;text-align:left;font:inherit;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-radius:4px}
+.pca{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pcm{display:flex;align-items:center;gap:6px;margin-top:auto}
+.pcm .pill{font-size:10.5px;padding:2px 6px;max-width:116px;overflow:hidden;text-overflow:ellipsis}
+.pcm .cost{margin-left:auto;font-size:11.5px;color:var(--text2)}
+.wbox{margin-top:4px;padding:6px 8px;border-radius:6px;background:var(--bad-bg);color:var(--bad-fg);font-size:11.5px;line-height:1.35;display:flex;flex-direction:column;gap:5px;align-items:flex-start;border:var(--pill-b)}
+.wbox.okb{background:var(--ok-bg);color:var(--ok-fg)}
+.menu{position:absolute;z-index:30;min-width:210px;background:var(--surface);border:var(--bw) solid var(--border);border-radius:8px;padding:4px;display:flex;flex-direction:column;box-sizing:border-box}
+.mi{display:flex;align-items:center;gap:8px;min-height:32px;padding:0 10px;border:0;background:transparent;font:inherit;font-size:13px;color:var(--text);border-radius:5px;cursor:pointer;text-align:left;width:100%;box-sizing:border-box}
+.mi:hover{background:var(--surface2)}
+.mi.sub{padding-left:30px;min-height:28px;font-size:12.5px;color:var(--text2)}
+.mi[aria-checked="true"]{color:var(--text);font-weight:600}
+.th .mi.dng{color:var(--alert-text)}
+.mi kbd,.mi .k{margin-left:auto;font:500 11.5px 'IBM Plex Mono',monospace;color:var(--muted)}
+.msep{height:var(--bw);background:var(--line);margin:4px 0}
+.mh{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:6px 10px 2px}
+.chip{display:inline-flex;align-items:center;gap:4px;height:26px;padding:0 4px 0 9px;border-radius:99px;border:var(--bw) solid var(--border);background:var(--surface2);font-size:12.5px;font-weight:500;box-sizing:border-box}
+.chip .ib{width:20px;height:20px;border-radius:99px}
+.lens{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border-radius:99px;border:var(--bw) solid var(--primary);background:var(--surface);font:inherit;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;box-sizing:border-box}
+.tool{border:var(--bw) solid var(--border);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:4px}
+.toolh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.toolh b{font:600 13px 'IBM Plex Mono',monospace;flex-grow:1}
+.cm{display:flex;gap:10px;align-items:flex-start}
+.av{width:28px;height:28px;border-radius:99px;border:var(--bw) solid var(--tile-b);background:var(--tile);display:grid;place-items:center;font-weight:600;font-size:11px;flex:none;box-sizing:border-box;color:var(--text)}
+.th[data-ui="minimal"] .adv{display:none !important}
+.th[data-ui="minimal"] .adv-only-full{display:none !important}
+.th .only-min{display:none !important}
+.th[data-ui="minimal"] .only-min{display:flex !important}
+.th[data-ui="minimal"] .only-min.blk{display:block !important}
+.uimode{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border);margin-right:8px}
+.uimode .seg{height:28px;font-size:12px}
+.uitog{height:40px;padding:0 10px;margin:0 2px;border-radius:8px;border:var(--bw) solid transparent;background:transparent;color:var(--text2);font:inherit;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;cursor:pointer}.uitog:hover{background:var(--surface2);color:var(--text)}.uitog.on{background:var(--surface2);color:var(--text);font-weight:600;border-color:var(--accent)}
+.minnote{align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.linkbtn{border:0;background:transparent;padding:0;font:inherit;font-size:12.5px;font-weight:600;color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer;min-height:24px}
+.linkbtn:hover{color:var(--link-h)}
+.sk{display:flex;flex-direction:column;gap:12px;min-width:0}
+.sk-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px;color:var(--text)}
+.sk-lab{font-size:12.5px;font-weight:600;color:var(--text)}
+.sk-row select,.sk-row input[type=date]{height:32px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);font:inherit;font-size:13px;padding:0 8px;color:var(--text);box-sizing:border-box;min-width:0}
+.sk-row select:disabled{opacity:.5;cursor:not-allowed}
+.sk-seg{display:flex;flex-wrap:wrap;gap:2px;padding:3px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border)}
+.sk-b{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.sk-b:hover{color:var(--text)}
+.sk-b.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sk-chip{min-width:46px;height:32px;padding:0 10px;border-radius:99px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer;box-sizing:border-box}
+.sk-chip:hover{color:var(--text);background:var(--surface2)}
+.sk-chip.on{background:var(--primary);border-color:var(--primary);color:var(--on-primary);font-weight:600}
+.sk-chk{display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer}
+.sk-chk input{width:16px;height:16px;accent-color:var(--primary);margin:0}
+.sk-sum{margin:0;font-size:18px;font-weight:600;letter-spacing:-.01em;line-height:1.3;color:var(--text)}
+.sk-runs{display:flex;flex-direction:column;gap:4px}
+.sk-list{margin:0;padding:0 0 0 18px;display:flex;flex-direction:column;gap:2px;font-size:13px}
+.sk-note{margin:0;font-size:12.5px;color:var(--muted)}
+.sk-err{margin:0;font-size:12.5px;font-weight:600;color:var(--alert-text)}
+.sk-adv{display:flex;flex-direction:column;gap:8px;padding-top:10px;border-top:var(--bw) solid var(--line)}
+.sk-cron{height:32px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font-size:13px;padding:0 8px;flex:1 1 180px;min-width:0;box-sizing:border-box}
+.sk-cron[readonly]{background:var(--surface2)}
+.sk-cron[aria-invalid="true"]{border-color:var(--accent);border-width:2px}
+.sk-link{border:0;background:transparent;padding:0;font:inherit;font-size:12.5px;font-weight:600;color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer;min-height:24px;align-self:flex-start}
+.sk-link:hover{color:var(--link-h)}
+.sk-tag{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:99px;border:var(--bw) solid var(--border);background:var(--surface2);font-size:11.5px;font-weight:600;color:var(--text2)}
+.sk-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.th{--tooltip-delay:500ms;--tooltip-hide-delay:100ms;--tooltip-offset:8px;--tooltip-max:280px}
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{position:absolute;left:50%;pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease-out var(--tooltip-hide-delay),visibility 0s linear calc(var(--tooltip-hide-delay) + 120ms);z-index:50}
+[data-tip]::after{content:attr(data-tip);bottom:calc(100% + var(--tooltip-offset));transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:var(--tooltip-max);padding:6px 10px;border-radius:6px;background:var(--primary);color:var(--on-primary);border:var(--bw) solid var(--primary);font:500 12.5px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}
+[data-tip]::before{content:"";bottom:calc(100% + var(--tooltip-offset) - 4px);width:8px;height:8px;margin-left:-4px;background:var(--primary);transform:rotate(45deg)}
+[data-tip]:hover::before,[data-tip]:hover::after{opacity:1;visibility:visible;transition-delay:var(--tooltip-delay),var(--tooltip-delay)}
+[data-tip]:focus-visible::before,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s,0s}
+[data-tip-pos="bottom"]::after{bottom:auto;top:calc(100% + var(--tooltip-offset))}
+[data-tip-pos="bottom"]::before{bottom:auto;top:calc(100% + var(--tooltip-offset) - 4px)}
+[data-tip-pos="right"]::after{left:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="right"]::before{left:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+[data-tip-pos="left"]::after{left:auto;right:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="left"]::before{left:auto;right:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+@media (prefers-reduced-motion: reduce){[data-tip]::before,[data-tip]::after{transition:none}}
+@media (hover: none){[data-tip]::before,[data-tip]::after{display:none}}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" data-ui="{{ui}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html" class="on" aria-current="page">Company OS</a>
+    <a href="Analytics.dc.html" class="adv">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <span class="sr" role="status" aria-live="polite">{{uiAnnounce}}</span>
+    <a href="Secrets.dc.html" class="icon adv" aria-label="Secrets" data-tip="Secrets" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" data-tip="Preferences" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg></a>
+    <button type="button" class="uitog {{uiTogCls}}" onClick="{{toggleUi}}" aria-pressed="{{uiMinPressed}}" data-tip="Minimal interface — hide advanced features" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button>
+    <a href="AdminUsers.dc.html" class="icon adv" aria-label="Platform admin, opens the SLM console" data-tip="Platform admin — opens the SLM console ↗" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <a href="Preferences.dc.html" aria-label="Profile settings" data-tip="Profile settings" data-tip-pos="left" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer; display: grid; place-items: center; text-decoration: none">JD</a>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+
+    <aside class="sub" aria-label="Company OS" style="flex: 1 1 220px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+      <button type="button" data-tip="Switch company" data-tip-pos="bottom" style="margin: 0 0 6px; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: 8px; border: var(--bw) solid var(--border); background: var(--surface2); font: inherit; font-size: 14px; font-weight: 600; color: var(--text); cursor: pointer; text-align: left">
+        <span style="width: 26px; height: 26px; border-radius: 6px; background: var(--brand-bg); color: var(--brand-fg); display: grid; place-items: center; font-size: 12px">AL</span><span style="flex-grow: 1; display: flex; flex-direction: column; line-height: 1.2">AutoBot Labs<span style="font-size: 11.5px; font-weight: 400; color: var(--muted)">Company OS</span></span><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>
+      <p class="sect">Overview</p>
+      <a href="CompanyOS.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5" class="i3"/><rect x="13" y="3" width="8" height="5" rx="1.5" class="i1"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5" class="i2"/></svg>Dashboard</a>
+      <a href="MyPlace.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9H4z"/><circle cx="12" cy="14" r="2.5" class="i2"/></svg>My place</a>
+      <a href="ReviewInbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 13h5l1 2h4l1-2h5"/></svg>My Reviews</a>
+      <a href="Approvals.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Approvals<span class="pill warn" data-tip="3 approvals waiting on you" data-tip-pos="right" style="margin-left: auto">3</span></a>
+      <a href="Activity.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18l5-6 4 3 7-9"/></svg>Activity</a>
+      <a href="RunSupervision.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M10 9l4 2-4 2z" class="i2"/><path d="M8 21h8"/></svg>Run supervision</a>
+      <a href="OperationHistory.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v5h5"/><path d="M12 8v4l3 2"/></svg>Operation history</a>
+      <a href="AgentLedger.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2" class="it2"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>Agent ledger</a>
+      <a href="CeoChat.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-4 4v-4H4z" class="it3"/></svg>CEO Chat</a>
+      <a href="CompanyMailbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6" class="it2"/></svg>Mailbox</a>
+      <p class="sect">Work</p>
+      <a href="Backlog.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Backlog</a>
+      <a href="Boards.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1" class="it1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1" class="it2"/></svg>Boards</a>
+      <a href="Portfolios.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2" class="it2"/><path d="M9 7V5h6v2M3 12h18"/></svg>Portfolios</a>
+      <a href="Timeline.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h9M8 12h12M4 18h7"/></svg>Timeline</a>
+      <a href="Goals.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4" class="it3"/></svg>Goals</a>
+      <a href="Automation.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L5 14h6l-1 8 8-12h-6z" class="it2"/></svg>Automation</a>
+      <a href="ProcessCanvas.dc.html" class="on adv" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="6" height="5" rx="1" class="it2"/><rect x="15" y="15" width="6" height="5" rx="1"/><path d="M9 6.5h4a2 2 0 0 1 2 2V15"/></svg>Process canvas</a>
+      <a href="Routines.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>Routines</a>
+      <a href="TranscriberProjects.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" class="it3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Transcriber</a>
+      <p class="sect">Organization</p>
+      <a href="OrgChart.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="5" rx="1" class="it2"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-4h12v4"/></svg>Org Chart</a>
+      <a href="Members.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0"/></svg>Members</a>
+      <a href="Teams.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="3"/><circle cx="16" cy="9" r="3" class="i2"/><path d="M2 20a6 6 0 0 1 12 0M10 20a6 6 0 0 1 12 0"/></svg>Teams</a>
+      <a href="Roles.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M14 10h4M14 14h3"/></svg>Roles</a>
+      <a href="Handbook.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z" class="it2"/><path d="M5 17a3 3 0 0 1 3-3h10M9 8h5"/></svg>Handbook</a>
+      <a href="Costs.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it2"/><path d="M12 7v10"/></svg>Costs &amp; Budget</a>
+      <a href="BusinessIntelligence.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><path d="M5 16l4-5 4 3 6-8" /><circle cx="19" cy="6" r="1.6" class="i2"/></svg>Business intelligence</a>
+      <a href="HeartbeatMonitor.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-4 4 8 2-4h6"/></svg>Heartbeat</a>
+      <a href="Portability.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12h8M13 9l3 3-3 3"/><rect x="4" y="4" width="16" height="16" rx="2"/></svg>Portability</a>
+      <a href="CompanySecrets.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4"/><path d="M12 12h9M18 12v3"/></svg>Secrets</a>
+      <a href="CompanySettings.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>Company settings</a>
+      <div class="only-min minnote" style="margin: 16px 10px 0; padding-top: 12px; border-top: var(--bw) solid var(--line)"><span>Showing essentials</span><button type="button" class="linkbtn" onClick="{{showAll}}">Show all features</button></div>
+    </aside>
+
+    <main style="flex: 999 1 520px; min-width: 0; box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 40px; display: flex; flex-direction: column; gap: 16px">
+      <section class="card only-min" role="note" aria-labelledby="advn-h" style="padding: 14px 16px; gap: 12px; align-items: center; flex-wrap: wrap">
+        <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg></span>
+        <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 240px; min-width: 0">
+          <h2 id="advn-h" style="margin: 0; font-size: 14px; font-weight: 600">This is an advanced area</h2>
+          <span class="sub2">It's hidden from navigation while Minimal interface is on.</span>
+        </div>
+        <button type="button" class="btn sm" onClick="{{showAll}}">Show all features</button>
+        <a href="Main.dc.html" class="btn sm">Go to Home</a>
+      </section>
+
+      <header style="display: flex; flex-wrap: wrap; gap: 14px; align-items: center">
+        <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1">
+          <span class="sub2"><a href="CompanyOS.dc.html" style="color: var(--muted); text-decoration: none">Company OS</a> / Organization / <a href="OrgChart.dc.html" style="color: var(--muted); text-decoration: none">Org Chart</a></span>
+          <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em">Process canvas</h1>
+          <p class="sub2" style="margin: 0">Think of it as a film script. People and agents are the actors, they get roles, roles perform workflows, and workflows are made of processes. A process is a reusable building block, so many workflows can use the same one. Roles also hold skills and meta skills, because some processes need them. Pick a workflow to see how work moves between its processes.</p>
+        </div>
+        <button type="button" class="btn pri" onClick="{{addCard}}"><svg class="ic sonp" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add process</button>
+      </header>
+
+      <div role="toolbar" aria-label="Canvas view" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
+        <div role="group" aria-label="View mode" style="display: flex; gap: 2px; padding: 3px; border-radius: 7px; background: var(--surface2); border: var(--bw) solid var(--border)">
+          <a href="OrgChart.dc.html" class="seg">Tree</a>
+          <button type="button" class="seg on" aria-pressed="true" data-tip="One workflow at a time. Edit, drag and connect its processes" data-tip-pos="bottom">Canvas</button>
+          <a href="ProcessCanvasTable.dc.html" class="seg" data-tip="Every process as a row. Bulk edit, group by role or workflow, colour rules" data-tip-pos="bottom">Table</a>
+          <a href="OrgChart.dc.html" class="seg">People</a>
+        </div>
+
+        <div class="adv" style="position: relative">
+          <button type="button" class="btn sm" aria-haspopup="menu" aria-expanded="{{colourOpen}}" onClick="{{toggleColour}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4" class="i1"/><circle cx="16" cy="9" r="4" class="i2"/><circle cx="12" cy="16" r="4" class="i3"/></svg>Colour by: {{colourLabel}}<svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>
+          <sc-if value="{{colourOpenB}}" hint-placeholder-val="{{ false }}">
+            <div class="menu" role="menu" aria-label="Colour processes by" style="left: 0; top: 38px">
+              <sc-for list="{{colourOpts}}" as="o" hint-placeholder-count="3">
+                <button type="button" class="mi" role="menuitemradio" aria-checked="{{o.checked}}" onClick="{{o.pick}}"><span class="sw" style="background: {{o.sw}}"></span>{{o.label}}</button>
+              </sc-for>
+              <div class="msep" role="separator"></div>
+              <a href="ProcessCanvasTable.dc.html" class="mi" role="menuitem" style="text-decoration: none">Edit colour rules…</a>
+            </div>
+          </sc-if>
+        </div>
+
+        <span style="flex-grow: 1" aria-hidden="true"></span>
+
+        <div class="adv" style="display: flex; align-items: center; gap: 6px">
+          <button type="button" class="lens" data-tip="Saved lens: Deploy a release, colour by section. Shared with everyone in AutoBot Labs." data-tip-pos="bottom"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M15.5 15.5L20 20"/></svg>Release view · shared</button>
+          <button type="button" class="btn sm" onClick="{{saveLens}}">Save lens</button>
+          <button type="button" class="btn sm" onClick="{{shareLens}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.2 11l7.6-4M8.2 13l7.6 4"/></svg>Share</button>
+        </div>
+
+        <div style="position: relative">
+          <button type="button" class="btn sm" aria-haspopup="menu" aria-expanded="{{exportOpen}}" onClick="{{toggleExport}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Export<svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>
+          <sc-if value="{{exportOpenB}}" hint-placeholder-val="{{ false }}">
+            <div class="menu" role="menu" aria-label="Export" style="right: 0; top: 38px; min-width: 240px">
+              <button type="button" class="mi" role="menuitem" onClick="{{exp.png}}">Export as PNG<span class="k">image</span></button>
+              <button type="button" class="mi" role="menuitem" onClick="{{exp.pdf}}">Export as PDF<span class="k">print</span></button>
+              <button type="button" class="mi" role="menuitem" onClick="{{exp.csv}}">Export as CSV<span class="k">one row per process</span></button>
+              <p class="hint" style="padding: 6px 10px 4px">Exports the open workflow with the active lens.</p>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+
+      <p role="status" aria-live="polite" class="sub2" style="margin: -6px 0 0; min-height: 18px">{{toast}}</p>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+
+        <aside class="card" aria-labelledby="exh" style="flex: 0 0 220px; width: 220px; box-sizing: border-box">
+          <div class="ch" style="padding: 12px 14px">
+            <h2 id="exh" style="font-size: 14px">Roles</h2>
+            <span class="cnt" data-tip="Roles in AutoBot Labs" data-tip-pos="left" tabindex="0">{{roleCount}}</span>
+          </div>
+          <ul class="tree" aria-label="Roles and their workflows">
+            <sc-for list="{{tree}}" as="r" hint-placeholder-count="4">
+              <li>
+                <div class="rf">
+                  <button type="button" class="rbtn" aria-expanded="{{r.expanded}}" onClick="{{r.toggle}}" data-tip="{{r.toggleTip}}" data-tip-pos="right">
+                    <svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="transform: {{r.rot}}"><path d="M9 6l6 6-6 6"/></svg>
+                    <svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" class="it2"/></svg>
+                    <span class="nm">{{r.name}}</span>
+                  </button>
+                  <span class="dot {{r.dot}}" tabindex="0" data-tip="{{r.statusTip}}" data-tip-pos="left"></span><span class="sr">{{r.statusText}}</span>
+                  <button type="button" class="ib" aria-label="{{r.newAria}}" data-tip="New workflow" data-tip-pos="left" onClick="{{r.newWf}}"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+                </div>
+                <div class="hold">
+                  <sc-for list="{{r.holders}}" as="h" hint-placeholder-count="1"><span style="display: inline-flex; align-items: center; gap: 5px"><span>{{h.n}}</span><span class="pill {{h.cls}}">{{h.label}}</span><sc-if value="{{h.away}}" hint-placeholder-val="{{ false }}"><span class="pill warn" tabindex="0" data-tip="{{h.awayTip}}">Away</span></sc-if></span></sc-for>
+                  <span style="flex-basis: 100%">{{r.info}}</span>
+                  <span style="flex-basis: 100%">{{r.skillsLine}}</span>
+                </div>
+                <sc-if value="{{r.expandedB}}" hint-placeholder-val="{{ true }}">
+                  <ul class="wfl" aria-label="Workflows of {{r.name}}">
+                    <sc-for list="{{r.wfs}}" as="w" hint-placeholder-count="1">
+                      <li><button type="button" class="wfb {{w.cls}}" aria-current="{{w.cur}}" onClick="{{w.pick}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7z" class="iw"/><path d="M14 3v4h4M10 12h5M10 16h5"/></svg><span class="nm">{{w.name}}</span><span class="cnt" data-tip="{{w.countTip}}" data-tip-pos="right">{{w.count}}</span></button></li>
+                    </sc-for>
+                  </ul>
+                </sc-if>
+              </li>
+            </sc-for>
+          </ul>
+          <div class="ch" style="padding: 12px 14px; border-top: var(--bw) solid var(--line)">
+            <h2 id="mkh" style="font-size: 14px">Meta skills</h2>
+            <span class="cnt" data-tip="Reusable know-how roles can hold" data-tip-pos="left" tabindex="0">{{metaCount}}</span>
+          </div>
+          <p class="hint" style="padding: 8px 14px 4px">A workflow starts on a trigger and belongs to a role. A meta skill has no trigger: it is know-how roles hold and workflows call.</p>
+          <ul class="libl" aria-labelledby="mkh">
+            <sc-for list="{{metaRows}}" as="m" hint-placeholder-count="2">
+              <li><button type="button" class="lib {{m.cls}}" aria-current="{{m.cur}}" onClick="{{m.pick}}"><span class="nm">{{m.name}}</span><span class="cnt" data-tip="{{m.tip}}" data-tip-pos="right">{{m.steps}}</span><span class="lsub"><span class="nm">{{m.sub}}</span><span class="pill {{m.lineCls}} aip" data-tip="{{m.lineTip}}" data-tip-pos="right"><svg class="ic" width="10" height="10" viewBox="0 0 24 24" aria-hidden="true"><path d="{{m.lineIcon}}"/></svg>{{m.lineShort}}</span></span></button></li>
+            </sc-for>
+          </ul>
+          <div class="ch" style="padding: 12px 14px; border-top: var(--bw) solid var(--line)">
+            <h2 id="lbh" style="font-size: 14px">Process library</h2>
+            <span class="cnt" data-tip="Processes any workflow can use" data-tip-pos="left" tabindex="0">{{libCount}}</span>
+          </div>
+          <div style="padding: 10px 10px 6px"><label for="lib-q" class="sr">Search processes</label><input id="lib-q" class="inp" type="search" placeholder="Search processes" value="{{libQ}}" onInput="{{onLibQ}}" autocomplete="off" style="height: 30px; font-size: 13px"></div>
+          <ul class="libl" aria-labelledby="lbh">
+            <sc-for list="{{libRows}}" as="p" hint-placeholder-count="6">
+              <li><button type="button" class="lib {{p.cls}}" aria-current="{{p.cur}}" onClick="{{p.pick}}"><span class="nm">{{p.name}}</span><span class="cnt" data-tip="{{p.usedTip}}" data-tip-pos="right">{{p.used}}</span><span class="lsub"><span class="nm" data-tip="{{p.ownerTip}}" data-tip-pos="right">{{p.owner}}</span><sc-if value="{{p.routine}}" hint-placeholder-val="{{ false }}"><span class="rtb" data-tip="{{p.rtTip}}" data-tip-pos="right"><svg class="ic" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>{{p.rtLabel}}</span></sc-if><span class="pill {{p.lineCls}} aip" data-tip="{{p.lineTip}}" data-tip-pos="right"><svg class="ic" width="10" height="10" viewBox="0 0 24 24" aria-hidden="true"><path d="{{p.lineIcon}}"/></svg>{{p.lineShort}}</span></span></button></li>
+            </sc-for>
+          </ul>
+          <sc-if value="{{libNone}}" hint-placeholder-val="{{ false }}"><p class="hint" style="padding: 0 14px 12px">No process matches. Create one with Add process.</p></sc-if>
+        </aside>
+
+        <section class="card" aria-labelledby="cvh" style="flex: 999 1 560px; min-width: 0; overflow: visible">
+          <div class="ch" style="flex-wrap: wrap">
+            <sc-if value="{{crumbShow}}" hint-placeholder-val="{{ false }}">
+              <nav aria-label="Breadcrumb" style="flex: 1 1 100%; display: flex; align-items: center; gap: 8px; font-size: 12.5px"><button type="button" class="linkbtn" onClick="{{crumbBack}}">← Back to {{crumbFrom}}</button><span class="sub2" aria-hidden="true">/</span><span class="sub2" aria-current="page">{{wfName}}</span></nav>
+            </sc-if>
+            <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="6" height="5" rx="1" class="it2"/><rect x="15" y="15" width="6" height="5" rx="1"/><path d="M9 6.5h4a2 2 0 0 1 2 2V15"/></svg></span>
+            <h2 id="cvh" style="flex: 1 1 240px; min-width: 0; font-size: 14.5px">{{headMain}}<span style="font-weight: 400; color: var(--muted)">{{headSub}}</span></h2>
+            <sc-if value="{{statusShow}}" hint-placeholder-val="{{ true }}">
+              <span class="pill {{statusCls}}" tabindex="0" data-tip="{{statusTip}}" data-tip-pos="bottom">{{statusLabel}}</span>
+            </sc-if>
+            <sc-if value="{{awayShow}}" hint-placeholder-val="{{ false }}">
+              <span class="pill warn" tabindex="0" data-tip="{{awayTip}}" data-tip-pos="bottom">Away</span>
+            </sc-if>
+            <sc-if value="{{automationShow}}" hint-placeholder-val="{{ true }}">
+            <a href="Automation.dc.html" class="btn sm" data-tip="Edit how this workflow runs: triggers, schedule and approvals" data-tip-pos="bottom"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>Open in Automation</a>
+            </sc-if>
+          </div>
+
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: var(--bw) solid var(--line)">
+            <span class="sub2">{{statLine}}</span>
+            <span class="adv" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--text2)" aria-label="Colour legend">
+              <sc-for list="{{legend}}" as="l" hint-placeholder-count="3"><span style="display: inline-flex; align-items: center; gap: 5px"><span class="sw" style="background: {{l.sw}}"></span>{{l.label}}</span></sc-for>
+            </span>
+          </div>
+
+          <div role="group" aria-label="Transition legend" style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding: 8px 14px; border-bottom: var(--bw) solid var(--line)">
+            <span class="lb">Transitions</span>
+            <span class="lgd"><svg width="34" height="8" aria-hidden="true"><path d="M1 4H33" fill="none" stroke-width="1.75" style="stroke: var(--muted)"/></svg><span class="pill ok">on success</span></span>
+            <span class="lgd"><svg width="34" height="8" aria-hidden="true"><path d="M1 4H33" fill="none" stroke-width="1.75" stroke-dasharray="7 4" style="stroke: var(--accent)"/></svg><span class="pill bad">on failure</span></span>
+            <span class="lgd"><svg width="34" height="8" aria-hidden="true"><path d="M1 4H33" fill="none" stroke-width="1.75" stroke-dasharray="9 3 2 3" style="stroke: var(--muted)"/></svg><span class="pill info">if condition</span><span class="pill idle">else</span></span>
+            <span class="lgd"><svg width="34" height="8" aria-hidden="true"><path d="M1 4H33" fill="none" stroke-width="1.75" stroke-dasharray="0.5 5" stroke-linecap="round" style="stroke: var(--muted)"/></svg><span class="pill warn">after 30 min</span></span>
+            <span class="sub2">Select a label to edit its transition. Start and End mark where the workflow begins and finishes.</span>
+          </div>
+
+          <sc-if value="{{addOpen}}" hint-placeholder-val="{{ false }}">
+            <div role="region" aria-label="Add a process" style="padding: 12px 14px; border-bottom: var(--bw) solid var(--line); background: var(--surface2); display: flex; flex-direction: column; gap: 10px">
+              <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+                <strong style="font-size: 13.5px; flex: 1 1 200px">{{addTitle}}</strong>
+                <div role="group" aria-label="How to add" style="display: flex; gap: 2px; padding: 3px; border-radius: 7px; background: var(--surface); border: var(--bw) solid var(--border)">
+                  <button type="button" class="seg {{addSeg.existing}}" aria-pressed="{{addPress.existing}}" onClick="{{addSetExisting}}">Use an existing process</button>
+                  <button type="button" class="seg {{addSeg.fresh}}" aria-pressed="{{addPress.fresh}}" onClick="{{addSetNew}}">Create a new process</button>
+                </div>
+                <button type="button" class="ib" aria-label="Close add process" data-tip="Close" data-tip-pos="left" onClick="{{addClose}}"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+              </div>
+              <sc-if value="{{addExisting}}" hint-placeholder-val="{{ true }}">
+                <div class="fld"><label for="add-q">Search the process library</label><input id="add-q" class="inp" type="search" value="{{addQ}}" onInput="{{onAddQ}}" placeholder="Search by name" autocomplete="off"></div>
+                <ul aria-label="Matching processes" style="list-style: none; margin: 0; padding: 0; max-height: 190px; overflow-y: auto; border: var(--bw) solid var(--border); border-radius: 8px; background: var(--surface)">
+                  <sc-for list="{{addResults}}" as="r" hint-placeholder-count="4">
+                    <li class="row" style="padding: 6px 10px; gap: 8px"><span style="flex-grow: 1; font-size: 13px; min-width: 0">{{r.name}}</span><span class="sub2">{{r.used}}</span><button type="button" class="btn xs" aria-label="{{r.aria}}" onClick="{{r.pick}}">{{r.action}}</button></li>
+                  </sc-for>
+                </ul>
+                <sc-if value="{{addNoResults}}" hint-placeholder-val="{{ false }}"><p class="hint">No process matches. Try another name, or create a new process.</p></sc-if>
+              </sc-if>
+              <sc-if value="{{addNew}}" hint-placeholder-val="{{ false }}">
+                <div class="fld"><label for="add-name">Process name</label><div style="display: flex; gap: 6px"><input id="add-name" class="inp" type="text" value="{{addName}}" onInput="{{onAddName}}" placeholder="For example, Check invoice" autocomplete="off"><button type="button" class="btn sm pri" onClick="{{createNew}}" style="flex: none">Create process</button></div><p class="hint">It joins the process library, so other workflows can use it too.</p></div>
+              </sc-if>
+            </div>
+          </sc-if>
+
+          <div style="overflow-x: auto; background: var(--surface2); border-radius: 0 0 10px 10px; padding: 6px 0">
+            <div class="cv" style="width: {{cvW}}px; height: {{cvH}}px">
+              <svg width="0" height="0" aria-hidden="true" style="position: absolute">
+                <defs>
+                  <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" style="fill: var(--muted)"/></marker>
+                  <marker id="ahd" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" style="fill: var(--accent)"/></marker>
+                  <marker id="ahs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" style="fill: var(--primary)"/></marker>
+                </defs>
+              </svg>
+
+              <sc-for list="{{lines}}" as="e" hint-placeholder-count="6">
+                <svg aria-hidden="true" style="position: absolute; left: 0; top: 0; width: {{cvW}}px; height: {{cvH}}px; pointer-events: none; overflow: visible"><path d="{{e.d}}" fill="none" stroke-linejoin="round" stroke-width="{{e.sw}}" stroke-dasharray="{{e.dash}}" marker-end="{{e.marker}}" style="stroke: {{e.stroke}}"/></svg>
+              </sc-for>
+
+              <sc-for list="{{nodes}}" as="n" hint-placeholder-count="6">
+                <sc-if value="{{n.isStart}}" hint-placeholder-val="{{ false }}">
+                  <button type="button" class="tn {{n.cls}}" aria-label="{{n.aria}}" aria-pressed="{{n.pressed}}" onClick="{{n.select}}" data-tip="Choose what starts this workflow" data-tip-pos="bottom" style="left: {{n.x}}px; top: {{n.y}}px; width: {{n.w}}px; height: {{n.h}}px">Start</button>
+                  <span class="tcap" style="left: {{n.x}}px; top: {{n.capTop}}px; width: 86px">{{n.cap}}</span>
+                  <span class="pill {{n.lineCls}} aip" tabindex="0" data-tip="{{n.lineTip}}" style="position: absolute; left: {{n.x}}px; top: {{n.lineTop}}px; width: 86px; box-sizing: border-box; white-space: normal"><svg class="ic" width="10" height="10" viewBox="0 0 24 24" aria-hidden="true"><path d="{{n.lineIcon}}"/></svg>{{n.lineLabel}}</span>
+                </sc-if>
+                <sc-if value="{{n.isEnd}}" hint-placeholder-val="{{ false }}">
+                  <div class="en {{n.endCls}}" role="group" aria-label="{{n.aria}}" style="left: {{n.x}}px; top: {{n.y}}px; width: {{n.w}}px; height: {{n.h}}px"><b>{{n.endTitle}}</b><span>{{n.cap}}</span></div>
+                </sc-if>
+                <sc-if value="{{n.isProc}}" hint-placeholder-val="{{ true }}">
+                  <div class="pc {{n.cls}} {{n.kindCls}}" role="group" aria-label="{{n.aria}}" style="left: {{n.x}}px; top: {{n.y}}px; width: {{n.w}}px; height: {{n.h}}px; border-left-color: {{n.stripe}}">
+                    <sc-if value="{{n.hint}}" hint-placeholder-val="{{ false }}"><span class="warnm" tabindex="0" role="img" aria-label="{{n.hintAria}}" data-tip="{{n.hintTip}}">!</span></sc-if>
+                    <span class="pill {{n.lineCls}} aip abs" tabindex="0" data-tip="{{n.lineTip}}"><svg class="ic" width="10" height="10" viewBox="0 0 24 24" aria-hidden="true"><path d="{{n.lineIcon}}"/></svg>{{n.lineLabel}}</span>
+                    <sc-if value="{{n.skm}}" hint-placeholder-val="{{ false }}"><span class="skm" tabindex="0" role="img" aria-label="{{n.skmAria}}" data-tip="{{n.skmTip}}">S</span></sc-if>
+                    <sc-if value="{{n.isMeta}}" hint-placeholder-val="{{ false }}"><span class="pill info shr" tabindex="0" data-tip="{{n.metaTip}}">{{n.metaChip}}</span></sc-if>
+                    <sc-if value="{{n.shared}}" hint-placeholder-val="{{ false }}"><span class="pill info shr" tabindex="0" data-tip="{{n.sharedTip}}">{{n.sharedLabel}}</span></sc-if>
+                    <sc-if value="{{n.rt}}" hint-placeholder-val="{{ false }}"><span class="rtb abs" tabindex="0" data-tip="{{n.rtTip}}"><svg class="ic" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>{{n.rtLabel}}</span></sc-if>
+                    <div class="pch"><button type="button" class="pct" aria-pressed="{{n.pressed}}" onClick="{{n.select}}">{{n.title}}</button><button type="button" class="ib" aria-label="{{n.menuAria}}" data-tip="Process actions" aria-haspopup="menu" aria-expanded="{{n.menuOpen}}" onClick="{{n.toggleMenu}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.3" class="ik"/><circle cx="12" cy="12" r="1.3" class="ik"/><circle cx="18" cy="12" r="1.3" class="ik"/></svg></button></div>
+                    <span class="pca mono">{{n.tools}}</span>
+                    <sc-if value="{{n.warn}}" hint-placeholder-val="{{ false }}">
+                      <div class="wbox"><span>{{n.roleName}} lacks a tool this process needs: <b class="mono">{{n.missTool}}</b></span><button type="button" class="btn xs" onClick="{{n.grant}}" data-tip="Adds the tool to the role. Every holder of the role can use it.">Grant tool</button></div>
+                    </sc-if>
+                    <sc-if value="{{n.okNote}}" hint-placeholder-val="{{ false }}">
+                      <div class="wbox okb"><span><b class="mono">ansible-runner</b> granted to {{n.roleName}}. The process can run.</span></div>
+                    </sc-if>
+                    <div class="pcm"><sc-if value="{{n.notMeta}}" hint-placeholder-val="{{ true }}"><span class="pill idle" tabindex="0" data-tip="Inputs this process needs before it starts">{{n.inputs}}</span></sc-if><sc-if value="{{n.isMeta}}" hint-placeholder-val="{{ false }}"><button type="button" class="btn xs" aria-label="{{n.openAria}}" onClick="{{n.openMeta}}" data-tip="Open the meta skill to see its processes and transitions">Open</button></sc-if><span class="cost mono adv" data-tip="{{n.costTip}}">{{n.cost}}</span></div>
+                  </div>
+                </sc-if>
+              </sc-for>
+
+              <sc-for list="{{chips}}" as="e" hint-placeholder-count="6">
+                <button type="button" class="pill tchip {{e.cls}} {{e.selCls}}" style="left: {{e.cx}}px; top: {{e.cy}}px" aria-label="{{e.aria}}" aria-pressed="{{e.pressed}}" onClick="{{e.pick}}">{{e.label}}</button>
+              </sc-for>
+
+              <sc-if value="{{menuOpenB}}" hint-placeholder-val="{{ false }}">
+                <div class="menu" role="menu" aria-label="{{menu.aria}}" style="left: {{menu.left}}px; top: {{menu.top}}px">
+                  <button type="button" class="mi" role="menuitem" onClick="{{menu.dup}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg>Duplicate<span class="k">Ctrl D</span></button>
+                  <button type="button" class="mi" role="menuitem" onClick="{{menu.add}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h12M12 8l4 4-4 4"/><path d="M20 5v14"/></svg>Add transition from here</button>
+                  <div class="msep" role="separator"></div>
+                  <button type="button" class="mi dng" role="menuitem" onClick="{{menu.del}}" data-tip="Removes the process and every transition into or out of it" data-tip-pos="right"><svg class="ic sacc" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></svg>Delete<span class="k">Del</span></button>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+        </section>
+
+        <aside class="card" aria-labelledby="sbh" style="flex: 1 1 300px; min-width: 0; box-sizing: border-box; border-color: var(--primary)">
+          <div class="ch">
+            <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7z" class="it2"/><path d="M14 3v4h4M10 12h5M10 16h5"/></svg></span>
+            <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0">
+              <span class="sect" style="margin: 0">{{panelKicker}}</span>
+              <h2 id="sbh" style="margin: 0; font-size: 15px; font-weight: 600">{{panelTitle}}</h2>
+            </div>
+            <button type="button" class="btn sm" aria-label="Close detail" data-tip="Close · Esc" data-tip-pos="left" style="width: 32px; padding: 0; justify-content: center"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+          </div>
+          <sc-if value="{{showProc}}" hint-placeholder-val="{{ false }}">
+            <div role="tablist" aria-label="Process detail" style="display: flex; gap: 2px; padding: 3px; margin: 12px 16px 0; border-radius: 7px; background: var(--surface2); border: var(--bw) solid var(--border)">
+              <button type="button" role="tab" class="seg {{sbc.details}}" aria-selected="{{sbs.details}}" onClick="{{sbPick.details}}" style="flex: 1">Details</button>
+              <button type="button" role="tab" class="seg {{sbc.comments}}" aria-selected="{{sbs.comments}}" onClick="{{sbPick.comments}}" style="flex: 1">Comments<span class="cnt" style="margin-left: 6px">3</span></button>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{showEdge}}" hint-placeholder-val="{{ true }}">
+            <div role="region" aria-label="Transition editor" style="padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 14px">
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap"><span class="pill {{ed.chipCls}}">{{ed.chipLabel}}</span><span class="sub2" style="flex: 1 1 160px">{{ed.summary}}</span></div>
+              <div class="fld">
+                <span class="lb" id="te-from">From</span>
+                <div style="border: var(--bw) solid var(--border); border-radius: 8px; padding: 8px 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap" aria-labelledby="te-from"><span style="flex-grow: 1; font-size: 13.5px; font-weight: 600">{{ed.fromTitle}}</span><sc-if value="{{ed.canOpenFrom}}" hint-placeholder-val="{{ true }}"><button type="button" class="linkbtn" onClick="{{ed.openFrom}}">Open process</button></sc-if></div>
+              </div>
+              <div class="fld">
+                <label for="te-to">To</label>
+                <select id="te-to" class="inp" value="{{ed.to}}" onChange="{{ed.onTo}}"><sc-for list="{{ed.toOpts}}" as="o" hint-placeholder-count="4"><option value="{{o.v}}">{{o.l}}</option></sc-for></select>
+                <span style="display: flex; gap: 14px; flex-wrap: wrap"><button type="button" class="linkbtn" onClick="{{ed.pickLib}}">Use an existing process</button><button type="button" class="linkbtn" onClick="{{ed.createLib}}">Create a new process</button></span>
+              </div>
+              <div class="fld">
+                <label for="te-type">Type</label>
+                <select id="te-type" class="inp" value="{{ed.type}}" onChange="{{ed.onType}}"><option value="success">On success</option><option value="failure">On failure</option><option value="if">If condition</option><option value="else">Else</option><option value="timeout">On timeout</option></select>
+                <p class="hint">{{ed.typeHint}}</p>
+              </div>
+              <sc-if value="{{ed.isIf}}" hint-placeholder-val="{{ false }}">
+                <div class="fld"><label for="te-cond">Condition</label><input id="te-cond" class="inp" type="text" value="{{ed.cond}}" onInput="{{ed.onCond}}" autocomplete="off"><p class="hint">Reads as “if” followed by this text. Pair it with an Else transition from the same process.</p></div>
+              </sc-if>
+              <sc-if value="{{ed.isFail}}" hint-placeholder-val="{{ false }}">
+                <div class="fld"><label for="te-retry">Retries</label><input id="te-retry" class="inp mono" type="number" min="0" max="5" step="1" value="{{ed.retries}}" onInput="{{ed.onRetries}}" style="width: 90px"><p class="hint">How many times the process runs again before this path is taken. 0 means no retry.</p></div>
+              </sc-if>
+              <sc-if value="{{ed.isTimeout}}" hint-placeholder-val="{{ false }}">
+                <div class="fld"><label for="te-time">Timeout in minutes</label><input id="te-time" class="inp mono" type="number" min="1" step="1" value="{{ed.timeout}}" onInput="{{ed.onTimeout}}" style="width: 90px"><p class="hint">If the process is still running after this long, this path is taken.</p></div>
+              </sc-if>
+              <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border-top: var(--bw) solid var(--line); padding-top: 12px">
+                <button type="button" class="btn sm dng" onClick="{{ed.remove}}" data-tip="Removes this transition. The workflow no longer follows it." data-tip-pos="top"><svg class="ic sacc" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></svg>Delete transition</button>
+                <span style="flex-grow: 1" aria-hidden="true"></span>
+                <a href="Automation.dc.html" class="linkbtn" style="display: inline-flex; align-items: center">Open in Automation</a>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{showStart}}" hint-placeholder-val="{{ false }}">
+            <div role="region" aria-label="Trigger editor" style="padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 14px">
+              <p class="sub2" style="margin: 0">The trigger decides what starts {{wfName}}. Then it moves to <b>{{trg.firstName}}</b>.</p>
+              <div role="note" style="display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap"><span class="pill {{wfLine.cls}} aip"><svg class="ic" width="10" height="10" viewBox="0 0 24 24" aria-hidden="true"><path d="{{wfLine.icon}}"/></svg>{{wfLine.label}}</span><span class="sub2" style="flex: 1 1 180px">{{wfLine.text}}</span></div>
+              <div class="fld">
+                <label for="tr-type">Trigger type</label>
+                <select id="tr-type" class="inp" value="{{trg.type}}" disabled="{{trg.locked}}" onChange="{{trg.onType}}"><option value="manual">Manual</option><option value="schedule">Schedule</option><option value="email">Email received</option><option value="status">Work item status change</option><option value="webhook">Webhook</option><option value="process">Process result</option><option value="folder">File added to folder</option><option value="call">Called by a workflow</option></select>
+                <p class="hint">{{trg.hint}}</p>
+              </div>
+              <sc-if value="{{trg.isText}}" hint-placeholder-val="{{ true }}">
+              <div class="fld">
+                <label for="tr-text">{{trg.fieldLabel}}</label>
+                <input id="tr-text" class="inp" type="text" value="{{trg.text}}" disabled="{{trg.locked}}" onInput="{{trg.onText}}" autocomplete="off">
+              </div>
+              </sc-if>
+              <sc-if value="{{trg.isFolder}}" hint-placeholder-val="{{ false }}">
+              <div class="fld">
+                <label for="tr-folder">Folder</label>
+                <select id="tr-folder" class="inp" value="{{trg.folder}}" onChange="{{trg.onFolder}}"><sc-for list="{{trg.folderOpts}}" as="o" hint-placeholder-count="4"><option value="{{o.v}}">{{o.l}}</option></sc-for></select>
+              </div>
+              <div class="fld">
+                <label for="tr-types">File types</label>
+                <input id="tr-types" class="inp mono" type="text" value="{{trg.types}}" onInput="{{trg.onTypes}}" autocomplete="off">
+                <p class="hint">Separate types with commas. Only files of these types start the workflow.</p>
+              </div>
+              </sc-if>
+              <sc-if value="{{trg.isSchedule}}" hint-placeholder-val="{{ false }}">
+<div class="sk" role="group" aria-label="Schedule">
+  <div class="sk-row"><span class="sk-lab" id="sk-rep">Repeats</span>
+    <div class="sk-seg" role="group" aria-labelledby="sk-rep"><sc-for list="{{sch.modes}}" as="o" hint-placeholder-count="6"><button type="button" class="sk-b {{o.cls}}" aria-pressed="{{o.pressed}}" onClick="{{o.pick}}">{{o.label}}</button></sc-for></div>
+  </div>
+  <sc-if value="{{sch.custom}}" hint-placeholder-val="{{ false }}"><p class="sk-note" role="status"><b>Custom schedule — edit in cron.</b> This schedule cannot be shown as clicks. <button type="button" class="sk-link" onClick="{{sch.openCron}}">Edit as cron</button></p></sc-if>
+  <sc-if value="{{sch.isMin}}" hint-placeholder-val="{{ false }}"><div class="sk-row"><label for="sk-every">Every</label><select id="sk-every" value="{{sch.every}}" onChange="{{sch.onEvery}}"><sc-for list="{{sch.everyOpts}}" as="o" hint-placeholder-count="4"><option value="{{o.v}}">{{o.l}}</option></sc-for></select><span>minutes</span></div></sc-if>
+  <sc-if value="{{sch.isHour}}" hint-placeholder-val="{{ false }}"><div class="sk-row"><label for="sk-hevery">Every</label><select id="sk-hevery" value="{{sch.hevery}}" onChange="{{sch.onHevery}}"><sc-for list="{{sch.heveryOpts}}" as="o" hint-placeholder-count="4"><option value="{{o.v}}">{{o.l}}</option></sc-for></select><span>hours, at minute</span><label class="sk-sr" for="sk-hmin">Minute</label><select id="sk-hmin" value="{{sch.hmin}}" onChange="{{sch.onHmin}}"><sc-for list="{{sch.minOpts}}" as="o" hint-placeholder-count="6"><option value="{{o.v}}">{{o.l}}</option></sc-for></select></div></sc-if>
+  <sc-if value="{{sch.showRange}}" hint-placeholder-val="{{ false }}"><div class="sk-row"><label class="sk-chk"><input type="checkbox" checked="{{sch.rangeOn}}" onClick="{{sch.onRange}}">Only between</label><label class="sk-sr" for="sk-from">From</label><select id="sk-from" value="{{sch.from}}" disabled="{{sch.rangeOff}}" onChange="{{sch.onFrom}}"><sc-for list="{{sch.fromOpts}}" as="o" hint-placeholder-count="6"><option value="{{o.v}}">{{o.l}}</option></sc-for></select><span>and</span><label class="sk-sr" for="sk-to">To</label><select id="sk-to" value="{{sch.to}}" disabled="{{sch.rangeOff}}" onChange="{{sch.onTo}}"><sc-for list="{{sch.toOpts}}" as="o" hint-placeholder-count="6"><option value="{{o.v}}">{{o.l}}</option></sc-for></select></div></sc-if>
+  <sc-if value="{{sch.isMonth}}" hint-placeholder-val="{{ false }}">
+    <div class="sk-row"><div class="sk-seg" role="group" aria-label="Which day of the month"><sc-for list="{{sch.mdChips}}" as="o" hint-placeholder-count="2"><button type="button" class="sk-b {{o.cls}}" aria-pressed="{{o.pressed}}" onClick="{{o.pick}}">{{o.label}}</button></sc-for></div></div>
+    <sc-if value="{{sch.mdDay}}" hint-placeholder-val="{{ true }}"><div class="sk-row"><label for="sk-mday">On day</label><select id="sk-mday" value="{{sch.mday}}" onChange="{{sch.onMday}}"><sc-for list="{{sch.dayOpts}}" as="o" hint-placeholder-count="6"><option value="{{o.v}}">{{o.l}}</option></sc-for></select></div></sc-if>
+    <sc-if value="{{sch.mdNth}}" hint-placeholder-val="{{ false }}"><div class="sk-row"><label for="sk-nth">On the</label><select id="sk-nth" value="{{sch.nth}}" onChange="{{sch.onNth}}"><sc-for list="{{sch.nthOpts}}" as="o" hint-placeholder-count="5"><option value="{{o.v}}">{{o.l}}</option></sc-for></select><label class="sk-sr" for="sk-nthday">Weekday</label><select id="sk-nthday" value="{{sch.nthDay}}" onChange="{{sch.onNthDay}}"><sc-for list="{{sch.nthDayOpts}}" as="o" hint-placeholder-count="7"><option value="{{o.v}}">{{o.l}}</option></sc-for></select></div></sc-if>
+    <sc-if value="{{sch.dayNote}}" hint-placeholder-val="{{ false }}"><p class="sk-note">Months without this day run on the last day.</p></sc-if>
+  </sc-if>
+  <sc-if value="{{sch.isOnce}}" hint-placeholder-val="{{ false }}"><div class="sk-row"><label for="sk-date">Date</label><input id="sk-date" type="date" value="{{sch.date}}" onInput="{{sch.onDate}}"></div></sc-if>
+  <sc-if value="{{sch.showDays}}" hint-placeholder-val="{{ false }}"><div class="sk-row" style="align-items: flex-start"><span class="sk-lab" id="sk-days">{{sch.dayLabel}}</span><div class="sk-row" role="group" aria-labelledby="sk-days" style="gap: 6px"><sc-for list="{{sch.dayChips}}" as="d" hint-placeholder-count="7"><button type="button" class="sk-chip {{d.cls}}" aria-pressed="{{d.pressed}}" aria-label="{{d.aria}}" onClick="{{d.toggle}}">{{d.label}}</button></sc-for></div></div></sc-if>
+  <sc-if value="{{sch.showTime}}" hint-placeholder-val="{{ false }}"><div class="sk-row"><span>At</span><label class="sk-sr" for="sk-h">Hour</label><select id="sk-h" value="{{sch.h}}" onChange="{{sch.onH}}"><sc-for list="{{sch.hourOpts}}" as="o" hint-placeholder-count="6"><option value="{{o.v}}">{{o.l}}</option></sc-for></select><span aria-hidden="true">:</span><label class="sk-sr" for="sk-m">Minute</label><select id="sk-m" value="{{sch.m}}" onChange="{{sch.onM}}"><sc-for list="{{sch.minOpts}}" as="o" hint-placeholder-count="6"><option value="{{o.v}}">{{o.l}}</option></sc-for></select><span class="sk-note">24-hour time</span>
+    <sc-if value="{{sch.isDay}}" hint-placeholder-val="{{ true }}"><label class="sk-chk" style="margin-left: 8px"><input type="checkbox" checked="{{sch.weekdaysOnly}}" onClick="{{sch.onWeekdays}}">Weekdays only</label></sc-if></div></sc-if>
+  <div class="sk-row"><label for="sk-zone">Time zone</label><select id="sk-zone" value="{{sch.zone}}" onChange="{{sch.onZone}}"><sc-for list="{{sch.zoneOpts}}" as="o" hint-placeholder-count="4"><option value="{{o.v}}">{{o.l}}</option></sc-for></select><span class="sk-note">Uses the company time zone.</span></div>
+  <p class="sk-sum" role="status" aria-live="polite">{{sch.summary}}</p>
+  <div class="sk-runs"><span class="sk-lab" id="sk-nx">Next runs</span>
+    <ol aria-labelledby="sk-nx" class="sk-list"><sc-for list="{{sch.runs}}" as="r" hint-placeholder-count="3"><li class="mono">{{r.text}}</li></sc-for></ol>
+    <sc-if value="{{sch.noRuns}}" hint-placeholder-val="{{ false }}"><p class="sk-note">{{sch.runsNote}}</p></sc-if>
+  </div>
+  <div class="adv sk-adv">
+    <button type="button" class="sk-link" aria-expanded="{{sch.advPressed}}" onClick="{{sch.toggleAdv}}">Advanced: saved as</button>
+    <sc-if value="{{sch.advOpen}}" hint-placeholder-val="{{ false }}">
+      <sc-if value="{{sch.showTag}}" hint-placeholder-val="{{ true }}"><div class="sk-row"><span class="sk-tag" tabindex="0" data-tip="Picked automatically. You never need to edit this.">{{sch.savedLabel}}</span></div></sc-if>
+      <sc-if value="{{sch.notEditing}}" hint-placeholder-val="{{ true }}"><sc-for list="{{sch.savedLines}}" as="l" hint-placeholder-count="1"><div class="sk-row"><input class="mono sk-cron" type="text" value="{{l.text}}" readonly="readonly" aria-label="{{l.aria}}" spellcheck="false"></div></sc-for></sc-if>
+      <sc-if value="{{sch.editing}}" hint-placeholder-val="{{ false }}"><div class="sk-row"><label class="sk-sr" for="sk-cron">Cron expression</label><input id="sk-cron" class="mono sk-cron" type="text" value="{{sch.cron}}" aria-invalid="{{sch.invalid}}" onInput="{{sch.onCron}}" autocomplete="off" spellcheck="false"></div></sc-if>
+      <div class="sk-row"><button type="button" class="btn sm" onClick="{{sch.copy}}">{{sch.copyLabel}}</button><button type="button" class="btn sm" onClick="{{sch.toggleEdit}}">{{sch.editLabel}}</button></div>
+      <sc-if value="{{sch.badPlain}}" hint-placeholder-val="{{ false }}"><p class="sk-err" role="alert">This isn't a valid schedule. Example: 0 9 * * 1-5 means weekdays at 09:00.</p></sc-if>
+      <sc-if value="{{sch.badExt}}" hint-placeholder-val="{{ false }}"><p class="sk-err" role="alert">Use the picker for 'last Friday' and similar — cron can't express it.</p></sc-if>
+      <sc-if value="{{sch.hasNote}}" hint-placeholder-val="{{ false }}"><p class="sk-note">{{sch.savedNote}}</p></sc-if>
+      <sc-if value="{{sch.editing}}" hint-placeholder-val="{{ false }}"><p class="sk-note">Standard five-field cron only: minute, hour, day of month, month, weekday. The picker and this field stay in sync.</p></sc-if>
+    </sc-if>
+  </div>
+  <span class="sk-sr" role="status" aria-live="polite">{{sch.live}}</span>
+</div>
+              </sc-if>
+              <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border-top: var(--bw) solid var(--line); padding-top: 12px">
+                <span class="sub2">Run by {{runBy}}</span>
+                <span style="flex-grow: 1" aria-hidden="true"></span>
+                <a href="Automation.dc.html" class="linkbtn" style="display: inline-flex; align-items: center">Open in Automation</a>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{sbDetails}}" hint-placeholder-val="{{ true }}">
+            <div role="tabpanel" aria-label="Details" style="padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 14px">
+              <div class="fld"><label for="cd-title">Title</label><input id="cd-title" class="inp" type="text" value="{{cardTitle}}" onInput="{{onTitle}}"></div>
+
+              <div class="fld">
+                <label for="cd-line">AI line</label>
+                <select id="cd-line" class="inp" value="{{line.val}}" onChange="{{line.onChange}}"><option value="auto">Autonomous</option><option value="draft">Drafts · person sends</option><option value="never">Never touches</option></select>
+                <p class="hint"><span class="pill {{line.effCls}} aip" style="margin-right: 4px"><svg class="ic" width="10" height="10" viewBox="0 0 24 24" aria-hidden="true"><path d="{{line.effIcon}}"/></svg>{{line.effShort}}</span>{{line.effText}}</p>
+                <sc-if value="{{line.unset}}" hint-placeholder-val="{{ false }}"><p class="hint">Not set. Treated as Drafts · person sends until the owner role decides.</p></sc-if>
+                <sc-if value="{{line.pending}}" hint-placeholder-val="{{ false }}">
+                  <div class="wbox" role="status" style="background: var(--warn-bg); color: var(--warn-fg)"><span><b>Change waiting for approval.</b> {{line.pendingText}}</span><div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center"><button type="button" class="btn xs" onClick="{{line.withdraw}}">Withdraw request</button><a href="Approvals.dc.html" class="linkbtn" style="display: inline-flex; align-items: center">Open Approvals</a></div></div>
+                </sc-if>
+                <p class="hint">Autonomous: AI does it alone, then reports. Drafts · person sends: AI drafts, a person reviews, edits and sends. Never touches: only people act. This applies to every tool and procedure.</p>
+                <p class="hint">Changing the line goes through Approvals. Agents never change a line.</p>
+              </div>
+
+              <sc-if value="{{isMetaSel}}" hint-placeholder-val="{{ false }}">
+                <div class="fld">
+                  <span class="lb" id="cd-meta">Meta skill</span>
+                  <div class="wbox" role="group" aria-labelledby="cd-meta" style="background: var(--info-bg); color: var(--info-fg)"><span>{{metaSel.text}}</span><button type="button" class="btn xs" aria-label="{{metaSel.aria}}" onClick="{{metaSel.open}}">Open meta skill</button></div>
+                  <p class="hint">A meta skill has no owner role. It is held by roles: {{metaSel.held}}.</p>
+                </div>
+              </sc-if>
+              <sc-if value="{{notMetaSel}}" hint-placeholder-val="{{ true }}">
+              <div class="fld">
+                <label for="cd-owner">Owner role</label>
+                <select id="cd-owner" class="inp" value="{{ownerVal}}" onChange="{{onOwner}}"><sc-for list="{{ownerOpts}}" as="o" hint-placeholder-count="4"><option value="{{o.v}}">{{o.l}}</option></sc-for></select>
+                <p class="hint">The role responsible for this process, whichever workflows use it. A routine runs it as this role, so whoever holds the role is accountable.</p>
+              </div>
+
+              <div class="fld">
+                <span class="lb" id="cd-rt">Routine</span>
+                <sc-if value="{{rt.on}}" hint-placeholder-val="{{ true }}">
+                  <div class="rtbox" role="group" aria-labelledby="cd-rt">
+                    <div class="row"><span class="k">Schedule</span><span style="flex: 1 1 120px">{{rt.text}}</span><sc-if value="{{rt.paused}}" hint-placeholder-val="{{ false }}"><span class="pill warn">Paused</span></sc-if></div>
+                    <div class="row"><span class="k">Next run</span><span class="mono" style="flex: 1 1 120px">{{rt.next}}</span></div>
+                    <div class="row"><span class="k">Last run</span><span class="pill {{rt.lastCls}}">{{rt.lastLabel}}</span><span class="sub2" style="flex: 1 1 120px">{{rt.lastWhen}}</span></div>
+                    <div class="row"><span class="k">Runs as</span><span style="flex: 1 1 120px">{{rt.runsAs}}</span></div>
+                  </div>
+                  <sc-if value="{{rt.away}}" hint-placeholder-val="{{ false }}">
+                    <div class="wbox" role="note" style="background: var(--warn-bg); color: var(--warn-fg)"><span>{{rt.awayText}}</span></div>
+                  </sc-if>
+                  <a href="Routines.dc.html" class="linkbtn" style="display: inline-flex; align-items: center; align-self: flex-start">Open in Routines</a>
+                </sc-if>
+                <sc-if value="{{rt.off}}" hint-placeholder-val="{{ false }}">
+                  <p class="hint">No routine runs this process on its own. It only runs inside workflows.</p>
+                  <button type="button" class="btn sm" onClick="{{rt.automate}}" data-tip="Creates a routine that runs this process on a schedule, as its owner role" style="align-self: flex-start"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>Automate with a routine</button>
+                </sc-if>
+              </div>
+              </sc-if>
+
+              <div class="fld">
+                <span class="lb" id="cd-sk">Requires skills ({{reqCount}})</span>
+                <ul aria-labelledby="cd-sk" style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: var(--bw) solid var(--border); border-radius: 8px">
+                  <sc-for list="{{reqRows}}" as="q" hint-placeholder-count="1">
+                    <li class="row" style="padding: 8px 10px; gap: 6px; flex-wrap: wrap"><b style="font-size: 13px; flex: 1 1 140px">{{q.name}}</b><sc-for list="{{q.roles}}" as="x" hint-placeholder-count="1"><span class="pill {{x.cls}}">{{x.label}}</span></sc-for></li>
+                  </sc-for>
+                </ul>
+                <sc-if value="{{reqNone}}" hint-placeholder-val="{{ false }}"><p class="hint">This process needs no skills.</p></sc-if>
+                <sc-for list="{{missRows}}" as="m" hint-placeholder-count="1">
+                  <div class="wbox" role="note" style="background: var(--warn-bg); color: var(--warn-fg)"><span>{{m.text}}</span><button type="button" class="btn xs" aria-label="{{m.aria}}" onClick="{{m.add}}" data-tip="Gives the skill to the role. Everyone who holds this role gets it.">{{m.btn}}</button></div>
+                </sc-for>
+                <sc-if value="{{inMetaShow}}" hint-placeholder-val="{{ false }}"><p class="hint">{{inMetaText}}</p></sc-if>
+                <sc-if value="{{opensTr}}" hint-placeholder-val="{{ false }}"><p class="hint"><a href="TranscriberProjects.dc.html">Opens results in Transcriber</a></p></sc-if>
+                <p class="hint">The role running the process must hold these skills. Whoever holds the role gets the role's skills.</p>
+              </div>
+
+              <div class="fld">
+                <span class="lb" id="cd-wf">Used in workflows ({{usedCount}})</span>
+                <ul aria-labelledby="cd-wf" style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: var(--bw) solid var(--border); border-radius: 8px">
+                  <sc-for list="{{usedRows}}" as="u" hint-placeholder-count="2">
+                    <li class="row" style="padding: 8px 10px; gap: 8px; flex-wrap: wrap"><span style="flex: 1 1 120px; min-width: 0; font-size: 13px"><b>{{u.name}}</b> <span class="sub2">· {{u.role}}</span></span><sc-if value="{{u.current}}" hint-placeholder-val="{{ false }}"><span class="pill idle">open now</span></sc-if><button type="button" class="btn xs" aria-label="{{u.aria}}" onClick="{{u.pick}}">Select</button></li>
+                  </sc-for>
+                </ul>
+                <sc-if value="{{usedNone}}" hint-placeholder-val="{{ false }}"><p class="hint">No workflow uses this process yet. Use it in a workflow to put it to work.</p></sc-if>
+                <sc-if value="{{sharedWarn}}" hint-placeholder-val="{{ false }}">
+                  <div class="wbox" role="note" style="background: var(--warn-bg); color: var(--warn-fg)"><span>This process is used in {{usedCount}} workflows. Changes apply to all of them.</span><button type="button" class="btn xs" disabled="{{copyOff}}" onClick="{{makeCopy}}" data-tip="Creates a copy used only by the workflow that is open. The other workflows keep the original.">Make a copy for this workflow only</button></div>
+                </sc-if>
+                <p class="hint">The role that owns a workflow runs it. Whoever holds the role, a person or an agent, performs every process in it.</p>
+                <a href="Automation.dc.html" class="linkbtn" style="display: inline-flex; align-items: center; align-self: flex-start">Open in Automation</a>
+              </div>
+
+              <sc-if value="{{inWf}}" hint-placeholder-val="{{ true }}">
+              <div class="fld">
+                <span class="lb" id="cd-out">Transitions out</span>
+                <ul aria-labelledby="cd-out" style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: var(--bw) solid var(--border); border-radius: 8px">
+                  <sc-for list="{{outRows}}" as="o" hint-placeholder-count="2">
+                    <li class="row" style="padding: 8px 10px; gap: 8px; flex-wrap: wrap"><span class="pill {{o.cls}}">{{o.label}}</span><span style="flex: 1 1 100px; font-size: 13px; min-width: 0">to {{o.to}}</span><button type="button" class="btn xs" aria-label="{{o.aria}}" onClick="{{o.open}}">Edit</button></li>
+                  </sc-for>
+                </ul>
+                <sc-if value="{{noOuts}}" hint-placeholder-val="{{ false }}"><p class="hint">No transitions out. The workflow stops here. Add one to say what happens next.</p></sc-if>
+                <button type="button" class="btn sm" onClick="{{addTransition}}" style="align-self: flex-start"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add transition</button>
+              </div>
+              </sc-if>
+              <sc-if value="{{notInWf}}" hint-placeholder-val="{{ false }}"><p class="hint">This process is not in the workflow that is open. Select a workflow above to see its transitions.</p></sc-if>
+
+              <div class="fld">
+                <label for="cd-move">Use in another workflow</label>
+                <div style="display: flex; gap: 6px"><select id="cd-move" class="inp" value="{{useVal}}" onChange="{{onUse}}" disabled="{{useNone}}"><sc-for list="{{useOpts}}" as="o" hint-placeholder-count="4"><option value="{{o.v}}">{{o.l}}</option></sc-for></select><button type="button" class="btn sm" disabled="{{useNone}}" onClick="{{doUse}}" data-tip="The process stays where it is and is also used in the workflow you picked" style="flex: none">Use</button></div>
+              </div>
+
+              <div class="fld">
+                <span class="lb" id="cd-in">Inputs</span>
+                <table aria-labelledby="cd-in" style="border-collapse: collapse; width: 100%; border: var(--bw) solid var(--border); border-radius: 8px">
+                  <thead><tr><th scope="col" style="padding: 6px 10px">Field</th><th scope="col" style="padding: 6px 10px"><span tabindex="0" data-tip="Required before the process can start">Req.</span></th><th scope="col" style="padding: 6px 10px"><span class="sr">Actions</span></th></tr></thead>
+                  <tbody>
+                    <sc-for list="{{inputRows}}" as="i" hint-placeholder-count="2">
+                      <tr><td style="padding: 6px 10px; white-space: normal">{{i.f}}<br><span class="sub2">{{i.t}}</span></td><td style="padding: 6px 10px"><span class="pill {{i.cls}}">{{i.req}}</span></td><td style="padding: 2px 4px; text-align: right"><button type="button" class="ib" aria-label="{{i.aria}}" data-tip="Edit field"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button></td></tr>
+                    </sc-for>
+                  </tbody>
+                </table>
+                <button type="button" class="linkbtn" style="align-self: flex-start">Add input field</button>
+              </div>
+
+              <div class="fld">
+                <div style="display: flex; align-items: center; gap: 8px"><span class="lb" style="flex-grow: 1">Tools</span><span class="sub2 mono adv" data-tip="Sum of per-run costs, all in EUR" data-tip-pos="left">{{costTotal}}</span></div>
+                <sc-for list="{{toolRows}}" as="t" hint-placeholder-count="2">
+                  <div class="tool">
+                    <div class="toolh"><b>{{t.name}}</b><span class="pill idle">{{t.group}}</span><span class="pill {{t.lineCls}} aip" tabindex="0" data-tip="{{t.lineTip}}"><svg class="ic" width="10" height="10" viewBox="0 0 24 24" aria-hidden="true"><path d="{{t.lineIcon}}"/></svg>{{t.lineLabel}}</span><button type="button" class="ib" aria-label="{{t.editAria}}" data-tip="Edit tool"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button><button type="button" class="ib" aria-label="{{t.rmAria}}" data-tip="Remove from process"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+                    <span class="sub2 mono" style="font-size: 11.5px">{{t.url}}</span>
+                    <span class="sub2 adv">{{t.cost}}</span>
+                    <sc-if value="{{t.miss}}" hint-placeholder-val="{{ false }}">
+                      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap"><span class="pill bad" tabindex="0" data-tip="{{t.missTip}}">Not granted to {{roleName}}</span><button type="button" class="btn xs" onClick="{{t.grant}}" data-tip="Adds the tool to the role. Every holder of the role can use it.">Grant tool</button></div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+                <sc-if value="{{noTools}}" hint-placeholder-val="{{ false }}"><p class="hint">This process needs no tools. A person does it by hand.</p></sc-if>
+                <button type="button" class="linkbtn" style="align-self: flex-start">Add tool</button>
+              </div>
+
+              <div class="fld">
+                <span class="lb" id="cd-links">Links, embeds &amp; training</span>
+                <ul aria-labelledby="cd-links" style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: var(--bw) solid var(--border); border-radius: 8px">
+                  <li class="row" style="padding: 8px 10px; gap: 8px"><span class="pill idle">Link</span><a href="Knowledge.dc.html" style="flex-grow: 1; font-size: 13px">Release runbook</a><button type="button" class="ib" aria-label="Remove Release runbook" data-tip="Remove"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></li>
+                  <li class="row" style="padding: 8px 10px; gap: 8px"><span class="pill info" data-tip="Shown inline in the process when opened">Embed</span><span style="flex-grow: 1; font-size: 13px">Service architecture diagram</span><button type="button" class="ib" aria-label="Remove Service architecture diagram" data-tip="Remove"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></li>
+                  <li class="row" style="padding: 8px 10px; gap: 8px"><span class="pill warn">Training</span><span style="flex-grow: 1; font-size: 13px">Safe deploys · video, 12 min</span><button type="button" class="ib" aria-label="Remove Safe deploys" data-tip="Remove"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></li>
+                </ul>
+                <button type="button" class="linkbtn" style="align-self: flex-start">Add link, embed or training</button>
+              </div>
+
+              <div style="border-top: var(--bw) solid var(--line); padding-top: 10px">
+                <div class="kv"><span>Created by</span><span>Alex Smith · <span class="mono">2026-09-28</span></span></div>
+                <div class="kv" style="border-bottom: 0"><span>Last edited</span><span>Jane Doe · <span class="mono">10:12</span></span></div>
+                <div style="margin-top: 6px; padding: 10px 12px; border-radius: 8px; background: var(--surface2); border: var(--bw) solid var(--border); display: flex; flex-direction: column; gap: 6px">
+                  <span style="font-size: 12.5px; font-weight: 600">Who can edit this process</span>
+                  <span class="sub2">The creator, their manager, and that manager's manager.</span>
+                  <span style="display: flex; gap: 6px; flex-wrap: wrap"><span class="pill idle">Alex Smith · creator</span><span class="pill ok" data-tip="That is you">Jane Doe · her manager</span></span>
+                  <span class="sub2">Jane Doe has no manager, so there is no third editor.</span>
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+                <span style="flex-grow: 1" aria-hidden="true"></span>
+                <button type="button" class="btn sm">Discard</button>
+                <button type="button" class="btn sm pri" onClick="{{saveCard}}">Save process</button>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{sbComments}}" hint-placeholder-val="{{ false }}">
+            <div role="tabpanel" aria-label="Comments and tags" style="padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 14px">
+              <div class="fld">
+                <span class="lb" id="tg-l">Tags</span>
+                <div role="list" aria-labelledby="tg-l" style="display: flex; flex-wrap: wrap; gap: 6px">
+                  <sc-for list="{{tags}}" as="t" hint-placeholder-count="3"><span class="chip" role="listitem">{{t.name}}<button type="button" class="ib" aria-label="{{t.aria}}" data-tip="Remove tag" onClick="{{t.remove}}"><svg class="ic" width="10" height="10" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span></sc-for>
+                </div>
+                <div style="display: flex; gap: 6px"><label for="tg-new" class="sr">New tag</label><input id="tg-new" class="inp" type="text" placeholder="Add a tag" value="{{tagDraft}}" onInput="{{onTagDraft}}" onKeyDown="{{onTagKey}}"><button type="button" class="btn sm" onClick="{{addTag}}">Add</button></div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 12px; border-top: var(--bw) solid var(--line); padding-top: 12px">
+                <span class="lb">Comments (3)</span>
+                <div class="cm"><span class="av" style="background: var(--i1t)">AS</span><div style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: 12.5px"><b>Alex Smith</b> <span class="sub2 mono">09:40</span></span><span style="font-size: 13px; line-height: 1.45">Staging deploys stopped at the playbook step. Can we give Ops Lead the ansible tool?</span></div></div>
+                <div class="cm"><span class="av"><svg class="ic" width="16" height="16" viewBox="0 0 30 30" aria-hidden="true"><rect x="5" y="9" width="20" height="15" rx="4" class="i3"/><path d="M15 9V5"/></svg></span><div style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: 12.5px"><b class="mono">devops-engineer</b> <span class="pill info" style="font-size: 10px; padding: 1px 6px">Agent</span> <span class="sub2 mono">09:52</span></span><span style="font-size: 13px; line-height: 1.45">Confirmed. I cannot run ansible-runner until the role has it.</span></div></div>
+                <div class="cm"><span class="av" style="background: var(--i2t)">JD</span><div style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: 12.5px"><b>Jane Doe</b> <span class="sub2 mono">10:12</span></span><span style="font-size: 13px; line-height: 1.45">I will grant it from the process card.</span></div></div>
+                <div class="fld"><label for="cm-new">Add a comment</label><textarea id="cm-new" class="inp" rows="3" placeholder="Write a comment. Type @ to mention a person or agent."></textarea></div>
+                <div style="display: flex; justify-content: flex-end"><button type="button" class="btn sm pri">Comment</button></div>
+              </div>
+            </div>
+          </sc-if>
+        </aside>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"ui":{"editor":"enum","options":["full","minimal"],"default":"full"},"$preview":{"width":1440,"height":2350}}'>
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+    try { const u = window.localStorage.getItem('autobot-ui-mode'); if (u === 'full' || u === 'minimal') this.setState({ ui: u }); } catch (e) {}
+  }
+  setUi(id) {
+    try { window.localStorage.setItem('autobot-ui-mode', id); } catch (e) {}
+    this.setState({ ui: id, uiAnnounce: id === 'minimal' ? 'Minimal interface on. Advanced features hidden.' : 'Full interface on. All features shown.' });
+  }
+  say(msg, extra) {
+    this.setState(Object.assign({ toast: msg }, extra || {}));
+  }
+  toolMeta() {
+    return {
+      'git-forge': { g: 'Source control', u: 'https://forge.example.com/api/v1', c: 0 },
+      'ansible-runner': { g: 'Infrastructure', u: 'https://ansible.example.com/run', c: 0.12 },
+      'issue-tracker': { g: 'Tracking', u: 'https://issues.example.com/api', c: 0.06 },
+      'test-runner': { g: 'CI', u: 'https://ci.example.com/run', c: 0.18 },
+      'llm-completion': { g: 'Model', u: 'https://llm.example.com/v1/complete', c: 0.24 },
+      'knowledge-search': { g: 'Knowledge', u: 'https://kb.example.com/search', c: 0.07 },
+      'bench-runner': { g: 'Infrastructure', u: 'https://bench.example.com/run', c: 6.8 },
+      'alerting': { g: 'Monitoring', u: 'https://alerts.example.com/api', c: 0.02 },
+      'status-page': { g: 'Communication', u: 'https://status.example.com/api', c: 0 },
+      'docs-site': { g: 'Publishing', u: 'https://docs.example.com/api', c: 0.02 },
+      'mailbox': { g: 'Communication', u: 'https://mail.example.com/api', c: 0.01 },
+      'transcriber': { g: 'Model', u: 'https://transcriber.example.com/api', c: 0.35 },
+      'social-media': { g: 'Communication', u: 'https://social.example.com/api', c: 0.03 }
+    };
+  }
+  model() {
+    const T = this.toolMeta();
+    const P = (id, title, tools) => ({ id: id, title: title, tools: tools, cost: Math.round(tools.reduce((s, t) => s + T[t].c, 0) * 100) / 100 });
+    const L = {};
+    [
+      P('goals', 'Set quarterly goals', []), P('budgets', 'Approve budgets', []),
+      P('notes', 'Check release notes', []), P('approve', 'Approve release', []),
+      Object.assign(P('email', 'Handle incoming email', ['mailbox', 'llm-completion', 'issue-tracker', 'social-media']), { metaId: 'mail' }),
+      Object.assign(P('safe', 'Safe deploy', ['git-forge', 'ansible-runner', 'test-runner']), { metaId: 'safe' }),
+      P('classify', 'Classify email', ['mailbox', 'llm-completion']), P('extract', 'Extract the request', ['llm-completion']), P('route', 'Route to the owning role', ['issue-tracker']),
+      P('triage', 'Triage request', ['issue-tracker', 'llm-completion']), P('ask', 'Ask for details', ['llm-completion']),
+      P('staging', 'Deploy to staging', ['git-forge', 'ansible-runner']), P('smoke', 'Run smoke tests', ['test-runner']),
+      P('prod', 'Deploy to production', ['git-forge', 'ansible-runner']),
+      P('rbs', 'Roll back staging', ['git-forge', 'ansible-runner']), P('rbp', 'Roll back production', ['git-forge', 'ansible-runner']),
+      P('notify', 'Notify owner', ['status-page']),
+      P('alert', 'Triage alert', ['alerting', 'llm-completion']), P('restore', 'Restore service', ['ansible-runner', 'status-page']),
+      P('note', 'Write incident note', ['llm-completion', 'status-page']),
+      P('sources', 'Gather sources', ['knowledge-search']), P('spec', 'Write spec', ['knowledge-search', 'llm-completion']),
+      P('impl', 'Implement change', ['git-forge', 'test-runner', 'llm-completion']), P('tests', 'Write tests', ['git-forge', 'test-runner']),
+      P('review', 'Review code', ['git-forge', 'llm-completion']), P('decide', 'Approve or request changes', ['git-forge']),
+      P('bench', 'Run benchmark', ['bench-runner']), P('compare', 'Compare with baseline', ['llm-completion']),
+      P('docs', 'Update docs', ['knowledge-search', 'llm-completion']), P('publish', 'Publish docs', ['docs-site']),
+      P('trans', 'Transcribe recording', ['transcriber']), P('label', 'Label speakers', ['transcriber']), P('tsum', 'Summarise transcript', ['llm-completion']), P('wi', 'Create work items', ['issue-tracker']), P('kb', 'Save to knowledge base', ['knowledge-search']),
+      P('check', 'Check social media feed', ['social-media']), P('reply', 'Draft a reply', ['social-media', 'llm-completion']), P('sched', 'Schedule a social media post', ['social-media']),
+      P('summ', 'Summarise daily work', ['issue-tracker', 'llm-completion']), P('fleet', 'Check fleet health', ['alerting']),
+      P('reindex', 'Re-index knowledge base', ['knowledge-search']), P('costrep', 'Send weekly cost report', ['llm-completion'])
+    ].forEach((p) => { L[p.id] = p; });
+    const W = (id, name, trigger, stages) => ({ id: id, name: name, trigger: trigger, stages: stages.map((s) => ({ n: s[0], ps: s[1].map((pid) => L[pid]) })) });
+    const manual = { type: 'manual', text: 'Started by hand' };
+    const email = { type: 'email', text: 'When an email arrives in the company mailbox' };
+    const agent = (n) => ({ n: n, t: 'agent' });
+    const person = (n, away) => ({ n: n, t: 'person', away: !!away });
+    const out = [
+      { id: 'ceo', name: 'Founder & CEO', holders: [person('Jane Doe')], wfs: [W('planning', 'Company planning', { type: 'schedule', text: 'Every quarter on the first working day' }, [['Plan', ['goals']], ['Approve', ['budgets']]])] },
+      { id: 'ops', name: 'Head of Operations', holders: [person('Alex Smith', true)], wfs: [W('approval', 'Release approval', email, [['Intake', ['email']], ['Check', ['notes']], ['Decide', ['approve']]])] },
+      { id: 'comms', name: 'Communications Lead', reports: 'Founder & CEO', holders: [person('Alex Smith', true)], wfs: [W('social', 'Social media replies', { type: 'process', text: 'When Check social media feed finds a mention', proc: 'check' }, [['Reply', ['reply']], ['Publish', ['sched']]])] },
+      { id: 'opslead', name: 'Ops Lead', holders: [agent('devops-engineer')], wfs: [
+        W('deploy', 'Deploy a release', { type: 'status', text: 'When a work item moves to Ready to deploy' }, [['Intake', ['triage', 'ask']], ['Staging', ['staging', 'smoke']], ['Production', ['prod']], ['Recovery', ['rbs', 'rbp', 'notify']]]),
+        W('incident', 'Incident response', email, [['Intake', ['email']], ['Triage', ['alert']], ['Fix', ['restore', 'note']], ['Notify', ['notify']]])] },
+      { id: 'research', name: 'Head of Research', holders: [agent('research-agent')], wfs: [W('research', 'Research a change', manual, [['Research', ['sources']], ['Spec', ['spec']]])] },
+      { id: 'staff', name: 'Staff Engineer', holders: [agent('code-agent')], wfs: [W('implement', 'Implement a change', manual, [['Build', ['impl']], ['Test', ['tests']]])] },
+      { id: 'reviewer', name: 'Reviewer', holders: [agent('code-reviewer'), person('Jane Doe')], wfs: [W('review', 'Code review', manual, [['Review', ['review']], ['Decide', ['decide']]])] },
+      { id: 'perf', name: 'Performance Lead', holders: [agent('performance-engineer')], wfs: [W('perf', 'Performance check', { type: 'schedule', text: 'Every night at 02:00' }, [['Measure', ['bench']], ['Compare', ['compare']]])] },
+      { id: 'writer', name: 'Technical Writer', holders: [agent('documentation-engineer')], wfs: [
+        W('docs', 'Docs update', manual, [['Draft', ['docs']], ['Publish', ['publish']]]),
+        W('transcribe', 'Transcribe meeting recordings', { type: 'folder', text: 'When an audio or video file is added to Company files / Recordings / Meetings (mp3, m4a, wav, mp4, mov, mkv)', folder: 'Company files / Recordings / Meetings', types: 'mp3, m4a, wav, mp4, mov, mkv' }, [['Transcribe', ['trans', 'label']], ['Summarise', ['tsum', 'wi']], ['Save', ['kb']], ['Recovery', ['notify']]])] }
+    ];
+    const RS = this.roleSkills();
+    out.forEach((r) => { r.skills = RS[r.id] || []; });
+    out.lib = L;
+    out.metas = [
+      { id: 'mail', pid: 'email', name: 'Handle incoming email', ps: ['classify', 'extract', 'route', 'reply'].map((id) => L[id]), held: ['ops', 'opslead', 'comms'] },
+      { id: 'safe', pid: 'safe', name: 'Safe deploy', ps: ['staging', 'smoke', 'prod', 'rbs'].map((id) => L[id]), held: ['opslead'] }
+    ];
+    return out;
+  }
+  owners() {
+    return { check: 'comms', summ: 'writer', fleet: 'opslead', reindex: 'research', costrep: 'ops', classify: 'ops', extract: 'ops', route: 'ops' };
+  }
+  lines() {
+    const set = (k, ids) => ids.reduce((o, id) => { o[id] = k; return o; }, {});
+    return Object.assign({},
+      set('auto', ['classify', 'extract', 'route', 'sources', 'spec', 'impl', 'tests', 'review', 'bench', 'compare', 'trans', 'label', 'tsum', 'kb', 'check', 'fleet', 'triage', 'alert', 'smoke', 'staging', 'rbs', 'notify', 'costrep', 'wi', 'email', 'safe']),
+      set('draft', ['reply', 'sched', 'prod', 'rbp', 'ask', 'publish', 'restore']),
+      set('never', ['approve', 'budgets', 'goals']));
+  }
+  toolLines() {
+    return { 'git-forge': 'auto', 'ansible-runner': 'auto', 'issue-tracker': 'auto', 'test-runner': 'auto', 'llm-completion': 'auto', 'knowledge-search': 'auto', 'bench-runner': 'auto', 'alerting': 'auto', 'status-page': 'auto', 'docs-site': 'draft', 'mailbox': 'draft', 'social-media': 'draft', 'transcriber': 'auto' };
+  }
+  skills() {
+    return { email: 'Email classification', ansible: 'Ansible deploy', smoke: 'Smoke testing', writeup: 'Incident write-up', brand: 'Brand voice writing', review: 'Code review', bench: 'Benchmarking', tech: 'Technical writing', research: 'Web research', transcribe: 'Transcription' };
+  }
+  roleSkills() {
+    return { ceo: [], ops: ['email', 'brand'], comms: ['brand', 'email'], opslead: ['ansible', 'smoke', 'email'], research: ['research'], staff: ['review'], reviewer: ['review'], perf: ['bench'], writer: ['tech', 'transcribe'] };
+  }
+  reqs() {
+    return { staging: ['ansible'], prod: ['ansible'], rbs: ['ansible'], rbp: ['ansible'], smoke: ['smoke'], note: ['writeup'], reply: ['brand'], review: ['review'], bench: ['bench'], docs: ['tech'], sources: ['research'], classify: ['email'], trans: ['transcribe'], tsum: ['tech'] };
+  }
+  routines() {
+    const ok = (when, note) => ({ cls: 'ok', label: 'Succeeded', when: when + (note ? ' · ' + note : '') });
+    return {
+      check: { text: 'Every 2 hours', badge: 'every 2 h', next: '10 Oct 2026, 12:00', last: ok('10 Oct 2026, 10:00', 'found 1 mention, started Social media replies') },
+      sched: { text: 'Weekdays at 09:00', badge: 'weekdays 09:00', next: 'Mon 13 Oct 2026, 09:00', last: ok('10 Oct 2026, 09:00', 'post scheduled, waiting for approval') },
+      summ: { text: 'Weekdays at 09:00', badge: 'weekdays 09:00', next: 'Mon 13 Oct 2026, 09:00', last: ok('10 Oct 2026, 09:00', 'created a work item') },
+      fleet: { text: 'Every 30 minutes', badge: 'every 30 min', next: 'Running now', last: ok('10 Oct 2026, 10:30', 'updated the recurring work item') },
+      reindex: { text: 'Every day at 02:00', badge: 'daily 02:00', next: '11 Oct 2026, 02:00', last: ok('10 Oct 2026, 02:00', 'updated the recurring work item') },
+      costrep: { text: 'Every Monday at 08:00', badge: 'Mondays 08:00', next: 'Mon 13 Oct 2026, 08:00', last: ok('6 Oct 2026, 08:00', 'created a work item') },
+      bench: { text: 'Every Saturday at 03:00', badge: 'Saturdays 03:00', next: 'Paused', paused: true, last: ok('27 Sep 2026, 03:00', 'created a work item') }
+    };
+  }
+  schedBase() {
+    return { mode: 'daily', every: 15, rangeOn: false, from: 8, to: 18, days: [], hevery: 1, hmin: 0, h: 9, m: 0, weekdaysOnly: false, wdays: [1], mdMode: 'day', mday: 1, nth: 1, nthDay: 1, date: '2026-10-13', zone: 'Etc/GMT-3 (UTC+3)' };
+  }
+  schedInit(cron, over) {
+    const r = this.schedParse(cron);
+    const custom = r.ok && !r.p;
+    return { p: Object.assign(this.schedBase(), r.p || {}, over || {}), custom: custom, customCron: custom ? cron : '', cronEdit: false, cronText: null, bad: false, ext: false, advOpen: custom, copied: false };
+  }
+  schedDow(a) {
+    const s = a.filter((x, i) => a.indexOf(x) === i).sort((x, y) => x - y);
+    if (s.length === 0 || s.length === 7) return '*';
+    const out = [];
+    let i = 0;
+    while (i < s.length) {
+      let j = i;
+      while (j + 1 < s.length && s[j + 1] === s[j] + 1) j += 1;
+      if (j - i >= 2) out.push(s[i] + '-' + s[j]); else for (let k = i; k <= j; k += 1) out.push(String(s[k]));
+      i = j + 1;
+    }
+    return out.join(',');
+  }
+  schedCron(p) {
+    const hr = p.rangeOn ? p.from + '-' + (p.to - 1) : '*';
+    if (p.mode === 'min') return '*/' + p.every + ' ' + hr + ' * * ' + this.schedDow(p.days);
+    if (p.mode === 'hour') return p.hmin + ' ' + (p.hevery > 1 ? (p.rangeOn ? hr + '/' + p.hevery : '*/' + p.hevery) : hr) + ' * * ' + this.schedDow(p.days);
+    if (p.mode === 'day') return p.m + ' ' + p.h + ' * * ' + (p.weekdaysOnly ? '1-5' : '*');
+    if (p.mode === 'week') return p.wdays.length ? p.m + ' ' + p.h + ' * * ' + this.schedDow(p.wdays) : null;
+    if (p.mode === 'month') return p.mdMode === 'day' && p.mday <= 28 ? p.m + ' ' + p.h + ' ' + p.mday + ' * *' : null;
+    return null;
+  }
+  schedRunCron(p) {
+    if (p.mode === 'month') return p.mdMode === 'day' ? { cron: p.m + ' ' + p.h + ' ' + (p.mday === 32 ? 31 : p.mday) + ' * *' } : { cron: p.m + ' ' + p.h + ' * * *', nth: { day: p.nthDay, n: p.nth } };
+    if (p.mode === 'once') {
+      const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(p.date || '');
+      return { cron: d ? p.m + ' ' + p.h + ' ' + Number(d[3]) + ' ' + Number(d[2]) + ' *' : null };
+    }
+    return { cron: this.schedCron(p) };
+  }
+  schedSaved(p) {
+    const std = this.schedCron(p);
+    if (std) return { label: 'Standard cron', lines: [std], note: '' };
+    const pad = (n) => (n < 10 ? '0' : '') + n;
+    if (p.mode === 'once') return /^\d{4}-\d{2}-\d{2}$/.test(p.date || '') ? { label: 'One-off run', lines: [p.date + ' ' + pad(p.h) + ':' + pad(p.m)], note: 'Runs once. No repeating cron is saved.' } : null;
+    if (p.mode !== 'month') return null;
+    const DD = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+    const tail = ';BYHOUR=' + p.h + ';BYMINUTE=' + p.m;
+    if (p.mdMode === 'nth') return { label: 'Calendar rule', lines: ['FREQ=MONTHLY;BYDAY=' + (p.nth === 5 ? '-1' : p.nth) + DD[p.nthDay] + tail], note: '' };
+    return { label: 'Calendar rule', lines: ['FREQ=MONTHLY;BYMONTHDAY=' + (p.mday === 32 ? '-1' : p.mday) + tail], note: p.mday < 32 ? 'Months without this day run on the last day.' : '' };
+  }
+  schedExpand(f, lo, hi) {
+    const out = [];
+    const toks = f.split(',');
+    for (let i = 0; i < toks.length; i += 1) {
+      const m = /^(?:\*|(\d+)(?:-(\d+))?)(?:\/(\d+))?$/.exec(toks[i]);
+      if (!m) return null;
+      const step = m[3] ? Number(m[3]) : 1;
+      let a = lo;
+      let b = hi;
+      if (m[1] !== undefined) { a = Number(m[1]); b = m[2] !== undefined ? Number(m[2]) : (m[3] ? hi : a); }
+      if (a < lo || b > hi || a > b || step < 1) return null;
+      for (let x = a; x <= b; x += step) out.push(x);
+    }
+    return out;
+  }
+  schedParse(text) {
+    const parts = String(text || '').trim().split(/\s+/);
+    if (parts.length !== 5) return { ok: false };
+    const mi = parts[0]; const ho = parts[1]; const dom = parts[2]; const mon = parts[3]; const dow = parts[4];
+    const ex = [this.schedExpand(mi, 0, 59), this.schedExpand(ho, 0, 23), this.schedExpand(dom, 1, 31), this.schedExpand(mon, 1, 12)];
+    if (/[#L]/i.test(dow)) return { ok: false, ext: true };
+    const dx = this.schedExpand(dow, 0, 7);
+    if (ex.some((x) => !x) || !dx) return { ok: false };
+    const dset = dx.map((x) => x % 7).filter((x, i, a) => a.indexOf(x) === i).sort((a, b) => a - b);
+    const days = dset.length === 7 ? [] : dset;
+    const num = (x) => /^\d+$/.test(x);
+    const t = num(mi) && num(ho) ? { m: Number(mi), h: Number(ho) } : null;
+    const none = { ok: true, p: null };
+    if (mon === '*' && dom === '*') {
+      const mm = /^\*\/(\d+)$/.exec(mi);
+      const rr = /^(\d+)-(\d+)$/.exec(ho);
+      if (mm && [5, 10, 15, 30].indexOf(Number(mm[1])) >= 0 && (ho === '*' || rr)) {
+        return { ok: true, p: { mode: 'min', every: Number(mm[1]), rangeOn: !!rr, from: rr ? Number(rr[1]) : 8, to: rr ? Number(rr[2]) + 1 : 18, days: days } };
+      }
+      const hh = /^(?:\*|(\d+)-(\d+))(?:\/(\d+))?$/.exec(ho);
+      if (num(mi) && hh) {
+        const k = hh[3] ? Number(hh[3]) : 1;
+        if ([1, 2, 3, 4, 6, 8, 12].indexOf(k) >= 0) return { ok: true, p: { mode: 'hour', hmin: Number(mi), hevery: k, rangeOn: hh[1] !== undefined, from: hh[1] !== undefined ? Number(hh[1]) : 8, to: hh[1] !== undefined ? Number(hh[2]) + 1 : 18, days: days } };
+      }
+      if (t && dow === '*') return { ok: true, p: { mode: 'day', m: t.m, h: t.h, weekdaysOnly: false } };
+      if (t && dow === '1-5') return { ok: true, p: { mode: 'day', m: t.m, h: t.h, weekdaysOnly: true } };
+      if (t) return { ok: true, p: { mode: 'week', m: t.m, h: t.h, wdays: dset } };
+      return none;
+    }
+    if (mon === '*' && num(dom) && dow === '*' && t) return { ok: true, p: { mode: 'month', mdMode: 'day', m: t.m, h: t.h, mday: Number(dom) } };
+    if (num(mon) && num(dom) && dow === '*' && t) {
+      const y = Number(mon) > 10 || (Number(mon) === 10 && Number(dom) >= 12) ? 2026 : 2027;
+      const pad = (n) => (n < 10 ? '0' : '') + n;
+      return { ok: true, p: { mode: 'once', m: t.m, h: t.h, date: y + '-' + pad(Number(mon)) + '-' + pad(Number(dom)) } };
+    }
+    return none;
+  }
+  schedDays(a) {
+    const s = a.filter((x, i) => a.indexOf(x) === i).sort((x, y) => x - y);
+    const L = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    if (s.length === 0 || s.length === 7) return 'day';
+    if (s.join() === '1,2,3,4,5') return 'weekday';
+    const w = [1, 2, 3, 4, 5, 6, 0].filter((d) => s.indexOf(d) >= 0).map((d) => L[d]);
+    return w.length === 1 ? w[0] : w.slice(0, -1).join(', ') + ' and ' + w[w.length - 1];
+  }
+  schedSummary(p) {
+    const pad = (n) => (n < 10 ? '0' : '') + n;
+    const T = pad(p.h) + ':' + pad(p.m);
+    const FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const ORD = ['', 'first', 'second', 'third', 'fourth', 'last'];
+    const zone = p.zone.split(' (')[0] + ' time';
+    const dw = this.schedDays(p.days);
+    const onDays = dw === 'day' ? '' : (dw === 'weekday' ? ', on weekdays' : ', on ' + dw);
+    const range = p.rangeOn ? ' between ' + pad(p.from) + ':00 and ' + pad(p.to === 24 ? 0 : p.to) + ':00' : '';
+    let s = '';
+    if (p.mode === 'min') s = 'Every ' + p.every + ' minutes' + range + onDays;
+    else if (p.mode === 'hour') s = (p.hevery === 1 ? 'Every hour' : 'Every ' + p.hevery + ' hours') + ' at minute ' + pad(p.hmin) + range + onDays;
+    else if (p.mode === 'day') s = (p.weekdaysOnly ? 'Every weekday' : 'Every day') + ' at ' + T;
+    else if (p.mode === 'week') {
+      const w = this.schedDays(p.wdays);
+      const one = p.wdays.length === 1 ? FULL[p.wdays[0]] : w;
+      s = 'Every ' + one + ' at ' + T;
+    } else if (p.mode === 'month') s = p.mdMode === 'day' ? (p.mday === 32 ? 'On the last day of every month at ' + T : 'On day ' + p.mday + ' of every month at ' + T) : 'On the ' + ORD[p.nth] + ' ' + FULL[p.nthDay] + ' of every month at ' + T;
+    else {
+      const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(p.date || '');
+      s = d ? 'Once on ' + this.schedFmt(Date.UTC(Number(d[1]), Number(d[2]) - 1, Number(d[3]), p.h, p.m)).replace(/, \d\d:\d\d$/, '') + ' at ' + T : 'Once';
+    }
+    return s + ', ' + zone;
+  }
+  schedDescribe(text) {
+    const parts = String(text || '').trim().split(/\s+/);
+    if (parts.length !== 5 || !/^\d+$/.test(parts[0]) || !/^\d+$/.test(parts[1])) return '';
+    const pad = (n) => (n < 10 ? '0' : '') + n;
+    let s = 'At ' + pad(Number(parts[1])) + ':' + pad(Number(parts[0]));
+    if (parts[2] !== '*') s += ' on day ' + parts[2] + ' of the month';
+    if (parts[3] !== '*') s += ' in month ' + parts[3];
+    if (parts[4] !== '*') {
+      const dx = this.schedExpand(parts[4], 0, 7);
+      s += ' on ' + (dx ? this.schedDays(dx.map((x) => x % 7)) : parts[4]);
+    }
+    return s;
+  }
+  schedFmt(t) {
+    const d = new Date(t);
+    const pad = (n) => (n < 10 ? '0' : '') + n;
+    const W = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const M = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return W[d.getUTCDay()] + ' ' + d.getUTCDate() + ' ' + M[d.getUTCMonth()] + ' ' + d.getUTCFullYear() + ', ' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes());
+  }
+  schedNext(cron, n, nth) {
+    const NOW = Date.UTC(2026, 9, 12, 10, 0);
+    const parts = String(cron || '').trim().split(/\s+/);
+    if (parts.length !== 5) return [];
+    const mi = this.schedExpand(parts[0], 0, 59);
+    const ho = this.schedExpand(parts[1], 0, 23);
+    const dom = this.schedExpand(parts[2], 1, 31);
+    const mon = this.schedExpand(parts[3], 1, 12);
+    const nthM = nth ? [null, String(nth.day), nth.n === 5 ? undefined : String(nth.n), nth.n === 5 ? 'L' : undefined] : null;
+    const dx = nthM ? [] : this.schedExpand(parts[4], 0, 7);
+    if (!mi || !ho || !dom || !mon || !dx) return [];
+    const dow = dx.map((x) => x % 7);
+    const single = /^\d+$/.test(parts[2]) ? Number(parts[2]) : 0;
+    const both = parts[2] !== '*' && parts[4] !== '*';
+    const out = [];
+    for (let d = 0; d < 800 && out.length < n; d += 1) {
+      const dt = new Date(NOW + d * 86400000);
+      const y = dt.getUTCFullYear(); const mo = dt.getUTCMonth(); const da = dt.getUTCDate(); const wd = dt.getUTCDay();
+      const dim = new Date(Date.UTC(y, mo + 1, 0)).getUTCDate();
+      if (mon.indexOf(mo + 1) < 0) continue;
+      const dm = dom.indexOf(da) >= 0 || (single > dim && da === dim);
+      const wm = nthM ? (wd === Number(nthM[1]) % 7 && (nthM[3] ? da + 7 > dim : Math.ceil(da / 7) === Number(nthM[2]))) : dow.indexOf(wd) >= 0;
+      if (!(both ? (dm || wm) : (dm && wm))) continue;
+      for (let a = 0; a < ho.length; a += 1) {
+        for (let b = 0; b < mi.length; b += 1) {
+          const t = Date.UTC(y, mo, da, ho[a], mi[b]);
+          if (t > NOW && out.length < n) out.push(t);
+        }
+      }
+    }
+    return out;
+  }
+  schedView(sk, save) {
+    const p = sk.p;
+    const pad = (n) => (n < 10 ? '0' : '') + n;
+    const set = (o) => save(Object.assign({}, sk, o));
+    const up = (o) => set({ p: Object.assign({}, p, o), custom: false, bad: false, ext: false, cronText: null, copied: false });
+    const pickNum = (key) => (e) => up({ [key]: Number(e.target.value) });
+    const rng = (a, b, f) => { const o = []; for (let i = a; i <= b; i += 1) o.push({ v: String(i), l: f(i) }); return o; };
+    const std = sk.custom ? sk.customCron : this.schedCron(p);
+    const rc = sk.custom ? { cron: sk.customCron } : this.schedRunCron(p);
+    const sv = sk.custom ? { label: 'Standard cron', lines: [sk.customCron], note: '' } : this.schedSaved(p);
+    const shown = sk.cronEdit && sk.cronText !== null ? sk.cronText : (std || '');
+    const zoneName = p.zone.split(' (')[0] + ' time';
+    let summary = '';
+    let runs = [];
+    if (sk.bad) summary = 'Waiting for a valid schedule';
+    else if (sk.custom) { const d = this.schedDescribe(sk.customCron); summary = d ? d + ', ' + zoneName : 'Custom schedule'; runs = this.schedNext(sk.customCron, 3); }
+    else if (!rc.cron) summary = p.mode === 'week' ? 'Pick at least one day' : 'Pick a date';
+    else { summary = this.schedSummary(p); runs = p.mode === 'once' ? this.schedNext(rc.cron, 40).filter((t) => new Date(t).getUTCFullYear() === Number(String(p.date).slice(0, 4))).slice(0, 1) : this.schedNext(rc.cron, 3, rc.nth); }
+    const mode = sk.custom ? '' : p.mode;
+    const MODES = [['min', 'Every few minutes'], ['hour', 'Hourly'], ['day', 'Daily'], ['week', 'Weekly'], ['month', 'Monthly'], ['once', 'Once']];
+    const dayKey = p.mode === 'week' ? 'wdays' : 'days';
+    const arr = p[dayKey];
+    const DAYS = [[1, 'Mon', 'Monday'], [2, 'Tue', 'Tuesday'], [3, 'Wed', 'Wednesday'], [4, 'Thu', 'Thursday'], [5, 'Fri', 'Friday'], [6, 'Sat', 'Saturday'], [0, 'Sun', 'Sunday']];
+    const hours = rng(0, 23, (i) => pad(i));
+    return {
+      modes: MODES.map((m) => ({ label: m[1], cls: mode === m[0] ? 'on' : '', pressed: mode === m[0] ? 'true' : 'false', pick: () => up({ mode: m[0] }) })),
+      custom: sk.custom, openCron: () => set({ advOpen: true, cronEdit: true, cronText: null }),
+      isMin: mode === 'min', isHour: mode === 'hour', isDay: mode === 'day', isWeek: mode === 'week', isMonth: mode === 'month', isOnce: mode === 'once',
+      showRange: mode === 'min' || mode === 'hour', showDays: mode === 'min' || mode === 'hour' || mode === 'week', showTime: mode === 'day' || mode === 'week' || mode === 'month' || mode === 'once',
+      every: String(p.every), everyOpts: [5, 10, 15, 30].map((x) => ({ v: String(x), l: String(x) })), onEvery: pickNum('every'),
+      hevery: String(p.hevery), heveryOpts: [1, 2, 3, 4, 6, 8, 12].map((x) => ({ v: String(x), l: String(x) })), onHevery: pickNum('hevery'),
+      hmin: String(p.hmin), minOpts: rng(0, 59, (i) => pad(i)), onHmin: pickNum('hmin'),
+      rangeOn: !!p.rangeOn, rangeOff: !p.rangeOn, onRange: () => up({ rangeOn: !p.rangeOn }),
+      from: String(p.from), fromOpts: rng(0, 22, (i) => pad(i) + ':00'), onFrom: (e) => { const v = Number(e.target.value); up({ from: v, to: Math.max(p.to, v + 1) }); },
+      to: String(p.to), toOpts: rng(1, 24, (i) => pad(i === 24 ? 0 : i) + ':00' + (i === 24 ? ' (midnight)' : '')), onTo: (e) => { const v = Number(e.target.value); up({ to: v, from: Math.min(p.from, v - 1) }); },
+      h: String(p.h), hourOpts: hours, onH: pickNum('h'), m: String(p.m), onM: pickNum('m'),
+      weekdaysOnly: !!p.weekdaysOnly, onWeekdays: () => up({ weekdaysOnly: !p.weekdaysOnly }),
+      dayLabel: p.mode === 'week' ? 'Repeat on' : 'Only on these days (none selected means every day)',
+      dayChips: DAYS.map((d) => { const on = arr.indexOf(d[0]) >= 0; return { label: d[1], aria: d[2], cls: on ? 'on' : '', pressed: on ? 'true' : 'false', toggle: () => up({ [dayKey]: on ? arr.filter((x) => x !== d[0]) : arr.concat([d[0]]) }) }; }),
+      mdChips: [['day', 'On day of the month'], ['nth', 'On a weekday of the month']].map((m) => ({ label: m[1], cls: p.mdMode === m[0] ? 'on' : '', pressed: p.mdMode === m[0] ? 'true' : 'false', pick: () => up({ mdMode: m[0] }) })),
+      mdDay: p.mdMode === 'day', mdNth: p.mdMode === 'nth',
+      mday: String(p.mday), dayOpts: rng(1, 31, (i) => String(i)).concat([{ v: '32', l: 'Last day' }]), onMday: pickNum('mday'),
+      dayNote: p.mdMode === 'day' && p.mday >= 29 && p.mday < 32,
+      nth: String(p.nth), nthOpts: [{ v: '1', l: 'first' }, { v: '2', l: 'second' }, { v: '3', l: 'third' }, { v: '4', l: 'fourth' }, { v: '5', l: 'last' }], onNth: pickNum('nth'),
+      nthDay: String(p.nthDay), nthDayOpts: DAYS.map((d) => ({ v: String(d[0]), l: d[2] })), onNthDay: pickNum('nthDay'),
+      date: p.date, onDate: (e) => up({ date: e.target.value }),
+      zone: p.zone, zoneOpts: ['Etc/GMT-3 (UTC+3)', 'Europe/London', 'America/New_York', 'UTC'].map((z) => ({ v: z, l: z })), onZone: (e) => up({ zone: e.target.value }),
+      summary: summary, runs: runs.map((t) => ({ text: this.schedFmt(t) })), noRuns: runs.length === 0 && !sk.bad,
+      runsNote: sk.bad ? 'Fix the cron expression to see the next runs.' : (!rc.cron && !sk.custom ? 'Complete the schedule to see the next runs.' : (p.mode === 'once' && !sk.custom ? 'That date and time have already passed.' : 'No run found in the next two years.')),
+      advOpen: !!sk.advOpen, advPressed: sk.advOpen ? 'true' : 'false', toggleAdv: () => set({ advOpen: !sk.advOpen }),
+      cron: shown, readOnly: !sk.cronEdit, invalid: sk.bad ? 'true' : 'false', bad: !!sk.bad,
+      editLabel: sk.cronEdit ? 'Done editing' : 'Edit as cron',
+      toggleEdit: () => set({ cronEdit: !sk.cronEdit, cronText: null, bad: false, ext: false, advOpen: true }),
+      onCron: (e) => {
+        const text = e.target.value;
+        const r = this.schedParse(text);
+        if (!r.ok) { set({ cronText: text, bad: true, ext: !!r.ext, copied: false }); return; }
+        if (r.p) { set({ cronText: text, bad: false, ext: false, custom: false, p: Object.assign({}, p, r.p), copied: false }); return; }
+        set({ cronText: text, bad: false, ext: false, custom: true, customCron: text.trim(), copied: false });
+      },
+      editing: !!sk.cronEdit, notEditing: !sk.cronEdit, badExt: !!sk.bad && !!sk.ext, badPlain: !!sk.bad && !sk.ext,
+      showTag: !!sv && !sk.cronEdit, savedLabel: sv ? sv.label : '',
+      savedLines: (sv ? sv.lines : []).map((t) => ({ text: t, aria: (sv ? sv.label : '') + ': ' + t })),
+      savedNote: sv ? sv.note : '', hasNote: !!sv && !!sv.note && !sk.cronEdit,
+      copyLabel: sk.copied ? 'Copied' : 'Copy',
+      copy: () => { try { window.navigator.clipboard.writeText(sk.cronEdit ? shown : (sv ? sv.lines.join('\n') : '')); } catch (e) {} set({ copied: true }); },
+      live: summary + (runs.length ? '. Next run ' + this.schedFmt(runs[0]) : '')
+    };
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const ui = st.ui || this.props.ui || 'full';
+    const defs = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+    const roles = this.model();
+    const meta = this.toolMeta();
+    const flat = (w) => [].concat.apply([], w.stages.map((s) => s.ps.map((p) => Object.assign({ stage: s.n }, p))));
+    const find = (id) => { for (let i = 0; i < roles.length; i++) { for (let j = 0; j < roles[i].wfs.length; j++) { if (roles[i].wfs[j].id === id) return { r: roles[i], w: roles[i].wfs[j] }; } } return null; };
+    const wfId = st.wf || 'deploy';
+    const metas = roles.metas;
+    const SK = this.skills();
+    const REQ = this.reqs();
+    const PSEUDO = { id: 'meta', name: 'No owning role', holders: [{ n: 'no holder', t: 'agent' }], wfs: [], skills: [] };
+    const metaWfs = metas.map((m) => ({ id: m.id, name: m.name, isMeta: true, meta: m, trigger: { type: 'call', text: 'When a workflow calls it' }, stages: [{ n: 'Steps', ps: m.ps }] }));
+    const metaHit = metaWfs.filter((x) => x.id === wfId)[0];
+    const hit = metaHit ? { r: PSEUDO, w: metaHit } : (find(wfId) || find('deploy'));
+    const isMeta = !!hit.w.isMeta;
+    const role = hit.r;
+    const wf = hit.w;
+    const newProcs = st.newProcs || [];
+    const wfAdds = st.wfAdds || {};
+    const libMap = {};
+    Object.keys(roles.lib).forEach((id) => { libMap[id] = roles.lib[id]; });
+    roles.forEach((r) => r.wfs.forEach((w) => w.stages.forEach((s) => s.ps.forEach((p) => { libMap[p.id] = p; }))));
+    newProcs.forEach((p) => { libMap[p.id] = p; });
+    const procsOf = (w) => {
+      const base = flat(w);
+      const extra = (wfAdds[w.id] || []).filter((id) => libMap[id] && !base.some((b) => b.id === id)).map((id) => Object.assign({ stage: 'Added', extra: true }, libMap[id]));
+      return base.concat(extra);
+    };
+    const usage = {};
+    roles.forEach((r) => r.wfs.forEach((w) => procsOf(w).forEach((p) => { (usage[p.id] = usage[p.id] || []).push({ w: w, r: r }); })));
+    roles.forEach((r) => r.wfs.forEach((w) => { if (w.trigger.proc) (usage[w.trigger.proc] = usage[w.trigger.proc] || []).push({ w: w, r: r, trig: true }); }));
+    const procs = procsOf(wf);
+    const roleById = {};
+    roles.forEach((r) => { roleById[r.id] = r; });
+    const ownDef = this.owners();
+    roles.forEach((r) => r.wfs.forEach((w) => flat(w).forEach((q) => { if (!ownDef[q.id]) ownDef[q.id] = r.id; })));
+    newProcs.forEach((q) => { ownDef[q.id] = q.owner || role.id; });
+    const ownerId = (q) => (st.owners || {})[q.id] || ownDef[q.id] || role.id;
+    const ownerRole = (q) => roleById[ownerId(q)] || role;
+    const RT = this.routines();
+    const routineOf = (q) => (st.rtNew || {})[q.id] || RT[q.id] || null;
+    const rtTipOf = (q) => 'Runs on a routine as ' + ownerRole(q).name + (routineOf(q).paused ? '. The routine is paused.' : '');
+    const awayOf = (r) => r.holders.filter((h) => h.away);
+    const uniq = (a) => a.filter((x, i) => a.indexOf(x) === i);
+    const metaById = {};
+    metas.forEach((m) => { metaById[m.id] = m; });
+    const reqOfMeta = (m) => uniq([].concat.apply([], m.ps.map((q) => REQ[q.id] || [])));
+    const reqOf = (q) => (q.metaId ? reqOfMeta(metaById[q.metaId]) : (REQ[q.id] || []));
+    const skillAdds = st.skillAdds || {};
+    const heldSet = (r) => {
+      const set = {};
+      (r.skills || []).concat(skillAdds[r.id] || []).forEach((k) => { set[k] = true; });
+      metas.filter((m) => m.held.indexOf(r.id) >= 0).forEach((m) => reqOfMeta(m).forEach((k) => { set[k] = true; }));
+      return set;
+    };
+    const runnersOf = (q) => {
+      const ids = [];
+      const add = (id) => { if (id && id !== 'meta' && ids.indexOf(id) < 0 && roleById[id]) ids.push(id); };
+      if (!q.metaId) add(ownerRole(q).id);
+      (usage[q.id] || []).forEach((u) => add(u.r.id));
+      metas.forEach((m) => { if (m.ps.some((x) => x.id === q.id)) m.held.forEach(add); });
+      return ids.map((id) => roleById[id]);
+    };
+    const skillState = (q) => reqOf(q).map((k) => ({ k: k, name: SK[k], roles: runnersOf(q).map((r) => ({ r: r, held: !!heldSet(r)[k] })) }));
+    const missOf = (q) => [].concat.apply([], skillState(q).map((x) => x.roles.filter((y) => !y.held).map((y) => ({ k: x.k, name: x.name, r: y.r }))));
+    const metaProcFor = (q) => (q.metaId ? metaById[q.metaId] : null);
+    const LD = {
+      auto: { rank: 0, label: 'Autonomous', short: 'Autonomous', setTo: 'Autonomous', cls: 'ok', icon: 'M5 12l5 5 9-10' },
+      draft: { rank: 1, label: 'Drafts · person sends', short: 'Drafts', setTo: 'Drafts', cls: 'warn', icon: 'M4 20h4L19 9l-4-4L4 16z' },
+      never: { rank: 2, label: 'Never touches', short: 'Never', setTo: 'Never touches', cls: 'bad', icon: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM6 6l12 12' }
+    };
+    const PL = this.lines();
+    const TL = this.toolLines();
+    const lineReq = st.lineReq || {};
+    const ownLine = (q) => PL[q.id] || '';
+    const ownEff = (q) => ownLine(q) || 'draft';
+    const toolCand = (t) => ({ k: TL[t] || 'draft', t: 'tool ' + t + (TL[t] ? ' is set to ' + LD[TL[t]].setTo : ' has no line, treated as Drafts') });
+    const effOf = (q) => {
+      const c = [{ k: ownEff(q), t: 'its own line is not set' }];
+      const m = metaProcFor(q);
+      if (m) {
+        m.ps.forEach((x) => c.push({ k: ownEff(x), t: x.title + (ownLine(x) ? ' is set to ' + LD[ownEff(x)].setTo : ' has no line, treated as Drafts') }));
+        m.ps.forEach((x) => x.tools.forEach((t) => c.push(toolCand(t))));
+      } else {
+        q.tools.forEach((t) => c.push(toolCand(t)));
+      }
+      let best = c[0];
+      c.forEach((x) => { if (LD[x.k].rank > LD[best.k].rank) best = x; });
+      const own = ownLine(q);
+      const why = best === c[0] ? '' : best.t;
+      const ld = LD[best.k];
+      const text = 'Effective: ' + ld.label + (why ? ' (because ' + why + ')' : (own ? '' : ' (not set, treated as Drafts until the owner role decides)'));
+      return { key: best.k, ld: ld, why: why, text: text, stricter: !!why };
+    };
+    const lineTipOf = (q) => { const e = effOf(q); return e.text + (lineReq[q.id] ? '. Change waiting for approval.' : ''); };
+    const wantSel = st.sel === undefined ? 'staging' : st.sel;
+    const selBase = libMap[wantSel] || procs[0];
+    const inProcs = procs.filter((p) => p.id === selBase.id)[0];
+    const inWf = !!inProcs;
+    const selP = Object.assign({ stage: inWf ? inProcs.stage : '' }, selBase);
+    const titles = st.titles || {};
+    const titleOf = (p) => (titles[p.id] === undefined ? p.title : titles[p.id]);
+    const granted = !!st.granted;
+    const lacks = role.id === 'opslead' && !granted ? ['ansible-runner'] : [];
+    const trigDefaults = { folder: 'When an audio or video file is added to Company files / Recordings / Meetings (mp3, m4a, wav, mp4, mov, mkv)', call: 'When a workflow calls it', process: 'When a process reports a result', manual: 'Started by hand', schedule: 'Every weekday at 09:00', email: 'When an email arrives in the company mailbox', status: 'When a work item changes status', webhook: 'When a webhook is called' };
+    const trigFields = { folder: 'Folder and file types', call: 'Starts when', process: 'Process and result', manual: 'Who can start it', schedule: 'Schedule', email: 'Mailbox and condition', status: 'Status change', webhook: 'Webhook name' };
+    const trigHints = { folder: 'Starts when a matching file is added to the folder. Audio and video files can be transcribed.', call: 'A meta skill has no trigger of its own. It starts when a workflow calls it.', process: 'Starts when a process in the library reports the result you name.', manual: 'Someone starts the workflow from its page.', schedule: 'Runs by itself at the times you set.', email: 'Starts when a matching email arrives.', status: 'Starts when a work item moves to the status you name.', webhook: 'Starts when another system calls the webhook.' };
+    const folderOpts = ['Company files / Recordings / Meetings', 'Company files / Recordings', 'Company files / Inbox', 'Company files / Invoices'].map((f) => ({ v: f, l: f }));
+    const folderText = (f, t) => 'When an audio or video file is added to ' + f + ' (' + t + ')';
+    const trig = (st.trig || {})[wf.id] || wf.trigger || { type: 'manual', text: trigDefaults.manual };
+    const initCron = wf.id === 'perf' ? '0 2 * * *' : (wf.id === 'planning' ? '0 9 1 1,4,7,10 *' : '0 9 * * 1-5');
+    const skCur = st.sk && st.skWf === wf.id ? st.sk : this.schedInit(initCron);
+    const sch = this.schedView(skCur, (n) => this.setState({ sk: n, skWf: wf.id }));
+    const trigText = trig.type === 'schedule' && st.sk && st.skWf === wf.id ? sch.summary : trig.text;
+    const holdersTxt = (r) => r.holders.map((h) => h.n + ' (' + h.t + (h.away ? ', away' : '') + ')').join(' and ');
+    const roleById0 = {};
+    roles.forEach((r) => { roleById0[r.id] = r; });
+    const heldNames = isMeta ? hit.w.meta.held.map((id) => roleById0[id].name).join(', ') : '';
+    const runBy = isMeta ? heldNames : holdersTxt(role);
+    const statusMap = { opslead: 'bad', perf: 'idle' };
+    const stKey = statusMap[role.id] || 'ok';
+    const colourBy = st.colourBy || 'section';
+    const cLabels = { section: 'Section', cost: 'Cost per run', none: 'No colour' };
+    const cSw = { section: 'var(--i2)', cost: 'var(--dot-warn)', none: 'var(--surface)' };
+    const stageSw = ['var(--i1)', 'var(--i2)', 'var(--i3)'];
+    const stageIdx = {};
+    wf.stages.forEach((s, i) => s.ps.forEach((p) => { stageIdx[p.id] = i; }));
+    const stripeOf = (p) => (colourBy === 'cost' ? (p.cost > 5 ? 'var(--dot-bad)' : (p.cost >= 0.3 ? 'var(--dot-warn)' : 'var(--dot-ok)')) : (colourBy === 'none' ? 'var(--border)' : stageSw[stageIdx[p.id] % 3]));
+    const menuFor = st.menuFor || null;
+    const g = this.graphOf(wf, procs);
+    const nodeMap = {};
+    g.nodes.forEach((n) => { nodeMap[n.id] = Object.assign({}, n, { cx: n.x + n.w / 2, ay: n.kind === 'proc' ? n.y + 42 : n.y + n.h / 2 }); });
+    const pmap = {};
+    procs.forEach((p) => { pmap[p.id] = p; });
+    const nodeTitle = (n) => (n.kind === 'proc' ? titleOf(pmap[n.id]) : (n.kind === 'start' ? 'Start' : ('End · ' + (n.endKind === 'done' ? 'Done' : 'Failed') + (n.cap ? ' (' + n.cap + ')' : ''))));
+    const ep = st.ep || {};
+    const gone = st.del || {};
+    const edges = g.edges.concat((st.added || []).filter((e) => e.wf === wf.id)).filter((e) => !gone[e.id]).map((e) => {
+      const p = ep[e.id];
+      if (!p) return e;
+      const moved = p.to !== undefined && p.to !== e.to;
+      return Object.assign({}, e, p, moved ? { pts: null, chip: null } : {});
+    }).filter((e) => nodeMap[e.from] && nodeMap[e.to]);
+    const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
+    const chipLabel = (e) => ({ plain: '', success: 'on success', failure: 'on failure' + (Number(e.retries) > 0 ? ' · retry ' + e.retries + '× then' : ''), if: 'if ' + e.cond, else: 'else', timeout: 'after ' + e.timeout + ' min' })[e.type];
+    const typeAria = (e) => ({ plain: 'start', success: 'on success', failure: 'on failure' + (Number(e.retries) > 0 ? ', retry ' + plural(Number(e.retries), 'time') : ''), if: 'if ' + e.cond, else: 'else', timeout: 'after ' + plural(Number(e.timeout), 'minute') })[e.type];
+    const chipCls = { plain: 'idle', success: 'ok', failure: 'bad', if: 'info', else: 'idle', timeout: 'warn' };
+    const dashOf = { plain: '', success: '', failure: '7 4', if: '9 3 2 3', else: '9 3 2 3', timeout: '0.5 5' };
+    const selE = st.selE !== undefined ? st.selE : (st.sel === undefined && wf.id === 'deploy' ? 'e-stg-rb' : null);
+    const selEdge = edges.filter((e) => e.id === selE)[0] || null;
+    const selStart = !selEdge && !!st.selStart;
+    const route = (a, b, under) => {
+      if (!under && b.x >= a.x + a.w + 20) {
+        const x1 = a.x + a.w; const y1 = a.ay; const x2 = b.x; const y2 = b.ay;
+        if (y1 === y2) return [[x1, y1], [x2, y2]];
+        const xm = Math.round((x1 + x2) / 2);
+        return [[x1, y1], [xm, y1], [xm, y2], [x2, y2]];
+      }
+      const yb = Math.max(a.y + a.h, b.y + b.h) + 30;
+      return [[a.cx, a.y + a.h], [a.cx, yb], [b.cx, yb], [b.cx, b.y + b.h]];
+    };
+    const segMid = (pts) => {
+      let best = null;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const len = Math.abs(pts[i + 1][0] - pts[i][0]) + Math.abs(pts[i + 1][1] - pts[i][1]);
+        if (!best || len > best.len) best = { len: len, x: (pts[i][0] + pts[i + 1][0]) / 2, y: (pts[i][1] + pts[i + 1][1]) / 2, h: pts[i][1] === pts[i + 1][1] };
+      }
+      return best;
+    };
+    const lines = []; const chips = []; const seen = {};
+    edges.forEach((e) => {
+      const a = nodeMap[e.from]; const b = nodeMap[e.to];
+      const pairKey = e.from + '>' + e.to;
+      const dup = !!seen[pairKey];
+      seen[pairKey] = true;
+      const pts = e.pts || route(a, b, dup);
+      const mid = segMid(pts);
+      const cp = e.chip || [Math.round(mid.x), Math.round(mid.y) - (mid.h && pts.length === 2 && mid.y === a.ay ? 18 : 0)];
+      const isSel = e.id === selE;
+      lines.push({
+        d: 'M' + pts.map((q) => q[0] + ' ' + q[1]).join(' L'),
+        stroke: isSel ? 'var(--primary)' : (e.type === 'failure' ? 'var(--accent)' : 'var(--muted)'),
+        sw: isSel ? 2.75 : 1.75,
+        dash: dashOf[e.type],
+        marker: isSel ? 'url(#ahs)' : (e.type === 'failure' ? 'url(#ahd)' : 'url(#ah)')
+      });
+      if (e.type !== 'plain') {
+        chips.push({
+          label: chipLabel(e), cls: chipCls[e.type], selCls: isSel ? 'sel' : '', cx: cp[0], cy: cp[1],
+          aria: 'Transition from ' + nodeTitle(a) + ' to ' + nodeTitle(b) + ', ' + typeAria(e),
+          pressed: isSel ? 'true' : 'false',
+          pick: () => this.setState({ selE: e.id, selStart: false, menuFor: null })
+        });
+      }
+    });
+    const outs = (id) => edges.filter((e) => e.from === id);
+    const FAIL_TIP = 'If this process fails the workflow stops. Add an on-failure transition.';
+    const ELSE_TIP = 'This condition has no else path. Add an else transition so the workflow always continues.';
+    const hintsFor = (p) => {
+      const o = outs(p.id);
+      const h = [];
+      if (g.chk.indexOf(p.id) >= 0 && !o.some((e) => ['failure', 'else', 'timeout'].indexOf(e.type) >= 0)) h.push(FAIL_TIP);
+      if (o.some((e) => e.type === 'if') && !o.some((e) => e.type === 'else')) h.push(ELSE_TIP);
+      return h;
+    };
+    const addEdgeFrom = (fromId) => {
+      const list = st.added || [];
+      const id = 'n' + (list.length + 1) + '-' + wf.id;
+      const cand = g.nodes.filter((n) => n.kind !== 'start' && n.id !== fromId)[0];
+      const ne = { id: id, wf: wf.id, from: fromId, to: cand.id, type: 'success', cond: '', retries: 0, timeout: 0 };
+      this.say('Transition added from “' + nodeTitle(nodeMap[fromId]) + '”. Choose where it goes and when it fires.', { added: list.concat([ne]), selE: id, sel: fromId, menuFor: null });
+    };
+    const D = { isProc: false, isStart: false, isEnd: false, x: 0, y: 0, w: 0, h: 0, title: '', cls: '', stripe: '', aria: '', pressed: 'false', select: () => {}, menuAria: '', menuOpen: 'false', toggleMenu: () => {}, tools: '', warn: false, okNote: false, roleName: '', missTool: '', grant: () => {}, inputs: '', cost: '', costTip: '', hint: false, hintTip: '', hintAria: '', endCls: '', endTitle: '', cap: '', capTop: 0, shared: false, sharedLabel: '', sharedTip: '', rt: false, rtLabel: '', rtTip: '', lineCls: '', lineLabel: '', lineIcon: '', lineTip: '', lineTop: 0, kindCls: '', isMeta: false, notMeta: true, metaChip: '', metaTip: '', openAria: '', openMeta: () => {}, skm: false, skmAria: '', skmTip: '' };
+    const stepsEff = g.nodes.filter((n) => n.kind === 'proc').map((n) => ({ p: pmap[n.id], e: effOf(pmap[n.id]) }));
+    const strictRank = stepsEff.reduce((m, x) => Math.max(m, x.e.ld.rank), 0);
+    const strictKey = ['auto', 'draft', 'never'][strictRank];
+    const strictNames = stepsEff.filter((x) => x.e.ld.rank === strictRank).map((x) => titleOf(x.p));
+    const wfLine = {
+      cls: LD[strictKey].cls, label: LD[strictKey].label, icon: LD[strictKey].icon,
+      text: strictKey === 'auto' ? 'AI does every step alone, then reports.' : (strictKey === 'draft' ? 'This workflow includes steps a person must send: ' + strictNames.join(', ') + '.' : 'This workflow includes steps only people do: ' + strictNames.join(', ') + '.')
+    };
+    const nodes = g.nodes.map((n) => {
+      const base = Object.assign({}, D, { x: n.x, y: n.y, w: n.w, h: n.h });
+      if (n.kind === 'start') return Object.assign(base, { lineCls: wfLine.cls, lineLabel: wfLine.label, lineIcon: wfLine.icon, lineTip: wfLine.text, lineTop: n.y - 42, isStart: true, cap: trigText, capTop: n.y + n.h + 6, cls: selStart ? 'sel' : '', pressed: selStart ? 'true' : 'false', aria: 'Start. Trigger: ' + trigText, select: () => this.setState({ selStart: true, selE: null, menuFor: null }) });
+      if (n.kind === 'end') return Object.assign(base, { isEnd: true, endCls: n.endKind === 'done' ? 'ok' : 'bad', endTitle: n.endKind === 'done' ? 'End · Done' : 'End · Failed', cap: n.cap || '', aria: nodeTitle(nodeMap[n.id]) });
+      const p = pmap[n.id];
+      const miss = lacks.filter((t) => p.tools.indexOf(t) >= 0)[0] || '';
+      const gr = granted && role.id === 'opslead' && p.tools.indexOf('ansible-runner') >= 0;
+      const hs = hintsFor(p);
+      const title = titleOf(p);
+      const nIn = this.inputsOf(p).length;
+      const mp = metaProcFor(p);
+      const ms = missOf(p);
+      const ef = effOf(p);
+      const msTxt = ms.map((x) => x.r.name + " doesn't hold the skill " + x.name).join('. ');
+      return Object.assign(base, {
+        lineCls: ef.ld.cls, lineLabel: ef.ld.label, lineIcon: ef.ld.icon, lineTip: lineTipOf(p),
+        kindCls: mp ? 'meta' : '', isMeta: !!mp, notMeta: !mp,
+        metaChip: mp ? 'meta skill · ' + mp.ps.length + ' processes' : '',
+        metaTip: mp ? 'Meta skill held by ' + mp.held.map((id) => roleById[id].name).join(', ') + '. It runs as one step here.' : '',
+        openAria: mp ? 'Open meta skill ' + title : '',
+        openMeta: () => { if (mp) this.say('Opened meta skill “' + mp.name + '”. Use the breadcrumb to go back to ' + wf.name + '.', { wf: mp.id, metaFrom: wf.id, sel: mp.ps[0].id, selE: null, selStart: false, menuFor: null, moveTo: null }); },
+        skm: ms.length > 0, skmAria: 'Missing skill: ' + msTxt, skmTip: msTxt,
+        isProc: true, title: title,
+        cls: !selEdge && !selStart && p.id === selP.id ? 'sel' : '',
+        stripe: stripeOf(p),
+        aria: title + ', ' + p.stage + ', in workflow ' + wf.name + (miss ? ', ' + role.name + ' is missing a tool' : '') + (hs.length ? ', has a warning' : '') + ', AI line ' + ef.ld.label + (mp ? ', meta skill with ' + mp.ps.length + ' processes' : '') + (ms.length ? ', missing a skill' : '') + ((usage[p.id] || []).length > 1 ? ', shared by ' + usage[p.id].length + ' workflows' : ''),
+        pressed: !selEdge && !selStart && p.id === selP.id ? 'true' : 'false',
+        select: () => this.setState({ sel: p.id, selE: null, selStart: false, menuFor: null, moveTo: null }),
+        menuAria: 'Process actions for ' + title,
+        menuOpen: menuFor === p.id ? 'true' : 'false',
+        toggleMenu: () => this.setState({ menuFor: menuFor === p.id ? null : p.id }),
+        tools: p.tools.length ? p.tools.join(', ') : 'No tools · done by hand',
+        warn: !!miss, okNote: gr, roleName: role.name, missTool: miss,
+        grant: () => this.say('ansible-runner granted to ' + role.name, { granted: true }),
+        inputs: nIn + (nIn === 1 ? ' input' : ' inputs'),
+        cost: p.cost.toFixed(2) + ' EUR',
+        costTip: p.cost > 5 ? 'Cost per run, above the 5 EUR rule' : 'Cost per run',
+        hint: hs.length > 0, hintTip: hs.join(' '), hintAria: 'Warning: ' + hs.join(' '),
+        rt: !!routineOf(p), rtLabel: routineOf(p) ? routineOf(p).badge : '', rtTip: routineOf(p) ? rtTipOf(p) : '',
+        shared: !mp && (usage[p.id] || []).length > 1,
+        sharedLabel: 'shared · ' + (usage[p.id] || []).length + ' workflows',
+        sharedTip: 'Used in ' + (usage[p.id] || []).map((u) => u.w.name + ' (' + u.r.name + ')').join(' and ') + '. Changes apply to all of them.'
+      });
+    });
+    const cvW = Math.max.apply(null, g.nodes.map((n) => n.x + n.w)) + 30;
+    const cvH = Math.max.apply(null, g.nodes.map((n) => n.y + n.h)) + 50;
+    const closeMenu = (msg) => this.say(msg, { menuFor: null });
+    const mn = menuFor ? nodeMap[menuFor] : null;
+    const menuOn = !!mn && mn.kind === 'proc';
+    const menu = menuOn ? {
+      aria: 'Process actions for ' + nodeTitle(mn), left: mn.x, top: mn.y + 40,
+      dup: () => closeMenu('Process duplicated as “' + nodeTitle(mn) + ' (copy)”'),
+      add: () => addEdgeFrom(menuFor),
+      del: () => closeMenu('“' + nodeTitle(mn) + '” deleted with every transition into or out of it')
+    } : { aria: '', left: 0, top: 0, dup: () => {}, add: () => {}, del: () => {} };
+    const patchE = (id, obj) => this.setState({ ep: Object.assign({}, ep, { [id]: Object.assign({}, ep[id] || {}, obj) }) });
+    const typeHint = { success: 'Taken when the process finishes without errors.', failure: 'Taken when the process fails, after any retries.', if: 'Taken when the condition is true. Pair it with an Else.', else: 'Taken when the If condition from the same process is not true.', timeout: 'Taken when the process runs longer than the timeout.' };
+    const sentence = (e, a, b) => ({
+      success: 'When “' + a + '” succeeds, go to “' + b + '”.',
+      failure: 'When “' + a + '” fails' + (Number(e.retries) > 0 ? ' after ' + plural(Number(e.retries), 'retry').replace('retrys', 'retries') : '') + ', go to “' + b + '”.',
+      if: 'If ' + e.cond + ', go from “' + a + '” to “' + b + '”.',
+      else: 'Otherwise, go from “' + a + '” to “' + b + '”.',
+      timeout: 'If “' + a + '” runs longer than ' + plural(Number(e.timeout), 'minute') + ', go to “' + b + '”.'
+    })[e.type];
+    let ed = { chipCls: 'idle', chipLabel: '', summary: '', fromTitle: '', canOpenFrom: false, openFrom: () => {}, to: '', toOpts: [], type: 'success', typeHint: '', isIf: false, isFail: false, isTimeout: false, cond: '', retries: 0, timeout: 30, onTo: () => {}, onType: () => {}, onCond: () => {}, onRetries: () => {}, onTimeout: () => {}, remove: () => {}, pickLib: () => {}, createLib: () => {} };
+    if (selEdge) {
+      const a = nodeMap[selEdge.from]; const b = nodeMap[selEdge.to];
+      ed = {
+        chipCls: chipCls[selEdge.type], chipLabel: chipLabel(selEdge), summary: sentence(selEdge, nodeTitle(a), nodeTitle(b)),
+        fromTitle: nodeTitle(a), canOpenFrom: a.kind === 'proc',
+        openFrom: () => this.setState({ sel: a.id, selE: null, selStart: false, moveTo: null }),
+        to: selEdge.to,
+        toOpts: g.nodes.filter((n) => n.kind !== 'start' && n.id !== selEdge.from).map((n) => ({ v: n.id, l: nodeTitle(nodeMap[n.id]) })),
+        type: selEdge.type, typeHint: typeHint[selEdge.type] || '',
+        isIf: selEdge.type === 'if', isFail: selEdge.type === 'failure', isTimeout: selEdge.type === 'timeout',
+        cond: selEdge.cond, retries: selEdge.retries, timeout: selEdge.timeout,
+        onTo: (ev) => patchE(selEdge.id, { to: ev.target.value }),
+        pickLib: () => this.setState({ addOpen: true, addMode: 'existing', addFor: selEdge.id, addQ: '' }),
+        createLib: () => this.setState({ addOpen: true, addMode: 'new', addFor: selEdge.id, addName: '' }),
+        onType: (ev) => {
+          const v = ev.target.value; const o = { type: v };
+          if (v === 'timeout' && !(Number(selEdge.timeout) > 0)) o.timeout = 30;
+          if (v === 'if' && !selEdge.cond) o.cond = 'condition is met';
+          patchE(selEdge.id, o);
+        },
+        onCond: (ev) => patchE(selEdge.id, { cond: ev.target.value }),
+        onRetries: (ev) => patchE(selEdge.id, { retries: Math.min(5, Math.max(0, Number(ev.target.value) || 0)) }),
+        onTimeout: (ev) => patchE(selEdge.id, { timeout: Math.max(1, Number(ev.target.value) || 1) }),
+        remove: () => this.say('Transition deleted. “' + nodeTitle(a) + '” no longer goes to “' + nodeTitle(b) + '” this way.', { del: Object.assign({}, gone, { [selEdge.id]: true }), selE: null, sel: a.kind === 'proc' ? a.id : st.sel })
+      };
+    }
+    const outRows = selEdge || !inWf ? [] : outs(selP.id).map((e) => ({
+      cls: chipCls[e.type], label: chipLabel(e), to: nodeTitle(nodeMap[e.to]),
+      aria: 'Edit transition from ' + nodeTitle(nodeMap[e.from]) + ' to ' + nodeTitle(nodeMap[e.to]) + ', ' + typeAria(e),
+      open: () => this.setState({ selE: e.id, selStart: false })
+    }));
+    const nTrans = edges.filter((e) => e.type !== 'plain').length;
+    const used = usage[selP.id] || [];
+    const usedRows = used.map((u) => ({
+      name: u.w.name, role: u.r.name + (u.trig ? ' · starts it' : ''), current: u.w.id === wf.id,
+      aria: 'Select workflow ' + u.w.name + ' of ' + u.r.name,
+      pick: () => this.say('Opened “' + u.w.name + '”', { wf: u.w.id, sel: selP.id, selE: null, selStart: false, menuFor: null })
+    }));
+    const useOpts = [].concat.apply([], roles.map((r) => r.wfs.filter((w) => !(usage[selP.id] || []).some((u) => u.w.id === w.id)).map((w) => ({ v: w.id, l: w.name + ' · ' + r.name }))));
+    const useVal = useOpts.some((o) => o.v === st.moveTo) ? st.moveTo : (useOpts[0] ? useOpts[0].v : '');
+    const addKey = st.addMode || 'existing';
+    const libQ = st.libQ || '';
+    const addQ = st.addQ || '';
+    const usedLabel = (id) => 'used in ' + (usage[id] || []).length;
+    const byTitle = (a, b) => (titleOf(a) < titleOf(b) ? -1 : (titleOf(a) > titleOf(b) ? 1 : 0));
+    const allLib = Object.keys(libMap).map((id) => libMap[id]).sort(byTitle);
+    const match = (p, q) => !q || titleOf(p).toLowerCase().indexOf(q.toLowerCase()) >= 0;
+    const libRows = allLib.filter((p) => !p.metaId && match(p, libQ)).map((p) => ({
+      name: titleOf(p), used: usedLabel(p.id),
+      lineCls: effOf(p).ld.cls, lineShort: effOf(p).ld.short, lineIcon: effOf(p).ld.icon, lineTip: lineTipOf(p),
+      owner: 'Owner: ' + ownerRole(p).name, ownerTip: 'Owner role: ' + ownerRole(p).name,
+      routine: !!routineOf(p), rtLabel: routineOf(p) ? routineOf(p).badge : '', rtTip: routineOf(p) ? rtTipOf(p) : '',
+      cls: !selEdge && !selStart && p.id === selP.id ? 'on' : '', cur: !selEdge && !selStart && p.id === selP.id ? 'true' : 'false',
+      usedTip: 'Used in ' + ((usage[p.id] || []).map((u) => u.w.name + ' · ' + u.r.name).join(', ') || 'no workflow yet'),
+      pick: () => this.setState({ sel: p.id, selE: null, selStart: false, menuFor: null, moveTo: null })
+    }));
+    const joinWf = (pid) => (procs.some((p) => p.id === pid) ? wfAdds : Object.assign({}, wfAdds, { [wf.id]: (wfAdds[wf.id] || []).concat([pid]) }));
+    const finishAdd = (pid, msg, extra) => {
+      const o = Object.assign({ wfAdds: joinWf(pid), addOpen: false, addFor: null, addQ: '', addName: '', sel: pid, selStart: false, menuFor: null }, extra || {});
+      if (st.addFor) { o.selE = st.addFor; o.ep = Object.assign({}, ep, { [st.addFor]: Object.assign({}, ep[st.addFor] || {}, { to: pid }) }); } else { o.selE = null; }
+      this.say(msg, o);
+    };
+    const addResults = allLib.filter((p) => match(p, addQ)).map((p) => {
+      const here = procs.some((x) => x.id === p.id);
+      return {
+        name: titleOf(p) + (p.metaId ? ' (meta skill)' : ''), used: usedLabel(p.id), action: here && !st.addFor ? 'Select' : 'Use',
+        aria: (here && !st.addFor ? 'Select ' : 'Use ') + titleOf(p) + ' in ' + wf.name,
+        pick: () => (here && !st.addFor
+          ? this.say('“' + titleOf(p) + '” is already in this workflow.', { sel: p.id, selE: null, selStart: false, addOpen: false })
+          : finishAdd(p.id, st.addFor ? 'Transition now goes to “' + titleOf(p) + '”.' : '“' + titleOf(p) + '” added to ' + wf.name + '. It is shared with the workflows that already use it.'))
+      };
+    });
+    const createNew = () => {
+      const name = (st.addName || '').trim();
+      if (!name) { this.say('Type a name for the new process, then choose Create process.'); return; }
+      const id = 'x' + (newProcs.length + 1);
+      finishAdd(id, 'Process “' + name + '” created and added to ' + wf.name + '.', { newProcs: newProcs.concat([{ id: id, title: name, tools: [], cost: 0, owner: role.id }]) });
+    };
+    const open = st.open || {};
+    const ownCount = (r) => Object.keys(libMap).filter((id) => ownerId(libMap[id]) === r.id).length;
+    const rtCount = (r) => Object.keys(libMap).filter((id) => ownerId(libMap[id]) === r.id && routineOf(libMap[id])).length;
+    const metaRows = metas.map((m) => {
+      const nUse = (usage[m.pid] || []).length;
+      const on = isMeta && wf.id === m.id && !selEdge && !selStart;
+      return {
+        lineCls: effOf(libMap[m.pid]).ld.cls, lineShort: effOf(libMap[m.pid]).ld.short, lineIcon: effOf(libMap[m.pid]).ld.icon, lineTip: lineTipOf(libMap[m.pid]),
+        name: m.name, steps: m.ps.length + ' steps',
+        tip: m.ps.length + ' processes: ' + m.ps.map((q) => q.title).join(', '),
+        sub: 'held by ' + m.held.length + (m.held.length === 1 ? ' role' : ' roles') + ' · ' + (nUse ? 'used in ' + nUse + (nUse === 1 ? ' workflow' : ' workflows') : 'not used in any workflow'),
+        cls: isMeta && wf.id === m.id ? 'on' : '', cur: on ? 'true' : 'false',
+        pick: () => this.say('Opened meta skill “' + m.name + '”', { wf: m.id, metaFrom: null, sel: m.ps[0].id, selE: null, selStart: false, menuFor: null, moveTo: null })
+      };
+    });
+    const tree = roles.map((r) => {
+      const expanded = open[r.id] !== false;
+      const sk = statusMap[r.id] || 'ok';
+      const holderNames = r.holders.map((h) => h.n).join(' and ');
+      return {
+        name: r.name,
+        expanded: expanded ? 'true' : 'false',
+        expandedB: expanded,
+        rot: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+        toggleTip: expanded ? 'Collapse ' + r.name : 'Expand ' + r.name,
+        toggle: () => { const o = Object.assign({}, open); o[r.id] = !expanded; this.setState({ open: o }); },
+        dot: sk === 'bad' ? 'd-bad' : (sk === 'idle' ? 'd-idle' : 'd-ok'),
+        statusText: sk === 'bad' ? 'In error' : (sk === 'idle' ? 'Paused' : 'Active'),
+        statusTip: sk === 'bad' ? holderNames + ' is in error. Open Heartbeat to see why.' : (sk === 'idle' ? holderNames + ' is paused. Its workflows will not run.' : holderNames + (r.holders.length > 1 ? ' are active' : ' is active')),
+        newAria: 'New workflow in ' + r.name,
+        newWf: () => { const o = Object.assign({}, open); o[r.id] = true; this.say('New workflow added to ' + r.name + '. Name it to open it on the canvas.', { open: o }); },
+        skillsLine: (r.skills.length + (skillAdds[r.id] || []).length) + ((r.skills.length + (skillAdds[r.id] || []).length) === 1 ? ' skill' : ' skills') + ' · ' + metas.filter((m) => m.held.indexOf(r.id) >= 0).length + (metas.filter((m) => m.held.indexOf(r.id) >= 0).length === 1 ? ' meta skill' : ' meta skills'),
+        info: (r.reports ? 'Reports to ' + r.reports + ' · ' : '') + ownCount(r) + (ownCount(r) === 1 ? ' process owned' : ' processes owned') + (rtCount(r) ? ', ' + rtCount(r) + ' on a routine' : ''),
+        holders: r.holders.map((h) => ({ n: h.n, label: h.t === 'agent' ? 'Agent' : 'Person', cls: h.t === 'agent' ? 'info' : 'idle', away: !!h.away, awayTip: h.n + ' is away. Routines still run because they are automated, but approvals they raise wait for ' + h.n + '.' })),
+        wfs: r.wfs.map((w) => {
+          const n = flat(w).length;
+          return {
+            name: w.name,
+            cls: w.id === wf.id ? 'on' : '',
+            cur: w.id === wf.id ? 'true' : 'false',
+            count: n,
+            countTip: n + (n === 1 ? ' process' : ' processes'),
+            pick: () => this.say('Opened “' + w.name + '”', { metaFrom: null, wf: w.id, sel: w.id === 'deploy' ? 'staging' : flat(w)[0].id, selE: w.id === 'deploy' ? 'e-stg-rb' : null, selStart: false, menuFor: null, moveTo: null })
+          };
+        })
+      };
+    });
+    const tags = st.tags || ['release', 'ops'];
+    const tagDraft = st.tagDraft || '';
+    const commitTag = () => { const v = (tagDraft || '').trim().toLowerCase(); if (!v || tags.indexOf(v) >= 0) return; this.say('Tag “' + v + '” added', { tags: tags.concat([v]), tagDraft: '' }); };
+    const sb = st.sb || 'details';
+    const exp = (fmt) => () => this.say(wf.name + ' exported as ' + fmt, { exportOpen: false });
+    const legend = colourBy === 'cost'
+      ? [{ label: 'Under 0.30 EUR', sw: 'var(--dot-ok)' }, { label: '0.30 to 5 EUR', sw: 'var(--dot-warn)' }, { label: 'Over 5 EUR', sw: 'var(--dot-bad)' }]
+      : (colourBy === 'none' ? [] : wf.stages.map((s, i) => ({ label: s.n, sw: stageSw[i % 3] })));
+    const statusShow = stKey !== 'ok';
+    const holderOne = role.holders[0].n;
+    return {
+      theme: cur,
+      ui: ui,
+      uiAnnounce: st.uiAnnounce || '',
+      sch: sch,
+      showAll: () => this.setUi('full'),
+      toggleUi: () => this.setUi(ui === 'minimal' ? 'full' : 'minimal'),
+      uiMinPressed: ui === 'minimal' ? 'true' : 'false',
+      uiTogCls: ui === 'minimal' ? 'on' : '',
+      toast: st.toast || '',
+      roleCount: roles.length,
+      tree: tree,
+      wfName: wf.name,
+      roleName: role.name,
+      runBy: runBy,
+      statusShow: statusShow,
+      statusCls: stKey === 'bad' ? 'bad' : 'idle',
+      statusLabel: stKey === 'bad' ? holderOne + ' in error' : holderOne + ' paused',
+      statusTip: stKey === 'bad' ? holderOne + ' is in error, so this workflow cannot run. Open Heartbeat to see why.' : holderOne + ' is paused, so this workflow will not run until it resumes.',
+      statLine: plural(procs.length, 'process').replace('processs', 'processes') + ' · ' + plural(nTrans, 'transition') + ' · ' + plural(wf.stages.length, 'section'),
+      legend: legend,
+      cvW: cvW,
+      cvH: cvH,
+      lines: lines,
+      nodes: nodes,
+      chips: chips,
+      menuOpenB: menuOn,
+      menu: menu,
+      showEdge: !!selEdge,
+      showProc: !selEdge && !selStart,
+      ed: ed,
+      outRows: outRows,
+      noOuts: inWf && !selEdge && outRows.length === 0,
+      addTransition: () => addEdgeFrom(selP.id),
+      panelKicker: selEdge ? 'Transition · ' + wf.name : (selStart ? 'Trigger · ' + wf.name : (selP.metaId ? 'Meta skill · ' : 'Process · ') + (inWf ? selP.stage : 'Library')),
+      panelTitle: selEdge ? ed.fromTitle + ' → ' + nodeTitle(nodeMap[selEdge.to]) : (selStart ? 'Start' : titleOf(selP)),
+      addCard: () => this.setState({ addOpen: true, addMode: 'existing', addFor: null, addQ: '' }),
+      colourOpen: st.colourOpen ? 'true' : 'false',
+      colourOpenB: !!st.colourOpen,
+      toggleColour: () => this.setState({ colourOpen: !st.colourOpen, exportOpen: false }),
+      colourLabel: cLabels[colourBy],
+      colourOpts: ['section', 'cost', 'none'].map((id) => ({ label: cLabels[id], sw: cSw[id], checked: id === colourBy ? 'true' : 'false', pick: () => this.say('Processes coloured by ' + cLabels[id].toLowerCase(), { colourBy: id, colourOpen: false }) })),
+      exportOpen: st.exportOpen ? 'true' : 'false',
+      exportOpenB: !!st.exportOpen,
+      toggleExport: () => this.setState({ exportOpen: !st.exportOpen, colourOpen: false }),
+      exp: { png: exp('PNG'), pdf: exp('PDF'), csv: exp('CSV') },
+      saveLens: () => this.say('Lens “Release view” saved with the open workflow, colour and filters'),
+      shareLens: () => this.say('Link to “Release view” copied. Anyone in AutoBot Labs can open it.'),
+      stageName: selP.stage,
+      cardTitle: titleOf(selP),
+      onTitle: (e) => { const t = Object.assign({}, titles); t[selP.id] = e.target.value; this.setState({ titles: t }); },
+      usedCount: used.length,
+      usedRows: usedRows,
+      usedNone: used.length === 0,
+      metaCount: metas.length,
+      metaRows: metaRows,
+      headMain: isMeta ? 'Meta skill · ' + wf.name : wf.name,
+      headSub: isMeta ? ' · held by ' + heldNames : ' · owned by ' + role.name + ' · run by ' + runBy,
+      automationShow: !isMeta,
+      crumbShow: isMeta && !!st.metaFrom && !!find(st.metaFrom),
+      crumbFrom: st.metaFrom && find(st.metaFrom) ? find(st.metaFrom).w.name : '',
+      crumbBack: () => { const b = st.metaFrom; const f = find(b); this.say('Back in “' + (f ? f.w.name : '') + '”', { wf: b, metaFrom: null, sel: wf.meta.pid, selE: null, selStart: false, menuFor: null }); },
+      isMetaSel: !!selP.metaId,
+      notMetaSel: !selP.metaId,
+      metaSel: (() => {
+        const m = selP.metaId ? metaById[selP.metaId] : null;
+        return m ? {
+          text: m.name + ' is a meta skill with ' + m.ps.length + ' processes: ' + m.ps.map((q) => q.title).join(', ') + '.',
+          held: m.held.map((id) => roleById[id].name).join(', '),
+          aria: 'Open meta skill ' + m.name,
+          open: () => this.say('Opened meta skill “' + m.name + '”.', { wf: m.id, metaFrom: inWf ? wf.id : null, sel: m.ps[0].id, selE: null, selStart: false, menuFor: null })
+        } : { text: '', held: '', aria: '', open: () => {} };
+      })(),
+      reqCount: reqOf(selP).length,
+      reqNone: reqOf(selP).length === 0,
+      reqRows: skillState(selP).map((x) => ({ name: x.name, roles: x.roles.map((y) => ({ cls: y.held ? 'ok' : 'warn', label: y.r.name + (y.held ? ' · held' : ' · missing') })) })),
+      missRows: missOf(selP).map((x) => ({
+        text: x.r.name + " doesn't hold the skill " + x.name + (selP.id === 'note' ? '. Needed by Write incident note in Incident response.' : '.'),
+        btn: 'Add skill to ' + x.r.name,
+        aria: 'Add skill ' + x.name + ' to ' + x.r.name,
+        add: () => this.say('Skill “' + x.name + '” added to ' + x.r.name + '. Everyone who holds this role gets it.', { skillAdds: Object.assign({}, skillAdds, { [x.r.id]: (skillAdds[x.r.id] || []).concat([x.k]) }) })
+      })),
+      opensTr: selP.id === 'trans',
+      wfLine: wfLine,
+      line: (() => {
+        const e = effOf(selP);
+        const cur = ownEff(selP);
+        const req = lineReq[selP.id];
+        return {
+          val: cur,
+          unset: !ownLine(selP),
+          effCls: e.ld.cls, effIcon: e.ld.icon, effShort: e.ld.short, effText: e.text,
+          pending: !!req,
+          pendingText: req ? 'Requested: ' + LD[req].label + ' instead of ' + LD[cur].label + '. The line stays ' + LD[cur].label + ' until it is approved.' : '',
+          onChange: (ev) => {
+            const v = ev.target.value;
+            const next = Object.assign({}, lineReq);
+            if (v === cur) { delete next[selP.id]; this.say('No change requested for “' + titleOf(selP) + '”.', { lineReq: next }); return; }
+            next[selP.id] = v;
+            this.say('Change requested: “' + titleOf(selP) + '” to ' + LD[v].label + '. Waiting for approval; the line has not changed.', { lineReq: next });
+          },
+          withdraw: () => { const next = Object.assign({}, lineReq); delete next[selP.id]; this.say('Request withdrawn for “' + titleOf(selP) + '”.', { lineReq: next }); }
+        };
+      })(),
+      inMetaShow: !selP.metaId && metas.some((m) => m.ps.some((q) => q.id === selP.id)),
+      inMetaText: 'Also a step in meta skill ' + metas.filter((m) => m.ps.some((q) => q.id === selP.id)).map((m) => m.name).join(' and ') + '.',
+      ownerVal: ownerId(selP),
+      ownerOpts: roles.map((r) => ({ v: r.id, l: r.name })),
+      onOwner: (e) => this.say('Owner role of “' + titleOf(selP) + '” is now ' + roleById[e.target.value].name + '. ' + (routineOf(selP) ? 'Its routine now runs as that role.' : ''), { owners: Object.assign({}, st.owners || {}, { [selP.id]: e.target.value }) }),
+      rt: (() => {
+        const q = routineOf(selP);
+        const o = ownerRole(selP);
+        const aw = awayOf(o);
+        const names = o.holders.map((h) => h.n).join(' and ');
+        return {
+          on: !!q, off: !q,
+          text: q ? q.text : '', next: q ? q.next : '', paused: !!(q && q.paused),
+          lastCls: q && q.last ? q.last.cls : 'idle', lastLabel: q && q.last ? q.last.label : 'Not run yet', lastWhen: q && q.last ? q.last.when : '',
+          runsAs: o.name + ' · ' + names,
+          away: !!q && aw.length > 0,
+          awayText: aw.length ? aw.map((h) => h.n).join(' and ') + ' is away. The routine still runs because it is automated, but approvals it raises wait for ' + aw.map((h) => h.n).join(' and ') + '.' : '',
+          automate: () => this.say('Routine created for “' + titleOf(selP) + '”. It runs as ' + o.name + '. Set its schedule in Routines.', { rtNew: Object.assign({}, st.rtNew || {}, { [selP.id]: { text: 'Every day at 09:00 (draft)', badge: 'daily 09:00', next: 'Tomorrow, 09:00', last: null } }) })
+        };
+      })(),
+      awayShow: awayOf(role).length > 0,
+      awayTip: awayOf(role).map((h) => h.n).join(' and ') + ' is away. Routines of ' + role.name + ' still run because they are automated, but approvals they raise wait.',
+      sharedWarn: used.length > 1,
+      copyOff: inWf ? 'false' : 'true',
+      makeCopy: () => this.say('Copy created: “' + titleOf(selP) + ' (copy)” is now used only in ' + wf.name + '. The other workflows keep the original.'),
+      inWf: inWf,
+      notInWf: !inWf,
+      useOpts: useOpts,
+      useVal: useVal,
+      useNone: useOpts.length === 0 ? 'true' : 'false',
+      onUse: (e) => this.setState({ moveTo: e.target.value }),
+      doUse: () => {
+        const dest = find(useVal);
+        if (!dest) return;
+        const next = Object.assign({}, wfAdds, { [dest.w.id]: (wfAdds[dest.w.id] || []).concat([selP.id]) });
+        this.say('“' + titleOf(selP) + '” is now also used in ' + dest.w.name + ' (' + dest.r.name + '). Changes apply to both.', { wfAdds: next, moveTo: null });
+      },
+      trg: {
+        type: trig.type, text: trig.text, hint: trigHints[trig.type], fieldLabel: trigFields[trig.type],
+        firstName: (edges.filter((e) => e.from === 'start')[0] ? nodeTitle(nodeMap[edges.filter((e) => e.from === 'start')[0].to]) : 'the first process'),
+        locked: isMeta,
+        isText: trig.type !== 'folder' && trig.type !== 'schedule',
+        isSchedule: trig.type === 'schedule',
+        isFolder: trig.type === 'folder',
+        folder: trig.folder || folderOpts[0].v,
+        types: trig.types || 'mp3, m4a, wav, mp4, mov, mkv',
+        folderOpts: folderOpts,
+        onFolder: (e) => this.setState({ trig: Object.assign({}, st.trig || {}, { [wf.id]: { type: 'folder', folder: e.target.value, types: trig.types || 'mp3, m4a, wav, mp4, mov, mkv', text: folderText(e.target.value, trig.types || 'mp3, m4a, wav, mp4, mov, mkv') } }) }),
+        onTypes: (e) => this.setState({ trig: Object.assign({}, st.trig || {}, { [wf.id]: { type: 'folder', folder: trig.folder || folderOpts[0].v, types: e.target.value, text: folderText(trig.folder || folderOpts[0].v, e.target.value) } }) }),
+        onType: (e) => isMeta ? null : this.setState({ trig: Object.assign({}, st.trig || {}, { [wf.id]: e.target.value === 'folder' ? { type: 'folder', folder: folderOpts[0].v, types: 'mp3, m4a, wav, mp4, mov, mkv', text: folderText(folderOpts[0].v, 'mp3, m4a, wav, mp4, mov, mkv') } : { type: e.target.value, text: trigDefaults[e.target.value] } }) }),
+        onText: (e) => isMeta ? null : this.setState({ trig: Object.assign({}, st.trig || {}, { [wf.id]: { type: trig.type, text: e.target.value } }) })
+      },
+      showStart: selStart,
+      libCount: allLib.filter((p) => !p.metaId).length,
+      libQ: libQ,
+      onLibQ: (e) => this.setState({ libQ: e.target.value }),
+      libRows: libRows,
+      libNone: libRows.length === 0,
+      addOpen: !!st.addOpen,
+      addTitle: st.addFor ? 'Choose the next process for this transition' : 'Add a process to ' + wf.name,
+      addExisting: addKey === 'existing',
+      addNew: addKey === 'new',
+      addSeg: { existing: addKey === 'existing' ? 'on' : '', fresh: addKey === 'new' ? 'on' : '' },
+      addPress: { existing: addKey === 'existing' ? 'true' : 'false', fresh: addKey === 'new' ? 'true' : 'false' },
+      addSetExisting: () => this.setState({ addMode: 'existing' }),
+      addSetNew: () => this.setState({ addMode: 'new' }),
+      addClose: () => this.setState({ addOpen: false, addFor: null }),
+      addQ: addQ,
+      onAddQ: (e) => this.setState({ addQ: e.target.value }),
+      addResults: addResults,
+      addNoResults: addResults.length === 0,
+      addName: st.addName || '',
+      onAddName: (e) => this.setState({ addName: e.target.value }),
+      createNew: createNew,
+      inputRows: this.inputsOf(selP).map((x) => ({ f: x.f, t: x.t, req: x.req ? 'Yes' : 'No', cls: x.req ? 'ok' : 'idle', aria: 'Edit ' + x.f + ' field' })),
+      costTotal: selP.cost.toFixed(2) + ' EUR / run',
+      toolRows: selP.tools.map((t) => ({
+        name: t, group: meta[t].g, url: meta[t].u,
+        lineCls: LD[TL[t] || 'draft'].cls, lineLabel: LD[TL[t] || 'draft'].label, lineIcon: LD[TL[t] || 'draft'].icon, lineTip: 'AI line for tool ' + t + ': ' + LD[TL[t] || 'draft'].label + (TL[t] ? '' : '. Not set, treated as Drafts.'),
+        cost: meta[t].c.toFixed(2) + ' EUR per run',
+        editAria: 'Edit ' + t + ' tool',
+        rmAria: 'Remove ' + t + ' from this process',
+        miss: inWf && lacks.indexOf(t) >= 0,
+        missTip: role.name + ' lacks this tool. Grant it to the role so its holders can run the process.',
+        grant: () => this.say(t + ' granted to ' + role.name, { granted: true })
+      })),
+      noTools: selP.tools.length === 0,
+      saveCard: () => this.say('Process saved'),
+      sbc: { details: sb === 'details' ? 'on' : '', comments: sb === 'comments' ? 'on' : '' },
+      sbs: { details: sb === 'details' ? 'true' : 'false', comments: sb === 'comments' ? 'true' : 'false' },
+      sbPick: { details: () => this.setState({ sb: 'details' }), comments: () => this.setState({ sb: 'comments' }) },
+      sbDetails: !selEdge && !selStart && sb === 'details',
+      sbComments: !selEdge && !selStart && sb === 'comments',
+      tags: tags.map((t) => ({ name: t, aria: 'Remove tag ' + t, remove: () => this.say('Tag “' + t + '” removed', { tags: tags.filter((x) => x !== t) }) })),
+      tagDraft: tagDraft,
+      onTagDraft: (e) => this.setState({ tagDraft: e.target.value }),
+      onTagKey: (e) => { if (e.key === 'Enter') commitTag(); },
+      addTag: commitTag,
+      themes: defs.map(([id, label]) => ({
+        label: label,
+        cls: id === cur ? 'on' : '',
+        pressed: id === cur ? 'true' : 'false',
+        pick: () => { try { window.localStorage.setItem('autobot-theme', id); } catch (e) {} this.setState({ theme: id }); }
+      }))
+    };
+  }
+  graphOf(wf, procs) {
+    const W = 168;
+    const tall = (p) => (p.tools.indexOf('ansible-runner') >= 0 ? 190 : 84);
+    const E = (id, from, to, type, o) => Object.assign({ id: id, from: from, to: to, type: type, cond: '', retries: 0, timeout: 0 }, o || {});
+    const START = { id: 'start', kind: 'start', x: 12, y: 62, w: 60, h: 32 };
+    const END = (id, kind, x, y, cap) => ({ id: id, kind: 'end', endKind: kind, cap: cap, x: x, y: y, w: 130, h: cap ? 62 : 48 });
+    const addExtras = (nodes) => {
+      const have = {};
+      nodes.forEach((n) => { have[n.id] = true; });
+      const bottom = Math.max.apply(null, nodes.map((n) => n.y + n.h));
+      procs.filter((p) => !have[p.id]).forEach((p, k) => nodes.push({ id: p.id, kind: 'proc', x: 100 + k * 200, y: bottom + 70, w: W, h: tall(p) }));
+      return nodes;
+    };
+    const place = (pos) => procs.filter((p) => pos[p.id]).map((p) => ({ id: p.id, kind: 'proc', x: pos[p.id][0], y: pos[p.id][1], w: W, h: tall(p) }));
+    if (wf.id === 'incident') {
+      const nodes = place({ email: [100, 36], alert: [438, 36], restore: [706, 36], note: [974, 36], notify: [1242, 36] });
+      nodes.push(START, END('endDone', 'done', 1510, 54, ''), END('endNone', 'done', 119, 210, 'No action needed'));
+      const edges = [
+        E('e-start', 'start', 'email', 'plain', { pts: [[72, 78], [100, 78]] }),
+        E('e-mail-alert', 'email', 'alert', 'if', { cond: 'it reports an outage', pts: [[268, 78], [438, 78]], chip: [353, 60] }),
+        E('e-mail-none', 'email', 'endNone', 'else', { pts: [[184, 120], [184, 210]], chip: [184, 165] }),
+        E('e-alert-rest', 'alert', 'restore', 'success', { pts: [[606, 78], [706, 78]], chip: [656, 60] }),
+        E('e-rest-note', 'restore', 'note', 'success', { pts: [[874, 78], [974, 78]], chip: [924, 60] }),
+        E('e-note-not', 'note', 'notify', 'success', { pts: [[1142, 78], [1242, 78]], chip: [1192, 60] }),
+        E('e-not-end', 'notify', 'endDone', 'success', { pts: [[1410, 78], [1510, 78]], chip: [1460, 60] }),
+        E('e-rest-fail', 'restore', 'notify', 'failure', { pts: [[790, 226], [790, 256], [1326, 256], [1326, 120]], chip: [1058, 256] })
+      ];
+      return { nodes: addExtras(nodes), edges: edges, chk: [] };
+    }
+    if (wf.id === 'approval') {
+      const nodes = place({ email: [100, 36], notes: [438, 36], approve: [706, 36] });
+      nodes.push(START, END('endDone', 'done', 974, 54, ''), END('endNone', 'done', 119, 210, 'Not a release request'));
+      const edges = [
+        E('e-start', 'start', 'email', 'plain', { pts: [[72, 78], [100, 78]] }),
+        E('e-mail-notes', 'email', 'notes', 'if', { cond: 'it is a release request', pts: [[268, 78], [438, 78]], chip: [353, 60] }),
+        E('e-mail-none', 'email', 'endNone', 'else', { pts: [[184, 120], [184, 210]], chip: [184, 165] }),
+        E('e-notes-app', 'notes', 'approve', 'success', { pts: [[606, 78], [706, 78]], chip: [656, 60] }),
+        E('e-app-end', 'approve', 'endDone', 'success', { pts: [[874, 78], [974, 78]], chip: [924, 60] })
+      ];
+      return { nodes: addExtras(nodes), edges: edges, chk: [] };
+    }
+    if (wf.id === 'mail') {
+      const nodes = place({ classify: [100, 36], extract: [368, 36], route: [680, 36], reply: [368, 290] });
+      nodes.push(START, END('endDone', 'done', 948, 54, ''), END('endDone2', 'done', 636, 308, ''));
+      const edges = [
+        E('e-start', 'start', 'classify', 'plain', { pts: [[72, 78], [100, 78]] }),
+        E('e-cls-ext', 'classify', 'extract', 'success', { pts: [[268, 78], [368, 78]], chip: [318, 60] }),
+        E('e-ext-rte', 'extract', 'route', 'if', { cond: 'it is urgent', pts: [[536, 78], [680, 78]], chip: [608, 60] }),
+        E('e-ext-rep', 'extract', 'reply', 'else', { pts: [[452, 120], [452, 290]], chip: [452, 205] }),
+        E('e-rte-end', 'route', 'endDone', 'success', { pts: [[848, 78], [948, 78]], chip: [898, 60] }),
+        E('e-rep-end', 'reply', 'endDone2', 'success', { pts: [[536, 332], [636, 332]], chip: [586, 314] })
+      ];
+      return { nodes: addExtras(nodes), edges: edges, chk: [] };
+    }
+    if (wf.id === 'safe') {
+      const nodes = place({ staging: [100, 36], smoke: [368, 36], prod: [676, 36], rbs: [368, 290] });
+      nodes.push(START, END('endDone', 'done', 944, 54, ''), END('endFail', 'failed', 636, 308, ''));
+      const edges = [
+        E('e-start', 'start', 'staging', 'plain', { pts: [[72, 78], [100, 78]] }),
+        E('e-stg-smk', 'staging', 'smoke', 'success', { pts: [[268, 78], [368, 78]], chip: [318, 60] }),
+        E('e-smk-prod', 'smoke', 'prod', 'if', { cond: 'all checks pass', pts: [[536, 78], [676, 78]], chip: [606, 60] }),
+        E('e-smk-rbs', 'smoke', 'rbs', 'else', { pts: [[452, 120], [452, 290]], chip: [452, 205] }),
+        E('e-prod-end', 'prod', 'endDone', 'success', { pts: [[844, 78], [944, 78]], chip: [894, 60] }),
+        E('e-rbs-end', 'rbs', 'endFail', 'success', { pts: [[536, 332], [636, 332]], chip: [586, 314] })
+      ];
+      return { nodes: addExtras(nodes), edges: edges, chk: [] };
+    }
+    if (wf.id === 'transcribe') {
+      const nodes = place({ trans: [100, 36], label: [368, 36], tsum: [636, 36], wi: [984, 36], kb: [1252, 36], notify: [100, 290] });
+      nodes.push(START, END('endDone', 'done', 1520, 54, ''), END('endFail', 'failed', 368, 308, ''));
+      const edges = [
+        E('e-start', 'start', 'trans', 'plain', { pts: [[72, 78], [100, 78]] }),
+        E('e-trn-lab', 'trans', 'label', 'success', { pts: [[268, 78], [368, 78]], chip: [318, 60] }),
+        E('e-lab-sum', 'label', 'tsum', 'success', { pts: [[536, 78], [636, 78]], chip: [586, 60] }),
+        E('e-sum-wi', 'tsum', 'wi', 'if', { cond: 'action items were found', pts: [[804, 78], [984, 78]], chip: [894, 60] }),
+        E('e-wi-kb', 'wi', 'kb', 'success', { pts: [[1152, 78], [1252, 78]], chip: [1202, 60] }),
+        E('e-sum-kb', 'tsum', 'kb', 'else', { pts: [[720, 120], [720, 210], [1336, 210], [1336, 120]], chip: [1028, 210] }),
+        E('e-kb-end', 'kb', 'endDone', 'success', { pts: [[1420, 78], [1520, 78]], chip: [1470, 60] }),
+        E('e-trn-not', 'trans', 'notify', 'failure', { retries: 1, pts: [[184, 120], [184, 290]], chip: [184, 205] }),
+        E('e-not-end', 'notify', 'endFail', 'success', { pts: [[268, 332], [368, 332]], chip: [318, 314] })
+      ];
+      return { nodes: addExtras(nodes), edges: edges, chk: [] };
+    }
+    if (wf.id === 'social') {
+      const nodes = place({ reply: [100, 36], sched: [368, 36] });
+      nodes.push(START, END('endDone', 'done', 636, 54, ''), END('endFail', 'failed', 119, 210, 'No reply drafted'));
+      const edges = [
+        E('e-start', 'start', 'reply', 'plain', { pts: [[72, 78], [100, 78]] }),
+        E('e-rep-sch', 'reply', 'sched', 'success', { pts: [[268, 78], [368, 78]], chip: [318, 60] }),
+        E('e-sch-end', 'sched', 'endDone', 'success', { pts: [[536, 78], [636, 78]], chip: [586, 60] }),
+        E('e-rep-fail', 'reply', 'endFail', 'failure', { pts: [[184, 120], [184, 210]], chip: [184, 165] })
+      ];
+      return { nodes: addExtras(nodes), edges: edges, chk: [] };
+    }
+    if (wf.id === 'deploy') {
+      const nodes = place({ triage: [100, 36], ask: [100, 290], staging: [368, 36], smoke: [636, 36], prod: [944, 36], rbs: [368, 290], rbp: [944, 290], notify: [636, 540] });
+      nodes.push({ id: 'start', kind: 'start', x: 12, y: 62, w: 60, h: 32 });
+      nodes.push({ id: 'endDone', kind: 'end', endKind: 'done', cap: '', x: 1212, y: 54, w: 130, h: 48 });
+      nodes.push({ id: 'endAsk', kind: 'end', endKind: 'failed', cap: 'Closed, waiting on requester', x: 119, y: 420, w: 130, h: 62 });
+      nodes.push({ id: 'endFail', kind: 'end', endKind: 'failed', cap: '', x: 655, y: 674, w: 130, h: 48 });
+      const edges = [
+        E('e-start', 'start', 'triage', 'plain', { pts: [[72, 78], [100, 78]] }),
+        E('e-tri-ask', 'triage', 'ask', 'if', { cond: 'request is incomplete', pts: [[184, 120], [184, 290]], chip: [184, 205] }),
+        E('e-tri-stg', 'triage', 'staging', 'else', { pts: [[268, 78], [368, 78]], chip: [318, 60] }),
+        E('e-ask-end', 'ask', 'endAsk', 'success', { pts: [[184, 374], [184, 420]], chip: [184, 397] }),
+        E('e-stg-smk', 'staging', 'smoke', 'success', { pts: [[536, 78], [636, 78]], chip: [586, 60] }),
+        E('e-stg-rb', 'staging', 'rbs', 'failure', { retries: 2, pts: [[452, 226], [452, 290]], chip: [452, 258] }),
+        E('e-smk-prod', 'smoke', 'prod', 'if', { cond: 'all checks pass', pts: [[804, 78], [944, 78]], chip: [874, 60] }),
+        E('e-smk-else', 'smoke', 'rbs', 'else', { pts: [[700, 120], [700, 330], [536, 330]], chip: [700, 200] }),
+        E('e-smk-time', 'smoke', 'rbs', 'timeout', { timeout: 30, pts: [[772, 120], [772, 390], [536, 390]], chip: [772, 260] }),
+        E('e-prod-end', 'prod', 'endDone', 'success', { pts: [[1112, 78], [1212, 78]], chip: [1162, 60] }),
+        E('e-prod-rb', 'prod', 'rbp', 'failure', { pts: [[1028, 226], [1028, 290]], chip: [1028, 258] }),
+        E('e-rbs-not', 'rbs', 'notify', 'success', { pts: [[452, 480], [452, 582], [636, 582]], chip: [452, 531] }),
+        E('e-rbp-not', 'rbp', 'notify', 'success', { pts: [[1028, 480], [1028, 582], [804, 582]], chip: [1028, 531] }),
+        E('e-not-end', 'notify', 'endFail', 'success', { pts: [[720, 624], [720, 674]], chip: [720, 649] })
+      ];
+      return { nodes: addExtras(nodes), edges: edges, chk: ['staging', 'smoke', 'prod', 'notify'] };
+    }
+    const base = procs.filter((p) => !p.extra);
+    const nodes = [START];
+    base.forEach((p, i) => nodes.push({ id: p.id, kind: 'proc', x: 100 + i * 268, y: 36, w: W, h: tall(p) }));
+    nodes.push({ id: 'endDone', kind: 'end', endKind: 'done', cap: '', x: 100 + base.length * 268, y: 54, w: 130, h: 48 });
+    const edges = [E('e-start', 'start', base[0].id, 'plain')];
+    base.forEach((p, i) => edges.push(E('e-' + i, p.id, i < base.length - 1 ? base[i + 1].id : 'endDone', 'success')));
+    return { nodes: addExtras(nodes), edges: edges, chk: [] };
+  }
+  inputsOf(p) {
+    if (p.id === 'staging') return [{ f: 'Release tag', t: 'Text', req: true }, { f: 'Target environment', t: 'Text · staging', req: false }, { f: 'Max deploy time', t: 'Number · 15 min', req: false }];
+    return [{ f: 'Source link', t: 'URL', req: true }, { f: 'Notes', t: 'Text', req: false }];
+  }
+}
+</script>
+</body>
+</html>

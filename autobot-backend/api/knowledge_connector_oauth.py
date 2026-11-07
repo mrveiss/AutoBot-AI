@@ -197,8 +197,6 @@ async def _exchange_and_store(payload: dict, code: str) -> str:
         owner_id=payload["owner_id"],
         provider=payload["provider"],
         token_response=token_response,
-        client_id=client_id,
-        client_secret=client_secret,
         token_url=prov.token_url,
         scopes=payload.get("scopes") or list(prov.default_scopes),
     )

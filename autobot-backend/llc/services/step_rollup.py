@@ -41,16 +41,39 @@ from .step_cost import derive_step_cost
 
 @dataclass
 class RollupBucket:
-    """One grouping's total, and how much of it is actually known."""
+    """One grouping's total, and how much of it is actually known.
+
+    Amounts are held **per currency**. Two currencies are different units and
+    no exchange rate exists here, so a bucket spanning more than one has no
+    blended total: ``per_month`` is ``None`` and ``per_currency`` carries the
+    honest figures (#14670). A by-role bucket is single-currency by the
+    ``role_id`` uniqueness of a rate; a by-tool bucket is not.
+    """
 
     key: str
     label: str
-    per_month: Decimal = Decimal(0)
+    #: currency code -> sum of the costed steps rated in that currency.
+    amounts: Dict[str, Decimal] = field(default_factory=dict)
     #: Steps that contributed a figure.
     costed: int = 0
     #: Steps counted but not costable — never summed as zero.
     not_costable: int = 0
-    currencies: set = field(default_factory=set)
+
+    @property
+    def currencies(self) -> List[str]:
+        return sorted(self.amounts)
+
+    @property
+    def is_mixed_currency(self) -> bool:
+        """Whether the bucket spans currencies, so no single sum exists."""
+        return len(self.amounts) > 1
+
+    @property
+    def per_month(self) -> Optional[Decimal]:
+        """The bucket's sum, or ``None`` when it would add different currencies."""
+        if self.is_mixed_currency:
+            return None
+        return next(iter(self.amounts.values()), Decimal(0))
 
     @property
     def total_steps(self) -> int:
@@ -68,9 +91,73 @@ def _add(bucket: RollupBucket, cost, currency: Optional[str]) -> None:  # noqa: 
         bucket.not_costable += 1
         return
     bucket.costed += 1
-    bucket.per_month += cost.per_month
-    if currency:
-        bucket.currencies.add(currency)
+    # A costed step always has a rate, hence a currency; the key is never None.
+    bucket.amounts[currency] = bucket.amounts.get(currency, Decimal(0)) + cost.per_month
+
+
+async def _scoped_attachments(session: AsyncSession, company_id: uuid.UUID):  # noqa: ANN202
+    """The company's role-workflow attachments, pinned on both sides of the join."""
+    return (
+        await session.execute(
+            select(
+                LLCRoleWorkflow.role_id,
+                LLCRoleWorkflow.workflow_id,
+                LLCRoleWorkflow.estimated_minutes,
+                LLCRoleWorkflow.runs_per_month,
+                Role.name,
+            )
+            .join(Role, Role.id == LLCRoleWorkflow.role_id)
+            .where(
+                # Pinned on both sides, as the process-nodes read is: losing
+                # either predicate cannot widen the result.
+                Role.org_id == company_id,
+                LLCRoleWorkflow.company_id == company_id,
+            )
+            .order_by(Role.name, LLCRoleWorkflow.workflow_id)
+        )
+    ).all()
+
+
+async def _scoped_tool_rows(session: AsyncSession, company_id: uuid.UUID):  # noqa: ANN202
+    """The company's role-tool rows, pinned on both sides like the attachments.
+
+    The role's own ``org_id`` is checked here rather than trusted from the
+    attachments query: the scoping must not rest on a cross-query invariant.
+    """
+    return (
+        await session.execute(
+            select(LLCRoleTool.role_id, LLCRoleTool.tool_name)
+            .join(Role, Role.id == LLCRoleTool.role_id)
+            .where(Role.org_id == company_id, LLCRoleTool.company_id == company_id)
+        )
+    ).all()
+
+
+async def _rates_by_role(session: AsyncSession, company_id: uuid.UUID) -> Dict[uuid.UUID, LLCRoleRate]:
+    rows = await session.execute(select(LLCRoleRate).where(LLCRoleRate.company_id == company_id))
+    return {row.role_id: row for row in rows.scalars()}
+
+
+def _group(attachments, rates, tools_by_role) -> Dict[str, List[RollupBucket]]:  # noqa: ANN001
+    """Fold the attachments into role and tool buckets."""
+    by_role: Dict[uuid.UUID, RollupBucket] = {}
+    by_tool: Dict[str, RollupBucket] = {}
+    for role_id, _workflow_id, minutes, runs, role_name in attachments:
+        rate = rates.get(role_id)
+        currency = rate.currency if rate else None
+        cost = derive_step_cost(
+            estimated_minutes=minutes,
+            runs_per_month=runs,
+            hourly_rate=rate.hourly_rate if rate else None,
+            currency=currency,
+        )
+        _add(by_role.setdefault(role_id, RollupBucket(key=str(role_id), label=role_name)), cost, currency)
+        for tool_name in tools_by_role.get(role_id, []):
+            _add(by_tool.setdefault(tool_name, RollupBucket(key=tool_name, label=tool_name)), cost, currency)
+    return {
+        "by_role": sorted(by_role.values(), key=lambda b: b.label),
+        "by_tool": sorted(by_tool.values(), key=lambda b: b.label),
+    }
 
 
 class StepRollupService:
@@ -87,63 +174,9 @@ class StepRollupService:
         here because a reader comparing the two columns will otherwise assume
         one of them is wrong.
         """
-        attachments = (
-            await session.execute(
-                select(
-                    LLCRoleWorkflow.role_id,
-                    LLCRoleWorkflow.workflow_id,
-                    LLCRoleWorkflow.estimated_minutes,
-                    LLCRoleWorkflow.runs_per_month,
-                    Role.name,
-                )
-                .join(Role, Role.id == LLCRoleWorkflow.role_id)
-                .where(
-                    # Pinned on both sides, as the process-nodes read is: losing
-                    # either predicate cannot widen the result.
-                    Role.org_id == company_id,
-                    LLCRoleWorkflow.company_id == company_id,
-                )
-                .order_by(Role.name, LLCRoleWorkflow.workflow_id)
-            )
-        ).all()
-
-        rates = {
-            row.role_id: row
-            for row in (
-                await session.execute(select(LLCRoleRate).where(LLCRoleRate.company_id == company_id))
-            ).scalars()
-        }
-
-        tool_rows = (
-            await session.execute(
-                select(LLCRoleTool.role_id, LLCRoleTool.tool_name).where(LLCRoleTool.company_id == company_id)
-            )
-        ).all()
+        attachments = await _scoped_attachments(session, company_id)
+        rates = await _rates_by_role(session, company_id)
         tools_by_role: Dict[uuid.UUID, List[str]] = {}
-        for role_id, tool_name in tool_rows:
+        for role_id, tool_name in await _scoped_tool_rows(session, company_id):
             tools_by_role.setdefault(role_id, []).append(tool_name)
-
-        by_role: Dict[uuid.UUID, RollupBucket] = {}
-        by_tool: Dict[str, RollupBucket] = {}
-
-        for role_id, _workflow_id, minutes, runs, role_name in attachments:
-            rate = rates.get(role_id)
-            cost = derive_step_cost(
-                estimated_minutes=minutes,
-                runs_per_month=runs,
-                hourly_rate=rate.hourly_rate if rate else None,
-                currency=rate.currency if rate else None,
-            )
-            currency = rate.currency if rate else None
-
-            role_bucket = by_role.setdefault(role_id, RollupBucket(key=str(role_id), label=role_name))
-            _add(role_bucket, cost, currency)
-
-            for tool_name in tools_by_role.get(role_id, []):
-                tool_bucket = by_tool.setdefault(tool_name, RollupBucket(key=tool_name, label=tool_name))
-                _add(tool_bucket, cost, currency)
-
-        return {
-            "by_role": sorted(by_role.values(), key=lambda b: b.label),
-            "by_tool": sorted(by_tool.values(), key=lambda b: b.label),
-        }
+        return _group(attachments, rates, tools_by_role)

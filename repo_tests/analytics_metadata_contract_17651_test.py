@@ -32,11 +32,72 @@ from repo_tests._analytics_metadata_detect import (
 from repo_tests._paths import repo_root
 
 _ANALYTICS = repo_root() / "autobot-backend" / "api" / "codebase_analytics"
-_WRITER = _ANALYTICS / "chromadb_storage.py"
+
+
+def _is_test_module(path) -> bool:
+    """Whether *path* is a test file, by the repo's two naming conventions.
+
+    `"test" in path.name` was the old predicate in both sweeps here. It also
+    excludes `latest_x.py` and `contest.py`, so a `_prepare_*_document` or a
+    filter in such a module escapes -- a guard that silently checks less,
+    which is the failure both sweeps exist to catch.
+    """
+    return path.name.endswith("_test.py") or path.name.startswith("test_") or "/tests/" in str(path)
+
+
+#: The writer is no longer one file: #18055 split problem storage out of
+#: chromadb_storage, which may not grow. Listed explicitly rather than
+#: globbed -- but see `test_every_document_preparer_is_in_the_writer_set`,
+#: which fails when a `_prepare_*_document` exists in the package outside
+#: this set. Without that, the split silently shrank the contract: the
+#: problem keys stopped being checked while every assertion kept passing.
+_WRITERS = (
+    _ANALYTICS / "chromadb_storage.py",
+    _ANALYTICS / "problem_storage.py",
+)
 
 
 def _writer_source() -> str:
-    return _WRITER.read_text(encoding="utf-8")
+    return "\n".join(p.read_text(encoding="utf-8") for p in _WRITERS)
+
+
+def test_the_test_module_predicate_discriminates():
+    """Contrast pair: the exclusion must skip tests and only tests.
+
+    The old `"test" in path.name` passed everything a test file throws at it
+    while also swallowing `latest_x.py` -- an over-broad exclusion is invisible
+    precisely because the sweep still returns results.
+    """
+    from pathlib import Path as _P
+
+    excluded = ["foo_test.py", "test_foo.py", "autobot-backend/tests/helper.py"]
+    included = ["latest_metrics.py", "contest_runner.py", "chromadb_storage.py", "protest.py"]
+
+    for name in excluded:
+        assert _is_test_module(_P(name)), f"{name} is a test module and must be skipped"
+    for name in included:
+        assert not _is_test_module(_P(name)), f"{name} is NOT a test module and must be swept"
+
+
+def test_every_document_preparer_is_in_the_writer_set():
+    """A preparer outside the writer set shrinks this contract invisibly.
+
+    The reader population is DISCOVERED (by obtaining the collection); the
+    writer population was a hand-written list of one. An asymmetry like that
+    does not fail when it goes stale -- it just checks less. This is the
+    assertion that makes the writer list fail instead of narrowing.
+    """
+    declared = {path.name for path in _WRITERS}
+    missing = []
+    for path in sorted(_ANALYTICS.rglob("*.py")):
+        if _is_test_module(path) or path.name in declared:
+            continue
+        if preparers(path.read_text(encoding="utf-8", errors="replace")):
+            missing.append(str(path.relative_to(_ANALYTICS)))
+    assert not missing, (
+        "these modules define _prepare_*_document but are not in _WRITERS, so the keys\n"
+        "they emit are not checked against what the endpoints filter on (#18055):\n  " + "\n  ".join(missing)
+    )
 
 
 def _emitted_keys() -> set[str]:
@@ -81,7 +142,7 @@ def _reader_filter_keys() -> tuple[dict[str, set[str]], int]:
     found: dict[str, set[str]] = {}
     reached = 0
     for path in sorted(backend.rglob("*.py")):
-        if "test" in path.name or "/tests/" in str(path):
+        if _is_test_module(path):
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
         if _COLLECTION_ACCESSOR not in text:

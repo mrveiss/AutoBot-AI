@@ -103,6 +103,31 @@ class AuditLog(Base):
         nullable=True,
     )
 
+    # --- Canonical audit-trail columns (#17225 D1) --------------------------
+    # This table is the audit trail's system of record. The four columns below
+    # carry what the canonical AuditEvent records and the original schema could
+    # not: actors and resources that are not user/row UUIDs (an agent, "system",
+    # a path), the session, and the category that selects the retention period.
+    # All additive: nullable, or a server default, so no existing row is rewritten.
+    category: Mapped[str] = mapped_column(
+        String(32),
+        server_default="security",
+        nullable=False,
+        index=True,
+    )
+    actor: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    session_id: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    resource_ref: Mapped[str | None] = mapped_column(
+        String(512),
+        nullable=True,
+    )
+
     # Timestamp (immutable)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -116,6 +141,7 @@ class AuditLog(Base):
         Index("idx_audit_org_created", "org_id", "created_at"),
         Index("idx_audit_user_created", "user_id", "created_at"),
         Index("idx_audit_action_created", "action", "created_at"),
+        Index("idx_audit_actor_created", "actor", "created_at"),
     )
 
     def __repr__(self) -> str:
@@ -123,7 +149,7 @@ class AuditLog(Base):
 
 
 # Standard audit actions
-class AuditAction:
+class IdentityAuditAction:
     """Standard audit action constants."""
 
     # Authentication

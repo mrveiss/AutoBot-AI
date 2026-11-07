@@ -27,11 +27,12 @@ import asyncio
 import json
 import time
 from collections import defaultdict
-from contextlib import asynccontextmanager
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
+from testkit.fake_redis_pipeline import FakeAsyncPipeline
 
 # ---------------------------------------------------------------------------
 # Fake async-Redis stub
@@ -69,64 +70,6 @@ class _FakePubSub:
             break  # one pass — tests drain manually
 
 
-class _FakePipeline:
-    """Simple pipeline stub supporting WATCH/MULTI/EXEC for optimistic CAS (M4).
-
-    Tracks the watched key's value at watch() time; execute() raises WatchError
-    (simulated via ValueError with name WatchError) if the value changed.
-    """
-
-    class WatchError(Exception):
-        pass
-
-    def __init__(self, store: "_FakeRedis") -> None:
-        self._store = store
-        self._watched_keys: dict[str, bytes | None] = {}
-        self._multi = False
-        self._queue: list[tuple[str, tuple, dict]] = []
-
-    async def watch(self, *keys: str) -> None:
-        for key in keys:
-            self._watched_keys[key] = self._store._strings.get(key)
-
-    async def get(self, key: str) -> bytes | None:
-        """Direct GET during watch phase (before MULTI)."""
-        if self._store._is_expired(key):
-            self._store._strings.pop(key, None)
-            return None
-        return self._store._strings.get(key)
-
-    def multi(self) -> None:
-        self._multi = True
-
-    def set(self, key: str, value: Any) -> None:  # noqa: A003
-        self._queue.append(("set", (key, value), {}))
-
-    async def execute(self) -> list:
-        # Check watched keys for concurrent modification
-        for key, snapshot_val in self._watched_keys.items():
-            current = self._store._strings.get(key)
-            if current != snapshot_val:
-                raise _FakePipeline.WatchError(f"WATCH key {key!r} was modified")
-        results = []
-        for cmd, args, kwargs in self._queue:
-            if cmd == "set":
-                self._store._strings[args[0]] = self._store._encode(args[1])
-                results.append(True)
-        return results
-
-    async def reset(self) -> None:
-        self._watched_keys.clear()
-        self._multi = False
-        self._queue.clear()
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *_):
-        pass
-
-
 class _FakeRedis:
     """
     Shared-state async Redis stub implementing the command surface used by
@@ -157,10 +100,11 @@ class _FakeRedis:
         return str(value).encode("utf-8")
 
     # STRING
-    async def set(self, key: str, value: Any, ex: int | None = None) -> None:  # noqa: A003
+    async def set(self, key: str, value: Any, ex: int | None = None) -> bool:  # noqa: A003
         self._strings[key] = self._encode(value)
         if ex is not None:
             self._expirations[key] = time.time() + ex
+        return True
 
     async def get(self, key: str) -> bytes | None:
         if self._is_expired(key):
@@ -248,11 +192,9 @@ class _FakeRedis:
     async def ltrim(self, key: str, start: int, stop: int) -> None:
         self._lists[key] = self._lists[key][start : stop + 1]
 
-    # PIPELINE (M4 optimistic CAS)
-    @asynccontextmanager
-    async def pipeline(self, transaction: bool = False):
-        pipe = _FakePipeline(self)
-        yield pipe
+    # PIPELINE (M4 optimistic CAS): WATCH snapshots the key, EXEC raises WatchError if it changed.
+    def pipeline(self, transaction: bool = False) -> FakeAsyncPipeline:
+        return FakeAsyncPipeline(self, transaction=transaction, detect_watch_conflicts=True)
 
     # PUB/SUB
     async def publish(self, channel: str, message: Any) -> int:

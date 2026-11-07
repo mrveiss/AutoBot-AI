@@ -5,6 +5,9 @@
 
 @import 'tailwindcss';
 
+/* Refined SLM scheme: teal identity, shared token names (#18223, #17566) */
+@import './slm-scheme.css';
+
 @theme {
   --color-primary-50: #f0f9ff;
   --color-primary-100: #e0f2fe;
@@ -23,8 +26,9 @@
   --color-warning-500: #eab308;
   --color-warning-600: #ca8a04;
 
-  --color-danger-500: #ef4444;
-  --color-danger-600: #dc2626;
+  --color-error-500: #ef4444;
+  --color-error-600: #dc2626;
+  --color-error-700: #b91c1c;
 }
 
 /*
@@ -54,19 +58,19 @@
 }
 
 @utility btn-primary {
-  @apply bg-primary-600 text-white hover:bg-primary-700;
+  @apply bg-primary-600 text-white enabled:hover:bg-primary-700;
 }
 
 @utility btn-secondary {
-  @apply bg-gray-200 text-gray-700 hover:bg-gray-300;
+  @apply bg-gray-200 text-gray-700 enabled:hover:bg-gray-300;
 }
 
 @utility btn-success {
-  @apply bg-success-500 text-white hover:bg-success-600;
+  @apply bg-success-500 text-(--text-on-success) enabled:hover:bg-success-600;
 }
 
-@utility btn-danger {
-  @apply bg-danger-500 text-white hover:bg-danger-600;
+@utility btn-error {
+  @apply bg-(--color-error-solid) text-(--text-on-error) enabled:hover:bg-(--color-error-solid-hover);
 }
 
 @utility card {
@@ -94,7 +98,7 @@
 }
 
 @utility health-unhealthy {
-  @apply bg-danger-500;
+  @apply bg-error-500;
 }
 
 @utility health-unknown {
@@ -148,15 +152,15 @@
   --success-color: var(--color-success-500);
   --color-warning: var(--color-warning-500);
   --warning-color: var(--color-warning-500);
-  --color-danger: var(--color-danger-500);
-  --danger-color: var(--color-danger-500);
+  --color-error: var(--color-error-500);
+  --error-color: var(--color-error-500);
   --color-info: var(--color-primary-500);
   --info-color: var(--color-primary-500);
   /* Status backgrounds — tint the status hue over the active surface so they
    * stay theme-aware (dark themes get a dark-tinted chip, not a light one). */
   --success-bg: color-mix(in srgb, var(--color-success-500) 14%, var(--a11y-bg));
   --warning-bg: color-mix(in srgb, var(--color-warning-500) 14%, var(--a11y-bg));
-  --danger-bg: color-mix(in srgb, var(--color-danger-500) 14%, var(--a11y-bg));
+  --error-bg: color-mix(in srgb, var(--color-error-500) 14%, var(--a11y-bg));
   --info-bg: color-mix(in srgb, var(--color-primary-500) 14%, var(--a11y-bg));
 }
 
@@ -214,6 +218,9 @@
   --z-popover: 1100;
   --z-tooltip: 1200;
   --z-toast: 1300;
+  --z-raised: 1;
+  --z-10: 10;
+  --z-maximum: 10000;
 }
 
 /* ─── Component literal captures (#11858 / #11896 / #11515 Task 4) ─────
@@ -226,6 +233,8 @@
 :root {
   /* Neutral constant (white text on coloured surfaces). */
   --color-white: #ffffff;
+  /* Ink for text on a light status fill (#19872). */
+  --color-black: #000000;
   /* Blue action shades used by the setup wizard's buttons/badges — distinct
    * from the sky --color-primary; captured verbatim pending palette
    * consolidation (#11515). */
@@ -251,6 +260,7 @@
   --slm-gray-300: #d1d5db;
   --slm-gray-500: #6b7280;
   --slm-gray-700: #374151;
+  --slm-gray-800: #1f2937;
   --slm-red-100: #fee2e2;
   --slm-red-700: #b91c1c;
   --slm-blue-100: #dbeafe;
@@ -265,6 +275,8 @@
   --slm-emerald-500: #10b981;
   --slm-emerald-600: #059669;
   --slm-orange-100: #ffedd5;
+  /* Sidebar update badge: system updates pending (amber-500 is code sync only). */
+  --slm-orange-500: #f97316;
   --slm-orange-600: #ea580c;
   /* Amber action shades + slate terminal-panel shades (ProcessMonitorTab #11899, ConfigHistoryTab #11900). */
   --slm-amber-500: #f59e0b;
@@ -573,4 +585,18 @@ p {
 .view-nav-link.is-active {
   color: var(--color-primary-500);
   border-bottom-color: var(--color-primary-500);
+}
+
+/* Links in body text carry a cue that is not colour (WCAG 1.4.1, #18223): the link
+ * colour can equal the text colour, so an underline at rest tells a link from a
+ * word. Anchors that carry a class (nav, buttons, cards) style themselves. */
+a:not([class]),
+.prose a {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+a:not([class]):hover,
+.prose a:hover {
+  color: var(--text-link-hover);
 }

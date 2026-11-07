@@ -16,19 +16,15 @@ Facts:
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from typing import Any, Dict, FrozenSet, List, Sequence, Tuple
 
-# ---------------------------------------------------------------------------
-# Internal tokenizer — same regex as skill_router._tokenize but returns a
-# frozenset so facts can be frozen.  Kept here to avoid a circular import
-# between prepared_facts and skills.builtin.skill_router.
-# ---------------------------------------------------------------------------
+from autobot_shared.text_tokens import word_tokens
 
-
-def _tok(text: str) -> FrozenSet[str]:
-    return frozenset(t for t in re.split(r"[\W_]+", text.lower()) if t)
+# The tokenizer is shared with skills.builtin.skill_router (#18093). It lives in
+# autobot_shared because prepared_facts cannot import anything under `skills`
+# (skills.registry imports this module).
+_tok = word_tokens
 
 
 # ---------------------------------------------------------------------------

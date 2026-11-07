@@ -3,7 +3,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025-2026 mrveiss
 # Author: mrveiss
-"""setup_passwordless_sudo.sh grants exactly four wrapper invocations, never a
+"""setup_passwordless_sudo.sh grants exactly three wrapper invocations, never a
 bare binary or a wildcard (#14317, hardened in PR #14412 review round 2).
 
 Before the first fix, the script hardcoded NOPASSWD sudo to a leftover
@@ -103,7 +103,6 @@ def _wrapper_accepted_invocations() -> set[str]:
     port_names = set(re.findall(r"^\s*(backend|frontend|backend-tls)\)", text, re.MULTILINE))
     assert port_names == {"backend", "frontend", "backend-tls"}
     accepted = {f"kill-port {p}" for p in port_names}
-    accepted |= {f"diagnose-port {p}" for p in port_names}
     accepted.add("kill-uvicorn")
     return accepted
 
@@ -155,7 +154,6 @@ def test_grants_exactly_the_wrapper_allowlist():
     assert granted == {
         "kill-port backend",
         "kill-port frontend",
-        "diagnose-port backend-tls",
         "kill-uvicorn",
     }
 
@@ -180,6 +178,7 @@ def test_denies_bare_binaries_and_unlisted_wrapper_invocations():
     granted = _granted_invocations()
     for invocation in (
         "kill-port backend-tls",  # the wrapper supports it; sudoers must not grant it
+        "diagnose-port backend-tls",  # retired in #17856 with its only caller
         "diagnose-port backend",
         "diagnose-port frontend",
         "kill-port",  # no argument
@@ -233,7 +232,7 @@ def test_account_name_is_validated_before_use():
         assert not pattern.match(invalid), f"{invalid!r} must be rejected"
 
     # and the check must actually abort the script, not just log
-    validate_pos = text.index('=~ ')
+    validate_pos = text.index("=~ ")
     exit_pos = text.index("exit 1", validate_pos)
     assert exit_pos - validate_pos < 200, "the validation failure must exit near where it's checked"
 
@@ -251,3 +250,9 @@ def test_wrapper_is_deployed_root_owned_and_read_only_in_this_repo():
     assert 'WRAPPER_DEST="/opt/autobot/bin/autobot-cleanup-port"' in text
     assert 'sudo install -m 0755 -o root -g root "${WRAPPER_SRC}" "${WRAPPER_DEST}"' in text
     assert WRAPPER.exists(), "autobot-cleanup-port must ship next to setup_passwordless_sudo.sh"
+
+
+def test_the_diagnose_port_subcommand_and_its_grant_are_retired():
+    """#17856: its only caller (ansible/fix-backend-deadlock.sh) is gone; an unused privilege is debris."""
+    assert "diagnose-port" not in _wrapper_text()
+    assert "diagnose-port" not in _sudoers_content()

@@ -23,6 +23,10 @@ on:
     - cron: '0 3 * * 0'
   workflow_dispatch:
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [ release, main ]
     paths:
       # A workflow that only ever runs on a schedule is never exercised until
@@ -34,6 +38,7 @@ on:
 
 permissions:
   contents: read
+  packages: read  # pull the ghcr CI image mirror (#18160)
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -41,6 +46,7 @@ concurrency:
 
 jobs:
   store-durations:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     # Renamed (#17313): it measures and uploads; the `land` job below is what
     # stores. The old name described an outcome this job never produced.
     name: Measure per-test durations
@@ -52,7 +58,13 @@ jobs:
 
     services:
       redis:
-        image: redis:7-alpine
+        # Mirror of the upstream image (ci-image-mirror.yml, #18160): anonymous
+        # pulls hit the per-IP quota. The ghcr packages must be public or grant
+        # this repo read access so fork PRs can pull them.
+        image: ghcr.io/mrveiss/ci-redis:7-alpine
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
         ports:
           - 6379:6379
         options: >-
@@ -63,6 +75,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2  # #19283: down-only ratchets read the base commit (HEAD^1)
 
       - uses: ./.github/actions/setup-python-suite
 
@@ -98,7 +112,7 @@ jobs:
           # nowhere at all, ever. Named in all four `repo_tests`-carrying invocations
           # together so hook_suites_run_in_ci_test.py's root-set agreement stays true.
           python -m pytest \
-            autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks .claude/skills/claims-audit autobot-infrastructure/shared/tests libs \
+            autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks autobot-infrastructure/shared/scripts/monitoring .claude/skills/claims-audit autobot-infrastructure/shared/tests libs plugins/core-plugins \
             -n auto --dist loadscope \
             -m "not integration and not slow and not distributed and not performance" \
             --store-durations \
@@ -126,12 +140,12 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           python scripts/ci/summarize_test_durations.py \
-            --splits 12 \
+            --splits 8 \
             .test_durations .test_durations_slm >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload durations
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: test-durations
           # Both paths are dotfiles; upload-artifact excludes hidden files
@@ -208,6 +222,13 @@ jobs:
           git checkout -B "$BRANCH"
           git add .test_durations .test_durations_slm
           git commit -m "chore(ci): refresh per-test split durations (#17313)"
+          # The checkout fetched only the triggering ref, so with no remote-tracking ref for
+          # $BRANCH the lease had nothing to compare and every push after the first was
+          # rejected "(stale info)" -- the 2026-10-18 scheduled refresh measured and never
+          # landed (#17313, #19527). Fetch its tip first when it exists.
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null; then
+            git fetch --no-tags origin "+refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}"
+          fi
           git push --force-with-lease origin "$BRANCH"
 
           if gh pr view "$BRANCH" --json number >/dev/null 2>&1; then

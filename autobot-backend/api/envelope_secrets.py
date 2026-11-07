@@ -28,11 +28,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth_middleware import get_auth_middleware, verify_internal_api_key
+from api._service_principal_refusal import validated_service
+from auth_middleware import resolve_human_user, verify_internal_api_key
 from autobot_shared.secrets_vault import VaultKind, VaultRef
 from llc.deps import get_session
 from models.secret import Secret
-from security.service_auth import validate_service_auth
 from services.envelope_secrets_service import SecretAccessError, SecretNotFoundError
 from services.secrets_coordinator import SecretsCoordinator
 
@@ -58,8 +58,8 @@ def get_coordinator() -> SecretsCoordinator:
 
 
 async def principal(request: Request) -> tuple[uuid.UUID, set[str]]:
-    """Resolve the caller to ``(user_id, permission_names)``; 401 when unauthenticated."""
-    user = get_auth_middleware().get_user_from_request(request)
+    """Resolve the caller to ``(user_id, permission_names)``; 401 when unauthenticated or revoked (#18688)."""
+    user = await resolve_human_user(request)
     if not user or not user.get("user_id"):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "authentication required")
     user_id = uuid.UUID(str(user["user_id"]))
@@ -91,10 +91,7 @@ async def service_principal(request: Request) -> str:
         )
         return service_id
 
-    try:
-        info = await validate_service_auth(request)
-    except HTTPException:
-        raise
+    info = await validated_service(request)  # #20750: a refusal logs the credential form presented
     service_id = info["service_id"]
     logger.info(
         "service principal authenticated via HMAC for secrets API",

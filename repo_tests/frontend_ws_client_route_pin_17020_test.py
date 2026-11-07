@@ -21,12 +21,13 @@ from __future__ import annotations
 import re
 
 from repo_tests._paths import repo_root
+from repo_tests._registry_catalogue import catalogue_entries, entries_in_source
 
 _ROOT = repo_root()
 
 _SSH_TERMINAL_VUE = _ROOT / "autobot-frontend" / "src" / "components" / "terminal" / "SSHTerminal.vue"
 _TERMINAL_PY = _ROOT / "autobot-backend" / "api" / "terminal.py"
-_REGISTRY_PY = _ROOT / "autobot-backend" / "api" / "registry.py"
+
 
 #: The exact template SSHTerminal.vue's buildWsUrl() returns, minus the origin -- asserted
 #: against the source text itself so a future edit to the template is caught by this string no
@@ -55,14 +56,24 @@ def test_ssh_terminal_vue_url_matches_a_route_terminal_py_registers() -> None:
 
     terminal_py = _TERMINAL_PY.read_text(encoding="utf-8")
     assert re.search(r'@router\.websocket\("/ws/ssh/\{host_id\}"\)', terminal_py), (
-        "terminal.py no longer registers @router.websocket(\"/ws/ssh/{host_id}\") -- "
-        "SSHTerminal.vue's URL would 404"
+        'terminal.py no longer registers @router.websocket("/ws/ssh/{host_id}") -- ' "SSHTerminal.vue's URL would 404"
     )
 
-    registry_py = _REGISTRY_PY.read_text(encoding="utf-8")
-    assert re.search(
-        r'module_path="api\.terminal",\s*\n\s*prefix="/api/terminal"', registry_py
-    ), "api.terminal's registered prefix in registry.py is no longer \"/api/terminal\" -- SSHTerminal.vue's hardcoded /api/terminal/... would no longer match"
+    # The catalogue's location is resolved, not named (#16375): this used to
+    # `re.search` the source of `api/registry.py`, which found nothing once the
+    # catalogue moved to `api/registry_catalog.py`. Asserting over parsed entries
+    # also stops the check depending on how the literal happens to be formatted --
+    # the old regex required `prefix=` on the line after `module_path=`, so a
+    # reformat would have broken it as surely as the move did.
+    advertised = dict(catalogue_entries(_ROOT / "autobot-backend"))
+    assert advertised, (
+        "no RouterConfig entries were parsed from the catalogue at all, so the prefix "
+        "assertion below would pass over an empty mapping"
+    )
+    assert advertised.get("api.terminal") == "/api/terminal", (
+        f"api.terminal's registered prefix is {advertised.get('api.terminal')!r}, not "
+        '"/api/terminal" -- SSHTerminal.vue\'s hardcoded /api/terminal/... would no longer match'
+    )
 
 
 def test_the_route_regex_would_catch_a_removed_or_renamed_route() -> None:
@@ -72,13 +83,27 @@ def test_the_route_regex_would_catch_a_removed_or_renamed_route() -> None:
     something unrelated and passing vacuously.
     """
     route_pattern = r'@router\.websocket\("/ws/ssh/\{host_id\}"\)'
-    mutated_route_removed = '@router.websocket("/ws/ssh_legacy/{host_id}")\nasync def ssh_terminal_websocket(...):\n    pass\n'
-    assert not re.search(route_pattern, mutated_route_removed), (
-        "the route regex matched text where the route was renamed -- it is not actually pinning anything"
+    mutated_route_removed = (
+        '@router.websocket("/ws/ssh_legacy/{host_id}")\nasync def ssh_terminal_websocket(...):\n    pass\n'
     )
+    assert not re.search(
+        route_pattern, mutated_route_removed
+    ), "the route regex matched text where the route was renamed -- it is not actually pinning anything"
 
-    prefix_pattern = r'module_path="api\.terminal",\s*\n\s*prefix="/api/terminal"'
-    mutated_prefix_changed = 'RouterConfig(\n    name="terminal",\n    module_path="api.terminal",\n    prefix="/terminal-v2",\n)'
-    assert not re.search(prefix_pattern, mutated_prefix_changed), (
-        "the prefix regex matched text where the prefix changed -- it is not actually pinning anything"
+    # The control must exercise the reader the LIVE assertion uses (review).
+    # It previously re-tested the `re.search` pattern that the AST reader
+    # replaced, so it proved the dead path still worked and said nothing about
+    # the replacement -- a contrast pair aimed at the code you removed.
+    mutated_prefix_changed = (
+        'RouterConfig(\n    name="terminal",\n    module_path="api.terminal",\n    prefix="/terminal-v2",\n)'
+    )
+    entries, unreadable = entries_in_source(mutated_prefix_changed, origin="<mutated>")
+    assert not unreadable, f"the control's own fixture is unreadable: {unreadable}"
+    assert dict(entries).get("api.terminal") == "/terminal-v2", (
+        "the AST reader did not read the mutated prefix back, so this control is not "
+        "exercising the reader the assertion above depends on"
+    )
+    assert dict(entries).get("api.terminal") != "/api/terminal", (
+        "the reader returned the ORIGINAL prefix for a source that declares a changed one "
+        "-- the live assertion would pass a renamed route"
     )

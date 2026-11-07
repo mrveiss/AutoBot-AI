@@ -409,7 +409,7 @@ register_env_var(
             "how long the interest is meant to last: an interest ends when its branch merges or "
             "closes, which is a fact someone looks up, not a timer. The TTL exists only so a "
             "record nobody pruned cannot outlive the repository, and a record reaching it means "
-            "prune() was never called rather than that the work was abandoned. Two weeks by "
+            "prune_closed_branches() was never called rather than that the work was abandoned. Two weeks by "
             "default, which no healthy branch should reach."
         ),
         component="orchestration",
@@ -547,3 +547,52 @@ register_env_var(
         component="judges",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_WHISPER_LOAD_RETRY_SECONDS",
+        type=float,
+        default=60.0,
+        description=(
+            "How long the shared Whisper loader waits after a FAILED model load "
+            "before trying again. A transient failure no longer disables local "
+            "transcription for the life of the process; an integrity failure is "
+            "never retried (media/audio/pipeline.py)."
+        ),
+        component="voice",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_WHISPER_DEVICE",
+        type=str,
+        default="auto",
+        description=(
+            "Where the shared Whisper pipeline runs: 'auto' (default; CUDA with "
+            "float16 when available, else CPU fp32) or 'cpu' (always CPU fp32). "
+            "Any other value logs a warning and uses cpu. "
+            "Used by both /voice/transcribe and the multimodal audio path "
+            "(media/audio/pipeline.py)."
+        ),
+        component="voice",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_FFMPEG_TIMEOUT_SECONDS",
+        type=float,
+        default=300.0,
+        description=(
+            "Wall-clock cap on one ffmpeg audio extraction. On expiry the process is "
+            "killed and reaped and the request fails with a sanitized error, so a "
+            "hostile or corrupt upload cannot hang a worker forever "
+            "(media/audio/ffmpeg_service.py)."
+        ),
+        component="voice",
+    )
+)
+
+from autobot_shared import env_registry_agent_tools  # noqa: E402,F401 -- registers #19729 vars; see its docstring
+from autobot_shared import env_registry_ledger  # noqa: E402,F401 -- registers #18391 vars; see its docstring

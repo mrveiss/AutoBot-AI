@@ -10,12 +10,19 @@ previously defined in ``belief_state.py`` and
 
 from __future__ import annotations
 
-import re
+from autobot_shared.slug import sanitize_token
 
 
 def slugify(text: str) -> str:
     """Return a lowercase, whitespace-collapsed slug capped at 80 chars."""
-    text = text.lower().strip()
-    text = re.sub(r"[^\w\s-]", "", text)
-    text = re.sub(r"[\s_-]+", "_", text)
-    return text[:80]
+    return sanitize_token(
+        text,
+        allowed=r"\w\s-",
+        replacement="",
+        collapse=False,
+        separator_chars=r"\s_-",
+        separator="_",
+        case="lower",
+        strip_input=True,
+        max_length=80,
+    )

@@ -14,13 +14,13 @@ Components:
 - types: Tool call data structures
 
 Usage:
-    from tools.parallel import ParallelToolExecutor, ToolCall
+    from tools.parallel import ParallelToolExecutor, ParallelToolCall
 
     executor = ParallelToolExecutor(dispatch_func, event_stream)
 
     calls = [
-        ToolCall(tool_name="grep_search", arguments={"pattern": "TODO"}),
-        ToolCall(tool_name="grep_search", arguments={"pattern": "FIXME"}),
+        ParallelToolCall(tool_name="grep_search", arguments={"pattern": "TODO"}),
+        ParallelToolCall(tool_name="grep_search", arguments={"pattern": "FIXME"}),
     ]
 
     results = await executor.execute_batch(calls, task_id="task-123")
@@ -28,10 +28,10 @@ Usage:
 
 from tools.parallel.analyzer import DependencyAnalyzer
 from tools.parallel.executor import ExecutionGraph, ParallelToolExecutor
-from tools.parallel.types import DependencyType, ToolCall
+from tools.parallel.types import DependencyType, ParallelToolCall
 
 __all__ = [
-    "ToolCall",
+    "ParallelToolCall",
     "DependencyType",
     "DependencyAnalyzer",
     "ParallelToolExecutor",

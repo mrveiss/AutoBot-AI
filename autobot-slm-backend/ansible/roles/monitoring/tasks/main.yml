@@ -6,9 +6,36 @@
 # Ansible Monitoring Role - Main Tasks
 ---
 
+# #18556: Alertmanager's config, and the rules Prometheus routes to it, are copied from the
+# host's repo clone (remote_src). Both are looked up here, before anything is installed, so a
+# host without that checkout fails at once and by name -- in check mode too, where the copy's
+# own source lookup would otherwise fail halfway through the install.
+- name: "Alertmanager | Look up the repo files it is installed from (#18556)"
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ alertmanager_config_src }}"
+    - "{{ alertmanager_rules_src }}"
+  register: _alertmanager_sources
+  when: monitoring_install_alertmanager | bool
+
+- name: "Alertmanager | Fail before installing anything when the repo clone lacks them (#18556)"
+  ansible.builtin.assert:
+    that: _alertmanager_sources.results | rejectattr('stat.exists') | list | length == 0
+    fail_msg: >-
+      Missing on this host: {{ _alertmanager_sources.results | rejectattr('stat.exists')
+      | map(attribute='item') | join(', ') }}. Alertmanager installs from the repo clone at
+      code_source_dir; sync the code to this host first (the builtin updater), or set
+      monitoring_install_alertmanager=false.
+  when: monitoring_install_alertmanager | bool
+
 - name: Include Prometheus installation
   ansible.builtin.include_tasks: prometheus.yml
   when: monitoring_install_prometheus | bool
+
+- name: Include Alertmanager installation
+  ansible.builtin.include_tasks: alertmanager.yml
+  when: monitoring_install_alertmanager | bool
 
 - name: Include Grafana installation
   ansible.builtin.include_tasks: grafana.yml

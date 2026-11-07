@@ -5,7 +5,7 @@
 """
 AutoBot Application User Management API
 
-Manages users in the remote AutoBot database (AUTOBOT_DB_HOST:5432/autobot_users).
+Manages users in the remote AutoBot database (AUTOBOT_POSTGRES_HOST:5432/autobot_users).
 These are application users who access AutoBot features (chat, workflows, etc.).
 """
 
@@ -16,8 +16,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.auth.permissions import Permission
+from autobot_shared.user_management.revocation_outcome import RENAME_REVOCATION_INCOMPLETE_MESSAGE, commit_or_503
+from autobot_shared.user_management.user_service_errors import UserNotFoundError
 from services.auth import require_permission
-from user_management.database import get_autobot_session
+from user_management.database import get_autobot_db
 from user_management.schemas.user import (
     PasswordChange,
     UserCreate,
@@ -25,17 +27,11 @@ from user_management.schemas.user import (
     UserResponse,
     UserUpdate,
 )
-from user_management.services import TenantContext, UserService
-from user_management.services.user_service import UserNotFoundError
+from user_management.services import TenantContext
+from user_management.services.autobot_database_user_service import AutobotDatabaseUserService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/autobot-users", tags=["autobot-users"])
-
-
-async def get_autobot_db():
-    """Dependency for AutoBot database session."""
-    async with get_autobot_session() as session:
-        yield session
 
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -47,7 +43,7 @@ async def create_autobot_user(
     """Create a new AutoBot application user."""
     logger.info("Creating AutoBot user: %s", user_data.username)
     context = TenantContext(is_platform_admin=True)
-    user_service = UserService(db, context)
+    user_service = AutobotDatabaseUserService(db, context)
 
     try:
         user = await user_service.create_user(
@@ -74,7 +70,7 @@ async def list_autobot_users(
     """List AutoBot application users with pagination and search."""
     logger.info("Listing AutoBot users (skip=%d, limit=%d, search=%s)", skip, limit, search)
     context = TenantContext(is_platform_admin=True)
-    user_service = UserService(db, context)
+    user_service = AutobotDatabaseUserService(db, context)
 
     users, total = await user_service.list_users(limit=limit, offset=skip, search=search)
     return UserListResponse(
@@ -93,7 +89,7 @@ async def get_autobot_user(
 ) -> UserResponse:
     """Get AutoBot user by ID."""
     context = TenantContext(is_platform_admin=True)
-    user_service = UserService(db, context)
+    user_service = AutobotDatabaseUserService(db, context)
 
     user = await user_service.get_user(user_id)
     if not user:
@@ -111,7 +107,7 @@ async def update_autobot_user(
     """Update AutoBot user."""
     logger.info("Updating AutoBot user: %s", user_id)
     context = TenantContext(is_platform_admin=True)
-    user_service = UserService(db, context)
+    user_service = AutobotDatabaseUserService(db, context)
 
     try:
         user = await user_service.update_user(
@@ -123,10 +119,12 @@ async def update_autobot_user(
             avatar_url=updates.avatar_url,
             preferences=updates.preferences,
         )
-        return UserResponse.model_validate(user)
+        response = UserResponse.model_validate(user)
     except Exception as e:
         logger.error("Failed to update AutoBot user: %s", e)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error") from e
+    await commit_or_503(db, RENAME_REVOCATION_INCOMPLETE_MESSAGE)  # outside the try, whose except answers 404
+    return response
 
 
 @router.post("/{user_id}/change-password", status_code=status.HTTP_200_OK)
@@ -139,7 +137,7 @@ async def change_autobot_user_password(
     """Reset an AutoBot user's password (admin action — no current password required)."""
     logger.info("Admin password reset for AutoBot user: %s", user_id)
     context = TenantContext(is_platform_admin=True)
-    user_service = UserService(db, context)
+    user_service = AutobotDatabaseUserService(db, context)
 
     try:
         await user_service.change_password(
@@ -162,10 +160,12 @@ async def delete_autobot_user(
     """Delete AutoBot user."""
     logger.info("Deleting AutoBot user: %s", user_id)
     context = TenantContext(is_platform_admin=True)
-    user_service = UserService(db, context)
+    user_service = AutobotDatabaseUserService(db, context)
 
     try:
         await user_service.delete_user(user_id)
     except Exception as e:
         logger.error("Failed to delete AutoBot user: %s", e)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error") from e
+
+    await commit_or_503(db)  # a failed revocation is answered, not only logged (#20443)

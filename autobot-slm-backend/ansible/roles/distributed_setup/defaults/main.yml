@@ -10,7 +10,7 @@ service_user: autobot
 service_group: autobot
 
 # Project directories
-project_root: /opt/autobot
+project_root: "{{ autobot.base_dir }}"
 config_dir: /etc/autobot
 logs_dir: /var/log/autobot
 scripts_dir: "{{ project_root }}/scripts"
@@ -66,11 +66,11 @@ backup_destinations:
 # plain HTTP, uvicorn bind port).  Defining it here would override the backend
 # role's default when distributed_setup runs after backend in the same play.
 backend_nginx_port: 8443
-frontend_port: 443
+frontend_tls_port: 443
 redis_port: 6379
 npu_worker_port: 8081
-ai_stack_port: 11434
-browser_service_port: 3000
+# ai_stack_port: not defined here -- inventory/group_vars/all.yml is the one authority (#17856)
+browser_service_port: 9001  # #19324: rendered to AUTOBOT_BROWSER_SERVICE_PORT; 3000 is Grafana
 ollama_port: 11434
 vnc_port: 6080
 

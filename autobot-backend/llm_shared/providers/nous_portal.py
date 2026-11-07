@@ -22,9 +22,14 @@ a 2048 default ``max_tokens``, and penalty-param forwarding from
 from __future__ import annotations
 
 from autobot_shared.ssot_config import config
+from llm_shared.types import ProviderType
 from services.provider_key_vault import resolve_provider_key
 
 from .openai_compatible import OpenAICompatibleProvider
+
+#: HF inference endpoints reject unbounded generations: a provider cap, not the global
+#: max_tokens default it happens to equal (#19730, maintainer decision).
+NOUS_MAX_TOKENS_CAP = 2048
 
 NOUS_MODELS = [
     "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO",
@@ -44,10 +49,10 @@ class NousPortalProvider(OpenAICompatibleProvider):
               HF_TOKEN or custom API key in environment
     """
 
-    provider_name = "nous"
+    provider_name = ProviderType.NOUS.value
     default_model = NOUS_MODELS[0]
     fallback_models = tuple(NOUS_MODELS)
-    default_max_tokens = 2048  # HF inference endpoints reject unbounded generations
+    default_max_tokens = NOUS_MAX_TOKENS_CAP
     forward_penalty_params = True
     missing_key_error = "Nous API key not found. Set HF_TOKEN or provide api_key in settings."
 

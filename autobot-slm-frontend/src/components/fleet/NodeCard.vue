@@ -14,6 +14,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { SLMNode } from '@/types/slm'
 import { useFleetStore } from '@/stores/fleet'
+import { BaseAlert, createRecencyFormatter } from '@autobot/ui'
 
 const props = defineProps<{
   node: SLMNode
@@ -23,7 +24,8 @@ const emit = defineEmits<{
   (e: 'action', action: string, nodeId: string): void
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const formatHeartbeatAge = createRecencyFormatter({ locale: () => locale.value, style: 'narrow', maxUnit: 'hour' })
 const fleetStore = useFleetStore()
 const showMenu = ref(false)
 
@@ -48,15 +50,7 @@ const lastSeen = computed(() => {
   // Issue #989: online nodes are actively connected — last_heartbeat can be stale
   if (props.node.status === 'online') return t('fleet.nodeCard.justNow')
   if (!props.node.health?.last_heartbeat) return t('fleet.nodeCard.never')
-  const date = new Date(props.node.health.last_heartbeat)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffSec = Math.floor(diffMs / 1000)
-  if (diffSec < 60) return t('fleet.nodeCard.secondsAgo', { seconds: diffSec })
-  const diffMin = Math.floor(diffSec / 60)
-  if (diffMin < 60) return t('fleet.nodeCard.minutesAgo', { minutes: diffMin })
-  const diffHr = Math.floor(diffMin / 60)
-  return t('fleet.nodeCard.hoursAgo', { hours: diffHr })
+  return formatHeartbeatAge(props.node.health.last_heartbeat)
 })
 
 const canEnroll = computed(() => {
@@ -270,18 +264,21 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
     </div>
 
     <!-- Enrolling Transition Indicator -->
-    <div
+    <BaseAlert
       v-if="isEnrolling"
-      class="flex items-center gap-2 px-2 py-1.5 mb-3 bg-blue-50 border border-blue-200 rounded-sm text-xs text-blue-700"
-      role="status"
+      variant="info"
+      size="compact"
+      class="mb-3"
+      :message="$t('fleet.nodeCard.transitioningToSSHKey')"
       :aria-label="$t('fleet.nodeCard.nodeIsBeingEnrolledAria')"
     >
-      <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-      </svg>
-      <span>{{ $t('fleet.nodeCard.transitioningToSSHKey') }}</span>
-    </div>
+      <template #icon>
+        <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+      </template>
+    </BaseAlert>
 
     <!-- Roles -->
     <div class="flex flex-wrap gap-1 mb-3" :aria-label="$t('fleet.nodeCard.assignedRolesAria')">

@@ -180,7 +180,7 @@ class TestTheDegradedModeStillRunsAndRecordsTheCheck:
         validator._is_org_admin_access = AsyncMock(return_value=False)
         validator._audit_log_violation = MagicMock()
         validator._record_violation_metrics = AsyncMock()
-        validator._get_authenticated_user = MagicMock(return_value={"username": "bob", "auth_disabled": False})
+        validator._get_authenticated_user = AsyncMock(return_value={"username": "bob", "auth_disabled": False})
 
         auth = MagicMock()
         auth.enable_auth = True
@@ -212,7 +212,7 @@ class TestTheDegradedModeStillRunsAndRecordsTheCheck:
         validator._is_org_admin_access = AsyncMock(return_value=False)
         validator._audit_log_violation = MagicMock()
         validator._record_violation_metrics = AsyncMock()
-        validator._get_authenticated_user = MagicMock(return_value={"username": "bob", "auth_disabled": False})
+        validator._get_authenticated_user = AsyncMock(return_value={"username": "bob", "auth_disabled": False})
 
         auth = MagicMock()
         auth.enable_auth = True
@@ -413,7 +413,7 @@ class TestADeliberateDisabledIsDistinguishableFromAFailure:
             validator._is_org_admin_access = AsyncMock(return_value=False)
             validator._audit_log_violation = MagicMock()
             validator._record_violation_metrics = AsyncMock()
-            validator._get_authenticated_user = MagicMock(return_value={"username": "bob", "auth_disabled": False})
+            validator._get_authenticated_user = AsyncMock(return_value={"username": "bob", "auth_disabled": False})
             auth = MagicMock()
             auth.enable_auth = True
             with patch("security.session_ownership.get_auth_middleware", return_value=auth):

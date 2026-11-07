@@ -20,8 +20,6 @@ from repo_tests._hardcoded_colour_baseline import (
     EXEMPT_BASENAMES,
     HARDCODED_COLOUR_LITERALS,
     IMPORTANT_DECLARATIONS,
-    TOTAL_IMPORTANT,
-    TOTAL_OCCURRENCES,
 )
 from repo_tests._hardcoded_colour_detect import (
     _FRONTEND,
@@ -29,15 +27,19 @@ from repo_tests._hardcoded_colour_detect import (
     REACH_COLOUR_FILES,
     REACH_IMPORTANT_FILES,
     REACH_STYLE_BLOCKS,
+    SLM_KEY_PREFIX,
+    VENDOR_SELECTORS,
     _colour_scanned_files,
     _important_scanned_files,
     _is_colour,
     _owned_token_names,
     _scan,
     _scan_important,
+    _scan_important_all,
     _token_redefinitions,
 )
 from repo_tests._paths import repo_root
+from repo_tests._ratchet_base import base_table, raised_entries
 
 
 @pytest.fixture(scope="module")
@@ -49,7 +51,12 @@ def measured() -> dict[str, int]:
 
 @pytest.fixture(scope="module")
 def measured_important() -> dict[str, int]:
-    return _scan_important(repo_root() / _FRONTEND)
+    return _scan_important_all(repo_root())
+
+
+def _base_table(name: str) -> dict:
+    """*name* from the colour baseline at the base commit and the anchor (see base_table)."""
+    return base_table(repo_root(), ("repo_tests/_hardcoded_colour_baseline.py",), name)
 
 
 class TestTheDetectorWorksBeforeItsOutputIsRead:
@@ -130,8 +137,10 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
 
 
 class TestTheBaselineIsInternallyConsistent:
-    def test_the_total_matches_the_entries(self):
-        assert TOTAL_OCCURRENCES == sum(HARDCODED_COLOUR_LITERALS.values())
+    def test_no_entry_rose_against_the_base(self):
+        """#19283: a raised or added entry fails against the base table, not a hand total."""
+        rose = raised_entries(HARDCODED_COLOUR_LITERALS, _base_table("HARDCODED_COLOUR_LITERALS"))
+        assert not rose, f"colour entries raised or added against the base (base, now): {rose}"
 
     def test_no_entry_is_zero(self):
         assert [f for f, n in HARDCODED_COLOUR_LITERALS.items() if n <= 0] == []
@@ -184,14 +193,9 @@ class TestThePopulationOnlyShrinks:
         new = sorted(set(measured) - set(HARDCODED_COLOUR_LITERALS))
         assert not new, f"these colours are written but never resolved from a token: {new}"
 
-    def test_the_total_never_rises(self, measured):
-        assert sum(measured.values()) <= TOTAL_OCCURRENCES
-
     def test_a_tokenised_colour_is_removed_from_the_baseline(self, measured):
         stale = sorted(f for f in HARDCODED_COLOUR_LITERALS if f not in measured)
-        assert (
-            not stale
-        ), f"these colours are fully tokenised now -- delete their entries and lower TOTAL_OCCURRENCES: {stale}"
+        assert not stale, f"these colours are fully tokenised now -- delete their entries: {stale}"
 
 
 class TestTheSharedNotificationSourceStaysShared:
@@ -235,6 +239,46 @@ class TestTheImportantDetectorWorks:
         assert _scan_important(tmp_path) == {"a.vue": 1}
 
 
+class TestTheVendorExemptionIsNarrow:
+    """#17567: the vendor exemption excuses vendor selectors and nothing else."""
+
+    def _count(self, tmp_path, css):
+        (tmp_path / "a.vue").write_text(f"<style>{css}</style>", encoding="utf-8")
+        return _scan_important(tmp_path).get("a.vue", 0)
+
+    def test_a_vendor_selector_is_not_counted(self, tmp_path):
+        assert self._count(tmp_path, ":deep(.apexcharts-tooltip) { color: red !important; }") == 0
+        assert self._count(tmp_path, ".t :deep(.xterm-viewport) { overflow: auto !important; }") == 0
+
+    def test_a_non_vendor_selector_is_still_counted(self, tmp_path):
+        css = (
+            ".apexcharts-tooltip { color: red !important; }\n"
+            ".apexcharts { color: red !important; }\n"
+            ".my-xtermish { color: red !important; }\n"
+            ".card { color: red !important; }"
+        )
+        assert self._count(tmp_path, css) == 3
+
+    def test_a_mixed_selector_list_is_counted(self, tmp_path):
+        assert self._count(tmp_path, ".apexcharts-tooltip, .card { color: red !important; }") == 1
+        assert self._count(tmp_path, ".card, .xterm-viewport { color: red !important; }") == 1
+
+    def test_a_list_of_only_vendor_selectors_is_not_counted(self, tmp_path):
+        assert self._count(tmp_path, ".apexcharts-tooltip, :deep(.xterm-rows) { color: red !important; }") == 0
+        assert self._count(tmp_path, ":is(.apexcharts-a, .apexcharts-b) { color: red !important; }") == 0
+
+    def test_a_new_non_vendor_important_trips_the_ratchet(self, tmp_path):
+        d = tmp_path / "autobot-frontend" / "src" / "views"
+        d.mkdir(parents=True)
+        (d / "New.vue").write_text("<style>.x { top: 0 !important; }</style>", encoding="utf-8")
+        measured = _scan_important_all(tmp_path)
+        assert set(measured) - set(IMPORTANT_DECLARATIONS) == {"views/New.vue"}
+
+    def test_every_vendor_exemption_states_its_reason(self):
+        for _pattern, reason in VENDOR_SELECTORS:
+            assert len(reason) > 10
+
+
 class TestTheImportantPopulationOnlyShrinks:
     def test_the_important_sweep_reaches_the_components(self):
         read = len(_important_scanned_files(repo_root()))
@@ -244,8 +288,23 @@ class TestTheImportantPopulationOnlyShrinks:
             "'nothing was read', not 'nothing was found'"
         )
 
-    def test_the_total_matches_the_entries(self):
-        assert TOTAL_IMPORTANT == sum(IMPORTANT_DECLARATIONS.values())
+    def test_no_entry_rose_against_the_base(self):
+        """#19283: a raised or added entry fails against the base table, not a hand total."""
+        rose = raised_entries(IMPORTANT_DECLARATIONS, _base_table("IMPORTANT_DECLARATIONS"))
+        assert not rose, f"!important entries raised or added against the base (base, now): {rose}"
+
+    def test_the_sweep_covers_the_control_plane_too(self, measured_important):
+        # #17567: the AC is both frontends. The control plane's keys carry a
+        # prefix; seeing none would mean the second tree was never read.
+        assert any(k.startswith(SLM_KEY_PREFIX) for k in measured_important)
+        assert any(f.startswith(SLM_KEY_PREFIX) for f in _important_scanned_files(repo_root()))
+
+    def test_a_prefixed_key_cannot_collide_with_the_user_frontend(self, tmp_path):
+        for name in ("autobot-frontend", "autobot-slm-frontend"):
+            d = tmp_path / name / "src" / "views"
+            d.mkdir(parents=True)
+            (d / "A.vue").write_text("<style>.x { top: 0 !important; }</style>", encoding="utf-8")
+        assert _scan_important_all(tmp_path) == {"views/A.vue": 1, f"{SLM_KEY_PREFIX}views/A.vue": 1}
 
     def test_every_pinned_important_matches_its_measured_count(self, measured_important):
         grew = {
@@ -257,19 +316,17 @@ class TestTheImportantPopulationOnlyShrinks:
             f"pinned count does not match the tree (pinned, now): {grew}. Equality, not a "
             "ceiling -- an unlowered pin leaves headroom for a removed !important to return. "
             "Raise specificity or fix the cascade; !important overrides the design system "
-            "rather than using it."
+            "rather than using it (#17567). A third-party library's injected markup is exempt "
+            "only under a VENDOR_SELECTORS entry with a stated reason."
         )
 
     def test_no_new_file_joins_the_population(self, measured_important):
         new = sorted(set(measured_important) - set(IMPORTANT_DECLARATIONS))
         assert not new, f"new files using !important: {new}"
 
-    def test_the_total_never_rises(self, measured_important):
-        assert sum(measured_important.values()) <= TOTAL_IMPORTANT
-
     def test_a_cleared_file_is_removed_from_the_baseline(self, measured_important):
         stale = sorted(f for f in IMPORTANT_DECLARATIONS if f not in measured_important)
-        assert not stale, f"clean now -- delete their entries and lower TOTAL_IMPORTANT: {stale}"
+        assert not stale, f"clean now -- delete their entries: {stale}"
 
 
 class TestFormTwoStaysAbsent:

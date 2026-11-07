@@ -141,7 +141,9 @@ class OrgKnowledgeConfigService(AsyncRedisClientMixin):
             ssot.llm, "provider", "ollama"
         )
         default_llm_model = getattr(ssot.llm, "default_model", None) or getattr(ssot.llm, "llamaindex_llm_model", "")
-        default_embed_model = getattr(ssot.llm, "embedding_model", "")
+        from autobot_shared.embedding_model import active_embedding_model
+
+        default_embed_model = active_embedding_model()  # #19377: the one resolver
 
         if org_cfg is None:
             return OrgKnowledgeConfig(

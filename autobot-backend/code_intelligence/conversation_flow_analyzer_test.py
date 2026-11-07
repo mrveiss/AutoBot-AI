@@ -20,21 +20,21 @@ from datetime import datetime
 
 import pytest
 
-from code_intelligence.conversation_flow_analyzer import (
+from code_intelligence.conversation_analysis import (
     AnalysisResult,
     Bottleneck,
     BottleneckType,
-    ConversationFlow,
     ConversationFlowAnalyzer,
+    ConversationIntentClassifier,
     ConversationMessage,
+    ConversationOptimizationType,
     FlowPattern,
     FlowState,
     IntentCategory,
-    IntentClassifier,
     Optimization,
-    OptimizationType,
     ResponseClassifier,
     ResponseType,
+    SessionConversationFlow,
     analyze_conversations,
     classify_intent,
     classify_response,
@@ -180,78 +180,78 @@ class TestIntentCategory:
 
 
 class TestIntentClassifier:
-    """Tests for IntentClassifier."""
+    """Tests for ConversationIntentClassifier."""
 
     def test_classify_greeting(self):
         """Test greeting intent classification."""
-        intent, confidence = IntentClassifier.classify("Hello")
+        intent, confidence = ConversationIntentClassifier.classify("Hello")
         assert intent == IntentCategory.GREETING
         assert confidence > 0
 
     def test_classify_farewell(self):
         """Test farewell intent classification."""
-        intent, confidence = IntentClassifier.classify("Goodbye")
+        intent, confidence = ConversationIntentClassifier.classify("Goodbye")
         assert intent == IntentCategory.FAREWELL
         assert confidence > 0
 
     def test_classify_installation(self):
         """Test installation intent classification."""
-        intent, confidence = IntentClassifier.classify("How do I install AutoBot?")
+        intent, confidence = ConversationIntentClassifier.classify("How do I install AutoBot?")
         assert intent == IntentCategory.INSTALLATION
         assert confidence > 0
 
     def test_classify_troubleshooting(self):
         """Test troubleshooting intent classification."""
-        intent, confidence = IntentClassifier.classify("I have an error with the API")
+        intent, confidence = ConversationIntentClassifier.classify("I have an error with the API")
         assert intent == IntentCategory.TROUBLESHOOTING
         assert confidence > 0
 
     def test_classify_architecture(self):
         """Test architecture intent classification."""
-        intent, confidence = IntentClassifier.classify("How is the system architecture designed?")
+        intent, confidence = ConversationIntentClassifier.classify("How is the system architecture designed?")
         assert intent == IntentCategory.ARCHITECTURE
         assert confidence > 0
 
     def test_classify_security(self):
         """Test security intent classification."""
-        intent, confidence = IntentClassifier.classify("How do I set up authentication?")
+        intent, confidence = ConversationIntentClassifier.classify("How do I set up authentication?")
         assert intent == IntentCategory.SECURITY
         assert confidence > 0
 
     def test_classify_performance(self):
         """Test performance intent classification."""
-        intent, confidence = IntentClassifier.classify("The system is slow and needs optimization")
+        intent, confidence = ConversationIntentClassifier.classify("The system is slow and needs optimization")
         assert intent == IntentCategory.PERFORMANCE
         assert confidence > 0
 
     def test_classify_clarification(self):
         """Test clarification intent classification."""
-        intent, confidence = IntentClassifier.classify("I don't understand, can you explain?")
+        intent, confidence = ConversationIntentClassifier.classify("I don't understand, can you explain?")
         assert intent == IntentCategory.CLARIFICATION
         assert confidence > 0
 
     def test_classify_confirmation(self):
         """Test confirmation intent classification."""
-        intent, confidence = IntentClassifier.classify("Yes, that's correct")
+        intent, confidence = ConversationIntentClassifier.classify("Yes, that's correct")
         assert intent == IntentCategory.CONFIRMATION
         assert confidence > 0
 
     def test_classify_empty_message(self):
         """Test empty message classification."""
-        intent, confidence = IntentClassifier.classify("")
+        intent, confidence = ConversationIntentClassifier.classify("")
         assert intent == IntentCategory.UNKNOWN
         assert confidence == 0.0
 
     def test_classify_general_message(self):
         """Test general message classification."""
-        intent, confidence = IntentClassifier.classify("Tell me about something random")
+        intent, confidence = ConversationIntentClassifier.classify("Tell me about something random")
         # Should return GENERAL or a low confidence match
         assert intent is not None
 
     def test_classify_sequence(self):
         """Test classifying a sequence of messages."""
         messages = ["Hello", "I need to install AutoBot", "Thanks, goodbye"]
-        results = IntentClassifier.classify_sequence(messages)
+        results = ConversationIntentClassifier.classify_sequence(messages)
         assert len(results) == 3
         assert results[0][0] == IntentCategory.GREETING
         assert results[1][0] == IntentCategory.INSTALLATION
@@ -259,9 +259,9 @@ class TestIntentClassifier:
 
     def test_case_insensitivity(self):
         """Test that classification is case insensitive."""
-        intent1, _ = IntentClassifier.classify("HELLO")
-        intent2, _ = IntentClassifier.classify("hello")
-        intent3, _ = IntentClassifier.classify("Hello")
+        intent1, _ = ConversationIntentClassifier.classify("HELLO")
+        intent2, _ = ConversationIntentClassifier.classify("hello")
+        intent3, _ = ConversationIntentClassifier.classify("Hello")
         assert intent1 == intent2 == intent3 == IntentCategory.GREETING
 
 
@@ -400,11 +400,11 @@ class TestConversationMessage:
 
 
 class TestConversationFlow:
-    """Tests for ConversationFlow dataclass."""
+    """Tests for SessionConversationFlow dataclass."""
 
     def test_create_flow(self):
         """Test creating a conversation flow."""
-        flow = ConversationFlow(
+        flow = SessionConversationFlow(
             session_id="test_session",
             messages=[],
             final_state=FlowState.COMPLETED,
@@ -416,7 +416,7 @@ class TestConversationFlow:
 
     def test_default_values(self):
         """Test default values for optional fields."""
-        flow = ConversationFlow(session_id="test", messages=[])
+        flow = SessionConversationFlow(session_id="test", messages=[])
         assert flow.final_state == FlowState.INITIATED
         assert flow.turn_count == 0
         assert flow.error_count == 0
@@ -468,14 +468,14 @@ class TestOptimization:
     def test_create_optimization(self):
         """Test creating an optimization suggestion."""
         opt = Optimization(
-            optimization_type=OptimizationType.CACHING,
+            optimization_type=ConversationOptimizationType.CACHING,
             description="Cache common responses",
             impact="high",
             effort="medium",
             affected_patterns=["pattern_1"],
             estimated_improvement="20% latency reduction",
         )
-        assert opt.optimization_type == OptimizationType.CACHING
+        assert opt.optimization_type == ConversationOptimizationType.CACHING
         assert opt.impact == "high"
 
 
@@ -577,7 +577,7 @@ class TestConversationFlowAnalyzer:
         # With frequent patterns, should suggest caching
         if result.flow_patterns:
             opt_types = [o.optimization_type for o in result.optimizations]
-            assert OptimizationType.CACHING in opt_types
+            assert ConversationOptimizationType.CACHING in opt_types
 
     def test_health_score_calculation(self, analyzer, sample_conversation):
         """Test health score calculation."""
@@ -828,9 +828,9 @@ class TestIntegration:
         assert result.analysis_timestamp is not None
 
     def test_analysis_with_prebuilt_flows(self, analyzer):
-        """Test analysis with pre-built ConversationFlow objects."""
+        """Test analysis with pre-built SessionConversationFlow objects."""
         flows = [
-            ConversationFlow(
+            SessionConversationFlow(
                 session_id="flow_1",
                 messages=[
                     ConversationMessage(role="user", content="Hello"),
@@ -840,7 +840,7 @@ class TestIntegration:
                 successful=True,
                 intent_sequence=[IntentCategory.GREETING],
             ),
-            ConversationFlow(
+            SessionConversationFlow(
                 session_id="flow_2",
                 messages=[
                     ConversationMessage(role="user", content="Hello"),

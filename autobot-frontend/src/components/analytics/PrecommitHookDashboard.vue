@@ -294,13 +294,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { createRecencyFormatter } from '@autobot/ui'
 import { useNotificationBus } from '@/composables/useNotificationBus'
 import { useExpansion } from '@/composables/useExpansion'
 import api from '@/services/api'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const logger = createLogger('PrecommitHookDashboard')
 
@@ -466,16 +467,12 @@ function toggleCategory(category: string) {
   categoryExpansion.toggle(category)
 }
 
-function formatTime(timestamp: string): string {
-  const date = new Date(timestamp)
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
-
-  if (diff < 60000) return t('analytics.precommit.justNow')
-  if (diff < 3600000) return t('analytics.precommit.minutesAgo', { count: Math.floor(diff / 60000) })
-  if (diff < 86400000) return t('analytics.precommit.hoursAgo', { count: Math.floor(diff / 3600000) })
-  return date.toLocaleDateString()
-}
+const formatTime = createRecencyFormatter({
+  justNow: () => t('analytics.precommit.justNow'),
+  locale: () => locale.value,
+  style: 'narrow',
+  olderThanMs: 86_400_000,
+})
 
 function getIssueBarWidth(count: number): string {
   const max = Math.max(...(summary.value.common_issues?.map(i => i.count) || [1]))
@@ -622,7 +619,7 @@ onMounted(() => {
 }
 
 .action-btn.danger {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-primary);
 }
 

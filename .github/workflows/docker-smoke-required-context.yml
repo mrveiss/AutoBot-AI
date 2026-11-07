@@ -42,16 +42,10 @@ permissions:
 jobs:
   changes:
     name: Detect changed paths (docker required context)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      docker: ${{ steps.filter.outputs.docker }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
-        id: filter
-        with:
-          filters: .github/filters/docker-paths.yml
+    uses: ./.github/workflows/_changes.yml
+    with:
+      timeout_minutes: 10
+      filters: .github/filters/docker-paths.yml
 
   smoke-test:
     # IDENTICAL to the job name in docker-smoke-test.yml on purpose: the required
@@ -117,7 +111,19 @@ jobs:
       )
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write  # force-cancel this run when an upstream was cancelled (#17764)
     steps:
+      - name: Check out the shared gate action
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - name: End cancelled, not failed, when an upstream was cancelled (#17764)
+        uses: ./.github/actions/cancel-run-on-cancelled-upstream
+        with:
+          results: ${{ needs.changes.result }}
       - name: Report the required context, or refuse when detection failed
         env:
           CHANGES_RESULT: ${{ needs.changes.result }}

@@ -65,7 +65,7 @@ class BatchableRequest:
 
 
 @dataclass
-class BatchResult:
+class RequestBatchResult:
     """Result from processing a batch of requests"""
 
     batch_id: str
@@ -171,7 +171,7 @@ class AdaptiveBatchingEngine:
         self.current_strategy = BatchingStrategy.ADAPTIVE
         self.learning_window = 50  # Number of batches to consider for adaptation
 
-    def record_batch_result(self, strategy: BatchingStrategy, result: BatchResult):
+    def record_batch_result(self, strategy: BatchingStrategy, result: RequestBatchResult):
         """Record batch processing result for learning"""
         # Calculate performance score (efficiency + success rate)
         efficiency_score = len(result.request_ids) / max(1, result.processing_time)
@@ -256,7 +256,7 @@ class IntelligentRequestBatcher:
 
         # Batch processing
         self.active_batches: Dict[str, asyncio.Task] = {}
-        self.batch_results: Dict[str, BatchResult] = {}
+        self.batch_results: Dict[str, RequestBatchResult] = {}
 
         # Lock for thread-safe stats access
         self._stats_lock = asyncio.Lock()
@@ -526,13 +526,13 @@ class IntelligentRequestBatcher:
         response: str,
         start_time: float,
         individual_responses: Dict[str, str],
-    ) -> BatchResult:
+    ) -> RequestBatchResult:
         """
-        Create BatchResult for successful batch execution.
+        Create RequestBatchResult for successful batch execution.
 
         Issue #620.
         """
-        return BatchResult(
+        return RequestBatchResult(
             batch_id=batch_id,
             request_ids=[req.id for req in batch],
             combined_content=combined_content,
@@ -548,13 +548,13 @@ class IntelligentRequestBatcher:
         batch: List[BatchableRequest],
         start_time: float,
         error: Exception,
-    ) -> BatchResult:
+    ) -> RequestBatchResult:
         """
-        Create BatchResult for failed batch execution.
+        Create RequestBatchResult for failed batch execution.
 
         Issue #620.
         """
-        return BatchResult(
+        return RequestBatchResult(
             batch_id=batch_id,
             request_ids=[req.id for req in batch],
             combined_content="",
@@ -649,7 +649,7 @@ class IntelligentRequestBatcher:
 
         return individual_responses
 
-    async def _update_statistics(self, batch: List[BatchableRequest], result: BatchResult):
+    async def _update_statistics(self, batch: List[BatchableRequest], result: RequestBatchResult):
         """Update batching statistics (thread-safe)"""
         async with self._stats_lock:
             self.stats["total_batches"] += 1

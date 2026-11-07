@@ -131,7 +131,7 @@ Proactive per-provider token-bucket rate limiter (Redis-backed, shared across al
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AUTOBOT_ENABLE_ENCRYPTION` | `false` | Enable data encryption |
-| `AUTOBOT_FIELD_ENCRYPTION_KEY` | _(required)_ | 32-byte AES-256-GCM encryption key (base64url-encoded) for encrypting sensitive fields like Telegram bot tokens. **Required for Telegram bot integration.** Generate with: `python -c "import secrets,base64; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())"` (GH#9606) |
+| `AUTOBOT_FIELD_ENCRYPTION_KEY` | _(unset)_ | **Legacy, read-only (#17981).** Needed only to read Telegram, WhatsApp, company PM and SSO values sealed before #17981. New values are sealed under a key derived from `AUTOBOT_SECRETS_ROOT_KEY`, bound to where they are stored, and are re-sealed when the product next saves them. **Rotating `AUTOBOT_SECRETS_ROOT_KEY` leaves every such value unreadable until it is re-entered**: rotation re-wraps vault grants only (#20744). |
 | `AUTOBOT_SESSION_TIMEOUT` | `30` | Session timeout in minutes |
 | `AUTOBOT_EMBED_ALLOWED_ORIGINS` | `*` | Comma-separated list of allowed origins for embed widget. Use `*` (default) to allow all origins, or specify domains like `https://example.com,https://app.acme.io` to restrict access (GH#9117) |
 | `AUTOBOT_EMBED_TRUSTED_PROXIES` | `` | Comma-separated list of trusted proxy IPs for X-Forwarded-For validation. Only connections from these IPs will have their X-Forwarded-For header trusted for rate limiting. Leave empty (default) to rate-limit by direct connection IP only. Example: `10.0.1.100,10.0.1.101` (GH#9117) |
@@ -149,7 +149,7 @@ Proactive per-provider token-bucket rate limiter (Redis-backed, shared across al
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AUTOBOT_USE_LANGCHAIN` | `false` | Use LangChain orchestrator |
-| `AUTOBOT_USE_PHI2` | `false` | Use Phi-2 model (deprecated) |
+| `AUTOBOT_USE_PHI2` | `false` | Use Phi-2 model (deprecated; not provisioned) |
 
 ## Frontend Configuration
 
@@ -193,14 +193,11 @@ export AUTOBOT_DEBUG_LOGGING=true
 export AUTOBOT_LOG_LEVEL=debug
 ```
 
-### Telegram Bot Encryption (GH#9606)
-```bash
-# Generate a secure encryption key
-export AUTOBOT_FIELD_ENCRYPTION_KEY=$(python -c "import secrets,base64; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())")
-
-# Configure Telegram bot token (will be encrypted automatically)
-# Note: Bot tokens are encrypted at rest in Redis using AES-256-GCM
-```
+### Telegram Bot Encryption (GH#9606, #17981)
+Bot tokens and webhook secrets are encrypted at rest in Redis with AES-256-GCM,
+under a key derived from `AUTOBOT_SECRETS_ROOT_KEY` (provisioned by every install
+path). Nothing extra needs to be set. `AUTOBOT_FIELD_ENCRYPTION_KEY` is only needed
+to read a token saved before #17981.
 
 ## Configuration Priority
 

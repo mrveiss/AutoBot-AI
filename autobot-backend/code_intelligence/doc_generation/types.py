@@ -44,7 +44,7 @@ class DocSection(Enum):
     CONTRIBUTING = "contributing"
 
 
-class ElementType(Enum):
+class CodeElementType(Enum):
     """Types of code elements that can be documented."""
 
     MODULE = "module"

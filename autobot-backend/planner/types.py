@@ -18,8 +18,9 @@ from enum import Enum
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 
 
-class StepStatus(Enum):
-    """Status of a plan step"""
+class PlanStepStatus(Enum):
+    """Lifecycle of one step in a planner Plan: pending until started, then completed,
+    failed, skipped or blocked on an unfinished dependency (#14263; the overseer has its own axis)."""
 
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
@@ -54,7 +55,7 @@ class PlanStep:
     pseudocode: str = ""  # Detailed implementation hint
 
     # Status
-    status: StepStatus = StepStatus.PENDING
+    status: PlanStepStatus = PlanStepStatus.PENDING
 
     # Dependencies
     depends_on: list[str] = field(default_factory=list)  # Step IDs this depends on
@@ -98,7 +99,7 @@ class PlanStep:
             step_number=data.get("step_number", 0),
             description=data.get("description", ""),
             pseudocode=data.get("pseudocode", ""),
-            status=StepStatus(data.get("status", "pending")),
+            status=PlanStepStatus(data.get("status", "pending")),
             depends_on=data.get("depends_on", []),
             blocks=data.get("blocks", []),
             started_at=(parse_utc_iso(data["started_at"]) if data.get("started_at") else None),
@@ -150,17 +151,17 @@ class ExecutionPlan:
     def get_current_step(self) -> PlanStep | None:
         """Get the currently active step"""
         for step in self.steps:
-            if step.status == StepStatus.IN_PROGRESS:
+            if step.status == PlanStepStatus.IN_PROGRESS:
                 return step
         return None
 
     def get_next_executable_steps(self) -> list[PlanStep]:
         """Get steps that can be executed (dependencies satisfied)"""
-        completed_ids = {s.step_id for s in self.steps if s.status == StepStatus.COMPLETED}
+        completed_ids = {s.step_id for s in self.steps if s.status == PlanStepStatus.COMPLETED}
         executable = []
 
         for step in self.steps:
-            if step.status != StepStatus.PENDING:
+            if step.status != PlanStepStatus.PENDING:
                 continue
             # Check if all dependencies are completed
             if all(dep_id in completed_ids for dep_id in step.depends_on):
@@ -204,12 +205,12 @@ class ExecutionPlan:
     def update_metrics(self) -> None:
         """Recalculate plan metrics"""
         self.total_steps = len(self.steps)
-        self.completed_steps = sum(1 for s in self.steps if s.status == StepStatus.COMPLETED)
-        self.failed_steps = sum(1 for s in self.steps if s.status == StepStatus.FAILED)
+        self.completed_steps = sum(1 for s in self.steps if s.status == PlanStepStatus.COMPLETED)
+        self.failed_steps = sum(1 for s in self.steps if s.status == PlanStepStatus.FAILED)
 
         # Update current step number
         for i, step in enumerate(self.steps):
-            if step.status == StepStatus.IN_PROGRESS:
+            if step.status == PlanStepStatus.IN_PROGRESS:
                 self.current_step_number = i + 1
                 break
         else:
@@ -217,11 +218,11 @@ class ExecutionPlan:
 
     def is_complete(self) -> bool:
         """Check if plan is fully completed"""
-        return all(s.status in (StepStatus.COMPLETED, StepStatus.SKIPPED) for s in self.steps)
+        return all(s.status in (PlanStepStatus.COMPLETED, PlanStepStatus.SKIPPED) for s in self.steps)
 
     def has_failures(self) -> bool:
         """Check if any steps have failed"""
-        return any(s.status == StepStatus.FAILED for s in self.steps)
+        return any(s.status == PlanStepStatus.FAILED for s in self.steps)
 
     def get_progress_percentage(self) -> float:
         """Get completion percentage"""
@@ -283,12 +284,12 @@ class ExecutionPlan:
 
         for step in self.steps:
             status_marker = {
-                StepStatus.PENDING: "[ ]",
-                StepStatus.IN_PROGRESS: "[→]",
-                StepStatus.COMPLETED: "[✓]",
-                StepStatus.BLOCKED: "[⊗]",
-                StepStatus.FAILED: "[✗]",
-                StepStatus.SKIPPED: "[-]",
+                PlanStepStatus.PENDING: "[ ]",
+                PlanStepStatus.IN_PROGRESS: "[→]",
+                PlanStepStatus.COMPLETED: "[✓]",
+                PlanStepStatus.BLOCKED: "[⊗]",
+                PlanStepStatus.FAILED: "[✗]",
+                PlanStepStatus.SKIPPED: "[-]",
             }.get(step.status, "[ ]")
 
             lines.append(f"{step.step_number}. {status_marker} {step.description}")
@@ -307,12 +308,12 @@ class ExecutionPlan:
         todos = []
         for step in self.steps:
             status_map = {
-                StepStatus.PENDING: "pending",
-                StepStatus.IN_PROGRESS: "in_progress",
-                StepStatus.COMPLETED: "completed",
-                StepStatus.BLOCKED: "pending",
-                StepStatus.FAILED: "pending",
-                StepStatus.SKIPPED: "completed",
+                PlanStepStatus.PENDING: "pending",
+                PlanStepStatus.IN_PROGRESS: "in_progress",
+                PlanStepStatus.COMPLETED: "completed",
+                PlanStepStatus.BLOCKED: "pending",
+                PlanStepStatus.FAILED: "pending",
+                PlanStepStatus.SKIPPED: "completed",
             }
 
             todos.append(

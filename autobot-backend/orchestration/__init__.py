@@ -61,7 +61,7 @@ from .causal_models import CausalMetadata, EffectTrace
 from .collaboration_coordinator import CollaborationCoordinator
 from .dag_executor import (
     DAGExecutor,
-    NodeType,
+    DagNodeType,
     WorkflowDAG,
     build_dag,
     workflow_has_condition_nodes,
@@ -103,7 +103,7 @@ from .sub_workflow import (
     extract_sub_workflow_step,
     is_sub_workflow_step,
 )
-from .subagent_dispatcher import SubagentDispatcher, SubagentTask, get_subagent_dispatcher
+from .subagent_dispatcher import SubagentDispatcher, SubagentDispatchTask, get_subagent_dispatcher
 from .success_criteria import (  # noqa: F401
     CriteriaResult,
     EvaluationResult,
@@ -126,7 +126,7 @@ from .types import (
 )
 from .variable_resolver import StepOutput, VariableResolver, resolve_variables
 from .workflow_documentation import WorkflowDocumenter
-from .workflow_executor import WorkflowExecutor
+from .workflow_executor import LegacyWorkflowExecutor
 from .workflow_memory import WorkflowMemory
 from .workflow_planner import WorkflowPlanner
 from .workflow_planning import StrategyPlanner
@@ -156,7 +156,7 @@ __all__ = [
     "AgentRouter",
     # Workflow components (single-workflow)
     "WorkflowDocumenter",
-    "WorkflowExecutor",
+    "LegacyWorkflowExecutor",
     "WorkflowMemory",
     "WorkflowPlanner",
     # Multi-agent coordination (folded in from enhanced_orchestration #10666 B3)
@@ -164,7 +164,7 @@ __all__ = [
     "WorkflowRunner",
     "CollaborationCoordinator",
     "SubagentDispatcher",
-    "SubagentTask",
+    "SubagentDispatchTask",
     "get_subagent_dispatcher",
     "BlockedPlanResumer",
     "ExecutionStrategyHandler",
@@ -190,7 +190,7 @@ __all__ = [
     "is_sub_workflow_step",
     # DAG execution (#2140)
     "DAGExecutor",
-    "NodeType",
+    "DagNodeType",
     "WorkflowDAG",
     "build_dag",
     "workflow_has_condition_nodes",

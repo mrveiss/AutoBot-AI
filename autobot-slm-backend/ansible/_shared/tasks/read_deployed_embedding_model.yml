@@ -1,0 +1,128 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# #15502: an update must never silently change a deployment's embedding model.
+#
+# Vectors indexed under one model are in a different space (and dimension) from vectors a
+# different model produces, so re-rendering AUTOBOT_EMBEDDING_MODEL from a new default would
+# strand the knowledge base. Before any render, read the value already deployed and adopt it
+# as `backend_embedding_model`; only a fresh install (no value on the host) takes the
+# canonical default. Changing an existing deployment's model happens only through a re-index
+# proposal (#18217, the #17038 approval queue), never through a template default.
+#
+# Caller sets `deployed_embedding_env_files` (list of rendered env files, most authoritative first).
+---
+
+- name: "Read the deployed AUTOBOT_EMBEDDING_MODEL, if any (#15502)"
+  ansible.builtin.shell:
+    cmd: |
+      for f in {{ deployed_embedding_env_files | join(' ') }}; do
+        v=$(grep -m1 -E '^(export[[:space:]]+)?AUTOBOT_EMBEDDING_MODEL=' "$f" 2>/dev/null \
+          | sed -E "s/^(export[[:space:]]+)?AUTOBOT_EMBEDDING_MODEL=//; s/\r\$//; s/^[\"']//; s/[\"']\$//")
+        if [ -n "$v" ]; then echo "$v"; break; fi
+      done
+      true
+  register: _embedding_model_probe
+  changed_when: false
+  failed_when: false
+  become: true
+
+# #19736: keeping the deployed value is right only for a model that CAN embed -- it is the one
+# whose vectors are in the index. A model the model server says cannot embed has produced no
+# vectors (every embed call failed), so replacing it strands nothing; keeping it keeps the KB
+# broken forever (#18834). Ask the server named in the same env file for the model's
+# capabilities: "embedding" keeps it, "not-embedding" falls back to the canonical default,
+# anything unanswerable ("unknown": server down, no curl, a non-Ollama model id) keeps it as before.
+- name: "Ask the model server whether the deployed embedding model can embed (#19736)"
+  ansible.builtin.shell:
+    cmd: |
+      host=""; port=""
+      # Host and port come from the file the model came from (the first that names one, as the read
+      # above picks it), so the probe asks the server THAT file's backend uses, not a mix of files.
+      for f in {{ deployed_embedding_env_files | join(' ') }}; do
+        grep -qE '^(export[[:space:]]+)?AUTOBOT_EMBEDDING_MODEL=[^[:space:]]' "$f" 2>/dev/null || continue
+        host=$(grep -m1 -E '^(export[[:space:]]+)?AUTOBOT_OLLAMA_HOST=' "$f" 2>/dev/null \
+          | sed -E "s/^(export[[:space:]]+)?AUTOBOT_OLLAMA_HOST=//; s/\r\$//; s/^[\"']//; s/[\"']\$//")
+        port=$(grep -m1 -E '^(export[[:space:]]+)?AUTOBOT_OLLAMA_PORT=' "$f" 2>/dev/null \
+          | sed -E "s/^(export[[:space:]]+)?AUTOBOT_OLLAMA_PORT=//; s/\r\$//; s/^[\"']//; s/[\"']\$//")
+        break
+      done
+      [ -z "$host" ] || [ "$host" = "0.0.0.0" ] && host="$DEFAULT_HOST"
+      body=$(curl -s -m "$PROBE_TIMEOUT_S" -d "{\"model\": \"$MODEL\"}" \
+        "http://${host}:${port:-$DEFAULT_PORT}/api/show" 2>/dev/null) || body=""
+      # A non-empty list only: an empty or absent one says nothing about the model, so "unknown".
+      caps=$(printf '%s' "$body" | tr -d '\n' | grep -o '"capabilities":[[:space:]]*\[[[:space:]]*"[^]]*\]')
+      if [ -z "$caps" ]; then echo unknown
+      elif printf '%s' "$caps" | grep -q '"embedding"'; then echo embedding
+      else echo not-embedding; fi
+  environment:
+    MODEL: "{{ _embedding_model_probe.stdout | trim }}"
+    # The same host/port defaults backend.env.j2 renders, so the probe asks the server the backend uses.
+    DEFAULT_HOST: "{{ backend_ollama_host | default('127.0.0.1') }}"
+    DEFAULT_PORT: "{{ backend_ollama_port | default('11434') }}"
+    PROBE_TIMEOUT_S: "{{ embedding_kind_probe_timeout_s | default(5) }}"
+  register: _embedding_kind_probe
+  changed_when: false
+  failed_when: false
+  become: true
+  when: (_embedding_model_probe.stdout | default('') | trim) | length > 0
+
+- name: "Keep the deployed embedding model (#15502)"
+  ansible.builtin.set_fact:
+    backend_embedding_model: "{{ _embedding_model_probe.stdout | trim }}"
+  when:
+    - (_embedding_model_probe.stdout | default('') | trim) | length > 0
+    - (_embedding_kind_probe.stdout | default('unknown') | trim) != 'not-embedding'
+
+# Record the replacement explicitly: skipping the keep leaves any `backend_embedding_model` the
+# caller already defined (e.g. from the same non-embedding env value) in place, and the template's
+# default applies only to an UNDEFINED variable. backend.env.j2 ignores the variable when this is set.
+- name: "Replace a deployed embedding model that cannot embed with the canonical default (#19736)"
+  ansible.builtin.set_fact:
+    embedding_model_replaced: true
+  when:
+    - (_embedding_model_probe.stdout | default('') | trim) | length > 0
+    - (_embedding_kind_probe.stdout | default('unknown') | trim) == 'not-embedding'
+
+- name: "Announce the replaced embedding model (#19736)"
+  ansible.builtin.debug:
+    msg: >-
+      REPLACED: AUTOBOT_EMBEDDING_MODEL on this host was '{{ _embedding_model_probe.stdout | trim }}',
+      which the model server reports cannot produce embeddings, so it never wrote a vector. This
+      update renders the canonical default instead (#19736, #18834).
+  when:
+    - (_embedding_model_probe.stdout | default('') | trim) | length > 0
+    - (_embedding_kind_probe.stdout | default('unknown') | trim) == 'not-embedding'
+
+# #18834: installs from before 2026-10-11 got the LIGHT CHAT model rendered as their embedding
+# model -- the old template wrote one value into both lines -- and the task above keeps it on
+# every update, as #15502 requires. Say so on every run: vectorization fails ("does not support
+# embeddings") until the user picks an embedding model in SLM Settings > LLM (#19373). Kept, not
+# corrected here -- a model change re-indexes. Compared against the light model DEPLOYED in the
+# same file, so no model name is written here.
+- name: "Read the deployed AUTOBOT_LIGHT_PROCESSING_MODEL, if any (#18834)"
+  ansible.builtin.shell:
+    cmd: |
+      for f in {{ deployed_embedding_env_files | join(' ') }}; do
+        v=$(grep -m1 -E '^(export[[:space:]]+)?AUTOBOT_LIGHT_PROCESSING_MODEL=' "$f" 2>/dev/null \
+          | sed -E "s/^(export[[:space:]]+)?AUTOBOT_LIGHT_PROCESSING_MODEL=//; s/\r\$//; s/^[\"']//; s/[\"']\$//")
+        if [ -n "$v" ]; then echo "$v"; break; fi
+      done
+      true
+  register: _light_model_probe
+  changed_when: false
+  failed_when: false
+  become: true
+
+- name: "Warn: the deployed embedding model is the light chat model (#18834)"
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: AUTOBOT_EMBEDDING_MODEL on this host is '{{ _embedding_model_probe.stdout | trim }}', the same
+      value as its light chat model, not an embedding model. Knowledge vectorization fails until
+      an embedding model is chosen in SLM Settings > LLM (#18834, #19373).
+  when:
+    - (_light_model_probe.stdout | default('') | trim) | length > 0
+    - (_embedding_model_probe.stdout | default('') | trim) == (_light_model_probe.stdout | trim)
+    - (_embedding_kind_probe.stdout | default('unknown') | trim) != 'not-embedding'

@@ -34,6 +34,10 @@ on:
       - 'autobot-backend/llc/**/replay*'
       - '.github/workflows/trajectory-eval.yml'
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [ release, main ]
     paths: *paths
 
@@ -46,6 +50,7 @@ permissions:
 
 jobs:
   trajectory-eval:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     # NON-BLOCKING: report drift without gating the merge (GH#10546).
     continue-on-error: true
@@ -61,12 +66,11 @@ jobs:
             requirements*.txt
             autobot-backend/requirements*.txt
 
+      - name: Install CI requirements
+        uses: ./.github/actions/install-ci-requirements
+
       - name: Install backend dependencies
         run: |
-          python -m pip install --upgrade pip setuptools wheel
-          # #11062: drop `|| true` so a genuine install crash surfaces (red step);
-          # the step's continue-on-error keeps the eval non-blocking regardless.
-          python -m pip install -r requirements-ci.txt --prefer-binary
           python -m pip install pytest pytest-asyncio --prefer-binary
 
       - name: Run harness unit tests
@@ -97,7 +101,7 @@ jobs:
 
       - name: Upload eval report
         if: always()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: trajectory-eval-report
           path: |

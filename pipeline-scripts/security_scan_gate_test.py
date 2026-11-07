@@ -482,3 +482,57 @@ def test_a_genuinely_empty_scan_still_passes(fmt: str, payload: str) -> None:
     raised AttributeError and that shape had never worked.
     """
     assert PARSERS[fmt](payload) == []
+
+
+def test_a_bandit_parse_failure_is_not_a_clean_scan() -> None:
+    """#16185: `results` present and empty, `errors` populated -- the real shape.
+
+    The pre-existing check only refused a document with NO `results` key. Bandit does
+    not produce that when it fails on a file: it produces `{"results": [], "errors":
+    [...]}`, which has the key, is empty, and is therefore indistinguishable in outcome
+    from a genuinely clean scan. Measured before the fix: this payload returned 0
+    findings and the gate PASSED, so every file bandit could not parse was reported as
+    having nothing wrong with it.
+    """
+    payload = json.dumps({"results": [], "errors": [{"filename": "a.py", "reason": "syntax error"}]})
+
+    with pytest.raises(ReportError) as excinfo:
+        _gate.parse_bandit(payload)
+
+    assert "scan error" in str(excinfo.value), "the message must name what went wrong"
+    assert "a.py" in str(excinfo.value), (
+        "the message must name the unscanned file -- an operator who cannot tell WHICH "
+        "file was skipped cannot judge whether it mattered"
+    )
+
+
+def test_a_genuinely_clean_scan_still_passes() -> None:
+    """The contrast, and the reason the fix is not simply `raise on empty results`.
+
+    Without this, the assertion above is satisfiable by refusing every empty scan,
+    which would make a clean repository unmergeable -- trading a false clean for a
+    false alarm rather than fixing the discrimination.
+    """
+    assert _gate.parse_bandit(json.dumps({"results": [], "errors": []})) == []
+    assert _gate.parse_bandit(json.dumps({"results": []})) == []
+
+
+def test_findings_are_still_returned_when_errors_is_absent() -> None:
+    """Narrowing must not cost the parser its actual job."""
+    payload = json.dumps(
+        {
+            "results": [
+                {
+                    "issue_severity": "HIGH",
+                    "test_id": "B101",
+                    "filename": "x.py",
+                    "line_number": 3,
+                }
+            ]
+        }
+    )
+
+    findings = _gate.parse_bandit(payload)
+
+    assert len(findings) == 1
+    assert findings[0].identifier == "B101"

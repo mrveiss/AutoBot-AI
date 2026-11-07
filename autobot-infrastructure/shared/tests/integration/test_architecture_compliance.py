@@ -227,20 +227,19 @@ class TestConfigurationSource:
 
         #13286 consolidated backend/redis/frontend host+port configuration onto
         `autobot_shared.ssot_config`, which declares no `service_discovery_defaults`
-        section -- `service_discovery.py:278` and `distributed_service_discovery.py`
-        both say so inline and read the section with `or {}`. This test used to
-        assert four keys inside it; there is no longer any source that would ever
-        populate them, so that shape was asserting a section nothing writes. What
-        still has to hold is the property those two callers actually depend on:
-        `get_config_section` returns `{}`, never `None`, for a section nobody
-        declared, so their `or {}` is defensive rather than covering a crash.
+        section. This test used to assert four keys inside it; there is no longer
+        any source that would ever populate them, so that shape was asserting a
+        section nothing writes. What still has to hold is the property callers
+        depend on: `get_config_section` returns `{}`, never `None`, for a section
+        nobody declared (the two modules that read it with `or {}` were retired
+        in #18639).
         """
         defaults = unified_config_manager.get_config_section("service_discovery_defaults")
 
         assert defaults is not None, "get_config_section must return {} (not None) for an undeclared section"
         assert defaults == {}, (
-            "service_discovery_defaults gained content -- service_discovery.py and "
-            "distributed_service_discovery.py's `or {}` fallback should be revisited"
+            "service_discovery_defaults gained content -- callers of get_config_section "
+            "that rely on an empty section should be revisited"
         )
 
 

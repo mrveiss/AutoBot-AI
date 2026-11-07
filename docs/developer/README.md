@@ -54,7 +54,7 @@ All docs in `docs/developer/`. Every doc listed here; missing entry = orphan or 
 | Doc | What it covers |
 |---|---|
 | [[causal-inference]] | How to wire up CausalInferenceEngine |
-| [[context-overflow-protection]] | Context overflow protection for LLC agents |
+| [[context-overflow-protection]] | Context overflow protection for Company OS agents |
 
 ---
 
@@ -80,7 +80,7 @@ All docs in `docs/developer/`. Every doc listed here; missing entry = orphan or 
 |---|---|
 | [[AGENT_MATURITY_LEVELS]] | One agent → specialists → orchestrator → automated team, mapped to code |
 | [[AGENT_OPTIMIZATION]] | Agent performance optimisation |
-| [[HEARTBEAT_SYSTEM]] | LLC heartbeat and quota monitoring |
+| [[HEARTBEAT_SYSTEM]] | Company OS heartbeat and quota monitoring |
 | [[THINKING_TOOLS_CONFIGURATION]] | Think Tool configuration |
 | [[TIERED_MODEL_ROUTING]] | Routing to Opus/Sonnet/Haiku by task cost |
 | [[MEMORY_STORAGE_ROUTINE]] | Agent memory storage patterns |

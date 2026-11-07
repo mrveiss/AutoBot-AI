@@ -203,6 +203,20 @@ def test_lesson_to_metadata_keys() -> None:
     assert "created_at" in meta
 
 
+def test_synthesis_lesson_carries_the_platform_docs_grant() -> None:
+    """#18944: synthesis lessons derive from platform docs/system data, so they are readable by all."""
+    from knowledge.platform_docs import PLATFORM_DOCS_GRANT
+
+    meta = Lesson(content="abc", domain="synthesis", score_delta=0.7).to_metadata()
+    assert {k: meta[k] for k in PLATFORM_DOCS_GRANT} == PLATFORM_DOCS_GRANT
+
+
+def test_retrieval_lesson_carries_no_grant() -> None:
+    """#18944: retrieval lessons derive from a user's query and results, so they stay private."""
+    meta = Lesson(content="abc", domain="retrieval", score_delta=0.7).to_metadata()
+    assert "visibility" not in meta and "access_level" not in meta
+
+
 # ---------------------------------------------------------------------------
 # Tests: analyze_synthesis_run
 # ---------------------------------------------------------------------------

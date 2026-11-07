@@ -10,13 +10,15 @@ const express = require('express');
 const app = express();
 app.use(express.json({ limit: '10mb' }));
 
+const BROWSER_PORT = process.env.AUTOBOT_BROWSER_SERVICE_PORT || '9001';  // port.browser (#19418)
+
 async function testFrontendForEdgeError() {
     console.log('🚀 Starting comprehensive Edge error testing');
     console.log('='.repeat(80));
 
     try {
         // Test the existing Playwright service
-        const response = await fetch('http://localhost:3000/test-frontend', {
+        const response = await fetch(`http://localhost:${BROWSER_PORT}/test-frontend`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -77,7 +79,7 @@ async function runEdgeSpecificErrorTests() {
 
         try {
             // Get Playwright browser from the service
-            const playwrightResponse = await fetch('http://localhost:3000/test-frontend', {
+            const playwrightResponse = await fetch(`http://localhost:${BROWSER_PORT}/test-frontend`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

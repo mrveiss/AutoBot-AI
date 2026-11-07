@@ -28,7 +28,16 @@ export function useWaveform(container: Ref<HTMLElement | null>) {
     ws.on('ready', () => { duration.value = ws!.getDuration() })
     ws.on('play', () => { isPlaying.value = true })
     ws.on('pause', () => { isPlaying.value = false })
-    await ws.load(audioUrl)
+    try {
+      await ws.load(audioUrl)
+    } catch (err) {
+      // wavesurfer v8 rejects a load that a newer one supersedes, with AbortError, where v7
+      // resolved it quietly. `init` is fired from `onMounted` and from a `watch` on the url,
+      // and neither call site awaits the promise it returns -- so switching recording before
+      // the first finishes loading surfaced as an unhandled rejection. Destroying the old
+      // instance above is what supersedes it, so this is the ordinary path, not an edge case.
+      if ((err as { name?: string } | null)?.name !== 'AbortError') throw err
+    }
   }
 
   function seekTo(seconds: number) {

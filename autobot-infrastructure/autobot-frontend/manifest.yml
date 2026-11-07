@@ -11,7 +11,7 @@ deploy:
 
 system_dependencies:
   - nginx
-  - nodejs   # v20 via NodeSource
+  - nodejs   # major = node_major (= .nvmrc), via NodeSource
 
 # #15603: no build oneshot. This declared exec_start: "bash -c 'cd ... && npm
 # ci && npm run build'" — unstaged, the exact defect

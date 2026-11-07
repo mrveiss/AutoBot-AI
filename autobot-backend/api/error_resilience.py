@@ -11,7 +11,7 @@ Allows monitoring of system resilience and graceful degradation state.
 
 from typing import Any, Dict
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from api.schemas_workflows import (
     CircuitBreakerResetResponse,
@@ -20,11 +20,12 @@ from api.schemas_workflows import (
     ErrorBudgetStatusResponse,
 )
 from api.system_health import ComponentHealth, KnownProbes, register_health_probe
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.logging_manager import get_logger
-from circuit_breaker import (
+from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.circuit_breaker import (
     get_circuit_breaker_manager,
 )
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_logger
 from services.resilience.error_budget import get_error_budget_tracker
 from services.resilience.fallback_manager import get_fallback_manager
 from utils.error_catalog import SOURCE_YAML, get_error_catalog_instance
@@ -33,7 +34,7 @@ logger = get_logger(__name__)
 
 # Prefix must NOT include "/api" — the app factory prepends it (#9864:
 # the old "/api/resilience" prefix served /api/api/resilience/*).
-router = APIRouter(prefix="/resilience", tags=["resilience"])
+router = APIRouter(prefix="/resilience", tags=["resilience"], dependencies=[Depends(get_current_user)])
 
 
 def _error_catalog_state() -> tuple[bool, dict]:
@@ -149,7 +150,7 @@ async def get_error_budget_status() -> Dict[str, Any]:
     operation="reset_circuit_breaker",
     error_code_prefix="ERROR_RESILIENCE",
 )
-async def reset_circuit_breaker(service_name: str) -> Dict[str, str]:
+async def reset_circuit_breaker(service_name: str, _: bool = Depends(check_admin_permission)) -> Dict[str, str]:
     """
     Manually reset circuit breaker for service.
 
@@ -174,7 +175,7 @@ async def reset_circuit_breaker(service_name: str) -> Dict[str, str]:
     operation="reset_error_budget",
     error_code_prefix="ERROR_RESILIENCE",
 )
-async def reset_error_budget(component: str) -> Dict[str, str]:
+async def reset_error_budget(component: str, _: bool = Depends(check_admin_permission)) -> Dict[str, str]:
     """
     Manually reset error budget for component.
 

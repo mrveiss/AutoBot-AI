@@ -8,7 +8,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from transcriber.database import Database
-from transcriber.deps import authenticate, caller_can_access, get_db
+from transcriber.deps import authenticate, caller_can_access, get_transcriber_db_from_request
 from transcriber.models import (
     NoteCreate,
     NoteOut,
@@ -28,7 +28,7 @@ router = APIRouter(tags=["transcriber-transcripts"], dependencies=[Depends(authe
 async def _require_recording_owner(recording_id: int, request: Request, db: Database) -> None:
     """Raise 403 unless the caller may access the project containing this recording.
 
-    Goes through can_access like every other transcriber check -- this helper
+    Goes through can_access_transcriber_row like every other transcriber check -- this helper
     used to compare owners itself, which forked the policy (#9863, #15758).
     """
     recording = await db.get_recording(recording_id)
@@ -40,7 +40,7 @@ async def _require_recording_owner(recording_id: int, request: Request, db: Data
 
 
 @router.get("/recordings/{recording_id}/transcript", response_model=TranscriptOut)
-async def get_transcript(recording_id: int, request: Request, db: Database = Depends(get_db)):
+async def get_transcript(recording_id: int, request: Request, db: Database = Depends(get_transcriber_db_from_request)):
     await _require_recording_owner(recording_id, request, db)
     rec = await db.get_recording(recording_id)
     speakers = await db.list_speakers(recording_id)
@@ -53,7 +53,9 @@ async def get_transcript(recording_id: int, request: Request, db: Database = Dep
 
 
 @router.patch("/segments/{segment_id}", response_model=SegmentOut)
-async def update_segment(segment_id: int, body: SegmentUpdate, request: Request, db: Database = Depends(get_db)):
+async def update_segment(
+    segment_id: int, body: SegmentUpdate, request: Request, db: Database = Depends(get_transcriber_db_from_request)
+):
     segment = await db.get_segment(segment_id)
     if not segment:
         raise HTTPException(404, "Segment not found")
@@ -64,7 +66,9 @@ async def update_segment(segment_id: int, body: SegmentUpdate, request: Request,
 
 
 @router.patch("/speakers/{speaker_id}", response_model=SpeakerOut)
-async def update_speaker(speaker_id: int, body: SpeakerUpdate, request: Request, db: Database = Depends(get_db)):
+async def update_speaker(
+    speaker_id: int, body: SpeakerUpdate, request: Request, db: Database = Depends(get_transcriber_db_from_request)
+):
     speaker = await db.get_speaker(speaker_id)
     if not speaker:
         raise HTTPException(404, "Speaker not found")
@@ -75,7 +79,7 @@ async def update_speaker(speaker_id: int, body: SpeakerUpdate, request: Request,
 
 
 @router.post("/speakers/merge", status_code=200)
-async def merge_speakers(body: SpeakerMerge, request: Request, db: Database = Depends(get_db)):
+async def merge_speakers(body: SpeakerMerge, request: Request, db: Database = Depends(get_transcriber_db_from_request)):
     """Merge source speaker into target speaker.
 
     All segments from source will be reassigned to target, then source is deleted.
@@ -94,7 +98,9 @@ async def merge_speakers(body: SpeakerMerge, request: Request, db: Database = De
 
 
 @router.post("/segments/{segment_id}/notes", response_model=NoteOut, status_code=201)
-async def create_note(segment_id: int, body: NoteCreate, request: Request, db: Database = Depends(get_db)):
+async def create_note(
+    segment_id: int, body: NoteCreate, request: Request, db: Database = Depends(get_transcriber_db_from_request)
+):
     segment = await db.get_segment(segment_id)
     if not segment:
         raise HTTPException(404, "Segment not found")
@@ -106,7 +112,9 @@ async def create_note(segment_id: int, body: NoteCreate, request: Request, db: D
 
 
 @router.patch("/notes/{note_id}", response_model=NoteOut)
-async def update_note(note_id: int, body: NoteUpdate, request: Request, db: Database = Depends(get_db)):
+async def update_note(
+    note_id: int, body: NoteUpdate, request: Request, db: Database = Depends(get_transcriber_db_from_request)
+):
     note = await db.get_note(note_id)
     if not note:
         raise HTTPException(404, "Note not found")
@@ -116,7 +124,7 @@ async def update_note(note_id: int, body: NoteUpdate, request: Request, db: Data
 
 
 @router.delete("/notes/{note_id}", status_code=204)
-async def delete_note(note_id: int, request: Request, db: Database = Depends(get_db)):
+async def delete_note(note_id: int, request: Request, db: Database = Depends(get_transcriber_db_from_request)):
     note = await db.get_note(note_id)
     if not note:
         raise HTTPException(404, "Note not found")

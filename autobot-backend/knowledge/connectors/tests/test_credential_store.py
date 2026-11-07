@@ -27,6 +27,14 @@ from knowledge.connectors.credential_store import ConnectorCredentialStore
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def _configured_oauth_app(monkeypatch):
+    """Operator config supplies the app credentials; bundles no longer carry them (#13630)."""
+    from knowledge.connectors import oauth_flow
+
+    monkeypatch.setattr(oauth_flow, "resolve_client_credentials", lambda p: ("cid", "csec"))
+
+
 def _make_svc(*, existing_secret=None):
     """Return a mock SecretsService."""
     svc = MagicMock()
@@ -272,15 +280,13 @@ async def test_store_oauth_persists_bundle_and_credentials_isolated():
         owner_id="user-9",
         provider="google",
         token_response={"access_token": "at", "refresh_token": "rt", "expires_in": 3600},
-        client_id="cid",
-        client_secret="csec",
         token_url="https://oauth2.googleapis.com/token",
         scopes=["drive.readonly"],
     )
     bundle = json.loads(store[secret_id]["value"])
     assert bundle["access_token"] == "at"
     assert bundle["refresh_token"] == "rt"
-    assert bundle["client_secret"] == "csec"
+    assert "client_secret" not in bundle and "client_id" not in bundle
     assert bundle["access_token_expires_at"] is not None
     assert store[secret_id]["created_by"] == "user-9"
 
@@ -294,8 +300,6 @@ async def test_get_access_token_returns_unexpired_without_refresh(monkeypatch):
         "u1",
         "google",
         {"access_token": "still-good", "refresh_token": "rt", "expires_in": 3600},
-        "cid",
-        "csec",
         "https://token",
         ["s"],
     )
@@ -321,15 +325,13 @@ async def test_get_access_token_refreshes_when_expired(monkeypatch):
         "u1",
         "gitlab",
         {"access_token": "old", "refresh_token": "rt-old", "expires_in": 0},
-        "cid",
-        "csec",
         "https://token",
         ["s"],
     )
 
     from knowledge.connectors import oauth_flow
 
-    async def _fake_refresh(token_url, client_id, client_secret, refresh_token):
+    async def _fake_refresh(token_url, client_id, client_secret, refresh_token, **_kw):
         assert refresh_token == "rt-old"
         return {"access_token": "new", "refresh_token": "rt-new", "expires_in": 3600}
 
@@ -360,8 +362,6 @@ async def test_refresh_without_expires_in_reuses_the_reported_lifetime(monkeypat
         "u1",
         "gitlab",
         {"access_token": "old", "refresh_token": "rt-old", "expires_in": 0},
-        "cid",
-        "csec",
         "https://token",
         ["s"],
     )
@@ -374,8 +374,6 @@ async def test_refresh_without_expires_in_reuses_the_reported_lifetime(monkeypat
         "u1",
         "gitlab",
         {"access_token": "old", "refresh_token": "rt-old", "expires_in": 3600},
-        "cid",
-        "csec",
         "https://token",
         ["s"],
     )
@@ -386,7 +384,7 @@ async def test_refresh_without_expires_in_reuses_the_reported_lifetime(monkeypat
 
     from knowledge.connectors import oauth_flow
 
-    async def _refresh_without_expiry(token_url, client_id, client_secret, refresh_token):
+    async def _refresh_without_expiry(token_url, client_id, client_secret, refresh_token, **_kw):
         return {"access_token": "new"}  # no expires_in — the provider omitted it
 
     monkeypatch.setattr(oauth_flow, "refresh_access_token", _refresh_without_expiry)
@@ -414,8 +412,6 @@ async def test_refresh_without_expires_in_does_not_refresh_again_next_call(monke
         "u1",
         "gitlab",
         {"access_token": "old", "refresh_token": "rt-old", "expires_in": 3600},
-        "cid",
-        "csec",
         "https://token",
         ["s"],
     )
@@ -427,7 +423,7 @@ async def test_refresh_without_expires_in_does_not_refresh_again_next_call(monke
 
     calls = []
 
-    async def _refresh_without_expiry(token_url, client_id, client_secret, refresh_token):
+    async def _refresh_without_expiry(token_url, client_id, client_secret, refresh_token, **_kw):
         calls.append(refresh_token)
         return {"access_token": "new"}
 
@@ -453,8 +449,6 @@ async def test_provider_that_never_reports_expiry_stays_non_expiring(monkeypatch
         "u1",
         "gitlab",
         {"access_token": "tok", "refresh_token": "rt"},  # no expires_in, ever
-        "cid",
-        "csec",
         "https://token",
         ["s"],
     )
@@ -486,8 +480,6 @@ async def test_legacy_bundle_without_stored_lifetime_self_heals(monkeypatch):
         "u1",
         "gitlab",
         {"access_token": "old", "refresh_token": "rt", "expires_in": 3600},
-        "cid",
-        "csec",
         "https://token",
         ["s"],
     )
@@ -499,7 +491,7 @@ async def test_legacy_bundle_without_stored_lifetime_self_heals(monkeypatch):
 
     from knowledge.connectors import oauth_flow
 
-    async def _refresh_reporting_expiry(token_url, client_id, client_secret, refresh_token):
+    async def _refresh_reporting_expiry(token_url, client_id, client_secret, refresh_token, **_kw):
         return {"access_token": "new", "expires_in": 7200}
 
     monkeypatch.setattr(oauth_flow, "refresh_access_token", _refresh_reporting_expiry)
@@ -527,8 +519,6 @@ async def test_malformed_expires_in_falls_back_and_keeps_the_stored_lifetime(bad
         "u1",
         "gitlab",
         {"access_token": "old", "refresh_token": "rt", "expires_in": 3600},
-        "cid",
-        "csec",
         "https://token",
         ["s"],
     )
@@ -538,7 +528,7 @@ async def test_malformed_expires_in_falls_back_and_keeps_the_stored_lifetime(bad
 
     from knowledge.connectors import oauth_flow
 
-    async def _refresh_malformed(token_url, client_id, client_secret, refresh_token):
+    async def _refresh_malformed(token_url, client_id, client_secret, refresh_token, **_kw):
         return {"access_token": "new", "expires_in": bad_expires_in}
 
     monkeypatch.setattr(oauth_flow, "refresh_access_token", _refresh_malformed)
@@ -567,8 +557,6 @@ async def test_credential_without_recorded_owner_is_denied_everywhere():
         "u1",
         "gitlab",
         {"access_token": "tok", "refresh_token": "rt", "expires_in": 3600},
-        "cid",
-        "csec",
         "https://token",
         ["s"],
     )
@@ -604,8 +592,6 @@ async def test_rotate_attributes_the_decrypt_to_the_caller():
         "u1",
         "gitlab",
         {"access_token": "tok", "refresh_token": "rt", "expires_in": 3600},
-        "cid",
-        "csec",
         "https://token",
         ["s"],
     )
@@ -630,8 +616,6 @@ async def test_owner_with_recorded_id_still_works():
         "u1",
         "gitlab",
         {"access_token": "tok", "refresh_token": "rt", "expires_in": 3600},
-        "cid",
-        "csec",
         "https://token",
         ["s"],
     )
@@ -649,8 +633,6 @@ async def test_get_access_token_owner_mismatch_raises():
         "owner-a",
         "google",
         {"access_token": "at", "refresh_token": "rt", "expires_in": 3600},
-        "cid",
-        "csec",
         "https://token",
         ["s"],
     )
@@ -675,8 +657,6 @@ async def test_get_access_token_expired_without_refresh_token_raises(monkeypatch
         "u1",
         "google",
         {"access_token": "old", "expires_in": 0},  # no refresh_token
-        "cid",
-        "csec",
         "https://token",
         ["s"],
     )
@@ -695,8 +675,6 @@ async def _expired_oauth_secret(cs, store, name):
         "u1",
         "gitlab",
         {"access_token": "old", "refresh_token": "rt-old", "expires_in": 3600},
-        "cid",
-        "csec",
         "https://token",
         ["s"],
     )
@@ -722,7 +700,7 @@ async def test_concurrent_refresh_calls_the_token_endpoint_once(monkeypatch):
 
     calls = []
 
-    async def _slow_refresh(token_url, client_id, client_secret, refresh_token):
+    async def _slow_refresh(token_url, client_id, client_secret, refresh_token, **_kw):
         calls.append(refresh_token)
         await asyncio.sleep(0.05)  # hold the lease long enough for the loser to queue
         return {"access_token": "new", "refresh_token": "rt-new", "expires_in": 3600}

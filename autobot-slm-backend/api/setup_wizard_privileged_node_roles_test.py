@@ -36,7 +36,7 @@ jinja2 = pytest.importorskip("jinja2")
 from api.setup_wizard import _apply_role_host_vars, _inject_co_located_ai_stack, _sanitize_ansible_name  # noqa: E402
 
 _SLM_ROOT = Path(__file__).resolve().parent.parent
-_FACTS_FILE = _SLM_ROOT / "ansible" / "playbooks" / "vars" / "role_active_facts.yml"
+_FACTS_FILE = _SLM_ROOT / "ansible" / "inventory" / "group_vars" / "all.yml"
 
 _PRIVILEGED_FACTS = frozenset(
     {

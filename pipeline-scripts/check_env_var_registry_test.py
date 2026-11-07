@@ -219,7 +219,9 @@ def test_the_generated_table_carries_no_count_line(checker):
     table = checker.build_table(checker.REGISTRY)
 
     assert "variables registered" not in table
-    assert table.rstrip("\n").splitlines()[-1].startswith("| `AUTOBOT_")
+    assert (
+        table.rstrip("\n").splitlines()[-1].startswith("| `")
+    )  # a registry row, not a count line; names may be unprefixed (#18094)
 
 
 def test_the_rules_doc_points_at_the_table_instead_of_carrying_it(checker):

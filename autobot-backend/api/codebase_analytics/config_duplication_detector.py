@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+from utils.file_categorization import SKIP_DIRS
 
 logger = get_logger(__name__)
 
@@ -181,6 +182,10 @@ class ConfigDuplicationDetector(_BaseClass):
 
         self.project_root = Path(project_root)
         self.config_values: Dict[any, List[Tuple[str, int, str]]] = defaultdict(list)
+        # What the detector actually looked at. "Found nothing" is only a claim
+        # about these files, and zero of them is "did not look" (#18067).
+        self.files_scanned = 0
+        self.files_failed = 0
 
     def _should_ignore_value(self, value: any, context: str = "") -> bool:
         """
@@ -301,7 +306,9 @@ class ConfigDuplicationDetector(_BaseClass):
         Args:
             filepath: Path to file to analyze
 
-        Optimized to perform single AST walk instead of dual walks.
+        Optimized to perform single AST walk instead of dual walks. A file that
+        cannot be parsed is counted in ``files_failed`` and logged at warning:
+        at DEBUG it was invisible, so a tree of unparsable files read as clean.
         """
         try:
             with open(filepath, "r", encoding="utf-8") as f:
@@ -315,9 +322,23 @@ class ConfigDuplicationDetector(_BaseClass):
                     self._process_pydantic_field(node, filepath)
                 elif isinstance(node, ast.ClassDef):
                     self._process_dataclass_fields(node, filepath)
+            self.files_scanned += 1
 
         except Exception as e:
-            logger.debug("Could not analyze %s: %s", filepath, e)
+            self.files_failed += 1
+            logger.warning("Could not analyze %s: %s", filepath, e)
+
+    @staticmethod
+    def _is_test_or_archive(relative: Path) -> bool:
+        """Test and archive files, judged on the path RELATIVE to the scan root.
+
+        This was ``"test" in str(py_file)`` on the ABSOLUTE path: a clone living
+        under any directory with "test" in its name (or a file called
+        ``latest.py``) was skipped wholesale, with no error and no count.
+        """
+        name = relative.name
+        parts = set(relative.parts[:-1])
+        return bool(parts & {"test", "tests", "archive"}) or name.startswith("test_") or name.endswith("_test.py")
 
     def scan_directory(self, directory: str = None) -> None:
         """
@@ -325,18 +346,18 @@ class ConfigDuplicationDetector(_BaseClass):
 
         Args:
             directory: Directory to scan (defaults to project root)
+
+        Walks once and prunes ``SKIP_DIRS`` before descending. A directory that
+        does not exist contributes nothing and is not counted, so the caller can
+        tell it from one that was read and was clean.
         """
-        if directory is None:
-            directory = self.project_root
-
-        dir_path = Path(directory)
-
-        for py_file in dir_path.rglob("*.py"):
-            # Skip test files and archived code
-            if "test" in str(py_file) or "archive" in str(py_file):
-                continue
-
-            self.analyze_file(str(py_file))
+        dir_path = Path(directory if directory is not None else self.project_root)
+        for dirpath, dirnames, filenames in os.walk(dir_path):
+            dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+            for name in filenames:
+                full = Path(dirpath) / name
+                if name.endswith(".py") and not self._is_test_or_archive(full.relative_to(dir_path)):
+                    self.analyze_file(str(full))
 
     def _has_diverse_contexts(self, locations: List[Tuple[str, int, str]]) -> bool:
         """
@@ -422,7 +443,9 @@ class ConfigDuplicationDetector(_BaseClass):
         duplicates = self.find_duplicates()
 
         if not duplicates:
-            return "✅ No configuration duplicates found!"
+            if self.files_scanned == 0:
+                return "⚠️ Nothing was scanned: no Python files were read, so no claim is made about duplicates."
+            return f"✅ No configuration duplicates found in {self.files_scanned} files scanned."
 
         report = ["Configuration Duplication Report", "=" * 60, ""]
 
@@ -485,9 +508,14 @@ def detect_config_duplicates(project_root: str) -> Dict[str, any]:
     """
     detector = ConfigDuplicationDetector(project_root)
 
-    # Scan key directories
-    detector.scan_directory(os.path.join(project_root, "src"))
-    detector.scan_directory(os.path.join(project_root, "backend"))
+    # The legacy layout names its config directories. A project without them
+    # (AutoBot's own is ``autobot-backend/``, ``autobot_shared/``) used to scan
+    # two directories that did not exist and report "no duplicates" in 0.7s
+    # (#18067); it is scanned from its root instead.
+    legacy = [d for d in (os.path.join(project_root, "src"), os.path.join(project_root, "backend")) if os.path.isdir(d)]
+    scanned = legacy or [project_root]
+    for directory in scanned:
+        detector.scan_directory(directory)
 
     duplicates = detector.find_duplicates()
     report = detector.generate_report()
@@ -496,6 +524,10 @@ def detect_config_duplicates(project_root: str) -> Dict[str, any]:
         "duplicates_found": len(duplicates),
         "duplicates": duplicates,
         "report": report,
+        "files_scanned": detector.files_scanned,
+        "files_failed": detector.files_failed,
+        "scanned_directories": scanned,
+        "scope": "Pydantic Field(default=...) and @dataclass field defaults in Python files only",
     }
 
 

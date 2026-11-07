@@ -54,7 +54,10 @@ Usage (slm-backend — HS256 unchanged)::
     data   = decode_jwt(token, secret=settings.secret_key)
 """
 
+import base64
+import json
 import logging
+import math
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
@@ -62,11 +65,57 @@ import bcrypt
 import jwt
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 
+from autobot_shared.env_utils import env_int_clamped
+
 logger = logging.getLogger(__name__)
 
 _ALGORITHM = "HS256"
 _ALGORITHM_RS256 = "RS256"
 _ALLOWED_ALGORITHMS = frozenset({"HS256", "RS256"})
+
+#: Redis key prefix of the cross-service RS256 jti denylist (#17856): autobot-backend
+#: writes it, the SLM backend reads it. Live entries are stored under this exact
+#: value, so changing it orphans them.
+RS256_DENYLIST_PREFIX = "auth:rs256:jti:denylist:"
+
+#: Clock-skew tolerance (seconds) for the ``iat`` and ``nbf`` claims (#18792). ``iat`` is
+#: stamped from the issuer's wall clock; a backward step (WSL2 time sync, NTP slew) or
+#: skew between hosts (SLM mints, backend verifies) otherwise rejects a fresh token as
+#: "not yet valid". ``exp`` is deliberately NOT given this leeway: PyJWT's ``leeway``
+#: is global, so ``iat``/``nbf`` are checked here (``_check_not_before_claims``) with
+#: PyJWT's own checks switched off, and PyJWT keeps verifying ``exp`` at leeway 0.
+CLOCK_SKEW_LEEWAY_SECONDS = env_int_clamped("AUTOBOT_JWT_CLOCK_SKEW_LEEWAY_SECONDS", 5, 0, 60)
+
+
+_SKEW_OPTIONS = {"verify_iat": False, "verify_nbf": False}
+
+
+def _check_not_before_claims(claims: Dict[str, Any]) -> None:
+    """Reject ``iat``/``nbf`` more than ``CLOCK_SKEW_LEEWAY_SECONDS`` in the future.
+
+    Replaces PyJWT's zero-leeway checks of the same claims (disabled via
+    ``_SKEW_OPTIONS``) so ``exp`` stays strict. A non-numeric claim is an error,
+    as PyJWT treats it.
+    """
+    limit = datetime.now(tz=timezone.utc).timestamp() + CLOCK_SKEW_LEEWAY_SECONDS
+    for name in ("iat", "nbf"):
+        if name not in claims:
+            continue
+        value = claims[name]
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise JWTDecodeError(f"JWT token is invalid: {name} must be a number")
+        if not math.isfinite(value):  # NaN compares False to everything; inf is never a real time
+            raise JWTDecodeError(f"JWT token is invalid: {name} must be finite")
+        if value > limit:
+            raise JWTDecodeError(f"JWT token is invalid: {name} is in the future beyond clock-skew tolerance")
+
+
+def _decode_with_skew(token: str, key: Any, algorithms: List[str], **kwargs: Any) -> Dict[str, Any]:
+    """The one ``jwt.decode`` wrapper: ``iat``/``nbf`` skew-tolerant, every other check PyJWT's."""
+    options = {**_SKEW_OPTIONS, **kwargs.pop("options", {})}
+    claims = jwt.decode(token, key, algorithms=algorithms, options=options, **kwargs)
+    _check_not_before_claims(claims)
+    return claims
 
 
 class JWTDecodeError(Exception):
@@ -107,6 +156,10 @@ def encode_jwt(
     """Encode *payload* as a signed JWT.
 
     Supports both HS256 (legacy / SLM) and RS256 (identity authority).
+
+    Clock skew (#18792): ``iat`` and ``nbf`` may be up to
+    ``CLOCK_SKEW_LEEWAY_SECONDS`` (env ``AUTOBOT_JWT_CLOCK_SKEW_LEEWAY_SECONDS``,
+    default 5, range 0-60) ahead of the local clock. ``exp`` stays strict.
 
     Expiry precedence (first truthy value wins):
     1. ``exp`` key already present in *payload*
@@ -250,8 +303,8 @@ def decode_jwt(
 
     try:
         if audience is not None:
-            return jwt.decode(token, key, algorithms=algorithms, audience=audience)
-        return jwt.decode(token, key, algorithms=algorithms, options={"verify_aud": False})
+            return _decode_with_skew(token, key, algorithms, audience=audience)
+        return _decode_with_skew(token, key, algorithms, options={"verify_aud": False})
     except ExpiredSignatureError as exc:
         raise JWTExpiredError("JWT token has expired") from exc
     except InvalidTokenError as exc:
@@ -320,14 +373,32 @@ def decode_jwt_no_verify_exp(
         key = secret
 
     try:
-        return jwt.decode(
-            token,
-            key,
-            algorithms=algorithms,
-            options={"verify_exp": False},
-        )
+        return _decode_with_skew(token, key, algorithms, options={"verify_exp": False})
     except InvalidTokenError as exc:
         raise JWTDecodeError(f"JWT token is invalid: {exc}") from exc
+
+
+def decode_jwt_claims_unverified(token: str) -> Dict[str, Any]:
+    """Decode the payload of a compact JWS WITHOUT verifying its signature.
+
+    The one unverified-claims decoder (#17856). Nothing may key trust or
+    authority on the result; it is for audit, logging and defence-in-depth
+    cross-checks only. Raises ``ValueError`` whose message completes the
+    sentence "<token name> ..." so callers keep their own error contract.
+    """
+    parts = token.split(".")
+    if len(parts) != 3:
+        raise ValueError("is not a well-formed JWT")
+    payload_b64 = parts[1]
+    payload_b64 += "=" * (-len(payload_b64) % 4)  # restore base64url padding
+    try:
+        raw = base64.urlsafe_b64decode(payload_b64.encode("ascii"))
+        claims = json.loads(raw.decode("utf-8"))
+    except Exception as exc:
+        raise ValueError(f"payload is undecodable: {exc}") from exc
+    if not isinstance(claims, dict):
+        raise ValueError("payload is not a JSON object")
+    return claims
 
 
 def decode_jwt_or_none(

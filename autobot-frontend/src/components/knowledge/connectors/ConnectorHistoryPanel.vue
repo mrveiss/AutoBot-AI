@@ -8,9 +8,10 @@
  */
 
 import { ref, computed, onMounted, watch } from 'vue'
-import BaseBadge from '@/components/base/BaseBadge.vue'
+import { useI18n } from 'vue-i18n'
+import { BaseAlert, BaseBadge, BaseButton, createRecencyFormatter } from '@autobot/ui'
 import { useConnectorJob, fetchConnectorHistory } from '@/composables/knowledge/useConnectorJob'
-import { formatTimeAgo } from '@/utils/formatHelpers'
+import { formatDuration } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import type { ConnectorHistoryEntry } from '@/types/knowledgeBase'
 
@@ -30,16 +31,28 @@ const history = ref<ConnectorHistoryEntry[]>([])
 const historyLoading = ref(false)
 const expandedRows = ref<Set<number>>(new Set())
 
-const { jobState, isPolling, start: startPoll, stop: stopPoll } = useConnectorJob()
+const { t, locale } = useI18n()
+const formatTimeAgo = createRecencyFormatter({ justNow: () => t('common.justNow'), locale: () => locale.value, invalidText: '—' })
+const { jobState, isPolling, pollFailed, start: startPoll, stop: stopPoll } = useConnectorJob()
+
+let latestHistoryRequest = 0
+let appliedHistoryRequest = 0
 
 async function loadHistory() {
+  const request = ++latestHistoryRequest
   historyLoading.value = true
   try {
-    history.value = await fetchConnectorHistory(props.connectorId)
+    const entries = await fetchConnectorHistory(props.connectorId)
+    // #20755: apply a response unless a newer one is already shown. Dropping it merely because a
+    // newer request exists would show nothing if that newer request then fails.
+    if (request > appliedHistoryRequest) {
+      appliedHistoryRequest = request
+      history.value = entries
+    }
   } catch (err) {
     logger.error('Failed to load history', err)
   } finally {
-    historyLoading.value = false
+    if (request === latestHistoryRequest) historyLoading.value = false
   }
 }
 
@@ -56,7 +69,8 @@ watch(() => props.syncActive, (active) => {
 })
 
 watch(isPolling, (active) => {
-  if (!active && jobState.value && jobState.value.status !== 'running') {
+  // However polling ended, a job may have left a history row: one finished between polls reads as none.
+  if (!active) {
     loadHistory()
   }
 })
@@ -69,10 +83,10 @@ function toggleRow(index: number) {
   }
 }
 
-function statusVariant(status: string | null): 'success' | 'danger' | 'warning' | 'neutral' {
+function statusVariant(status: string | null): 'success' | 'error' | 'warning' | 'neutral' {
   switch (status) {
     case 'success': return 'success'
-    case 'failed': return 'danger'
+    case 'failed': return 'error'
     case 'partial': return 'warning'
     default: return 'neutral'
   }
@@ -90,13 +104,7 @@ function errorList(entry: ConnectorHistoryEntry): string[] {
   return []
 }
 
-function formatDuration(seconds: number | null): string {
-  if (seconds === null) return '—'
-  if (seconds < 60) return `${seconds.toFixed(1)}s`
-  const m = Math.floor(seconds / 60)
-  const s = Math.round(seconds % 60)
-  return `${m}m ${s}s`
-}
+const DURATION_OPTIONS = { style: 'secondsCompact' } as const
 </script>
 
 <template>
@@ -106,8 +114,15 @@ function formatDuration(seconds: number | null): string {
       <button class="close-btn" aria-label="Close" @click="emit('close')">✕</button>
     </div>
 
+    <BaseAlert v-if="pollFailed" variant="error" data-testid="job-status-failed">
+      {{ t('knowledge.connectors.jobStatusFailed') }}
+      <BaseButton size="sm" variant="secondary" data-testid="job-status-retry" @click="startPoll(props.connectorId)">
+        {{ t('common.retry') }}
+      </BaseButton>
+    </BaseAlert>
+
     <!-- Live job progress -->
-    <div v-if="isPolling || (jobState && jobState.status === 'running')" class="live-job">
+    <div v-if="isPolling || (jobState && (jobState.status === 'starting' || jobState.status === 'running'))" class="live-job">
       <div class="live-header">
         <BaseBadge variant="warning" size="xs">Running</BaseBadge>
         <span class="live-worker">{{ jobState?.worker_id }}</span>
@@ -116,7 +131,7 @@ function formatDuration(seconds: number | null): string {
         <div class="progress-bar-fill" :style="{ width: progressPercent + '%' }" />
       </div>
       <div class="live-counts">
-        {{ jobState?.sources_done ?? 0 }} / {{ jobState?.sources_total ?? '?' }} sources
+        {{ jobState?.sources_done ?? 0 }} / {{ jobState?.status === 'running' ? jobState.sources_total : '?' }} sources
         <span v-if="jobState && jobState.sources_failed > 0" class="failed-count">
           ({{ jobState.sources_failed }} failed)
         </span>
@@ -138,7 +153,7 @@ function formatDuration(seconds: number | null): string {
             {{ entry.status ?? '?' }}
           </BaseBadge>
           <span class="row-time">{{ entry.started_at ? formatTimeAgo(entry.started_at) : '?' }}</span>
-          <span class="row-duration">{{ formatDuration(entry.duration_seconds) }}</span>
+          <span class="row-duration">{{ formatDuration(entry.duration_seconds, DURATION_OPTIONS) }}</span>
           <span class="row-counts">
             +{{ entry.added ?? 0 }} ~{{ entry.updated ?? 0 }} -{{ entry.deleted ?? 0 }}
           </span>

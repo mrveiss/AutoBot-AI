@@ -12,6 +12,7 @@ paraphrasing the rule.
 from __future__ import annotations
 
 import importlib.util
+import sys
 
 from repo_tests._paths import repo_root
 
@@ -87,11 +88,7 @@ def test_backend_filter_patterns_ignores_a_nested_backend_key(tmp_path):
     filters = tmp_path / ".github" / "filters"
     filters.mkdir(parents=True)
     (filters / "code-quality-paths.yml").write_text(
-        "some-other-key:\n"
-        "  backend:\n"
-        "    - 'nested/**'\n"
-        "backend:\n"
-        "  - 'real/**'\n",
+        "some-other-key:\n" "  backend:\n" "    - 'nested/**'\n" "backend:\n" "  - 'real/**'\n",
         encoding="utf-8",
     )
     assert checker.backend_filter_patterns(tmp_path) == ["real/**"]
@@ -207,9 +204,9 @@ def test_the_workflow_and_the_shim_both_read_the_shared_filter_file():
     """Neither half of the pair may keep an inline copy of the path set (#15608)."""
     for name in ("code-quality.yml", "code-quality-required-context.yml"):
         text = (REPO_ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
-        assert "filters: .github/filters/code-quality-paths.yml" in text, (
-            f"{name} does not resolve the path set through the shared filter file"
-        )
+        assert (
+            "filters: .github/filters/code-quality-paths.yml" in text
+        ), f"{name} does not resolve the path set through the shared filter file"
         assert "filters: |" not in text, (
             f"{name} carries an inline `filters: |` block again — a second copy is "
             "how the gate and its complement shim drift apart, and the drift "
@@ -231,6 +228,19 @@ def test_code_quality_runs_the_audit():
     assert _CHECKER.is_file(), f"{_CHECKER} is gone but the workflow still calls it"
 
 
+#: Stdlib asked of the INTERPRETER, not listed by hand. The literal set this
+#: replaces enforced "these five names", not "stdlib" -- the same defect
+#: `ci_system_package_provisioning_test` already fixed and documented, where a
+#: hand-written list failed on `os` and `subprocess`, both stdlib and neither
+#: listed. These three were its unfixed siblings.
+#:
+#: `_scan_helpers` is allowed because it is the shared lint helper these
+#: checkers import, and it is itself kept dependency-free by
+#: `ci_system_package_provisioning_test.test_the_scan_helper_the_checker_leans
+#: _on_is_itself_dependency_free`. One guard for that property, not four.
+_ALLOWED_IMPORT_ROOTS = set(sys.stdlib_module_names) | {"_scan_helpers"}
+
+
 def test_the_checker_needs_no_third_party_import():
     """It must run in a job that installs linters, not the application's dependencies."""
     source = _CHECKER.read_text(encoding="utf-8")
@@ -239,6 +249,6 @@ def test_the_checker_needs_no_third_party_import():
         for line in source.splitlines()
         if line.startswith(("import ", "from "))
         and not line.startswith("from __future__")
-        and line.split()[1].split(".")[0] not in {"argparse", "importlib", "logging", "pathlib", "re", "sys"}
+        and line.split()[1].split(".")[0] not in _ALLOWED_IMPORT_ROOTS
     ]
     assert third_party == [], f"the checker imports non-stdlib modules: {third_party}"

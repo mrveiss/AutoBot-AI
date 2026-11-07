@@ -142,43 +142,9 @@ REACH = declare(
     # Measured, not felt (#16199 review): this population grows with ordinary work --
     # 504 modules at e47e4eb02 (~12 Jul), 556 at eef2b3a3e (~11 Aug), 608 on 10 Sep,
     # about 52 per 30 days. A band of 20 would fail an unrelated PR within days, so
-    # growth covers a little over a month of that rate; the floor sits just under
-    # today's count. Losing a whole root is caught separately: the population test
+    # growth covers a little over a month of that rate; the floor is computed from
+    # the base commit (#19676). Losing a whole root is caught separately: the population test
     # requires every root to contribute.
-    # Re-pinned 600 -> 601 (#16230): measured 661 non-test modules on the tree that
-    # merges this branch with main. Floor = population - growth. This branch adds
-    # four (api/analytics_cost_pricing.py, api/schemas_analytics_pricing.py,
-    # llm_shared/pricing/sync_cache_scheduler.py, autobot_shared/env_registry_pricing.py)
-    # against 60 of allowance that main had already spent 61 of, so the branch did
-    # not cause the red on its own.
-    # Re-pinned 601 -> 602: measured 662 non-test modules under api/ and
-    # autobot_shared/ across both backends. This branch adds exactly one
-    # (autobot_shared/security/path_http.py, the shared path->HTTP translation
-    # for #13579); the remaining growth is main's.
-    # Re-pinned 602 -> 604 (#17305, #17306, held here for #17307/#17308):
-    # measured 664 non-test modules against a 60 allowance main had spent down
-    # to 56. The in-scope additions are the shared-module pair
-    # autobot_shared/verifier_degradation.py and verifier_prompt.py, both
-    # extracted to keep their callers under the 600-line ceiling; this branch's
-    # own new modules live under llm_shared/, outside this scope, so the pin
-    # does not move again. Pinned at `population - growth`.
-    # #14881 pins 635 rather than main's 604. This branch adds a module under
-    # the counted roots (autobot_shared/code_review_enums.py, the shared home
-    # the four hand-copied enums moved to), and main's pin is `population -
-    # growth` -- zero headroom by construction, so one added module is enough.
-    # Second time this declaration has gone red that way in a night.
-    #
-    # 635 is mid-window, not the bottom. The block above records this population
-    # growing ~52 modules per 30 days, so a floor at the bottom of its band is
-    # red again within weeks of ordinary work.
-    #
-    # NO MEASURED NUMBERS HERE, deliberately: prose citing a population survives
-    # the rebase that changes it, which is how these floor files accumulated
-    # several stale narratives in one night -- the resolver owns the value and
-    # nothing owns the sentence. The arithmetic is in the commit message, which
-    # cannot drift from the tree it describes. Re-derive rather than trusting
-    # any figure written here.
-    floor=635,
     what="non-test modules under api/ and autobot_shared/, both backends",
     growth=60,
 )

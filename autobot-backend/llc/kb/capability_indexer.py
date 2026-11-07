@@ -16,6 +16,8 @@ from typing import Any, Dict, Optional
 from autobot_shared.logging_manager import get_logger
 from knowledge import get_knowledge_base
 
+from .collections import KbCollectionManager, company_collection
+
 logger = get_logger(__name__)
 
 
@@ -46,7 +48,7 @@ class AgentCapabilityIndexer:
     @classmethod
     def _collection_name(cls, company_id: str) -> str:
         """Return the canonical collection name for agent capabilities."""
-        return f"company:{company_id}:agents"
+        return company_collection(company_id, KbCollectionManager.AGENTS_SUFFIX)
 
     @classmethod
     def _doc_id(cls, agent_id: str) -> str:

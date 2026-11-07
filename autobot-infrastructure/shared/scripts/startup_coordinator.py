@@ -27,10 +27,19 @@ import aiohttp
 import psutil
 
 # Import centralized Redis client and network constants
-sys.path.append(str(Path(__file__).parent.parent))
-from constants.network_constants import NetworkConstants, ServiceURLs
-from constants.threshold_constants import TimingConstants
-from autobot_shared.redis_client import get_async_redis_client
+
+# Runs from any directory with no PYTHONPATH: put the repository root on the path for
+# `autobot_shared` (#18289).
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from autobot_shared.network_constants import NetworkConstants, ServiceURLs  # noqa: E402
+
+from autobot_shared.process_group import stop_process_group  # noqa: E402
+from autobot_shared.redis_client import get_async_redis_client  # noqa: E402
+from autobot_shared.redis_management.endpoint import resolve_redis_endpoint  # noqa: E402
+from autobot_shared.ssot_constants import TimingConstants  # noqa: E402
 
 # Configure logging
 logging.basicConfig(
@@ -74,20 +83,10 @@ async def _check_redis_health() -> bool:
 
 
 def _terminate_process_gracefully(name: str, process: subprocess.Popen) -> bool:
-    """Terminate a process gracefully with fallback to kill (Issue #315 - extracted)."""
-    if process.poll() is not None:
-        return False  # Process already stopped
-
+    """Stop a component's whole process group (#19496); False if it was already gone."""
     logger.info("Stopping %s (PID: %s)", name, process.pid)
-    process.terminate()
-
-    try:
-        process.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        logger.warning("Force killing %s", name)
-        process.kill()
-        process.wait()
-
+    if not stop_process_group(process):
+        return False
     logger.info("✅ %s stopped", name)
     return True
 
@@ -110,7 +109,7 @@ class ComponentInfo:
     port: Optional[int] = None
     health_url: Optional[str] = None
     dependencies: List[str] = None
-    start_command: Optional[str] = None
+    start_command: Optional[List[str]] = None  # argv, never a shell string (#19496)
     health_status: HealthStatus = HealthStatus.UNKNOWN
     start_time: Optional[float] = None
     ready_time: Optional[float] = None
@@ -142,8 +141,9 @@ class StartupCoordinator:
         # Core infrastructure (no dependencies)
         self.components["redis"] = ComponentInfo(
             name="redis",
-            port=NetworkConstants.REDIS_PORT,
-            health_url=ServiceURLs.REDIS_LOCAL,
+            # #19232: the endpoint the canonical client dials, not a loopback literal
+            port=resolve_redis_endpoint().port,
+            health_url=resolve_redis_endpoint().url(with_auth=False),
             dependencies=[],
         )
 
@@ -158,7 +158,10 @@ class StartupCoordinator:
             port=NetworkConstants.BACKEND_PORT,
             health_url=f"{ServiceURLs.BACKEND_LOCAL}/api/system/health",
             dependencies=["redis", "config"],
-            start_command=f"uvicorn main:app --host 0.0.0.0 --port {NetworkConstants.BACKEND_PORT} --log-level info",
+            start_command=[
+                "uvicorn", "main:app", "--host", NetworkConstants.BIND_ALL_INTERFACES, "--port", str(NetworkConstants.BACKEND_PORT),
+                "--log-level", "info",
+            ],  # fmt: skip
         )
 
         # Frontend (depends on backend being ready)
@@ -167,7 +170,7 @@ class StartupCoordinator:
             port=NetworkConstants.FRONTEND_PORT,
             health_url=ServiceURLs.FRONTEND_LOCAL,
             dependencies=["backend"],
-            start_command="npm run dev",
+            start_command=["npm", "run", "dev"],
         )
 
         # Optional components
@@ -312,17 +315,17 @@ class StartupCoordinator:
 
         try:
             if component.start_command:
-                logger.info("Executing: %s", component.start_command)
+                logger.info("Executing: %s", " ".join(component.start_command))
 
                 env, cwd = self._get_component_env_and_cwd(component)
 
-                process = subprocess.Popen(
+                process = subprocess.Popen(  # nosec B603 -- fixed argv from this module, no shell (#19496)
                     component.start_command,
-                    shell=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     env=env,
                     cwd=cwd,
+                    start_new_session=True,  # its own process group, so stop reaches its children
                 )
 
                 self.processes[component.name] = process

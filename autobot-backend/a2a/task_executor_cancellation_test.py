@@ -50,9 +50,10 @@ class _FakeTaskManager:
 async def claim_registry(monkeypatch):
     """A real work-claim registry over an in-process Redis (see task_executor_trust_test.py)."""
     fakeredis_async = pytest.importorskip("fakeredis.aioredis")
+    fakeredis = pytest.importorskip("fakeredis")
     from autobot_shared.coordination import work_claims
 
-    client = fakeredis_async.FakeRedis(server=fakeredis_async.FakeServer(), decode_responses=True)
+    client = fakeredis_async.FakeRedis(server=fakeredis.FakeServer(), decode_responses=True)
     monkeypatch.setattr(work_claims, "get_async_redis_client", AsyncMock(return_value=client))
     yield client
     await client.flushall()

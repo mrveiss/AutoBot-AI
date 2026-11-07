@@ -12,7 +12,8 @@ Eliminates duplicate _get_ssot_config() functions across the codebase.
 
 ARCHITECTURE:
 - Lazy Redis connection (only when first accessed)
-- Local cache with TTL (default 60s)
+- Local cache with TTL (default 60s, AUTOBOT_CONFIG_REGISTRY_CACHE_TTL_SECONDS),
+  including a negative cache for keys Redis holds nothing for (#18998)
 - Five-tier fallback: Cache -> Redis -> Environment -> Registry Defaults -> Caller Default
 
 USAGE:
@@ -27,13 +28,15 @@ USAGE:
 Issue: #751 - Consolidate Common Utilities
 """
 
+import json
 import logging
 import os
+import sys
 import threading
 import time
 from typing import Any, Dict
 
-from autobot_shared.env_utils import env_float
+from autobot_shared.env_utils import env_float, env_float_clamped
 
 # stdlib logging avoids circular import: network_constants → config.registry → get_logger
 # → logging_manager → from config import config_manager (partially initialized) GH#7765
@@ -48,6 +51,21 @@ REDIS_CONFIG_PREFIX = "autobot:config:"
 # unreachable opened 29 connections and tripped the 'main' circuit breaker.
 # Bounded so a Redis that comes up after the config layer is still picked up.
 REDIS_RETRY_INTERVAL_SECONDS = env_float("AUTOBOT_CONFIG_REGISTRY_REDIS_RETRY_SECONDS", 30)
+
+# Issue #18998: how long a resolved value, and the fact that Redis holds nothing
+# for a key, are served from process memory before Redis is asked again. A write
+# through another process becomes visible here within this many seconds.
+CACHE_TTL_SECONDS = env_float_clamped("AUTOBOT_CONFIG_REGISTRY_CACHE_TTL_SECONDS", 60.0, 0.0, 3600.0)
+
+
+# Returned by _fetch_from_redis when Redis could not answer (the GET raised), as opposed to
+# None, which means Redis answered and holds nothing. Only the latter may be remembered.
+_FETCH_FAILED = object()
+
+
+def _now() -> float:
+    """Wall clock for cache ageing; a seam so tests can advance time."""
+    return time.time()
 
 
 class ConfigRegistry:
@@ -64,7 +82,12 @@ class ConfigRegistry:
     _cache: Dict[str, Any] = {}
     _cache_timestamps: Dict[str, float] = {}
     _lock = threading.RLock()
-    _ttl_seconds = 60
+    _ttl_seconds = CACHE_TTL_SECONDS
+    # Issue #18998: negative cache. key -> time Redis was last found to hold
+    # nothing for it. Only the Redis miss is remembered; env and registry
+    # defaults are re-resolved on every read (an env lookup and a dict lookup),
+    # so different caller defaults for one key stay correct.
+    _miss_timestamps: Dict[str, float] = {}
     _initialized = False
     # Issue #12674: monotonic deadline before which _get_redis() skips dialling
     # Redis because the previous connect attempt failed.
@@ -87,33 +110,60 @@ class ConfigRegistry:
             with cls._lock:
                 if cls._is_cache_valid(key):
                     return cls._cache[key]
+                redis_missed = cls._is_miss_valid(key)
 
-            # Try Redis
-            value = cls._fetch_from_redis(key)
-            if value is not None:
-                cls._update_cache(key, value)
-                return value
+            # Try Redis, unless it was recently found to hold nothing for key
+            if not redis_missed:
+                value = cls._fetch_from_redis(key)
+                if value is not _FETCH_FAILED:
+                    if value is not None:
+                        cls._update_cache(key, value)
+                        return value
+                    cls._remember_miss(key)
 
-            # Try environment variable (AUTOBOT_REDIS_HOST format)
-            env_key = f"AUTOBOT_{key.upper().replace('.', '_')}"
-            env_value = os.getenv(env_key)  # ssot-config-exempt: dynamic config key lookup
-            if env_value is not None:
-                cls._update_cache(key, env_value)
-                return env_value
-
-            # Try registry defaults
-            from config.registry_defaults import get_default
-
-            registry_default = get_default(key)
-            if registry_default is not None:
-                return registry_default
-
-            # Return caller's default (don't cache defaults)
-            return default
+            return cls._resolve_without_redis(key, default)
 
         except Exception as e:
             logger.warning("Config lookup failed for %s: %s", key, e)
             return default
+
+    @classmethod
+    def _resolve_without_redis(cls, key: str, default: Any) -> Any:
+        """Env var, then registry default, then the caller's default."""
+        # AUTOBOT_REDIS_HOST format
+        env_key = f"AUTOBOT_{key.upper().replace('.', '_')}"
+        env_value = os.getenv(env_key)  # ssot-config-exempt: dynamic config key lookup
+        if env_value is not None:
+            cls._update_cache(key, env_value)
+            return env_value
+
+        from config.registry_defaults import get_default
+
+        registry_default = get_default(key)
+        if registry_default is not None:
+            return registry_default
+
+        # Caller's default is never cached
+        return default
+
+    @classmethod
+    def _is_miss_valid(cls, key: str) -> bool:
+        """True while a recorded Redis miss for *key* has not expired. Hold ``_lock``."""
+        stamp = cls._miss_timestamps.get(key)
+        return stamp is not None and (_now() - stamp) < cls._ttl_seconds
+
+    @classmethod
+    def _remember_miss(cls, key: str) -> None:
+        """Record that Redis holds nothing for *key*.
+
+        Only when a client answered: with no client (outage, or the transient
+        circular-import window) the miss says nothing about Redis, and
+        remembering it would hide a value for a full TTL after Redis returns.
+        """
+        if cls._redis_client is None:
+            return
+        with cls._lock:
+            cls._miss_timestamps[key] = _now()
 
     @classmethod
     def _is_cache_valid(cls, key: str) -> bool:
@@ -122,7 +172,7 @@ class ConfigRegistry:
             return False
         if key not in cls._cache_timestamps:
             return False
-        age = time.time() - cls._cache_timestamps[key]
+        age = _now() - cls._cache_timestamps[key]
         return age < cls._ttl_seconds
 
     @classmethod
@@ -130,11 +180,16 @@ class ConfigRegistry:
         """Update cache with new value and timestamp."""
         with cls._lock:
             cls._cache[key] = value
-            cls._cache_timestamps[key] = time.time()
+            cls._cache_timestamps[key] = _now()
+            cls._miss_timestamps.pop(key, None)
 
     @classmethod
-    def _fetch_from_redis(cls, key: str) -> str | None:
-        """Fetch value from Redis. Returns None if not found or error."""
+    def _fetch_from_redis(cls, key: str) -> "str | None | object":
+        """Fetch value from Redis.
+
+        Returns the value, ``None`` when Redis answered and holds nothing, or
+        ``_FETCH_FAILED`` when the GET raised (never remembered as a miss).
+        """
         try:
             redis_client = cls._get_redis()
             if redis_client is None:
@@ -146,7 +201,7 @@ class ConfigRegistry:
             return None
         except Exception as e:
             logger.debug("Redis fetch failed for %s: %s", key, e)
-            return None
+            return _FETCH_FAILED
 
     @classmethod
     def _get_redis(cls):
@@ -165,6 +220,12 @@ class ConfigRegistry:
             if cls._redis_client is not None:
                 return cls._redis_client
             if time.monotonic() < cls._redis_retry_after:
+                return None
+
+            # #20008: reached while redis_client is itself importing (its loggers load this package), so
+            # importing it here would fail partway. Same outcome as below, without the loop.
+            loading = sys.modules.get("autobot_shared.redis_client")
+            if loading is not None and not hasattr(loading, "get_redis_client"):
                 return None
 
             try:
@@ -198,6 +259,7 @@ class ConfigRegistry:
         with cls._lock:
             cls._cache.clear()
             cls._cache_timestamps.clear()
+            cls._miss_timestamps.clear()
             cls._redis_client = None
             # Issue #12674: also drop the failed-connect backoff so a cleared
             # registry re-probes Redis immediately instead of staying degraded.
@@ -241,7 +303,9 @@ class ConfigRegistry:
             redis_client = cls._get_redis()
             if redis_client is not None:
                 redis_key = f"{REDIS_CONFIG_PREFIX}{key}"
-                redis_client.set(redis_key, str(value))
+                # str() of a dict is a Python repr no reader can parse back.
+                stored = json.dumps(value) if isinstance(value, (dict, list)) else str(value)
+                redis_client.set(redis_key, stored)
 
             cls._update_cache(key, value)
             return True
@@ -266,5 +330,6 @@ class ConfigRegistry:
                 del cls._cache[key]
             if key in cls._cache_timestamps:
                 del cls._cache_timestamps[key]
+            cls._miss_timestamps.pop(key, None)
 
         return cls.get(key)

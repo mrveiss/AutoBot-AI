@@ -227,11 +227,13 @@ async def resolve_safe_ip_async(
     host:
         Raw hostname or IP literal — not a full URL.
     timeout:
-        DNS resolution timeout in seconds (default 2.0).
+        DNS resolution timeout in seconds (default 2.0); past it, ``ValueError``.
     """
     loop = asyncio.get_running_loop()
     try:
-        infos = await loop.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+        infos = await asyncio.wait_for(loop.getaddrinfo(host, None, type=socket.SOCK_STREAM), timeout=timeout)
+    except TimeoutError as exc:  # before OSError, its base class
+        raise ValueError(f"DNS resolution timeout for {host}") from exc
     except (socket.gaierror, OSError) as exc:
         raise ValueError(f"Could not resolve host '{host}': {exc}") from exc
 

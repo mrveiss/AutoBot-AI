@@ -648,3 +648,21 @@ detected-state gap its ACs did not cover).
 - *`knowledge_population.py` using `asyncio.create_task` rather than Celery* — checked, not filed.
   `docs/architecture/async-work.md` documents deliberate non-Beat async patterns; this is one, not
   a deviation.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #2871 — Bug: GPU/NPU benchmarking returns hardcoded placeholder scores
+- #16755 — security(plugin-sdk): plugin capabilities are granted at load but never checked — network:outbound (and every other capability) is declarative only (closed)
+- #17226 — feat(deploy): air-gapped operation is achievable by hand but is not a mode, and nothing tests that it holds
+- #17260 — feat(backend): connectivity signals measure service state only — nothing measures internet availability, so air-gapped is indistinguishable from connected
+- #17261 — refactor(slm): the update decision is not a value — so no gate, no backoff and no dry-run can exist (MaintenanceWindow, UpdatePolicy and severity are all wired to nothing)
+- #17262 — bug(slm): the whole-machine self-update path has no disk gate and no rollback, though both exist elsewhere in the repo
+- #17263 — feat(models): the pre-seed manifest is half-built — pinned registry covers 6 of 13 load sites and nothing walks it to fetch
+- #17264 — bug(llm): model pulls bypass Celery entirely — no job, no persisted progress, no disk precheck, and no GUI caller
+- #17265 — security(sandbox): Docker unreachable silently downgrades to uncontainerized host execution — hardening drops with no signal
+- #17266 — security(marketplace): two endpoints have no auth dependency at all, and install is not admin-gated unlike every equivalent plugin route
+- #17267 — refactor(sandbox): container hardening is copy-pasted across three Docker clients, with a docstring as the only thing preventing drift
+- #17268 — refactor(async): knowledge vectorization still runs its own Redis progress scheme, bypassing the canonical tracker #6506 established
+- #17270 — feat(slm): the frontend bundle keeps a rollback target that nothing can trigger — the flip is a documented shell command only

@@ -6,8 +6,25 @@ Setup script for AutoBot Code Analysis Suite
 """
 
 import os
+import re
 
 from setuptools import find_packages, setup
+
+_SSOT_CONSTRAINTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "constraints", "shared.txt")
+
+
+def _ssot_floor(package: str, constraints: str = _SSOT_CONSTRAINTS) -> str:
+    """The ``>=`` floor *package* has in constraints/shared.txt, the one place it is stated (#18047).
+
+    Raises rather than falling back to a literal: a restated floor is what drifted on every bump.
+    """
+    with open(constraints, encoding="utf-8") as f:
+        for line in f:
+            match = re.match(rf"^{re.escape(package)}\s*(>=\s*[0-9][0-9.]*)", line.split("#", 1)[0].strip())
+            if match:
+                return match.group(1).replace(" ", "")
+    raise RuntimeError(f"{package} has no >= floor in {constraints}")
+
 
 # Read the contents of README file
 this_directory = os.path.abspath(os.path.dirname(__file__))
@@ -50,8 +67,7 @@ setup(
             "mypy>=0.991",
         ],
         "npu": [
-            # #14476: floor raised to match the SSOT (autobot-npu-worker/requirements.txt).
-            "openvino>=2026.4.0",
+            f"openvino{_ssot_floor('openvino')}",  # #18047: the floor is read from the SSOT, never restated
             "onnxruntime>=1.12.0",
         ],
         "web": [

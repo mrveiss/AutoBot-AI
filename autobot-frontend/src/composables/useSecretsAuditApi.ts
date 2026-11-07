@@ -15,37 +15,16 @@ import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { showSubtleErrorNotification } from '@/utils/cacheManagement'
 import { useLoadingState } from '@/composables/useLoadingState'
+import type { AuditApiEntry, AuditQueryResponse } from '@/types/audit'
 
 const logger = createLogger('SecretsAuditApi')
-
-export interface AuditLogEntry {
-  id: string
-  timestamp: string
-  operation: string
-  user_id: string
-  session_id?: string
-  vm_name?: string
-  resource?: string
-  result: 'success' | 'failure'
-  details?: string
-  ip_address?: string
-  metadata?: Record<string, unknown>
-}
-
-interface AuditQueryResponse {
-  success: boolean
-  total_returned: number
-  has_more: boolean
-  entries: AuditLogEntry[]
-  query: Record<string, unknown>
-}
 
 export function useSecretsAuditApi() {
   const api = useApiClient()
 
   const { isLoading: loading, wrap } = useLoadingState()
   const error = ref<string | null>(null)
-  const entries = ref<AuditLogEntry[]>([])
+  const entries = ref<AuditApiEntry[]>([])
   const hasMore = ref(false)
   const totalCount = ref(0)
 
@@ -62,17 +41,8 @@ export function useSecretsAuditApi() {
     const params = new URLSearchParams()
 
     if (options?.operationFilter && options.operationFilter !== 'all') {
-      const operationMap: Record<string, string> = {
-        'access': 'secrets.access',
-        'inject': 'secrets.inject',
-        'copy': 'secrets.copy',
-        'reveal': 'secrets.reveal',
-        'create': 'secrets.create',
-        'read': 'secrets.read',
-        'update': 'secrets.update',
-        'delete': 'secrets.delete'
-      }
-      const backendOp = operationMap[options.operationFilter] || options.operationFilter
+      // The backend writes `secret.<verb>` (api/secrets_audit.py SECRET_OPERATIONS)
+      const backendOp = `secret.${options.operationFilter}`
       params.append('operation', backendOp)
     }
 
@@ -90,7 +60,7 @@ export function useSecretsAuditApi() {
 
     return wrap(async () => {
       try {
-        const data = await api.get<AuditQueryResponse>(
+        const data = await api.get<AuditQueryResponse<AuditApiEntry>>(
           `${getApiBase()}/audit/logs?${params.toString()}`
         )
 

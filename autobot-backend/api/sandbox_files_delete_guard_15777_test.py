@@ -12,8 +12,8 @@ half and be useless in production.
 from __future__ import annotations
 
 import asyncio
-import subprocess
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
@@ -27,38 +27,20 @@ from api.sandbox_files import (
     _uncommitted_entries,
 )
 from autobot_shared.env_utils import env_int_clamped
-from autobot_shared.paths import scrubbed_git_env
-
-
-def _fixture_git_env() -> dict[str, str]:
-    """The canonical scrub, plus the identity a throwaway repo needs to commit.
-
-    Wrapping rather than inlining ``{**scrubbed_git_env(), ...}`` at three call
-    sites is the pattern ``check_git_write_env_scrubbed`` expects: without the
-    scrub, an ambient ``GIT_DIR`` -- which the pre-push hook exports -- makes
-    these writes land in the pushing worktree's real index rather than in
-    ``tmp_path`` (#15246).
-    """
-    return {
-        **scrubbed_git_env(),
-        "GIT_AUTHOR_NAME": "t",
-        "GIT_AUTHOR_EMAIL": "t@e",
-        "GIT_COMMITTER_NAME": "t",
-        "GIT_COMMITTER_EMAIL": "t@e",
-    }
+from autobot_shared.isolated_git import git, make_repo
 
 
 def _init_repo(root: Path) -> None:
-    subprocess.run(["git", "init", "-q", str(root)], check=True, env=_fixture_git_env())
+    make_repo(root)
     (root / "tracked.txt").write_text("committed\n", encoding="utf-8")
-    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True, env=_fixture_git_env())
-    subprocess.run(["git", "-C", str(root), "commit", "-qm", "seed"], check=True, env=_fixture_git_env())
+    git(root, "add", "-A")
+    git(root, "commit", "-qm", "seed")
 
 
 class TestNonEmptyDirectory:
     @pytest.mark.asyncio
     async def test_non_empty_directory_is_refused_without_recursive(self, tmp_path):
-        (tmp_path / "a.txt").write_text("x", encoding="utf-8")
+        await asyncio.to_thread((tmp_path / "a.txt").write_text, "x", encoding="utf-8")
 
         with pytest.raises(HTTPException) as exc:
             await _assert_directory_deletable(
@@ -77,7 +59,7 @@ class TestNonEmptyDirectory:
 
     @pytest.mark.asyncio
     async def test_non_empty_directory_passes_with_recursive(self, tmp_path):
-        (tmp_path / "a.txt").write_text("x", encoding="utf-8")
+        await asyncio.to_thread((tmp_path / "a.txt").write_text, "x", encoding="utf-8")
 
         await _assert_directory_deletable(tmp_path, "work", recursive=True, force=False, entries=_entry_count(tmp_path))
 
@@ -86,7 +68,7 @@ class TestDirtyWorkTree:
     @pytest.mark.asyncio
     async def test_uncommitted_file_blocks_the_delete(self, tmp_path):
         _init_repo(tmp_path)
-        (tmp_path / "unsaved.txt").write_text("hours of work\n", encoding="utf-8")
+        await asyncio.to_thread((tmp_path / "unsaved.txt").write_text, "hours of work\n", encoding="utf-8")
 
         with pytest.raises(HTTPException) as exc:
             await _assert_directory_deletable(
@@ -106,7 +88,7 @@ class TestDirtyWorkTree:
     @pytest.mark.asyncio
     async def test_force_overrides_a_dirty_tree(self, tmp_path):
         _init_repo(tmp_path)
-        (tmp_path / "unsaved.txt").write_text("deliberate\n", encoding="utf-8")
+        await asyncio.to_thread((tmp_path / "unsaved.txt").write_text, "deliberate\n", encoding="utf-8")
 
         await _assert_directory_deletable(tmp_path, "repo", recursive=True, force=True, entries=_entry_count(tmp_path))
 
@@ -143,7 +125,7 @@ class TestWorkTreeDiscovery:
     @pytest.mark.asyncio
     async def test_status_lists_untracked_work(self, tmp_path):
         _init_repo(tmp_path)
-        (tmp_path / "untracked.txt").write_text("x", encoding="utf-8")
+        await asyncio.to_thread((tmp_path / "untracked.txt").write_text, "x", encoding="utf-8")
 
         lines = await _uncommitted_entries(tmp_path, tmp_path)
 
@@ -183,7 +165,7 @@ class TestHermeticGitProbe:
         for repo in (target, elsewhere):
             repo.mkdir()
             _init_repo(repo)
-        (elsewhere / "noise.txt").write_text("dirty over there\n", encoding="utf-8")
+        await asyncio.to_thread((elsewhere / "noise.txt").write_text, "dirty over there\n", encoding="utf-8")
         monkeypatch.setenv("GIT_DIR", str(elsewhere / ".git"))
 
         lines = await _uncommitted_entries(target, target)
@@ -264,9 +246,9 @@ class TestTheAuditLineSurvivesTheFloodGuard:
 
         monkeypatch.setattr(sandbox_files.logger, "warning", _warning)
         monkeypatch.setattr(sandbox_files, "_validate_path", lambda path: tmp_path)
-        monkeypatch.setattr(sandbox_files, "_check_permission", lambda request, permission: {"username": "agent"})
+        monkeypatch.setattr(sandbox_files, "_check_permission", AsyncMock(return_value={"username": "agent"}))
         monkeypatch.setattr(sandbox_files.shutil, "rmtree", lambda target: None)
-        (tmp_path / "a.txt").write_text("x", encoding="utf-8")
+        await asyncio.to_thread((tmp_path / "a.txt").write_text, "x", encoding="utf-8")
 
         await sandbox_files.delete_file.__wrapped__(request=None, path="work", recursive=True, force=True)
 

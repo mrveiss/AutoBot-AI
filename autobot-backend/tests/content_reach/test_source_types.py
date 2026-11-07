@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from source_attribution import Source, SourceReliability, SourceType
+from source_attribution import Source, SourceKind, SourceReliability
 
 
 @pytest.mark.parametrize(
@@ -19,13 +19,13 @@ from source_attribution import Source, SourceReliability, SourceType
     ],
 )
 def test_new_source_types_exist(member, value):
-    assert SourceType[member].value == value
+    assert SourceKind[member].value == value
 
 
 def test_new_source_types_have_citation_icons():
     for member in ("YOUTUBE", "REDDIT", "WEB_PAGE", "SOCIAL"):
         src = Source(
-            type=SourceType[member],
+            type=SourceKind[member],
             reliability=SourceReliability.MEDIUM,
             content="c",
             timestamp=datetime.now(tz=timezone.utc),

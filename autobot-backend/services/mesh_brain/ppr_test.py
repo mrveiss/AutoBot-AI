@@ -15,11 +15,11 @@ from services.mesh_brain.ppr import PersonalizedPageRank
 # =============================================================================
 
 
-def _make_db_mock(neighbor_map: dict[str, list[dict]]) -> AsyncMock:
+def _make_db_mock(neighbor_map: dict[str, list[tuple[str, float]]]) -> AsyncMock:
     """Return a MeshDB mock whose get_neighbors returns from neighbor_map.
 
     neighbor_map keys are node_id strings; values are lists of
-    {"to_node": str, "weight": float} dicts.  Unknown nodes return [].
+    (str, float) dicts.  Unknown nodes return [].
     """
     db = AsyncMock()
     db.get_neighbors = AsyncMock(side_effect=lambda node_id, min_weight=0.0: neighbor_map.get(node_id, []))
@@ -43,7 +43,7 @@ class TestPersonalizedPageRank:
     async def test_single_seed_node_gets_highest_score(self) -> None:
         """The seed node must receive the highest PPR score in any connected graph."""
         neighbor_map = {
-            "A": [{"to_node": "B", "weight": 0.8}],
+            "A": [("B", 0.8)],
             "B": [],
         }
         ppr = _ppr(neighbor_map)
@@ -59,7 +59,7 @@ class TestPersonalizedPageRank:
     async def test_connected_neighbor_gets_score(self) -> None:
         """A directly connected neighbor with high weight receives a meaningful score."""
         neighbor_map = {
-            "seed": [{"to_node": "neighbor", "weight": 0.9}],
+            "seed": [("neighbor", 0.9)],
             "neighbor": [],
         }
         ppr = _ppr(neighbor_map)
@@ -77,7 +77,7 @@ class TestPersonalizedPageRank:
         """A node not reachable from seeds must not appear in results."""
         neighbor_map = {
             "seed": [],
-            "isolated": [{"to_node": "seed", "weight": 0.9}],
+            "isolated": [("seed", 0.9)],
         }
         ppr = _ppr(neighbor_map)
 
@@ -91,7 +91,7 @@ class TestPersonalizedPageRank:
     async def test_alpha_controls_teleport(self) -> None:
         """High alpha concentrates scores on seeds; low alpha spreads to neighbors."""
         neighbor_map = {
-            "seed": [{"to_node": "far", "weight": 0.9}],
+            "seed": [("far", 0.9)],
             "far": [],
         }
 
@@ -112,11 +112,11 @@ class TestPersonalizedPageRank:
     async def test_edge_weight_influences_propagation(self) -> None:
         """A higher-weight edge propagates more PPR score than a lower-weight edge."""
         high_weight_map = {
-            "seed": [{"to_node": "target", "weight": 0.95}],
+            "seed": [("target", 0.95)],
             "target": [],
         }
         low_weight_map = {
-            "seed": [{"to_node": "target", "weight": 0.1}],
+            "seed": [("target", 0.1)],
             "target": [],
         }
 
@@ -159,7 +159,7 @@ class TestPersonalizedPageRank:
         """rank() returns at most top_k results regardless of subgraph size."""
         # Build a star graph: seed → n0..n9
         neighbor_map: dict = {
-            "seed": [{"to_node": f"n{i}", "weight": 0.8} for i in range(10)],
+            "seed": [(f"n{i}", 0.8) for i in range(10)],
         }
         for i in range(10):
             neighbor_map[f"n{i}"] = []
@@ -173,7 +173,7 @@ class TestPersonalizedPageRank:
     async def test_results_sorted_descending(self) -> None:
         """rank() results are sorted by score in descending order."""
         neighbor_map = {
-            "seed": [{"to_node": "B", "weight": 0.8}],
+            "seed": [("B", 0.8)],
             "B": [],
         }
         ppr = _ppr(neighbor_map)
@@ -182,3 +182,19 @@ class TestPersonalizedPageRank:
 
         scores = [score for _, score in results]
         assert scores == sorted(scores, reverse=True), "Results must be sorted descending"
+
+
+class TestPprOverMeshAdapter:
+    """PPR runs over the production-wired MeshDBAdapter, not a fake (#18139)."""
+
+    @pytest.mark.asyncio
+    async def test_rank_over_real_adapter(self) -> None:
+        from services.mesh_brain.mesh_db_adapter import MeshDBAdapter
+
+        rows = {"seed": [{"neighbor_id": "n1", "weight": 0.9, "edge_type": "semantic"}]}
+        inner = AsyncMock()
+        inner.fetch_neighbor_rows = AsyncMock(side_effect=lambda node_id, min_weight=0.0: rows.get(node_id, []))
+
+        ranked = await PersonalizedPageRank(db=MeshDBAdapter(inner)).rank(["seed"])
+
+        assert "n1" in dict(ranked)

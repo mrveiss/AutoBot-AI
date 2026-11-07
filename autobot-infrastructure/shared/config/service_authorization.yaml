@@ -7,7 +7,7 @@
 # - npu-worker (${AUTOBOT_NPU_WORKER_HOST}:8081) - NPU hardware acceleration
 # - redis-stack (${AUTOBOT_REDIS_HOST}:6379) - Data layer
 # - ai-stack (${AUTOBOT_AI_STACK_HOST}:8080) - AI processing and inference
-# - browser-service (${AUTOBOT_BROWSER_SERVICE_HOST}:3000) - Playwright automation
+# - browser-service (${AUTOBOT_BROWSER_SERVICE_HOST}:${AUTOBOT_BROWSER_SERVICE_PORT}) - Playwright automation
 
 authorization_matrix:
   # Main Backend Service (${AUTOBOT_BACKEND_HOST}:8001)
@@ -132,7 +132,7 @@ authorization_matrix:
           - "/models/*"
           - "/embeddings/*"
 
-  # Browser Service (${AUTOBOT_BROWSER_SERVICE_HOST}:3000)
+  # Browser Service (${AUTOBOT_BROWSER_SERVICE_HOST}:${AUTOBOT_BROWSER_SERVICE_PORT})
   # Playwright web automation service
   browser-service:
     allowed_services:

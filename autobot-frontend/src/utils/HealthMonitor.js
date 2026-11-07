@@ -8,6 +8,7 @@
 
 import { cacheBuster } from './CacheBuster.js';
 import { createLogger } from '@/utils/debugUtils';
+import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import { getApiBase } from '@/config/ssot-config';
 
 // Create scoped logger for HealthMonitor
@@ -54,6 +55,7 @@ class HealthMonitor {
         // Event-driven monitoring state
         this.eventListeners = new Map();
         this.consecutiveFailures = { backend: 0, websocket: 0 };
+        this.lastBackendError = null; // the last failed backend check's message (#16253)
         this.healthCheckTimer = null;
         this.listeners = [];
         this.isUserViewing = false;
@@ -277,7 +279,7 @@ class HealthMonitor {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
 
-            const response = await fetch(`${getApiBase()}/system/health`, {
+            const response = await fetchWithAuth(`${getApiBase()}/system/health`, {
                 signal: controller.signal,
                 headers: cacheBuster.getBustHeaders()
             });
@@ -297,6 +299,7 @@ class HealthMonitor {
 
                 this.healthStatus.backend = 'healthy';
                 this.consecutiveFailures.backend = 0;
+                this.lastBackendError = null;
                 return { status: 'healthy', responseTime: performance.now() - startTime };
             } else {
                 throw new Error(`Backend responded with status: ${response.status}`);
@@ -304,6 +307,7 @@ class HealthMonitor {
 
         } catch (error) {
             this.consecutiveFailures.backend++;
+            this.lastBackendError = error.message;
 
             if (this.consecutiveFailures.backend >= 3) {
                 this.healthStatus.backend = 'critical';
@@ -472,6 +476,7 @@ class HealthMonitor {
         // listener maps non-healthy/degraded to Disconnected, and the next
         // real check can be up to intervals.healthy away.
         this.consecutiveFailures = { backend: 0, websocket: 0 };
+        this.lastBackendError = null; // the last failed backend check's message (#16253)
         this.healthStatus.overall = 'healthy';
         this.healthStatus.backend = 'healthy';
         this.healthStatus.frontend = 'healthy';

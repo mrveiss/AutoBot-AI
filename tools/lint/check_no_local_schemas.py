@@ -45,7 +45,8 @@ Where a model goes — companion modules, not a re-split (owner ruling, #16178):
 Exit codes:
   0 — clean (scoped: nothing this change added)
   1 — violations found, or the added-line set could not be computed
-  2 — invalid arguments
+  2 — invalid arguments, or a vacuous scan: root not a git toplevel, git failed,
+      nothing reached, or a full-repo sweep landed under its floor (#14896)
 
 Background: #5799 (schemas_common.py split), #5996 (terminal/analytics/knowledge model
 merges), #6056 (this hook), #16178 (changed-lines scoping, headroom-aware guidance).
@@ -56,16 +57,17 @@ from __future__ import annotations
 import argparse
 import ast
 import importlib.util
+import logging
 import sys
 from pathlib import Path
 from typing import List, Sequence, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from _check_harness import run_anchored, run_check  # noqa: E402
 from _scan_helpers import (  # noqa: E402
     PY_FLOOR,
     added_lines,
-    enforce_reach,
     resolve_base,
     scan_python_files,
     staged_paths,
@@ -248,39 +250,53 @@ def _destination_guide(repo_root: Path) -> str:
     return "\n".join(parts)
 
 
-def _report(new: List[Hit], earlier: List[Hit], repo_root: Path) -> int:
-    """Print the verdict; a pre-existing model is listed, never hidden."""
-    for rel, line, name in earlier:
-        print(
-            f"[{HOOK_ID}] not counted (pre-existing, not added by this change): {rel}:{line} '{name}'", file=sys.stderr
-        )
+def _model_findings(new: List[Hit], repo_root: Path) -> List[str]:
+    """One line per added model, then the summary block (which names where models go)."""
     if not new:
-        return 0
-    for rel, line, name in new:
-        print(f"[{HOOK_ID}] {rel}:{line}: Local BaseModel subclass '{name}' found.", file=sys.stderr)
-    print(
+        return []
+    lines = [f"[{HOOK_ID}] {rel}:{line}: Local BaseModel subclass '{name}' found." for rel, line, name in new]
+    lines.append(
         f"\n[{HOOK_ID}] {len(new)} violation(s). Move each model to a schemas_*.py module (#6056).\n"
-        f"{_destination_guide(repo_root)}",
-        file=sys.stderr,
+        f"{_destination_guide(repo_root)}"
     )
-    return 1
+    return lines
 
 
-def run(files: Sequence[Path], repo_root: Path, *, changed_only: bool, base: str | None) -> int:
-    """Check *files* under *repo_root*. Whether to scope is the caller's to state."""
+def _judge(files: Sequence[Path], repo_root: Path, *, changed_only: bool, base: str | None) -> List[str]:
+    """Finding lines for *files*. Whether to scope is the caller's to state.
+
+    A pre-existing model and a file judged whole are logged as notes, never
+    hidden and never counted: they do not change the verdict.
+    """
     hits = _collect_hits(files, repo_root)
     if not changed_only:
-        return _report(hits, [], repo_root)
+        return _model_findings(hits, repo_root)
     try:
         new, earlier, unscoped = _split_by_added(hits, repo_root, base)
     except RuntimeError as exc:
-        print(
-            f"[{HOOK_ID}] FATAL: could not compute the added-line set, refusing to report clean: {exc}", file=sys.stderr
-        )
-        return 1
+        return [f"[{HOOK_ID}] FATAL: could not compute the added-line set, refusing to report clean: {exc}"]
+    log = logging.getLogger(HOOK_ID)
     for rel in unscoped:
-        print(f"[{HOOK_ID}] {rel}: not staged, so there is no change to scope to; judged whole-file", file=sys.stderr)
-    return _report(new, earlier, repo_root)
+        log.error("[%s] %s: not staged, so there is no change to scope to; judged whole-file", HOOK_ID, rel)
+    for rel, line, name in earlier:
+        log.error("[%s] not counted (pre-existing, not added by this change): %s:%s '%s'", HOOK_ID, rel, line, name)
+    return _model_findings(new, repo_root)
+
+
+def run(files: Sequence[Path], repo_root: Path, *, changed_only: bool, base: str | None) -> int:
+    """Check explicit *files* under *repo_root* through the same path ``main`` takes.
+
+    The argv is rebuilt and handed to :func:`_collect`, so there is one scan path
+    and not a second one the tests alone exercise. An empty list is an explicit
+    request to check nothing and returns ``0``: it must not be re-read as the
+    argv-less full-repo sweep, which is what an empty argv means to the harness.
+    """
+    if not files:
+        return 0
+    argv = [str(path) for path in files]
+    if changed_only:
+        argv = ["--changed-lines-only", *(["--base", base] if base else []), *argv]
+    return run_check(HOOK_ID, _collect, argv, root=repo_root, full_repo_of=_is_full_repo)
 
 
 def _parse_args(argv: Sequence[str]) -> argparse.Namespace:
@@ -296,15 +312,23 @@ def _parse_args(argv: Sequence[str]) -> argparse.Namespace:
     return args
 
 
+def _is_full_repo(argv: Sequence[str]) -> bool:
+    """A sweep is whole-repo when no *files* were named; flags alone do not scope it."""
+    return not _parse_args(argv).files
+
+
+def _collect(argv: List[str], repo_root: Path) -> Tuple[int, List[str]]:
+    """``(files reached, finding lines)`` for the hook's own *argv* (empty = whole repo)."""
+    args = _parse_args(argv)
+    files, _ = scan_python_files(args.files, repo_root)
+    base = resolve_base(args.base)
+    return len(files), _judge(files, repo_root, changed_only=args.changed_lines_only, base=base)
+
+
 def main(argv: List[str]) -> int:
-    args = _parse_args(argv[1:])
-    repo_root = Path(__file__).resolve().parents[2]
-    files, full_repo = scan_python_files(args.files, repo_root)
     # Vacuity floor (#14896): full-repo mode only -- pre-commit legitimately
-    # hands this hook an argv with no Python in it.
-    if enforce_reach(len(files), PY_FLOOR, hook=HOOK_ID, full_repo=full_repo):
-        return 1
-    return run(files, repo_root, changed_only=args.changed_lines_only, base=resolve_base(args.base))
+    # hands this hook an argv with no Python in it. Exit 2 = the scan proved nothing.
+    return run_anchored(HOOK_ID, _collect, argv[1:], anchor=Path(__file__), floor=PY_FLOOR, full_repo_of=_is_full_repo)
 
 
 if __name__ == "__main__":

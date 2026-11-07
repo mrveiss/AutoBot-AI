@@ -15,10 +15,10 @@ from .learning_engine import WorkflowLearningEngine
 from .models import (
     AdaptiveMode,
     SmartWorkflowStep,
+    SmartWorkflowTemplate,
     WorkflowComplexity,
     WorkflowIntelligence,
     WorkflowIntent,
-    WorkflowTemplate,
 )
 from .optimizer import WorkflowOptimizer
 from .risk_analyzer import RiskAnalyzer
@@ -35,7 +35,7 @@ __all__ = [
     "WorkflowIntent",
     "WorkflowIntelligence",
     "SmartWorkflowStep",
-    "WorkflowTemplate",
+    "SmartWorkflowTemplate",
     # Components
     "TemplateManager",
     "IntentAnalyzer",

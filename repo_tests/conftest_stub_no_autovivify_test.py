@@ -77,6 +77,7 @@ import pytest
 from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
+from tools.lint import _parse_cache as parse_cache
 
 _REPO = repo_root()
 
@@ -84,7 +85,7 @@ _REPO = repo_root()
 #: git already tracks, plus this fix's own testkit/auth_middleware_stub.py).
 #: RATCHET: raise it when a new conftest.py or testkit/ file genuinely lands;
 #: lower it only with a stated reason (a directory deletion, not a filter bug).
-_REACH_FLOOR = 25
+_REACH_FLOOR = 37  # #18811: 38 conftest.py/testkit files after tests/coordination/conftest.py and its harnesses
 
 #: How far the population may outgrow the floor before the floor is stale.
 #: Same 1.5x discipline as with_error_handling_single_definition_test.py.
@@ -180,7 +181,7 @@ def find_hybrid_catchall_violations(source: str, label: str) -> List[str]:
     promise (def/async def/lambda) AND a ``__getattr__`` bound to a blind
     catch-all (see module docstring for why both halves are required).
     """
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     funcs_by_name = _functions_by_name(tree)
 
     # base variable name -> {attr: assigned value node}

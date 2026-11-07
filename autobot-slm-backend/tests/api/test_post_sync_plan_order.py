@@ -218,3 +218,62 @@ class TestTheLiveBarThatPromptedThis:
 
         assert len(plan) == len(observed) - 2
         assert set(_all_units(plan)) == {u for a in observed for u in (a.systemd_service or "").split()}
+
+
+class TestUnitOrderingRules17455:
+    """Owner decision on #17455: chromadb before ai-stack; the self-killing unit last."""
+
+    @pytest.mark.parametrize("flip", [False, True])
+    def test_chromadb_restarts_before_ai_stack_in_either_input_order(self, flip):
+        pair = [
+            _action("restart", "autobot-ai-stack", units="autobot-ai-stack"),
+            _action("restart", "autobot-database", units="autobot-chromadb"),
+        ]
+        plan = ordered_post_sync_plan(reversed(pair) if flip else pair)
+        units = _all_units(plan)
+        assert units.index("autobot-chromadb") < units.index("autobot-ai-stack")
+
+    @pytest.mark.parametrize("category", ["restart", "install", "build"])
+    @pytest.mark.parametrize("first", [True, False])
+    def test_slm_backend_is_last_whatever_its_category_or_position(self, category, first):
+        own = _action(category, "slm", units="autobot-slm-backend")
+        others = [
+            _action("restart", "a", units="autobot-backend"),
+            _action("install", "b"),
+            _action("build", "c"),
+        ]
+        plan = ordered_post_sync_plan([own, *others] if first else [*others, own])
+        assert plan[-1].systemd_service == "autobot-slm-backend"
+        assert [a.role_name for a in plan[:-1]] == ["b", "c", "a"]
+
+    def test_slm_backend_restart_follows_its_own_install(self):
+        plan = ordered_post_sync_plan(
+            [
+                _action("restart", "slm", units="autobot-slm-backend"),
+                _action("install", "slm", units="autobot-slm-backend"),
+                _action("restart", "a", units="autobot-backend"),
+            ]
+        )
+        assert [(a.category, a.systemd_service) for a in plan] == [
+            ("restart", "autobot-backend"),
+            ("install", "autobot-slm-backend"),
+            ("restart", "autobot-slm-backend"),
+        ]
+
+    def test_a_group_holding_slm_backend_is_split_so_it_still_goes_last(self):
+        plan = ordered_post_sync_plan(
+            [
+                _action("restart", "shared", units="autobot-backend autobot-slm-backend"),
+                _action("restart", "b", units="autobot-celery"),
+            ]
+        )
+        assert _all_units(plan) == ["autobot-backend", "autobot-celery", "autobot-slm-backend"]
+
+    def test_ollama_shared_by_two_roles_restarts_once(self):
+        plan = ordered_post_sync_plan(
+            [
+                _action("restart", "autobot-llm-cpu", units="ollama"),
+                _action("restart", "autobot-llm-gpu", units="ollama"),
+            ]
+        )
+        assert _all_units(plan) == ["ollama"]

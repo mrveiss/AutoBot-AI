@@ -61,16 +61,18 @@
 
           <h4 class="section-heading">{{ $t('views.componentShowcase.sizes') }}</h4>
           <div class="input-stack">
-            <BaseInput v-model="sampleText" size="sm" :placeholder="$t('views.componentShowcase.smallInput')" />
-            <BaseInput v-model="sampleText" size="md" :placeholder="$t('views.componentShowcase.mediumInput')" />
-            <BaseInput v-model="sampleText" size="lg" :placeholder="$t('views.componentShowcase.largeInput')" />
+            <BaseInput v-model="sampleText" size="sm" :placeholder="$t('views.componentShowcase.smallInput')" :aria-label="$t('views.componentShowcase.smallInput')" />
+            <BaseInput v-model="sampleText" size="md" :placeholder="$t('views.componentShowcase.mediumInput')" :aria-label="$t('views.componentShowcase.mediumInput')" />
+            <BaseInput v-model="sampleText" size="lg" :placeholder="$t('views.componentShowcase.largeInput')" :aria-label="$t('views.componentShowcase.largeInput')" />
           </div>
 
           <h4 class="section-heading">{{ $t('views.componentShowcase.clearable') }}</h4>
           <BaseInput
             v-model="clearableText"
             :placeholder="$t('views.componentShowcase.typeSomething')"
+            :aria-label="$t('views.componentShowcase.clearable')"
             clearable
+            :clear-label="$t('base.input.clearInput')"
           />
         </div>
       </BaseCard>
@@ -80,28 +82,28 @@
         <div class="component-section">
           <h4 class="section-heading">{{ $t('views.componentShowcase.variants') }}</h4>
           <div class="badge-group">
-            <BaseBadge variant="neutral">{{ $t('views.componentShowcase.default') }}</BaseBadge>
-            <BaseBadge variant="primary">{{ $t('views.componentShowcase.primary') }}</BaseBadge>
-            <BaseBadge variant="success">{{ $t('views.componentShowcase.success') }}</BaseBadge>
-            <BaseBadge variant="warning">{{ $t('views.componentShowcase.warning') }}</BaseBadge>
-            <BaseBadge variant="danger">{{ $t('views.componentShowcase.error') }}</BaseBadge>
-            <BaseBadge variant="info">{{ $t('views.componentShowcase.info') }}</BaseBadge>
+            <BaseBadge size="sm" variant="neutral">{{ $t('views.componentShowcase.default') }}</BaseBadge>
+            <BaseBadge size="sm" variant="primary">{{ $t('views.componentShowcase.primary') }}</BaseBadge>
+            <BaseBadge size="sm" variant="success">{{ $t('views.componentShowcase.success') }}</BaseBadge>
+            <BaseBadge size="sm" variant="warning">{{ $t('views.componentShowcase.warning') }}</BaseBadge>
+            <BaseBadge size="sm" variant="error">{{ $t('views.componentShowcase.error') }}</BaseBadge>
+            <BaseBadge size="sm" variant="info">{{ $t('views.componentShowcase.info') }}</BaseBadge>
           </div>
 
           <h4 class="section-heading">{{ $t('views.componentShowcase.outlineStyle') }}</h4>
           <div class="badge-group">
-            <BaseBadge variant="primary" outline>{{ $t('views.componentShowcase.primary') }}</BaseBadge>
-            <BaseBadge variant="success" outline>{{ $t('views.componentShowcase.success') }}</BaseBadge>
-            <BaseBadge variant="warning" outline>{{ $t('views.componentShowcase.warning') }}</BaseBadge>
-            <BaseBadge variant="danger" outline>{{ $t('views.componentShowcase.error') }}</BaseBadge>
+            <BaseBadge size="sm" variant="primary" tone="outline">{{ $t('views.componentShowcase.primary') }}</BaseBadge>
+            <BaseBadge size="sm" variant="success" tone="outline">{{ $t('views.componentShowcase.success') }}</BaseBadge>
+            <BaseBadge size="sm" variant="warning" tone="outline">{{ $t('views.componentShowcase.warning') }}</BaseBadge>
+            <BaseBadge size="sm" variant="error" tone="outline">{{ $t('views.componentShowcase.error') }}</BaseBadge>
           </div>
 
           <h4 class="section-heading">{{ $t('views.componentShowcase.monospace') }}</h4>
           <div class="badge-group">
-            <BaseBadge monospace :rounded="false">v2.1.0</BaseBadge>
-            <BaseBadge monospace :rounded="false" variant="primary">main</BaseBadge>
-            <BaseBadge monospace :rounded="false" variant="success">+142ms</BaseBadge>
-            <BaseBadge monospace :rounded="false">SHA:a3f4c2</BaseBadge>
+            <BaseBadge size="sm" monospace :rounded="false">v2.1.0</BaseBadge>
+            <BaseBadge size="sm" monospace :rounded="false" variant="primary">main</BaseBadge>
+            <BaseBadge size="sm" monospace :rounded="false" variant="success">+142ms</BaseBadge>
+            <BaseBadge size="sm" monospace :rounded="false">SHA:a3f4c2</BaseBadge>
           </div>
 
           <h4 class="section-heading">{{ $t('views.componentShowcase.sizes') }}</h4>
@@ -114,9 +116,9 @@
 
           <h4 class="section-heading">{{ $t('views.componentShowcase.removable') }}</h4>
           <div class="badge-group">
-            <BaseBadge variant="primary" removable @remove="handleRemove">Tag 1</BaseBadge>
-            <BaseBadge variant="success" removable @remove="handleRemove">Tag 2</BaseBadge>
-            <BaseBadge variant="warning" removable @remove="handleRemove">Tag 3</BaseBadge>
+            <BaseBadge size="sm" variant="primary" removable @remove="handleRemove" :remove-label="$t('base.badge.removeBadge')">Tag 1</BaseBadge>
+            <BaseBadge size="sm" variant="success" removable @remove="handleRemove" :remove-label="$t('base.badge.removeBadge')">Tag 2</BaseBadge>
+            <BaseBadge size="sm" variant="warning" removable @remove="handleRemove" :remove-label="$t('base.badge.removeBadge')">Tag 3</BaseBadge>
           </div>
         </div>
       </BaseCard>
@@ -167,8 +169,13 @@
         <BaseCard :title="$t('views.componentShowcase.table')" :subtitle="$t('views.componentShowcase.tableSubtitle')">
           <BaseTable
             :columns="tableColumns"
-            :data="tableData"
+            :rows="tableData"
+            :caption="$t('views.componentShowcase.table')"
             :selectable="true"
+            :select-all-label="$t('base.table.selectAllRows')"
+            :select-row-label="(n: number) => $t('base.table.selectRow', { row: n })"
+            :actions-label="$t('base.table.actions')"
+            :empty-title="$t('base.table.noDataAvailable')"
             :zebra="true"
             size="comfortable"
           >
@@ -177,6 +184,7 @@
                 <BaseInput
                   v-model="tableSearch"
                   :placeholder="$t('views.componentShowcase.searchPlaceholder')"
+                  :aria-label="$t('views.componentShowcase.searchPlaceholder')"
                   size="sm"
                   style="max-width: 300px;"
                 />
@@ -221,15 +229,15 @@
         <div class="component-section">
           <h4 class="section-heading">{{ $t('views.componentShowcase.electricBlue') }}</h4>
           <div class="color-swatches">
-            <div class="color-swatch" style="background-color: #3b82f6;">
+            <div class="color-swatch" style="background-color: var(--showcase-swatch-primary);">
               <span class="swatch-label">{{ $t('views.componentShowcase.primary') }}</span>
               <span class="swatch-hex">#3b82f6</span>
             </div>
-            <div class="color-swatch" style="background-color: #2563eb;">
+            <div class="color-swatch" style="background-color: var(--showcase-swatch-hover);">
               <span class="swatch-label">{{ $t('views.componentShowcase.hover') }}</span>
               <span class="swatch-hex">#2563eb</span>
             </div>
-            <div class="color-swatch" style="background-color: #1d4ed8;">
+            <div class="color-swatch" style="background-color: var(--showcase-swatch-active);">
               <span class="swatch-label">{{ $t('views.componentShowcase.active') }}</span>
               <span class="swatch-hex">#1d4ed8</span>
             </div>
@@ -237,19 +245,19 @@
 
           <h4 class="section-heading">{{ $t('views.componentShowcase.statusColors') }}</h4>
           <div class="color-swatches">
-            <div class="color-swatch" style="background-color: #10b981;">
+            <div class="color-swatch" style="background-color: var(--showcase-swatch-success);">
               <span class="swatch-label">{{ $t('views.componentShowcase.success') }}</span>
               <span class="swatch-hex">#10b981</span>
             </div>
-            <div class="color-swatch" style="background-color: #f59e0b;">
+            <div class="color-swatch" style="background-color: var(--showcase-swatch-warning);">
               <span class="swatch-label">{{ $t('views.componentShowcase.warning') }}</span>
               <span class="swatch-hex">#f59e0b</span>
             </div>
-            <div class="color-swatch" style="background-color: #ef4444;">
+            <div class="color-swatch" style="background-color: var(--showcase-swatch-error);">
               <span class="swatch-label">{{ $t('views.componentShowcase.error') }}</span>
               <span class="swatch-hex">#ef4444</span>
             </div>
-            <div class="color-swatch" style="background-color: #06b6d4;">
+            <div class="color-swatch" style="background-color: var(--showcase-swatch-info);">
               <span class="swatch-label">{{ $t('views.componentShowcase.info') }}</span>
               <span class="swatch-hex">#06b6d4</span>
             </div>
@@ -289,14 +297,10 @@
 </template>
 
 <script setup lang="ts">
+import { BaseBadge, BaseButton, BaseCard, BaseInput, BaseTable } from '@autobot/ui'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
-import BaseButton from '@/components/base/BaseButton.vue'
-import BaseInput from '@/components/base/BaseInput.vue'
-import BaseBadge from '@/components/base/BaseBadge.vue'
-import BaseCard from '@/components/base/BaseCard.vue'
-import BaseTable from '@/components/base/BaseTable.vue'
 
 const { t } = useI18n()
 const logger = createLogger('ComponentShowcase')

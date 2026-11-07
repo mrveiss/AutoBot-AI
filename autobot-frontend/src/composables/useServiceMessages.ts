@@ -81,7 +81,7 @@ export function useServiceMessages() {
         if (params?.msg_type) sp.append('msg_type', params.msg_type)
         const qs = sp.toString()
         const url = `${getApiBase()}/service-messages/latest${qs ? `?${qs}` : ''}`
-        const result = await api.get<LatestMessagesResponse>(url)
+        const result = await api.get<LatestMessagesResponse>(url, { circuitBreaker: 'service-messages' })
         if (result && result.success) {
           messages.value = result.messages
         }

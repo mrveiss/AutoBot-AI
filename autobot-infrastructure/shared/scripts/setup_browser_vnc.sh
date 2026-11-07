@@ -74,11 +74,13 @@ echo "  VNC server started on :1 (port 5901, password-protected)"
 # roles/vnc removes (#13069) and which otherwise serves a stale pre-VeNCrypt
 # client (#13060). This script does not install noVNC itself; run the vnc role
 # (or an equivalent pinned install) first so /opt/novnc exists.
+# Node TLS dir: a pinned copy of env_registry_tls.DEFAULT_TLS_REMOTE_CERT_DIR (#19366).
+TLS_REMOTE_CERT_DIR="${AUTOBOT_TLS_REMOTE_CERT_DIR:-/etc/autobot/certs}"
 echo "[5/7] Starting websockify for noVNC..."
 run_on_browser_vm "nohup /usr/bin/websockify \
     --web ${AUTOBOT_NOVNC_PATH:-/opt/novnc} \
-    --cert=/etc/autobot/certs/server-cert.pem \
-    --key=/etc/autobot/certs/server-key.pem \
+    --cert=${TLS_REMOTE_CERT_DIR}/server-cert.pem \
+    --key=${TLS_REMOTE_CERT_DIR}/server-key.pem \
     --ssl-only \
     localhost:6080 \
     localhost:5901 \
@@ -98,6 +100,10 @@ echo "  Playwright configured for headed mode on DISPLAY :1"
 # Step 7: Restart Playwright server
 echo "[7/7] Restarting Playwright server..."
 run_on_browser_vm "pkill -f playwright-server.js 2>/dev/null || true"
+# One canonical server (+ the two modules it requires) from autobot-browser-worker (#18549)
+for f in playwright-server.js session-store.js element-index.js; do
+    scp -i "$SSH_KEY" "${SCRIPT_DIR}/../../../../autobot-browser-worker/${f}" "$BROWSER_USER@$BROWSER_VM_IP:${f}"
+done
 run_on_browser_vm "cd /home/autobot && mkdir -p logs && \
     nohup node playwright-server.js > logs/playwright.log 2>&1 &"
 sleep 3
@@ -113,6 +119,6 @@ echo "  - VNC Server: $BROWSER_VM_IP:5901"
 echo "  - noVNC Web:  http://$BROWSER_VM_IP:6080/vnc.html"
 echo ""
 echo "Playwright:"
-echo "  - API Server: http://$BROWSER_VM_IP:3000"
+echo "  - API Server: http://$BROWSER_VM_IP:${AUTOBOT_BROWSER_SERVICE_PORT}"
 echo "  - Mode: Headed (visible browser on VNC)"
 echo ""

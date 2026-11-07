@@ -129,7 +129,7 @@ class ReplayedResponse:
 
 
 @dataclass(frozen=True)
-class Claim:
+class KeyClaim:
     """What claiming a key produced -- exactly one of the three states.
 
     ``token`` set means the caller holds the claim and must proceed; it is the
@@ -161,8 +161,8 @@ def _marker(token: str) -> str:
     return f"{_IN_FLIGHT}:{token}"
 
 
-async def claim(redis: Any, key: str) -> Claim:
-    """Claim *key*, or report what is already there.
+async def claim(redis: Any, key: str) -> KeyClaim:
+    """KeyClaim *key*, or report what is already there.
 
     Retries the atomic claim -- rather than reporting "unseen" -- when the
     record it lost to has expired by the time it is read. Reporting unseen there
@@ -171,12 +171,12 @@ async def claim(redis: Any, key: str) -> Claim:
     for _ in range(IDEMPOTENCY_CLAIM_ATTEMPTS):
         token = secrets.token_hex(16)
         if await redis.set(key, _marker(token), nx=True, ex=IDEMPOTENCY_CLAIM_TTL_SECONDS):
-            return Claim(token=token)
+            return KeyClaim(token=token)
         existing = await redis.get(key)
         if existing is not None:
             return _decode(existing)
     logger.warning("idempotency claim lost %d races to an expiring key", IDEMPOTENCY_CLAIM_ATTEMPTS)
-    return Claim(in_flight=True)
+    return KeyClaim(in_flight=True)
 
 
 async def complete(redis: Any, key: str, token: str, response: ReplayedResponse) -> bool:
@@ -201,7 +201,7 @@ async def complete(redis: Any, key: str, token: str, response: ReplayedResponse)
     return True
 
 
-async def release(redis: Any, key: str, token: str) -> bool:
+async def release_key(redis: Any, key: str, token: str) -> bool:
     """Drop a claim whose request failed, so the caller may retry it.
 
     A failed create is not a completed one: holding the key would make the retry
@@ -221,13 +221,13 @@ def _truthy(reply: Any) -> bool:
         return bool(reply)
 
 
-def _decode(raw: Any) -> Claim:
+def _decode(raw: Any) -> KeyClaim:
     text = raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else str(raw)
     if text.startswith(_IN_FLIGHT):
-        return Claim(in_flight=True)
+        return KeyClaim(in_flight=True)
     try:
         data = json.loads(text)
-        return Claim(
+        return KeyClaim(
             replay=ReplayedResponse(
                 status_code=int(data["status_code"]),
                 body=base64.b64decode(data["body_b64"]),
@@ -239,7 +239,7 @@ def _decode(raw: Any) -> Claim:
         # A malformed record must not resurrect as a wrong replay; treat it as
         # in flight so the caller retries rather than receiving nonsense.
         logger.warning("discarding malformed idempotency record")
-        return Claim(in_flight=True)
+        return KeyClaim(in_flight=True)
 
 
 IN_FLIGHT = _IN_FLIGHT

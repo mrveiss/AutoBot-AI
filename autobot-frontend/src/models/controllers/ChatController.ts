@@ -1,15 +1,16 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
-import { useChatStore } from '@/stores/useChatStore'
+import { useChatStore, type ChatSession } from '@/stores/useChatStore'
 import { useAppStore } from '@/stores/useAppStore'
 import { chatRepository } from '@/models/repositories'
 import apiClient from '@/utils/ApiClient'
-import type { ChatSession } from '@/stores/useChatStore'
 import { createLogger } from '@/utils/debugUtils'
-import { extractErrorMessage } from '@/utils/errorExtract'
+import { extractErrorMessage, streamErrorText } from '@/utils/errorExtract'
 import i18n from '@/i18n'
 import type { ChatMessage, ChatMessageDisplayType } from '@/types/api'
 import { requestQueue } from '@/composables/useRequestQueue'
+import { stripBracketTags, stripProtocolTagsForDisplay } from '@/utils/llmProtocolTags'
+import { showAttachmentNotice } from '@/utils/attachmentNotice'
 
 const logger = createLogger('ChatController')
 
@@ -324,7 +325,7 @@ export class ChatController {
     }, ChatController.PREVIEW_THROTTLE_MS)
   }
 
-  private async handleStreamingResponse(response: Response): Promise<void> {
+  async handleStreamingResponse(response: Response): Promise<void> {
     const reader = response.body?.getReader()
     if (!reader) {
       throw new Error('No response stream available')
@@ -395,10 +396,11 @@ export class ChatController {
         logger.debug('Stream started:', data.session_id)
         return fallbackMessageId
       }
-      if (data.type === 'end') {
-        logger.debug('Stream ended')
+      if (data.type === 'end' || data.type === 'cancelled') { // #17829: a stopped turn keeps its shown text
+        logger.debug('Stream ended:', data.type)
         return fallbackMessageId
       }
+      if (data.type === 'attachment_notice') { showAttachmentNotice(data.metadata); return fallbackMessageId } // #20195
       if (data.type === 'segment_complete') {
         logger.debug(`Segment complete: ${data.metadata?.completed_type}`)
         const backendId = data.metadata?.message_id
@@ -416,7 +418,7 @@ export class ChatController {
         })
         if (!errorMsgId) return fallbackMessageId
         this.chatStore.updateMessage(errorMsgId, {
-          content: `Error: ${data.content || data.message || 'Unknown error'}`,
+          content: streamErrorText(data),
           status: 'error'
         })
         return fallbackMessageId
@@ -519,10 +521,10 @@ export class ChatController {
       const msg = this.chatStore.currentSession?.messages.find(m => m.id === frontendId)
       if (!msg) continue
 
-      const displayContent = (msg.content || '')
-        .replace(/\[\/?(THOUGHT|PLANNING|DEBUG|SOURCES)\]?/gi, '')
-        .replace(/\[\/?(?:THO(?:UGH?T?)?|PLA(?:NN?I?N?G?)?|DEB(?:UG?)?|SOU(?:RC?E?S?)?)\]?/gi, '')
-        .trim()
+      // `true` = strip a truncated marker ANYWHERE, not only at end-of-string.
+      // This site was unanchored while the other two were anchored; the option
+      // keeps that difference explicit instead of silently resolving it (#18065).
+      const displayContent = stripBracketTags(msg.content || '', true).trim()
 
       if (displayContent) {
         if (msg.status !== 'error') {
@@ -547,12 +549,9 @@ export class ChatController {
 
     // Strip internal tags that shouldn't be shown to users
     // Handles complete tags and partial/truncated tags from streaming (e.g. [/THO)
-    const preview = content
-      .replace(/\[\/?(THOUGHT|PLANNING|DEBUG|SOURCES)\]?/gi, '')
-      .replace(/\[\/?(?:THO(?:UGH?T?)?|PLA(?:NN?I?N?G?)?|DEB(?:UG?)?|SOU(?:RC?E?S?)?)\]?$/gi, '')
-      .replace(/<tool_call[^>]*>.*?<\/tool_call>/gs, '')
-      .replace(/<TOOL_CALL[^>]*>.*?<\/TOOL_CALL>/gs, '')
-      .trim()
+    // The two adjacent case-variant replaces this line replaced were the fork
+    // made visible: one defect, patched here and nowhere else (#18065).
+    const preview = stripProtocolTagsForDisplay(content)
 
     if (!preview) return ''
 
@@ -981,7 +980,6 @@ export class ChatController {
   async resetCurrentChat(): Promise<void> {
     return this.resetChat()
   }
-
 
   // Enhanced validation helpers
   validateMessage(content: string): { valid: boolean; error?: string } {

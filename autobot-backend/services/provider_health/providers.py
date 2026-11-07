@@ -7,27 +7,49 @@ Provider-specific health check implementations
 """
 
 import time
+from typing import Callable
 
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.ssot_config import get_ollama_url
 from constants.model_constants import ANTHROPIC_CLAUDE3_HAIKU_DATED
-from services.provider_key_vault import resolve_provider_key
+from services.provider_key_vault import VaultKeyUnavailableError, resolve_provider_key
 
-from .base import BaseProviderHealth, ProviderHealthResult, ProviderStatus
+from .base import BaseProviderHealth, ProviderHealthResult, ProviderHealthStatus
+
+
+def _health_key(resolve: Callable[[], str]) -> tuple[str, str]:
+    """``(key, refusal)``: a vault refusal (#18094) becomes a reported health state, never a constructor crash."""
+    try:
+        return resolve(), ""
+    except VaultKeyUnavailableError as exc:
+        return "", str(exc)
+
+
+def _refused_result(checker: BaseProviderHealth) -> ProviderHealthResult:
+    """The health result for a key the vault holds but could not read -- the reason, never a value."""
+    return checker._create_result(
+        status=ProviderHealthStatus.UNAVAILABLE,
+        available=False,
+        message=checker.key_refusal,
+        response_time=0.0,
+        details={"api_key_set": True, "vault_readable": False},
+    )
+
 
 logger = get_logger(__name__)
 
 
 # Response code to status mapping for API providers (Issue #315 - extracted)
 _API_STATUS_RESPONSES = {
-    200: ProviderStatus.HEALTHY,
-    401: ProviderStatus.UNAVAILABLE,
-    403: ProviderStatus.UNAVAILABLE,
-    429: ProviderStatus.DEGRADED,
+    200: ProviderHealthStatus.HEALTHY,
+    401: ProviderHealthStatus.UNAVAILABLE,
+    403: ProviderHealthStatus.UNAVAILABLE,
+    429: ProviderHealthStatus.DEGRADED,
 }
 
 
@@ -48,7 +70,9 @@ class OllamaHealth(BaseProviderHealth):
             tags_url = f"{self.ollama_host}/api/tags"
 
             http_client = get_http_client()
-            async with await http_client.get(tags_url, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
+            async with await http_client.get(
+                tags_url, timeout=aiohttp.ClientTimeout(total=timeout), guard_egress=EGRESS_POLICY
+            ) as response:
                 response_time = time.time() - start_time
 
                 if response.status == 200:
@@ -57,7 +81,7 @@ class OllamaHealth(BaseProviderHealth):
                     model_count = len(models)
 
                     return self._create_result(
-                        status=ProviderStatus.HEALTHY,
+                        status=ProviderHealthStatus.HEALTHY,
                         available=True,
                         message=f"Ollama connected with {model_count} models available",
                         response_time=response_time,
@@ -69,7 +93,7 @@ class OllamaHealth(BaseProviderHealth):
                     )
                 else:
                     return self._create_result(
-                        status=ProviderStatus.UNAVAILABLE,
+                        status=ProviderHealthStatus.UNAVAILABLE,
                         available=False,
                         message=f"Ollama returned status {response.status}",
                         response_time=response_time,
@@ -83,7 +107,7 @@ class OllamaHealth(BaseProviderHealth):
             response_time = time.time() - start_time
             logger.warning("Ollama health check failed: %s", str(e))
             return self._create_result(
-                status=ProviderStatus.UNAVAILABLE,
+                status=ProviderHealthStatus.UNAVAILABLE,
                 available=False,
                 message="Cannot connect to Ollama",
                 response_time=response_time,
@@ -93,7 +117,7 @@ class OllamaHealth(BaseProviderHealth):
             response_time = time.time() - start_time
             logger.error("Ollama health check error: %s", str(e))
             return self._create_result(
-                status=ProviderStatus.UNKNOWN,
+                status=ProviderHealthStatus.UNKNOWN,
                 available=False,
                 message="Health check error",
                 response_time=response_time,
@@ -107,7 +131,9 @@ class OpenAIHealth(BaseProviderHealth):
     def __init__(self) -> None:
         """Initialize OpenAI health checker with API key configuration."""
         super().__init__("openai")
-        self.api_key = resolve_provider_key("OPENAI_API_KEY", ssot_config.openai_api_key)
+        self.api_key, self.key_refusal = _health_key(
+            lambda: resolve_provider_key("OPENAI_API_KEY", ssot_config.openai_api_key)
+        )
         # Use env var for base URL, fallback to standard OpenAI API
         self.base_url = ssot_config.openai_api_base_url
 
@@ -117,7 +143,7 @@ class OpenAIHealth(BaseProviderHealth):
             models = data.get("data", [])
             model_count = len(models)
             return self._create_result(
-                status=ProviderStatus.HEALTHY,
+                status=ProviderHealthStatus.HEALTHY,
                 available=True,
                 message=f"OpenAI connected with {model_count} models available",
                 response_time=response_time,
@@ -132,7 +158,7 @@ class OpenAIHealth(BaseProviderHealth):
             401: "OpenAI API key is invalid",
             429: "OpenAI rate limit exceeded",
         }
-        status = _API_STATUS_RESPONSES.get(response_status, ProviderStatus.UNAVAILABLE)
+        status = _API_STATUS_RESPONSES.get(response_status, ProviderHealthStatus.UNAVAILABLE)
         msg = error_messages.get(response_status, f"OpenAI returned status {response_status}")
         details = {"api_key_set": True, "status_code": response_status}
         if response_status == 429:
@@ -150,9 +176,11 @@ class OpenAIHealth(BaseProviderHealth):
         start_time = time.time()
 
         # Check if API key is configured
+        if self.key_refusal:
+            return _refused_result(self)
         if not self.api_key:
             return self._create_result(
-                status=ProviderStatus.NOT_CONFIGURED,
+                status=ProviderHealthStatus.NOT_CONFIGURED,
                 available=False,
                 message="OpenAI API key not configured (set OPENAI_API_KEY)",
                 response_time=0.0,
@@ -172,6 +200,7 @@ class OpenAIHealth(BaseProviderHealth):
                 models_url,
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=timeout),
+                guard_egress=EGRESS_POLICY,
             ) as response:
                 response_time = time.time() - start_time
                 data = await response.json() if response.status == 200 else {}
@@ -182,7 +211,7 @@ class OpenAIHealth(BaseProviderHealth):
             response_time = time.time() - start_time
             logger.warning("OpenAI health check failed: %s", str(e))
             return self._create_result(
-                status=ProviderStatus.UNAVAILABLE,
+                status=ProviderHealthStatus.UNAVAILABLE,
                 available=False,
                 message="Cannot connect to OpenAI",
                 response_time=response_time,
@@ -192,7 +221,7 @@ class OpenAIHealth(BaseProviderHealth):
             response_time = time.time() - start_time
             logger.error("OpenAI health check error: %s", str(e))
             return self._create_result(
-                status=ProviderStatus.UNKNOWN,
+                status=ProviderHealthStatus.UNKNOWN,
                 available=False,
                 message="Health check error",
                 response_time=response_time,
@@ -206,7 +235,9 @@ class AnthropicHealth(BaseProviderHealth):
     def __init__(self) -> None:
         """Initialize Anthropic health checker with API key configuration."""
         super().__init__("anthropic")
-        self.api_key = resolve_provider_key("ANTHROPIC_API_KEY", ssot_config.anthropic_api_key)
+        self.api_key, self.key_refusal = _health_key(
+            lambda: resolve_provider_key("ANTHROPIC_API_KEY", ssot_config.anthropic_api_key)
+        )
         # Use env var for base URL, fallback to standard Anthropic API
         self.base_url = ssot_config.anthropic_api_base_url
 
@@ -214,7 +245,7 @@ class AnthropicHealth(BaseProviderHealth):
         """Build result based on HTTP response status. (Issue #315 - extracted)"""
         if response_status == 200:
             return self._create_result(
-                status=ProviderStatus.HEALTHY,
+                status=ProviderHealthStatus.HEALTHY,
                 available=True,
                 message="Anthropic connected successfully",
                 response_time=response_time,
@@ -225,7 +256,7 @@ class AnthropicHealth(BaseProviderHealth):
             401: "Anthropic API key is invalid",
             429: "Anthropic rate limit exceeded",
         }
-        status = _API_STATUS_RESPONSES.get(response_status, ProviderStatus.UNAVAILABLE)
+        status = _API_STATUS_RESPONSES.get(response_status, ProviderHealthStatus.UNAVAILABLE)
         msg = error_messages.get(response_status, f"Anthropic returned status {response_status}")
         details = {"api_key_set": True, "status_code": response_status}
         if response_status == 429:
@@ -243,9 +274,11 @@ class AnthropicHealth(BaseProviderHealth):
         start_time = time.time()
 
         # Check if API key is configured
+        if self.key_refusal:
+            return _refused_result(self)
         if not self.api_key:
             return self._create_result(
-                status=ProviderStatus.NOT_CONFIGURED,
+                status=ProviderHealthStatus.NOT_CONFIGURED,
                 available=False,
                 message="Anthropic API key not configured (set ANTHROPIC_API_KEY)",
                 response_time=0.0,
@@ -275,6 +308,7 @@ class AnthropicHealth(BaseProviderHealth):
                 headers=headers,
                 json=payload,
                 timeout=aiohttp.ClientTimeout(total=timeout),
+                guard_egress=EGRESS_POLICY,
             ) as response:
                 response_time = time.time() - start_time
                 # Use helper to build result (Issue #315)
@@ -284,7 +318,7 @@ class AnthropicHealth(BaseProviderHealth):
             response_time = time.time() - start_time
             logger.warning("Anthropic health check failed: %s", str(e))
             return self._create_result(
-                status=ProviderStatus.UNAVAILABLE,
+                status=ProviderHealthStatus.UNAVAILABLE,
                 available=False,
                 message="Cannot connect to Anthropic",
                 response_time=response_time,
@@ -294,7 +328,7 @@ class AnthropicHealth(BaseProviderHealth):
             response_time = time.time() - start_time
             logger.error("Anthropic health check error: %s", str(e))
             return self._create_result(
-                status=ProviderStatus.UNKNOWN,
+                status=ProviderHealthStatus.UNKNOWN,
                 available=False,
                 message="Health check error",
                 response_time=response_time,
@@ -308,7 +342,9 @@ class GoogleHealth(BaseProviderHealth):
     def __init__(self) -> None:
         """Initialize Google health checker with API key from environment."""
         super().__init__("google")
-        self.api_key = resolve_provider_key("GOOGLE_API_KEY", ssot_config.google_api_key)
+        self.api_key, self.key_refusal = _health_key(
+            lambda: resolve_provider_key("GOOGLE_API_KEY", ssot_config.google_api_key)
+        )
         self.base_url = "https://generativelanguage.googleapis.com/v1"
 
     def _build_google_result(self, response_status: int, data: dict, response_time: float) -> ProviderHealthResult:
@@ -317,7 +353,7 @@ class GoogleHealth(BaseProviderHealth):
             models = data.get("models", [])
             model_count = len(models)
             return self._create_result(
-                status=ProviderStatus.HEALTHY,
+                status=ProviderHealthStatus.HEALTHY,
                 available=True,
                 message=f"Google Gemini connected with {model_count} models available",
                 response_time=response_time,
@@ -333,7 +369,7 @@ class GoogleHealth(BaseProviderHealth):
             403: "Google API key is invalid",
             429: "Google rate limit exceeded",
         }
-        status = _API_STATUS_RESPONSES.get(response_status, ProviderStatus.UNAVAILABLE)
+        status = _API_STATUS_RESPONSES.get(response_status, ProviderHealthStatus.UNAVAILABLE)
         msg = error_messages.get(response_status, f"Google returned status {response_status}")
         details = {"api_key_set": True, "status_code": response_status}
         if response_status == 429:
@@ -351,9 +387,11 @@ class GoogleHealth(BaseProviderHealth):
         start_time = time.time()
 
         # Check if API key is configured
+        if self.key_refusal:
+            return _refused_result(self)
         if not self.api_key:
             return self._create_result(
-                status=ProviderStatus.NOT_CONFIGURED,
+                status=ProviderHealthStatus.NOT_CONFIGURED,
                 available=False,
                 message="Google API key not configured (set GOOGLE_API_KEY)",
                 response_time=0.0,
@@ -374,6 +412,7 @@ class GoogleHealth(BaseProviderHealth):
                 models_url,
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=timeout),
+                guard_egress=EGRESS_POLICY,
             ) as response:
                 response_time = time.time() - start_time
                 data = await response.json() if response.status == 200 else {}
@@ -384,7 +423,7 @@ class GoogleHealth(BaseProviderHealth):
             response_time = time.time() - start_time
             logger.warning("Google health check failed: %s", str(e))
             return self._create_result(
-                status=ProviderStatus.UNAVAILABLE,
+                status=ProviderHealthStatus.UNAVAILABLE,
                 available=False,
                 message="Cannot connect to Google",
                 response_time=response_time,
@@ -394,7 +433,7 @@ class GoogleHealth(BaseProviderHealth):
             response_time = time.time() - start_time
             logger.error("Google health check error: %s", str(e))
             return self._create_result(
-                status=ProviderStatus.UNKNOWN,
+                status=ProviderHealthStatus.UNKNOWN,
                 available=False,
                 message="Health check error",
                 response_time=response_time,
@@ -420,7 +459,9 @@ class LMStudioHealth(BaseProviderHealth):
             models_url = f"{self.lmstudio_host}/v1/models"
 
             http_client = get_http_client()
-            async with await http_client.get(models_url, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
+            async with await http_client.get(
+                models_url, timeout=aiohttp.ClientTimeout(total=timeout), guard_egress=EGRESS_POLICY
+            ) as response:
                 response_time = time.time() - start_time
 
                 if response.status == 200:
@@ -429,7 +470,7 @@ class LMStudioHealth(BaseProviderHealth):
                     model_count = len(models)
 
                     return self._create_result(
-                        status=ProviderStatus.HEALTHY,
+                        status=ProviderHealthStatus.HEALTHY,
                         available=True,
                         message=f"LM Studio connected with {model_count} models loaded",
                         response_time=response_time,
@@ -441,7 +482,7 @@ class LMStudioHealth(BaseProviderHealth):
                     )
                 else:
                     return self._create_result(
-                        status=ProviderStatus.UNAVAILABLE,
+                        status=ProviderHealthStatus.UNAVAILABLE,
                         available=False,
                         message=f"LM Studio returned status {response.status}",
                         response_time=response_time,
@@ -456,7 +497,7 @@ class LMStudioHealth(BaseProviderHealth):
             # LM Studio might not be running - this is expected
             logger.debug("LM Studio health check failed: %s", str(e))
             return self._create_result(
-                status=ProviderStatus.UNAVAILABLE,
+                status=ProviderHealthStatus.UNAVAILABLE,
                 available=False,
                 message="LM Studio not running or unreachable",
                 response_time=response_time,
@@ -466,7 +507,7 @@ class LMStudioHealth(BaseProviderHealth):
             response_time = time.time() - start_time
             logger.error("LM Studio health check error: %s", str(e))
             return self._create_result(
-                status=ProviderStatus.UNKNOWN,
+                status=ProviderHealthStatus.UNKNOWN,
                 available=False,
                 message="Health check error",
                 response_time=response_time,
@@ -492,7 +533,9 @@ class VLLMHealth(BaseProviderHealth):
             models_url = f"{self.vllm_host}/v1/models"
 
             http_client = get_http_client()
-            async with await http_client.get(models_url, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
+            async with await http_client.get(
+                models_url, timeout=aiohttp.ClientTimeout(total=timeout), guard_egress=EGRESS_POLICY
+            ) as response:
                 response_time = time.time() - start_time
 
                 if response.status == 200:
@@ -501,7 +544,7 @@ class VLLMHealth(BaseProviderHealth):
                     model_count = len(models)
 
                     return self._create_result(
-                        status=ProviderStatus.HEALTHY,
+                        status=ProviderHealthStatus.HEALTHY,
                         available=True,
                         message=f"vLLM connected with {model_count} models available",
                         response_time=response_time,
@@ -513,7 +556,7 @@ class VLLMHealth(BaseProviderHealth):
                     )
                 else:
                     return self._create_result(
-                        status=ProviderStatus.UNAVAILABLE,
+                        status=ProviderHealthStatus.UNAVAILABLE,
                         available=False,
                         message=f"vLLM returned status {response.status}",
                         response_time=response_time,
@@ -528,7 +571,7 @@ class VLLMHealth(BaseProviderHealth):
             # vLLM might not be running - this is expected
             logger.debug("vLLM health check failed: %s", str(e))
             return self._create_result(
-                status=ProviderStatus.UNAVAILABLE,
+                status=ProviderHealthStatus.UNAVAILABLE,
                 available=False,
                 message="vLLM not running or unreachable",
                 response_time=response_time,
@@ -538,7 +581,7 @@ class VLLMHealth(BaseProviderHealth):
             response_time = time.time() - start_time
             logger.error("vLLM health check error: %s", str(e))
             return self._create_result(
-                status=ProviderStatus.UNKNOWN,
+                status=ProviderHealthStatus.UNKNOWN,
                 available=False,
                 message="Health check error",
                 response_time=response_time,

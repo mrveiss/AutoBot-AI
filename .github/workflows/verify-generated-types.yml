@@ -76,11 +76,16 @@ on:
       # assumed — see the header.
       - 'autobot_shared/**/*.py'
       - 'autobot-frontend/src/types/generated/api.ts'
+      # #16568: workflow.ts is generated from Python sources (autobot-backend and
+      # autobot_shared, both already watched above) by gen_frontend_types.py.
+      - 'autobot-frontend/src/types/_generated/**'
+      - 'autobot-infrastructure/shared/scripts/gen_frontend_types.py'
       - 'autobot-frontend/package.json'
       - 'autobot-frontend/package-lock.json'
       - 'scripts/audit_api_wiring.py'
       - 'requirements*.txt'
       - '.github/workflows/verify-generated-types.yml'
+      - '.github/workflows/_changes.yml'
   # NOTE: no pull_request.paths filter — this workflow ALWAYS runs on PRs so its
   # required-check context ("verify-generated-types") always reports a conclusion.
   # A path-filtered required check that never triggers leaves the PR deadlocked
@@ -88,6 +93,10 @@ on:
   # job below; #13862 made the required context a separate reporting job so that
   # "nothing to verify" is stated rather than inferred from a skip.
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [ release, main ]
 
 concurrency:
@@ -99,42 +108,42 @@ permissions:
 
 jobs:
   changes:
+    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and
+    # every `always()` aggregate below reads `needs.changes.result`.
+    # Gating it makes those read `skipped` and exit 1, so a REQUIRED
+    # context would report FAILED on every draft -- worse than no gate.
+    # Gate the expensive jobs, never the cheap thing others read.
     name: Detect changed paths
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      types: ${{ steps.filter.outputs.types }}
-      slm_types: ${{ steps.filter.outputs.slm_types }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
-        id: filter
-        with:
-          # #14054: dorny/paths-filter errors on an event it does not
-          # recognise unless `base` is given, and a failed `changes` job
-          # skips every job that needs it -- i.e. the required context
-          # never reports and the queue deadlocks. Empty on push/PR, so
-          # their existing behaviour is unchanged.
-          base: ${{ github.event.merge_group.base_sha || '' }}
-          filters: |
-            types:
-              - 'autobot-backend/**/*.py'
-              - 'autobot_shared/**/*.py'
-              - 'autobot-frontend/src/types/generated/api.ts'
-              - 'autobot-frontend/package.json'
-              - 'autobot-frontend/package-lock.json'
-              - 'scripts/audit_api_wiring.py'
-              - '**/requirements*.txt'
-              - '.github/workflows/verify-generated-types.yml'
-            slm_types:
-              - 'autobot-slm-backend/**/*.py'
-              - 'autobot_shared/**/*.py'
-              - 'autobot-slm-frontend/src/types/generated/api.ts'
-              - 'autobot-slm-frontend/package.json'
-              - 'autobot-slm-frontend/package-lock.json'
-              - 'scripts/audit_api_wiring.py'
-              - '**/requirements*.txt'
-              - '.github/workflows/verify-generated-types.yml'
+    uses: ./.github/workflows/_changes.yml
+    with:
+      timeout_minutes: 10
+      # #14054: dorny/paths-filter errors on an event it does not
+      # recognise unless `base` is given, and a failed `changes` job
+      # skips every job that needs it -- i.e. the required context
+      # never reports and the queue deadlocks. Empty on push/PR, so
+      # their existing behaviour is unchanged.
+      merge_group_base: true
+      filters: |
+        types:
+          - 'autobot-backend/**/*.py'
+          - 'autobot_shared/**/*.py'
+          - 'autobot-frontend/src/types/generated/api.ts'
+          - 'autobot-frontend/src/types/_generated/**'
+          - 'autobot-infrastructure/shared/scripts/gen_frontend_types.py'
+          - 'autobot-frontend/package.json'
+          - 'autobot-frontend/package-lock.json'
+          - 'scripts/audit_api_wiring.py'
+          - '**/requirements*.txt'
+          - '.github/workflows/verify-generated-types.yml'
+        slm_types:
+          - 'autobot-slm-backend/**/*.py'
+          - 'autobot_shared/**/*.py'
+          - 'autobot-slm-frontend/src/types/generated/api.ts'
+          - 'autobot-slm-frontend/package.json'
+          - 'autobot-slm-frontend/package-lock.json'
+          - 'scripts/audit_api_wiring.py'
+          - '**/requirements*.txt'
+          - '.github/workflows/verify-generated-types.yml'
 
   verify-types-run:
     needs: changes
@@ -161,10 +170,28 @@ jobs:
             requirements*.txt
             autobot-backend/requirements*.txt
 
-      - name: Install backend dependencies
+      - name: Install CI requirements
+        uses: ./.github/actions/install-ci-requirements
+
+      # #16568: workflow.ts is generated from Python sources (the Permission and
+      # Role enums, the workflow types, the notification and overseer enums) by
+      # gen_frontend_types.py. Its only guard was frontend-codegen-drift, which is
+      # not a required context, so a backend enum change could merge with stale
+      # frontend types. It runs BEFORE the OpenAPI dump on purpose: that dump needs
+      # the whole backend to import, and a stale workflow.ts should not wait on it
+      # or hide behind its failure.
+      - name: Regenerate workflow.ts from its Python sources
+        run: python autobot-infrastructure/shared/scripts/gen_frontend_types.py
+
+      - name: Fail if workflow.ts drifted (#16568)
         run: |
-          python -m pip install --upgrade pip setuptools wheel
-          python -m pip install -r requirements-ci.txt --prefer-binary
+          if ! git diff --exit-code autobot-frontend/src/types/_generated/workflow.ts; then
+            echo "::error::autobot-frontend/src/types/_generated/workflow.ts is stale."
+            echo "A Python source of the generator (an enum or type it emits) changed but the committed file was not regenerated."
+            echo "Fix: run 'python3 autobot-infrastructure/shared/scripts/gen_frontend_types.py' and commit the result."
+            exit 1
+          fi
+          echo "workflow.ts is fresh."
 
       - name: Dump authoritative OpenAPI schema
         run: |
@@ -195,7 +222,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version-file: .nvmrc
           cache: 'npm'
           cache-dependency-path: autobot-frontend/package-lock.json
 
@@ -279,7 +306,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version-file: .nvmrc
           cache: 'npm'
           cache-dependency-path: autobot-slm-frontend/package-lock.json
 
@@ -326,7 +353,19 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write  # force-cancel this run when an upstream was cancelled (#17764)
     steps:
+      - name: Check out the shared gate action
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - name: End cancelled, not failed, when an upstream was cancelled (#17764)
+        uses: ./.github/actions/cancel-run-on-cancelled-upstream
+        with:
+          results: ${{ needs.changes.result }} ${{ needs.verify-types-run.result }}
       - name: Report generated-types verdict
         env:
           CHANGES_RESULT: ${{ needs.changes.result }}
@@ -342,7 +381,7 @@ jobs:
 
           case "$RUN_RESULT" in
             success)
-              echo "autobot-frontend generated types are fresh"
+              echo "autobot-frontend generated types (api.ts and workflow.ts) are fresh"
               ;;
             skipped)
               echo "no autobot-backend schema or autobot-frontend type path changed in this diff — nothing to verify"

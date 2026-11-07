@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -28,10 +29,10 @@ def test_the_fallback_pattern_reads_variable_and_literal(guard):
 @pytest.mark.parametrize(
     "line",
     [
-        '${AUTOBOT_BACKEND_PORT}',                 # no fallback at all
-        '${AUTOBOT_BACKEND_PORT:-$OTHER}',         # non-numeric fallback
-        '${SOME_OTHER_PORT:-8001}',                # not an AUTOBOT_* variable
-        '${AUTOBOT_BASE_DIR:-/opt/autobot}',       # not a port
+        "${AUTOBOT_BACKEND_PORT}",  # no fallback at all
+        "${AUTOBOT_BACKEND_PORT:-$OTHER}",  # non-numeric fallback
+        "${SOME_OTHER_PORT:-8001}",  # not an AUTOBOT_* variable
+        "${AUTOBOT_BASE_DIR:-/opt/autobot}",  # not a port
     ],
 )
 def test_shapes_that_are_not_a_numeric_port_fallback_are_ignored(guard, line):
@@ -122,7 +123,7 @@ def test_an_empty_file_listing_is_fatal_not_clean(guard, monkeypatch):
         stdout = ""
         stderr = ""
 
-    monkeypatch.setattr(guard.subprocess, "run", lambda *a, **k: _Result())
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Result())
 
     with pytest.raises(SystemExit) as excinfo:
         guard._shell_files(Path("."))
@@ -213,8 +214,7 @@ def test_the_diverging_fallback_still_fails_when_some_ports_are_sentinels(guard,
         encoding="utf-8",
     )
     (tmp_path / "bad.sh").write_text(
-        'psql -p "${AUTOBOT_POSTGRES_PORT:-5432}"\n'
-        'curl "http://h:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}/health"\n',
+        'psql -p "${AUTOBOT_POSTGRES_PORT:-5432}"\n' 'curl "http://h:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}/health"\n',
         encoding="utf-8",
     )
 

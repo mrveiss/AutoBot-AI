@@ -7,8 +7,8 @@
 # - Worktree status
 # - Recommendations
 #
-# WHY NOT `git branch --merged` (#15036). This repository squash-merges, so the
-# base branch is never a descendant of a merged branch's commits. `--merged`
+# WHY NOT `git branch --merged` (#15036). Trains land with merge commits now, but
+# older history holds squashes, whose branches the base never descends from. `--merged`
 # (and `--is-ancestor`) therefore report ~0 merged branches no matter how much
 # has landed, and the "merged branches to clean up" recommendation built on it
 # was never actionable. The landed/unproven split below uses
@@ -86,10 +86,9 @@ jobs:
           # re-prefixed to the unresolvable `origin/<remote>/<branch>`. Every
           # git question about it failed, and the branch was classified from
           # those failures rather than skipped.
-          # Dev_new_gui: temporary mirror of main for the live updater; remove with #16461.
           all_branches=$(git for-each-ref --format='%(refname:short)' refs/remotes/origin/ \
             | sed 's|^origin/||' \
-            | grep -vx "HEAD\|release\|master\|main\|Dev_new_gui" || true)
+            | grep -vx "HEAD\|release\|master\|main" || true)
 
           while IFS= read -r branch; do
             [ -z "$branch" ] && continue

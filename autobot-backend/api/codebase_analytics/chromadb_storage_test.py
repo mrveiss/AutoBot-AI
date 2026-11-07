@@ -103,11 +103,23 @@ class TestPrepareImportDocument:
         assert doc_id == "src-A_import_0_pkg/mod.py"
         assert "pkg/mod.py" in doc_text
 
-    def test_no_source_id_omits_source_metadata_and_prefix(self):
-        doc_id, _doc_text, metadata = _prepare_import_document("mod.py", [], idx=3, source_id=None)
+    def test_no_source_id_is_refused(self):
+        """#17758: was `test_no_source_id_omits_source_metadata_and_prefix`.
 
-        assert "source_id" not in metadata
-        assert doc_id == "import_3_mod.py"
+        That test asserted the behaviour without recording a reason for it, and
+        the behaviour was a defect: a document with no `source_id` metadata is
+        invisible to every source-scoped `where` filter, and a doc id with no
+        source prefix collides with the same index from another source -- one
+        overwrites the other. Two projects storing their import documents would
+        lose each other's.
+
+        Checked before changing it: nothing in this file, its class docstring
+        (#12364, about .py filtering) or the surrounding tests records unscoped
+        storage as intended. The scoped case two tests up is the one asserted as
+        correct. So this pins the refusal now, on the same line of code.
+        """
+        with pytest.raises(ValueError, match="source_id"):
+            _prepare_import_document("mod.py", [], idx=3, source_id=None)
 
 
 class TestPrepareImportsBatch:
@@ -124,8 +136,17 @@ class TestPrepareImportsBatch:
         async def _noop_progress(**kwargs):
             return None
 
+        # source_id is required since #17758; this test is about .py filtering,
+        # so it supplies one rather than exercising the refusal.
         total = await _prepare_imports_batch(
-            files, batch_ids, batch_documents, batch_metadatas, _noop_progress, total_items=10, items_offset=5
+            files,
+            batch_ids,
+            batch_documents,
+            batch_metadatas,
+            _noop_progress,
+            total_items=10,
+            items_offset=5,
+            source_id="src-A",
         )
 
         stored_paths = {m["file_path"] for m in batch_metadatas}

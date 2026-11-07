@@ -58,8 +58,10 @@ from api.ws_security import open_authenticated_ws
 from auth_middleware import check_admin_permission
 
 # Import AutoBot monitoring system
+from autobot_shared.chromadb_endpoints import CHROMADB_HEARTBEAT_PATH
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
+from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import get_config
 from autobot_shared.time_utils import to_rfc3339
@@ -110,11 +112,11 @@ async def _query_prometheus_instant(query: str) -> float | None:
     """
     try:
         http_client = get_http_client()
-        params = {"query": query}
+        # pending #18326: two Prometheus host derivations; guard once one SSOT home exists
         async with http_client.tracked_request(
             "GET",
             f"{_PROMETHEUS_URL}/api/v1/query",
-            params=params,
+            params={"query": query},
             timeout=aiohttp.ClientTimeout(total=10),
         ) as response:
             if response.status != 200:
@@ -157,12 +159,8 @@ async def _query_prometheus_range(
     """
     try:
         http_client = get_http_client()
-        params = {
-            "query": query,
-            "start": to_rfc3339(start),
-            "end": to_rfc3339(end),
-            "step": step,
-        }
+        params = {"query": query, "start": to_rfc3339(start), "end": to_rfc3339(end), "step": step}
+        # pending #18326: two Prometheus host derivations; guard once one SSOT home exists
         async with http_client.tracked_request(
             "GET",
             f"{_PROMETHEUS_URL}/api/v1/query_range",
@@ -255,7 +253,7 @@ async def _fetch_alertmanager_alerts() -> List[Dict[str, Any]]:
             # AlertManager v2 API for active alerts
             url = f"{ServiceURLs.ALERTMANAGER_API}/api/v2/alerts"
             async with get_http_client().tracked_request(
-                "GET", url, timeout=_ALERTMANAGER_TIMEOUT, suppress_error_log=True
+                "GET", url, timeout=_ALERTMANAGER_TIMEOUT, suppress_error_log=True, guard_egress=EGRESS_POLICY
             ) as response:
                 if response.status == 200:
                     raw_alerts = await response.json()
@@ -421,7 +419,7 @@ def _resolve_service_urls() -> tuple:
         npu_url = f"http://{_ssot.vm.npu}:{_ssot.port.npu}/health"
         browser_url = f"http://{_ssot.vm.browser}:{_ssot.port.browser}/health"
         ollama_url = f"http://{_ssot.vm.ollama}:{_ssot.port.ollama}/api/version"
-        chromadb_url = f"http://{_ssot.vm.aistack}:{_ssot.port.aistack}/api/v2/heartbeat"
+        chromadb_url = f"http://{_ssot.vm.chromadb}:{_ssot.port.chromadb}{CHROMADB_HEARTBEAT_PATH}"  # #19321, #19423
     except Exception:
         # Issue #1229: Use ConfigRegistry (defaults from SSOT via registry_defaults)
         npu_host = ConfigRegistry.get("vm.npu")
@@ -430,12 +428,11 @@ def _resolve_service_urls() -> tuple:
         browser_port = ConfigRegistry.get("port.browser")
         ollama_host = ConfigRegistry.get("vm.llm")
         ollama_port = ConfigRegistry.get("port.ollama")
-        chromadb_host = ConfigRegistry.get("vm.aistack")
-        chromadb_port = ConfigRegistry.get("port.aistack")
+        chromadb_host = ConfigRegistry.get("vm.chromadb")  # #19321: was the AI-stack host/port
         npu_url = f"http://{npu_host}:{npu_port}/health"
         browser_url = f"http://{browser_host}:{browser_port}/health"
         ollama_url = f"http://{ollama_host}:{ollama_port}/api/version"
-        chromadb_url = f"http://{chromadb_host}:{chromadb_port}/api/v2/heartbeat"
+        chromadb_url = f"http://{chromadb_host}:{ConfigRegistry.get('port.chromadb')}{CHROMADB_HEARTBEAT_PATH}"
     return npu_url, browser_url, ollama_url, chromadb_url
 
 
@@ -510,8 +507,8 @@ def _build_service_list(results: list) -> list:
         ),
         _to_service_entry(
             "ChromaDB",
-            ConfigRegistry.get("vm.aistack"),
-            int(ConfigRegistry.get("port.aistack")),
+            ConfigRegistry.get("vm.chromadb"),
+            int(ConfigRegistry.get("port.chromadb")),
             chromadb_s,
             chromadb_m,
         ),
@@ -1179,7 +1176,7 @@ async def realtime_monitoring_websocket(websocket: WebSocket):
 # Helper functions
 # Performance monitoring decorator endpoint
 @router.post("/test/performance", response_model=TestPerformanceResponse)
-@monitor_performance("api_test")
+@monitor_performance("api_test", client_provider=lambda: performance_monitor.redis_client)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_performance_monitoring",
@@ -1203,7 +1200,7 @@ async def test_performance_monitoring(
 
 
 # Issue #1288: Prometheus metrics endpoints removed — consolidated into
-# api/prometheus_endpoint.py at /api/metrics/prometheus (no auth, for scraping).
+# api/prometheus_endpoint.py at /api/metrics/prometheus (scrape-token gated, #16375).
 # The auth-protected duplicates here were unusable by Prometheus server.
 
 

@@ -209,3 +209,17 @@ in parallel.
 ([pipeline_parallel.py](../../autobot-npu-worker/workers/pipeline_parallel.py),
 [worker_node.py](../../autobot-npu-worker/workers/worker_node.py)) has no located production
 `get_layers()` implementation — only test doubles. Worth a discovery issue if confirmed.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #13030 — umbrella(optimization): large-model inference on lean hardware is scaffolded but non-functional — 7 defects
+- #13031 — bug(optimization): layer streaming loads the entire checkpoint per layer, per token (#13030)
+- #13032 — bug(optimization): LayerInferenceEngine cannot produce correct output — no embedding, no LM head, wrong sampling axis (#13030)
+- #13033 — bug(optimization): KV trim_to_length retains the oldest window instead of the newest (#13030)
+- #13034 — security(models): no revision pinning or weight integrity verification — 18 suppressed B615 findings (#13030)
+- #13035 — tech-debt(optimization): LayerInferenceAdapter never registered + duplicate meta-eviction implementation (#13030)
+- #13036 — tech-debt(optimization): no end-to-end memory/correctness baseline for the optimization package (#13030)
+- #13048 — discovery(npu): pipeline-parallel model loader has no production get_layers() — only test doubles
+- #13049 — tech-debt(optimization): consolidate architecture-family, dtype and compression taxonomies + duplicated accelerate loader

@@ -46,7 +46,7 @@ post-commit hook
                                         │
                                         └─ (optional: auto-update)
 
-Operator: POST /api/updates/trigger ──► Ansible deploy
+Operator: POST /api/code-sync/update-all ──► Ansible deploy
   or: SLM GUI "Update All"               update-all-nodes.yml
                                             │
                                             ├─ Play 1: SLM self-update (if SLM is in scope)
@@ -56,7 +56,7 @@ Operator: POST /api/updates/trigger ──► Ansible deploy
                                             └─ Play 2: fleet nodes
                                                 - rsync cache → /opt/autobot/ on each node
                                                 - restart affected services
-                                                - POST /api/nodes/{id}/mark-synced
+                                                - POST /api/code-sync/nodes/{id}/mark-synced
                                                   → node status → UP_TO_DATE
 ```
 
@@ -84,7 +84,7 @@ curl -sk -X POST https://<slm-manager-ip>/api/code-source/notify \
 - `01-Backend` → `OUTDATED` (has `autobot-backend`)
 - Other nodes unchanged
 
-**4. Operator triggers update via SLM GUI** (or `POST /api/updates/trigger`).
+**4. Operator triggers update via SLM GUI** (or `POST /api/code-sync/update-all`).
 
 **5. Ansible runs `update-all-nodes.yml`:**
 
@@ -97,7 +97,7 @@ Play 1 (SLM self): if SLM node is in scope
 Play 2 (fleet nodes): all nodes except SLM
   - rsync changed role dirs from cache → /opt/autobot/
   - systemctl restart <role-service>
-  - call /api/nodes/{id}/mark-synced with new commit hash
+  - call /api/code-sync/nodes/{id}/mark-synced with new commit hash
 ```
 
 **6. Node status → `UP_TO_DATE`:**
@@ -166,7 +166,7 @@ SLM scheduled check (daily, 02:00)
   │
   └─ for policy=full nodes: auto-apply + reboot (non-peak hours only)
 
-Operator: POST /api/updates/system/{node_id} → Ansible system-update.yml
+Operator: POST /api/updates/apply → Ansible apply-system-updates.yml
 ```
 
 ### Playbook
@@ -272,7 +272,7 @@ Phase 5 — SERVICES
 
 Phase 6 — VERIFY
   - Poll manifest.health.endpoint
-  - Report UP_TO_DATE to SLM via /api/nodes/{id}/mark-synced
+  - Report UP_TO_DATE to SLM via /api/code-sync/nodes/{id}/mark-synced
   - Update node status in SLM DB
 ```
 

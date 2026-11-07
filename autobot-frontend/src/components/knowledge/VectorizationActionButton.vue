@@ -146,7 +146,7 @@ function handleClick(): void {
 
 /* Retry (failed) */
 .vectorization-action-btn.is-retry {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-primary);
 }
 

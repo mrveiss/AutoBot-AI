@@ -81,23 +81,23 @@ from .storage import (
 # Types and data classes
 from .types import (
     CodeLocation,
-    CodePattern,
+    CodePatternType,
     ComplexityHotspot,
+    DetectedCodePattern,
     DuplicatePattern,
     ModularizationSuggestion,
     PatternAnalysisReport,
     PatternCluster,
     PatternSeverity,
-    PatternType,
     RegexOpportunity,
 )
 
 __all__ = [
     # Types
-    "PatternType",
+    "CodePatternType",
     "PatternSeverity",
     "CodeLocation",
-    "CodePattern",
+    "DetectedCodePattern",
     "DuplicatePattern",
     "RegexOpportunity",
     "ModularizationSuggestion",

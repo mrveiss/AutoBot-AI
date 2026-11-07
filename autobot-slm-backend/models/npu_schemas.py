@@ -19,6 +19,8 @@ from typing import Dict, List
 
 from pydantic import BaseModel, Field
 
+from autobot_shared.ssot_constants import RetryConfig
+
 
 class NPUDeviceType(str, Enum):
     """NPU device type enumeration."""
@@ -154,7 +156,7 @@ class NPUWorkerConfig(BaseModel):
     weight: int = Field(default=1, ge=1, le=100)
     max_concurrent: int = Field(default=1, ge=1)
     failure_action: str = Field(default="retry")
-    max_retries: int = Field(default=3, ge=0, le=10)
+    max_retries: int = Field(default=RetryConfig.DEFAULT_RETRIES, ge=0, le=10)  # #19730
     assigned_models: List[str] = Field(default_factory=list)
 
     model_config = {"populate_by_name": True}

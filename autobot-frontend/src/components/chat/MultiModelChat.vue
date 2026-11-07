@@ -175,7 +175,7 @@ defineExpose({ reset })
 
 .multi-model-chat__model-name {
   font-family: ui-monospace, monospace;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .multi-model-chat__model-ctx {
@@ -202,7 +202,7 @@ defineExpose({ reset })
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md, 0.375rem);
   padding: var(--spacing-2, 0.5rem) var(--spacing-3, 0.75rem);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   line-height: 1.5;
 }
 
@@ -218,7 +218,7 @@ defineExpose({ reset })
   color: var(--mmchat-on-accent);
   border: none;
   border-radius: var(--radius-md, 0.375rem);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   transition: background 0.15s;
@@ -275,7 +275,7 @@ defineExpose({ reset })
 
 .multi-model-chat__response-model {
   font-family: ui-monospace, monospace;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;

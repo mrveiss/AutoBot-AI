@@ -13,9 +13,9 @@ from typing import Any, Dict, List
 
 # Import retry components
 from retry_mechanism import (
-    RetryConfig,
     RetryExhaustedError,
     RetryMechanism,
+    RetryPolicy,
     RetryStrategy,
     retry_async,
     retry_file_operation,
@@ -33,7 +33,7 @@ class AutoBotServiceWithRetry:
     def __init__(self):
         # Configure different retry strategies for different operations
         self.network_retry = RetryMechanism(
-            RetryConfig(
+            RetryPolicy(
                 max_attempts=5,
                 base_delay=1.0,
                 max_delay=30.0,
@@ -43,7 +43,7 @@ class AutoBotServiceWithRetry:
         )
 
         self.database_retry = RetryMechanism(
-            RetryConfig(
+            RetryPolicy(
                 max_attempts=3,
                 base_delay=0.5,
                 max_delay=5.0,
@@ -53,7 +53,7 @@ class AutoBotServiceWithRetry:
         )
 
         self.file_retry = RetryMechanism(
-            RetryConfig(
+            RetryPolicy(
                 max_attempts=3,
                 base_delay=0.1,
                 max_delay=2.0,
@@ -140,7 +140,7 @@ class AutoBotServiceWithRetry:
         Example of custom retry configuration
         """
         command_retry = RetryMechanism(
-            RetryConfig(
+            RetryPolicy(
                 max_attempts=2,  # Don't retry commands too many times
                 base_delay=0.5,
                 strategy=RetryStrategy.FIXED_DELAY,

@@ -88,11 +88,22 @@ async def _wait_with_watchdog(
             if status in ("completed", "failed", "cancelled"):
                 return await proc.wait()
 
-            progress = task_data.get("progress", {})
+            # #18055: a phase transition is liveness too.  Hashing only the
+            # progress counters made every legitimately-silent step fatal --
+            # the bulk problem upsert ran past the window and the worker was
+            # killed before anything was persisted.
+            # `or {}`, not a default: a legacy or partial state dict can carry
+            # the key with an explicit null, and `.get(k, {})` returns that null.
+            # An AttributeError here escapes the watchdog and leaves the child
+            # running unwatched -- the supervisor catches only TimeoutError.
+            progress = task_data.get("progress") or {}
+            phases = task_data.get("phases") or {}
             progress_hash = (
                 progress.get("current"),
                 progress.get("total"),
                 progress.get("operation"),
+                phases.get("current_phase"),
+                len(phases.get("phases_completed") or []),
             )
             now = asyncio.get_running_loop().time()
 
@@ -142,7 +153,8 @@ async def _run_indexing_subprocess(
     worker_script = Path(__file__).parent / "indexing_worker.py"
 
     async with tasks_lock:
-        indexing_tasks[task_id] = create_initial_state_fn()
+        # #20491: known from the first save, so no reader takes it for another source's job.
+        indexing_tasks[task_id] = {**create_initial_state_fn(), "source_id": source_id}
         await save_task_fn(task_id)
 
     cmd = [sys.executable, str(worker_script), task_id, root_path]

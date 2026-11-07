@@ -36,6 +36,8 @@ from services.auth import get_current_user
 from services.database import get_db
 from services.replication import replication_service
 from services.replication_jobs import setup_replication
+from services.secrets_store_snapshot import secrets_runner
+from services.ssh_utils import ssh_destination_args, ssh_options
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/stateful", tags=["stateful"])
@@ -172,16 +174,16 @@ async def restore_backup(
     backup = result.scalar_one_or_none()
 
     if not backup:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Backup not found",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Backup not found")
 
     if backup.status != BackupStatus.COMPLETED.value:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot restore backup in status: {backup.status}",
-        )
+        detail = f"Cannot restore backup in status: {backup.status}"
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+
+    # #19455: refused before the job starts, since the restore stops Redis and replaces its dump.rdb.
+    if not BackupServiceType.is_restorable(backup.service_type):
+        detail = f"A {backup.service_type} backup is restored by the operator, not by this action"
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
     # Start async restore job
     job_id = str(uuid.uuid4())[:16]
@@ -521,14 +523,12 @@ async def _run_backup(backup_id: str, host: str, service_type: BackupServiceType
     logger.info("Running backup %s for host %s (service: %s)", backup_id, host, service_type.value)
 
     async with db_service.session() as db:
-        # Get the backup record
         result = await db.execute(select(Backup).where(Backup.backup_id == backup_id))
         backup = result.scalar_one_or_none()
         if not backup:
             logger.error("Backup %s not found", backup_id)
             return
 
-        # Get the node for full connection details
         node_result = await db.execute(select(Node).where(Node.node_id == backup.node_id))
         node = node_result.scalar_one_or_none()
         if not node:
@@ -550,16 +550,16 @@ async def _run_backup(backup_id: str, host: str, service_type: BackupServiceType
         runners = {
             BackupServiceType.REDIS: backup_service.execute_redis_backup,
             BackupServiceType.POSTGRES: backup_service.execute_postgres_backup,
+            BackupServiceType.SECRETS: secrets_runner(backup_service),  # #18281
         }
         runner = runners.get(service_type)
         if runner is not None:
             success, message = await runner(db, backup_id, node)
             if not success:
                 logger.error("Backup %s failed: %s", backup_id, message)
-            else:
-                # #13307: prune here rather than on a timer — a new good backup
-                # is the only moment it is safe to drop an old one, and it keeps
-                # retention working without a scheduler this service does not have.
+            elif service_type is not BackupServiceType.SECRETS:
+                # #13307: prune on a good backup (no scheduler here). Never SECRETS: no agent deletes stored
+                # credential data on its own (#17038); pruning those is an approval-queue proposal.
                 await backup_service.apply_retention(db, backup.node_id, service_type.value)
         else:
             # For unsupported service types, mark as failed
@@ -602,11 +602,8 @@ async def _run_redis_ssh_check(host: str):
     """Helper for _verify_redis. Ref: #1088."""
     cmd = [
         "ssh",
-        "-o",
-        "StrictHostKeyChecking=accept-new",
-        "-o",
-        "ConnectTimeout=10",
-        f"autobot@{host}",
+        *ssh_options("StrictHostKeyChecking=accept-new", "ConnectTimeout=10"),
+        *ssh_destination_args("autobot", host),
         "redis-cli PING && redis-cli INFO keyspace && redis-cli DBSIZE",
     ]
     process = await asyncio.create_subprocess_exec(

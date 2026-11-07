@@ -141,7 +141,7 @@ class LLMResponse:
 
 
 @dataclass
-class ChatMessage:
+class LLMChatMessage:
     """Chat message structure"""
 
     role: str  # "user", "assistant", "system"
@@ -184,6 +184,6 @@ __all__ = [
     "ToolDefinition",
     "ToolCall",
     "LLMResponse",
-    "ChatMessage",
+    "LLMChatMessage",
     "LLMRequest",
 ]

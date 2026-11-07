@@ -262,7 +262,7 @@ Key packages:
 ### Optional: Ollama
 - Ollama (latest) for local LLM hosting
 - Install: `curl -fsSL https://ollama.com/install.sh | sh`
-- Models: llama2, mistral, codellama
+- Models: the provisioned set in [Tiered Model Routing](developer/TIERED_MODEL_ROUTING.md)
 
 ### SSH Keys
 - `/home/autobot/.ssh/autobot_key` - For Ansible management

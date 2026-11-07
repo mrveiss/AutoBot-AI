@@ -1,0 +1,111 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# The ONE `changes` job (#15360). Sixteen workflows each carried a byte-similar
+# copy of "checkout + dorny/paths-filter + a list of outputs"; this is that job
+# once. A caller passes its filter source (a path under .github/filters/, or an
+# inline YAML string) and keeps everything else -- job id `changes`, the
+# `needs.changes.outputs.X` / `needs.changes.result` reads, the `on:` block.
+#
+# Zero behaviour change is the contract, so every knob a caller used to vary is
+# an input whose default is "what a caller that did not vary it had":
+#   merge_group_base  `base: ${{ github.event.merge_group.base_sha || '' }}` on
+#                     the callers that had it (#14054); no `base` on the rest.
+#                     dorny's `base` input has no default, so '' and omitted both
+#                     read as the empty string -- identical.
+#   pr_only           the dorny step ran only on pull_request (docker-smoke-test).
+#   checkout          whether the job checks the repository out first.
+#   timeout_minutes   360 is GitHub's own default, so a caller that had no
+#                     `timeout-minutes` passes nothing and keeps it.
+#
+# The caller's workflow-level `permissions:` is inherited; this file declares
+# none of its own so it can never widen what a caller granted.
+name: Changed paths (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      filters:
+        description: >-
+          dorny/paths-filter `filters`: a path under .github/filters/ or an
+          inline YAML string, passed through unchanged.
+        type: string
+        required: true
+      merge_group_base:
+        description: Pass the merge group's base_sha as `base` (#14054).
+        type: boolean
+        default: false
+      pr_only:
+        description: Run the filter step on pull_request events only.
+        type: boolean
+        default: false
+      checkout:
+        description: Check the repository out before filtering.
+        type: boolean
+        default: true
+      timeout_minutes:
+        description: Job timeout; 360 is GitHub's default.
+        type: number
+        default: 360
+    outputs:
+      wiring:
+        value: ${{ jobs.changes.outputs.wiring }}
+      python:
+        value: ${{ jobs.changes.outputs.python }}
+      deps:
+        value: ${{ jobs.changes.outputs.deps }}
+      reviewable:
+        value: ${{ jobs.changes.outputs.reviewable }}
+      backend:
+        value: ${{ jobs.changes.outputs.backend }}
+      docker:
+        value: ${{ jobs.changes.outputs.docker }}
+      frontend:
+        value: ${{ jobs.changes.outputs.frontend }}
+      types:
+        value: ${{ jobs.changes.outputs.types }}
+      slm_types:
+        value: ${{ jobs.changes.outputs.slm_types }}
+      migrations:
+        value: ${{ jobs.changes.outputs.migrations }}
+      browser_worker:
+        value: ${{ jobs.changes.outputs.browser_worker }}
+      mcp:
+        value: ${{ jobs.changes.outputs.mcp }}
+      sdk_ts:
+        value: ${{ jobs.changes.outputs.sdk_ts }}
+      structured_thinking:
+        value: ${{ jobs.changes.outputs.structured_thinking }}
+      slm_frontend:
+        value: ${{ jobs.changes.outputs.slm_frontend }}
+
+jobs:
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    outputs:
+      wiring: ${{ steps.filter.outputs.wiring }}
+      python: ${{ steps.filter.outputs.python }}
+      deps: ${{ steps.filter.outputs.deps }}
+      reviewable: ${{ steps.filter.outputs.reviewable }}
+      backend: ${{ steps.filter.outputs.backend }}
+      docker: ${{ steps.filter.outputs.docker }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      types: ${{ steps.filter.outputs.types }}
+      slm_types: ${{ steps.filter.outputs.slm_types }}
+      migrations: ${{ steps.filter.outputs.migrations }}
+      browser_worker: ${{ steps.filter.outputs.browser_worker }}
+      mcp: ${{ steps.filter.outputs.mcp }}
+      sdk_ts: ${{ steps.filter.outputs.sdk_ts }}
+      structured_thinking: ${{ steps.filter.outputs.structured_thinking }}
+      slm_frontend: ${{ steps.filter.outputs.slm_frontend }}
+    steps:
+      - if: ${{ inputs.checkout }}
+        uses: actions/checkout@v7
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
+        id: filter
+        if: ${{ !inputs.pr_only || github.event_name == 'pull_request' }}
+        with:
+          base: ${{ inputs.merge_group_base && github.event.merge_group.base_sha || '' }}
+          filters: ${{ inputs.filters }}

@@ -18,7 +18,7 @@ from autobot_shared.logging_manager import get_logger
 logger = get_logger(__name__)
 
 
-class GUIController:
+class DummyGUIController:
     """
     A dummy GUIController for environments where actual GUI automation
     is not supported or desired. All methods will return a success status

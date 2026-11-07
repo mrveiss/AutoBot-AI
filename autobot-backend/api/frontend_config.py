@@ -24,6 +24,7 @@ from fastapi import APIRouter
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config as ssot_config
 from constants.network_constants import NetworkConstants
 from constants.path_constants import PathConstants
 from services.config_service import ConfigService
@@ -222,7 +223,7 @@ async def get_frontend_config():
                 "timeouts": _build_timeouts_config(full_config.get("api", {}).get("timeouts", {})),
             },
             "websocket": {
-                "url": NetworkConstants.get_websocket_url(),
+                "url": ssot_config.websocket_url,
                 "reconnect_attempts": full_config.get("websocket", {}).get("reconnect_attempts", 5),
                 "reconnect_delay": full_config.get("websocket", {}).get("reconnect_delay", 1000),
             },

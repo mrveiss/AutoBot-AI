@@ -13,11 +13,11 @@
  * AbortController, race protection, and consistent error handling.
  */
 
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
-import { getConfig } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import type {
+  AiFilteringModelState,
   UseCodeIntelAnalysisDeps,
   EnvironmentAnalysisResult,
 } from './codeIntelTypes'
@@ -49,7 +49,15 @@ export function useEnvironmentAnalysis(
   const { rootPath, withSourceId } = deps
 
   const useAiFiltering = ref(false)
-  const aiFilteringModel = ref(getConfig().llm.defaultModel)
+  // #15502: the frontend holds no model literal; the backend names the filter model.
+  const aiFilteringModel = ref<string | null>(null)
+  // True once the default-model fetch failed or returned none, so the hint
+  // stops saying "loading" and names the server default instead (#15502).
+  const aiFilteringModelUnavailable = ref(false)
+  const aiFilteringModelState = computed<AiFilteringModelState>(() => ({
+    model: aiFilteringModel.value,
+    unavailable: aiFilteringModelUnavailable.value,
+  }))
   const aiFilteringPriority = ref('high')
   const llmFilteringResult = ref<{
     enabled: boolean
@@ -97,6 +105,23 @@ export function useEnvironmentAnalysis(
     { withSourceId },
   )
 
+  const defaultModelEndpoint = useFetchEndpoint<{ model: string }, string>({
+    path: '/api/analytics/codebase/env-analysis/default-model',
+    pickData: (raw) => raw.model || null,
+    onSuccess: (model) => {
+      aiFilteringModel.value = model
+    },
+    onNoData: () => {
+      aiFilteringModelUnavailable.value = true
+    },
+    onError: (_message, err) => {
+      aiFilteringModelUnavailable.value = true
+      logger.error('Failed to load the AI filtering default model:', err)
+    },
+    label: 'Environment analysis default model',
+  })
+  void defaultModelEndpoint.load()
+
   const loadEnvironmentAnalysis = async () => {
     if (!rootPath.value) return
     llmFilteringResult.value = null
@@ -106,7 +131,9 @@ export function useEnvironmentAnalysis(
     }
     if (useAiFiltering.value) {
       queryExtras['use_llm_filter'] = 'true'
-      queryExtras['llm_model'] = aiFilteringModel.value
+      if (aiFilteringModel.value) {
+        queryExtras['llm_model'] = aiFilteringModel.value
+      }
       queryExtras['filter_priority'] = aiFilteringPriority.value
     }
 
@@ -119,6 +146,8 @@ export function useEnvironmentAnalysis(
     envAnalysisError: endpoint.error,
     useAiFiltering,
     aiFilteringModel,
+    aiFilteringModelUnavailable,
+    aiFilteringModelState,
     aiFilteringPriority,
     llmFilteringResult,
     loadEnvironmentAnalysis,

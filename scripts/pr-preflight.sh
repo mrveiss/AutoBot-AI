@@ -47,8 +47,9 @@ done
 # would read as "no match" and so deselect every required check without a word.
 [[ "" =~ $ONLY ]]; [ $? -ne 2 ] || { echo "--only: not a valid ERE: $ONLY" >&2; exit 2; }
 
+PREFLIGHT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd) || exit 2
 # shellcheck source=scripts/lib/git-root.sh
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/git-root.sh" || exit 2
+source "${PREFLIGHT_DIR}/lib/git-root.sh" || exit 2
 REPO_ROOT=$(git_repo_root) || exit 2
 cd "$REPO_ROOT" || exit 2
 
@@ -82,15 +83,11 @@ FAILED=0
 
 # The fleet range is deliberately NOT written here -- putting it in a script is
 # the very thing being checked for. It is read from the existing lint rule,
-# which is the single source of truth for what "fleet IP" means.
-FLEET_RULE="tools/lint/check_no_hardcoded_ip_fallbacks.py"
-FLEET_IP_RE=$(grep -oE '\^[0-9]{1,3}\\\.[0-9]{1,3}\\\.[0-9]{1,3}\\\.' "$FLEET_RULE" 2>/dev/null \
-              | head -1 | sed 's/^\^//' | sed 's/\\\././g')
-if [ -n "$FLEET_IP_RE" ]; then
-  FLEET_IP_RE="$(printf '%s' "$FLEET_IP_RE" | sed 's/\./\\./g')[0-9]{1,3}"
-else
-  FLEET_IP_RE='(?!)'  # rule file unreadable -- match nothing rather than guess
-fi
+# which is the single source of truth for what "fleet IP" means. #19233: the rule
+# path is beside this script, and an unreadable rule exits 2 (scripts/lib/fleet-ip-rule.sh).
+# shellcheck source=scripts/lib/fleet-ip-rule.sh
+source "${PREFLIGHT_DIR}/lib/fleet-ip-rule.sh" || exit 2
+FLEET_IP_RE=$(fleet_ip_regex "${PREFLIGHT_FLEET_RULE:-${PREFLIGHT_DIR}/../tools/lint/check_no_hardcoded_ip_fallbacks.py}") || exit 2
 pass() { printf '  ok    %s\n' "$1"; }
 fail() { printf '  FAIL  %s\n' "$1"; FAILED=$((FAILED + 1)); }
 note() { printf '  --    %s\n' "$1"; }
@@ -247,7 +244,7 @@ if git rev-parse --verify --quiet "$BASE" >/dev/null; then
   # NO when the truth is yes, so the session builds work that already exists --
   # and nothing pushes back on that answer, because doing more work never looks
   # like a mistake. Freshness was previously a side effect of having a PR:
-  # auto-update-pr-branches.yml keeps PR branches current, and before the first
+  # sync-branches-with-main.yml (#19548) keeps PR branches current, and before the first
   # push there was no mechanism at all. This is that mechanism.
   #
   # Measured AFTER a best-effort fetch. Against a stale remote-tracking ref the

@@ -10,16 +10,15 @@ Advanced code analysis endpoints for development acceleration using NPU and Redi
 
 import asyncio
 import json
-from typing import Any, Awaitable, Callable, Dict
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from agents.development_speedup_agent import (
     analyze_codebase,
     find_duplicates,
-    get_development_speedup_agent,
 )
+from api.dev_speedup_analysis import ANALYSIS_TYPE_HANDLERS, VALID_ANALYSIS_TYPES, get_dev_speedup_agent
 from api.dev_speedup_templates import CODE_TEMPLATES
 from api.schemas_code import (
     DevelopmentSpeedupAnalysisRequest,
@@ -37,12 +36,12 @@ from api.schemas_code import (
     DevSpeedupTemplatesResponse,
 )
 from api.schemas_common import DataResponse
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
-from autobot_shared.singleton_factory import lazy_singleton
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 logger = get_logger(__name__)
 
 # Redis list of recent developer-speedup actions, newest first (#10502).
@@ -52,62 +51,6 @@ DEV_SPEEDUP_HISTORY_LIMIT = 50
 
 # Issue #380: Module-level frozenset for valid severity levels
 _VALID_SEVERITIES = frozenset({"low", "medium", "high", "critical"})
-
-# Type alias for analysis handlers (Issue #336)
-AnalysisHandler = Callable[[str], Awaitable[Any]]
-
-_get_dev_speedup_agent = lazy_singleton(get_development_speedup_agent)
-
-
-# Issue #336: Analysis type handlers extracted from elif chain
-async def _analyze_comprehensive(root_path: str) -> Any:
-    """Run comprehensive analysis (Issue #336 - extracted handler)."""
-    return await analyze_codebase(root_path)
-
-
-async def _analyze_duplicates(root_path: str) -> Any:
-    """Run duplicate code analysis (Issue #336 - extracted handler)."""
-    return await _get_dev_speedup_agent().find_duplicate_code(root_path)
-
-
-async def _analyze_patterns(root_path: str) -> Any:
-    """Run pattern analysis (Issue #336 - extracted handler)."""
-    return await _get_dev_speedup_agent().identify_code_patterns(root_path)
-
-
-async def _analyze_imports(root_path: str) -> Any:
-    """Run import analysis (Issue #336 - extracted handler)."""
-    return await _get_dev_speedup_agent().analyze_imports_and_dependencies(root_path)
-
-
-async def _analyze_dead_code(root_path: str) -> Any:
-    """Run dead code detection (Issue #336 - extracted handler)."""
-    return await _get_dev_speedup_agent().detect_dead_code(root_path)
-
-
-async def _analyze_refactoring(root_path: str) -> Any:
-    """Run refactoring opportunities analysis (Issue #336 - extracted handler)."""
-    return await _get_dev_speedup_agent().find_refactoring_opportunities(root_path)
-
-
-async def _analyze_quality(root_path: str) -> Any:
-    """Run code quality analysis (Issue #336 - extracted handler)."""
-    return await _get_dev_speedup_agent().analyze_code_quality_consistency(root_path)
-
-
-# Issue #336: Dispatch table for analysis type routing
-ANALYSIS_TYPE_HANDLERS: Dict[str, AnalysisHandler] = {
-    "comprehensive": _analyze_comprehensive,
-    "duplicates": _analyze_duplicates,
-    "patterns": _analyze_patterns,
-    "imports": _analyze_imports,
-    "dead_code": _analyze_dead_code,
-    "refactoring": _analyze_refactoring,
-    "quality": _analyze_quality,
-}
-
-# Valid analysis types for error messages
-VALID_ANALYSIS_TYPES = ", ".join(ANALYSIS_TYPE_HANDLERS.keys())
 
 
 @router.post("/analyze", response_model=DataResponse[DevSpeedupAnalysisResultResponse])
@@ -198,7 +141,7 @@ async def find_duplicates_endpoint(
         logger.info("Finding duplicates in: %s", path)
 
         # Temporarily adjust minimum lines threshold
-        agent = _get_dev_speedup_agent()
+        agent = get_dev_speedup_agent()
         original_threshold = agent.min_duplicate_lines
         agent.min_duplicate_lines = min_lines
 
@@ -242,7 +185,7 @@ async def analyze_patterns_endpoint(
     try:
         logger.info("Analyzing patterns in: %s", path)
 
-        result = await _get_dev_speedup_agent().identify_code_patterns(path)
+        result = await get_dev_speedup_agent().identify_code_patterns(path)
 
         # Filter by pattern type if specified
         if pattern_type:
@@ -287,7 +230,7 @@ async def analyze_imports_endpoint(
     try:
         logger.info("Analyzing imports in: %s", path)
 
-        result = await _get_dev_speedup_agent().analyze_imports_and_dependencies(path)
+        result = await get_dev_speedup_agent().analyze_imports_and_dependencies(path)
 
         if not show_unused:
             result.pop("potential_unused_imports", None)
@@ -323,7 +266,7 @@ async def detect_dead_code_endpoint(path: str = Query(..., description="Root pat
     try:
         logger.info("Detecting dead code in: %s", path)
 
-        result = await _get_dev_speedup_agent().detect_dead_code(path)
+        result = await get_dev_speedup_agent().detect_dead_code(path)
 
         return JSONResponse(
             status_code=200,
@@ -358,7 +301,7 @@ async def find_refactoring_opportunities_endpoint(
     try:
         logger.info("Finding refactoring opportunities in: %s", path)
 
-        result = await _get_dev_speedup_agent().find_refactoring_opportunities(path)
+        result = await get_dev_speedup_agent().find_refactoring_opportunities(path)
 
         # Filter by complexity if specified
         if min_complexity > 1.0:
@@ -406,7 +349,7 @@ async def analyze_quality_endpoint(
     try:
         logger.info("Analyzing code quality in: %s", path)
 
-        result = await _get_dev_speedup_agent().analyze_code_quality_consistency(path)
+        result = await get_dev_speedup_agent().analyze_code_quality_consistency(path)
 
         # Filter by severity if specified (Issue #380: use module-level constant)
         if severity:
@@ -551,9 +494,9 @@ async def get_development_speedup_status():
                 },
                 "search_index": search_status,
                 "thresholds": {
-                    "duplicate_similarity": (_get_dev_speedup_agent().duplicate_threshold),
-                    "min_duplicate_lines": _get_dev_speedup_agent().min_duplicate_lines,
-                    "complexity_threshold": (_get_dev_speedup_agent().complexity_threshold),
+                    "duplicate_similarity": (get_dev_speedup_agent().duplicate_threshold),
+                    "min_duplicate_lines": get_dev_speedup_agent().min_duplicate_lines,
+                    "complexity_threshold": (get_dev_speedup_agent().complexity_threshold),
                 },
             },
         )

@@ -17,6 +17,7 @@ from typing import Any
 
 from autobot_shared.env_utils import env_int
 from autobot_shared.time_utils import now_utc
+from autobot_shared.tool_timeouts import TOOL_CALL_TIMEOUT_MS, TOOL_GROUP_TIMEOUT_MS
 from constants.threshold_constants import BatchConfig, RetryConfig
 
 # ---------------------------------------------------------------------------
@@ -186,9 +187,8 @@ class AgentLoopConfig:
     max_iterations: int = BatchConfig.MAX_CONCURRENCY  # 100 - Maximum iterations per task
     max_consecutive_errors: int = RetryConfig.DEFAULT_RETRIES  # 3 - Stop after N consecutive errors
 
-    # Timeouts (milliseconds) - kept as specific values for tool execution timing
-    iteration_timeout_ms: int = 60000  # Max time per iteration
-    tool_timeout_ms: int = 30000  # Max time per tool execution
+    iteration_timeout_ms: int = TOOL_GROUP_TIMEOUT_MS  # Max time per iteration (ms, #19729)
+    tool_timeout_ms: int = TOOL_CALL_TIMEOUT_MS  # Max time per tool execution (ms, #19729)
     total_task_timeout_ms: int = 600000  # Max time for entire task (10 min)
 
     # Think tool settings
@@ -295,7 +295,7 @@ class AgentLoopConfig:
 # =============================================================================
 
 
-class MessageType(Enum):
+class LoopMessageType(Enum):
     """
     Message semantics for agent-user communication (Manus pattern).
 
@@ -311,7 +311,7 @@ class MessageType(Enum):
 class AgentMessage:
     """A message from agent to user with semantic type."""
 
-    message_type: MessageType
+    message_type: LoopMessageType
     content: str
     options: list[str] | None = None  # For ASK messages
     metadata: dict = field(default_factory=dict)
@@ -321,7 +321,7 @@ class AgentMessage:
 
     def __post_init__(self):
         """Set requires_response based on message type."""
-        self.requires_response = self.message_type == MessageType.ASK
+        self.requires_response = self.message_type == LoopMessageType.ASK
 
     def to_dict(self) -> dict:
         """Convert to dictionary for events."""
@@ -548,8 +548,7 @@ class TaskContext:
         observations only, preventing unbounded saturation on long tasks.
         Issue #6627.
         """
-        from agent_loop.fingerprint import content_hash as _hash
-        from agent_loop.fingerprint import normalize_content, tokenize
+        from agent_loop.fingerprint import normalize_content, normalized_content_hash, tokenize
 
         normalized = normalize_content(content)
         new_tokens = tokenize(normalized)
@@ -564,7 +563,7 @@ class TaskContext:
         self._token_windows.append(frozenset(new_tokens))
         fp = ObservationFingerprint(
             iteration=iteration,
-            content_hash=_hash(content),
+            content_hash=normalized_content_hash(content),
             content_size=len(normalized),
             novel_token_ratio=ratio,
         )

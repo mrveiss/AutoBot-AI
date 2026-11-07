@@ -110,7 +110,7 @@ class TestFetchProblemsFromChromaDBFallback:
 
     def test_unresolved_fallback_uses_deployed_layout_aware_root(self, tmp_path):
         """When source_root is None, path validation must resolve against
-        resolve_project_root() (git-walk-up / deployed code_source probe,
+        resolve_git_repo_root() (git-walk-up / deployed code_source probe,
         #10730), not the plain parents[4] get_project_root() -- which
         resolves to /opt/autobot (not the analyzable repo) in the deployed
         standalone rsync layout."""
@@ -134,7 +134,7 @@ class TestFetchProblemsFromChromaDBFallback:
                 return_value={"metadatas": [{"file_path": "x.py"}]},
             ),
             patch.object(report_mod, "filter_problems_by_file_existence", side_effect=fake_filter),
-            patch.object(report_mod, "resolve_project_root", return_value=str(deployed_root)),
+            patch.object(report_mod, "resolve_git_repo_root", return_value=str(deployed_root)),
         ):
             report_mod._fetch_problems_from_chromadb(source_id=None, source_root=None)
 
@@ -249,7 +249,7 @@ class TestReportPipelineSourceIsolation:
 
     async def test_unresolvable_source_scan_root_uses_deployed_layout_aware_root(self, tmp_path):
         """Issue #12399: generate_analysis_report's scan_root fallback (sibling
-        of #12393's resolve_scan_root fix) must use resolve_project_root(), not
+        of #12393's resolve_scan_root fix) must use resolve_git_repo_root(), not
         the plain parents[4] get_project_root() -- which resolves to
         /opt/autobot (not the analyzable repo) in the deployed layout."""
         from api.codebase_analytics.endpoints import report as report_mod
@@ -270,7 +270,7 @@ class TestReportPipelineSourceIsolation:
             patch.object(report_mod, "_get_pattern_analysis", side_effect=fake_get_pattern_analysis),
             patch.object(report_mod, "_get_api_endpoint_analysis", new=AsyncMock(return_value=None)),
             patch.object(report_mod, "_get_bug_prediction", new=AsyncMock(return_value=None)),
-            patch.object(report_mod, "resolve_project_root", return_value=str(deployed_root)),
+            patch.object(report_mod, "resolve_git_repo_root", return_value=str(deployed_root)),
         ):
             await report_mod.generate_analysis_report(source_id="unresolvable-source", quick=False)
 

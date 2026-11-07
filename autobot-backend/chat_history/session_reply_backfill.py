@@ -11,22 +11,22 @@ completed-reply text was accepted by ``_persist_workflow_messages`` and then
 silently discarded. A conversational turn from that window therefore reads
 back with the user's message and no assistant reply at all.
 
-Two sources can supply the missing text, both written by
-``chat_workflow.conversation._persist_conversation`` regardless of the bug:
+The missing text survives in the legacy per-turn transcript file
+(``data/conversation_transcripts/{id}.json``, read through
+``chat_history.legacy_transcripts``), which ``_persist_conversation`` used to
+write regardless of the bug. ``chat_sessions`` is the system of record for
+conversation turns (``autobot_shared/store_authority.py``); the transcript is
+a frozen, read-only LEGACY source that nothing writes since #18293, used here
+only as the witness that recovers what ``chat_sessions`` lost. The repair
+writes the recovered reply into ``chat_sessions``, never the other way round.
 
-1. ``chat:conversation:{id}`` (Redis, ``REDIS_KEY.CHAT_CONVERSATION_PREFIX``)
-   — short-lived, ``conversation_history_ttl`` (default 24h). Fast, but every
-   session damaged by #13214 is in the past, so this has very likely expired
-   by the time anyone runs a repair.
-2. ``data/conversation_transcripts/{id}.json`` (the durable file transcript,
-   ``ChatWorkflowManager.transcript_dir``) — no TTL, one ``{timestamp, user,
-   assistant}`` entry per exchange, the entire session's history (unlike the
-   production loader's last-10 truncation, which exists only to bound LLM
-   context and is irrelevant here).
+``chat:conversation:{id}`` is no longer consulted. Since #18293 it is a cache
+re-projected from ``chat_sessions`` itself, so it cannot carry a reply
+``chat_sessions`` lacks -- and a warm entry would shadow the transcript that can.
 
-``repair_session`` tries Redis first (fast path when still warm) and falls
-back to the transcript file — the actual source of truth for anything old
-enough to need this repair.
+Still needed after #18293: nothing writes the transcript any more, but the
+sessions damaged before #13214 are exactly the ones whose reply exists only
+there, and they stay damaged until this repair runs for them.
 
 This module is a REPAIR PATH, not an auto-run migration: nothing here
 executes on import, there is no scheduled/Celery hook, and the CLI entry
@@ -40,83 +40,12 @@ with no concurrent writer (e.g. no active chat) or a late write can be lost.
 
 import argparse
 import asyncio
-import json
-from pathlib import Path
 from typing import Any, Callable, Dict, List, Tuple
 
-import aiofiles
-
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.ssot_constants import REDIS_KEY
+from chat_history.legacy_transcripts import read_legacy_transcript_pairs
 
 logger = get_logger(__name__)
-
-# Mirrors ChatWorkflowManager.transcript_dir (chat_workflow/manager.py) — not
-# yet promoted to a shared SSOT path constant there, so this is a second,
-# clearly-labeled copy of that one existing literal (not a new triplication
-# like the Redis prefix below was).
-_TRANSCRIPT_DIR = "data/conversation_transcripts"
-
-
-def _conversation_key(session_id: str) -> str:
-    """Redis key holding the ``{user, assistant}`` pair history for *session_id*."""
-    return f"{REDIS_KEY.CHAT_CONVERSATION_PREFIX}{session_id}"
-
-
-def _parse_conversation_pairs(raw: str | bytes | None) -> List[Dict[str, str]]:
-    """Parse the ``chat:conversation:*`` JSON payload into ``{user, assistant}`` pairs.
-
-    Malformed or empty payloads repair to an empty list rather than raising —
-    a single corrupt/expired key must not abort a batch repair run.
-    """
-    if not raw:
-        return []
-    if isinstance(raw, bytes):
-        raw = raw.decode("utf-8")
-    try:
-        pairs = json.loads(raw)
-    except json.JSONDecodeError:
-        logger.warning("Malformed chat:conversation payload — skipping repair for this session")
-        return []
-    if not isinstance(pairs, list):
-        return []
-    return [p for p in pairs if isinstance(p, dict) and (p.get("user") or "").strip()]
-
-
-async def _load_transcript_pairs(session_id: str, transcript_dir: str = _TRANSCRIPT_DIR) -> List[Dict[str, str]]:
-    """Read the FULL durable transcript file as ``{user, assistant}`` pairs.
-
-    Unlike ``ChatWorkflowManager._load_transcript`` (which truncates to the
-    last 10 exchanges — a bound for LLM context, not repair), this reads
-    every exchange ever recorded: a #13214-damaged turn can be arbitrarily
-    far back in a long session's history, and it is exactly the case where
-    ``chat:conversation:*`` has already expired.
-    """
-    path = Path(transcript_dir) / f"{session_id}.json"
-    try:
-        async with aiofiles.open(path, "r", encoding="utf-8") as f:
-            content = await f.read()
-    except FileNotFoundError:
-        return []
-    except OSError as exc:
-        logger.warning("Failed to read transcript file %s: %s", path, exc)
-        return []
-
-    try:
-        transcript = json.loads(content)
-    except json.JSONDecodeError:
-        logger.warning("Malformed transcript file %s — skipping repair for this session", path)
-        return []
-
-    messages = transcript.get("messages", []) if isinstance(transcript, dict) else []
-    if not isinstance(messages, list):
-        return []
-    return [
-        {"user": m.get("user", ""), "assistant": m.get("assistant", "")}
-        for m in messages
-        if isinstance(m, dict) and (m.get("user") or "").strip()
-    ]
 
 
 def _find_turn_end(messages: List[Dict[str, Any]], start: int) -> int:
@@ -151,7 +80,7 @@ def compute_backfilled_messages(
 ) -> Tuple[List[Dict[str, Any]], int]:
     """Return (repaired_messages, backfilled_count) for one session.
 
-    Pure function: plain dicts in, plain dicts out — no I/O, no Redis client —
+    Pure function: plain dicts in, plain dicts out — no I/O —
     so the matching logic is independently testable from the load/save seam
     that ``repair_session`` owns.
 
@@ -162,7 +91,7 @@ def compute_backfilled_messages(
     (see ``manager.py``'s ``_build_workflow_message_batch``), and would be
     misjudged damaged by a next-slot-only check, causing a spurious duplicate
     insertion (#13303 review). For each genuinely damaged turn, the first
-    not-yet-consumed ``chat:conversation:*``/transcript pair whose ``user``
+    not-yet-consumed legacy transcript pair whose ``user``
     text matches byte-for-byte supplies the missing ``assistant`` text,
     inserted at the end of the turn's window — after any tool/system entries,
     preserving them.
@@ -206,7 +135,7 @@ def compute_backfilled_messages(
 def _build_backfilled_assistant_message(chat_mgr, text: str) -> Dict[str, Any]:
     """Build the persisted dict for one backfilled assistant turn.
 
-    ``sources: []`` — the conversation-pair/transcript sources carry no
+    ``sources: []`` — the legacy transcript carries no
     citation metadata, so a backfilled turn cannot claim KB provenance it
     never recorded (#13292's fidelity fix does not apply retroactively;
     there is nothing to recover).
@@ -215,30 +144,16 @@ def _build_backfilled_assistant_message(chat_mgr, text: str) -> Dict[str, Any]:
         "assistant",
         text,
         "response",
-        {"message_type": "llm_response", "backfilled_from": "chat:conversation", "streamed": True},
+        {"message_type": "llm_response", "backfilled_from": "legacy_conversation_transcripts", "streamed": True},
         None,
         sources=[],
     )
 
 
-async def _load_conversation_pairs(session_id: str, redis_client, transcript_dir: str) -> List[Dict[str, str]]:
-    """Redis ``chat:conversation:*`` first (fast, may be TTL-expired), else the
-    durable transcript file — the actual source for anything old enough to
-    need this repair.
-    """
-    if redis_client is not None:
-        raw = await redis_client.get(_conversation_key(session_id))
-        pairs = _parse_conversation_pairs(raw)
-        if pairs:
-            return pairs
-    return await _load_transcript_pairs(session_id, transcript_dir)
-
-
 async def repair_session(
     session_id: str,
     chat_mgr,
-    redis_client=None,
-    transcript_dir: str = _TRANSCRIPT_DIR,
+    transcript_dir: str | None = None,
 ) -> int:
     """Backfill missing assistant turns for one session. Returns count repaired.
 
@@ -246,24 +161,18 @@ async def repair_session(
         session_id: The session to repair.
         chat_mgr: A ``ChatHistoryManager`` (or duck-typed equivalent exposing
             ``load_session``/``save_session``/``_build_message_dict``).
-        redis_client: Optional async Redis client (``database="main"``); a
-            fresh one is opened when omitted, and Redis is skipped (falling
-            straight to the transcript file) if unavailable.
         transcript_dir: Override for tests; defaults to production's path.
 
-    Returns 0 when the session needed no repair, or no source (Redis nor
-    transcript) has anything to backfill from.
+    Returns 0 when the session needed no repair, or its legacy transcript
+    has nothing to backfill from. Sessions with NO turns in ``chat_sessions``
+    are not repaired here (``load_session`` is empty): they start with no
+    prior context until an approved #17038 backfill moves their turns in.
 
     Not concurrency-safe: this is a plain read-modify-write over
     ``load_session``/``save_session`` with no lock. Run it only against a
     session with no in-flight writer.
     """
-    if redis_client is None:
-        redis_client = await get_async_redis_client(database="main")
-        if redis_client is None:
-            logger.warning("No Redis client available for session %s — using transcript file only", session_id)
-
-    conversation_pairs = await _load_conversation_pairs(session_id, redis_client, transcript_dir)
+    conversation_pairs = await read_legacy_transcript_pairs(session_id, transcript_dir)
     if not conversation_pairs:
         return 0
 

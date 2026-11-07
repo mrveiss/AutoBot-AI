@@ -27,7 +27,7 @@ def test_base_classes_are_identical():
 
 def test_capability_classes_are_identical():
     assert shim_capabilities.CapabilityChecker is shared_capabilities.CapabilityChecker
-    assert shim_capabilities.Capability is shared_capabilities.Capability
+    assert shim_capabilities.PluginCapability is shared_capabilities.PluginCapability
     assert shim_capabilities.TrustTier is shared_capabilities.TrustTier
     assert shim_capabilities.CapabilityError is shared_capabilities.CapabilityError
 

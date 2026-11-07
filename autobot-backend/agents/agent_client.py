@@ -20,12 +20,12 @@ from constants.threshold_constants import exponential_backoff_delay
 from utils.service_registry import get_service_url
 
 from .base_agent import (
+    AgentDeploymentMode,
     AgentHealth,
     AgentRequest,
-    AgentResponse,
     AgentStatus,
     BaseAgent,
-    DeploymentMode,
+    StandardizedAgentResponse,
     create_agent_request,
     deserialize_agent_response,
     serialize_agent_request,
@@ -40,7 +40,7 @@ class AgentClientConfig:
     def __init__(self, config_dict: Dict[str, Any] | None = None):
         """Initialize agent client config with deployment settings."""
         self.config = config_dict or {}
-        self.default_mode = DeploymentMode.LOCAL
+        self.default_mode = AgentDeploymentMode.LOCAL
         self.container_base_url = get_service_url("ai-stack")
         self.request_timeout = 30.0
         self.retry_attempts = 3
@@ -48,7 +48,7 @@ class AgentClientConfig:
 
         # Load from config if provided
         if config_dict:
-            self.default_mode = DeploymentMode(config_dict.get("default_mode", "local"))
+            self.default_mode = AgentDeploymentMode(config_dict.get("default_mode", "local"))
             self.container_base_url = config_dict.get("container_base_url", self.container_base_url)
             self.request_timeout = config_dict.get("request_timeout", self.request_timeout)
             self.retry_attempts = config_dict.get("retry_attempts", self.retry_attempts)
@@ -139,11 +139,11 @@ class ContainerAgentProxy(BaseAgent):
 
     def __init__(self, agent_type: str, container_url: str):
         """Initialize container proxy with agent type and endpoint URL."""
-        super().__init__(agent_type, DeploymentMode.CONTAINER)
+        super().__init__(agent_type, AgentDeploymentMode.CONTAINER)
         self.container_url = container_url.rstrip("/")
         self._http_client = get_http_client()  # Use singleton HTTP client
 
-    async def process_request(self, request: AgentRequest) -> AgentResponse:
+    async def process_request(self, request: AgentRequest) -> StandardizedAgentResponse:
         """Send request to containerized agent via HTTP"""
         try:
             request_data = serialize_agent_request(request)
@@ -159,7 +159,7 @@ class ContainerAgentProxy(BaseAgent):
                     return deserialize_agent_response(response_data)
                 else:
                     error_text = await response.text()
-                    return AgentResponse(
+                    return StandardizedAgentResponse(
                         request_id=request.request_id,
                         agent_type=self.agent_type,
                         status="error",
@@ -168,7 +168,7 @@ class ContainerAgentProxy(BaseAgent):
                     )
 
         except asyncio.TimeoutError:
-            return AgentResponse(
+            return StandardizedAgentResponse(
                 request_id=request.request_id,
                 agent_type=self.agent_type,
                 status="error",
@@ -176,7 +176,7 @@ class ContainerAgentProxy(BaseAgent):
                 error=f"Request timeout after {request.timeout}s",
             )
         except Exception as e:
-            return AgentResponse(
+            return StandardizedAgentResponse(
                 request_id=request.request_id,
                 agent_type=self.agent_type,
                 status="error",
@@ -245,7 +245,7 @@ class AgentClient:
         context: Dict[str, Any] | None = None,
         priority: str = "normal",
         timeout: float | None = None,
-    ) -> AgentResponse:
+    ) -> StandardizedAgentResponse:
         """
         Call an agent with automatic local/remote routing.
         """
@@ -261,7 +261,7 @@ class AgentClient:
 
         return await self.process_request(request)
 
-    async def process_request(self, request: AgentRequest) -> AgentResponse:
+    async def process_request(self, request: AgentRequest) -> StandardizedAgentResponse:
         """Process an agent request with routing and fallback logic"""
         start_time = time.time()
 
@@ -269,7 +269,7 @@ class AgentClient:
             # Get agent from registry
             agent = self.registry.get_agent(request.agent_type)
             if not agent:
-                return AgentResponse(
+                return StandardizedAgentResponse(
                     request_id=request.request_id,
                     agent_type=request.agent_type,
                     status="error",
@@ -282,7 +282,7 @@ class AgentClient:
             health = self.registry.agent_health.get(request.agent_type)
 
             if health and health.status == AgentStatus.UNHEALTHY:
-                return AgentResponse(
+                return StandardizedAgentResponse(
                     request_id=request.request_id,
                     agent_type=request.agent_type,
                     status="error",
@@ -304,7 +304,7 @@ class AgentClient:
             execution_time = time.time() - start_time
             self._update_stats(request.agent_type, "error", execution_time)
 
-            return AgentResponse(
+            return StandardizedAgentResponse(
                 request_id=request.request_id,
                 agent_type=request.agent_type,
                 status="error",
@@ -313,7 +313,7 @@ class AgentClient:
                 execution_time=execution_time,
             )
 
-    async def _execute_with_retries(self, agent: BaseAgent, request: AgentRequest) -> AgentResponse:
+    async def _execute_with_retries(self, agent: BaseAgent, request: AgentRequest) -> StandardizedAgentResponse:
         """Execute request with retry logic"""
         last_error = None
 
@@ -337,7 +337,7 @@ class AgentClient:
                     await asyncio.sleep(exponential_backoff_delay(attempt))
 
         # All retries failed
-        return AgentResponse(
+        return StandardizedAgentResponse(
             request_id=request.request_id,
             agent_type=request.agent_type,
             status="error",

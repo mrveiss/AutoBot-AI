@@ -286,7 +286,7 @@
 }
 
 .btn-action-danger {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-error);
 }
 
@@ -972,4 +972,97 @@
 .modal-body-text {
   font-size: var(--text-sm);
   color: var(--text-secondary);
+}
+
+/* ============================================================
+ * Folded in from assets/main.css, which nothing imported (#17613)
+ * ============================================================ */
+
+/* Touch screens (#1804): no tap flash, no double-tap zoom on controls, and
+ * momentum scrolling on scroll containers. */
+@media (max-width: 1024px) {
+  button,
+  [role="button"],
+  a {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  .overflow-y-auto,
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Extra-small viewports: tighten page-header padding. Additive to the 640px
+ * rule in "RESPONSIVE HELPERS" above. */
+@media (max-width: 480px) {
+  .page-header {
+    padding: var(--spacing-3) var(--spacing-3) var(--spacing-2);
+  }
+
+  .page-actions {
+    flex-wrap: wrap;
+  }
+}
+
+/* RTL locales (ar, fa, he, ur; i18n/index.ts sets <html dir>, #1337): code
+ * stays left-to-right inside a right-to-left page. */
+[dir="rtl"] pre,
+[dir="rtl"] code,
+[dir="rtl"] .code-block {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: left;
+}
+
+/* #15429/#12731: the load-failure banner and the detail-fetch states, declared
+   once. They were written into three view files identically, which is exactly
+   the per-view duplication the fragmentation ratchet exists to catch — it
+   caught it. */
+.board-load-error {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-error-border);
+  background: var(--color-error-bg);
+  color: var(--color-error);
+  border-radius: 6px;
+}
+.board-load-error-detail {
+  opacity: 0.85;
+  font-size: var(--text-sm);
+}
+.board-load-error-retry {
+  margin-inline-start: auto;
+  cursor: pointer;
+}
+.detail-fetch-state {
+  padding: 1rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+.detail-fetch-error {
+  color: var(--color-error);
+}
+
+/* ============================================================
+ * UI MODE (#18240) — Minimal hides advanced-only chrome
+ * ============================================================
+ * `data-ui` on <html> is written only by composables/useUiMode.ts. `.adv`
+ * marks advanced-only chrome; `.only-min` marks the "Showing essentials" note
+ * that is visible in Minimal only. Specificity (0,2,1) beats a bare display
+ * utility on the same element, so no !important is needed. Hidden pages still
+ * open from direct links: this hides chrome, it never gates a route.
+ */
+html[data-ui="minimal"] .adv {
+  display: none;
+}
+.only-min {
+  display: none;
+}
+html[data-ui="minimal"] .only-min {
+  display: flex;
 }

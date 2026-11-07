@@ -36,11 +36,11 @@ async def my_endpoint(
 #### Available Dependency Providers:
 
 - `get_config()` - Configuration manager
-- `get_orchestrator()` - Orchestrator with all dependencies
-- `get_knowledge_base()` - Knowledge base with config
+- `provide_orchestrator()` - Orchestrator with all dependencies
+- `provide_knowledge_base()` - Knowledge base with config
 - `get_diagnostics()` - Diagnostics with config
 - `get_llm_interface()` - LLM interface
-- `get_security_layer()` - Security layer (optional)
+- `provide_security_layer()` - Security layer (optional)
 
 #### Cached Versions:
 
@@ -58,7 +58,7 @@ class Orchestrator:
         self.llm_interface = LLMInterface()
         self.knowledge_base = KnowledgeBase()
         self.diagnostics = Diagnostics()
-        
+
         llm_config = global_config_manager.get_llm_config()
         # ... direct global config usage
 ```
@@ -72,7 +72,7 @@ class Orchestrator:
         self.llm_interface = llm_interface or LLMInterface()
         self.knowledge_base = knowledge_base or KnowledgeBase()
         self.diagnostics = diagnostics or Diagnostics()
-        
+
         llm_config = self.config_manager.get_llm_config()
         # ... use injected config
 ```
@@ -145,9 +145,9 @@ Components can now be tested with mock dependencies:
 def test_orchestrator_with_mock_config():
     mock_config = Mock(spec=ConfigManager)
     mock_config.get_llm_config.return_value = {"model": "test"}
-    
+
     orchestrator = Orchestrator(config_manager=mock_config)
-    
+
     # Test orchestrator behavior with controlled config
     mock_config.get_llm_config.assert_called_once()
 ```
@@ -214,11 +214,11 @@ orchestrator = Orchestrator(config_manager=global_config_manager)
 ### 2. Full Dependency Chain
 
 ```python
-from backend.dependencies import get_config, get_orchestrator
+from backend.dependencies import get_config, provide_orchestrator
 
 # Get fully configured orchestrator through dependency injection
 config = get_config()
-orchestrator = get_orchestrator()  # Gets config + all sub-dependencies
+orchestrator = provide_orchestrator(config=config)  # outside FastAPI, Depends() is not resolved: pass it
 ```
 
 ### 3. Testing with Mocks
@@ -302,7 +302,7 @@ Convenient type aliases for cleaner code:
 
 ```python
 ConfigDep = Depends(get_config)
-OrchestratorDep = Depends(get_orchestrator)
+OrchestratorDep = Depends(provide_orchestrator)
 
 # Usage
 def my_function(config: ConfigManager = ConfigDep): pass

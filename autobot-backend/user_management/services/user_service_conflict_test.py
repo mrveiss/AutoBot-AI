@@ -42,9 +42,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.ext.compiler import compiles
 
+from autobot_shared.user_management.user_service_errors import DuplicateUserError
 from user_management.models import User
 from user_management.models.base import Base
-from user_management.services.user_service import DuplicateUserError, UserService
+from user_management.services.user_service import UserService
 
 _SQLITE_URL = "sqlite+aiosqlite://"  # canonical: ignore py-adhoc-db-engine (test-local engine, in-memory only)
 
@@ -67,11 +68,13 @@ class _RaisingNestedCtx:
 
 @pytest_asyncio.fixture
 async def session_factory() -> AsyncIterator:
-    engine = create_async_engine(_SQLITE_URL)
+    engine = create_async_engine(_SQLITE_URL)  # canonical: ignore py-adhoc-db-engine (test-local engine)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all, tables=[User.__table__])
     try:
-        yield async_sessionmaker(bind=engine, expire_on_commit=False)
+        yield async_sessionmaker(  # canonical: ignore py-adhoc-db-engine (test-local session factory)
+            bind=engine, expire_on_commit=False
+        )
     finally:
         await engine.dispose()
 

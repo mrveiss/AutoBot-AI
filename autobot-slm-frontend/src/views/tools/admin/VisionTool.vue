@@ -3,6 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 /**
  * VisionTool - Vision & Multimodal Interface
  *
@@ -12,7 +13,7 @@
 
 import { ref } from 'vue'
 import { useAutobotApi } from '@/composables/useAutobotApi'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 
 const api = useAutobotApi()
 
@@ -209,9 +210,7 @@ function loadFromHistory(item: AnalysisHistory): void {
         </div>
 
         <!-- Error Message -->
-        <div v-if="error" class="mx-6 mt-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-          {{ error }}
-        </div>
+        <BaseAlert v-if="error" variant="error" class="mx-6 mt-4" :message="error" />
 
         <!-- Capture Tab -->
         <div v-if="activeTab === 'capture'" class="flex-1 p-6 overflow-auto">
@@ -399,7 +398,7 @@ function loadFromHistory(item: AnalysisHistory): void {
               <div class="flex gap-4">
                 <img :src="item.image" :alt="$t('tools.admin.visionTool.history')" class="w-24 h-24 object-cover rounded-lg" />
                 <div class="flex-1">
-                  <p class="text-xs text-gray-500 mb-1">{{ formatDateTime(item.timestamp.toISOString()) }}</p>
+                  <p class="text-xs text-gray-500 mb-1">{{ formatFleetDateTime(item.timestamp.toISOString()) }}</p>
                   <p class="text-sm font-medium text-gray-900 mb-2">{{ item.prompt }}</p>
                   <p class="text-sm text-gray-600 line-clamp-2">{{ item.result }}</p>
                 </div>

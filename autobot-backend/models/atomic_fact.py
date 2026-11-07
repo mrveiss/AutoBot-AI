@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List
 
+from autobot_shared.confidence_level import ConfidenceLevel  # noqa: F401  (re-export)
 from autobot_shared.time_utils import parse_utc_iso
 
 
@@ -35,16 +36,6 @@ class TemporalType(Enum):
     DYNAMIC = "DYNAMIC"  # Facts that can change or become outdated
     ATEMPORAL = "ATEMPORAL"  # Facts not bound to specific time periods
     TEMPORAL_BOUND = "TEMPORAL_BOUND"  # Facts valid only for specific time periods
-
-
-class ConfidenceLevel(Enum):
-    """Confidence levels for extracted facts."""
-
-    VERY_HIGH = 0.9
-    HIGH = 0.8
-    MEDIUM = 0.6
-    LOW = 0.4
-    VERY_LOW = 0.2
 
 
 # Confidence thresholds for classification (Issue #315: extracted for reduced nesting)

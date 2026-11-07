@@ -11,7 +11,7 @@ on the same task resume into the existing worktree.
 
 Key functions:
   allocate(task_id, agent_id)   – create or resume a worktree
-  release(task_id)              – remove the worktree when a task closes
+  release_workspace(task_id)              – remove the worktree when a task closes
   release_for_task(task_id, session) – async hook: clear workspace_dir + release on task close (MVA-1152)
   cleanup_stale(max_age_days)   – Celery beat hook to evict aged workspaces
 """
@@ -185,7 +185,7 @@ def allocate(
     )
 
 
-def release(
+def release_workspace(
     task_id: str,
     repo_root: Optional[Path] = None,
     keep_on_failure: bool = False,
@@ -298,7 +298,7 @@ def cleanup_stale(
                 if not guarded or (entry / _ACTIVE_LOCK_FILENAME).exists():
                     logger.debug("Skipping in-use workspace task=%s during stale cleanup", task_id)
                     continue
-                release(task_id, root, keep_on_failure=True, force_branch=False)
+                release_workspace(task_id, root, keep_on_failure=True, force_branch=False)
                 cleaned.append(task_id)
         except Exception as exc:
             logger.warning("Stale cleanup failed for task=%s: %s", task_id, exc)
@@ -342,7 +342,7 @@ async def release_for_task(
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(
             None,
-            lambda: release(task_id, repo_root=repo_root, keep_on_failure=True),
+            lambda: release_workspace(task_id, repo_root=repo_root, keep_on_failure=True),
         )
     except Exception:
         logger.warning("release_for_task failed for task=%s", task_id, exc_info=True)
@@ -413,7 +413,7 @@ def _git_add_worktree(root: Path, workspace_dir: Path, branch: str) -> None:
             check=True,
             capture_output=True,
             text=True,
-            # #15246: see _git_add_worktree's sibling call below and release()'s
+            # #15246: see _git_add_worktree's sibling call below and release_workspace()'s
             # worktree-remove above -- an inherited GIT_DIR overrides cwd here too.
             env=scrubbed_git_env(),
         )
@@ -499,6 +499,6 @@ def _enforce_limit(agent_id: str, max_per_agent: int, root: Path) -> None:
                     agent_id,
                     max_per_agent,
                 )
-                release(oldest_task_id, root, force_branch=False)
+                release_workspace(oldest_task_id, root, force_branch=False)
         except Exception as exc:
             logger.warning("Eviction failed for task=%s: %s", oldest_task_id, exc)

@@ -8,7 +8,7 @@ Tests for knowledge.vector_search_engine — Issue #3828.
 Covers:
 - Hardware auto-selection logic (NPU > GPU > CPU)
 - Forced hardware backend routing
-- Search result standardization (SearchResult dataclass)
+- Search result standardization (VectorSearchResult dataclass)
 - Reranker callable integration
 - Fallback to CPU when primary backend raises
 - Singleton factory returns the same instance
@@ -132,7 +132,7 @@ finally:
 
 
 def _make_engine_result(text="hello", score=0.9, metadata=None, source="doc1"):
-    return vse.SearchResult(text=text, score=score, metadata=metadata or {}, source=source)
+    return vse.VectorSearchResult(text=text, score=score, metadata=metadata or {}, source=source)
 
 
 def _cpu_backend_returning(results):
@@ -155,20 +155,20 @@ def _gpu_backend_returning(results):
 
 
 # ---------------------------------------------------------------------------
-# SearchResult dataclass
+# VectorSearchResult dataclass
 # ---------------------------------------------------------------------------
 
 
 class TestSearchResult:
     def test_defaults(self):
-        r = vse.SearchResult(text="hello", score=0.5)
+        r = vse.VectorSearchResult(text="hello", score=0.5)
         assert r.text == "hello"
         assert r.score == 0.5
         assert r.metadata == {}
         assert r.source == ""
 
     def test_explicit_fields(self):
-        r = vse.SearchResult(text="abc", score=0.8, metadata={"k": "v"}, source="fact-42")
+        r = vse.VectorSearchResult(text="abc", score=0.8, metadata={"k": "v"}, source="fact-42")
         assert r.metadata["k"] == "v"
         assert r.source == "fact-42"
 

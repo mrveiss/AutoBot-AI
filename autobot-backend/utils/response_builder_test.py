@@ -27,8 +27,8 @@ from utils.response_builder import (
     raise_bad_request,
     raise_conflict,
     raise_forbidden,
-    raise_internal_error,
-    raise_not_found,
+    raise_internal_error_with_message,
+    raise_not_found_with_message,
     raise_unauthorized,
     server_error_response,
     service_unavailable_response,
@@ -143,11 +143,11 @@ class TestHTTPExceptionCompatibility:
     @pytest.mark.parametrize(
         "raiser,expected_status",
         [
-            (raise_not_found, 404),
+            (raise_not_found_with_message, 404),
             (raise_bad_request, 400),
             (raise_unauthorized, 401),
             (raise_forbidden, 403),
-            (raise_internal_error, 500),
+            (raise_internal_error_with_message, 500),
             (raise_conflict, 409),
         ],
     )

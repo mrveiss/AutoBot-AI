@@ -19,10 +19,8 @@ Related Issues: #185 (Split), #209 (Knowledge split)
 """
 
 import asyncio
-import re
 from pathlib import Path as PathLib
 
-import aiofiles
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 
 from auth_middleware import check_admin_permission
@@ -41,12 +39,11 @@ from knowledge.schemas.population import (
     TaskStatusResponse,
 )
 from knowledge_factory import get_or_create_knowledge_base
+from utils.encoding_utils import strip_ansi_escapes
 from utils.template_loader import knowledge_data_exists, load_knowledge_data
 
 logger = get_logger(__name__)
 
-# Issue #380: Pre-compiled regex for ANSI escape sequence removal
-_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 # Create router for population endpoints
 router = APIRouter(
@@ -512,7 +509,7 @@ async def _fetch_man_page(command: str) -> str | None:
 
         man_content = stdout.decode("utf-8").strip()
         # Remove ANSI escape sequences
-        return _ANSI_ESCAPE_RE.sub("", man_content)
+        return strip_ansi_escapes(man_content)
 
     except Exception as e:
         logger.error("Error fetching man page for %s: %s", command, e)
@@ -748,122 +745,6 @@ async def get_job_status(task_id: str, req: Request):
     return response
 
 
-def extract_category_from_path(doc_file: str) -> str:
-    """Extract category from document file path
-
-    Examples:
-        docs/api/file.md -> "api"
-        docs/architecture/file.md -> "architecture"
-        CLAUDE.md -> "root"
-    """
-    path_parts = str(doc_file).split("/")
-    if len(path_parts) > 1 and path_parts[0] == "docs":
-        # docs/api/file.md -> "api"
-        return path_parts[1] if len(path_parts) > 2 else "docs"
-    # Root files like CLAUDE.md
-    return "root"
-
-
-def _format_doc_content(doc_file: str, file_path, content: str, category: str) -> str:
-    """Format documentation content for storage."""
-    return f"""AutoBot Documentation: {doc_file}
-
-File Path: {file_path}
-
-Content:
-{content}
-
-Source: AutoBot Documentation
-Category: {category}
-Type: Documentation
-"""
-
-
-def _get_doc_metadata(doc_file: str, file_path, category: str) -> dict:
-    """Create metadata dict for documentation storage."""
-    return {
-        "title": f"AutoBot: {doc_file}",
-        "source": "autobot_docs_population",
-        "category": category,
-        "filename": doc_file,
-        "type": f"{category}_documentation",
-        "file_path": str(file_path),
-        "visibility": INGESTED_DOCUMENT_VISIBILITY,
-    }
-
-
-async def _store_doc_file(kb_to_use, doc_file: str, file_path, content: str, category: str) -> dict | None:
-    """Store a documentation file in knowledge base, returns result or None."""
-    structured_content = _format_doc_content(doc_file, file_path, content, category)
-    metadata = _get_doc_metadata(doc_file, file_path, category)
-
-    try:
-        if hasattr(kb_to_use, "store_fact"):
-            return await kb_to_use.store_fact(content=structured_content, metadata=metadata)
-        return await kb_to_use.store_fact(text=structured_content, metadata=metadata)
-    except Exception as e:
-        logger.error("Error storing doc %s: %s", doc_file, e)
-        return None
-
-
-async def _read_doc_file_content(file_path) -> str | None:
-    """
-    Read documentation file content asynchronously.
-
-    Issue #398: Extracted from _process_doc_file to reduce method length.
-
-    Returns:
-        File content string, or None if file doesn't exist or is empty.
-    """
-    file_exists = await asyncio.to_thread(file_path.exists)
-    is_file = await asyncio.to_thread(file_path.is_file) if file_exists else False
-    if not file_exists or not is_file:
-        return None
-
-    try:
-        async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-            content = await f.read()
-        return content if content.strip() else None
-    except OSError:
-        return None
-
-
-async def _process_doc_file(kb_to_use, tracker, autobot_base_path, doc_file: str) -> tuple[int, int, int]:
-    """
-    Process a single documentation file.
-
-    Issue #398: Refactored to extract file reading logic.
-
-    Returns:
-        Tuple of (added, skipped, failed) counts
-    """
-    file_path = autobot_base_path / doc_file
-    content = await _read_doc_file_content(file_path)
-
-    if content is None:
-        logger.warning("File not found or empty: %s", doc_file)
-        return (0, 1, 0)
-
-    category = extract_category_from_path(doc_file)
-    result = await _store_doc_file(kb_to_use, doc_file, file_path, content, category)
-
-    if result and result.get("fact_id"):
-        tracker.mark_imported(
-            file_path=str(file_path),
-            category=category,
-            facts_count=1,
-            metadata={
-                "fact_id": result.get("fact_id"),
-                "title": f"AutoBot: {doc_file}",
-            },
-        )
-        logger.info("Added AutoBot doc: %s", doc_file)
-        return (1, 0, 0)
-
-    tracker.mark_failed(str(file_path), "Failed to store in knowledge base")
-    return (0, 0, 1)
-
-
 def _build_system_config_info() -> str:
     """Build system configuration info string."""
     from constants.network_constants import NetworkConstants
@@ -873,11 +754,11 @@ def _build_system_config_info() -> str:
 
 Network Layout (role-based, count-agnostic -- any host count; SSOT-resolved):
 - Backend role (Main Machine): {NetworkConstants.MAIN_MACHINE_IP} - Backend API
-  (port {NetworkConstants.BACKEND_PORT}) + NPU Worker (port 8082) +
-  Desktop/Terminal VNC (port 6080)
+  (port {NetworkConstants.BACKEND_PORT}) + Windows NPU Worker (port {NetworkConstants.NPU_WORKER_WINDOWS_PORT}) +
+  Desktop/Terminal VNC (port {NetworkConstants.VNC_PORT})
 - Frontend role: {NetworkConstants.FRONTEND_VM_IP}:5173 - Web interface
   (SINGLE FRONTEND SERVER)
-- NPU Worker role: {NetworkConstants.NPU_WORKER_VM_IP}:8081 - Secondary NPU worker (Linux)
+- NPU Worker role: {NetworkConstants.NPU_WORKER_VM_IP}:{NetworkConstants.NPU_WORKER_PORT} - Secondary NPU worker (Linux)
 - Database role (Redis): {NetworkConstants.REDIS_VM_IP}:{NetworkConstants.REDIS_PORT} - Data layer
 - AI Stack role: {NetworkConstants.AI_STACK_VM_IP}:{NetworkConstants.AI_STACK_PORT} - AI processing
 - Browser role: {NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT} -
@@ -924,76 +805,6 @@ async def _store_system_config(kb_to_use) -> bool:
     except Exception as e:
         logger.error("Error adding AutoBot configuration: %s", e)
         return False
-
-
-async def _scan_doc_files(autobot_base_path: PathLib, tracker, force_reindex: bool) -> tuple[list[str], int]:
-    """
-    Scan for documentation files that need processing.
-
-    Issue #398: Extracted from populate_autobot_docs to reduce method length.
-
-    Args:
-        autobot_base_path: Base path of the AutoBot project.
-        tracker: Import tracker instance.
-        force_reindex: Whether to force reindex all files.
-
-    Returns:
-        Tuple of (doc_files list, items_skipped count).
-    """
-    doc_files = []
-    items_skipped = 0
-
-    docs_path = autobot_base_path / "docs"
-    if not await asyncio.to_thread(docs_path.exists):
-        return doc_files, items_skipped
-
-    md_files = await asyncio.to_thread(lambda: list(docs_path.rglob("*.md")))
-    for md_file in md_files:
-        rel_path = md_file.relative_to(autobot_base_path)
-        if not force_reindex and not tracker.needs_reimport(str(md_file)):
-            logger.info("Skipping unchanged file: %s", rel_path)
-            items_skipped += 1
-            continue
-        doc_files.append(str(rel_path))
-
-    return doc_files, items_skipped
-
-
-async def _process_all_doc_files(
-    kb_to_use, tracker, autobot_base_path: PathLib, doc_files: list[str]
-) -> tuple[int, int, int]:
-    """
-    Process all documentation files.
-
-    Issue #398: Extracted from populate_autobot_docs to reduce method length.
-
-    Args:
-        kb_to_use: Knowledge base instance.
-        tracker: Import tracker instance.
-        autobot_base_path: Base path of the AutoBot project.
-        doc_files: List of doc file paths to process.
-
-    Returns:
-        Tuple of (items_added, items_skipped, items_failed).
-    """
-    items_added = 0
-    items_skipped = 0
-    items_failed = 0
-
-    for doc_file in doc_files:
-        try:
-            added, skipped, failed = await _process_doc_file(kb_to_use, tracker, autobot_base_path, doc_file)
-            items_added += added
-            items_skipped += skipped
-            items_failed += failed
-        except Exception as e:
-            items_failed += 1
-            tracker.mark_failed(str(autobot_base_path / doc_file), str(e))
-            logger.error("Error processing AutoBot doc %s: %s", doc_file, e)
-
-        await asyncio.sleep(TimingConstants.MICRO_DELAY)
-
-    return items_added, items_skipped, items_failed
 
 
 @router.post("/populate_autobot_docs", response_model=TaskQueuedResponse)
@@ -1118,16 +929,7 @@ async def get_populate_status(task_id: str):
     """
     from services.knowledge.task_status_manager import TaskStatusManager
 
-    task_status = await TaskStatusManager.get_task(task_id)
-
-    if not task_status:
-        return {
-            "status": "not_found",
-            "message": f"Task {task_id} not found",
-            "task_id": task_id,
-        }
-
-    return task_status.to_response_dict()
+    return await TaskStatusManager.get_task_response(task_id)
 
 
 # =========================================================================
@@ -1198,16 +1000,7 @@ async def get_index_code_status(task_id: str):
     """
     from services.knowledge.task_status_manager import TaskStatusManager
 
-    task_status = await TaskStatusManager.get_task(task_id)
-
-    if not task_status:
-        return {
-            "status": "not_found",
-            "message": f"Task {task_id} not found",
-            "task_id": task_id,
-        }
-
-    return task_status.to_response_dict()
+    return await TaskStatusManager.get_task_response(task_id)
 
 
 # =========================================================================

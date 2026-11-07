@@ -29,7 +29,6 @@ insufficient is not visible from reading the config.
 from __future__ import annotations
 
 import re
-import sys
 from pathlib import Path
 
 import pytest
@@ -114,12 +113,10 @@ def _files_reachable_from(directory: str, root: Path = _REPO_ROOT) -> set[Path]:
 def _pyproject_specs(path: Path) -> list[str]:
     """Every PEP 508 requirement string a pyproject declares."""
     # #15177: matches the two siblings below rather than inventing a third
-    # approach. A `tomli` fallback is not available -- it is declared in no
-    # requirements or constraints file -- so skipping is the only option that
-    # does not raise ModuleNotFoundError on 3.10.
-    if sys.version_info < (3, 11):
-        pytest.skip("tomllib is 3.11+; no tomli fallback is declared in this repo")
-
+    # approach. The 3.11 skip that used to guard this is gone -- `tomllib` is
+    # stdlib from 3.11 and `.python-version` is 3.14, so the branch was
+    # unreachable and its only effect was to make these three checks SKIP
+    # silently on an under-floor interpreter instead of failing loudly.
     import tomllib
 
     # Deliberately not wrapped in try/except. Returning [] on a parse error is
@@ -303,9 +300,6 @@ def test_a_pyproject_pin_is_visible_to_the_frozen_exclusion_check(tmp_path) -> N
     Fails against the raw line-scan: TOML dependencies are quoted, so `_PIN`
     matches none of them and the pin list comes back empty.
     """
-    if sys.version_info < (3, 11):
-        pytest.skip("tomllib needs 3.11+; CI runs 3.14, where this must run")
-
     pyproject = tmp_path / "pyproject.toml"
     pyproject.write_text(
         '[project]\nname = "sample"\ndependencies = ["websockets>=17.0.1"]\n',
@@ -332,9 +326,6 @@ def test_a_pyproject_contributes_its_real_dependencies() -> None:
     friends as though they were packages: a reachable set full of strings no
     dependabot block will ever name (#14733).
     """
-    if sys.version_info < (3, 11):
-        pytest.skip("tomllib needs 3.11+; CI runs 3.14, where this must run")
-
     shared = _REPO_ROOT / "autobot_shared" / "pyproject.toml"
     if not shared.is_file():
         pytest.skip("autobot_shared/pyproject.toml has moved; re-point this guard")

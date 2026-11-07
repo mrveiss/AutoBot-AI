@@ -34,7 +34,7 @@ case "$ACTION" in
         # Wait for health check
         echo "⏳ Waiting for Playwright service to be ready..."
         for i in {1..30}; do
-            if curl -sf http://localhost:3000/health > /dev/null 2>&1; then
+            if curl -sf http://localhost:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}/health > /dev/null 2>&1; then
                 echo "✅ Playwright service is healthy and ready."
                 exit 0
             fi
@@ -76,11 +76,11 @@ case "$ACTION" in
             echo "✅ Container 'autobot-playwright' is running."
 
             # Check health endpoint
-            if curl -sf http://localhost:3000/health > /dev/null 2>&1; then
+            if curl -sf http://localhost:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}/health > /dev/null 2>&1; then
                 echo "✅ Service is healthy and responding."
 
                 # Get service info
-                HEALTH_INFO=$(curl -s http://localhost:3000/health 2>/dev/null)
+                HEALTH_INFO=$(curl -s http://localhost:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}/health 2>/dev/null)
                 echo "📡 Service info: $HEALTH_INFO"
             else
                 echo "⚠️ Service is not responding to health checks."
@@ -112,7 +112,7 @@ case "$ACTION" in
 
         # Test health endpoint
         echo "Testing health endpoint..."
-        if curl -f http://localhost:3000/health; then
+        if curl -f http://localhost:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}/health; then
             echo "✅ Health endpoint OK"
         else
             echo "❌ Health endpoint failed"
@@ -121,7 +121,7 @@ case "$ACTION" in
 
         # Test search endpoint
         echo -e "\nTesting search endpoint..."
-        SEARCH_RESULT=$(curl -sf -X POST http://localhost:3000/search \
+        SEARCH_RESULT=$(curl -sf -X POST http://localhost:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}/search \
             -H "Content-Type: application/json" \
             -d '{"query": "playwright testing", "search_engine": "duckduckgo"}')
 

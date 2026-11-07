@@ -20,6 +20,7 @@ from memory import TaskPriority  # canonical enum (#10626)
 from task_execution_tracker import get_task_tracker
 from voice_processing.hallucination_filter import is_silence_hallucination, peak_window_rms
 from voice_processing.models import AudioInput, SpeechRecognitionResult
+from voice_processing.providers import ProviderUnavailable
 from voice_processing.types import SpeechQuality
 
 logger = get_logger(__name__)
@@ -270,41 +271,61 @@ class SpeechRecognitionEngine:
             return 0.5
 
     def _try_google_recognition(self, audio_data, language: str = "en") -> List[Dict[str, Any]]:
-        """Try Google speech recognition (Issue #298 - extracted helper)."""
+        """Try Google speech recognition (Issue #298 - extracted helper).
+
+        ``UnknownValueError`` is the recognizer's own "no speech here" and yields no results.
+        A ``RequestError`` (network, quota, key) and anything else PROPAGATES: it is a failure,
+        not silence, and the caller's fallback chain must be able to tell them apart (#17778).
+        """
+        import speech_recognition as sr
+
         results = []
         try:
             result = self.recognizer.recognize_google(audio_data, language=language, show_all=True)
-            if not result or "alternative" not in result:
-                return results
-            for alt in result["alternative"]:
-                results.append(
-                    {
-                        "text": alt.get("transcript", ""),
-                        "confidence": alt.get("confidence", 0.0),
-                        "engine": "google",
-                    }
-                )
-        except Exception as e:
-            logger.debug("Google Speech Recognition failed: %s", e)
+        except sr.UnknownValueError:
+            return results
+        if not result or "alternative" not in result:
+            return results
+        for alt in result["alternative"]:
+            results.append(
+                {
+                    "text": alt.get("transcript", ""),
+                    "confidence": alt.get("confidence", 0.0),
+                    "engine": "google",
+                }
+            )
         return results
 
     def _try_sphinx_recognition(self, audio_data) -> List[Dict[str, Any]]:
-        """Try Sphinx offline recognition (Issue #298 - extracted helper)."""
+        """Try Sphinx offline recognition (Issue #298 - extracted helper).
+
+        Sphinx is an optional offline second opinion: an absent backend (``ImportError`` or the
+        library's ``RequestError`` for a missing install) means "not available", and
+        ``UnknownValueError`` means no speech. Any other error propagates (#17778).
+        """
+        import speech_recognition as sr
+
         try:
             text = self.recognizer.recognize_sphinx(audio_data)
-            return [
-                {
-                    "text": text,
-                    "confidence": 0.7,  # Sphinx doesn't provide confidence
-                    "engine": "sphinx",
-                }
-            ]
-        except Exception as e:
-            logger.debug("Sphinx Recognition failed: %s", e)
+        except sr.UnknownValueError:
             return []
+        except (ImportError, sr.RequestError) as e:
+            logger.debug("Sphinx backend unavailable: %s", e)
+            return []
+        return [
+            {
+                "text": text,
+                "confidence": 0.7,  # Sphinx doesn't provide confidence
+                "engine": "sphinx",
+            }
+        ]
 
     async def _perform_speech_recognition(self, audio_input: AudioInput, language: str = "en") -> Dict[str, Any]:
-        """Perform actual speech recognition (#1329: language passthrough)."""
+        """Perform actual speech recognition (#1329: language passthrough).
+
+        Returns the empty result ONLY when the recognizers ran and heard nothing. A missing
+        recognizer raises :class:`ProviderUnavailable`; a recognizer error propagates (#17778).
+        """
         empty_result = {
             "transcription": "",
             "confidence": 0.0,
@@ -313,33 +334,22 @@ class SpeechRecognitionEngine:
         }
 
         if self.recognizer is None:
+            raise ProviderUnavailable("SpeechRecognition library not available")
+
+        audio_data = self._convert_to_audio_data(audio_input)
+        transcription_results = self._try_google_recognition(audio_data, language)
+        if not transcription_results:
+            transcription_results = self._try_sphinx_recognition(audio_data)
+        if not transcription_results:
             return empty_result
 
-        try:
-            # Convert audio data to AudioData format
-            audio_data = self._convert_to_audio_data(audio_input)
-
-            # Try recognition engines (Issue #298 - uses helpers)
-            transcription_results = self._try_google_recognition(audio_data, language)
-
-            if not transcription_results:
-                transcription_results = self._try_sphinx_recognition(audio_data)
-
-            # Process results
-            if not transcription_results:
-                return empty_result
-
-            best_result = max(transcription_results, key=lambda x: x["confidence"])
-            return {
-                "transcription": best_result["text"],
-                "confidence": best_result["confidence"],
-                "alternatives": transcription_results[1:],
-                "language": language,
-            }
-
-        except Exception as e:
-            logger.error("Speech recognition processing failed: %s", e)
-            return empty_result
+        best_result = max(transcription_results, key=lambda x: x["confidence"])
+        return {
+            "transcription": best_result["text"],
+            "confidence": best_result["confidence"],
+            "alternatives": transcription_results[1:],
+            "language": language,
+        }
 
     def _convert_to_audio_data(self, audio_input: AudioInput):
         """Convert audio input to speech_recognition AudioData format"""

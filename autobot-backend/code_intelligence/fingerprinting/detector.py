@@ -17,7 +17,6 @@ Extracted from code_fingerprinting.py as part of Issue #381 refactoring.
 import ast
 import hashlib
 from collections import defaultdict
-from pathlib import Path
 from typing import Any, Dict, List, Set, Tuple
 
 from autobot_shared.logging_manager import get_logger
@@ -34,6 +33,7 @@ from code_intelligence.fingerprinting.types import (
     Fingerprint,
     FingerprintType,
 )
+from code_intelligence.python_files import collect_python_files
 
 # Issue #607: Import shared caches for performance optimization
 try:
@@ -226,30 +226,8 @@ class CloneDetector:
         return report
 
     def _get_python_files(self, directory: str) -> List[str]:
-        """
-        Get all Python files in directory, excluding specified patterns.
-
-        Args:
-            directory: Root directory to search
-
-        Returns:
-            Sorted list of Python file paths
-        """
-        python_files = []
-        dir_path = Path(directory)
-
-        for py_file in dir_path.rglob("*.py"):
-            # Check if in excluded directory
-            should_exclude = False
-            for exclude_dir in self.exclude_dirs:
-                if exclude_dir in py_file.parts:
-                    should_exclude = True
-                    break
-
-            if not should_exclude:
-                python_files.append(str(py_file))
-
-        return sorted(python_files)
+        """All Python files in *directory* minus ``exclude_dirs`` (shared collector, #18731)."""
+        return collect_python_files(directory, self.exclude_dirs)
 
     def _create_fragment_from_node(
         self, node: ast.AST, file_path: str, lines: List[str], fragment_type: str, parent_class: str | None = None

@@ -25,7 +25,7 @@ logger = get_logger(__name__)
 
 
 @dataclass
-class FileMetadata:
+class FileMtimeSnapshot:
     """Lightweight file metadata for fast comparison"""
 
     path: str
@@ -149,7 +149,7 @@ class FastDocumentScanner:
 
         return command_files
 
-    def _get_file_metadata(self, file_path: str) -> FileMetadata | None:
+    def _get_file_metadata(self, file_path: str) -> FileMtimeSnapshot | None:
         """
         Get file metadata (FAST - no content reading).
 
@@ -157,15 +157,15 @@ class FastDocumentScanner:
             file_path: Absolute path to file
 
         Returns:
-            FileMetadata or None if file doesn't exist
+            FileMtimeSnapshot or None if file doesn't exist
         """
         try:
             stat = os.stat(file_path)
-            return FileMetadata(path=file_path, mtime=stat.st_mtime, size=stat.st_size, exists=True)
+            return FileMtimeSnapshot(path=file_path, mtime=stat.st_mtime, size=stat.st_size, exists=True)
         except (FileNotFoundError, PermissionError):
             return None
 
-    def _get_cached_metadata(self, file_path: str) -> FileMetadata | None:
+    def _get_cached_metadata(self, file_path: str) -> FileMtimeSnapshot | None:
         """
         Get cached file metadata from Redis.
 
@@ -173,7 +173,7 @@ class FastDocumentScanner:
             file_path: Absolute path to file
 
         Returns:
-            Cached FileMetadata or None
+            Cached FileMtimeSnapshot or None
         """
         cache_key = f"{self.CACHE_KEY_PREFIX}{file_path}"
         cached_data = self.redis.hgetall(cache_key)
@@ -181,14 +181,14 @@ class FastDocumentScanner:
         if not cached_data:
             return None
 
-        return FileMetadata(
+        return FileMtimeSnapshot(
             path=cached_data.get("path", file_path),
             mtime=float(cached_data.get("mtime", 0)),
             size=int(cached_data.get("size", 0)),
             exists=cached_data.get("exists", "true").lower() == "true",
         )
 
-    def _cache_metadata(self, metadata: FileMetadata) -> None:
+    def _cache_metadata(self, metadata: FileMtimeSnapshot) -> None:
         """
         Cache file metadata in Redis.
 

@@ -19,6 +19,7 @@ from urllib.parse import urljoin
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.http_egress_guard import EGRESS_POLICY, EgressBlockedError
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from autobot_shared.status_enums import ConnectionStatus
@@ -66,7 +67,7 @@ async def _handle_transient_error(
 ) -> None:
     """Log and sleep on transient connection errors; raise on final attempt."""
     _log_connection_error(attempt + 1, e)
-    if attempt < retry_attempts - 1:
+    if attempt < retry_attempts - 1 and not isinstance(e, EgressBlockedError):  # a refusal is final
         await asyncio.sleep(retry_delay * (attempt + 1))
     else:
         raise final_error from e
@@ -86,6 +87,17 @@ class AIStackError(Exception):
         self.status_code = status_code
         self.details = details or {}
         super().__init__(message)
+
+
+def _transient_failure(e: Exception, url: str, timeout: aiohttp.ClientTimeout) -> "AIStackError":
+    """The AIStackError raised when the last retry hits a transport failure (timeout, refusal, any client error)."""
+    details = {"error": type(e).__name__, "url": url}
+    if isinstance(e, asyncio.TimeoutError):
+        return AIStackError(f"AI Stack unreachable: connection timed out ({timeout.total}s) to {url}", details=details)
+    if isinstance(e, aiohttp.ClientConnectorError):
+        details["os_error"] = str(e.os_error) if e.os_error else None
+        return AIStackError(f"AI Stack unreachable: connection refused at {url}", details=details)
+    return AIStackError(f"AI Stack connection error: {type(e).__name__}: {e}", details=details)
 
 
 async def _process_ai_stack_response(response, url: str, attempt: int, retry_attempts: int) -> tuple:
@@ -272,6 +284,7 @@ class AIStackClient:
                     params=params,
                     headers=request_headers,
                     timeout=self.timeout,
+                    guard_egress=EGRESS_POLICY,
                 ) as response:
                     # Use helper to process response (Issue #315: reduced nesting)
                     result, should_retry, error = await _process_ai_stack_response(
@@ -284,45 +297,9 @@ class AIStackClient:
                         raise error
                     return result
 
-            except asyncio.TimeoutError as e:
-                await _handle_transient_error(
-                    e,
-                    attempt,
-                    self.retry_attempts,
-                    self.retry_delay,
-                    AIStackError(
-                        f"AI Stack unreachable: connection timed out" f" ({self.timeout.total}s) to {url}",
-                        details={"error": type(e).__name__, "url": url},
-                    ),
-                )
-                continue
-            except aiohttp.ClientConnectorError as e:
-                await _handle_transient_error(
-                    e,
-                    attempt,
-                    self.retry_attempts,
-                    self.retry_delay,
-                    AIStackError(
-                        f"AI Stack unreachable: connection refused at {url}",
-                        details={
-                            "error": type(e).__name__,
-                            "url": url,
-                            "os_error": str(e.os_error) if e.os_error else None,
-                        },
-                    ),
-                )
-                continue
-            except aiohttp.ClientError as e:
-                await _handle_transient_error(
-                    e,
-                    attempt,
-                    self.retry_attempts,
-                    self.retry_delay,
-                    AIStackError(
-                        f"AI Stack connection error: {type(e).__name__}: {e}",
-                        details={"error": type(e).__name__, "url": url},
-                    ),
-                )
+            except (asyncio.TimeoutError, aiohttp.ClientError) as e:
+                failure = _transient_failure(e, url, self.timeout)
+                await _handle_transient_error(e, attempt, self.retry_attempts, self.retry_delay, failure)
                 continue
             except Exception as e:
                 logger.warning("Unexpected error in AI Stack request: %s: %s", type(e).__name__, e)
@@ -346,6 +323,20 @@ class AIStackClient:
         }
         return await self._make_request("POST", endpoint, data=request_body)
 
+    def _ollama_tags(self):
+        """Open the Ollama model listing under ``EGRESS_POLICY`` (the SSOT Ollama origin is internal).
+
+        #12979: pooled + ``suppress_error_log`` -- Ollama is an optional backing service and an unreachable
+        (or refused) probe is an expected, routine condition that falls through to the AI Stack fallback.
+        """
+        return get_http_client().tracked_request(
+            "GET",
+            f"{self._ollama_url}/api/tags",
+            timeout=aiohttp.ClientTimeout(total=10),
+            suppress_error_log=True,
+            guard_egress=EGRESS_POLICY,
+        )
+
     async def health_check(self) -> Metadata:
         """Check AI Stack health — uses Ollama as backing service when configured (#6228)."""
         if not self.enabled:
@@ -358,16 +349,7 @@ class AIStackClient:
             }
         if self._ollama_url:
             try:
-                # #12979: pooled + suppress_error_log — Ollama is an optional
-                # backing service and an unreachable probe is an expected,
-                # routine condition (falls through to the AI Stack fallback
-                # below), not a genuine outbound-call failure.
-                async with get_http_client().tracked_request(
-                    "GET",
-                    f"{self._ollama_url}/api/tags",
-                    timeout=aiohttp.ClientTimeout(total=10),
-                    suppress_error_log=True,
-                ) as resp:
+                async with self._ollama_tags() as resp:
                     if resp.status == 200:
                         data = await resp.json()
                         models = [m["name"] for m in data.get("models", [])]
@@ -417,15 +399,7 @@ class AIStackClient:
         """List available agents — from Ollama models when configured (#6228), else AI Stack."""
         if self._ollama_url:
             try:
-                # #12979: pooled + suppress_error_log — same rationale as
-                # health_check(): an unreachable Ollama backing is expected
-                # and falls through to the AI Stack fallback below.
-                async with get_http_client().tracked_request(
-                    "GET",
-                    f"{self._ollama_url}/api/tags",
-                    timeout=aiohttp.ClientTimeout(total=10),
-                    suppress_error_log=True,
-                ) as resp:
+                async with self._ollama_tags() as resp:
                     if resp.status == 200:
                         data = await resp.json()
                         agents = [

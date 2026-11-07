@@ -11,7 +11,7 @@ silently dropped on every call and the client never received the refreshed
 JWT. The fix declares response_model=AuthRefreshData directly.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -39,6 +39,7 @@ class TestRefreshTokenResponsePayload:
                 return_value={"username": "alice", "role": "admin", "email": "alice@example.com"},
             ),
             patch("api.auth.get_auth_middleware", return_value=mock_middleware),
+            patch("api.auth.reject_if_account_not_live", AsyncMock()),  # #20443: tested in its own file
         ):
             response = client.post(
                 "/api/auth/refresh",

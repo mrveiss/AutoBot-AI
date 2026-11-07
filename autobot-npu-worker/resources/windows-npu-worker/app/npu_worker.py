@@ -185,7 +185,9 @@ def main():
 
     if tls_enabled:
         cert_dir = tls_config.get(
-            "cert_dir", os.environ.get("AUTOBOT_TLS_CERT_DIR", "certs")  # ssot-config-exempt: NPU worker
+            # Standalone worker, no autobot_shared: pinned copy of env_registry_tls.DEFAULT_TLS_CERT_DIR (#19317)
+            "cert_dir",
+            os.environ.get("AUTOBOT_TLS_CERT_DIR", "certs"),
         )
         ssl_keyfile = os.path.join(cert_dir, "server-key.pem")
         ssl_certfile = os.path.join(cert_dir, "server-cert.pem")

@@ -1,0 +1,91 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# Node enrollment (#18606): prepare the node for passwordless fleet access, then
+# deploy the SLM agent through the slm_agent role -- the same file set, unit and
+# venv every role-deployed node gets. No agent code lives in this playbook.
+#
+# Run by services/deployment.py (DeploymentService.enroll_node) as
+#   ansible-playbook playbooks/enroll-slm-agent.yml -i "<host>," \
+#     -e slm_node_id=... -e slm_admin_url=... -e slm_heartbeat_interval=... \
+#     -e '{"slm_server_pubkey": "<SLM server public key>"}'
+#
+# Required vars: slm_node_id, slm_admin_url, slm_heartbeat_interval (agent role)
+# Optional vars: slm_server_pubkey (empty -> the SSH-key steps are skipped)
+
+- name: Enroll Node - Deploy SLM Agent
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    slm_agent_user: autobot
+    slm_agent_group: autobot
+    slm_server_pubkey: ""
+
+  # The service invokes this play with a bare `-i "<host>,"`, which loads no
+  # group_vars, so the slm_agent role's `autobot.base_dir` /
+  # `slm_manager_inventory_host` come from the single definition by name -- the
+  # same load deploy.yml does for the same reason (#15348).
+  vars_files:
+    - ../inventory/group_vars/all.yml
+
+  tasks:
+    - name: Create autobot user
+      ansible.builtin.user:
+        name: "{{ slm_agent_user }}"
+        system: true
+        shell: /bin/bash
+        home: "/home/{{ slm_agent_user }}"
+        create_home: true
+
+    - name: Ensure .ssh directory exists for autobot user
+      ansible.builtin.file:
+        path: "/home/{{ slm_agent_user }}/.ssh"
+        state: directory
+        owner: "{{ slm_agent_user }}"
+        group: "{{ slm_agent_group }}"
+        mode: '0700'
+      when: slm_server_pubkey | length > 0
+
+    - name: Deploy SLM server SSH public key for passwordless access
+      ansible.posix.authorized_key:
+        user: "{{ slm_agent_user }}"
+        key: "{{ slm_server_pubkey }}"
+        state: present
+        comment: "SLM Server - AutoBot Fleet Management"
+      when: slm_server_pubkey | length > 0
+
+    - name: Verify SSH key deployment succeeded
+      ansible.builtin.command: grep -q "SLM Server" /home/{{ slm_agent_user }}/.ssh/authorized_keys
+      register: ssh_key_check
+      changed_when: false
+      failed_when: ssh_key_check.rc != 0
+      when: slm_server_pubkey | length > 0
+
+    - name: Configure passwordless sudo for autobot user
+      ansible.builtin.copy:
+        dest: /etc/sudoers.d/autobot-nopasswd
+        content: "{{ slm_agent_user }} ALL=(ALL) NOPASSWD: ALL"  # pragma: allowlist secret
+        mode: '0440'
+        validate: '/usr/sbin/visudo -cf %s'
+
+    # The role creates its own directories but not the install base they sit under.
+    - name: Create the install base directory
+      ansible.builtin.file:
+        path: "{{ autobot.base_dir }}"
+        state: directory
+        owner: "{{ slm_agent_user }}"
+        group: "{{ slm_agent_group }}"
+        mode: '0755'
+
+    # The real agent imports autobot_shared. One shared task file installs it here and in
+    # deploy-slm-agent.yml (#18611); it is deliberately not the autobot_shared role.
+    - name: Ship autobot_shared for the agent
+      ansible.builtin.import_tasks: ../roles/_shared/tasks/install_agent_autobot_shared.yml
+
+    - name: Deploy the SLM agent (slm_agent role)
+      ansible.builtin.import_role:
+        name: slm_agent

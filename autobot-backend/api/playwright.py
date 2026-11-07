@@ -13,6 +13,7 @@ import aiohttp
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 
 from api.browser_mcp import DEFAULT_BROWSER_SESSION_ID
+from api.playwright_region_scripts import JS_COLLECT_REGIONS as _JS_COLLECT_REGIONS
 from api.schemas_code import (
     AiProposeRegionsResponse,
     FrontendTestRequest,
@@ -38,6 +39,7 @@ from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
+from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
 from research_browser_manager import get_research_browser_manager
@@ -321,6 +323,7 @@ async def navigate_to_url(request: PlaywrightNavigateRequest):
                 "session_id": request.session_id or DEFAULT_BROWSER_SESSION_ID,
             },
             timeout=aiohttp.ClientTimeout(total=request.timeout / 1000 + 5),
+            guard_egress=EGRESS_POLICY,
         ) as response:
             result = await response.json()
 
@@ -365,6 +368,7 @@ async def reload_page(request: PlaywrightReloadRequest):
                 "session_id": request.session_id or DEFAULT_BROWSER_SESSION_ID,
             },
             timeout=aiohttp.ClientTimeout(total=35),
+            guard_egress=EGRESS_POLICY,
         ) as response:
             result = await response.json()
 
@@ -409,6 +413,7 @@ async def go_back(request: PlaywrightSessionRequest | None = None):
             f"{BROWSER_VM_URL}/back",
             json={"session_id": session_id},
             timeout=aiohttp.ClientTimeout(total=35),
+            guard_egress=EGRESS_POLICY,
         ) as response:
             result = await response.json()
 
@@ -453,6 +458,7 @@ async def go_forward(request: PlaywrightSessionRequest | None = None):
             f"{BROWSER_VM_URL}/forward",
             json={"session_id": session_id},
             timeout=aiohttp.ClientTimeout(total=35),
+            guard_egress=EGRESS_POLICY,
         ) as response:
             result = await response.json()
 
@@ -494,6 +500,7 @@ async def get_worker_status(session_id: str | None = None):
             f"{BROWSER_VM_URL}/status",
             params={"session_id": session_id or DEFAULT_BROWSER_SESSION_ID},
             timeout=aiohttp.ClientTimeout(total=10),
+            guard_egress=EGRESS_POLICY,
         ) as response:
             data = await response.json()
             logger.info("Worker status: %s", data.get("status"))
@@ -539,6 +546,7 @@ async def take_worker_screenshot(request: PlaywrightSessionRequest | None = None
             f"{BROWSER_VM_URL}/screenshot",
             json={"session_id": session_id},
             timeout=aiohttp.ClientTimeout(total=30),
+            guard_egress=EGRESS_POLICY,
         ) as response:
             result = await response.json()
             if response.status == 200:
@@ -593,6 +601,7 @@ async def interact_with_page(request: PlaywrightInteractRequest):
             f"{BROWSER_VM_URL}/{request.action}",
             json=payload,
             timeout=aiohttp.ClientTimeout(total=15),
+            guard_egress=EGRESS_POLICY,
         ) as response:
             result = await response.json()
             if response.status == 200:
@@ -670,55 +679,6 @@ async def get_capabilities():
             "description": "Docker container with native API integration",
         },
     }
-
-
-# JavaScript used by snapshot_with_regions to walk the DOM and collect regions.
-_JS_COLLECT_REGIONS = """
-() => {
-  const results = [];
-  const seen = new Set();
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
-  while (walker.nextNode()) {
-    const el = walker.currentNode;
-    const rect = el.getBoundingClientRect();
-    const area = rect.width * rect.height;
-    if (area < 20) continue;
-    const style = window.getComputedStyle(el);
-    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') continue;
-    if (rect.width === 0 || rect.height === 0) continue;
-    const key = `${Math.round(rect.x)},${Math.round(rect.y)},${Math.round(rect.width)},${Math.round(rect.height)}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const role = el.getAttribute('role') || el.tagName.toLowerCase();
-    const textPreview = (el.textContent || '').trim().slice(0, 80);
-    if (!textPreview && !el.getAttribute('aria-label') && !el.getAttribute('alt')) continue;
-    let selector = el.tagName.toLowerCase();
-    if (el.id) selector = `#${el.id}`;
-    else if (el.className && typeof el.className === 'string') {
-      const cls = el.className.trim().split(/\\s+/)[0];
-      if (cls) selector = `.${cls}`;
-    }
-    let xpath = '';
-    let node = el;
-    while (node && node !== document.body) {
-      const tag = node.tagName.toLowerCase();
-      const idx = Array.from(node.parentElement?.children || [])
-        .filter(c => c.tagName === node.tagName).indexOf(node) + 1;
-      xpath = `/${tag}[${idx}]${xpath}`;
-      node = node.parentElement;
-    }
-    xpath = `/html/body${xpath}`;
-    results.push({
-      selector,
-      xpath,
-      rect: { x: rect.x, y: rect.y, w: rect.width, h: rect.height },
-      textPreview: textPreview || el.getAttribute('aria-label') || el.getAttribute('alt') || '',
-      role
-    });
-  }
-  return results.slice(0, 200);
-}
-"""
 
 
 @router.post(

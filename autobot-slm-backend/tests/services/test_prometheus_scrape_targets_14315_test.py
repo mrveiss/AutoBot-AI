@@ -47,6 +47,10 @@ _ANSIBLE = Path(__file__).resolve().parents[2] / "ansible"
 _ROLE = _ANSIBLE / "roles" / "monitoring"
 _TEMPLATE = _ROLE / "templates" / "prometheus.yml.j2"
 _TASK_DIR = _ROLE / "tasks"
+#: Shared var the template reads (``monitoring_local_host``, #18556), from its one home in group_vars/all.
+_LOCAL_HOST = yaml.safe_load((_ANSIBLE / "inventory" / "group_vars" / "all.yml").read_text(encoding="utf-8"))[
+    "monitoring_local_host"
+]
 
 _TOPOLOGY_FACT = "_backend_metrics_on_loopback"
 
@@ -75,6 +79,7 @@ def _render(**overrides) -> dict:
         "backend_nginx_port": 8443,
         "backend_host": "backend-node",
         "redis_host": "db-node",
+        "monitoring_local_host": _LOCAL_HOST,
     }
     context.update(overrides)
     return yaml.safe_load(_env().from_string(_TEMPLATE.read_text(encoding="utf-8")).render(**context))

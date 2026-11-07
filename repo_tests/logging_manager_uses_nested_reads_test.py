@@ -26,6 +26,8 @@ import re
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _REPO_ROOT = repo_root()
 
 #: Files that read config through a manager exposing both accessors.
@@ -40,7 +42,7 @@ _DOTTED = re.compile(r"^[a-z_]+(\.[a-z_{}]+)+$", re.IGNORECASE)
 def _dotted_flat_reads(source: str) -> list[tuple[int, str]]:
     """Every ``.get("a.b")`` call whose first argument looks like a dotted path."""
     found: list[tuple[int, str]] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
             continue
         if node.func.attr != "get" or not node.args:
@@ -50,9 +52,7 @@ def _dotted_flat_reads(source: str) -> list[tuple[int, str]]:
         if isinstance(first, ast.Constant) and isinstance(first.value, str):
             text = first.value
         elif isinstance(first, ast.JoinedStr):
-            text = "".join(
-                part.value if isinstance(part, ast.Constant) else "{}" for part in first.values
-            )
+            text = "".join(part.value if isinstance(part, ast.Constant) else "{}" for part in first.values)
         if text and _DOTTED.match(text):
             found.append((node.lineno, text))
     return found
@@ -76,7 +76,6 @@ def test_no_dotted_key_is_read_through_the_flat_get():
 def test_the_sweep_actually_parsed_the_files():
     """A vacuity floor: a scan that parsed nothing would pass silently."""
     total = sum(
-        len(list(ast.walk(ast.parse((_REPO_ROOT / rel).read_text(encoding="utf-8")))))
-        for rel in _SCANNED
+        len(list(ast.walk(parse_cache.parse((_REPO_ROOT / rel).read_text(encoding="utf-8"))))) for rel in _SCANNED
     )
     assert total > 500, f"FIX THE SWEEP: only {total} AST nodes across {len(_SCANNED)} files"

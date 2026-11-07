@@ -38,6 +38,7 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Dict, List
 
+from autobot_shared.ssot_constants import RetryConfig
 from autobot_shared.status_enums import TaskStatus
 
 
@@ -136,7 +137,7 @@ class WorkflowTask:
     requires_approval: bool = False
     priority: int = 5
     timeout_seconds: float = 300.0
-    max_retries: int = 3
+    max_retries: int = RetryConfig.DEFAULT_RETRIES  # #19730
     retry_count: int = 0
 
     capabilities_required: List[str] = field(default_factory=list)

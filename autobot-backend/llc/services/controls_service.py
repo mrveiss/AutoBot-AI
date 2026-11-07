@@ -14,16 +14,19 @@ Redis keys:
 """
 
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import text
+from sqlalchemy import false, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
+from models.agent_org import AgentOrgNode
 
-from ..models.enums import ActivityEventType, LLCAgentStatus
+from ..models.enums import UNDISPATCHABLE_AGENT_STATUSES, ActivityEventType, LLCAgentStatus
 from .activity_log import LLCActivityLogService
+from .company import CompanyNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +42,30 @@ class SprintNotFoundError(Exception):
     pass
 
 
-class CompanyNotFoundError(Exception):
-    pass
+class AgentNotSchedulableError(Exception):
+    """Enabling a heartbeat on an agent whose status means it must never run (#15907)."""
+
+    def __init__(self, agent_id: str, status: str) -> None:
+        super().__init__(f"Agent {agent_id} is {status}; its heartbeat cannot be enabled")
+        self.status = status
+
+
+#: Statuses no heartbeat may wake: the terminal pair ``llc/api/replay.py`` rejects,
+#: and the one migration 090 writes for a node that is not a company's CEO.
+NEVER_SCHEDULED_STATUSES = UNDISPATCHABLE_AGENT_STATUSES - {LLCAgentStatus.PAUSED.value}
+
+
+def _agent_in_company(company_id: str, agent_id: str) -> tuple:
+    """One agent, by slug, only within *company_id* -- the tenant scope of every heartbeat write.
+
+    A malformed company id matches nothing rather than raising, exactly as an
+    unknown one does.
+    """
+    try:
+        company = uuid.UUID(company_id)
+    except ValueError:
+        return (false(),)
+    return (AgentOrgNode.company_id == company, AgentOrgNode.agent_id == agent_id)
 
 
 class ControlsService:
@@ -49,6 +74,7 @@ class ControlsService:
     All methods are synchronous from the caller's perspective: the state change
     is committed before the method returns. Redis flags are best-effort (failures
     are logged, not raised) because the DB state is authoritative.
+    A flag follows the activity write, so a failed write leaves no flag behind (#20150).
     """
 
     def __init__(self, activity_log: Optional[LLCActivityLogService] = None) -> None:
@@ -95,8 +121,6 @@ class ControlsService:
             },
         )
 
-        await self._set_redis_flag(_AGENT_PAUSED_KEY.format(agent_id=agent_id), "1")
-
         await self._activity_log.record(
             session=session,
             company_id=company_id,
@@ -108,6 +132,8 @@ class ControlsService:
             before={"status": before_status},
             after={"status": LLCAgentStatus.PAUSED.value, "pause_reason": reason},
         )
+
+        await self._set_redis_flag(_AGENT_PAUSED_KEY.format(agent_id=agent_id), "1")
 
         return {"agent_id": agent_id, "status": LLCAgentStatus.PAUSED.value, "pause_reason": reason}
 
@@ -144,8 +170,6 @@ class ControlsService:
             },
         )
 
-        await self._del_redis_flag(_AGENT_PAUSED_KEY.format(agent_id=agent_id))
-
         await self._activity_log.record(
             session=session,
             company_id=company_id,
@@ -157,6 +181,8 @@ class ControlsService:
             before={"status": before_status},
             after={"status": restore_status},
         )
+
+        await self._del_redis_flag(_AGENT_PAUSED_KEY.format(agent_id=agent_id))
 
         return {"agent_id": agent_id, "status": restore_status}
 
@@ -189,9 +215,6 @@ class ControlsService:
             },
         )
 
-        # Terminated agents also get the Redis pause flag so heartbeat skips them
-        await self._set_redis_flag(_AGENT_PAUSED_KEY.format(agent_id=agent_id), "terminated")
-
         await self._activity_log.record(
             session=session,
             company_id=company_id,
@@ -204,7 +227,51 @@ class ControlsService:
             after={"status": LLCAgentStatus.TERMINATED.value, "reason": reason},
         )
 
+        # Terminated agents also get the Redis pause flag so heartbeat skips them
+        await self._set_redis_flag(_AGENT_PAUSED_KEY.format(agent_id=agent_id), "terminated")
+
         return {"agent_id": agent_id, "status": LLCAgentStatus.TERMINATED.value}
+
+    async def set_agent_heartbeat(
+        self,
+        session: AsyncSession,
+        company_id: str,
+        agent_id: str,
+        enabled: bool,
+        actor_user_id: str,
+        default_cron: str,
+    ) -> dict:
+        """Switch one agent's periodic heartbeat on or off (#15907).
+
+        Writes ``heartbeat_enabled``, the column the scheduler selects on. Enabling
+        an agent that has no cron (a provisioned CEO) also gives it *default_cron*:
+        the scheduler requires ``heartbeat_cron IS NOT NULL`` as well, so the flag
+        alone would read as on and never fire. A cron already set is kept.
+        """
+        row = await self._get_heartbeat_row(session, company_id, agent_id)
+        if row is None:
+            raise AgentNotFoundError(agent_id)
+        if enabled and row["status"] in NEVER_SCHEDULED_STATUSES:
+            raise AgentNotSchedulableError(agent_id, row["status"])
+
+        cron = row["heartbeat_cron"] or (default_cron if enabled else None)
+        await session.execute(
+            update(AgentOrgNode)
+            .where(*_agent_in_company(company_id, agent_id))
+            .values(heartbeat_enabled=enabled, heartbeat_cron=cron)
+        )
+        await self._activity_log.record(
+            session=session,
+            company_id=company_id,
+            actor_type="user",
+            actor_id=actor_user_id,
+            event_type=ActivityEventType.CONTROL_AGENT_HEARTBEAT_SET,
+            entity_type="agent",
+            entity_id=agent_id,
+            before={"heartbeat_enabled": row["heartbeat_enabled"], "heartbeat_cron": row["heartbeat_cron"]},
+            after={"heartbeat_enabled": enabled, "heartbeat_cron": cron},
+        )
+        return {"agent_id": agent_id, "heartbeat_enabled": enabled, "heartbeat_cron": cron}
 
     # ------------------------------------------------------------------
     # Sprint controls
@@ -287,8 +354,6 @@ class ControlsService:
         """Set company-wide Redis pause flag — blocks all new heartbeat runs."""
         if await self._get_company_row(session, company_id) is None:
             raise CompanyNotFoundError(company_id)
-        await self._set_redis_flag(_COMPANY_PAUSED_KEY.format(company_id=company_id), reason or "1")
-
         await self._activity_log.record(
             session=session,
             company_id=company_id,
@@ -299,6 +364,8 @@ class ControlsService:
             entity_id=company_id,
             after={"reason": reason},
         )
+
+        await self._set_redis_flag(_COMPANY_PAUSED_KEY.format(company_id=company_id), reason or "1")
 
         return {"company_id": company_id, "paused": True}
 
@@ -311,8 +378,6 @@ class ControlsService:
         """Lift company-wide pause flag."""
         if await self._get_company_row(session, company_id) is None:
             raise CompanyNotFoundError(company_id)
-        await self._del_redis_flag(_COMPANY_PAUSED_KEY.format(company_id=company_id))
-
         await self._activity_log.record(
             session=session,
             company_id=company_id,
@@ -323,6 +388,8 @@ class ControlsService:
             entity_id=company_id,
             after={"paused": False},
         )
+
+        await self._del_redis_flag(_COMPANY_PAUSED_KEY.format(company_id=company_id))
 
         return {"company_id": company_id, "paused": False}
 
@@ -340,6 +407,15 @@ class ControlsService:
         )
         row = result.fetchone()
         return {"status": row[0], "pre_pause_status": row[1]} if row else None
+
+    async def _get_heartbeat_row(self, session: AsyncSession, company_id: str, agent_id: str) -> Optional[dict]:
+        result = await session.execute(
+            select(AgentOrgNode.status, AgentOrgNode.heartbeat_enabled, AgentOrgNode.heartbeat_cron).where(
+                *_agent_in_company(company_id, agent_id)
+            )
+        )
+        row = result.first()
+        return {"status": row[0], "heartbeat_enabled": bool(row[1]), "heartbeat_cron": row[2]} if row else None
 
     async def _get_company_row(self, session: AsyncSession, company_id: str) -> Optional[dict]:
         result = await session.execute(

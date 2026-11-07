@@ -38,6 +38,9 @@ frontend:
   # its own tests never executed.
   - 'libs/autobot-ui/**'
   - '.github/workflows/frontend-test.yml'
+  # #15360: the reusable `changes` job both workflows call; editing it changes how
+  # `frontend` is computed, so it must run the suite (mirrored in frontend-test.yml).
+  - '.github/workflows/_changes.yml'
   # The shim workflow gates a required context, so editing it must run the real
   # suite for the same reason editing frontend-test.yml does.
   - '.github/workflows/frontend-required-context.yml'

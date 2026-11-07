@@ -21,7 +21,7 @@ import pytest
 
 from orchestration.subagent_dispatcher import (
     SubagentDispatcher,
-    SubagentTask,
+    SubagentDispatchTask,
     get_subagent_dispatcher,
 )
 
@@ -41,21 +41,21 @@ def _score_response(score: float, gaps: list) -> MagicMock:
 
 
 # ---------------------------------------------------------------------------
-# SubagentTask defaults
+# SubagentDispatchTask defaults
 # ---------------------------------------------------------------------------
 
 
 class TestSubagentTaskDefaults:
     def test_reflection_disabled_by_default(self):
-        task = SubagentTask(task_id="t1", func=lambda: None)
+        task = SubagentDispatchTask(task_id="t1", func=lambda: None)
         assert task.enable_reflection is False
 
     def test_reflection_threshold_default(self):
-        task = SubagentTask(task_id="t1", func=lambda: None)
+        task = SubagentDispatchTask(task_id="t1", func=lambda: None)
         assert task.reflection_threshold == 0.7
 
     def test_enable_reflection_flag(self):
-        task = SubagentTask(
+        task = SubagentDispatchTask(
             task_id="t1",
             func=lambda: None,
             enable_reflection=True,
@@ -79,7 +79,7 @@ class TestReflectionDisabled:
         async def my_func():
             return "original"
 
-        task = SubagentTask(task_id="t1", func=my_func, enable_reflection=False)
+        task = SubagentDispatchTask(task_id="t1", func=my_func, enable_reflection=False)
 
         with patch.object(orch, "_reflection_pass", new_callable=AsyncMock) as mock_rp:
             result = await orch._execute_task(task)
@@ -102,7 +102,7 @@ class TestReflectionHighScore:
         async def my_func():
             return "original result"
 
-        task = SubagentTask(
+        task = SubagentDispatchTask(
             task_id="t1",
             func=my_func,
             enable_reflection=True,
@@ -135,7 +135,7 @@ class TestReflectionLowScore:
         async def my_func():
             return "incomplete result"
 
-        task = SubagentTask(
+        task = SubagentDispatchTask(
             task_id="t1",
             func=my_func,
             enable_reflection=True,
@@ -165,7 +165,7 @@ class TestReflectionLowScore:
         async def my_func():
             return "borderline result"
 
-        task = SubagentTask(
+        task = SubagentDispatchTask(
             task_id="t1",
             func=my_func,
             enable_reflection=True,
@@ -200,7 +200,7 @@ class TestReflectionLLMUnavailable:
         async def my_func():
             return "original"
 
-        task = SubagentTask(
+        task = SubagentDispatchTask(
             task_id="t1",
             func=my_func,
             enable_reflection=True,
@@ -223,7 +223,7 @@ class TestReflectionLLMUnavailable:
         async def my_func():
             return "original"
 
-        task = SubagentTask(
+        task = SubagentDispatchTask(
             task_id="t1",
             func=my_func,
             enable_reflection=True,
@@ -263,7 +263,7 @@ class TestParallelDispatchNoRegression:
             return func
 
         tasks = [
-            SubagentTask(
+            SubagentDispatchTask(
                 task_id=f"t{i}",
                 func=await make_func(i),
                 enable_reflection=False,
@@ -300,7 +300,7 @@ class TestParallelDispatchNoRegression:
             active -= 1
             return "ok"
 
-        tasks = [SubagentTask(task_id=f"t{i}", func=my_func) for i in range(4)]
+        tasks = [SubagentDispatchTask(task_id=f"t{i}", func=my_func) for i in range(4)]
         results = await orch.spawn_parallel_tasks(tasks)
 
         # All 4 tasks complete (no truncation)
@@ -316,7 +316,7 @@ class TestParallelDispatchNoRegression:
         async def bad_func():
             raise ValueError("boom")
 
-        task = SubagentTask(task_id="bad", func=bad_func)
+        task = SubagentDispatchTask(task_id="bad", func=bad_func)
         results = await orch.spawn_parallel_tasks([task])
         assert isinstance(results["bad"], ValueError)
 

@@ -20,7 +20,7 @@ StartLimitBurst=5
 Type=simple
 User=autobot
 Group=autobot
-WorkingDirectory=/opt/autobot/autobot-browser-worker
+WorkingDirectory={{ autobot.base_dir }}/autobot-browser-worker
 
 # Environment
 Environment="PLAYWRIGHT_PORT={{ playwright_port }}"
@@ -34,7 +34,7 @@ Environment="PLAYWRIGHT_BROWSERS_PATH=/var/lib/autobot/playwright-browsers"
 EnvironmentFile=-/etc/autobot/autobot-browser-worker.env
 
 # Start command - Node.js Express server
-ExecStart=/usr/bin/node /opt/autobot/autobot-browser-worker/playwright-server.js
+ExecStart=/usr/bin/node {{ autobot.base_dir }}/autobot-browser-worker/playwright-server.js
 
 # Restart policy
 Restart=always

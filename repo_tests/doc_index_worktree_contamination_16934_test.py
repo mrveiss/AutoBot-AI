@@ -29,7 +29,8 @@ from pathlib import Path
 
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import git, make_repo
+from tools.lint._comment_syntax import code_lines
 
 _REPO_ROOT = repo_root()
 _HOOK = _REPO_ROOT / "autobot-infrastructure/shared/scripts/hooks/post-merge-doc-sync"
@@ -47,9 +48,9 @@ Path(__file__).resolve().parent.parent.joinpath("{marker}").write_text("invoked"
 
 
 def _git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
-    """#15246: env scrubbed -- an inherited GIT_DIR would point these calls at
+    """#15246/#18940: isolated env -- an inherited GIT_DIR would point these calls at
     the real repository instead of the throwaway one under tmp_path."""
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=check, env=scrubbed_git_env())
+    return git(cwd, *args, check=check)
 
 
 def _seed_repo(tmp_path: Path, *, name: str, branch: str) -> Path:
@@ -70,9 +71,7 @@ def _seed_repo(tmp_path: Path, *, name: str, branch: str) -> Path:
     hook_dest.chmod(0o755)
     (repo / ".git" / "hooks" / "lib" / "_common.sh").write_bytes(_COMMON_LIB.read_bytes())
 
-    _git(tmp_path, "init", "--quiet", f"--initial-branch={branch}", str(repo))
-    _git(repo, "config", "user.email", "t@t")
-    _git(repo, "config", "user.name", "t")
+    make_repo(repo, default_branch=branch)
     _git(repo, "add", "-A")
     _git(repo, "commit", "--quiet", "-m", "seed")
     return repo
@@ -213,8 +212,15 @@ def test_post_commit_hook_no_longer_chains_to_doc_sync():
     move is fine; an actual chain -- `source`/exec of a `*-doc-sync` path
     -- is the regression this guards)."""
     text = _POST_COMMIT.read_text(encoding="utf-8")
+    # #17941: whole-line comments were skipped but a TRAILING one was not, so
+    # `exec thing  # the old doc-sync path` read as an invocation. The docstring
+    # above says a comment noting the move is fine; that has to hold for a
+    # trailing comment too. Quote-aware, so a `#` inside a quoted argument
+    # stays data.
     invocation_lines = [
-        line for line in text.splitlines() if "doc-sync" in line.lower() and not line.lstrip().startswith("#")
+        entry.text
+        for entry in code_lines(text, name="post-commit", strip_trailing=True)
+        if "doc-sync" in entry.text.lower()
     ]
     assert not invocation_lines, f"post-commit still invokes doc-sync: {invocation_lines}"
 

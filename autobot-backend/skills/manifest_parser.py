@@ -14,12 +14,12 @@ Optional fields : category, capabilities, dependencies, trust_level_requested,
                   tags, author, license, homepage
 """
 
-import re
 import warnings
 from typing import Any
 
 import yaml
 
+from autobot_shared.frontmatter import split_frontmatter
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -39,8 +39,6 @@ _OPTIONAL_FIELDS = (
 _VALID_TRUST_LEVELS = {"trusted", "monitored", "sandboxed", "restricted"}
 _LIST_FIELDS = ("capabilities", "dependencies", "tags")
 
-_FRONT_MATTER_RE = re.compile(r"^---\r?\n(.*?)\r?\n---", re.DOTALL)
-
 
 def parse_manifest(text: str) -> dict[str, Any]:
     """Parse YAML front-matter from a SKILL.md string.
@@ -54,11 +52,10 @@ def parse_manifest(text: str) -> dict[str, Any]:
     Raises:
         ValueError: If front-matter is missing, unparseable, or fails validation.
     """
-    match = _FRONT_MATTER_RE.match(text)
-    if not match:
+    raw_yaml, _ = split_frontmatter(text)
+    if raw_yaml is None:
         raise ValueError("SKILL.md must start with a YAML front-matter block delimited by '---' lines")
 
-    raw_yaml = match.group(1)
     try:
         data = yaml.safe_load(raw_yaml)
     except yaml.YAMLError as exc:

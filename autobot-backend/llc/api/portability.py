@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from llc.deps import assert_company_access
-from llc.services.portability import PortabilityService
+from llc.services.portability import ImportNeedsApprovalError, PortabilityService
 from llc.services.portability import TemplateImportError as LLCImportError
 from user_management.database import get_async_session
 from user_management.services import TenantContext
@@ -43,6 +43,7 @@ class ImportPreviewResponse(BaseModel):
 
 class RemappingOptions(BaseModel):
     require_approval_for_hires: Optional[bool] = None
+    require_approval_for_budget_raises: Optional[bool] = None
 
 
 class ImportExecuteRequest(BaseModel):
@@ -117,6 +118,8 @@ async def execute_import(
             remapping_options=remapping,
             secret_mapping=body.secret_mapping or {},
         )
+    except ImportNeedsApprovalError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except LLCImportError:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
     await session.commit()

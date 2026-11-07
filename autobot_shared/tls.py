@@ -12,6 +12,7 @@ one function with a documented trust hierarchy.
 
 import os
 import ssl
+from pathlib import Path
 from typing import Optional
 
 from autobot_shared.logging_manager import get_logger
@@ -61,6 +62,15 @@ def tls_verify_enabled() -> bool:
         True to verify (the default); False only on an explicit opt-out.
     """
     return os.environ.get("AUTOBOT_SKIP_TLS_VERIFY", "").lower() != "true"
+
+
+def _project_ca_fallback() -> str:
+    """``<project_root>/<AUTOBOT_TLS_CERT_DIR>/ca/ca-cert.pem``, with the one default (#19317)."""
+    from autobot_shared.env_registry_tls import DEFAULT_TLS_CERT_DIR
+
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    cert_dir = os.environ.get("AUTOBOT_TLS_CERT_DIR", DEFAULT_TLS_CERT_DIR)
+    return os.path.join(project_root, cert_dir, "ca", "ca-cert.pem")
 
 
 def get_internal_tls_context(
@@ -115,9 +125,7 @@ def get_internal_tls_context(
         return ctx
 
     # 4. AutoBot project CA fallback (single-host installs with self-signed certs)
-    _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    _cert_dir = os.environ.get("AUTOBOT_TLS_CERT_DIR", "certs")
-    _fallback_ca = os.path.join(_project_root, _cert_dir, "ca", "ca-cert.pem")
+    _fallback_ca = _project_ca_fallback()
     if os.path.isfile(_fallback_ca):
         ctx.load_verify_locations(_fallback_ca)
         if client_cert and client_key:
@@ -142,3 +150,43 @@ def get_internal_tls_context(
     if client_cert and client_key:
         ctx.load_cert_chain(client_cert, client_key)
     return ctx
+
+
+def resolve_redis_mtls_paths() -> tuple[str, str, str]:
+    """Return ``(ca, client_cert, client_key)`` for Redis mTLS (#6702, #18953).
+
+    Explicit ``tls_ca_path`` / ``tls_cert_path`` / ``tls_key_path`` settings win;
+    when any is missing, all three fall back to the legacy ``<cert_dir>`` layout
+    under the project root. The one resolver for celery and the checkpointer.
+    """
+    from autobot_shared.ssot_config import config as ssot_config
+
+    ca = ssot_config.misc.tls_ca_path
+    cert = ssot_config.misc.tls_cert_path
+    key = ssot_config.misc.tls_key_path
+    if ca and cert and key:
+        return ca, cert, key
+    root = Path(__file__).resolve().parent.parent / ssot_config.tls.cert_dir
+    return (
+        str(root / "ca" / "ca-cert.pem"),
+        str(root / "main-host" / "server-cert.pem"),
+        str(root / "main-host" / "server-key.pem"),
+    )
+
+
+def redis_ssl_connection_kwargs() -> dict:
+    """redis-py ``ssl_*`` kwargs whose verification policy equals the shared context's.
+
+    Builds the context with :func:`get_internal_tls_context` and mirrors its
+    ``verify_mode`` / ``check_hostname`` so redis-py (which defaults hostname
+    checking off when only ``ssl_cert_reqs`` is passed) is never weaker than celery.
+    """
+    ca, cert, key = resolve_redis_mtls_paths()
+    ctx = get_internal_tls_context(ca_path=ca, client_cert=cert, client_key=key)
+    return {
+        "ssl_ca_certs": ca,
+        "ssl_certfile": cert,
+        "ssl_keyfile": key,
+        "ssl_cert_reqs": "required" if ctx.verify_mode == ssl.CERT_REQUIRED else "none",
+        "ssl_check_hostname": ctx.check_hostname,
+    }

@@ -173,6 +173,12 @@ export interface EnvRecommendation {
   priority: string
 }
 
+/** The env-analysis AI filter model, and whether fetching it failed (#15502). */
+export interface AiFilteringModelState {
+  model: string | null
+  unavailable: boolean
+}
+
 export interface EnvironmentAnalysisResult {
   total_hardcoded_values: number
   high_priority_count: number

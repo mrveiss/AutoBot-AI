@@ -9,14 +9,14 @@
         <p class="page-subtitle">{{ t('budgetPolicies.subtitle') }}</p>
       </div>
       <div class="header-actions">
-        <button class="btn-action-primary" @click="openCreate">
+        <BaseButton size="sm" @click="openCreate">
           <Icon name="plus" />
           {{ t('budgetPolicies.newPolicy') }}
-        </button>
-        <button class="btn-action-secondary" :disabled="loading" @click="loadPolicies">
+        </BaseButton>
+        <BaseButton variant="secondary" size="sm" :disabled="loading" @click="loadPolicies">
           <Icon name="sync-alt" :spin="loading" />
           {{ t('common.refresh') }}
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -122,9 +122,9 @@
 :placeholder="t('budgetPolicies.agentIdPlaceholder')"
           @keydown.enter="checkAgentStatus"
         />
-        <button class="btn-action-secondary" :disabled="!agentIdQuery.trim()" @click="checkAgentStatus">
+        <BaseButton variant="secondary" size="sm" :disabled="!agentIdQuery.trim()" @click="checkAgentStatus">
           {{ t('budgetPolicies.checkStatus') }}
-        </button>
+        </BaseButton>
       </div>
 
       <div v-if="agentStatus" class="agent-status-result">
@@ -146,15 +146,14 @@
           <span class="status-label">{{ t('budgetPolicies.labelSince') }}</span>
           <span>{{ new Date(agentStatus.paused_at).toLocaleString() }}</span>
         </div>
-        <button
+        <BaseButton size="sm" class="mt-2"
           v-if="agentStatus.is_paused && isAdmin"
-          class="btn-action-primary mt-2"
           :disabled="resuming"
           @click="resumeAgent(agentStatus.agent_id)"
         >
           <Icon name="play" :spin="resuming" />
           {{ t('budgetPolicies.resumeAgent') }}
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -247,16 +246,15 @@
       </form>
 
       <template #actions>
-        <button type="button" class="btn-action-secondary" @click="closeModal">{{ t('common.cancel') }}</button>
-        <button
+        <BaseButton variant="secondary" size="sm" type="button" @click="closeModal">{{ t('common.cancel') }}</BaseButton>
+        <BaseButton size="sm"
           type="submit"
           form="budget-policy-form"
-          class="btn-action-primary"
           :disabled="saving"
         >
           <Icon v-if="saving" name="sync-alt" :spin="true" />
           {{ editTarget ? t('budgetPolicies.saveChanges') : t('budgetPolicies.createPolicy') }}
-        </button>
+        </BaseButton>
       </template>
     </BaseModal>
 
@@ -275,11 +273,11 @@
       </p>
 
       <template #actions>
-        <button class="btn-action-secondary" @click="deleteTarget = null">{{ t('common.cancel') }}</button>
-        <button class="btn-action-danger" :disabled="deleting" @click="doDelete">
+        <BaseButton variant="secondary" size="sm" @click="deleteTarget = null">{{ t('common.cancel') }}</BaseButton>
+        <BaseButton variant="error" size="sm" :disabled="deleting" @click="doDelete">
           <Icon v-if="deleting" name="sync-alt" :spin="true" />
           {{ t('common.delete') }}
-        </button>
+        </BaseButton>
       </template>
     </BaseModal>
   </div>
@@ -291,7 +289,7 @@ import { createLogger } from '@/utils/debugUtils'
 import apiClient from '@/utils/ApiClient'
 import { useUserStore } from '@/stores/useUserStore'
 import Icon from '@/components/ui/Icon.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, HttpError, BaseButton } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -395,7 +393,7 @@ async function loadPolicies(): Promise<void> {
     const res = await apiClient.rawRequest(`/api/budget-policies?${params}`)
     if (!res.ok) {
       const body = await res.json().catch(() => ({})) as { detail?: string }
-      throw new Error(body.detail ?? `HTTP ${res.status}`)
+      throw HttpError.withDetail(res.status, res.statusText, body.detail)
     }
     const data = await res.json() as { policies: BudgetPolicyResponse[]; count: number }
     policies.value = data.policies
@@ -452,7 +450,7 @@ async function submitForm(): Promise<void> {
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({})) as { detail?: string }
-      throw new Error(body.detail ?? `HTTP ${res.status}`)
+      throw HttpError.withDetail(res.status, res.statusText, body.detail)
     }
     closeModal()
     await loadPolicies()
@@ -477,7 +475,7 @@ async function doDelete(): Promise<void> {
     })
     if (!res.ok && res.status !== 204) {
       const body = await res.json().catch(() => ({})) as { detail?: string }
-      throw new Error(body.detail ?? `HTTP ${res.status}`)
+      throw HttpError.withDetail(res.status, res.statusText, body.detail)
     }
     deleteTarget.value = null
     await loadPolicies()
@@ -499,7 +497,7 @@ async function checkAgentStatus(): Promise<void> {
     const res = await apiClient.rawRequest(`/api/budget-policies/${id}/status`)
     if (!res.ok) {
       const body = await res.json().catch(() => ({})) as { detail?: string }
-      throw new Error(body.detail ?? `HTTP ${res.status}`)
+      throw HttpError.withDetail(res.status, res.statusText, body.detail)
     }
     agentStatus.value = await res.json() as PauseStatusResponse
   } catch (err) {
@@ -517,7 +515,7 @@ async function resumeAgent(agentId: string): Promise<void> {
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({})) as { detail?: string }
-      throw new Error(body.detail ?? `HTTP ${res.status}`)
+      throw HttpError.withDetail(res.status, res.statusText, body.detail)
     }
     agentStatus.value = null
     agentIdQuery.value = ''
@@ -741,65 +739,6 @@ onMounted(loadPolicies)
 .actions-cell {
   display: flex;
   gap: var(--spacing-2);
-}
-
-.btn-action-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  padding: var(--spacing-2) var(--spacing-4);
-  background: var(--color-primary);
-  color: white;
-  border: none;
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-
-.btn-action-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-action-secondary {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  padding: var(--spacing-2) var(--spacing-4);
-  background: var(--bg-input);
-  color: var(--text-primary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.btn-action-secondary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-action-danger {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  padding: var(--spacing-2) var(--spacing-4);
-  background: var(--color-error);
-  color: white;
-  border: none;
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.btn-action-danger:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .btn-icon {

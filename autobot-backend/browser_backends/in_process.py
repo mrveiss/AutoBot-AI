@@ -20,8 +20,8 @@ import logging
 
 from autobot_shared.browser.base import (
     ActionRequest,
+    BrowserCapability,
     BrowserResult,
-    Capability,
     ExtractRequest,
     NavigateRequest,
     ScreenshotRequest,
@@ -39,13 +39,13 @@ class InProcessBrowserBackend:
     name = BACKEND_NAME
     capabilities = frozenset(
         {
-            Capability.NAVIGATE,
-            Capability.EXTRACT_TEXT,
-            Capability.EXTRACT_STRUCTURED,
-            Capability.MHTML,
-            Capability.HUMAN_HANDOFF,
-            Capability.PERSISTENT_SESSION,
-            Capability.IN_PROCESS,
+            BrowserCapability.NAVIGATE,
+            BrowserCapability.EXTRACT_TEXT,
+            BrowserCapability.EXTRACT_STRUCTURED,
+            BrowserCapability.MHTML,
+            BrowserCapability.HUMAN_HANDOFF,
+            BrowserCapability.PERSISTENT_SESSION,
+            BrowserCapability.IN_PROCESS,
         }
     )
 

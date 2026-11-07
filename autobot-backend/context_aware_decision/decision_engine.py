@@ -24,7 +24,7 @@ from .types import (
     HIGH_RESOURCE_CONSTRAINT_TYPES,
     HIGH_RISK_ACTIONS,
     MITIGATION_REQUIRED_RISK_LEVELS,
-    ConfidenceLevel,
+    DecisionConfidenceLevel,
     DecisionType,
 )
 
@@ -364,7 +364,7 @@ class DecisionEngine:
             chosen_action=escalation_action,
             alternative_actions=[],
             confidence=0.9,
-            confidence_level=ConfidenceLevel.HIGH,
+            confidence_level=DecisionConfidenceLevel.HIGH,
             reasoning=(f"High risk factors detected: " f"{[rf['risk_type'] for rf in high_risk_factors]}"),
             supporting_evidence=[{"type": "risk_analysis", "high_risk_count": len(high_risk_factors)}],
             risk_assessment={"risk_level": "high", "factors": high_risk_factors},
@@ -398,7 +398,7 @@ class DecisionEngine:
             chosen_action=continue_action,
             alternative_actions=[],
             confidence=0.8,
-            confidence_level=ConfidenceLevel.HIGH,
+            confidence_level=DecisionConfidenceLevel.HIGH,
             reasoning="Risk factors within acceptable limits",
             supporting_evidence=[{"type": "risk_analysis", "risk_level": "acceptable"}],
             risk_assessment={"risk_level": "low", "factors": risk_factors},
@@ -459,7 +459,7 @@ class DecisionEngine:
             chosen_action=escalation_action,
             alternative_actions=[],
             confidence=0.95,
-            confidence_level=ConfidenceLevel.VERY_HIGH,
+            confidence_level=DecisionConfidenceLevel.VERY_HIGH,
             reasoning=f"Immediate escalation required due to: {', '.join(urgency_factors)}",
             supporting_evidence=[{"type": "urgency_analysis", "factors": urgency_factors}],
             risk_assessment={"risk_level": "high", "immediate_action_required": True},
@@ -490,7 +490,7 @@ class DecisionEngine:
             chosen_action=continue_action,
             alternative_actions=escalation_actions,
             confidence=0.8,
-            confidence_level=ConfidenceLevel.HIGH,
+            confidence_level=DecisionConfidenceLevel.HIGH,
             reasoning="No immediate escalation factors detected",
             supporting_evidence=[{"type": "escalation_analysis", "urgency_factors": []}],
             risk_assessment={"risk_level": "low", "escalation_needed": False},
@@ -701,7 +701,7 @@ class DecisionEngine:
             chosen_action=no_action,
             alternative_actions=[],
             confidence=1.0,
-            confidence_level=ConfidenceLevel.VERY_HIGH,
+            confidence_level=DecisionConfidenceLevel.VERY_HIGH,
             reasoning=reason,
             supporting_evidence=[],
             risk_assessment={"risk_level": "none", "factors": []},
@@ -801,15 +801,15 @@ class DecisionEngine:
             "mitigation_required": risk_level in MITIGATION_REQUIRED_RISK_LEVELS,
         }
 
-    def _determine_confidence_level(self, confidence: float) -> ConfidenceLevel:
+    def _determine_confidence_level(self, confidence: float) -> DecisionConfidenceLevel:
         """Convert numeric confidence to confidence level enum."""
         if confidence >= 0.9:
-            return ConfidenceLevel.VERY_HIGH
+            return DecisionConfidenceLevel.VERY_HIGH
         elif confidence >= 0.7:
-            return ConfidenceLevel.HIGH
+            return DecisionConfidenceLevel.HIGH
         elif confidence >= 0.5:
-            return ConfidenceLevel.MEDIUM
+            return DecisionConfidenceLevel.MEDIUM
         elif confidence >= 0.3:
-            return ConfidenceLevel.LOW
+            return DecisionConfidenceLevel.LOW
         else:
-            return ConfidenceLevel.VERY_LOW
+            return DecisionConfidenceLevel.VERY_LOW

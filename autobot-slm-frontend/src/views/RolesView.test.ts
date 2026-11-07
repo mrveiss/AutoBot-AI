@@ -38,11 +38,20 @@ const TOKEN_KEY = 'slm_access_token'
 
 const i18n = createI18n({ legacy: true, locale: 'en', fallbackLocale: 'en', messages: { en } })
 
+// A Response body can be read once: every fetch call needs its own Response, so the mocks
+// below build one per call (mockImplementation), never share one (mockResolvedValue). #18254
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { 'content-type': 'application/json' },
   })
+}
+
+/** What each mount request answers by default: its own shape per endpoint, never one body for all. */
+const EMPTY_FLEET_HEALTH = { health: 'healthy', required_down: [], optional_down: [], detail: '' }
+function servedBody(url: string, nodes: unknown[] = []): unknown {
+  const u = String(url)
+  return u.endsWith('/nodes') ? { nodes, total: nodes.length } : u.endsWith('/fleet-health') ? EMPTY_FLEET_HEALTH : []
 }
 
 function mountView() {
@@ -60,7 +69,7 @@ describe('RolesView transport', () => {
   beforeEach(() => {
     sessionStorage.clear()
     localStorage.clear()
-    fetchMock = vi.fn().mockResolvedValue(jsonResponse([]))
+    fetchMock = vi.fn().mockImplementation(async (url: string) => jsonResponse(servedBody(url)))
     vi.stubGlobal('fetch', fetchMock)
   })
 
@@ -116,7 +125,7 @@ describe('RolesView transport', () => {
   it("surfaces the backend's own detail message, not a status code", async () => {
     // The reason this helper calls rawRequest: the typed helpers would replace
     // "role store is locked" with "HTTP 409".
-    fetchMock.mockResolvedValue(jsonResponse({ detail: 'role store is locked' }, 409))
+    fetchMock.mockImplementation(async () => jsonResponse({ detail: 'role store is locked' }, 409))
     const wrapper = mountView()
     await flushPromises()
 
@@ -134,7 +143,7 @@ describe('RolesView transport', () => {
   })
 
   it('dispatches each failed mount read ONCE, inheriting no retry budget', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ detail: 'nope' }, 500))
+    fetchMock.mockImplementation(async () => jsonResponse({ detail: 'nope' }, 500))
     mountView()
     await flushPromises()
 
@@ -152,7 +161,7 @@ describe('RolesView transport', () => {
       const wrapper = mountView()
       await flushPromises()
 
-      fetchMock.mockResolvedValue(jsonResponse({ detail: 'role store is locked' }, 500))
+      fetchMock.mockImplementation(async () => jsonResponse({ detail: 'role store is locked' }, 500))
       const beforeWrite = fetchMock.mock.calls.length
       const vm = wrapper.vm as unknown as { deleteRole: (name: string) => Promise<void> }
       await vm.deleteRole('worker')
@@ -174,10 +183,29 @@ describe('RolesView transport', () => {
     // in `utils/ApiClient.test.ts` ('clears session and redirects to /login on 401
     // when a token was attached'), so it is named here rather than duplicated.
     sessionStorage.setItem(TOKEN_KEY, 'still-valid')
-    fetchMock.mockResolvedValue(jsonResponse({ detail: 'internal' }, 500))
+    fetchMock.mockImplementation(async () => jsonResponse({ detail: 'internal' }, 500))
     mountView()
     await flushPromises()
 
     expect(sessionStorage.getItem(TOKEN_KEY)).toBe('still-valid')
+  })
+})
+
+describe('RolesView migrate target nodes (#19002 review)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('reads GET /nodes as NodeListResponse and offers each node as a target', async () => {
+    // fails if fetchNodes treats the { nodes, total } envelope as the list again
+    const node = { node_id: 'node-a', ip_address: 'addr-a', status: 'online', roles: [] }
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => jsonResponse(servedBody(url, [node]))))
+    const wrapper = mount(RolesView, { global: { plugins: [i18n], stubs: { Teleport: true } } })
+    await flushPromises()
+    Object.assign(wrapper.vm as unknown as Record<string, unknown>, { showMigrateDialog: true })
+    await flushPromises()
+    const options = wrapper.findAll('.aui-dialog select option').map((o) => o.attributes('value'))
+    expect(options).toEqual(['', 'node-a'])
+    wrapper.unmount()
   })
 })

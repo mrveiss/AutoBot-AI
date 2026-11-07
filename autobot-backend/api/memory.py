@@ -33,6 +33,7 @@ from typing import Dict, List
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse
 
+from api.memory_responses import _build_delete_entity_response, _build_delete_relation_response
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     EntityCreateRequest,
@@ -57,6 +58,7 @@ from api.schemas_knowledge import (
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
 from autobot_memory_graph import AutoBotMemoryGraph
+from autobot_memory_graph.owner_scope import UNSCOPED_ALL_USERS, OwnerScope
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
@@ -119,7 +121,7 @@ async def _get_entity_name_by_id(memory_graph: AutoBotMemoryGraph, entity_id: st
     Raises:
         HTTPException: If entity not found
     """
-    entity = await memory_graph.get_entity(entity_id=entity_id)
+    entity = await memory_graph.get_entity(entity_id=entity_id, owner=UNSCOPED_ALL_USERS)
     if entity is None:
         raise HTTPException(status_code=404, detail=f"Entity not found: {entity_id}")
     return entity["name"]
@@ -130,78 +132,6 @@ def _parse_tag_list(tags: str | None) -> List[str] | None:
     if not tags:
         return None
     return [tag.strip() for tag in tags.split(",") if tag.strip()]
-
-
-def _build_delete_entity_response(
-    request_id: str,
-    entity_id: str,
-    entity_name: str,
-    cascade_relations: bool,
-) -> JSONResponse:
-    """
-    Build success response for entity deletion.
-
-    Issue #620: Extracted from delete_entity to reduce function length.
-
-    Args:
-        request_id: Request tracking ID
-        entity_id: Deleted entity UUID
-        entity_name: Deleted entity name
-        cascade_relations: Whether relations were cascaded
-
-    Returns:
-        JSONResponse with deletion confirmation
-    """
-    return JSONResponse(
-        status_code=200,
-        content={
-            "success": True,
-            "data": {
-                "entity_id": entity_id,
-                "entity_name": entity_name,
-                "deleted": True,
-                "cascade_relations": cascade_relations,
-            },
-            "message": "Entity deleted successfully",
-            "request_id": request_id,
-        },
-    )
-
-
-def _build_delete_relation_response(
-    request_id: str,
-    from_entity: str,
-    to_entity: str,
-    relation_type: str,
-) -> JSONResponse:
-    """
-    Build success response for relation deletion.
-
-    Issue #620: Extracted from delete_relation to reduce function length.
-
-    Args:
-        request_id: Request tracking ID
-        from_entity: Source entity name
-        to_entity: Target entity name
-        relation_type: Type of deleted relation
-
-    Returns:
-        JSONResponse with deletion confirmation
-    """
-    return JSONResponse(
-        status_code=200,
-        content={
-            "success": True,
-            "data": {
-                "from_entity": from_entity,
-                "to_entity": to_entity,
-                "relation_type": relation_type,
-                "deleted": True,
-            },
-            "message": "Relation deleted successfully",
-            "request_id": request_id,
-        },
-    )
 
 
 async def _get_entity_graph_for_id(
@@ -225,7 +155,7 @@ async def _get_entity_graph_for_id(
     Raises:
         HTTPException: If entity not found
     """
-    entity = await memory_graph.get_entity(entity_id=entity_id, include_relations=True)
+    entity = await memory_graph.get_entity(entity_id=entity_id, include_relations=True, owner=UNSCOPED_ALL_USERS)
 
     if entity is None:
         raise HTTPException(status_code=404, detail=f"Entity not found: {entity_id}")
@@ -245,7 +175,7 @@ async def _get_entity_graph_sample(memory_graph: AutoBotMemoryGraph) -> Dict:
     Returns:
         Dict with sample entity graph data
     """
-    entities = await memory_graph.search_entities(query="*", limit=50)
+    entities = await memory_graph.search_entities(query="*", limit=50, owner=UNSCOPED_ALL_USERS)
 
     return {
         "entities": entities[:20],  # Limit to 20 for graph visualization
@@ -382,6 +312,7 @@ async def create_entity(
             observations=entity_data.observations,
             metadata=entity_data.metadata,
             tags=entity_data.tags,
+            owner=OwnerScope.system(),
         )
 
         logger.info("[%s] Entity created successfully: %s", request_id, entity["id"])
@@ -438,7 +369,9 @@ async def list_all_entities(
     try:
         logger.info("[%s] Listing entities: type=%s, limit=%s", request_id, entity_type, limit)
 
-        entities = await memory_graph.search_entities(query="*", entity_type=entity_type, limit=limit)
+        entities = await memory_graph.search_entities(
+            query="*", entity_type=entity_type, limit=limit, owner=UNSCOPED_ALL_USERS
+        )
 
         logger.info("[%s] Found %s entities", request_id, len(entities))
         return _build_list_entities_response(request_id, entities, entity_type, limit)
@@ -478,7 +411,9 @@ async def find_orphaned_conversation_entities(
     try:
         logger.info("[%s] Scanning for orphaned conversation entities", request_id)
 
-        all_entities = await memory_graph.search_entities(query="*", entity_type="conversation", limit=1000)
+        all_entities = await memory_graph.search_entities(
+            query="*", entity_type="conversation", limit=1000, owner=UNSCOPED_ALL_USERS
+        )
 
         if not all_entities:
             return _build_empty_orphan_response(request_id, "No conversation entities found")
@@ -740,7 +675,9 @@ async def _detect_orphaned_entities(memory_graph: AutoBotMemoryGraph, request: R
     Returns:
         List of orphaned entities, empty list if none found
     """
-    all_entities = await memory_graph.search_entities(query="*", entity_type="conversation", limit=1000)
+    all_entities = await memory_graph.search_entities(
+        query="*", entity_type="conversation", limit=1000, owner=UNSCOPED_ALL_USERS
+    )
 
     if not all_entities:
         return []
@@ -827,7 +764,7 @@ async def get_entity_by_id(
     try:
         logger.info("[%s] Retrieving entity: %s", request_id, entity_id)
 
-        entity = await memory_graph.get_entity(entity_id=entity_id, include_relations=include_relations)
+        entity = await memory_graph.get_entity(entity_id, include_relations=include_relations, owner=UNSCOPED_ALL_USERS)
 
         if entity is None:
             logger.warning("[%s] Entity not found: %s", request_id, entity_id)
@@ -881,7 +818,9 @@ async def get_entity_by_name(
     try:
         logger.info("[%s] Searching for entity by name: %s", request_id, name)
 
-        entity = await memory_graph.get_entity(entity_name=name, include_relations=include_relations)
+        entity = await memory_graph.get_entity(
+            entity_name=name, include_relations=include_relations, owner=UNSCOPED_ALL_USERS
+        )
 
         if entity is None:
             logger.warning("[%s] Entity not found: %s", request_id, name)
@@ -1117,6 +1056,7 @@ async def get_related_entities(
             relation_type=relation_type,
             direction=direction,
             max_depth=max_depth,
+            owner=UNSCOPED_ALL_USERS,
         )
         logger.info("[%s] Found %s related entities", request_id, len(related))
 
@@ -1249,6 +1189,7 @@ async def search_entities(
             tags=tag_list,
             status=status,
             limit=limit,
+            owner=UNSCOPED_ALL_USERS,
         )
         logger.info("[%s] Search returned %s entities", request_id, len(entities))
 

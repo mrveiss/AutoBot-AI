@@ -248,7 +248,7 @@ install_nodejs() {
     log "Installing Node.js..."
 
     if ! command -v node &>/dev/null; then
-        curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+        curl -fsSL ${AUTOBOT_NODESOURCE_BASE_URL}/setup_${NODE_MAJOR:?NODE_MAJOR unset: .nvmrc not found}.x | bash -
         apt-get install -y -qq nodejs
     fi
 
@@ -306,7 +306,7 @@ install_grafana() {
         echo "deb [signed-by=/usr/share/keyrings/grafana.key] https://apt.grafana.com stable main" \
             > /etc/apt/sources.list.d/grafana.list
         apt-get update -qq
-        apt-get install -y -qq grafana
+        apt-get install -y -qq "grafana=${GRAFANA_VERSION:=11.6.16}"
     fi
 
     # Configure Grafana
@@ -357,7 +357,7 @@ setup_code() {
         fi
     else
         log "Syncing from dev machine ($DEV_HOST)..."
-        rsync -avz --delete \
+        rsync -avz --chmod=o-w --delete \
             --exclude 'node_modules/' \
             --exclude 'venv/' \
             --exclude '__pycache__/' \
@@ -479,8 +479,7 @@ server {
 
     # Security headers
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header X-Content-Type-Options nosniff always;
-    add_header X-Frame-Options SAMEORIGIN always;
+    add_header X-Content-Type-Options nosniff always; add_header X-Frame-Options SAMEORIGIN always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
     # SLM Admin UI (static files or dev server)
@@ -495,8 +494,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # WebSocket endpoint for SLM (must be before /api/ to take priority)
-    # Issue #3108: include full proxy headers
+    # WebSocket endpoint for SLM (must be before /api/ to take priority; #3108: full proxy headers)
     location /api/ws {
         proxy_pass http://127.0.0.1:8000/api/ws;
         proxy_http_version 1.1;
@@ -509,6 +507,7 @@ server {
         proxy_read_timeout 86400;
     }
 
+    location ^~ /api/internal/ { return 404; }  # #20046: service-to-service only
     # SLM API (local backend at port 8000)
     location /api/ {
         proxy_pass http://127.0.0.1:8000/api/;
@@ -521,6 +520,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    location ^~ /autobot-api/internal/ { return 404; }  # #20046: service-to-service only
     # AutoBot Backend API (main backend at ${DEV_HOST}:8001)
     # Issue #729 - Proxy for migrated admin functionality
     location /autobot-api/ {
@@ -792,7 +792,7 @@ main() {
                 die "Unknown option: $1"
                 ;;
         esac
-    done
+    done; cd /  # the service user cannot read the caller's cwd, and git aborts in it (#19403)
 
     print_banner
     check_prerequisites

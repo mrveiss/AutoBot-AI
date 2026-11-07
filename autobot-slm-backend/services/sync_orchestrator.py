@@ -19,18 +19,19 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.ssot_config import config
-from models.database import CodeSource, Node, NodeRole, Role, RoleStatus
+from models.database import Node, NodeCodeSource, NodeRole, Role, RoleStatus
 from services.database import db_service
-from services.deploy_artifacts import rsync_artifact_excludes
-from services.ssh_utils import _ssh_key_usable, build_ssh_base_cmd
+from services.deploy_artifacts import RSYNC_NEVER_WORLD_WRITABLE, rsync_artifact_excludes
+from services.post_sync_timeouts import POST_SYNC_TIMEOUT_S
+from services.ssh_utils import _ssh_key_usable, ssh_destination_args, ssh_remote_path
 
 logger = logging.getLogger(__name__)
 
 
 class SyncNodeContext:
-    """Context object for sync_node_role operation.
+    """Context object for sync_role_files operation.
 
-    Helper for sync_node_role (Issue #665).
+    Helper for sync_role_files (Issue #665).
     """
 
     def __init__(self):
@@ -45,17 +46,10 @@ class SyncNodeContext:
 
 
 # Code cache directory
-from autobot_shared.env_utils import env_int
 from autobot_shared.git_probe import start_git
 
 CODE_CACHE_DIR = Path(os.environ.get("SLM_CODE_CACHE", "/var/lib/slm/code-cache"))
 
-# #14275: seconds a post-sync command may run before it is abandoned. Was a
-# literal 300 at each call site; hoisted to an env-backed module constant because
-# the shape of the work behind it varies — a `pip install` on a slow link takes
-# far longer than a service restart, and an operator hitting the ceiling should
-# be able to raise it without editing code.
-POST_SYNC_TIMEOUT_S = env_int("AUTOBOT_SYNC_POST_CMD_TIMEOUT_S", 300)
 SSH_KEY_PATH = config.path.ssh_key_path  # canonical inter-node key (#12429)
 
 
@@ -70,7 +64,7 @@ class SyncOrchestrator:
         """
         Get node and role information from database.
 
-        Helper for sync_node_role (Issue #665).
+        Helper for sync_role_files (Issue #665).
 
         Returns:
             Tuple of (success, message, context) where context contains node/role info.
@@ -107,7 +101,7 @@ class SyncOrchestrator:
         """
         Build SSH options string for rsync.
 
-        Helper for sync_node_role (Issue #665).
+        Helper for sync_role_files (Issue #665).
         """
         ssh_opts = (
             "ssh -o StrictHostKeyChecking=accept-new "
@@ -129,7 +123,7 @@ class SyncOrchestrator:
         """
         Rsync a single source path to the target node.
 
-        Helper for sync_node_role (Issue #665).
+        Helper for sync_role_files (Issue #665).
         """
         src = cache_path / source_path.rstrip("/")
         if not src.exists():
@@ -175,11 +169,13 @@ class SyncOrchestrator:
         rsync_cmd = [
             "rsync",
             "-avz",
+            RSYNC_NEVER_WORLD_WRITABLE,
             *[arg for pattern in rsync_artifact_excludes() for arg in ("--exclude", pattern)],
             "-e",
             ssh_opts,
+            "--",
             rsync_src,
-            f"{ctx.node_user}@{ctx.node_ip}:{ctx.target_path}/",
+            ssh_remote_path(ctx.node_user, ctx.node_ip, f"{ctx.target_path}/"),
         ]
 
         try:
@@ -200,69 +196,11 @@ class SyncOrchestrator:
         except Exception as e:
             return False, f"Sync error: {e}"
 
-    async def _run_post_sync_command(self, ctx: SyncNodeContext) -> tuple[bool, str]:
-        """
-        Execute post-sync command on remote node.
-
-        Helper for sync_node_role (Issue #665).
-
-        #14275: returns success rather than None. This never inspected
-        `proc.returncode`, so a failing `pip install` — permission denied, a
-        missing venv, an unresolvable constraint — was logged at WARNING and the
-        caller carried on to restart the service and mark the role synced. The
-        sync reported success while the dependencies it was meant to install had
-        not been installed, which is the failure this whole path exists to avoid.
-        """
-        if not ctx.post_sync_cmd:
-            return True, ""
-
-        try:
-            ssh_cmd = build_ssh_base_cmd(ctx.node_ip, ctx.node_user, ctx.node_port, SSH_KEY_PATH)
-            ssh_cmd.append(ctx.post_sync_cmd)
-
-            proc = await asyncio.create_subprocess_exec(
-                *ssh_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-            )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=POST_SYNC_TIMEOUT_S)
-            if proc.returncode != 0:
-                tail = (stdout or b"").decode("utf-8", errors="replace").strip()[-800:]
-                logger.error("Post-sync command exited %s: %s", proc.returncode, tail)
-                return False, f"post-sync command failed (exit {proc.returncode}): {tail}"
-            return True, ""
-        except Exception as e:
-            logger.error("Post-sync command failed: %s", e)
-            return False, f"post-sync command failed: {e}"
-
-    async def _restart_systemd_service(self, ctx: SyncNodeContext, node_id: str, restart: bool) -> None:
-        """
-        Restart systemd service on remote node if configured.
-
-        Helper for sync_node_role (Issue #665).
-        """
-        if not (restart and ctx.auto_restart and ctx.systemd_service):
-            return
-
-        try:
-            ssh_cmd = build_ssh_base_cmd(ctx.node_ip, ctx.node_user, ctx.node_port, SSH_KEY_PATH)
-            ssh_cmd.append(f"sudo systemctl restart {' '.join(ctx.systemd_service)}")  # #16025: >1 unit, one call
-
-            proc = await asyncio.create_subprocess_exec(
-                *ssh_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-            )
-            await asyncio.wait_for(proc.communicate(), timeout=60)
-            logger.info("Restarted %s on %s", " ".join(ctx.systemd_service), node_id)
-        except Exception as e:
-            logger.warning("Service restart failed: %s", e)
-
     async def _update_node_role_record(self, node_id: str, role_name: str, commit: str) -> None:
         """
         Update or create NodeRole record in database.
 
-        Helper for sync_node_role (Issue #665).
+        Helper for sync_role_files (Issue #665).
         """
         async with db_service.session() as db:
             role_result = await db.execute(
@@ -301,7 +239,7 @@ class SyncOrchestrator:
             node_ip, node_user, repo_path, and commit.
         """
         # Get active code source
-        result = await db.execute(select(CodeSource).where(CodeSource.is_active == True))  # noqa: E712
+        result = await db.execute(select(NodeCodeSource).where(NodeCodeSource.is_active == True))  # noqa: E712
         source = result.scalar_one_or_none()
 
         if not source:
@@ -338,6 +276,7 @@ class SyncOrchestrator:
         return [
             "rsync",
             "-avz",
+            RSYNC_NEVER_WORLD_WRITABLE,
             "--delete",
             "--exclude",
             ".git",
@@ -353,7 +292,8 @@ class SyncOrchestrator:
             ".venv",
             "-e",
             ssh_opts,
-            f"{node_user}@{node_ip}:{repo_path}/",
+            "--",
+            ssh_remote_path(node_user, node_ip, f"{repo_path}/"),
             f"{cache_path}/",
         ]
 
@@ -383,7 +323,7 @@ class SyncOrchestrator:
 
         ssh_cmd.extend(
             [
-                f"{node_user}@{node_ip}",
+                *ssh_destination_args(node_user, node_ip),
                 f"git -C {repo_path} rev-parse HEAD 2>/dev/null || echo ''",
             ]
         )
@@ -428,13 +368,13 @@ class SyncOrchestrator:
             db: Database session
             commit: New commit hash to set
         """
-        result = await db.execute(select(CodeSource).where(CodeSource.is_active == True))  # noqa: E712
+        result = await db.execute(select(NodeCodeSource).where(NodeCodeSource.is_active == True))  # noqa: E712
         source = result.scalar_one_or_none()
 
         if source:
             source.last_known_commit = commit
             await db.commit()
-            logger.info("Updated CodeSource commit to %s", commit[:12])
+            logger.info("Updated NodeCodeSource commit to %s", commit[:12])
 
     async def _run_rsync(
         self,
@@ -511,6 +451,7 @@ class SyncOrchestrator:
         return [
             "rsync",
             "-avz",
+            RSYNC_NEVER_WORLD_WRITABLE,
             "--delete",
             "--exclude",
             ".git",
@@ -582,59 +523,35 @@ class SyncOrchestrator:
             )
         return await self._run_rsync(rsync_cmd, commit, node_info["node_ip"], cache_path)
 
-    async def sync_node_role(
-        self,
-        node_id: str,
-        role_name: str,
-        commit: str,
-        restart: bool = True,
-    ) -> Tuple[bool, str]:
+    async def sync_role_files(
+        self, node_id: str, role_name: str, commit: str
+    ) -> Tuple[bool, str, SyncNodeContext | None]:
         """
-        Sync a specific role to a node.
+        Rsync a role's source paths to a node (Issue #665); post-sync work is NOT done here.
 
-        Args:
-            node_id: Target node ID
-            role_name: Role to sync
-            commit: Commit hash to sync
-            restart: Whether to restart service after sync
-
-        Returns:
-            Tuple of (success, message)
+        #17455: post-sync commands and restarts run once per node, as one ordered plan
+        (api/node_post_sync.py -> services/post_sync_plan_runner.py), so there is a
+        single execution path. Returns (success, message, context).
         """
-        # Get node and role info from database
         success, msg, ctx = await self._get_node_and_role_info(node_id, role_name)
         if not success:
-            return False, msg
+            return False, msg, None
 
-        # Check cache exists
         cache_path = self.cache_dir / commit
         if not cache_path.exists():
-            return False, f"Commit not cached: {commit}"
+            return False, f"Commit not cached: {commit}", None
 
-        # Sync each source path
         ssh_opts = self._build_ssh_options(ctx.node_port)
         for source_path in ctx.source_paths:
             success, msg = await self._rsync_source_path(cache_path, source_path, ssh_opts, ctx)
             if not success:
-                return False, msg
+                return False, msg, None
+        return True, "OK", ctx
 
-        # Run post-sync command and restart service.
-        #
-        # #14275: a failed post-sync stops the sync here. Restarting into a
-        # half-installed dependency set is worse than leaving the running process
-        # alone with new files on disk, and marking the role synced would record a
-        # commit whose dependencies were never installed.
-        post_sync_ok, post_sync_msg = await self._run_post_sync_command(ctx)
-        if not post_sync_ok:
-            return False, post_sync_msg
-
-        await self._restart_systemd_service(ctx, node_id, restart)
-
-        # Update database record
+    async def record_role_synced(self, node_id: str, role_name: str, commit: str) -> None:
+        """Record *commit* as the role's version on the node, once its post-sync plan succeeded."""
         await self._update_node_role_record(node_id, role_name, commit)
-
         logger.info("Synced %s to %s (commit: %s)", role_name, node_id, commit[:12])
-        return True, f"Synced {role_name} to {node_id}"
 
 
 # Singleton

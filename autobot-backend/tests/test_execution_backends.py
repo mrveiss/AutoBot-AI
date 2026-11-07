@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from autobot_shared.container_hardening import execution_hardening_kwargs
 from services.execution.base_backend import (
     BackendType,
     ExecutionResult,
@@ -897,9 +898,7 @@ class TestDockerBackendSnapshot:
             backend = DockerBackend(snapshot_index=idx)
             backend.client = mock_client
 
-        mock_new_container = MagicMock()
-        mock_new_container.id = "new-cont-id-123"
-        mock_client.containers.run.return_value = mock_new_container
+        mock_client.containers.run.return_value = MagicMock(id="new-cont-id-123")
 
         new_id = await backend.restore("snap-001", caller_user_id="__system__")
 
@@ -909,6 +908,7 @@ class TestDockerBackendSnapshot:
             "sleep infinity",
             detach=True,
             remove=False,
+            **execution_hardening_kwargs(),
         )
 
     @pytest.mark.asyncio

@@ -92,6 +92,8 @@ from typing import Iterator
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_lines
+
 _MODE_ENV = "AUTOBOT_SYSMODULES_GUARD"
 _MODE_OFF = "off"
 
@@ -139,9 +141,9 @@ def _load_baseline(path: Path) -> _Baseline:
         return _Baseline(frozenset(), frozenset())
     owners: set[str] = set()
     removal_checked: set[str] = set()
-    for line in path.read_text(encoding="utf-8").splitlines():
-        entry = line.strip()
-        if not entry or entry.startswith("#"):
+    for _lineno, raw in code_lines(path.read_text(encoding="utf-8")):
+        entry = raw.strip()
+        if not entry:
             continue
         owner, _, annotation = entry.partition(" ")
         owners.add(owner)
@@ -259,10 +261,7 @@ class _Leak:
             "owner": self.mutation.owner,
             "owner_dir_display": self.mutation.owner_dir_display,
             "observed_at": self.observed_at,
-            "occupant": (
-                f"{self.mutation.prev_kind} -> "
-                f"{_occupant(self.mutation.key, self.mutation.obj_id)}"
-            ),
+            "occupant": (f"{self.mutation.prev_kind} -> " f"{_occupant(self.mutation.key, self.mutation.obj_id)}"),
         }
 
 
@@ -554,9 +553,7 @@ class _LeakGuard:
         actually changed.
         """
         previous_of = self._baseline.get
-        changed = [
-            name for name, module in current.items() if previous_of(name, _MISSING) is not module
-        ]
+        changed = [name for name, module in current.items() if previous_of(name, _MISSING) is not module]
         return [(name, current[name], previous_of(name, _MISSING)) for name in changed]
 
     def _classify(self, name: str, module: object, previous: object) -> str | None:
@@ -784,11 +781,7 @@ class _LeakGuard:
         if owner_file.name not in self._candidate_names:
             return
         owner = _display(owner_file, self._rootdir)
-        if (
-            owner not in self._removal_candidates
-            or owner in self._visited
-            or owner in self._exercised
-        ):
+        if owner not in self._removal_candidates or owner in self._visited or owner in self._exercised:
             return
         owner_dir = owner_file if owner_file.is_dir() else owner_file.parent
         self._visited[owner] = (owner_dir, frozenset(owner_dir.parents))
@@ -876,9 +869,7 @@ def pytest_configure(config: pytest.Config) -> None:
     """Keep the guard's warnings visible even under a strict filter set."""
     if _GUARD is None:
         return
-    config.addinivalue_line(
-        "filterwarnings", f"always::{__name__}.{_SysModulesLeakWarning.__name__}"
-    )
+    config.addinivalue_line("filterwarnings", f"always::{__name__}.{_SysModulesLeakWarning.__name__}")
 
 
 def pytest_plugin_registered(plugin: object, manager: object) -> None:
@@ -1103,9 +1094,7 @@ def pytest_terminal_summary(terminalreporter: object, exitstatus: int) -> None:
     _write_known_owners(terminalreporter, verdict, grouped)
 
 
-def _write_new_owners(
-    terminalreporter: object, verdict: _Verdict, grouped: dict[str, list[dict]]
-) -> None:
+def _write_new_owners(terminalreporter: object, verdict: _Verdict, grouped: dict[str, list[dict]]) -> None:
     """Regressions: files that leak and are not on the baseline."""
     if not verdict.new_owners:
         return
@@ -1129,9 +1118,7 @@ def _write_fixed_owners(terminalreporter: object, verdict: _Verdict) -> None:
         )
 
 
-def _write_known_owners(
-    terminalreporter: object, verdict: _Verdict, grouped: dict[str, list[dict]]
-) -> None:
+def _write_known_owners(terminalreporter: object, verdict: _Verdict, grouped: dict[str, list[dict]]) -> None:
     """Known debt (#13361): listed, still leaking, and not a failure."""
     if not verdict.known_owners:
         return

@@ -10,7 +10,8 @@ const makeEntry = (
   overrides: Record<string, unknown> = {}
 ) => ({
   id,
-  timestamp: new Date(Date.now() - Math.random() * 3600000).toISOString(),
+  date: '2026-10-31',
+  timestamp: (Date.now() - Math.random() * 3600000) / 1000,
   operation,
   result,
   user_id: 'alice',
@@ -18,7 +19,9 @@ const makeEntry = (
   vm_name: 'vm-worker-01',
   vm_source: 'proxmox',
   ip_address: '192.168.1.10',
-  error_message: null,
+  user_role: null,
+  resource: null,
+  performance_ms: null,
   details: {},
   ...overrides,
 });
@@ -26,9 +29,9 @@ const makeEntry = (
 const sampleEntries = [
   makeEntry('1', 'user_login', 'success'),
   makeEntry('2', 'file_read', 'success', { user_id: 'bob', vm_name: 'vm-dev-02' }),
-  makeEntry('3', 'vm_snapshot', 'denied', { error_message: 'Permission denied for snapshot on protected VM' }),
-  makeEntry('4', 'token_refresh', 'failed', { error_message: 'Token expired' }),
-  makeEntry('5', 'connection_open', 'error', { error_message: 'Network unreachable' }),
+  makeEntry('3', 'vm_snapshot', 'denied', { details: { reason: 'Permission denied for snapshot on protected VM' } }),
+  makeEntry('4', 'token_refresh', 'failed', { details: { reason: 'Token expired' } }),
+  makeEntry('5', 'connection_open', 'error', { details: { reason: 'Network unreachable' } }),
   makeEntry('6', 'user_logout', 'success', { session_id: null, user_id: null }),
 ];
 
@@ -107,11 +110,10 @@ export const MixedResults: Story = {
   args: {
     entries: [
       makeEntry('a', 'vm_start', 'success'),
-      makeEntry('b', 'vm_delete', 'denied', { error_message: 'Unauthorized VM deletion attempt' }),
+      makeEntry('b', 'vm_delete', 'denied', { details: { reason: 'Unauthorized VM deletion attempt' } }),
       makeEntry('c', 'firewall_rule_add', 'failed', { user_id: null, session_id: null, vm_name: null }),
       makeEntry('d', 'file_write', 'error', {
-        details: { file: '/etc/passwd', size_bytes: 4096 },
-        error_message: 'Disk quota exceeded',
+        details: { file: '/etc/passwd', size_bytes: 4096, reason: 'Disk quota exceeded' },
       }),
     ],
     loading: false,

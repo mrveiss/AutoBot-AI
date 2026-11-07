@@ -26,9 +26,11 @@ from autobot_shared.coordination.work_claims import ClaimMode, ClaimUnavailable,
 from autobot_shared.eventually import eventually
 
 try:
+    import fakeredis
     import fakeredis.aioredis as fakeredis_async
 except ImportError:  # pragma: no cover
     fakeredis_async = None
+    fakeredis = None  # type: ignore[assignment]
 
 
 @pytest_asyncio.fixture
@@ -37,7 +39,7 @@ async def redis(monkeypatch):
         pytest.skip("fakeredis[lua] not installed")
     from autobot_shared.coordination import work_claims as wc
 
-    client = fakeredis_async.FakeRedis(server=fakeredis_async.FakeServer(), decode_responses=True)
+    client = fakeredis_async.FakeRedis(server=fakeredis.FakeServer(), decode_responses=True)
 
     async def _client(database: str = "main"):
         return client
@@ -124,7 +126,7 @@ async def test_a_release_failure_does_not_replace_the_runs_outcome(redis, monkey
     async def _failing_release(scope, **kwargs):
         raise RuntimeError("redis went away")
 
-    monkeypatch.setattr("autobot_shared.coordination.work_claims.release", _failing_release)
+    monkeypatch.setattr("autobot_shared.coordination.work_claims.release_scope", _failing_release)
 
     async with hold_scopes(["path:a/b.py"], agent_id="agent-1", task_id="t1", intent="write") as held:
         assert held.granted
@@ -152,9 +154,9 @@ async def test_an_unavailable_registry_lets_the_run_proceed_unclaimed(redis, mon
 
 def test_a_refusal_names_the_holder_and_their_intent():
     """ "Blocked" without "by whom, doing what" turns a collision into a mystery."""
-    from autobot_shared.coordination.work_claims import Claim, ClaimConflict
+    from autobot_shared.coordination.work_claims import ClaimConflict, WorkClaim
 
-    holder = Claim(
+    holder = WorkClaim(
         scope="path:a/b.py",
         agent_id="agent-9",
         task_id="t9",

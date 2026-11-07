@@ -39,36 +39,38 @@ def _load_connection_manager():
 
 
 _cm = pytest.importorskip("redis") and _load_connection_manager()
+# #19232: the host chain lives in the one endpoint resolver the manager reads.
+from autobot_shared.redis_management import endpoint as _endpoint  # noqa: E402
 
 
 class TestRedisHostFromEnv:
     def test_reads_redis_host(self, monkeypatch):
         monkeypatch.delenv("AUTOBOT_REDIS_HOST", raising=False)
         monkeypatch.setenv("REDIS_HOST", "127.0.0.1")
-        assert _cm.RedisConnectionManager._redis_host_from_env() == "127.0.0.1"
+        assert _endpoint.redis_host_from_env() == "127.0.0.1"
 
     def test_reads_autobot_redis_host(self, monkeypatch):
         """The slm-agent unit sets BOTH; either alone must work."""
         monkeypatch.delenv("REDIS_HOST", raising=False)
         monkeypatch.setenv("AUTOBOT_REDIS_HOST", "10.0.0.9")
-        assert _cm.RedisConnectionManager._redis_host_from_env() == "10.0.0.9"
+        assert _endpoint.redis_host_from_env() == "10.0.0.9"
 
     def test_prefers_redis_host_over_autobot_prefixed(self, monkeypatch):
         monkeypatch.setenv("REDIS_HOST", "first")
         monkeypatch.setenv("AUTOBOT_REDIS_HOST", "second")
-        assert _cm.RedisConnectionManager._redis_host_from_env() == "first"
+        assert _endpoint.redis_host_from_env() == "first"
 
     def test_blank_and_whitespace_are_not_a_host(self, monkeypatch):
         """An empty env var must not shadow the fallback — a blank host is the
         exact failure mode this issue is about."""
         monkeypatch.setenv("REDIS_HOST", "   ")
         monkeypatch.delenv("AUTOBOT_REDIS_HOST", raising=False)
-        assert _cm.RedisConnectionManager._redis_host_from_env() is None
+        assert _endpoint.redis_host_from_env() is None
 
     def test_returns_none_when_unset(self, monkeypatch):
         monkeypatch.delenv("REDIS_HOST", raising=False)
         monkeypatch.delenv("AUTOBOT_REDIS_HOST", raising=False)
-        assert _cm.RedisConnectionManager._redis_host_from_env() is None
+        assert _endpoint.redis_host_from_env() is None
 
 
 class TestLoadRedisConfigPrecedence:
@@ -79,15 +81,15 @@ class TestLoadRedisConfigPrecedence:
 
     def test_env_used_when_config_manager_is_unavailable(self, monkeypatch):
         """The agent's actual situation: no importable config layer."""
-        monkeypatch.setattr(_cm, "_get_config_manager", lambda: None)
+        monkeypatch.setattr(_endpoint, "get_config_manager", lambda: None)
         monkeypatch.setenv("REDIS_HOST", "127.0.0.1")
         assert self._mgr()._load_redis_config()["host"] == "127.0.0.1"
 
     def test_env_used_when_constants_resolve_empty(self, monkeypatch):
         """NetworkConstants.REDIS_VM_IP is '' outside the backend interpreter —
         the env var must win rather than yielding a blank host."""
-        monkeypatch.setattr(_cm, "_get_config_manager", lambda: None)
-        monkeypatch.setattr(_cm.NetworkConstants, "REDIS_VM_IP", "", raising=False)
+        monkeypatch.setattr(_endpoint, "get_config_manager", lambda: None)
+        monkeypatch.setattr(_endpoint.NetworkConstants, "REDIS_VM_IP", "", raising=False)
         monkeypatch.setenv("REDIS_HOST", "127.0.0.1")
         assert self._mgr()._load_redis_config()["host"] == "127.0.0.1"
 
@@ -100,13 +102,13 @@ class TestLoadRedisConfigPrecedence:
             def get_redis_config():
                 return {"host": "configured-host", "port": 6379}
 
-        monkeypatch.setattr(_cm, "_get_config_manager", lambda: _CM())
+        monkeypatch.setattr(_endpoint, "get_config_manager", lambda: _CM())
         monkeypatch.setenv("REDIS_HOST", "env-host")
         assert self._mgr()._load_redis_config()["host"] == "configured-host"
 
     def test_falls_back_to_constants_when_nothing_else_set(self, monkeypatch):
-        monkeypatch.setattr(_cm, "_get_config_manager", lambda: None)
-        monkeypatch.setattr(_cm.NetworkConstants, "REDIS_VM_IP", "10.0.0.4", raising=False)
+        monkeypatch.setattr(_endpoint, "get_config_manager", lambda: None)
+        monkeypatch.setattr(_endpoint.NetworkConstants, "REDIS_VM_IP", "10.0.0.4", raising=False)
         monkeypatch.delenv("REDIS_HOST", raising=False)
         monkeypatch.delenv("AUTOBOT_REDIS_HOST", raising=False)
         assert self._mgr()._load_redis_config()["host"] == "10.0.0.4"

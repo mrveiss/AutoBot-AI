@@ -208,7 +208,7 @@ PATCH_INSTRUCTIONS = """
    try:
        result = self.injection_detector.detect_injection(user_input, context="user_input")
        if result.blocked:
-           yield StreamChunk(
+           yield ExecChunk(
                timestamp=self._get_timestamp(),
                chunk_type=ChunkType.ERROR,
                content=f"🚨 Security Policy Violation: {result.detected_patterns}",
@@ -218,7 +218,7 @@ PATCH_INSTRUCTIONS = """
        user_input = result.sanitized_text
    except Exception as e:
        logger.error("Security validation error: %s", e)
-       yield StreamChunk(
+       yield ExecChunk(
            timestamp=self._get_timestamp(),
            chunk_type=ChunkType.ERROR,
            content=f"❌ Security validation failed: {str(e)}",
@@ -241,7 +241,7 @@ PATCH_INSTRUCTIONS = """
                   if msg.get("type") == "user_input"]
        is_safe = self.injection_detector.validate_conversation_context(history)
        if not is_safe:
-           yield StreamChunk(
+           yield ExecChunk(
                timestamp=self._get_timestamp(),
                chunk_type=ChunkType.ERROR,
                content="🚨 Conversation context poisoning detected",

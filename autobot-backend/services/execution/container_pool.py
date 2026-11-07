@@ -15,6 +15,7 @@ import asyncio
 from typing import Any, Dict
 
 from autobot_shared.async_compat import fire_and_forget
+from autobot_shared.container_hardening import execution_hardening_kwargs
 from autobot_shared.logging_manager import get_logger
 
 try:
@@ -45,6 +46,8 @@ class WarmContainerPool:
         image: str,
         pool_size: int = _DEFAULT_POOL_SIZE,
         container_kwargs: Dict[str, Any] | None = None,
+        network_reason: str | None = None,
+        writable_root_reason: str | None = None,
     ) -> None:
         """
         Args:
@@ -52,7 +55,11 @@ class WarmContainerPool:
             image: Image to pre-start (e.g. ``"python:3.10-slim"``).
             pool_size: Number of warm containers to maintain.
             container_kwargs: Extra kwargs forwarded to ``containers.run()``.
+            network_reason: Named opt-in slug that enables network (default: none).
+            writable_root_reason: Named opt-in slug that enables a writable root.
         """
+        self._network_reason = network_reason
+        self._writable_root_reason = writable_root_reason
         self._client = docker_client
         self._image = image
         self._pool_size = pool_size
@@ -77,6 +84,9 @@ class WarmContainerPool:
             return_exceptions=True,
         )
         for result in results:
+            if isinstance(result, ValueError):
+                self._running = False
+                raise result  # a refused run kwarg is configuration, never "pool is empty"
             if isinstance(result, Exception):
                 logger.warning("Failed to pre-warm container for %s: %s", self._image, result)
             elif result is not None:
@@ -193,6 +203,21 @@ class WarmContainerPool:
         """Blocking coroutine that waits for a container from the queue."""
         return await self._pool.get()
 
+    def _run_kwargs(self) -> Dict[str, Any]:
+        """Caller kwargs with the full execution hardening applied on top (#17267).
+
+        The hardening wins on conflict, so a caller's ``container_kwargs`` cannot drop
+        network isolation, the read-only root, the memory cap or the privilege floor; the
+        only way out is a named, logged reason (``network_reason`` / ``writable_root_reason``).
+        Keys that widen reach (privileged, cap_add, devices, host namespaces, the docker
+        socket or host root as a bind...) are refused with ValueError, not merely overridden.
+        """
+        return execution_hardening_kwargs(
+            network_reason=self._network_reason,
+            writable_root_reason=self._writable_root_reason,
+            extra=self._container_kwargs,
+        )
+
     async def _create_warm_container(self) -> "docker.models.containers.Container | None":
         """Start a new idle container and return it.
 
@@ -202,6 +227,9 @@ class WarmContainerPool:
         Returns:
             Running container, or ``None`` on failure.
         """
+        # Outside the try: a refused kwarg (ValueError) is a configuration error and must
+        # propagate, not read as an empty pool.
+        run_kwargs = self._run_kwargs()
         try:
             container = await asyncio.to_thread(
                 self._client.containers.run,
@@ -209,7 +237,7 @@ class WarmContainerPool:
                 ["sleep", "infinity"],
                 detach=True,
                 remove=False,
-                **self._container_kwargs,
+                **run_kwargs,
             )
             logger.debug("Created warm container %s for %s", container.short_id, self._image)
             return container
@@ -266,7 +294,11 @@ class ContainerPoolRegistry:
         docker_client: "docker.DockerClient",
         pool_size: int = _DEFAULT_POOL_SIZE,
         default_container_kwargs: Dict[str, Any] | None = None,
+        network_reason: str | None = None,
+        writable_root_reason: str | None = None,
     ) -> None:
+        self._network_reason = network_reason
+        self._writable_root_reason = writable_root_reason
         self._client = docker_client
         self._pool_size = pool_size
         self._default_kwargs = default_container_kwargs or {}
@@ -285,6 +317,8 @@ class ContainerPoolRegistry:
                 image=image,
                 pool_size=self._pool_size,
                 container_kwargs=self._default_kwargs.copy(),
+                network_reason=self._network_reason,
+                writable_root_reason=self._writable_root_reason,
             )
             self._pools[image] = pool
 

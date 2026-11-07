@@ -14,7 +14,7 @@ same format the file store already used.
 These tests never call the real Redis client -- ``_FakeAsyncRedis`` is a
 minimal in-memory async stand-in supporting exactly the surface
 ``checkpoint_manager.py`` uses (``hset``/``hget``/``keys``/``expire``/
-``delete``/``pipeline``). No shared ``tests/helpers/fake_redis.py`` class
+``delete``/``pipeline``). No shared ``tests/helpers/_fake_redis.py`` class
 supports glob ``keys()``, which this module relies on.
 """
 
@@ -28,22 +28,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pytest
 
+from testkit.fake_redis_pipeline import FakeAsyncPipeline
 from utils.long_running_operations.checkpoint_manager import OperationCheckpointManager
-
-
-class _FakePipeline:
-    """Buffers ``hget`` calls and replays them on ``execute()``."""
-
-    def __init__(self, redis: "_FakeAsyncRedis") -> None:
-        self._redis = redis
-        self._ops: List[Tuple[str, str]] = []
-
-    def hget(self, name: str, field: str) -> "_FakePipeline":
-        self._ops.append((name, field))
-        return self
-
-    async def execute(self) -> List[Optional[bytes]]:
-        return [await self._redis.hget(name, field) for name, field in self._ops]
 
 
 class _FakeAsyncRedis:
@@ -77,8 +63,8 @@ class _FakeAsyncRedis:
                 removed += 1
         return removed
 
-    def pipeline(self) -> _FakePipeline:
-        return _FakePipeline(self)
+    def pipeline(self) -> FakeAsyncPipeline:
+        return FakeAsyncPipeline(self)
 
 
 def _manager(tmp_path: Path, redis_client: _FakeAsyncRedis) -> OperationCheckpointManager:

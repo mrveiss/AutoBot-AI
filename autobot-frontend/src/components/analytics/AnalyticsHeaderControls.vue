@@ -13,22 +13,22 @@
           {{ $t('analytics.codebase.buttons.backToProjects') }}
         </router-link>
 
-        <button @click="emit('index-codebase')" :disabled="analyzing" class="btn-primary">
+        <BaseButton variant="success" @click="emit('index-codebase')" :disabled="analyzing">
           <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'database'"></i>
           {{ analyzing ? $t('analytics.codebase.buttons.indexing') : $t('analytics.codebase.buttons.indexCodebase') }}
-        </button>
-        <button
+        </BaseButton>
+        <BaseButton
+          variant="error"
           v-if="analyzing || scanRunnerRunning"
           @click="emit('stop')"
-          class="btn-cancel"
         >
           <Icon name="stop-circle" />
           {{ $t('analytics.codebase.actions.stop') }}
-        </button>
-        <button @click="emit('run-full-analysis')" :disabled="analyzing || (!rootPath && !selectedSource)" class="btn-secondary">
+        </BaseButton>
+        <BaseButton @click="emit('run-full-analysis')" :disabled="analyzing || (!rootPath && !selectedSource)">
           <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'chart-bar'"></i>
           {{ analyzing ? $t('analytics.codebase.buttons.analyzing') : $t('analytics.codebase.buttons.analyzeAll') }}
-        </button>
+        </BaseButton>
 
         <!-- Enhanced Debug Controls -->
         <div class="debug-controls" style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
@@ -67,6 +67,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -135,7 +136,7 @@ const emit = defineEmits<{
   flex-wrap: wrap;
 }
 
-.btn-primary, .btn-secondary, .btn-debug {
+.btn-debug {
   padding: var(--spacing-2-5) var(--spacing-5);
   border: none;
   border-radius: var(--radius-lg);
@@ -145,52 +146,6 @@ const emit = defineEmits<{
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-}
-
-.btn-primary {
-  background: var(--chart-green);
-  color: var(--text-on-success);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--color-success-dark);
-  transform: translateY(-1px);
-}
-
-.btn-secondary {
-  background: var(--color-primary);
-  color: var(--text-on-primary);
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: var(--color-primary-hover);
-  transform: translateY(-1px);
-}
-
-.btn-primary:disabled, .btn-secondary:disabled {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  cursor: not-allowed;
-  transform: none;
-}
-
-.btn-cancel {
-  background: var(--color-error-hover);
-  color: var(--text-on-error);
-  padding: var(--spacing-2-5) var(--spacing-5);
-  border: none;
-  border-radius: var(--radius-lg);
-  font-weight: var(--font-semibold);
-  cursor: pointer;
-  transition: var(--transition-all);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-}
-
-.btn-cancel:hover {
-  background: var(--color-error-dark);
-  transform: translateY(-1px);
 }
 
 .btn-back {

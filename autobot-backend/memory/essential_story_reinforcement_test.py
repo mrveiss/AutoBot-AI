@@ -16,6 +16,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 import memory.essential_story as es
+from autobot_shared.env_utils import env_float
+from knowledge.ownership import KnowledgeOwnership
+from knowledge.search_filters import kb_principal
 from memory.essential_story import (
     EssentialStoryGenerator,
     _compute_facts_fingerprint,
@@ -24,6 +27,8 @@ from memory.essential_story import (
 )
 
 NOW = datetime(2026, 7, 26, tzinfo=timezone.utc)
+
+ALICE = kb_principal({"user_id": "alice"})
 
 
 def _fact(fid, quality, access=0, last_accessed=None, category="general", content=None):
@@ -35,6 +40,8 @@ def _fact(fid, quality, access=0, last_accessed=None, category="general", conten
             "access_count": access,
             "last_accessed": last_accessed or "",
             "category": category,
+            "owner_id": "alice",
+            "visibility": "private",
         },
     }
 
@@ -130,6 +137,7 @@ def _patch_kb(facts):
     kb = MagicMock()
     kb.get_all_facts = AsyncMock(return_value=facts)
     kb.record_fact_access = AsyncMock()
+    kb.ownership_manager = KnowledgeOwnership(None)  # #16665: the real visibility decision
     return kb
 
 
@@ -142,7 +150,7 @@ async def test_fetch_top_facts_reinforced_order(monkeypatch):
     kb = _patch_kb(facts)
     with patch("knowledge._composed.get_knowledge_base", AsyncMock(return_value=kb)):
         gen = EssentialStoryGenerator()
-        selected = await gen._fetch_top_facts(max_tokens=1000)
+        selected = await gen._fetch_top_facts(max_tokens=1000, principal=ALICE)
     assert [f["fact_id"] for f in selected][0] == "hot"
     kb.record_fact_access.assert_awaited_once()
 
@@ -159,7 +167,7 @@ async def test_fetch_top_facts_weight_zero_matches_quality_order(monkeypatch):
     kb = _patch_kb(facts)
     with patch("knowledge._composed.get_knowledge_base", AsyncMock(return_value=kb)):
         gen = EssentialStoryGenerator()
-        selected = await gen._fetch_top_facts(max_tokens=1000)
+        selected = await gen._fetch_top_facts(max_tokens=1000, principal=ALICE)
     assert [f["fact_id"] for f in selected] == ["high", "mid", "low"]
 
 
@@ -175,15 +183,40 @@ async def test_fetch_top_facts_ties_are_deterministic(monkeypatch):
     for facts in (order_a, order_b):
         kb = _patch_kb(facts)
         with patch("knowledge._composed.get_knowledge_base", AsyncMock(return_value=kb)):
-            selected = await EssentialStoryGenerator()._fetch_top_facts(max_tokens=1000)
+            selected = await EssentialStoryGenerator()._fetch_top_facts(max_tokens=1000, principal=ALICE)
         out.append([f["fact_id"] for f in selected])
     assert out[0] == out[1] == ["a", "b", "c"]
 
 
 def test_env_float_falls_back_on_garbage(monkeypatch):
     monkeypatch.setenv("AUTOBOT_TEST_FLOAT", "not-a-float")
-    assert es._env_float("AUTOBOT_TEST_FLOAT", 0.3) == 0.3
+    assert env_float("AUTOBOT_TEST_FLOAT", 0.3, reject_nan=True) == 0.3
     monkeypatch.setenv("AUTOBOT_TEST_FLOAT", "nan")
-    assert es._env_float("AUTOBOT_TEST_FLOAT", 0.3) == 0.3
+    assert env_float("AUTOBOT_TEST_FLOAT", 0.3, reject_nan=True) == 0.3
     monkeypatch.setenv("AUTOBOT_TEST_FLOAT", "0.7")
-    assert es._env_float("AUTOBOT_TEST_FLOAT", 0.3) == 0.7
+    assert env_float("AUTOBOT_TEST_FLOAT", 0.3, reject_nan=True) == 0.7
+
+
+# ---- #16665: the story is built only from facts its principal may read ----------
+
+
+@pytest.mark.asyncio
+async def test_essential_story_never_contains_another_users_private_fact():
+    facts = [_fact("mine", 0.9, content="alice secret"), _fact("sys", 0.5, content="for everyone")]
+    facts[1]["metadata"].update(owner_id="admin", visibility="system")
+    bob = kb_principal({"user_id": "bob"})
+    with patch("knowledge._composed.get_knowledge_base", AsyncMock(return_value=_patch_kb(facts))):
+        for_bob = await EssentialStoryGenerator()._fetch_top_facts(max_tokens=1000, principal=bob)
+        for_alice = await EssentialStoryGenerator()._fetch_top_facts(max_tokens=1000, principal=ALICE)
+
+    assert [f["fact_id"] for f in for_bob] == ["sys"]
+    assert [f["fact_id"] for f in for_alice] == ["mine", "sys"]
+
+
+@pytest.mark.asyncio
+async def test_essential_story_without_a_principal_is_empty_not_unscoped():
+    facts = [_fact("mine", 0.9, content="alice secret")]
+    with patch("knowledge._composed.get_knowledge_base", AsyncMock(return_value=_patch_kb(facts))):
+        story = await EssentialStoryGenerator().generate("default")
+
+    assert story == ""

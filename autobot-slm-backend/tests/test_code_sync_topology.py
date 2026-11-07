@@ -118,7 +118,7 @@ async def test_slm_self_sync_remote_code_source_uses_ssh_rsync():
         ssh_user="autobot",
         ssh_port=22,
     )
-    job = _CS.FleetSyncJob(
+    job = _CS.FleetSyncJobState(
         job_id="job-remote",
         strategy="rolling",
         batch_size=1,
@@ -156,7 +156,7 @@ async def test_slm_self_sync_local_code_source_uses_ansible():
         ssh_user="autobot",
         ssh_port=22,
     )
-    job = _CS.FleetSyncJob(
+    job = _CS.FleetSyncJobState(
         job_id="job-local",
         strategy="rolling",
         batch_size=1,

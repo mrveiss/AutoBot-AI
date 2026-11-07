@@ -132,7 +132,7 @@ def sign_request(
 
 
 # Example usage patterns for migration
-async def example_usage() -> None:
+async def example_http_client_usage() -> None:
     """Example of how to use the HTTP client manager."""
 
     # Get the singleton client

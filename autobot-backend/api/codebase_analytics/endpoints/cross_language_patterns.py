@@ -60,7 +60,6 @@ def _get_detector(
         project_root=str(project_root) if project_root else None,
         use_llm=use_llm,
         use_cache=use_cache,
-        embedding_model="nomic-embed-text",
         source_id=source_id,
     )
 

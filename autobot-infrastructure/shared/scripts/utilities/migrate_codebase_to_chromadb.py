@@ -12,24 +12,25 @@ from Redis DB 11 to a new ChromaDB collection 'autobot_code'.
 
 import json
 import logging
-import os
 import sys
 from pathlib import Path
 
 import chromadb
-import redis
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
 
-from constants.network_constants import NetworkConstants
+
+# Runs from any directory with no PYTHONPATH: put the repository root on the path for
+# `autobot_shared` (#18289).
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from autobot_shared.redis_client import require_redis_client  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
-
-# DB number from redis-databases.yaml SSOT (#2806): analytics = 11
-_DB_ANALYTICS = int(os.getenv("AUTOBOT_REDIS_DB_ANALYTICS", "11"))
 
 
 class CodebaseChromaDBMigration:
@@ -52,13 +53,8 @@ class CodebaseChromaDBMigration:
     def connect_redis(self):
         """Connect to Redis DB 11 (codebase analytics)"""
         try:
-            self.redis_client = redis.Redis(
-                host=str(NetworkConstants.REDIS_VM_IP),
-                port=NetworkConstants.REDIS_PORT,
-                db=_DB_ANALYTICS,  # Codebase analytics database (redis-databases.yaml SSOT, #2806)
-                decode_responses=True,
-                socket_timeout=30,
-            )
+            # Codebase analytics database (redis-databases.yaml SSOT, #2806); canonical client (#18553).
+            self.redis_client = require_redis_client(database="analytics", decode_responses=True)
             # Test connection
             self.redis_client.ping()
             logger.info("✅ Connected to Redis DB 11")

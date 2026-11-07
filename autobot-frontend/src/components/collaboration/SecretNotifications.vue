@@ -8,24 +8,23 @@
  */
 
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { createDateFormatter, createRecencyFormatter } from '@autobot/ui'
 import {
   useSessionCollaboration,
   type SecretSharingNotification
 } from '@/composables/useSessionCollaboration'
 
 const { secretNotifications, clearSecretNotifications } = useSessionCollaboration()
+const { locale } = useI18n()
 
 // Format timestamp
-const formatTime = (date: Date): string => {
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
-  const seconds = Math.floor(diff / 1000)
-  const minutes = Math.floor(seconds / 60)
-
-  if (seconds < 60) return 'just now'
-  if (minutes < 60) return `${minutes}m ago`
-  return date.toLocaleTimeString()
-}
+const formatTime = createRecencyFormatter({
+  locale: () => locale.value,
+  style: 'narrow',
+  olderThanMs: 3_600_000,
+  older: createDateFormatter({ kind: 'time' }),
+})
 
 // Get icon for secret type
 const getSecretIcon = (type: string): string => {

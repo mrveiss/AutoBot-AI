@@ -12,7 +12,8 @@
  */
 
 import { ref, reactive, computed, onMounted, watch } from 'vue'
-import { formatDateTime } from '@/composables/useTimezone'
+import { useI18n } from 'vue-i18n'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import { useAuthStore } from '@/stores/auth'
 import { getSlmApiBase } from '@/config/ssot-config'
 import {
@@ -22,7 +23,7 @@ import {
 import {
   useSlmUserApi,
   type SlmUserResponse,
-  type TeamResponse,
+  type AutobotTeamResponse,
 } from '@/composables/useSlmUserApi'
 import {
   useSsoApi,
@@ -30,7 +31,9 @@ import {
   type SSOProviderCreate,
 } from '@/composables/useSsoApi'
 import PasswordChangeForm from '@shared/components/PasswordChangeForm.vue'
+import { BaseAlert, BaseModal } from '@autobot/ui'
 
+const { t } = useI18n()
 const authStore = useAuthStore()
 const autobotApi = useAutobotApi()
 const slmApi = useSlmUserApi()
@@ -48,7 +51,7 @@ const activeTab = ref<'slm-admins' | 'autobot-users' | 'teams' | 'sso'>('slm-adm
 // User list state
 const slmUsers = ref<SlmUserResponse[]>([])
 const autobotUsers = ref<SlmUserResponse[]>([])
-const teams = ref<TeamResponse[]>([])
+const teams = ref<AutobotTeamResponse[]>([])
 const ssoProviders = ref<SSOProviderResponse[]>([])
 const selectedUser = ref<SlmUserResponse | null>(null)
 const selectedUserType = ref<'slm' | 'autobot'>('slm')
@@ -90,24 +93,10 @@ const newProviderForm = reactive({
   default_role: 'user',
 })
 
-// Preferences
-const preferences = reactive({
-  enableNotifications: true,
-  autoSaveSettings: true,
-  theme: 'auto' as 'auto' | 'light' | 'dark',
-  language: 'en',
-})
-
-// Security settings
-const securitySettings = reactive({
-  sessionTimeout: 30,
-  requireReauth: true,
-})
-
 // RBAC state
 const rbacStatus = reactive({
   initialized: false,
-  message: 'Checking RBAC status...',
+  message: t('settings.admin.userManagementSettings.checkingRbacStatus'),
 })
 const isInitializingRbac = ref(false)
 const rbacInitOptions = reactive({
@@ -158,7 +147,7 @@ async function loadSlmUsers(): Promise<void> {
     const response = await slmApi.getSlmUsers()
     slmUsers.value = response.users
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load SLM users'
+    error.value = e instanceof Error ? e.message : t('settings.admin.userManagementSettings.failedToLoadSlmUsers')
   }
 }
 
@@ -167,7 +156,7 @@ async function loadAutobotUsers(): Promise<void> {
     const response = await slmApi.getAutobotUsers()
     autobotUsers.value = response.users
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load AutoBot users'
+    error.value = e instanceof Error ? e.message : t('settings.admin.userManagementSettings.failedToLoadAutobotUsers')
   }
 }
 
@@ -176,7 +165,7 @@ async function loadTeams(): Promise<void> {
     const response = await slmApi.getTeams()
     teams.value = response.teams
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load teams'
+    error.value = e instanceof Error ? e.message : t('settings.admin.userManagementSettings.failedToLoadTeams')
   }
 }
 
@@ -185,7 +174,7 @@ async function loadSsoProviders(): Promise<void> {
     const response = await ssoApi.listProviders()
     ssoProviders.value = response.providers
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load SSO providers'
+    error.value = e instanceof Error ? e.message : t('settings.admin.userManagementSettings.failedToLoadSsoProviders')
   }
 }
 
@@ -213,7 +202,7 @@ async function loadAllData(): Promise<void> {
 
 async function createUser(): Promise<void> {
   if (newUserForm.password !== newUserForm.confirmPassword) {
-    error.value = 'Passwords do not match'
+    error.value = t('settings.admin.userManagementSettings.passwordsDoNotMatch')
     return
   }
 
@@ -233,42 +222,42 @@ async function createUser(): Promise<void> {
       await slmApi.createAutobotUser(payload)
     }
 
-    showSuccess('User created successfully')
+    showSuccess(t('settings.admin.userManagementSettings.userCreated'))
     showCreateUserModal.value = false
     resetNewUserForm()
     await refreshActiveTab()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to create user'
+    error.value = e instanceof Error ? e.message : t('settings.admin.userManagementSettings.failedToCreateUser')
   } finally {
     saving.value = false
   }
 }
 
 async function deleteSlmUser(userId: string): Promise<void> {
-  if (!confirm('Are you sure you want to delete this SLM admin?')) return
+  if (!confirm(t('settings.admin.userManagementSettings.confirmDeleteSlmAdmin'))) return
 
   saving.value = true
   try {
     await slmApi.deleteSlmUser(userId)
-    showSuccess('SLM user deleted successfully')
+    showSuccess(t('settings.admin.userManagementSettings.slmUserDeleted'))
     await loadSlmUsers()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to delete user'
+    error.value = e instanceof Error ? e.message : t('settings.admin.userManagementSettings.failedToDeleteUser')
   } finally {
     saving.value = false
   }
 }
 
 async function deleteAutobotUser(userId: string): Promise<void> {
-  if (!confirm('Are you sure you want to delete this user?')) return
+  if (!confirm(t('settings.admin.userManagementSettings.confirmDeleteUser'))) return
 
   saving.value = true
   try {
     await slmApi.deleteAutobotUser(userId)
-    showSuccess('AutoBot user deleted successfully')
+    showSuccess(t('settings.admin.userManagementSettings.autobotUserDeleted'))
     await loadAutobotUsers()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to delete user'
+    error.value = e instanceof Error ? e.message : t('settings.admin.userManagementSettings.failedToDeleteUser')
   } finally {
     saving.value = false
   }
@@ -288,28 +277,28 @@ async function createTeam(): Promise<void> {
       description: newTeamForm.description || undefined,
     })
 
-    showSuccess('Team created successfully')
+    showSuccess(t('settings.admin.userManagementSettings.teamCreated'))
     showCreateTeamModal.value = false
     newTeamForm.name = ''
     newTeamForm.description = ''
     await loadTeams()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to create team'
+    error.value = e instanceof Error ? e.message : t('settings.admin.userManagementSettings.failedToCreateTeam')
   } finally {
     saving.value = false
   }
 }
 
 async function deleteTeam(teamId: string): Promise<void> {
-  if (!confirm('Are you sure you want to delete this team?')) return
+  if (!confirm(t('settings.admin.userManagementSettings.confirmDeleteTeam'))) return
 
   saving.value = true
   try {
     await slmApi.deleteTeam(teamId)
-    showSuccess('Team deleted successfully')
+    showSuccess(t('settings.admin.userManagementSettings.teamDeleted'))
     await loadTeams()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to delete team'
+    error.value = e instanceof Error ? e.message : t('settings.admin.userManagementSettings.failedToDeleteTeam')
   } finally {
     saving.value = false
   }
@@ -348,7 +337,7 @@ async function checkRbacStatus(): Promise<void> {
     rbacStatus.initialized = data.initialized
     rbacStatus.message = data.message
   } catch {
-    rbacStatus.message = 'Failed to check RBAC status'
+    rbacStatus.message = t('settings.admin.userManagementSettings.failedToCheckRbacStatus')
   }
 }
 
@@ -361,43 +350,13 @@ async function initializeRbac(): Promise<void> {
       create_admin: rbacInitOptions.createAdmin,
       admin_username: rbacInitOptions.adminUsername,
     })
-    showSuccess(data.message || 'RBAC initialized successfully')
+    showSuccess(data.message || t('settings.admin.userManagementSettings.rbacInitializedSuccessfully'))
     showRbacModal.value = false
     await checkRbacStatus()
   } catch (e) {
-    error.value = autobotApiErrorMessage(e, 'Failed to initialize RBAC')
+    error.value = autobotApiErrorMessage(e, t('settings.admin.userManagementSettings.failedToInitializeRbac'))
   } finally {
     isInitializingRbac.value = false
-  }
-}
-
-// ===========================================================================
-// Settings
-// ===========================================================================
-
-async function savePreferences(): Promise<void> {
-  saving.value = true
-  error.value = null
-  try {
-    await autobotApi.updateSettingsSection('preferences', preferences)
-    showSuccess('Preferences saved successfully')
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to save preferences'
-  } finally {
-    saving.value = false
-  }
-}
-
-async function saveSecuritySettings(): Promise<void> {
-  saving.value = true
-  error.value = null
-  try {
-    await autobotApi.updateSettingsSection('security', securitySettings)
-    showSuccess('Security settings saved successfully')
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to save security settings'
-  } finally {
-    saving.value = false
   }
 }
 
@@ -440,27 +399,27 @@ async function createSsoProvider(): Promise<void> {
     }
 
     await ssoApi.createProvider(payload)
-    showSuccess('SSO provider created successfully')
+    showSuccess(t('settings.admin.userManagementSettings.ssoProviderCreated'))
     showCreateProviderModal.value = false
     resetNewProviderForm()
     await loadSsoProviders()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to create SSO provider'
+    error.value = e instanceof Error ? e.message : t('settings.admin.userManagementSettings.failedToCreateSsoProvider')
   } finally {
     saving.value = false
   }
 }
 
 async function deleteSsoProvider(providerId: string): Promise<void> {
-  if (!confirm('Are you sure you want to delete this SSO provider?')) return
+  if (!confirm(t('settings.admin.userManagementSettings.confirmDeleteSsoProvider'))) return
 
   saving.value = true
   try {
     await ssoApi.deleteProvider(providerId)
-    showSuccess('SSO provider deleted successfully')
+    showSuccess(t('settings.admin.userManagementSettings.ssoProviderDeleted'))
     await loadSsoProviders()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to delete SSO provider'
+    error.value = e instanceof Error ? e.message : t('settings.admin.userManagementSettings.failedToDeleteSsoProvider')
   } finally {
     saving.value = false
   }
@@ -470,12 +429,12 @@ async function testSsoProvider(providerId: string): Promise<void> {
   try {
     const result = await ssoApi.testProvider(providerId)
     if (result.success) {
-      showSuccess(result.message || 'SSO provider connection successful')
+      showSuccess(result.message || t('settings.admin.userManagementSettings.ssoConnectionSuccessful'))
     } else {
-      error.value = result.message || 'SSO provider connection test failed'
+      error.value = result.message || t('settings.admin.userManagementSettings.ssoConnectionFailed')
     }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to test SSO provider'
+    error.value = e instanceof Error ? e.message : t('settings.admin.userManagementSettings.failedToTestSsoProvider')
   }
 }
 
@@ -493,11 +452,6 @@ async function refreshActiveTab(): Promise<void> {
   else if (activeTab.value === 'autobot-users') await loadAutobotUsers()
   else if (activeTab.value === 'sso') await loadSsoProviders()
   else await loadTeams()
-}
-
-function formatDate(dateStr: string | null | undefined): string {
-  if (!dateStr) return 'Never'
-  return formatDateTime(dateStr)
 }
 
 // ===========================================================================
@@ -523,148 +477,44 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
 <template>
   <div class="p-6 space-y-6">
     <!-- Messages -->
-    <div v-if="error" class="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-center gap-3">
-      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-      {{ error }}
-      <button @click="error = null" class="ml-auto text-red-500 hover:text-red-700" :aria-label="$t('settings.admin.userManagementSettings.dismissError')">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-    </div>
+    <BaseAlert v-if="error" variant="error" :message="error" dismissible :dismiss-label="$t('settings.admin.userManagementSettings.dismissError')" @dismiss="error = null" />
 
-    <div v-if="success" class="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 flex items-center gap-3">
-      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-      {{ success }}
-    </div>
+    <BaseAlert v-if="success" variant="success" :message="success" />
 
     <!-- Authentication Status -->
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.admin.userManagementSettings.authenticationStatus') }}</h2>
 
-      <div v-if="authStore.isAuthenticated" class="flex items-center gap-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-        <div class="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
-          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </div>
-        <div class="flex-1">
-          <p class="font-medium text-green-800">{{ $t('settings.admin.userManagementSettings.authenticated') }}</p>
-          <p class="text-sm text-green-600">{{ authStore.user?.username }} ({{ isAdmin ? 'Admin' : 'User' }})</p>
-        </div>
-        <button @click="logout" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 flex items-center gap-2">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-          </svg>
-          {{ $t('settings.admin.userManagementSettings.logout') }}
-        </button>
-      </div>
+      <BaseAlert
+        v-if="authStore.isAuthenticated"
+        variant="success"
+        :title="$t('settings.admin.userManagementSettings.authenticated')"
+      >
+        {{ authStore.user?.username }} ({{ isAdmin ? $t('common.sidebar.admin') : $t('common.sidebar.user') }})
+        <template #actions>
+          <button @click="logout" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            {{ $t('settings.admin.userManagementSettings.logout') }}
+          </button>
+        </template>
+      </BaseAlert>
 
-      <div v-else class="flex items-center gap-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-        <div class="w-10 h-10 bg-yellow-500 rounded-full flex items-center justify-center">
-          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-        </div>
-        <div class="flex-1">
-          <p class="font-medium text-yellow-800">{{ $t('settings.admin.userManagementSettings.notAuthenticated') }}</p>
-          <p class="text-sm text-yellow-600">{{ $t('settings.admin.userManagementSettings.pleaseLogInTo') }}</p>
-        </div>
-      </div>
+      <BaseAlert
+        v-else
+        variant="warning"
+        :title="$t('settings.admin.userManagementSettings.notAuthenticated')"
+        :message="$t('settings.admin.userManagementSettings.pleaseLogInTo')"
+      />
     </div>
 
-    <!-- User Preferences -->
-    <div v-if="authStore.isAuthenticated" class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-      <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.admin.userManagementSettings.userPreferences') }}</h2>
-
-      <div class="space-y-4">
-        <div class="flex items-center justify-between pb-4 border-b border-gray-100">
-          <div>
-            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.admin.userManagementSettings.theme') }}</label>
-            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.userManagementSettings.chooseYourPreferredColor') }}</p>
-          </div>
-          <select v-model="preferences.theme" class="w-40 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
-            <option value="auto">{{ $t('settings.admin.userManagementSettings.autoSystem') }}</option>
-            <option value="light">{{ $t('settings.admin.userManagementSettings.light') }}</option>
-            <option value="dark">{{ $t('settings.admin.userManagementSettings.dark') }}</option>
-          </select>
-        </div>
-
-        <div class="flex items-center justify-between pb-4 border-b border-gray-100">
-          <div>
-            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.admin.userManagementSettings.language') }}</label>
-            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.userManagementSettings.interfaceLanguage') }}</p>
-          </div>
-          <select v-model="preferences.language" class="w-40 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
-            <option value="en">{{ $t('settings.admin.userManagementSettings.english') }}</option>
-            <option value="es">{{ $t('settings.admin.userManagementSettings.spanish') }}</option>
-            <option value="fr">{{ $t('settings.admin.userManagementSettings.french') }}</option>
-            <option value="de">{{ $t('settings.admin.userManagementSettings.german') }}</option>
-          </select>
-        </div>
-
-        <div class="flex items-center justify-between pb-4 border-b border-gray-100">
-          <div>
-            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.admin.userManagementSettings.enableNotifications') }}</label>
-            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.userManagementSettings.receiveSystemNotifications') }}</p>
-          </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" v-model="preferences.enableNotifications" class="sr-only peer" />
-            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-          </label>
-        </div>
-
-        <div class="flex items-center justify-between">
-          <div>
-            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.admin.userManagementSettings.autoSaveSettings') }}</label>
-            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.userManagementSettings.automaticallySaveChanges') }}</p>
-          </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" v-model="preferences.autoSaveSettings" class="sr-only peer" />
-            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-          </label>
-        </div>
-      </div>
-
-      <div class="mt-6 flex justify-end">
-        <button @click="savePreferences" :disabled="saving" class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2">
-          <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-          {{ $t('settings.admin.userManagementSettings.savePreferences') }}
-        </button>
-      </div>
-    </div>
-
+    <!-- Preferences, session timeout and re-auth are hidden until a backend stores them (#18733). -->
     <!-- Security Settings -->
     <div v-if="authStore.isAuthenticated" class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.admin.userManagementSettings.security') }}</h2>
 
       <div class="space-y-4">
-        <div class="flex items-center justify-between pb-4 border-b border-gray-100">
-          <div>
-            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.admin.userManagementSettings.sessionTimeout') }}</label>
-            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.userManagementSettings.autoLogoutAfterInactivity') }}</p>
-          </div>
-          <input v-model.number="securitySettings.sessionTimeout" type="number" min="5" max="1440" class="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
-        </div>
-
-        <div class="flex items-center justify-between pb-4 border-b border-gray-100">
-          <div>
-            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.admin.userManagementSettings.requireReAuthentication') }}</label>
-            <p class="text-xs text-gray-500 mt-1">{{ $t('settings.admin.userManagementSettings.forSensitiveOperations') }}</p>
-          </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" v-model="securitySettings.requireReauth" class="sr-only peer" />
-            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-          </label>
-        </div>
-
         <div class="flex items-center justify-between">
           <div>
             <label class="block text-sm font-medium text-gray-900">{{ $t('settings.admin.userManagementSettings.password') }}</label>
@@ -677,16 +527,6 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
             {{ $t('settings.admin.userManagementSettings.changePassword') }}
           </button>
         </div>
-      </div>
-
-      <div class="mt-6 flex justify-end">
-        <button @click="saveSecuritySettings" :disabled="saving" class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2">
-          <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-          {{ $t('settings.admin.userManagementSettings.saveSecuritySettings') }}
-        </button>
       </div>
     </div>
 
@@ -793,7 +633,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                     {{ user.is_active ? $t('settings.admin.userManagementSettings.active') : $t('settings.admin.userManagementSettings.inactive') }}
                   </span>
                 </td>
-                <td class="py-3 px-4 text-sm text-gray-600">{{ formatDate(user.last_login_at) }}</td>
+                <td class="py-3 px-4 text-sm text-gray-600">{{ formatFleetDateTime(user.last_login_at) }}</td>
                 <td class="py-3 px-4 text-right">
                   <div class="flex items-center justify-end gap-1">
                     <button @click="openPasswordChangeModal(user, 'slm')" class="text-amber-600 hover:text-amber-800 p-1" :title="$t('settings.admin.userManagementSettings.resetPassword')">
@@ -860,7 +700,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                     {{ user.is_active ? $t('settings.admin.userManagementSettings.active') : $t('settings.admin.userManagementSettings.inactive') }}
                   </span>
                 </td>
-                <td class="py-3 px-4 text-sm text-gray-600">{{ formatDate(user.last_login_at) }}</td>
+                <td class="py-3 px-4 text-sm text-gray-600">{{ formatFleetDateTime(user.last_login_at) }}</td>
                 <td class="py-3 px-4 text-right">
                   <div class="flex items-center justify-end gap-1">
                     <button @click="openPasswordChangeModal(user, 'autobot')" class="text-amber-600 hover:text-amber-800 p-1" :title="$t('settings.admin.userManagementSettings.resetPassword')">
@@ -913,7 +753,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
               <tr v-for="team in teams" :key="team.id" class="border-b border-gray-100 hover:bg-gray-50">
                 <td class="py-3 px-4 text-sm font-medium text-gray-900">{{ team.name }}</td>
                 <td class="py-3 px-4 text-sm text-gray-600">{{ team.description || '-' }}</td>
-                <td class="py-3 px-4 text-sm text-gray-600">{{ formatDate(team.created_at) }}</td>
+                <td class="py-3 px-4 text-sm text-gray-600">{{ formatFleetDateTime(team.created_at) }}</td>
                 <td class="py-3 px-4 text-right">
                   <button @click="deleteTeam(team.id)" class="text-red-600 hover:text-red-800 p-1" :title="$t('settings.admin.userManagementSettings.deleteTeam')">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -969,7 +809,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                     {{ provider.is_active ? $t('settings.admin.userManagementSettings.active') : $t('settings.admin.userManagementSettings.inactive') }}
                   </span>
                 </td>
-                <td class="py-3 px-4 text-sm text-gray-600">{{ formatDateTime(provider.last_sync_at ?? null) }}</td>
+                <td class="py-3 px-4 text-sm text-gray-600">{{ formatFleetDateTime(provider.last_sync_at ?? null) }}</td>
                 <td class="py-3 px-4 text-right">
                   <div class="flex justify-end gap-2">
                     <button @click="testSsoProvider(provider.id)" class="text-blue-600 hover:text-blue-800 p-1" :title="$t('settings.admin.userManagementSettings.testConnection')">
@@ -998,21 +838,12 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
     <div v-if="isAdmin" class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.admin.userManagementSettings.roleBasedAccessControl') }}</h2>
 
-      <div class="p-4 rounded-lg mb-4" :class="rbacStatus.initialized ? 'bg-green-50 border border-green-200' : 'bg-yellow-50 border border-yellow-200'">
-        <div class="flex items-center gap-3">
-          <svg :class="['w-5 h-5', rbacStatus.initialized ? 'text-green-500' : 'text-yellow-500']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="rbacStatus.initialized ? 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' : 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'" />
-          </svg>
-          <div>
-            <p :class="['font-medium', rbacStatus.initialized ? 'text-green-800' : 'text-yellow-800']">
-              {{ rbacStatus.initialized ? $t('settings.admin.userManagementSettings.rBACInitialized') : $t('settings.admin.userManagementSettings.rBACNotInitialized') }}
-            </p>
-            <p :class="['text-sm', rbacStatus.initialized ? 'text-green-600' : 'text-yellow-600']">
-              {{ rbacStatus.message }}
-            </p>
-          </div>
-        </div>
-      </div>
+      <BaseAlert
+        :variant="rbacStatus.initialized ? 'success' : 'warning'"
+        class="mb-4"
+        :title="rbacStatus.initialized ? $t('settings.admin.userManagementSettings.rBACInitialized') : $t('settings.admin.userManagementSettings.rBACNotInitialized')"
+        :message="rbacStatus.message"
+      />
 
       <div class="p-4 bg-gray-50 rounded-lg mb-4">
         <p class="text-sm text-gray-600"><strong>{{ $t('settings.admin.userManagementSettings.systemPermissions') }}</strong> {{ $t('settings.admin.userManagementSettings.23PermissionsAcross8') }}</p>
@@ -1040,196 +871,187 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
     </div>
 
     <!-- Change Password Modal -->
-    <div v-if="showChangePasswordModal" class="fixed inset-0 z-50 flex items-center justify-center">
-      <div class="absolute inset-0 bg-black/50" @click="showChangePasswordModal = false; selectedUser = null; selectedUserType = 'slm'"></div>
-      <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">
-          {{ isAdminReset ? `Reset Password for ${selectedUser?.username}` : $t('settings.admin.userManagementSettings.changePassword') }}
-        </h3>
-
-        <PasswordChangeForm
-          v-if="passwordChangeUserId"
-          :user-id="passwordChangeUserId"
-          :require-current-password="!isAdminReset"
-          :api-endpoint="passwordChangeApiEndpoint"
-          :auth-token="authStore.token ?? undefined"
-          @success="handlePasswordChangeSuccess"
-          @error="handlePasswordChangeError"
-        />
-
-        <div class="flex justify-end mt-4">
-          <button @click="showChangePasswordModal = false; selectedUser = null; selectedUserType = 'slm'" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
-            {{ $t('settings.admin.userManagementSettings.cancel') }}
-          </button>
-        </div>
-      </div>
-    </div>
+    <BaseModal
+      v-model="showChangePasswordModal"
+      :title="isAdminReset ? $t('settings.admin.userManagementSettings.resetPasswordFor', { username: selectedUser?.username ?? '' }) : $t('settings.admin.userManagementSettings.changePassword')"
+      size="sm"
+      :close-label="$t('ui.modal.closeDialog')"
+      @close="selectedUser = null; selectedUserType = 'slm'"
+    >
+      <PasswordChangeForm
+        v-if="passwordChangeUserId"
+        :user-id="passwordChangeUserId"
+        :require-current-password="!isAdminReset"
+        :api-endpoint="passwordChangeApiEndpoint"
+        :auth-token="authStore.token ?? undefined"
+        @success="handlePasswordChangeSuccess"
+        @error="handlePasswordChangeError"
+      />
+      <template #actions>
+        <button @click="showChangePasswordModal = false; selectedUser = null; selectedUserType = 'slm'" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
+          {{ $t('settings.admin.userManagementSettings.cancel') }}
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- Create User Modal -->
-    <div v-if="showCreateUserModal" class="fixed inset-0 z-50 flex items-center justify-center">
-      <div class="absolute inset-0 bg-black/50" @click="showCreateUserModal = false"></div>
-      <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">
-          {{ activeTab === 'slm-admins' ? $t('settings.admin.userManagementSettings.createSLMAdministrator') : $t('settings.admin.userManagementSettings.createAutoBotUser') }}
-        </h3>
-
-        <div class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.username') }}</label>
-            <input v-model="newUserForm.username" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" :placeholder="$t('settings.admin.userManagementSettings.lowercaseLettersNumbersUnderscores')" />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.email') }}</label>
-            <input v-model="newUserForm.email" type="email" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.password') }}</label>
-            <input v-model="newUserForm.password" type="password" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" :placeholder="$t('settings.admin.userManagementSettings.min8CharsUpperLowerDigit')" />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.confirmPassword') }}</label>
-            <input v-model="newUserForm.confirmPassword" type="password" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
-          </div>
+    <BaseModal
+      :close-on-esc="!saving"
+      v-model="showCreateUserModal"
+      :title="activeTab === 'slm-admins' ? $t('settings.admin.userManagementSettings.createSLMAdministrator') : $t('settings.admin.userManagementSettings.createAutoBotUser')"
+      size="sm"
+      :close-label="$t('ui.modal.closeDialog')"
+    >
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.username') }}</label>
+          <input v-model="newUserForm.username" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" :placeholder="$t('settings.admin.userManagementSettings.lowercaseLettersNumbersUnderscores')" />
         </div>
-
-        <div class="flex justify-end gap-3 mt-6">
-          <button @click="showCreateUserModal = false" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
-            {{ $t('settings.admin.userManagementSettings.cancel') }}
-          </button>
-          <button @click="createUser" :disabled="saving" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 flex items-center gap-2">
-            <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            {{ $t('settings.admin.userManagementSettings.create') }}
-          </button>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.email') }}</label>
+          <input v-model="newUserForm.email" type="email" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.password') }}</label>
+          <input v-model="newUserForm.password" type="password" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" :placeholder="$t('settings.admin.userManagementSettings.min8CharsUpperLowerDigit')" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.confirmPassword') }}</label>
+          <input v-model="newUserForm.confirmPassword" type="password" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
         </div>
       </div>
-    </div>
+      <template #actions>
+        <button @click="showCreateUserModal = false" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
+          {{ $t('settings.admin.userManagementSettings.cancel') }}
+        </button>
+        <button @click="createUser" :disabled="saving" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 flex items-center gap-2">
+          <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          {{ $t('settings.admin.userManagementSettings.create') }}
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- Create Team Modal -->
-    <div v-if="showCreateTeamModal" class="fixed inset-0 z-50 flex items-center justify-center">
-      <div class="absolute inset-0 bg-black/50" @click="showCreateTeamModal = false"></div>
-      <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.admin.userManagementSettings.createTeam') }}</h3>
-
-        <div class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.teamName') }}</label>
-            <input v-model="newTeamForm.name" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" :placeholder="$t('settings.admin.userManagementSettings.eGEngineeringDesign')" />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.descriptionOptional') }}</label>
-            <textarea v-model="newTeamForm.description" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" :placeholder="$t('settings.admin.userManagementSettings.briefDescriptionOfTheTeamS')"></textarea>
-          </div>
+    <BaseModal
+      :close-on-esc="!saving"
+      v-model="showCreateTeamModal"
+      :title="$t('settings.admin.userManagementSettings.createTeam')"
+      size="sm"
+      :close-label="$t('ui.modal.closeDialog')"
+    >
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.teamName') }}</label>
+          <input v-model="newTeamForm.name" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" :placeholder="$t('settings.admin.userManagementSettings.eGEngineeringDesign')" />
         </div>
-
-        <div class="flex justify-end gap-3 mt-6">
-          <button @click="showCreateTeamModal = false" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
-            {{ $t('settings.admin.userManagementSettings.cancel') }}
-          </button>
-          <button @click="createTeam" :disabled="saving || !newTeamForm.name" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 flex items-center gap-2">
-            <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            {{ $t('settings.admin.userManagementSettings.createTeam') }}
-          </button>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.descriptionOptional') }}</label>
+          <textarea v-model="newTeamForm.description" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" :placeholder="$t('settings.admin.userManagementSettings.briefDescriptionOfTheTeamS')"></textarea>
         </div>
       </div>
-    </div>
+      <template #actions>
+        <button @click="showCreateTeamModal = false" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
+          {{ $t('settings.admin.userManagementSettings.cancel') }}
+        </button>
+        <button @click="createTeam" :disabled="saving || !newTeamForm.name" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 flex items-center gap-2">
+          <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          {{ $t('settings.admin.userManagementSettings.createTeam') }}
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- RBAC Init Modal -->
-    <div v-if="showRbacModal" class="fixed inset-0 z-50 flex items-center justify-center">
-      <div class="absolute inset-0 bg-black/50" @click="showRbacModal = false"></div>
-      <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.admin.userManagementSettings.initializeRBACSystem') }}</h3>
+    <BaseModal
+      :close-on-esc="!isInitializingRbac"
+      v-model="showRbacModal"
+      :title="$t('settings.admin.userManagementSettings.initializeRBACSystem')"
+      size="sm"
+      :close-label="$t('ui.modal.closeDialog')"
+    >
+      <BaseAlert
+        variant="warning"
+        class="mb-4"
+        :title="$t('settings.admin.userManagementSettings.rBACInitialization')"
+        :message="$t('settings.admin.userManagementSettings.thisWillCreateSystem')"
+      />
 
-        <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg mb-4">
-          <div class="flex gap-3">
-            <svg class="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            <div>
-              <p class="font-medium text-yellow-800">{{ $t('settings.admin.userManagementSettings.rBACInitialization') }}</p>
-              <p class="text-sm text-yellow-700">
-                {{ $t('settings.admin.userManagementSettings.thisWillCreateSystem') }}
-              </p>
-            </div>
-          </div>
+      <div class="space-y-4">
+        <div class="flex items-center gap-3">
+          <input id="create-admin" v-model="rbacInitOptions.createAdmin" type="checkbox" class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500" />
+          <label for="create-admin" class="text-sm text-gray-700">{{ $t('settings.admin.userManagementSettings.createInitialAdminUser') }}</label>
         </div>
 
-        <div class="space-y-4">
-          <div class="flex items-center gap-3">
-            <input id="create-admin" v-model="rbacInitOptions.createAdmin" type="checkbox" class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500" />
-            <label for="create-admin" class="text-sm text-gray-700">{{ $t('settings.admin.userManagementSettings.createInitialAdminUser') }}</label>
-          </div>
-
-          <div v-if="rbacInitOptions.createAdmin">
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.adminUsername') }}</label>
-            <input v-model="rbacInitOptions.adminUsername" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
-          </div>
-        </div>
-
-        <div class="flex justify-end gap-3 mt-6">
-          <button @click="showRbacModal = false" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
-            {{ $t('settings.admin.userManagementSettings.cancel') }}
-          </button>
-          <button @click="initializeRbac" :disabled="isInitializingRbac" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2">
-            <svg v-if="isInitializingRbac" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            {{ $t('settings.admin.userManagementSettings.initializeRBAC') }}
-          </button>
+        <div v-if="rbacInitOptions.createAdmin">
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.adminUsername') }}</label>
+          <input v-model="rbacInitOptions.adminUsername" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
         </div>
       </div>
-    </div>
+      <template #actions>
+        <button @click="showRbacModal = false" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
+          {{ $t('settings.admin.userManagementSettings.cancel') }}
+        </button>
+        <button @click="initializeRbac" :disabled="isInitializingRbac" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2">
+          <svg v-if="isInitializingRbac" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          {{ $t('settings.admin.userManagementSettings.initializeRBAC') }}
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- Create SSO Provider Modal -->
-    <div v-if="showCreateProviderModal" class="fixed inset-0 z-50 flex items-center justify-center">
-      <div class="absolute inset-0 bg-black/50" @click="showCreateProviderModal = false"></div>
-      <div class="relative bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.admin.userManagementSettings.addSSOProvider') }}</h3>
-        <div class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.providerType') }}</label>
-            <select v-model="newProviderForm.provider_type" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
-              <option value="google">{{ $t('settings.admin.userManagementSettings.googleOAuth') }}</option>
-              <option value="github">{{ $t('settings.admin.userManagementSettings.gitHub') }}</option>
-              <option value="microsoft_entra">{{ $t('settings.admin.userManagementSettings.microsoftEntraID') }}</option>
-              <option value="ldap">{{ $t('settings.admin.userManagementSettings.lDAP') }}</option>
-              <option value="active_directory">{{ $t('settings.admin.userManagementSettings.activeDirectory') }}</option>
-              <option value="saml">{{ $t('settings.admin.userManagementSettings.sAML20') }}</option>
-              <option value="google_workspace">{{ $t('settings.admin.userManagementSettings.googleWorkspace') }}</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.displayName') }}</label>
-            <input v-model="newProviderForm.name" type="text" :placeholder="$t('settings.admin.userManagementSettings.eGCompanyGoogleSSO')" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.clientID') }}</label>
-            <input v-model="(newProviderForm.config as Record<string, string>).client_id" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.clientSecret') }}</label>
-            <input v-model="(newProviderForm.config as Record<string, string>).client_secret" type="password" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
-          </div>
-          <div class="flex items-center gap-3">
-            <input id="sso-active" v-model="newProviderForm.is_active" type="checkbox" class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500" />
-            <label for="sso-active" class="text-sm text-gray-700">{{ $t('settings.admin.userManagementSettings.active') }}</label>
-          </div>
-          <div class="flex items-center gap-3">
-            <input id="sso-provision" v-model="newProviderForm.allow_user_creation" type="checkbox" class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500" />
-            <label for="sso-provision" class="text-sm text-gray-700">{{ $t('settings.admin.userManagementSettings.allowAutomaticUserCreation') }}</label>
-          </div>
+    <BaseModal
+      :close-on-esc="!saving"
+      v-model="showCreateProviderModal"
+      :title="$t('settings.admin.userManagementSettings.addSSOProvider')"
+      width="32rem"
+      :close-label="$t('ui.modal.closeDialog')"
+    >
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.providerType') }}</label>
+          <select v-model="newProviderForm.provider_type" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
+            <option value="google">{{ $t('settings.admin.userManagementSettings.googleOAuth') }}</option>
+            <option value="github">{{ $t('settings.admin.userManagementSettings.gitHub') }}</option>
+            <option value="microsoft_entra">{{ $t('settings.admin.userManagementSettings.microsoftEntraID') }}</option>
+            <option value="ldap">{{ $t('settings.admin.userManagementSettings.lDAP') }}</option>
+            <option value="active_directory">{{ $t('settings.admin.userManagementSettings.activeDirectory') }}</option>
+            <option value="saml">{{ $t('settings.admin.userManagementSettings.sAML20') }}</option>
+            <option value="google_workspace">{{ $t('settings.admin.userManagementSettings.googleWorkspace') }}</option>
+          </select>
         </div>
-        <div class="flex justify-end gap-3 mt-6">
-          <button @click="showCreateProviderModal = false" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">{{ $t('settings.admin.userManagementSettings.cancel') }}</button>
-          <button @click="createSsoProvider" :disabled="saving" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50">{{ $t('settings.admin.userManagementSettings.createProvider') }}</button>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.displayName') }}</label>
+          <input v-model="newProviderForm.name" type="text" :placeholder="$t('settings.admin.userManagementSettings.eGCompanyGoogleSSO')" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.clientID') }}</label>
+          <input v-model="(newProviderForm.config as Record<string, string>).client_id" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.userManagementSettings.clientSecret') }}</label>
+          <input v-model="(newProviderForm.config as Record<string, string>).client_secret" type="password" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
+        </div>
+        <div class="flex items-center gap-3">
+          <input id="sso-active" v-model="newProviderForm.is_active" type="checkbox" class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500" />
+          <label for="sso-active" class="text-sm text-gray-700">{{ $t('settings.admin.userManagementSettings.active') }}</label>
+        </div>
+        <div class="flex items-center gap-3">
+          <input id="sso-provision" v-model="newProviderForm.allow_user_creation" type="checkbox" class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500" />
+          <label for="sso-provision" class="text-sm text-gray-700">{{ $t('settings.admin.userManagementSettings.allowAutomaticUserCreation') }}</label>
         </div>
       </div>
-    </div>
+      <template #actions>
+        <button @click="showCreateProviderModal = false" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">{{ $t('settings.admin.userManagementSettings.cancel') }}</button>
+        <button @click="createSsoProvider" :disabled="saving" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50">{{ $t('settings.admin.userManagementSettings.createProvider') }}</button>
+      </template>
+    </BaseModal>
   </div>
 </template>

@@ -307,7 +307,7 @@ defineExpose({
   flex: 1;
 }
 
-.selected-host i {
+.selected-host .icon {
   color: var(--color-primary);
 }
 
@@ -325,15 +325,15 @@ defineExpose({
   margin-left: auto;
 }
 
-.connection-status.disconnected i {
+.connection-status.disconnected .icon {
   color: var(--text-muted);
 }
 
-.connection-status.connecting i {
+.connection-status.connecting .icon {
   color: var(--color-warning);
 }
 
-.connection-status.connected i {
+.connection-status.connected .icon {
   color: var(--color-success);
 }
 
@@ -529,9 +529,10 @@ defineExpose({
   color: var(--text-muted);
 }
 
-.empty-state i,
-.loading-state i {
-  font-size: 32px;
+.empty-state .icon,
+.loading-state .icon {
+  width: 32px;
+  height: 32px;
   margin-bottom: var(--spacing-3);
   opacity: 0.5;
 }

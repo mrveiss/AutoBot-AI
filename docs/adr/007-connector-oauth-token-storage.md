@@ -231,7 +231,7 @@ The migration is idempotent: connectors whose `secret_id` is already set are ski
    self-hosted deployment model.
 
 3. **Extend LLCSecret for connector credentials** — company-scoped secrets are
-   the right layer for LLC-owned connectors (future), but user-owned connectors
+   the right layer for Company OS-owned connectors (future), but user-owned connectors
    should use user-scoped SecretsService entries. Mixing the two into LLCSecret
    would conflate user and company ownership.
 

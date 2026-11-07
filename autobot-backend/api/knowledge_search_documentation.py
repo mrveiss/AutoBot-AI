@@ -25,6 +25,7 @@ from api.schemas_knowledge import KnowledgeDocumentationSearchResponse, Knowledg
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from constants.rag_graph_constants import RAG_SCORE_THRESHOLD
 
 logger = get_logger(__name__)
 
@@ -103,7 +104,7 @@ def process_documentation_context(
     if not doc_searcher or not doc_searcher.is_documentation_query(query):
         return total_length
 
-    doc_results = doc_searcher.search(query=query, n_results=2, score_threshold=0.3)
+    doc_results = doc_searcher.search(query=query, n_results=2, score_threshold=RAG_SCORE_THRESHOLD)
     if not doc_results:
         return total_length
 
@@ -122,7 +123,7 @@ def process_documentation_context(
 async def search_documentation(
     query: str,
     n_results: int = 5,
-    score_threshold: float = 0.3,
+    score_threshold: float = RAG_SCORE_THRESHOLD,
 ):
     """
     Search indexed AutoBot documentation.

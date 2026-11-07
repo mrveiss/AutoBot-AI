@@ -29,7 +29,8 @@ completion — adding it here would block on 248 pre-existing sites.
 Exit code:
   0 — clean (no banned patterns found in scanned files)
   1 — banned patterns found (PR/commit blocked)
-  2 — usage error
+  2 — vacuous scan: root not a git toplevel, git failed, nothing reached,
+      or a full-repo sweep landed under its floor (#14896)
 """
 
 from __future__ import annotations
@@ -43,7 +44,8 @@ from typing import List, Tuple
 # regardless of invocation mode (script / importlib from tests).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _scan_helpers import PY_FLOOR, enforce_reach, scan_python_files  # noqa: E402
+from _check_harness import format_finding, run_anchored  # noqa: E402
+from _scan_helpers import PY_FLOOR, scan_python_files  # noqa: E402
 
 # Files allowed to contain banned patterns (very narrow allowlist)
 ALLOWLIST = {
@@ -65,12 +67,11 @@ ALLOWLIST = {
 }
 
 # Path prefixes whose files cannot import `autobot_shared.time_utils` reliably
-# (standalone agent on remote nodes, ansible-synced agent code, infra log
+# (standalone agent on remote nodes, ansible-deployed agent code, infra log
 # forwarders). For violations in these paths, suggest the inline canonical
 # form instead of the helper. See PR #5384 (#5381) and #5397.
 INLINE_PATH_PREFIXES: Tuple[str, ...] = (
     "autobot-slm-backend/slm/agent/",
-    "autobot-slm-backend/ansible/roles/slm_agent/files/",
     "autobot-infrastructure/shared/scripts/",
 )
 
@@ -225,32 +226,36 @@ def _prose_lines(text: str) -> set[int]:
     return prose_lines - code_lines
 
 
+_HOOK = "no-utcnow-isoformat"
+
+
+def _display(path: Path, repo_root: Path) -> Path:
+    """*path* relative to the repo when it is inside it, else as given."""
+    try:
+        return path.resolve().relative_to(repo_root)
+    except ValueError:
+        return path
+
+
+def _summary(n: int) -> str:
+    return f"\n[no-utcnow-isoformat] {n} banned pattern(s) found. See per-line fix suggestions above."
+
+
+def _collect(args: List[str], repo_root: Path) -> Tuple[int, List[str]]:
+    """``(files reached, finding lines)`` for *args* (empty = whole repo)."""
+    files, _ = scan_python_files(args, repo_root)
+    findings = [
+        f"[{_HOOK}] " + format_finding(_display(path, repo_root), line_no, f"{pattern_id} — {message}")
+        for path in files
+        for line_no, pattern_id, message in _scan(path, repo_root)
+    ]
+    return len(files), findings
+
+
 def main(argv: List[str]) -> int:
-    repo_root = Path(__file__).resolve().parents[2]
-    files, full_repo = scan_python_files(argv[1:], repo_root)
     # Vacuity floor (#14896): full-repo mode only -- pre-commit legitimately
-    # hands this hook an argv with no Python in it.
-    if enforce_reach(len(files), PY_FLOOR, hook="no-utcnow-isoformat", full_repo=full_repo):
-        return 1
-    total_hits = 0
-    for path in files:
-        for line_no, pattern_id, message in _scan(path, repo_root):
-            try:
-                rel = path.resolve().relative_to(repo_root)
-            except ValueError:
-                rel = path
-            print(
-                f"[no-utcnow-isoformat] {rel}:{line_no}: {pattern_id} — {message}",
-                file=sys.stderr,
-            )
-            total_hits += 1
-    if total_hits:
-        print(
-            f"\n[no-utcnow-isoformat] {total_hits} banned pattern(s) found. " f"See per-line fix suggestions above.",
-            file=sys.stderr,
-        )
-        return 1
-    return 0
+    # hands this hook an argv with no Python in it. Exit 2 = the scan proved nothing.
+    return run_anchored(_HOOK, _collect, argv[1:], anchor=Path(__file__), floor=PY_FLOOR, summary=_summary)
 
 
 if __name__ == "__main__":

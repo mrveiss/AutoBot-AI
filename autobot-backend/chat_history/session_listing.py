@@ -22,6 +22,7 @@ from typing import Any, Dict, List
 import aiofiles
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.path_validator import validate_relative_path
 from chat_history.file_io import run_in_chat_io_executor
 
 logger = get_logger(__name__)
@@ -169,6 +170,20 @@ class SessionListingMixin:
             logger.error("Error listing chat sessions: %s", str(e))
             return []
 
+    async def list_session_ids(self) -> List[Dict[str, Any]]:
+        """Read only: one ``{"chatId": id}`` per chat file, whether or not it can be read (#20030).
+
+        Unlike :meth:`list_sessions` this never runs the old-file cleanup (a report must not delete
+        conversations), never creates the chats directory, and does not drop a file whose content cannot be
+        decrypted: the caller learns that from ``get_session_owner``. An absent directory lists nothing.
+        """
+        chats_directory = self._get_chats_directory()
+        if not await run_in_chat_io_executor(os.path.isdir, chats_directory):
+            return []
+        filenames = await run_in_chat_io_executor(os.listdir, chats_directory)
+        chat_ids = {chat_id for chat_id in map(_extract_chat_id_from_filename, filenames) if chat_id}
+        return [{"chatId": chat_id} for chat_id in sorted(chat_ids)]
+
     async def _read_chat_file_metadata(self, chat_path: str) -> tuple[str | None, int, str, str]:
         """Read chat name, message count and tenancy scope from file.
 
@@ -218,8 +233,8 @@ class SessionListingMixin:
         """
         try:
             stat = await run_in_chat_io_executor(os.stat, chat_path)
-            created_time = datetime.fromtimestamp(stat.st_ctime).isoformat()
-            last_modified = datetime.fromtimestamp(stat.st_mtime).isoformat()
+            created_time = datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc).isoformat()
+            last_modified = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
             file_size = stat.st_size
 
             chat_name, message_count, company_id, session_kind = await self._read_chat_file_metadata(chat_path)
@@ -237,11 +252,13 @@ class SessionListingMixin:
                 "createdTime": created_time,
                 "updatedAt": last_modified,
                 "lastModified": last_modified,
-                # #13948: the ISO fields above are naive LOCAL time, so during a
-                # DST fallback two different instants render as the same hour and
-                # neither sorts nor compares reliably. The raw mtime is the
-                # unambiguous ordering key; consumers that must not skip a session
-                # use this, not the strings.
+                # #13856: the ISO fields above carry an explicit ``+00:00``
+                # offset (the canonical form of autobot_shared.time_utils). They
+                # were naive LOCAL time until #13856, which made them ambiguous
+                # across a DST fallback and wrong by the host offset for every
+                # parse_utc_iso consumer.
+                # #13948: the raw mtime stays the ordering key regardless — a
+                # number needs no parser and cannot drift in format.
                 "updatedAtEpoch": stat.st_mtime,
                 "isActive": False,
                 "fileSize": file_size,
@@ -355,8 +372,8 @@ class SessionListingMixin:
         Returns:
             Session dictionary with all metadata
         """
-        created_time = datetime.fromtimestamp(stat.st_ctime).isoformat()
-        last_modified = datetime.fromtimestamp(stat.st_mtime).isoformat()
+        created_time = datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc).isoformat()
+        last_modified = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
         session_name = f"Terminal Session {session_id[:8]}"
 
         return {
@@ -370,7 +387,7 @@ class SessionListingMixin:
             "createdTime": created_time,
             "updatedAt": last_modified,
             "lastModified": last_modified,
-            "updatedAtEpoch": stat.st_mtime,  # #13948, as above
+            "updatedAtEpoch": stat.st_mtime,  # #13948/#13856, as above
             "isActive": False,
             "fileSize": stat.st_size,
             "fast_mode": True,
@@ -390,7 +407,7 @@ class SessionListingMixin:
         Returns:
             Session dict or None on error
         """
-        chat_file = os.path.join(chats_directory, f"{session_id}_chat.json")
+        chat_file = str(validate_relative_path(f"{session_id}_chat.json", chats_directory))
 
         chat_file_exists = await run_in_chat_io_executor(os.path.exists, chat_file)
         if chat_file_exists:

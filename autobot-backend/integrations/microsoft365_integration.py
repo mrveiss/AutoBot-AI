@@ -32,6 +32,7 @@ from integrations.base import (
     IntegrationHealth,
     IntegrationStatus,
 )
+from knowledge.connectors.egress import VENDOR_API_EGRESS
 
 logger = get_logger(__name__)
 
@@ -563,10 +564,7 @@ class Microsoft365Integration(BaseIntegration):
         empty/non-JSON bodies explicitly), so ``get_json()``/``post_json()``
         would change this method's error-path contract.
         """
-        merged_headers = {
-            "Authorization": f"Bearer {self.token}",
-            "Content-Type": "application/json",
-        }
+        merged_headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
         if headers:
             merged_headers.update(headers)
 
@@ -579,6 +577,7 @@ class Microsoft365Integration(BaseIntegration):
                 json=json_data,
                 params=params,
                 timeout=timeout,
+                guard_egress=VENDOR_API_EGRESS,
             ) as resp:
                 status_code = resp.status
 

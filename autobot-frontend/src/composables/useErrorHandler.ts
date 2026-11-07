@@ -43,6 +43,7 @@
  * ```
  */
 
+import { backoffDelay } from '@autobot/ui'
 import { ref, computed, onUnmounted, onErrorCaptured, getCurrentInstance, type Ref, type ComponentPublicInstance } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -152,7 +153,7 @@ export function useErrorState(options: UseErrorStateOptions = {}) {
 // Async Operation Wrapper
 // ========================================
 
- 
+
 export function useAsyncHandler<T = unknown>(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic pass-through args
   operation: (...args: any[]) => Promise<T>,
@@ -190,7 +191,7 @@ export function useAsyncHandler<T = unknown>(
       return result
     } catch (err) {
       if (retry && attempt < retryAttempts - 1) {
-        const delay = retryDelay * Math.pow(2, attempt)
+        const delay = backoffDelay(attempt, { base: retryDelay })
 
         if (logErrors) {
           logger.warn(
@@ -344,7 +345,7 @@ export async function retryOperation<T>(
       lastError = err instanceof Error ? err : new Error(String(err))
 
       if (attempt < maxAttempts - 1) {
-        const delay = initialDelay * Math.pow(2, attempt)
+        const delay = backoffDelay(attempt, { base: initialDelay })
         await new Promise((resolve) => setTimeout(resolve, delay))
       }
     }

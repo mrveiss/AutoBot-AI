@@ -11,8 +11,10 @@
  */
 
 import { ref, onMounted } from 'vue'
+import { BaseAlert } from '@autobot/ui'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('AgentActivity')
 
@@ -84,14 +86,7 @@ function closeModal() {
   allEntries.value = []
 }
 
-function formatTimestamp(ts?: string): string {
-  if (!ts) return '—'
-  try {
-    return new Date(ts).toLocaleString()
-  } catch {
-    return ts
-  }
-}
+const formatTimestamp = createDateFormatter({ emptyText: '—' })
 
 onMounted(fetchSummary)
 </script>
@@ -112,12 +107,7 @@ onMounted(fetchSummary)
     </div>
 
     <!-- Error state -->
-    <div
-      v-if="error"
-      class="mb-4 p-4 rounded bg-red-50 border border-red-200 text-red-700 text-sm dark:bg-red-900/20 dark:border-red-800 dark:text-red-400"
-    >
-      {{ error }}
-    </div>
+    <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />
 
     <!-- Loading skeleton -->
     <div v-if="isLoading && !agents.length" class="space-y-4">

@@ -152,7 +152,7 @@ class TestParseGitHubResults:
             ]
         }
         results = _parse_github_results(data)
-        assert results[0].summary == ""
+        assert results[0].snippet == ""
 
 
 class TestExtractThemes:
@@ -163,7 +163,7 @@ class TestExtractThemes:
             SearchResult(
                 title="Multi-head Attention",
                 url="u",
-                summary="transformer block",
+                snippet="transformer block",
                 source="arxiv",
             )
         ]
@@ -174,7 +174,7 @@ class TestExtractThemes:
             SearchResult(
                 title="Dropout",
                 url="u",
-                summary="weight decay regularization",
+                snippet="weight decay regularization",
                 source="arxiv",
             )
         ]
@@ -188,7 +188,7 @@ class TestExtractThemes:
             SearchResult(
                 title="Unrelated paper",
                 url="u",
-                summary="nothing relevant",
+                snippet="nothing relevant",
                 source="arxiv",
             )
         ]
@@ -199,7 +199,7 @@ class TestExtractThemes:
             SearchResult(
                 title="Attention and Dropout",
                 url="u",
-                summary="learning rate warmup",
+                snippet="learning rate warmup",
                 source="arxiv",
             ),
         ]

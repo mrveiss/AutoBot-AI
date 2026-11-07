@@ -10,7 +10,7 @@
 <template>
   <div class="resource-heatmap">
     <div class="heatmap-header">
-      <h3>{{ title || t('visualizations.resourceHeatmap.defaultTitle') }}</h3>
+      <h3 v-if="!embedded">{{ title || t('visualizations.resourceHeatmap.defaultTitle') }}</h3>
       <div class="header-actions">
         <select v-model="selectedMetric" @change="updateData" class="metric-select">
           <option value="cpu">{{ t('visualizations.resourceHeatmap.cpuUsage') }}</option>
@@ -37,7 +37,7 @@
 
     <div v-else-if="error" class="error-state">
       <Icon name="exclamation-triangle" />
-      <span>{{ error }}</span>
+      <span>{{ t('visualizations.resourceHeatmap.loadFailed') }} {{ error }}</span>
       <button @click="fetchData" class="retry-btn">{{ t('visualizations.resourceHeatmap.retry') }}</button>
     </div>
 
@@ -105,6 +105,7 @@ interface Props {
   height?: number
   refreshInterval?: number
   machine?: string
+  embedded?: boolean // in a dashboard frame that shows the title: hide this one's own (#16744)
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -329,7 +330,7 @@ defineExpose({
 
 .heatmap-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end; /* the title's auto margin keeps it left; embedded, controls stay right (#16744) */
   align-items: center;
   margin-bottom: var(--spacing-5);
   padding-bottom: var(--spacing-4);
@@ -340,7 +341,7 @@ defineExpose({
   font-size: var(--text-lg);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
-  margin: var(--spacing-0);
+  margin: var(--spacing-0) auto var(--spacing-0) var(--spacing-0);
 }
 
 .header-actions {

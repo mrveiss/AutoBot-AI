@@ -62,13 +62,13 @@ _EXEMPTION_MARKER = "# fixed sleep on purpose (#16255):"
 #: "Class.method" or "function" qualname)`` rather than line number, which drifts
 #: on any unrelated edit above it in the same file. The value is how many exempt
 #: sleeps that one test carries -- 1 unless the comment says otherwise. Counted by
-#: hand from ``git grep -n "fixed sleep on purpose (#16255):"`` on 2026-09-11: 12
-#: exempt sleeps across these 10 sites.
+#: hand from ``git grep -n "fixed sleep on purpose (#16255):"``; the TTL-cache entries left on 2026-10-19
+#: when #18888 moved those caches onto an injectable monotonic clock.
 _EXEMPT_SITES: dict[tuple[str, str], int] = {
     (
-        "autobot-backend/knowledge/embedding_cache_test.py",
-        "TestEmbeddingCache.test_ttl_expiration",
-    ): 1,  # TTL expiry via time.time() is the subject; no injectable clock
+        "autobot-backend/chat_workflow/turn_control_17273_test.py",
+        "test_no_work_happens_after_the_consumer_is_gone",
+    ): 1,  # absence of a dispatch across the LLM call's duration is the subject; no event to wait on
     (
         "autobot-backend/llc/adapters/tests/test_stall_watchdog_13099.py",
         "TestStallKillsWholeGroup.test_continuous_output_is_not_killed",
@@ -85,14 +85,6 @@ _EXEMPT_SITES: dict[tuple[str, str], int] = {
         "autobot-backend/protocols/idle_notice_test.py",
         "TestNotifyAgentIdle.test_an_already_idle_first_report_fires_no_notice",
     ): 1,  # proving an event never fires has no observable to wait on
-    (
-        "autobot-backend/security/threat_intelligence_test.py",
-        "TestThreatIntelligenceCache.test_cache_expiration",
-    ): 1,  # TTL expiry via time.time() is the subject; no injectable clock
-    (
-        "autobot-backend/security/threat_intelligence_test.py",
-        "TestThreatIntelligenceCache.test_clear_expired",
-    ): 1,  # TTL expiry via time.time() is the subject; no injectable clock
     (
         "autobot-backend/services/wake_word_detection_test.py",
         "TestCPUOptimization.test_throttle_triggered_when_cpu_high",

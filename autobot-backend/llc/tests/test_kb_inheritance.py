@@ -45,7 +45,7 @@ class TestGetQueryCollections:
 
         assert len(result) == 1
         collection_name, weight = result[0]
-        assert collection_name == f"{PARENT_ID}:company"
+        assert collection_name == f"company:{PARENT_ID}"
         assert weight == pytest.approx(1.0)
 
     @pytest.mark.asyncio
@@ -63,8 +63,8 @@ class TestGetQueryCollections:
         result = await resolver.get_query_collections(session, str(CHILD_ID))
 
         assert len(result) == 2
-        assert result[0] == (f"{CHILD_ID}:company", pytest.approx(1.0))
-        assert result[1] == (f"{PARENT_ID}:company", pytest.approx(0.6))
+        assert result[0] == (f"company:{CHILD_ID}", pytest.approx(1.0))
+        assert result[1] == (f"company:{PARENT_ID}", pytest.approx(0.6))
 
     @pytest.mark.asyncio
     async def test_grandchild_returns_three_collections_with_compound_decay(self, resolver):

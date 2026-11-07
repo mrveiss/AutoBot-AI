@@ -12,17 +12,14 @@ The main initialization sequence lives in lifespan.py.
 from fastapi import FastAPI
 
 from autobot_shared.logging_manager import get_logger
+from initialization.ai_stack_init import log_initialization_step
+
+__all__ = ["get_or_create_knowledge_base_or_none", "log_initialization_step"]
 
 logger = get_logger(__name__, "backend")
 
 
-def log_initialization_step(stage: str, message: str, percentage: int = 0, success: bool = True):
-    """Log initialization steps with consistent formatting."""
-    icon = "✅" if success else "❌" if percentage == 100 else "🔄"
-    logger.info(f"{icon} [{percentage:3d}%] {stage}: {message}")
-
-
-async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False):
+async def get_or_create_knowledge_base_or_none(app: FastAPI, force_refresh: bool = False):
     """
     Get or create a properly initialized knowledge base instance for the app.
     Enhanced with AI Stack integration awareness.

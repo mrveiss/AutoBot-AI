@@ -22,7 +22,7 @@ sys.path.append(str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from computer_vision_system import computer_vision_system  # noqa: E402
-from context_aware_decision_system import (  # noqa: E402
+from context_aware_decision import (  # noqa: E402
     DecisionType,
     context_aware_decision_system,
 )
@@ -30,11 +30,11 @@ from modern_ai_integration import AIProvider, get_modern_ai_integration  # noqa:
 from multimodal_processor import (  # noqa: E402
     ModalInput,
     ModalityType,
-    ProcessingIntent,
-    ProcessingResult,
+    MultimodalProcessingIntent,
+    MultimodalResult,
 )
 from multimodal_processor import processor as multimodal_processor  # noqa: E402
-from tests.test_helpers import get_test_backend_url  # noqa: E402
+from tests.test_helpers import live_backend_url  # noqa: E402
 from voice_processing_system import AudioInput, get_voice_processing_system  # noqa: E402
 
 voice_processing_system = get_voice_processing_system()
@@ -47,7 +47,7 @@ def demo_api_connectivity():
     try:
         import requests
 
-        response = requests.get(get_test_backend_url() + "/api/system/health", timeout=5)
+        response = requests.get(live_backend_url() + "/api/system/health", timeout=5)
         if response.status_code == 200:
             health_data = response.json()
             print(f"✅ API accessible - Status: {health_data.get('status', 'unknown')}")  # noqa: print  # noqa: print
@@ -57,7 +57,7 @@ def demo_api_connectivity():
             return False
     except requests.exceptions.ConnectionError:
         print(  # noqa: print
-            f"⚠️ Cannot connect to backend API at {get_test_backend_url()} " "(not required for multimodal tests)"
+            f"⚠️ Cannot connect to backend API at {live_backend_url()} " "(not required for multimodal tests)"
         )
         return False
     except Exception as e:
@@ -66,8 +66,8 @@ def demo_api_connectivity():
 
 
 def _build_processing_result(modality, intent, data, confidence):
-    """Build a real ProcessingResult so tests assert the actual result_data field."""
-    return ProcessingResult(
+    """Build a real MultimodalResult so tests assert the actual result_data field."""
+    return MultimodalResult(
         result_id="test_result",
         input_id="test_input",
         modality_type=modality,
@@ -97,14 +97,14 @@ async def test_multimodal_processor():
         text_input = ModalInput(
             input_id="test_text_1",
             modality_type=ModalityType.TEXT,
-            intent=ProcessingIntent.CONTENT_GENERATION,
+            intent=MultimodalProcessingIntent.CONTENT_GENERATION,
             data="Generate a summary of AutoBot's capabilities",
             metadata={"source": "test"},
             timestamp=asyncio.get_running_loop().time(),
         )
         stub.process.return_value = _build_processing_result(
             ModalityType.TEXT,
-            ProcessingIntent.CONTENT_GENERATION,
+            MultimodalProcessingIntent.CONTENT_GENERATION,
             {"summary": "capabilities overview"},
             0.9,
         )
@@ -122,14 +122,14 @@ async def test_multimodal_processor():
         image_input = ModalInput(
             input_id="test_image_1",
             modality_type=ModalityType.IMAGE,
-            intent=ProcessingIntent.SCREEN_ANALYSIS,
+            intent=MultimodalProcessingIntent.SCREEN_ANALYSIS,
             data=test_image_bytes,
             metadata={"source": "synthetic_test"},
             timestamp=asyncio.get_running_loop().time(),
         )
         stub.process.return_value = _build_processing_result(
             ModalityType.IMAGE,
-            ProcessingIntent.SCREEN_ANALYSIS,
+            MultimodalProcessingIntent.SCREEN_ANALYSIS,
             {"ui_elements": [{"type": "button", "confidence": 0.9}]},
             0.8,
         )
@@ -141,7 +141,7 @@ async def test_multimodal_processor():
         combined_input = ModalInput(
             input_id="test_combined_1",
             modality_type=ModalityType.COMBINED,
-            intent=ProcessingIntent.DECISION_MAKING,
+            intent=MultimodalProcessingIntent.DECISION_MAKING,
             data={
                 "text": "Analyze this screen for automation opportunities",
                 "image": base64.b64encode(test_image_bytes).decode("utf-8"),
@@ -151,7 +151,7 @@ async def test_multimodal_processor():
         )
         stub.process.return_value = _build_processing_result(
             ModalityType.COMBINED,
-            ProcessingIntent.DECISION_MAKING,
+            MultimodalProcessingIntent.DECISION_MAKING,
             {"combined_results": {"image_analysis": {}, "text_analysis": {}}},
             0.7,
         )
@@ -399,7 +399,7 @@ async def demo_integration():
         modal_input = ModalInput(
             input_id="integration_test_1",
             modality_type=ModalityType.IMAGE,
-            intent=ProcessingIntent.AUTOMATION_TASK,
+            intent=MultimodalProcessingIntent.AUTOMATION_TASK,
             data=test_image_bytes,
             metadata={"integration_test": True},
             timestamp=asyncio.get_running_loop().time(),

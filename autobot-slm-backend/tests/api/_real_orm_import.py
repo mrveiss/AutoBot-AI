@@ -35,7 +35,9 @@ import contextlib
 import importlib
 import importlib.util
 import sys
+import types
 from pathlib import Path
+from unittest.mock import NonCallableMock
 
 SLM_ROOT = Path(__file__).resolve().parents[2]
 if str(SLM_ROOT) not in sys.path:
@@ -65,7 +67,12 @@ def _build_real_modules() -> dict:
     exercised against genuine ORM machinery rather than mock identity.
     """
     saved = {name: mod for name, mod in sys.modules.items() if _is_sqlalchemy_key(name)}
-    saved.update({name: sys.modules.get(name) for name in ("models.database", "models.schemas")})
+    saved.update(
+        {
+            name: sys.modules.get(name)
+            for name in ("models.database", "models.schemas", "models.fleet_schemas", "models.post_sync_action_run")
+        }
+    )
     for name in list(saved):
         sys.modules.pop(name, None)
     try:
@@ -74,15 +81,22 @@ def _build_real_modules() -> dict:
         importlib.import_module("sqlalchemy.dialects.sqlite")
         load_real_module("models.database", SLM_ROOT / "models" / "database.py")
         load_real_module("models.schemas", SLM_ROOT / "models" / "schemas.py")
+        load_real_module("models.fleet_schemas", SLM_ROOT / "models" / "fleet_schemas.py")  # imports schemas (#18714)
+        # Loaded ONCE here: two loads would declare the same table on the one real Base (#17455).
+        load_real_module("models.post_sync_action_run", SLM_ROOT / "models" / "post_sync_action_run.py")
         return {name: mod for name, mod in sys.modules.items() if _is_sqlalchemy_key(name)} | {
             "models.database": sys.modules["models.database"],
             "models.schemas": sys.modules["models.schemas"],
+            "models.fleet_schemas": sys.modules["models.fleet_schemas"],
+            "models.post_sync_action_run": sys.modules["models.post_sync_action_run"],
         }
     finally:
         for name in [n for n in sys.modules if _is_sqlalchemy_key(n)]:
             del sys.modules[name]
         sys.modules.pop("models.database", None)
         sys.modules.pop("models.schemas", None)
+        sys.modules.pop("models.fleet_schemas", None)
+        sys.modules.pop("models.post_sync_action_run", None)
         for name, mod in saved.items():
             if mod is not None:
                 sys.modules[name] = mod
@@ -125,6 +139,9 @@ def import_modules_with_real_orm(import_names: tuple, path_loaded: dict | None =
     path_loaded = path_loaded or {}
     touched = tuple(path_loaded) + tuple(import_names)
     saved = {name: sys.modules.get(name) for name in touched}
+    stub_built = _evict_stub_built_modules(exclude=touched)
+    bindings = _parent_bindings(touched) + _parent_bindings(tuple(stub_built))
+    before = set(sys.modules)
     try:
         with real_modules_swapped():
             loaded = [load_real_module(name, path) for name, path in path_loaded.items()]
@@ -138,3 +155,85 @@ def import_modules_with_real_orm(import_names: tuple, path_loaded: dict | None =
                 sys.modules[name] = mod
             else:
                 sys.modules.pop(name, None)
+        _drop_modules_first_imported_since(before)
+        sys.modules.update(stub_built)
+        _restore_parent_bindings(bindings)
+
+
+_FIRST_PARTY_ROOTS = ("api", "models", "services")
+
+
+def _mock_root(value):
+    """The top of a mock's parent chain: ``stub.select().where`` -> ``stub``."""
+    while getattr(value, "_mock_new_parent", None) is not None:
+        value = value._mock_new_parent
+    return value
+
+
+def _evict_stub_built_modules(exclude: tuple) -> dict:
+    """Pop, and return, every cached first-party module that was executed against the ORM stubs.
+
+    The ORM stubs are whatever stands under a ``REAL_MODULES`` key right now -- the very objects
+    ``real_modules_swapped`` replaces. A real module first imported while they stood in (by any
+    earlier test module, at collection or at run time) holds their children as its globals --
+    ``services.service_upsert``'s ``select`` (#19021). Left cached, the import below would bind it
+    instead of building it against the real ORM, so the router under test runs ``select(...)`` on a
+    mock. Popped here, it is rebuilt inside the swap; the caller puts the originals back afterwards,
+    so whoever imported them keeps the object it holds. Only a mock descended from one of THOSE stubs
+    counts: a module a caller built against its own mocks on purpose (``_real_auth_import``) is kept.
+    """
+    stubs = {id(mod) for name in REAL_MODULES if isinstance(mod := sys.modules.get(name), NonCallableMock)}
+    evicted = {}
+    for name, mod in list(sys.modules.items()):
+        if name in exclude or name in REAL_MODULES or name.split(".")[0] not in _FIRST_PARTY_ROOTS:
+            continue
+        if not isinstance(mod, types.ModuleType) or hasattr(mod, "__path__"):
+            continue
+        if any(isinstance(v, NonCallableMock) and id(_mock_root(v)) in stubs for v in vars(mod).values()):
+            evicted[name] = sys.modules.pop(name)
+    return evicted
+
+
+def _drop_modules_first_imported_since(before: set) -> None:
+    """Remove every module the swap imported that was not loaded beforehand, and its parent attribute.
+
+    Loading e.g. ``services.post_sync_recorder`` transitively imports real submodules
+    (``models.post_sync_schemas``, ``services.post_sync_*``...). Left in ``sys.modules`` they
+    give a later stub-installing test an inconsistent ``models`` package (#17455: it broke
+    test_colocated_managed_update_11605 at collection). Callers keep their returned references.
+    """
+    for name in [n for n in sys.modules if n not in before]:
+        mod = sys.modules.pop(name)
+        parent_name, _, attr = name.rpartition(".")
+        parent = sys.modules.get(parent_name) if parent_name else None
+        if parent is not None and getattr(parent, "__dict__", {}).get(attr) is mod:
+            delattr(parent, attr)
+
+
+_UNBOUND = object()
+
+
+def _parent_bindings(names: tuple) -> list:
+    """``(parent, attr, value)`` for each dotted name whose parent package is loaded.
+
+    Importing ``api.roles`` also sets ``api.roles`` as an ATTRIBUTE of the ``api``
+    package. Restoring ``sys.modules`` alone leaves that attribute on the real-ORM
+    module, so a later ``patch("api.roles.x")`` patches one object while the code
+    under test reads another (#18186: it broke test_colocated_managed_update_11605).
+    """
+    out = []
+    for name in names:
+        parent_name, _, attr = name.rpartition(".")
+        parent = sys.modules.get(parent_name) if parent_name else None
+        if parent is not None:
+            out.append((parent, attr, getattr(parent, attr, _UNBOUND)))
+    return out
+
+
+def _restore_parent_bindings(bindings: list) -> None:
+    for parent, attr, value in bindings:
+        if value is _UNBOUND:
+            if attr in vars(parent):
+                delattr(parent, attr)
+        else:
+            setattr(parent, attr, value)

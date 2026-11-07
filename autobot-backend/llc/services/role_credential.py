@@ -29,11 +29,10 @@ from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from user_management.models.role import Role
-
 from ..models.activity import ActorType
 from ..models.role_credential import LLCRoleCredential
 from ..models.secret import LLCSecret
+from ._role_guard import ensure_role_in_company
 from .authz import require_company_admin
 from .base import LLCServiceBase
 
@@ -62,8 +61,6 @@ class RoleCredentialService(LLCServiceBase):
         actor: Optional[uuid.UUID],
         after: Optional[Dict[str, Any]],
     ) -> None:
-        if not self.activity_log:
-            return
         await self.activity_log.record(
             session=session,
             company_id=str(attachment.company_id),
@@ -77,9 +74,8 @@ class RoleCredentialService(LLCServiceBase):
         )
 
     async def _require_role(self, session: AsyncSession, company_id: uuid.UUID, role_id: uuid.UUID) -> None:
-        result = await session.execute(select(Role.id).where(Role.id == role_id, Role.org_id == company_id))
-        if result.scalar_one_or_none() is None:
-            raise ValueError(f"role {role_id} does not exist in company {company_id}")
+        """Delegates to :func:`._role_guard.ensure_role_in_company` (#18557)."""
+        await ensure_role_in_company(session, company_id, role_id)
 
     async def _require_secret(self, session: AsyncSession, company_id: uuid.UUID, secret_id: uuid.UUID) -> None:
         """The secret must exist in this company and not be revoked.

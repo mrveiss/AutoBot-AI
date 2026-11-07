@@ -34,6 +34,13 @@
 # every tls-* directive. Both need a guaranteed variable source before they can
 # join the update path; until then they stay on the provisioning path only.
 #
+# #17932 review adds a THIRD artifact to that list: /etc/autobot/redis-backup.env,
+# the backup script's client credential, written from tasks/main.yml for the same
+# reason. The backup SCRIPT below stays on this path only because it carries that
+# file's PATH and never its value -- so a re-render here cannot strip the
+# credential, which is the property that lets the script be code-only while the
+# credential is not.
+#
 # Handlers (`reload systemd`, `restart redis-stack`, `restart chromadb`) live in
 # the role, so this file is only usable via include_role/import_role.
 
@@ -62,6 +69,11 @@
 
 # A shell script rendered from a role template — worker code by any other name,
 # and the same shape that left the TTS worker four days stale in #12886.
+# `validate` is defence in depth, not the fix for #17932: the trim_blocks fusion
+# produced VALID bash (one tar command with two -f flags), so a syntax check would
+# have passed it. The guard that catches that class renders and executes the script
+# -- repo_tests/redis_backup_template_renders_runnable_17932_test.py. What this adds
+# is that a future render which does NOT parse never reaches /usr/local/bin.
 - name: "Redis | Create backup script"
   ansible.builtin.template:
     src: redis-backup.sh.j2
@@ -69,6 +81,7 @@
     mode: '0755'
     owner: root
     group: root
+    validate: /bin/bash -n %s
   become: true
   tags: ['redis', 'backup']
 

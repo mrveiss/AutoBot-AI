@@ -219,7 +219,7 @@ def test_the_risk_level_boundary_table_covers_every_command_risk():
 # #13578 — the backup service vocabulary
 # --------------------------------------------------------------------------
 
-BACKUP_SERVICE_TYPE_UNION = {("REDIS", "redis"), ("POSTGRES", "postgres")}
+BACKUP_SERVICE_TYPE_UNION = {("REDIS", "redis"), ("POSTGRES", "postgres"), ("SECRETS", "secrets")}
 
 
 def _enum_members_from_source(path: Path, class_name: str) -> set[tuple[str, str]] | None:
@@ -237,7 +237,7 @@ def _enum_members_from_source(path: Path, class_name: str) -> set[tuple[str, str
     return None
 
 
-def test_backup_service_type_exists_and_names_both_engines():
+def test_backup_service_type_exists_and_names_every_service():
     members = _enum_members_from_source(SLM / "status_enums.py", "BackupServiceType")
     assert members is not None, "#13578: BackupServiceType is gone from status_enums.py (moved there in #15495)"
     assert members == BACKUP_SERVICE_TYPE_UNION
@@ -411,7 +411,7 @@ def test_every_deliberate_severity_literal_file_still_has_one():
     ("rel", "alias"),
     [
         ("autobot-backend/utils/monitoring_alerts.py", "AlertSeverity"),
-        ("autobot-backend/utils/error_boundaries/types.py", "ErrorSeverity"),
+        ("autobot_shared/error_boundaries/types.py", "ErrorSeverity"),
     ],
 )
 def test_the_severity_aliases_still_point_at_the_canonical_enum(rel, alias):

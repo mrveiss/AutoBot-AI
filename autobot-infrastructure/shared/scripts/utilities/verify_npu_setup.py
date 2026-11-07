@@ -74,17 +74,18 @@ def check_user_groups():
         return False
 
 
-def check_openvino_npu():
-    """Check if OpenVINO can detect NPU"""
+def check_openvino_detects_npu():
+    """Check if OpenVINO can detect NPU
+
+    Enumeration is ``enable_npu_support.list_openvino_devices`` (#18964); the messages
+    and the "not installed" outcome (``None``, reported as SKIPPED) stay this script's.
+    """
+    from enable_npu_support import list_openvino_devices
+
     try:
-        import openvino as ov
-
-        core = ov.Core()
-        devices = core.available_devices
-
+        devices, npu_devices = list_openvino_devices()
         logger.info("📋 Available OpenVINO devices: %s", devices)
 
-        npu_devices = [d for d in devices if "NPU" in d]
         if npu_devices:
             logger.info("✅ OpenVINO NPU devices found: %s", npu_devices)
             return True
@@ -109,7 +110,7 @@ def main():
         ("Kernel Module", check_kernel_module),
         ("NPU Device", check_npu_device),
         ("User Groups", check_user_groups),
-        ("OpenVINO NPU", check_openvino_npu),
+        ("OpenVINO NPU", check_openvino_detects_npu),
     ]
 
     results = {}

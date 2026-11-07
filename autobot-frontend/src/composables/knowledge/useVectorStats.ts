@@ -23,9 +23,6 @@ export interface VectorStats {
   categories?: string[]
 }
 
-export const EMBEDDING_MODEL = 'nomic-embed-text'
-export const EMBEDDING_DIMENSIONS = 768
-
 /**
  * Zeroed fallback for consumers whose UI must render a stats strip even when
  * the store has no facts yet or the backend is unreachable (KnowledgeHealth).
@@ -74,8 +71,9 @@ export function useVectorStats(): UseVectorStatsReturn {
       categories: Array.isArray(storeStats.categories)
         ? (storeStats.categories as unknown as { name?: string }[]).map((c) => c.name || c) as string[]
         : [],
-      embedding_model: EMBEDDING_MODEL,
-      embedding_dimensions: EMBEDDING_DIMENSIONS,
+      // #15502: the backend reports the model the index was built with; none is assumed here.
+      embedding_model: storeStats.embedding_model || undefined,
+      embedding_dimensions: storeStats.embedding_dimensions || undefined,
     }
   })
 

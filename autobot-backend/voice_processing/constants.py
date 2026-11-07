@@ -10,6 +10,8 @@ MIGRATION (Issue #GH7440):
     Import directly from autobot_shared.ssot_constants for new code.
 """
 
+from autobot_shared.ssot_constants import match_intent_from_patterns  # noqa: F401
+
 # Temporary placeholders for constants migration (Issue MVA-2185)
 # These were expected to come from ssot_constants but don't exist there yet
 APP_PATTERNS_RE = {}  # noqa: F401
@@ -24,8 +26,3 @@ QUERY_INTENT_PATTERNS = []  # noqa: F401
 QUOTED_TEXT_RE = None  # noqa: F401
 SCREEN_STATE_INTENTS = []  # noqa: F401
 URL_RE = None  # noqa: F401
-
-
-def match_intent_from_patterns(text, patterns):  # noqa: F401
-    """Placeholder for match_intent_from_patterns."""
-    return None

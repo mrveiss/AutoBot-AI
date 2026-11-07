@@ -5,7 +5,6 @@
 Discovery and type-safe access; ``check_env_var_registry`` requires every var
 to be registered. A NEW one goes in an ``env_registry_<component>.py`` sibling
 imported below -- this file is at its ceiling and may not grow (#14236).
-
 Closes GH#7081.
 """
 
@@ -14,6 +13,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from typing import Any
+
+from autobot_shared import deployment_profile as _profile  # #19315: env/mode defaults live there
 
 
 @dataclass(frozen=True)
@@ -61,26 +62,33 @@ def env(name: str, default: Any = None) -> Any:
 # ---------------------------------------------------------------------------
 # Registered variables — grouped by component
 # ---------------------------------------------------------------------------
-
-# Split into per-component sibling modules as this file reaches its
-# grandfathered file-size ceiling (#14236) with no slack left inline: ai
-# (#14856), terminal/testing (#14961), slm (#15620), and agent_runtime /
-# backend_services (#15710, the os.environ.get sweep the registry checker
-# had never seen either). Importing each here -- after
-# EnvVarSpec/register_env_var/REGISTRY are defined above, and before
-# anything below can observe the registry -- is a side effect that fully
-# populates that module's entries; see each sibling's own docstring for why
-# its variables live there instead of inline.
-
+# Per-component siblings split at the size ceiling (#14236, #18391); imported after REGISTRY exists, before any read.
 from autobot_shared import env_registry_agent_runtime  # noqa: E402,F401
-from autobot_shared import env_registry_ai  # noqa: E402,F401
 from autobot_shared import env_registry_backend  # noqa: E402,F401
 from autobot_shared import env_registry_backend_services  # noqa: E402,F401
+from autobot_shared import env_registry_knowledge  # noqa: E402,F401
 from autobot_shared import env_registry_llc  # noqa: E402,F401
 from autobot_shared import env_registry_logging  # noqa: E402,F401
-from autobot_shared import env_registry_slm  # noqa: E402,F401
-from autobot_shared import env_registry_terminal  # noqa: E402,F401
-from autobot_shared import env_registry_testing  # noqa: E402,F401
+from autobot_shared import env_registry_memory  # noqa: E402,F401
+from autobot_shared import env_registry_npu  # noqa: E402,F401
+from autobot_shared import env_registry_security  # noqa: E402,F401
+from autobot_shared import env_registry_tls  # noqa: E402,F401
+from autobot_shared import (  # noqa: E402,F401
+    env_registry_agent_tools,
+    env_registry_ai,
+    env_registry_analytics,
+    env_registry_approvals,
+    env_registry_batch,
+    env_registry_chat_attachments,
+    env_registry_gateway,
+    env_registry_ledger,
+    env_registry_postgres,
+    env_registry_rag,
+    env_registry_slm,
+    env_registry_slm_health,
+    env_registry_terminal,
+    env_registry_testing,
+)
 
 # --- events (#14817, #14818) -------------------------------------------------
 
@@ -138,7 +146,7 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_CHATS_DIRECTORY",
         type=str,
-        default="data/chats",
+        default="",
         description="Filesystem path where chat session files are stored.",
         component="chat",
     )
@@ -188,8 +196,8 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_DEPLOYMENT_MODE",
         type=str,
-        default="distributed",
-        description="Deployment topology: 'distributed' or 'standalone'.",
+        default=_profile.DEPLOYMENT_MODE_DEFAULT,
+        description="Topology. Unset: auto-detect -- docker_local in a container, else local (#19316).",
         component="system",
     )
 )
@@ -198,8 +206,8 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_ENV",
         type=str,
-        default="production",
-        description="Short environment label used in logs and traces (e.g. 'development', 'production').",
+        default=_profile.ENVIRONMENT_DEFAULT,
+        description="Legacy spelling of AUTOBOT_ENVIRONMENT, read only when that is unset (#19315).",
         component="system",
     )
 )
@@ -208,10 +216,8 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_ENVIRONMENT",
         type=str,
-        default="development",
-        description=(
-            "Full environment name for OTel deployment.environment attribute. " "Prefer AUTOBOT_ENV for new code."
-        ),
+        default=_profile.ENVIRONMENT_DEFAULT,
+        description="Deployment environment (production/development/test); profiles in deployment_profile.py.",
         component="system",
     )
 )
@@ -331,71 +337,6 @@ register_env_var(
     )
 )
 
-# --- postgres ---------------------------------------------------------------
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_POSTGRES_DB",
-        type=str,
-        default="autobot_users",
-        description="PostgreSQL database name.",
-        component="postgres",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_POSTGRES_HOST",
-        type=str,
-        default="127.0.0.1",
-        description="PostgreSQL server hostname or IP.",
-        component="postgres",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_POSTGRES_PASSWORD",
-        type=str,
-        default="",
-        description="PostgreSQL user password.",
-        component="postgres",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_POSTGRES_PORT",
-        type=str,
-        default="5432",
-        description="PostgreSQL server port.",
-        component="postgres",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_POSTGRES_USER",
-        type=str,
-        default="slm_app",
-        description="PostgreSQL login role.",
-        component="postgres",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_USERS_DATABASE_URL",
-        type=str,
-        default=None,
-        description=(
-            "Full SQLAlchemy connection URL for the users database. "
-            "Overrides AUTOBOT_POSTGRES_* individual vars when set."
-        ),
-        component="postgres",
-    )
-)
-
 # --- monitoring -------------------------------------------------------------
 
 register_env_var(
@@ -414,8 +355,8 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_REDIS_DB_ANALYTICS",
         type=int,
-        default=11,
-        description="Redis logical database number for analytics data.",
+        default=None,
+        description="Redis DB number for analytics data; unset uses redis-databases.yaml (#19232).",
         component="redis",
         range=(0, 15),
     )
@@ -425,8 +366,8 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_REDIS_DB_KNOWLEDGE",
         type=int,
-        default=1,
-        description="Redis logical database number for knowledge-base vectors.",
+        default=None,
+        description="Redis DB number for knowledge-base vectors; unset uses redis-databases.yaml (#19232).",
         component="redis",
         range=(0, 15),
     )
@@ -436,8 +377,8 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_REDIS_DB_MAIN",
         type=int,
-        default=0,
-        description="Redis logical database number for primary application data.",
+        default=None,
+        description="Redis DB number for primary application data; unset uses redis-databases.yaml (#19232).",
         component="redis",
         range=(0, 15),
     )
@@ -447,7 +388,7 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_REDIS_HOST",
         type=str,
-        default="localhost",
+        default="127.0.0.1",
         description="Redis server hostname or IP address.",
         component="redis",
     )
@@ -495,62 +436,8 @@ register_env_var(
     )
 )
 
-# --- tls --------------------------------------------------------------------
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_TLS_CA_PATH",
-        type=str,
-        default=None,
-        description="Path to the CA certificate file for TLS verification.",
-        component="tls",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_TLS_CERT_DIR",
-        type=str,
-        default="/etc/autobot/certs",
-        description="Directory containing TLS certificate and key files.",
-        component="tls",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_TLS_CERT_PATH",
-        type=str,
-        default=None,
-        description="Path to the TLS client/server certificate file.",
-        component="tls",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_TLS_KEY_PATH",
-        type=str,
-        default=None,
-        description="Path to the TLS private key file.",
-        component="tls",
-    )
-)
-
-# --- network ----------------------------------------------------------------
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_TRUSTED_PROXIES",
-        type=str,
-        default="",
-        description=(
-            "Comma-separated list of trusted reverse-proxy IP addresses or CIDR ranges "
-            "for X-Forwarded-For header trust."
-        ),
-        component="network",
-    )
-)
+# --- tls: env_registry_tls.py ------------------------------------------
+# --- network: env_registry_tls.py (#18765, to make room for a sibling import) ---
 
 # --- voice / speech-to-text -------------------------------------------------
 
@@ -724,47 +611,7 @@ register_env_var(
     )
 )
 
-# --- gateway connectors (#14223) ---------------------------------------------
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_IMESSAGE_ENABLED",
-        type=bool,
-        default=False,
-        description=(
-            "Opt in to the iMessage gateway adapter. Off by default: it is "
-            "macOS-only and needs Full Disk Access to the Messages database."
-        ),
-        component="gateway",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_SIGNAL_ENABLED",
-        type=bool,
-        default=False,
-        description=(
-            "Opt in to the Signal gateway adapter. Off by default: it needs a "
-            "running signal-cli daemon and a registered number."
-        ),
-        component="gateway",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_MATRIX_E2EE",
-        type=bool,
-        default=False,
-        description=(
-            "Opt in to end-to-end encryption for the Matrix adapter. Off by "
-            "default because E2EE needs the optional olm dependency and a "
-            "persisted device store."
-        ),
-        component="gateway",
-    )
-)
+# --- gateway connectors: env_registry_gateway.py (#19010) ---
 
 # --- execution sandbox and snapshots (#14223) --------------------------------
 

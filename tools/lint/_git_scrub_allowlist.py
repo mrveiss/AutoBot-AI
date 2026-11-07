@@ -4,7 +4,7 @@
 # Author: mrveiss
 """Data module for ``check_git_toplevel_env_scrubbed.ALLOWLIST``.
 
-Split out for the same reason as ``python_file_size_ratchet_baseline`` (#14547):
+Split out for the same reason as ``python_file_size_known_large`` (#14547):
 the checker sits at its 600-line ratchet ceiling, and each entry here carries
 several lines of reasoning by design. Holding them in the checker would mean
 choosing between a documented exemption and a raised ceiling every time one is

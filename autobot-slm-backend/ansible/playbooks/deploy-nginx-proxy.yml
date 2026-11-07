@@ -20,10 +20,9 @@
   vars:
     backend_user: autobot
     backend_group: autobot
-    backend_install_dir: /opt/autobot/autobot-backend
-    backend_code_dir: /opt/autobot/autobot-backend
+    backend_install_dir: "{{ autobot.base_dir }}/autobot-backend"
+    backend_code_dir: "{{ autobot.base_dir }}/autobot-backend"
     backend_log_dir: /var/log/autobot
-    backend_workers: 4
     service_auth_service_id: "main-backend"
     service_auth_keys_dir: "/etc/autobot/service-keys"
 
@@ -69,11 +68,11 @@
     # 3. Update backend systemd service FIRST (frees port 8443)
     #    uvicorn moves from :8443 (SSL) → :8001 (plain HTTP)
     # -------------------------------------------------------
+    # #17856: one template path -- roles/backend unit_only owns the worker count (role default).
     - name: "backend | Deploy updated systemd service (no SSL)"
-      ansible.builtin.template:
-        src: ../roles/backend/templates/autobot-backend.service.j2
-        dest: /etc/systemd/system/autobot-backend.service
-        mode: "0644"
+      ansible.builtin.include_role:
+        name: backend
+        tasks_from: unit_only
 
     - name: "backend | Reload systemd and restart backend (frees port 8443)"
       ansible.builtin.systemd:

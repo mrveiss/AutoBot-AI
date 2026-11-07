@@ -7,28 +7,41 @@ RUM (Real User Monitoring) API endpoints for logging frontend events.
 Provides comprehensive logging of user interactions, errors, and performance metrics.
 
 Issue #476: Added /metrics endpoint for Prometheus integration.
+
+Access posture (#16375, owner decision 2026-10-12):
+
+* ``POST /event`` and ``POST /metrics`` are OPEN BY DESIGN -- unauthenticated
+  browser telemetry ingest. The RumAgent sender carries no credential (a bare
+  ``fetch``/``sendBeacon``) and runs on ``/login`` and ``/shared/:token``, where
+  no session exists, so a gate would silently stop RUM on every page. Both are
+  bounded instead (``api/rum_ingest_bounds.py``): per-address rate limit (429),
+  body-size cap enforced while the body streams (413, ``api/rum_body_cap.py``),
+  field, list and string caps (422), one bounded row per event, and metric
+  label values held to a fixed vocabulary per label (#18368). Owner ruling
+  2026-10-12: ``/metrics`` stays open like ``/event``, bounded the same way.
+* ``POST /config``, ``/disable``, ``/clear`` change collection or delete data,
+  and ``GET /export`` returns every visitor's URLs (``/shared/:token`` links
+  included): admin only.
+* ``GET /status`` (config and counts): any signed-in user.
 """
 
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
-from api.schemas_analytics import (
-    RumApiCallMetric,
-    RumConfig,
-    RumCriticalIssueMetric,
-    RumEvent,
-    RumJsErrorMetric,
-    RumMetrics,
-    RumPageMetrics,
-    RumResourceMetric,
-    RumSessionMetric,
-    RumUserActionMetric,
-    RumWebSocketMetric,
+from api.rum_body_cap import BodyCappedRoute
+from api.rum_ingest_bounds import (
+    append_bounded,
+    bound_event_ingest,
+    bound_metrics_ingest,
+    enforce_event_field_caps,
+    enforce_metrics_caps,
+    track_session,
 )
+from api.rum_metrics_dispatch import dispatch_and_tally_rum_metrics
+from api.schemas_analytics import RumConfig, RumEvent, RumMetrics
 from api.schemas_workflows import (
     RUMClearResponse,
     RUMConfigResponse,
@@ -38,13 +51,16 @@ from api.schemas_workflows import (
     RUMMetricsResponse,
     RUMStatusResponse,
 )
+from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.env_registry import env
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import sanitize_log_value
 from autobot_shared.time_utils import parse_utc_iso
 from monitoring.prometheus_metrics import get_metrics_manager
 from type_defs.common import Metadata
 
-router = APIRouter()
+router = APIRouter(route_class=BodyCappedRoute)
 logger = get_logger(__name__)
 
 # RUM configuration storage
@@ -193,7 +209,7 @@ def setup_rum_logger():
 rum_logger = setup_rum_logger()
 
 
-@router.post("/config", response_model=RUMConfigResponse)
+@router.post("/config", response_model=RUMConfigResponse, dependencies=[Depends(check_admin_permission)])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="configure_rum",
@@ -230,14 +246,15 @@ async def configure_rum(config: RumConfig):
         raise HTTPException(status_code=500, detail="Error configuring RUM")
 
 
-@router.post("/event", response_model=RUMEventResponse)
+@router.post("/event", response_model=RUMEventResponse, dependencies=[Depends(bound_event_ingest)])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="log_rum_event",
     error_code_prefix="RUM",
 )
 async def log_rum_event(event: RumEvent):
-    """Log a RUM event from the frontend"""
+    """Log a RUM event from the frontend -- one bounded row per request (#16375)."""
+    enforce_event_field_caps(event)
     try:
         async with _rum_lock:
             if not rum_config["enabled"]:
@@ -247,29 +264,10 @@ async def log_rum_event(event: RumEvent):
             event_data = event.model_dump()
             event_data["server_timestamp"] = datetime.now(tz=timezone.utc).isoformat()
 
-            # Store event in memory (in production, this would go to Redis/DB)
-            rum_events.append(event_data)
-
-            # Update session tracking
-            session_id = event.sessionId
-            if session_id not in rum_sessions:
-                rum_sessions[session_id] = {
-                    "start_time": event_data["server_timestamp"],
-                    "event_count": 0,
-                    "last_activity": event_data["server_timestamp"],
-                    "user_agent": event.userAgent,
-                    "initial_url": event.url,
-                }
-
-            rum_sessions[session_id]["event_count"] += 1
-            rum_sessions[session_id]["last_activity"] = event_data["server_timestamp"]
-            session_event_count = rum_sessions[session_id]["event_count"]
+            # One capped buffer entry and one capped session upsert (#16375).
+            append_bounded(rum_events, event_data)
+            session_event_count = track_session(rum_sessions, event_data)
             interaction_tracking = rum_config["interaction_tracking"]
-
-            # Keep only last 10000 events in memory to prevent memory leaks
-            if len(rum_events) > 10000:
-                # Use slice assignment to modify global list in-place
-                rum_events[:] = rum_events[-5000:]  # Keep last 5000 events
 
         # Log to dedicated RUM log file based on event type (outside lock)
         log_message = format_rum_log_message(event_data)
@@ -287,7 +285,7 @@ async def log_rum_event(event: RumEvent):
         return {"status": "error", "message": "Failed to log RUM event"}
 
 
-@router.post("/disable", response_model=RUMDisableResponse)
+@router.post("/disable", response_model=RUMDisableResponse, dependencies=[Depends(check_admin_permission)])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="disable_rum",
@@ -309,7 +307,7 @@ async def disable_rum():
         raise HTTPException(status_code=500, detail="Error disabling RUM")
 
 
-@router.post("/clear", response_model=RUMClearResponse)
+@router.post("/clear", response_model=RUMClearResponse, dependencies=[Depends(check_admin_permission)])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_rum_data",
@@ -340,7 +338,7 @@ async def clear_rum_data():
         raise HTTPException(status_code=500, detail="Error clearing RUM data")
 
 
-@router.get("/export", response_model=RUMExportResponse)
+@router.get("/export", response_model=RUMExportResponse, dependencies=[Depends(check_admin_permission)])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_rum_data",
@@ -385,7 +383,7 @@ async def export_rum_data():
         raise HTTPException(status_code=500, detail="Error exporting RUM data")
 
 
-@router.get("/status", response_model=RUMStatusResponse)
+@router.get("/status", response_model=RUMStatusResponse, dependencies=[Depends(get_current_user)])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_rum_status",
@@ -428,10 +426,16 @@ async def get_rum_status():
 
 
 def format_rum_log_message(event_data: Metadata) -> str:
-    """Format RUM event data into a readable log message.
+    """The RUM log line for *event_data*, with control characters escaped.
 
-    Uses dictionary dispatch pattern to reduce nesting (Issue #315).
+    Every field is unauthenticated input, so CR/LF and other controls are
+    rendered as visible escapes (CWE-117, #16375) -- one event is one log line.
     """
+    return sanitize_log_value(_compose_rum_log_message(event_data), max_chars=int(env("AUTOBOT_RUM_EVENT_MAX_BYTES")))
+
+
+def _compose_rum_log_message(event_data: Metadata) -> str:
+    """Format RUM event data into a readable log message (dictionary dispatch, Issue #315)."""
     event_type = event_data.get("type", "unknown")
     session_id = event_data.get("sessionId", "unknown")
     url = event_data.get("url", "unknown")
@@ -451,124 +455,7 @@ def format_rum_log_message(event_data: Metadata) -> str:
 # =============================================================================
 
 
-def _process_page_metrics(metrics_manager, page_metrics: RumPageMetrics) -> None:
-    """Process page performance metrics."""
-    if page_metrics.load_time_seconds is not None:
-        metrics_manager.record_frontend_page_load(page_metrics.page, page_metrics.load_time_seconds)
-    if page_metrics.fcp_seconds is not None:
-        metrics_manager.record_frontend_fcp(page_metrics.page, page_metrics.fcp_seconds)
-    if page_metrics.lcp_seconds is not None:
-        metrics_manager.record_frontend_lcp(page_metrics.page, page_metrics.lcp_seconds)
-    if page_metrics.tti_seconds is not None:
-        metrics_manager.record_frontend_tti(page_metrics.page, page_metrics.tti_seconds)
-    if page_metrics.dom_loaded_seconds is not None:
-        metrics_manager.record_frontend_dom_loaded(page_metrics.page, page_metrics.dom_loaded_seconds)
-
-
-def _process_api_calls(metrics_manager, api_calls: List[RumApiCallMetric]) -> None:
-    """Process API call metrics."""
-    for call in api_calls:
-        metrics_manager.record_frontend_api_request(
-            endpoint=call.endpoint,
-            method=call.method,
-            status=call.status,
-            latency_seconds=call.latency_seconds,
-            is_slow=call.is_slow,
-            is_timeout=call.is_timeout,
-        )
-        if call.error_type:
-            metrics_manager.record_frontend_api_error(call.endpoint, call.method, call.error_type)
-
-
-def _process_js_errors(metrics_manager, js_errors: List[RumJsErrorMetric]) -> None:
-    """Process JavaScript error metrics."""
-    for error in js_errors:
-        if error.is_rejection:
-            metrics_manager.record_frontend_unhandled_rejection(error.page)
-        else:
-            metrics_manager.record_frontend_js_error(error.error_type, error.page)
-        if error.component:
-            metrics_manager.record_frontend_component_error(error.component, error.error_type)
-
-
-def _process_user_actions(metrics_manager, user_actions: List[RumUserActionMetric]) -> None:
-    """Process user action metrics."""
-    for action in user_actions:
-        metrics_manager.record_frontend_user_action(action.action_type, action.page)
-        if action.form_name and action.form_status:
-            metrics_manager.record_frontend_form_submission(action.form_name, action.form_status)
-
-
-def _process_session_metric(metrics_manager, session: RumSessionMetric) -> None:
-    """Process session metrics."""
-    if session.event == "start":
-        metrics_manager.record_frontend_session_start()
-    elif session.event == "end" and session.duration_seconds is not None:
-        metrics_manager.record_frontend_session_duration(session.duration_seconds)
-
-
-def _process_websocket_events(metrics_manager, websocket_events: List[RumWebSocketMetric]) -> None:
-    """Process WebSocket event metrics."""
-    for ws_event in websocket_events:
-        metrics_manager.record_frontend_ws_event(ws_event.event)
-        if ws_event.direction and ws_event.event_type:
-            metrics_manager.record_frontend_ws_message(ws_event.direction, ws_event.event_type)
-
-
-def _process_resources(metrics_manager, resources: List[RumResourceMetric]) -> None:
-    """Process resource load metrics."""
-    for resource in resources:
-        metrics_manager.record_frontend_resource_load(resource.resource_type, resource.load_time_seconds)
-        if resource.is_slow:
-            metrics_manager.record_frontend_slow_resource(resource.resource_type)
-
-
-def _process_critical_issues(metrics_manager, critical_issues: List[RumCriticalIssueMetric]) -> None:
-    """Process critical issue metrics."""
-    for issue in critical_issues:
-        metrics_manager.record_frontend_critical_issue(issue.issue_type)
-
-
-def _dispatch_and_tally_rum_metrics(metrics_manager, metrics: RumMetrics) -> int:
-    """Helper for receive_rum_metrics. Ref: #1088."""
-    recorded_count = 0
-
-    if metrics.page_metrics:
-        _process_page_metrics(metrics_manager, metrics.page_metrics)
-        recorded_count += 1
-
-    if metrics.api_calls:
-        _process_api_calls(metrics_manager, metrics.api_calls)
-        recorded_count += len(metrics.api_calls)
-
-    if metrics.js_errors:
-        _process_js_errors(metrics_manager, metrics.js_errors)
-        recorded_count += len(metrics.js_errors)
-
-    if metrics.user_actions:
-        _process_user_actions(metrics_manager, metrics.user_actions)
-        recorded_count += len(metrics.user_actions)
-
-    if metrics.session:
-        _process_session_metric(metrics_manager, metrics.session)
-        recorded_count += 1
-
-    if metrics.websocket_events:
-        _process_websocket_events(metrics_manager, metrics.websocket_events)
-        recorded_count += len(metrics.websocket_events)
-
-    if metrics.resources:
-        _process_resources(metrics_manager, metrics.resources)
-        recorded_count += len(metrics.resources)
-
-    if metrics.critical_issues:
-        _process_critical_issues(metrics_manager, metrics.critical_issues)
-        recorded_count += len(metrics.critical_issues)
-
-    return recorded_count
-
-
-@router.post("/metrics", response_model=RUMMetricsResponse)
+@router.post("/metrics", response_model=RUMMetricsResponse, dependencies=[Depends(bound_metrics_ingest)])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="receive_rum_metrics",
@@ -580,10 +467,12 @@ async def receive_rum_metrics(metrics: RumMetrics):
 
     Issue #476: This endpoint receives batched RUM metrics from the frontend
     and records them to the Prometheus metrics system for monitoring.
+    #18368: every list and string is capped before anything is recorded.
     """
+    enforce_metrics_caps(metrics)
     try:
         metrics_manager = get_metrics_manager()
-        recorded_count = _dispatch_and_tally_rum_metrics(metrics_manager, metrics)
+        recorded_count = dispatch_and_tally_rum_metrics(metrics_manager, metrics)
 
         logger.debug(f"Recorded {recorded_count} RUM metrics from session {metrics.session_id}")
 

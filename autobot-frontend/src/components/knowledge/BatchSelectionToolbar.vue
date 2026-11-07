@@ -138,7 +138,7 @@ function handleVectorize(): void {
 .batch-selection-toolbar {
   position: sticky;
   top: 0;
-  z-index: 20;
+  z-index: var(--z-20);
   background: var(--color-primary);
   color: var(--text-on-primary);
   padding: var(--spacing-3) var(--spacing-6);

@@ -47,7 +47,7 @@ from autobot_shared.logging_manager import get_logger
 from .dag_executor import (
     DAGExecutionContext,
     DAGNode,
-    NodeType,
+    DagNodeType,
     StepExecutorCallback,
     WorkflowDAG,
     _evaluate_condition,
@@ -86,7 +86,7 @@ def _make_dag_node_fn(
         step_executor: StepExecutorCallback = state["step_executor"]
 
         # Mirror DAGExecutor._execute_node logic.
-        if dag_node.node_type == NodeType.CONDITION:
+        if dag_node.node_type == DagNodeType.CONDITION:
             condition_result = _evaluate_condition(dag_node, ctx)
             ctx.branches_taken[dag_node.node_id] = condition_result
             ctx.step_results[dag_node.node_id] = {
@@ -107,7 +107,7 @@ def _make_dag_node_fn(
             _mark_descendants_skipped(pruned, dag, ctx)
             return {}  # dag_ctx mutated in-place
 
-        if dag_node.node_type == NodeType.DISTRIBUTED_SHELL:
+        if dag_node.node_type == DagNodeType.DISTRIBUTED_SHELL:
             try:
                 result = await execute_distributed_shell(dag_node, ctx)
             except Exception as exc:
@@ -223,7 +223,7 @@ def build_dag_graph(
             builder.add_edge(nid, END)
             continue
 
-        if dag_node.node_type == NodeType.CONDITION:
+        if dag_node.node_type == DagNodeType.CONDITION:
             # Conditional edges: branch is resolved *after* node execution
             # since the node populates ctx.branches_taken.
             true_targets = [e.target for e in successors if e.label is True]

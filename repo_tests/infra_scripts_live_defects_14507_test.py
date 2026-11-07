@@ -28,6 +28,8 @@ from unittest.mock import create_autospec
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _REPO_ROOT = repo_root()
 _SCRIPTS = _REPO_ROOT / "autobot-infrastructure" / "shared" / "scripts"
 _BACKEND = _REPO_ROOT / "autobot-backend"
@@ -229,13 +231,14 @@ def test_every_absolute_import_target_in_the_script_resolves(request, script, lo
     request.getfixturevalue(loader)  # the script performs its own sys.path setup
     source = (_SCRIPTS / script).read_text(encoding="utf-8")
     targets = set()
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.Import):
             targets.update(alias.name.split(".")[0] for alias in node.names)
         elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
             targets.add(node.module.split(".")[0])
 
-    assert "knowledge" in targets, "the knowledge-base import must still be exercised"
+    # #18122 slice 5: the scripts reach the KB through the canonical accessor (knowledge_factory).
+    assert targets & {"knowledge", "knowledge_factory"}, "the knowledge-base import must still be exercised"
     unresolvable = sorted(name for name in targets if importlib.util.find_spec(name) is None)
     assert unresolvable == []
 

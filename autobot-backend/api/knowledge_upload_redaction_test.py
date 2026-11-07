@@ -34,7 +34,7 @@ async def test_uploaded_text_file_is_redacted_before_it_reaches_the_kb():
     req = MagicMock()
     req.form = AsyncMock(return_value={"file": upload, "title": "Setup"})
     kb = MagicMock()
-    kb.store_fact = AsyncMock(return_value={"fact_id": "f1"})
+    kb.add_document = AsyncMock(return_value={"status": "success", "fact_id": "f1"})
 
     with (
         patch.object(mod, "get_or_create_knowledge_base", AsyncMock(return_value=kb)),
@@ -43,7 +43,7 @@ async def test_uploaded_text_file_is_redacted_before_it_reaches_the_kb():
     ):
         await mod.upload_file_to_knowledge(admin_check=True, req=req)
 
-    stored_content = kb.store_fact.await_args.kwargs["content"]
+    stored_content = kb.add_document.await_args.args[0]
     assert _SECRET not in stored_content, "credential reached the KB store unredacted"
     assert "Setup instructions" in stored_content
 
@@ -58,7 +58,7 @@ async def test_uploaded_text_file_with_no_secret_is_unchanged():
     req = MagicMock()
     req.form = AsyncMock(return_value={"file": upload, "title": "Notes"})
     kb = MagicMock()
-    kb.store_fact = AsyncMock(return_value={"fact_id": "f1"})
+    kb.add_document = AsyncMock(return_value={"status": "success", "fact_id": "f1"})
 
     with (
         patch.object(mod, "get_or_create_knowledge_base", AsyncMock(return_value=kb)),
@@ -67,6 +67,6 @@ async def test_uploaded_text_file_with_no_secret_is_unchanged():
     ):
         await mod.upload_file_to_knowledge(admin_check=True, req=req)
 
-    stored_content = kb.store_fact.await_args.kwargs["content"]
+    stored_content = kb.add_document.await_args.args[0]
     assert "Team meeting notes" in stored_content
     assert "standup is at 10am" in stored_content

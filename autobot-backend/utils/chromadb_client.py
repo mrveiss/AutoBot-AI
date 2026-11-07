@@ -20,9 +20,7 @@ async variants to prevent event loop blocking. See Issue #369.
 
 from __future__ import annotations
 
-import json
-import pickle  # nosec B403  # restricted Unpickler below; see _RestrictedHnswUnpickler
-import sqlite3
+import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Tuple
 
@@ -37,6 +35,7 @@ from utils.async_chromadb_client import (
     wrap_collection_async,
 )
 from utils.chromadb_auth import chroma_client_auth_kwargs
+from utils.chromadb_store_repairs import prepare_local_store
 
 if TYPE_CHECKING:
     import chromadb  # noqa: F401
@@ -77,304 +76,32 @@ __all__ = [
     "get_async_chromadb_client",
     "get_all_paginated",
     "get_backend_client",
-    "get_async_default_client",
     "AsyncChromaClient",
     "AsyncChromaCollection",
     "wrap_collection_async",
-    "_fix_hnsw_pickle_format",
 ]
 
 
-def _read_hnsw_params(cursor: sqlite3.Cursor, collection_id: str) -> dict:
-    """Read HNSW metadata for one collection from collection_metadata table.
-
-    Ref: #2735. Helper for _migrate_legacy_collection_configs.
-    """
-    cursor.execute(
-        "SELECT key, str_value, int_value, float_value " "FROM collection_metadata WHERE collection_id=?",
-        (collection_id,),
-    )
-    hnsw: dict = {}
-    for key, sv, iv, fv in cursor.fetchall():
-        if key.startswith("hnsw:"):
-            hnsw[key[5:]] = sv if sv is not None else (iv if iv is not None else fv)
-    return hnsw
+_local_open_lock = threading.RLock()  # guards the client cache; the repair locks live in chromadb_store_repairs
 
 
-def _build_collection_config_json(hnsw: dict) -> str:
-    """Build the ChromaDB 0.5.x config_json_str from HNSW parameter dict.
+def _open_local_client(cache_key: tuple, chroma_path: Path, allow_reset: bool, telemetry: bool) -> Any:
+    """Prepare the store, then open (or reuse) the cached local PersistentClient."""
+    import chromadb  # noqa: F811
+    from chromadb.config import Settings as ChromaSettings
 
-    Ref: #2735. Helper for _migrate_legacy_collection_configs.
-    """
-    return json.dumps(
-        {
-            "hnsw_configuration": {
-                "space": hnsw.get("space", "l2"),
-                "ef_construction": hnsw.get("construction_ef", 100),
-                "ef_search": hnsw.get("search_ef", 10),
-                "num_threads": 4,
-                "M": hnsw.get("M", 16),
-                "resize_factor": 1.2,
-                "batch_size": 100,
-                "sync_threshold": 1000,
-                "_type": "HNSWConfigurationInternal",
-            },
-            "_type": "CollectionConfigurationInternal",
-        }
-    )
-
-
-def _migrate_legacy_collection_configs(chroma_path: Path) -> None:
-    """Migrate ChromaDB collections missing _type in config_json_str.
-
-    ChromaDB 0.5.x requires '_type' fields in collection config JSON.
-    Collections created by older versions store config_json_str as '{}',
-    which causes KeyError: '_type' on access. This patches the SQLite
-    database directly before the PersistentClient opens it.
-    """
-    db_file = chroma_path / "chroma.sqlite3"
-    if not db_file.exists():
-        return
-
-    try:
-        conn = sqlite3.connect(str(db_file))
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, name, config_json_str FROM collections")
-        rows = cursor.fetchall()
-
-        fixed = 0
-        for cid, _name, config_str in rows:
-            config = json.loads(config_str) if config_str else {}
-            if "_type" in config:
-                continue
-
-            hnsw = _read_hnsw_params(cursor, cid)
-            new_cfg = _build_collection_config_json(hnsw)
-            cursor.execute(
-                "UPDATE collections SET config_json_str=? WHERE id=?",
-                (new_cfg, cid),
-            )
-            fixed += 1
-
-        if fixed:
-            conn.commit()
-            logger.info("Migrated %d ChromaDB collection config(s) to 0.5.x format", fixed)
-        conn.close()
-    except Exception as e:
-        logger.warning("ChromaDB config migration check failed: %s", e)
-
-
-def _fix_segment_hnsw_space(chroma_path: Path) -> None:
-    """Copy hnsw:space from collection_metadata into segment_metadata.
-
-    ChromaDB 0.5.23 stores hnsw:space in collection_metadata but reads
-    it from segment_metadata when initializing the HNSW segment. If
-    segment_metadata is empty the space defaults to L2, producing wrong
-    distances even though the collection was created with cosine (#1390).
-    """
-    db_file = chroma_path / "chroma.sqlite3"
-    if not db_file.exists():
-        return
-    try:
-        conn = sqlite3.connect(str(db_file))
-        c = conn.cursor()
-
-        # Find vector segments whose collection has hnsw:space set
-        c.execute(
-            "SELECT s.id, cm.str_value "
-            "FROM segments s "
-            "JOIN collection_metadata cm "
-            "  ON cm.collection_id = s.collection "
-            "WHERE s.scope = 'VECTOR' "
-            "  AND cm.key = 'hnsw:space' "
-            "  AND cm.str_value IS NOT NULL"
+    with _local_open_lock:
+        cached = _sync_client_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        prepare_local_store(chroma_path)
+        client = chromadb.PersistentClient(
+            path=str(chroma_path),
+            settings=ChromaSettings(allow_reset=allow_reset, anonymized_telemetry=telemetry),
         )
-        rows = c.fetchall()
-
-        fixed = 0
-        for seg_id, space_val in rows:
-            # Check if segment_metadata already has hnsw:space
-            c.execute(
-                "SELECT 1 FROM segment_metadata " "WHERE segment_id = ? AND key = 'hnsw:space'",
-                (seg_id,),
-            )
-            if c.fetchone():
-                continue
-            c.execute(
-                "INSERT INTO segment_metadata " "(segment_id, key, str_value) " "VALUES (?, 'hnsw:space', ?)",
-                (seg_id, space_val),
-            )
-            fixed += 1
-
-        if fixed:
-            conn.commit()
-            logger.info("Propagated hnsw:space to %d segment(s)", fixed)
-        conn.close()
-    except Exception as e:
-        logger.warning("segment hnsw:space fix failed: %s", e)
-
-
-def _fix_seq_id_blob_type(chroma_path: Path) -> None:
-    """Fix embeddings.seq_id BLOB->INTEGER for ChromaDB 0.5.x (#1390).
-
-    ChromaDB 0.5.23 creates seq_id as BLOB but its Rust compactor
-    expects INTEGER. Patch the column type before the compactor starts.
-    """
-    db_file = chroma_path / "chroma.sqlite3"
-    if not db_file.exists():
-        return
-    try:
-        conn = sqlite3.connect(str(db_file))
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA table_info(embeddings)")
-        cols = {row[1]: row[2] for row in cursor.fetchall()}
-        if cols.get("seq_id", "").upper() != "BLOB":
-            conn.close()
-            return
-        cursor.execute(
-            "CREATE TABLE embeddings_fix ("
-            "id INTEGER PRIMARY KEY, "
-            "segment_id TEXT NOT NULL, "
-            "embedding_id TEXT NOT NULL, "
-            "seq_id INTEGER NOT NULL, "
-            "created_at TIMESTAMP NOT NULL DEFAULT "
-            "CURRENT_TIMESTAMP, "
-            "UNIQUE (segment_id, embedding_id))"
-        )
-        cursor.execute("INSERT INTO embeddings_fix SELECT * FROM embeddings")
-        cursor.execute("DROP TABLE embeddings")
-        cursor.execute("ALTER TABLE embeddings_fix RENAME TO embeddings")
-        conn.commit()
-        conn.close()
-        logger.info("Fixed embeddings.seq_id BLOB->INTEGER")
-    except Exception as e:
-        logger.warning("seq_id fix failed: %s", e)
-
-
-def _infer_hnsw_dimensionality(segment_dir: Path) -> int:
-    """Infer HNSW embedding dimensionality from binary files (#1390).
-
-    Reads data_level0.bin size and element count to compute the
-    vector dimension via hnswlib's internal record layout.
-    Returns 0 if inference fails.
-    """
-    import struct
-
-    data_file = segment_dir / "data_level0.bin"
-    header_file = segment_dir / "header.bin"
-    if not data_file.exists() or not header_file.exists():
-        return 0
-    try:
-        file_size = data_file.stat().st_size
-        with open(header_file, "rb") as f:
-            hdr = f.read(52)
-        vals = struct.unpack("<" + "I" * 13, hdr[:52])
-        count = vals[5]
-        if count == 0:
-            return 0
-        rec_size = file_size // count
-        links_size = vals[11]
-        label_size = 8
-        dim = (rec_size - links_size - label_size) // 4
-        if 64 <= dim <= 4096:
-            return dim
-    except Exception:
-        pass
-    return 0
-
-
-# Issue #14187: index_metadata.pickle is ChromaDB's own on-disk format for
-# PersistentLocalHnswSegment (chromadb/segment/impl/vector/local_persistent_hnsw.py)
-# -- the library writes it with plain pickle.dump() and reads it back with plain
-# pickle.load() itself, downstream of this function, so the file cannot move to a
-# non-pickle format without forking the dependency. What this module controls is
-# only its OWN read, performed solely to patch legacy metadata shapes before
-# ChromaDB's loader runs (#1390).
-#
-# Trust boundary: the file lives under the local ChromaDB persist directory,
-# which resolves under the SSOT/legacy data roots excluded from the filesystem
-# MCP bridge (api/filesystem_mcp.py _EXCLUDED_DIR_PATHS, #14081/#14124). The only
-# writers are ChromaDB's own segment code and this function, both running inside
-# the backend process -- there is no known external write path today. Because
-# "no known path today" is not proof for tomorrow (#14124's own history), the
-# read here is restricted rather than trusted outright: find_class allows
-# exactly ChromaDB's PersistentData class and nothing else, so a file written
-# by anything other than ChromaDB's own persistence code fails closed instead
-# of executing arbitrary code during deserialization.
-_ALLOWED_HNSW_PICKLE_CLASSES = frozenset(
-    {
-        ("chromadb.segment.impl.vector.local_persistent_hnsw", "PersistentData"),
-    }
-)
-
-
-class _RestrictedHnswUnpickler(pickle.Unpickler):
-    """Unpickler for ``index_metadata.pickle`` restricted to ChromaDB's own class.
-
-    Subclassing ``pickle.Unpickler`` (rather than calling ``pickle.load``/
-    ``pickle.loads`` directly) keeps every GLOBAL/REDUCE opcode gated by
-    ``find_class``: only ``PersistentData`` may be constructed, and builtin
-    containers (dict/list/str/int/None) used by its fields never go through
-    ``find_class`` at all, so legitimate files are unaffected.
-    """
-
-    def find_class(self, module: str, name: str) -> Any:
-        if (module, name) not in _ALLOWED_HNSW_PICKLE_CLASSES:
-            raise pickle.UnpicklingError(
-                f"Refusing to unpickle disallowed class {module}.{name} from index_metadata.pickle"
-            )
-        return super().find_class(module, name)
-
-
-def _fix_hnsw_pickle_format(chroma_path: Path) -> None:
-    """Fix HNSW index_metadata.pickle for ChromaDB 0.5.x (#1390).
-
-    ChromaDB 0.5.23 may serialize HNSW metadata as a plain dict
-    (reader expects PersistentData) and/or leave dimensionality
-    as None (HNSW init requires an int). This patches both.
-    """
-    try:
-        # Issue #3016: lazy import — chromadb is heavy
-        from chromadb.segment.impl.vector.local_persistent_hnsw import PersistentData
-    except ImportError:
-        return
-
-    for pkl_file in chroma_path.glob("*/index_metadata.pickle"):
-        try:
-            with open(pkl_file, "rb") as f:
-                data = _RestrictedHnswUnpickler(f).load()
-            needs_fix = isinstance(data, dict)
-            if isinstance(data, dict):
-                dim = data.get("dimensionality")
-            else:
-                dim = getattr(data, "dimensionality", None)
-            needs_dim_fix = dim is None
-            if not needs_fix and not needs_dim_fix:
-                continue
-            if needs_dim_fix:
-                dim = _infer_hnsw_dimensionality(pkl_file.parent)
-                if dim == 0:
-                    dim = None
-            if isinstance(data, dict):
-                obj = PersistentData(
-                    dimensionality=dim,
-                    total_elements_added=data.get("total_elements_added", 0),
-                    id_to_label=data.get("id_to_label", {}),
-                    label_to_id=data.get("label_to_id", {}),
-                    id_to_seq_id=data.get("id_to_seq_id", {}),
-                )
-            else:
-                obj = data
-                obj.dimensionality = dim
-            with open(pkl_file, "wb") as f:
-                pickle.dump(obj, f)
-            logger.info(
-                "Fixed HNSW pickle: %s (dim=%s)",
-                pkl_file.parent.name[:8],
-                dim,
-            )
-        except Exception as e:
-            logger.warning("HNSW pickle fix failed for %s: %s", pkl_file, e)
+        logger.info("ChromaDB persistent client at: %s", chroma_path)
+        _sync_client_cache[cache_key] = client
+        return client
 
 
 def get_chromadb_client(
@@ -430,22 +157,8 @@ def get_chromadb_client(
             _sync_client_cache[cache_key] = client
             return client
 
-        # Fallback: local PersistentClient
-        chroma_path = Path(db_path or "data/chromadb")
-        chroma_path.mkdir(parents=True, exist_ok=True)
-        _migrate_legacy_collection_configs(chroma_path)
-        _fix_segment_hnsw_space(chroma_path)
-        _fix_seq_id_blob_type(chroma_path)
-        _fix_hnsw_pickle_format(chroma_path)
-        client = chromadb.PersistentClient(
-            path=str(chroma_path),
-            settings=ChromaSettings(
-                allow_reset=allow_reset,
-                anonymized_telemetry=anonymized_telemetry,
-            ),
-        )
-        logger.info("ChromaDB persistent client at: %s", chroma_path)
-        _sync_client_cache[cache_key] = client
+        # Fallback: local PersistentClient (shared with the async client, #18789)
+        client = _open_local_client(cache_key, Path(db_path or "data/chromadb"), allow_reset, anonymized_telemetry)
         return client
 
     except Exception as e:
@@ -522,26 +235,3 @@ def get_backend_client(
         anonymized_telemetry=anonymized_telemetry,
     )
     return ChromaDBClient(raw)
-
-
-async def get_async_default_client(
-    db_path: str = "",
-    allow_reset: bool = False,
-    anonymized_telemetry: bool = False,
-) -> Any:
-    """Return an async ``AsyncBaseClient`` wrapping the ChromaDB client.
-
-    Issue #5316: opt-in async seam. Mirrors ``get_backend_client`` but
-    returns an ``AsyncBaseClient`` (see ``knowledge.backends.async_base``)
-    for callers running in async contexts. Existing async callers keep
-    using ``get_async_chromadb_client`` unchanged.
-    """
-    # Lazy import to keep the backends package optional at import time.
-    from knowledge.backends.async_chromadb_adapter import AsyncChromaDBClient
-
-    raw = await get_async_chromadb_client(
-        db_path=db_path,
-        allow_reset=allow_reset,
-        anonymized_telemetry=anonymized_telemetry,
-    )
-    return AsyncChromaDBClient(raw)

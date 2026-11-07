@@ -29,25 +29,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env
 
 HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-module-singletons"
 
 
-def _test_git_env() -> dict[str, str]:
-    """#15246: env for every git subprocess this suite spawns.
-
-    Scrubbed rather than os.environ: the pre-push hook runs this suite with
-    GIT_DIR pointing at the worktree it is pushing (every checkout here is
-    one), and an unscrubbed `git init`/`git add`/`git commit` in a
-    fixture then operates on THAT repository instead of tmp_path's. See
-    autobot_shared/paths_test.py and #15246 for the reproduced incident.
-    """
-    return {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
-
-
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True, env=_test_git_env())
+    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True, env=isolated_git_env())
 
 
 def _init_repo(tmp_path: Path) -> Path:
@@ -70,7 +58,7 @@ def _run_hook(repo: Path, *args: str) -> subprocess.CompletedProcess:
         cwd=repo,
         capture_output=True,
         text=True,
-        env=_test_git_env(),
+        env=isolated_git_env(),
     )
 
 
@@ -136,9 +124,7 @@ class TestArgvAndGitBranchesAgree:
         # would stay green over the restored bug. Content that DOES parse is
         # what makes the extension filter the only thing keeping this file out
         # of the report, so removing the filter flips the result.
-        (repo / "autobot_shared" / "widget.vue").write_text(
-            "_tracker = TrackerClass()\n", encoding="utf-8"
-        )
+        (repo / "autobot_shared" / "widget.vue").write_text("_tracker = TrackerClass()\n", encoding="utf-8")
         _git(repo, "add", "autobot_shared/mod.py", "autobot_shared/widget.vue")
 
     def test_argv_branch_drops_non_python_paths(self, tmp_path: Path) -> None:

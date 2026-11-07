@@ -295,7 +295,7 @@ Replaced with `EXTRACT_TEXT` / `EXTRACT_HTML` / `EXTRACT_STRUCTURED`, plus a
 `ContentFormat` on `ExtractRequest`. Requiring a capability and naming a
 format are two statements that can disagree, so the registry checks the
 resolved backend declares the capability for the requested format and raises
-`UnsupportedFormatError` rather than returning the wrong shape.
+`UnsupportedContentFormatError` rather than returning the wrong shape.
 
 Two earlier amendments from the same exercise are already in the code:
 locality capabilities (`IN_PROCESS` / `OUT_OF_PROCESS`) and

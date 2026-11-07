@@ -41,16 +41,27 @@ def check_cpu_npu_support():
         return False
 
 
+def list_openvino_devices() -> tuple:
+    """Return ``(all_devices, npu_devices)`` from OpenVINO; ImportError if it is absent.
+
+    The one device enumeration (#18964). ``openvino.Core`` is the current import;
+    ``openvino.runtime.Core`` is the older spelling, tried second.
+    """
+    try:
+        from openvino import Core
+    except ImportError:
+        from openvino.runtime import Core
+
+    devices = Core().available_devices
+    return devices, [d for d in devices if "NPU" in d]
+
+
 def check_openvino_npu():
     """Check OpenVINO NPU device availability."""
     try:
-        from openvino.runtime import Core
-
-        core = Core()
-        devices = core.available_devices
+        devices, npu_devices = list_openvino_devices()
         logger.info("OpenVINO available devices: %s", devices)
 
-        npu_devices = [d for d in devices if "NPU" in d]
         if npu_devices:
             logger.info("✅ OpenVINO NPU devices found: %s", npu_devices)
             return True, npu_devices

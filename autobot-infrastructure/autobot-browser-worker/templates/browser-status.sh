@@ -5,7 +5,7 @@
 # Manual intervention script for checking the browser worker status
 
 SERVICE_NAME="autobot-browser-worker"
-HEALTH_PORT=3000
+HEALTH_PORT="${AUTOBOT_BROWSER_SERVICE_PORT:-9001}"  # #19324: PLAYWRIGHT_PORT; 3000 is Grafana
 
 echo "=== AutoBot Browser Worker Status ==="
 echo ""

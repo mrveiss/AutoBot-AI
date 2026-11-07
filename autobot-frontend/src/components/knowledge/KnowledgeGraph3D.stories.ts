@@ -41,6 +41,9 @@ export const WithEntities: Story = {
 
 export const LargeGraph: Story = {
   args: {
+    // Settled before the first frame, so the screenshot shows one layout, not whichever
+    // animation frame it caught (#18694).
+    staticLayout: true,
     entities: Array.from({ length: 20 }, (_, i) => ({
       id: `entity-${i}`,
       name: `Entity ${i}`,

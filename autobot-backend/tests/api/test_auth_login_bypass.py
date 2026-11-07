@@ -16,13 +16,13 @@ from fastapi import HTTPException
 
 from api.auth import login
 from api.schemas_agent import LoginRequest
-from user_management.config import DeploymentConfig, DeploymentMode, FeatureFlags
+from user_management.config import DeploymentConfig, UserManagementMode, UserModeFeatures
 
 
-def _make_deploy_cfg(mode: DeploymentMode) -> DeploymentConfig:
+def _make_deploy_cfg(mode: UserManagementMode) -> DeploymentConfig:
     return DeploymentConfig(
         mode=mode,
-        features=FeatureFlags(),
+        features=UserModeFeatures(),
         postgres_enabled=True,
     )
 
@@ -40,7 +40,7 @@ def _login_req(user: str, pw: str) -> LoginRequest:
 class TestLoginRejectsWrongPassword:
     @pytest.mark.asyncio
     async def test_wrong_value_returns_401_in_single_company(self, monkeypatch):
-        cfg = _make_deploy_cfg(DeploymentMode.SINGLE_COMPANY)
+        cfg = _make_deploy_cfg(UserManagementMode.SINGLE_COMPANY)
 
         async def _fail_auth(*args, **kwargs):
             raise HTTPException(status_code=401, detail="Invalid credentials")

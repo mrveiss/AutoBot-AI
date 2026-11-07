@@ -19,17 +19,17 @@ import requests
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from tests.test_helpers import get_test_backend_url
+from tests.test_helpers import live_backend_url
 
 
 class FileUploadAPITests(unittest.TestCase):
     """Test file upload API endpoints"""
 
-    BASE_URL = get_test_backend_url() + "/api/files"
     HEADERS = {"X-User-Role": "admin"}
 
     def setUp(self):
-        """Set up test environment"""
+        """Set up test environment; every test here dials the backend (#19479)."""
+        self.BASE_URL = live_backend_url() + "/api/files"
         self.test_files = []
 
     def tearDown(self):

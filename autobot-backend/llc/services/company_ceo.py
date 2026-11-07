@@ -28,7 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.agent_org import AgentOrgNode, OrgRole
 
 from ..models.company_ceo import LLCCompanyCEO
-from ..models.enums import RoleHolderType
+from ..models.enums import LLCAgentStatus, RoleHolderType
 from ..models.membership import LLCCompanyMembership
 from .base import LLCServiceBase
 
@@ -43,6 +43,17 @@ _DESIGNABLE = frozenset({RoleHolderType.USER.value, RoleHolderType.AGENT.value})
 DEFAULT_CEO_NAME = "CEO"
 DEFAULT_CEO_TITLE = "Chief Executive Officer"
 DEFAULT_CEO_ORG_ROLE = OrgRole.MANAGER.value
+
+#: What a default CEO node becomes when its organization stops being a company:
+#: migration 20260907_090's ``_DORMANT_STATUS``, the terminal state replay and the
+#: budget watchdog already agree on. The node is kept, never deleted -- entities
+#: acquire references, and deleting one turns a wrong row into a dangling one.
+DORMANT_CEO_STATUS = LLCAgentStatus.INACTIVE.value
+
+#: Why a demotion left the node dormant. ``inactive`` alone does not say: the budget
+#: watchdog writes it too, for a node that must stop. A promotion reactivates only a
+#: node carrying this reason, so it never undoes a budget stop or a 090 repair.
+RETIRED_CEO_REASON = "organization is not a company (#15907)"
 
 
 def default_ceo_slug(company_id: uuid.UUID) -> str:
@@ -178,6 +189,40 @@ class CompanyCEOService(LLCServiceBase):
         await session.flush()
         return True
 
+    async def sync_with_parent(
+        self, session: AsyncSession, company_id: uuid.UUID, parent_org_id: Optional[uuid.UUID]
+    ) -> None:
+        """Make the CEO follow the organization's position in the tree (#15907).
+
+        A top-level organization is a company and has a CEO; a sub-organization is
+        not one and has none (migration 20260907_090, #15892). This is the single
+        place creation and every re-parent decide it, so the two cannot diverge.
+        Runs in the caller's transaction, beside the ``parent_org_id`` change.
+        """
+        if parent_org_id is None:
+            await self.provision_default(session, company_id)
+            return
+        await self._retire(session, company_id)
+
+    async def _retire(self, session: AsyncSession, company_id: uuid.UUID) -> None:
+        """Drop a sub-organization's CEO designation and make its default CEO node dormant.
+
+        090's end state for a non-company: "no CEO, and a dormant node nothing
+        schedules". Only the provisioned node (``ceo-<org id>``) is made dormant --
+        an agent the owner hired and designated keeps running as an ordinary
+        agent; it merely stops holding a position the organization no longer has.
+        """
+        await self.clear(session, company_id)
+        node = await self._find_default_agent(session, default_ceo_slug(company_id), company_id)
+        if node is None:
+            return
+        node.heartbeat_enabled = False
+        # Terminated is permanent ("no recovery path"); dormancy must not soften it.
+        if node.status != LLCAgentStatus.TERMINATED.value:
+            node.status = DORMANT_CEO_STATUS
+            node.pause_reason = RETIRED_CEO_REASON
+        await session.flush()
+
     async def provision_default(self, session: AsyncSession, company_id: uuid.UUID) -> LLCCompanyCEO:
         """Give a company an agent CEO, creating the agent if it is absent.
 
@@ -208,8 +253,17 @@ class CompanyCEOService(LLCServiceBase):
         slug = default_ceo_slug(company_id)
         agent = await self._find_default_agent(session, slug, company_id)
         if agent is not None:
+            # #15907: a node left dormant by a demotion (or by 090) is this
+            # company's CEO again on promotion -- reused, never duplicated. Only a
+            # demotion's own dormancy is lifted; any other stop stays for the owner
+            # to resume. The heartbeat stays off: waking it is the owner's choice.
+            if agent.status == DORMANT_CEO_STATUS and agent.pause_reason == RETIRED_CEO_REASON:
+                agent.status = LLCAgentStatus.AVAILABLE.value
+                agent.pause_reason = None
             return agent
 
+        # Exempt from require_approval_for_hires (#8214) on purpose: a company needs its first agent, and no
+        # board exists to approve it until it has one. Only the default CEO is created here, once per company.
         try:
             async with session.begin_nested():
                 agent = AgentOrgNode(

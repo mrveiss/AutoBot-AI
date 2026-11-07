@@ -13,9 +13,9 @@ import asyncio
 import json
 import logging
 import os
+import sys
 import time
 import traceback
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
@@ -23,9 +23,11 @@ from typing import Any, Dict, List
 import aiofiles
 import aiohttp
 import psutil
+from metrics_types import DatabaseMetrics, HostPerformanceMetrics, InterVMMetrics, ServiceMetrics
 
 from autobot_shared.network_constants import NetworkConstants
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.time_utils import utc_timestamp
 from config import ConfigManager
 
@@ -72,67 +74,7 @@ SERVICE_ENDPOINTS = {
 }
 
 
-@dataclass
-class SystemMetrics:
-    """System performance metrics data class."""
-
-    timestamp: str
-    hostname: str
-    cpu_percent: float
-    memory_percent: float
-    memory_available_gb: float
-    disk_percent: float
-    disk_free_gb: float
-    load_average: List[float]
-    network_sent_mb: float
-    network_recv_mb: float
-    process_count: int
-    gpu_utilization: float | None = None
-    gpu_memory_used: float | None = None
-    npu_utilization: float | None = None
-
-
-@dataclass
-class ServiceMetrics:
-    """Service-specific performance metrics."""
-
-    timestamp: str
-    service_name: str
-    response_time: float
-    status_code: int | None
-    is_healthy: bool
-    error_message: str | None = None
-    custom_metrics: Dict[str, Any] | None = None
-
-
-@dataclass
-class DatabaseMetrics:
-    """Database performance metrics."""
-
-    timestamp: str
-    database_type: str
-    connection_time: float
-    query_count: int
-    memory_usage_mb: float
-    operations_per_second: float
-    error_count: int = 0
-    database_size_mb: float | None = None
-
-
-@dataclass
-class InterVMMetrics:
-    """Inter-VM communication performance metrics."""
-
-    timestamp: str
-    source_vm: str
-    target_vm: str
-    latency_ms: float
-    throughput_mbps: float
-    packet_loss_percent: float
-    jitter_ms: float
-
-
-class PerformanceMonitor:
+class FleetPerformanceMonitor:
     """Main performance monitoring class for AutoBot distributed system."""
 
     def __init__(self, log_level: str = "INFO"):
@@ -142,8 +84,7 @@ class PerformanceMonitor:
         self.metrics_history = []
         self.alert_history = []
         self.redis_client = None
-        _base = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
-        self.performance_data_path = Path(_base) / "logs" / "performance"
+        self.performance_data_path = Path(ssot_config.path.base_dir) / "logs" / "performance"
         self.performance_data_path.mkdir(parents=True, exist_ok=True)
 
     def setup_logging(self, log_level: str):
@@ -155,7 +96,7 @@ class PerformanceMonitor:
                 logging.StreamHandler(),
                 logging.FileHandler(
                     os.path.join(
-                        os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"),
+                        ssot_config.path.base_dir,
                         "logs/performance_monitor.log",
                     )
                 ),
@@ -179,7 +120,7 @@ class PerformanceMonitor:
             self.logger.error(f"❌ Failed to connect to Redis for metrics: {e}")
             self.redis_client = None
 
-    async def collect_system_metrics(self, hostname: str = "localhost") -> SystemMetrics:
+    async def collect_system_metrics(self, hostname: str = "localhost") -> HostPerformanceMetrics:
         """Collect comprehensive system performance metrics."""
         try:
             # CPU and memory metrics
@@ -200,7 +141,7 @@ class PerformanceMonitor:
             # NPU metrics (Intel NPU if available)
             npu_util = await self.get_npu_metrics()
 
-            return SystemMetrics(
+            return HostPerformanceMetrics(
                 timestamp=utc_timestamp(),
                 hostname=hostname,
                 cpu_percent=cpu_percent,
@@ -255,8 +196,11 @@ class PerformanceMonitor:
         """
         try:
             # Detect NPU via OpenVINO using async subprocess
+            # #13842: a known interpreter, not whatever PATH offers. This does
+            # NOT make the probe correct -- OpenVINO lives only in the NPU
+            # worker's venv, so it still cannot answer yes here (#17988).
             process = await asyncio.create_subprocess_exec(
-                "python3",
+                sys.executable,
                 "-c",
                 'import openvino as ov; print("NPU Available")',  # noqa
                 stdout=asyncio.subprocess.PIPE,
@@ -772,7 +716,7 @@ async def main():
 
     args = parser.parse_args()
 
-    monitor = PerformanceMonitor(log_level=args.log_level)
+    monitor = FleetPerformanceMonitor(log_level=args.log_level)
 
     if args.once:
         metrics = await monitor.generate_performance_report()

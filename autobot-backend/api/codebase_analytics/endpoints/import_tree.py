@@ -13,14 +13,16 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 import aiofiles
-from celery.result import AsyncResult
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 
+from api.codebase_analytics.source_scope import SourceIdQuery, cached_task_result, source_scoped_prefix
+from api.codebase_analytics.task_routes import add_clear_stuck_route
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from tasks.analytics_tasks import run_import_tree_analysis
-from utils.celery_task_status import celery_result_to_status, get_latest_task_result, store_latest_task_id
+from utils.celery_task_status import known_task_status_or_404, store_latest_task_id
 from utils.chromadb_client import get_all_paginated
 
 from ..storage import get_code_collection
@@ -170,7 +172,14 @@ async def _load_import_tree_from_index(
     if not code_collection:
         return None
 
-    where = {"$and": [{"type": "import"}, {"source_id": source_id}]} if source_id else {"type": "import"}
+    # #17758: no unscoped branch -- see dependencies.py for the reasoning. None
+    # here means "no indexed data for this request", which this function's own
+    # contract already covers and which the caller answers with the filesystem
+    # walk. The old conditional queried every registered source instead.
+    if not source_id:
+        logger.debug("import-tree index read skipped: no source_id to scope the query (#17758)")
+        return None
+    where = {"$and": [{"type": "import"}, {"source_id": source_id}]}
     results = await asyncio.to_thread(get_all_paginated, code_collection, where=where, include=["metadatas"])
     metadatas = results.get("metadatas", [])
     if not metadatas:
@@ -250,9 +259,9 @@ async def get_import_tree(
     """
     effective_source_id = source_id
     if not effective_source_id:
-        from api.codebase_analytics.source_storage import get_default_source_id
+        from api.codebase_analytics.endpoints.shared import default_source_id
 
-        effective_source_id = await get_default_source_id()
+        effective_source_id = await default_source_id()
 
     indexed = await _load_import_tree_from_index(effective_source_id)
     if indexed is not None:
@@ -356,42 +365,27 @@ def _build_summary(import_tree: List[Dict]) -> Dict:
 
 @router.get("/analytics/import-tree/cached")
 @bounded(60.0)
-async def get_cached_import_tree_result(source_id: str = ""):
+async def get_cached_import_tree_result(source_id: SourceIdQuery):
     """Return the latest completed import tree analysis result (#1540)."""
-    cached = await get_latest_task_result(_REDIS_PREFIX)
-    if cached and cached.get("result"):
-        return {
-            "status": "success",
-            "from_cache": True,
-            "completed_at": cached.get("completed_at"),
-            **cached["result"],
-        }
-    return {"status": "no_data"}
+    return await cached_task_result(_REDIS_PREFIX, source_id)
 
 
 @router.post("/analytics/import-tree/analyze")
 @bounded(60.0)
-async def start_import_tree_analysis_endpoint():
+async def start_import_tree_analysis_endpoint(source_id: SourceIdQuery):
     """Enqueue import tree analysis as a Celery task (GH#6505)."""
-    result = run_import_tree_analysis.delay()
-    await store_latest_task_id(_REDIS_PREFIX, result.id)
+    result = run_import_tree_analysis.delay(source_id)
+    await store_latest_task_id(source_scoped_prefix(_REDIS_PREFIX, source_id), result.id)
     return {"task_id": result.id, "status": "pending"}
 
 
-@router.get("/analytics/import-tree/status/{task_id}")
+@router.get("/analytics/import-tree/status/{task_id}", dependencies=[Depends(get_current_user)])
 @bounded(60.0)
 async def get_import_tree_status(task_id: str):
     """Get import tree analysis task status."""
-    status = celery_result_to_status(AsyncResult(task_id))
-    if status is None or status["status"] == "pending":
-        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-    return status
+    return known_task_status_or_404(task_id)
 
 
-@router.post("/analytics/import-tree/tasks/clear-stuck")
-@bounded(60.0)
-async def clear_stuck_import_tasks(
-    force: bool = Query(default=False, description="Force clear ALL running tasks"),
-):
-    """No-op: Celery handles stuck-task recovery automatically (GH#6505)."""
-    return {"cleared_count": 0, "message": "Celery handles task recovery automatically"}
+add_clear_stuck_route(
+    router, "/analytics/import-tree/tasks/clear-stuck", name="clear_stuck_import_tasks", bounded_s=60.0
+)

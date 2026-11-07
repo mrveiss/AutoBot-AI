@@ -26,8 +26,8 @@ def crontab_from_string(cron_expr: str) -> crontab:
     parts = cron_expr.strip().split()
     if len(parts) != 5:
         logger.warning(
-            "Invalid cron expression %r (expected 5 fields); falling back to '0 3 * * *'",
-            cron_expr,
+            "Invalid cron expression: %d fields, expected 5; falling back to '0 3 * * *'",
+            len(parts),
         )
         parts = ["0", "3", "*", "*", "*"]
     minute, hour, day_of_month, month_of_year, day_of_week = parts

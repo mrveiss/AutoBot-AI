@@ -22,8 +22,13 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import shlex
 
 from autobot_shared.env_utils import env_float_clamped
+from services.unit_names import validate_journal_since, validate_unit_name
+
+#: Upper bound on ``journalctl -n``; matches the logs route's ``le=`` (#18359).
+JOURNAL_MAX_LINES = 1000
 
 # Stdlib logging, matching every sibling in this package and the module this
 # code came from. The SLM backend's conftest stubs `services.*` wholesale, and
@@ -49,10 +54,16 @@ class JournalFetchTimeout(RuntimeError):
 
 
 def build_journal_command(service_name: str, lines: int, since: str | None = None) -> str:
-    """Build the remote journalctl command (``sudo -n`` for non-interactive)."""
-    journal_cmd = f"sudo -n journalctl -u {service_name} -n {lines} --no-pager"
+    """Build the remote journalctl command (``sudo -n`` for non-interactive).
+
+    Every request-derived value is validated (ValueError otherwise) and ``shlex.quote``d (#18359):
+    the unit by ``validate_unit_name``, ``since`` by ``validate_journal_since``, ``lines`` is an
+    int clamped to ``1..JOURNAL_MAX_LINES``.
+    """
+    bounded = max(1, min(int(lines), JOURNAL_MAX_LINES))
+    journal_cmd = f"sudo -n journalctl -u {shlex.quote(validate_unit_name(service_name))} -n {bounded} --no-pager"
     if since:
-        journal_cmd += f" --since='{since}'"
+        journal_cmd += f" --since={shlex.quote(validate_journal_since(since))}"
     return journal_cmd
 
 

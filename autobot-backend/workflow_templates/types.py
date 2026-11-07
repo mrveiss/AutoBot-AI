@@ -32,7 +32,7 @@ from autobot_types import TaskComplexity
 WorkflowStep = WorkflowTask
 
 
-class TemplateCategory(Enum):
+class WorkflowTemplateCategory(Enum):
     """Categories of workflow templates."""
 
     SECURITY = "security"
@@ -98,7 +98,7 @@ class WorkflowTemplate:
     id: str
     name: str
     description: str
-    category: TemplateCategory
+    category: WorkflowTemplateCategory
     complexity: TaskComplexity
     steps: List[WorkflowTask]
     estimated_duration_minutes: int

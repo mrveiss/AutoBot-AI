@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
+from llc.api._common import actor_id
 from llc.deps import get_session
 from llc.deps import load_owned_project as _load_owned_project
 from llc.models.finding_proposal import LLCFindingProposal
@@ -173,9 +174,9 @@ async def promote_proposal(
 ) -> dict:
     """Promote a pending proposal to a work item (or gate on approval)."""
     proposal = await _load_owned_proposal(proposal_id, session, ctx)
-    actor_id = uuid.UUID(str(current_user.get("id") or current_user.get("user_id")))
+    actor = actor_id(current_user)
     try:
-        result = await promote(proposal, session, actor_id)
+        result = await promote(proposal, session, actor)
     except ProposalStateError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     if isinstance(result, dict):

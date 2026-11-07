@@ -24,6 +24,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from testkit.canonical_gate import unauthenticated_canonical_gate
 from user_management.services import TenantContext
 
 _FIXED_USER_ID = uuid.UUID("66666666-6666-6666-6666-666666666666")
@@ -117,15 +118,13 @@ class TestReviewGatePoliciesNoAuth:
         return TestClient(app)
 
     def test_list_no_token_returns_401(self):
-        with patch("api.user_management.dependencies.get_auth_middleware") as mock_mw:
-            mock_mw.return_value.get_user_from_request.return_value = None
+        with unauthenticated_canonical_gate():
             client = self._make_unauthenticated_client()
             resp = client.get(_base(str(uuid.uuid4())))
         assert resp.status_code == 401
 
     def test_delete_no_token_returns_401(self):
-        with patch("api.user_management.dependencies.get_auth_middleware") as mock_mw:
-            mock_mw.return_value.get_user_from_request.return_value = None
+        with unauthenticated_canonical_gate():
             client = self._make_unauthenticated_client()
             resp = client.delete(f"{_base(str(uuid.uuid4()))}/{uuid.uuid4()}")
         assert resp.status_code == 401

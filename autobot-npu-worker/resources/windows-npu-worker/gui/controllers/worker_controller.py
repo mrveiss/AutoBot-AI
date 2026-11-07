@@ -9,6 +9,7 @@ import subprocess
 from pathlib import Path
 
 import requests
+from gui.utils.app_config import DEFAULT_WORKER_PORT
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 
 logger = logging.getLogger(__name__)
@@ -77,7 +78,7 @@ class WorkerController(QObject):
         super().__init__()
         logger.debug("WorkerController.__init__")
         self.worker_process: subprocess.Popen | None = None
-        self.api_url = "http://localhost:8082"
+        self.api_url = f"http://localhost:{DEFAULT_WORKER_PORT}"
         self.worker_status = "unknown"  # Start as unknown until first check
         self._status_checker: StatusChecker | None = None
         self._metrics_worker: MetricsWorker | None = None
@@ -318,4 +319,3 @@ class WorkerController(QObject):
     def _on_metrics_error(self, error: str):
         """Handle metrics fetch error"""
         # Silently ignore - worker might be stopped
-        pass

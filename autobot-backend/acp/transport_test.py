@@ -21,14 +21,14 @@ import json
 
 import pytest
 
-from acp.transport import StdioTransport
+from acp.transport import AcpStdioTransport
 
 
 @pytest.mark.asyncio
 async def test_send_writes_one_json_line(monkeypatch):
     out = io.StringIO()
     monkeypatch.setattr("sys.stdout", out)
-    transport = StdioTransport()
+    transport = AcpStdioTransport()
 
     await transport.send({"jsonrpc": "2.0", "id": 1, "result": {}})
 
@@ -43,7 +43,7 @@ async def test_send_does_not_embed_raw_newlines(monkeypatch):
     """A newline inside a value would otherwise split one message into two."""
     out = io.StringIO()
     monkeypatch.setattr("sys.stdout", out)
-    transport = StdioTransport()
+    transport = AcpStdioTransport()
 
     await transport.send({"text": "line one\nline two"})
 
@@ -55,7 +55,7 @@ async def test_send_does_not_embed_raw_newlines(monkeypatch):
 async def test_send_preserves_non_ascii(monkeypatch):
     out = io.StringIO()
     monkeypatch.setattr("sys.stdout", out)
-    transport = StdioTransport()
+    transport = AcpStdioTransport()
 
     await transport.send({"text": "café — 日本語"})
 
@@ -67,7 +67,7 @@ async def test_concurrent_sends_do_not_interleave(monkeypatch):
     """Every line must parse; a torn write corrupts the stream permanently."""
     out = io.StringIO()
     monkeypatch.setattr("sys.stdout", out)
-    transport = StdioTransport()
+    transport = AcpStdioTransport()
 
     await asyncio.gather(*(transport.send({"n": i, "pad": "x" * 200}) for i in range(30)))
 
@@ -81,7 +81,7 @@ async def test_send_serialises_unknown_types_rather_than_raising(monkeypatch):
     """`default=str` keeps one odd value from killing the whole session."""
     out = io.StringIO()
     monkeypatch.setattr("sys.stdout", out)
-    transport = StdioTransport()
+    transport = AcpStdioTransport()
 
     class Odd:
         def __str__(self) -> str:

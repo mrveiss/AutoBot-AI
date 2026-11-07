@@ -98,6 +98,49 @@ def claimable_by(agent_uuid: uuid.UUID) -> ColumnElement[bool]:
     )
 
 
+def eligible_for(agent_id: str, company_id: str) -> List[ColumnElement[bool]]:
+    """What makes a work item claimable by *agent_id* right now, as WHERE clauses.
+
+    This company's, ``ready``, unclaimed, and either unassigned or already this
+    agent's. ``backlog`` is excluded deliberately -- an item nobody has readied
+    is not work an agent should pick up on its own.
+
+    Split out of :func:`checkout_next` for #17726, which needs to ask "is there
+    anything to do?" without claiming anything. The alternative was a second
+    copy of these four clauses, and a second copy is the drift this module's own
+    header records happening once already: two expressions of one rule, one of
+    which quietly stops matching what the other does. There is now exactly one
+    answer to "may this agent work on this item", and both callers read it.
+    """
+    return [
+        LLCWorkItem.company_id == uuid.UUID(company_id),
+        LLCWorkItem.status == WorkItemStatus.READY.value,
+        LLCWorkItem.checkout_run_id.is_(None),
+        claimable_by(uuid.UUID(agent_id)),
+    ]
+
+
+async def has_pending_work(session: AsyncSession, agent_id: str, company_id: str) -> bool:
+    """Whether :func:`checkout_next` would have anything to offer (#17726).
+
+    Bounded by construction: ``LIMIT 1`` over the same predicate and the same
+    ordering, selecting the id rather than the entity, so it cannot become the
+    expensive call in a poll loop no matter how long the backlog grows.
+
+    It answers "would a checkout find something", not "will the next checkout
+    succeed" -- another agent can take the item in between. That race is
+    harmless here and already handled where it matters: ``checkout_next`` walks
+    ``CHECKOUT_CANDIDATES`` candidates precisely because losing one is normal.
+    A false ``True`` costs one wake that finds nothing, which is the behaviour
+    that existed before this function. A false ``False`` would drop work, and
+    that is why the predicate is shared rather than restated.
+    """
+    result = await session.execute(
+        select(LLCWorkItem.id).where(*eligible_for(agent_id, company_id)).order_by(*backlog_order()).limit(1)
+    )
+    return result.first() is not None
+
+
 async def checkout_next(
     session: AsyncSession,
     service: Any,
@@ -127,19 +170,14 @@ async def checkout_next(
     """
     from .work_item_service import CheckoutConflict
 
+    # In SQL, not in Python after the fact. The LIMIT must apply to ELIGIBLE
+    # rows: filtering afterwards meant ten items assigned to other agents
+    # returned "no work" while eligible items sat below them, and the bound
+    # silently became "how many of the top ten are mine" rather than "how many
+    # claims will I attempt". `eligible_for` keeps that in the WHERE clause.
     eligible = (
         select(LLCWorkItem)
-        .where(
-            LLCWorkItem.company_id == uuid.UUID(company_id),
-            LLCWorkItem.status == WorkItemStatus.READY.value,
-            LLCWorkItem.checkout_run_id.is_(None),
-            # In SQL, not in Python after the fact. The LIMIT must apply to
-            # ELIGIBLE rows: filtering afterwards meant ten items assigned to
-            # other agents returned "no work" while eligible items sat below
-            # them, and the bound silently became "how many of the top ten are
-            # mine" rather than "how many claims will I attempt".
-            claimable_by(uuid.UUID(agent_id)),
-        )
+        .where(*eligible_for(agent_id, company_id))
         .order_by(*backlog_order())
         .limit(CHECKOUT_CANDIDATES)
     )

@@ -12,6 +12,8 @@ Part of Issue #381 - God Class Refactoring
 
 from enum import Enum
 
+from autobot_shared.confidence_level import ConfidenceLevel  # noqa: F401  (re-export)
+
 
 class ModalityType(Enum):
     """Types of input modalities supported"""
@@ -23,7 +25,7 @@ class ModalityType(Enum):
     COMBINED = "combined"
 
 
-class ProcessingIntent(Enum):
+class MultimodalProcessingIntent(Enum):
     """Types of processing intents"""
 
     SCREEN_ANALYSIS = "screen_analysis"
@@ -32,16 +34,6 @@ class ProcessingIntent(Enum):
     AUTOMATION_TASK = "automation_task"
     CONTENT_GENERATION = "content_generation"
     DECISION_MAKING = "decision_making"
-
-
-class ConfidenceLevel(Enum):
-    """Confidence levels for processing results"""
-
-    VERY_HIGH = 0.9
-    HIGH = 0.8
-    MEDIUM = 0.6
-    LOW = 0.4
-    VERY_LOW = 0.2
 
 
 class PersistenceOutcome(str, Enum):

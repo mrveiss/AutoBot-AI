@@ -158,7 +158,7 @@ class TestTerminatePid:
     async def test_returns_true_when_already_gone(self) -> None:
         # Identity verifies; SIGTERM itself then raises ProcessLookupError.
         with patch(_PSUTIL_PROCESS) as mock_cls, patch("os.kill", side_effect=ProcessLookupError):
-            mock_cls.return_value.create_time.return_value = 100.0
+            mock_cls.return_value._ident = (0, 100.0)
             result = await terminate_pid(99999, grace_seconds=1, log_name="Test", expected_create_time=100.0)
         assert result is True
 
@@ -176,7 +176,7 @@ class TestTerminatePid:
             patch("os.kill", side_effect=smart_kill),
             patch("asyncio.sleep", new_callable=AsyncMock),
         ):
-            mock_cls.return_value.create_time.return_value = 100.0
+            mock_cls.return_value._ident = (0, 100.0)
             result = await terminate_pid(12345, grace_seconds=1, log_name="Test", expected_create_time=100.0)
 
         assert result is False
@@ -196,7 +196,7 @@ class TestTerminatePid:
             patch("os.kill", side_effect=stubborn_kill),
             patch("asyncio.sleep", new_callable=AsyncMock),
         ):
-            mock_cls.return_value.create_time.return_value = 100.0
+            mock_cls.return_value._ident = (0, 100.0)
             result = await terminate_pid(12345, grace_seconds=1, log_name="Test", expected_create_time=100.0)
 
         assert result is False
@@ -219,7 +219,7 @@ class TestTerminatePid:
             patch("os.kill", side_effect=kill_fn),
             patch("asyncio.sleep", new_callable=AsyncMock),
         ):
-            mock_cls.return_value.create_time.return_value = 100.0
+            mock_cls.return_value._ident = (0, 100.0)
             result = await terminate_pid(12345, grace_seconds=1, log_name="Test", expected_create_time=100.0)
 
         assert result is False
@@ -249,7 +249,7 @@ class TestTerminatePidIdentityGuards:
             patch("os.kill") as mock_kill,
             patch("os.killpg") as mock_killpg,
         ):
-            mock_cls.return_value.create_time.return_value = 200.0  # not the recorded 100.0
+            mock_cls.return_value._ident = (0, 200.0)  # not the recorded 100.0
             result = await terminate_pid(12345, grace_seconds=1, log_name="Test", expected_create_time=100.0)
         assert result is True
         mock_kill.assert_not_called()
@@ -263,7 +263,7 @@ class TestTerminatePidIdentityGuards:
             patch("os.kill") as mock_kill,
             patch("os.killpg") as mock_killpg,
         ):
-            mock_cls.return_value.create_time.return_value = 100.0
+            mock_cls.return_value._ident = (0, 100.0)
             result = await terminate_pid(protected_pid, grace_seconds=1, log_name="Test", expected_create_time=100.0)
         assert result is True
         mock_kill.assert_not_called()
@@ -278,7 +278,7 @@ class TestTerminatePidIdentityGuards:
 class TestSpawnCreateTime:
     def test_reads_real_create_time(self) -> None:
         with patch(_PSUTIL_PROCESS) as mock_cls:
-            mock_cls.return_value.create_time.return_value = 100.0
+            mock_cls.return_value._ident = (0, 100.0)
             assert spawn_create_time(12345) == 100.0
 
     def test_psutil_error_returns_none(self) -> None:
@@ -305,14 +305,14 @@ class TestProbePidIdentity:
 
     def test_matching_create_time_is_running(self) -> None:
         with patch(_PSUTIL_PROCESS) as mock_cls:
-            mock_cls.return_value.create_time.return_value = 100.0
+            mock_cls.return_value._ident = (0, 100.0)
             result = probe_pid_identity(12345, 100.0)
         assert result.status is LLCRunStatus.RUNNING
 
     def test_mismatched_create_time_is_completed(self) -> None:
         """A pid alive under a DIFFERENT identity means THIS run is over."""
         with patch(_PSUTIL_PROCESS) as mock_cls:
-            mock_cls.return_value.create_time.return_value = 200.0
+            mock_cls.return_value._ident = (0, 200.0)
             result = probe_pid_identity(12345, 100.0)
         assert result.status is LLCRunStatus.COMPLETED
 
@@ -349,12 +349,12 @@ class TestIdentityVerified:
 
     def test_matching_create_time_verified(self) -> None:
         with patch(_PSUTIL_PROCESS) as mock_cls:
-            mock_cls.return_value.create_time.return_value = 100.0
+            mock_cls.return_value._ident = (0, 100.0)
             assert _identity_verified(12345, 100.0) is True
 
     def test_mismatched_create_time_not_verified(self) -> None:
         with patch(_PSUTIL_PROCESS) as mock_cls:
-            mock_cls.return_value.create_time.return_value = 200.0
+            mock_cls.return_value._ident = (0, 200.0)
             assert _identity_verified(12345, 100.0) is False
 
     def test_psutil_error_not_verified(self) -> None:

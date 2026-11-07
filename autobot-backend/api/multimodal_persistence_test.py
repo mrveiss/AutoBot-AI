@@ -26,17 +26,17 @@ from fastapi.testclient import TestClient
 import api.multimodal as multimodal_api
 from auth_middleware import get_current_user
 from memory.storage.general_storage import LEGACY_UNSCOPED_OWNER, _require_user_id
-from multimodal_processor.models import ModalityType, ProcessingIntent, ProcessingResult
+from multimodal_processor.models import ModalityType, MultimodalProcessingIntent, MultimodalResult
 from multimodal_processor.processor import MultiModalProcessor
 from multimodal_processor.types import PersistenceOutcome
 
 
 def _processed(modality=ModalityType.TEXT):
-    return ProcessingResult(
+    return MultimodalResult(
         result_id="r-1",
         input_id="i-1",
         modality_type=modality,
-        intent=ProcessingIntent.DECISION_MAKING,
+        intent=MultimodalProcessingIntent.DECISION_MAKING,
         success=True,
         confidence=0.9,
         result_data={"summary": "ok"},

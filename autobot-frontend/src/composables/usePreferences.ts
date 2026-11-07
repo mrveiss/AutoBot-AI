@@ -13,7 +13,15 @@ import { setLocale } from '@/i18n'
 import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
-import { useTheme, type Theme, type ThemePreset, type AccentColor as ThemeAccentColor } from '@/composables/useTheme'
+import { useUiMode, type UiMode, type UiStart } from '@/composables/useUiMode'
+import { useThemeVariant, hasStoredThemeVariant } from '@/composables/useThemeVariant'
+import {
+  useTheme,
+  ACCENT_COLORS,
+  type Theme,
+  type ThemePreset,
+  type AccentColor as ThemeAccentColor,
+} from '@/composables/useTheme'
 
 const logger = createLogger('usePreferences')
 
@@ -25,6 +33,10 @@ interface AccountAppearance {
   layout_density: LayoutDensity
   font_size: FontSize
   theme_preset: ThemePreset
+  // #18240: the interface mode and the theme variant follow the user too.
+  ui_mode: UiMode
+  ui_start: UiStart
+  theme_variant: string
 }
 
 /** Backend response for the active personality profile (#753 language sync). */
@@ -37,7 +49,11 @@ interface PersonalityActiveResponse {
 
 // Preference types
 export type FontSize = 'small' | 'medium' | 'large'
-export type AccentColor = 'teal' | 'emerald' | 'blue' | 'purple' | 'orange'
+// #18066: one accent type, owned by useTheme. This module's own 5-value copy
+// set a second attribute (`data-accent-color`) that a second stylesheet read,
+// so the accent applied or not depending on which composable a view called.
+// Re-exported rather than redeclared -- a second declaration is the fork.
+export type AccentColor = ThemeAccentColor
 export type LayoutDensity = 'compact' | 'comfortable' | 'spacious'
 export type VoiceDisplayMode = 'modal' | 'sidepanel'
 export type ContextOverflowMode = 'auto' | 'warn' | 'disabled'
@@ -54,10 +70,10 @@ export interface UserPreferences {
   reasoningEffort: ReasoningEffort
 }
 
-// Default preferences (Issue #9040: aligned with design-tokens.css electric blue default)
+// Default preferences (#18223: the `theme` accent, so the theme's own primary stands)
 const DEFAULT_PREFERENCES: UserPreferences = {
   fontSize: 'medium',
-  accentColor: 'blue',
+  accentColor: 'theme',
   layoutDensity: 'comfortable',
   voiceDisplayMode: 'sidepanel',
   language: 'en',
@@ -67,7 +83,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
 
 // Reactive preferences state
 const fontSize = ref<FontSize>('medium')
-const accentColor = ref<AccentColor>('blue')
+const accentColor = ref<AccentColor>('theme')
 const layoutDensity = ref<LayoutDensity>('comfortable')
 const voiceDisplayMode = ref<VoiceDisplayMode>('sidepanel')
 const language = ref<string>('en')
@@ -92,7 +108,7 @@ function loadPreferences(): void {
     if (stored) {
       const parsed = JSON.parse(stored) as UserPreferences
       fontSize.value = parsed.fontSize || DEFAULT_PREFERENCES.fontSize
-      accentColor.value = parsed.accentColor || DEFAULT_PREFERENCES.accentColor
+      accentColor.value = normaliseAccent(parsed.accentColor || DEFAULT_PREFERENCES.accentColor)
       layoutDensity.value = parsed.layoutDensity || DEFAULT_PREFERENCES.layoutDensity
       voiceDisplayMode.value = parsed.voiceDisplayMode || DEFAULT_PREFERENCES.voiceDisplayMode
       language.value = parsed.language || localStorage.getItem('autobot-language') || DEFAULT_PREFERENCES.language
@@ -142,12 +158,28 @@ function applyFontSize(size: FontSize): void {
   logger.debug(`Font size applied: ${size}`)
 }
 
+/** #18066: `emerald` was this module's name for the same colour `accents.css`
+ * calls `green` (both `#10b981`). A stored `emerald` maps forward so nobody's
+ * saved preference is silently dropped. */
+function normaliseAccent(color: string): ThemeAccentColor {
+  // `emerald` was this module's name for the colour accents.css calls `green`.
+  const mapped = color === 'emerald' ? 'green' : color
+  // A stored value is untrusted input: localStorage survives renames and
+  // hand-editing. An unrecognised accent used to reach setAccentColor and set
+  // a data-accent with no matching rule, so no accent applied at all and
+  // nothing said why. Fall back to the default instead of writing a dead one.
+  return (ACCENT_COLORS as readonly string[]).includes(mapped)
+    ? (mapped as ThemeAccentColor)
+    : (DEFAULT_PREFERENCES.accentColor as ThemeAccentColor)
+}
+
 /**
  * Apply accent color preference to document root
  */
 function applyAccentColor(color: AccentColor): void {
-  const root = document.documentElement
-  root.setAttribute('data-accent-color', color)
+  // #18066: delegate to the canonical owner instead of setting a rival
+  // attribute. `data-accent-color` is retired; `accents.css` reads `data-accent`.
+  useTheme().setAccentColor(normaliseAccent(color))
   logger.debug(`Accent color applied: ${color}`)
 }
 
@@ -200,6 +232,8 @@ export function usePreferences() {
   // Theme owns base mode / accent / preset; usePreferences owns density / fontSize.
   // Both are persisted together to the account so choices follow the user (#8988).
   const theme = useTheme()
+  const uiMode = useUiMode()
+  const variant = useThemeVariant()
 
   /**
    * Persist all appearance prefs to the user account (source of truth across devices).
@@ -213,8 +247,14 @@ export function usePreferences() {
         accent_color: theme.accentColor.value,
         layout_density: layoutDensity.value,
         font_size: fontSize.value,
-        theme_preset: theme.preset.value,
+        theme_preset: theme.preset.value ?? 'auto',
+        ui_mode: uiMode.uiMode.value,
+        ui_start: uiMode.uiStart.value,
+        theme_variant: variant.themeVariant.value,
       }
+      // The endpoint is a partial PATCH (#18240): every field sent here is
+      // written, every field omitted is left alone. All are sent so a stale
+      // device cannot silently keep an older value for one of them.
       await apiClient.patch(`${getApiBase()}/users/me/preferences`, payload)
       logger.debug('Appearance prefs saved to account', payload)
     } catch (error) {
@@ -223,10 +263,32 @@ export function usePreferences() {
   }
 
   /**
+   * The account's `default` variant is also what a user who never chose gets, so
+   * it only overrides a device that holds an explicit choice (a deployment may
+   * pin another build-time default). Any other id is the user's own pick; an
+   * id this deployment no longer installs reverts inside setThemeVariant.
+   */
+  async function applyAccountVariant(id: string | undefined): Promise<void> {
+    if (!id || id === variant.themeVariant.value) return
+    if (id === 'default' && !hasStoredThemeVariant()) return
+    try {
+      await variant.setThemeVariant(id)
+    } catch (error) {
+      logger.warn('Account theme variant could not be applied', error)
+    }
+  }
+
+  /**
    * Load appearance prefs from the user account and apply them. Called after login
    * so a fresh device inherits the user's stored theme/accent/density.
+   *
+   * Every account appearance field (theme, accent, preset, density, font size,
+   * reasoning effort, interface mode, theme variant) applies only at a fresh
+   * sign-in (owner decision 2026-10-12): on a session restore the device's
+   * current values are kept, never overwritten. Changes still save to the account.
    */
-  async function loadAppearanceFromBackend(): Promise<void> {
+  async function loadAppearanceFromBackend(opts: { freshSignIn?: boolean } = {}): Promise<void> {
+    if (!opts.freshSignIn) return
     try {
       const res = await apiClient.get<{ data?: { preferences?: AccountAppearance } }>(
         `${getApiBase()}/users/me/preferences`
@@ -243,6 +305,8 @@ export function usePreferences() {
       if (prefs.layout_density) setLayoutDensity(prefs.layout_density)
       if (prefs.font_size) setFontSize(prefs.font_size)
       if (prefs.reasoning_effort) setReasoningEffort(prefs.reasoning_effort)
+      uiMode.applyAccount(prefs.ui_mode, prefs.ui_start)
+      await applyAccountVariant(prefs.theme_variant)
       logger.debug('Appearance prefs loaded from account', prefs)
     } catch (error) {
       logger.warn('Could not load appearance prefs from account', error)
@@ -288,8 +352,9 @@ export function usePreferences() {
       _scheduleAppearanceSync()
     })
 
-    // Theme owns base mode / accent / preset — sync those to the account too
-    watch([theme.theme, theme.accentColor, theme.preset], () => {
+    // Theme owns base mode / accent / preset; useUiMode owns the interface
+    // mode and useThemeVariant the variant -- sync all of them to the account too
+    watch([theme.theme, theme.accentColor, theme.preset, uiMode.uiMode, uiMode.uiStart, variant.themeVariant], () => {
       _scheduleAppearanceSync()
     })
 

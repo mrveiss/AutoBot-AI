@@ -97,7 +97,7 @@ class TakeoverState(Enum):
 
 
 @dataclass
-class TakeoverRequest:
+class TakeoverTicket:
     """Takeover request data structure"""
 
     request_id: str
@@ -125,7 +125,7 @@ class TakeoverRequest:
         return json.dumps(d, ensure_ascii=False, default=str)
 
     @classmethod
-    def from_json(cls, raw: str | bytes) -> "TakeoverRequest":
+    def from_json(cls, raw: str | bytes) -> "TakeoverTicket":
         """Deserialize from JSON string retrieved from Redis."""
         d = json.loads(raw)
         d["trigger"] = TakeoverTrigger(d["trigger"])
@@ -141,7 +141,7 @@ class TakeoverSession:
     """Active takeover session"""
 
     session_id: str
-    request: TakeoverRequest
+    request: TakeoverTicket
     state: TakeoverState
     human_operator: str | None
     started_at: datetime | None
@@ -174,7 +174,7 @@ class TakeoverSession:
         req["requested_at"] = datetime.fromisoformat(req["requested_at"])
         if req["expires_at"]:
             req["expires_at"] = datetime.fromisoformat(req["expires_at"])
-        d["request"] = TakeoverRequest(**req)
+        d["request"] = TakeoverTicket(**req)
         if d["started_at"]:
             d["started_at"] = datetime.fromisoformat(d["started_at"])
         if d["ended_at"]:
@@ -207,7 +207,7 @@ class TakeoverManager:
         self._redis_warning_logged = False
 
         # In-process fallback state (used when Redis unavailable)
-        self._fb_pending: Dict[str, TakeoverRequest] = {}
+        self._fb_pending: Dict[str, TakeoverTicket] = {}
         self._fb_sessions: Dict[str, TakeoverSession] = {}
         self._fb_paused: Set[str] = set()
         self._fb_req_task: Dict[str, str] = {}
@@ -278,7 +278,7 @@ class TakeoverManager:
     # pending_requests helpers
     # ------------------------------------------------------------------
 
-    async def _pending_set(self, request_id: str, request: TakeoverRequest, timeout_seconds: int | None = None) -> None:
+    async def _pending_set(self, request_id: str, request: TakeoverTicket, timeout_seconds: int | None = None) -> None:
         """Store a pending request in Redis with TTL.
 
         M3: Single atomic SET with ex= so TTL is set atomically; honours the
@@ -298,7 +298,7 @@ class TakeoverManager:
             self._latch_redis_fallback(exc)
             self._fb_pending[request_id] = request
 
-    async def _pending_getdel(self, request_id: str) -> TakeoverRequest | None:
+    async def _pending_getdel(self, request_id: str) -> TakeoverTicket | None:
         """Atomically retrieve-and-delete a pending request (prevents double-approve)."""
         r = await self._redis_client()
         if r is None:
@@ -310,12 +310,12 @@ class TakeoverManager:
             if raw is None:
                 return None
             await r.srem(_KEY_PENDING_INDEX, request_id)
-            return TakeoverRequest.from_json(raw)
+            return TakeoverTicket.from_json(raw)
         except (ConnectionError, TimeoutError, OSError) as exc:
             self._latch_redis_fallback(exc)
             return self._fb_pending.pop(request_id, None)
 
-    async def _pending_get(self, request_id: str) -> TakeoverRequest | None:
+    async def _pending_get(self, request_id: str) -> TakeoverTicket | None:
         """Read a pending request without deleting it."""
         r = await self._redis_client()
         if r is None:
@@ -323,7 +323,7 @@ class TakeoverManager:
         key = f"{_KEY_PENDING}:{request_id}"
         try:
             raw = await r.get(key)
-            return TakeoverRequest.from_json(raw) if raw else None
+            return TakeoverTicket.from_json(raw) if raw else None
         except (ConnectionError, TimeoutError, OSError) as exc:
             self._latch_redis_fallback(exc)
             return self._fb_pending.get(request_id)
@@ -656,16 +656,16 @@ class TakeoverManager:
         context_data: Dict[str, Any] | None,
         timeout_minutes: int | None,
         auto_approve: bool,
-    ) -> TakeoverRequest:
+    ) -> TakeoverTicket:
         """
-        Create a TakeoverRequest object with computed fields.
+        Create a TakeoverTicket object with computed fields.
 
         Issue #665: Extracted from request_takeover to reduce function length.
         """
         timeout = timedelta(minutes=timeout_minutes) if timeout_minutes else self.default_timeout
         expires_at = datetime.now(tz=timezone.utc) + timeout
 
-        return TakeoverRequest(
+        return TakeoverTicket(
             request_id=request_id,
             trigger=trigger,
             priority=priority,
@@ -712,7 +712,7 @@ class TakeoverManager:
         self,
         session_id: str,
         resolution: str,
-        request: TakeoverRequest,
+        request: TakeoverTicket,
         completion_data: Dict[str, Any],
     ) -> None:
         """Record takeover-session completion in memory system.
@@ -740,7 +740,7 @@ class TakeoverManager:
             TakeoverTrigger.SECURITY_CONCERN,
         }
 
-    async def _handle_post_request_actions(self, request: TakeoverRequest, request_id: str) -> None:
+    async def _handle_post_request_actions(self, request: TakeoverTicket, request_id: str) -> None:
         """Handle actions after takeover request is created. Issue #620."""
         await self._execute_trigger_handlers(request)
 
@@ -796,7 +796,7 @@ class TakeoverManager:
 
         return request_id
 
-    async def _validate_takeover_request(self, request_id: str) -> TakeoverRequest:
+    async def _validate_takeover_request(self, request_id: str) -> TakeoverTicket:
         """Validate takeover request exists, not expired, and capacity available. Issue #620."""
         request = await self._pending_get(request_id)
         if request is None:
@@ -813,7 +813,7 @@ class TakeoverManager:
         return request
 
     async def _create_takeover_session(
-        self, request_id: str, request: TakeoverRequest, human_operator: str
+        self, request_id: str, request: TakeoverTicket, human_operator: str
     ) -> TakeoverSession:
         """Create and register a new takeover session. Issue #620, #11639."""
         session_id = f"session_{request_id}_{int(time.time())}"
@@ -1151,7 +1151,7 @@ class TakeoverManager:
                 "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
-    async def _execute_trigger_handlers(self, request: TakeoverRequest):
+    async def _execute_trigger_handlers(self, request: TakeoverTicket):
         """Execute registered handlers for takeover triggers"""
         handlers = self.trigger_handlers.get(request.trigger, [])
 
@@ -1254,7 +1254,7 @@ class TakeoverManager:
                 if raw is None:
                     stale_ids.append(rid)
                     continue
-                request = TakeoverRequest.from_json(raw)
+                request = TakeoverTicket.from_json(raw)
                 request_dict = asdict(request)
                 request_dict["trigger"] = request.trigger.value
                 request_dict["priority"] = request.priority.value

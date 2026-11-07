@@ -40,16 +40,10 @@ permissions:
 jobs:
   changes:
     name: Detect changed paths (python required context)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      python: ${{ steps.filter.outputs.python }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
-        id: filter
-        with:
-          filters: .github/filters/python-paths.yml
+    uses: ./.github/workflows/_changes.yml
+    with:
+      timeout_minutes: 10
+      filters: .github/filters/python-paths.yml
 
   python-suite:
     # IDENTICAL to the aggregator job name in ci.yml on purpose: the required
