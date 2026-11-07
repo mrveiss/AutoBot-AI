@@ -21,7 +21,7 @@ import asyncio
 from celery import shared_task
 
 from autobot_shared.logging_manager import get_logger
-from llc.services.attachment_service import AttachmentService
+from llc.services.accessors import get_attachment_service
 from user_management.database import get_async_session_factory
 from utils.celery_reliability import (
     CELERY_MAX_RETRIES,
@@ -49,7 +49,7 @@ def run_attachment_file_sweep(self: object) -> dict:  # type: ignore[type-arg]
 
 
 async def _async_sweep() -> dict:
-    service = AttachmentService()
+    service = get_attachment_service()
     factory = get_async_session_factory()
     async with factory() as session:
         outbox = await service.drain_removals(session)

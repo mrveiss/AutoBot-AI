@@ -1162,7 +1162,7 @@ async def set_session_work_item(
     caller name another company's work item and have its goal titles rendered
     into their own prompt.
     """
-    from llc.services.work_item_service import WorkItemService
+    from llc.services.accessors import get_work_item_service
     from user_management.database import get_async_session_factory
 
     await validate_chat_ownership(session_id, request)  # SECURITY: caller must own the session
@@ -1179,7 +1179,7 @@ async def set_session_work_item(
     async with factory() as db:
         # SECURITY: company-scoped fetch — a work item owned by another company
         # is indistinguishable from one that does not exist.
-        item = await WorkItemService().get(db, work_item_id, company_id=str(ctx.org_id))
+        item = await get_work_item_service().get(db, work_item_id, company_id=str(ctx.org_id))
         if item is None:
             raise HTTPException(status_code=404, detail="Work item not found")
 
