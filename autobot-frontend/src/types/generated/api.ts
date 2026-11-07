@@ -152708,7 +152708,9 @@ export interface operations {
     };
     delete_secret_api_v2_secrets__secret_id__delete: {
         parameters: {
-            query?: never;
+            query?: {
+                confirm_dependents?: boolean;
+            };
             header?: never;
             path: {
                 secret_id: string;

@@ -13,7 +13,7 @@
  */
 import type { IconName } from '@/components/ui/Icon.vue'
 
-export type AuditResult = 'success' | 'denied' | 'failed' | 'error'
+export type AuditResult = 'success' | 'denied' | 'failed' | 'error' | 'attempted'
 
 /**
  * One row as `GET /audit/logs` sends it (`AuditEntry.to_response_dict` in
