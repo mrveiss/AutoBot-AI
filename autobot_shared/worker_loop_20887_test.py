@@ -315,3 +315,29 @@ def test_run_on_loop_times_out_cancels_and_names_the_coroutine(monkeypatch):
     with pytest.raises(TimeoutError, match="never_finishes"):
         worker_loop.run_on_loop(never_finishes(), loop)
     assert cancelled.wait(5)
+
+
+def test_run_on_loop_surfaces_the_coroutines_own_timeout_unchanged():
+    async def raises_inner():
+        raise TimeoutError("inner")
+
+    loop = worker_loop.start_worker_loop()
+    with pytest.raises(TimeoutError) as info:
+        worker_loop.run_on_loop(raises_inner(), loop)
+    assert str(info.value) == "inner"
+
+
+def test_run_in_worker_loop_defaults_to_the_bounded_run_timeout(monkeypatch):
+    cancelled = threading.Event()
+
+    async def never_finishes():
+        try:
+            await asyncio.sleep(60)
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+
+    monkeypatch.setattr(worker_loop, "WORKER_LOOP_RUN_TIMEOUT", 0.2)
+    with pytest.raises(Exception):
+        worker_loop.run_in_worker_loop(never_finishes())
+    assert cancelled.wait(5)

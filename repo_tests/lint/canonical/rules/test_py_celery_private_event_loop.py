@@ -98,14 +98,29 @@ def test_allowlist_is_exactly_the_three_decided_modules():
         assert (REPO / entry).is_file(), entry
 
 
-def test_allowlisted_module_is_not_flagged(tmp_path):
+def _allowlisted(tmp_path: Path, body: str) -> Path:
     f = tmp_path / "autobot-backend" / "services" / "pricing_refresh.py"
     f.parent.mkdir(parents=True)
-    f.write_text(
-        "import asyncio\nfrom celery import shared_task\n\n@shared_task\ndef f(c):\n    asyncio.run(c)\n",
-        encoding="utf-8",
+    f.write_text(body, encoding="utf-8")
+    return f
+
+
+def test_allowlisted_module_non_task_code_is_not_flagged(tmp_path):
+    f = _allowlisted(
+        tmp_path,
+        "import asyncio\nfrom celery import shared_task\n\n@shared_task\ndef f(c):\n    return c\n\n"
+        "def main(c):\n    asyncio.run(c)\n",
     )
     assert _check(f, tmp_path) == []
+
+
+def test_allowlisted_module_task_body_is_still_flagged(tmp_path):
+    f = _allowlisted(
+        tmp_path,
+        "import asyncio\nfrom celery import shared_task\n\n@shared_task\ndef f(c):\n    asyncio.run(c)\n\n"
+        "def main(c):\n    asyncio.run(c)\n",
+    )
+    assert [d.line for d in _check(f, tmp_path)] == [6]
 
 
 # --- census / blindness controls -------------------------------------------

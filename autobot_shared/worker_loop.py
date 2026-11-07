@@ -153,11 +153,14 @@ def _running_loop() -> asyncio.AbstractEventLoop | None:
 def run_in_worker_loop(coro: Coroutine[Any, Any, T], *, timeout: float | None = None) -> T:
     """Run ``coro`` on the worker loop and block for its result.
 
-    Raises whatever ``coro`` raises. If the waiting thread is interrupted (a
-    Celery soft time limit, ``KeyboardInterrupt``) or ``timeout`` elapses, the
-    pending future is cancelled so a runaway task cannot hold the loop for later
-    tasks.
+    ``timeout`` defaults to ``WORKER_LOOP_RUN_TIMEOUT`` (read at call time), so a hung
+    coroutine never blocks the task thread forever. Raises whatever ``coro`` raises. If
+    the waiting thread is interrupted (a Celery soft time limit, ``KeyboardInterrupt``)
+    or the timeout elapses, the pending future is cancelled so a runaway task cannot
+    hold the loop for later tasks.
     """
+    if timeout is None:
+        timeout = WORKER_LOOP_RUN_TIMEOUT
     loop = _ensure_loop()
     if _running_loop() is loop:
         coro.close()
@@ -181,6 +184,9 @@ def run_on_loop(coro: Coroutine[Any, Any, T], loop: asyncio.AbstractEventLoop) -
     try:
         return future.result(WORKER_LOOP_RUN_TIMEOUT)
     except concurrent.futures.TimeoutError as exc:
+        if future.done():
+            # The coroutine itself raised TimeoutError (the same class since 3.11): not our wait.
+            raise
         future.cancel()
         raise TimeoutError(
             f"coroutine {name} did not finish within {WORKER_LOOP_RUN_TIMEOUT}s on the worker loop"

@@ -13,7 +13,9 @@ and (b) any file defining a Celery task (``@shared_task``, ``@celery_app.task``,
 ``@app.task``), so a task defined elsewhere is still covered.
 
 ``ALLOWLIST`` is the complete list of modules allowed a private loop (owner decision
-2026-11-06). It is exactly three entries; do not add a fourth, migrate the caller.
+2026-11-06). It is exactly three entries; do not add a fourth, migrate the caller. The
+exemption covers non-task code only (a CLI ``main()``): a call inside a function decorated
+as a Celery task is flagged even in an allowlisted module.
 """
 
 from __future__ import annotations
@@ -105,16 +107,23 @@ def resolve(node: ast.AST, table: dict[str, str]) -> str | None:
     return f"{full}.{rest}" if rest else full
 
 
-def is_task_module(tree: ast.AST) -> bool:
-    """True when the module defines a function decorated as a Celery task."""
+def task_functions(tree: ast.AST) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
+    """Every function decorated as a Celery task."""
+    found: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         for dec in node.decorator_list:
             name = _dotted(dec.func if isinstance(dec, ast.Call) else dec) or ""
             if name.endswith(_TASK_DECORATORS):
-                return True
-    return False
+                found.append(node)
+                break
+    return found
+
+
+def is_task_module(tree: ast.AST) -> bool:
+    """True when the module defines a function decorated as a Celery task."""
+    return bool(task_functions(tree))
 
 
 def in_scope(rel: str, tree: ast.AST) -> bool:
@@ -138,9 +147,17 @@ def private_loop_calls(tree: ast.AST) -> list[tuple[ast.Call, str]]:
     return found
 
 
+def _task_lines(tree: ast.AST) -> set[int]:
+    """Line numbers covered by Celery task bodies (the part an allowlisted module may not exempt)."""
+    return {n for fn in task_functions(tree) for n in range(fn.lineno, (fn.end_lineno or fn.lineno) + 1)}
+
+
 def check(file_path: Path, tree: ast.AST, ctx: Context) -> list[Diagnostic]:
     rel = _rel(file_path, ctx)
-    if rel in ALLOWLIST or not in_scope(rel, tree):
+    if not in_scope(rel, tree):
+        return []
+    exempt_lines = None if rel not in ALLOWLIST else _task_lines(tree)
+    if exempt_lines is not None and not exempt_lines:
         return []
     try:
         lines = file_path.read_text(encoding="utf-8").splitlines()
@@ -148,6 +165,8 @@ def check(file_path: Path, tree: ast.AST, ctx: Context) -> list[Diagnostic]:
         return []
     out: list[Diagnostic] = []
     for node, name in private_loop_calls(tree):
+        if exempt_lines is not None and node.lineno not in exempt_lines:
+            continue
         idx = node.lineno - 1
         if 0 <= idx < len(lines) and _WAIVER.search(lines[idx]):
             continue
