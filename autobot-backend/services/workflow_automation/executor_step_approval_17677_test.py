@@ -162,3 +162,18 @@ def test_decision_for_an_unknown_step_is_refused(harness, action):
     assert h.control(client, action, "nope").status_code == 409
     assert h.ran == []
     assert h.statuses[0] == WorkflowStepStatus.WAITING_APPROVAL
+
+
+@pytest.mark.parametrize("action", ["approve_step", "skip_step"])
+def test_refused_wrong_step_decision_is_not_counted_as_approved_or_skipped(harness, action):
+    """#20918: the approval metric moves only for a decision the executor accepted."""
+    h, client = harness
+    recorded = []
+    h.manager.controller.prometheus_metrics = SimpleNamespace(
+        record_workflow_approval=lambda **kw: recorded.append(kw["decision"])
+    )
+    h.park_current_step()
+    assert h.control(client, action, "s2").status_code == 409
+    assert recorded == []
+    assert h.control(client, action, "s1").status_code == 200
+    assert recorded == [{"approve_step": "approved", "skip_step": "skipped"}[action]]
