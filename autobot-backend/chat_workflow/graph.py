@@ -1170,8 +1170,8 @@ async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict
         # into the per-iteration entries _persist_workflow_messages now needs
         # to interleave with tool output.
         combined_response = await _emit_before_response_send_safe(combined_response, session_id)
-
-        await manager._persist_conversation(session_id, session, state["user_message"], combined_response)
+        model = state.get("llm_params", {}).get("selected_model")  # the rolling-summary refresh folds with it
+        await manager._persist_conversation(session_id, session, state["user_message"], combined_response, model)
 
         wf_messages = _build_workflow_messages_from_state(state)
         await manager._persist_workflow_messages(

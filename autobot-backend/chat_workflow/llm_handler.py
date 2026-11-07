@@ -870,7 +870,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
 
             system_prompt = await tcs.prepend_memory_context(system_prompt, session, message, selected_model)
         system_prompt = await _emit_system_prompt_ready(system_prompt, session)
-        conversation_context = self._build_conversation_context(session, await prompt_summary(session, selected_model))
+        conversation_context = self._build_conversation_context(session, await prompt_summary(session))
 
         # Knowledge retrieval for RAG
         # Issue MVA-1992: Skip RAG when lightweight_mode=True

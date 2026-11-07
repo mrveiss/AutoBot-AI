@@ -96,9 +96,7 @@ class Conversation:
 
     def __init__(self, redis, stub):
         self.redis, self.stub = redis, stub
-        self.session = SimpleNamespace(
-            session_id=SID, conversation_history=[], metadata={rs.ROLLING_SUMMARY_MODEL_KEY: "m"}
-        )
+        self.session = SimpleNamespace(session_id=SID, conversation_history=[], metadata={})
         self.durable = []
         self.reads = 0  # reads of the stored session
         self.projected = []  # messages projected per call to the projection (the O(history) work)
@@ -261,10 +259,10 @@ def test_schedule_refresh_runs_off_the_reply_path_through_the_tracked_task_helpe
         patch.object(rs, "fire_and_forget") as spawn,
         patch.object(rs, "_safe_refresh", MagicMock(return_value="coro")),
     ):
-        rs.schedule_refresh(session)
+        rs.schedule_refresh(session, "m")
         assert spawn.call_args.args[0] == "coro" and spawn.call_args.kwargs["name"] == f"rolling-summary-{SID}"
         spawn.reset_mock()
-        rs.schedule_refresh(SimpleNamespace(session_id=SID, metadata={}))  # no model
+        rs.schedule_refresh(SimpleNamespace(session_id=SID, metadata={}), None)  # no model
         assert spawn.call_count == 0
 
 
@@ -515,3 +513,16 @@ async def test_an_unreadable_durable_history_skips_the_refresh_and_keeps_the_sum
 
 def test_system_of_record_is_chat_sessions():
     assert rs.SYSTEM_OF_RECORD.name == "chat_sessions"
+
+
+@pytest.mark.asyncio
+async def test_prompt_summary_is_a_pure_read_and_the_model_is_passed_to_the_refresh(env):
+    """#20852: the read path writes nothing to the session; the post-turn refresh gets the model as an argument."""
+    session = env.session
+    before = dict(session.metadata)
+    await rs.prompt_summary(session)
+    assert session.metadata == before == {}
+    with patch.object(rs, "fire_and_forget") as spawn, patch.object(rs, "_safe_refresh", MagicMock()) as refresh:
+        rs.schedule_refresh(session, "turn-model")
+        refresh.assert_called_once_with(SID, "turn-model")
+        assert spawn.call_count == 1

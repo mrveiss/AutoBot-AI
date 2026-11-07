@@ -121,7 +121,6 @@ _NEVER = 0.0  # ``failed_at`` of an entry that never failed
 _SUMMARY_KEY_PREFIX = "chat:rolling_summary:"
 _LOCK_KEY_PREFIX = "chat:rolling_summary_lock:"
 
-ROLLING_SUMMARY_MODEL_KEY = "rolling_summary_model"  # session.metadata: the model the turn used
 
 _RELEASE_LOCK = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end"
 _EXTEND_LOCK = (
@@ -275,9 +274,8 @@ async def current_summary(session_id: str) -> str:
     return entry.text if entry else ""
 
 
-async def prompt_summary(session: Any, model: str) -> str:
-    """The summary for this turn's prompt (no LLM call); records *model* for the post-turn refresh."""
-    session.metadata[ROLLING_SUMMARY_MODEL_KEY] = model
+async def prompt_summary(session: Any) -> str:
+    """The summary for this turn's prompt (no LLM call). A pure read: it writes nothing to the session."""
     return await current_summary(session.session_id)
 
 
@@ -465,13 +463,12 @@ async def _safe_refresh(session_id: str, model: str) -> None:
         logger.warning("Rolling summary refresh failed for session %s: %s", session_id, exc, exc_info=True)
 
 
-def schedule_refresh(session: Any) -> None:
+def schedule_refresh(session: Any, model: Optional[str]) -> None:
     """Refresh the session's summary after the turn, as a tracked background task.
 
-    The model is the one the turn's prompt used (``ROLLING_SUMMARY_MODEL_KEY``); with
-    none recorded there is nothing to fold with.
+    *model* is the one the turn's prompt used, passed in by the caller that knows it; with
+    none there is nothing to fold with.
     """
-    model = (session.metadata or {}).get(ROLLING_SUMMARY_MODEL_KEY)
     if not model:
         return
     fire_and_forget(_safe_refresh(session.session_id, model), name=f"rolling-summary-{session.session_id}")

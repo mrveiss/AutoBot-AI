@@ -21,7 +21,7 @@ with no prior context until an approved #17038 backfill moves its legacy turns i
 
 import asyncio
 import json
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
@@ -196,6 +196,7 @@ class ConversationHandlerMixin:
         session: WorkflowSession,
         message: str,
         llm_response: str,
+        model: Optional[str] = None,
     ):
         """Record a completed exchange in the session's LLM context and its cache.
 
@@ -210,10 +211,11 @@ class ConversationHandlerMixin:
             session: Workflow session object
             message: User message
             llm_response: LLM response
+            model: The model the turn used; the rolling-summary refresh folds with it (#20852)
         """
         self._update_conversation_history(session, message, llm_response, session_id)
         # #20852: fold the older turns off the reply path, from the durable history.
-        schedule_refresh(session)
+        schedule_refresh(session, model)
 
         await self._save_conversation_history(session_id, session.conversation_history)
 
