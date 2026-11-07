@@ -56,6 +56,7 @@ from ..models.enums import (
     WorkItemType,
 )
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
+from ..services.accessors import get_attachment_service, get_work_product_service
 from ..services.activity_log import ActivityLogQuery, LLCActivityLogService
 from ..services.attachment_service import (
     AttachmentNotFound,
@@ -75,7 +76,6 @@ from ..services.work_item_service import (
     WorkItemService,
     resolve_actor_role,
 )
-from ..services.work_product_service import WorkProductService
 from ._common import actor_id as verified_user_id
 from ._common import own_task_actor, refused_transition
 from ._handoff_identity import handing_off_agent, member_reviewer
@@ -115,10 +115,8 @@ class CoworkerRequest(BaseModel):
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/work-items", tags=["llc-work-items"], dependencies=[Depends(require_work_item_id)])
-_get_product_service = lazy_singleton(WorkProductService)
 _get_handoff_service = lazy_singleton(HandoffService)
 _kb_manager = KbCollectionManager()
-_get_attachment_service = lazy_singleton(AttachmentService)
 _get_activity_service = lazy_singleton(LLCActivityLogService)
 _get_ac_suggester = lazy_singleton(AcSuggester)
 
@@ -130,7 +128,7 @@ def _handoff_service() -> HandoffService:
 
 
 def _attachment_service() -> AttachmentService:
-    return _get_attachment_service()
+    return get_attachment_service()
 
 
 # ------------------------------------------------------------------
@@ -987,7 +985,7 @@ async def list_work_products(
     item = await _service().get(session, work_item_id)
     if item is None or str(item.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
-    products = await _get_product_service().list_by_work_item(
+    products = await get_work_product_service().list_by_work_item(
         session,
         work_item_id=work_item_id,
         limit=limit,

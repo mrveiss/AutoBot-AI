@@ -15,7 +15,6 @@ from typing import Dict
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.singleton_factory import lazy_singleton
 from celery_app import celery_app
 
 logger = get_logger(__name__)
@@ -25,9 +24,10 @@ _DEFAULT_TTL_DAYS = 7
 
 async def _async_cleanup_expired_snapshots(ttl_days: int) -> Dict[str, int]:
     """Remove snapshots older than TTL (async helper for Celery task)."""
-    from services.execution.docker_backend import _SYSTEM_CALLER, DockerBackend
+    from services.execution.docker_backend import _SYSTEM_CALLER
+    from services.execution.docker_backend_accessor import get_docker_backend_singleton
 
-    backend = lazy_singleton(DockerBackend)
+    backend = get_docker_backend_singleton()
     snapshots = backend._snapshot_index.list_all()
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=ttl_days)
