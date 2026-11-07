@@ -14,6 +14,8 @@ Type=simple
 User=autobot
 Group=autobot
 WorkingDirectory=/opt/autobot/autobot-user-backend
+# #20894: the log directory, as before the resolver (the working directory's logs/)
+Environment=AUTOBOT_LOGS_DIR=/opt/autobot/autobot-user-backend/logs
 Environment="PATH=/opt/autobot/autobot-user-backend/venv/bin:/usr/local/bin:/usr/bin"
 Environment="PYTHONPATH=/opt/autobot/autobot-user-backend"
 EnvironmentFile=-/opt/autobot/autobot-user-backend/.env

@@ -18,9 +18,11 @@ the same anchor ``ssot_config`` uses for its relative path settings, never the c
 
 from __future__ import annotations
 
+import atexit
 import functools
 import logging
 import os
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -41,7 +43,9 @@ def _under_pytest() -> bool:
 @functools.lru_cache(maxsize=1)
 def _process_temp_dir() -> Path:
     """One temp directory per process, so every caller in a test run agrees."""
-    return Path(tempfile.mkdtemp(prefix="autobot-logs-"))
+    path = Path(tempfile.mkdtemp(prefix="autobot-logs-"))
+    atexit.register(shutil.rmtree, path, ignore_errors=True)  # no leftover directory per test process
+    return path
 
 
 def _state_home() -> Path:

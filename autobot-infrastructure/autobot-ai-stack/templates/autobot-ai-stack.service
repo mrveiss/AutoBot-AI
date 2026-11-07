@@ -24,6 +24,8 @@ Type=simple
 User=autobot
 Group=autobot
 WorkingDirectory=/opt/autobot/autobot-ai-stack
+# #20894: the log directory, as before the resolver (the working directory's logs/)
+Environment=AUTOBOT_LOGS_DIR=/opt/autobot/autobot-ai-stack/logs
 
 # Environment
 Environment="PYTHONUNBUFFERED=1"
