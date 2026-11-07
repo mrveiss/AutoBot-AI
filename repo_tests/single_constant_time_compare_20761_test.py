@@ -45,7 +45,7 @@ def _discover(root: Path) -> list[Path]:
 REACH = declare(
     "single-constant-time-compare",
     discover=_discover,
-    floor=3000,
+    floor=3556,  # mid-window: population 3556, window (3556, 3556)
     what="production python files",
     roots=_TREES,
 )
