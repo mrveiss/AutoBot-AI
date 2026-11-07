@@ -35,7 +35,8 @@ with real_modules_swapped():
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 FAILED, COMPLETED = "deployment_failed", "deployment_completed"
-ENROLL_FAILED, ENROLL_DONE = "Enrollment failed for node x: boom", "Enrollment completed for node x"
+ENROLL_FAILED = ("Enrollment failed for node x: boom", True)
+ENROLL_DONE = ("Enrollment completed for node x", True)
 #: node_id -> its events in order as (event_type, message).
 _EVENTS = {
     "n-completed": [(COMPLETED, ENROLL_DONE)],
@@ -45,7 +46,9 @@ _EVENTS = {
     "n-degraded": [],
     "n-never-heartbeat": [],
     # a failed UPDATE job is not a failed enrollment
-    "n-update-failed": [(COMPLETED, ENROLL_DONE), (FAILED, "Update job j1 failed")],
+    "n-update-failed": [(COMPLETED, ENROLL_DONE), (FAILED, ("Update job j1 failed", False))],
+    # a historical FAILED enrollment event written before the marker existed is not evidence
+    "n-historical-failed": [(FAILED, ("Enrollment failed for node x: old", False))],
 }
 
 
@@ -61,9 +64,17 @@ async def maker():
         for node_id, events in _EVENTS.items():
             status = "degraded" if node_id == "n-degraded" else "online"
             db.add(_db.Node(node_id=node_id, hostname=node_id, ip_address="node.example.test", status=status))
-            for event_type, message in events:
+            for event_type, (message, marked) in events:
                 n += 1
-                db.add(_db.NodeEvent(event_id=f"e{n:03d}", node_id=node_id, event_type=event_type, message=message))
+                db.add(
+                    _db.NodeEvent(
+                        event_id=f"e{n:03d}",
+                        node_id=node_id,
+                        event_type=event_type,
+                        message=message,
+                        details=_events.enrollment_details() if marked else {},
+                    )
+                )
                 await db.flush()
         await db.commit()
     yield factory
@@ -81,7 +92,9 @@ async def test_split_targets_everyone_else_and_reports_the_skip(maker):
         targets, skipped = await _events.split_enrollment_failed(db, list(_EVENTS))
     assert skipped == ["n-failed"]
     assert targets == [n for n in _EVENTS if n != "n-failed"]
-    assert {"n-completed", "n-retried", "n-selfreg", "n-degraded", "n-never-heartbeat"} <= set(targets)
+    assert {"n-completed", "n-retried", "n-selfreg", "n-degraded", "n-never-heartbeat", "n-historical-failed"} <= set(
+        targets
+    )
 
 
 async def test_empty_target_list_runs_no_query():
@@ -114,3 +127,9 @@ async def test_collect_outdated_drops_failed_enrollment_and_counts_it(maker, mon
     assert "n-failed" not in ids
     assert job.enrollment_skipped_nodes == ["n-failed"]
     assert set(ids) == set(_EVENTS) - {"n-failed"}
+
+
+async def test_an_unmarked_historical_failed_event_does_not_skip(maker):
+    async with maker() as db:
+        failed = await _events.get_enrollment_failed_node_ids(db, ["n-historical-failed", "n-update-failed"])
+    assert failed == set()

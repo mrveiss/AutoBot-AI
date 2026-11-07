@@ -82,7 +82,7 @@ from services.code_status import get_latest_code_version as _get_latest_code_ver
 from services.code_status import reported_code_status as _reported_code_status
 from services.database import get_db
 from services.encryption import encrypt_data
-from services.node_events import ENROLLMENT_MESSAGE_PREFIX, create_node_event
+from services.node_events import create_node_event, enrollment_details
 from services.reconciler import reconciler_service
 from services.ssh_utils import build_ssh_base_cmd
 from services.temp_inventory import write_linked_inventory
@@ -173,8 +173,8 @@ async def _handle_enrollment_failed(db: AsyncSession, node_id: str, message: str
         node_id,
         NodeEventType.DEPLOYMENT_FAILED,
         EventSeverity.ERROR,
-        f"{ENROLLMENT_MESSAGE_PREFIX}failed for node {node_id}: {message}",
-        error_details,
+        f"Enrollment failed for node {node_id}: {message}",
+        enrollment_details(error_details),
     )
     await db.commit()
 
@@ -224,8 +224,8 @@ async def _handle_enrollment_completed(db: AsyncSession, node_id: str) -> dict:
         node_id,
         NodeEventType.DEPLOYMENT_COMPLETED,
         EventSeverity.INFO,
-        f"{ENROLLMENT_MESSAGE_PREFIX}completed for node {node_id}",
-        completion_details,
+        f"Enrollment completed for node {node_id}",
+        enrollment_details(completion_details),
     )
     await db.commit()
 
