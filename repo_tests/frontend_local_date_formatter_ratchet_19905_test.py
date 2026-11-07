@@ -29,6 +29,11 @@ caught. ``BEHAVIOUR`` still holds the functions only the behavioural detector fi
 **One number, not a per-file table**, for the reason given in
 ``slm_raw_setinterval_ratchet_19482_test.py``. The pin is down-only against the base (#19283). The
 reach floor guards the scan itself: a moved folder would otherwise read as a clean 0.
+
+**Inline shapes (#19905).** ``new Date(x).toLocaleString()`` is counted with one level of nested parens;
+``d.toLocaleString()`` on a date *variable* is left to the BEHAVIOUR detector, because telling it from a
+number's needs type information. A locale literal is found anywhere inside a kit formatter call's arguments
+(balanced parens), not only before the first ``}``.
 """
 
 from __future__ import annotations
@@ -96,9 +101,12 @@ PINS = {
 _DECLARATION_KEYS = (NAMED, BEHAVIOUR)
 
 _INLINE_LOCALE = re.compile(r"\.toLocale(?:Date|Time)String\s*\(")
-_INLINE_TO_LOCALE_STRING = re.compile(r"new\s+Date\([^)]*\)\s*\.toLocaleString\s*\(")
+# One level of nested parens is allowed (``new Date(a.getTime()).toLocaleString()``). ``d.toLocaleString()`` on a
+# date *variable* is not counted here: telling it from a number's needs types, so the BEHAVIOUR detector owns it.
+_INLINE_TO_LOCALE_STRING = re.compile(r"new\s+Date\((?:[^()]|\([^()]*\))*\)\s*\.toLocaleString\s*\(")
 _INTL_OUTSIDE_KIT = re.compile(r"new\s+Intl\s*\.\s*DateTimeFormat\s*\(")
-_HARDCODED_FORMATTER = re.compile(r"create(?:Date|Recency)Formatter\(\s*\{[^}]*\blocale\s*:\s*['\"]", re.S)
+_FORMATTER_CALL = re.compile(r"create(?:Date|Recency)Formatter\(")
+_LOCALE_LITERAL = re.compile(r"\blocale\s*:\s*['\"`]")
 _HARDCODED_CALL = re.compile(r"\.toLocale(?:Date|Time)?String\s*\(\s*['\"][a-z]{2}")
 _HAND_ASSEMBLED = re.compile(
     r"\$\{[^}`]*\.get(?:Month|Date|Hours|Minutes|Seconds)\(\)"
@@ -120,6 +128,26 @@ def _sources(src: Path) -> list[Path]:
 _NAMED = re.compile(rf"^{_NAMES}$")
 
 
+def _call_span(text: str, start: int) -> int:
+    """Index just past the ``)`` that closes the call whose ``(`` is at ``start - 1``."""
+    depth = 1
+    for i in range(start, len(text)):
+        depth += {"(": 1, ")": -1}.get(text[i], 0)
+        if depth == 0:
+            return i + 1
+    return len(text)
+
+
+def _hardcoded_formatter_locales(text: str) -> int:
+    """Locale literals inside a kit formatter call's arguments, wherever the key sits in the object."""
+    total, pos = 0, 0
+    while (m := _FORMATTER_CALL.search(text, pos)) is not None:
+        end = _call_span(text, m.end())
+        total += len(_LOCALE_LITERAL.findall(text[m.end() : end]))
+        pos = end
+    return total
+
+
 def _counts(text: str) -> dict[str, int]:
     """Declarations by name, and the behavioural formatters whose name the list does not hold."""
     text = _COMMENT_LINE.sub("", text)
@@ -130,7 +158,7 @@ def _counts(text: str) -> dict[str, int]:
         INLINE_LOCALE: len(_INLINE_LOCALE.findall(text)),
         INLINE_TO_LOCALE_STRING: len(_INLINE_TO_LOCALE_STRING.findall(text)),
         INTL_OUTSIDE_KIT: len(_INTL_OUTSIDE_KIT.findall(text)),
-        HARDCODED_LOCALE: len(_HARDCODED_FORMATTER.findall(text)) + len(_HARDCODED_CALL.findall(text)),
+        HARDCODED_LOCALE: _hardcoded_formatter_locales(text) + len(_HARDCODED_CALL.findall(text)),
         HAND_ASSEMBLED: len(_HAND_ASSEMBLED.findall(text)),
     }
 
@@ -313,6 +341,12 @@ def test_each_inline_shape_is_counted_under_its_own_key() -> None:
     assert _shapes(multi)[HARDCODED_LOCALE] == 1
     assert _shapes('const a = createRecencyFormatter({ locale: "en" })')[HARDCODED_LOCALE] == 1
     assert _shapes("d.toLocaleDateString('de-DE')")[HARDCODED_LOCALE] == 1
+    after_intl = "createDateFormatter({ intl: { month: 'short' }, locale: 'en-US' })"
+    assert _shapes(after_intl)[HARDCODED_LOCALE] == 1
+    assert _shapes("createRecencyFormatter({ intl: { a: 1 }, locale: `en-${x}` })")[HARDCODED_LOCALE] == 1
+    nested = "createRecencyFormatter({ locale: () => l.value, older: createDateFormatter({ locale: 'en' }) })"
+    assert _shapes(nested)[HARDCODED_LOCALE] == 1
+    assert _shapes("const a = new Date(a.getTime()).toLocaleString()")[INLINE_TO_LOCALE_STRING] == 1
     assert _shapes("const s = `${d.getMonth() + 1}/${d.getDate()}`")[HAND_ASSEMBLED] == 2
     assert _shapes("const s = h.getHours().toString().padStart(2,'0')")[HAND_ASSEMBLED] == 1
 
@@ -330,6 +364,9 @@ def test_a_number_a_zone_probe_a_live_locale_and_date_arithmetic_are_not_inline_
     for key in (INLINE_LOCALE, INLINE_TO_LOCALE_STRING, INTL_OUTSIDE_KIT, HARDCODED_LOCALE, HAND_ASSEMBLED):
         assert shapes[key] == 0, key
     assert _shapes("const a = createDateFormatter({ kind: 'date' })")[HARDCODED_LOCALE] == 0
+    live = "createDateFormatter({ intl: { month: 'short' }, locale: () => locale.value })"
+    assert _shapes(live)[HARDCODED_LOCALE] == 0
+    assert _shapes("const a = d.toLocaleString()")[INLINE_TO_LOCALE_STRING] == 0
     assert _shapes("// new Date(x).toLocaleString()")[INLINE_TO_LOCALE_STRING] == 0
 
 
