@@ -1,0 +1,138 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""Env vars for the per-session chat write lease (chat_history/session_lease.py, #20862)."""
+
+from __future__ import annotations
+
+from autobot_shared.env_registry import EnvVarSpec, register_env_var
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_LEASE_TTL_MS",
+        type=int,
+        default=30000,
+        range=(1000, None),
+        description=(
+            "Lifetime in milliseconds of the per-session Redis lease that serialises writes to a chat "
+            "file. The holder renews it while it works, so only a crashed holder makes a waiter sit "
+            "out the full lifetime (chat_history/session_lease.py, #20862). Minimum 1000."
+        ),
+        component="chat",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_LEASE_WAIT_S",
+        type=float,
+        default=30.0,
+        range=(0.1, None),
+        description=(
+            "Seconds a writer waits for another writer's lease on the same chat session before it "
+            "raises an error naming the holder. The save is never written unlocked and never dropped "
+            "silently (chat_history/session_lease.py, #20862). Minimum 0.1."
+        ),
+        component="chat",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_LEASE_POLL_S",
+        type=float,
+        default=0.05,
+        range=(0.001, None),
+        description=(
+            "Seconds between attempts to take a chat session lease another writer holds "
+            "(chat_history/session_lease.py, #20862). Minimum 0.001."
+        ),
+        component="chat",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_LEASE_REDIS_DB",
+        type=str,
+        default="main",
+        description=(
+            "Redis database holding the per-session chat lease keys and their fencing counters "
+            "(chat_history/session_lease.py, #20862)."
+        ),
+        component="chat",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_LEASE_KEY_PREFIX",
+        type=str,
+        default="autobot:chat:session_lease:",
+        description=(
+            "Key prefix of the per-session chat lease; the session id is appended "
+            "(chat_history/session_lease.py, #20862)."
+        ),
+        component="chat",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_LEASE_GENERATION_KEY_PREFIX",
+        type=str,
+        default="autobot:chat:session_generation:",
+        description=(
+            "Key prefix of the per-session fencing counter; the session id is appended. Kept apart from "
+            "AUTOBOT_CHAT_LEASE_KEY_PREFIX so one session's counter can never be another session's "
+            "lease key (chat_history/session_lease.py, #20862)."
+        ),
+        component="chat",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_LEASE_BEST_EFFORT_WAIT_S",
+        type=float,
+        default=0.5,
+        range=(0.01, None),
+        description=(
+            "Seconds a best-effort pass (old-file cleanup, orphan recovery while listing) waits for one "
+            "session's lease before it skips that session and leaves it for the next pass "
+            "(chat_history/session_lease.py, #20862). Minimum 0.01."
+        ),
+        component="chat",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_LEASE_PASS_BUDGET_S",
+        type=float,
+        default=5.0,
+        range=(0.1, None),
+        description=(
+            "Seconds in total one best-effort pass (old-file cleanup, orphan recovery while listing) may "
+            "spend waiting for session leases; the sessions it did not reach wait for the next pass "
+            "(chat_history/session_lease.py, #20862). Minimum 0.1."
+        ),
+        component="chat",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_LEASE_STORE_SILENT_S",
+        type=float,
+        default=3.0,
+        range=(0.1, None),
+        description=(
+            "Seconds the lease store may give no answer at all (Redis disabled, circuit open or erroring) "
+            "before a chat write fails fast with LeaseStoreUnavailable instead of waiting out "
+            "AUTOBOT_CHAT_LEASE_WAIT_S (chat_history/session_lease.py, #20862). Minimum 0.1."
+        ),
+        component="chat",
+    )
+)
