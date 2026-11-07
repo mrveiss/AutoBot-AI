@@ -202,7 +202,7 @@ async def test_the_sweep_warns_with_a_count_and_no_path_when_entries_belong_to_a
     service.drain_removals.return_value = {"removed": 0, "stuck": 0, "other_root": 3}
     service.sweep_staging.return_value = {}
     with (
-        patch.object(sweep, "AttachmentService", return_value=service),
+        patch.object(sweep, "get_attachment_service", return_value=service),
         patch.object(sweep, "get_async_session_factory", return_value=FakeAsyncSession),
     ):
         await sweep._async_sweep()
