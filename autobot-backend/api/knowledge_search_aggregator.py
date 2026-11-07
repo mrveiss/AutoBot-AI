@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Set
 
 from fastapi import APIRouter, Depends, Query, Request
 
+from api.knowledge_graph_sections import graph_sections
 from api.schemas_knowledge import (
     ContextRequest,
     GraphRequest,
@@ -639,6 +640,7 @@ async def _get_facts_for_graph(
     user_org_id: str | None,
     user_group_ids: List[str],
     is_admin: bool,
+    offset: int = 0,
 ) -> List[Dict[str, Any]]:
     """Get facts for the graph with optional category filtering.
 
@@ -657,7 +659,7 @@ async def _get_facts_for_graph(
         facts = [{**fact, "metadata": _decode_fact_metadata(fact)} for fact in raw_facts]
     else:
         # #19727: listed, not a search for "*", which the keyword fallback matches nothing for; quarantine stays out
-        listed = await kb.get_all_facts(limit=max_facts)
+        listed = await kb.get_all_facts(limit=max_facts, offset=offset)
         get_category = lambda fact: (fact.get("metadata") or {}).get("category", CategoryDefaults.GENERAL)  # noqa: E731
         facts = [{**fact, "id": fact.get("fact_id"), "category": get_category(fact)} for fact in listed]
 
@@ -886,9 +888,8 @@ async def get_multi_source_graph(req: Request, body: GraphRequest, current_user:
         facts: List[Dict[str, Any]] = []
         if kb is not None:
             try:
-                facts = await _get_facts_for_graph(
-                    kb, body.category_filter, body.max_facts, user_id, user_org_id, user_group_ids, is_admin
-                )
+                scope = (kb, body.category_filter, body.max_facts, user_id, user_org_id, user_group_ids, is_admin)
+                facts = await _get_facts_for_graph(*scope, offset=body.offset)
             except Exception as e:
                 logger.warning("Failed to get facts: %s", e)
 
@@ -912,11 +913,9 @@ async def get_multi_source_graph(req: Request, body: GraphRequest, current_user:
 
         return {
             "success": True,
-            "data": {
-                "entities": nodes,
-                "relations": edges,
-            },
+            "data": {"entities": nodes, "relations": edges},
             "stats": {
+                "sections": await graph_sections(kb, body, nodes, edges, is_admin, len(fact_ids)),
                 "total_entities": len(nodes),
                 "total_relations": len(edges),
                 "categories": len([n for n in nodes if n["type"] == "category"]),

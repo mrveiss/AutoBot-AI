@@ -543,3 +543,25 @@ register_env_var(
         range=(100, 1000000),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_GRAPH_SECTION_SAMPLE_LIMIT",
+        type=int,
+        default=25,
+        description="Records sampled per knowledge-graph section; the response reports total vs returned.",
+        component="knowledge",
+        range=(1, 500),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_GRAPH_PREVIEW_CHARS",
+        type=int,
+        default=160,
+        description="Characters of a bucket record shown as its knowledge-graph node name.",
+        component="knowledge",
+        range=(20, 1000),
+    )
+)

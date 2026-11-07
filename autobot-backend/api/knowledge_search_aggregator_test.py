@@ -57,7 +57,7 @@ async def test_get_facts_for_graph_lists_facts_with_quarantined_ones_left_out():
         is_admin=False,
     )
 
-    mock_kb.get_all_facts.assert_awaited_once_with(limit=25)
+    mock_kb.get_all_facts.assert_awaited_once_with(limit=25, offset=0)
     mock_kb.search.assert_not_called()
 
 
