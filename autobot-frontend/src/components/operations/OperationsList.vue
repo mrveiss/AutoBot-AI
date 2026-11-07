@@ -333,13 +333,13 @@ function canResumeOperation(operation: Operation): boolean {
 }
 
 .cancel-btn {
-  background-color: #fee2e2;
-  color: #dc2626;
+  background-color: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .resume-btn {
-  background-color: #dcfce7;
-  color: #16a34a;
+  background-color: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .view-btn {
