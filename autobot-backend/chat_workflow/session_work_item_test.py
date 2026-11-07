@@ -146,7 +146,7 @@ class TestGoalAncestryIsCompanyScoped:
 
         modules = {
             "llc.services.goal": MagicMock(GoalService=MagicMock(return_value=goal_svc)),
-            "llc.services.work_item_service": MagicMock(WorkItemService=MagicMock(return_value=wi_svc)),
+            "llc.services.accessors": MagicMock(get_work_item_service=MagicMock(return_value=wi_svc)),
             "user_management.database": MagicMock(
                 get_async_session_factory=MagicMock(return_value=MagicMock(return_value=session_cm))
             ),
