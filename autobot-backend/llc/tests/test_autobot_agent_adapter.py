@@ -501,7 +501,7 @@ async def test_cost_forwarded_to_budget_service():
     def session_factory():
         return mock_session
 
-    with patch("llc.services.budget.BudgetService") as MockBS:
+    with patch("llc.services.accessors.get_budget_service") as MockBS:
         MockBS.return_value.ingest_cost_event = AsyncMock()
 
         adapter = AutoBotAgentAdapter(
@@ -532,7 +532,7 @@ async def test_budget_exhausted_propagates_to_failed_status():
     def session_factory():
         return mock_session
 
-    with patch("llc.services.budget.BudgetService") as MockBS:
+    with patch("llc.services.accessors.get_budget_service") as MockBS:
         MockBS.return_value.ingest_cost_event = AsyncMock(side_effect=BudgetExhausted("agent-xyz", 100.0, 50.0))
 
         adapter = AutoBotAgentAdapter(
