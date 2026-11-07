@@ -12695,6 +12695,16 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * RolesUpdateRequest
+         * @description Request to update node roles.
+         */
+        RolesUpdateRequest: {
+            /** Roles */
+            roles: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * RollbackCandidates
          * @description The picker's contents: ancestors of the branch head, newest first.
          */
@@ -12736,8 +12746,11 @@ export interface components {
         RollbackDatabaseCheck: {
             /** Database */
             database: string;
-            /** In The Way */
-            in_the_way?: string[];
+            /**
+             * In The Way
+             * @default []
+             */
+            in_the_way: string[];
             /**
              * Message
              * @default
@@ -12773,16 +12786,6 @@ export interface components {
              * @description Full commit id from the candidates list
              */
             commit: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * RolesUpdateRequest
-         * @description Request to update node roles.
-         */
-        RolesUpdateRequest: {
-            /** Roles */
-            roles: string[];
         } & {
             [key: string]: unknown;
         };
