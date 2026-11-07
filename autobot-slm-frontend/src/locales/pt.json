@@ -2131,7 +2131,13 @@
       "time": "Time:",
       "time1": "Time",
       "value0TracePlural": "{value0} trace{plural}",
-      "paginationAria": "Trace list pages"
+      "paginationAria": "Trace list pages",
+      "range": {
+        "1h": "1h",
+        "6h": "6h",
+        "24h": "24h",
+        "7d": "7d"
+      }
     }
   },
   "performanceView": {
