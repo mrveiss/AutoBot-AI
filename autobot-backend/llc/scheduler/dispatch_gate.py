@@ -29,7 +29,7 @@ from ..adapters import get_adapter
 from ..adapters.subprocess_base import is_subprocess_adapter
 from ..models.enums import UNDISPATCHABLE_AGENT_STATUSES, LLCAgentStatus
 from ..org_role_authority import describe_role_bound, role_bound_refusal
-from ..services.budget import BudgetService
+from ..services.accessors import get_budget_service
 
 logger = get_logger(__name__)
 
@@ -162,7 +162,7 @@ async def dispatch_block_reason(
     if reason is None and not deliberate_only and not company_id:
         return "agent has no company, so its budget cannot be read"
     if reason is None and not deliberate_only:
-        _, over_limit, _ = await BudgetService().check_budget(session, agent_id, str(company_id))
+        _, over_limit, _ = await get_budget_service().check_budget(session, agent_id, str(company_id))
         reason = BUDGET_EXHAUSTED if over_limit else None
     return reason
 
