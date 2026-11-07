@@ -25,6 +25,13 @@ import { useLoadingState } from '@/composables/useLoadingState'
 // Create scoped logger for useConversationFiles
 const logger = createLogger('useConversationFiles')
 
+/** The user-facing text for a failed write: a recognised 413 refusal translated, else the server's message (#20723). */
+function describeFailure(err: unknown, fallback: string): string {
+  return (
+    describeApiRefusal(err, (key, params) => i18n.global.t(key, params ?? {})) ?? extractApiErrorMessage(err, fallback)
+  )
+}
+
 /**
  * File metadata interface matching backend ConversationFile model
  */
@@ -203,7 +210,7 @@ export function useConversationFiles(sessionId: string) {
         return false
 
       } catch (err: unknown) {
-        error.value = extractApiErrorMessage(err, 'Upload failed')
+        error.value = describeFailure(err, 'Upload failed')
         logger.error('Upload error:', err)
         return false
       } finally {
@@ -345,9 +352,7 @@ export function useConversationFiles(sessionId: string) {
         error.value = 'Failed to create file'
         return false
       } catch (err: unknown) {
-        error.value =
-          describeApiRefusal(err, (key, params) => i18n.global.t(key, params ?? {})) ??
-          extractApiErrorMessage(err, 'Failed to create file')
+        error.value = describeFailure(err, 'Failed to create file')
         logger.error('Create file error:', err)
         return false
       }
@@ -394,7 +399,7 @@ export function useConversationFiles(sessionId: string) {
       error.value = 'Save failed'
       return false
     } catch (err: unknown) {
-      error.value = extractApiErrorMessage(err, 'Save failed')
+      error.value = describeFailure(err, 'Save failed')
       logger.error('Update content error:', err)
       return false
     }
@@ -410,7 +415,7 @@ export function useConversationFiles(sessionId: string) {
         error.value = 'Copy failed'
         return false
       } catch (err: unknown) {
-        error.value = extractApiErrorMessage(err, 'Copy failed')
+        error.value = describeFailure(err, 'Copy failed')
         logger.error('Copy error:', err)
         return false
       }
