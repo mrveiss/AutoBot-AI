@@ -187,6 +187,12 @@ describe('withQuery and parseRetryAfterMs', () => {
     expect(withQuery('/x', { b: null })).toBe('/x')
   })
 
+  it('serialises an array as repeated keys, not a comma list (FastAPI List[str])', () => {
+    expect(withQuery('/x', { a: ['red', 'blue'], n: 1 })).toBe('/x?a=red&a=blue&n=1')
+    expect(withQuery('/x', { a: [] })).toBe('/x')
+    expect(withQuery('/x?z=1', { a: ['r b'] })).toBe('/x?z=1&a=r+b')
+  })
+
   it('reads delta-seconds and dates, and treats junk as 0', () => {
     expect(parseRetryAfterMs('3')).toBe(3000)
     expect(parseRetryAfterMs('Wed, 21 Oct 2015 07:28:10 GMT', Date.parse('Wed, 21 Oct 2015 07:28:00 GMT'))).toBe(10_000)
@@ -206,6 +212,13 @@ interface FixturePaths {
   '/api/items/{item_id}': {
     get: { parameters: { query?: never; path: { item_id: string } }; requestBody?: never; responses: { 200: { content: { 'application/json': Item } } } }
     delete: { parameters: { query?: never; path: { item_id: string } }; requestBody?: never; responses: { 204: { content?: never } } }
+  }
+  '/api/search': {
+    get: { parameters: { query: { tags: string[]; limit?: number }; path?: never }; requestBody?: never; responses: { 200: { content: { 'application/json': Item[] } } } }
+  }
+  '/api/maybe': {
+    get: { parameters: { query?: never; path?: never }; requestBody?: never; responses: { 200: { content: { 'text/csv': string } }; 204: { content?: never } } }
+    post: { parameters: { query?: never; path?: never }; requestBody?: never; responses: { 200: { content: { 'application/json': Item } }; 204: { content?: never } } }
   }
   '/api/items/{item_id}/export': {
     get: { parameters: { query?: never; path: { item_id: string } }; requestBody?: never; responses: { 200: { content: { 'text/csv': string } } } }
@@ -255,6 +268,25 @@ describe('ApiClientBase typed call layer', () => {
     await expect(loose.call('post', '/api/items', { body: {} })).rejects.toThrow(/use callRaw\(\)/)
   })
 
+  it('sends an array query value as repeated keys', async () => {
+    fetchMock.mockResolvedValue(json([]))
+    await new TypedClient().call('get', '/api/search', { query: { tags: ['red', 'blue'] } })
+    expect(fetchMock.mock.calls[0][0]).toBe('http://base/api/search?tags=red&tags=blue')
+  })
+
+  it('labels a Blob body with its own media type, or none; never JSON', async () => {
+    fetchMock.mockResolvedValue(json({}))
+    const client = new TypedClient()
+    await client.rawRequest('/x', { method: 'POST', body: new Blob(['zip'], { type: 'application/zip' }) })
+    expect(fetchMock.mock.calls[0][1].headers['Content-Type']).toBe('application/zip')
+    await client.rawRequest('/x', { method: 'POST', body: new Blob(['raw']) })
+    expect(fetchMock.mock.calls[1][1].headers['Content-Type']).toBeUndefined()
+    await client.rawRequest('/x', { method: 'POST', body: new Blob(['raw']), headers: { 'Content-Type': 'application/x-tar' } })
+    expect(fetchMock.mock.calls[2][1].headers['Content-Type']).toBe('application/x-tar')
+    await client.rawRequest('/x', { method: 'POST', body: { a: 1 } })
+    expect(fetchMock.mock.calls[3][1].headers['Content-Type']).toBe('application/json')
+  })
+
   it('refuses a request whose path param is missing', () => {
     expect(() => fillPathParams('/api/items/{item_id}', {})).toThrow('Missing path parameter "item_id"')
     expect(fillPathParams('/a/{x}/b/{y}', { x: 1, y: 'z' })).toBe('/a/1/b/z')
@@ -301,8 +333,19 @@ describe('ApiClientBase typed call layer', () => {
     expectTypeOf<CreateCall>().resolves.toEqualTypeOf<Item>()
     type DeleteCall = ReturnType<typeof client.call<'/api/items/{item_id}', 'delete'>>
     expectTypeOf<DeleteCall>().resolves.toBeVoid()
+    // A 204 documented beside a JSON 200 makes the reply a union, not just the body.
+    type MaybeCall = ReturnType<typeof client.call<'/api/maybe', 'post'>>
+    expectTypeOf<MaybeCall>().resolves.toEqualTypeOf<Item | void>()
     // Compile-time only: these are never run, and each line must stay a type error.
     const never = (): void => {
+      // @ts-expect-error the generated contract requires `query.tags`; it may not be omitted
+      void client.call('get', '/api/search')
+      // @ts-expect-error `query` is present but its required `tags` is missing
+      void client.call('get', '/api/search', { query: { limit: 1 } })
+      // an all-optional query stays optional
+      void client.call('get', '/api/items')
+      // a 204 beside a text/csv 200 is readable by `call` (the 204)
+      void client.call('get', '/api/maybe')
       // @ts-expect-error not a documented path
       void client.call('get', '/api/nope')
       // @ts-expect-error the path offers no DELETE

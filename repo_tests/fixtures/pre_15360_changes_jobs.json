@@ -182,7 +182,7 @@
    "file": ".github/filters/backend-python-paths.yml",
    "sha256": "18bfcaf8-e98f2c5c-797e4af0-fbb9e626-918c0ffa-8d56bcf0-58848749-72ffe9df"
   },
-  "header_sha256": "a87bc1db-91fe7005-6f25388c-4a9b806f-e9f98d50-8fbac86c-4e4f5d3f-28af4f51",
+  "header_sha256": "feea5164-90c702cf-e9ece10c-0e09aa12-62db0225-0f3f557f-efff2a5d-5626902d",
   "job_level_extras": [],
   "on": {
    "merge_group": null,
@@ -210,6 +210,7 @@
      ".github/filters/backend-python-paths.yml",
      "autobot-frontend/src/**",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "scripts/api_wiring_baseline.txt",
      "requirements*.txt",
      ".github/workflows/api-wiring.yml"
@@ -1519,6 +1520,7 @@
      "autobot-slm-frontend/package.json",
      "autobot-slm-frontend/package-lock.json",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "**/requirements*.txt",
      ".github/workflows/verify-generated-types.yml"
     ],
@@ -1531,12 +1533,13 @@
      "autobot-frontend/package.json",
      "autobot-frontend/package-lock.json",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "**/requirements*.txt",
      ".github/workflows/verify-generated-types.yml"
     ]
    }
   },
-  "header_sha256": "3b94f14c-8d7bc5e0-620ee3a1-3189e067-7d49ecde-3bf32e69-78ee82cd-2ea5e795",
+  "header_sha256": "4818ceae-75aa678f-c3772955-6a4e2f77-1f8f9a98-bdd7660d-4e683860-ca7ad7e7",
   "job_level_extras": [],
   "on": {
    "merge_group": null,
@@ -1566,6 +1569,7 @@
      "autobot-frontend/package.json",
      "autobot-frontend/package-lock.json",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "requirements*.txt",
      ".github/workflows/verify-generated-types.yml"
     ]
