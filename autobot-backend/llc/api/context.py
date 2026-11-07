@@ -22,8 +22,8 @@ from user_management.services import TenantContext
 
 from ..kb.context_builder import HeartbeatContextBuilder
 from ..kb.rag_assembler import LLCRAGAssembler
+from ..services.accessors import get_work_item_service
 from ..services.goal import GoalService
-from ..services.work_item_service import WorkItemService
 from ._common import parse_work_item_id
 
 router = APIRouter(tags=["llc-context"])
@@ -34,7 +34,7 @@ def _get_context_services() -> Dict[str, Any]:
     return {
         "rag_assembler": LLCRAGAssembler(),
         "goal_service": GoalService(),
-        "work_item_service": WorkItemService(),
+        "work_item_service": get_work_item_service(),
     }
 
 

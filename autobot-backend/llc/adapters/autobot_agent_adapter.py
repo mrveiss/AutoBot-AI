@@ -409,10 +409,12 @@ class AutoBotAgentAdapter:
             return
 
         try:
-            from llc.services.budget import BudgetService
+            from llc.services.accessors import get_budget_service
 
             async with self._budget_session_factory() as session:
-                await BudgetService().ingest_cost_event(session, agent_id, company_id, tokens_in, tokens_out, model)
+                await get_budget_service().ingest_cost_event(
+                    session, agent_id, company_id, tokens_in, tokens_out, model
+                )
         except BudgetExhausted:
             raise  # Hard-stop from GH#8215: propagate so run is marked FAILED
         except Exception:
