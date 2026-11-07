@@ -109,10 +109,49 @@ def test_both_readers_of_the_current_job_check_its_source() -> None:
         assert "jobBelongsToSource(data.source_id" in body, reader
 
 
+SCORES = "autobot-frontend/src/composables/analytics/useCodeIntelScores.ts"
+INTELLIGENCE = "autobot-frontend/src/composables/useCodeIntelligence.ts"
+
+
+def _strip_comments(text: str) -> str:
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
+    return re.sub(r"//[^\n]*", "", text)
+
+
+def _block(source: str, start: str, end: str) -> str:
+    assert start in source, f"split marker moved: {start!r}"
+    return source[source.index(start) :].split(end, 1)[0]
+
+
+def sends_its_source(block: str) -> bool:
+    """True when the block scopes the read to a source (option set to true, scoper passed)."""
+    code = _strip_comments(block)
+    return bool(re.search(r"scopeToSource:\s*true", code)) and "{ withSourceId }" in code
+
+
+def scoped_by_with_source_id(block: str) -> bool:
+    """True when the block builds its URL through ``withSourceId(...)``."""
+    return bool(re.search(r"withSourceId\(", _strip_comments(block)))
+
+
+def test_the_source_detectors_fail_without_the_scoping() -> None:
+    real = _block(_read(SCORES), "const cachedSecurityScoreEndpoint", "const loadCachedSecurityScore")
+    assert sends_its_source(real), "control: the real block is scoped"
+    assert not sends_its_source(real.replace("scopeToSource: true", "scopeToSource: false"))
+    assert not sends_its_source(real.replace("{ withSourceId }", "{}"))
+    assert not sends_its_source("// scopeToSource: true { withSourceId }\npath: 'x'")
+    cached = _block(_read(INTELLIGENCE), "async function getSecurityScoreCached", "\n  }\n")
+    assert scoped_by_with_source_id(cached), "control: the real read is scoped"
+    assert not scoped_by_with_source_id(cached.replace("withSourceId(", "noop("))
+    assert not scoped_by_with_source_id("// withSourceId(url)\nget(url)")
+
+
 def test_the_cached_security_read_sends_its_source() -> None:
     """The route requires ``source_id``; without it the page-open read answers 422."""
-    source = _read("autobot-frontend/src/composables/analytics/useCodeIntelScores.ts")
-    block = source.split("const cachedSecurityScoreEndpoint", 1)[1].split("const loadCachedSecurityScore", 1)[0]
-    assert "scopeToSource: true" in block and "{ withSourceId }" in block
-    control = block.replace("scopeToSource: true", "")
-    assert "scopeToSource: true" not in control, "control: the detector sees the line it looks for"
+    block = _block(_read(SCORES), "const cachedSecurityScoreEndpoint", "const loadCachedSecurityScore")
+    assert sends_its_source(block)
+
+
+def test_the_other_cached_security_read_sends_its_source() -> None:
+    block = _block(_read(INTELLIGENCE), "async function getSecurityScoreCached", "\n  }\n")
+    assert scoped_by_with_source_id(block)

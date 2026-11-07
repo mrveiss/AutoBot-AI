@@ -55,11 +55,14 @@ describe('cached security score read (#20491)', () => {
     expect(scores.securityScore.value?.security_score).toBe(91)
   })
 
-  it('control: a start route would be caught by the method check', async () => {
+  it('a no_data answer is still one plain GET', async () => {
     mockedFetch.mockResolvedValueOnce(jsonResponse({ status: 'no_data' }))
-    await makeScores().loadCachedSecurityScore()
-    const calls = mockedFetch.mock.calls.map((c) => String(c[0]))
-    expect(calls.some((u) => u.includes('/security/score/analyze'))).toBe(false)
-    expect(calls.some((u) => u.includes('/security/score/cached'))).toBe(true)
+    const scores = makeScores()
+    await scores.loadCachedSecurityScore()
+
+    expect(mockedFetch).toHaveBeenCalledTimes(1)
+    const [, init] = mockedFetch.mock.calls[0] as [string, RequestInit | undefined]
+    expect((init?.method ?? 'GET').toUpperCase()).toBe('GET')
+    expect(scores.securityScore.value).toBeNull()
   })
 })

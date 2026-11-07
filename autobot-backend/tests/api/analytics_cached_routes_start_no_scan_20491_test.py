@@ -82,3 +82,19 @@ async def test_cached_bug_prediction_starts_no_scan():
     assert body["from_cache"] is True and body["completed_at"]
     delay.assert_not_called()
     store.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_the_explicit_bug_prediction_start_route_does_reach_the_scan_entry_point():
+    """Control: the mocked ``.delay`` is the one the explicit POST route calls."""
+    from api import analytics_bug_prediction as mod
+
+    task = MagicMock(id="task-2")
+    with (
+        patch.object(mod, "store_latest_task_id", AsyncMock()),
+        patch.object(mod.run_bug_prediction_analysis, "delay", MagicMock(return_value=task)) as delay,
+    ):
+        body = await mod.start_bug_analysis(admin_check=True, path=".", include_pattern="*.py", limit=10)
+
+    delay.assert_called_once_with(".", "*.py", 10)
+    assert body == {"task_id": "task-2", "status": "pending"}
