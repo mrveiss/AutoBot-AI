@@ -280,6 +280,7 @@ async def import_conversation(
         messages=messages,
         name=name,
         metadata=owner_metadata or None,
+        replace=exists and on_conflict == "replace",  # the explicit replace; a snapshot never drops messages (#20862)
     )
     logger.info("Imported conversation %s (%d messages)", session_id, len(messages))
     return {
