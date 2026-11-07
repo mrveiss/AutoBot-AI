@@ -548,7 +548,7 @@
             @cancel-workflow="handleCancelWorkflow"
             :approve-step="handleApproveStep"
             :skip-step="handleSkipStep"
-            @select-workflow="getWorkflowStatus"
+            @select-workflow="selectWorkflow"
             @refresh="loadActiveWorkflows"
           />
         </section>
@@ -702,6 +702,7 @@ import {
 } from '@/composables/useWorkflowBuilder';
 import PlanBeforeBuildingAction from '@/components/llc/workflowPlanner/PlanBeforeBuildingAction.vue';
 import type { WorkflowTemplateSummary } from '@/types/workflowTemplates';
+import { useRunnerSelection } from '@/composables/workflow/useRunnerSelection';
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import Icon, { type IconName } from '@/components/ui/Icon.vue';
@@ -822,6 +823,10 @@ const {
   connectWebSocket,
   disconnectWebSocket,
 } = useWorkflowBuilder();
+const { selectWorkflow, handleViewWorkflow, handleStartWorkflow } = useRunnerSelection({
+  t, showToast, navigateToRunner: () => navigateTo('runner'),
+  activeWorkflows, currentWorkflow, executingWorkflow, startWorkflow, getWorkflowStatus,
+});
 
 // Issue #1367: Fetch full template detail when summary lacks steps
 const { fetchTemplateDetail } = useWorkflowTemplates();
@@ -1106,8 +1111,7 @@ async function handleSaveWorkflow(name: string, description: string): Promise<vo
   };
   const workflowId = await createWorkflowFromTemplate(template, sessionId.value);
   if (workflowId) {
-    showToast(t('workflow.builder.saved', { name }), 'success');
-    await handleViewWorkflow(workflowId);
+    if (await handleViewWorkflow(workflowId)) showToast(t('workflow.builder.saved', { name }), 'success');
   } else {
     showToast(t('workflow.builder.saveFailed'), 'error');
   }
@@ -1147,13 +1151,6 @@ async function handleRunTemplate(template: WorkflowTemplate | WorkflowTemplateSu
     await loadActiveWorkflows();
   } else {
     showToast(result?.error || t('workflow.builder.templateRunFailed', { name: template.name }), 'error');
-  }
-}
-
-async function handleStartWorkflow(workflowId: string): Promise<void> {
-  const success = await startWorkflow(workflowId);
-  if (success) {
-    showToast(t('workflow.builder.started'), 'success');
   }
 }
 
@@ -1197,17 +1194,6 @@ async function openWorkflowFromQuery(): Promise<void> {
   const workflowId = workflowIdFromQuery(route.query);
   if (!workflowId) return;
   await handleViewWorkflow(workflowId);
-}
-
-async function handleViewWorkflow(workflowId: string): Promise<void> {
-  // Issue #1367: Load the selected workflow before switching to runner
-  navigateTo('runner');
-  const local = activeWorkflows.value.find((wf) => wf.workflow_id === workflowId);
-  if (local) {
-    currentWorkflow.value = local;
-  } else {
-    await getWorkflowStatus(workflowId);
-  }
 }
 
 async function handleReRunWorkflow(workflowId: string): Promise<void> {

@@ -21,6 +21,8 @@ const STARTED: Wf = { ...SAVED, started_at: 'now', steps: [{ ...SAVED.steps[0], 
 const getWorkflowStatus = vi.fn()
 const startWorkflow = vi.fn()
 const createWorkflowFromTemplate = vi.fn()
+const showToast = vi.fn()
+const executingWorkflow = ref(false)
 
 vi.mock('vue-router', () => ({
   useRoute: () => route,
@@ -31,7 +33,7 @@ vi.mock('@/composables/useWorkflowBuilder', async () => {
   const { ref: r, computed: c } = await import('vue')
   return {
     useWorkflowBuilder: () => new Proxy({
-      loading: r(false), executingWorkflow: r(false), loadingCapabilities: r(false), error: r(null),
+      loading: r(false), executingWorkflow, loadingCapabilities: r(false), error: r(null),
       activeWorkflows: r([]), completedWorkflows: r([]), currentWorkflow,
       stepsAwaitingApproval: c(() => currentWorkflow.value?.steps.filter((s) => s.status === 'waiting_approval') ?? []),
       pendingApproval: r(null), orchestrationStatus: r(null), executionStrategies: r([]), agentCapabilities: r([]),
@@ -45,7 +47,7 @@ vi.mock('@/composables/useWorkflowBuilder', async () => {
   }
 })
 vi.mock('@/composables/useWorkflowTemplates', () => ({ useWorkflowTemplates: () => ({ fetchTemplateDetail: vi.fn() }) }))
-vi.mock('@/composables/useNotificationBus', () => ({ useNotificationBus: () => ({ showToast: vi.fn() }) }))
+vi.mock('@/composables/useNotificationBus', () => ({ useNotificationBus: () => ({ showToast }) }))
 
 import WorkflowBuilderView from '../WorkflowBuilderView.vue'
 
@@ -59,6 +61,7 @@ describe('WorkflowBuilderView runner start (#21043)', () => {
     vi.clearAllMocks()
     route.params.section = 'canvas'
     currentWorkflow.value = null
+    executingWorkflow.value = false
     createWorkflowFromTemplate.mockResolvedValue('wf-new')
     getWorkflowStatus.mockImplementation(async () => { currentWorkflow.value = SAVED; return SAVED })
     startWorkflow.mockImplementation(async () => { currentWorkflow.value = STARTED; return true })
@@ -91,5 +94,60 @@ describe('WorkflowBuilderView runner start (#21043)', () => {
     w.findComponent({ name: 'WorkflowRunner' }).vm.$emit('select-workflow', 'wf-9')
     await flushPromises()
     expect(getWorkflowStatus).toHaveBeenCalledWith('wf-9')
+  })
+
+  const runner = () => mount(WorkflowBuilderView, { global: { plugins: [i18n], stubs, mocks: { $route: route } } })
+  const toasts = (type: string) => showToast.mock.calls.filter((c) => c[1] === type).map((c) => c[0])
+
+  it('a failed start shows the start-failed error and no success toast', async () => {
+    route.params.section = 'runner'
+    startWorkflow.mockResolvedValue(false)
+    const w = runner()
+    w.findComponent({ name: 'WorkflowRunner' }).vm.$emit('start-workflow', 'wf-1')
+    await flushPromises()
+    expect(toasts('error')).toEqual([en.workflow.builder.startFailed])
+    expect(toasts('success')).toEqual([])
+  })
+
+  it('a failed select (status fetch returns null) shows the select-failed error', async () => {
+    route.params.section = 'runner'
+    getWorkflowStatus.mockResolvedValue(null)
+    const w = runner()
+    w.findComponent({ name: 'WorkflowRunner' }).vm.$emit('select-workflow', 'wf-404')
+    await flushPromises()
+    expect(toasts('error')).toEqual([en.workflow.builder.selectFailed])
+  })
+
+  it('a canvas save whose fetch fails reports the error and no success toast', async () => {
+    getWorkflowStatus.mockResolvedValue(null)
+    const w = runner()
+    w.findComponent(WorkflowCanvas).vm.$emit('save-workflow', 'My flow', '')
+    await flushPromises()
+    expect(toasts('error')).toEqual([en.workflow.builder.selectFailed])
+    expect(toasts('success')).toEqual([])
+  })
+
+  it('a canvas save whose fetch succeeds shows the saved toast', async () => {
+    const w = runner()
+    w.findComponent(WorkflowCanvas).vm.$emit('save-workflow', 'My flow', '')
+    await flushPromises()
+    expect(toasts('success')).toEqual(['Workflow "My flow" saved'])
+    expect(toasts('error')).toEqual([])
+  })
+
+  it('a second Start while one is in flight does not start twice', async () => {
+    route.params.section = 'runner'
+    startWorkflow.mockImplementation(async () => {
+      executingWorkflow.value = true
+      await new Promise((r) => setTimeout(r, 0))
+      executingWorkflow.value = false
+      return true
+    })
+    const w = runner()
+    const r = w.findComponent({ name: 'WorkflowRunner' })
+    r.vm.$emit('start-workflow', 'wf-1')
+    r.vm.$emit('start-workflow', 'wf-1')
+    await flushPromises()
+    expect(startWorkflow).toHaveBeenCalledTimes(1)
   })
 })

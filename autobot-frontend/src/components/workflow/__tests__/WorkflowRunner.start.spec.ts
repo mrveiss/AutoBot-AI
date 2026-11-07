@@ -53,4 +53,12 @@ describe('WorkflowRunner select and start (#21043)', () => {
     expect(l).toContain('Cancel')
     expect(l).not.toContain('Start')
   })
+
+  it('disables Start while a start is in flight', () => {
+    const w = mount(WorkflowRunner, {
+      props: { workflows: [SAVED], currentWorkflow: SAVED, loading: true, approveStep: async () => true, skipStep: async () => true },
+      global: { plugins: [i18n], stubs: { WorkflowNotificationConfig: true } },
+    })
+    expect(w.findAll('button').find((b) => b.text() === 'Start')!.attributes('disabled')).toBeDefined()
+  })
 })

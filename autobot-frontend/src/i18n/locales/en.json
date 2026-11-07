@@ -4688,6 +4688,8 @@
       "templateStarted": "Workflow \"{name}\" started",
       "templateRunFailed": "Failed to run \"{name}\"",
       "started": "Workflow started",
+      "startFailed": "Could not start the workflow",
+      "selectFailed": "Could not open the workflow",
       "paused": "Workflow paused",
       "resumed": "Workflow resumed",
       "cancelled": "Workflow cancelled",
