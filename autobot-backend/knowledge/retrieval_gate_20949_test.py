@@ -178,3 +178,50 @@ def test_load_gold_rejects_unknown_bucket(tmp_path):
     p.write_text(json.dumps({"id": "1", "query": "q", "bucket": "nope", "gold": ["a"]}), encoding="utf-8")
     with pytest.raises(ValueError):
         rg.load_gold(str(p))
+
+
+# ---- shipped gold sets ----------------------------------------------------
+
+
+def test_every_shipped_gold_file_is_valid():
+    import glob
+    import os
+
+    corpus = set(__import__("knowledge.retrieval_gate_fixture", fromlist=["x"]).load_corpus())
+    files = sorted(glob.glob(os.path.join(rg.RETRIEVAL_GATE_GOLD_DIR, "*_*.jsonl")))
+    gold_files = [f for f in files if not f.endswith("fixture_corpus.jsonl")]
+    names = {os.path.basename(f) for f in gold_files}
+    assert names >= {f"fixture_{b}.jsonl" for b in rg.BUCKETS}
+    seen = set()
+    for path in gold_files:
+        bucket = os.path.basename(path).split("_", 1)[1][: -len(".jsonl")]
+        assert bucket in rg.BUCKETS, path
+        queries = rg.load_gold(path)
+        assert queries, path
+        for q in queries:
+            assert q.bucket == bucket and q.query and q.gold, (path, q.id)
+            assert q.id not in seen
+            seen.add(q.id)
+            if path.rsplit("/", 1)[-1].startswith("fixture_"):
+                assert set(q.gold) <= corpus, (q.id, set(q.gold) - corpus)
+    # both splits get queries, so the held-out set is non-empty
+    allq = rg.load_gold_set("fixture")
+    assert rg.select_split(allq, BenchmarkSplit.TEST) and rg.select_split(allq, BenchmarkSplit.DEV)
+
+
+def test_load_gold_set_unknown_set_raises():
+    with pytest.raises(FileNotFoundError):
+        rg.load_gold_set("nope")
+
+
+def test_fixture_run_is_deterministic_and_finds_gold():
+    from knowledge.retrieval_gate_fixture import factory
+
+    queries = rg.load_gold_set("fixture")
+    one = rg.run_ablation(factory(), queries, BenchmarkSplit.ALL, k=3)
+    two = rg.run_ablation(factory(), queries, BenchmarkSplit.ALL, k=3)
+    assert one == two
+    overall = one["runs"]["default"]["metrics"]["overall"]
+    assert overall["recall"] > 0.8 and overall["mrr"] > 0.7
+    assert overall["grounding"] is None and overall["contradiction"] is None
+    assert set(one["runs"]["default"]["metrics"]) == set(rg.BUCKETS) | {"overall"}

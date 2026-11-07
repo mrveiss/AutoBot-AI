@@ -252,3 +252,25 @@ register_env_var(
         range=(0.0, 1.0),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_RETRIEVAL_GATE_GOLD_DIR",
+        type=str,
+        default="",
+        description=(
+            "Override directory of gold query sets for the retrieval gate; empty uses the shipped one (#20949)."
+        ),
+        component="rag",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_RETRIEVAL_GATE_GOLD_SET",
+        type=str,
+        default="fixture",
+        description=("Gold set the retrieval gate loads: fixture (CI) or live (owner-curated) (#20949)."),
+        component="rag",
+    )
+)

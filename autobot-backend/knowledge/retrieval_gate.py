@@ -43,6 +43,13 @@ RETRIEVAL_GATE_MIN_IMPROVEMENT = float(os.getenv("AUTOBOT_RETRIEVAL_GATE_MIN_IMP
 #: Share of queries routed to the dev split.
 RETRIEVAL_GATE_DEV_FRACTION = float(os.getenv("AUTOBOT_RETRIEVAL_GATE_DEV_FRACTION", "0.8"))
 
+#: Directory holding versioned gold sets (fixture_<bucket>.jsonl shipped; live_<bucket>.jsonl owner-curated).
+RETRIEVAL_GATE_GOLD_DIR = os.getenv("AUTOBOT_RETRIEVAL_GATE_GOLD_DIR") or os.path.join(
+    os.path.dirname(__file__), "benchmarks", "gold"
+)
+#: Which gold set the CLI loads by default: "fixture" (CI) or "live" (owner-curated).
+RETRIEVAL_GATE_GOLD_SET = os.getenv("AUTOBOT_RETRIEVAL_GATE_GOLD_SET", "fixture")
+
 BUCKETS = ("docs", "code", "memory", "facts", "patterns", "cross")
 TECHNIQUES = ("dense", "bm25", "fusion", "rerank", "query_expansion", "graph", "memory", "cache")
 #: metric name -> True when higher is better
@@ -96,6 +103,22 @@ def load_gold(path: str) -> List[GoldQuery]:
             gold = row["gold"]
             gains = {d: 1.0 for d in gold} if isinstance(gold, list) else {d: float(g) for d, g in gold.items()}
             out.append(GoldQuery(row["id"], row["query"], row["bucket"], gains))
+    return out
+
+
+def load_gold_set(gold_set: str = RETRIEVAL_GATE_GOLD_SET, directory: str = RETRIEVAL_GATE_GOLD_DIR) -> List[GoldQuery]:
+    """Load ``<gold_set>_<bucket>.jsonl`` for every bucket present in *directory*.
+
+    Missing bucket files are skipped; an empty result raises, so a mistyped set
+    name cannot silently pass the gate on zero queries.
+    """
+    out: List[GoldQuery] = []
+    for bucket in BUCKETS:
+        path = os.path.join(directory, f"{gold_set}_{bucket}.jsonl")
+        if os.path.exists(path):
+            out.extend(load_gold(path))
+    if not out:
+        raise FileNotFoundError(f"no {gold_set}_<bucket>.jsonl files in {directory}")
     return out
 
 
@@ -251,7 +274,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     p = argparse.ArgumentParser(prog="retrieval_gate")
     sub = p.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run", help="run the ablation and write a JSON report")
-    r.add_argument("--gold", required=True)
+    r.add_argument("--gold", help="one JSONL file; default: the configured gold set in the gold dir")
     r.add_argument("--retriever", required=True, help="module:factory returning a Retriever")
     r.add_argument("--split", default="test", choices=[s.value for s in BenchmarkSplit])
     r.add_argument("--out", required=True)
@@ -261,7 +284,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     g.add_argument("--run", default="default")
     args = p.parse_args(argv)
     if args.cmd == "run":
-        report = run_ablation(_load_factory(args.retriever)(), load_gold(args.gold), BenchmarkSplit(args.split))
+        report = run_ablation(
+            _load_factory(args.retriever)(),
+            load_gold(args.gold) if args.gold else load_gold_set(),
+            BenchmarkSplit(args.split),
+        )
         with open(args.out, "w", encoding="utf-8") as fh:
             json.dump(report, fh, indent=2, sort_keys=True)
         return 0

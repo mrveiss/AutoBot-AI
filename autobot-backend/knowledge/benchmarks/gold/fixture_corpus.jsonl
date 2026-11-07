@@ -1,0 +1,20 @@
+{"id": "docs-1", "bucket": "docs", "text": "Redis stores session state and is reached through the shared client helper"}
+{"id": "docs-2", "bucket": "docs", "text": "The setup guide lists the supported operating systems and the install steps"}
+{"id": "docs-3", "bucket": "docs", "text": "Backups are written nightly and can be restored from the maintenance page"}
+{"id": "docs-4", "bucket": "docs", "text": "The API reference documents every router and its authentication requirement"}
+{"id": "code-1", "bucket": "code", "text": "def get_logger(name) returns a configured logger from the logging manager"}
+{"id": "code-2", "bucket": "code", "text": "class KnowledgeBase implements search over chunks with a vector and keyword stage"}
+{"id": "code-3", "bucket": "code", "text": "async def advanced_search runs retrieval then reranks facts before returning"}
+{"id": "code-4", "bucket": "code", "text": "def content_hash computes a sha256 digest used to deduplicate chunks"}
+{"id": "memory-1", "bucket": "memory", "text": "The user prefers short answers and dark theme in the interface"}
+{"id": "memory-2", "bucket": "memory", "text": "Last week the user asked about migrating the database to a new host"}
+{"id": "memory-3", "bucket": "memory", "text": "The user works in the Riga timezone and wants times shown locally"}
+{"id": "memory-4", "bucket": "memory", "text": "The user rejected the proposal to delete old logs automatically"}
+{"id": "facts-1", "bucket": "facts", "text": "The default embedding model is nomic-embed-text"}
+{"id": "facts-2", "bucket": "facts", "text": "The backend listens on a port taken from the single source of truth config"}
+{"id": "facts-3", "bucket": "facts", "text": "Chunks are deduplicated by a hash of their normalised content"}
+{"id": "facts-4", "bucket": "facts", "text": "Cache entries expire after a time to live read from an environment variable"}
+{"id": "patterns-1", "bucket": "patterns", "text": "Pattern: wrap outbound requests in the guarded fetch to enforce egress policy"}
+{"id": "patterns-2", "bucket": "patterns", "text": "Pattern: read configuration from the single source of truth never hardcode values"}
+{"id": "patterns-3", "bucket": "patterns", "text": "Pattern: acquire redis through the shared client factory not a direct connection"}
+{"id": "patterns-4", "bucket": "patterns", "text": "Pattern: split long functions so each stays under thirty lines"}

@@ -1,0 +1,4 @@
+{"id": "patterns-q1", "query": "pattern for making outbound requests safely", "bucket": "patterns", "gold": ["patterns-1"]}
+{"id": "patterns-q2", "query": "pattern for reading configuration", "bucket": "patterns", "gold": ["patterns-2"]}
+{"id": "patterns-q3", "query": "pattern for getting a redis connection", "bucket": "patterns", "gold": ["patterns-3"]}
+{"id": "patterns-q4", "query": "pattern for keeping functions short", "bucket": "patterns", "gold": ["patterns-4"]}
