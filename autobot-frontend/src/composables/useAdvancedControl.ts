@@ -158,6 +158,11 @@ export function useAdvancedControl() {
     )
   }
 
+  /** The capability summary (name, version, features, endpoints) of the Advanced Control API. */
+  function getControlInfo() {
+    return apiClient.call('get', '/api/advanced-control/')
+  }
+
   async function requestTakeover(request: TakeoverRequest): Promise<boolean> {
     return mutate(
       () => apiClient.call('post', '/api/advanced-control/takeover/request', { body: request as Schemas['TakeoverRequest'] }),
@@ -265,6 +270,7 @@ export function useAdvancedControl() {
     loading,
     error,
     loadTakeovers,
+    getControlInfo,
     requestTakeover,
     approve,
     pause,
