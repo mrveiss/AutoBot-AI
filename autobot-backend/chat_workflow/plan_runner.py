@@ -17,7 +17,7 @@ limit (``limits.MAX_CONTINUATION_ITERATIONS``), so a plan can never ask for more
 Delegation: a subagent plans with ``cap // (depth + 1)`` steps and with none when that is under two, so
 a delegated run gets a shallower plan and a nested one gets no plan.
 
-State and events (``EVENT_STATE_DOCTRINE.md``): the plan body is durable in Redis (``autobot:plans:<id>``,
+State and events (``EVENT_STATE_DOCTRINE.md``): the plan body is durable in Redis (``autobot:plans:<session>:<id>``,
 written by the planner); the graph state carries only ids and the rendered step block. The planner gets no
 ``event_stream`` -- that is the second bus the doctrine forbids -- so the plan reaches clients once, as the
 existing ``agent.plan`` event on the one bus (``cot_events.emit_plan``); no new event type is added.
@@ -62,6 +62,9 @@ STATUS_OUTCOME: Dict[str, str] = {
     "approval_required": WAIT,
     "pending_delegation": WAIT,
 }
+#: Log-once flag for the no-Redis notice. The repo has no shared public log-once helper (only private per-module
+#: ``_warn_once`` copies in ``deployment_profile``, ``redis_management.endpoint`` and ``llc.services.findings_verify``),
+#: so this is an explicit per-process flag; it is only ever set by ``_log_no_redis_once``.
 _NO_REDIS_LOGGED = False
 
 
@@ -90,7 +93,7 @@ def _build_planner(manager: Any, model: str, session_id: str, max_steps: int) ->
         PlannerLLMClient(model, session_id),
         None,  # no second event bus; see the module docstring
         redis_client=getattr(manager, "redis_client", None),
-        config=PlannerConfig(max_steps_per_plan=max_steps),
+        config=PlannerConfig(max_steps_per_plan=max_steps, key_scope=session_id),
     )
 
 
@@ -124,7 +127,7 @@ class PlanTracker:
         progress = {"done": self.done, "total": self.total, "complete": self.step_id is None, "block": self.block}
         return {"plan_id": self.plan_id, "current_step_id": self.step_id, "plan_progress": progress}
 
-    async def _refresh(self, plan: ExecutionPlan) -> None:
+    def _refresh(self, plan: ExecutionPlan) -> None:
         step = plan.get_current_step()
         self.step_id = step.step_id if step else None
         self.block = _step_block(plan, step)
@@ -140,7 +143,7 @@ class PlanTracker:
         ready = plan.get_next_executable_steps()
         if ready:
             await self.planner.start_step(plan.plan_id, ready[0].step_id)
-        await self._refresh(plan)
+        self._refresh(plan)
 
     async def advance(self, new_entries: List[Dict[str, Any]]) -> None:
         """Complete or fail the current step from the tool results of the pass that just ran."""

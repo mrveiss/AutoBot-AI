@@ -15,7 +15,9 @@ from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import CategoryDefaults
 from llm_shared import get_provider_registry
 from llm_shared.models import LLMRequest
-from llm_shared.types import LLMType, ProviderType
+from llm_shared.types import LLMType
+
+from .llm_provider import configured_provider
 
 logger = get_logger(__name__)
 
@@ -32,7 +34,7 @@ class PlannerLLMClient:
         request = LLMRequest(
             messages=[{"role": CategoryDefaults.ROLE_USER, "content": prompt}],
             llm_type=LLMType.CHAT,
-            provider=ProviderType.OLLAMA,
+            provider=configured_provider(),
             model_name=self.model_name,
             temperature=temperature,
             metadata={"conversation_id": self.session_id, "purpose": "chat_planner"},

@@ -110,3 +110,16 @@ register_env_var(
         component="chat_workflow",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PLAN_TTL_SECONDS",
+        type=int,
+        default=86400,
+        description=(
+            "Seconds a stored plan (Redis key autobot:plans:<session>:<id>) is kept before it expires "
+            "(#21023). Default 24 hours."
+        ),
+        component="chat_workflow",
+    )
+)

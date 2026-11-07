@@ -21,13 +21,12 @@ from constants.threshold_constants import (
     BatchConfig,
     LLMDefaults,
     RetryConfig,
-    TimingConstants,
 )
 from events.types import create_plan_event
+from planner.plan_storage import PLAN_TTL_SECONDS, plan_key
 from planner.types import ExecutionPlan, PlanStatus, PlanStep, PlanStepStatus
 
 logger = get_logger(__name__)
-
 
 # =============================================================================
 # Configuration
@@ -42,7 +41,8 @@ class PlannerConfig:
     """
 
     max_steps_per_plan: int = 20  # Plan-specific, no constant needed
-    plan_ttl_seconds: int = TimingConstants.HOURLY_INTERVAL * 24  # 86400 = 24 hours
+    plan_ttl_seconds: int = PLAN_TTL_SECONDS
+    key_scope: str = ""  # session id for chat plans (see plan_storage); empty = legacy unscoped key
     llm_temperature: float = LLMDefaults.DEFAULT_TEMPERATURE - 0.4  # 0.3 for planning precision
     enable_parallel_steps: bool = True
     max_parallel_steps: int = BatchConfig.SMALL_BATCH // 2  # 5 parallel steps
@@ -673,7 +673,7 @@ Output ONLY valid JSON in this format:
         # Try Redis if available
         if self.redis:
             try:
-                key = f"autobot:plans:{plan_id}"
+                key = plan_key(self.config.key_scope, plan_id)
                 data = await self.redis.get(key)
                 if data:
                     if isinstance(data, bytes):
@@ -697,7 +697,7 @@ Output ONLY valid JSON in this format:
 
         if self.redis:
             try:
-                key = f"autobot:plans:{plan.plan_id}"
+                key = plan_key(self.config.key_scope, plan.plan_id)
                 await self.redis.set(
                     key,
                     plan.to_json(),
