@@ -68,7 +68,7 @@ _ROOTS = (
 
 
 def _tracked_python(root: Path = _ROOT) -> list[str]:
-    """Tracked Python files; empty on an empty tree so the reach floor can fire."""
+    """Tracked Python files; empty on an empty tree so the reach fraction can fire."""
     try:
         return tracked_paths(root, *(f"{r}/*.py" for r in _ROOTS))
     except EmptyEnumeration:
@@ -83,7 +83,7 @@ def _all_tracked_python(root: Path) -> int:
         return 0
 
 
-#: #21034: an absolute floor (even with a ``growth`` allowance) tracks a population that gains ~450 files
+#: #21034: an absolute count (even with a ``growth`` allowance) tracks a population that gains ~450 files
 #: a week and went red on every train that merged main. A share of all tracked Python moves with the
 #: tree: the roots held 8144 of 8180 (99.6%) when measured, so 0.95 tolerates the tree growing or
 #: shrinking by any amount and fails only when the scan reaches materially less of it (a root dropped
@@ -278,7 +278,7 @@ def test_no_accessor_managed_class_constructed_directly():
     assert not offenders, "constructed directly; use llc.services.accessors.get_*: " + ", ".join(offenders)
 
 
-def test_floor_measures_the_tracked_python_it_names():
+def test_fraction_measures_the_tracked_python_it_names():
     """Control (MEASUREMENT_DISCIPLINE): a count taken from one plain `*.py` spec (filtered by root here, not by per-root globs) equals both numbers the
     fraction is judged on, and the roots are all real, so a share cannot read well off a wrong path."""
 
@@ -290,7 +290,7 @@ def test_floor_measures_the_tracked_python_it_names():
     assert {p.split("/", 1)[0] for p in scanned} == set(_ROOTS)
 
 
-def test_floor_ignores_tree_growth_but_fires_when_the_sweep_narrows(tmp_path):
+def test_fraction_ignores_tree_growth_but_fires_when_the_sweep_narrows(tmp_path):
     """#21034 control: with the reference at today's size, the share holds across growth and
     deletion of both numbers, and fails when the sweep reaches materially less of the same tree."""
     import dataclasses  # noqa: PLC0415
