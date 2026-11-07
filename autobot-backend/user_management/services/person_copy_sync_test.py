@@ -113,3 +113,22 @@ async def test_an_unset_internal_key_sends_nothing_and_is_recorded_as_a_failure(
     http.post.assert_not_called()
     assert pair[0].push_error == "FirstAdminLinkError"
     assert any(r.levelname == "ERROR" and "no internal API key" in r.message for r in caplog.records)
+
+
+class _ReleaseFails(_Unlocked):
+    async def __aexit__(self, *exc):
+        raise ConnectionError("release")
+
+
+async def test_a_release_error_after_a_good_push_keeps_the_success(caplog) -> None:
+    pair = _pair(failed=datetime.now(timezone.utc))
+    session = _session_with([pair])
+    with (
+        patch.object(sync, "_person_lock", MagicMock(return_value=_ReleaseFails())),
+        patch.object(sync, "_post_copy", AsyncMock()),
+        caplog.at_level("WARNING"),
+    ):
+        await sync._push_person(session, uuid.uuid4())
+    assert (pair[0].push_error, pair[0].push_failed_at) == (None, None)
+    session.rollback.assert_not_awaited()
+    assert any("release" in r.message and "ConnectionError" in r.message for r in caplog.records)

@@ -108,16 +108,22 @@ def _record(link: PersonLink, error: str | None) -> None:
 
 async def _push_person(session: AsyncSession, user_id: uuid.UUID) -> None:
     """Push one person and record the outcome on their link. Only the error's type is kept."""
+    settled = False  # the outcome is decided inside the lock; leaving it can't change it
     try:
         async with _person_lock(user_id):
             pair = await _read_pair(session, user_id)
             if pair is None:
+                settled = True
                 return
             await _post_copy(pair[0].slm_user_id, pair[1])
             _record(pair[0], None)
             await session.commit()  # inside the lock: the next pusher sees this outcome
-            return
+            settled = True
+        return
     except Exception as exc:
+        if settled:  # the push and its record are done; only releasing the lock failed
+            logger.warning("Could not release a person's push lock after a good push: %s", type(exc).__name__)
+            return
         await session.rollback()
         logger.warning("Could not push a person's copy to the SLM: %s", type(exc).__name__)
         error = type(exc).__name__
