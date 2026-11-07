@@ -8778,6 +8778,7 @@
       "noProjectsHint": "No project is available for new work items. Every work item belongs to an active project, and archived projects can't take new ones. Create or restore a project first.",
       "storyPointsWholeNumber": "Story points must be a whole number, 0 or more.",
       "createdRefreshFailed": "The work item was created, but the list did not refresh.",
+      "fetchFailed": "The backlog could not be loaded.",
       "projectsLoadFailed": "Couldn't load this company's projects.",
       "selectSprint": "Select a sprint…",
       "loadingProjects": "Loading projects…",

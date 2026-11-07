@@ -53,6 +53,12 @@
       />
     </div>
 
+    <BaseAlert v-if="loadFailed" variant="error" :message="t('llc.backlog.fetchFailed')">
+      <template #actions>
+        <button class="underline" data-testid="retry-load" @click="fetchBacklog">{{ t('common.retry') }}</button>
+      </template>
+    </BaseAlert>
+
     <BaseAlert v-if="createdRefreshFailed" variant="warning" :message="t('llc.backlog.createdRefreshFailed')">
       <template #actions>
         <button class="underline" data-testid="retry-refresh" @click="onItemCreated">{{ t('common.retry') }}</button>
@@ -120,7 +126,7 @@
               <span v-else class="sprint-empty">—</span>
             </td>
           </tr>
-          <tr v-if="filteredItems.length === 0 && !isLoading">
+          <tr v-if="filteredItems.length === 0 && !isLoading && !loadFailed">
             <td colspan="8" class="empty-state">{{ t('llc.backlog.noMatch') }}</td>
           </tr>
           <tr v-if="isLoading">
@@ -142,43 +148,15 @@
       @created="onItemCreated"
     />
 
-    <!-- Bulk sprint assign drawer -->
-    <BaseModal
+    <BacklogBulkAssignModal
       :model-value="showBulkAssign"
-      :title="t('llc.backlog.assignToSprint')"
-      :close-label="t('ui.modal.closeDialog')"
-      :width="560"
+      :company-id="companyId"
+      :work-item-ids="Array.from(selectedIds)"
+      :projects="projects"
+      :loading-projects="isLoadingProjects"
       @close="showBulkAssign = false"
-    >
-      <div class="modal-form-body">
-        <p>{{ t('llc.backlog.itemsSelected', { count: selectedIds.size }) }}</p>
-        <div class="form-field">
-          <label>{{ t('llc.backlog.project') }}</label>
-          <select class="form-input" :value="selectedProjectId" :disabled="isLoadingProjects"
-                  @change="onProjectSelect(($event.target as HTMLSelectElement).value)">
-            <option value="">{{ isLoadingProjects ? t('llc.backlog.loadingProjects') : t('llc.backlog.selectProject') }}</option>
-            <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</option>
-          </select>
-        </div>
-        <div class="form-field">
-          <label>{{ t('llc.backlog.sprint') }}</label>
-          <select v-model="bulkSprintId" class="form-input" :disabled="!selectedProjectId || isLoadingSprints">
-            <option value="">{{ isLoadingSprints ? t('llc.backlog.loadingSprints') : t('llc.backlog.selectSprint') }}</option>
-            <option v-for="s in sprints" :key="s.id" :value="s.id">{{ s.name }}</option>
-          </select>
-          <p v-if="selectedProjectId && !isLoadingSprints && sprints.length === 0" class="form-hint">
-            {{ t('llc.backlog.noSprints') }}
-          </p>
-        </div>
-      </div>
-
-      <template #actions>
-        <button class="btn-secondary" @click="showBulkAssign = false">{{ t('common.cancel') }}</button>
-        <button class="btn-primary" :disabled="!bulkSprintId || isBulkAssigning" @click="bulkAssign">
-          {{ isBulkAssigning ? t('llc.backlog.assigning') : t('llc.backlog.assign') }}
-        </button>
-      </template>
-    </BaseModal>
+      @assigned="onBulkAssigned"
+    />
 
     <WorkItemDetail
       v-if="detailItem"
@@ -201,7 +179,8 @@ import { createLogger } from '@/utils/debugUtils'
 import WorkItemDetail from './WorkItemDetail.vue'
 import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
 import BacklogCreateModal from '@/components/llc/BacklogCreateModal.vue'
-import { BaseAlert, BaseAvatar, BaseModal } from '@autobot/ui'
+import BacklogBulkAssignModal from '@/components/llc/BacklogBulkAssignModal.vue'
+import { BaseAlert, BaseAvatar } from '@autobot/ui'
 
 const logger = createLogger('BacklogView')
 const api = useApiClient()
@@ -226,16 +205,9 @@ const showCreateForm = ref(false)
 const createdRefreshFailed = ref(false) // a create worked, the list refresh after it did not (#20930)
 
 const showBulkAssign = ref(false)
-const isBulkAssigning = ref(false)
-const bulkSprintId = ref('')
-
-interface SprintOpt { id: string; name: string; status: string }
 
 const { projects, isLoadingProjects, projectsFailed, loadProjects } = useAssignableProjects(companyId)
-const { items, isLoading, fetchBacklog } = useBacklogItems(companyId, projectFilterId)
-const sprints = ref<SprintOpt[]>([])
-const selectedProjectId = ref('')
-const isLoadingSprints = ref(false)
+const { items, isLoading, loadFailed, fetchBacklog } = useBacklogItems(companyId, projectFilterId)
 
 const filteredItems = computed(() => {
   return items.value.filter(item => {
@@ -321,56 +293,22 @@ function openCreateForm() {
 }
 
 // Refetched, not prepended: the form can pick any project and the list is filtered by the server.
-// Also the Retry of a failed refresh: the form is already closed then.
+// Also the Retry of a failed refresh: the form is already closed then. A refresh a newer request superseded
+// answers true (see useBacklogItems), so an earlier one can never set the warning over a newer outcome (#21032).
 async function onItemCreated() {
   showCreateForm.value = false
   createdRefreshFailed.value = !(await fetchBacklog())
 }
 
-// Cascade picker for bulk sprint assignment: pick a Project, then a Sprint from
-// that project. Only assignable (non-archived) projects and (open) sprints are
-// offered so a user never needs to paste a raw Sprint UUID (#10853).
-async function onProjectSelect(projectId: string) {
-  selectedProjectId.value = projectId
-  bulkSprintId.value = ''
-  sprints.value = []
-  if (!projectId) return
-  isLoadingSprints.value = true
-  try {
-    const result = await api.get<SprintOpt[]>(`/api/llc/projects/${projectId}/sprints`)
-    sprints.value = (result ?? []).filter(
-      sp => sp.status !== 'closed' && sp.status !== 'archived',
-    )
-  } catch (err) {
-    logger.error('Failed to load sprints', err)
-  } finally {
-    isLoadingSprints.value = false
-  }
-}
-
 function openBulkAssign() {
   showBulkAssign.value = true
-  onProjectSelect('')
   if (projects.value.length === 0) loadProjects()
 }
 
-async function bulkAssign() {
-  if (!bulkSprintId.value) return
-  isBulkAssigning.value = true
-  try {
-    await api.post<unknown>(`/api/llc/backlog/bulk-assign-sprint`, {
-      work_item_ids: Array.from(selectedIds.value),
-      sprint_id: bulkSprintId.value,
-    })
-    selectedIds.value = new Set()
-    showBulkAssign.value = false
-    bulkSprintId.value = ''
-    await fetchBacklog()
-  } catch (err) {
-    logger.error('Bulk assign failed', err)
-  } finally {
-    isBulkAssigning.value = false
-  }
+function onBulkAssigned() {
+  selectedIds.value = new Set()
+  showBulkAssign.value = false
+  fetchBacklog()
 }
 
 // Server-side filter, so a change is a refetch rather than a recompute.
@@ -384,7 +322,7 @@ watch(companyId, () => {
   const refetchedByFilter = projectFilterId.value !== ''
   selectedIds.value = new Set()
   projectFilterId.value = ''
-  onProjectSelect('')
+  createdRefreshFailed.value = false
   if (!refetchedByFilter) fetchBacklog()
 })
 
@@ -522,42 +460,6 @@ onMounted(() => {
 .loading-state {
   text-align: center;
   padding: 2rem;
-  color: var(--text-secondary);
-}
-
-/* #10882: overlay/panel/header/footer chrome now provided by @autobot/ui
-   BaseModal; only the body field stack keeps its 1rem gap here. */
-.modal-form-body {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.form-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.form-field label {
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-}
-
-.form-input {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-  width: 100%;
-}
-
-.form-hint {
-  margin: 0.25rem 0 0;
-  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 

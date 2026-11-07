@@ -43,6 +43,9 @@ PROJECT_REQUIRED_TYPES: FrozenSet[WorkItemType] = frozenset(WorkItemType)
 # legacy rows, and the bound is what makes the walk terminate on cyclic data.
 MAX_HIERARCHY_DEPTH = 32
 
+# Ids per ``UPDATE ... WHERE id IN (...)`` when a subtree moves; well under the 32,767 bind-parameter limit.
+SUBTREE_UPDATE_BATCH = 10_000
+
 
 # ``WorkItemService.get`` -- the one place a work item is read by id, so it stays the one place to patch.
 ItemGetter = Callable[..., Awaitable[Optional[LLCWorkItem]]]
@@ -203,13 +206,18 @@ async def move_subtree_to_project(
 ) -> int:
     """Set ``project_id`` on every descendant of *root_id* in *company_id*, at any depth. Returns the count.
 
-    The whole subtree is read before anything is written, so a move can never stop half way down.
+    The whole subtree is read before anything is written, so a move can never stop half way down. The
+    writes go out in batches of ``SUBTREE_UPDATE_BATCH`` ids in the caller's transaction: one ``IN (...)``
+    over more ids than the driver's bind-parameter limit (32,767) would fail the whole move.
     """
     descendants = await _descendant_ids(session, root_id, company_id)
-    if descendants:
+    for start in range(0, len(descendants), SUBTREE_UPDATE_BATCH):
         await session.execute(
             update(LLCWorkItem)
-            .where(LLCWorkItem.id.in_(descendants), LLCWorkItem.company_id == company_id)
+            .where(
+                LLCWorkItem.id.in_(descendants[start : start + SUBTREE_UPDATE_BATCH]),
+                LLCWorkItem.company_id == company_id,
+            )
             .values(project_id=project_id)
         )
     return len(descendants)
