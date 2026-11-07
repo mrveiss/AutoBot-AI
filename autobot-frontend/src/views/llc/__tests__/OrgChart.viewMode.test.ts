@@ -21,7 +21,7 @@ vi.mock('@/plugins/api', () => ({
   useApiClient: () => ({
     get: (url: string, ...rest: unknown[]) =>
       String(url).endsWith('/members')
-        ? Promise.resolve([{ user_id: 'u1', display_name: 'Ada', role: 'owner', viewer_role: 'owner' }])
+        ? Promise.resolve([{ user_id: 'u1', display_name: 'Ada', role: 'owner', viewer_can_manage: true }])
         : get(url, ...rest),
     post,
   }),

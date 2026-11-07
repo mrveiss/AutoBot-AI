@@ -4,7 +4,7 @@
 // who is not a company owner/admin: deleting a contact (the shared-directory delete,
 // `require_company_admin`) and pausing/resuming/terminating an agent (`require_board_role`,
 // owner/admin). Creating or editing a contact and hiring an agent have no such check on the server
-// and are deliberately not gated. The viewer's role is the members list's `viewer_role`.
+// and are deliberately not gated. Who may is the members list's `viewer_can_manage`.
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
@@ -52,7 +52,7 @@ function respond(viewerRole: string | null | 'fail'): void {
     if (url.endsWith('/members')) {
       return viewerRole === 'fail'
         ? Promise.reject(new Error('HTTP 503'))
-        : Promise.resolve([{ user_id: 'u1', display_name: 'Ada', role: 'member', viewer_role: viewerRole }])
+        : Promise.resolve([{ user_id: 'u1', display_name: 'Ada', role: 'member', viewer_can_manage: viewerRole === 'owner' || viewerRole === 'admin' }])
     }
     if (url.includes('/org-chart')) return Promise.resolve({ nodes: [AGENT] })
     if (url.includes('/involved')) return Promise.resolve({ with_role: [CONTACT], unassigned: [] })

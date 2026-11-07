@@ -26,6 +26,8 @@ export interface Member {
   viewer_role?: string | null
   /** The roles the server would let the caller grant or revoke (#20073). */
   viewer_grantable_roles?: string[]
+  /** Whether the company owner/admin writes would let the caller through, as the server decides it (#20542). */
+  viewer_can_manage?: boolean
 }
 
 export interface MembersApi {
@@ -42,18 +44,6 @@ export function canChangeRole(grantable: readonly string[], current: string): bo
 /** Whether *role* is a choice the viewer may make for a member who holds *current* (that one stays shown). */
 export function canGrantRole(grantable: readonly string[], role: string, current: string): boolean {
   return role === current || grantable.includes(role)
-}
-
-/**
- * The roles the server lets change a company's role attachments (`GRANTING_ROLES` in the LLC authz
- * service, checked by `require_company_admin`). Only the viewer's *own* role is compared, never a
- * platform-admin flag: that check does not make a platform admin an owner/admin of a company.
- */
-const COMPANY_ADMIN_ROLES: readonly string[] = ['owner', 'admin']
-
-/** Whether a viewer holding *role* in the company would pass the server's owner/admin check. */
-export function isCompanyAdminRole(role: string | null | undefined): boolean {
-  return role != null && COMPANY_ADMIN_ROLES.includes(role)
 }
 
 function statusOf(err: unknown): number | undefined {
@@ -167,11 +157,11 @@ export function useCompanyMembers(api: MembersApi, companyId: () => string) {
   // Without rows there is no standing to read; see rolesToOffer.
   const standingKnown = computed(() => members.value.length > 0)
 
-  // The caller's own role rides on every row; without rows there is no standing, so it is unknown (null).
-  const viewerRole = computed<string | null>(() => {
+  // The server's own verdict rides on every row; without rows there is no standing, so it is false.
+  const viewerCanManage = computed<boolean>(() => {
     const rows = members.value
-    return Array.isArray(rows) ? (rows[0]?.viewer_role ?? null) : null
+    return Array.isArray(rows) && rows[0]?.viewer_can_manage === true
   })
 
-  return { members, grantableRoles, viewerRole, standingKnown, isLoading, errorMessage, pendingUserId, load, changeRole, removeMember }
+  return { members, grantableRoles, viewerCanManage, standingKnown, isLoading, errorMessage, pendingUserId, load, changeRole, removeMember }
 }

@@ -10,7 +10,7 @@ import { defineComponent, h } from 'vue'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
-import { useCompanyMembers, rolesToOffer, isCompanyAdminRole, type MembersApi } from '../useCompanyMembers'
+import { useCompanyMembers, rolesToOffer, type MembersApi } from '../useCompanyMembers'
 
 vi.mock('@/utils/debugUtils', () => ({
   createLogger: () => ({ warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() }),
@@ -74,11 +74,17 @@ describe('rolesToOffer', () => {
   })
 })
 
-describe('isCompanyAdminRole (#20682)', () => {
-  it.each([['owner', true], ['admin', true], ['member', false], ['lead', false], ['guest', false], [null, false], [undefined, false]])(
-    '%s -> %s',
-    (role, expected) => {
-      expect(isCompanyAdminRole(role as string | null | undefined)).toBe(expected)
-    },
-  )
+describe('useCompanyMembers viewerCanManage (#20542)', () => {
+  const withFlag = (flag: boolean | undefined) => [{ ...row('a'), viewer_role: null, viewer_can_manage: flag }]
+
+  it.each([[true, true], [false, false], [undefined, false]])('reads the server flag %s as %s', async (flag, expected) => {
+    const api = setup(vi.fn().mockResolvedValue(withFlag(flag)) as unknown as MembersApi['get'])
+    await api.load()
+    expect(api.viewerCanManage.value).toBe(expected)
+  })
+
+  it('is false before any rows are known', () => {
+    const api = setup(vi.fn() as unknown as MembersApi['get'])
+    expect(api.viewerCanManage.value).toBe(false)
+  })
 })

@@ -8,8 +8,8 @@
   Shown in Company settings (the mockup's CEO section). Three states the backend keeps apart are
   kept apart here: no designation, a designation whose holder is gone, and a live holder. A refusal
   shows the server's own reason. Whether the viewer may change it is the server's call (it answers
-  with a refusal), but only an owner/admin is offered the controls (#20542): the viewer's own role is the
-  one the members list reports, so a member never sees a control that would be refused. The holder is shown by name, the id second.
+  with a refusal), but only a viewer the server says may manage the company is offered the controls (#20542):
+  the members response carries that verdict, so nobody sees a control that would be refused. The holder is shown by name, the id second.
 -->
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
@@ -17,7 +17,6 @@ import { useI18n } from 'vue-i18n'
 import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseSelectMenu, BaseSpinner } from '@autobot/ui'
 import { useApiClient } from '@/plugins/api'
 import { useCompanyPeople } from '@/composables/llc/useCompanyPeople'
-import { isCompanyAdminRole, useCompanyMembers } from '@/composables/llc/useCompanyMembers'
 import { ceoCandidates, parseCandidate, useCompanyCeo } from '@/composables/llc/useCompanyCeo'
 
 const props = defineProps<{ companyId: string }>()
@@ -26,9 +25,9 @@ const api = useApiClient()
 
 const ceo = useCompanyCeo(api, () => props.companyId)
 const { state, designation, isSaving, actionError } = ceo
-// #20542: set/clear answer 403 to a non-owner/admin; the controls stay hidden until the role is known.
-const standing = useCompanyMembers(api, () => props.companyId)
-const canChange = computed(() => isCompanyAdminRole(standing.viewerRole.value))
+// #20542: set/clear answer 403 to a non-owner/admin; the server says who may (`viewer_can_manage`), so
+// the controls stay hidden until that is known. It rides on the members response the people load makes.
+const canChange = ref(false)
 
 const agents = ref<{ id: string; name: string }[]>([])
 const people = ref<{ user_id: string; name: string }[]>([])
@@ -42,6 +41,7 @@ async function loadPeople(): Promise<void> {
   agents.value = source.agents.value
   people.value = source.humans.value
   peopleFailed.value = source.loadFailed.value
+  canChange.value = source.viewerCanManage.value
   peopleLoading.value = false
 }
 
@@ -92,7 +92,6 @@ async function clear(): Promise<void> {
 
 function reloadAll(): void {
   void ceo.load()
-  void standing.load()
   void loadPeople()
 }
 
@@ -159,8 +158,6 @@ watch(
         </div>
         <BaseBadge variant="success">{{ t('llcSettings.ceo.current') }}</BaseBadge>
       </div>
-
-      <BaseAlert v-if="standing.errorMessage.value" variant="warning" :message="t('llcSettings.ceo.standingUnavailable')" data-testid="ceo-standing-unavailable" />
 
       <BaseAlert v-if="peopleFailed" variant="warning" :message="t('llcSettings.ceo.peopleFailed')" data-testid="ceo-people-failed" />
 

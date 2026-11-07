@@ -1,8 +1,9 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 // #20682: the attach and detach routes answer 403 to anyone who is not an owner/admin of the
-// company, so the org chart must not offer them to anyone else. The viewer's own role is the
-// `viewer_role` the members list reports; until it is known the controls stay hidden.
+// company, so the org chart must not offer them to anyone else. Who may is the members list's
+// server-derived `viewer_can_manage` (it also lets a platform admin with no membership through);
+// until it is known the controls stay hidden.
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
@@ -42,8 +43,8 @@ const PEOPLE = [
 const PROCESSES = [{ role_id: 'r1', role_name: 'Head of Sales', workflow_id: 'wf-1' }]
 const TOOLS = [{ role_id: 'r1', role_name: 'Head of Sales', tool_name: 'web_search' }]
 
-function member(viewerRole: string | null) {
-  return [{ user_id: 'u1', display_name: 'Ada', role: viewerRole ?? 'member', viewer_role: viewerRole }]
+function member(viewerRole: string | null, canManage = viewerRole === 'owner' || viewerRole === 'admin') {
+  return [{ user_id: 'u1', display_name: 'Ada', role: viewerRole ?? 'member', viewer_role: viewerRole, viewer_can_manage: canManage }]
 }
 
 function respond(members: unknown): void {
@@ -92,10 +93,16 @@ describe('OrgChart attachment controls follow the server owner/admin check (#206
     for (const id of CONTROLS) expect(wrapper.find(`[data-testid="${id}"]`).exists()).toBe(false)
   })
 
-  it('hides them from a viewer with no membership (a platform admin the server also refuses)', async () => {
+  it('hides them from a viewer with no membership the server does not let through', async () => {
     respond(member(null))
     const wrapper = await canvasWrapper()
     for (const id of CONTROLS) expect(wrapper.find(`[data-testid="${id}"]`).exists()).toBe(false)
+  })
+
+  it('offers them to a platform admin with no membership, as the server allows (#20682)', async () => {
+    respond(member(null, true))
+    const wrapper = await canvasWrapper()
+    for (const id of CONTROLS) expect(wrapper.find(`[data-testid="${id}"]`).exists()).toBe(true)
   })
 
   it('hides them while the viewer standing cannot be read', async () => {

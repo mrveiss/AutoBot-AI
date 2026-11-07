@@ -356,17 +356,16 @@
               >{{ nodeText(node, 'workflow_id') }}</p>
               <div class="org-meta">
                 <span class="process-role">{{ nodeText(node, 'role_name') }}</span>
-                <!-- #14549: `.stop` keeps the click from also selecting the node (which
-                     opens the workflow builder); OrgChart.vue does the mutation, by event. -->
-                <button
-                  v-if="detachable" type="button"
-                  class="process-detach-btn"
-                  data-testid="process-detach-btn"
-                  :aria-label="processDetachLabel(node)"
+                <!-- #14549: the canvas shows the attachment but could not
+                     change it. `.stop` keeps the click from also selecting the
+                     node, which would navigate to the workflow builder — the
+                     mutation itself is OrgChart.vue's job, reached by event. -->
+                <CanvasDetachButton
+                  v-if="detachable"
+                  kind="process"
+                  :label="processDetachLabel(node)"
                   @click.stop="emit('process-detached', nodeText(node, 'role_id'), nodeText(node, 'workflow_id'))"
-                >
-                  <Icon name="times" />
-                </button>
+                />
               </div>
             </template>
             <!-- #14597: a tool one or more roles carry. `roles` is empty
@@ -386,15 +385,12 @@
                   <span class="tool-role-name">{{ role.role_name }}</span>
                   <!-- #14597: mirrors the org-process detach control — `.stop`
                        keeps the click from also selecting the tool node. -->
-                  <button
-                    v-if="detachable" type="button"
-                    class="tool-detach-btn"
-                    data-testid="tool-detach-btn"
-                    :aria-label="toolDetachLabel(node, role)"
+                  <CanvasDetachButton
+                    v-if="detachable"
+                    kind="tool"
+                    :label="toolDetachLabel(node, role)"
                     @click.stop="emit('tool-detached', role.role_id, nodeText(node, 'tool_name'))"
-                  >
-                    <Icon name="times" />
-                  </button>
+                  />
                 </li>
               </ul>
             </template>
@@ -555,6 +551,7 @@
 
 <script setup lang="ts">
 import Icon, { type IconName } from '@/components/ui/Icon.vue'
+import CanvasDetachButton from './CanvasDetachButton.vue'
 import { ref, reactive, computed, nextTick, useId, watch, toRaw } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useConfirmDialog } from '@/composables/useConfirmDialog';
@@ -2780,24 +2777,6 @@ function runContextMenuAction(action: CanvasContextMenuAction): void {
   color: var(--text-secondary);
   font-family: var(--font-family-mono, monospace);
 }
-.process-detach-btn {
-  margin-inline-start: auto;
-  padding: var(--spacing-1);
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  border-radius: var(--radius-default);
-  line-height: 1;
-}
-.process-detach-btn:hover {
-  color: var(--color-error);
-  background: var(--bg-hover);
-}
-.process-detach-btn:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
 /* #14597: a tool node must not read as "another process node" — colour is
    never the only signal (#13941), so the header background AND the border
    style both differ from every other org node type (solid info for
@@ -2830,23 +2809,6 @@ function runContextMenuAction(action: CanvasContextMenuAction): void {
 .tool-role-name {
   flex: 1;
   font-family: var(--font-family-mono, monospace);
-}
-.tool-detach-btn {
-  padding: var(--spacing-1);
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  border-radius: var(--radius-default);
-  line-height: 1;
-}
-.tool-detach-btn:hover {
-  color: var(--color-error);
-  background: var(--bg-hover);
-}
-.tool-detach-btn:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
 }
 
 /* #14612: multi-select status chip — mirrors `.rule-mode`'s existing
