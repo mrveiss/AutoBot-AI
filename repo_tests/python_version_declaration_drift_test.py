@@ -445,9 +445,9 @@ def test_no_ansible_file_restates_python_interpreter_version_as_a_literal() -> N
         offenders
     )
 
-    role_tasks = (_REPO_ROOT / _ROLE_DIR / "tasks" / "main.yml").read_text(encoding="utf-8")
+    role_tasks = (_REPO_ROOT / _ROLE_DIR / "tasks" / "resolve.yml").read_text(encoding="utf-8")
     assert "lookup('file', role_path" in role_tasks and ".python-version" in role_tasks, (
-        f"{_ROLE_DIR}tasks/main.yml no longer derives python_interpreter_version from .python-version — "
+        f"{_ROLE_DIR}tasks/resolve.yml no longer derives python_interpreter_version from .python-version — "
         "FIX THE SWEEP or the derivation itself"
     )
 
