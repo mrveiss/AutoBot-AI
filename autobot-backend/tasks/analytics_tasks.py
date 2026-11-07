@@ -10,16 +10,20 @@ canonical Celery tasks.  Each task uses ``bind=True`` so it can call
 ``self.update_state()`` for granular progress reporting compatible
 with the existing ``celery_task_status.celery_result_to_status`` helper.
 
-Async workers are wrapped via ``_run_async`` (new event loop per task).
+Async workers are wrapped via ``_run_async`` (the persistent worker loop, #20887).
 """
 
 import asyncio
+import contextvars
 import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from celery import current_task as celery_current_task
+
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.worker_loop import run_in_worker_loop
 from celery_app import celery_app
 
 logger = get_logger(__name__)
@@ -65,22 +69,27 @@ async def _save_path_checkpoint(path: str, result: dict, source_id: str | None =
         pass
 
 
-def _run_async(coro):
-    """Run *coro* in a fresh event loop (Celery workers are sync).
+async def _drain_after(coro):
+    """Await *coro*, then drain the fire-and-forget tasks it spawned (GH#8434)."""
+    result = await coro
+    current = asyncio.current_task()
+    pending = [t for t in asyncio.all_tasks() if t is not current and not t.done()]
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
+    return result
 
-    GH#8434: drain any fire-and-forget tasks (asyncio.create_task) spawned
-    inside *coro* before closing the loop so they are not orphaned.
-    """
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        result = loop.run_until_complete(coro)
-        pending = asyncio.all_tasks(loop)
-        if pending:
-            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-        return result
-    finally:
-        loop.close()
+
+# #20887: Celery keeps the running task's request in thread-local storage, and the
+# coroutine now runs on the worker-loop thread. The id is captured on the task thread
+# and travels in this ContextVar (call_soon_threadsafe copies the caller's context).
+_TASK_ID: contextvars.ContextVar[str | None] = contextvars.ContextVar("analytics_task_id", default=None)
+
+
+def _run_async(coro):
+    """Run *coro* on the worker's persistent loop (Celery workers are sync, #20887)."""
+    current = celery_current_task
+    _TASK_ID.set(getattr(getattr(current, "request", None), "id", None))
+    return run_in_worker_loop(_drain_after(coro))
 
 
 def _progress(self, step: str, pct: float, started_at: str | None = None) -> None:
@@ -88,7 +97,7 @@ def _progress(self, step: str, pct: float, started_at: str | None = None) -> Non
     meta: dict = {"step": step, "progress": pct}
     if started_at:
         meta["started_at"] = started_at
-    self.update_state(state="PROGRESS", meta=meta)
+    self.update_state(task_id=_TASK_ID.get(), state="PROGRESS", meta=meta)
 
 
 def _wrap(result: object, started: str) -> dict:

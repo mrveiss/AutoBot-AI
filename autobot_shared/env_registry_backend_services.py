@@ -595,3 +595,4 @@ register_env_var(
 )
 
 from autobot_shared import env_registry_chat_attachments  # noqa: E402,F401 -- registers #20195 vars; see its docstring
+from autobot_shared import env_registry_worker_loop  # noqa: E402,F401 -- registers #20887 vars

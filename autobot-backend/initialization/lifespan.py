@@ -2281,10 +2281,10 @@ def create_lifespan_manager():
         loop.set_default_executor(_executor)
         logger.info("🧵 Bounded thread pool configured (max %d workers)", MAX_WORKER_THREADS)
 
-        # Register the running event loop for sync-endpoint audit scheduling (#1568)
-        from middleware.audit_middleware import set_main_event_loop
+        # Register the running event loop for sync-endpoint audit scheduling (#1568), run_or_schedule (#20887)
+        from initialization.main_loop import register_main_loops
 
-        set_main_event_loop(asyncio.get_running_loop())
+        register_main_loops(asyncio.get_running_loop())
 
         # Phase 1: Critical initialization (BLOCKING)
         await initialize_critical_services(app)
