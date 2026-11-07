@@ -53,6 +53,7 @@ from .safety_limits import (
     WorkflowLimits,
 )
 from .state_machine import AutomationWorkflowStateMachine, WorkflowPhase
+from .step_approval_gate import StepApprovalGate
 from .step_evaluator import WorkflowStepEvaluator
 from .vision_step_handler import VISION_STEP_TYPES, execute_vision_step
 
@@ -187,6 +188,9 @@ def _resolve_step_references(config: dict, step_results: dict) -> dict:
 
 class WorkflowExecutor:
     """Handles workflow step execution and processing"""
+
+    #: Files a waiting step in the approvals inbox (#20917); a test replaces it on the instance.
+    step_approvals = StepApprovalGate()
 
     def __init__(
         self,
@@ -345,7 +349,6 @@ class WorkflowExecutor:
 
         current_step = workflow.steps[workflow.current_step_index]
 
-        # Check dependencies
         if not self._check_step_dependencies(workflow, current_step):
             logger.warning("Step %s dependencies not met", current_step.step_id)
             current_step.status = WorkflowStepStatus.SKIPPED
@@ -353,16 +356,13 @@ class WorkflowExecutor:
             await self.process_next_step(workflow, workflows)
             return
 
-        # Evaluate step with LLM judges if enabled (Issue #620: extracted)
         if not await self._evaluate_step_with_judges(workflow, current_step):
             return
 
-        # Update step status
         current_step.status = WorkflowStepStatus.WAITING_APPROVAL
         current_step.started_at = datetime.now(tz=timezone.utc)
-
-        # Send step confirmation request to frontend
         await self._send_step_confirmation_request(workflow, current_step)
+        await self.step_approvals.file(workflow, current_step)
 
     async def _send_step_confirmation_request(self, workflow: ActiveWorkflow, step: WorkflowStep) -> None:
         """Send step confirmation request to frontend"""
@@ -757,7 +757,7 @@ class WorkflowExecutor:
 
         # Issue #390: Clear any pending approval when workflow is cancelled
         self.clear_pending_approval(workflow.workflow_id)
-
+        await self.step_approvals.withdraw(workflow.workflow_id)
         self._record_cancellation_metrics(workflow, workflows)
 
         # Issue #2159: Clean up cost tracker entry to prevent memory leak

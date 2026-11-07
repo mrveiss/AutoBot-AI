@@ -107,6 +107,7 @@ class WorkflowController:
         """Approve and execute a workflow step"""
         # Record Prometheus workflow approval metric, only once the executor accepted the step (#20918)
         workflow_type = "automated_workflow"
+        await self.executor.step_approvals.withdraw(workflow.workflow_id, step_id)
         await self.executor.approve_and_execute_step(workflow, step_id, workflows)
         self.prometheus_metrics.record_workflow_approval(workflow_type=workflow_type, decision="approved")
         return True
@@ -120,6 +121,7 @@ class WorkflowController:
         """Skip a workflow step"""
         # Record Prometheus workflow approval metric (rejected/skipped)
         workflow_type = "automated_workflow"
+        await self.executor.step_approvals.withdraw(workflow.workflow_id, step_id)
         await self.executor.skip_step(workflow, step_id, workflows)
         self.prometheus_metrics.record_workflow_approval(workflow_type=workflow_type, decision="skipped")
         return True

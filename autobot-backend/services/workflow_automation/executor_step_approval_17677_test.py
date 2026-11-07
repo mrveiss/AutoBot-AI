@@ -144,6 +144,19 @@ def test_second_approve_while_executing_does_not_run_the_step_again(harness):
 
 
 @pytest.mark.parametrize("action", ["approve_step", "skip_step"])
+def test_decision_for_a_step_still_executing_is_refused_and_changes_nothing(harness, action):
+    """#20918: approve and skip both need the step parked in WAITING_APPROVAL, not just named."""
+    h, client = harness
+    h.park_current_step()
+    h.workflow.steps[0].status = WorkflowStepStatus.EXECUTING
+    response = h.control(client, action, "s1")
+    assert response.status_code == 409
+    assert h.ran == []
+    assert h.statuses == [WorkflowStepStatus.EXECUTING, WorkflowStepStatus.PENDING]
+    assert h.workflow.current_step_index == 0
+
+
+@pytest.mark.parametrize("action", ["approve_step", "skip_step"])
 def test_decision_for_the_wrong_step_is_refused_and_changes_nothing(harness, action):
     """#20918: a step id that is not the waiting step is a 409, never `success: true`."""
     h, client = harness

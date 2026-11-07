@@ -321,7 +321,7 @@
         "network": "Network error during upload",
         "cancelled": "Upload cancelled",
         "fileTooLarge": "This file is too large. The maximum size is {maxMb} MB.",
-        "quotaExceeded": "Your storage limit of {limitMb} MB is reached. {liveMb} MB is in use and {remainingMb} MB is left.",
+        "quotaExceeded": "This file is larger than the room you have left. Your storage limit is {limitMb} MB, {liveMb} MB is in use, and {remainingMb} MB is left.",
         "quotaExceededPendingRemoval": "Your storage limit of {limitMb} MB is reached. {liveMb} MB is in use, and {pendingMb} MB of deleted files still count until their removal is approved after human review.",
         "unknown": "Upload failed"
       },
@@ -4866,6 +4866,15 @@
       "capabilities": "Capabilities",
       "unknownPhase": "Unknown Phase",
       "notScored": "Not scored",
+      "status": {
+        "complete": "Complete",
+        "mostly_complete": "Mostly complete",
+        "in_progress": "In progress",
+        "incomplete": "Incomplete",
+        "promoted": "Promoted",
+        "eligible": "Eligible",
+        "blocked": "Blocked"
+      },
       "noneScored": "No phases scored"
     }
   },
@@ -6755,6 +6764,10 @@
     "envelope": {
       "approve": "Approve",
       "reject": "Reject"
+    },
+    "inbox": {
+      "waitingForYou": "Waiting for you",
+      "skipStep": "Skip step"
     }
   },
   "research": {
@@ -8284,7 +8297,12 @@
       "preferences": "settings options language theme",
       "budgetPolicies": "cost spending limits money",
       "systemHealth": "status uptime diagnostics monitoring",
-      "vault": "credentials keys passwords tokens vault"
+      "vault": "credentials keys passwords tokens vault",
+      "approvals": "approve reject waiting pending decisions workflow step"
+    },
+    "approvals": {
+      "aria": "Approvals",
+      "tip": "Approvals — what is waiting for you"
     },
     "homeAria": "AutoBot home",
     "vaultTip": "Secrets — stored keys and credentials",
@@ -10344,6 +10362,18 @@
     }
   },
   "transcriber": {
+    "asr": {
+      "heading": "Speech-to-text provider",
+      "help": "Choose which cloud provider transcribes recordings. Only providers with a server-side API key configured are selectable. Selecting a cloud provider means audio is sent to that provider for processing.",
+      "loading": "Loading providers…",
+      "empty": "No speech-to-text providers are available. Configure a provider API key on the server to enable cloud transcription.",
+      "activeProvider": "Active provider",
+      "selectPlaceholder": "Select a provider…",
+      "optionNotConfigured": "{name} — not configured",
+      "saving": "Saving…",
+      "notConfigured": "not configured",
+      "notConfiguredHelp": "Providers marked \"not configured\" require a server-side API key before they can be selected."
+    },
     "layout": {
       "settingsButton": "Settings",
       "hideSettingsButton": "Hide settings",

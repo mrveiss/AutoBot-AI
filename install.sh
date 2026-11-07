@@ -651,11 +651,11 @@ INVENTORY
 
     if [[ ! -f "${SECRETS_FILE}" ]] || [[ "${REINSTALL}" == true ]]; then
         info "Writing secrets file..."
-        local secret_key encryption_key hmac_api_key_secret local_ip network_subnet network_gateway autobot_encryption_key
+        local secret_key encryption_key hmac_api_key_secret local_ip network_subnet network_gateway autobot_encryption_key autobot_internal_api_key
         autobot_encryption_key=$(if [[ -f "${SECRETS_FILE}" ]]; then grep -oP '^AUTOBOT_ENCRYPTION_KEY=\K.+' "${SECRETS_FILE}" || true; else openssl rand -hex 32; fi)  # #19864: new installs only; a reinstall keeps what it has
         secret_key=$(openssl rand -hex 32) encryption_key=$(openssl rand -hex 32) hmac_api_key_secret=$(grep -oP '^SLM_HMAC_API_KEY_SECRET=\K.+' "${SECRETS_FILE}" 2>/dev/null | head -1 || true); hmac_api_key_secret=${hmac_api_key_secret:-$(openssl rand -hex 32)}  # #16299, #19120: a reinstall keeps an existing pepper
-        # Issue #2758: detect the machine's primary outbound IP so that
-        # SLM_EXTERNAL_URL is set correctly and not left to the Python fallback.
+        autobot_internal_api_key=$(grep -oP '^AUTOBOT_INTERNAL_API_KEY=\K.+' "${SECRETS_FILE}" 2>/dev/null | head -1 || true); autobot_internal_api_key=${autobot_internal_api_key:-$(openssl rand -hex 32)}  # #10200: the SLM's canonical key (#20750); a reinstall keeps it
+        # Issue #2758: detect the primary outbound IP so SLM_EXTERNAL_URL is set, not left to the Python fallback.
         local_ip="$(detect_local_ip)"
         detect_network
         (umask 077; cat > "${SECRETS_FILE}") << EOF  # created 0600, never briefly world-readable under the tree's 022
@@ -663,6 +663,7 @@ SLM_SECRET_KEY=${secret_key}
 SLM_ENCRYPTION_KEY=${encryption_key}
 AUTOBOT_ENCRYPTION_KEY=${autobot_encryption_key}
 SLM_HMAC_API_KEY_SECRET=${hmac_api_key_secret}
+AUTOBOT_INTERNAL_API_KEY=${autobot_internal_api_key}
 SLM_ADMIN_PASSWORD=${ADMIN_PASSWORD}
 SLM_EXTERNAL_URL=https://${local_ip}
 SLM_HOST=${local_ip}
@@ -674,11 +675,9 @@ EOF
         success "  Secrets written to ${SECRETS_FILE}"
     else
         ADMIN_PASSWORD=$(grep -oP 'SLM_ADMIN_PASSWORD=\K.*' "${SECRETS_FILE}" 2>/dev/null || echo "${ADMIN_PASSWORD}")
-        # Refresh IP/network fields even when preserving static secrets (#3266).
-        # Stale IPs remain when the machine's address changes between installs.
+        # Refresh IP/network fields even when preserving static secrets (#3266): a changed address leaves stale IPs.
         info "  Refreshing IP/network fields in preserved secrets file..."
-        local local_ip network_subnet network_gateway
-        local_ip="$(detect_local_ip)"
+        local local_ip network_subnet network_gateway; local_ip="$(detect_local_ip)"
         detect_network
         # Upsert, as plain sed s/// does nothing on a file written before the key existed (#3194).
         _upsert_secrets_key() {
@@ -693,6 +692,7 @@ EOF
         _upsert_secrets_key "SLM_HOST"         "${local_ip}"          "${SECRETS_FILE}"
         _upsert_secrets_key "NETWORK_SUBNET"   "${network_subnet}"    "${SECRETS_FILE}"
         _upsert_secrets_key "NETWORK_GATEWAY"  "${network_gateway}"   "${SECRETS_FILE}"
+        grep -q '^AUTOBOT_INTERNAL_API_KEY=.' "${SECRETS_FILE}" || _upsert_secrets_key "AUTOBOT_INTERNAL_API_KEY" "$(openssl rand -hex 32)" "${SECRETS_FILE}"  # #10200: only when absent or empty
         success "  Secrets file preserved (IP/network fields updated to ${local_ip})"
     fi
 
