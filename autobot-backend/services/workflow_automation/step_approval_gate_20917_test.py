@@ -21,6 +21,7 @@ from starlette.testclient import TestClient
 
 from auth_middleware import get_current_user
 from services import approval_execution
+from testkit.fake_async_session import FakeAsyncSession, FakeResult
 
 from . import executor as executor_module
 from . import routes
@@ -41,22 +42,6 @@ class _Messenger:
     async def send_message(self, session_id, message):
         self.sent.append(message)
         return True
-
-
-class _Result:
-    def __init__(self, value):
-        self.value = value
-
-    def scalar_one_or_none(self):
-        return self.value
-
-    def scalars(self):
-        return SimpleNamespace(all=lambda: [])
-
-
-class _Db:
-    async def execute(self, _stmt):
-        return _Result("alice")
 
 
 class _Service:
@@ -112,7 +97,7 @@ def _make(monkeypatch, owner_id):
 
     @asynccontextmanager
     async def _session():
-        yield _Db()
+        yield FakeAsyncSession(default_result=FakeResult(["alice"]))
 
     monkeypatch.setattr(gate, "get_async_session_factory", lambda: lambda: _session())
     monkeypatch.setattr(gate, "ApprovalGateService", _Service)
