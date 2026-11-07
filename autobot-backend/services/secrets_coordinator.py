@@ -500,6 +500,18 @@ class SecretsCoordinator:
             session, secret_id=secret_id, new_root_key=new_root_key, actor_vaults={vault}
         )
 
+    async def service_describe_dependencies(
+        self, session: AsyncSession, *, secret_id: uuid.UUID, vault: VaultRef
+    ) -> list[SecretDependency]:
+        """What depends on a system-vault secret, for a service identity's delete (#20640)."""
+        self._assert_system_vault(vault)
+        owner_vault = await self._owner_vault(session, secret_id)
+        if owner_vault.kind is not VaultKind.SYSTEM:
+            raise SecretAccessError(
+                f"service may only read dependents of system-vault secrets; found owner {owner_vault.to_str()!r}"
+            )
+        return await SecretDependencyService().what_depends_on(session, secret_id=secret_id)
+
     async def service_delete(self, session: AsyncSession, *, secret_id: uuid.UUID, vault: VaultRef) -> None:
         """Delete a system-vault secret on behalf of a service identity."""
         self._assert_system_vault(vault)
