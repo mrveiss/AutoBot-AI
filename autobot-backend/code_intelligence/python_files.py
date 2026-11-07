@@ -5,14 +5,31 @@
 """The one Python-file collector shared by the code-intelligence analyzers (#18731).
 
 The anti-pattern suite, the clone detector and the pattern analyzer each
-carried their own copy of this walk; they now delegate here.
+carried their own copy of this walk; they now delegate here. The exclusion
+predicate (``is_excluded``) is shared too, so the cached (async) and
+uncached (sync) discovery paths cannot disagree (#20493).
 """
 
 from pathlib import Path
 from typing import Iterable, List
 
 
+def is_excluded(path: Path, root: Path, excluded: Iterable[str]) -> bool:
+    """True if a component of *path* **below** *root* is in *excluded*.
+
+    Matching the absolute path asked whether an excluded name appears anywhere
+    in it, including in the root itself, so a tree checked out below e.g. a
+    ``venv`` directory scanned as empty (#13602, #20493).
+    """
+    try:
+        parts = path.relative_to(root).parts
+    except ValueError:
+        parts = path.parts
+    return not set(excluded).isdisjoint(parts)
+
+
 def collect_python_files(directory: str, exclude_dirs: Iterable[str]) -> List[str]:
-    """Return sorted ``*.py`` paths under *directory*, skipping any path with an excluded part."""
+    """Return sorted ``*.py`` paths under *directory* at any depth, minus excluded parts."""
+    root = Path(directory)
     excluded = set(exclude_dirs)
-    return sorted(str(py_file) for py_file in Path(directory).rglob("*.py") if not excluded.intersection(py_file.parts))
+    return sorted(str(py_file) for py_file in root.rglob("*.py") if not is_excluded(py_file, root, excluded))
