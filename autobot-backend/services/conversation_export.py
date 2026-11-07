@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
+from chat_history.session_lease import session_lease
 from security.session_owner_errors import SessionOwnerUnreadable
 from security.session_ownership import build_owner_metadata
 
@@ -177,12 +178,13 @@ def _validate_import_document(document: Dict[str, Any]) -> Tuple[bool, str]:
 
 
 async def _session_exists(chat_history_manager, session_id: str) -> bool:
-    """Return True when the session already exists in storage."""
-    try:
-        messages = await chat_history_manager.load_session(session_id)
-        return len(messages) > 0
-    except Exception:
-        return False
+    """True when the session already exists in storage.
+
+    Fails closed: a storage error propagates, because "could not tell" must never read as "no such
+    session" when the answer decides whether an import may write into someone else's conversation.
+    """
+    messages = await chat_history_manager.load_session(session_id)
+    return len(messages) > 0
 
 
 def _apply_suffix_to_session_id(session_id: str, suffix: str) -> str:
@@ -227,59 +229,66 @@ async def import_conversation(
     valid, err = _validate_import_document(document)
     if not valid:
         return {"success": False, "session_id": None, "conflict": False, "message": err}
+    # The existence and ownership checks and the save are one step under the session's lease (#20908).
+    async with session_lease(document["session_id"], "import"):
+        return await _import_under_lease(chat_history_manager, document, on_conflict, user_data)
 
+
+def _conflict_result(session_id: str, message: str) -> Dict[str, Any]:
+    return {"success": False, "session_id": session_id, "conflict": True, "message": message}
+
+
+async def _owner_refusal(chat_history_manager, session_id: str, user_data: Dict[str, Any] | None):
+    """A refusal result when the importer may not write into the existing session, else None.
+
+    #14026: an import carrying a known session_id could write into another user's conversation. An
+    owner that cannot be read is refused, never treated as "unowned" (#14033).
+    """
+    try:
+        existing_owner = await chat_history_manager.get_session_owner(session_id)
+    except SessionOwnerUnreadable:
+        existing_owner = _UNREADABLE_OWNER
+    importer = (user_data or {}).get("username")
+    if existing_owner is _UNREADABLE_OWNER or (existing_owner is not None and existing_owner != importer):
+        logger.warning("Import refused: %s may not write session %s", importer or "<anonymous>", session_id)
+        return _conflict_result(session_id, f"Session {session_id!r} belongs to another user")
+    return None
+
+
+async def _import_under_lease(
+    chat_history_manager, document: Dict[str, Any], on_conflict: str, user_data: Dict[str, Any] | None
+) -> Dict[str, Any]:
+    """Resolve the conflict policy against the stored session, then save; the caller holds the lease."""
     session_id: str = document["session_id"]
-    messages: List[Dict[str, Any]] = document.get("messages", [])
-    name: str = document.get("name", "")
-
     exists = await _session_exists(chat_history_manager, session_id)
+    if exists and on_conflict == "skip":
+        logger.info("Import skipped: session %s already exists", session_id)
+        return _conflict_result(session_id, f"Session {session_id!r} already exists (on_conflict=skip)")
+    if exists and on_conflict == "rename":
+        session_id = _apply_suffix_to_session_id(session_id, f"imported-{int(time.time())}")
+        logger.info("Import renamed to %s due to conflict", session_id)
+    elif exists:
+        refusal = await _owner_refusal(chat_history_manager, session_id, user_data)
+        if refusal is not None:
+            return refusal
+    return await _save_import(chat_history_manager, document, session_id, exists, on_conflict, user_data)
 
-    if exists:
-        if on_conflict == "skip":
-            logger.info("Import skipped: session %s already exists", session_id)
-            return {
-                "success": False,
-                "session_id": session_id,
-                "conflict": True,
-                "message": f"Session {session_id!r} already exists (on_conflict=skip)",
-            }
-        if on_conflict == "replace":
-            # #14026: "replace" overwrote whatever was already at this
-            # session_id with no ownership check at all, so an import carrying a
-            # known session_id could destroy another user's conversation.
-            try:
-                existing_owner = await chat_history_manager.get_session_owner(session_id)
-            except SessionOwnerUnreadable:
-                existing_owner = _UNREADABLE_OWNER
 
-            importer = (user_data or {}).get("username")
-            if existing_owner is _UNREADABLE_OWNER or (existing_owner is not None and existing_owner != importer):
-                logger.warning(
-                    "Import refused: %s may not replace session %s",
-                    importer or "<anonymous>",
-                    session_id,
-                )
-                return {
-                    "success": False,
-                    "session_id": session_id,
-                    "conflict": True,
-                    "message": f"Session {session_id!r} belongs to another user",
-                }
-
-        if on_conflict == "rename":
-            suffix = str(int(time.time()))
-            session_id = _apply_suffix_to_session_id(session_id, f"imported-{suffix}")
-            logger.info("Import renamed to %s due to conflict", session_id)
-
-    # #14026: stamp ownership through the canonical builder, so an imported
-    # session carries the same owner fields as one created by POST /chat/sessions.
-    owner_metadata = build_owner_metadata(user_data)
-
+async def _save_import(
+    chat_history_manager,
+    document: Dict[str, Any],
+    session_id: str,
+    exists: bool,
+    on_conflict: str,
+    user_data: Dict[str, Any] | None,
+) -> Dict[str, Any]:
+    """Save the imported messages under *session_id*, stamped with the importer as owner (#14026)."""
+    messages: List[Dict[str, Any]] = document.get("messages", [])
     await chat_history_manager.save_session(
         session_id=session_id,
         messages=messages,
-        name=name,
-        metadata=owner_metadata or None,
+        name=document.get("name", ""),
+        metadata=build_owner_metadata(user_data) or None,
         replace=exists and on_conflict == "replace",  # the explicit replace; a snapshot never drops messages (#20862)
     )
     logger.info("Imported conversation %s (%d messages)", session_id, len(messages))

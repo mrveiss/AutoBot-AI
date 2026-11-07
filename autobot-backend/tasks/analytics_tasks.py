@@ -15,12 +15,11 @@ Async workers are wrapped via ``_run_async`` (the persistent worker loop, #20887
 
 import asyncio
 import contextvars
+import functools
 import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-
-from celery import current_task as celery_current_task
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.worker_loop import run_in_worker_loop
@@ -69,26 +68,52 @@ async def _save_path_checkpoint(path: str, result: dict, source_id: str | None =
         pass
 
 
+# One fresh token per ``_drain_after`` call. A task spawned while the coroutine runs inherits it, so the
+# drain waits only for its own run's tasks; the worker loop is shared and persistent, and other runs'
+# (or other subsystems') tasks live on it too.
+_OP: contextvars.ContextVar[object | None] = contextvars.ContextVar("analytics_op", default=None)
+
+
 async def _drain_after(coro):
-    """Await *coro*, then drain the fire-and-forget tasks it spawned (GH#8434)."""
+    """Await *coro*, then drain the fire-and-forget tasks it spawned (GH#8434), and only those."""
+    token = object()
+    _OP.set(token)
     result = await coro
     current = asyncio.current_task()
-    pending = [t for t in asyncio.all_tasks() if t is not current and not t.done()]
+    pending = [
+        t for t in asyncio.all_tasks() if t is not current and not t.done() and t.get_context().get(_OP) is token
+    ]
     if pending:
         await asyncio.gather(*pending, return_exceptions=True)
     return result
 
 
 # #20887: Celery keeps the running task's request in thread-local storage, and the
-# coroutine now runs on the worker-loop thread. The id is captured on the task thread
-# and travels in this ContextVar (call_soon_threadsafe copies the caller's context).
+# coroutine now runs on the worker-loop thread. The id is bound on the task thread by
+# ``_binds_task_id`` and travels in this ContextVar (call_soon_threadsafe copies the caller's context).
 _TASK_ID: contextvars.ContextVar[str | None] = contextvars.ContextVar("analytics_task_id", default=None)
+
+
+def _binds_task_id(func):
+    """Bind ``_TASK_ID`` from ``self.request.id`` for the whole task body, then restore the previous value.
+
+    Without it the first ``_progress`` call, made before ``_run_async``, would address the previous task
+    run on this thread.
+    """
+
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        token = _TASK_ID.set(getattr(getattr(self, "request", None), "id", None))
+        try:
+            return func(self, *args, **kwargs)
+        finally:
+            _TASK_ID.reset(token)
+
+    return wrapper
 
 
 def _run_async(coro):
     """Run *coro* on the worker's persistent loop (Celery workers are sync, #20887)."""
-    current = celery_current_task
-    _TASK_ID.set(getattr(getattr(current, "request", None), "id", None))
     return run_in_worker_loop(_drain_after(coro))
 
 
@@ -135,6 +160,7 @@ async def _scan_root_or_refusal(source_id: "str | None") -> "tuple[Path | None, 
 
 
 @celery_app.task(bind=True, name="analytics.run_import_tree_analysis")
+@_binds_task_id
 def run_import_tree_analysis(self, source_id: "str | None" = None) -> dict:
     """Celery wrapper for import tree background analysis (#6505).
 
@@ -188,6 +214,7 @@ def run_import_tree_analysis(self, source_id: "str | None" = None) -> dict:
 
 
 @celery_app.task(bind=True, name="analytics.run_duplicate_analysis")
+@_binds_task_id
 def run_duplicate_analysis(self, source_id: "str | None" = None) -> dict:
     """Celery wrapper for duplicate code background analysis (#6505).
 
@@ -222,6 +249,7 @@ def run_duplicate_analysis(self, source_id: "str | None" = None) -> dict:
 
 
 @celery_app.task(bind=True, name="analytics.run_dependency_analysis")
+@_binds_task_id
 def run_dependency_analysis(self, source_id: "str | None" = None) -> dict:
     """Celery wrapper for dependency background analysis (#6505).
 
@@ -280,6 +308,7 @@ def run_dependency_analysis(self, source_id: "str | None" = None) -> dict:
 
 
 @celery_app.task(bind=True, name="analytics.run_pattern_analysis")
+@_binds_task_id
 def run_pattern_analysis(self, request_data: dict) -> dict:
     """Celery wrapper for pattern analysis background job (#6505, GH#8439).
 
@@ -336,6 +365,7 @@ def run_pattern_analysis(self, request_data: dict) -> dict:
 
 
 @celery_app.task(bind=True, name="analytics.run_bug_prediction_analysis")
+@_binds_task_id
 def run_bug_prediction_analysis(self, path: str, include_pattern: str, limit: int) -> dict:
     """Celery wrapper for bug prediction background analysis (#6505)."""
     started = datetime.now(tz=timezone.utc).isoformat()
@@ -358,6 +388,7 @@ def run_bug_prediction_analysis(self, path: str, include_pattern: str, limit: in
 
 
 @celery_app.task(bind=True, name="analytics.run_security_analysis")
+@_binds_task_id
 def run_security_analysis(self, path: str) -> dict:
     """Celery wrapper for security score background analysis (#6505)."""
     started = datetime.now(tz=timezone.utc).isoformat()
@@ -399,6 +430,7 @@ def run_security_analysis(self, path: str) -> dict:
 
 
 @celery_app.task(bind=True, name="analytics.run_anti_pattern_analysis")
+@_binds_task_id
 def run_anti_pattern_analysis(self, root_path: str) -> dict:
     """Celery wrapper for anti-pattern background analysis (#12365).
 
@@ -428,6 +460,7 @@ def run_anti_pattern_analysis(self, root_path: str) -> dict:
 
 
 @celery_app.task(bind=True, name="analytics.run_dashboard_analysis")
+@_binds_task_id
 def run_dashboard_analysis(self) -> dict:
     """Celery wrapper for dashboard overview background analysis (#6505)."""
     started = datetime.now(tz=timezone.utc).isoformat()
@@ -480,6 +513,7 @@ def run_dashboard_analysis(self) -> dict:
 
 
 @celery_app.task(bind=True, name="analytics.run_pattern_summary_analysis")
+@_binds_task_id
 def run_pattern_summary_analysis(self, path: str) -> dict:
     """Celery wrapper for pattern summary background job (#6505)."""
     from api.codebase_analytics.endpoints.pattern_analysis import _ANALYSIS_TIMEOUT
