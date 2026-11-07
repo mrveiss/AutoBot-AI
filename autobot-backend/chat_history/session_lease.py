@@ -13,8 +13,8 @@ heartbeat, compare-and-delete release). On top of it:
 
 * a per-session ``asyncio.Lock`` is only a fair local queue in front of the Redis lease;
 * a contended writer waits up to ``AUTOBOT_CHAT_LEASE_WAIT_S`` and then raises
-  :class:`SessionLeaseTimeout` naming the holder; it is never fail-fast, never last-writer-wins
-  and never written unlocked;
+  :class:`SessionLeaseTimeout` naming the holder (in the exception and the server log, never in a
+  response); it is never fail-fast, never last-writer-wins and never written unlocked;
 * a fencing generation (``INCR`` per acquire, floored by the generation stored in the file) is
   written into the file; a write carrying a generation lower than the file's is rejected with
   :class:`StaleGenerationError`;

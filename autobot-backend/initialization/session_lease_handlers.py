@@ -5,9 +5,10 @@
 """One 409 for a chat session another writer holds (#20862).
 
 A write to a chat session raises ``SessionLeaseTimeout`` (the lease stayed held for the whole bounded
-wait, holder named) or ``StaleGenerationError`` (a newer write landed first). Both are retryable
-conflicts, not server faults, so every route answers them here with the same status and a detail that
-names the holder, instead of each route mapping them itself or leaving a 500.
+wait) or ``StaleGenerationError`` (a newer write landed first). Both are retryable
+conflicts, not server faults, so every route answers them here with the same status instead of each route
+mapping them itself or leaving a 500. The body carries a stable code and a generic message only: the holder
+string names a node hostname and pid, which a client must not see, so it stays in the server log.
 """
 
 from fastapi import FastAPI, Request
@@ -15,7 +16,7 @@ from fastapi.responses import JSONResponse
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import sanitize_log_value
-from chat_history.session_lease import ChatFileUnreadable, SessionLeaseError
+from chat_history.session_lease import ChatFileUnreadable, SessionLeaseError, SessionLeaseTimeout
 
 logger = get_logger(__name__)
 
@@ -23,6 +24,15 @@ logger = get_logger(__name__)
 CHAT_SESSION_UNREADABLE = {
     "code": "chat_session_unreadable",
     "message": "The stored chat session could not be read, so it was not changed.",
+}
+
+CHAT_SESSION_BUSY = {
+    "code": "chat_session_busy",
+    "message": "The chat session is being written by another request. Try again shortly.",
+}
+CHAT_SESSION_CONFLICT = {
+    "code": "chat_session_conflict",
+    "message": "The chat session changed while it was being written, so nothing was saved. Try again.",
 }
 
 
@@ -47,4 +57,5 @@ def register_session_lease_handlers(app: FastAPI) -> None:
     @app.exception_handler(SessionLeaseError)
     async def _session_conflict(request: Request, exc: SessionLeaseError) -> JSONResponse:
         logger.warning("chat session write conflict on %s %s: %s", *_loggable(request, exc))
-        return JSONResponse(status_code=409, content={"detail": str(exc)})
+        detail = CHAT_SESSION_BUSY if isinstance(exc, SessionLeaseTimeout) else CHAT_SESSION_CONFLICT
+        return JSONResponse(status_code=409, content={"detail": detail})

@@ -6,11 +6,15 @@
 
 import pytest
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from chat_history.session_lease import ChatFileUnreadable, SessionLeaseLost, SessionLeaseTimeout, StaleGenerationError
 from initialization.session_lease_handlers import register_session_lease_handlers
+
+_HOST, _PID = "node-zq7-internal", 48211
+_HOLDER = "%s-%d:save_session:aa" % (_HOST, _PID)
 
 
 @pytest.fixture()
@@ -21,7 +25,7 @@ def client():
     @app.get("/busy")
     @with_error_handling(category=ErrorCategory.SERVER_ERROR, operation="busy", error_code_prefix="T")
     async def busy():
-        raise SessionLeaseTimeout("s1", "backend-2-1:save_session:aa", 30.0)
+        raise SessionLeaseTimeout("s1", _HOLDER, 30.0)
 
     @app.get("/stale")
     @with_error_handling(category=ErrorCategory.SERVER_ERROR, operation="stale", error_code_prefix="T")
@@ -46,22 +50,44 @@ def client():
     return TestClient(app, raise_server_exceptions=False)
 
 
-def test_a_lease_timeout_is_a_409_naming_the_holder(client):
+def test_a_lease_timeout_is_a_409_with_a_code_and_no_holder(client):
     response = client.get("/busy")
     assert response.status_code == 409
-    assert "backend-2-1:save_session:aa" in response.json()["detail"]
+    assert response.json()["detail"]["code"] == "chat_session_busy"
+    assert _HOST not in response.text and str(_PID) not in response.text and "save_session" not in response.text
 
 
-def test_a_stale_generation_is_a_409(client):
+def test_the_holder_stays_in_the_server_log(client, caplog):
+    client.get("/busy")
+    assert _HOLDER in caplog.text
+
+
+def test_control_the_old_handler_returned_the_holder_so_the_check_can_fail():
+    app = FastAPI()
+
+    @app.exception_handler(SessionLeaseTimeout)
+    async def legacy(request, exc):  # the handler before this fix
+        return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+    @app.get("/busy")
+    async def busy():
+        raise SessionLeaseTimeout("s1", _HOLDER, 30.0)
+
+    text = TestClient(app, raise_server_exceptions=False).get("/busy").text
+    assert _HOST in text and str(_PID) in text
+
+
+def test_a_stale_generation_is_a_409_without_generations(client):
     response = client.get("/stale")
     assert response.status_code == 409
-    assert "older than the file's 7" in response.json()["detail"]
+    assert response.json()["detail"]["code"] == "chat_session_conflict"
+    assert "older than" not in response.text
 
 
 def test_a_lost_lease_or_file_lock_is_still_a_409(client):
     response = client.get("/lost")
     assert response.status_code == 409
-    assert "s1" in response.json()["detail"]
+    assert response.json()["detail"]["code"] == "chat_session_conflict" and "s1_chat" not in response.text
 
 
 def test_an_unreadable_chat_file_is_a_typed_500_without_the_decode_cause(client):
