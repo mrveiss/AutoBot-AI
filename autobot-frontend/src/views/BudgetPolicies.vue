@@ -144,7 +144,7 @@
         </div>
         <div v-if="agentStatus.is_paused && agentStatus.paused_at" class="status-row">
           <span class="status-label">{{ t('budgetPolicies.labelSince') }}</span>
-          <span>{{ new Date(agentStatus.paused_at).toLocaleString() }}</span>
+          <span>{{ formatISOString(agentStatus.paused_at) }}</span>
         </div>
         <BaseButton size="sm" class="mt-2"
           v-if="agentStatus.is_paused && isAdmin"
@@ -289,7 +289,7 @@ import { createLogger } from '@/utils/debugUtils'
 import apiClient from '@/utils/ApiClient'
 import { useUserStore } from '@/stores/useUserStore'
 import Icon from '@/components/ui/Icon.vue'
-import { BaseModal, HttpError, BaseButton } from '@autobot/ui'
+import { BaseModal, HttpError, BaseButton, formatISOString } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
