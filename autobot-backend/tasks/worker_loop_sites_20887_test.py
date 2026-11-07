@@ -33,6 +33,8 @@ SITES: list[tuple[str, str, str, dict[str, Any]]] = [
     ("tasks.knowledge_retention", "cleanup_expired_kb_entries", "_async_cleanup_expired_kb_entries", {}),
     ("workers.consolidate_tasks", "consolidate_trajectories", "_run_consolidation", {}),
     ("workers.consolidate_tasks", "consolidate_facts", "_run_facts_consolidation", {}),
+    ("llc.scheduler.attachment_file_sweep", "run_attachment_file_sweep", "_async_sweep", {}),
+    ("tasks.snapshot_cleanup", "cleanup_expired_snapshots", "_async_cleanup_expired_snapshots", {}),
 ]
 
 

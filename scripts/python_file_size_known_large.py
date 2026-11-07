@@ -236,14 +236,14 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llc/adapters/tests/test_claude_code_adapter.py": 602,
     "autobot-backend/llc/api/companies.py": 1605,
     "autobot-backend/llc/api/roles.py": 713,
-    "autobot-backend/llc/api/sprints.py": 1215,
-    "autobot-backend/llc/api/work_items.py": 1286,  # #18978: 1302 -> 1287; #19582: comment wake moved into the service
+    "autobot-backend/llc/api/sprints.py": 1213,
+    "autobot-backend/llc/api/work_items.py": 1284,  # #18978: 1302 -> 1287; #19582: comment wake moved into the service
     "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 979,  # #19240 (run key moved out)
     "autobot-backend/llc/services/template.py": 642,
-    "autobot-backend/llc/services/work_item_service.py": 998,  # #18978: -19; #20102: completion effects moved out
+    "autobot-backend/llc/services/work_item_service.py": 995,  # #18978: -19; #20102, #20930: code moved out
     "autobot-backend/llc/tests/conftest.py": 832,
     "autobot-backend/llc/tests/test_autobot_agent_adapter.py": 663,
-    "autobot-backend/llc/tests/test_heartbeat_scheduler.py": 1009,
+    "autobot-backend/llc/tests/test_heartbeat_scheduler.py": 1007,
     "autobot-backend/llc/tests/test_review_gate.py": 632,
     "autobot-backend/llc/tests/test_role_assignments.py": 728,
     "autobot-backend/llc/tests/test_work_items_idor.py": 602,
@@ -285,7 +285,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/prompt_manager.py": 1462,
     "autobot-backend/protocols/agent_communication.py": 654,
     "autobot-backend/research_browser_manager.py": 704,
-    "autobot-backend/secure_command_executor.py": 1215,
+    "autobot-backend/secure_command_executor.py": 1089,
     "autobot-backend/secure_sandbox_executor.py": 1017,
     "autobot-backend/security/command_patterns.py": 609,
     "autobot-backend/security/domain_security.py": 715,
@@ -300,7 +300,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/security/session_ownership.py": 813,
     "autobot-backend/security/threat_detection_refactor_test.py": 880,
     "autobot-backend/security/threat_intelligence.py": 762,
-    "autobot-backend/security_layer.py": 715,
+    "autobot-backend/security_layer.py": 670,
     "autobot-backend/services/agent_analytics.py": 686,
     "autobot-backend/services/agent_terminal/service.py": 922,
     "autobot-backend/services/ai_stack_client.py": 764,
@@ -352,7 +352,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/tool_output_filter.py": 639,
     "autobot-backend/services/trigger_service.py": 842,
     "autobot-backend/services/wake_word_service.py": 615,
-    "autobot-backend/services/workflow_automation/executor.py": 1104,
+    "autobot-backend/services/workflow_automation/executor.py": 1078,
     "autobot-backend/services/workflow_export_test.py": 611,
     "autobot-backend/services/workflow_io.py": 693,
     "autobot-backend/slash_command_handler.py": 1662,
