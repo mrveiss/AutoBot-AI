@@ -332,3 +332,61 @@ def _token_redefinitions(root: Path, owned: set[str]) -> tuple[dict[str, list[st
         if clashes:
             offenders[path.relative_to(root).as_posix()] = clashes
     return offenders, blocks
+
+
+# --- #20425: a label on a primary fill reads --text-on-primary -------------------------------
+#: --color-primary is white in High Contrast Dark and pale in Dark, so a literal white label on
+#: it vanishes there. --text-on-primary is the token that follows the fill.
+_PRIMARY_FILL = re.compile(
+    r"background(?:-color)?\s*:[^;{}]*var\(\s*--(?:color-)?primary\s*[,)]",
+    re.IGNORECASE,
+)
+_WHITE_LABEL = re.compile(
+    r"(?<![\w-])color\s*:\s*(?:white|#fff(?:fff)?|rgb\(\s*255\s*,\s*255\s*,\s*255\s*\)|var\(\s*--color-white\s*\))"
+    r"\s*(?:!\s*important\s*)?(?=[;}])",
+    re.IGNORECASE,
+)
+_WHITE_ON_PRIMARY_TREES = ((_FRONTEND, ""), (_SLM_FRONTEND, SLM_KEY_PREFIX))
+
+
+def white_on_primary_in(css: str) -> int:
+    """Rules in *css* that fill with the primary token and write a literal white label."""
+    css = _CSS_COMMENT.sub("", css)
+    return sum(
+        1 for m in _RULE_BLOCK.finditer(css) if _PRIMARY_FILL.search(m.group(2)) and _WHITE_LABEL.search(m.group(2))
+    )
+
+
+def _white_on_primary_files(repo: Path) -> list[Path]:
+    out: list[Path] = []
+    for tree, _prefix in _WHITE_ON_PRIMARY_TREES:
+        base = repo / tree
+        if base.is_dir():
+            out += [
+                p for p in sorted(base.rglob("*")) if p.suffix in {".vue", ".css"} and "node_modules" not in p.parts
+            ]
+    return out
+
+
+def _scan_white_on_primary(repo: Path) -> dict[str, int]:
+    """``path -> rules painting a primary fill with a literal white label`` in both apps.
+
+    .vue files contribute their <style> blocks only; .css files are read whole. Keys carry
+    SLM_KEY_PREFIX for the control plane, as the !important sweep does.
+    """
+    counts: dict[str, int] = {}
+    for tree, prefix in _WHITE_ON_PRIMARY_TREES:
+        base = repo / tree
+        for path in _white_on_primary_files(repo):
+            if base not in path.parents:
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            if path.suffix == ".vue":
+                text = "\n".join(m.group(1) for m in _STYLE_CONTENT.finditer(text))
+            found = white_on_primary_in(text)
+            if found:
+                counts[prefix + path.relative_to(base).as_posix()] = found
+    return counts
