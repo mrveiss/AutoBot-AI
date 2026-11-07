@@ -303,9 +303,9 @@ class HeartbeatContextBuilder:
     ) -> str:
         """Return wiki entries for this agent as a Markdown string (GH#9021)."""
         try:
-            from ..services.agent_wiki_service import AgentWikiService
+            from ..services.accessors import get_agent_wiki_service
 
-            svc = AgentWikiService()
+            svc = get_agent_wiki_service()
             return await svc.get_wiki_context(session, agent_id, company_id)
         except Exception as e:
             logger.warning("Failed to fetch agent wiki for %s: %s", agent_id, e)
