@@ -67,11 +67,13 @@
                 v-for="item in humanItems(col.id)"
                 :key="item.id"
                 class="work-card"
-                draggable="true"
+                :draggable="!isMoving(item.id)"
+                :aria-busy="isMoving(item.id)"
                 @dragstart="onDragStart(item)"
                 @click="openDetail(item)"
               >
                 <KanbanCard :item="item" />
+                <span v-if="isMoving(item.id)" class="lane-empty" role="status">{{ $t('llc.kanban.moving') }}</span>
               </div>
               <div v-if="humanItems(col.id).length === 0" class="lane-empty">—</div>
             </div>
@@ -91,11 +93,13 @@
                 v-for="item in agentItems(col.id)"
                 :key="item.id"
                 class="work-card"
-                draggable="true"
+                :draggable="!isMoving(item.id)"
+                :aria-busy="isMoving(item.id)"
                 @dragstart="onDragStart(item)"
                 @click="openDetail(item)"
               >
                 <KanbanCard :item="item" />
+                <span v-if="isMoving(item.id)" class="lane-empty" role="status">{{ $t('llc.kanban.moving') }}</span>
               </div>
               <div v-if="agentItems(col.id).length === 0" class="lane-empty">—</div>
             </div>
@@ -108,11 +112,13 @@
               v-for="item in itemsByColumn(col.id)"
               :key="item.id"
               class="work-card"
-              draggable="true"
+              :draggable="!isMoving(item.id)"
+              :aria-busy="isMoving(item.id)"
               @dragstart="onDragStart(item)"
               @click="openDetail(item)"
             >
               <KanbanCard :item="item" />
+              <span v-if="isMoving(item.id)" class="lane-empty" role="status">{{ $t('llc.kanban.moving') }}</span>
             </div>
             <div v-if="itemsByColumn(col.id).length === 0" class="column-empty">
               {{ $t('llc.kanban.dropHere') }}
@@ -251,17 +257,31 @@ function onItemUpdated(updated: WorkItem) {
   if (detailItem.value?.id === updated.id) detailItem.value = updated
 }
 
+// Cards whose move request is still in flight (#20930): locked, so a second move cannot start from a
+// column the first one has not settled, and a rollback cannot restore a stale one.
+const movingIds = ref<Set<string>>(new Set())
+const isMoving = (id: string) => movingIds.value.has(id)
+
+function setMoving(id: string, moving: boolean) {
+  const next = new Set(movingIds.value)
+  if (moving) next.add(id)
+  else next.delete(id)
+  movingIds.value = next
+}
+
 function onDragStart(item: BoardCard) {
+  if (isMoving(item.id)) return
   draggedItem.value = item
 }
 
 async function onDrop(colId: string) {
-  if (!draggedItem.value || draggedItem.value.column_id === colId) return
+  if (!draggedItem.value || draggedItem.value.column_id === colId || isMoving(draggedItem.value.id)) return
   const item = draggedItem.value
   draggedItem.value = null
   const prevCol = item.column_id
   item.column_id = colId
   moveError.value = null
+  setMoving(item.id, true)
   try {
     await api.post<unknown>(`/api/llc/boards/${boardId.value}/move`, {
       work_item_id: item.id,
@@ -269,8 +289,11 @@ async function onDrop(colId: string) {
     })
   } catch (err) {
     logger.error('Move failed', err)
-    item.column_id = prevCol
+    // A live update may have placed the card since: only the column this move put it in is rolled back.
+    if (item.column_id === colId) item.column_id = prevCol
     moveError.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    setMoving(item.id, false)
   }
 }
 
@@ -482,6 +505,10 @@ onMounted(async () => {
 
 .work-card {
   cursor: grab;
+}
+
+.work-card[aria-busy='true'] {
+  opacity: 0.6;
 }
 
 .work-card:active {
