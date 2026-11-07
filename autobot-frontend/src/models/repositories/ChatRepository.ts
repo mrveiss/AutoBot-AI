@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { getBackendUrl, getApiBase } from '@/config/ssot-config'
 import { HttpError } from '@autobot/ui'
-import { toSessionDate } from './sessionDates'
+import { toSessionDate, type ChatListEntry } from './sessionDates'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { clearStoredAuth } from '@/utils/authToken'
@@ -320,12 +320,12 @@ export class ChatRepository {
   }
 
   // Get chat sessions (alias for getChatList)
-  async getSessions(): Promise<ChatSession[]> {
+  async getSessions(): Promise<ChatListEntry[]> {
     return this.getChatList()
   }
 
   // Get list of all chat sessions (for compatibility with controller)
-  async getChatList(): Promise<ChatSession[]> {
+  async getChatList(): Promise<ChatListEntry[]> {
     try {
       const response = await this.get<{
         sessions?: BackendSessionEntry[]
@@ -345,7 +345,7 @@ export class ChatRepository {
         createdAt: toSessionDate(session.createdAt, session.createdTime),
         updatedAt: toSessionDate(session.updatedAt, session.lastModified),
         isActive: false // Will be set by store when session is selected
-      })) as unknown as ChatSession[]
+      })) as unknown as ChatListEntry[]
     } catch (error: unknown) {
       logger.error('Failed to get chat list:', error)
       return [] // Return empty array on error to prevent app crash

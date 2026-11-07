@@ -696,8 +696,8 @@ export class ChatController {
             id: session.id,
             title: session.title ?? '',
             messages: session.messages,
-            createdAt: session.createdAt as Date | undefined,
-            updatedAt: session.updatedAt as Date | undefined,
+            createdAt: session.createdAt,
+            updatedAt: session.updatedAt,
             isActive: false,
           })
         })
