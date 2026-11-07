@@ -68,17 +68,12 @@ export function useCompanyTeams(api: TeamsApi, companyId: () => string) {
   const isInactive = (userId: string): boolean =>
     members.value.find((m) => m.user_id === userId)?.is_active === false
 
-  async function load(): Promise<void> {
-    const id = companyId()
-    if (!id) return
-    const mine = generation
-    const req = ++loadSeq
-    const current = () => mine === generation && req === loadSeq
-    // A reload keeps the table on screen; only the first load of a company shows the loading state.
-    if (teams.value.length === 0) state.value = 'loading'
-    // The members read is not awaited: teams render as soon as their own read answers, and the
-    // names fill in when the members arrive (a slow or never-answering read must not hide the teams).
-    // A reload after the names are known keeps them; only the first read shows them pending.
+  /**
+   * The members read is not awaited: teams render as soon as their own read answers, and the
+   * names fill in when the members arrive (a slow or never-answering read must not hide the teams).
+   * A reload after the names are known keeps them; only the first read shows them pending.
+   */
+  function readMembers(id: string, current: () => boolean): void {
     if (members.value.length === 0) membersPending.value = true
     void (api.get(`/api/llc/companies/${id}/members`) as Promise<Member[]>).then(
       (list) => {
@@ -94,6 +89,17 @@ export function useCompanyTeams(api: TeamsApi, companyId: () => string) {
         membersPending.value = false
       },
     )
+  }
+
+  async function load(): Promise<void> {
+    const id = companyId()
+    if (!id) return
+    const mine = generation
+    const req = ++loadSeq
+    const current = () => mine === generation && req === loadSeq
+    // A reload keeps the table on screen; only the first load of a company shows the loading state.
+    if (teams.value.length === 0) state.value = 'loading'
+    readMembers(id, current)
     const teamsResult = await Promise.allSettled([api.get(`/api/llc/companies/${id}/teams`) as Promise<CompanyTeamsResponse>]).then((r) => r[0])
     if (!current()) return
     if (teamsResult.status === 'fulfilled') {
