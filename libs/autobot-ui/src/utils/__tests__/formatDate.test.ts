@@ -7,7 +7,6 @@ import {
   formatDateTime,
   formatISOString,
   formatTime,
-  formatTimeAgo,
   formatRelativeTime,
   formatLocalTime,
   createRecencyFormatter
@@ -102,25 +101,6 @@ describe('formatDate / formatDateTime / formatISOString / formatTime (#19905)', 
     expect(formatTime(ISO, true)).toBe(
       new Date(ISO).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
     )
-  })
-})
-
-describe('formatTimeAgo (#19905)', () => {
-  it('walks the tiers from just now to years', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
-    const ago = (seconds: number) => formatTimeAgo(Date.now() - seconds * 1000)
-    expect(ago(30)).toBe('just now')
-    expect(ago(120)).toBe('2 minutes ago')
-    expect(ago(7200)).toBe('2 hours ago')
-    expect(ago(172800)).toBe('2 days ago')
-    expect(ago(1209600)).toBe('2 weeks ago')
-    expect(ago(5184000)).toBe('2 months ago')
-    expect(ago(63072000)).toBe('2 years ago')
-  })
-
-  it('reads an invalid value as unknown', () => {
-    expect(formatTimeAgo('nope')).toBe('unknown')
   })
 })
 
@@ -223,6 +203,15 @@ describe('createRecencyFormatter (#19606)', () => {
     expect(f(at(day))).toBe(at(day).toLocaleDateString())
     const g = createRecencyFormatter({ olderThanMs: day, older: () => 'long ago', now })
     expect(g(at(2 * day))).toBe('long ago')
+  })
+
+  it('shows a time of day past the cutoff when the older text is a time formatter', () => {
+    const hour = 3_600_000
+    const older = createDateFormatter({ kind: 'time', locale: 'en-US', intl: { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', hour12: false } })
+    const f = createRecencyFormatter({ olderThanMs: hour, older, locale: 'en', style: 'narrow', now })
+    expect(f(at(hour - 1))).toBe('59m ago')
+    expect(f(at(hour))).toBe('11:00')
+    expect(f(at(2 * hour))).toBe('10:00')
   })
 
   it('caps the unit and answers a missing or unparseable moment with the invalid text', () => {

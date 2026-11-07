@@ -21,7 +21,8 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
-import { formatTimeAgo, createDateFormatter } from '@/utils/formatHelpers'
+import { createRecencyFormatter } from '@autobot/ui'
+import { createDateFormatter } from '@/utils/formatHelpers'
 import type { components } from '@/types/generated/api'
 import type { OrgNode } from '@/views/llc/OrgTreeNode.vue'
 import type { WorkItem } from '@/views/llc/workItemTypes'
@@ -62,7 +63,8 @@ const emit = defineEmits<{
 
 const logger = createLogger('CanvasNodeSidebar')
 const api = useApiClient()
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const formatTimeAgo = createRecencyFormatter({ justNow: () => t('common.justNow'), locale: () => locale.value, invalidText: '—' })
 
 
 const RAIL_ICON_CLASS: Record<SidebarRailIcon, string> = {
