@@ -52,10 +52,13 @@ from typing import TYPE_CHECKING, Any
 from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import BaseUnavailable, base_commit
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import scrubbed_git_env
 
 if TYPE_CHECKING:
     from repo_tests._reach import Reach
+
+logger = get_logger(__name__)
 
 REPO_ROOT = repo_root()
 TREE_PREFIX = "autobot-reach-base-"
@@ -139,7 +142,10 @@ def _prune(root: Path, keep: Path) -> None:
     for old in root.iterdir():
         if old == keep or not old.is_dir() or time.time() - old.stat().st_mtime <= _STALE_AFTER_S:
             continue
-        shutil.rmtree(old)
+        try:
+            shutil.rmtree(old)
+        except OSError as exc:  # one unremovable stale tree must not fail an unrelated guard run
+            logger.warning("Reach base cache: could not prune %s: %s", old, exc)
 
 
 def _extract(sha: str, into: Path) -> None:
@@ -193,6 +199,16 @@ def _on_sigterm(signum: int, frame: FrameType | None) -> None:
     os.kill(os.getpid(), signum)
 
 
+def _restore_sigterm() -> None:
+    """Put back the SIGTERM disposition ``base_tree`` replaced.
+
+    ``signal.signal`` returns None for a handler installed from C, and None cannot be passed back
+    to it; the default disposition is the closest one Python can restore.
+    """
+    previous = _PREVIOUS_HANDLER.pop(signal.SIGTERM)
+    signal.signal(signal.SIGTERM, signal.SIG_DFL if previous is None else previous)
+
+
 def _build(root: Path, sha: str, final: Path) -> None:
     """Extract into a private temp dir, then rename it into place: *final* is never half-built."""
     partial = Path(tempfile.mkdtemp(prefix=".partial-", dir=root))
@@ -225,7 +241,7 @@ def base_tree() -> Path:
             _prune(root, keep=final)
         finally:
             if can_trap:
-                signal.signal(signal.SIGTERM, _PREVIOUS_HANDLER.pop(signal.SIGTERM))
+                _restore_sigterm()
     _TREE["tree"] = final
     return final
 

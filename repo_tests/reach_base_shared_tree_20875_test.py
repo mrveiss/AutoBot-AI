@@ -6,8 +6,10 @@
 
 from __future__ import annotations
 
+import logging
 import multiprocessing
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -121,3 +123,45 @@ def test_sigterm_during_a_build_leaves_no_partial_dir(tmp_path: Path) -> None:
     proc.send_signal(signal.SIGTERM)
     assert proc.wait(timeout=30) == -signal.SIGTERM  # default behaviour re-raised
     assert [p.name for p in cache.iterdir() if p.name != ".lock"] == []
+
+
+def test_a_sigterm_handler_installed_from_c_is_restored_as_the_default(
+    cache: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``signal.signal`` reports a C-installed handler as None; restoring None would raise TypeError."""
+    real_signal, original = signal.signal, signal.getsignal(signal.SIGTERM)
+
+    def c_installed(signum: int, handler: object) -> object:
+        previous = real_signal(signum, handler)
+        return None if handler is _reach_base._on_sigterm else previous
+
+    monkeypatch.setattr(signal, "signal", c_installed)
+    try:
+        _reach_base.base_tree()
+        assert signal.getsignal(signal.SIGTERM) == signal.SIG_DFL
+    finally:
+        real_signal(signal.SIGTERM, signal.SIG_DFL if original is None else original)
+
+
+def test_one_unremovable_stale_tree_is_logged_and_the_prune_goes_on(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    stale_at = time.time() - _reach_base._STALE_AFTER_S - 60
+    for name in ("a", "b"):
+        (tmp_path / name).mkdir()
+        os.utime(tmp_path / name, (stale_at, stale_at))
+    (tmp_path / "keep").mkdir()
+    real_rmtree, calls = shutil.rmtree, []
+
+    def first_fails(path: Path, *args: object, **kwargs: object) -> None:
+        calls.append(Path(path))
+        if len(calls) == 1:
+            raise PermissionError(13, "Permission denied", str(path))
+        real_rmtree(path, *args, **kwargs)
+
+    monkeypatch.setattr(_reach_base.shutil, "rmtree", first_fails)
+    with caplog.at_level(logging.WARNING):
+        _reach_base._prune(tmp_path, keep=tmp_path / "keep")
+    failed, pruned = calls
+    assert failed.is_dir() and not pruned.exists() and (tmp_path / "keep").is_dir()
+    assert str(failed) in caplog.text and "Permission denied" in caplog.text
