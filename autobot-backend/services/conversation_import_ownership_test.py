@@ -118,3 +118,58 @@ async def test_replace_still_works_on_a_genuinely_unowned_session() -> None:
 
     assert result["success"] is True
     manager.save_session.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_merge_import_into_another_users_session_is_refused() -> None:
+    """The default conflict path (no replace) must not merge into someone else's session (#20908)."""
+    manager = _manager(exists=True, owner="alice")
+
+    result = await import_conversation(manager, dict(_DOCUMENT), on_conflict="merge", user_data=_BOB)
+
+    assert result["success"] is False
+    manager.save_session.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_merge_import_is_refused_when_the_owner_is_unreadable() -> None:
+    manager = _manager(exists=True, owner_raises=True)
+
+    result = await import_conversation(manager, dict(_DOCUMENT), on_conflict="merge", user_data=_BOB)
+
+    assert result["success"] is False
+    manager.save_session.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_store_fails_closed_instead_of_reading_as_no_session() -> None:
+    manager = _manager()
+    manager.load_session = AsyncMock(side_effect=OSError("disk gone"))
+
+    with pytest.raises(OSError):
+        await import_conversation(manager, dict(_DOCUMENT), on_conflict="replace", user_data=_BOB)
+
+    manager.save_session.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_the_checks_and_the_save_run_inside_the_session_lease(monkeypatch) -> None:
+    from contextlib import asynccontextmanager
+
+    from services import conversation_export
+
+    events: list[str] = []
+
+    @asynccontextmanager
+    async def _lease(session_id, operation, wait_s=None):
+        events.append(f"enter:{operation}")
+        yield None
+        events.append("exit")
+
+    monkeypatch.setattr(conversation_export, "session_lease", _lease)
+    manager = _manager(exists=True, owner="alice")
+    manager.save_session.side_effect = lambda **_: events.append("save")
+
+    await import_conversation(manager, dict(_DOCUMENT), on_conflict="replace", user_data=_ALICE)
+
+    assert events == ["enter:import", "save", "exit"]
