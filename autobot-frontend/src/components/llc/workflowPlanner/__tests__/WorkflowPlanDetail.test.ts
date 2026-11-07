@@ -111,3 +111,22 @@ describe('WorkflowPlanDetail failed re-read', () => {
     expect(w.find('[data-testid="plan-stale"]').text()).toContain('readiness checks could not be refreshed')
   })
 })
+
+describe('WorkflowPlanDetail edge cases', () => {
+  it('posts a new edge case to the step edge-cases route through the generated client', async () => {
+    const plan = { ...PLAN, steps: [{ key: 'step-1', lane_key: 'lane-1', label: 'Quote', position: 0 }], one_number: { step_key: 'step-1' } }
+    get.mockImplementation((url: string) => Promise.resolve(url === `${BASE}/gate` ? GATE : plan))
+    post.mockResolvedValue(plan)
+    const w = mount(WorkflowPlanDetail, { props: { planKey: 'quote', api: useWorkflowPlans() }, global: { plugins: [i18n] } })
+    await flushPromises()
+    await w.find('[data-testid="step-label"]').trigger('click')
+    await w.findAll('input')[1].setValue('Customer cancels')
+    await w.find('[data-testid="add-edge-case-ai"]').trigger('click')
+    await flushPromises()
+    expect(post).toHaveBeenCalledWith(`${BASE}/steps/step-1/edge-cases`, {
+      key: 'edge-1',
+      description: 'Customer cancels',
+      classification: 'ai',
+    })
+  })
+})
