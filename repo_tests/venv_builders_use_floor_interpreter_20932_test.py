@@ -22,11 +22,12 @@ cannot rot into a blanket exemption.
 import re
 from pathlib import Path
 
+from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
-_ROOT = Path(__file__).resolve().parent.parent
+_ROOT = repo_root()
 
 #: Deploy and infrastructure paths a node venv is built from.
 _SCAN_DIRS = ("autobot-slm-backend/ansible", "autobot-infrastructure", "autobot-backend/code_analysis")
