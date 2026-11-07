@@ -10,12 +10,19 @@
 ask-human defaults from here instead of carrying its own literals.
 """
 
+import logging
 from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from autobot_shared.paths import project_root
+from autobot_shared.status_enums import LLMProvider
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_LLM_PROVIDER = "ollama"
+_PROVIDER_WARNED = False
 
 
 class ChatGraphSettings(BaseSettings):
@@ -23,6 +30,8 @@ class ChatGraphSettings(BaseSettings):
 
     # Chat-graph planner node (#21023): off by default, no behaviour change.
     chat_planner_enabled: bool = Field(default=False, alias="AUTOBOT_CHAT_PLANNER_ENABLED")
+    # Turns shorter than this skip the planner LLM call (up to the planner timeout per turn) (#21023).
+    chat_planner_min_message_chars: int = Field(default=24, ge=0, alias="AUTOBOT_CHAT_PLANNER_MIN_MESSAGE_CHARS")
     # Chat-graph stall escalation (#21022): "stop" halts the turn, "ask" asks the human.
     chat_stall_escalation: Literal["stop", "ask"] = Field(default="stop", alias="AUTOBOT_CHAT_STALL_ESCALATION")
     # Ask-the-human defaults (#10553): seconds to wait, then the escalation policy.
@@ -40,3 +49,27 @@ class ChatGraphSettings(BaseSettings):
         if value not in allowed:
             raise ValueError(f"{field.alias} must be one of {', '.join(allowed)}; got {value!r}")
         return value
+
+    @field_validator("provider", mode="before", check_fields=False)
+    @classmethod
+    def _provider_is_known(cls, value):
+        """``AUTOBOT_LLM_PROVIDER`` names a registry provider; an unknown one falls back, once, with a warning.
+
+        ``config.llm.provider`` is read by startup paths beyond chat (agent schemas, per-agent routing), so
+        failing fast would stop an install that never needed the chat route's registry. The chat route's
+        ``configured_provider()`` would raise on it before its try/except, so the typo is replaced by the default.
+        """
+        global _PROVIDER_WARNED
+        name = str(value).strip().lower()
+        if name in {p.value for p in LLMProvider}:
+            return name
+        if not _PROVIDER_WARNED:
+            _PROVIDER_WARNED = True
+            allowed = ", ".join(sorted(p.value for p in LLMProvider))
+            logger.warning(
+                "AUTOBOT_LLM_PROVIDER=%r is not a known provider (allowed: %s); using %r",
+                value,
+                allowed,
+                DEFAULT_LLM_PROVIDER,
+            )
+        return DEFAULT_LLM_PROVIDER

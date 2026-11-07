@@ -75,12 +75,50 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_CHAT_PLANNER_TIMEOUT_SECONDS",
+        type=int,
+        default=30,
+        description=(
+            "Seconds the chat planner may take to write a plan (#21023); past it the turn runs " "without a plan."
+        ),
+        component="chat_workflow",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_PLANNER_MIN_MESSAGE_CHARS",
+        type=int,
+        default=24,
+        description=(
+            "Chat turns shorter than this many characters skip the planner, which otherwise adds one "
+            "LLM call (bounded by AUTOBOT_CHAT_PLANNER_TIMEOUT_SECONDS) before the first token (#21023)."
+        ),
+        component="chat_workflow",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_CHAT_STALL_ESCALATION",
         type=str,
         default="stop",
         description=(
             "What the chat graph does when a turn stalls: stop halts the turn, "
             "ask escalates to the human (#21022, #20846); any other value fails config load."
+        ),
+        component="chat_workflow",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PLAN_TTL_SECONDS",
+        type=int,
+        default=86400,
+        description=(
+            "Seconds a stored plan (Redis key autobot:plans:<session>:<id>) is kept before it expires "
+            "(#21023). Default 24 hours."
         ),
         component="chat_workflow",
     )

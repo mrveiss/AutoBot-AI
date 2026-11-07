@@ -34,6 +34,12 @@ from chat_workflow import limits
 from chat_workflow.approval_binding import ai_line_calls_shown, bind_decision
 from chat_workflow.attachment_context import attachment_prompt, stream_notices, without_block
 from chat_workflow.checkpointer_connection import describe_connection, describe_error, get_checkpointer_connection
+from chat_workflow.graph_hooks import (
+    _emit_agent_execute_hook,
+    _emit_planned_agent_complete_hook,
+    _emit_planned_agent_error_hooks,
+)
+from chat_workflow.graph_planner import NO_PLAN, advance_after_tools, create_plan, with_plan_step
 from chat_workflow.graph_tool_dispatch import (
     dispatch_approved_calls,
     emit_tool_call_hook,
@@ -126,6 +132,11 @@ class ChatState(TypedDict, total=False):
     # has already triggered a regeneration for this turn (capped at 1).
     judge_count: int
 
+    # Planner (#21023): ids only; the plan body lives in Redis. plan_progress = done/total/complete + step block.
+    plan_id: str | None
+    current_step_id: str | None
+    plan_progress: Dict[str, Any]
+
     # Tool-call loop detection (#3254)
     # Each entry is a frozenset fingerprint of (tool_name, args_hash) for one iteration.
     tool_call_fingerprints: List[str]
@@ -188,6 +199,7 @@ async def initialize_session(state: ChatState, config: RunnableConfig) -> dict:
             # #18430: a yes never outlives its turn (the checkpointer would otherwise carry it forward).
             "approval_decision": None,
             "pending_approval": None,
+            **NO_PLAN,  # #21023: a plan never outlives its turn
         }
     except Exception as exc:
         logger.error("initialize_session failed: %s", exc, exc_info=True)
@@ -346,6 +358,8 @@ def _build_llm_iteration_context(state: ChatState):
     if loop_warning:
         initial_prompt = _inject_mid_conversation_warning(loop_warning, initial_prompt)
 
+    initial_prompt = with_plan_step(initial_prompt, state)  # #21023: the current plan step, if the turn has a plan
+
     # GH#11159/#11160: carry governed identity from the request context bag.
     agent_context, work_item_id, approval_cats = build_governed_identity(
         state.get("context", {}) or {}, state["session_id"]
@@ -475,36 +489,6 @@ async def _run_llm_iteration_plan(manager, ctx, iteration, messages, stream_cb):
     return messages, llm_response, tool_calls, should_stop
 
 
-async def _emit_planned_agent_error_hooks(session_id, iteration, exc: Exception) -> None:
-    """Fire ON_AGENT_ERROR for the plan-only path (mirrors generate_response). GH#11202."""
-    try:
-        from autobot_shared.plugin_sdk import Hook, HookRegistry
-
-        await HookRegistry().call_hook(
-            Hook.ON_AGENT_ERROR.value,
-            session_id=session_id,
-            iteration=iteration,
-            error=str(exc),
-        )
-    except Exception as _hook_exc:  # noqa: BLE001
-        logger.debug("Plugin hook ON_AGENT_ERROR failed (non-fatal): %s", _hook_exc)
-
-
-async def _emit_planned_agent_complete_hook(session_id, iteration, llm_response: str) -> None:
-    """Fire ON_AGENT_COMPLETE for the plan-only path (mirrors generate_response). GH#11202."""
-    try:
-        from autobot_shared.plugin_sdk import Hook, HookRegistry
-
-        await HookRegistry().call_hook(
-            Hook.ON_AGENT_COMPLETE.value,
-            session_id=session_id,
-            iteration=iteration,
-            response=llm_response or "",
-        )
-    except Exception as _hook_exc:  # noqa: BLE001
-        logger.debug("Plugin hook ON_AGENT_COMPLETE failed (non-fatal): %s", _hook_exc)
-
-
 async def _generate_response_planned(
     state: ChatState,
     manager,
@@ -588,22 +572,7 @@ def _carry_tool_results_into_prompt(manager, ctx, state: ChatState) -> None:
     for warning in (state.get("rlm_refinement_hint", ""), state.get("tool_loop_warning", "")):
         if warning:
             prompt = _inject_mid_conversation_warning(warning, prompt)
-    ctx.initial_prompt = prompt
-
-
-async def _emit_agent_execute_hook(session_id, iteration) -> None:
-    """Issue #3278: notify plugins before LLM execution."""
-    try:
-        from autobot_shared.plugin_sdk import Hook, HookRegistry
-
-        await HookRegistry().call_hook(
-            Hook.ON_AGENT_EXECUTE.value,
-            session_id=session_id,
-            iteration=iteration,
-            agent_type="chat_workflow",
-        )
-    except Exception as _hook_exc:  # noqa: BLE001
-        logger.debug("Plugin hook ON_AGENT_EXECUTE failed (non-fatal): %s", _hook_exc)
+    ctx.initial_prompt = with_plan_step(prompt, state)  # #21023
 
 
 async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
@@ -875,6 +844,28 @@ async def request_approval(state: ChatState, config: RunnableConfig) -> dict:
     }
 
 
+async def _inline_dispatched_update(manager, state: ChatState, turn: tuple) -> dict:
+    """execute_tools for calls already run inline (GH#11958): no re-dispatch; loop check and plan step only."""
+    from chat_workflow.cot_events import emit_step_complete
+
+    messages, stream_cb, cot_start = turn
+    tool_calls, session_id = state.get("tool_calls", []), state.get("session_id")
+    logger.debug("execute_tools: %d call(s) already dispatched inline (session=%s)", len(tool_calls), session_id)
+    emit_step_complete(
+        "execute_tools",
+        cot_start,
+        output_summary="tools already dispatched inline — skipped re-dispatch",
+        session_id=session_id,
+    )
+    return {
+        "should_continue": state.get("should_continue", False),
+        "workflow_messages": messages,
+        "tool_calls": [],
+        **_inline_loop_update(state, tool_calls, messages, stream_cb, state.get("iteration_count", 0)),
+        **await advance_after_tools(manager, state, tool_calls),  # #21023: these are this pass's results
+    }
+
+
 async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
     """Execute approved tool calls.
 
@@ -906,19 +897,7 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
     )
 
     if are_already_executed(tool_calls):
-        logger.debug("execute_tools: %d call(s) already dispatched inline (session=%s)", len(tool_calls), session_id)
-        emit_step_complete(
-            "execute_tools",
-            _cot_exec_start,
-            output_summary="tools already dispatched inline — skipped re-dispatch",
-            session_id=session_id,
-        )
-        return {
-            "should_continue": state.get("should_continue", False),
-            "workflow_messages": messages,
-            "tool_calls": [],
-            **_inline_loop_update(state, tool_calls, messages, stream_cb, iteration),
-        }
+        return await _inline_dispatched_update(manager, state, (messages, stream_cb, _cot_exec_start))
 
     # If approval was needed and denied, skip execution
     if decision and not decision.get("approved", False):
@@ -948,6 +927,8 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
         _append_loop_abort_message(messages, stream_cb, iteration)
 
     await emit_tool_complete_hook(session_id, exec_history)
+    this_pass = exec_history[len(state.get("execution_history", [])) :]
+    plan_update = await advance_after_tools(manager, state, this_pass)  # #21023: one plan step per tool pass
 
     # Issue #3232: emit step complete for the execute_tools block.
     emit_step_complete(
@@ -963,6 +944,7 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
         "workflow_messages": messages,
         "tool_calls": [],  # Clear after execution
         **loop_state,
+        **plan_update,
     }
 
 
@@ -1350,6 +1332,7 @@ def build_chat_graph() -> StateGraph:
     builder.add_node("detect_intent", detect_intent)
     builder.add_node("prepare_llm", prepare_llm)
     builder.add_node("perform_knowledge_search", perform_knowledge_search)  # Issue #1718
+    builder.add_node("create_plan", create_plan)  # Issue #21023
     builder.add_node("generate_response", generate_response)
     builder.add_node("reflect_on_response", reflect_on_response)
     builder.add_node("inline_judge_response", inline_judge_response)  # Issue #10599
@@ -1363,7 +1346,8 @@ def build_chat_graph() -> StateGraph:
     builder.add_edge("initialize_session", "detect_intent")
     builder.add_conditional_edges("detect_intent", route_after_intent)
     builder.add_edge("prepare_llm", "perform_knowledge_search")  # Issue #1718
-    builder.add_edge("perform_knowledge_search", "generate_response")  # Issue #1718
+    builder.add_edge("perform_knowledge_search", "create_plan")  # Issue #1718, #21023
+    builder.add_edge("create_plan", "generate_response")
     builder.add_conditional_edges("generate_response", route_after_generation)
     builder.add_conditional_edges("reflect_on_response", route_after_reflection)
     builder.add_conditional_edges("inline_judge_response", route_after_judge)  # Issue #10599
