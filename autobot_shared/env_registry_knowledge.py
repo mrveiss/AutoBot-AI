@@ -565,3 +565,25 @@ register_env_var(
         range=(20, 1000),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_GRAPH_MAX_OFFSET",
+        type=int,
+        default=100000,
+        description="Upper bound of the knowledge-graph offset parameter (facts and bucket records to skip).",
+        component="knowledge",
+        range=(0, 10000000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_GRAPH_SCAN_LIMIT",
+        type=int,
+        default=5000,
+        description="Records scanned per fact listing or bucket collection to count and page what the caller may see.",
+        component="knowledge",
+        range=(100, 100000),
+    )
+)

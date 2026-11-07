@@ -6,32 +6,37 @@
 
 from typing import Any, Dict, List
 
+from api.knowledge_graph_facts import FactsPage
 from api.schemas_knowledge_graph import GraphRequest
 from autobot_shared.logging_manager import get_logger
+from knowledge.graph_bucket_visibility import viewer_for
 from knowledge.graph_buckets import build_bucket_sections, section_report
 
 logger = get_logger(__name__)
 
 
-async def facts_section(kb: Any, returned: int, offset: int) -> Dict[str, Any]:
-    """The facts section's total vs returned; total is None (reported as limited) when stats are unreadable."""
-    total = None
-    try:
-        total = (await kb.get_stats()).get("total_facts")
-    except Exception as e:
-        logger.warning("Failed to read fact total for graph: %s", e)
-    return section_report("facts", "Knowledge base facts", total, offset + returned)
+def facts_section(page: FactsPage, offset: int) -> Dict[str, Any]:
+    """The facts section: the VISIBLE total vs this page (never a count of facts the caller cannot read)."""
+    return section_report("facts", "Knowledge base facts", page.total, len(page.facts), offset, page.truncated)
 
 
 async def bucket_sections_for_graph(
-    kb: Any, body: GraphRequest, nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]], is_admin: bool
+    kb: Any,
+    body: GraphRequest,
+    nodes: List[Dict[str, Any]],
+    edges: List[Dict[str, Any]],
+    current_user: Any,
+    ledger: Any,
 ) -> List[Dict[str, Any]]:
-    """Append one section per ChromaDB knowledge bucket; return their total vs returned (#20945)."""
+    """Append one section per ChromaDB knowledge bucket the caller may read; return their totals (#20945)."""
     client = getattr(kb, "_async_chroma_client", None)
-    if not body.include_buckets or client is None or body.offset > 0 or body.category_filter:
+    if not body.include_buckets or client is None or body.category_filter:
         return []
     try:
-        built = await build_bucket_sections(client, is_admin)
+        viewer = viewer_for(current_user, ledger)
+        built = await build_bucket_sections(
+            client, viewer, getattr(kb, "ownership_manager", None), limit=body.max_facts, offset=body.offset
+        )
     except Exception as e:
         logger.warning("Failed to build bucket sections: %s", e)
         return []
@@ -47,11 +52,12 @@ async def graph_sections(
     body: GraphRequest,
     nodes: List[Dict[str, Any]],
     edges: List[Dict[str, Any]],
-    is_admin: bool,
-    fact_count: int,
+    ledger: Any,
+    page: FactsPage,
+    current_user: Any,
 ) -> List[Dict[str, Any]]:
-    """The facts section first, then one per bucket: total vs returned for the whole graph."""
+    """The facts section first, then one per bucket: visible total vs this page for the whole graph."""
     return [
-        await facts_section(kb, fact_count, body.offset),
-        *await bucket_sections_for_graph(kb, body, nodes, edges, is_admin),
+        facts_section(page, body.offset),
+        *await bucket_sections_for_graph(kb, body, nodes, edges, current_user, ledger),
     ]

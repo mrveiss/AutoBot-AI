@@ -79234,7 +79234,7 @@ export interface components {
             max_facts: number;
             /**
              * Offset
-             * @description Facts to skip, so a client can page to every fact (#20945)
+             * @description Facts and bucket records to skip, so a client can page to every one the caller may read (#20945)
              * @default 0
              */
             offset: number;
@@ -79277,12 +79277,75 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * GraphSection
+         * @description Visible total vs this page of one graph section (the facts, or one knowledge bucket).
+         */
+        GraphSection: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /**
+             * Total
+             * @description Records the caller may read (a lower bound when truncated)
+             */
+            total?: number | null;
+            /**
+             * Returned
+             * @description Records on this page
+             */
+            returned: number;
+            /**
+             * Limited
+             * @description True while readable records remain past this page
+             */
+            limited: boolean;
+            /**
+             * Truncated
+             * @description True when the scan cap cut the listing short
+             * @default false
+             */
+            truncated: boolean;
+        } & {
+            [key: string]: unknown;
+        };
         /** GraphSpec */
         GraphSpec: {
             /** Nodes */
             nodes?: components["schemas"]["NodeSpec"][];
             /** Transitions */
             transitions?: components["schemas"]["TransitionSpec"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * GraphStats
+         * @description Counts of one multi-source graph response.
+         */
+        GraphStats: {
+            /** Sections */
+            sections?: components["schemas"]["GraphSection"][];
+            /**
+             * Total Entities
+             * @default 0
+             */
+            total_entities: number;
+            /**
+             * Total Relations
+             * @default 0
+             */
+            total_relations: number;
+            /**
+             * Categories
+             * @default 0
+             */
+            categories: number;
+            /**
+             * Facts
+             * @default 0
+             */
+            facts: number;
         } & {
             [key: string]: unknown;
         };
@@ -82646,10 +82709,7 @@ export interface components {
             data: {
                 [key: string]: unknown;
             };
-            /** Stats */
-            stats: {
-                [key: string]: unknown;
-            };
+            stats: components["schemas"]["GraphStats"];
         } & {
             [key: string]: unknown;
         };
@@ -117652,6 +117712,8 @@ export interface operations {
                 max_facts?: number;
                 /** @description Include category nodes */
                 include_categories?: boolean;
+                /** @description Facts and bucket records to skip */
+                offset?: number;
             };
             header?: never;
             path?: never;
