@@ -220,7 +220,8 @@ describe('ThemeManagerSettings uninstall', () => {
   it('names the malformed answer with a translated message (#20816)', async () => {
     client.get.mockResolvedValue({ detail: 'x' })
     const w = await mountView()
-    expect(byId(w, 'slm-themes-error').text()).toContain(L.malformedList)
+    // A control string, not the en.json value the view reads: the message is the translated sentence.
+    expect(byId(w, 'slm-themes-error').text()).toContain('The theme list answer was not a list.')
   })
 
   it('ignores an older read that resolves after a newer one (#20816)', async () => {
@@ -237,5 +238,20 @@ describe('ThemeManagerSettings uninstall', () => {
     await flushPromises()
     expect(w.text()).toContain('Ember')
     expect(w.text()).not.toContain('Amber')
+  })
+
+  it('ignores an older read that rejects after a newer one succeeded (#20816)', async () => {
+    const w = await mountView()
+    let rejectOld: (e: unknown) => void = () => {}
+    client.get.mockReturnValueOnce(new Promise((_, rej) => { rejectOld = rej }))
+    await byId(w, 'slm-themes-refresh').trigger('click')
+    client.post.mockResolvedValue(ember)
+    client.get.mockResolvedValueOnce([ember])
+    await pick(w, zip('ember.zip'))
+    rejectOld(new TypeError('Failed to fetch'))
+    await flushPromises()
+    expect(byId(w, 'slm-themes-unavailable').exists()).toBe(false)
+    expect(byId(w, 'slm-themes-error').exists()).toBe(false)
+    expect(w.text()).toContain('Ember')
   })
 })

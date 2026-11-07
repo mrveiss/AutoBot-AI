@@ -3254,6 +3254,7 @@
         "loading": "Reading the installed themes...",
         "errorTitle": "The installed themes could not be read",
         "errorBody": "The theme list request failed.",
+        "malformedList": "The theme list answer was not a list.",
         "unavailableTitle": "The theme manager is not available",
         "unavailableBody": "Theme packages live on the main app, which did not answer. Try again once it is running.",
         "emptyTitle": "No themes installed",
