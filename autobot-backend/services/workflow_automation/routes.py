@@ -172,7 +172,7 @@ async def control_workflow(
             raise HTTPException(status_code=404, detail="Workflow not found or action failed")
 
     except StepNotAwaitingApproval as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except HTTPException:
         # #17014: without this the 403 below -- and the 404 above, already -- left as
         # a 500. An ownership refusal that surfaces as "Internal server error" is
@@ -180,7 +180,7 @@ async def control_workflow(
         raise
     except Exception as e:
         logger.error("Failed to control workflow: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @with_error_handling(

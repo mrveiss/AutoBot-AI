@@ -16,11 +16,11 @@ import json
 from datetime import datetime, timedelta, timezone
 from typing import Dict
 
-from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.ssot_constants import REDIS_KEY
+from autobot_shared.worker_loop import run_in_worker_loop
 from celery_app import celery_app
 from tasks.retention_audit import emit_deletion_audit as _emit_deletion_audit
 
@@ -176,4 +176,4 @@ def cleanup_expired_chats(self, retention_days: int = None, dry_run: bool = Fals
     """
     if retention_days is None:
         retention_days = _CHAT_RETENTION_DAYS
-    return run_or_schedule(_async_cleanup_expired_chats(retention_days, dry_run))
+    return run_in_worker_loop(_async_cleanup_expired_chats(retention_days, dry_run))
