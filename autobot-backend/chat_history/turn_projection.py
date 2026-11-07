@@ -23,6 +23,10 @@ by ``ConversationHandlerMixin._register_user_message_in_history``.
 
 from typing import Any, Dict, List
 
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
+
 #: How many completed exchanges the LLM sees. Matches the in-process window
 #: ``ConversationHandlerMixin._update_conversation_history`` keeps, and the
 #: last-10 bound the retired transcript loader applied.
@@ -68,3 +72,20 @@ def project_turn_pairs(messages: List[Dict[str, Any]], limit: int = LLM_CONTEXT_
             replies.append(message["text"].strip())
     _close_pair(pairs, user, replies)
     return pairs[-limit:] if limit > 0 else []
+
+
+async def load_turn_pairs(session_id: str, limit: int = LLM_CONTEXT_TURN_LIMIT) -> List[Dict[str, str]] | None:
+    """The last *limit* completed exchanges of *session_id* read from chat_sessions, the system of record.
+
+    None (an unreadable session) is kept apart from ``[]`` (a session with no
+    completed turns) so the first is logged as the error it is. The one reader the
+    LLM-context loader and the rolling-summary rebuild share.
+    """
+    from chat_history import ChatHistoryManager
+
+    try:
+        messages = await ChatHistoryManager().load_session(session_id)
+    except (PermissionError, ValueError, OSError) as exc:
+        logger.error("Cannot read chat session %s for LLM context: %s", session_id, exc)
+        return None
+    return project_turn_pairs(messages, limit)
