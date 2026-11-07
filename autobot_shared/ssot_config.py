@@ -224,11 +224,7 @@ class LLMConfig(RedactedSettings, ChatGraphSettings):
     environment variables, defaulting to the main AUTOBOT_LLM_PROVIDER.
     """
 
-    model_config = SettingsConfigDict(
-        env_file=str(PROJECT_ROOT / ".env"),
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
+    # model_config is inherited from ChatGraphSettings (same .env / utf-8 / extra="ignore"): one ConfigDict.
 
     # Primary models — each role maps to its optimal 6-tier (#2553)
     default_model: str = Field(default=DEFAULT_LLM_MODEL, alias="AUTOBOT_DEFAULT_LLM_MODEL")
