@@ -80,3 +80,24 @@ def test_the_literal_detector_sees_a_restated_budget() -> None:
     assert literal_budget_fields(source, "ParallelExecutorConfig", {"per_call_timeout_ms", "group_timeout_ms"}) == [
         "per_call_timeout_ms"
     ]
+
+
+def test_directly_built_executor_config_clamps_group_budget_and_warns(caplog) -> None:
+    """#19900: a caller-built config cannot reintroduce the group-cancels-call bug."""
+    with caplog.at_level("WARNING"):
+        cfg = ParallelExecutorConfig(per_call_timeout_ms=4500, group_timeout_ms=0)
+    assert cfg.group_timeout_ms == 4500
+    assert any("group_timeout_ms" in r.getMessage() for r in caplog.records)
+
+
+def test_executor_config_group_budget_needing_no_clamp_is_untouched(caplog) -> None:
+    with caplog.at_level("WARNING"):
+        cfg = ParallelExecutorConfig(per_call_timeout_ms=4500, group_timeout_ms=9000)
+    assert cfg.group_timeout_ms == 9000
+    assert not [r for r in caplog.records if "group_timeout_ms" in r.getMessage()]
+
+
+def test_clamp_group_timeout_is_the_single_rule() -> None:
+    assert tool_timeouts.clamp_group_timeout(4500, 0) == 4500
+    assert tool_timeouts.clamp_group_timeout(4500, 4500) == 4500
+    assert tool_timeouts.clamp_group_timeout(4500, 9000) == 9000
