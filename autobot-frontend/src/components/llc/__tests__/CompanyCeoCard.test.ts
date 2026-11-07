@@ -239,5 +239,13 @@ describe('CompanyCeoCard owner/admin-only controls (#20542)', () => {
     const wrapper = await mountCard()
     expect(wrapper.find('[data-testid="ceo-live"]').exists()).toBe(true)
     for (const id of controls) expect(wrapper.find(`[data-testid="${id}"]`).exists()).toBe(false)
+    // Said, not silent: a failed load must not read as a permission refusal.
+    expect(wrapper.find('[data-testid="ceo-standing-unavailable"]').exists()).toBe(true)
+  })
+
+  it('says nothing about the role when it loaded', async () => {
+    serve(live, asRole('member'))
+    const wrapper = await mountCard()
+    expect(wrapper.find('[data-testid="ceo-standing-unavailable"]').exists()).toBe(false)
   })
 })

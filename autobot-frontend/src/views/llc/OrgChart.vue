@@ -71,7 +71,7 @@ const router = useRouter()
 const route = useRoute() as ReturnType<typeof useRoute> | undefined
 const { companyId, resolveCompanyId } = useLlcCompanyContext()
 // #20682/#21001: attach/detach, contact delete and agent pause/terminate 403 for a non-owner/admin; hidden until the role loads.
-const { viewerRole, load: loadViewerStanding } = useCompanyMembers(api, () => companyId.value ?? '')
+const { viewerRole, errorMessage: standingError, load: loadViewerStanding } = useCompanyMembers(api, () => companyId.value ?? '')
 const canManageCompany = computed(() => isCompanyAdminRole(viewerRole.value))
 
 const tree = ref<OrgNode[]>([])
@@ -1127,7 +1127,7 @@ onMounted(() => {
         :unavailable="executorRollupUnavailable"
       />
     </div>
-
+    <p v-if="standingError" class="mb-2 text-xs text-autobot-text-muted" data-testid="org-standing-unavailable">{{ t('llc.orgChart.standingUnavailable') }}</p>
     <div v-if="error && viewMode !== 'planner'" class="rounded-lg bg-autobot-error-bg border border-autobot-error p-4 text-autobot-error text-sm mb-4">
       {{ error }}
       <button class="ml-4 underline" @click="fetchTree">{{ t('llc.orgChart.retry') }}</button>

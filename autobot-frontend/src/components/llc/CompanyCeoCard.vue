@@ -160,6 +160,8 @@ watch(
         <BaseBadge variant="success">{{ t('llcSettings.ceo.current') }}</BaseBadge>
       </div>
 
+      <BaseAlert v-if="standing.errorMessage.value" variant="warning" :message="t('llcSettings.ceo.standingUnavailable')" data-testid="ceo-standing-unavailable" />
+
       <BaseAlert v-if="peopleFailed" variant="warning" :message="t('llcSettings.ceo.peopleFailed')" data-testid="ceo-people-failed" />
 
       <div v-if="canChange" class="flex flex-col gap-2" data-testid="ceo-change">

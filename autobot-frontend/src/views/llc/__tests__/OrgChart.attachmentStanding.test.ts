@@ -79,6 +79,7 @@ describe('OrgChart attachment controls follow the server owner/admin check (#206
   it.each(['owner', 'admin'])('shows detach and attach to a company %s', async (role) => {
     respond(member(role))
     const wrapper = await canvasWrapper()
+    expect(wrapper.find('[data-testid="org-standing-unavailable"]').exists()).toBe(false)
     // Guard against a vacuous pass: the canvas did draw the nodes the buttons sit on.
     expect(wrapper.findAll('[data-testid="process-detach-btn"]').length).toBeGreaterThan(0)
     for (const id of CONTROLS) expect(wrapper.find(`[data-testid="${id}"]`).exists()).toBe(true)
@@ -100,6 +101,8 @@ describe('OrgChart attachment controls follow the server owner/admin check (#206
   it('hides them while the viewer standing cannot be read', async () => {
     respond(() => Promise.reject(new Error('HTTP 503')))
     const wrapper = await canvasWrapper()
+    // Said, not silent: a failed load must not read as a permission refusal.
+    expect(wrapper.find('[data-testid="org-standing-unavailable"]').exists()).toBe(true)
     for (const id of CONTROLS) expect(wrapper.find(`[data-testid="${id}"]`).exists()).toBe(false)
   })
 })
