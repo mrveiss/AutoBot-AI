@@ -18,13 +18,13 @@ Beat schedule entry:
 The schedule is registered in celery_app.py so that beat picks it up.
 """
 
-import asyncio
 from datetime import datetime, timezone
 
 from celery import shared_task
 from sqlalchemy import or_, select
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.worker_loop import run_in_worker_loop
 from llc.models.enums import ApprovalStatus
 from llc.models.sprint import LLCProject
 from llc.services.project_disposal import dispose
@@ -55,12 +55,7 @@ logger = get_logger(__name__)
 )
 def run_disposal_sweep(self: object) -> dict:  # type: ignore[type-arg]
     """Sync Celery entry point — disposes projects whose retention has elapsed."""
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    disposed = loop.run_until_complete(_async_sweep())
+    disposed = run_in_worker_loop(_async_sweep())
     return {"disposed": disposed}
 
 

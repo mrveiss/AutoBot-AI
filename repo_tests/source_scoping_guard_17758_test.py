@@ -64,7 +64,7 @@ _ACCEPTS_WITHOUT_READING: frozenset[str] = frozenset()
 #: and a verdict is not something this guard can supply.
 _KNOWN_UNSCOPED_FALLBACKS: frozenset[str] = frozenset(
     {
-        "autobot-backend/tasks/analytics_tasks.py:38",
+        "autobot-backend/tasks/analytics_tasks.py:41",
         "autobot-backend/api/codebase_analytics/chromadb_storage.py:616",
     }
 )
