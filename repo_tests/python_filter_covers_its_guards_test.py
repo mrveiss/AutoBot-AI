@@ -160,6 +160,10 @@ def _is_covered(path: str, patterns: list[str]) -> bool:
         head, sep, tail = pattern.partition("/**")
         if sep and (path == head or path.startswith(f"{head}/")):
             return True
+        # A pattern with no `**` is single-segment per `*`, as in the real filter: `docs/*.md`
+        # must not "cover" `docs/a/b.md` just because fnmatch's `*` crosses `/` (#17930).
+        if "**" not in pattern and path.count("/") != pattern.count("/"):
+            continue
         if fnmatch.fnmatch(path, pattern.replace("**/", "*/").replace("**", "*")):
             return True
         if pattern.startswith("**/") and fnmatch.fnmatch(path, pattern[3:].replace("**", "*")):
