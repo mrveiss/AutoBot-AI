@@ -29,6 +29,11 @@
         :aria-describedby="tipAddsInfo ? describedby : undefined"
       >
         <NavItemIcon :item="item" class="h-5 w-5" />
+        <span
+          v-if="badge > 0"
+          class="absolute -right-0.5 -top-0.5 min-w-[1rem] rounded-full bg-autobot-primary px-1 text-center text-[10px] font-semibold leading-4 text-white"
+          data-testid="nav-badge"
+        >{{ badge }}</span>
       </router-link>
     </template>
   </BaseTooltip>
@@ -42,7 +47,7 @@ import { BaseTooltip } from '@autobot/ui'
 import type { NavIconItem } from '@/config/navItems'
 import NavItemIcon from '@/components/layout/NavItemIcon.vue'
 
-const props = defineProps<{ item: NavIconItem }>()
+const props = withDefaults(defineProps<{ item: NavIconItem; badge?: number }>(), { badge: 0 })
 const { t } = useI18n()
 const route = useRoute()
 const active = computed(() => !!props.item.to && route.path.startsWith(props.item.to))
@@ -53,5 +58,5 @@ const norm = (v: string) => v.trim().toLowerCase()
 const tipAddsInfo = computed(() => norm(t(props.item.tipKey)) !== norm(t(props.item.ariaKey)))
 
 const linkClass =
-  'inline-flex h-10 w-10 items-center justify-center rounded-lg text-autobot-text-secondary transition-colors duration-150 hover:bg-autobot-bg-tertiary hover:text-autobot-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-autobot-primary'
+  'relative inline-flex h-10 w-10 items-center justify-center rounded-lg text-autobot-text-secondary transition-colors duration-150 hover:bg-autobot-bg-tertiary hover:text-autobot-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-autobot-primary'
 </script>

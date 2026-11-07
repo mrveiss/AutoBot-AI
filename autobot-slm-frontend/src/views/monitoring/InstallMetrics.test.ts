@@ -32,9 +32,22 @@ const ROUTES = {
   npu: '/monitoring/hardware/npu',
 }
 
+// The shape get_performance_dashboard() + the route's `analysis` block return (monitor.py, monitoring.py).
 const dashboard = {
-  system_metrics: { cpu_percent: 12.5, memory_percent: 48.25, disk_percent: 71, process_count: 233 },
-  analysis: { overall_health: 'good', performance_score: 88 },
+  timestamp: 1730000000,
+  monitoring_active: true,
+  hardware_acceleration: { gpu_available: false, npu_available: false },
+  recent_alerts: [],
+  system: { cpu_usage_percent: 12.5, memory_usage_percent: 48.25, cpu_load_1m: 0.4 },
+  trends: {},
+  analysis: { overall_health: 'healthy', performance_score: 88, bottlenecks: [], resource_utilization: {} },
+}
+// What the route returns when the monitor holds nothing: `analysis` is still attached, as a default.
+const unmeasuredDashboard = {
+  timestamp: 1730000000,
+  monitoring_active: false,
+  recent_alerts: [],
+  analysis: { overall_health: 'healthy', performance_score: 0, bottlenecks: [], resource_utilization: {} },
 }
 const services = {
   total_services: 2, healthy_services: 1, degraded_services: 1, critical_services: 0, overall_status: 'degraded', health_percentage: 50,
@@ -96,7 +109,8 @@ describe('InstallMetrics', () => {
     expect(client.get).toHaveBeenCalledTimes(6)
     expect(byId(w, 'slm-install-stat-cpu').text()).toContain('12.5%')
     expect(byId(w, 'slm-install-stat-memory').text()).toContain('48.3%')
-    expect(byId(w, 'slm-install-stat-processes').text()).toContain('233')
+    expect(byId(w, 'slm-install-stat-disk').exists()).toBe(false)
+    expect(byId(w, 'slm-install-stat-processes').exists()).toBe(false)
     expect(byId(w, 'slm-install-stat-gpuName').text()).toContain('GPU-X')
     expect(byId(w, 'slm-install-stat-gpuTemperature').text()).toContain('61 °C')
     expect(byId(w, 'slm-install-services-summary').text()).toContain('1 of 2 services healthy')
@@ -115,7 +129,7 @@ describe('InstallMetrics', () => {
   })
 
   it('says a field the backend left out is not reported, never 0, and a device that is absent is said absent', async () => {
-    serve({ dashboard: { system_metrics: { cpu_percent: 5 } } })
+    serve({ dashboard: { system: { cpu_usage_percent: 5 } } })
     const w = await mountView()
     expect(byId(w, 'slm-install-stat-cpu').text()).toContain('5.0%')
     expect(byId(w, 'slm-install-stat-memory').text()).toContain(L.notReported)
@@ -126,7 +140,7 @@ describe('InstallMetrics', () => {
 
   it('says the read is empty when every route answers with nothing, not that it failed', async () => {
     serve({
-      dashboard: {}, services: { ...services, total_services: 0, healthy_services: 0, services: [] },
+      dashboard: unmeasuredDashboard, services: { ...services, total_services: 0, healthy_services: 0, services: [] },
       alerts: { ...alerts, total_count: 0, alerts: [] }, recommendations: [], gpu: { ...gpu, available: false }, npu,
     })
     const w = await mountView()
@@ -134,6 +148,52 @@ describe('InstallMetrics', () => {
     expect(byId(w, 'slm-install-unavailable').exists()).toBe(false)
     expect(byId(w, 'slm-install-section-failed').exists()).toBe(false)
     expect(byId(w, 'slm-install-system').exists()).toBe(false)
+  })
+
+  it('is not empty when only the host was measured, and not empty when only the analysis was computed', async () => {
+    const quiet = { services: { ...services, total_services: 0, healthy_services: 0, services: [] }, alerts: { ...alerts, total_count: 0, alerts: [] }, recommendations: [], gpu: { ...gpu, available: false }, npu }
+    serve({ ...quiet, dashboard: { ...unmeasuredDashboard, system: { cpu_usage_percent: 3, memory_usage_percent: 4 } } })
+    let w = await mountView()
+    expect(byId(w, 'slm-install-empty').exists()).toBe(false)
+    expect(byId(w, 'slm-install-stat-cpu').text()).toContain('3.0%')
+    w.unmount()
+    serve({ ...quiet, dashboard: { ...unmeasuredDashboard, analysis: { overall_health: 'warning', performance_score: 0, bottlenecks: ['High CPU load'] } } })
+    w = await mountView()
+    expect(byId(w, 'slm-install-empty').exists()).toBe(false)
+    expect(byId(w, 'slm-install-stat-overallHealth').text()).toContain('warning')
+  })
+
+  it('does not show the default analysis as a measured figure', async () => {
+    serve({ dashboard: unmeasuredDashboard })
+    const w = await mountView()
+    expect(byId(w, 'slm-install-stat-overallHealth').text()).toContain(L.notReported)
+    expect(byId(w, 'slm-install-stat-performanceScore').text()).toContain(L.notReported)
+  })
+
+  it('says not authorised, apart from unavailable, when all six reads are refused with 401 or 403', async () => {
+    for (const status of [401, 403]) {
+      const refused = () => new HttpError(status, 'Refused', { detail: 'no' })
+      serve(Object.fromEntries(Object.keys(ROUTES).map((k) => [k, refused()])))
+      const w = await mountView()
+      expect(byId(w, 'slm-install-unauthorised').text()).toContain(L.unauthorisedTitle)
+      expect(byId(w, 'slm-install-unavailable').exists()).toBe(false)
+      w.unmount()
+    }
+  })
+
+  it('keeps the unavailable state for 502/503/504 and mixed refusals', async () => {
+    for (const status of [502, 503, 504]) {
+      serve(Object.fromEntries(Object.keys(ROUTES).map((k) => [k, new HttpError(status, 'x', { detail: 'd' })])))
+      const w = await mountView()
+      expect(byId(w, 'slm-install-unavailable').exists()).toBe(true)
+      expect(byId(w, 'slm-install-unauthorised').exists()).toBe(false)
+      w.unmount()
+    }
+    const mixed = Object.fromEntries(Object.keys(ROUTES).map((k, i) => [k, i === 0 ? down() : new HttpError(403, 'x', { detail: 'd' })]))
+    serve(mixed)
+    const w = await mountView()
+    expect(byId(w, 'slm-install-unavailable').exists()).toBe(true)
+    expect(byId(w, 'slm-install-unauthorised').exists()).toBe(false)
   })
 
   it('names the one section that failed, shows the rest, and draws the failed one as not reported', async () => {
