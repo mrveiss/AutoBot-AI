@@ -32,7 +32,6 @@ Freeing the slot is still separate from removing the directory, and now doubly s
 slot comes back on the sweep's own authority, the directory waits for a person.
 """
 
-import asyncio
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -42,6 +41,7 @@ from sqlalchemy import select
 
 from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.worker_loop import run_in_worker_loop
 from llc.models.enums import ApprovalStatus, ApprovalType
 from llc.services.approval import ApprovalService
 from llc.services.workspace_disposal import DisposalVerdict, dispose_workspace, work_landed
@@ -106,7 +106,7 @@ EXECUTION_WINDOW_DAYS = env_float_clamped("AUTOBOT_LLC_DISPOSAL_EXECUTION_WINDOW
 )
 def run_workspace_lease_sweep(self: object) -> dict:  # type: ignore[type-arg]
     """Celery entry point. Returns the counts so a run is legible from the result."""
-    return asyncio.run(_async_sweep())
+    return run_in_worker_loop(_async_sweep())
 
 
 def _is_sweep_proposal(approval: Any) -> bool:
