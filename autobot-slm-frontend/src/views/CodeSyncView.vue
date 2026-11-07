@@ -37,6 +37,7 @@ import { getCommitHashDisplay, getCommitUrl } from '@/utils/commitHashUtils'
 import ScheduleModal from '@/components/ScheduleModal.vue'
 import CodeSourceModal from '@/components/CodeSourceModal.vue'
 import FullTreeDriftPanel from '@/components/FullTreeDriftPanel.vue' // #16310
+import CodeRollbackPanel from '@/components/CodeRollbackPanel.vue' // #20214
 import UpdateProgressPanel from '@/components/UpdateProgressPanel.vue' // #20254
 import { useCodeSource } from '@/composables/useCodeSource'
 
@@ -815,8 +816,8 @@ async function handleUpdateAll(): Promise<void> {
   }
 }
 
-// Resume polling if a job is already running when the view mounts
-async function _checkExistingUpdateAllJob(): Promise<void> {
+// Follow the update-all job that is already running: on mount, and when a rollback (#20214) starts one
+async function adoptRunningUpdateAllJob(): Promise<void> {
   const result = await codeSync.getUpdateAllStatus()
   if (result === undefined || result === null || result === UPDATE_ALL_UNAUTHENTICATED) {
     return
@@ -839,7 +840,7 @@ onMounted(async () => {
     codeSync.fetchSchedules(),
     codeSync.fetchRoles(),
     codeSourceComposable.fetchCodeSource(),
-    _checkExistingUpdateAllJob(),
+    adoptRunningUpdateAllJob(),
   ])
 })
 
@@ -1501,9 +1502,8 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Full-Tree Drift Check (#16310 owner requirement) — additive to the
-         per-component card above; independent state, independent endpoint. -->
-    <div class="mb-6">
+    <div class="mb-6 space-y-6">
+      <CodeRollbackPanel :disabled="updateAllIsRunning" @started="adoptRunningUpdateAllJob" />
       <FullTreeDriftPanel />
     </div>
 
