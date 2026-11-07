@@ -171,8 +171,10 @@ _MIN_SOURCE_FILES = {"autobot-frontend": 500, "autobot-slm-frontend": 100}
 # canonical client) is not counted as another client -- only classes that share no base with it are sprawl.
 _CLIENT_CLASS_RE = re.compile(r"\bclass\s+([A-Za-z]*(?:ApiClient|ApiService|Client))\b([^{;]*)\{")
 _EXTENDS_KIT_BASE_RE = re.compile(r"\bextends\s+ApiClientBase\b")
-# Files that pull in the bridge `fetchWithAuth` (retired in #12363 slice 3), static or dynamic import.
-_FETCH_WITH_AUTH_IMPORT_RE = re.compile(r"""(?:\bfrom\s+|\bimport\s*\(\s*)['"][^'"]*\bfetchWithAuth(?:\.[jt]s)?['"]""")
+# Files that pull in the bridge `fetchWithAuth` (retired in #12363 slice 3): static, dynamic or CommonJS `require(`.
+_FETCH_WITH_AUTH_IMPORT_RE = re.compile(
+    r"""(?:\bfrom\s+|\bimport\s*\(\s*|\brequire\s*\(\s*)['"][^'"]*\bfetchWithAuth(?:\.[jt]s)?['"]"""
+)
 # A URL assembled by hand from the base helper instead of a typed `apiClient.call(...)` path. The WebSocket
 # URL builder shares the helper and is a different transport, so a line naming `getBackendWsUrl(` is out.
 _HAND_BUILT_URL_RE = re.compile(r"\$\{getApiBase\(\)\}/")
@@ -385,7 +387,7 @@ def test_the_inline_generic_detector_matches_the_typed_call_but_not_a_plain_call
     assert not _INLINE_GENERIC_RE.search("await recall<Foo>(x)")
 
 
-def test_the_fetch_with_auth_importer_detector_matches_static_and_dynamic_imports_only(tmp_path: Path) -> None:
+def test_the_fetch_with_auth_importer_detector_matches_static_dynamic_and_require_imports_only(tmp_path: Path) -> None:
     src = tmp_path / "src"
     src.mkdir()
     (src / "static.ts").write_text("import { fetchWithAuth } from '@/utils/fetchWithAuth'\n", encoding="utf-8")
@@ -394,10 +396,13 @@ def test_the_fetch_with_auth_importer_detector_matches_static_and_dynamic_import
     (src / "other.ts").write_text("import { x } from '@/utils/fetchWithAuthExtras'\n", encoding="utf-8")
     (src / "ext.ts").write_text("import { x } from '../utils/fetchWithAuth.ts'\n", encoding="utf-8")
     (src / "extjs.js").write_text("import { x } from './utils/fetchWithAuth.js'\n", encoding="utf-8")
+    (src / "cjs.js").write_text("const { fetchWithAuth } = require('./utils/fetchWithAuth')\n", encoding="utf-8")
+    (src / "cjsother.js").write_text("const x = require('./utils/fetchWithAuthExtras')\n", encoding="utf-8")  # control
     (src / "otherext.ts").write_text(
         "import { x } from './fetchWithAuth.json'\n", encoding="utf-8"
     )  # control: not the bridge
     assert _fetch_with_auth_importers(src, tmp_path) == [
+        "src/cjs.js",
         "src/dynamic.js",
         "src/ext.ts",
         "src/extjs.js",

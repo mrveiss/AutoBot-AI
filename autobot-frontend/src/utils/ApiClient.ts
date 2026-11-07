@@ -219,6 +219,14 @@ export class ApiClient extends ApiClientBase<RequestOptions, paths> {
     return readStoredAuthToken();
   }
 
+  // Contract keys carry the literal `/api` prefix; `VITE_API_BASE_PATH` may relocate it (a path or an absolute URL).
+  // Apply the configured base to `call`/`callRaw` so they reach the route hand-built `${getApiBase()}/x` callers
+  // do, and so `isAuthEndpoint` sees the same prefix (#12363). Keys outside `/api` (`/v1/...`) are sent as written.
+  protected contractPath(path: string): string {
+    const base = getApiBase();
+    return path.startsWith('/api/') && base !== '/api' ? `${base}${path.slice('/api'.length)}` : path;
+  }
+
   protected isAuthEndpoint(endpoint: string): boolean {
     return endpoint.includes(`${getApiBase()}/auth/`);
   }

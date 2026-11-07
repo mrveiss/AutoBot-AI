@@ -83,6 +83,7 @@ on:
       - 'autobot-frontend/package.json'
       - 'autobot-frontend/package-lock.json'
       - 'scripts/audit_api_wiring.py'
+      - 'scripts/audit_api_wiring_args.py'
       - 'requirements*.txt'
       - '.github/workflows/verify-generated-types.yml'
       - '.github/workflows/_changes.yml'
@@ -133,6 +134,7 @@ jobs:
           - 'autobot-frontend/package.json'
           - 'autobot-frontend/package-lock.json'
           - 'scripts/audit_api_wiring.py'
+          - 'scripts/audit_api_wiring_args.py'
           - '**/requirements*.txt'
           - '.github/workflows/verify-generated-types.yml'
         slm_types:
@@ -142,6 +144,7 @@ jobs:
           - 'autobot-slm-frontend/package.json'
           - 'autobot-slm-frontend/package-lock.json'
           - 'scripts/audit_api_wiring.py'
+          - 'scripts/audit_api_wiring_args.py'
           - '**/requirements*.txt'
           - '.github/workflows/verify-generated-types.yml'
 

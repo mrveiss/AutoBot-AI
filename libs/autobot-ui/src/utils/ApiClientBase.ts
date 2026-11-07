@@ -27,19 +27,28 @@ export interface TransportRequestOptions {
   /** A 401 is returned to the caller without the client's 401 policy running (diagnostics, #12363). */
   keepSessionOn401?: boolean
   /** Appended URL-encoded to the endpoint; `null`/`undefined` values are left out. */
-  params?: Record<string, string | number | boolean | null | undefined>
+  params?: Record<string, QueryValue>
   /** GET only: `'text'` returns the body as a string; anything else parses JSON. */
   responseType?: string
 }
 
 export type RawRequestOptions<O extends TransportRequestOptions> = O & { method?: string; body?: unknown }
 
-/** Append `params` to `endpoint`, skipping null/undefined; keeps an existing `?query`. Scalars only. */
+type QueryScalar = string | number | boolean
+/** A query value: a scalar, or an array sent as repeated keys (`a=1&a=2`, what FastAPI reads for `List[...]`). */
+export type QueryValue = QueryScalar | readonly QueryScalar[] | null | undefined
+
+/** Append `params` to `endpoint`, skipping null/undefined; keeps an existing `?query`. Arrays become repeated keys. */
 export function withQuery(endpoint: string, params: TransportRequestOptions['params']): string {
   if (!params) return endpoint
   const query = new URLSearchParams()
   for (const [key, value] of Object.entries(params)) {
-    if (value !== null && value !== undefined) query.append(key, String(value))
+    if (value === null || value === undefined) continue
+    if (Array.isArray(value)) {
+      for (const item of value as readonly QueryScalar[]) query.append(key, String(item))
+    } else {
+      query.append(key, String(value))
+    }
   }
   const text = query.toString()
   if (!text) return endpoint
@@ -114,26 +123,21 @@ export type MethodsOf<P, K extends keyof P> = { [M in HttpMethod]: [OpAt<P, K, M
 
 type JsonOf<C> = C extends { 'application/json': infer J } ? J : unknown
 
-/** The operation's JSON 200/201 response body; `void` for a documented 204; `unknown` when it documents none. */
+type JsonAt<R, S extends 200 | 201> = S extends keyof R ? (R[S] extends { content: infer C } ? JsonOf<C> : never) : never
+type HasJsonAt<R, S extends 200 | 201> = S extends keyof R ? (R[S] extends { content: { 'application/json': unknown } } ? true : false) : false
+
+/** The union of the operation's documented readable replies: JSON 200 and/or 201 bodies, `void` for a 204; `unknown` when it documents none. */
 export type CallResponse<Op> = Op extends { responses: infer R }
-  ? R extends { 200: { content: infer C } }
-    ? JsonOf<C>
-    : R extends { 201: { content: infer C } }
-      ? JsonOf<C>
-      : R extends { 204: unknown }
-        ? void
-        : unknown
+  ? [JsonAt<R, 200> | JsonAt<R, 201> | (204 extends keyof R ? void : never)] extends [never]
+    ? unknown
+    : JsonAt<R, 200> | JsonAt<R, 201> | (204 extends keyof R ? void : never)
   : unknown
 
-/** True when `call` can read the operation's reply: a JSON 200/201 body or a 204. CSV, text and blobs go through `callRaw`. */
+/** True when `call` can read some documented reply: a JSON 200/201 body or a 204 (CSV, text and blobs go through `callRaw`). */
 type ReturnsJson<Op> = Op extends { responses: infer R }
-  ? R extends { 200: { content: { 'application/json': unknown } } }
+  ? true extends HasJsonAt<R, 200> | HasJsonAt<R, 201> | (204 extends keyof R ? true : false)
     ? true
-    : R extends { 201: { content: { 'application/json': unknown } } }
-      ? true
-      : R extends { 204: unknown }
-        ? true
-        : false
+    : false
   : false
 
 /** The methods of a path whose reply `call` can read (see {@link ReturnsJson}); the rest are `callRaw` only. */
@@ -145,7 +149,12 @@ type ParamsOf<Op, S extends 'path' | 'query'> = Op extends { parameters: infer P
 type BodyOf<B> = B extends { content: infer C } ? (C extends { 'application/json': infer J } ? J : FormData | Blob) : never
 
 type PathPart<Op> = [ParamsOf<Op, 'path'>] extends [never] ? { path?: undefined } : { path: ParamsOf<Op, 'path'> }
-type QueryPart<Op> = [ParamsOf<Op, 'query'>] extends [never] ? { query?: undefined } : { query?: ParamsOf<Op, 'query'> }
+/** `query` is optional only when every generated query field is optional; one required field makes it required. */
+type QueryPart<Op> = [ParamsOf<Op, 'query'>] extends [never]
+  ? { query?: undefined }
+  : {} extends ParamsOf<Op, 'query'>
+    ? { query?: ParamsOf<Op, 'query'> }
+    : { query: ParamsOf<Op, 'query'> }
 type BodyPart<Op> = Op extends { requestBody: infer B }
   ? { body: BodyOf<B> }
   : Op extends { requestBody?: infer B }
@@ -257,6 +266,11 @@ export abstract class ApiClientBase<O extends TransportRequestOptions = Transpor
       delete headers['Content-Type'] // the browser sets the multipart boundary
     } else if (opts.body instanceof Blob) {
       init.body = opts.body // raw bytes: JSON would turn them into "{}"
+      // Never label bytes as JSON: the Blob's own media type, or none when it has none (caller headers still win).
+      if (opts.headers?.['Content-Type'] === undefined) {
+        if (opts.body.type) headers['Content-Type'] = opts.body.type
+        else delete headers['Content-Type']
+      }
     } else if (opts.body !== undefined) {
       init.body = JSON.stringify(opts.body)
     }

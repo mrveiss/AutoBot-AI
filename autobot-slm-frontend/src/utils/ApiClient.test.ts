@@ -390,6 +390,13 @@ describe('SlmApiClient.getContract (#16292)', () => {
     expect(body).toEqual({ nodes: [], total: 0 })
   })
 
+  it('refuses a contract key outside the /api mount instead of sending it under the base', () => {
+    const client = new SlmApiClient()
+    const loose = client as unknown as { callRaw: (m: string, p: string) => Promise<Response> }
+    expect(() => loose.callRaw('get', '/')).toThrow(/outside the \/api mount/)
+    expect(() => loose.callRaw('get', '/scim/v2/Users')).toThrow(/outside the \/api mount/)
+  })
+
   it('keeps a co-located base', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ nodes: [], total: 0 }))
     const client = new SlmApiClient()

@@ -56,7 +56,10 @@ export interface GetOptions extends RequestOptions {
   responseType?: 'json' | 'text'
 }
 
-export class SlmApiClient extends ApiClientBase<RequestOptions, paths> {
+/** The contract keys this client can reach: its base is the `/api` mount, so `/` and `/scim/...` are out. */
+export type SlmApiPaths = Pick<paths, Extract<keyof paths, `/api/${string}`>>
+
+export class SlmApiClient extends ApiClientBase<RequestOptions, SlmApiPaths> {
   // Optional host/base override (defaults to getSlmApiBase() when unset).
   private baseUrlOverride: string | null = null
 
@@ -118,8 +121,10 @@ export class SlmApiClient extends ApiClientBase<RequestOptions, paths> {
 
   // Contract keys carry the `/api` prefix; this client's base already supplies it (or `/slm/api`),
   // so `call`/`callRaw` drop it once here (#12363).
+  // The base is the `/api` mount, so a key outside it (`/`, `/scim/v2/...`) has no route through this client.
   protected contractPath(path: string): string {
-    return path.replace(/^\/api(?=\/)/, '')
+    if (!path.startsWith('/api/')) throw new Error(`${path} is outside the /api mount this client's base points at; it cannot be called through SlmApiClient`)
+    return path.slice('/api'.length)
   }
 
   // GET typed by the generated contract (#16292): the path must be a GET in `paths`, and the response
