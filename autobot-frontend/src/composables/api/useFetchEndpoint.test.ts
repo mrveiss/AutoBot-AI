@@ -9,7 +9,7 @@
  * Covers:
  *   - default behavior: `deps` optional, `scopeToSource` defaults FALSE
  *   - explicit opt-in: `scopeToSource: true` + deps.withSourceId wraps the URL
- *   - fallback to identity when scopeToSource=true without a withSourceId
+ *   - scopeToSource=true with no source in the URL: no request, no-data path (#20513)
  *   - HTTP methods: GET (default), POST + body factory, DELETE + body
  *   - loading/error/data lifecycle, onSuccess/onNoData/onError hooks
  *   - queryExtras appending + empty-value skipping
@@ -165,39 +165,59 @@ describe('useFetchEndpoint (rehomed)', () => {
     expect(url).toBe('http://backend.test/api/analytics/codebase/stats?source_id=s42')
   })
 
-  it('scopeToSource=true with NO deps falls back to identity and does not throw', async () => {
-    mockedFetch.mockResolvedValueOnce(
-      jsonResponse({ ok: true, value: 7 }),
-    )
+  it('scopeToSource=true with NO deps makes no request and takes the no-data path (#20513)', async () => {
     const { data, error, load } = useFetchEndpoint<RawPayload, number>({
       path: '/api/analytics/codebase/stats',
       scopeToSource: true,
       pickData: (raw) => (raw.ok ? (raw.value ?? null) : null),
     })
     await load()
+    // No source in the URL: the route would answer 422, so nothing is sent.
+    expect(mockedFetch).not.toHaveBeenCalled()
     expect(error.value).toBe('')
-    expect(data.value).toBe(7)
-    // URL unchanged — identity fallback
-    const url = mockedFetch.mock.calls[0]?.[0] as string
-    expect(url).toBe('http://backend.test/api/analytics/codebase/stats')
+    expect(data.value).toBeNull()
   })
 
-  it('scopeToSource=true with deps={} (withSourceId omitted) falls back to identity', async () => {
-    mockedFetch.mockResolvedValueOnce(
-      jsonResponse({ ok: true, value: 1 }),
-    )
+  it('scopeToSource=true with deps={} (withSourceId omitted) makes no request (#20513)', async () => {
+    const onNoData = vi.fn()
     const { data, load } = useFetchEndpoint<RawPayload, number>(
       {
         path: '/api/x',
         scopeToSource: true,
         pickData: (raw) => (raw.ok ? (raw.value ?? null) : null),
+        onNoData,
       },
       {}, // empty deps
     )
     await load()
-    expect(data.value).toBe(1)
-    const url = mockedFetch.mock.calls[0]?.[0] as string
-    expect(url).toBe('http://backend.test/api/x')
+    expect(mockedFetch).not.toHaveBeenCalled()
+    expect(onNoData).toHaveBeenCalledTimes(1)
+    expect(data.value).toBeNull()
+  })
+
+  it('scopeToSource=true with a withSourceId that adds nothing (no source selected) makes no request (#20513)', async () => {
+    const { load } = useFetchEndpoint<RawPayload, number>(
+      {
+        path: '/api/analytics/codebase/problems',
+        scopeToSource: true,
+        pickData: (raw) => (raw.ok ? (raw.value ?? null) : null),
+      },
+      { withSourceId: (u: string) => u },
+    )
+    await load()
+    expect(mockedFetch).not.toHaveBeenCalled()
+  })
+
+  it('scopeToSource=true with source_id supplied through queryExtras still sends the request', async () => {
+    mockedFetch.mockResolvedValueOnce(jsonResponse({ ok: true, value: 5 }))
+    const { data, load } = useFetchEndpoint<RawPayload, number>({
+      path: '/api/analytics/codebase/stats',
+      scopeToSource: true,
+      pickData: (raw) => (raw.ok ? (raw.value ?? null) : null),
+    })
+    await load({ source_id: 's9' })
+    expect(mockedFetch.mock.calls[0]?.[0]).toBe('http://backend.test/api/analytics/codebase/stats?source_id=s9')
+    expect(data.value).toBe(5)
   })
 
   it('POST with body works without deps', async () => {

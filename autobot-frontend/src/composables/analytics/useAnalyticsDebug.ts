@@ -34,17 +34,23 @@ export interface UseAnalyticsDebugDeps {
   declarationAnalysis: Ref<unknown[]>
   duplicateAnalysis: Ref<unknown[]>
   stopJobPolling: () => void
+  /** Adds the selected source's id to a URL; the source-scoped analytics routes require it (#20513). */
+  withSourceId: (url: string) => string
   t: (key: string, params?: Record<string, unknown>) => string
   notify: (msg: string, type?: ToastType) => void
 }
 
-// Endpoint configs for API health check (#1588)
-const _testEndpointConfigs = [
-  { name: 'Declarations', path: `${getApiBase()}/analytics/codebase/declarations` },
-  { name: 'Duplicates', path: `${getApiBase()}/analytics/codebase/duplicates` },
-  { name: 'Hardcodes', path: `${getApiBase()}/analytics/codebase/hardcodes` },
-  { name: 'NPU', path: `${getApiBase()}/npu/status` },
-  { name: 'Stats', path: `${getApiBase()}/analytics/codebase/stats` },
+const SOURCE_ID_IN_URL = /[?&]source_id=[^&#]+/
+
+// Endpoint configs for API health check (#1588). #20513: the analytics routes
+// require `source_id`, so they are built from `withSourceId`; `scoped` marks
+// the ones that need it, and they are skipped (not failed) with no source selected.
+const _testEndpointConfigs = (withSourceId: (url: string) => string) => [
+  { name: 'Declarations', scoped: true, path: withSourceId(`${getApiBase()}/analytics/codebase/declarations`) },
+  { name: 'Duplicates', scoped: true, path: withSourceId(`${getApiBase()}/analytics/codebase/duplicates`) },
+  { name: 'Hardcodes', scoped: true, path: withSourceId(`${getApiBase()}/analytics/codebase/hardcodes`) },
+  { name: 'NPU', scoped: false, path: `${getApiBase()}/npu/status` },
+  { name: 'Stats', scoped: true, path: withSourceId(`${getApiBase()}/analytics/codebase/stats`) },
 ]
 
 export function useAnalyticsDebug(deps: UseAnalyticsDebugDeps) {
@@ -60,6 +66,7 @@ export function useAnalyticsDebug(deps: UseAnalyticsDebugDeps) {
     declarationAnalysis,
     duplicateAnalysis,
     stopJobPolling,
+    withSourceId,
     t,
     notify,
   } = deps
@@ -113,7 +120,11 @@ export function useAnalyticsDebug(deps: UseAnalyticsDebugDeps) {
     )
     try {
       const results: string[] = []
-      for (const ep of _testEndpointConfigs) {
+      for (const ep of _testEndpointConfigs(withSourceId)) {
+        if (ep.scoped && !SOURCE_ID_IN_URL.test(ep.path)) {
+          results.push(`${ep.name}: skipped (no source selected)`)
+          continue
+        }
         try {
           await apiClient.get<unknown>(ep.path)
           results.push(`${ep.name}: OK`)

@@ -30,7 +30,10 @@ vi.mock('@/config/AppConfig.js', () => ({ default: { getServiceUrl: vi.fn(async 
 
 import { usePatternAnalysis } from './usePatternAnalysis'
 
-const CACHED = '/api/analytics/codebase/patterns/cached-summary'
+const SOURCE = 'src-a'
+// The selected source's id, added the way `withSourceId` does (#20513).
+const withSourceId = (url: string) => `${url}${url.includes('?') ? '&' : '?'}source_id=${SOURCE}`
+const CACHED = withSourceId('/api/analytics/codebase/patterns/cached-summary')
 
 describe('usePatternAnalysis failure reporting (#17651)', () => {
   beforeEach(() => {
@@ -43,7 +46,7 @@ describe('usePatternAnalysis failure reporting (#17651)', () => {
       if (url === CACHED) throw new Error('cached summary unavailable')
       return { status: 'success', stats: null }
     })
-    const { loadCachedData, error, hasResults } = usePatternAnalysis()
+    const { loadCachedData, error, hasResults } = usePatternAnalysis(withSourceId)
 
     expect(await loadCachedData()).toBe(false)
     expect(error.value).toContain('cached summary unavailable')
@@ -54,7 +57,7 @@ describe('usePatternAnalysis failure reporting (#17651)', () => {
     apiGet.mockImplementation(async (url: string) =>
       url === CACHED ? { status: 'no_data', has_cached_data: false } : { status: 'success', stats: null },
     )
-    const { loadCachedData, error } = usePatternAnalysis()
+    const { loadCachedData, error } = usePatternAnalysis(withSourceId)
 
     expect(await loadCachedData()).toBe(false)
     expect(error.value).toBeNull()
@@ -62,7 +65,7 @@ describe('usePatternAnalysis failure reporting (#17651)', () => {
 
   it('clearStorage reports a failed clear', async () => {
     apiPost.mockRejectedValue(new Error('clear refused'))
-    const { clearStorage, error } = usePatternAnalysis()
+    const { clearStorage, error } = usePatternAnalysis(withSourceId)
 
     expect(await clearStorage()).toBe(false)
     expect(error.value).toContain('clear refused')
@@ -70,9 +73,19 @@ describe('usePatternAnalysis failure reporting (#17651)', () => {
 
   it('getReport reports a failed fetch', async () => {
     apiGet.mockRejectedValue(new Error('report down'))
-    const { getReport, error } = usePatternAnalysis()
+    const { getReport, error } = usePatternAnalysis(withSourceId)
 
     expect(await getReport()).toBeNull()
     expect(error.value).toContain('report down')
+  })
+
+  it('with no source selected nothing is requested (the routes answer 422 without one, #20513)', async () => {
+    const { loadCachedData, getReport, clearStorage } = usePatternAnalysis((url: string) => url)
+
+    expect(await loadCachedData()).toBe(false)
+    expect(await getReport()).toBeNull()
+    expect(await clearStorage()).toBe(false)
+    expect(apiGet).not.toHaveBeenCalled()
+    expect(apiPost).not.toHaveBeenCalled()
   })
 })

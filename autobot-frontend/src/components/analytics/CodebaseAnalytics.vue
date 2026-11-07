@@ -222,8 +222,7 @@
             <!-- Issue #208: Code Pattern Analysis Section -->
       <PatternAnalysis
         ref="patternAnalysisRef"
-        :root-path="rootPath"
-        :auto-load="true"
+        :root-path="rootPath" :auto-load="true" :with-source-id="withSourceId"
         @analysis-complete="onPatternAnalysisComplete"
         @error="onPatternAnalysisError"
       />
@@ -802,6 +801,7 @@ const {
   declarationAnalysis,
   duplicateAnalysis,
   stopJobPolling,
+  withSourceId,
   t,
   notify,
 })

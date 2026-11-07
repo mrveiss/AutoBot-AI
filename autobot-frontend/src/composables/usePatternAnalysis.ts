@@ -20,6 +20,8 @@ import { createLogger } from '@/utils/debugUtils'
 import { extractErrorMessage } from '@/utils/errorExtract'
 import { useBackgroundTask } from '@/composables/useBackgroundTask'
 import { useLoadingState } from '@/composables/useLoadingState'
+import { usePatternSourceScope } from '@/composables/usePatternSourceScope'
+import { usePatternStorage } from '@/composables/usePatternStorage'
 import { CLEAR_STUCK_FORBIDDEN_MESSAGE, forceClearStuck, isClearStuckForbidden } from '@/composables/usePatternClearStuck'
 
 const logger = createLogger('usePatternAnalysis')
@@ -157,14 +159,17 @@ export interface AnalysisTaskEntry {
 }
 
 /**
- * Composable for Code Pattern Analysis
+ * Composable for Code Pattern Analysis. #20513: the `/patterns/*` routes require
+ * `source_id`; `withSourceId` supplies it, and with no source nothing is requested.
  */
-export function usePatternAnalysis() {
+export function usePatternAnalysis(withSourceId: (url: string) => string) {
   // Background task for pattern summary (#1332)
   const summaryTask = useBackgroundTask(
     `${getApiBase()}/analytics/codebase/patterns/summary`,
     `${getApiBase()}/analytics/codebase/patterns/summary/tasks/clear-stuck`
   )
+
+  const { selectedSourceId, hasSource } = usePatternSourceScope(withSourceId)
 
   // Reactive state
   const { isLoading: loading, wrap } = useLoadingState()
@@ -200,6 +205,9 @@ export function usePatternAnalysis() {
     }
   }
   const storageStats = ref<PatternStorageStats | null>(null)
+  const { getStorageStats, clearStorage, getReport } = usePatternStorage({
+    withSourceId, hasSource, wrap, error, storageStats,
+  })
 
   // AbortControllers — replaced (aborting previous) before each new fetch
   // _actionController removed: GET/POST helpers now use apiClient (no manual abort needed)
@@ -236,10 +244,11 @@ export function usePatternAnalysis() {
   // API Methods
 
   /**
-   * Run full pattern analysis on a directory
+   * Run full pattern analysis on the selected source, or a sub-path of it
+   * (`subPath` is relative to the source root, #20513).
    */
   const analyzePatterns = async (
-    path: string,
+    subPath: string | undefined,
     options: {
       enableRegex?: boolean
       enableComplexity?: boolean
@@ -256,6 +265,12 @@ export function usePatternAnalysis() {
       runInBackground = true
     } = options
 
+    const sourceId = selectedSourceId()
+    if (!sourceId) {
+      logger.debug('No source selected; skipping pattern analysis')
+      return false
+    }
+
     analyzing.value = true
     error.value = null
     wasInterrupted.value = false
@@ -270,7 +285,8 @@ export function usePatternAnalysis() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          path,
+          source_id: sourceId,
+          ...(subPath ? { path: subPath } : {}),
           enable_regex_detection: enableRegex,
           enable_complexity_analysis: enableComplexity,
           enable_duplicate_detection: enableDuplicates,
@@ -490,9 +506,9 @@ export function usePatternAnalysis() {
   /** Cached summary from ChromaDB (#208); `raise` for callers with no fallback to report a failed read (#17651). */
   const getCachedSummary = async (raise = false): Promise<boolean> => {
     try {
-      const data = await apiClient.get<Record<string, unknown>>(
-        '/api/analytics/codebase/patterns/cached-summary',
-      )
+      const url = withSourceId('/api/analytics/codebase/patterns/cached-summary')
+      if (!hasSource(url, 'cached pattern summary')) return false
+      const data = await apiClient.get<Record<string, unknown>>(url)
       if (data.has_cached_data && (data.total_patterns as number) > 0) {
         // Update report from cached data
         analysisReport.value = {
@@ -540,7 +556,9 @@ export function usePatternAnalysis() {
       // Fall back to background task analysis (#1332)
       // The sync GET /patterns/summary runs analysis inline and times out
       // on large codebases. Use POST /patterns/summary/analyze instead.
-      const query = path ? { path } : undefined
+      const sourceId = selectedSourceId()
+      if (!sourceId) return
+      const query = { source_id: sourceId, ...(path ? { path } : {}) }
       const success = await summaryTask.start(undefined, query)
 
       if (!success) {
@@ -591,9 +609,9 @@ export function usePatternAnalysis() {
       })
       if (path) params.append('path', path)
 
-      const data = await apiClient.get<{ status: string; duplicates?: DuplicatePattern[] }>(
-        `/api/analytics/codebase/patterns/duplicates?${params}`,
-      )
+      const url = withSourceId(`/api/analytics/codebase/patterns/duplicates?${params}`)
+      if (!hasSource(url, 'duplicates')) return
+      const data = await apiClient.get<{ status: string; duplicates?: DuplicatePattern[] }>(url)
       if (data.status === 'success') {
         duplicatePatterns.value = data.duplicates || []
       }
@@ -615,9 +633,9 @@ export function usePatternAnalysis() {
       const params = new URLSearchParams({ limit: limit.toString() })
       if (path) params.append('path', path)
 
-      const data = await apiClient.get<{ status: string; opportunities?: RegexOpportunity[] }>(
-        `/api/analytics/codebase/patterns/regex-opportunities?${params}`,
-      )
+      const url = withSourceId(`/api/analytics/codebase/patterns/regex-opportunities?${params}`)
+      if (!hasSource(url, 'regex-opportunities')) return
+      const data = await apiClient.get<{ status: string; opportunities?: RegexOpportunity[] }>(url)
       if (data.status === 'success') {
         regexOpportunities.value = data.opportunities || []
       }
@@ -643,9 +661,9 @@ export function usePatternAnalysis() {
       })
       if (path) params.append('path', path)
 
-      const data = await apiClient.get<{ status: string; hotspots?: ComplexityHotspot[] }>(
-        `/api/analytics/codebase/patterns/complexity-hotspots?${params}`,
-      )
+      const url = withSourceId(`/api/analytics/codebase/patterns/complexity-hotspots?${params}`)
+      if (!hasSource(url, 'complexity-hotspots')) return
+      const data = await apiClient.get<{ status: string; hotspots?: ComplexityHotspot[] }>(url)
       if (data.status === 'success') {
         complexityHotspots.value = data.hotspots || []
       }
@@ -667,69 +685,15 @@ export function usePatternAnalysis() {
       const params = new URLSearchParams({ max_suggestions: maxSuggestions.toString() })
       if (path) params.append('path', path)
 
-      const data = await apiClient.get<{ status: string; suggestions?: RefactoringSuggestion[] }>(
-        `/api/analytics/codebase/patterns/refactoring-suggestions?${params}`,
-      )
+      const url = withSourceId(`/api/analytics/codebase/patterns/refactoring-suggestions?${params}`)
+      if (!hasSource(url, 'refactoring-suggestions')) return
+      const data = await apiClient.get<{ status: string; suggestions?: RefactoringSuggestion[] }>(url)
       if (data.status === 'success') {
         refactoringSuggestions.value = data.suggestions || []
       }
     }).catch((e: unknown) => {
       error.value = extractErrorMessage(e, 'Refactoring suggestions fetch failed')
       logger.error('Refactoring suggestions fetch failed:', e)
-    })
-  }
-
-  /**
-   * Get pattern storage stats
-   */
-  const getStorageStats = async (): Promise<void> => {
-    await wrap(async () => {
-      const data = await apiClient.get<{ status: string; stats?: PatternStorageStats }>(
-        '/api/analytics/codebase/patterns/storage/stats',
-      )
-      if (data.status === 'success') {
-        storageStats.value = data.stats ?? null
-      }
-    }).catch((e: unknown) => {
-      logger.error('Storage stats fetch failed:', e)
-    })
-  }
-
-  /**
-   * Clear pattern storage
-   */
-  const clearStorage = async (): Promise<boolean> => {
-    return wrap(async () => {
-      // Handler returns {message} on 2xx and raises on failure (no status field).
-      await apiClient.post(
-        '/api/analytics/codebase/patterns/storage/clear',
-      )
-      storageStats.value = null
-      return true
-    }).catch((e: unknown) => {
-      error.value = extractErrorMessage(e, 'Clearing the stored patterns failed')
-      logger.error('Clear storage failed:', e)
-      return false
-    })
-  }
-
-  /**
-   * Get markdown report
-   */
-  const getReport = async (path?: string): Promise<string | null> => {
-    return wrap(async () => {
-      const params = path ? `?path=${encodeURIComponent(path)}` : ''
-      const data = await apiClient.get<{ status: string; report?: string }>(
-        `/api/analytics/codebase/patterns/report${params}`,
-      )
-      if (data.status === 'success') {
-        return data.report ?? null
-      }
-      return null
-    }).catch((e: unknown) => {
-      error.value = extractErrorMessage(e, 'Report fetch failed')
-      logger.error('Report fetch failed:', e)
-      return null
     })
   }
 

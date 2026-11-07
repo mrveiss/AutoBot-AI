@@ -38,6 +38,9 @@ import { useApiResource } from '@/composables/useApiResource'
 
 const logger = createLogger('useFetchEndpoint')
 
+/** A non-empty `source_id` query parameter anywhere in the URL (#20513). */
+const SOURCE_ID_IN_URL = /[?&]source_id=[^&#]+/
+
 export type FetchEndpointMethod = 'GET' | 'POST' | 'DELETE'
 
 export interface UseFetchEndpointOptions<TRaw, TOut, Ctx = undefined> {
@@ -227,6 +230,15 @@ export function useFetchEndpoint<TRaw, TOut, Ctx = undefined>(
       url = withSourceId(url)
     }
     url = appendQueryExtras(url, queryExtras)
+
+    // #20513: the analytics routes require `source_id` and answer 422 without
+    // it. A scoped call with no source selected has nothing to ask for, so it
+    // takes the no-data path instead of sending a request that is certain to fail.
+    if (scopeToSource && !SOURCE_ID_IN_URL.test(url)) {
+      logger.debug(`No source selected; skipping ${label}`)
+      opts.onNoData?.(ctx)
+      return null
+    }
 
     const init: RequestInit = {
       method,
