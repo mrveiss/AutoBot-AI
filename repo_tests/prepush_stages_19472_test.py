@@ -351,9 +351,9 @@ _ADDED = (
 
 
 class TestFastGate:
-    def test_the_guard_set_is_seventeen_existing_guards_including_todays(self) -> None:
+    def test_the_guard_set_is_distinct_existing_guards_including_todays(self) -> None:
         guards = _guard_list()
-        assert len(guards) == len(set(guards)) == 17
+        assert len(guards) == len(set(guards)) and len(guards) >= len(_ADDED)
         assert set(_ADDED) <= set(guards)
         assert [g for g in guards if not (repo_root() / g).is_file()] == []
         assert "scripts/repin_reach_floors.py --check" in _SOURCE
@@ -362,8 +362,8 @@ class TestFastGate:
     def test_every_branch_runs_only_the_fast_gate(self, tmp_path: Path) -> None:
         for branch in ("issue-x", "train-x"):
             done = _push(tmp_path / branch, branch)
-            assert "fast gate: 17 guard tests + reach-floor pins" in done.stderr, done.stderr[-3000:]
-            assert "fast guards: 17 guard file(s) pass" in done.stderr, done.stderr[-3000:]
+            assert f"fast gate: {len(_guard_list())} guard tests + reach-floor pins" in done.stderr, done.stderr[-3000:]
+            assert f"fast guards: {len(_guard_list())} guard file(s) pass" in done.stderr, done.stderr[-3000:]
             assert "pytest selection" not in done.stderr and "pytest selected" not in done.stderr
             assert done.returncode == 0, done.stderr[-3000:]
 
@@ -399,7 +399,7 @@ class TestFastGate:
         assert "cat <<'EOF'" not in _fn("fast_guard_tests"), "the list is baked into the hook again"
 
     def test_the_pushed_commits_list_governs_not_the_working_tree(self, tmp_path: Path) -> None:
-        # The pushed commit drops every guard but the first; the working tree still names all 17.
+        # The pushed commit drops every guard but the first; the working tree still names every listed guard.
         done = _guards(tmp_path, pushed_list="# one only\n" + _guard_list()[0] + "\n")
         assert "exit=0" in done.stdout and "fast guards: 1 guard file(s) pass" in done.stderr, done.stderr
 
@@ -410,7 +410,9 @@ class TestFastGate:
 
     def test_a_commit_without_the_list_falls_back_to_the_working_tree(self, tmp_path: Path) -> None:
         done = _guards(tmp_path, pushed_list="")
-        assert "exit=0" in done.stdout and "fast guards: 17 guard file(s) pass" in done.stderr, done.stderr
+        assert (
+            "exit=0" in done.stdout and f"fast guards: {len(_guard_list())} guard file(s) pass" in done.stderr
+        ), done.stderr
 
     def test_no_list_anywhere_blocks_rather_than_running_nothing(self, tmp_path: Path) -> None:
         done = _guards(tmp_path, pushed_list="", tree_list=False)

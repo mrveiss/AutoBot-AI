@@ -12,11 +12,13 @@ import ast
 import re
 from pathlib import Path
 
+from repo_tests._paths import repo_root
+
 from tools.lint import _parse_cache as parse_cache
 from tools.lint.canonical.context import Context
 from tools.lint.canonical.rules import py_celery_private_event_loop as rule
 
-REPO = Path(__file__).resolve().parents[4]
+REPO = repo_root()
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "py_celery_private_event_loop"
 
 
@@ -45,14 +47,14 @@ def test_waiver_is_honoured():
 
 
 def test_alias_table_resolves_module_and_from_import_aliases():
-    tree = ast.parse("import asyncio as aio\nfrom asyncio import run as r, new_event_loop\n")
+    tree = parse_cache.parse("import asyncio as aio\nfrom asyncio import run as r, new_event_loop\n")
     table = rule.alias_table(tree)
     assert (
         table["aio"] == "asyncio"
         and table["r"] == "asyncio.run"
         and table["new_event_loop"] == "asyncio.new_event_loop"
     )
-    names = {n for _, n in rule.private_loop_calls(ast.parse("import asyncio as aio\naio.run(x)\n"))}
+    names = {n for _, n in rule.private_loop_calls(parse_cache.parse("import asyncio as aio\naio.run(x)\n"))}
     assert names == {"asyncio.run"}
 
 
@@ -144,7 +146,7 @@ def _census() -> set[str]:
 def _rule_population(census: set[str]) -> set[str]:
     out = set()
     for rel in census:
-        tree = ast.parse((REPO / rel).read_text(encoding="utf-8"))
+        tree = parse_cache.parse((REPO / rel).read_text(encoding="utf-8"))
         if rule.in_scope(rel, tree):
             out.add(rel)
     return out
@@ -164,8 +166,8 @@ def test_rule_population_covers_the_independent_census():
 
 
 def test_rule_can_fail_on_a_known_bad_control_string():
-    assert rule.private_loop_calls(ast.parse("import asyncio\nasyncio.run(x)\n"))
-    assert not rule.private_loop_calls(ast.parse("x = 'asyncio.run(y)'\n"))
+    assert rule.private_loop_calls(parse_cache.parse("import asyncio\nasyncio.run(x)\n"))
+    assert not rule.private_loop_calls(parse_cache.parse("x = 'asyncio.run(y)'\n"))
 
 
 def test_repo_has_no_private_loops_in_scope():
@@ -208,7 +210,7 @@ def _closure(start: set[str]) -> set[str]:
         if rel in seen:
             continue
         seen.add(rel)
-        tree = ast.parse((REPO / rel).read_text(encoding="utf-8"))
+        tree = parse_cache.parse((REPO / rel).read_text(encoding="utf-8"))
         for mod in _module_level_imports(tree):
             f = _module_file(mod)
             if f is not None:
@@ -227,7 +229,7 @@ def test_no_task_module_imports_a_helper_that_creates_a_private_loop():
     for rel in sorted(reachable):
         if rel in rule.ALLOWLIST or rel in _HELPERS or rel.endswith("_test.py"):
             continue
-        calls = rule.private_loop_calls(ast.parse((REPO / rel).read_text(encoding="utf-8")))
+        calls = rule.private_loop_calls(parse_cache.parse((REPO / rel).read_text(encoding="utf-8")))
         names = [n for _, n in calls if not n.endswith("run_or_schedule")]  # run_or_schedule is worker-aware
         if names:
             offenders[rel] = names
