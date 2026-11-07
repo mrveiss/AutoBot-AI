@@ -519,3 +519,54 @@ def test_off_mode_disables_everything(scratch_repo):
 
     assert "LEAK:" not in result.stdout
     assert result.returncode == 0
+
+
+# ---------------------------------------------------------------------------
+# #20214 / #16069 -- the SLM stub-lifetime plugin and the guard, ordered at the seam
+# ---------------------------------------------------------------------------
+
+_SLM_BACKEND = _REPO_ROOT / "autobot-slm-backend"
+
+_SLM_LIKE_CONFTEST = f"""
+import sys
+import types
+from pathlib import Path
+
+sys.path.insert(0, {str(_SLM_BACKEND)!r})
+from _slm_stub_lifetime import register_stub_lifetime
+
+_STUB = types.ModuleType({_VICTIM!r})
+sys.modules[{_VICTIM!r}] = _STUB
+
+
+def pytest_configure(config):
+    if {{register!r}}:
+        register_stub_lifetime(config, Path(__file__).parent, {{{_VICTIM!r}: _STUB}})
+"""
+
+
+def _slm_like(scratch_repo, register: bool) -> Path:
+    """``pkg_a`` (a sibling, collected first) and ``z_slm`` (collected LAST, owner of a guard-tracked stub)."""
+    repo = scratch_repo("")
+    _write(repo / "z_slm" / "conftest.py", _SLM_LIKE_CONFTEST.replace("{register!r}", repr(register)))
+    _write(repo / "z_slm" / "test_z_slm.py", "def test_ok():\n    assert True\n")
+    return repo
+
+
+def test_a_sibling_item_run_first_after_collection_ends_in_the_slm_tree_is_not_blamed(scratch_repo):
+    """Collection ends inside the SLM tree with its stub live; the first item to RUN belongs to a sibling.
+
+    The lifetime plugin must withdraw the stub before the guard's own protocol check, or the guard
+    blames the SLM conftest for a stub that is withdrawn a moment later.
+    """
+    result = _run_pytest(_slm_like(scratch_repo, register=True), targets=("pkg_a", "z_slm"))
+
+    assert "LEAK:" not in result.stdout, result.stdout
+    assert result.returncode == 0, result.stdout
+
+
+def test_the_same_ordering_is_a_leak_without_the_lifetime_plugin(scratch_repo):
+    """The control: with nothing withdrawing the stub the guard does report it, so the test above can fail."""
+    result = _run_pytest(_slm_like(scratch_repo, register=False), targets=("pkg_a", "z_slm"))
+
+    assert "LEAK:" in result.stdout, result.stdout
