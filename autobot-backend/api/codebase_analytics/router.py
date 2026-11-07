@@ -32,6 +32,7 @@ from .endpoints import (
 from .endpoints import queue as queue_router
 from .endpoints import (
     report,
+    run_state,
     sources,
     stats,
 )
@@ -48,6 +49,7 @@ router = APIRouter(
 # Include all endpoint routers
 router.include_router(indexing.router)
 router.include_router(stats.router)
+router.include_router(run_state.router)  # Issue #21003: partial-run label
 router.include_router(charts.router)
 router.include_router(dependencies.router)
 router.include_router(import_tree.router)

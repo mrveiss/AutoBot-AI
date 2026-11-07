@@ -27,8 +27,21 @@ from .indexing_executor import (
     _SUBPROCESS_WATCHDOG_INTERVAL,
 )
 from .progress_tracker import _load_task_from_redis
+from .run_status import (
+    STATUS_KILLED,
+    TERMINAL_STATUSES,
+    RunKilled,
+    record_run_finished,
+    record_run_started,
+    status_for_returncode,
+)
 
 logger = get_logger(__name__)
+
+# #21003: why the supervisor killed a worker, by task id.  ``_wait_with_watchdog``
+# returns only an exit code, and both kill paths return -9, so the cause would
+# otherwise be lost between the kill and the status record.
+_KILL_REASONS: dict[str, str] = {}
 
 
 async def _handle_subprocess_crash(
@@ -36,8 +49,10 @@ async def _handle_subprocess_crash(
     returncode: int,
     mark_task_failed_fn,
     save_task_fn,
+    source_id: str | None = None,
+    kill_reason: str = "",
 ) -> None:
-    """Mark indexing task failed in Redis after subprocess crash (#1180).
+    """Mark indexing task failed/killed in Redis after subprocess crash (#1180).
 
     Only updates state if the subprocess did not already write a terminal
     status (completed/failed/cancelled) before crashing.
@@ -48,15 +63,20 @@ async def _handle_subprocess_crash(
         Callable ``(task_id, error)`` bound to module-level indexing_tasks.
     save_task_fn:
         Async callable ``(task_id)`` that persists task state to Redis.
+    kill_reason:
+        Why the supervisor killed the worker (progress timeout or hard
+        timeout), when it did; otherwise the exit code is the reason.
     """
     logger.error("[Task %s] Indexing subprocess crashed (exit code %d)", task_id, returncode)
     task_data = await _load_task_from_redis(task_id) or {}
-    if task_data.get("status") not in ("completed", "failed", "cancelled"):
-        mark_task_failed_fn(
-            task_id,
-            RuntimeError(f"Indexing subprocess crashed (exit code {returncode})"),
-        )
+    if task_data.get("status") not in TERMINAL_STATUSES:
+        status = status_for_returncode(returncode)
+        reason = kill_reason or f"Indexing subprocess crashed (exit code {returncode})"
+        error_type = RunKilled if status == STATUS_KILLED else RuntimeError
+        mark_task_failed_fn(task_id, error_type(reason))
         await save_task_fn(task_id)
+        # #21003: durable terminal status; the findings it stored stay, labelled partial.
+        await record_run_finished(source_id, task_id, status, reason)
 
 
 async def _wait_with_watchdog(
@@ -85,7 +105,7 @@ async def _wait_with_watchdog(
         task_data = await _load_task_from_redis(task_id)
         if task_data:
             status = task_data.get("status")
-            if status in ("completed", "failed", "cancelled"):
+            if status in TERMINAL_STATUSES:
                 return await proc.wait()
 
             # #18055: a phase transition is liveness too.  Hashing only the
@@ -115,6 +135,10 @@ async def _wait_with_watchdog(
                     "[Task %s] Subprocess stale for %d seconds, " "killing (no progress update)",
                     task_id,
                     int(now - last_progress_time),
+                )
+                _KILL_REASONS[task_id] = (
+                    f"killed by the progress watchdog: no progress for {int(now - last_progress_time)}s "
+                    f"(limit {_SUBPROCESS_PROGRESS_TIMEOUT}s)"
                 )
                 proc.kill()
                 await proc.wait()
@@ -161,6 +185,7 @@ async def _run_indexing_subprocess(
     if source_id:
         cmd.append(source_id)
 
+    await record_run_started(source_id, task_id)
     logger.info("[Task %s] Launching isolated indexing subprocess (#1180)", task_id)
     proc = await asyncio.create_subprocess_exec(*cmd)
 
@@ -175,11 +200,15 @@ async def _run_indexing_subprocess(
             task_id,
             _SUBPROCESS_HARD_TIMEOUT,
         )
+        _KILL_REASONS[task_id] = f"killed by the hard timeout: run exceeded {_SUBPROCESS_HARD_TIMEOUT}s"
         proc.kill()
         await proc.wait()
         returncode = -9
 
+    kill_reason = _KILL_REASONS.pop(task_id, "")
     if returncode != 0:
-        await _handle_subprocess_crash(task_id, returncode, mark_task_failed_fn, save_task_fn)
+        await _handle_subprocess_crash(
+            task_id, returncode, mark_task_failed_fn, save_task_fn, source_id=source_id, kill_reason=kill_reason
+        )
     else:
         logger.info("[Task %s] Subprocess completed successfully (rc=0)", task_id)
