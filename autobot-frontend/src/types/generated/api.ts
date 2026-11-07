@@ -79228,10 +79228,22 @@ export interface components {
         GraphRequest: {
             /**
              * Max Facts
-             * @description Maximum facts to include
+             * @description Facts per page (page through with offset)
              * @default 50
              */
             max_facts: number;
+            /**
+             * Offset
+             * @description Facts to skip, so a client can page to every fact (#20945)
+             * @default 0
+             */
+            offset: number;
+            /**
+             * Include Buckets
+             * @description Include one section per non-fact knowledge bucket (#20945)
+             * @default true
+             */
+            include_buckets: boolean;
             /**
              * Max Depth
              * @description Maximum relation depth
