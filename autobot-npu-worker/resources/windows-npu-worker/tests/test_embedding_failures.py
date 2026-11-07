@@ -3,7 +3,8 @@ import sys
 from pathlib import Path
 
 import pytest
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 
 APP_DIR = Path(__file__).parents[1] / "app"
 sys.path.insert(0, str(APP_DIR))
@@ -11,6 +12,7 @@ sys.path.insert(0, str(APP_DIR))
 from api_schemas import NPUTaskRequest
 from worker_inference import WorkerInferenceMixin
 from worker_routes import WorkerRoutesMixin
+from worker_state import LRUCache, ThreadSafeStats
 
 
 class FailingModelManager:
@@ -38,7 +40,7 @@ def test_unavailable_inference_fails_when_mock_mode_is_disabled():
 
 
 class RouteHarness(WorkerRoutesMixin):
-    async def generate_npu_embeddings(self, *args):
+    async def _generate_npu_embeddings_with_origin(self, *args):
         raise RuntimeError("model is not loaded")
 
     async def process_task(self, *args):
@@ -52,7 +54,7 @@ def test_embedding_route_returns_5xx_with_failure_reason():
         asyncio.run(request._handle_embedding_generate(["hello"], "nomic-embed-text", True, "balanced"))
 
     assert exc_info.value.status_code == 500
-    assert "model is not loaded" in str(exc_info.value.detail)
+    assert exc_info.value.detail == "Embedding generation failed"
 
 
 def test_inference_route_returns_5xx_with_failure_reason():
@@ -63,4 +65,72 @@ def test_inference_route_returns_5xx_with_failure_reason():
         asyncio.run(request._handle_inference(payload))
 
     assert exc_info.value.status_code == 500
-    assert "model is not loaded" in str(exc_info.value.detail)
+    assert exc_info.value.detail == "Inference failed"
+
+
+class HTTPHarness(WorkerInferenceMixin, WorkerRoutesMixin):
+    def __init__(self, manager):
+        self.app = FastAPI()
+        self._model_manager = manager
+        self._use_real_inference = True
+        self._allow_mock_inference = False
+        self.loaded_models = {"model": {}}
+        self.embedding_cache = LRUCache()
+        self.task_stats = ThreadSafeStats()
+        self.npu_optimization = {}
+        self.npu_available = False
+        self._register_inference_routes()
+
+    async def get_npu_utilization(self):
+        return 0
+
+
+@pytest.mark.parametrize("error", [KeyError("missing model"), RuntimeError("private inference failure")])
+@pytest.mark.parametrize("endpoint", ["/inference", "/embedding/generate"])
+def test_failures_reach_http_without_exposing_details(endpoint, error):
+    class Manager:
+        def generate_embedding(self, text, model_name):
+            raise error
+
+    worker = HTTPHarness(Manager())
+    payload = (
+        {"task_type": "embedding_generation", "model_name": "model", "input_data": {"text": "hello"}}
+        if endpoint == "/inference"
+        else ["hello"]
+    )
+    response = TestClient(worker.app).post(endpoint, json=payload, params={"model_name": "model"})
+    assert response.status_code == 500
+    assert "private" not in response.text and "missing model" not in response.text
+    assert "embedding" not in response.json()
+
+
+def test_mock_status_survives_cache_and_crosses_both_endpoints():
+    worker = HTTPHarness(None)
+    worker._allow_mock_inference = True
+    client = TestClient(worker.app)
+    first = client.post("/embedding/generate", json=["hello"], params={"model_name": "model"}).json()
+    second = client.post(
+        "/inference", json={"task_type": "embedding_generation", "model_name": "model", "input_data": {"text": "hello"}}
+    ).json()
+    assert first["mock"] is True
+    assert second["result"]["mock"] is True
+    assert second["result"]["cache_hit"] is True
+
+
+def test_mixed_batch_marks_cached_mock_and_new_real_embedding():
+    worker = HTTPHarness(None)
+    worker._allow_mock_inference = True
+    client = TestClient(worker.app)
+    client.post("/embedding/generate", json=["cached"], params={"model_name": "model"})
+
+    class Manager:
+        def generate_embedding(self, text, model_name):
+            return [1.0, 0.0]
+
+    worker._model_manager = Manager()
+    response = client.post("/embedding/generate", json=["cached", "real"], params={"model_name": "model"})
+    assert response.status_code == 200
+    assert response.json()["mock"] is True
+    real = client.post("/embedding/generate", json=["real"], params={"model_name": "model"}).json()
+    assert real["mock"] is False
+    assert real["embeddings"] == [[1.0, 0.0]]

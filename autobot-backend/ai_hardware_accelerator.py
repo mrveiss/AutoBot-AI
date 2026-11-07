@@ -574,7 +574,10 @@ class AIHardwareAccelerator:
             if response.status == 200:
                 result_data = await response.json()
                 if result_data.get("status") == "completed":
-                    return result_data.get("result", {})
+                    result = result_data.get("result", {})
+                    if task.task_type == "embedding_generation" and result.get("mock") is True:
+                        raise RuntimeError("NPU worker returned a mock embedding")
+                    return result
                 else:
                     raise Exception(f"NPU processing failed: {result_data.get('error')}")
             else:

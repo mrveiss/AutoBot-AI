@@ -215,7 +215,7 @@ class WorkerRoutesMixin:
             )
         except Exception as e:
             logger.error(f"Inference failed for task {task_id}: {e}")
-            raise HTTPException(status_code=500, detail=f"Inference failed: {e}") from e
+            raise HTTPException(status_code=500, detail="Inference failed") from e
 
     async def _handle_embedding_generate(
         self,
@@ -231,7 +231,9 @@ class WorkerRoutesMixin:
         """
         try:
             start_time = time.time()
-            embeddings = await self.generate_npu_embeddings(texts, model_name, use_cache, optimization_level)
+            embeddings, mock = await self._generate_npu_embeddings_with_origin(
+                texts, model_name, use_cache, optimization_level
+            )
             processing_time = (time.time() - start_time) * 1000
 
             model_info = self.loaded_models.get(model_name, {})
@@ -240,6 +242,7 @@ class WorkerRoutesMixin:
 
             return {
                 "embeddings": embeddings,
+                "mock": mock,
                 "model_used": model_name,
                 "processing_time_ms": processing_time,
                 "texts_processed": len(texts),
@@ -249,7 +252,7 @@ class WorkerRoutesMixin:
             }
         except Exception as e:
             logger.error(f"Embedding generation failed: {e}")
-            raise HTTPException(status_code=500, detail=f"Embedding generation failed: {e}") from e
+            raise HTTPException(status_code=500, detail="Embedding generation failed") from e
 
     async def _handle_semantic_search(
         self,
