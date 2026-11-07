@@ -78,7 +78,7 @@ def _tracked_python(root: Path = _ROOT) -> list[str]:
 REACH = declare(
     "inline-lazy-singleton",
     discover=_tracked_python,
-    floor=8093,  # mid-window: population 8093, window (8093, 8093)
+    floor=8144,  # mid-window: population 8144, window (8144, 8144)
     what="tracked python files",
     roots=_ROOTS,
 )
