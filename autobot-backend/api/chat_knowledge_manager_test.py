@@ -27,7 +27,12 @@ from typing import Any, Dict, List
 import pytest
 
 from api.chat_knowledge_manager import ChatKnowledgeManager
-from api.chat_knowledge_prompt import DELIMITER_LOOKALIKES, OVERRIDE_PATTERNS, TranscriptRefused
+from api.chat_knowledge_prompt import (
+    DELIMITER_LOOKALIKES,
+    KNOWLEDGE_MAX_CHUNKS,
+    OVERRIDE_PATTERNS,
+    TranscriptRefused,
+)
 from chat_history.summarization_prompt import SUMMARIZER_INPUT_MAX_CHARS
 
 _CHAT_ID = "chat-15630"
@@ -55,9 +60,11 @@ class _RecordingLLM:
 
     def __init__(self) -> None:
         self.prompts: List[str] = []
+        self.kwargs: List[Dict[str, Any]] = []
 
-    async def chat(self, messages: List[Dict[str, Any]], **_kwargs: Any) -> SimpleNamespace:
+    async def chat(self, messages: List[Dict[str, Any]], **kwargs: Any) -> SimpleNamespace:
         self.prompts.append(messages[0]["content"])
+        self.kwargs.append(kwargs)
         return SimpleNamespace(content="a summary")
 
 
@@ -206,11 +213,23 @@ async def test_a_forged_end_marker_is_defused_inside_the_frame() -> None:
 
 async def test_an_overlong_transcript_is_summarised_in_bounded_chunks() -> None:
     """One long chat cannot buy unlimited prompt space, and none of it is silently cut (#20852)."""
-    manager, llm = _manager([{"role": "user", "content": f"line {i} " + "word " * 400} for i in range(120)])
+    manager, llm = _manager([{"role": "user", "content": f"line {i} " + "word " * 400} for i in range(30)])
     await manager.compile_chat_to_knowledge(_CHAT_ID)
 
     assert len(llm.prompts) > 1, "an over-cap transcript must be folded in chunks"
     assert all(len(_framed_body(prompt)) <= SUMMARIZER_INPUT_MAX_CHARS + 2000 for prompt in llm.prompts)
+    assert len(llm.prompts) <= KNOWLEDGE_MAX_CHUNKS + 1  # the ceiling bounds the calls one request buys
+    assert all("model_name" not in kwargs for kwargs in llm.kwargs), "no model named: the gateway's default"
+
+
+async def test_a_transcript_beyond_the_chunk_ceiling_is_refused_not_cut() -> None:
+    """The old path cut at 24000 characters; the new one fails loudly past a chunk ceiling, with no LLM call."""
+    llm, kb, reason = await _refused(
+        [{"role": "user", "content": "word " * (SUMMARIZER_INPUT_MAX_CHARS // 5)}] * (KNOWLEDGE_MAX_CHUNKS + 1)
+    )
+
+    assert llm.prompts == [] and not hasattr(kb, "content")
+    assert "too long" in reason
 
 
 async def test_a_transcript_with_no_content_writes_no_entry() -> None:

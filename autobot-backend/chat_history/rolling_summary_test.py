@@ -26,6 +26,7 @@ class FakeRedis:
 
     def __init__(self):
         self.data = {}
+        self.ttls = {}
 
     async def get(self, key):
         return self.data.get(key)
@@ -36,11 +37,18 @@ class FakeRedis:
         self.data[key] = value
         return True
 
-    async def eval(self, script, numkeys, key, token):
-        if self.data.get(key) == token:
-            del self.data[key]
-            return 1
-        return 0
+    async def eval(self, script, numkeys, *args):
+        keys, argv = args[:numkeys], args[numkeys:]
+        if self.data.get(keys[0]) != argv[0]:
+            return 0  # every script is guarded by the lock token
+        if script == rs._RELEASE_LOCK:
+            del self.data[keys[0]]
+        elif script == rs._STORE_IF_LOCKED:
+            self.data[keys[1]] = argv[1]
+            self.ttls[keys[1]] = argv[2]
+        else:
+            assert script == rs._EXTEND_LOCK
+        return 1
 
 
 class StubSummarizer:
@@ -72,9 +80,12 @@ class Conversation:
 
     async def turn(self, user, assistant, now=1000.0):
         self.durable.append({"user": user, "assistant": assistant})
-        evicted = self.mixin._update_conversation_history(self.session, user, assistant, SID)
-        turns = [*evicted, *self.session.conversation_history]
-        return await rs.refresh_summary(SID, turns, "m", self.stub, now=now)
+        self.mixin._update_conversation_history(self.session, user, assistant, SID)
+        return await rs.refresh_summary(SID, "m", self.stub, now=now)
+
+    async def run_same(self, n):
+        for _ in range(n):
+            await self.turn("same question", "same answer")
 
     async def run(self, n, constraints=None):
         for i in range(1, n + 1):
@@ -138,14 +149,15 @@ async def test_ttl_expiry_after_turn_12_rebuilds_from_durable_history(env):
     assert await env.summary() == ""
     await env.turn("question 13", "answer 13")
     assert CONSTRAINT in await env.summary()  # turn 1 is gone from the window; durable history has it
-    rebuild = env.stub.calls[-1]
-    assert rebuild["prior"] == "" and rebuild["n"] == (13 - rs.RECENT_TURNS_KEPT) * 2
+    rebuild = env.stub.calls[-2]  # chunk one of the rebuild: it starts from nothing
+    assert rebuild["prior"] == ""
+    assert sum(c["n"] for c in env.stub.calls[-2:]) == (13 - rs.RECENT_TURNS_KEPT) * 2  # 2 chunks of the 11 older
 
 
 @pytest.mark.asyncio
-async def test_a_summary_older_than_the_ttl_is_rebuilt_not_extended(env):
+async def test_a_summary_older_than_the_rebuild_age_is_rebuilt_not_extended(env):
     await env.run(5, constraints={1: CONSTRAINT})
-    await env.turn("question 6", "answer 6", now=1000.0 + rs.ROLLING_SUMMARY_TTL_SECONDS + 1)
+    await env.turn("question 6", "answer 6", now=1000.0 + rs.ROLLING_SUMMARY_REBUILD_AGE_SECONDS + 1)
     assert env.stub.calls[-1]["prior"] == "" and CONSTRAINT in await env.summary()
 
 
@@ -165,7 +177,7 @@ async def test_a_same_count_edit_invalidates_the_summary(env):
 async def test_incomplete_turn_is_not_summarised(env):
     await env.run(5)
     env.session.conversation_history.append({"user": "in flight", "assistant": ""})
-    await rs.refresh_summary(SID, env.session.conversation_history, "m", env.stub, now=1000.0)
+    await rs.refresh_summary(SID, "m", env.stub, now=1000.0)
     assert env.stub.calls[-1]["n"] == 2  # turn 3 only; turns 4-5 and the in-flight one stay recent/unfolded
 
 
@@ -205,11 +217,10 @@ def test_schedule_refresh_runs_off_the_reply_path_through_the_tracked_task_helpe
         patch.object(rs, "fire_and_forget") as spawn,
         patch.object(rs, "_safe_refresh", MagicMock(return_value="coro")),
     ):
-        rs.schedule_refresh(session, session.conversation_history)
+        rs.schedule_refresh(session)
         assert spawn.call_args.args[0] == "coro" and spawn.call_args.kwargs["name"] == f"rolling-summary-{SID}"
         spawn.reset_mock()
-        rs.schedule_refresh(SimpleNamespace(session_id=SID, metadata={}), session.conversation_history)  # no model
-        rs.schedule_refresh(session, _history_turns(2))  # nothing older than the recent turns
+        rs.schedule_refresh(SimpleNamespace(session_id=SID, metadata={}))  # no model
         assert spawn.call_count == 0
 
 
@@ -324,3 +335,130 @@ async def test_summarize_endpoint_uses_the_shared_summariser():
     assert resp.data["summary"] == "ENDPOINT-SUMMARY"
     assert sentinel.await_args.args[1] == "local-model" and sentinel.await_args.kwargs["max_tokens"] == 77
     assert resp.data["summary_token_count"] == 321  # the provider usage, not an estimate
+
+
+def _is_folded_once(stub):
+    return sum(c["n"] for c in stub.calls) // 2
+
+
+@pytest.mark.asyncio
+async def test_repeated_identical_turns_are_each_folded_exactly_once(env):
+    """[A]*6 then new turns: a digest-boundary match skipped turns; the ordinal folds each once."""
+    await env.run_same(6)
+    assert (await env.summary()) != "" and _is_folded_once(env.stub) == 6 - rs.RECENT_TURNS_KEPT
+    for i in range(7, 10):
+        await env.turn(f"new {i}", f"answer {i}")
+    await env.run_same(3)
+    older = len(env.durable) - rs.RECENT_TURNS_KEPT
+    assert _is_folded_once(env.stub) == older  # no turn folded twice, none skipped
+    entry = rs._entry_from(env.redis.data[f"{rs._SUMMARY_KEY_PREFIX}{SID}"])
+    assert entry.folded == older and entry.guard == rs.prefix_guard(env.durable[:older])
+
+
+@pytest.mark.asyncio
+async def test_locate_does_not_treat_a_short_history_as_a_match():
+    entry = rs.SummaryEntry(folded=3, guard=rs.prefix_guard(_history_turns(3)))
+    assert rs.locate_new_turns(entry, _history_turns(2)) is None  # fewer turns than folded
+    assert rs.locate_new_turns(entry, _history_turns(5)) == _history_turns(5)[3:]
+
+
+@pytest.mark.asyncio
+async def test_an_edit_at_the_fold_boundary_rebuilds(env):
+    await env.run(8)
+    boundary = 8 - rs.RECENT_TURNS_KEPT - 1  # the last folded turn
+    env.durable[boundary] = {"user": f"question {boundary + 1}", "assistant": "regenerated"}
+    await env.turn("question 9", "answer 9")
+    assert env.stub.calls[-1]["prior"] == ""  # one chunk, rebuilt from nothing
+    assert rs._entry_from(env.redis.data[f"{rs._SUMMARY_KEY_PREFIX}{SID}"]).folded == 9 - rs.RECENT_TURNS_KEPT
+
+
+def test_an_in_process_turn_and_its_durable_projection_share_identity_and_digest():
+    from chat_history.turn_projection import project_turn_pairs
+
+    messages = [
+        {"sender": "user", "text": "q"},
+        {"sender": "assistant", "text": "  first \n", "messageType": "llm_response"},
+        {"sender": "assistant", "text": "second\n", "messageType": "response"},
+    ]
+    durable = project_turn_pairs(messages)[0]
+    in_process = {"user": "q", "assistant": "  first \n\n\nsecond\n"}
+    assert rs.normalise_turn(in_process) != durable  # raw reply differs in its inner whitespace ...
+    single = project_turn_pairs([messages[0], messages[1]])[0]
+    raw = {"user": "q", "assistant": "  first \n"}
+    assert rs.normalise_turn(raw) == single and rs.turn_digest(raw) == rs.turn_digest(single)
+    assert rs.turn_digest(durable) == rs.turn_digest(rs.normalise_turn(durable))
+
+
+@pytest.mark.asyncio
+async def test_a_lock_that_expires_mid_fold_refuses_the_late_writers_store(env):
+    await env.run(5)
+    before = env.redis.data[f"{rs._SUMMARY_KEY_PREFIX}{SID}"]
+    stale = rs._RefreshLock(env.redis, SID)
+    assert await stale.acquire()
+    del env.redis.data[stale.key]  # the lock expired mid-fold ...
+    fresh = rs._RefreshLock(env.redis, SID)
+    assert await fresh.acquire()  # ... and a second refresh took it
+    assert await stale.store(rs.SummaryEntry(text="late", folded=1)) is False
+    assert env.redis.data[f"{rs._SUMMARY_KEY_PREFIX}{SID}"] == before
+    assert await fresh.store(rs.SummaryEntry(text="fresh", folded=1)) is True
+    assert env.redis.ttls[f"{rs._SUMMARY_KEY_PREFIX}{SID}"] == rs.ROLLING_SUMMARY_TTL_SECONDS
+    await stale.release()  # a stale holder must not release the new holder's lock
+    assert fresh.key in env.redis.data
+
+
+@pytest.mark.asyncio
+async def test_a_refresh_that_loses_its_lock_between_chunks_stops_folding(env):
+    await env.run(4)
+    env.stub.calls.clear()
+    real_extend = rs._RefreshLock.extend
+
+    async def lose_after_first(lock):
+        if env.stub.calls:
+            env.redis.data.pop(lock.key, None)
+        return await real_extend(lock)
+
+    with patch.object(rs, "ROLLING_SUMMARY_CHUNK_TURNS", 1), patch.object(rs._RefreshLock, "extend", lose_after_first):
+        env.redis.data.pop(f"{rs._SUMMARY_KEY_PREFIX}{SID}")
+        for i in range(5, 9):
+            env.durable.append({"user": f"question {i}", "assistant": f"answer {i}"})
+        await rs.refresh_summary(SID, "m", env.stub, now=1000.0)
+    assert len(env.stub.calls) == 1  # stopped after the first chunk; nothing was stored
+    assert f"{rs._SUMMARY_KEY_PREFIX}{SID}" not in env.redis.data
+
+
+@pytest.mark.asyncio
+async def test_a_rebuild_longer_than_the_ceiling_loses_no_turn_and_warns(env, caplog):
+    for i in range(1, 13):
+        env.durable.append({"user": f"question {i}", "assistant": f"answer {i}"})
+    with patch.object(rs, "ROLLING_SUMMARY_CHUNK_TURNS", 2), patch.object(rs, "ROLLING_SUMMARY_MAX_CHUNKS", 3):
+        with caplog.at_level("WARNING", logger=rs.logger.name):
+            await rs.refresh_summary(SID, "m", env.stub, now=1000.0)
+        assert any("folding the oldest 3 now" in r.getMessage() for r in caplog.records)
+        entry = rs._entry_from(env.redis.data[f"{rs._SUMMARY_KEY_PREFIX}{SID}"])
+        assert entry.folded == 6  # the OLDEST 6 of the 10 older turns; none truncated from the front
+        assert env.stub.calls[0]["n"] == 4  # chunk one is turns 1-2
+        for _ in range(2):  # the next refreshes catch up
+            await rs.refresh_summary(SID, "m", env.stub, now=1001.0)
+    assert _is_folded_once(env.stub) == 12 - rs.RECENT_TURNS_KEPT
+    assert rs._entry_from(env.redis.data[f"{rs._SUMMARY_KEY_PREFIX}{SID}"]).folded == 10
+
+
+@pytest.mark.asyncio
+async def test_a_summary_past_the_rebuild_age_still_serves_and_the_key_outlives_it(env):
+    await env.run(5, constraints={1: CONSTRAINT})
+    assert rs.ROLLING_SUMMARY_TTL_SECONDS > rs.ROLLING_SUMMARY_REBUILD_AGE_SECONDS
+    assert env.redis.ttls[f"{rs._SUMMARY_KEY_PREFIX}{SID}"] == rs.ROLLING_SUMMARY_TTL_SECONDS
+    assert CONSTRAINT in await rs.current_summary(SID)  # no age check on the prompt path
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_durable_history_skips_the_refresh_and_keeps_the_summary(env):
+    await env.run(5, constraints={1: CONSTRAINT})
+    before = await env.summary()
+    with patch.object(rs, "load_turn_pairs", AsyncMock(return_value=None)):
+        await env.turn("question 6", "answer 6")
+    assert await env.summary() == before
+
+
+def test_system_of_record_is_chat_sessions():
+    assert rs.SYSTEM_OF_RECORD.name == "chat_sessions"

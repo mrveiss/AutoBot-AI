@@ -167,10 +167,10 @@ class ConversationHandlerMixin:
         message: str,
         llm_response: str,
         session_id: str,
-    ) -> List[Dict[str, str]]:
-        """Update session conversation history with deduplication; returns the turns the 10-turn trim evicted.
+    ) -> None:
+        """Update session conversation history with deduplication.
 
-        Issue #620. The evicted turns go to the rolling summary (#20852) before they are gone.
+        Issue #620. A turn the trim evicts is still in chat_sessions, which the rolling summary (#20852) reads.
 
         Args:
             session: Workflow session object
@@ -187,11 +187,8 @@ class ConversationHandlerMixin:
         else:
             session.conversation_history.append({"user": message, "assistant": llm_response})
 
-        evicted: List[Dict[str, str]] = []
         if len(session.conversation_history) > 10:
-            evicted = session.conversation_history[:-10]
             session.conversation_history = session.conversation_history[-10:]
-        return evicted
 
     async def _persist_conversation(
         self,
@@ -214,9 +211,9 @@ class ConversationHandlerMixin:
             message: User message
             llm_response: LLM response
         """
-        evicted = self._update_conversation_history(session, message, llm_response, session_id)
-        # #20852: fold what is about to leave the window (and the rest) off the reply path.
-        schedule_refresh(session, [*evicted, *session.conversation_history])
+        self._update_conversation_history(session, message, llm_response, session_id)
+        # #20852: fold the older turns off the reply path, from the durable history.
+        schedule_refresh(session)
 
         await self._save_conversation_history(session_id, session.conversation_history)
 

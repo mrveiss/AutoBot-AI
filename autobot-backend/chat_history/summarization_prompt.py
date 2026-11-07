@@ -126,6 +126,11 @@ def usage_total(response: Any, text: str) -> int:
     return len(text) // 4
 
 
+def optional_model_name(model_name: Optional[str]) -> Dict[str, str]:
+    """``model_name`` kwarg only when one is named: a gateway's own default model otherwise (as before #20852)."""
+    return {"model_name": model_name} if model_name else {}
+
+
 def optional_max_tokens(max_tokens: Optional[int]) -> Dict[str, int]:
     """``max_tokens`` kwarg for the gateway, omitted when the caller wants the provider default."""
     return {} if max_tokens is None else {"max_tokens": max_tokens}
@@ -161,8 +166,8 @@ async def call_gateway(
         response = await asyncio.wait_for(
             gateway.chat(
                 messages=[{"role": CategoryDefaults.ROLE_USER, "content": prompt}],
-                model_name=model_name,
                 temperature=0.3,  # Low temp for consistent summaries
+                **optional_model_name(model_name),
                 **optional_max_tokens(max_tokens),
             ),
             timeout=SUMMARIZER_TIMEOUT_SECONDS,
