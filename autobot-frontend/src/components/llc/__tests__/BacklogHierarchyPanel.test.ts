@@ -73,7 +73,7 @@ describe('BacklogHierarchyPanel', () => {
 
     expect(wrapper.text()).toContain('Hierarchy violations (1)')
     expect(wrapper.get('[data-testid="hierarchy-violations"]').text()).toContain('WI-1')
-    expect(wrapper.text()).toContain('A Task cannot sit under a Epic.')
+    expect(wrapper.text()).toContain('Task cannot sit under Epic.')
     expect(wrapper.text()).not.toContain('server english text')
   })
 

@@ -306,6 +306,19 @@ def _violation_filter(parent, cycle_ids):
     )
 
 
+def violations_statement(company: uuid.UUID, limit: int):
+    """The one SELECT behind the report: rows breaking a rule, their parent, and whether they sit in a cycle."""
+    parent = aliased(LLCWorkItem)
+    cycle_ids = _cycle_members(company)
+    return (
+        select(LLCWorkItem, parent, LLCWorkItem.id.in_(cycle_ids))
+        .outerjoin(parent, and_(parent.id == LLCWorkItem.parent_id, parent.company_id == company))
+        .where(LLCWorkItem.company_id == company, _violation_filter(parent, cycle_ids))
+        .order_by(LLCWorkItem.identifier, LLCWorkItem.id)
+        .limit(limit + 1)
+    )
+
+
 async def find_hierarchy_violations(
     session: AsyncSession, company_id: str, limit: int = HIERARCHY_VIOLATIONS_LIMIT
 ) -> Tuple[List[Dict[str, Optional[str]]], bool]:
@@ -314,16 +327,7 @@ async def find_hierarchy_violations(
     Returns ``(rows, truncated)``. The rules are applied and the limit taken in SQL, so at most
     ``limit + 1`` rows leave the database; ``truncated`` says there were more than *limit*.
     """
-    company = uuid.UUID(str(company_id))
-    parent = aliased(LLCWorkItem)
-    cycle_ids = _cycle_members(company)
-    stmt = (
-        select(LLCWorkItem, parent, LLCWorkItem.id.in_(cycle_ids))
-        .outerjoin(parent, and_(parent.id == LLCWorkItem.parent_id, parent.company_id == company))
-        .where(LLCWorkItem.company_id == company, _violation_filter(parent, cycle_ids))
-        .order_by(LLCWorkItem.identifier, LLCWorkItem.id)
-        .limit(limit + 1)
-    )
+    stmt = violations_statement(uuid.UUID(str(company_id)), limit)
     fetched = (await session.execute(stmt)).all()
     return [_report_row(*r) for r in fetched[:limit]], len(fetched) > limit
 
