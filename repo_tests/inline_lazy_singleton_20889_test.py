@@ -279,23 +279,14 @@ def test_no_accessor_managed_class_constructed_directly():
 
 
 def test_floor_measures_the_tracked_python_it_names():
-    """Control (MEASUREMENT_DISCIPLINE): an independent `git ls-files` count equals both numbers the
+    """Control (MEASUREMENT_DISCIPLINE): a count taken from one plain `*.py` spec (filtered by root here, not by per-root globs) equals both numbers the
     fraction is judged on, and the roots are all real, so a share cannot read well off a wrong path."""
 
-    import subprocess  # noqa: PLC0415
-
-    from autobot_shared.paths import scrubbed_git_env  # noqa: PLC0415
-
-    def listed(*specs: str) -> set[str]:
-        out = subprocess.run(
-            ["git", "ls-files", "-z", "--", *specs], cwd=_ROOT, env=scrubbed_git_env(), capture_output=True, check=True
-        ).stdout
-        return {p for p in out.decode("utf-8").split("\0") if p}
-
-    scanned = listed(*(f"{r}/*.py" for r in _ROOTS))
+    every_py = set(tracked_paths(_ROOT, "*.py"))  # one plain spec, filtered here: not the per-root globs
+    scanned = {p for p in every_py if p.split("/", 1)[0] in _ROOTS}
     assert scanned, "control: the independent enumeration found nothing"
     assert {str(p) for p in REACH.population(_ROOT)} == scanned
-    assert _all_tracked_python(_ROOT) == len(listed("*.py"))
+    assert _all_tracked_python(_ROOT) == len(every_py)
     assert {p.split("/", 1)[0] for p in scanned} == set(_ROOTS)
 
 
