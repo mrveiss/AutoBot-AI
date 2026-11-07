@@ -18268,8 +18268,7 @@ export interface paths {
          * List directory for SLM admin file browser
          * @description List directory contents at an absolute path.
          *
-         *     No auth required — accessible via /autobot-api/ nginx proxy (Issue #984).
-         *     Restricted to pre-approved base directories.
+         *     Admin permission required. Restricted to pre-approved base directories.
          */
         get: operations["admin_list_directory_api_files_get"];
         put?: never;
@@ -18291,7 +18290,7 @@ export interface paths {
          * Read file content for SLM admin file browser
          * @description Return text content of a file at an absolute path.
          *
-         *     Limited to 1 MB. No auth required — accessible via /autobot-api/ (Issue #984).
+         *     Limited to 1 MB. Admin permission required.
          */
         get: operations["admin_read_file_api_files_read_get"];
         put?: never;
