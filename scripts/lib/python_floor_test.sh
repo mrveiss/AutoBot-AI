@@ -71,5 +71,34 @@ python_floor_venv_matches "$tmp" "$tmp/none"; check "missing venv mismatches" "1
 echo "$(python3 -c 'import sys;print("%d.%d"%sys.version_info[:2])')" > "$tmp/.python-version"
 check "present interpreter is returned" "yes" "$([[ "$(python_floor_ensure "$tmp")" == python3.* ]] && echo yes || echo no)"
 
+# python_floor_build_venv, against fake interpreters on PATH (no real venv, no sudo).
+mkfake() { # BIN_DIR VERSION: pythonVERSION whose `-m venv DIR` writes DIR/bin/python reporting VERSION
+    mkdir -p "$1"
+    cat > "$1/python$2" <<EOF
+#!/bin/sh
+[ "\$1 \$2" = "-m venv" ] || exit 2
+mkdir -p "\$3/bin"
+printf '#!/bin/sh\\necho $2\\n' > "\$3/bin/python"
+chmod +x "\$3/bin/python"
+EOF
+    chmod +x "$1/python$2"
+}
+fake="$tmp/fakebin"; mkfake "$fake" 3.14
+echo "3.14" > "$tmp/.python-version"
+saved_path="$PATH"; PATH="$fake:$PATH"
+rm -rf "$tmp/bv"
+python_floor_build_venv "$tmp" "$tmp/bv"; check "build_venv creates a venv on the floor interpreter" "0:3.14" "$?:$("$tmp/bv/bin/python")"
+mkdir -p "$tmp/old/bin"; printf '#!/bin/sh\necho 3.9\n' > "$tmp/old/bin/python"; chmod +x "$tmp/old/bin/python"; touch "$tmp/old/stale-marker"
+python_floor_build_venv "$tmp" "$tmp/old"; rc=$?
+check "build_venv rebuilds a venv left on another interpreter" "0:3.14:gone" "$rc:$("$tmp/old/bin/python"):$([ -e "$tmp/old/stale-marker" ] && echo kept || echo gone)"
+touch "$tmp/bv/keep-marker"; python_floor_build_venv "$tmp" "$tmp/bv"
+check "build_venv keeps a venv already on the floor" "yes" "$([ -e "$tmp/bv/keep-marker" ] && echo yes || echo no)"
+echo "3.99" > "$tmp/.python-version"
+out="$(python_floor_build_venv "$tmp" "$tmp/nv" 2>&1)"; rc=$?
+check "build_venv fails cleanly when the interpreter cannot be ensured" "1:yes:no" "$rc:$([[ "$out" == *"python3.99 is required"* ]] && echo yes || echo no):$([ -e "$tmp/nv" ] && echo yes || echo no)"
+echo "x" > "$tmp/.python-version"
+python_floor_build_venv "$tmp" "$tmp/nv" >/dev/null 2>&1; check "build_venv refuses a bad .python-version" "1" "$?"
+PATH="$saved_path"
+
 echo "python_floor_test: ${pass} passed, ${fail} failed"
 [ "$fail" -eq 0 ]
