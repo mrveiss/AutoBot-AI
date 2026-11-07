@@ -12,7 +12,7 @@ ask-human defaults from here instead of carrying its own literals.
 
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from autobot_shared.paths import project_root
@@ -26,7 +26,17 @@ class ChatGraphSettings(BaseSettings):
     # Chat-graph stall escalation (#21022): "stop" halts the turn, "ask" asks the human.
     chat_stall_escalation: Literal["stop", "ask"] = Field(default="stop", alias="AUTOBOT_CHAT_STALL_ESCALATION")
     # Ask-the-human defaults (#10553): seconds to wait, then the escalation policy.
-    ask_human_timeout_seconds: int = Field(default=300, alias="AUTOBOT_ASK_HUMAN_TIMEOUT_SECONDS")
+    ask_human_timeout_seconds: int = Field(default=300, ge=1, alias="AUTOBOT_ASK_HUMAN_TIMEOUT_SECONDS")
     ask_human_escalation_policy: Literal["abandon", "default", "re_ask"] = Field(
         default="abandon", alias="AUTOBOT_ASK_HUMAN_ESCALATION_POLICY"
     )
+
+    @field_validator("chat_stall_escalation", "ask_human_escalation_policy", mode="before")
+    @classmethod
+    def _enum_names_its_variable(cls, value, info):
+        """Fail fast on a typo, but name the variable and its allowed values."""
+        field = cls.model_fields[info.field_name]
+        allowed = field.annotation.__args__
+        if value not in allowed:
+            raise ValueError(f"{field.alias} must be one of {', '.join(allowed)}; got {value!r}")
+        return value
