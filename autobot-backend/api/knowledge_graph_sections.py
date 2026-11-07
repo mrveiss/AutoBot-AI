@@ -6,6 +6,7 @@
 
 from typing import Any, Dict, List
 
+from api.knowledge_graph_codebase import codebase_section_for_graph
 from api.schemas_knowledge_graph import GraphRequest
 from autobot_shared.logging_manager import get_logger
 from knowledge.graph_buckets import build_bucket_sections, section_report
@@ -49,9 +50,14 @@ async def graph_sections(
     edges: List[Dict[str, Any]],
     is_admin: bool,
     fact_count: int,
+    user: Dict[str, Any] | None = None,
 ) -> List[Dict[str, Any]]:
-    """The facts section first, then one per bucket: total vs returned for the whole graph."""
+    """The codebase section first (AutoBot's own code), then facts, then one per bucket: total vs returned."""
+    codebases: List[Dict[str, Any]] = []
+    if body.include_buckets and body.offset == 0 and not body.category_filter:
+        codebases = await codebase_section_for_graph(nodes, edges, user, is_admin)
     return [
+        *codebases,
         await facts_section(kb, fact_count, body.offset),
         *await bucket_sections_for_graph(kb, body, nodes, edges, is_admin),
     ]

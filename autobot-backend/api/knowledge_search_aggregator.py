@@ -915,7 +915,7 @@ async def get_multi_source_graph(req: Request, body: GraphRequest, current_user:
             "success": True,
             "data": {"entities": nodes, "relations": edges},
             "stats": {
-                "sections": await graph_sections(kb, body, nodes, edges, is_admin, len(fact_ids)),
+                "sections": await graph_sections(kb, body, nodes, edges, is_admin, len(fact_ids), current_user),
                 "total_entities": len(nodes),
                 "total_relations": len(edges),
                 "categories": len([n for n in nodes if n["type"] == "category"]),
