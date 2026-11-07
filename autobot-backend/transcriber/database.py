@@ -426,3 +426,14 @@ async def get_transcriber_db() -> Database:
         await _db_instance.connect()
         logger.info("Transcriber database initialized at %s", db_path)
     return _db_instance
+
+
+async def close_transcriber_db() -> None:
+    """Close and forget the singleton connection (worker shutdown, #20887).
+
+    The connection is opened on the worker loop, so it must be closed there.
+    """
+    global _db_instance
+    db, _db_instance = _db_instance, None
+    if db is not None:
+        await db.close()
