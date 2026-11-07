@@ -36,6 +36,7 @@ def pytest_sessionfinish(session, exitstatus) -> None:
     if os.environ.get("AUTOBOT_LOGS_DIR") == _RUN_LOGS_DIR and not os.environ.get("PYTEST_XDIST_WORKER"):
         shutil.rmtree(_RUN_LOGS_DIR, ignore_errors=True)
 
+
 # Repo-wide sys.modules leak guard (#13337). Declared here — the rootdir
 # conftest is the only conftest where ``pytest_plugins`` is still legal in
 # pytest >= 9 — and loaded after the sys.path insert above, so ``repo_tests``
