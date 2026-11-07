@@ -19,7 +19,7 @@ import { getTimezoneOption } from '@/composables/useTimezone'
 import type { AppLogEntry } from '@/types/api-responses'
 
 const logger = createLogger('LogViewer')
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 /**
  * Row rendered by this viewer — a client-side VIEW-MODEL, not a wire shape.
@@ -97,9 +97,9 @@ function getLevelClass(level: string): string {
   }
 }
 
-const formatTimestamp = createDateFormatter({ kind: 'time', locale: 'en-US', intl: () => ({ hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', ...getTimezoneOption() }) })
+const formatTimestamp = createDateFormatter({ kind: 'time', locale: () => locale.value, intl: () => ({ hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', ...getTimezoneOption() }) })
 
-const formatDate = createDateFormatter({ kind: 'date', locale: 'en-US', intl: () => ({ month: 'short', day: 'numeric', ...getTimezoneOption() }) })
+const formatDate = createDateFormatter({ kind: 'date', locale: () => locale.value, intl: () => ({ month: 'short', day: 'numeric', ...getTimezoneOption() }) })
 
 const severityToLevel: Record<string, LogRow['level']> = {
   debug: 'debug',
