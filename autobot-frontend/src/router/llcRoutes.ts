@@ -11,6 +11,16 @@
 import type { RouteRecordRaw } from 'vue-router'
 import WorkflowBuilderView from '@/views/WorkflowBuilderView.vue'
 
+/** The approvals page without a company (#20917): the person's waiting approvals, from any page. */
+export const approvalsRoutes: RouteRecordRaw[] = [
+  {
+    path: '/approvals',
+    name: 'approvals',
+    component: () => import('@/views/llc/ApprovalsInbox.vue'),
+    meta: { title: 'Approvals', requiresAuth: true, hideInNav: true },
+  },
+]
+
 export const llcCompanyChildren: RouteRecordRaw[] = [
   { path: '', redirect: { name: 'llc-backlog' } },
   {
