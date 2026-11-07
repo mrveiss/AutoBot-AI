@@ -62,7 +62,7 @@ def test_taxonomy_detects_the_directory_before_the_filename():
 def test_the_indexer_chunks_with_the_shared_primitives_the_kb_chunker_is_built_on():
     """The indexer owns no packing logic: its fallback is the very function ``chunk_plain_text`` reuses."""
     from autobot_shared import doc_chunking
-    from services.knowledge import doc_indexer
+    from services.knowledge import doc_markdown_chunks as doc_indexer
 
     assert doc_indexer._chunk_large_content is doc_chunking.chunk_large_content
     assert doc_indexer._process_h2_sections is doc_chunking.process_h2_sections

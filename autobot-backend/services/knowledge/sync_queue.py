@@ -74,6 +74,11 @@ class SyncStatus(str, Enum):
     PROCESSING = "processing"
     DONE = "done"
     FAILED = "failed"
+    GONE = "gone"  # the file no longer exists: dropped, never retried (#20968)
+
+
+class DocumentGone(Exception):
+    """The entry's file no longer exists, so there is nothing to index and nothing to retry."""
 
 
 # ---------------------------------------------------------------------------
@@ -301,7 +306,7 @@ class DocumentSyncQueue:
         pipe.zrem(_PENDING_KEY, entry_id)
         await pipe.execute()
 
-    async def mark_done(self, entry_id: str) -> None:
+    async def mark_done(self, entry_id: str, status: SyncStatus = SyncStatus.DONE) -> None:
         """Mark an entry complete and place it on the TTL-pruned done zset.
 
         Clears the ``pending_paths`` secondary key so a subsequent re-edit
@@ -319,7 +324,7 @@ class DocumentSyncQueue:
         pipe = redis.pipeline()
         pipe.hset(
             self._entry_key(entry_id),
-            mapping={"status": SyncStatus.DONE.value, "updated_at": now_iso},
+            mapping={"status": status.value, "updated_at": now_iso},
         )
         pipe.zrem(_PENDING_KEY, entry_id)
         pipe.zadd(_DONE_KEY, {entry_id: now_ts})
@@ -387,6 +392,7 @@ class DocumentSyncQueue:
             SyncStatus.PENDING: _PENDING_KEY,
             SyncStatus.FAILED: _FAILED_KEY,
             SyncStatus.DONE: _DONE_KEY,
+            SyncStatus.GONE: _DONE_KEY,
         }.get(status)
         if key is None:
             return []
@@ -454,6 +460,11 @@ class DocumentSyncQueue:
             return None
         try:
             await processor(entry)
+        except DocumentGone as gone:
+            logger.warning("sync entry %s dropped, file gone: %s (%s)", entry.id, entry.document_path, gone)
+            await self.mark_done(entry.id, SyncStatus.GONE)
+            entry.status = SyncStatus.GONE
+            return entry
         except Exception as exc:  # noqa: BLE001 — worker must survive any failure
             return await self.mark_failed(entry.id, str(exc))
         await self.mark_done(entry.id)
@@ -492,6 +503,8 @@ async def _reindex_processor(entry: SyncQueueEntry) -> None:
 
     from services.knowledge.doc_indexer import get_doc_indexer_service
 
+    if not Path(entry.document_path).exists():
+        raise DocumentGone(f"File no longer exists: {entry.document_path}")
     indexer = get_doc_indexer_service()
     if not await indexer.initialize():
         raise RuntimeError("DocIndexerService initialization failed")
@@ -550,6 +563,7 @@ __all__ = [
     "DONE_TTL_SECONDS",
     "DocumentSyncQueue",
     "MAX_ATTEMPTS",
+    "DocumentGone",
     "SyncQueueEntry",
     "SyncQueueWorker",
     "SyncReason",
