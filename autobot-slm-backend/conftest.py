@@ -462,6 +462,13 @@ _REAL_SERVICE_MODULES = (
     "jwks_verifier",
     # #19318: its co-located test imports it, so it must be real-loaded, not a MagicMock.
     "admin_seed_password",
+    # #20214: the code rollback services; each has a co-located test that imports
+    # it. Order is dependency order: rollback_target first (commits and
+    # migrations import is_full_sha from it), code_rollback last.
+    "rollback_target",
+    "rollback_commits",
+    "rollback_migrations",
+    "code_rollback",
 )
 
 # The placeholder a failed real-load falls back to (#15563). Loaded by path for
