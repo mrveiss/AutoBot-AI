@@ -341,7 +341,6 @@ class TestSecureCommandExecutor:
 
         assert result["status"] == "error", result
         assert result["return_code"] == 124, result
-        assert result["return_code"] == 124
         assert result["stderr"] == "Command timed out after 1s and was killed"
         assert result["security"]["timeout"] is True
         assert self.executor_with_callback.command_history[-1]["error"] == "Command timed out"

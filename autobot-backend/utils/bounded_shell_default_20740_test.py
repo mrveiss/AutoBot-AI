@@ -7,8 +7,8 @@
 These run real processes. A mocked runner cannot show that a child process is gone.
 """
 
+import asyncio
 import os
-import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -27,11 +27,16 @@ def _alive(pid: int) -> bool:
     return True
 
 
-def _pid_from(path) -> int:
+def _read_stripped(path) -> str:
+    return path.read_text(encoding="utf-8").strip() if path.exists() else ""
+
+
+async def _pid_from(path) -> int:
     for _ in range(50):
-        if path.exists() and path.read_text().strip():
-            return int(path.read_text().strip())
-        time.sleep(0.05)
+        text = await asyncio.to_thread(_read_stripped, path)
+        if text:
+            return int(text)
+        await asyncio.sleep(0.05)
     raise AssertionError("the child never wrote its pid")
 
 
@@ -42,7 +47,7 @@ async def test_a_command_with_no_policy_is_killed_at_the_default_deadline(tmp_pa
         result = await execute_shell_command(f"sh -c 'echo $$ > {pid_file}; sleep 60'")
     assert result["return_code"] == 124 and result["status"] == "error"
     assert result["stderr"] == "Command timed out after 1s and was killed"
-    assert not _alive(_pid_from(pid_file)), "the child outlived the deadline, not only the shell"
+    assert not _alive(await _pid_from(pid_file)), "the child outlived the deadline, not only the shell"
 
 
 @pytest.mark.asyncio
@@ -86,7 +91,7 @@ async def test_a_background_job_outlives_a_shell_that_finished_in_time(tmp_path)
     pid_file = tmp_path / "bg"
     result = await execute_shell_command(f"sleep 30 > /dev/null 2>&1 & echo $! > {pid_file}")
     assert result["status"] == "success" and result["timed_out"] is False
-    pid = _pid_from(pid_file)
+    pid = await _pid_from(pid_file)
     try:
         assert _alive(pid), "a job deliberately backgrounded was killed when its shell returned"
     finally:
