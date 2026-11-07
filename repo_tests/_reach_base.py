@@ -172,7 +172,10 @@ def _unmeasured(same_module_as: "Reach[Any] | None" = None) -> list["Reach[Any]"
     return [
         r
         for r in REGISTRY.values()
-        if r.computed and r.name not in _BASE_COUNT and (same_module_as is None or r.module == same_module_as.module)
+        if r.computed
+        and r.name not in _BASE_COUNT
+        and r.name not in _BASE_FAILED
+        and (same_module_as is None or r.module == same_module_as.module)
     ]
 
 
@@ -197,6 +200,14 @@ def base_population(reach: "Reach[Any]") -> int:
     if reach.name not in _BASE_COUNT and reach.name not in _BASE_FAILED:
         pending = _unmeasured(reach)
         _measure_at_base(pending if reach in pending else [*pending, reach])
+        if reach.name not in _BASE_COUNT:
+            # The base process loaded only the requesting module, so a declaration moved between
+            # modules is not found there. Look it up across the whole registry, once, before
+            # saying the base lacks it. The name stays in ``_BASE_FAILED`` so this runs once.
+            first_error = _BASE_FAILED.pop(reach.name, None)
+            prefetch_base()
+            if reach.name not in _BASE_COUNT:
+                _BASE_FAILED[reach.name] = _BASE_FAILED.get(reach.name) or first_error or reach.module
     if reach.name not in _BASE_COUNT:
         raise BaseUnavailable(
             f"[{reach.name}] the base has no declaration by this name ({_BASE_FAILED.get(reach.name)}): "

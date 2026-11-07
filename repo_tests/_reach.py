@@ -454,7 +454,7 @@ class Reach(BaseFloor, FloorWindow, Generic[T]):
         # the base commit, which walks every declaration once per process (#17810).
         if count == 0:
             raise ReachFloorError(
-                f"[{self.name}] {verb} 0 {what}; every floor is above zero. "
+                f"[{self.name}] {verb} 0 {what}; floor is above zero. "
                 f"Fix the sweep, not the tree — a clean result below this floor asserts nothing."
             )
         if count < self.floor:

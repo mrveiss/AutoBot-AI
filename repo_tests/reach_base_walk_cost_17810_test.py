@@ -24,10 +24,13 @@ from pathlib import Path
 
 import pytest
 from repo_tests import _reach, _reach_base
+from repo_tests._ratchet_base import BaseUnavailable
 from repo_tests._reach import Reach, ReachFloorError
 from repo_tests.audio_extension_allowlist_test import REACH as REAL
 
 _POPULATION = 10
+#: Large enough that a real declaration's skips and growth leave a positive floor.
+_LARGE = 100_000
 
 
 def _decl(name: str, module: str, found: int = 3) -> Reach[int]:
@@ -85,7 +88,7 @@ def test_prefetch_is_one_walk_for_the_whole_registry(walks: list[list[str]]) -> 
 
 def test_an_empty_tree_is_refused_without_reading_any_floor(walks: list[list[str]]) -> None:
     empty = _decl("w::empty", "mod_e", found=0)
-    with pytest.raises(ReachFloorError, match="every floor is above zero"):
+    with pytest.raises(ReachFloorError, match="floor is above zero"):
         empty.examined(Path("."))
     assert walks == [], "the empty-tree proof measured the base, which it has no need of"
 
@@ -101,7 +104,95 @@ def test_control_a_populated_tree_does_read_the_floor(walks: list[list[str]]) ->
 def test_a_real_declaration_refuses_an_empty_tree_without_a_base_walk(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Isolated from any count an earlier test cached: with one cached, ``.floor`` would never reach
+    # ``_measure_at_base`` and the test would pass without proving anything.
+    monkeypatch.setattr(_reach_base, "_BASE_COUNT", {})
+    monkeypatch.setattr(_reach_base, "_BASE_FAILED", {})
     monkeypatch.setattr(_reach, "_MEASURED", {})
     monkeypatch.setattr(_reach_base, "_measure_at_base", lambda _r: pytest.fail("the empty-tree proof walked the base"))
     with pytest.raises(ReachFloorError):
         REAL.examined(tmp_path)
+
+
+def test_control_a_real_declaration_with_a_count_does_reach_the_base_walk(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without this, the test above passes if the walk is simply unreachable from ``examined``."""
+    monkeypatch.setattr(_reach_base, "_BASE_COUNT", {})
+    monkeypatch.setattr(_reach_base, "_BASE_FAILED", {})
+    monkeypatch.setattr(_reach, "_MEASURED", {})
+    reached: list[str] = []
+
+    def record(reaches: list[Reach]) -> None:
+        reached.extend(r.name for r in reaches)
+        _reach_base._BASE_COUNT.update({r.name: _LARGE for r in reaches})
+
+    monkeypatch.setattr(_reach_base, "_measure_at_base", record)
+    assert REAL.floor == _LARGE - REAL.skips - REAL.growth
+    assert REAL.name in reached
+
+
+def test_a_declaration_moved_between_modules_is_found_by_one_full_prefetch(
+    walks: list[list[str]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The base process loads only the requesting module, so a moved declaration needs the whole registry."""
+    from repo_tests._reach import REGISTRY  # noqa: PLC0415
+
+    def record(reaches: list[Reach]) -> None:
+        walks.append(sorted(r.name for r in reaches))
+        modules = {r.module for r in reaches}
+        # "w::b1" lived in mod_c at the base: only a walk that covers mod_c sees it.
+        _reach_base._BASE_COUNT.update(
+            {r.name: _POPULATION for r in reaches if r.name != "w::b1" or "mod_c" in modules}
+        )
+
+    monkeypatch.setattr(_reach_base, "_measure_at_base", record)
+    assert REGISTRY["w::b1"].floor == _POPULATION
+    assert len(walks) == 2, f"expected the module walk then one full prefetch: {walks}"
+    assert "w::c1" in walks[1], "the fallback did not cover the other modules"
+
+
+def test_a_declaration_the_base_lacks_is_refused_after_one_fallback(
+    walks: list[list[str]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from repo_tests._reach import REGISTRY  # noqa: PLC0415
+
+    def record(reaches: list[Reach]) -> None:
+        walks.append(sorted(r.name for r in reaches))
+        _reach_base._BASE_COUNT.update({r.name: _POPULATION for r in reaches if r.name != "w::b1"})
+
+    monkeypatch.setattr(_reach_base, "_measure_at_base", record)
+    for _ in range(2):
+        with pytest.raises(BaseUnavailable, match="no declaration by this name"):
+            _ = REGISTRY["w::b1"].floor
+    assert len(walks) == 2, f"a missing declaration was re-walked on a repeat read: {walks}"
+
+
+def test_a_failed_declaration_is_not_measured_again_by_a_prefetch(walks: list[list[str]]) -> None:
+    _reach_base._BASE_FAILED["w::c1"] = "ImportError: gone"
+    _reach_base.prefetch_base()
+    assert walks == [["w::a1", "w::a2", "w::b1"]]
+
+
+def test_the_real_base_process_measures_a_single_small_module() -> None:
+    """The one case that runs the subprocess itself: which modules it loads and what counts it returns."""
+    saved = (dict(_reach_base._BASE_COUNT), dict(_reach_base._BASE_FAILED))
+    _reach_base._BASE_COUNT.clear()
+    _reach_base._BASE_FAILED.clear()
+    try:
+        try:
+            _reach_base._measure_at_base([REAL])
+        except BaseUnavailable as exc:
+            pytest.skip(f"the base is unavailable here: {exc}")
+        if REAL.name in _reach_base._BASE_FAILED:
+            pytest.skip(f"the base has no {REAL.name}: {_reach_base._BASE_FAILED[REAL.name]}")
+        measured = set(_reach_base._BASE_COUNT)
+        module_names = {r.name for r in _reach.REGISTRY.values() if r.module == REAL.module}
+        assert REAL.name in measured
+        assert measured <= module_names | {REAL.name}, "the base process loaded more than the requested module"
+        assert all(count > 0 for count in _reach_base._BASE_COUNT.values()), _reach_base._BASE_COUNT
+    finally:
+        _reach_base._BASE_COUNT.clear()
+        _reach_base._BASE_COUNT.update(saved[0])
+        _reach_base._BASE_FAILED.clear()
+        _reach_base._BASE_FAILED.update(saved[1])
