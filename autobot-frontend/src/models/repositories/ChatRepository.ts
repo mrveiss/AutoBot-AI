@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { getBackendUrl, getApiBase } from '@/config/ssot-config'
 import { HttpError } from '@autobot/ui'
+import { toSessionDate } from './sessionDates'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { clearStoredAuth } from '@/utils/authToken'
@@ -336,14 +337,13 @@ export class ChatRepository {
       // Transform backend session format to frontend store format.
       // NOTE: the mapped objects use the store's camelCase/Date shape
       // (createdAt/updatedAt/isActive) rather than the declared `ChatSession`
-      // wire type — a pre-existing discrepancy that was masked while axios typed
-      // `.data` as `any` (#12363 Phase 2). Runtime shape is unchanged.
+      // wire type — masked while axios typed `.data` as `any` (#12363 Phase 2).
       return sessions.map((session: BackendSessionEntry) => ({
         id: session.id || session.chatId,
         title: session.title || session.name || `Chat ${session.id?.slice(0, 8)}`,
         messages: [], // Sessions list doesn't include messages - loaded separately
-        createdAt: new Date(session.createdAt || session.createdTime || Date.now()),
-        updatedAt: new Date(session.updatedAt || session.lastModified || Date.now()),
+        createdAt: toSessionDate(session.createdAt, session.createdTime),
+        updatedAt: toSessionDate(session.updatedAt, session.lastModified),
         isActive: false // Will be set by store when session is selected
       })) as unknown as ChatSession[]
     } catch (error: unknown) {
