@@ -11,7 +11,7 @@
 import Icon from '@/components/ui/Icon.vue'
 
 defineProps<{
-  /** Which node kind it sits on; sets the class and test id the tests and stylesheet key on. */
+  /** Which node kind it sits on; sets the class and test id the tests key on. */
   kind: 'process' | 'tool'
   /** The accessible name: a bare "x" would not say what it detaches. */
   label: string
@@ -21,34 +21,11 @@ defineProps<{
 <template>
   <button
     type="button"
-    class="canvas-detach-btn"
-    :class="`${kind}-detach-btn`"
+    class="cursor-pointer rounded border-0 bg-transparent p-1 leading-none text-autobot-text-secondary hover:bg-autobot-bg-secondary hover:text-autobot-error focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-autobot-primary"
+    :class="[`${kind}-detach-btn`, kind === 'process' ? 'ms-auto' : '']"
     :data-testid="`${kind}-detach-btn`"
     :aria-label="label"
   >
     <Icon name="times" />
   </button>
 </template>
-
-<style scoped>
-.canvas-detach-btn {
-  padding: var(--spacing-1);
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  border-radius: var(--radius-default);
-  line-height: 1;
-}
-.process-detach-btn {
-  margin-inline-start: auto;
-}
-.canvas-detach-btn:hover {
-  color: var(--color-error);
-  background: var(--bg-hover);
-}
-.canvas-detach-btn:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-</style>
