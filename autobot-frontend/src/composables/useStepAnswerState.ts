@@ -44,7 +44,7 @@ export function useStepAnswerState() {
       inFlight.has(keyOf(workflowId, stepId)) || decided.has(keyOf(workflowId, stepId)),
     /** A status refresh succeeded: the server's step status is authoritative again for this workflow. */
     clearDecided: (workflowId: string) => {
-      for (const key of [...decided]) if (key.startsWith(`${workflowId}\u0000`)) decided.delete(key);
+      for (const key of decided) if (key.startsWith(`${workflowId}\u0000`)) decided.delete(key);
     },
   };
 }
