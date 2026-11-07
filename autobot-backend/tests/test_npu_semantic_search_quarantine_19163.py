@@ -41,10 +41,12 @@ def test_batch_chromadb_path_withholds_quarantined():
 
 def test_basic_fallbacks_pass_filters_by_keyword_not_into_the_wrong_slot():
     obj = _engine()
-    obj.knowledge_base = SimpleNamespace(vector_store=None, vector_index=None, search=AsyncMock(return_value=[]))
+    obj.knowledge_base = SimpleNamespace(
+        vector_store=None, vector_index=None, basic_vector_search=AsyncMock(return_value=[])
+    )
     asyncio.run(obj._perform_vector_search("q", 7, {"a": 1}))
-    call = obj.knowledge_base.search.await_args
-    assert call.args == ("q",) and call.kwargs == {"top_k": 7, "filters": {"a": 1}, "mode": "text"}
+    call = obj.knowledge_base.basic_vector_search.await_args  # the non-recursive leaf (#20940)
+    assert call.args == ("q", 7, {"a": 1}) and call.kwargs == {}
 
 
 def test_hybrid_index_path_withholds_quarantined(monkeypatch):
