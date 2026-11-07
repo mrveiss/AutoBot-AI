@@ -254,11 +254,16 @@ class SessionLease:
         """Allocate this lease's fencing generation, above both the counter and the file's."""
         if self.generation:
             return
-        redis = await _lease_client(CHAT_LEASE_DATABASE)
-        if redis is None:
-            raise LeaseStoreUnavailable(self.session_id)
         floor = int(current_file_generation)
-        self.generation = int(await redis.eval(_GENERATION_LUA, 1, self.generation_key, floor))
+        try:
+            redis = await _lease_client(CHAT_LEASE_DATABASE)
+            if redis is None:
+                raise LeaseStoreUnavailable(self.session_id)
+            self.generation = int(await redis.eval(_GENERATION_LUA, 1, self.generation_key, floor))
+        except SessionLeaseError:
+            raise
+        except Exception as exc:
+            raise LeaseStoreUnavailable(self.session_id) from exc
 
     async def fence(self, chat_data: Dict[str, Any], on_disk_generation: int) -> None:
         """Confirm the lease, reject a stale write, and stamp this lease's generation into *chat_data*."""

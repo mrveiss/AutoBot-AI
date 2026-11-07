@@ -9,6 +9,9 @@ file in between, replacing it with that snapshot drops their change. After the w
 session lease and has re-read the file, a snapshot is therefore *merged by message id*: a
 message it carries updates the stored one, a message it does not have is added, and a stored
 message the snapshot lacks is kept. A snapshot can add or update, never silently drop.
+A stored message modified in place after the snapshot was taken
+(its ``last_modified`` stamp is newer than the snapshot's copy) is kept as stored, so a stale
+snapshot cannot undo a concurrent approval or metadata update.
 
 Dropping messages is a deliberate operation (``replace=True``: cleaning duplicates, replacing an
 imported session), never a side effect of a stale snapshot. ``append=True`` adds new messages to
@@ -23,6 +26,25 @@ from chat_history.message_schema import message_role, message_text
 
 Message = Dict[str, Any]
 Key = Tuple[Any, ...]
+
+#: Per-message stamp (epoch seconds) set when a message is changed in place after it was written
+#: (a metadata or approval update). A snapshot taken before that change carries a smaller stamp or none.
+MESSAGE_STAMP_FIELD = "last_modified"
+
+
+def message_stamp(message: Message) -> float:
+    """The message's modification stamp; 0.0 when it was never modified in place or the value is unusable."""
+    try:
+        return float(message.get(MESSAGE_STAMP_FIELD) or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _newer_of(stored: Message, supplied: Message | None) -> Message:
+    """The supplied message, unless the stored one was modified after the snapshot was taken."""
+    if supplied is None or message_stamp(stored) > message_stamp(supplied):
+        return stored
+    return supplied
 
 
 def message_keys(messages: List[Message]) -> List[Key]:
@@ -123,7 +145,7 @@ def merge_snapshot(on_disk: List[Message], supplied: List[Message], discard: fro
     result: List[Message] = []
     for key, message in zip(disk_keys, on_disk, strict=True):
         if key not in discard:
-            result.append(updates.get(key, message))
+            result.append(_newer_of(message, updates.get(key)))
         result.extend(after.get(key, ()))
     return result + tail
 

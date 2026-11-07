@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any, Awaitable, Callable, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
 from chat_history.session_lease import SessionLeaseError
+from chat_history.session_merge import MESSAGE_STAMP_FIELD
 
 logger = get_logger(__name__)
 
@@ -338,6 +339,7 @@ class MessagesMixin:
         if not message.get("metadata"):
             message["metadata"] = {}
         message["metadata"].update(metadata_updates)
+        message[MESSAGE_STAMP_FIELD] = time.time()
 
     async def update_message_metadata(
         self,
