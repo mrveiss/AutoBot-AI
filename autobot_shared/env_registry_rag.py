@@ -207,3 +207,58 @@ register_env_var(
         range=(1, 2592000),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_RETRIEVAL_GATE_K",
+        type=int,
+        default=5,
+        description=(
+            "Cutoff k for recall@k and nDCG@k in the retrieval benchmark gate (knowledge/retrieval_gate.py, #20949)."
+        ),
+        component="rag",
+        range=(1, 100),
+    )
+)
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_RETRIEVAL_GATE_MAX_REGRESSION",
+        type=float,
+        default=0.0,
+        description=("Largest absolute drop in any metric the retrieval benchmark gate tolerates (#20949)."),
+        component="rag",
+        range=(0.0, 1.0),
+    )
+)
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_RETRIEVAL_GATE_MIN_IMPROVEMENT",
+        type=float,
+        default=0.01,
+        description=(
+            "Smallest absolute improvement in one metric for the retrieval benchmark gate to accept a change (#20949)."
+        ),
+        component="rag",
+        range=(0.0, 1.0),
+    )
+)
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_RETRIEVAL_GATE_DEV_FRACTION",
+        type=float,
+        default=0.8,
+        description=("Share of gold queries routed to the dev split by the retrieval benchmark gate (#20949)."),
+        component="rag",
+        range=(0.05, 0.95),
+    )
+)
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_RETRIEVAL_GROUNDING_OVERLAP",
+        type=float,
+        default=0.6,
+        description=("Share of a claim's tokens that must occur in a chunk for the lexical grounding check (#20949)."),
+        component="rag",
+        range=(0.0, 1.0),
+    )
+)
