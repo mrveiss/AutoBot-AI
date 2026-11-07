@@ -35,6 +35,7 @@ from ..source_models import (
     SourceSyncResponse,
 )
 from ..source_paths import CODE_SOURCES_BASE, make_clone_path
+from ..source_scope import CROSS_SOURCE_OPENAPI
 from ..source_storage import get_source, list_sources, save_source
 from .shared import _caller_owner_id
 
@@ -228,7 +229,7 @@ async def _trigger_indexing(source: CodeSource) -> None:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/sources")
+@router.get("/sources", openapi_extra=CROSS_SOURCE_OPENAPI)
 @bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -311,7 +312,7 @@ async def _auto_index_local_source(source: CodeSource) -> None:
     await _trigger_indexing(source)
 
 
-@router.get("/sources/summary")
+@router.get("/sources/summary", openapi_extra=CROSS_SOURCE_OPENAPI)
 @bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

@@ -129,17 +129,18 @@ class TestGetImportTreeConvergence:
         live_scan.assert_awaited_once_with("src-A")
         auto_trigger.assert_awaited_once_with("src-A")
 
-    async def test_default_source_resolved_when_source_id_omitted(self):
+    async def test_the_named_source_is_the_one_read_and_no_default_is_consulted(self):
         with (
             patch(
                 "api.codebase_analytics.source_storage.get_default_source_id",
                 AsyncMock(return_value="default-src"),
-            ),
+            ) as default_lookup,
             patch.object(import_tree, "_load_import_tree_from_index", AsyncMock(return_value=({}, {}))) as loader,
         ):
-            await import_tree.get_import_tree(source_id=None)
+            await import_tree.get_import_tree(source_id="named-src")
 
-        loader.assert_awaited_once_with("default-src")
+        loader.assert_awaited_once_with("named-src")
+        default_lookup.assert_not_called()
 
 
 class TestLiveWalkFallbackStillScoped:
@@ -151,7 +152,7 @@ class TestLiveWalkFallbackStillScoped:
         root_a.mkdir()
         _write_module(root_a, "mod_a.py", "import os\n")
 
-        async def fake_resolve(source_id, use_default=True):
+        async def fake_resolve(source_id, strict=False):
             return root_a if source_id == "A" else tmp_path
 
         with patch.object(import_tree, "resolve_scan_root", side_effect=fake_resolve):

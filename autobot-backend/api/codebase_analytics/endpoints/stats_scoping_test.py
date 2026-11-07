@@ -46,7 +46,7 @@ class TestFetchProblemsFromChromaDBFallback:
             patch.object(stats_mod, "resolve_git_repo_root", return_value=str(deployed_root)),
         ):
             stats_mod._fetch_problems_from_chromadb(
-                fake_collection, problem_type=None, source_id=None, source_root=None
+                fake_collection, problem_type=None, source_id="src1", source_root=None
             )
 
         assert captured["root"] == deployed_root

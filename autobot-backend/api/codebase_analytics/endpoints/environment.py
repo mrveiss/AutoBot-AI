@@ -18,6 +18,7 @@ from pathlib import Path
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
+from api.codebase_analytics.source_scope import SourceIdQuery, require_source_id
 from autobot_shared.error_boundaries import ROUTE_DEADLINE_GRACE, ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import QUALITY_MODEL
@@ -31,7 +32,7 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 # Cache for environment analysis (in-memory, refreshed on demand).
-# Issue #12330: Keyed by source_id (or "default") to prevent cross-project
+# Issue #12330: Keyed by source_id (never a shared sentinel, #20513) to prevent cross-project
 # leakage -- a single global cache returned one project's hardcoded-value
 # analysis for every other selected source.
 _env_analysis_cache: dict[str, dict] = {}
@@ -41,19 +42,17 @@ _env_analysis_full_cache: dict[str, dict] = {}
 _env_analysis_cache_lock = asyncio.Lock()
 
 
-def _env_cache_key(source_id: str | None) -> str:
-    """Cache key for a source. Issue #12330: scope per project, not global."""
-    return source_id or "default"
+def _env_cache_key(source_id: str) -> str:
+    """Cache key for a source. Issue #12330: scope per project, never a shared sentinel (#20513)."""
+    return require_source_id(source_id, "environment-analysis cache key")
 
 
-async def _resolve_env_scan_root(source_id: str | None) -> str:
+async def _resolve_env_scan_root(source_id: str) -> str:
     """Resolve the filesystem root to analyze for a source (Issue #12330).
 
     Issue #12359: Delegates to the shared ``resolve_scan_root`` used by
-    call-graph/import-tree/dependencies so a ``source_id=None`` request
-    resolves the caller's DEFAULT registered source first, instead of
-    falling straight through to AutoBot's own project root. Keeps env
-    analysis consistent with the sibling scan-root-scoped endpoints.
+    call-graph/import-tree/dependencies, so env analysis resolves the named
+    source exactly as its sibling scan-root-scoped endpoints do.
     """
     return str(await resolve_scan_root(source_id))
 
@@ -280,9 +279,7 @@ def _build_error_response(message: str, status: str = "error") -> dict:
     }
 
 
-async def _check_env_analysis_cache(
-    use_llm_filter: bool, refresh: bool, source_id: str | None = None
-) -> JSONResponse | None:
+async def _check_env_analysis_cache(use_llm_filter: bool, refresh: bool, source_id: str) -> JSONResponse | None:
     """
     Check if cached environment analysis is available and valid.
 
@@ -302,7 +299,7 @@ async def _check_env_analysis_cache(
                 "Returning cached environment analysis (%d hardcoded values)",
                 cached.get("total_hardcoded_values", 0),
             )
-            return JSONResponse(cached)
+            return JSONResponse({**cached, "source_id": source_id})
 
     return None
 
@@ -331,9 +328,7 @@ async def _execute_env_analysis(
         return await _run_environment_analysis(analyzer, path, pattern_list)
 
 
-async def _cache_env_analysis_results(
-    result: dict, full_result: dict, use_llm_filter: bool, source_id: str | None = None
-) -> None:
+async def _cache_env_analysis_results(result: dict, full_result: dict, use_llm_filter: bool, source_id: str) -> None:
     """
     Cache environment analysis results (thread-safe).
 
@@ -365,7 +360,7 @@ async def _analyze_and_return_env_result(
     use_llm_filter: bool,
     llm_model: str,
     filter_priority: str,
-    source_id: str | None = None,
+    source_id: str,
 ) -> JSONResponse:
     """Helper for get_environment_analysis. Ref: #1088. Issue #12330: per-source cache."""
     analysis = await _execute_env_analysis(analyzer, path, pattern_list, use_llm_filter, llm_model, filter_priority)
@@ -384,7 +379,7 @@ async def _analyze_and_return_env_result(
         result["recommendations_count"],
         " (LLM filtered)" if use_llm_filter else "",
     )
-    return JSONResponse(result)
+    return JSONResponse({**result, "source_id": source_id})
 
 
 @router.get("/env-analysis")
@@ -395,6 +390,7 @@ async def _analyze_and_return_env_result(
     error_code_prefix="CODEBASE",
 )
 async def get_environment_analysis(
+    source_id: SourceIdQuery,
     path: str = Query(None, description="Root path to analyze (defaults to project root)"),
     refresh: bool = Query(False, description="Force fresh analysis instead of cache"),
     patterns: str = Query("**/*.py", description="Glob patterns for files to scan, comma-separated"),
@@ -404,7 +400,6 @@ async def get_environment_analysis(
         "high",
         description="Priority level to filter: 'high', 'medium', 'low', or 'all'",
     ),
-    source_id: str | None = Query(None, description="#12330: scope analysis to the selected code source"),
 ):
     """
     Analyze codebase for hardcoded values and environment variable opportunities (Issue #538).
@@ -448,8 +443,8 @@ async def get_environment_analysis(
     error_code_prefix="CODEBASE",
 )
 async def get_env_recommendations(
+    source_id: SourceIdQuery,
     path: str = Query(None, description="Root path to analyze (defaults to project root)"),
-    source_id: str | None = Query(None, description="#12330: scope recommendations to the selected code source"),
 ):
     """
     Get environment variable recommendations for a codebase (Issue #538).
@@ -471,6 +466,7 @@ async def get_env_recommendations(
             return JSONResponse(
                 {
                     "status": "success",
+                    "source_id": source_id,
                     "recommendations": cached["recommendations"],
                     "total": len(cached["recommendations"]),
                     "source": "cache",
@@ -486,10 +482,10 @@ async def get_env_recommendations(
     if error_response:
         return error_response
 
-    return await _fetch_live_env_recommendations(path)
+    return await _fetch_live_env_recommendations(path, source_id)
 
 
-async def _fetch_live_env_recommendations(path: str) -> JSONResponse:
+async def _fetch_live_env_recommendations(path: str, source_id: str) -> JSONResponse:
     """Helper for get_env_recommendations. Ref: #1088."""
     try:
         analyzer = await asyncio.to_thread(_get_environment_analyzer)
@@ -507,6 +503,7 @@ async def _fetch_live_env_recommendations(path: str) -> JSONResponse:
         return JSONResponse(
             {
                 "status": "success",
+                "source_id": source_id,
                 "recommendations": recommendations[:20],
                 "total": len(recommendations),
                 "source": "live_analysis",
@@ -576,6 +573,7 @@ def _build_export_response_json(
     category: str | None,
     severity: str | None,
     limit: int | None,
+    source_id: str,
 ) -> JSONResponse:
     """Helper for export_env_analysis. Ref: #1088."""
     category_counts = _calculate_category_breakdown(hardcoded_values)
@@ -589,6 +587,7 @@ def _build_export_response_json(
     return JSONResponse(
         {
             "status": "success",
+            "source_id": source_id,
             "path": full_data.get("path", ""),
             "export_timestamp": full_data.get("analysis_time_seconds", 0),
             "total_in_export": len(hardcoded_values),
@@ -606,7 +605,7 @@ def _build_export_response_json(
     )
 
 
-async def _load_env_analysis_cache(source_id: str | None = None) -> tuple:
+async def _load_env_analysis_cache(source_id: str) -> tuple:
     """Thread-safe cache read for export_env_analysis. Returns (full_data, error_response).
 
     Issue #2735: Extracted from export_env_analysis for length compliance.
@@ -654,11 +653,11 @@ def _validate_export_severity(severity: str | None) -> JSONResponse | None:
     error_code_prefix="CODEBASE",
 )
 async def export_env_analysis(
+    source_id: SourceIdQuery,
     category: str = Query(None, description="Filter by category (e.g., 'security', 'port', 'hostname')"),
     severity: str = Query(None, description="Filter by severity ('high', 'medium', 'low')"),
     limit: int = Query(None, description="Limit number of results (default: all)"),
     include_recommendations: bool = Query(True, description="Include recommendations in export"),
-    source_id: str | None = Query(None, description="#12330: export the selected code source's analysis"),
 ):
     """
     Export full environment analysis results without truncation (Issue #631).
@@ -692,4 +691,5 @@ async def export_env_analysis(
         category,
         severity,
         limit,
+        source_id,
     )

@@ -22,7 +22,12 @@ import time
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 
-from api.codebase_analytics.source_scope import SourceIdQuery, cached_task_result, source_scoped_prefix
+from api.codebase_analytics.source_scope import (
+    SourceIdQuery,
+    cached_task_result,
+    require_source_id,
+    source_scoped_prefix,
+)
 from api.codebase_analytics.task_routes import add_clear_stuck_route
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
@@ -78,7 +83,7 @@ router = APIRouter()
 _REDIS_PREFIX = "dup_task:"
 
 # Cache for duplicate analysis (in-memory, refreshed on demand)
-# Keyed by source_id (or "" for unscoped) to prevent cross-project leakage (#3685)
+# Keyed by source_id (no unscoped slot, #20513) to prevent cross-project leakage (#3685)
 _duplicate_cache: dict[str, dict] = {}
 
 
@@ -221,13 +226,19 @@ def _process_and_cache_analysis(analysis, project_root: str, source_id: str | No
     Args:
         analysis: Analysis result object
         project_root: Project root path
-        source_id: Optional source ID for per-project cache scoping
+        source_id: the source whose cache entry is read
 
     Returns:
         Result dict suitable for JSONResponse
     """
     result = _convert_analysis_to_result(analysis, project_root)
-    _duplicate_cache[source_id or ""] = result
+    if source_id:
+        _duplicate_cache[require_source_id(source_id, "duplicate-analysis cache key")] = result
+    else:
+        # #20513: no shared "" slot. Every route now requires a source, so nothing
+        # would read it; a source-less background run (the scheduler, deferred from
+        # #20513) still returns its result, it just is not cached under a sentinel.
+        logger.debug("duplicate analysis finished without a source_id; result not cached (#20513)")
 
     logger.info(
         "Duplicate analysis complete: %d duplicates (%d high, %d medium, %d low)",
@@ -268,7 +279,7 @@ async def _run_duplicate_analysis(
     return analysis
 
 
-def _check_duplicate_cache(refresh: bool, source_id: str | None = None) -> JSONResponse | None:
+def _check_duplicate_cache(refresh: bool, source_id: str) -> JSONResponse | None:
     """
     Check if cached results are available and return them.
 
@@ -277,22 +288,22 @@ def _check_duplicate_cache(refresh: bool, source_id: str | None = None) -> JSONR
 
     Args:
         refresh: Whether to force fresh analysis
-        source_id: Optional source ID for per-project cache scoping
+        source_id: the source whose cache entry is read
 
     Returns:
         JSONResponse with cached data, or None if cache miss/refresh requested
     """
-    cached = _duplicate_cache.get(source_id or "")
+    cached = _duplicate_cache.get(require_source_id(source_id, "duplicate-analysis cache key"))
     if cached and not refresh:
         logger.info(
             "Returning cached duplicate analysis (%d duplicates)",
             cached.get("total_count", 0),
         )
-        return JSONResponse(cached)
+        return JSONResponse({**cached, "source_id": source_id})
     return None
 
 
-async def _handle_detection_failure(error: Exception, source_id: str | None = None) -> JSONResponse:
+async def _handle_detection_failure(error: Exception, source_id: str) -> JSONResponse:
     """
     Handle duplicate detection failure with fallback.
 
@@ -301,7 +312,7 @@ async def _handle_detection_failure(error: Exception, source_id: str | None = No
 
     Args:
         error: Exception that occurred
-        source_id: Optional source ID for per-project scoping
+        source_id: the source whose fallback data is read
 
     Returns:
         JSONResponse with fallback data or error response
@@ -324,10 +335,10 @@ async def _handle_detection_failure(error: Exception, source_id: str | None = No
     error_code_prefix="CODEBASE",
 )
 async def get_duplicate_code(
+    source_id: SourceIdQuery,
     refresh: bool = Query(False, description="Force fresh analysis instead of cache"),
     min_similarity: float = Query(0.5, description="Minimum similarity threshold (0.0-1.0)"),
     use_semantic: bool = Query(False, description="Enable LLM-based semantic analysis (Issue #554)"),
-    source_id: str | None = Query(None, description="#1772: source_id for per-project scoping"),
 ):
     """
     Get duplicate code detected in the codebase (Issue #528).
@@ -351,7 +362,7 @@ async def get_duplicate_code(
     # AutoBot's own tree under the caller's key. `strict` follows what the
     # CALLER supplied: naming nothing is not the same as naming a ghost.
     try:
-        project_root = str(await resolve_scan_root(source_id, strict=bool(source_id)))
+        project_root = str(await resolve_scan_root(source_id, strict=True))
     except UnresolvedSourceError:
         return _unresolved_source_response()
 
@@ -367,7 +378,7 @@ async def get_duplicate_code(
 
         # Convert, cache, and return results - Issue #620, #3685: Scoped by source_id
         result = _process_and_cache_analysis(analysis, project_root, source_id=source_id)
-        return JSONResponse(result)
+        return JSONResponse({**result, "source_id": source_id})
 
     except ScanUnavailable as exc:
         # #18013: busy and timed-out are different answers; neither is cached.
@@ -385,8 +396,8 @@ async def get_duplicate_code(
     error_code_prefix="CODEBASE",
 )
 async def detect_config_duplicates_endpoint(
+    source_id: SourceIdQuery,
     use_semantic: bool = Query(False, description="Enable LLM-based semantic analysis (Issue #554)"),
-    source_id: str | None = Query(None, description="#3685: source_id for per-project scoping"),
 ):
     """
     Detect configuration value duplicates across codebase (Issue #341).
@@ -406,7 +417,7 @@ async def detect_config_duplicates_endpoint(
     # above -- a named source that does not resolve is an error, not a cue to
     # substitute AutoBot's own tree.
     try:
-        project_root = await resolve_scan_root(source_id, strict=bool(source_id))
+        project_root = await resolve_scan_root(source_id, strict=True)
     except UnresolvedSourceError:
         return _unresolved_source_response()
 
@@ -434,6 +445,7 @@ async def detect_config_duplicates_endpoint(
     return JSONResponse(
         {
             "status": "success",
+            "source_id": source_id,
             "duplicates_found": result["duplicates_found"],
             "duplicates": duplicates_array,
             "report": result["report"],

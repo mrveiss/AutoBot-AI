@@ -23,6 +23,7 @@ from utils.chromadb_client import get_all_paginated
 
 from ..analyzers import normalize_hardcode_record
 from ..scanner import _tasks_sync_lock, indexing_tasks
+from ..source_scope import CROSS_SOURCE_OPENAPI, SourceIdQuery, require_source_id
 from ..storage import get_code_collection, get_redis_connection
 from .shared import (
     _in_memory_storage,
@@ -116,7 +117,7 @@ def _is_task_stale(task_info: dict) -> bool:
         return False
 
 
-def _get_active_indexing_task(source_id: str | None = None) -> dict | None:
+def _get_active_indexing_task(source_id: str) -> dict | None:
     """
     Check if there's an active indexing task and return its info.
 
@@ -126,7 +127,7 @@ def _get_active_indexing_task(source_id: str | None = None) -> dict | None:
     Issue #3685: Filters by source_id to prevent cross-project leakage.
 
     Args:
-        source_id: When provided, only return a task belonging to this project.
+        source_id: Only a task belonging to this project is returned (#20513: required).
 
     Returns:
         Task info dict if indexing is in progress for this project, None otherwise.
@@ -137,7 +138,7 @@ def _get_active_indexing_task(source_id: str | None = None) -> dict | None:
                 continue
 
             # Issue #3685: Skip tasks belonging to a different project
-            if source_id is not None and task_info.get("source_id") != source_id:
+            if task_info.get("source_id") != source_id:
                 continue
 
             # Issue #540: Skip stale tasks (stuck for >1 hour)
@@ -162,6 +163,7 @@ def _get_active_indexing_task(source_id: str | None = None) -> dict | None:
 def _build_indexing_response(
     message: str,
     active_task: dict,
+    source_id: str,
     stats: dict | None = None,
 ) -> JSONResponse:
     """
@@ -181,6 +183,7 @@ def _build_indexing_response(
     return JSONResponse(
         {
             "status": "indexing",
+            "source_id": source_id,
             "message": message,
             "indexing": active_task,
             "stats": stats,
@@ -195,7 +198,7 @@ def _build_indexing_response(
     operation="get_codebase_stats",
     error_code_prefix="CODEBASE",
 )
-async def get_codebase_stats(source_id: str | None = None):
+async def get_codebase_stats(source_id: SourceIdQuery):
     """
     Get real codebase statistics from storage.
 
@@ -214,19 +217,22 @@ async def get_codebase_stats(source_id: str | None = None):
             return _build_indexing_response(
                 "Indexing in progress. ChromaDB connection pending.",
                 active_task,
+                source_id,
             )
-        return JSONResponse(no_data_response("ChromaDB connection failed.", stats=None))
+        return JSONResponse({**no_data_response("ChromaDB connection failed.", stats=None), "source_id": source_id})
 
     # Issue #1710: Per-source stats use source-scoped document ID
-    stats_doc_id = f"codebase_stats_{source_id}" if source_id else "codebase_stats"
+    stats_doc_id = f"codebase_stats_{require_source_id(source_id, 'stats document id')}"
     try:
         results = code_collection.get(ids=[stats_doc_id], include=["metadatas"])
     except Exception as chroma_error:
         logger.warning("ChromaDB stats query failed: %s", chroma_error)
         # Issue #540, #665: Show indexing status even on query failure
         if active_task:
-            return _build_indexing_response("Indexing in progress.", active_task)
-        return JSONResponse(no_data_response("No codebase data found. Run indexing first.", stats=None))
+            return _build_indexing_response("Indexing in progress.", active_task, source_id)
+        return JSONResponse(
+            {**no_data_response("No codebase data found. Run indexing first.", stats=None), "source_id": source_id}
+        )
 
     # Check if we have data
     if not results.get("metadatas") or len(results["metadatas"]) == 0:
@@ -235,8 +241,11 @@ async def get_codebase_stats(source_id: str | None = None):
             return _build_indexing_response(
                 "Indexing in progress. Stats will be available when complete.",
                 active_task,
+                source_id,
             )
-        return JSONResponse(no_data_response("No codebase data found. Run indexing first.", stats=None))
+        return JSONResponse(
+            {**no_data_response("No codebase data found. Run indexing first.", stats=None), "source_id": source_id}
+        )
 
     # Parse and return stats (Issue #315 - use extracted helper)
     stats_metadata = results["metadatas"][0]
@@ -246,6 +255,7 @@ async def get_codebase_stats(source_id: str | None = None):
     # This shows both the previous stats AND current indexing progress
     response = {
         "status": "indexing" if active_task else "success",
+        "source_id": source_id,
         "stats": stats,
         "last_indexed": stats_metadata.get("last_indexed", "Never"),
         "storage_type": "chromadb",
@@ -261,7 +271,7 @@ async def get_codebase_stats(source_id: str | None = None):
 def _fetch_hardcodes_from_redis(
     redis_client,
     hardcode_type: str | None,
-    source_id: str | None = None,
+    source_id: str,
 ) -> list:
     """
     Fetch hardcoded values from Redis with pipeline batching.
@@ -273,12 +283,12 @@ def _fetch_hardcodes_from_redis(
     Args:
         redis_client: Redis client
         hardcode_type: Optional type filter
-        source_id: Optional source ID for per-project scoping
+        source_id: the source whose keys are read (#20513: required)
 
     Returns:
         List of hardcoded values
     """
-    key_prefix = f"codebase:{source_id}" if source_id else "codebase"
+    key_prefix = f"codebase:{require_source_id(source_id, 'hardcodes key')}"
     results = []
     if hardcode_type:
         hardcodes_data = redis_client.get(f"{key_prefix}:hardcodes:{hardcode_type}")
@@ -297,7 +307,7 @@ def _fetch_hardcodes_from_redis(
     return results
 
 
-def _fetch_hardcodes_from_memory(storage, hardcode_type: str | None) -> list:
+def _fetch_hardcodes_from_memory(storage, hardcode_type: str | None, source_id: str) -> list:
     """
     Fetch hardcoded values from in-memory storage.
 
@@ -306,17 +316,19 @@ def _fetch_hardcodes_from_memory(storage, hardcode_type: str | None) -> list:
     Args:
         storage: In-memory storage dict
         hardcode_type: Optional type filter
+        source_id: the source whose keys are read (#20513: scoped like the Redis path)
 
     Returns:
         List of hardcoded values
     """
+    key_prefix = f"codebase:{require_source_id(source_id, 'hardcodes key')}"
     results = []
     if hardcode_type:
-        hardcodes_data = storage.get(f"codebase:hardcodes:{hardcode_type}")
+        hardcodes_data = storage.get(f"{key_prefix}:hardcodes:{hardcode_type}")
         if hardcodes_data:
             results = json.loads(hardcodes_data)
     else:
-        for key in storage.scan_iter("codebase:hardcodes:*"):
+        for key in storage.scan_iter(f"{key_prefix}:hardcodes:*"):
             hardcodes_data = storage.get(key)
             if hardcodes_data:
                 results.extend(json.loads(hardcodes_data))
@@ -336,8 +348,8 @@ _normalize_hardcode_record = normalize_hardcode_record
     error_code_prefix="CODEBASE",
 )
 async def get_hardcoded_values(
+    source_id: SourceIdQuery,
     hardcode_type: str | None = None,
-    source_id: str | None = None,
 ):
     """
     Get real hardcoded values found in the codebase.
@@ -362,12 +374,13 @@ async def get_hardcoded_values(
         storage_type = "redis"
     elif _in_memory_storage:
         # Issue #620: Use helper for memory fetch
-        all_hardcodes = _fetch_hardcodes_from_memory(_in_memory_storage, hardcode_type)
+        all_hardcodes = _fetch_hardcodes_from_memory(_in_memory_storage, hardcode_type, source_id)
         storage_type = "memory"
     else:
         return JSONResponse(
             {
                 "status": "no_data",
+                "source_id": source_id,
                 "message": "No codebase data found. Run indexing first.",
                 "hardcodes": [],
             }
@@ -383,6 +396,7 @@ async def get_hardcoded_values(
     return JSONResponse(
         {
             "status": "success",
+            "source_id": source_id,
             "hardcodes": all_hardcodes,
             "total_count": len(all_hardcodes),
             "hardcode_types": list(set(h.get("type", "unknown") for h in all_hardcodes)),
@@ -408,7 +422,7 @@ def _parse_problem_metadata(metadata: dict) -> dict:
 def _fetch_problems_from_chromadb(
     code_collection,
     problem_type: str | None,
-    source_id: str | None = None,
+    source_id: str,
     source_root: Path | None = None,
 ) -> list:
     """Fetch problems from ChromaDB. (Issue #315, #1710: per-source filter)
@@ -417,26 +431,10 @@ def _fetch_problems_from_chromadb(
     Findings that reference non-existent paths are dropped to prevent
     hallucinated results from reaching the issue tracker.
     """
-    if source_id:
-        if problem_type:
-            where_filter = {
-                "$and": [
-                    {"type": "problem"},
-                    {"source_id": source_id},
-                    {"problem_type": problem_type},
-                ]
-            }
-        else:
-            where_filter = {
-                "$and": [
-                    {"type": "problem"},
-                    {"source_id": source_id},
-                ]
-            }
-    else:
-        where_filter = {"type": "problem"}
-        if problem_type:
-            where_filter["problem_type"] = problem_type
+    conditions = [{"type": "problem"}, {"source_id": require_source_id(source_id, "problems query")}]
+    if problem_type:
+        conditions.append({"problem_type": problem_type})
+    where_filter = {"$and": conditions}
 
     results = get_all_paginated(code_collection, where=where_filter, include=["metadatas"])
     problems = [_parse_problem_metadata(m) for m in results.get("metadatas", [])]
@@ -450,7 +448,7 @@ def _fetch_problems_from_chromadb(
     return filter_problems_by_file_existence(problems, root)
 
 
-async def _fetch_problems_from_redis(problem_type: str | None, source_id: str | None = None) -> tuple:
+async def _fetch_problems_from_redis(problem_type: str | None, source_id: str) -> tuple:
     """Fetch problems from Redis. Returns (problems, success).
 
     Issue #315: Extracted helper.
@@ -462,7 +460,7 @@ async def _fetch_problems_from_redis(problem_type: str | None, source_id: str | 
     if not redis_client:
         return [], False
 
-    key_prefix = f"codebase:{source_id}" if source_id else "codebase"
+    key_prefix = f"codebase:{require_source_id(source_id, 'problems key')}"
 
     def _fetch_problems():
         results = []
@@ -486,7 +484,7 @@ async def _fetch_problems_from_redis(problem_type: str | None, source_id: str | 
     return problems, True
 
 
-@router.get("/embedding-stats")
+@router.get("/embedding-stats", openapi_extra=CROSS_SOURCE_OPENAPI)
 @bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -602,16 +600,10 @@ async def reset_embedding_stats_endpoint() -> JSONResponse:
     error_code_prefix="CODEBASE",
 )
 async def get_codebase_problems(
+    source_id: SourceIdQuery,
     problem_type: str | None = None,
-    source_id: str | None = None,
 ):
     """Get real code problems detected during analysis (#1710: per-source)."""
-    # Default to most recent source to prevent cross-project data mixing (#2653)
-    if not source_id:
-        from api.codebase_analytics.endpoints.shared import default_source_id
-
-        source_id = await default_source_id()
-
     # Issue #2724 / #2760: Resolve source root via shared helper so _fetch_problems_from_chromadb
     # can validate file paths without needing to do async I/O in a sync context.
     source_root = await resolve_source_root(source_id)
@@ -650,6 +642,7 @@ async def get_codebase_problems(
     return JSONResponse(
         {
             "status": "success",
+            "source_id": source_id,
             **state,
             "problems": all_problems,
             "total_count": len(all_problems),

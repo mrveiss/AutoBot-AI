@@ -132,7 +132,9 @@ class _FakeChromaCollection:
 # ---------------------------------------------------------------------------
 class TestBuildChromaDBWhereFilter:
     def test_always_includes_source_id(self):
-        assert _build_chromadb_where_filter(None, None) == {"source_id": "default"}
+        # #20513: no "default" sentinel -- a missing source is refused, not answered.
+        with pytest.raises(ValueError):
+            _build_chromadb_where_filter(None, None, source_id=None)
         assert _build_chromadb_where_filter(None, None, source_id="A") == {"source_id": "A"}
 
     def test_folds_extra_conditions_with_and(self):
@@ -190,8 +192,11 @@ class TestCodePatternAnalyzerSourceTagging:
 # Storage-level query scoping + end-to-end isolation
 # ---------------------------------------------------------------------------
 class TestStorageSourceScoping:
-    def test_build_source_scoped_where_default_sentinel(self, pa):
-        assert pa.storage.build_source_scoped_where(None) == {"source_id": "default"}
+    def test_build_source_scoped_where_refuses_missing_source(self, pa):
+        # #20513: the read-side "default" sentinel is gone; no source is an error.
+        for missing in (None, ""):
+            with pytest.raises(ValueError):
+                pa.storage.build_source_scoped_where(missing)
         assert pa.storage.build_source_scoped_where("A") == {"source_id": "A"}
 
     def test_build_source_scoped_where_folds_extra(self, pa):

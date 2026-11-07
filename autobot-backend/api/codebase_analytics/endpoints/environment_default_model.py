@@ -14,10 +14,12 @@ from fastapi import APIRouter
 from autobot_shared.error_boundaries import bounded
 from autobot_shared.ssot_config import QUALITY_MODEL
 
+from ..source_scope import CROSS_SOURCE_OPENAPI
+
 router = APIRouter()
 
 
-@router.get("/env-analysis/default-model")
+@router.get("/env-analysis/default-model", openapi_extra=CROSS_SOURCE_OPENAPI)
 @bounded(60.0)
 async def get_env_analysis_default_model() -> dict[str, str]:
     """The model the AI false-positive filter uses when the caller names none."""

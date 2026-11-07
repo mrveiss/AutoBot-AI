@@ -27,6 +27,7 @@ This file is the endpoint's first test coverage.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 import pytest
@@ -56,7 +57,7 @@ class TestValidationUsesTheResolvedScanRoot:
             captured["root"] = root
             return None
 
-        async def _resolve(source_id, use_default=True):
+        async def _resolve(source_id, strict=False):
             return clone
 
         monkeypatch.setattr(own_mod, "_get_project_root", lambda: str(project_root))
@@ -87,7 +88,7 @@ class TestSiblingEndpointsAreScopedToo:
         project_root, clone = two_roots
         captured: dict[str, str] = {}
 
-        async def _resolve(source_id, use_default=True):
+        async def _resolve(source_id, strict=False):
             assert source_id == "abc123", "the requested source must reach the resolver"
             return clone
 
@@ -219,7 +220,7 @@ class TestOwnershipAnalyzerIsBounded:
         monkeypatch.setattr(oa.asyncio, "create_subprocess_exec", _fake_exec)
         analyzer = oa.OwnershipAnalyzer.__new__(oa.OwnershipAnalyzer)
         target = tmp_path / "a.py"
-        target.write_text("x = 1\n", encoding="utf-8")
+        await asyncio.to_thread(target.write_text, "x = 1\n", encoding="utf-8")
 
         blame = asyncio.ensure_future(analyzer._get_file_ownership(target, tmp_path))
         await asyncio.wait_for(blame_started.wait(), timeout=5)
@@ -244,7 +245,7 @@ class TestOwnershipAnalyzerIsBounded:
         import code_analysis.src.ownership_analyzer as oa
 
         for i in range(12):
-            (tmp_path / f"f{i}.py").write_text("x = 1\n", encoding="utf-8")
+            await asyncio.to_thread((tmp_path / f"f{i}.py").write_text, "x = 1\n", encoding="utf-8")
 
         blamed: list[str] = []
 
@@ -269,7 +270,7 @@ class TestOwnershipAnalyzerIsBounded:
         import code_analysis.src.ownership_analyzer as oa
 
         for i in range(30):
-            (tmp_path / f"f{i}.py").write_text("x = 1\n", encoding="utf-8")
+            await asyncio.to_thread((tmp_path / f"f{i}.py").write_text, "x = 1\n", encoding="utf-8")
 
         blamed: list[str] = []
         clock = {"t": 0.0}
@@ -305,7 +306,7 @@ class TestOwnershipAnalyzerIsBounded:
 
         for ext in ("py", "ts", "vue"):
             for i in range(6):
-                (tmp_path / f"f{i}.{ext}").write_text("x = 1\n", encoding="utf-8")
+                await asyncio.to_thread((tmp_path / f"f{i}.{ext}").write_text, "x = 1\n", encoding="utf-8")
 
         blamed: list[str] = []
 

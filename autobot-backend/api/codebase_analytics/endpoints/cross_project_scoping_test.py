@@ -25,6 +25,8 @@ import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 
 def _write_module(directory: Path, filename: str, body: str) -> None:
     (directory / filename).write_text(body, encoding="utf-8")
@@ -92,8 +94,8 @@ class TestResolveScanRoot:
         assert resolved == deployed_root
         assert resolved != wrong_root
 
-    async def test_uses_default_source_when_source_id_missing(self, tmp_path):
-        """When no source_id is given the default source is scoped, not the global root."""
+    async def test_no_default_source_is_resolved_when_source_id_missing(self, tmp_path):
+        """#20513: a missing source_id never resolves to the most recently indexed source."""
         from api.codebase_analytics.endpoints import shared
 
         default_root = tmp_path / "default_proj"
@@ -107,11 +109,12 @@ class TestResolveScanRoot:
             patch(
                 "api.codebase_analytics.source_storage.get_default_source_id",
                 AsyncMock(return_value="DEFAULT"),
-            ),
+            ) as default_lookup,
         ):
             resolved = await shared.resolve_scan_root(None)
 
-        assert resolved == default_root
+        assert resolved != default_root
+        default_lookup.assert_not_called()
 
 
 class TestCallGraphIsolation:
@@ -153,7 +156,8 @@ class TestEndpointCoverageCacheScoping:
     async def test_cache_key_is_per_source(self):
         from api.codebase_analytics.endpoints.api_endpoints import _cache_key
 
-        assert _cache_key(None) == "default"
+        with pytest.raises(ValueError):
+            _cache_key(None)
         assert _cache_key("A") == "A"
         assert _cache_key("A") != _cache_key("B")
 
@@ -165,7 +169,7 @@ class TestEndpointCoverageCacheScoping:
         root_a.mkdir()
         root_b.mkdir()
 
-        async def fake_resolve(source_id, use_default=True):
+        async def fake_resolve(source_id, strict=False):
             return {"A": root_a, "B": root_b}.get(source_id, api_endpoints.Path("/tmp"))
 
         analysis_a = MagicMock(name="analysis_A")
@@ -246,7 +250,8 @@ class TestEnvironmentCacheScoping:
     def test_cache_key_is_per_source(self):
         from api.codebase_analytics.endpoints.environment import _env_cache_key
 
-        assert _env_cache_key(None) == "default"
+        with pytest.raises(ValueError):
+            _env_cache_key(None)
         assert _env_cache_key("A") == "A"
         assert _env_cache_key("A") != _env_cache_key("B")
 
@@ -266,29 +271,27 @@ class TestEnvironmentCacheScoping:
         assert data_a["marker"] == "A"
         assert data_b["marker"] == "B"
 
-    async def test_scan_root_resolves_default_source_for_none(self, tmp_path):
-        """Issue #12359: _resolve_env_scan_root now delegates to the shared
-        resolve_scan_root (used by call-graph/import-tree/dependencies), so a
-        source_id=None request resolves the caller's DEFAULT registered
-        source instead of jumping straight to the AutoBot project root."""
+    async def test_scan_root_resolves_the_named_source_never_a_default(self, tmp_path):
+        """#20513: the env scan root is the NAMED source's root; no default source is consulted."""
         from api.codebase_analytics.endpoints import environment, shared
 
-        default_root = tmp_path / "default_proj"
-        default_root.mkdir()
+        named_root = tmp_path / "named_proj"
+        named_root.mkdir()
 
         async def fake_resolve_source_root(source_id):
-            return default_root if source_id == "DEFAULT" else None
+            return named_root if source_id == "NAMED" else None
 
         with (
             patch.object(shared, "resolve_source_root", side_effect=fake_resolve_source_root),
             patch(
                 "api.codebase_analytics.source_storage.get_default_source_id",
                 AsyncMock(return_value="DEFAULT"),
-            ),
+            ) as default_lookup,
         ):
-            resolved = await environment._resolve_env_scan_root(None)
+            resolved = await environment._resolve_env_scan_root("NAMED")
 
-        assert resolved == str(default_root)
+        assert resolved == str(named_root)
+        default_lookup.assert_not_called()
 
     async def test_explicit_source_id_unchanged_by_alignment(self, tmp_path):
         """A real, resolvable source_id resolves identically whether via

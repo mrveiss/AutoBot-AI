@@ -23,6 +23,7 @@ from ..scanner import (
     _tasks_lock,
     indexing_tasks,
 )
+from ..source_scope import CROSS_SOURCE_OPENAPI
 
 logger = get_logger(__name__)
 
@@ -40,7 +41,7 @@ def _build_running_info(task_id: str) -> dict:
     }
 
 
-@router.get("/index/queue")
+@router.get("/index/queue", openapi_extra=CROSS_SOURCE_OPENAPI)
 @bounded(60.0)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

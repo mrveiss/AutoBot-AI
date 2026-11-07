@@ -136,7 +136,7 @@ class TestFetchProblemsFromChromaDBFallback:
             patch.object(report_mod, "filter_problems_by_file_existence", side_effect=fake_filter),
             patch.object(report_mod, "resolve_git_repo_root", return_value=str(deployed_root)),
         ):
-            report_mod._fetch_problems_from_chromadb(source_id=None, source_root=None)
+            report_mod._fetch_problems_from_chromadb(source_id="src1", source_root=None)
 
         assert captured["root"] == deployed_root
         assert captured["root"] != wrong_root

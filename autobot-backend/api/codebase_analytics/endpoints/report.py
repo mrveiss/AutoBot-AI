@@ -55,6 +55,7 @@ from ..duplicate_detector import (  # noqa: F401
     DuplicateCodeDetector,
 )
 from ..models import APIEndpointAnalysis
+from ..source_scope import SourceIdQuery, require_source_id
 from ..storage import get_code_collection
 from .duplicates import _run_standard_analysis
 from .scan_responses import ScanUnavailable
@@ -1225,7 +1226,7 @@ def _generate_cross_language_section(
 
 
 def _fetch_problems_from_chromadb(
-    source_id: str | None = None,
+    source_id: str,
     source_root: Path | None = None,
 ) -> List[Dict]:
     """
@@ -1237,7 +1238,7 @@ def _fetch_problems_from_chromadb(
     prevent hallucinated results from reaching the issue tracker.
 
     Args:
-        source_id: Optional source registry ID to scope results.
+        source_id: Source registry ID the results are scoped to (#20513: required).
         source_root: Filesystem root to resolve relative file paths against.
                      Defaults to the project root when None.
 
@@ -1246,6 +1247,8 @@ def _fetch_problems_from_chromadb(
         Each entry includes ``file_verified: True`` when the path was confirmed
         on disk, or ``file_verified: False`` when the path field was absent.
     """
+    # Before the `try` below, which logs and swallows: a missing source is a caller bug.
+    where_filter = {"$and": [{"type": "problem"}, {"source_id": require_source_id(source_id, "report problems query")}]}
     code_collection = get_code_collection()
     problems = []
 
@@ -1253,15 +1256,6 @@ def _fetch_problems_from_chromadb(
         return problems
 
     try:
-        if source_id:
-            where_filter = {
-                "$and": [
-                    {"type": "problem"},
-                    {"source_id": source_id},
-                ]
-            }
-        else:
-            where_filter = {"type": "problem"}
         results = get_all_paginated(
             code_collection,
             where=where_filter,
@@ -2191,6 +2185,7 @@ def _render_report(problems: list, analyses: dict) -> str:
     error_code_prefix="CODEBASE",
 )
 async def generate_analysis_report(
+    source_id: SourceIdQuery,
     format: str = "markdown",
     include_api_analysis: bool = True,
     include_duplicate_analysis: bool = True,
@@ -2199,7 +2194,6 @@ async def generate_analysis_report(
     include_pattern_analysis: bool = True,
     quick: bool = False,
     use_semantic: bool = False,
-    source_id: str | None = None,
 ):
     """
     Generate a code analysis report from the indexed data.
@@ -2216,18 +2210,11 @@ async def generate_analysis_report(
         quick: If True, skip expensive analyses for faster export
         use_semantic: Enable LLM-based semantic analysis for bug prediction (Issue #554)
         source_id: Scope the report and every sub-analysis to this code source
-            (Issue #12372). Falls back to the most recently indexed source, or
-            AutoBot's own root only when no source is resolvable.
+            (Issue #12372). Required (#20513): there is no default source.
 
     Returns:
         Markdown formatted report as plain text
     """
-    # Default to most recent source to prevent cross-project data mixing (#2653)
-    if not source_id:
-        from api.codebase_analytics.endpoints.shared import default_source_id
-
-        source_id = await default_source_id()
-
     # Issue #2724 / #2760: Resolve source root via shared helper so _fetch_problems_from_chromadb
     # (which runs in a thread) can validate file paths without blocking the event loop.
     source_root = await resolve_source_root(source_id)
@@ -2258,5 +2245,6 @@ async def generate_analysis_report(
         media_type="text/markdown; charset=utf-8",
         headers={
             "Content-Disposition": 'attachment; filename="code-analysis-report.md"',
+            "X-Source-Id": source_id,
         },
     )

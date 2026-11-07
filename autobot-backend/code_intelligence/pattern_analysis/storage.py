@@ -361,7 +361,7 @@ def _process_search_results(results: Dict[str, Any], min_similarity: float) -> L
 
 
 def build_source_scoped_where(
-    source_id: str | None,
+    source_id: str,
     extra: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """Build a ChromaDB ``where`` filter scoped to a source, with optional
@@ -370,8 +370,9 @@ def build_source_scoped_where(
     Issue #12384: The ``source_id`` condition is ALWAYS included -- callers
     must never query the shared ``code_patterns`` collection without it, or a
     request for one source could surface another source's (or AutoBot's own)
-    stored patterns. Uses the ``source_id or "default"`` sentinel so it
-    matches exactly what ``CodePatternAnalyzer`` writes at storage time.
+    stored patterns. #20513: the ``source_id or "default"`` read-side sentinel
+    is gone -- a missing or malformed ``source_id`` raises, because a read that
+    quietly asked for the ``"default"`` partition answered for no source at all.
 
     Note: ChromaDB equality on an ABSENT field matches nothing, so patterns
     stored before this fix (no ``source_id`` key at all) become invisible to
@@ -385,7 +386,11 @@ def build_source_scoped_where(
     Returns:
         ChromaDB-compatible where filter dict.
     """
-    conditions = [{"source_id": source_id or "default"}]
+    # Lazy: the `api.codebase_analytics` package imports the routers, which
+    # import this module, so a top-level import here would be a cycle.
+    from api.codebase_analytics.source_scope import require_source_id  # noqa: PLC0415
+
+    conditions = [{"source_id": require_source_id(source_id, "pattern-store query")}]
     if extra:
         conditions.extend({k: v} for k, v in extra.items())
     if len(conditions) == 1:
@@ -399,12 +404,13 @@ async def search_similar_patterns(
     n_results: int = 10,
     min_similarity: float = 0.7,
     collection=None,
-    source_id: str | None = None,
+    *,
+    source_id: str,
 ) -> List[Dict[str, Any]]:
     """Search for similar patterns using vector similarity.
 
-    Issue #12384: Always scopes the query to ``source_id`` (default sentinel
-    when None) so one project can never read another's stored patterns.
+    Issue #12384: Always scopes the query to ``source_id`` (required, #20513)
+    so one project can never read another's stored patterns.
 
     Args:
         query_embedding: Embedding vector to search for
@@ -417,17 +423,17 @@ async def search_similar_patterns(
     Returns:
         List of similar patterns with similarity scores
     """
+    # Before the `try`: a missing source is a caller bug, not a store failure to swallow.
+    where_filter = build_source_scoped_where(
+        source_id,
+        {"pattern_type": pattern_type} if pattern_type else None,
+    )
     try:
         if collection is None:
             collection = await get_pattern_collection_async()
             if collection is None:
                 logger.error("Could not get pattern collection")
                 return []
-
-        where_filter = build_source_scoped_where(
-            source_id,
-            {"pattern_type": pattern_type} if pattern_type else None,
-        )
 
         results = await collection.query(
             query_embeddings=[query_embedding],
@@ -468,7 +474,7 @@ async def delete_pattern(pattern_id: str, collection=None) -> bool:
         return False
 
 
-async def get_pattern_stats(collection=None, source_id: str | None = None) -> Dict[str, Any]:
+async def get_pattern_stats(collection=None, *, source_id: str) -> Dict[str, Any]:
     """Get statistics about stored patterns.
 
     Issue #12384: Scopes the sample/count to ``source_id`` so aggregate stats
@@ -482,13 +488,13 @@ async def get_pattern_stats(collection=None, source_id: str | None = None) -> Di
     Returns:
         Dictionary with pattern statistics
     """
+    where_filter = build_source_scoped_where(source_id)
     try:
         if collection is None:
             collection = await get_pattern_collection_async()
             if collection is None:
                 return {"error": "Collection not available"}
 
-        where_filter = build_source_scoped_where(source_id)
         # #1361: bound the fetch (no scoped count() exists in the ChromaDB API)
         # to stay under the SQLite backend's ~999 SQL-variable limit -- mirrors
         # the sampling already done by get_pattern_stats() pre-#12384.
@@ -523,11 +529,11 @@ async def get_pattern_stats(collection=None, source_id: str | None = None) -> Di
         return {"error": "Failed to retrieve pattern stats"}
 
 
-async def clear_patterns(collection=None, source_id: str | None = None) -> bool:
+async def clear_patterns(collection=None, *, source_id: str) -> bool:
     """Clear all patterns for a single source from the collection.
 
-    Issue #12408: Scoped to ``source_id`` (default sentinel when None,
-    mirroring ``build_source_scoped_where``) so a clear for one source can
+    Issue #12408: Scoped to ``source_id`` (required, #20513,
+    through ``build_source_scoped_where``) so a clear for one source can
     never delete another source's (or AutoBot's own) stored patterns.
     Previously this had NO source filter at all -- ``collection.get()``/
     ``collection.delete()`` operated over every id in the shared
@@ -550,16 +556,16 @@ async def clear_patterns(collection=None, source_id: str | None = None) -> bool:
     Returns:
         True if successful, False otherwise
     """
+    where_filter = build_source_scoped_where(source_id)
     try:
         if collection is None:
             collection = await get_pattern_collection_async()
             if collection is None:
                 return False
 
-        where_filter = build_source_scoped_where(source_id)
         await collection.delete(where=where_filter)
 
-        logger.info("Cleared patterns for source_id=%s", source_id or "default")
+        logger.info("Cleared patterns for source_id=%s", source_id)
         return True
 
     except Exception as e:

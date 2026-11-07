@@ -17,6 +17,8 @@ outage and a source nobody had indexed both rendered as a blank panel.
 
 from fastapi import HTTPException, status
 
+from ..source_scope import require_source_id
+
 STORE_UNAVAILABLE_DETAIL = "Code index store unavailable"
 NOT_INDEXED_MESSAGE = "This source has not been indexed yet. Run indexing first."
 
@@ -26,18 +28,18 @@ def store_unavailable() -> HTTPException:
     return HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=STORE_UNAVAILABLE_DETAIL)
 
 
-def source_is_indexed(collection, source_id: str | None) -> bool:
+def source_is_indexed(collection, source_id: str) -> bool:
     """True when the store holds at least one row of any type for ``source_id``.
 
     Any row counts, whatever its ``type``: this answers "was it indexed", not
     "did it contain functions". A read failure propagates; it is not "not indexed".
     """
-    where = {"source_id": source_id} if source_id else None
+    where = {"source_id": require_source_id(source_id, "index-state query")}
     found = collection.get(where=where, limit=1, include=[])
     return bool(found.get("ids"))
 
 
-def index_state(collection, source_id: str | None, has_results: bool) -> dict:
+def index_state(collection, source_id: str, has_results: bool) -> dict:
     """The ``status``/``indexed`` fields for a list response (never reads the store when results exist)."""
     indexed = has_results or source_is_indexed(collection, source_id)
     if indexed:
