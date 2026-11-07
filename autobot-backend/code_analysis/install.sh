@@ -10,7 +10,10 @@ echo "🚀 Installing AutoBot Code Analysis Suite..."
 # Python: the floor interpreter from .python-version (#20932), never a bare python3
 CA_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=scripts/lib/python_floor.sh
-source "$CA_ROOT/scripts/lib/python_floor.sh"
+source "$CA_ROOT/scripts/lib/python_floor.sh" || {
+    echo "ERROR: cannot source scripts/lib/python_floor.sh" >&2
+    exit 1
+}
 PYTHON_BIN="$(python_floor_ensure "$CA_ROOT")" || exit 1
 
 echo "✅ Python version: $("$PYTHON_BIN" --version)"

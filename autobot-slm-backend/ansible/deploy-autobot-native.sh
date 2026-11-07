@@ -175,7 +175,10 @@ configure_backend() {
 
     # Install backend dependencies if needed
     # shellcheck source=scripts/lib/python_floor.sh
-    source "$SCRIPT_DIR/../../scripts/lib/python_floor.sh"
+    source "$SCRIPT_DIR/../../scripts/lib/python_floor.sh" || {
+        echo "ERROR: cannot source scripts/lib/python_floor.sh" >&2
+        exit 1
+    }
     if [[ -f ../venv/bin/activate ]] && ! python_floor_venv_matches "$SCRIPT_DIR/../.." ../venv; then
         log "WARN" "Existing venv is not on the floor interpreter; rebuilding it (#20932)"
         rm -rf ../venv

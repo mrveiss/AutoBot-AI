@@ -435,7 +435,10 @@ run_repairs() {
 
     # Fix Python environment
     # shellcheck source=scripts/lib/python_floor.sh
-    source "$SCRIPT_DIR/../../../../scripts/lib/python_floor.sh"
+    source "$SCRIPT_DIR/../../../../scripts/lib/python_floor.sh" || {
+        echo "ERROR: cannot source scripts/lib/python_floor.sh" >&2
+        exit 1
+    }
     if [ "${ISSUES_FOUND[venv_missing]}" != true ] && [ -d venv ] \
         && ! python_floor_venv_matches "$SCRIPT_DIR/../../../.." venv; then
         log_info "Existing venv is not on the floor interpreter; rebuilding it (#20932)"
