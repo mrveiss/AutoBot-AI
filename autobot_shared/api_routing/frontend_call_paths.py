@@ -42,7 +42,8 @@ URL_BASE_API_RE = re.compile(
 # placeholders (``const base = `/api/llc/roles/${companyId.value}/${roleId}` ``): they become path parameters.
 BASE_CONST_RE = re.compile(
     r"^\s*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*(?::\s*string\s*)?=\s*[`'\"]"
-    r"((?:/api|\$\{getApiBase\(\)\}|\$\{getBackendUrl\(\)\}/api)(?:[A-Za-z0-9_/\-]|\$\{[^}`'\"\n]*\})*)[`'\"]\s*;?\s*$",
+    r"((?:/api|\$\{getApiBase\(\)\}|\$\{getBackendUrl\(\)\}/api|\$\{[A-Za-z_]\w*\})"
+    r"(?:[A-Za-z0-9_/\-]|\$\{[^}`'\"\n]*\})*)[`'\"]\s*;?\s*$",
     re.MULTILINE,
 )
 
@@ -52,27 +53,25 @@ def _resolve_base(value: str) -> str:
     return value.replace("${getApiBase()}", "/api").replace("${getBackendUrl()}", "")
 
 
-#: How many passes resolve a base that extends another base before giving up (a longer chain is not a real file).
-_MAX_BASE_DEPTH = 5
-
-
 def _base_constants(lines: list[str]) -> dict[str, list[str]]:
     """``{NAME: [/api/... paths]}`` for the file-local base constants.
 
-    A name may be declared again in another function with another value, so every value is kept. A constant may
-    extend an earlier one.
+    A value may start with an earlier constant (``const CHILD = `${BASE}/sub` ``): the chain resolves in
+    declaration order, once per value of the parent. A name redeclared in several functions keeps every value and
+    ALL of them apply file-wide, whichever function declares them: this errs toward 'connected', which is the safe
+    direction for a gate that must not flag a wired route. A value still led by an unknown ``${NAME}`` is no base.
     """
     bases: dict[str, list[str]] = {}
-    text = "\n".join(lines)
-    for _ in range(_MAX_BASE_DEPTH):
-        resolved: dict[str, list[str]] = {}
-        for name, value in BASE_CONST_RE.findall(text):
-            for other, paths in resolved.items():
-                value = value.replace("${" + other + "}", paths[-1])
-            resolved.setdefault(name, []).append(_resolve_base(value))
-        if resolved == bases:
-            break
-        bases = resolved
+    for name, value in BASE_CONST_RE.findall("\n".join(lines)):
+        lead = re.match(r"\$\{([A-Za-z_]\w*)\}", value)
+        parents = [""]
+        if lead and lead.group(1) not in ("getApiBase", "getBackendUrl"):
+            if lead.group(1) not in bases:
+                continue
+            parents, value = bases[lead.group(1)], value[lead.end() :]
+        resolved = [_resolve_base(parent + value) for parent in parents]
+        known = bases.setdefault(name, [])
+        known.extend(r for r in resolved if r not in known)
     return bases
 
 

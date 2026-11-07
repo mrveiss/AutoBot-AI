@@ -402,8 +402,8 @@ class _NormMod:
 def test_route_candidates_have_no_phantom_forms_20910() -> None:
     """With a registration prefix and an own prefix only reg+own+raw is real; reg+raw only without an own prefix."""
     cand = routes._candidates
-    assert cand(_NormMod, "/x", "/own", "/api") == ("/api/own/x",)
-    assert cand(_NormMod, "/x", "", "/api") == ("/api/x",)
+    assert cand(_NormMod, "/x", "/own", ["/api"]) == ("/api/own/x",)
+    assert cand(_NormMod, "/x", "", ["/api"]) == ("/api/x",)
     assert cand(_NormMod, "/x", "/own", None) == ("/own/x", "/x")
 
 
@@ -429,3 +429,15 @@ def test_a_file_path_ending_in_api_is_not_a_caller_20910(tmp_path: Path) -> None
     """`autobot-backend/api/x.py` names a file; it must not read as a call to `/api/x.py`."""
     decoy = {"scripts/note.sh": "# edit autobot-backend/api/planted/orphan\n"}
     assert _fired(tmp_path, {**_ROUTE, **_WIRED, **decoy}) == {"route:autobot-backend/api/planted_route.py:GET /orphan"}
+
+
+def test_a_router_mounted_twice_is_judged_at_every_mount_20910() -> None:
+    """A router served at its registry mount and at a nested include has a candidate path per mount."""
+    assert routes._candidates(_NormMod, "/x", "", ["/a", "/a/sub"]) == ("/a/sub/x", "/a/x")
+    assert routes._candidates(_NormMod, "/x", "/own", ["/a", "/a/sub"]) == ("/a/own/x", "/a/sub/own/x")
+
+
+def test_the_real_nested_mount_of_a_registry_router_is_seen_20910() -> None:
+    """knowledge_debug.py is mounted by the registry AND `include_router`ed under /debug by knowledge.py."""
+    prefixes = _state(repo_root())[1].registry_prefixes("autobot-backend")["autobot-backend/api/knowledge_debug.py"]
+    assert {"/knowledge_base", "/knowledge_base/debug"} <= set(prefixes), prefixes

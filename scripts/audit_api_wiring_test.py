@@ -347,3 +347,15 @@ def test_get_api_base_is_not_a_host_placeholder_for_api_paths_20910(tmp_path):
     """`${getApiBase()}/api/x` is `/api/api/x` at runtime; it must not also read as a call to `/api/x`."""
     found = _calls_in(tmp_path, "const u = `${getApiBase()}/api/x`\n")
     assert "/api/api/x" in found and "/api/x" not in found
+
+
+def test_chained_base_constants_resolve_in_declaration_order_20910(tmp_path):
+    """``const CHILD = `${BASE}/sub` `` then ``${CHILD}/leaf``: the leaf is a call, not an unwired route."""
+    src = (
+        "const BASE = `${getApiBase()}/knowledge-graph`\n"
+        "const CHILD = `${BASE}/entities`\n"
+        "const a = await api.get(`${CHILD}/${id}/leaf`)\n"
+    )
+    assert "/api/knowledge-graph/entities/{p}/leaf" in _calls_in(tmp_path, src)
+    # a value led by a name that is not a base is no base: nothing is invented
+    assert not any("leaf" in c for c in _calls_in(tmp_path / "x", "const C = `${unknown}/entities`\nf(`${C}/leaf`)\n"))
