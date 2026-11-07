@@ -85,6 +85,7 @@ import os
 import sys
 import types
 import warnings
+import weakref
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
@@ -441,12 +442,13 @@ class _LeakGuard:
         # each of the thousands of collectors a session brackets.
         self._candidate_names = {Path(owner).name for owner in removal_candidates}
         self._tracked: dict[str, _Mutation] = {}
+        # withdrawn and put back inside its owner's tree, a stub keeps its owner (weakref: ids get reused)
+        self._first_owner: dict[str, tuple[_Mutation, weakref.ref]] = {}
         # name -> why the synthetic->genuine exemption was refused (#13651)
         self._exempt_blocked: dict[str, str] = {}
         self._reported: set[tuple[str, str]] = set()
         self._warned_owners: set[str] = set()
-        # Baselined owners this session has loaded but not yet taken anywhere
-        # they could escape to, mapped to their directory and its ancestors.
+        # Baselined owners loaded but not yet taken anywhere they could escape to: directory and ancestors.
         self._visited: dict[str, tuple[Path, frozenset[Path]]] = {}
         # Baselined owners the session *has* taken outside their directory —
         # the only ones whose silence is evidence that they were fixed.
@@ -461,19 +463,11 @@ class _LeakGuard:
     def snapshot(self) -> None:
         """Re-baseline. Everything after this point is attributable.
 
-        The baseline stores the module objects and comparison is by identity.
-        Building ``{name: id(mod)}`` instead ran a Python-level comprehension
-        over every entry ``sys.modules`` holds — ~3600 in an
-        ``autobot-backend`` session — on every collector and every test, and
-        measured 1.028 ms against 0.087 ms for the plain copy.
-
-        ``sys.modules.copy()`` and never a live view: ``dict.copy()`` is a
-        single C-level operation and cannot be torn, whereas iterating
-        ``sys.modules.items()`` races with any import happening on another
-        thread.  The suite has plenty — the analytics/celery task tests spawn
-        them — and the loser of that race is a ``RuntimeError: dictionary
-        changed size during iteration`` raised inside a hook, which under xdist
-        kills the worker and takes the session down with ``INTERNALERROR``.
+        The baseline stores the module objects, compared by identity (building
+        ``{name: id(mod)}`` cost 1.028 ms against 0.087 ms at ~3600 entries).
+        ``sys.modules.copy()`` and never a live view: one C-level operation that
+        cannot be torn, whereas iterating races with imports on other threads
+        (``RuntimeError`` in a hook, ``INTERNALERROR`` under xdist).
         """
         self._baseline = sys.modules.copy()
 
@@ -501,10 +495,14 @@ class _LeakGuard:
         owner_ancestors = frozenset(owner_dir.parents)
         for name, module, previous in changed:
             self._exempt_blocked.pop(name, None)
+            first, ref = self._first_owner.get(name, (None, None))
+            if first and ref() is module and first.owner_dir in (owner_dir, *owner_dir.parents):
+                self._tracked[name] = first  # reinstalled inside its owner's tree, not new
+                continue
             kind = self._classify(name, module, previous)
             if kind is None:
                 continue
-            self._tracked[name] = _Mutation(
+            self._tracked[name] = mutation = _Mutation(
                 key=name,
                 kind=kind,
                 owner=owner,
@@ -515,6 +513,8 @@ class _LeakGuard:
                 + (f" [exempt-refused: {self._exempt_blocked[name]}]" if name in self._exempt_blocked else ""),
                 owner_ancestors=owner_ancestors,
             )
+            if first is None or ref() is not module:
+                self._first_owner[name] = (mutation, weakref.ref(module))
 
     def _matches_baseline(self) -> bool:
         """True when nothing in ``sys.modules`` moved since the last baseline.
@@ -901,19 +901,15 @@ def pytest_make_collect_report(collector: pytest.Collector) -> Iterator[None]:
     installs anything, or the guard reacts to a stub that is about to be put
     back.
 
-    There is no re-baseline here.  ``attribute()`` ends by re-baselining, so
-    an explicit ``snapshot()`` at this point only re-copied ``sys.modules`` a
-    third time per node — the profile showed ``snapshot`` at 270 calls against
-    ``attribute``'s 136 — and it *discarded* anything imported between the
-    previous node's attribution and this one instead of attributing it.
+    There is no re-baseline here: ``attribute()`` ends by re-baselining, and an
+    extra ``snapshot()`` re-copied ``sys.modules`` per node and *discarded*
+    anything imported since the previous attribution.
 
-    Every collector is bracketed, not just ``pytest.Module``.  A ``Dir`` or
-    ``Package`` node is where a hook-installed stub is created, so skipping
-    those left the guard blind to them.
+    Every collector is bracketed, not just ``pytest.Module``: a ``Dir`` or
+    ``Package`` is where a hook-installed stub is created.
 
-    The check runs *before* ``collector.collect()`` because that is the moment
-    a leaked stub does its damage: it is the import that fails, and the failure
-    names the importing module rather than the conftest responsible.
+    The check runs *before* ``collector.collect()``: that is when a leaked stub
+    does its damage, and the failure names the importer, not the conftest.
     """
     if _GUARD is None:
         yield
