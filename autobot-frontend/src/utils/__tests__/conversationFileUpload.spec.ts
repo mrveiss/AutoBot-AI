@@ -16,6 +16,7 @@ import {
   describeUploadError,
   ensureUploadSession,
   postConversationUpload,
+  usesCanonicalRoute,
 } from '@/utils/conversationFileUpload'
 
 type Listener = (event?: unknown) => void
@@ -241,5 +242,24 @@ describe('ensureUploadSession (#20133)', () => {
     const create = vi.fn().mockRejectedValueOnce(new Error('down')).mockResolvedValueOnce('new-3')
     await expect(ensureUploadSession({ currentSessionId: null }, { createNewSession: create })).rejects.toThrow('down')
     expect(await ensureUploadSession({ currentSessionId: null }, { createNewSession: create })).toBe('new-3')
+  })
+})
+
+describe('usesCanonicalRoute (#20195)', () => {
+  it('sends a turn with files to the canonical route even when the overseer is on', () => {
+    expect(usesCanonicalRoute(true, ['file-1'])).toBe(true)
+  })
+
+  it('lets the overseer take a turn with no files', () => {
+    expect(usesCanonicalRoute(true, [])).toBe(false)
+  })
+
+  it('uses the canonical route whenever the overseer is off', () => {
+    expect(usesCanonicalRoute(false, [])).toBe(true)
+    expect(usesCanonicalRoute(false, ['file-1'])).toBe(true)
+  })
+
+  it('control: the decision depends on the ids, not on the overseer flag alone', () => {
+    expect(usesCanonicalRoute(true, [])).not.toBe(usesCanonicalRoute(true, ['file-1']))
   })
 })

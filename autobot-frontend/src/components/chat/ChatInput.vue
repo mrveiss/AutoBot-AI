@@ -462,7 +462,7 @@ import McpPromptPicker from './McpPromptPicker.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
 import { getFileIconNameByMimeType } from '@/utils/iconMappings'
 import { createLogger } from '@/utils/debugUtils'
-import { postConversationUpload, describeUploadError, ensureUploadSession } from '@/utils/conversationFileUpload'
+import { postConversationUpload, describeUploadError, ensureUploadSession, usesCanonicalRoute } from '@/utils/conversationFileUpload'
 import type { MultiModalResponse } from '@/utils/VisionMultimodalApiClient'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { useSlashCommands } from '@/composables/useSlashCommands'
@@ -749,9 +749,22 @@ const sendMessage = async () => {
 
   isSending.value = true
 
+  // #20195: the server ids from the upload, never browser File objects
+  const attachmentIds = serverFileIds(files)
+  const sendOptions = {
+    attachments: attachmentIds,
+    use_knowledge: useKnowledge.value,  // Issue #249: RAG toggle
+    // GH#8993: extended thinking parameters
+    ...(thinkingEnabled.value ? { thinking_enabled: true, thinking_budget_tokens: thinkingBudget.value } : {}),
+    // #9460/#9471: per-conversation reasoning effort (omit 'auto' so request stays inert)
+    ...(reasoningEffort.value !== 'auto' ? { reasoning_effort: reasoningEffort.value } : {}),
+    // #11585: per-request model/provider override (empty when "auto")
+    ...overrideFields.value,
+  }
+
   try {
-    // Issue #690: Use Overseer Agent when enabled
-    if (overseerEnabled.value) {
+    // Issue #690: Use Overseer Agent when enabled, unless the turn carries files (#20195)
+    if (!usesCanonicalRoute(overseerEnabled.value, attachmentIds)) {
       logger.info('[ChatInput] Sending via Overseer Agent:', message.substring(0, 50))
 
       // Add user message to chat store directly (appears immediately)
@@ -768,24 +781,11 @@ const sendMessage = async () => {
       if (!success) {
         logger.warn('[ChatInput] Overseer submission failed, falling back to normal flow')
         // Fallback: send as normal message
-        await controller.sendMessage(message, {
-          use_knowledge: useKnowledge.value,
-          // #11585: per-request model/provider override (empty when "auto")
-          ...overrideFields.value,
-        })
+        await controller.sendMessage(message, sendOptions)
       }
     } else {
       // Normal message flow (Issue #249)
-      await controller.sendMessage(message, {
-        attachments: serverFileIds(files),  // #20195: the server ids from the upload, never browser File objects
-        use_knowledge: useKnowledge.value,  // Issue #249: RAG toggle
-        // GH#8993: extended thinking parameters
-        ...(thinkingEnabled.value ? { thinking_enabled: true, thinking_budget_tokens: thinkingBudget.value } : {}),
-        // #9460/#9471: per-conversation reasoning effort (omit 'auto' so request stays inert)
-        ...(reasoningEffort.value !== 'auto' ? { reasoning_effort: reasoningEffort.value } : {}),
-        // #11585: per-request model/provider override (empty when "auto")
-        ...overrideFields.value,
-      })
+      await controller.sendMessage(message, sendOptions)
     }
 
   } catch (error) {
