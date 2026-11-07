@@ -23,14 +23,14 @@ import platform
 import stat as stat_module
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 from autobot_shared.ssot_config import config
 from models.approval import ApprovalComment
 from services.approval_execution import register_post_approval_action
 from services.approval_four_eyes import is_self_approval  # the one four-eyes rule (#19997, #20030)
 from services.audit.taxonomy import AuditAction
-from services.audit_logger import audit_log
+from services.audit_logger import AuditResult, audit_log
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -142,7 +142,7 @@ def _remove_env_copies(plan: CleanupPlan, root: Path) -> int:
 async def _audit(
     approval: "Approval",
     action: AuditAction,
-    result: Literal["success", "denied", "failed", "attempted"],
+    result: AuditResult,
     **details: object,
 ) -> bool:
     """Whether the entry was written. Durable, as the entry before a removal must not be lost (#17038)."""
