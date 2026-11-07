@@ -13,6 +13,8 @@ frameworks, and file types.
 from pathlib import Path
 from typing import Dict, Set
 
+from utils.colocated_test_files import is_test_filename
+
 # =============================================================================
 # File Categories
 # =============================================================================
@@ -597,8 +599,7 @@ def _get_category_by_extension(extension: str, filename: str) -> str:
         return FILE_CATEGORY_DATA
     if extension in ASSET_EXTENSIONS:
         return FILE_CATEGORY_ASSETS
-    if extension in ALL_CODE_EXTENSIONS:
-        return FILE_CATEGORY_CODE
+    # Code extensions and unknown ones alike are code.
     return FILE_CATEGORY_CODE
 
 
@@ -618,13 +619,12 @@ def get_file_category(file_path: Path) -> str:
     extension = file_path.suffix.lower()
     filename = file_path.name.lower()
 
-    # Directory-based categories take precedence
-    dir_category = _get_category_by_directory(path_parts)
-    if dir_category:
-        return dir_category
-
-    # Fall back to extension-based categorization
-    return _get_category_by_extension(extension, filename)
+    # Directory first, then test-file names (#20493), then the extension
+    return (
+        _get_category_by_directory(path_parts)
+        or (FILE_CATEGORY_TEST if is_test_filename(filename) else None)
+        or _get_category_by_extension(extension, filename)
+    )
 
 
 def get_language(file_path: Path) -> str:
