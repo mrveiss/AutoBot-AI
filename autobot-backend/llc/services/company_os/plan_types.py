@@ -19,9 +19,11 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from models.approval import ApprovalType
 
 from .graph_types import NodeSpec, TransitionSpec
 
@@ -229,10 +231,9 @@ class StatusChange(_Doc):
     reason: Optional[str] = Field(None, max_length=1000)
 
 
-class PlanApprovalType(str, Enum):
-    """The one kind of approval a plan may ask for: it waits in Approvals (FR-6.2)."""
-
-    WORKFLOW_GATE = "workflow_gate"
+#: The one kind of approval a plan may ask for: it waits in Approvals (FR-6.2). The value is the canonical
+#: ``ApprovalType`` member (#20115), narrowed to one so a policy cannot name another kind.
+PlanApprovalType = Literal[ApprovalType.WORKFLOW_GATE]
 
 
 class PlanApprovalTimeout(str, Enum):
@@ -253,10 +254,16 @@ class PlanApprovalPolicy(_Doc):
     """
 
     key: str = Field(..., min_length=1, max_length=64, pattern=KEY_PATTERN)
-    approval_type: PlanApprovalType = PlanApprovalType.WORKFLOW_GATE
+    approval_type: PlanApprovalType = ApprovalType.WORKFLOW_GATE
     sub_step_keys: List[str] = Field(default_factory=list, max_length=200)
     on_timeout: PlanApprovalTimeout = PlanApprovalTimeout.HOLD
     wait_limit: bool = False
+
+
+class PolicyEnforcement(str, Enum):
+    """Whether the approval policies of a plan are enforced. Nothing executes workflows yet (#16763)."""
+
+    NOT_ENFORCED = "not_enforced"
 
 
 class ConversionStatus(str, Enum):
@@ -328,6 +335,8 @@ class EdgeCaseTreatment(_Doc):
 class ProposalOutcome(str, Enum):
     UNFILED = "unfiled"
     FILED = "filed"
+    #: The request exists and a person turned it down or sent it back: the line did not change (#20115).
+    DECLINED = "declined"
     FAILED = "failed"
 
 
@@ -396,3 +405,7 @@ class CompanyWorkflowPlan(_Doc):
     approved_at: Optional[datetime] = None
     approved_by: Optional[uuid.UUID] = None
     conversion: Optional[PlanConversion] = None
+    #: Set by the server on an ``approved`` or ``converted`` plan, so a client can say the policies wait for an
+    #: executor without parsing text; ``None`` below that (#20115).
+    policy_enforcement: Optional[PolicyEnforcement] = None
+    policy_enforcement_tracking_issue: Optional[int] = None

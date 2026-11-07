@@ -21,6 +21,7 @@ class _HangingProcess:
     """An ffmpeg stand-in whose communicate() never finishes."""
 
     def __init__(self):
+        self.returncode = None
         self.killed = False
         self.reaped = False
 

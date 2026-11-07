@@ -27,8 +27,10 @@ import redis
 
 from api.schemas_analytics import CodeAnalysisRequest, CommunicationPattern
 from autobot_shared.endpoint_normalization import collapse_dynamic_segments
+from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
+from autobot_shared.subprocess_reap import kill_and_reap
 from constants import PATH
 from constants.threshold_constants import TimingConstants
 from type_defs.common import Metadata
@@ -45,6 +47,8 @@ _analytics_state_lock = asyncio.Lock()
 # Performance optimization: O(1) lookup for analysis type routing (Issue #326)
 COMMUNICATION_CHAIN_ANALYSIS_TYPES = {"full", "communication_chains"}
 CODE_INDEXING_ANALYSIS_TYPES = {"full", "incremental"}
+#: Wait for the code-index subprocess; the timeout message reports this same value (#18056).
+_CODE_INDEX_TIMEOUT_S = env_float_clamped("AUTOBOT_CODE_INDEX_RUN_TIMEOUT_SECONDS", 180.0, positive_finite=True)
 
 # Bounded-dict limits for per-endpoint tracking dicts (Issue #1554).
 # After normalization these should stay well under the cap, but it acts as a
@@ -313,7 +317,8 @@ class AnalyticsController:
                 results["code_analysis_error"] = stderr.decode()
 
         except asyncio.TimeoutError:
-            results["code_analysis_error"] = "Analysis timeout (5 minutes)"
+            await kill_and_reap(process)
+            results["code_analysis_error"] = f"Analysis timeout ({TimingConstants.VERY_LONG_TIMEOUT:g} seconds)"
         except Exception as e:
             results["code_analysis_error"] = str(e)
 
@@ -337,7 +342,7 @@ class AnalyticsController:
                 cwd=str(self.code_index_path),
             )
 
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=180)
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=_CODE_INDEX_TIMEOUT_S)
 
             if process.returncode == 0:
                 index_data = json.loads(stdout.decode())
@@ -352,7 +357,8 @@ class AnalyticsController:
                 results["code_index_error"] = stderr.decode()
 
         except asyncio.TimeoutError:
-            results["code_index_error"] = "Indexing timeout (3 minutes)"
+            await kill_and_reap(process)
+            results["code_index_error"] = f"Indexing timeout ({_CODE_INDEX_TIMEOUT_S:g} seconds)"
         except Exception as e:
             results["code_index_error"] = str(e)
 

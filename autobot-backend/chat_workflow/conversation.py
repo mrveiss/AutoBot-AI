@@ -115,16 +115,17 @@ class ConversationHandlerMixin:
             key = self._get_conversation_key(session_id)
             history_json = json.dumps(history)
 
-            # Save with 24-hour expiration and 2s timeout
+            # Save with the history TTL and a bounded wait
             try:
                 await asyncio.wait_for(
                     self.redis_client.set(key, history_json, ex=self.conversation_history_ttl),
-                    timeout=2.0,
+                    timeout=config.timeout.redis_op,
                 )
                 logger.debug("Saved conversation history for session %s to Redis", session_id)
             except asyncio.TimeoutError:
                 logger.warning(
-                    "Redis set timeout after 2s for session %s - data may not be cached",
+                    "Redis set timeout after %gs for session %s - data may not be cached",
+                    config.timeout.redis_op,
                     session_id,
                 )
 
