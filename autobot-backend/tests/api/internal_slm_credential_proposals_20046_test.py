@@ -61,7 +61,7 @@ def test_the_slm_key_proposes_through_the_real_gate_and_the_admission_is_audited
     response = world.client.post(PROPOSE, json=NODE, headers=KEY_HEADERS)
     assert response.status_code == 201 and response.json()["created"] is True
     event = world.audit.await_args.args[0]
-    assert event.actor_id == "service:slm-ssh-password-deletion" and event.resource_id == PROPOSE
+    assert event.actor_id == "service:slm-credential-actions" and event.resource_id == PROPOSE
 
 
 def test_the_slm_key_claims_through_the_real_gate(world) -> None:

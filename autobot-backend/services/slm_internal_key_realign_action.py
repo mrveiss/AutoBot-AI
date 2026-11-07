@@ -42,7 +42,11 @@ async def execute_internal_key_realign(approval: "Approval", session: "AsyncSess
 def register_internal_key_realign_action() -> None:
     """Idempotent: re-registering just replaces the same key with an equal handler."""
     register_post_approval_action(
-        INTERNAL_KEY_REALIGN.name, execute_internal_key_realign, proposed_by=PROPOSED_BY, server_only=True
+        INTERNAL_KEY_REALIGN.name,
+        execute_internal_key_realign,
+        proposed_by=PROPOSED_BY,
+        server_only=True,
+        admin_only=True,
     )
 
 

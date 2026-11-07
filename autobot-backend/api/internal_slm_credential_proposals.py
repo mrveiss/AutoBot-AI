@@ -69,7 +69,7 @@ from services.slm_ssh_password_action import register_ssh_password_action
 logger = get_logger(__name__)
 
 #: The caller named on the service-key admission audit row (#16333).
-SLM_CALLER = "slm-ssh-password-deletion"
+SLM_CALLER = "slm-credential-actions"
 
 # get_current_user is the recognised gate; require_internal_api_key narrows it to the service key alone.
 # The SLM's and the updater's calls carry that key and no user, so each handler names its caller with

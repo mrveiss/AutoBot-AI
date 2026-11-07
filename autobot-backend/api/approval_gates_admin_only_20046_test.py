@@ -18,8 +18,9 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from autobot_shared.slm_credential_actions import SSH_PASSWORD_DELETE
+from autobot_shared.slm_credential_actions import INTERNAL_KEY_REALIGN, SSH_PASSWORD_DELETE
 from services.approval_gate_service import ApprovalGateService
+from services.slm_internal_key_realign_action import register_internal_key_realign_action
 from services.slm_ssh_password_action import register_ssh_password_action
 from testkit.fake_async_session import FakeAsyncSession
 from tests.conftest import load_real_auth_middleware
@@ -54,7 +55,8 @@ def _row(action: str | None):
 
 @pytest.fixture
 def world(monkeypatch):
-    register_ssh_password_action()  # the production registration, admin_only included
+    register_ssh_password_action()  # the production registrations, admin_only included
+    register_internal_key_realign_action()
     real = load_real_auth_middleware()
     monkeypatch.setitem(sys.modules, "auth_middleware", real)
     monkeypatch.delitem(sys.modules, "api.approval_gates", raising=False)
@@ -107,3 +109,20 @@ def test_other_actions_keep_their_existing_approver_rule(world) -> None:
     world.state.user = _person("user")
     assert 200 <= _post(world).status_code < 300
     world.audit.assert_not_awaited()
+
+
+@pytest.mark.parametrize("role", ["user", "operator"])
+def test_a_non_admin_person_cannot_approve_a_key_realign(world, role) -> None:
+    world.state.row = _row(INTERNAL_KEY_REALIGN.name)
+    world.state.user = _person(role)
+    assert _post(world).status_code == 403
+    world.approve.assert_not_awaited()
+    kwargs = world.audit.await_args.kwargs
+    assert kwargs["result"] == "denied" and kwargs["details"]["action"] == INTERNAL_KEY_REALIGN.name
+
+
+def test_an_admin_approves_a_key_realign(world) -> None:
+    world.state.row = _row(INTERNAL_KEY_REALIGN.name)
+    world.state.user = _person("admin")
+    assert 200 <= _post(world).status_code < 300
+    world.approve.assert_awaited_once()
