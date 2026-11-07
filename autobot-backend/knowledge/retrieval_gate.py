@@ -16,13 +16,16 @@ Run (see ``main``):
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib
 import json
+import math
 import os
 import sys
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional, Protocol, Sequence, Tuple
 
+from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.logging_manager import get_logger
 from knowledge.rag_benchmarks import BenchmarkSplit, _deterministic_dev_test_split
 from knowledge.retrieval_metrics import (
@@ -39,7 +42,9 @@ logger = get_logger(__name__)
 #: Cutoff for recall@k / nDCG@k.
 RETRIEVAL_GATE_K = int(os.getenv("AUTOBOT_RETRIEVAL_GATE_K", "5"))
 #: Every one of the five metrics must improve by at least this much (absolute).
-RETRIEVAL_GATE_MIN_IMPROVEMENT = float(os.getenv("AUTOBOT_RETRIEVAL_GATE_MIN_IMPROVEMENT", "0.01"))
+RETRIEVAL_GATE_MIN_IMPROVEMENT = env_float_clamped(
+    "AUTOBOT_RETRIEVAL_GATE_MIN_IMPROVEMENT", 0.01, 0.0, 1.0, positive_finite=True
+)
 #: Share of queries routed to the dev split.
 RETRIEVAL_GATE_DEV_FRACTION = float(os.getenv("AUTOBOT_RETRIEVAL_GATE_DEV_FRACTION", "0.8"))
 
@@ -101,6 +106,8 @@ def load_gold(path: str) -> List[GoldQuery]:
             if row["bucket"] not in BUCKETS:
                 raise ValueError(f"unknown bucket {row['bucket']!r} in query {row['id']!r}")
             gold = row["gold"]
+            if not gold:
+                raise ValueError(f"query {row['id']!r} has empty gold")
             gains = {d: 1.0 for d in gold} if isinstance(gold, list) else {d: float(g) for d, g in gold.items()}
             out.append(GoldQuery(row["id"], row["query"], row["bucket"], gains))
     return out
@@ -120,6 +127,12 @@ def load_gold_set(gold_set: str = RETRIEVAL_GATE_GOLD_SET, directory: str = RETR
     if not out:
         raise FileNotFoundError(f"no {gold_set}_<bucket>.jsonl files in {directory}")
     return out
+
+
+def gold_fingerprint(queries: Sequence[GoldQuery]) -> str:
+    """SHA-256 over the canonical gold rows, so reports can prove the same gold set."""
+    rows = sorted((q.id, q.query, q.bucket, sorted(q.gold.items())) for q in queries)
+    return hashlib.sha256(json.dumps(rows, sort_keys=True).encode("utf-8")).hexdigest()
 
 
 def select_split(queries: Sequence[GoldQuery], split: BenchmarkSplit) -> List[GoldQuery]:
@@ -214,6 +227,7 @@ def run_ablation(
         "split": split.value,
         "held_out": split == BenchmarkSplit.TEST,
         "query_count": len(chosen),
+        "gold_sha256": gold_fingerprint(queries),
         "runs": runs,
     }
 
@@ -242,6 +256,10 @@ def gate_decision(
     reasons: List[str] = []
     for m, higher_better in METRICS.items():
         b, c = baseline.get(m), candidate.get(m)
+        bad = [side for side, v in (("baseline", b), ("candidate", c)) if v is not None and not math.isfinite(v)]
+        if bad:
+            reasons.append(f"{m}: non-finite value in {' and '.join(bad)}")
+            continue
         if b is None or c is None:
             side = "baseline" if b is None else "candidate"
             reasons.append(f"{m}: not measured in {side}")
@@ -260,6 +278,10 @@ def gate_reports(baseline: Mapping[str, Any], candidate: Mapping[str, Any], run:
         return GateVerdict(False, ["both reports must be produced on the held-out test split"])
     if baseline.get("k") != candidate.get("k"):
         return GateVerdict(False, ["reports use different k"])
+    if not baseline.get("gold_sha256") or baseline.get("gold_sha256") != candidate.get("gold_sha256"):
+        return GateVerdict(False, ["reports were not produced from the same gold set"])
+    if not baseline.get("query_count") or baseline.get("query_count") != candidate.get("query_count"):
+        return GateVerdict(False, ["reports differ in query_count, or it is zero"])
     b = baseline["runs"]["default"]["metrics"]["overall"]
     c = candidate["runs"][run]["metrics"]["overall"]
     return gate_decision(b, c)

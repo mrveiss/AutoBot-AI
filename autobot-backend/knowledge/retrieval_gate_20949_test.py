@@ -225,3 +225,51 @@ def test_fixture_run_is_deterministic_and_finds_gold():
     assert overall["recall"] > 0.8 and overall["mrr"] > 0.7
     assert overall["grounding"] is None and overall["contradiction"] is None
     assert set(one["runs"]["default"]["metrics"]) == set(rg.BUCKETS) | {"overall"}
+
+
+# ---- review fixes ---------------------------------------------------------
+
+_BASE = {"recall": 0.5, "mrr": 0.5, "ndcg": 0.5, "grounding": 0.8, "contradiction": 0.1}
+_BETTER = {"recall": 0.6, "mrr": 0.6, "ndcg": 0.6, "grounding": 0.9, "contradiction": 0.05}
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+@pytest.mark.parametrize("side", ["baseline", "candidate"])
+def test_gate_decision_rejects_non_finite(bad, side):
+    base, cand = dict(_BASE), dict(_BETTER)
+    (base if side == "baseline" else cand)["ndcg"] = bad
+    v = rg.gate_decision(base, cand)
+    assert not v.accepted and any(r.startswith("ndcg: non-finite") for r in v.reasons)
+
+
+@pytest.mark.parametrize("raw", ["0", "-0.5", "nan", "inf"])
+def test_min_improvement_never_zero_negative_or_non_finite(raw, monkeypatch):
+    import importlib
+
+    monkeypatch.setenv("AUTOBOT_RETRIEVAL_GATE_MIN_IMPROVEMENT", raw)
+    try:
+        mod = importlib.reload(rg)
+        assert mod.RETRIEVAL_GATE_MIN_IMPROVEMENT == 0.01
+    finally:
+        monkeypatch.delenv("AUTOBOT_RETRIEVAL_GATE_MIN_IMPROVEMENT")
+        importlib.reload(rg)
+
+
+def test_gate_reports_requires_same_gold_and_non_zero_queries():
+    rep = rg.run_ablation(fake_retriever, GOLD, BenchmarkSplit.TEST, k=3)
+    assert rep["gold_sha256"] == rg.gold_fingerprint(GOLD)
+    other = rg.run_ablation(fake_retriever, GOLD[:2], BenchmarkSplit.TEST, k=3)
+    v = rg.gate_reports(rep, {**rep, "gold_sha256": "0" * 64})
+    assert not v.accepted and "same gold set" in v.reasons[0]
+    assert not rg.gate_reports(rep, {**rep, "query_count": rep["query_count"] + 1}).accepted
+    zero = {**rep, "query_count": 0}
+    v = rg.gate_reports(zero, zero)
+    assert not v.accepted and "query_count" in v.reasons[0]
+    assert other["gold_sha256"] != rep["gold_sha256"]
+
+
+def test_load_gold_rejects_empty_gold(tmp_path):
+    p = tmp_path / "g.jsonl"
+    p.write_text(json.dumps({"id": "1", "query": "q", "bucket": "docs", "gold": []}), encoding="utf-8")
+    with pytest.raises(ValueError, match="empty gold"):
+        rg.load_gold(str(p))

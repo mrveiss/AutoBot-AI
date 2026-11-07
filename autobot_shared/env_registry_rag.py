@@ -225,9 +225,7 @@ register_env_var(
         name="AUTOBOT_RETRIEVAL_GATE_MIN_IMPROVEMENT",
         type=float,
         default=0.01,
-        description=(
-            "Smallest absolute gain required in every metric for the retrieval gate to accept a change (#20949)."
-        ),
+        description=("Smallest absolute gain required in every metric for the retrieval gate; must be > 0 (#20949)."),
         component="rag",
         range=(0.0, 1.0),
     )

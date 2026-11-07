@@ -418,7 +418,7 @@ appears outside the known overlays.
 | `AUTOBOT_RETRIEVAL_GATE_GOLD_DIR` | rag | str | `""` | Override directory of gold query sets for the retrieval gate; empty uses the shipped one (#20949). |
 | `AUTOBOT_RETRIEVAL_GATE_GOLD_SET` | rag | str | `'fixture'` | Gold set the retrieval gate loads: fixture (CI) or live (owner-curated) (#20949). |
 | `AUTOBOT_RETRIEVAL_GATE_K` | rag | int | `5` | Cutoff k for recall@k and nDCG@k in the retrieval benchmark gate (knowledge/retrieval_gate.py, #20949). Range: 1–100. |
-| `AUTOBOT_RETRIEVAL_GATE_MIN_IMPROVEMENT` | rag | float | `0.01` | Smallest absolute gain required in every metric for the retrieval gate to accept a change (#20949). Range: 0.0–1.0. |
+| `AUTOBOT_RETRIEVAL_GATE_MIN_IMPROVEMENT` | rag | float | `0.01` | Smallest absolute gain required in every metric for the retrieval gate; must be > 0 (#20949). Range: 0.0–1.0. |
 | `AUTOBOT_RETRIEVAL_GROUNDING_OVERLAP` | rag | float | `0.6` | Share of a claim's tokens that must occur in a chunk for the lexical grounding check (#20949). Range: 0.0–1.0. |
 | `AUTOBOT_RETRIEVAL_REDIS_TIMEOUT` | redis | float | `1.5` | Seconds the retrieval learner waits for its Redis lock before proceeding without it. Short on purpose — retrieval must answer even when the learner cannot record what it learned. |
 | `AUTOBOT_REVOCATION_RETRY_AFTER_SECONDS` | auth | int | `5` | Seconds in the Retry-After header of the 503 (detail revocation_check_unavailable) both backends answer when a token's revocation check cannot run (#18892). The token is still refused; the client keeps its session and retries. Raising it spaces retries out during a long store outage; lowering it recovers faster once the store is back (autobot_shared/auth/revocation_unavailable.py). Floor 1. Range: 1–300. |
