@@ -20,9 +20,6 @@ const rawRequest = vi.fn()
 vi.mock('@/utils/ApiClient', () => ({ default: { rawRequest: (...args: unknown[]) => rawRequest(...args) } }))
 
 vi.mock('@/composables/useTimezone', () => ({ formatFleetDateTime: (d: string) => `on ${d.slice(0, 10)}` }))
-vi.mock('@/utils/debugUtils', () => ({
-  createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
-}))
 
 // @autobot/ui drags in reka-ui, which does not load under vitest here: stand in for the kit components.
 vi.mock('@autobot/ui', () => {
@@ -44,7 +41,8 @@ vi.mock('@autobot/ui', () => {
       h('select', { disabled: p.disabled, onChange: (e: Event) => emit('update:modelValue', (e.target as HTMLSelectElement).value) },
         (p.options as { value: string; label: string; disabled?: boolean }[]).map((o) => h('option', { value: o.value, disabled: o.disabled }, o.label))),
   })
-  return { BaseCard, BaseAlert, BaseButton, BaseModal, BaseSelectMenu }
+  const createLogger = () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() })
+  return { BaseCard, BaseAlert, BaseButton, BaseModal, BaseSelectMenu, createLogger }
 })
 
 const i18n = createI18n({ legacy: true, locale: 'en', fallbackLocale: 'en', messages: { en } })
@@ -158,9 +156,61 @@ describe('CodeRollbackPanel', () => {
 
   it('shows nothing at all while the server says rollback is not enabled', async () => {
     const wrapper = await mountPanel({
-      'GET /code-sync/rollback/candidates': () => response(403, { detail: 'Rollback is not enabled on this SLM' }),
+      'GET /code-sync/rollback/candidates': () =>
+        response(403, { detail: { code: 'rollback_feature_disabled', message: 'Rollback is not enabled on this SLM' } }),
     })
     expect(wrapper.find('select').exists()).toBe(false)
     expect(wrapper.text()).toBe('')
+  })
+
+  it('keeps the panel and shows the reason when an enabled server denies the request (a 403 that is not "disabled")', async () => {
+    const wrapper = await mountPanel({
+      'GET /code-sync/rollback/candidates': () => response(403, { detail: 'You are not allowed to roll back.' }),
+    })
+    expect(wrapper.text()).toContain('You are not allowed to roll back.')
+    expect(wrapper.find('[data-test="alert"]').exists()).toBe(true)
+  })
+
+  it('starts the rollback to the commit that was reviewed, even if the picker value has moved since', async () => {
+    const wrapper = await mountPanel({
+      'GET /code-sync/rollback/preview': () => response(200, { commit: COMMITS[1], allowed: true, refusal: null, checks: CHECK_CLEAR }),
+      'POST /code-sync/rollback': () => response(202, { job_id: 'j1', status: 'pending', stages: [] }),
+    })
+    await choose(wrapper, COMMIT_B)
+    ;(wrapper.vm as unknown as { selected: string }).selected = COMMIT_A
+    await flushPromises()
+    await wrapper.find('[data-test="modal"]').findAll('button').find((b) => b.text() === 'Roll back')!.trigger('click')
+    await flushPromises()
+    expect(rawRequest).toHaveBeenCalledWith('/code-sync/rollback', { method: 'POST', body: { commit: COMMIT_B } })
+    expect(rawRequest).not.toHaveBeenCalledWith('/code-sync/rollback', { method: 'POST', body: { commit: COMMIT_A } })
+  })
+
+  it('locks the picker while the check runs, so the reviewed commit cannot change under it', async () => {
+    let release: (r: Response) => void = () => {}
+    const pending = new Promise<Response>((resolve) => (release = resolve))
+    const wrapper = await mountPanel({ 'GET /code-sync/rollback/preview': () => pending as unknown as Response })
+    await wrapper.find('select').setValue(COMMIT_B)
+    await wrapper.find('button').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('select').attributes('disabled')).toBeDefined()
+    release(response(200, { commit: COMMITS[1], allowed: true, refusal: null, checks: CHECK_CLEAR }))
+    await flushPromises()
+    expect(wrapper.find('select').attributes('disabled')).toBeUndefined()
+  })
+
+  it('clears an earlier failure when the next check succeeds', async () => {
+    let attempt = 0
+    const wrapper = await mountPanel({
+      'GET /code-sync/rollback/preview': () =>
+        ++attempt === 1
+          ? response(500, {})
+          : response(200, { commit: COMMITS[1], allowed: true, refusal: null, checks: CHECK_CLEAR }),
+    })
+    await choose(wrapper, COMMIT_B)
+    expect(wrapper.find('[data-test="alert"]').exists()).toBe(true)
+    await wrapper.find('button').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-test="modal"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="alert"]').exists()).toBe(false)
   })
 })

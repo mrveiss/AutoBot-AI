@@ -17,7 +17,7 @@
 
 import { ref } from 'vue'
 import slmApiClient from '@/utils/ApiClient'
-import { createLogger } from '@/utils/debugUtils'
+import { createLogger } from '@autobot/ui'
 import type { components } from '@/types/generated/api'
 import type { UpdateAllJob } from '@/composables/useCodeSync'
 
@@ -27,19 +27,40 @@ export type RollbackCandidates = components['schemas']['RollbackCandidates']
 export type RollbackCommit = components['schemas']['RollbackCommit']
 export type RollbackPreview = components['schemas']['RollbackPreview']
 
-async function readDetail(response: Response): Promise<string | null> {
+/** The `detail` code the server gives ONLY the feature-disabled 403 (api/code_rollback.py). */
+const FEATURE_DISABLED_CODE = 'rollback_feature_disabled'
+
+interface ErrorBody {
+  detail: string | null
+  code: string | null
+}
+
+async function readError(response: Response): Promise<ErrorBody> {
   try {
     const body = (await response.json()) as { detail?: unknown } | null
-    return typeof body?.detail === 'string' ? body.detail : null
+    const detail = body?.detail
+    if (typeof detail === 'string') return { detail, code: null }
+    if (detail && typeof detail === 'object') {
+      const { code, message } = detail as { code?: unknown; message?: unknown }
+      return {
+        detail: typeof message === 'string' ? message : null,
+        code: typeof code === 'string' ? code : null,
+      }
+    }
   } catch {
-    return null
+    // an unreadable body is a failure without a reason
   }
+  return { detail: null, code: null }
+}
+
+async function readDetail(response: Response): Promise<string | null> {
+  return (await readError(response)).detail
 }
 
 export function useCodeRollback() {
   const candidates = ref<RollbackCandidates | null>(null)
   const preview = ref<RollbackPreview | null>(null)
-  /** False when the server says rollback is not enabled (403): the page then shows no panel at all. */
+  /** False only when the server says the feature is off (the disabled 403): the page then shows no panel at all. */
   const enabled = ref(true)
   const loading = ref(false)
   const checking = ref(false)
@@ -55,12 +76,13 @@ export function useCodeRollback() {
     failed.value = false
     try {
       const response = await slmApiClient.rawRequest('/code-sync/rollback/candidates', { method: 'GET' })
-      if (response.status === 403) {
-        enabled.value = false
-        return
-      }
       if (!response.ok) {
-        error.value = await readDetail(response)
+        const body = await readError(response)
+        if (response.status === 403 && body.code === FEATURE_DISABLED_CODE) {
+          enabled.value = false
+          return
+        }
+        error.value = body.detail
         failed.value = true
         return
       }
@@ -78,6 +100,7 @@ export function useCodeRollback() {
   async function loadPreview(commit: string): Promise<RollbackPreview | null> {
     checking.value = true
     error.value = null
+    failed.value = false
     preview.value = null
     try {
       const response = await slmApiClient.rawRequest('/code-sync/rollback/preview', {

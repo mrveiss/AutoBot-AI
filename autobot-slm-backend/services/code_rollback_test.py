@@ -7,19 +7,22 @@
 from __future__ import annotations
 
 import sys
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
 import api
 from services import code_rollback as cr
-from services.rollback_commits import CommitInfo
+from services.rollback_commits import CommitInfo, RollbackRefused
 from services.rollback_migrations import BLOCKED, CLEAR, UNKNOWN, MigrationCheck
 from services.rollback_target import current_rollback_ref
+from testkit.fake_async_session import FakeAsyncSession, FakeResult
 
 TARGET = CommitInfo(commit="b" * 40, date="2026-10-01T10:00:00+00:00", subject="an earlier change")
 LATEST = "c" * 40
+DEPLOYED = "d" * 40
 
 
 def _fake_cs(*, slm_fired: bool, seen: dict):
@@ -59,6 +62,7 @@ def _fake_cs(*, slm_fired: bool, seen: dict):
         _run_slm_stage=_slm,
         _reconcile_self_update_stage=_reconcile,
         _run_fleet_stage_or_already_current=_fleet,
+        _get_slm_deployed_commit=AsyncMock(return_value=DEPLOYED),
         _get_tracker_for_db=AsyncMock(return_value=SimpleNamespace(repo_path="r", remote="origin", branch="main")),
         stages=stages,
     )
@@ -67,13 +71,33 @@ def _fake_cs(*, slm_fired: bool, seen: dict):
 @pytest.fixture(autouse=True)
 def _still_an_ancestor(monkeypatch):
     monkeypatch.setattr(cr, "resolve_target", AsyncMock(return_value=TARGET))
+    monkeypatch.setattr(cr, "require_before_deployed", AsyncMock())
+    monkeypatch.setattr(cr, "check_migrations", AsyncMock(return_value=[MigrationCheck("SLM", CLEAR)]))
 
 
-def _db():
-    ref = MagicMock()
-    ref.session.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
-    ref.session.return_value.__aexit__ = AsyncMock(return_value=False)
-    return ref
+class _DbRef:
+    """What ``db_service`` offers the stages: ``session()`` is an async context manager over one session."""
+
+    def __init__(self, make_session):
+        self._make = make_session
+
+    @asynccontextmanager
+    async def session(self):
+        async with self._make() as session:
+            yield session
+
+
+def _db(*results):
+    @asynccontextmanager
+    async def _fake():
+        yield FakeAsyncSession(results=list(results))
+
+    return _DbRef(_fake)
+
+
+def _db_with_off_target(ids):
+    """The node-version query answered with ``ids`` (a fake session: the SQL itself is tested against sqlite)."""
+    return _db(FakeResult(list(ids)))
 
 
 async def test_self_update_path_passes_the_target_through_every_stage():
@@ -116,6 +140,40 @@ async def test_a_commit_that_left_the_branch_during_the_fetch_stops_the_run(monk
     assert job.status == "failed" and "slm_target" not in seen
 
 
+async def test_a_migration_applied_after_the_preflight_stops_the_run(monkeypatch):
+    seen: dict = {}
+    cs = _fake_cs(slm_fired=True, seen=seen)
+    blocked = MigrationCheck("backend", BLOCKED, ["m9"], "backend has a newer migration")
+    monkeypatch.setattr(cr, "check_migrations", AsyncMock(return_value=[MigrationCheck("SLM", CLEAR), blocked]))
+    job = SimpleNamespace(status="running")
+    await cr._run_stages(cs, job, _db(), TARGET)
+    assert job.status == "failed" and "slm_target" not in seen and "fleet_target" not in seen
+
+
+async def test_an_unreadable_migration_state_after_the_fetch_stops_the_run(monkeypatch):
+    cs = _fake_cs(slm_fired=False, seen={})
+    unknown = MigrationCheck("backend", UNKNOWN, message="unknown")
+    monkeypatch.setattr(cr, "check_migrations", AsyncMock(return_value=[unknown]))
+    job = SimpleNamespace(status="running")
+    assert await cr._revalidate_after_fetch(cs, job, _db(), TARGET) is False
+    assert job.status == "failed"
+
+
+async def test_a_clear_migration_state_after_the_fetch_lets_the_run_on():
+    cs = _fake_cs(slm_fired=False, seen={})
+    assert await cr._revalidate_after_fetch(cs, SimpleNamespace(status="running"), _db(), TARGET) is True
+
+
+async def test_a_target_that_is_no_longer_earlier_than_the_deployed_commit_stops_the_run(monkeypatch):
+    seen: dict = {}
+    cs = _fake_cs(slm_fired=True, seen=seen)
+    monkeypatch.setattr(cr, "require_before_deployed", AsyncMock(side_effect=RollbackRefused("not earlier")))
+    job = SimpleNamespace(status="running")
+    await cr._run_stages(cs, job, _db(), TARGET)
+    assert job.status == "failed" and "slm_target" not in seen
+    cr.require_before_deployed.assert_awaited_once_with("r", TARGET.commit, DEPLOYED)
+
+
 async def test_the_final_audit_entry_follows_the_job_status(monkeypatch):
     record = AsyncMock()
     monkeypatch.setattr(cr.rollback_audit, "record_rollback", record)
@@ -153,26 +211,6 @@ def test_rolling_back_to_what_is_already_deployed_is_refused():
     assert "already runs that commit" in _preflight(TARGET.commit, CLEAR, CLEAR).refusal
 
 
-class _Rows:
-    def __init__(self, ids):
-        self._ids = ids
-
-    def scalars(self):
-        return self
-
-    def all(self):
-        return self._ids
-
-
-def _db_with_off_target(ids):
-    ref = MagicMock()
-    session = MagicMock()
-    session.execute = AsyncMock(return_value=_Rows(ids))
-    ref.session.return_value.__aenter__ = AsyncMock(return_value=session)
-    ref.session.return_value.__aexit__ = AsyncMock(return_value=False)
-    return ref
-
-
 async def test_a_completed_job_with_a_node_off_the_target_is_failed():
     job = SimpleNamespace(status="completed", failure_reason=None)
     await cr._verify_fleet_at_target(job, _db_with_off_target(["n1", "n2"]), TARGET)
@@ -187,10 +225,10 @@ async def test_a_completed_job_with_every_node_on_the_target_stays_completed():
 
 async def test_other_job_states_are_not_second_guessed():
     job = SimpleNamespace(status="partial", failure_reason=None)
-    db = _db_with_off_target(["n1"])
+    db = _db()
+    db.session = lambda: pytest.fail("a job that is not completed must not query the nodes")
     await cr._verify_fleet_at_target(job, db, TARGET)
     assert job.status == "partial"
-    db.session.assert_not_called()
 
 
 def test_rollback_is_off_unless_the_setting_turns_it_on(monkeypatch):

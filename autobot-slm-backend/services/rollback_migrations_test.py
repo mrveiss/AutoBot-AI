@@ -14,7 +14,9 @@ from autobot_shared.isolated_git import git, make_repo
 from services.rollback_migrations import (
     BLOCKED,
     CLEAR,
+    ROLLBACK_STATEMENT_TIMEOUT_MS,
     UNKNOWN,
+    _bound_statements,
     check_migrations,
     parse_backend_revisions,
     parse_slm_migrations,
@@ -130,3 +132,42 @@ def test_parsers_read_literals_without_executing_anything():
     assert parse_slm_migrations("OTHER = []\n") is None
     out = 'revision: str = "abc"\nrevision = \'def\'\ndown_revision = "zzz"\nx/some-revision.py:revision = "q"\n'
     assert parse_backend_revisions(out) == ["abc", "def", "q"]
+
+
+class _Conn:
+    """The slice of a psycopg2 connection ``_bound_statements`` uses; records the statements it ran."""
+
+    def __init__(self) -> None:
+        self.ran: list[tuple[str, tuple]] = []
+
+    def cursor(self):
+        conn = self
+
+        class _Cur:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def execute(self, sql, params=()):
+                conn.ran.append((sql, params))
+
+        return _Cur()
+
+
+def test_each_migration_read_is_bounded_by_the_env_backed_statement_timeout():
+    conn = _Conn()
+    _bound_statements(conn)
+    sql, params = conn.ran[0]
+    assert "statement_timeout" in sql and params == (str(ROLLBACK_STATEMENT_TIMEOUT_MS),)
+
+
+def test_the_statement_timeout_comes_from_the_environment_and_is_clamped(monkeypatch):
+    from autobot_shared.env_utils import env_int_clamped
+
+    monkeypatch.setenv("SLM_ROLLBACK_STATEMENT_TIMEOUT_MS", "2500")
+    assert env_int_clamped("SLM_ROLLBACK_STATEMENT_TIMEOUT_MS", 10000, 1000, 300000) == 2500
+    monkeypatch.setenv("SLM_ROLLBACK_STATEMENT_TIMEOUT_MS", "0")
+    assert env_int_clamped("SLM_ROLLBACK_STATEMENT_TIMEOUT_MS", 10000, 1000, 300000) == 1000
+    assert 1000 <= ROLLBACK_STATEMENT_TIMEOUT_MS <= 300000

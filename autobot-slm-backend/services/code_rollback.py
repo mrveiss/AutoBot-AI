@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from autobot_shared.env_registry import env
 from autobot_shared.logging_manager import get_logger
 from services import rollback_audit
-from services.rollback_commits import CommitInfo, RollbackRefused, resolve_target
+from services.rollback_commits import CommitInfo, RollbackRefused, require_before_deployed, resolve_target
 from services.rollback_migrations import CLEAR, MigrationCheck, check_migrations
 from services.rollback_target import rollback_scope
 
@@ -69,8 +69,11 @@ async def preflight(repo: str, remote: str, branch: str, commit: object, **reade
     from api.code_sync import _get_slm_deployed_commit
 
     target = await resolve_target(repo, remote, branch, commit)
+    deployed = await _get_slm_deployed_commit()
+    if target.commit != deployed:  # the equal case is a preview refusal (Preflight.refusal), not a bad request
+        await require_before_deployed(repo, target.commit, deployed)
     checks = await check_migrations(repo, target.commit, **readers)
-    return Preflight(target=target, deployed=await _get_slm_deployed_commit(), checks=checks)
+    return Preflight(target=target, deployed=deployed, checks=checks)
 
 
 def _skip_pull_stage(cs, job) -> None:
@@ -81,14 +84,21 @@ def _skip_pull_stage(cs, job) -> None:
 
 
 async def _revalidate_after_fetch(cs, job, db_service_ref, target: CommitInfo) -> bool:
-    """The fetch can move the branch; the commit must still be part of its history."""
+    """The fetch can move the branch, and the start gate can have waited for a forward update.
+
+    The commit must still be part of the branch, strictly earlier than what is deployed, and the migration
+    state must still be CLEAR: a forward update that finished after the preflight may have applied one.
+    """
     async with db_service_ref.session() as db:
         tracker = await cs._get_tracker_for_db(db)
     try:
         await resolve_target(tracker.repo_path, tracker.remote, tracker.branch, target.commit)
+        await require_before_deployed(tracker.repo_path, target.commit, await cs._get_slm_deployed_commit())
+        blockers = [c for c in await check_migrations(tracker.repo_path, target.commit) if c.status != CLEAR]
+        if blockers:
+            raise RollbackRefused(" ".join(c.message for c in blockers))
     except RollbackRefused as exc:
-        stage = cs._get_stage(job, "github_fetch")
-        cs._fail_fleet_stage(job, stage, exc.reason)
+        cs._fail_fleet_stage(job, cs._get_stage(job, "github_fetch"), exc.reason)
         return False
     return True
 
@@ -124,16 +134,20 @@ async def _verify_fleet_at_target(job, db_service_ref, target: CommitInfo) -> No
     """
     if job.status != "completed":
         return
-    from sqlalchemy import select
+    from sqlalchemy import or_, select
 
     from models.database import Node
 
     async with db_service_ref.session() as db:
-        result = await db.execute(select(Node.node_id).where(Node.code_version != target.commit))
+        # a NULL code_version (a failed version write) is not confirmed on the target either: `!=` alone skips it
+        unconfirmed = or_(Node.code_version.is_(None), Node.code_version != target.commit)
+        result = await db.execute(select(Node.node_id).where(unconfirmed))
         off_target = list(result.scalars().all())
     if off_target:
         job.status = "failed"
-        job.failure_reason = f"{len(off_target)} node(s) are not on {target.short} after the rollback reported done"
+        job.failure_reason = (
+            f"{len(off_target)} node(s) are not confirmed on {target.short} after the rollback reported done"
+        )
 
 
 async def _record_end(actor: str | None, target: CommitInfo, job) -> None:

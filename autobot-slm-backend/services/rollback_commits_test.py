@@ -15,6 +15,7 @@ from services.rollback_commits import (
     ROLLBACK_SUPPORT_PATH,
     RollbackRefused,
     list_candidates,
+    require_before_deployed,
     resolve_target,
 )
 
@@ -51,7 +52,7 @@ def repo(tmp_path: Path) -> dict:
 
 
 async def test_candidates_are_the_ancestors_of_the_remote_head_with_dates_and_subjects(repo):
-    commits = await list_candidates(repo["path"], "origin", "main")
+    commits = await list_candidates(repo["path"], "origin", "main", repo["third"])
     assert [c.commit for c in commits] == [repo["third"], repo["second"], repo["first"]]
     assert [c.subject for c in commits] == ["third change", "second change", "first change"]
     assert all(c.date.startswith("20") and "T" in c.date for c in commits)
@@ -59,7 +60,7 @@ async def test_candidates_are_the_ancestors_of_the_remote_head_with_dates_and_su
 
 
 async def test_candidate_list_is_capped(repo):
-    assert len(await list_candidates(repo["path"], "origin", "main", limit=2)) == 2
+    assert len(await list_candidates(repo["path"], "origin", "main", repo["third"], limit=2)) == 2
 
 
 async def test_an_ancestor_is_accepted(repo):
@@ -109,7 +110,7 @@ async def test_a_branch_name_that_is_not_a_safe_ref_is_refused(repo):
 
 
 async def test_a_commit_that_predates_rollback_support_is_not_offered(repo):
-    commits = await list_candidates(repo["path"], "origin", "main")
+    commits = await list_candidates(repo["path"], "origin", "main", repo["third"])
     assert repo["old"] not in [c.commit for c in commits]
     assert [c.subject for c in commits][-1] == "first change"
 
@@ -117,3 +118,38 @@ async def test_a_commit_that_predates_rollback_support_is_not_offered(repo):
 async def test_a_commit_that_predates_rollback_support_is_refused_plainly(repo):
     with pytest.raises(RollbackRefused, match="predates rollback support"):
         await resolve_target(repo["path"], "origin", "main", repo["old"])
+
+
+async def test_commits_newer_than_the_deployed_one_are_not_offered(repo):
+    commits = await list_candidates(repo["path"], "origin", "main", repo["second"])
+    assert [c.commit for c in commits] == [repo["second"], repo["first"]]
+
+
+async def test_nothing_is_offered_when_the_deployed_commit_is_unknown(repo):
+    assert await list_candidates(repo["path"], "origin", "main", None) == []
+    assert await list_candidates(repo["path"], "origin", "main", "not a commit") == []
+
+
+async def test_a_strictly_earlier_commit_is_accepted(repo):
+    await require_before_deployed(repo["path"], repo["first"], repo["third"])
+
+
+async def test_a_commit_newer_than_the_deployed_one_is_refused(repo):
+    with pytest.raises(RollbackRefused, match="not earlier"):
+        await require_before_deployed(repo["path"], repo["third"], repo["second"])
+
+
+async def test_the_deployed_commit_itself_is_refused(repo):
+    with pytest.raises(RollbackRefused, match="already runs"):
+        await require_before_deployed(repo["path"], repo["second"], repo["second"])
+
+
+async def test_a_commit_on_another_line_of_history_is_refused(repo):
+    with pytest.raises(RollbackRefused, match="not earlier"):
+        await require_before_deployed(repo["path"], repo["side"], repo["third"])
+
+
+@pytest.mark.parametrize("deployed", [None, "", "main", "0" * 40])
+async def test_an_unknown_deployed_commit_refuses(repo, deployed):
+    with pytest.raises(RollbackRefused):
+        await require_before_deployed(repo["path"], repo["first"], deployed)
