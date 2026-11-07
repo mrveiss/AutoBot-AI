@@ -84,6 +84,8 @@ export interface NavIconItem extends Omit<NavItem, 'to'> {
   requires?: 'admin';
   /** Renders after the Minimal/Full toggle rather than before it. */
   afterToggle?: boolean;
+  /** A count shown on the icon while above zero; the cluster maps the source to its number (#20917). */
+  badgeSource?: 'approvals';
 }
 
 /**
@@ -149,6 +151,8 @@ export const profileMenuItems: NavItem[] = [
 // nav (see INTENTIONALLY_HIDDEN in nav-items-coverage.test.ts). Routes of the
 // internal entries must carry hideInNav: true in router/index.ts.
 export const navIconItems: NavIconItem[] = [
+  // #20917: what is waiting for the person to decide, from any page; the badge is the count.
+  { to: '/approvals', labelKey: 'nav.approvals.aria', ariaKey: 'nav.approvals.aria', tipKey: 'nav.approvals.tip', badgeSource: 'approvals', keywords: ['nav.keywords.approvals'], iconPaths: ['M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'], iconViewBox: '0 0 24 24', iconStroke: true },
   { to: '/secrets', labelKey: 'nav.secrets', ariaKey: 'nav.secrets', tipKey: 'nav.vaultTip', adv: true, keywords: ['nav.keywords.vault'], iconPaths: ['M4 12a4 4 0 108 0 4 4 0 00-8 0z', 'M12 12h9M18 12v3M21 12v2'], iconViewBox: '0 0 24 24', iconStroke: true },
   { to: '/preferences', labelKey: 'nav.preferences', ariaKey: 'nav.preferences', tipKey: 'nav.preferencesTip', keywords: ['nav.keywords.preferences'], iconPaths: [ICONS.cog], iconViewBox: '0 0 24 24', iconStroke: true },
   // Platform admin: the SLM console, in a new tab. Admins only, as the SLM itself is (#20631);
