@@ -546,17 +546,6 @@ route:autobot-backend/llc/api/reporting_lines.py:PUT /{company_id}/{subject_type
 route:autobot-backend/llc/api/roles.py:DELETE /{company_id}/{role_id}/credentials/{secret_id}
 route:autobot-backend/llc/api/roles.py:DELETE /{company_id}/{role_id}/holders/{assignment_id}
 route:autobot-backend/llc/api/roles.py:DELETE /{company_id}/{role_id}/permissions/{permission}
-route:autobot-backend/llc/api/roles.py:DELETE /{company_id}/{role_id}/rate
-route:autobot-backend/llc/api/roles.py:GET /{company_id}/{role_id}/credentials
-route:autobot-backend/llc/api/roles.py:GET /{company_id}/{role_id}/holders
-route:autobot-backend/llc/api/roles.py:GET /{company_id}/{role_id}/permissions
-route:autobot-backend/llc/api/roles.py:GET /{company_id}/{role_id}/rate
-route:autobot-backend/llc/api/roles.py:GET /{company_id}/{role_id}/workflows/{workflow_id}/cost
-route:autobot-backend/llc/api/roles.py:POST /{company_id}/{role_id}/credentials
-route:autobot-backend/llc/api/roles.py:POST /{company_id}/{role_id}/holders
-route:autobot-backend/llc/api/roles.py:POST /{company_id}/{role_id}/permissions
-route:autobot-backend/llc/api/roles.py:PUT /{company_id}/{role_id}/rate
-route:autobot-backend/llc/api/roles.py:PUT /{company_id}/{role_id}/workflows/{workflow_id}/cost
 route:autobot-backend/llc/api/runs.py:GET /{agent_id}/diary
 route:autobot-backend/llc/api/runs.py:GET /{agent_id}/runs/{run_id}
 route:autobot-backend/llc/api/templates.py:GET /

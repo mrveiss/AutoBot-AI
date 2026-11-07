@@ -30,16 +30,19 @@ BACKEND_URL_CALL_RE = re.compile(r"\$\{getBackendUrl\(\)\}(/[A-Za-z0-9_/${}():.\
 # #20910: ONE rule for "a URL base directly before `/api/`", for frontend and non-frontend callers alike. The base is a
 # placeholder (`${API_BASE}`, `${NetworkConstants.getBackendUrl()}`, shell `$BASE` or `"$BASE"`, python `{base}`,
 # jinja `{{ backend_url }}`) or a literal host (`http://localhost:8001`, `:8001`). A directory name before `/api/`
-# (`autobot-backend/api/x.py`) is a file path, not a base, and does not match.
+# (`autobot-backend/api/x.py`) is a file path, not a base, and does not match. `${getApiBase()}` is not a host: it is
+# `/api` itself, so `${getApiBase()}/api/x` is `/api/api/x` and is left to GETAPIBASE_CALL_RE.
 URL_BASE_API_RE = re.compile(
-    r"(?:\$\{[^}\n]*\}|\$[A-Za-z_]\w*\"?|\{{1,2}[^{}\n]+\}{1,2}|:\d{2,5}|(?:https?|wss?)://[\w.\-]+)"
+    r"(?:\$\{(?!getApiBase\(\))[^}\n]*\}|\$[A-Za-z_]\w*\"?|\{{1,2}(?!getApiBase\(\))[^{}\n]+\}{1,2}"
+    r"|:\d{2,5}|(?:https?|wss?)://[\w.\-]+)"
     r"(/api/[A-Za-z0-9_/${}():.\-]+)"
 )
 # #20910: a file-local base constant that names an /api path, which later calls extend:
-# ``const API_BASE = `${getApiBase()}/knowledge-graph` `` then ``${API_BASE}/entities``.
+# ``const API_BASE = `${getApiBase()}/knowledge-graph` `` then ``${API_BASE}/entities``. The value may itself hold
+# placeholders (``const base = `/api/llc/roles/${companyId.value}/${roleId}` ``): they become path parameters.
 BASE_CONST_RE = re.compile(
     r"^\s*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*(?::\s*string\s*)?=\s*[`'\"]"
-    r"((?:/api|\$\{getApiBase\(\)\}|\$\{getBackendUrl\(\)\}/api)[A-Za-z0-9_/\-]*)[`'\"]\s*;?\s*$",
+    r"((?:/api|\$\{getApiBase\(\)\}|\$\{getBackendUrl\(\)\}/api)(?:[A-Za-z0-9_/\-]|\$\{[^}`'\"\n]*\})*)[`'\"]\s*;?\s*$",
     re.MULTILINE,
 )
 
@@ -49,14 +52,27 @@ def _resolve_base(value: str) -> str:
     return value.replace("${getApiBase()}", "/api").replace("${getBackendUrl()}", "")
 
 
-def _base_constants(lines: list[str]) -> dict[str, str]:
-    """``{NAME: /api/... path}`` for the file-local base constants (a constant may extend an earlier one)."""
-    bases: dict[str, str] = {}
-    for _ in range(2):
-        for name, value in BASE_CONST_RE.findall("\n".join(lines)):
-            for other, path in bases.items():
-                value = value.replace("${" + other + "}", path)
-            bases[name] = _resolve_base(value)
+#: How many passes resolve a base that extends another base before giving up (a longer chain is not a real file).
+_MAX_BASE_DEPTH = 5
+
+
+def _base_constants(lines: list[str]) -> dict[str, list[str]]:
+    """``{NAME: [/api/... paths]}`` for the file-local base constants.
+
+    A name may be declared again in another function with another value, so every value is kept. A constant may
+    extend an earlier one.
+    """
+    bases: dict[str, list[str]] = {}
+    text = "\n".join(lines)
+    for _ in range(_MAX_BASE_DEPTH):
+        resolved: dict[str, list[str]] = {}
+        for name, value in BASE_CONST_RE.findall(text):
+            for other, paths in resolved.items():
+                value = value.replace("${" + other + "}", paths[-1])
+            resolved.setdefault(name, []).append(_resolve_base(value))
+        if resolved == bases:
+            break
+        bases = resolved
     return bases
 
 
@@ -74,7 +90,8 @@ def call_paths(txt: str) -> list[str]:
         # `${getBackendUrl()}/<path>` (host-level, so the path is the call target) and other host placeholders.
         found += BACKEND_URL_CALL_RE.findall(line)
         found += URL_BASE_API_RE.findall(line)
-        for name, base in bases.items():
-            found += [base + t for t in re.findall(r"\$\{" + name + r"\}(/[A-Za-z0-9_/${}():.\-]+)", line)]
-            found += [base + t for t in re.findall(r"\b" + name + r"\s*\+\s*[`'\"](/[A-Za-z0-9_/${}():.\-]+)", line)]
+        for name, paths in bases.items():
+            tails = re.findall(r"\$\{" + name + r"\}(/[A-Za-z0-9_/${}():.\-]+)", line)
+            tails += re.findall(r"\b" + name + r"\s*\+\s*[`'\"](/[A-Za-z0-9_/${}():.\-]+)", line)
+            found += [base + t for base in paths for t in tails]
     return found

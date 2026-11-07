@@ -331,3 +331,19 @@ def test_file_local_base_constant_calls_are_extended_20910(tmp_path):
         "const b = API_BASE + '/events'\n"
     )
     assert {"/api/knowledge-graph/entities/{p}", "/api/knowledge-graph/events"} <= _calls_in(tmp_path, src)
+
+
+def test_parameterised_base_constant_calls_are_extended_20910(tmp_path):
+    """RolesView form: ``const base = `/api/llc/roles/${companyId.value}/${roleId}` `` then ``${base}/holders``."""
+    src = (
+        "const base = `/api/llc/roles/${companyId.value}/${roleId}`\n"
+        "const a = await api.get(`${base}/holders?include_past=${past}`)\n"
+        "const b = await api.get(`${base}/permissions`)\n"
+    )
+    assert {"/api/llc/roles/{p}/{p}/holders", "/api/llc/roles/{p}/{p}/permissions"} <= _calls_in(tmp_path, src)
+
+
+def test_get_api_base_is_not_a_host_placeholder_for_api_paths_20910(tmp_path):
+    """`${getApiBase()}/api/x` is `/api/api/x` at runtime; it must not also read as a call to `/api/x`."""
+    found = _calls_in(tmp_path, "const u = `${getApiBase()}/api/x`\n")
+    assert "/api/api/x" in found and "/api/x" not in found

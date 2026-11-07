@@ -209,6 +209,28 @@ def test_the_frozen_remeasure_never_grows_against_the_base() -> None:
     assert not grown, f"#20910: the frozen one-time re-measure gained entries: {grown}"
 
 
+def _stale_frozen_keys(frozen: set[str], baseline_keys) -> list[str]:
+    """Frozen keys no baseline entry carries any more (the route was wired and its baseline line removed)."""
+    present = {k.rstrip() for k in baseline_keys}
+    return sorted(k for k in frozen if k not in present)
+
+
+def test_every_frozen_remeasure_key_is_still_in_the_baseline() -> None:
+    """The frozen list shrinks with the baseline: a stale key would let a later re-addition of it pass."""
+    frozen = _remeasure_keys((repo_root() / REMEASURE_REL).read_text(encoding="utf-8"))
+    stale = _stale_frozen_keys(frozen, _baseline())
+    assert (
+        not stale
+    ), f"#20910: frozen re-measure keys no longer in the baseline; delete them from {REMEASURE_REL}: {stale}"
+
+
+def test_a_wired_route_cannot_be_re_added_through_a_stale_frozen_key() -> None:
+    frozen = {"route:a.py:GET /x", "route:b.py:GET /y"}
+    assert _stale_frozen_keys(frozen, {"route:a.py:GET /x": "#20970", "route:b.py:GET /y": "#20970"}) == []
+    after_wiring = {"route:a.py:GET /x": "#20970"}  # /y was wired and its baseline line removed
+    assert _stale_frozen_keys(frozen, after_wiring) == ["route:b.py:GET /y"]
+
+
 def test_a_new_entry_linked_to_a_remeasure_issue_is_refused() -> None:
     """Linking a grouped wiring issue (#20970..#20977) does not exempt a new entry: only the frozen list does."""
     base = "route:a.py:GET /x\t#10603\n"
