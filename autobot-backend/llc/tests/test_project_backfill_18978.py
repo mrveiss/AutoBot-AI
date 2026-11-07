@@ -152,7 +152,8 @@ async def test_the_preview_counts_and_changes_nothing(factory):
     ids = await _seed(factory)
     body = _client(factory, OWNER).get(f"/api/llc/companies/{COMPANY}/project-backfill").json()
     assert body == {
-        "missing": 3, "from_ancestor": 2, "to_default": 1, "foreign_ancestor_project_skipped": 0,
+        "missing": 3, "conflicts": 0, "conflicting_item_ids": [], "from_ancestor": 2, "to_default": 1,
+        "foreign_ancestor_project_skipped": 0,
         "default_project_exists": False, "default_project_would_be_created": True,
     }  # fmt: skip
     for key in ("pbi", "task", "lone"):
