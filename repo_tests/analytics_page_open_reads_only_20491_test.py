@@ -107,3 +107,12 @@ def test_both_readers_of_the_current_job_check_its_source() -> None:
         body = source[source.index(reader) :]
         body = body[: body.index("\n  }\n")]
         assert "jobBelongsToSource(data.source_id" in body, reader
+
+
+def test_the_cached_security_read_sends_its_source() -> None:
+    """The route requires ``source_id``; without it the page-open read answers 422."""
+    source = _read("autobot-frontend/src/composables/analytics/useCodeIntelScores.ts")
+    block = source.split("const cachedSecurityScoreEndpoint", 1)[1].split("const loadCachedSecurityScore", 1)[0]
+    assert "scopeToSource: true" in block and "{ withSourceId }" in block
+    control = block.replace("scopeToSource: true", "")
+    assert "scopeToSource: true" not in control, "control: the detector sees the line it looks for"

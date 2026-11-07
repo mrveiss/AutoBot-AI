@@ -290,31 +290,36 @@ export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
   const cachedSecurityScoreEndpoint = useFetchEndpoint<
     CachedSecurityScoreRaw,
     SecurityScoreResult
-  >({
-    path: '/api/code-intelligence/security/score/cached',
-    label: 'Cached security score',
-    pickData: (r) =>
-      r.status === 'success' && r.security_score !== undefined
-        ? {
-            security_score: r.security_score ?? 0,
-            grade: r.grade ?? 'N/A',
-            risk_level: r.risk_level ?? 'unknown',
-            status_message: r.status_message ?? '',
-            total_findings: r.total_findings ?? 0,
-            critical_issues: r.critical_issues ?? 0,
-            high_issues: r.high_issues ?? 0,
-            files_analyzed: r.files_analyzed ?? 0,
-            severity_breakdown: r.severity_breakdown ?? {},
-            owasp_breakdown: r.owasp_breakdown ?? {},
-          }
-        : null,
-    // Mutate the useTaskLoader-backed `securityScore` ref only on a
-    // successful cached read. On no_data / error / !ok, leave it alone
-    // so a prior live-scan result remains visible.
-    onSuccess: (picked) => {
-      securityScore.value = picked
+  >(
+    {
+      path: '/api/code-intelligence/security/score/cached',
+      // #20491: the route requires source_id; without it the page-open read answered 422.
+      scopeToSource: true,
+      label: 'Cached security score',
+      pickData: (r) =>
+        r.status === 'success' && r.security_score !== undefined
+          ? {
+              security_score: r.security_score ?? 0,
+              grade: r.grade ?? 'N/A',
+              risk_level: r.risk_level ?? 'unknown',
+              status_message: r.status_message ?? '',
+              total_findings: r.total_findings ?? 0,
+              critical_issues: r.critical_issues ?? 0,
+              high_issues: r.high_issues ?? 0,
+              files_analyzed: r.files_analyzed ?? 0,
+              severity_breakdown: r.severity_breakdown ?? {},
+              owasp_breakdown: r.owasp_breakdown ?? {},
+            }
+          : null,
+      // Mutate the useTaskLoader-backed `securityScore` ref only on a
+      // successful cached read. On no_data / error / !ok, leave it alone
+      // so a prior live-scan result remains visible.
+      onSuccess: (picked) => {
+        securityScore.value = picked
+      },
     },
-  })
+    { withSourceId },
+  )
 
   const loadCachedSecurityScore = () => cachedSecurityScoreEndpoint.load()
 
