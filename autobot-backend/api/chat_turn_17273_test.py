@@ -106,6 +106,21 @@ async def test_a_foreign_conversation_answers_exactly_like_an_unknown_one(monkey
 
 
 @pytest.mark.asyncio
+async def test_cancel_on_a_nonexistent_id_is_404_for_a_user_but_not_an_admin(monkeypatch):
+    """``must_exist``: an id with no session is never let through as ``legacy_unowned`` (#20413)."""
+    _as_user(monkeypatch, "bob", owner=None)
+    monkeypatch.setattr("chat_history.session_file.session_file_exists", AsyncMock(return_value=False))
+    assert (await _post("no-such-chat")).status_code == 404
+
+    install_canonical_resolver(
+        monkeypatch,
+        "security.session_posture.resolve_human_user",
+        MagicMock(get_user_from_request=lambda _r: {"username": "root", "role": "admin"}),
+    )
+    assert (await _post("no-such-chat")).status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_the_owner_cancels_a_running_turn_and_a_second_cancel_is_a_noop(monkeypatch):
     _as_user(monkeypatch, "alice", owner="alice")
     turn, state = await _register_turn("alices-chat")
