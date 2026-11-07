@@ -20,22 +20,40 @@ a reply. The key is the session id, like ``chat:conversation:*``; it is reached 
 from the authenticated turn's own session (THREAT_MODEL.md, session ownership).
 
 Identity. The entry records the folded high-water mark as an ORDINAL into the
-durable history's complete turns (``folded``) plus a guard (``guard``): the chain
-digest of every folded turn [0, folded), so an edit anywhere in the folded prefix,
-not only at the boundary, is detected. A refresh reads the durable history -- never
-the sliding in-process window -- so the ordinal and the digests are computed by the
-one projection (``turn_projection.project_turn_pairs``) on both the fold and the
-check, and repeated identical turns are each folded exactly once. The stored messages
-carry no per-turn id, so a guard mismatch (an edit, a regenerate, a delete, a lost
-key, or an age past ``ROLLING_SUMMARY_REBUILD_AGE_SECONDS``) rebuilds the summary
-from the oldest turn.
+durable history's complete turns (``folded``) and a guard (``guard``): an INCREMENTAL
+chain digest of every folded turn, ``chain(prev_guard, new_turns)``, so the prefix is
+never re-hashed. It also records where the last folded exchange sits in the stored
+messages (``last_start``, ``last_digest``) and how many messages the session had
+(``messages_seen``). A refresh reads the durable history -- never the sliding
+in-process window -- and the ordinal and the digests come from the one projection
+(``turn_projection.project_indexed_pairs``) on both the fold and the check, so
+repeated identical turns are each folded exactly once.
+
+Cost. The store keeps a session as one document, so a refresh is one read of it
+(``load_session_messages``); there is no cheaper count or tail read to call first. What
+the entry avoids is the O(history) work after that read: with ``messages_seen`` unchanged
+nothing is projected or hashed (the refresh returns), and with new messages only the
+tail from ``last_start`` is projected and only the new turns are hashed.
+
+Verification. The boundary is checked on every refresh (the exchange at ``last_start``
+must still hash to ``last_digest``, and the session must not have shrunk), which
+catches an edit or delete at the boundary and any shift of the message indexes. An edit
+deep inside the already-folded prefix is NOT visible to the incremental path -- it is
+caught by the periodic full verify: a summary older than
+``ROLLING_SUMMARY_REBUILD_AGE_SECONDS`` is rebuilt from the oldest turn, re-projecting
+and re-hashing the whole history. That is the bound on how long a stale fold can serve.
+A boundary mismatch, a lost key or an age past the rebuild age rebuilds from the oldest
+turn.
 
 A rebuild folds in chunks from the OLDEST turn, ``ROLLING_SUMMARY_CHUNK_TURNS``
-at a time. ``ROLLING_SUMMARY_MAX_CHUNKS`` is a cost ceiling per refresh: when it
+at a time, and stores the entry after EACH chunk (a compare-and-set on the lock), so a
+failure at chunk k keeps the k-1 chunks already folded and the next refresh continues
+from them. ``ROLLING_SUMMARY_MAX_CHUNKS`` is a cost ceiling per refresh: when it
 bites a warning is logged and the remaining, newest turns are folded by the next
-refreshes. Nothing is truncated; the summary only lags. Trim-then-crash is safe for
-the same reason: a turn the in-process window evicts is still in the durable
-history, so whichever refresh runs next folds it from the stored ordinal.
+refreshes. The summary only lags. A single message longer than the summariser's input
+cap is split across summariser calls (``summarization_prompt.chunk_lines``), never cut.
+Trim-then-crash is safe for the same reason: a turn the in-process window evicts is
+still in the durable history, so whichever refresh runs next folds it.
 
 The Redis key outlives the rebuild age, so a stale summary keeps serving the prompt
 while the asynchronous rebuild runs. The one cold start is a session with no key
@@ -44,7 +62,8 @@ first turn has no summary until that refresh completes. If the durable history i
 unreadable the refresh is skipped (and logged); the stored summary keeps serving.
 
 Concurrency. Refreshes of one session are single-flighted by a Redis lock held by
-a uuid4 token, renewed before each chunk. The summary write is a compare-and-set
+a uuid4 token, renewed before EACH summariser gateway call (the summariser's ``on_call``
+hook), because one chunk of long turns can need several sequential calls. The summary write is a compare-and-set
 on that token (Lua), so a refresh whose lock expired cannot overwrite a newer one.
 """
 
@@ -53,7 +72,7 @@ import hashlib
 import json
 import time
 import uuid
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from typing import Any, Awaitable, Dict, List, Optional, Tuple
 
 from autobot_shared.async_compat import fire_and_forget
@@ -65,7 +84,7 @@ from autobot_shared.ssot_constants import CategoryDefaults
 from autobot_shared.store_authority import system_of_record
 from chat_history.context_overflow import ConversationSummarizer
 from chat_history.summarization_prompt import SUMMARIZER_TIMEOUT_SECONDS
-from chat_history.turn_projection import load_turn_pairs
+from chat_history.turn_projection import load_session_messages, project_indexed_pairs
 
 logger = get_logger(__name__)
 
@@ -88,7 +107,7 @@ ROLLING_SUMMARY_TTL_SECONDS = max(
 # After a failed summarisation, do not retry for this long.
 ROLLING_SUMMARY_FAILURE_BACKOFF_SECONDS = env_int("AUTOBOT_ROLLING_SUMMARY_FAILURE_BACKOFF_SECONDS", 300)
 
-# One chunk's lock lifetime = one summariser timeout + this margin; renewed before every chunk.
+# The lock lifetime = one summariser call's timeout + this margin; renewed before EVERY gateway call.
 ROLLING_SUMMARY_LOCK_MARGIN_SECONDS = env_int("AUTOBOT_ROLLING_SUMMARY_LOCK_MARGIN_SECONDS", 30)
 _LOCK_TTL_SECONDS = int(SUMMARIZER_TIMEOUT_SECONDS) + ROLLING_SUMMARY_LOCK_MARGIN_SECONDS
 
@@ -96,7 +115,6 @@ _LOCK_TTL_SECONDS = int(SUMMARIZER_TIMEOUT_SECONDS) + ROLLING_SUMMARY_LOCK_MARGI
 ROLLING_SUMMARY_CHUNK_TURNS = max(1, env_int("AUTOBOT_ROLLING_SUMMARY_CHUNK_TURNS", 10))
 ROLLING_SUMMARY_MAX_CHUNKS = max(1, env_int("AUTOBOT_ROLLING_SUMMARY_MAX_CHUNKS", 20))
 
-_ALL_TURNS = 1 << 31  # "no limit" for the durable read: the ordinal needs the whole history
 _NEVER = 0.0  # ``failed_at`` of an entry that never failed
 
 # Redis keys (module constants, as chat_history/context_overflow.py does: ssot_constants.py is at its size ceiling).
@@ -121,19 +139,17 @@ class SummaryEntry:
 
     text: str = ""
     folded: int = 0  # ordinal high-water mark: complete durable turns [0, folded) are in the text
-    guard: str = ""  # chain digest of durable turns [0, folded); a mismatch means rebuild
+    guard: str = ""  # incremental chain digest of durable turns [0, folded)
     built_at: float = 0.0  # when the text was last rebuilt from the durable history
     failed_at: float = _NEVER
+    messages_seen: int = 0  # stored messages the session had when the fold caught up; 0 while it lags
+    last_start: int = -1  # message index of the user message that began the last folded exchange
+    last_digest: str = ""  # turn_digest of that exchange: the boundary check
 
 
 def complete_turns(history: List[Dict[str, str]]) -> List[Dict[str, str]]:
     """Turns whose assistant reply exists (an empty reply is an in-flight turn, #715)."""
     return [msg for msg in history or [] if msg.get("assistant")]
-
-
-def older_turns(history: List[Dict[str, str]]) -> List[Dict[str, str]]:
-    """Complete turns before the last ``RECENT_TURNS_KEPT``: the ones a summary must cover."""
-    return complete_turns(history)[: -RECENT_TURNS_KEPT or None]
 
 
 def normalise_turn(turn: Dict[str, str]) -> Dict[str, str]:
@@ -152,12 +168,21 @@ def turn_digest(turn: Dict[str, str]) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
-def prefix_guard(turns: List[Dict[str, str]]) -> str:
-    """Chain digest of *turns* in order: changes if any turn, or the count, changes."""
-    chain = hashlib.sha256()
+def chain_guard(prev: str, turns: List[Dict[str, str]]) -> str:
+    """The guard after folding *turns* onto a prefix whose guard is *prev*: one hash step per turn.
+
+    Per-turn, so the digest of a prefix does not depend on how it was split into chunks, and the
+    stored guard extends by the new turns alone, without re-hashing the folded prefix.
+    """
+    guard = prev
     for turn in turns:
-        chain.update(turn_digest(turn).encode("ascii"))
-    return chain.hexdigest()[:16]
+        guard = hashlib.sha256((guard + turn_digest(turn)).encode("ascii")).hexdigest()[:16]
+    return guard
+
+
+def prefix_guard(turns: List[Dict[str, str]]) -> str:
+    """Chain digest of *turns* from the start: changes if any turn, or the count, changes."""
+    return chain_guard("", turns)
 
 
 def render_context(history: List[Dict[str, str]], rolling_summary: str = "") -> str:
@@ -182,21 +207,40 @@ def _as_messages(turns: List[Dict[str, str]]) -> List[Dict[str, Any]]:
     return out
 
 
-def locate_new_turns(entry: SummaryEntry, older: List[Dict[str, str]]) -> Optional[List[Dict[str, str]]]:
-    """The turns in *older* after the entry's folded ordinal, or None if the guard does not hold.
+Indexed = Tuple[int, Dict[str, str]]  # (message index of the exchange's user message, the exchange)
 
-    *older* is the durable history's older turns, oldest first. None means the stored
-    summary no longer matches them (an edit, a regenerate, a delete, or an entry from
-    before ordinals) and must be rebuilt; the guard is the digest of the turn at the
-    ordinal and covers the whole folded prefix, so identical turns cannot make a different
-    history look folded.
+
+def _older(exchanges: List[Indexed]) -> List[Indexed]:
+    """*exchanges* before the last ``RECENT_TURNS_KEPT``: the ones a summary must cover."""
+    return exchanges[: -RECENT_TURNS_KEPT or None]
+
+
+def _usable(entry: Optional[SummaryEntry], now: float) -> bool:
+    """An entry the incremental path may extend: fresh, and carrying the boundary it is checked against."""
+    return bool(
+        entry
+        and entry.folded > 0
+        and entry.guard
+        and entry.last_start >= 0
+        and now - entry.built_at <= ROLLING_SUMMARY_REBUILD_AGE_SECONDS
+    )
+
+
+def locate_tail(entry: SummaryEntry, messages: List[Dict[str, Any]]) -> Optional[List[Indexed]]:
+    """The exchanges after the last folded one, or None when the stored boundary no longer holds.
+
+    Only the messages from ``entry.last_start`` on are projected. The exchange found there must
+    still hash to ``entry.last_digest`` and the session must not have shrunk; otherwise the
+    stored summary no longer matches the history (an edit, a regenerate, a delete, shifted
+    indexes) and is rebuilt. Identical turns cannot pass for the folded one: the index is part
+    of the check.
     """
-    folded = entry.folded
-    if folded <= 0 or not entry.guard or folded > len(older):
+    if len(messages) < entry.messages_seen:
         return None
-    if prefix_guard(older[:folded]) != entry.guard:
+    tail = project_indexed_pairs(messages, entry.last_start)
+    if not tail or tail[0][0] != entry.last_start or turn_digest(tail[0][1]) != entry.last_digest:
         return None
-    return older[folded:]
+    return tail[1:]
 
 
 def _entry_from(raw: Any) -> Optional[SummaryEntry]:
@@ -237,6 +281,10 @@ async def prompt_summary(session: Any, model: str) -> str:
     return await current_summary(session.session_id)
 
 
+class _LockLost(RuntimeError):
+    """The refresh lock expired mid-fold; the write would be refused, so stop spending LLM calls."""
+
+
 class _RefreshLock:
     """A per-session Redis lock held by a uuid4 token: renewable and releasable only by its holder."""
 
@@ -250,8 +298,13 @@ class _RefreshLock:
         return bool(await _redis_op(self.redis.set(self.key, self.token, nx=True, ex=_LOCK_TTL_SECONDS)))
 
     async def extend(self) -> bool:
-        """Renew the lock for the next chunk; False when it was already lost."""
+        """Renew the lock; False when it was already lost."""
         return bool(await _redis_op(self.redis.eval(_EXTEND_LOCK, 1, self.key, self.token, _LOCK_TTL_SECONDS)))
+
+    async def renew(self) -> None:
+        """Renew before a gateway call; raises ``_LockLost`` when the lock is already gone."""
+        if not await self.extend():
+            raise _LockLost()
 
     async def store(self, entry: SummaryEntry) -> bool:
         """Compare-and-set the summary on the lock token: refused when the lock expired or changed hands."""
@@ -277,24 +330,18 @@ class _RefreshLock:
             logger.warning("Rolling summary lock release failed (expires on TTL): %s", exc)
 
 
-async def _durable_older(session_id: str) -> Optional[List[Dict[str, str]]]:
-    """Older complete turns of the durable history (the system of record); None if it is unreadable."""
-    durable = await load_turn_pairs(session_id, _ALL_TURNS)
-    return None if durable is None else older_turns(durable)
-
-
 def _plan(
-    entry: Optional[SummaryEntry], older: List[Dict[str, str]], now: float
-) -> Tuple[SummaryEntry, List[Dict[str, str]]]:
-    """(the entry to fold into, the turns still to fold): a rebuild starts from an empty entry."""
-    if entry and now - entry.built_at <= ROLLING_SUMMARY_REBUILD_AGE_SECONDS:
-        new = locate_new_turns(entry, older)
-        if new is not None:
-            return entry, new
-    return SummaryEntry(built_at=now), older
+    entry: Optional[SummaryEntry], messages: List[Dict[str, Any]], now: float
+) -> Tuple[SummaryEntry, List[Indexed]]:
+    """(the entry to fold into, the exchanges still to fold): a rebuild starts from an empty entry."""
+    if entry is not None and _usable(entry, now):
+        rest = locate_tail(entry, messages)
+        if rest is not None:
+            return entry, _older(rest)
+    return SummaryEntry(built_at=now), _older(project_indexed_pairs(messages))
 
 
-def _chunks(turns: List[Dict[str, str]], session_id: str) -> List[List[Dict[str, str]]]:
+def _chunks(turns: List[Indexed], session_id: str) -> List[List[Indexed]]:
     """*turns* in chunks of ``ROLLING_SUMMARY_CHUNK_TURNS``, oldest first, at most ``ROLLING_SUMMARY_MAX_CHUNKS``.
 
     The ceiling drops the NEWEST chunks from this refresh (logged); they are folded by the next one.
@@ -311,50 +358,72 @@ def _chunks(turns: List[Dict[str, str]], session_id: str) -> List[List[Dict[str,
     return chunks[:ROLLING_SUMMARY_MAX_CHUNKS]
 
 
-async def _fold(entry: SummaryEntry, new: List[Dict[str, str]], model: str, summarizer: Any) -> SummaryEntry:
-    folded = entry.folded + len(new)
+async def _fold(
+    lock: _RefreshLock, entry: SummaryEntry, chunk: List[Indexed], model: str, summarizer: Any, seen: int
+) -> SummaryEntry:
+    """*entry* with *chunk* folded in; the lock is renewed before each gateway call the summariser makes."""
+    turns = [pair for _, pair in chunk]
+    folded = entry.folded + len(turns)
     text = await summarizer.summarize_messages(
-        _as_messages(new), model, prior_summary=entry.text, turns_summarized=folded
+        _as_messages(turns), model, prior_summary=entry.text, turns_summarized=folded, on_call=lock.renew
     )
-    return SummaryEntry(text=text, folded=folded, built_at=entry.built_at)
+    last_start, last = chunk[-1]
+    return replace(
+        entry,
+        text=text,
+        folded=folded,
+        guard=chain_guard(entry.guard, turns),
+        last_start=last_start,
+        last_digest=turn_digest(last),
+        messages_seen=seen,
+    )
 
 
 async def _fold_chunks(
-    lock: _RefreshLock, base: SummaryEntry, older: List[Dict[str, str]], model: str, summarizer: Any, session_id: str
+    lock: _RefreshLock, base: SummaryEntry, new: List[Indexed], seen: int, model: str, summarizer: Any, session_id: str
 ) -> SummaryEntry:
-    """Fold the turns of *older* after ``base.folded``, oldest chunk first; stamps the guard of what is folded."""
+    """Fold *new* oldest chunk first, storing the entry after EACH chunk; returns the last stored entry.
+
+    Each store is a compare-and-set on the lock token, so a later failure keeps the earlier progress.
+    ``messages_seen`` (the no-new-message shortcut) is stamped only by the chunk that catches up
+    with the session; a partial entry has 0, so the next refresh looks again.
+    """
     entry = base
-    for chunk in _chunks(older[base.folded :], session_id):
-        if not await lock.extend():
+    chunks = _chunks(new, session_id)
+    caught_up = sum(len(c) for c in chunks) == len(new)  # the ceiling did not leave newer turns unfolded
+    for i, chunk in enumerate(chunks):
+        last = caught_up and i == len(chunks) - 1
+        entry = await _fold(lock, entry, chunk, model, summarizer, seen if last else 0)
+        if not await lock.store(entry):
             raise _LockLost()
-        entry = await _fold(entry, chunk, model, summarizer)
-    return SummaryEntry(**{**asdict(entry), "guard": prefix_guard(older[: entry.folded])})
-
-
-class _LockLost(RuntimeError):
-    """The refresh lock expired mid-fold; the write would be refused, so stop spending LLM calls."""
+    return entry
 
 
 async def _refresh_locked(lock: _RefreshLock, session_id: str, model: str, summarizer: Any, now: float) -> None:
     stored = _entry_from(await _redis_op(lock.redis.get(lock.summary_key)))
     if stored and now - stored.failed_at < ROLLING_SUMMARY_FAILURE_BACKOFF_SECONDS:
         return
-    older = await _durable_older(session_id)
-    if older is None:
+    messages = await load_session_messages(session_id)
+    if messages is None:
         logger.warning("Rolling summary refresh for %s skipped: durable history unreadable", session_id)
         return
-    base, new = _plan(stored, older, now)
+    if stored is not None and _usable(stored, now) and len(messages) == stored.messages_seen:
+        return  # nothing new in the session: no projection, no hashing
+    base, new = _plan(stored, messages, now)
     if not new:
         return  # up to date, or nothing durable to fold yet
     try:
-        entry = await _fold_chunks(lock, base, older, model, summarizer, session_id)
+        await _fold_chunks(lock, base, new, len(messages), model, summarizer, session_id)
     except _LockLost:
         logger.warning("Rolling summary lock for %s expired mid-fold; abandoning this refresh", session_id)
-        return
     except Exception as exc:  # noqa: BLE001 -- a summary failure must never break a turn
         logger.warning("Rolling summary failed; older turns stay out of the prompt: %s", exc, exc_info=True)
-        entry = SummaryEntry(**{**asdict(stored or SummaryEntry()), "failed_at": now})
-    await lock.store(entry)
+        await lock.store(replace(await _latest(lock, stored), failed_at=now))
+
+
+async def _latest(lock: _RefreshLock, stored: Optional[SummaryEntry]) -> SummaryEntry:
+    """The entry now in Redis (a failed refresh keeps the chunks already stored), or *stored*/empty."""
+    return _entry_from(await _redis_op(lock.redis.get(lock.summary_key))) or stored or SummaryEntry()
 
 
 async def refresh_summary(

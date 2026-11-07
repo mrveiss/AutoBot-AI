@@ -218,15 +218,26 @@ async def test_an_overlong_transcript_is_summarised_in_bounded_chunks() -> None:
 
     assert len(llm.prompts) > 1, "an over-cap transcript must be folded in chunks"
     assert all(len(_framed_body(prompt)) <= SUMMARIZER_INPUT_MAX_CHARS + 2000 for prompt in llm.prompts)
-    assert len(llm.prompts) <= KNOWLEDGE_MAX_CHUNKS + 1  # the ceiling bounds the calls one request buys
+    assert len(llm.prompts) <= KNOWLEDGE_MAX_CHUNKS  # the ceiling is exact: the calls one request buys
     assert all("model_name" not in kwargs for kwargs in llm.kwargs), "no model named: the gateway's default"
 
 
-async def test_a_transcript_beyond_the_chunk_ceiling_is_refused_not_cut() -> None:
-    """The old path cut at 24000 characters; the new one fails loudly past a chunk ceiling, with no LLM call."""
-    llm, kb, reason = await _refused(
-        [{"role": "user", "content": "word " * (SUMMARIZER_INPUT_MAX_CHARS // 5)}] * (KNOWLEDGE_MAX_CHUNKS + 1)
-    )
+def _one_call_each(count: int) -> List[Dict[str, Any]]:
+    """*count* messages, each over half a chunk, so the summariser needs exactly *count* calls."""
+    return [{"role": "user", "content": "w" * (SUMMARIZER_INPUT_MAX_CHARS * 6 // 10)}] * count
+
+
+async def test_a_transcript_of_exactly_the_chunk_ceiling_is_summarised() -> None:
+    """The ceiling is exact: KNOWLEDGE_MAX_CHUNKS calls are allowed (no off-by-one in either direction)."""
+    manager, llm = _manager(_one_call_each(KNOWLEDGE_MAX_CHUNKS))
+    await manager.compile_chat_to_knowledge(_CHAT_ID)
+
+    assert len(llm.prompts) == KNOWLEDGE_MAX_CHUNKS
+
+
+async def test_a_transcript_one_chunk_beyond_the_ceiling_is_refused_not_cut() -> None:
+    """The old path cut at 24000 characters; the new one fails loudly past the ceiling, with no LLM call."""
+    llm, kb, reason = await _refused(_one_call_each(KNOWLEDGE_MAX_CHUNKS + 1))
 
     assert llm.prompts == [] and not hasattr(kb, "content")
     assert "too long" in reason

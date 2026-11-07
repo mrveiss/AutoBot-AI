@@ -13,6 +13,7 @@ import pytest
 from chat_history import rolling_summary as rs
 from chat_history.context_overflow import ConversationSummarizer, SummarizationFailed
 from chat_history.summarization_prompt import SummaryResult, build_prompt
+from chat_history.turn_projection import project_indexed_pairs
 from chat_workflow.conversation import ConversationHandlerMixin
 from chat_workflow.llm_handler import LLMHandlerMixin
 
@@ -22,23 +23,41 @@ SID = "sess-1"
 
 
 class FakeRedis:
-    """Just enough Redis: get/set(nx, ex)/eval(release-if-owner)/delete."""
+    """Just enough Redis: get/set(nx, ex)/eval(release/extend/store-if-owner)/delete.
 
-    def __init__(self):
+    With ``clock`` set (a callable returning seconds) a key set or renewed with a TTL expires when the clock passes it.
+    """
+
+    def __init__(self, clock=None):
         self.data = {}
         self.ttls = {}
+        self.clock = clock
+        self.expiry = {}
+
+    def _expire(self, key):
+        if self.clock and key in self.expiry and self.clock() >= self.expiry[key]:
+            self.data.pop(key, None)
+            self.expiry.pop(key, None)
+
+    def _arm(self, key, ttl):
+        if self.clock:
+            self.expiry[key] = self.clock() + int(ttl)
 
     async def get(self, key):
+        self._expire(key)
         return self.data.get(key)
 
     async def set(self, key, value, nx=False, ex=None):
+        self._expire(key)
         if nx and key in self.data:
             return None
         self.data[key] = value
+        self._arm(key, ex or 0) if ex else None
         return True
 
     async def eval(self, script, numkeys, *args):
         keys, argv = args[:numkeys], args[numkeys:]
+        self._expire(keys[0])
         if self.data.get(keys[0]) != argv[0]:
             return 0  # every script is guarded by the lock token
         if script == rs._RELEASE_LOCK:
@@ -48,6 +67,7 @@ class FakeRedis:
             self.ttls[keys[1]] = argv[2]
         else:
             assert script == rs._EXTEND_LOCK
+            self._arm(keys[0], argv[1])
         return 1
 
 
@@ -58,7 +78,11 @@ class StubSummarizer:
         self.calls = []
         self.gate = gate
 
-    async def summarize_messages(self, messages, model_name, prior_summary="", turns_summarized=None, **_kw):
+    async def summarize_messages(
+        self, messages, model_name, prior_summary="", turns_summarized=None, on_call=None, **_kw
+    ):
+        if on_call is not None:
+            await on_call()  # the real summariser awaits this before each gateway call
         self.calls.append({"n": len(messages), "prior": prior_summary, "turns": turns_summarized})
         if self.gate is not None:
             await self.gate.wait()
@@ -76,6 +100,8 @@ class Conversation:
             session_id=SID, conversation_history=[], metadata={rs.ROLLING_SUMMARY_MODEL_KEY: "m"}
         )
         self.durable = []
+        self.reads = 0  # reads of the stored session
+        self.projected = []  # messages projected per call to the projection (the O(history) work)
         self.mixin = ConversationHandlerMixin.__new__(ConversationHandlerMixin)
 
     async def turn(self, user, assistant, now=1000.0):
@@ -96,17 +122,32 @@ class Conversation:
         return await rs.current_summary(SID)
 
 
+def _messages_of(turns):
+    """The stored session for *turns*: a user message and an LLM reply each."""
+    out = []
+    for turn in turns:
+        out.append({"sender": "user", "text": turn["user"]})
+        out.append({"sender": "assistant", "text": turn["assistant"], "messageType": "llm_response"})
+    return out
+
+
 @pytest.fixture
 def env():
     redis = FakeRedis()
     conv = Conversation(redis, StubSummarizer())
 
-    async def durable(session_id, limit):
-        return [dict(t) for t in conv.durable[-limit:]]
+    async def stored_messages(session_id):
+        conv.reads += 1
+        return _messages_of(conv.durable)
+
+    def spy_project(messages, start=0):
+        conv.projected.append(len(messages) - start)
+        return project_indexed_pairs(messages, start)
 
     with (
         patch.object(rs, "get_async_redis_client", AsyncMock(return_value=redis)),
-        patch.object(rs, "load_turn_pairs", durable),
+        patch.object(rs, "load_session_messages", stored_messages),
+        patch.object(rs, "project_indexed_pairs", spy_project),
     ):
         yield conv
 
@@ -162,15 +203,18 @@ async def test_a_summary_older_than_the_rebuild_age_is_rebuilt_not_extended(env)
 
 
 @pytest.mark.asyncio
-async def test_a_same_count_edit_invalidates_the_summary(env):
+async def test_an_edit_deep_in_the_folded_prefix_is_caught_by_the_periodic_full_verify(env):
+    """The incremental path checks the boundary only; the rebuild age is the full verify that catches a deep edit."""
     await env.run(8, constraints={3: CONSTRAINT})
     assert CONSTRAINT in await env.summary()
-    # a regenerate/edit replaces the constraint turn in place: the turn count is unchanged
-    env.durable[2] = {"user": "question 3", "assistant": "edited"}
+    env.durable[2] = {"user": "question 3", "assistant": "edited"}  # a regenerate replaces turn 3 in place
     env.session.conversation_history[2] = dict(env.durable[2])
     await env.turn("question 9", "answer 9")
-    assert CONSTRAINT not in await env.summary(), "a stale summary still carries the removed content"
-    assert env.stub.calls[-1]["prior"] == ""  # rebuilt, not extended
+    assert CONSTRAINT in await env.summary()  # documented bound: not visible until the full verify
+    later = 1000.0 + rs.ROLLING_SUMMARY_REBUILD_AGE_SECONDS + 1
+    await env.turn("question 10", "answer 10", now=later)
+    assert CONSTRAINT not in await env.summary(), "the full verify must drop the removed content"
+    assert env.stub.calls[-1]["prior"] == "" or env.stub.calls[-2]["prior"] == ""  # rebuilt from nothing
 
 
 @pytest.mark.asyncio
@@ -299,7 +343,9 @@ async def test_hook_endpoint_and_rolling_fold_call_the_same_summariser():
 
     sentinel = AsyncMock(return_value="SUMMARY")
     with patch.object(ConversationSummarizer, "summarize_messages", sentinel):
-        await rs._fold(rs.SummaryEntry(), _history_turns(3), "m", ConversationSummarizer())
+        lock = rs._RefreshLock(FakeRedis(), SID)
+        chunk = list(enumerate(_history_turns(3)))
+        await rs._fold(lock, rs.SummaryEntry(), chunk, "m", ConversationSummarizer(), 6)
         assert sentinel.await_count == 1  # rolling fold
 
         long_msgs = [{"role": "user", "content": "x" * 2000} for _ in range(60)]
@@ -355,11 +401,18 @@ async def test_repeated_identical_turns_are_each_folded_exactly_once(env):
     assert entry.folded == older and entry.guard == rs.prefix_guard(env.durable[:older])
 
 
-@pytest.mark.asyncio
-async def test_locate_does_not_treat_a_short_history_as_a_match():
-    entry = rs.SummaryEntry(folded=3, guard=rs.prefix_guard(_history_turns(3)))
-    assert rs.locate_new_turns(entry, _history_turns(2)) is None  # fewer turns than folded
-    assert rs.locate_new_turns(entry, _history_turns(5)) == _history_turns(5)[3:]
+def test_locate_tail_rejects_a_shrunk_or_shifted_history():
+    turns = [{"user": f"q{i}", "assistant": f"a{i}"} for i in range(5)]
+    messages = _messages_of(turns)
+    entry = rs.SummaryEntry(
+        folded=3,
+        guard=rs.prefix_guard(turns[:3]),
+        last_start=4,
+        last_digest=rs.turn_digest(turns[2]),
+        messages_seen=len(messages),
+    )
+    assert [p for _, p in rs.locate_tail(entry, messages)] == turns[3:]
+    assert rs.locate_tail(entry, messages[:-2]) is None and rs.locate_tail(entry, messages[2:]) is None
 
 
 @pytest.mark.asyncio
@@ -422,8 +475,8 @@ async def test_a_refresh_that_loses_its_lock_between_chunks_stops_folding(env):
         for i in range(5, 9):
             env.durable.append({"user": f"question {i}", "assistant": f"answer {i}"})
         await rs.refresh_summary(SID, "m", env.stub, now=1000.0)
-    assert len(env.stub.calls) == 1  # stopped after the first chunk; nothing was stored
-    assert f"{rs._SUMMARY_KEY_PREFIX}{SID}" not in env.redis.data
+    assert len(env.stub.calls) == 1  # stopped after the first chunk
+    assert rs._entry_from(env.redis.data[f"{rs._SUMMARY_KEY_PREFIX}{SID}"]).folded == 1  # whose progress was kept
 
 
 @pytest.mark.asyncio
@@ -455,7 +508,7 @@ async def test_a_summary_past_the_rebuild_age_still_serves_and_the_key_outlives_
 async def test_an_unreadable_durable_history_skips_the_refresh_and_keeps_the_summary(env):
     await env.run(5, constraints={1: CONSTRAINT})
     before = await env.summary()
-    with patch.object(rs, "load_turn_pairs", AsyncMock(return_value=None)):
+    with patch.object(rs, "load_session_messages", AsyncMock(return_value=None)):
         await env.turn("question 6", "answer 6")
     assert await env.summary() == before
 

@@ -65,8 +65,8 @@ register_env_var(
         default=30,
         description=(
             "Seconds added to one summariser call's timeout to make the per-session refresh lock lifetime. The lock is "
-            "renewed before each chunk, and the summary write is refused if the lock was lost, so a crashed refresh "
-            "blocks the next one for at most this long plus one summariser timeout."
+            "renewed before EACH summariser gateway call, and the summary write is refused if the lock was lost, so a "
+            "crashed refresh blocks the next one for at most this long plus one summariser timeout."
         ),
         component="chat",
     )
@@ -79,7 +79,7 @@ register_env_var(
         default=10,
         description=(
             "Chat turns folded into the rolling summary per summariser call group; a rebuild folds from the OLDEST "
-            "turn in chunks of this size, so none is truncated."
+            "turn in chunks of this size, storing the progress after each chunk, so none is dropped."
         ),
         component="chat",
     )
@@ -104,8 +104,9 @@ register_env_var(
         type=int,
         default=4,
         description=(
-            "Most summariser chunks (of AUTOBOT_SUMMARIZER_INPUT_MAX_CHARS characters) a chat-to-knowledge "
-            "transcript may need; a longer chat is refused with an error instead of costing unbounded LLM calls."
+            "Most summariser calls (each of at most AUTOBOT_SUMMARIZER_INPUT_MAX_CHARS characters) a chat-to-knowledge "
+            "transcript may need, counted exactly by the summariser before the first call; a longer chat is refused "
+            "with an error instead of costing unbounded LLM calls."
         ),
         component="chat",
     )
@@ -130,7 +131,8 @@ register_env_var(
         type=int,
         default=24000,
         description=(
-            "Conversation characters sent to the summariser in one call; longer input is summarised in " "chunks."
+            "Conversation characters sent to the summariser in one call; longer input is summarised in chunks. A "
+            "single message longer than this is split across calls, never cut: every character is summarised."
         ),
         component="chat",
     )

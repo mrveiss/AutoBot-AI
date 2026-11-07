@@ -15,7 +15,7 @@ Builds on #8990 (token usage tracking) and #3770 (compression service).
 """
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
@@ -31,10 +31,9 @@ from chat_history.summarization_prompt import (
     SUMMARIZER_INPUT_MAX_CHARS,
     SummarizationFailed,
     SummaryResult,
-    build_prompt,
-    call_gateway,
-    chunk_lines,
     count_turns,
+    fold_calls,
+    plan_chunks,
 )
 
 logger = get_logger(__name__)
@@ -512,13 +511,15 @@ class ConversationSummarizer:
         max_tokens: Optional[int] = SUMMARIZER_DEFAULT_MAX_TOKENS,
         turns_summarized: Optional[int] = None,
         template: str = SUMMARIZATION_PROMPT,
+        on_call: Optional[Callable[[], Awaitable[None]]] = None,
+        max_calls: Optional[int] = None,
     ) -> SummaryResult:
         """Summarise *messages* with the LLM (#20852: the one summariser).
 
-        The overflow protection, the compact hook, ``/chat/summarize``, the rolling
-        chat-history summary and chat-to-knowledge all call it. Input longer than
-        ``SUMMARIZER_INPUT_MAX_CHARS`` is folded in chunks, each call bounded by
-        ``SUMMARIZER_TIMEOUT_SECONDS``; the conversation is framed as data.
+        The overflow protection, compact hook, ``/chat/summarize``, rolling chat-history summary and
+        chat-to-knowledge all call it. Input over ``SUMMARIZER_INPUT_MAX_CHARS`` is folded in chunks (an
+        over-long message is split, never cut), each call bounded by ``SUMMARIZER_TIMEOUT_SECONDS``;
+        the conversation is framed as data.
 
         Args:
             messages: Dicts in the API (role/content) or display (sender/text) schema.
@@ -527,24 +528,23 @@ class ConversationSummarizer:
             max_tokens: Cap on the generated summary (also the length the prompt asks for).
             turns_summarized: Turns the summary will cover; defaults to the user turns in *messages*.
             template: Prompt template with ``{{count}}``/``{{target}}``/``{{conversation}}``.
+            on_call: Awaited before EACH gateway call (a caller renews its lock there); what it raises propagates.
+            max_calls: Most gateway calls allowed; more raises ``InputTooLong`` before any call.
 
         Raises:
             SummarizationFailed: The gateway errored, timed out, or returned nothing usable.
                 Never a placeholder — see that exception's docstring (#14065).
         """
-        # Outside the try on purpose: a bug in these pure local transformations is a
-        # programming error and must surface as itself, not be relabelled "summarization
-        # failed" and retried forever (#14065).
+        # Outside the try on purpose: a bug in these pure local transformations must surface
+        # as itself, not be relabelled "summarization failed" and retried forever (#14065).
         safe_messages = _sanitize_tool_messages(messages)
         lines = [line for line in (self._format_messages([m]) for m in safe_messages) if line]
         turns = count_turns(messages) if turns_summarized is None else turns_summarized
-        target = max_tokens or SUMMARIZER_DEFAULT_MAX_TOKENS
-        summary, tokens = prior_summary, 0
-        for chunk in chunk_lines(lines, SUMMARIZER_INPUT_MAX_CHARS) or [""]:
-            text = f"Previous summary:\n{summary}\n\nNewer turns:\n{chunk}" if summary else chunk
-            prompt = build_prompt(text, turns, target, template)
-            summary, used = await call_gateway(self._get_gateway, prompt, model_name, max_tokens, len(messages))
-            tokens += used
+        args = (turns, max_tokens or SUMMARIZER_DEFAULT_MAX_TOKENS, template, len(messages))
+        chunks = plan_chunks(lines, SUMMARIZER_INPUT_MAX_CHARS, max_calls)
+        summary, tokens = await fold_calls(
+            self._get_gateway, chunks, prior_summary, model_name, max_tokens, args, on_call
+        )
         logger.info("Generated summary for %d messages (%d tokens est.)", len(messages), len(summary) // 4)
         return SummaryResult(summary, tokens)
 

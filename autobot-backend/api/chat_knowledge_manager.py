@@ -34,7 +34,7 @@ from typing import Dict, List
 
 from fastapi import HTTPException, Request
 
-from api.chat_knowledge_prompt import KNOWLEDGE_ENTRY_PROMPT, vet_transcript
+from api.chat_knowledge_prompt import summarise_transcript
 from api.schemas_knowledge import FileAssociationType, KnowledgeDecision
 from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.async_compat import run_or_schedule
@@ -435,11 +435,7 @@ class ChatKnowledgeManager:
         # #15700: vetted, then framed as data by the one summariser (#20852). A refused
         # transcript raises TranscriptRefused (a 422), so no entry is written.
         summarizer = ConversationSummarizer(gateway=self.llm_interface)
-        summary = (
-            await summarizer.summarize_with_usage(
-                vet_transcript(messages), None, template=KNOWLEDGE_ENTRY_PROMPT, max_tokens=None
-            )
-        ).text
+        summary = await summarise_transcript(summarizer, messages)
 
         context = self.chat_contexts.get(chat_id)
         compiled_knowledge = self._build_compiled_knowledge_dict(chat_id, title, context, messages, summary)

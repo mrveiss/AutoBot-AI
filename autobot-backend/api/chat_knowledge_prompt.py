@@ -50,7 +50,7 @@ from typing import Any, Callable, Dict, List
 
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
-from chat_history.summarization_prompt import SUMMARIZER_INPUT_MAX_CHARS
+from chat_history.summarization_prompt import InputTooLong
 from security.prompt_injection_detector import get_prompt_injection_detector
 
 logger = get_logger(__name__)
@@ -106,14 +106,15 @@ _REFUSED_OVERRIDE = (
     "compiled into the knowledge base, where it would be retrieved into other prompts. Remove or "
     "rephrase that text and try again."
 )
-_REFUSED_TOO_LONG = (
+REFUSED_TOO_LONG = (
     "This conversation is too long to compile into the knowledge base in one pass. "
     "Compile a shorter range of it, or split it into separate chats."
 )
 _REFUSED_EMPTY = "This conversation has no content to compile into the knowledge base."
 
-#: Cost ceiling: a transcript needing more summariser chunks than this is refused, not silently cut
-#: (the old path cut it at one 24000-character chunk). Bounds the LLM calls one request can buy.
+#: Cost ceiling: a transcript needing more summariser calls than this is refused, not silently cut
+#: (the old path cut it at one 24000-character chunk). The summariser counts its own chunks
+#: (``max_calls``), so the ceiling is exact and the refusal comes before any LLM call.
 KNOWLEDGE_MAX_CHUNKS = max(1, env_int("AUTOBOT_CHAT_KNOWLEDGE_MAX_CHUNKS", 4))
 
 #: The chat-to-knowledge task as a template for the one summariser (#20852); it
@@ -159,15 +160,12 @@ def vet_transcript(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """*messages* cleaned of invisible characters, or a refusal; the summariser frames them as data.
 
     Raises:
-        TranscriptRefused: the transcript has no content, is longer than ``KNOWLEDGE_MAX_CHUNKS``
-            summariser chunks, carries an instruction to
+        TranscriptRefused: the transcript has no content, carries an instruction to
             the model, or tripped a deployment's hard-block. No KB entry follows.
     """
     detector = get_prompt_injection_detector(strict_mode=True)
     if not _has_content(messages, detector.strip_invisible_unicode):
         raise TranscriptRefused(_REFUSED_EMPTY)
-    if sum(len(str(m.get("content") or "")) for m in messages) > KNOWLEDGE_MAX_CHUNKS * SUMMARIZER_INPUT_MAX_CHARS:
-        raise TranscriptRefused(_REFUSED_TOO_LONG)
     # Cleaned before detection, and serialised unescaped: see the module docstring.
     serialised = json.dumps(messages, indent=2, ensure_ascii=False)
     transcript = _clean(serialised, detector.strip_invisible_unicode)
@@ -181,3 +179,23 @@ def vet_transcript(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         )
         raise TranscriptRefused(_REFUSED_OVERRIDE)
     return [{**m, "content": _clean(str(m.get("content") or ""), detector.strip_invisible_unicode)} for m in messages]
+
+
+async def summarise_transcript(summarizer: Any, messages: List[Dict[str, Any]]) -> str:
+    """The knowledge-entry summary of *messages*: vetted, framed as data, within ``KNOWLEDGE_MAX_CHUNKS`` calls.
+
+    Raises:
+        TranscriptRefused: the vet step refused it, or it needs more than ``KNOWLEDGE_MAX_CHUNKS`` summariser
+            calls (counted exactly by the summariser before the first call, so no LLM call is spent).
+    """
+    try:
+        result = await summarizer.summarize_with_usage(
+            vet_transcript(messages),
+            None,
+            template=KNOWLEDGE_ENTRY_PROMPT,
+            max_tokens=None,
+            max_calls=KNOWLEDGE_MAX_CHUNKS,
+        )
+    except InputTooLong as exc:
+        raise TranscriptRefused(REFUSED_TOO_LONG) from exc
+    return result.text
