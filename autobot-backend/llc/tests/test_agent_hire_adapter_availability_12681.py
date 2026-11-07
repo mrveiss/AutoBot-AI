@@ -132,7 +132,7 @@ class TestHireRejectsAnUnrunnableAdapter:
         with (
             patch.object(mod, "registered_adapter_types", return_value=["claude_code"]),
             patch("llc.adapters.base.get_adapter", return_value=_CliAdapter(available=False)),
-            patch("llc.services.agent_hire_service.BudgetService.provision_budget", new=AsyncMock()),
+            patch("llc.services.budget.BudgetService.provision_budget", new=AsyncMock()),
             patch.object(mod, "company_requires_hire_approval", new=AsyncMock(return_value=False)),
             pytest.raises(mod.HTTPException) as caught,
         ):
@@ -163,7 +163,7 @@ class TestHireRejectsAnUnrunnableAdapter:
         with (
             patch.object(mod, "registered_adapter_types", return_value=["claude_code"]),
             patch("llc.adapters.base.get_adapter", return_value=_CliAdapter(available=True)),
-            patch("llc.services.agent_hire_service.BudgetService.provision_budget", new=AsyncMock()),
+            patch("llc.services.budget.BudgetService.provision_budget", new=AsyncMock()),
             patch.object(mod, "company_requires_hire_approval", new=AsyncMock(return_value=False)),
         ):
             await mod.hire_agent(

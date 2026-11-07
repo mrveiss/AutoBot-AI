@@ -23,7 +23,7 @@ from models.agent_org import AgentOrgNode
 from models.approval import ApprovalType
 from user_management.models.organization import Organization
 
-from .budget import BudgetService
+from .accessors import get_budget_service
 
 if TYPE_CHECKING:  # approval.py imports this module through approval_hooks
     from .approval import ApprovalService
@@ -107,7 +107,7 @@ async def insert_hired_agent(session: AsyncSession, company_id: uuid.UUID, hire:
     )
     await session.flush()
     # Auto-provision a budget row for the newly hired agent (GH#9901); idempotent.
-    await BudgetService().provision_budget(session, hire.agent_id, str(company_id))
+    await get_budget_service().provision_budget(session, hire.agent_id, str(company_id))
     return node_id
 
 

@@ -119,15 +119,13 @@
                   <span v-if="step.started_at"><Icon name="play" /> {{ formatTime(step.started_at) }}</span>
                   <span v-if="step.completed_at"><Icon name="check" /> {{ formatTime(step.completed_at) }}</span>
                 </div>
-                <!-- Approval Actions -->
-                <div v-if="step.status === 'waiting_approval' && step.requires_confirmation" class="step-actions">
-                  <BaseButton variant="success" size="xs" @click="$emit('approve-step', currentWorkflow.workflow_id, step.step_id)">
-                    <Icon name="check" /> {{ $t('workflow.runner.approve') }}
-                  </BaseButton>
-                  <BaseButton variant="secondary" size="xs" @click="$emit('skip-step', currentWorkflow.workflow_id, step.step_id)">
-                    <Icon name="forward" /> {{ $t('workflow.runner.skip') }}
-                  </BaseButton>
-                </div>
+                <StepApprovalCard
+                  v-if="step.status === 'waiting_approval'"
+                  :step="step"
+                  :workflow-id="currentWorkflow.workflow_id"
+                  :approve="approveStep"
+                  :skip="skipStep"
+                />
                 <!-- Execution Result -->
                 <div v-if="step.execution_result" class="step-result" :class="{ error: step.status === 'failed' }">
                   <pre>{{ formatResult(step.execution_result) }}</pre>
@@ -163,15 +161,14 @@ import { BaseBadge, BaseModal, RiskBadge, BaseButton } from '@autobot/ui'
 import { ref, computed } from 'vue';
 import type { ActiveWorkflow } from '@/composables/useWorkflowBuilder';
 import WorkflowNotificationConfig from './WorkflowNotificationConfig.vue';
+import StepApprovalCard, { type StepAnswer } from './StepApprovalCard.vue';
 
-const props = defineProps<{ workflows: ActiveWorkflow[]; currentWorkflow: ActiveWorkflow | null; loading: boolean }>();
+const props = defineProps<{ workflows: ActiveWorkflow[]; currentWorkflow: ActiveWorkflow | null; loading: boolean; approveStep: StepAnswer; skipStep: StepAnswer }>();
 const emit = defineEmits<{
   (e: 'start-workflow', id: string): void;
   (e: 'pause-workflow', id: string): void;
   (e: 'resume-workflow', id: string): void;
   (e: 'cancel-workflow', id: string): void;
-  (e: 'approve-step', wfId: string, stepId: string): void;
-  (e: 'skip-step', wfId: string, stepId: string): void;
   (e: 'refresh'): void;
 }>();
 
@@ -330,7 +327,6 @@ function formatResult(result: Record<string, unknown>): string {
 .step-meta { display: flex; gap: var(--spacing-3); font-size: var(--text-xs); color: var(--text-tertiary); }
 .step-meta span { display: flex; align-items: center; gap: var(--spacing-1); }
 
-.step-actions { display: flex; gap: var(--spacing-2); margin-top: var(--spacing-3); padding-top: var(--spacing-3); border-top: 1px solid var(--border-default); }
 .step-result { margin-top: var(--spacing-3); padding: var(--spacing-2-5); background: var(--bg-tertiary); border-radius: var(--radius-default); }
 .step-result.error { background: var(--color-error-bg); }
 .step-result pre { margin: var(--spacing-0); font-size: var(--text-xs); color: var(--text-secondary); white-space: pre-wrap; word-break: break-all; max-height: 150px; overflow-y: auto; }
