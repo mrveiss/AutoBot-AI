@@ -110,8 +110,9 @@ _SCRIPT_LITERAL = re.compile(
 )
 #: A number with a time unit, `1h`, `24h`, `7d`, `30 min` -- but only after `label:` (#20765). A general
 #: unit shape would flag `viewMode === '3d'`; `label:` is the one key whose value is always shown. A
-#: whole-tree measurement found these four sites and no other `label:` time value (0 false positives).
-_LABEL_TIME_LITERAL = re.compile(r"""\blabel:\s*([`'"])(\d+\s?(?:ms|s|min|m|h|d|w))\1""")
+#: whole-tree measurement found these four sites and no other `label:` time value (0 false positives,
+#: also for a quoted `'label'` key and a fractional `1.5h`).
+_LABEL_TIME_LITERAL = re.compile(r"""(?<!\w)['"]?label['"]?\s*:\s*([`'"])(\d+(?:\.\d+)?\s?(?:ms|s|min|m|h|d|w))\1""")
 
 
 def _script_texts(source: str) -> list[str]:
