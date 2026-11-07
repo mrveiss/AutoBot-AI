@@ -43,7 +43,8 @@ def _python_files(root: Path) -> list[str]:
 REACH = declare(
     "no-in-repo-log-path-20894",
     discover=_python_files,
-    floor=4005,  # live population of tracked non-test .py when pinned
+    floor=4005,  # pin while the guard is new (#19676); growth absorbs main merges between repins
+    growth=400,
     what="tracked non-test python files",
 )
 

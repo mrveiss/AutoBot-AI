@@ -9,6 +9,7 @@ Issue: #7458
 """
 
 import os
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -24,7 +25,16 @@ os.environ.setdefault("AUTOBOT_FRONTEND_SERVED_BY", "vite")
 
 # No test run writes logs into the source tree (#20894): one temp log directory for the whole run,
 # inherited by every subprocess a test starts (repo_tests/_reach_base.py base checkouts included).
-os.environ.setdefault("AUTOBOT_LOGS_DIR", tempfile.mkdtemp(prefix="autobot-logs-"))
+os.environ.setdefault("AUTOBOT_TESTING", "1")  # the explicit "this is a test run" flag (autobot_shared/log_dir.py)
+_RUN_LOGS_DIR = tempfile.mkdtemp(prefix="autobot-logs-")
+os.environ.setdefault("AUTOBOT_LOGS_DIR", _RUN_LOGS_DIR)
+
+
+def pytest_sessionfinish(session, exitstatus) -> None:
+    """Remove the run's temp log directory (#20894); xdist workers share the controller's via env, so
+    only the process that created it removes it."""
+    if os.environ.get("AUTOBOT_LOGS_DIR") == _RUN_LOGS_DIR and not os.environ.get("PYTEST_XDIST_WORKER"):
+        shutil.rmtree(_RUN_LOGS_DIR, ignore_errors=True)
 
 # Repo-wide sys.modules leak guard (#13337). Declared here — the rootdir
 # conftest is the only conftest where ``pytest_plugins`` is still legal in

@@ -23,7 +23,6 @@ import functools
 import logging
 import os
 import shutil
-import sys
 import tempfile
 from pathlib import Path
 
@@ -36,8 +35,13 @@ _warned_alias = False
 
 
 def _under_pytest() -> bool:
-    """True inside a test run (a pytest process, or a subprocess that opted in)."""
-    return "pytest" in sys.modules or "PYTEST_CURRENT_TEST" in os.environ or "AUTOBOT_TESTING" in os.environ
+    """True inside a test run: pytest is executing a test, or the run opted in with ``AUTOBOT_TESTING``.
+
+    Not ``"pytest" in sys.modules``: a service that merely imports pytest (a plugin, a test helper) would
+    then log to a throwaway temp dir. The root conftest sets ``AUTOBOT_TESTING`` so collection-time and
+    subprocess callers agree.
+    """
+    return "PYTEST_CURRENT_TEST" in os.environ or bool(os.environ.get("AUTOBOT_TESTING"))
 
 
 @functools.lru_cache(maxsize=1)
