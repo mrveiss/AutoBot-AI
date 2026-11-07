@@ -109,6 +109,43 @@ def test_a_stub_reinstalled_outside_its_first_owners_tree_is_blamed_on_the_reins
     assert guard._tracked["agents"].owner.endswith("lifespan_test.py")
 
 
+def test_the_remembered_owner_follows_the_latest_reinstaller(guard):
+    """After an out-of-tree reinstatement the new owner is remembered, so its own later reinstatement is not a leak."""
+    stub = types.ModuleType("agents")
+    _install("agents", stub)
+    guard.attribute(_LLC_CONFTEST)
+    del sys.modules["agents"]
+    guard.attribute(_LLC_CONFTEST)
+    _install("agents", stub)
+    guard.attribute(_OTHER_MODULE)
+    del sys.modules["agents"]
+    guard.attribute(_OTHER_MODULE)
+    _install("agents", stub)
+    guard.attribute(_OTHER_MODULE)
+
+    assert guard._first_owner["agents"][0].owner.endswith("lifespan_test.py")
+    assert guard._tracked["agents"] is guard._first_owner["agents"][0]
+
+
+def test_a_module_that_cannot_be_weakly_referenced_never_matches_a_remembered_owner():
+    """``weakref.ref`` raises ``TypeError`` for some objects; the fallback must not raise, and never claims a match."""
+    plain = object()
+    with pytest.raises(TypeError):
+        guard_module.weakref.ref(plain)
+    assert guard_module._weak(plain)() is None
+    stub = types.ModuleType("agents")
+    assert guard_module._weak(stub)() is stub
+
+
+def test_a_non_weakreferenceable_sys_modules_value_is_attributed_without_raising(guard):
+    class _Slotted:
+        __slots__ = ()
+
+    _install("agents", _Slotted())
+    guard.attribute(_LLC_CONFTEST)  # must not raise from the owner bookkeeping
+    assert guard._first_owner["agents"][1]() is None
+
+
 def test_reports_a_replaced_real_module(guard):
     """The #13324 shape: ``autobot_shared`` swapped for a bare MagicMock."""
     _install("autobot_shared", types.ModuleType("autobot_shared"))

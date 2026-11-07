@@ -88,7 +88,7 @@ import warnings
 import weakref
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator
+from typing import Callable, Iterator
 
 import pytest
 from repo_tests._paths import repo_root
@@ -271,6 +271,14 @@ def _is_synthetic(module: object) -> bool:
     return getattr(module, "__spec__", None) is None
 
 
+def _weak(module: object):
+    """A weak reference to *module*; one that cannot be weakly referenced never matches (the owner is re-derived)."""
+    try:
+        return weakref.ref(module)
+    except TypeError:
+        return lambda: None
+
+
 def _previous_kind(previous: object) -> str:
     """Describe what a key held before the mutation, for the report (#13651)."""
     if previous is _MISSING:
@@ -433,17 +441,13 @@ class _LeakGuard:
     def __init__(self, rootdir: Path, removal_candidates: frozenset[str] = frozenset()) -> None:
         self._rootdir = rootdir
         self._baseline: dict[str, object] = {}
-        # Only the owners the shrink check may fire on are worth watching; the
-        # rest are on the allowlist and nothing this session sees can move them.
+        # Only the owners the shrink check may fire on are worth watching (the rest are allowlisted).
         self._removal_candidates = removal_candidates
-        # Their basenames, so the visit check can reject the overwhelming
-        # majority of nodes — every directory and every unrelated module — on
-        # one set lookup instead of building a repo-relative display path for
-        # each of the thousands of collectors a session brackets.
+        # Their basenames: one set lookup rejects nearly every collector without building a display path.
         self._candidate_names = {Path(owner).name for owner in removal_candidates}
         self._tracked: dict[str, _Mutation] = {}
         # withdrawn and put back inside its owner's tree, a stub keeps its owner (weakref: ids get reused)
-        self._first_owner: dict[str, tuple[_Mutation, weakref.ref]] = {}
+        self._first_owner: dict[str, tuple[_Mutation, Callable[[], object]]] = {}
         # name -> why the synthetic->genuine exemption was refused (#13651)
         self._exempt_blocked: dict[str, str] = {}
         self._reported: set[tuple[str, str]] = set()
@@ -513,23 +517,17 @@ class _LeakGuard:
                 + (f" [exempt-refused: {self._exempt_blocked[name]}]" if name in self._exempt_blocked else ""),
                 owner_ancestors=owner_ancestors,
             )
-            if first is None or ref() is not module:
-                self._first_owner[name] = (mutation, weakref.ref(module))
+            self._first_owner[name] = (mutation, _weak(module))  # the latest owner, so a later reinstatement matches it
 
     def _matches_baseline(self) -> bool:
         """True when nothing in ``sys.modules`` moved since the last baseline.
 
-        Most collectors import nothing — every ``Class`` node, every directory
-        that only lists its children — and this answers them with one C-level
-        dict comparison instead of a copy plus a Python pass over every entry
-        (0.065 ms against 0.390 ms at 3600 entries).  Under xdist every worker
-        collects the whole suite, so this is the guard's most repeated call.
+        Most collectors import nothing (every ``Class`` node, every directory that only lists its
+        children); one C-level dict comparison answers them (0.065 ms against 0.390 ms at 3600 entries).
 
-        CPython compares dict values with an identity short-circuit, so equal
-        entries never reach a user-defined ``__eq__``.  A *differing* entry
-        can, a Python ``__eq__`` can release the GIL, and a concurrent import
-        then makes the comparison raise; falling back to ``False`` runs the
-        full copy-and-scan below, which is the correct answer either way.
+        CPython compares dict values with an identity short-circuit, so equal entries never reach a
+        user-defined ``__eq__``. A *differing* entry can, and a concurrent import then makes the
+        comparison raise; ``False`` runs the full copy-and-scan below, the correct answer either way.
         """
         try:
             return sys.modules == self._baseline

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -14,7 +15,9 @@ from autobot_shared.isolated_git import git, make_repo
 from services.rollback_migrations import (
     BLOCKED,
     CLEAR,
+    ROLLBACK_STATEMENT_TIMEOUT_MS,
     UNKNOWN,
+    _bound_statements,
     check_migrations,
     parse_backend_revisions,
     parse_slm_migrations,
@@ -130,3 +133,21 @@ def test_parsers_read_literals_without_executing_anything():
     assert parse_slm_migrations("OTHER = []\n") is None
     out = 'revision: str = "abc"\nrevision = \'def\'\ndown_revision = "zzz"\nx/some-revision.py:revision = "q"\n'
     assert parse_backend_revisions(out) == ["abc", "def", "q"]
+
+
+def test_each_migration_read_is_bounded_by_the_env_backed_statement_timeout():
+    conn = MagicMock()  # a psycopg2 connection (sync DB-API), not an AsyncSession
+    _bound_statements(conn)
+    cursor = conn.cursor.return_value.__enter__.return_value
+    sql, params = cursor.execute.call_args.args
+    assert "statement_timeout" in sql and params == (str(ROLLBACK_STATEMENT_TIMEOUT_MS),)
+
+
+def test_the_statement_timeout_comes_from_the_environment_and_is_clamped(monkeypatch):
+    from autobot_shared.env_utils import env_int_clamped
+
+    monkeypatch.setenv("SLM_ROLLBACK_STATEMENT_TIMEOUT_MS", "2500")
+    assert env_int_clamped("SLM_ROLLBACK_STATEMENT_TIMEOUT_MS", 10000, 1000, 300000) == 2500
+    monkeypatch.setenv("SLM_ROLLBACK_STATEMENT_TIMEOUT_MS", "0")
+    assert env_int_clamped("SLM_ROLLBACK_STATEMENT_TIMEOUT_MS", 10000, 1000, 300000) == 1000
+    assert 1000 <= ROLLBACK_STATEMENT_TIMEOUT_MS <= 300000

@@ -565,6 +565,7 @@ appears outside the known overlays.
 | `SLM_REPO_PATH` | slm | str | `'/opt/autobot/code_source'` | The SLM's code_source git CHECKOUT (the directory holding .git), never the install root that contains it (default: fleet_constants.FLEET_CODE_SOURCE_DIR). Read once, in services/git_tracker.py as DEFAULT_REPO_PATH; drift checks, packaging and the python-provision playbook path all resolve under it. The provision sudoers rule does not follow an override (#19204), so leave it at the default unless that rule is changed too (#15708). |
 | `SLM_ROLLBACK_CANDIDATE_LIMIT` | slm | int | `50` | Newest commits the rollback picker offers (services/rollback_commits.py). Range: 1–500. |
 | `SLM_ROLLBACK_ENABLED` | slm | bool | false | Offer the SLM rollback to an earlier commit (api/code_rollback.py). Off until a host test. |
+| `SLM_ROLLBACK_STATEMENT_TIMEOUT_MS` | slm | int | `10000` | Server-side statement timeout (ms) for the rollback's migration reads (rollback_migrations.py). Range: 1000–300000. |
 | `SLM_SECRET_KEY` | slm | str | `""` | SLM JWT signing secret. Empty and unset are equivalent (both mean not configured). |
 | `SLM_STALE_COMPONENTS_SCAN_TIMEOUT_SECONDS` | slm | int | `300` | Seconds /code-sync/status waits on a drift scan before serving the last result (#20250). |
 | `SLM_UPDATE_PROGRESS_STALL_SECONDS` | slm | int | `600` | Seconds a live self-update's log may stay still before the page reports it as quiet (#20254). |

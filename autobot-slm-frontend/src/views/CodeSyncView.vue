@@ -816,9 +816,9 @@ async function handleUpdateAll(): Promise<void> {
   }
 }
 
-// Follow the update-all job that is already running: on mount, and when a rollback (#20214) starts one
-async function adoptRunningUpdateAllJob(): Promise<void> {
-  const result = await codeSync.getUpdateAllStatus()
+// Follow the update-all job: the running one on mount, or the one a rollback just started (#20214, no re-fetch)
+async function adoptRunningUpdateAllJob(started?: UpdateAllJob): Promise<void> {
+  const result = started ?? (await codeSync.getUpdateAllStatus())
   if (result === undefined || result === null || result === UPDATE_ALL_UNAUTHENTICATED) {
     return
   }

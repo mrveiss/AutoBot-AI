@@ -42,7 +42,6 @@ from services.rollback_commits import ROLLBACK_SUPPORT_PATH  # noqa: E402
 from services.rollback_migrations import BLOCKED, CLEAR, MigrationCheck  # noqa: E402
 
 USER = {"sub": "alice"}
-DEPLOYED = "d" * 40
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -72,7 +71,7 @@ def world(tmp_path, monkeypatch):
     side = _commit(root, "d")
     tracker = SimpleNamespace(repo_path=str(root), remote="origin", branch="main")
     monkeypatch.setattr(cs, "_get_tracker_for_db", AsyncMock(return_value=tracker))
-    monkeypatch.setattr(cs, "_get_slm_deployed_commit", AsyncMock(return_value=DEPLOYED))
+    monkeypatch.setattr(cs, "_get_slm_deployed_commit", AsyncMock(return_value=third))  # the SLM runs the branch head
     events: list = []
     monkeypatch.setattr(api_rb, "verify_internal_api_key", lambda key: False)
 
@@ -105,7 +104,7 @@ async def test_picker_lists_ancestors_with_dates_and_subjects_and_marks_nothing_
     assert [c.commit for c in result.commits] == [world.third, world.second, world.first]
     assert [c.subject for c in result.commits][0] == "change c"
     assert all(c.date and c.short == c.commit[:12] for c in result.commits)
-    assert result.branch == "main" and result.deployed_commit == DEPLOYED
+    assert result.branch == "main" and result.deployed_commit == world.third
 
 
 async def test_a_clear_path_starts_and_the_run_is_handed_the_chosen_commit(world):
@@ -268,7 +267,25 @@ def test_the_routes_answer_403_while_rollback_is_off(monkeypatch):
     monkeypatch.delenv("SLM_ROLLBACK_ENABLED", raising=False)
     with pytest.raises(HTTPException) as err:
         api_rb.require_rollback_enabled()
-    assert err.value.status_code == 403 and "not enabled" in err.value.detail
+    assert err.value.status_code == 403 and err.value.detail["code"] == "rollback_feature_disabled"
     monkeypatch.setenv("SLM_ROLLBACK_ENABLED", "true")
     api_rb.require_rollback_enabled()
     assert any(d.dependency is api_rb.require_rollback_enabled for d in api_rb.router.dependencies)
+
+
+async def test_a_commit_newer_than_the_deployed_one_is_not_offered_and_is_refused(world, monkeypatch):
+    monkeypatch.setattr(cs, "_get_slm_deployed_commit", AsyncMock(return_value=world.second))
+    offered = await api_rb.rollback_candidates(None, USER)
+    assert [c.commit for c in offered.commits] == [world.second, world.first]
+    with pytest.raises(HTTPException) as err:
+        await _post(world.third)
+    assert err.value.status_code == 400 and "not earlier" in err.value.detail
+    assert not [e for e in world.events if e[0] == "start"]
+
+
+async def test_an_unknown_deployed_commit_offers_and_allows_nothing(world, monkeypatch):
+    monkeypatch.setattr(cs, "_get_slm_deployed_commit", AsyncMock(return_value=None))
+    assert (await api_rb.rollback_candidates(None, USER)).commits == []
+    with pytest.raises(HTTPException) as err:
+        await _post(world.second)
+    assert err.value.status_code == 400

@@ -29,6 +29,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable
 
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from services.git_subprocess import run_git_capture
 from services.rollback_target import is_full_sha
@@ -43,6 +44,9 @@ BLOCKED = "blocked"
 UNKNOWN = "unknown"
 
 _CONNECT_TIMEOUT_S = 5
+#: Server-side bound on each migration read, so a locked ``alembic_version`` / ``migrations_applied`` returns an
+#: unknown-state refusal instead of holding a connection and a worker thread. Env-backed; clamped to 1s..5min.
+ROLLBACK_STATEMENT_TIMEOUT_MS = env_int_clamped("SLM_ROLLBACK_STATEMENT_TIMEOUT_MS", 10000, 1000, 300000)
 _LIBPQ_DRIVER = "postgresql"  # libpq takes a plain scheme; the deployment URL may carry an asyncpg/psycopg driver
 _REVISION_LINE = re.compile(r"""(?:^|:)revision\b[^=\n]*=\s*(['"])([^'"\n]+)\1""")
 
@@ -125,6 +129,12 @@ def judge(database: str, applied: list[str] | None, target: list[str] | None, wh
     return MigrationCheck(database, CLEAR, message=f"No {database} migration is in the way.")
 
 
+def _bound_statements(conn) -> None:
+    """Make every statement on ``conn`` fail after ``ROLLBACK_STATEMENT_TIMEOUT_MS``."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT set_config('statement_timeout', %s, false)", (str(ROLLBACK_STATEMENT_TIMEOUT_MS),))
+
+
 async def read_applied_slm() -> list[str]:
     """Names in the SLM database's ``migrations_applied`` table."""
     from migrations import runner
@@ -132,6 +142,7 @@ async def read_applied_slm() -> list[str]:
     def _read() -> list[str]:
         conn = runner.get_connection(timeout=_CONNECT_TIMEOUT_S)
         try:
+            _bound_statements(conn)
             return runner.get_applied_migrations(conn)
         finally:
             conn.close()
@@ -155,6 +166,7 @@ async def read_applied_backend() -> list[str]:
     def _read() -> list[str]:
         conn = psycopg2.connect(url, connect_timeout=_CONNECT_TIMEOUT_S)
         try:
+            _bound_statements(conn)
             with conn.cursor() as cur:
                 cur.execute("SELECT version_num FROM alembic_version")
                 return [row[0] for row in cur.fetchall()]
