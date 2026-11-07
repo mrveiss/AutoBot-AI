@@ -34,9 +34,16 @@ def _load_entries(root: Path) -> dict[str, dict]:
     return json.loads((root / _MAP).read_text(encoding="utf-8"))
 
 
+def _resolves_inside_src(root: Path, name: str) -> bool:
+    """True when *name* is an existing file whose resolved path stays inside ``src`` (no ``../`` escape)."""
+    src = (root / _SRC).resolve()
+    target = (root / _SRC / name).resolve()
+    return target.is_relative_to(src) and target.is_file()
+
+
 def _entries_naming_missing_files(entries: dict[str, dict], root: Path) -> dict[str, str]:
-    """Entry key -> file, for every entry whose component is not under ``src``."""
-    return {key: entry["file"] for key, entry in entries.items() if not (root / _SRC / entry["file"]).is_file()}
+    """Entry key -> file, for every entry whose component is not a file inside ``src`` (#20723)."""
+    return {key: entry["file"] for key, entry in entries.items() if not _resolves_inside_src(root, entry["file"])}
 
 
 def test_the_map_is_not_vacuous() -> None:
@@ -65,3 +72,11 @@ def test_the_detector_discriminates(tmp_path: Path) -> None:
         "bbbb0002": {"id": "icons-bbbb0002", "category": "icons", "file": "components/Gone.vue"},
     }
     assert _entries_naming_missing_files(entries, tmp_path) == {"bbbb0002": "components/Gone.vue"}
+
+
+def test_an_entry_escaping_src_is_listed(tmp_path: Path) -> None:
+    """#20723 negative fixture: a ``../`` path to a file that exists outside ``src`` must not count as present."""
+    (tmp_path / _SRC).mkdir(parents=True)
+    (tmp_path / _FRONTEND / "outside.vue").write_text("<template/>", encoding="utf-8")
+    entries = {"cccc0003": {"id": "icons-cccc0003", "category": "icons", "file": "../outside.vue"}}
+    assert _entries_naming_missing_files(entries, tmp_path) == {"cccc0003": "../outside.vue"}
