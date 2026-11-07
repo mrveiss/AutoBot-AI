@@ -146,7 +146,7 @@ class AgentLoop:
 
     STILL UNPORTED: everything else in the guard stack — schema self-correction
     (``max_schema_retries``), the approval workflow fields, and the belief-state
-    and planning machinery — remains dormant here.
+    machinery — remains dormant here. Planning has its own graph node (#21023).
     """
 
     def __init__(

@@ -13,12 +13,6 @@ PORTED TO THE CHAT GRAPH (maintainer decision 2026-11-07, #20846): the chat grap
 escalation are ported as graph nodes (#21023, #21022). ``AgentLoop`` is never
 instantiated in production; whether to retire it is #21025.
 
-NOT WIRED IN PRODUCTION (#11221): ``AgentLoop`` is never instantiated by any
-production caller — the live tool seam is ``chat_workflow._dispatch_tool_call``.
-Submodules here (belief_state, extractors, guards) ARE reused by other
-subsystems, but the loop orchestrator itself is dormant, so anything wired only
-into it is inert. See ``AgentLoop``'s docstring for details.
-
 The Agent Loop:
     1. ANALYZE EVENTS    → Understand state from event stream
     2. SELECT TOOLS      → Choose based on plan + knowledge
