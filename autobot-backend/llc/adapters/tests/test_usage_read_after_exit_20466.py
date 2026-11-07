@@ -10,10 +10,12 @@ covered: the actual claude CLI, and _invoke (the state file is built with the ad
 own _build_state from the spawned process instead).
 """
 
+import asyncio
 import json
 import sys
 from unittest.mock import AsyncMock, patch
 
+import psutil
 import pytest
 
 from llc.adapters.claude_code_adapter import ClaudeCodeAdapter, _state_path
@@ -35,6 +37,14 @@ _CHILD = (
 )
 
 
+def _alive(pid: int) -> bool:
+    """True while the child is a running process (a zombie awaiting reaping has already exited)."""
+    try:
+        return psutil.Process(pid).status() != psutil.STATUS_ZOMBIE
+    except psutil.NoSuchProcess:
+        return False
+
+
 async def _spawn_run(tmp_path, adapter):
     out = tmp_path / "out.jsonl"
     with open(out, "w", encoding="utf-8") as fh:
@@ -54,15 +64,15 @@ async def test_status_is_running_while_alive_and_usage_arrives_only_after_exit(t
     polls: list[tuple[bool, object]] = []
 
     async def status(c, r):
-        alive = proc.returncode is None
+        before = _alive(proc.pid)
         res = await adapter.status(c, r)
-        polls.append((alive, res))
+        polls.append((before and _alive(proc.pid), res))  # live only if alive on BOTH sides of the call
         return res
 
     wrapped = AsyncMock()
     wrapped.status = status
     with patch.object(hbs, "_ADAPTER_POLL_INTERVAL", 0.1):
-        result = await hbs._await_adapter_completion(wrapped, cfg, run_id)
+        result = await asyncio.wait_for(hbs._await_adapter_completion(wrapped, cfg, run_id), timeout=30)
     await proc.wait()
 
     live = [res for alive, res in polls if alive]
