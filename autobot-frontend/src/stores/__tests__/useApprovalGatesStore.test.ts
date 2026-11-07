@@ -7,12 +7,14 @@ import { flushPromises } from '@vue/test-utils'
 
 const get = vi.fn()
 const post = vi.fn()
-let handler: ((event: { event_type: string }) => void) | null = null
-const unsubscribe = vi.fn()
-const subscribe = vi.fn((_channel: string, cb: typeof handler) => {
-  handler = cb
-  return unsubscribe
-})
+type Handler = (event: { event_type: string }) => void
+const live = vi.hoisted(() => ({ handler: null as Handler | null, unsubscribe: vi.fn() }))
+const subscribe = vi.hoisted(() =>
+  vi.fn((_channel: string, cb: Handler) => {
+    live.handler = cb
+    return live.unsubscribe
+  }),
+)
 
 vi.mock('@/plugins/api', () => ({ useApiClient: () => ({ get, post }) }))
 vi.mock('@/services/LiveEventService', () => ({ default: { subscribe } }))
@@ -29,8 +31,8 @@ beforeEach(() => {
   get.mockReset().mockResolvedValue([ROW])
   post.mockReset().mockResolvedValue({})
   subscribe.mockClear()
-  unsubscribe.mockClear()
-  handler = null
+  live.unsubscribe.mockClear()
+  live.handler = null
 })
 
 describe('useApprovalGatesStore (#20917)', () => {
@@ -51,7 +53,7 @@ describe('useApprovalGatesStore (#20917)', () => {
       await store.start()
       get.mockClear()
       get.mockResolvedValue([])
-      handler!({ event_type: eventType })
+      live.handler!({ event_type: eventType })
       await flushPromises()
       expect(get).toHaveBeenCalledTimes(1)
       expect(store.count).toBe(0)
@@ -61,7 +63,7 @@ describe('useApprovalGatesStore (#20917)', () => {
   it('does not refetch for an unrelated event (control)', async () => {
     await useApprovalGatesStore().start()
     get.mockClear()
-    handler!({ event_type: 'provider_fallback' })
+    live.handler!({ event_type: 'provider_fallback' })
     await flushPromises()
     expect(get).not.toHaveBeenCalled()
   })
@@ -89,7 +91,7 @@ describe('useApprovalGatesStore (#20917)', () => {
     const store = useApprovalGatesStore()
     await store.start()
     store.stop()
-    expect(unsubscribe).toHaveBeenCalled()
+    expect(live.unsubscribe).toHaveBeenCalled()
     expect(store.count).toBe(0)
   })
 })
