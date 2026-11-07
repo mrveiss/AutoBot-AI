@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
-from code_intelligence.python_files import collect_python_files, is_excluded
+from code_intelligence.python_files import cache_covers_exclusions, collect_python_files, is_excluded
 from code_intelligence.similarity_thresholds import SIMILARITY_MEDIUM
 
 from .detectors import (
@@ -404,12 +404,13 @@ class AntiPatternSuiteAnalyzer(SemanticAnalysisMixin):
         Get all Python files in directory using async cache.
 
         Issue #607: Uses shared FileListCache for performance optimization.
-        Filters results by exclude_dirs after cache lookup.
+        Filters by exclude_dirs after lookup; walks instead if the cache's SKIP_DIRS
+        filter is not implied by exclude_dirs, so both paths share one rule.
         """
         dir_path = Path(directory)
 
-        # Use shared cache if available
-        if self.use_shared_cache:
+        # Shared cache only when its fixed SKIP_DIRS filter equals exclude_dirs' (#20493)
+        if self.use_shared_cache and cache_covers_exclusions(self.exclude_dirs):
             all_files = await get_cached_python_files(dir_path)
             python_files = [str(f) for f in all_files if not is_excluded(f, dir_path, self.exclude_dirs)]
             return sorted(python_files)
@@ -496,6 +497,7 @@ class AntiPatternSuiteAnalyzer(SemanticAnalysisMixin):
             summary=self._calculate_summary(patterns),
             severity_distribution=self._calculate_severity_distribution(patterns),
             files_failed=files_failed,
+            cap_applied=False,  # discovery applies no file cap
         )
 
     async def _analyze_directory_with_cache(self, directory: str) -> AnalysisReport:
@@ -649,16 +651,7 @@ class AntiPatternSuiteAnalyzer(SemanticAnalysisMixin):
             return False
 
         cache_key = self._generate_content_hash(directory)
-        report_dict = (
-            report.to_dict()
-            if hasattr(report, "to_dict")
-            else {
-                "scan_path": report.scan_path,
-                "total_files": report.total_files,
-                "anti_patterns": [p.to_dict() for p in report.anti_patterns],
-                "summary": report.summary,
-            }
-        )
+        report_dict = report.to_dict()
 
         return await self._cache_result(
             key=cache_key,

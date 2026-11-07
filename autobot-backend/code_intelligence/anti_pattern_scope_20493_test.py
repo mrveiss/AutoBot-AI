@@ -71,3 +71,27 @@ def test_scope_is_stated(tree: Path):
     assert out["files_failed"] == 1
     assert out["files_examined"] == 3
     assert out["cap_applied"] is False
+
+
+def test_files_failed_on_cached_path(tree: Path):
+    a = AntiPatternSuiteAnalyzer()
+    report = asyncio.run(a._analyze_directory_with_cache(str(tree)))
+    assert report.total_files == 4
+    assert report.files_failed == 1
+    assert report.to_dict()["files_examined"] == 3
+
+
+def test_custom_exclude_dirs_agree_across_paths(tree: Path):
+    """exclude_dirs omitting a SKIP_DIRS name is authoritative on both paths."""
+    a = AntiPatternSuiteAnalyzer(exclude_dirs=["pkg"])  # node_modules NOT excluded
+    sync_files = a._get_python_files(str(tree))
+    cached_files = asyncio.run(a._get_python_files_async(str(tree)))
+    rel = {Path(f).relative_to(tree).as_posix() for f in sync_files}
+    assert rel == {"top.py", "node_modules/x.py"}
+    assert sync_files == cached_files
+
+
+def test_out_of_root_path_is_excluded(tmp_path: Path):
+    from code_intelligence.python_files import is_excluded
+
+    assert is_excluded(Path("/elsewhere/a.py"), tmp_path, ["venv"]) is True

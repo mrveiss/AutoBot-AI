@@ -55,6 +55,7 @@ class AnalysisReport:
     summary: Dict[str, int]
     severity_distribution: Dict[str, int]
     files_failed: int = 0
+    cap_applied: bool = False  # discovery has no file cap; set by the discovery code if one is added
 
     @property
     def derived_summary(self) -> Dict[str, int]:
@@ -79,7 +80,7 @@ class AnalysisReport:
         ``anti_patterns`` list that is returned, so a caller that filters the
         list can never leave the counts describing a different set (#20493).
         ``files_examined`` states how many discovered files were analysed; no
-        cap is applied to discovery (``cap_applied`` is always False).
+        cap is applied to discovery (``cap_applied`` is False).
         """
         return {
             "scan_path": self.scan_path,
@@ -89,7 +90,7 @@ class AnalysisReport:
             "anti_patterns": [p.to_dict() for p in self.anti_patterns],
             "files_examined": self.total_files - self.files_failed,
             "files_failed": self.files_failed,
-            "cap_applied": False,
+            "cap_applied": self.cap_applied,
             "summary": self.derived_summary,
             "severity_distribution": self.derived_severity_distribution,
             "total_issues": len(self.anti_patterns),
