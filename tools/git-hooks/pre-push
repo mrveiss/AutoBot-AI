@@ -288,9 +288,22 @@ machine_slot_wait() {
   command -v flock >/dev/null 2>&1 || { warn "flock is missing: this push did not queue for a machine slot"; return 0; }
   local dir="${AUTOBOT_MACHINE_SLOT_DIR:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/autobot-machine-slots-$(id -u)}"
   local i start=$SECONDS next=$SECONDS every="${AUTOBOT_MACHINE_SLOT_REPORT:-60}"
+  # The only place these defaults live (#21098); docs/developer/ENV_VARS.md lists them from the registry.
+  local slots="${AUTOBOT_MACHINE_SLOTS:-2}" max_load="${AUTOBOT_MACHINE_SLOT_MAX_LOAD:-14}"
+  local loadavg="${AUTOBOT_MACHINE_SLOT_LOADAVG:-/proc/loadavg}" load=""
   mkdir -p "$dir"
   while :; do
-    for ((i = 1; i <= ${AUTOBOT_MACHINE_SLOTS:-4}; i++)); do
+    # A slot is taken only while the 1-minute load is under the ceiling; an unreadable source never blocks.
+    load=$(awk '{print $1; exit}' "$loadavg" 2>/dev/null)
+    if [ -n "$load" ] && ! awk -v l="$load" -v m="$max_load" 'BEGIN { exit !(l < m) }'; then
+      if [ "$SECONDS" -ge "$next" ]; then
+        log "queued $((SECONDS - start))s: load $load is at or above $max_load (AUTOBOT_MACHINE_SLOT_MAX_LOAD), waiting for it to fall"
+        next=$((SECONDS + every))
+      fi
+      sleep "${AUTOBOT_MACHINE_SLOT_POLL:-5}"
+      continue
+    fi
+    for ((i = 1; i <= slots; i++)); do
       exec 9>>"$dir/slot-$i"  # Appending: opening with > would wipe a holder's name.
       if flock -n 9; then
         export AUTOBOT_MACHINE_SLOT_HELD=1
