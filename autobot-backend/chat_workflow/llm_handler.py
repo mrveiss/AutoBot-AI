@@ -17,6 +17,7 @@ from async_chat_workflow import WorkflowMessage
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
+from chat_history.rolling_summary import fold_session
 from constants.api_constants import PATH_OLLAMA_GENERATE
 from constants.model_constants import ModelConfig
 from dependencies import provide_config_manager
@@ -662,29 +663,11 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             "that printed output is what you receive back — tool-call plumbing is handled for you.\n"
         )
 
-    def _build_conversation_context(self, session: WorkflowSession) -> str:
-        """Build conversation context from recent history.
+    def _build_conversation_context(self, session: WorkflowSession, rolling_summary: str = "") -> str:
+        """Rolling summary of older turns (#20852) + the recent turns verbatim."""
+        from chat_history.rolling_summary import render_context
 
-        Issue #715: Now handles incomplete entries (empty assistant response)
-        that are registered before LLM call to fix race conditions.
-        """
-        if not session.conversation_history:
-            return ""
-
-        # Filter out incomplete entries (where assistant response is empty placeholder)
-        # These are messages currently being processed
-        complete_messages = [
-            msg
-            for msg in session.conversation_history
-            if msg.get("assistant")  # Only include if assistant response exists
-        ]
-
-        if not complete_messages:
-            return ""
-
-        context_parts = ["\n**Recent Context:**\n"]
-        context_parts.extend(f"User: {msg['user']}\nYou: {msg['assistant']}\n\n" for msg in complete_messages[-2:])
-        return "".join(context_parts)
+        return render_context(session.conversation_history, rolling_summary)
 
     async def _retrieve_knowledge_context(self, message: str, session: WorkflowSession) -> tuple:
         """Retrieve knowledge context for RAG. Returns (context, citations)."""
@@ -887,7 +870,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
 
             system_prompt = await tcs.prepend_memory_context(system_prompt, session, message, selected_model)
         system_prompt = await _emit_system_prompt_ready(system_prompt, session)
-        conversation_context = self._build_conversation_context(session)
+        conversation_context = self._build_conversation_context(session, await fold_session(session, selected_model))
 
         # Knowledge retrieval for RAG
         # Issue MVA-1992: Skip RAG when lightweight_mode=True

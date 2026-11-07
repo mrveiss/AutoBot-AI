@@ -2594,38 +2594,21 @@ async def summarize_conversation(
     if not messages_to_summarize:
         raise HTTPException(status_code=404, detail="No messages found with the provided IDs")
 
-    # Build prompt for summarization
-    conversation_text = "\n\n".join(
-        [f"{msg.get('role', 'unknown').upper()}: {msg.get('content', '')}" for msg in messages_to_summarize]
-    )
-
-    summarization_prompt = f"""Summarize the following conversation segment concisely.
-Preserve key context, decisions, and technical details that would be needed to continue the conversation naturally.
-
-Target length: approximately {body.target_length or 500} tokens.
-
-Conversation:
-{conversation_text}
-
-Summary:"""
-
-    # Get LLM service and generate summary
-    llm_service = get_llm_service()
+    # One summariser for every caller (#20852): the same ConversationSummarizer the
+    # compact hook, overflow protection and rolling chat summary use, on the
+    # configured model (no hosted-model default).
+    from chat_history.context_overflow import ConversationSummarizer
 
     try:
-        summary_response = await llm_service.generate_response(
-            messages=[{"role": "user", "content": summarization_prompt}],
-            model="gpt-4o-mini",  # Fast, cheap model for summarization
+        summary_text = await ConversationSummarizer().summarize_messages(
+            messages_to_summarize,
+            provide_config_manager().get_selected_model(),
             max_tokens=body.target_length or 500,
-            temperature=0.3,  # Lower temperature for focused summarization
         )
-
-        summary_text = summary_response.get("content", "")
-        summary_tokens = summary_response.get("usage", {}).get("total_tokens", 0)
-
     except Exception as e:
         logger.exception("[%s] Failed to generate summary", request_id)
         raise HTTPException(status_code=500, detail=f"Summarization failed: {str(e)}")
+    summary_tokens = len(summary_text) // 4  # estimate, as the summariser logs
 
     result_data = ConversationSummarizeData(
         summary=summary_text,

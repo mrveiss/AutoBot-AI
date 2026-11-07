@@ -25,6 +25,7 @@ from autobot_shared.ssot_constants import CategoryDefaults
 from autobot_shared.token_count import estimate_fast
 from autobot_shared.tool_catalogue import FILE_WRITE_TOOLS, SHELL_EXEC_TOOLS, match_tool_name
 from chat_history.message_schema import message_text
+from chat_history.summarization_prompt import SUMMARIZATION_PROMPT
 
 logger = get_logger(__name__)
 
@@ -493,31 +494,7 @@ class ConversationSummarizer:
         summary = await summarizer.summarize_messages(messages, model="gpt-4")
     """
 
-    _SUMMARIZATION_PROMPT = (
-        "You are summarizing a conversation to preserve context after compaction. "
-        "Produce a structured summary that lets the conversation continue seamlessly.\n\n"
-        "Use this format:\n\n"
-        "## Conversation Summary\n"
-        "**Turns summarized:** {{count}}\n\n"
-        "### User Goal\n"
-        "One sentence describing what the user is trying to accomplish.\n\n"
-        "### What Was Done\n"
-        "- Bullet points of completed actions, decisions made, and key outputs\n"
-        "- Include specific file paths, function names, variable names, URLs, and config values\n"
-        "- Note any errors encountered and how they were resolved\n\n"
-        "### Current State\n"
-        "What is the system/task state right now? What was the last thing discussed?\n\n"
-        "### Pending / Next Steps\n"
-        "- What remains to be done\n"
-        "- Any open questions or blockers\n\n"
-        "### Key Context\n"
-        "- Important constraints, preferences, or decisions that must not be forgotten\n"
-        "- Specific values: model names, ports, paths, credentials references, versions\n\n"
-        "Keep the summary under 1000 tokens. Be dense — every token should carry information.\n\n"
-        "Conversation to summarize:\n"
-        "{{conversation}}\n\n"
-        "Provide ONLY the structured summary above — no preamble or meta-commentary."
-    )
+    _SUMMARIZATION_PROMPT = SUMMARIZATION_PROMPT
 
     async def _get_gateway(self):
         """Return the canonical LLM service (#14840); ``llm_shared.gateway`` never existed."""
@@ -529,12 +506,20 @@ class ConversationSummarizer:
         self,
         messages: List[Dict[str, Any]],
         model_name: str,
+        prior_summary: str = "",
+        max_tokens: int = 500,
     ) -> str:
         """Generate summary of conversation messages using LLM.
+
+        This is the one summariser: the overflow protection, the compact hook,
+        the ``/chat/summarize`` endpoint and the rolling chat-history summary
+        (#20852) all call it.
 
         Args:
             messages: List of message dicts with 'sender' and 'text' fields.
             model_name: LLM model to use for summarization.
+            prior_summary: Earlier summary to fold the new messages into (rolling).
+            max_tokens: Cap on the generated summary length.
 
         Returns:
             Summary text.
@@ -549,6 +534,8 @@ class ConversationSummarizer:
         # not be relabelled "summarization failed" and retried forever (#14065).
         safe_messages = _sanitize_tool_messages(messages)
         conversation_text = self._format_messages(safe_messages)
+        if prior_summary:
+            conversation_text = f"Previous summary:\n{prior_summary}\n\nNewer turns:\n{conversation_text}"
         prompt = self._SUMMARIZATION_PROMPT.replace("{{conversation}}", conversation_text).replace(
             "{{count}}", str(len(messages))
         )
@@ -559,7 +546,7 @@ class ConversationSummarizer:
                 messages=[{"role": CategoryDefaults.ROLE_USER, "content": prompt}],
                 model_name=model_name,
                 temperature=0.3,  # Low temp for consistent summaries
-                max_tokens=500,  # Cap summary length
+                max_tokens=max_tokens,
             )
             summary = (getattr(response, "content", None) or "").strip()
         except Exception as exc:
