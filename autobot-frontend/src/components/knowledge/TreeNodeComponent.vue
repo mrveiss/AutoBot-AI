@@ -108,7 +108,7 @@
 import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { formatFileSize, formatManPageTitle } from '@/utils/formatHelpers'
+import { formatFileSize, formatManPageTitle, knowledgeNodeFactType } from '@/utils/formatHelpers'
 import VectorizationStatusBadge from './VectorizationStatusBadge.vue'
 import type { DocumentVectorizationState } from '@/composables/useKnowledgeVectorization'
 
@@ -212,7 +212,7 @@ const { t } = useI18n()
 
 // #21037: display-only man-page label; node.name stays raw for search/icons.
 const displayName = computed(() =>
-  formatManPageTitle(props.node.name, props.node.metadata?.metadata?.type, t),
+  formatManPageTitle(props.node.name, knowledgeNodeFactType(props.node.metadata), t),
 )
 
 const sizeOptions = computed(() => ({

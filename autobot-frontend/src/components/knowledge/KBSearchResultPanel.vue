@@ -67,7 +67,7 @@
           <div class="result-item-header">
             <span class="result-rank">{{ index + 1 }}</span>
             <span class="result-title">
-              {{ formatManPageTitle(result.document?.title, result.document?.type, $t) || 'Untitled' }}
+              {{ formatManPageTitle(result.document?.title, result.document?.metadata?.factType, $t) || 'Untitled' }}
             </span>
             <span
               class="result-score"
@@ -111,7 +111,7 @@
           <div class="viewer-header">
             <div class="viewer-title-row">
               <Icon name="file-alt" class="viewer-icon" />
-              <h4 class="viewer-title">{{ formatManPageTitle(activeResult.document?.title, activeResult.document?.type, $t) || 'Untitled' }}</h4>
+              <h4 class="viewer-title">{{ formatManPageTitle(activeResult.document?.title, activeResult.document?.metadata?.factType, $t) || 'Untitled' }}</h4>
             </div>
             <div class="viewer-meta">
               <span v-if="activeResult.document?.category">

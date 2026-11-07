@@ -188,7 +188,7 @@ export default {
 
 type TranslateFn = (key: string, params?: Record<string, unknown>) => string
 
-/** Fact `type` values the backend writes for man-page facts. */
+/** Fact `type` values the backend writes for man-page facts (`man_page_parser` / `knowledge_population`). */
 const MAN_PAGE_TYPES = new Set(['man_page', 'manual_page'])
 
 /** `name(N)` with an optional leading `man `; N may carry a letter suffix (3p). */
@@ -220,4 +220,16 @@ export function formatManPageTitle(
     section,
     sectionName: t(`knowledge.manSection.${section}`),
   })
+}
+
+/**
+ * The fact `type` of a knowledge-browser tree node. A node built from
+ * `GET /facts/by_category` carries the fact's metadata flat (`metadata.type`);
+ * a node lazy-loaded from `POST /search` carries the whole search hit, whose
+ * metadata is nested (`metadata.metadata.type`).
+ */
+export function knowledgeNodeFactType(metadata: { type?: unknown; metadata?: unknown } | undefined): unknown {
+  const hit = metadata?.metadata
+  if (hit && typeof hit === 'object') return (hit as { type?: unknown }).type
+  return metadata?.type
 }

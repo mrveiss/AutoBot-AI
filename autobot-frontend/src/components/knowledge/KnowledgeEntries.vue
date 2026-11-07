@@ -186,7 +186,7 @@
               />
             </td>
             <td class="title-cell" @click="viewEntry(entry)">
-              <span class="entry-title">{{ formatManPageTitle(entry.title, entry.type, $t) || $t('knowledge.entries.untitled') }}</span>
+              <span class="entry-title">{{ formatManPageTitle(entry.title, entry.metadata?.factType, $t) || $t('knowledge.entries.untitled') }}</span>
               <span
                 v-if="getVerificationStatus(entry)"
                 class="provenance-dot"
@@ -295,7 +295,7 @@
         <div class="entry-metadata">
           <div class="meta-item">
             <label>{{ $t('knowledge.entries.titleLabel') }}</label>
-            <span>{{ formatManPageTitle(currentEntry.title, currentEntry.type, $t) || $t('knowledge.entries.untitled') }}</span>
+            <span>{{ formatManPageTitle(currentEntry.title, currentEntry.metadata?.factType, $t) || $t('knowledge.entries.untitled') }}</span>
           </div>
           <div class="meta-item">
             <label>{{ $t('knowledge.entries.categoryViewLabel') }}</label>
@@ -596,7 +596,7 @@ const selectedBulkEditEntries = computed<BulkEditEntry[]>(() => {
     .filter(doc => selection.isSelected(doc))
     .map(doc => ({
       id: doc.id,
-      title: formatManPageTitle(doc.title, doc.type, t) || t('knowledge.entries.untitled'),
+      title: formatManPageTitle(doc.title, doc.metadata?.factType, t) || t('knowledge.entries.untitled'),
       category: doc.category,
       tags: doc.tags
     }))

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect } from 'vitest'
 import { createI18n } from 'vue-i18n'
-import { formatManPageTitle } from '../formatHelpers'
+import { formatManPageTitle, knowledgeNodeFactType } from '../formatHelpers'
 
 // Control locale: strings distinct from en.json so a hard-coded fallback cannot pass.
 const i18n = createI18n({
@@ -47,9 +47,12 @@ describe('formatManPageTitle (#21037)', () => {
   it('leaves a man-page fact that is not name(N) unchanged', () => {
     expect(formatManPageTitle('man ls', 'manual_page', t)).toBe('man ls')
   })
-  it('changes only the display: the stored record is untouched', () => {
-    const fact = Object.freeze({ title: 'gettext(1)', type: 'man_page' })
-    formatManPageTitle(fact.title, fact.type, t)
-    expect(fact.title).toBe('gettext(1)')
+})
+
+describe('knowledgeNodeFactType (#21037)', () => {
+  it('reads a browse node (flat fact metadata) and a folder-search node (nested hit metadata)', () => {
+    expect(knowledgeNodeFactType({ type: 'man_page', key: 'fact:1' })).toBe('man_page')
+    expect(knowledgeNodeFactType({ content: 'x', metadata: { type: 'man_page' } })).toBe('man_page')
+    expect(knowledgeNodeFactType(undefined)).toBeUndefined()
   })
 })

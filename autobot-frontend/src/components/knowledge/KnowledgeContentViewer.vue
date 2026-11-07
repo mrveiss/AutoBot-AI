@@ -64,7 +64,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import { BaseButton } from '@autobot/ui'
 import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
-import { formatDate, formatFileSize, formatManPageTitle } from '@/utils/formatHelpers'
+import { formatDate, formatFileSize, formatManPageTitle, knowledgeNodeFactType } from '@/utils/formatHelpers'
 import { useI18n } from 'vue-i18n'
 
 interface TreeNode {
@@ -102,11 +102,9 @@ const { getFileIcon: getFileIconUtil } = useKnowledgeIcons()
 const { t } = useI18n()
 
 // #21037: display-only man-page label; selectedFile.name stays raw.
-const displayName = computed(() => {
-  const file = props.selectedFile
-  const inner = file?.metadata?.metadata as Record<string, unknown> | undefined
-  return formatManPageTitle(file?.name, inner?.type, t)
-})
+const displayName = computed(() =>
+  formatManPageTitle(props.selectedFile?.name, knowledgeNodeFactType(props.selectedFile?.metadata), t),
+)
 
 const fileIcon = computed<IconName>(() => {
   if (!props.selectedFile) return 'file'
