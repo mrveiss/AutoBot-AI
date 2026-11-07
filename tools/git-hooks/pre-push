@@ -355,10 +355,11 @@ stage_record() {
 }
 
 # ---------------------------------------------------------------------------
-# #18058: run pytest on an interpreter that meets the platform's 3.11 floor.
+# #18058/#20903: run pytest on an interpreter that meets the platform floor,
+# read from .python-version (the SSOT) rather than restated here.
 #
 # Bare `python3` is whatever the machine happens to ship.  Where that is below
-# 3.11, every selected group dies at COLLECT time on a 3.11-only name
+# the floor, every selected group dies at COLLECT time on a newer-only name
 # (enum.StrEnum, asyncio.Task.cancelling) and the push is blocked by the
 # interpreter rather than by anything in the changeset.  Classifying that
 # after the fact only names the problem; choosing a conforming interpreter
@@ -378,15 +379,23 @@ pick_python() {
     # Version alone is not enough: a bare /usr/bin/python3.14 with no pytest
     # fails with "No module named pytest", which is the same push-blocking
     # non-failure in different words.
-    local candidate main_root
+    local candidate main_root floor_text="" floor_major floor_minor
+    local floor_fallback="3.14"  # only if .python-version is unreadable; swept by the drift guard
+    # The floor is the repo's .python-version (initialised above: this hook runs under set -u).
+    [ -r "$REPO_ROOT/.python-version" ] && IFS= read -r floor_text < "$REPO_ROOT/.python-version"
+    case "$floor_text" in
+        ([0-9]*.[0-9]*) [ -z "${floor_text//[0-9.]/}" ] || floor_text="$floor_fallback" ;;
+        (*) floor_text="$floor_fallback" ;;
+    esac
+    IFS=. read -r floor_major floor_minor _ <<< "$floor_text"
     # In a worktree $PWD is the worktree, which has no venv; the venv lives in
     # the main checkout, whose path is the parent of the common git dir.
     main_root="$(dirname "$(git rev-parse --git-common-dir 2>/dev/null || echo .)")"
     for candidate in "$REPO_ROOT/venv/bin/python" "$REPO_ROOT/.venv/bin/python" \
                      "$main_root/venv/bin/python" "$main_root/.venv/bin/python" \
-                     python3 python3.14 python3.13 python3.12 python3.11; do
+                     python3 python3.14 python3.15 python3.16; do
         command -v "$candidate" >/dev/null 2>&1 || [ -x "$candidate" ] || continue
-        if "$candidate" -c 'import sys; sys.exit(1) if sys.version_info < (3, 11) else __import__("pytest")' 2>/dev/null; then
+        if "$candidate" -c 'import sys; sys.exit(1) if sys.version_info[:2] < ('"$floor_major"', '"$floor_minor"') else __import__("pytest")' 2>/dev/null; then
             printf '%s' "$candidate"
             return 0
         fi
@@ -720,7 +729,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     if [ "$gh_view_exit" = "0" ]; then
       pr_number="$gh_view_output"
       log "PR #$pr_number exists for $branch_name — checking its body (#16859)"
-      body_check_output=$(python3 "$REPO_ROOT/scripts/validate_pr_body.py" --pr "$branch_name" 2>&1)
+      body_check_output=$("$PYTEST_PYTHON" "$REPO_ROOT/scripts/validate_pr_body.py" --pr "$branch_name" 2>&1)
       body_check_exit=$?
       if [ "$body_check_exit" != "0" ]; then
         fail "PR body fails the template-sections and/or batching gate (#16859):"
@@ -1243,7 +1252,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
             floor_symptom="enum.StrEnum is 3.11+"
           fi
           if [ -n "$floor_symptom" ]; then
-            pytest_unrunnable="the interpreter floor: $("$PYTEST_PYTHON" -V 2>&1) is below the 3.11+ the platform requires ($floor_symptom; CI is 3.14)"
+            pytest_unrunnable="the interpreter floor: $("$PYTEST_PYTHON" -V 2>&1) is below the floor declared in .python-version ($floor_symptom)"
           else
             pytest_failed=1
             fail "pytest failures (#5142):"
