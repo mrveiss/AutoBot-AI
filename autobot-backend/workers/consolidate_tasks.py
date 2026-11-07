@@ -15,9 +15,9 @@ lives in ``TrajectoryStore.consolidate`` which is fully delete-only.
 
 import os
 
-from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.worker_loop import run_in_worker_loop
 from celery_app import celery_app
 
 logger = get_logger(__name__)
@@ -53,7 +53,7 @@ async def _run_consolidation() -> dict:
 def consolidate_trajectories(self) -> dict:
     """Daily task: dedupe + prune the trajectory store, then record the run time."""
     run_at = utc_timestamp()
-    summary = run_or_schedule(_run_consolidation())
+    summary = run_in_worker_loop(_run_consolidation())
     try:
         _get_redis().set(_LAST_RUN_KEY, run_at)
     except Exception as exc:  # noqa: BLE001 — bookkeeping only, never fail the task
@@ -78,7 +78,7 @@ def consolidate_facts(self) -> dict:
     dry-run by default so candidates are logged before any deletion is enforced.
     """
     run_at = utc_timestamp()
-    summary = run_or_schedule(_run_facts_consolidation())
+    summary = run_in_worker_loop(_run_facts_consolidation())
     try:
         _get_redis().set(_FACTS_LAST_RUN_KEY, run_at)
     except Exception as exc:  # noqa: BLE001 — bookkeeping only, never fail the task
