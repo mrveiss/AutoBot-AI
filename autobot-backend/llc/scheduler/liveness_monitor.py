@@ -28,7 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.redis_utils import delete_if_value
+from autobot_shared.redis_utils import delete_if_holder
 from user_management.database import get_async_session_factory
 
 from ..models.activity import ActorType
@@ -36,10 +36,10 @@ from ..models.enums import ActivityEventType, WorkItemStatus, WorkItemType
 from ..models.heartbeat_run import LLCHeartbeatRun
 from ..models.sprint import LLCProject
 from ..models.work_item import LLCWorkItem
+from ..services.accessors import get_work_item_service
 from ..services.activity_log import LLCActivityLogService
 from ..services.actor import audit
 from ..services.work_item_hierarchy import HierarchyViolation, parent_if_allowed
-from ..services.work_item_service import WorkItemService
 from .base import PollLoopScheduler
 from .dispatch_gate import agent_ref_block_reason
 
@@ -165,7 +165,7 @@ class LivenessMonitor(PollLoopScheduler):
         if redis is None:
             return
         try:
-            await delete_if_value(redis, f"llc:checkout:{work_item_id}", agent_id)
+            await delete_if_holder(redis, f"llc:checkout:{work_item_id}", agent_id)
         except Exception:
             logger.debug("Redis DEL llc:checkout:%s failed (swallowed)", work_item_id)
 
@@ -193,7 +193,7 @@ class LivenessMonitor(PollLoopScheduler):
             f"Work item {identifier} has been set to blocked. "
             f"Investigate and unblock manually."
         )
-        svc = WorkItemService()
+        svc = get_work_item_service()
         # #18978: the Bug follows the stuck item's parent only where the hierarchy rules allow it
         # (a stuck Subtask's parent is a Task) and always sits in the stuck item's project.
         project_id = await _recovery_project(session, work_item, company_id)
