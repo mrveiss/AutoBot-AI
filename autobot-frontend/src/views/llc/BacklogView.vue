@@ -53,6 +53,8 @@
       />
     </div>
 
+    <BacklogHierarchyPanel :company-id="companyId" />
+
     <BaseAlert v-if="loadFailed" variant="error" :message="t('llc.backlog.fetchFailed')">
       <template #actions>
         <button class="underline" data-testid="retry-load" @click="fetchBacklog">{{ t('common.retry') }}</button>
@@ -180,6 +182,7 @@ import WorkItemDetail from './WorkItemDetail.vue'
 import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
 import BacklogCreateModal from '@/components/llc/BacklogCreateModal.vue'
 import BacklogBulkAssignModal from '@/components/llc/BacklogBulkAssignModal.vue'
+import BacklogHierarchyPanel from '@/components/llc/BacklogHierarchyPanel.vue'
 import { BaseAlert, BaseAvatar } from '@autobot/ui'
 
 const logger = createLogger('BacklogView')
