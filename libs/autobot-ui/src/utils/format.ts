@@ -355,16 +355,6 @@ export function formatRelativeTime(timestamp: DateInput, options: FormatRelative
   return formatter.format(value === 0 && seconds <= 0 ? -0 : value, unit) // -0 reads as past: 0 seconds ago
 }
 
-/**
- * English `2 hours ago`, `'just now'` under a minute (or in the future), `'unknown'` when invalid.
- * It is {@link formatRelativeTime} fixed to English; a caller that shows it to a user passes a locale there.
- */
-export function formatTimeAgo(timestamp: Date | string | number): string {
-  const date = toValidDate(timestamp)
-  if (!date) return 'unknown'
-  return Date.now() - date.getTime() < 60000 ? 'just now' : formatRelativeTime(date, { locale: 'en' })
-}
-
 /** Options for {@link createRecencyFormatter}; a function is read on every call (a locale can change). */
 export interface RecencyFormatterOptions {
   /** BCP 47 locale for the relative text (default: the browser's). */
