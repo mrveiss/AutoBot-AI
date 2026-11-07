@@ -195,11 +195,16 @@ export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
   })
   const showRedisDetails = ref(false)
 
+  // Set once a live scan succeeds after a failed stored read; cleared by the next stored read.
+  const cachedReadSuperseded = ref(false)
+
   // --- Score loaders ---
 
   const loadSecurityScore = async () => {
     if (!rootPath.value) return
-    await _loadSecurityScoreTask(undefined, { path: rootPath.value })
+    const result = await _loadSecurityScoreTask(undefined, { path: rootPath.value })
+    // A successful live scan supersedes an earlier failed stored read.
+    if (result && !liveSecurityScoreError.value) cachedReadSuperseded.value = true
   }
 
   const loadPerformanceScore = async () => {
@@ -327,14 +332,18 @@ export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
   const securityScoreError = computed(
     () =>
       liveSecurityScoreError.value ||
-      (cachedSecurityScoreEndpoint.error.value
+      (cachedSecurityScoreEndpoint.error.value && !cachedReadSuperseded.value
         ? i18n.global.t('analytics.codebase.errors.cachedSecurityScoreFailed', {
             error: cachedSecurityScoreEndpoint.error.value,
           })
         : ''),
   )
 
-  const loadCachedSecurityScore = () => cachedSecurityScoreEndpoint.load()
+  // A new stored read starts afresh: it clears its own error, so its outcome is what shows.
+  const loadCachedSecurityScore = async () => {
+    cachedReadSuperseded.value = false
+    await cachedSecurityScoreEndpoint.load()
+  }
 
   return {
     // Scores
