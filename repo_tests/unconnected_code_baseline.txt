@@ -124,13 +124,6 @@ module:autobot_shared/api_routing/mount_graph.py	#10603
 module:autobot_shared/api_routing/route_order.py	#10603
 module:autobot_shared/declared_egress.py	#10603
 module:autobot_shared/delta_engine.py	#10603
-module:autobot_shared/env_registry_analytics.py	#10603
-module:autobot_shared/env_registry_batch.py	#10603
-module:autobot_shared/env_registry_gateway.py	#10603
-module:autobot_shared/env_registry_postgres.py	#10603
-module:autobot_shared/env_registry_rag.py	#10603
-module:autobot_shared/env_registry_terminal.py	#10603
-module:autobot_shared/env_registry_testing.py	#10603
 module:autobot_shared/eventually.py	#10603
 module:autobot_shared/isolated_git.py	#10603
 module:autobot_shared/paperclip_client.py	#10603
@@ -152,8 +145,6 @@ table:service_dependencies	#10603
 table:ssh_keys	#10603
 table:system_events	#10603
 table:validation_results	#10603
-module:autobot_shared/env_registry_ai.py	#10603
-module:autobot_shared/env_registry_slm.py	#10603
 route:autobot-backend/api/admin_ownerless_chat_sessions.py:POST /ownerless-chat-sessions/requests	#10603
 route:autobot-backend/api/conversation_files.py:GET /conversation/{session_id}/preview/{file_id}	#10603
 route:autobot-backend/api/knowledge_chunked_upload.py:DELETE /expired/{upload_id}	#10603
