@@ -10,11 +10,11 @@ import asyncio
 import importlib
 import os
 import sys
-import time
 from pathlib import Path
 
 import pytest
 
+from autobot_shared.eventually import eventually
 from autobot_shared.isolated_git import git, make_repo
 
 # The root conftest stubs ``services.sync_orchestrator`` (an api/code_sync.py import); load the real module
@@ -65,7 +65,5 @@ async def test_a_hung_checkout_hook_is_killed_with_git_not_orphaned(tmp_path, mo
     with pytest.raises(asyncio.TimeoutError):
         await so.SyncOrchestrator.__new__(so.SyncOrchestrator)._return_to_branch(str(root), "main")
     child = int(await asyncio.to_thread(pid_file.read_text, encoding="utf-8"))
-    deadline = time.monotonic() + 10
-    while _alive(child) and time.monotonic() < deadline:
-        await asyncio.sleep(0.1)
+    await eventually(lambda: not _alive(child), deadline=10)
     assert not _alive(child), "the hook's child outlived the timed-out checkout"

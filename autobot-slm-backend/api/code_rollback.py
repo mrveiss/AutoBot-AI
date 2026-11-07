@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api import code_sync as cs
+from autobot_shared import node_proxy
 from autobot_shared.logging_manager import get_logger
 from models.rollback_schemas import (
     RollbackCandidates,
@@ -70,7 +71,7 @@ def _actor(user: dict) -> str | None:
 def _named_person(request: Request, user: dict) -> str:
     """The person acting. The internal service key passes the router gate; it must not start a rollback."""
     actor = _actor(user)
-    if actor is None or verify_internal_api_key(request.headers.get("X-Internal-API-Key")):
+    if actor is None or verify_internal_api_key(request.headers.get(node_proxy.INTERNAL_KEY_HEADER)):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_PERSON_ONLY)
     return actor
 
