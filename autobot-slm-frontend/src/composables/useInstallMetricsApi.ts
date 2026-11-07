@@ -23,13 +23,18 @@ import type {
   OptimizationRecommendation,
   ServicesSummary,
 } from '@autobot/ui'
+import { isHttpError } from '@autobot/ui'
 import { createAutobotBackendClient } from '@/composables/useAutobotApi'
 
+/**
+ * The dashboard's `system` block, as the main backend's monitor stores it and `monitoring_utils.py`
+ * reads it. The route is `response_model=dict`, so it publishes no schema and there is no generated
+ * type to import: this is the one declaration of the fields the screen reads. The monitor reports
+ * no disk figure and no process count, so the screen shows none.
+ */
 export interface InstallSystemMetrics {
-  cpu_percent?: number
-  memory_percent?: number
-  disk_percent?: number
-  process_count?: number
+  cpu_usage_percent?: number
+  memory_usage_percent?: number
 }
 
 export interface InstallAnalysis {
@@ -39,8 +44,18 @@ export interface InstallAnalysis {
 }
 
 export interface InstallDashboardOverview {
-  system_metrics?: InstallSystemMetrics | null
+  system?: InstallSystemMetrics | null
   analysis?: InstallAnalysis | null
+}
+
+/**
+ * The route attaches `analysis` to every reply, derived from whatever the monitor holds. With
+ * nothing measured it is the default: healthy, score 0, no bottlenecks. Only a score above 0 or a
+ * named bottleneck means the analysis was computed from a measurement.
+ */
+export function analysisMeasured(analysis: InstallAnalysis | null | undefined): boolean {
+  if (!analysis) return false
+  return (typeof analysis.performance_score === 'number' && analysis.performance_score > 0) || (analysis.bottlenecks?.length ?? 0) > 0
 }
 
 export type SectionResult<D> = { ok: true; data: D } | { ok: false; error: unknown }
@@ -64,6 +79,14 @@ export function failedReadCount(reading: InstallMetricsReading): number {
 /** All six failed: the main app is down or unreachable, not one route misbehaving. */
 export function isMainAppUnavailable(reading: InstallMetricsReading): boolean {
   return failedReadCount(reading) === INSTALL_METRICS_SECTIONS.length
+}
+
+/** All six failed with 401/403: the main app answered and refused this session, it is not down. */
+export function isMainAppUnauthorised(reading: InstallMetricsReading): boolean {
+  return INSTALL_METRICS_SECTIONS.every((key) => {
+    const result = reading[key]
+    return !result.ok && isHttpError(result.error) && (result.error.status === 401 || result.error.status === 403)
+  })
 }
 
 export function useInstallMetricsApi() {
