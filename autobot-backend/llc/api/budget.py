@@ -19,6 +19,7 @@ from llc.config import DEFAULT_BUDGET_LIMIT
 from llc.deps import assert_company_access, load_authorized
 from llc.exceptions import BudgetExhausted, UnpricedModel
 from llc.models.budget import TOKEN_LIMIT_MAX, LLCAgentBudget
+from llc.services.accessors import get_budget_service
 from llc.services.approval import ApprovalService
 from llc.services.authz import NotAuthorisedError, require_company_admin_unless_platform
 from llc.services.budget import BudgetService
@@ -196,7 +197,7 @@ async def provision_budget(
     # The first row carries a limit the caller chose, so it is the same admin act as changing one (#20422).
     await _require_budget_admin(session, company_id, agent_id, ctx)
 
-    svc = BudgetService()
+    svc = get_budget_service()
     over_default = body.budget_limit is not None and body.budget_limit > DEFAULT_BUDGET_LIMIT
     gated = over_default and await company_requires_budget_approval(session, uuid.UUID(company_id))
     row, created = await svc.provision_budget(session, agent_id, company_id, None if gated else body.budget_limit)
@@ -224,7 +225,7 @@ async def list_budgets(
     assert_company_access(ctx, company_id)
     result = await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.company_id == company_id))
     rows = result.scalars().all()
-    svc = BudgetService()
+    svc = get_budget_service()
     out: List[Dict[str, Any]] = []
     for row in rows:
         remaining, is_over, alert = await svc.check_budget(session, row.agent_id, row.company_id)
@@ -287,7 +288,7 @@ async def ingest_cost(
         id_attr="agent_id",
         not_found_detail=f"No budget row for agent {agent_id}",
     )
-    svc = BudgetService()
+    svc = get_budget_service()
     try:
         cost = await svc.ingest_cost_event(
             session, agent_id, row.company_id, body.tokens_in, body.tokens_out, body.model

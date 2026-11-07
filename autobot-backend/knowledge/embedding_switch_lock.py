@@ -45,10 +45,3 @@ async def holder() -> str | None:
         if claim.scope == SWITCH_SCOPE:
             return claim.agent_id
     return None
-
-
-async def force_release() -> None:
-    """Release whoever holds the claim: the force-close of a build whose worker is gone."""
-    current = await holder()
-    if current is not None:
-        await release(current)
