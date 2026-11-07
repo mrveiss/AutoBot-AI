@@ -2,7 +2,7 @@
 type: fix
 scope: secrets
 issue: 20665
-pr: 0
+pr: 21011
 ---
 The audit record written before a credential delete or rotate (`DELETE`/`PUT /api/secrets/{id}`)
 now says `attempted` instead of `success`, so a write that then fails no longer leaves a record

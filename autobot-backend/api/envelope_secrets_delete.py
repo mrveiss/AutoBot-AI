@@ -43,6 +43,12 @@ async def audited_delete(
     (503): the credential is never destroyed without its paper trail (#17038). A refusal
     or failure is recorded as ``denied`` / ``failed`` and re-raised for the route to map.
     ``who`` are identifiers only (e.g. ``service``), never a value.
+
+    The dependents listing and the delete are separate statements, exactly as on
+    ``DELETE /api/secrets/{id}``: a dependent registered between them is deleted with the
+    secret (``ON DELETE CASCADE``), the same outcome as one registered a moment after the
+    delete. The check guards against a consumer a human or service already depends on, not
+    against a registration racing the delete, so no lock is taken (the store has none).
     """
     ref = str(secret_id)
     await audit_secret_op("DELETE", ref, request, "attempted", required=True, phase="before_write", **who)
