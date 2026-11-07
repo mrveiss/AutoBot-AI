@@ -90,6 +90,7 @@ describe('man-page titles at each call site (#21037)', () => {
     const pinia = createPinia()
     const wrapper = mount(KnowledgeEntries, { global: { plugins: [pinia, i18n()] } })
     await flushPromises()
+    await wrapper.findAll('.manage-tab-btn')[1].trigger('click') // the Manage tab lists the entries
     expect(wrapper.find('.entry-title').text()).toBe(SHOWN)
     expect(useKnowledgeStore(pinia).documents.map(d => d.title)).toEqual([RAW])
   })
