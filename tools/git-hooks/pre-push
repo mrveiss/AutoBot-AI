@@ -283,45 +283,57 @@ push_marker_set() {
 # and a queued push never times out, and it prints to the terminal rather than a stage's log. Holders
 # run at lower priority, so the install always wins. A dead holder's lock goes with it; each slot file
 # names its holder, so a stuck one can be seen. CI has its own runners.
+# #21098: sets MACHINE_SLOT_LOAD_MSG and returns 0 while the 1-minute load is at or above the ceiling. An
+# unreadable source never blocks; it warns once per push instead.
+machine_slot_load_high() {
+  local max="${AUTOBOT_MACHINE_SLOT_MAX_LOAD:-14}" src="${AUTOBOT_MACHINE_SLOT_LOADAVG:-/proc/loadavg}" load
+  load=$(awk '{print $1; exit}' "$src" 2>/dev/null)
+  if [ -z "$load" ]; then
+    [ -n "${MACHINE_SLOT_LOAD_WARNED:-}" ] || warn "the load average is unreadable ($src): this push does not wait for load"
+    MACHINE_SLOT_LOAD_WARNED=1
+    return 1
+  fi
+  awk -v l="$load" -v m="$max" 'BEGIN { exit !(l < m) }' && return 1
+  MACHINE_SLOT_LOAD_MSG="load $load is at or above $max (AUTOBOT_MACHINE_SLOT_MAX_LOAD), waiting for it to fall"
+}
+# Takes the first free slot under $1 (the default size lives here, #21098) and returns 0, or returns 1.
+machine_slot_take() {
+  local i
+  for ((i = 1; i <= ${AUTOBOT_MACHINE_SLOTS:-2}; i++)); do
+    exec 9>>"$1/slot-$i"  # Appending: opening with > would wipe a holder's name.
+    if flock -n 9; then
+      export AUTOBOT_MACHINE_SLOT_HELD=1
+      : > "$1/slot-$i"
+      printf '%s pre-push %s\n' "$$" "${branch_name:-}" >&9
+      renice -n 10 -p "$BASHPID" >/dev/null 2>&1
+      ionice -c 3 -p "$BASHPID" >/dev/null 2>&1
+      return 0
+    fi
+  done
+  exec 9>&-
+  return 1
+}
 machine_slot_wait() {
   [ -z "${CI:-}" ] && [ -z "${AUTOBOT_MACHINE_SLOT_HELD:-}" ] || return 0
   command -v flock >/dev/null 2>&1 || { warn "flock is missing: this push did not queue for a machine slot"; return 0; }
   local dir="${AUTOBOT_MACHINE_SLOT_DIR:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/autobot-machine-slots-$(id -u)}"
-  local i start=$SECONDS next=$SECONDS every="${AUTOBOT_MACHINE_SLOT_REPORT:-60}"
-  # The only place these defaults live (#21098); docs/developer/ENV_VARS.md lists them from the registry.
-  local slots="${AUTOBOT_MACHINE_SLOTS:-2}" max_load="${AUTOBOT_MACHINE_SLOT_MAX_LOAD:-14}"
-  local loadavg="${AUTOBOT_MACHINE_SLOT_LOADAVG:-/proc/loadavg}" load=""
+  local start=$SECONDS next=$SECONDS every="${AUTOBOT_MACHINE_SLOT_REPORT:-60}" why
   mkdir -p "$dir"
   while :; do
-    # A slot is taken only while the 1-minute load is under the ceiling; an unreadable source never blocks.
-    load=$(awk '{print $1; exit}' "$loadavg" 2>/dev/null)
-    if [ -n "$load" ] && ! awk -v l="$load" -v m="$max_load" 'BEGIN { exit !(l < m) }'; then
-      if [ "$SECONDS" -ge "$next" ]; then
-        log "queued $((SECONDS - start))s: load $load is at or above $max_load (AUTOBOT_MACHINE_SLOT_MAX_LOAD), waiting for it to fall"
-        next=$((SECONDS + every))
-      fi
-      sleep "${AUTOBOT_MACHINE_SLOT_POLL:-5}"
-      continue
+    # A slot is taken only while the 1-minute load is under the ceiling.
+    if machine_slot_load_high; then
+      why="$MACHINE_SLOT_LOAD_MSG"
+    elif machine_slot_take "$dir"; then
+      [ "$SECONDS" != "$start" ] || return 0
+      log "waited $((SECONDS - start))s for a machine slot"
+      # #20260: the queue has no time limit, so the marker set before it may be about to expire.
+      [ -z "${branch_name:-}" ] || push_marker_set "$branch_name" "${remote_sha:-$ZERO}"
+      return 0
+    else
+      why="waiting for a machine slot, held by: $(cat "$dir"/slot-* 2>/dev/null | tr '\n' ';')"
     fi
-    for ((i = 1; i <= slots; i++)); do
-      exec 9>>"$dir/slot-$i"  # Appending: opening with > would wipe a holder's name.
-      if flock -n 9; then
-        export AUTOBOT_MACHINE_SLOT_HELD=1
-        : > "$dir/slot-$i"
-        printf '%s pre-push %s\n' "$$" "${branch_name:-}" >&9
-        renice -n 10 -p "$BASHPID" >/dev/null 2>&1
-        ionice -c 3 -p "$BASHPID" >/dev/null 2>&1
-        if [ "$SECONDS" != "$start" ]; then
-          log "waited $((SECONDS - start))s for a machine slot"
-          # #20260: the queue has no time limit, so the marker set before it may be about to expire.
-          [ -z "${branch_name:-}" ] || push_marker_set "$branch_name" "${remote_sha:-$ZERO}"
-        fi
-        return 0
-      fi
-    done
-    exec 9>&-
     if [ "$SECONDS" -ge "$next" ]; then
-      log "queued $((SECONDS - start))s for a machine slot, held by: $(cat "$dir"/slot-* 2>/dev/null | tr '\n' ';')"
+      log "queued $((SECONDS - start))s: $why"
       next=$((SECONDS + every))
     fi
     sleep "${AUTOBOT_MACHINE_SLOT_POLL:-5}"
