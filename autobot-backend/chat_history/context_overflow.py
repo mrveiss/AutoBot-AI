@@ -25,7 +25,17 @@ from autobot_shared.ssot_constants import CategoryDefaults
 from autobot_shared.token_count import estimate_fast
 from autobot_shared.tool_catalogue import FILE_WRITE_TOOLS, SHELL_EXEC_TOOLS, match_tool_name
 from chat_history.message_schema import message_text
-from chat_history.summarization_prompt import SUMMARIZATION_PROMPT
+from chat_history.summarization_prompt import (
+    SUMMARIZATION_PROMPT,
+    SUMMARIZER_DEFAULT_MAX_TOKENS,
+    SUMMARIZER_INPUT_MAX_CHARS,
+    SummarizationFailed,
+    SummaryResult,
+    build_prompt,
+    call_gateway,
+    chunk_lines,
+    count_turns,
+)
 
 logger = get_logger(__name__)
 
@@ -465,23 +475,6 @@ def _sanitize_tool_messages(msgs: List[Dict]) -> List[Dict]:
     return cleaned
 
 
-class SummarizationFailed(RuntimeError):
-    """Summarization did not produce a usable summary (#14065).
-
-    Raised instead of returning a placeholder string. The placeholder read like
-    a successful compaction — "[Summary: N earlier message(s) were summarized to
-    preserve context.]" — so the caller reset the token tracker, reported
-    ``summary_created: True`` and logged "messages compressed" while the oldest
-    half of the conversation had in fact been replaced by a sentence containing
-    none of the goals, decisions, file paths or state the summarization prompt
-    exists to preserve.
-
-    Failure has to be *shaped* differently from success, not merely logged
-    differently. A ``logger.error`` in one line and a truthy return value in the
-    next is a failure the caller cannot see.
-    """
-
-
 class ConversationSummarizer:
     """Uses LLM to create intelligent conversation summaries.
 
@@ -496,74 +489,64 @@ class ConversationSummarizer:
 
     _SUMMARIZATION_PROMPT = SUMMARIZATION_PROMPT
 
+    def __init__(self, gateway: Any = None) -> None:
+        self._gateway = gateway
+
     async def _get_gateway(self):
         """Return the canonical LLM service (#14840); ``llm_shared.gateway`` never existed."""
+        if self._gateway is not None:
+            return self._gateway
         from services.llm_service import get_llm_service
 
         return get_llm_service()
 
-    async def summarize_messages(
+    async def summarize_messages(self, messages: List[Dict[str, Any]], model_name: Optional[str], **kwargs: Any) -> str:
+        """Summary text of *messages*; see :meth:`summarize_with_usage` for the arguments."""
+        return (await self.summarize_with_usage(messages, model_name, **kwargs)).text
+
+    async def summarize_with_usage(
         self,
         messages: List[Dict[str, Any]],
-        model_name: str,
+        model_name: Optional[str],
         prior_summary: str = "",
-        max_tokens: int = 500,
-    ) -> str:
-        """Generate summary of conversation messages using LLM.
+        max_tokens: Optional[int] = SUMMARIZER_DEFAULT_MAX_TOKENS,
+        turns_summarized: Optional[int] = None,
+        template: str = SUMMARIZATION_PROMPT,
+    ) -> SummaryResult:
+        """Summarise *messages* with the LLM (#20852: the one summariser).
 
-        This is the one summariser: the overflow protection, the compact hook,
-        the ``/chat/summarize`` endpoint and the rolling chat-history summary
-        (#20852) all call it.
+        The overflow protection, the compact hook, ``/chat/summarize``, the rolling
+        chat-history summary and chat-to-knowledge all call it. Input longer than
+        ``SUMMARIZER_INPUT_MAX_CHARS`` is folded in chunks, each call bounded by
+        ``SUMMARIZER_TIMEOUT_SECONDS``; the conversation is framed as data.
 
         Args:
-            messages: List of message dicts with 'sender' and 'text' fields.
-            model_name: LLM model to use for summarization.
+            messages: Dicts in the API (role/content) or display (sender/text) schema.
+            model_name: LLM model to use.
             prior_summary: Earlier summary to fold the new messages into (rolling).
-            max_tokens: Cap on the generated summary length.
-
-        Returns:
-            Summary text.
+            max_tokens: Cap on the generated summary (also the length the prompt asks for).
+            turns_summarized: Turns the summary will cover; defaults to the user turns in *messages*.
+            template: Prompt template with ``{{count}}``/``{{target}}``/``{{conversation}}``.
 
         Raises:
-            SummarizationFailed: The gateway errored, or returned nothing usable.
+            SummarizationFailed: The gateway errored, timed out, or returned nothing usable.
                 Never a placeholder — see that exception's docstring (#14065).
         """
-        # Deliberately outside the try: these are pure, local transformations of
-        # the caller's own data. A bug in _sanitize_tool_messages or
-        # _format_messages is a programming error and must surface as itself,
-        # not be relabelled "summarization failed" and retried forever (#14065).
+        # Outside the try on purpose: a bug in these pure local transformations is a
+        # programming error and must surface as itself, not be relabelled "summarization
+        # failed" and retried forever (#14065).
         safe_messages = _sanitize_tool_messages(messages)
-        conversation_text = self._format_messages(safe_messages)
-        if prior_summary:
-            conversation_text = f"Previous summary:\n{prior_summary}\n\nNewer turns:\n{conversation_text}"
-        prompt = self._SUMMARIZATION_PROMPT.replace("{{conversation}}", conversation_text).replace(
-            "{{count}}", str(len(messages))
-        )
-
-        try:
-            gateway = await self._get_gateway()
-            response = await gateway.chat(
-                messages=[{"role": CategoryDefaults.ROLE_USER, "content": prompt}],
-                model_name=model_name,
-                temperature=0.3,  # Low temp for consistent summaries
-                max_tokens=max_tokens,
-            )
-            summary = (getattr(response, "content", None) or "").strip()
-        except Exception as exc:
-            logger.error("Summarization failed for %d messages: %s", len(messages), exc, exc_info=True)
-            raise SummarizationFailed(f"summarization call failed: {exc}") from exc
-
-        if not summary:  # LLMService reports a provider failure in .error, not by raising
-            logger.error("Empty summary for %d messages: %s", len(messages), getattr(response, "error", None))
-            raise SummarizationFailed(f"LLM returned empty summary: {getattr(response, 'error', None)}")
-
-        logger.info(
-            "Generated summary for %d messages (%d → %d tokens est.)",
-            len(messages),
-            sum(len(_message_text(m)) for m in messages) // 4,
-            len(summary) // 4,
-        )
-        return summary
+        lines = [line for line in (self._format_messages([m]) for m in safe_messages) if line]
+        turns = count_turns(messages) if turns_summarized is None else turns_summarized
+        target = max_tokens or SUMMARIZER_DEFAULT_MAX_TOKENS
+        summary, tokens = prior_summary, 0
+        for chunk in chunk_lines(lines, SUMMARIZER_INPUT_MAX_CHARS) or [""]:
+            text = f"Previous summary:\n{summary}\n\nNewer turns:\n{chunk}" if summary else chunk
+            prompt = build_prompt(text, turns, target, template)
+            summary, used = await call_gateway(self._get_gateway, prompt, model_name, max_tokens, len(messages))
+            tokens += used
+        logger.info("Generated summary for %d messages (%d tokens est.)", len(messages), len(summary) // 4)
+        return SummaryResult(summary, tokens)
 
     def _format_messages(self, messages: List[Dict[str, Any]]) -> str:
         """Format messages into readable conversation text.

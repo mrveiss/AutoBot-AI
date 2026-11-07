@@ -2594,21 +2594,20 @@ async def summarize_conversation(
     if not messages_to_summarize:
         raise HTTPException(status_code=404, detail="No messages found with the provided IDs")
 
-    # One summariser for every caller (#20852): the same ConversationSummarizer the
-    # compact hook, overflow protection and rolling chat summary use, on the
-    # configured model (no hosted-model default).
+    # #20852: the one summariser every caller uses, on the configured model.
     from chat_history.context_overflow import ConversationSummarizer
+    from chat_history.summarization_prompt import SUMMARIZER_DEFAULT_MAX_TOKENS
 
     try:
-        summary_text = await ConversationSummarizer().summarize_messages(
+        summary = await ConversationSummarizer().summarize_with_usage(
             messages_to_summarize,
             provide_config_manager().get_selected_model(),
-            max_tokens=body.target_length or 500,
+            max_tokens=body.target_length or SUMMARIZER_DEFAULT_MAX_TOKENS,
         )
     except Exception as e:
         logger.exception("[%s] Failed to generate summary", request_id)
         raise HTTPException(status_code=500, detail=f"Summarization failed: {str(e)}")
-    summary_tokens = len(summary_text) // 4  # estimate, as the summariser logs
+    summary_text, summary_tokens = summary.text, summary.total_tokens  # provider usage when reported
 
     result_data = ConversationSummarizeData(
         summary=summary_text,

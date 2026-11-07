@@ -17,7 +17,7 @@ from async_chat_workflow import WorkflowMessage
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
-from chat_history.rolling_summary import fold_session
+from chat_history.rolling_summary import prompt_summary
 from constants.api_constants import PATH_OLLAMA_GENERATE
 from constants.model_constants import ModelConfig
 from dependencies import provide_config_manager
@@ -870,7 +870,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
 
             system_prompt = await tcs.prepend_memory_context(system_prompt, session, message, selected_model)
         system_prompt = await _emit_system_prompt_ready(system_prompt, session)
-        conversation_context = self._build_conversation_context(session, await fold_session(session, selected_model))
+        conversation_context = self._build_conversation_context(session, await prompt_summary(session, selected_model))
 
         # Knowledge retrieval for RAG
         # Issue MVA-1992: Skip RAG when lightweight_mode=True

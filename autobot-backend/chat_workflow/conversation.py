@@ -28,6 +28,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from autobot_shared.ssot_constants import REDIS_KEY
 from autobot_shared.store_authority import system_of_record
+from chat_history.rolling_summary import schedule_refresh
 
 from .models import WorkflowSession
 
@@ -74,15 +75,9 @@ class ConversationHandlerMixin:
         None (an unreadable session) is kept apart from ``[]`` (a session with no
         completed turns) so the first is logged as the error it is.
         """
-        from chat_history import ChatHistoryManager
-        from chat_history.turn_projection import LLM_CONTEXT_TURN_LIMIT, project_turn_pairs
+        from chat_history.turn_projection import load_turn_pairs
 
-        try:
-            messages = await ChatHistoryManager().load_session(session_id)
-        except (PermissionError, ValueError, OSError) as exc:
-            logger.error("Cannot read chat session %s for LLM context: %s", session_id, exc)
-            return None
-        return project_turn_pairs(messages, LLM_CONTEXT_TURN_LIMIT)
+        return await load_turn_pairs(session_id)
 
     async def _load_conversation_history(self, session_id: str) -> List[Dict[str, str]]:
         """LLM context: the Redis cache, else projected from chat_sessions, else nothing (#18293)."""
@@ -172,10 +167,10 @@ class ConversationHandlerMixin:
         message: str,
         llm_response: str,
         session_id: str,
-    ) -> None:
-        """Update session conversation history with deduplication.
+    ) -> List[Dict[str, str]]:
+        """Update session conversation history with deduplication; returns the turns the 10-turn trim evicted.
 
-        Issue #620.
+        Issue #620. The evicted turns go to the rolling summary (#20852) before they are gone.
 
         Args:
             session: Workflow session object
@@ -192,8 +187,11 @@ class ConversationHandlerMixin:
         else:
             session.conversation_history.append({"user": message, "assistant": llm_response})
 
+        evicted: List[Dict[str, str]] = []
         if len(session.conversation_history) > 10:
+            evicted = session.conversation_history[:-10]
             session.conversation_history = session.conversation_history[-10:]
+        return evicted
 
     async def _persist_conversation(
         self,
@@ -216,7 +214,9 @@ class ConversationHandlerMixin:
             message: User message
             llm_response: LLM response
         """
-        self._update_conversation_history(session, message, llm_response, session_id)
+        evicted = self._update_conversation_history(session, message, llm_response, session_id)
+        # #20852: fold what is about to leave the window (and the rest) off the reply path.
+        schedule_refresh(session, [*evicted, *session.conversation_history])
 
         await self._save_conversation_history(session_id, session.conversation_history)
 

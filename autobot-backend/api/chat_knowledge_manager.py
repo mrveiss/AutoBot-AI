@@ -34,12 +34,13 @@ from typing import Dict, List
 
 from fastapi import HTTPException, Request
 
-from api.chat_knowledge_prompt import build_summary_prompt
+from api.chat_knowledge_prompt import KNOWLEDGE_ENTRY_PROMPT, vet_transcript
 from api.schemas_knowledge import FileAssociationType, KnowledgeDecision
 from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from chat_history import ChatHistoryManager
+from chat_history.context_overflow import ConversationSummarizer
 from constants.threshold_constants import CategoryDefaults
 from knowledge.ownership_index import drop_ownership_unless_admin
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
@@ -431,14 +432,14 @@ class ChatKnowledgeManager:
         if not include_system_messages:
             messages = [m for m in messages if m.get("role") != CategoryDefaults.ROLE_SYSTEM]
 
-        # #15700: framed as data. A refused transcript raises TranscriptRefused (a 422),
-        # so no entry is written.
-        summary_prompt = build_summary_prompt(messages)
-
-        summary_response = await self.llm_interface.chat(
-            messages=[{"role": CategoryDefaults.ROLE_USER, "content": summary_prompt}]
-        )
-        summary = summary_response.content
+        # #15700: vetted, then framed as data by the one summariser (#20852). A refused
+        # transcript raises TranscriptRefused (a 422), so no entry is written.
+        summarizer = ConversationSummarizer(gateway=self.llm_interface)
+        summary = (
+            await summarizer.summarize_with_usage(
+                vet_transcript(messages), None, template=KNOWLEDGE_ENTRY_PROMPT, max_tokens=None
+            )
+        ).text
 
         context = self.chat_contexts.get(chat_id)
         compiled_knowledge = self._build_compiled_knowledge_dict(chat_id, title, context, messages, summary)

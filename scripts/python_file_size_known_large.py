@@ -72,7 +72,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/batch_jobs.py": 916,
     "autobot-backend/api/browser_mcp.py": 1320,
     "autobot-backend/api/cache_management.py": 692,
-    "autobot-backend/api/chat.py": 2627,  # #20852: summarize endpoint uses the shared summariser
+    "autobot-backend/api/chat.py": 2626,  # #20852: summarize endpoint uses the shared summariser
     "autobot-backend/api/chat_sessions.py": 1859,  # #18293: legacy transcripts only ever proposed
     "autobot-backend/api/code_intelligence.py": 2145,
     "autobot-backend/api/code_search.py": 786,
@@ -143,7 +143,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/autobot_memory_graph/property_graph.py": 629,
     "autobot-backend/autobot_memory_graph/semantic_search.py": 706,
     "autobot-backend/benchmarks/benchmark_belief_state.py": 725,
-    "autobot-backend/chat_history/context_overflow.py": 832,
+    "autobot-backend/chat_history/context_overflow.py": 815,
     "autobot-backend/chat_history/session.py": 921,
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
     "autobot-backend/chat_workflow/graph.py": 1459,  # #19715
