@@ -306,7 +306,6 @@ export class AppConfigService {
       'Content-Type': 'application/json'
     };
 
-    // Merge headers
     const headers = {
       ...defaultHeaders,
       ...options.headers
