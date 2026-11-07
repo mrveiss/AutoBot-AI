@@ -144,7 +144,7 @@ def _on_commit(sync: Session) -> None:
             logger.exception("Event wake: dispatch of run %s failed after commit", wake.run_id)
 
 
-def _within(txn: Optional[SessionTransaction], ancestor: SessionTransaction) -> bool:
+def within_transaction(txn: Optional[SessionTransaction], ancestor: SessionTransaction) -> bool:
     while txn is not None:
         if txn is ancestor:
             return True
@@ -155,7 +155,7 @@ def _within(txn: Optional[SessionTransaction], ancestor: SessionTransaction) -> 
 def _on_rollback(sync: Session, previous_transaction: SessionTransaction) -> None:
     """Drop the dispatches whose run row this rollback (outer or savepoint) undid."""
     pending = sync.info.get(_PENDING_KEY, [])
-    pending[:] = [wake for wake in pending if not _within(wake.transaction, previous_transaction)]
+    pending[:] = [wake for wake in pending if not within_transaction(wake.transaction, previous_transaction)]
 
 
-__all__ = ["EVENT_WAKE_SOURCES", "wake_agent"]
+__all__ = ["EVENT_WAKE_SOURCES", "wake_agent", "within_transaction"]

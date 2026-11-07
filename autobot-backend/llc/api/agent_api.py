@@ -50,11 +50,10 @@ async def get_next_work_item(request: Request) -> Dict[str, Any]:
     "nothing to do" from "this route does nothing", which is exactly the
     distinction the stub response existed to make.
     """
-    from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
 
+    from ..services.accessors import get_work_item_service
     from ..services.work_item_queue import checkout_next
-    from ..services.work_item_service import WorkItemService
 
     agent_id, company_id = agent_context(request)
 
@@ -71,7 +70,7 @@ async def get_next_work_item(request: Request) -> Dict[str, Any]:
 
     factory = get_async_session_factory()
     async with factory() as session:
-        svc = lazy_singleton(WorkItemService)()
+        svc = get_work_item_service()
         item = await checkout_next(session, svc, agent_id=str(node_uuid), company_id=company_id)
         await session.commit()
 
@@ -109,11 +108,10 @@ async def update_work_item_status(item_id: str, body: StatusUpdate, request: Req
     item belonging to another company must 404 rather than transition.
     """
     item_id = str(parse_work_item_id(item_id))
-    from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
 
     from ..models.enums import WorkItemStatus
-    from ..services.work_item_service import WorkItemService
+    from ..services.accessors import get_work_item_service
 
     agent_id, company_id = agent_context(request)
     try:
@@ -124,7 +122,7 @@ async def update_work_item_status(item_id: str, body: StatusUpdate, request: Req
     factory = get_async_session_factory()
     async with factory() as session:
         try:
-            item = await lazy_singleton(WorkItemService)().transition_status(
+            item = await get_work_item_service().transition_status(
                 session,
                 work_item_id=str(item_id),
                 new_status=new_status,
@@ -141,7 +139,7 @@ async def update_work_item_status(item_id: str, body: StatusUpdate, request: Req
         comment_id = None
         if body.comment and body.comment.strip():
             author_uuid = await agent_node_uuid(agent_id, company_id)
-            comment = await lazy_singleton(WorkItemService)().add_comment(
+            comment = await get_work_item_service().add_comment(
                 session,
                 work_item_id=str(item_id),
                 company_id=str(company_id),
@@ -187,17 +185,16 @@ async def ingest_cost_event(body: CostEvent, request: Request) -> Dict[str, Any]
     A ``work_item_id`` that is unknown, or belongs to another company, is 404 and
     charges nothing: a ``200`` means the cost landed on the item named (#16016).
     """
-    from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
 
     from ..exceptions import BudgetExhausted, UnpricedModel, WorkItemNotInCompany
-    from ..services.budget import BudgetService
+    from ..services.accessors import get_budget_service
 
     agent_id, company_id = agent_context(request)
     factory = get_async_session_factory()
     try:
         async with factory() as session:
-            cost = await lazy_singleton(BudgetService)().ingest_cost_event(
+            cost = await get_budget_service().ingest_cost_event(
                 session,
                 agent_id=agent_id,
                 company_id=company_id,
@@ -232,10 +229,9 @@ async def post_comment(body: CommentBody, request: Request) -> Dict[str, Any]:
     be stored under its OWN company — readable by neither side and attached to
     an item its company does not own.
     """
-    from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
 
-    from ..services.work_item_service import WorkItemService
+    from ..services.accessors import get_work_item_service
 
     agent_id, company_id = agent_context(request)
     await assert_item_in_company(body.work_item_id, company_id)
@@ -243,7 +239,7 @@ async def post_comment(body: CommentBody, request: Request) -> Dict[str, Any]:
 
     factory = get_async_session_factory()
     async with factory() as session:
-        svc = lazy_singleton(WorkItemService)()
+        svc = get_work_item_service()
         comment = await svc.add_comment(
             session,
             work_item_id=body.work_item_id,
@@ -270,11 +266,10 @@ class WorkProduct(BaseModel):
 @router.post("/products")
 async def upload_work_product(body: WorkProduct, request: Request) -> Dict[str, Any]:
     agent_id, company_id = agent_context(request)
-    from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
 
     from ..models.enums import WorkProductType
-    from ..services.work_product_service import WorkProductService
+    from ..services.accessors import get_work_product_service
 
     try:
         product_type = WorkProductType(body.type)
@@ -283,7 +278,7 @@ async def upload_work_product(body: WorkProduct, request: Request) -> Dict[str, 
 
         raise _HTTPException(status_code=422, detail=f"Unknown product type: {body.type!r}")
 
-    svc = lazy_singleton(WorkProductService)()
+    svc = get_work_product_service()
     factory = get_async_session_factory()
     async with factory() as session:
         async with session.begin():
@@ -410,15 +405,15 @@ async def agent_upload_attachment(
 ) -> Dict[str, Any]:
     """Agent uploads a file attachment to a work item (GH#8253)."""
     agent_id, company_id = agent_context(request)
-    from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
 
-    from ..services.attachment_service import AttachmentService, AttachmentTooLarge
+    from ..services.accessors import get_attachment_service
+    from ..services.attachment_service import AttachmentTooLarge
 
     factory = get_async_session_factory()
     try:
         async with factory() as session:
-            svc = lazy_singleton(AttachmentService)()
+            svc = get_attachment_service()
             row = await svc.upload(
                 session,
                 company_id=company_id,
@@ -536,14 +531,13 @@ async def agent_list_wiki(namespace: Optional[str] = None, request: Request = No
     agent_id, company_id = agent_context(request)
     import uuid as _uuid
 
-    from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
 
-    from ..services.agent_wiki_service import AgentWikiService
+    from ..services.accessors import get_agent_wiki_service
 
     factory = get_async_session_factory()
     async with factory() as session:
-        svc = lazy_singleton(AgentWikiService)()
+        svc = get_agent_wiki_service()
         entries = await svc.list_entries(session, agent_id, _uuid.UUID(company_id), namespace)
     return {
         "entries": [
@@ -559,14 +553,13 @@ async def agent_create_wiki_entry(body: AgentWikiEntryIn, request: Request = Non
     agent_id, company_id = agent_context(request)
     import uuid as _uuid
 
-    from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
 
-    from ..services.agent_wiki_service import AgentWikiService
+    from ..services.accessors import get_agent_wiki_service
 
     factory = get_async_session_factory()
     async with factory() as session:
-        svc = lazy_singleton(AgentWikiService)()
+        svc = get_agent_wiki_service()
         entry = await svc.create_entry(
             session,
             agent_id=agent_id,
