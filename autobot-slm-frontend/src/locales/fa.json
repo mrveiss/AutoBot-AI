@@ -3132,6 +3132,7 @@
         "value": "مقدار"
       },
       "userManagementSettings": {
+        "personPushFailed": "The SLM could not be updated for: {names}. If one of them was deactivated or changed their password, the SLM still has the old state. It retries by itself.",
         "23PermissionsAcross8": "23 permissions across 8 resources",
         "actions": "عملیات",
         "active": "فعال",
