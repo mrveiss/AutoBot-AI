@@ -699,22 +699,6 @@
   "8db0e9e9",
   "ce6c5ba6"
  ],
- "autobot-frontend/src/components/transcriber/AsrProviderSelector.vue": [
-  "00f090ad",
-  "21d32e0c",
-  "2b7c7aaa",
-  "2ba707ec",
-  "2e499689",
-  "320f7cc3",
-  "32aba378",
-  "3cdae58b",
-  "71873814",
-  "73a8c697",
-  "86402bb7",
-  "b06b6725",
-  "bdc27412",
-  "c553bfc5"
- ],
  "autobot-frontend/src/components/transcriber/ExportMenu.vue": [
   "22ea305b",
   "2e7389f6",

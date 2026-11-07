@@ -22,11 +22,13 @@ from __future__ import annotations
 import ast
 import re
 from pathlib import Path
+from typing import cast
 
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
 from autobot_shared.slm_credential_deletion import PROPOSAL_PATH, claim_path, delete_path
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _TEXT_SUFFIXES = (".conf", ".j2", ".sh", ".py", ".yml", ".yaml", ".tmpl", ".template")
@@ -155,7 +157,7 @@ def test_the_routes_sit_under_the_denied_prefix() -> None:
 
 
 def _parse(rel: str) -> ast.Module:
-    return ast.parse((repo_root() / rel).read_text(encoding="utf-8"))
+    return cast(ast.Module, parse_cache.parse((repo_root() / rel).read_text(encoding="utf-8")))
 
 
 def _str_kwarg(call: ast.Call, name: str) -> str:
@@ -215,9 +217,9 @@ def test_the_first_admin_route_sits_under_the_denied_prefix() -> None:
 
 def test_contrast_a_remounted_or_reprefixed_first_admin_route_changes_the_resolved_path() -> None:
     """The resolver follows the chain: a router with another prefix would not resolve under /api/internal/."""
-    other = ast.parse('router = APIRouter(prefix="/public")')
+    other = parse_cache.parse('router = APIRouter(prefix="/public")')
     assert _router_prefix(other) == "/public"
-    assert _str_kwarg(ast.parse('x.include_router(r, prefix="/api")').body[0].value, "prefix") == "/api"
+    assert _str_kwarg(parse_cache.parse('x.include_router(r, prefix="/api")').body[0].value, "prefix") == "/api"
 
 
 _PLAIN = "    location /api/ {\n        proxy_pass http://x;\n    }\n"
