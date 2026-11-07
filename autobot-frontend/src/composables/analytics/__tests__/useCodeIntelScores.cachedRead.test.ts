@@ -7,7 +7,7 @@
  *
  * The cached security route requires `source_id`; without it the page-open read answered 422.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/utils/fetchWithAuth', () => ({ fetchWithAuth: vi.fn() }))
 vi.mock('@/config/AppConfig.js', () => ({
@@ -38,6 +38,7 @@ vi.mock('@/composables/useTaskLoader', async () => {
   }
 })
 
+import { loadLocaleMessages } from '@/i18n'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { useCodeIntelScores } from '../useCodeIntelScores'
 import type { UseCodeIntelAnalysisDeps } from '../codeIntelTypes'
@@ -60,6 +61,10 @@ function makeScores() {
 }
 
 describe('cached security score read (#20491)', () => {
+  // The English bundle is lazy-loaded; the surfaced error is asserted as resolved text.
+  beforeAll(async () => {
+    await loadLocaleMessages('en')
+  })
   beforeEach(() => mockedFetch.mockReset())
 
   it('sends the selected source and issues no write', async () => {
@@ -159,5 +164,23 @@ describe('cached security score read (#20491)', () => {
     await scores.loadCachedSecurityScore()
     await scores.loadCachedSecurityScore()
     expect(scores.securityScoreError.value).toBe('')
+  })
+
+  it('a preset score survives a no_data and a failed cached answer', async () => {
+    liveScan.ok = true
+    mockedFetch.mockResolvedValueOnce(jsonResponse({ status: 'no_data' }))
+    mockedFetch.mockResolvedValueOnce(failedRead())
+    const scores = makeScores()
+    await scores.loadSecurityScore()
+    // Control: the live result is in place before the cached answers arrive.
+    expect(scores.securityScore.value?.security_score).toBe(80)
+
+    await scores.loadCachedSecurityScore()
+    expect(mockedFetch).toHaveBeenCalledTimes(1)
+    expect(scores.securityScore.value?.security_score).toBe(80)
+
+    await scores.loadCachedSecurityScore()
+    expect(mockedFetch).toHaveBeenCalledTimes(2)
+    expect(scores.securityScore.value?.security_score).toBe(80)
   })
 })
