@@ -689,15 +689,15 @@ export class ChatController {
       // Update store with loaded sessions
       if (Array.isArray(sessions)) {
         sessions.forEach(session => {
-          // #9724: normalize the repository session (snake_case ISO strings)
-          // to the store shape — pushing it raw left createdAt/updatedAt/
-          // isActive undefined on every imported session.
+          // #9724: the store needs isActive. Dates are taken as the repository
+          // mapped them (#20865) — re-deriving them from snake_case fields the
+          // repository does not return produced Invalid Date.
           this.chatStore.importSession({
             id: session.id,
             title: session.title ?? '',
             messages: session.messages,
-            createdAt: new Date(session.created_at),
-            updatedAt: new Date(session.updated_at),
+            createdAt: session.createdAt as Date | undefined,
+            updatedAt: session.updatedAt as Date | undefined,
             isActive: false,
           })
         })
