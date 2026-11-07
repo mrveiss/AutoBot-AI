@@ -16,6 +16,7 @@ from sqlalchemy import delete, select
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
 from autobot_shared.time_utils import now_utc
+from autobot_shared.worker_loop import run_in_worker_loop
 
 logger = get_logger(__name__)
 metrics = get_metrics_manager()
@@ -33,9 +34,7 @@ def cleanup_stale_mobile_devices(dry_run: bool = False) -> dict:
     Returns:
         Dict with keys: deleted_count, dry_run
     """
-    import asyncio
-
-    result = asyncio.run(_cleanup_stale_devices_async(dry_run))
+    result = run_in_worker_loop(_cleanup_stale_devices_async(dry_run))
     return result
 
 
