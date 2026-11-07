@@ -13,8 +13,9 @@ from __future__ import annotations
 import asyncio
 import os
 import shlex
-import signal
 from dataclasses import dataclass
+
+from autobot_shared.subprocess_reap import kill_and_reap
 
 _READ_CHUNK = 65536
 #: The only variables a child inherits from the backend; everything else (keys, DSNs, tokens) is withheld.
@@ -50,15 +51,6 @@ async def _drain(stream: asyncio.StreamReader, limit: int | None) -> tuple[bytes
         size += len(take)
         dropped = dropped or len(take) < len(chunk)
     return b"".join(kept), dropped
-
-
-async def _reap(process: asyncio.subprocess.Process) -> None:
-    """Kill the child's process group if it is still running, then collect it."""
-    try:
-        os.killpg(process.pid, signal.SIGKILL)  # always: a backgrounded process outlives its shell
-    except ProcessLookupError:
-        pass  # the whole group already exited
-    await process.wait()
 
 
 async def run_bounded(command: str, *, cwd: str, timeout_s: float, max_output_bytes: int) -> BoundedResult:
@@ -120,4 +112,4 @@ async def _wait_bounded(
         return BoundedResult(b"", b"", None, True, False)
     finally:
         if kill_group_on_exit or not finished:  # timed out, or cancelled by the caller
-            await _reap(process)
+            await kill_and_reap(process, process_group=True)

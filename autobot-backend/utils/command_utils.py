@@ -35,6 +35,7 @@ from asyncio import Queue as AsyncQueue
 from dataclasses import dataclass
 from typing import Any, AsyncGenerator, Callable, Dict, List
 
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import TimingConstants
 from autobot_shared.time_utils import utc_timestamp as get_timestamp
@@ -49,7 +50,9 @@ logger = get_logger(__name__)
 #: The deadline for a command run without a policy (#20740). It used to be none at all:
 #: a command that never exited held its caller forever. A caller that needs longer passes a
 #: CommandRunPolicy naming its own limit, never an unbounded escape hatch.
-DEFAULT_SHELL_TIMEOUT_S = TimingConstants.VERY_LONG_TIMEOUT
+DEFAULT_SHELL_TIMEOUT_S = env_int_clamped(
+    "AUTOBOT_SECURE_COMMAND_TIMEOUT_S", TimingConstants.VERY_LONG_TIMEOUT, min_v=1, max_v=3600
+)
 
 # Re-export for backward compatibility
 __all__ = [
