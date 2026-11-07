@@ -387,7 +387,9 @@ async def deactivate_user(
     "/{user_id}/roles/{role_id}",
     response_model=RoleAssignmentResponse,
     summary="Assign role",
-    description="Assign a role to a user.",
+    description=(
+        "Assign a role to a user. Changes permissions only, " "never platform admin status (PUT /{user_id}/admin)."
+    ),
     dependencies=[
         Depends(user_management_route_marker),
         Depends(require_platform_admin),
@@ -416,7 +418,9 @@ async def assign_role(
     "/{user_id}/roles/{role_id}",
     response_model=RoleAssignmentResponse,
     summary="Revoke role",
-    description="Revoke a role from a user.",
+    description=(
+        "Revoke a role from a user. Changes permissions only, " "never platform admin status (PUT /{user_id}/admin)."
+    ),
     dependencies=[
         Depends(user_management_route_marker),
         Depends(require_platform_admin),
@@ -452,6 +456,7 @@ async def revoke_role(
     summary="Set user role by name",
     description=(
         "Replace all system roles for a user with the named role (admin, user, readonly). "
+        "Changes permissions only, never platform admin status (PUT /{user_id}/admin). "
         "Requires admin privilege. Issue #1801."
     ),
     dependencies=[

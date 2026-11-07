@@ -126,6 +126,31 @@ class UserLifecycleMixin(UserServiceBase):
         logger.info("%s user: %s", "Activated" if active else "Deactivated", user_id)
         return True
 
+    async def set_platform_admin(self, user_id: uuid.UUID, is_admin: bool) -> bool:
+        """Make *user_id* a platform admin, or not -- the one place that changes it (#20670).
+
+        ``is_platform_admin`` is the only source of the token's admin ``role``. The old tokens are
+        revoked after the commit through the password epoch, so the change takes effect on the next
+        request: a demoted admin cannot keep acting on a token that still says admin, and a promoted
+        user signs in again to get one that does. A demotion revokes with the same one-second lead as
+        a deactivation, so a token minted in that second is void too. The role routes (``UserRole``)
+        never reach this field. Returns False, changing and auditing nothing, when the flag already
+        holds that value. Raises ``UserNotFoundError``.
+        """
+        user = await self._require_user(user_id)
+        previous = bool(user.is_platform_admin)
+        if previous == is_admin:
+            return False
+        user.is_platform_admin = is_admin
+        user.updated_at = now_utc()
+        await self.session.flush()
+        lead = 0 if is_admin else DEACTIVATION_EPOCH_LEAD_SECONDS
+        run_after_commit(self.session, PasswordEpochMark(user.username, lead, self.epoch_in_redis))
+        details = {"from": previous, "to": is_admin, "sessions_revocation": "queued_after_commit"}
+        await self._audit_log(IdentityAuditAction.PLATFORM_ADMIN_CHANGED, AuditResourceType.USER, user_id, details)
+        logger.info("Platform admin %s for user: %s", "granted" if is_admin else "revoked", user_id)
+        return True
+
     async def deactivate_user(self, user_id: uuid.UUID) -> bool:
         """Deactivate a user account; raises ``UserNotFoundError``."""
         return await self._set_active(user_id, False)
