@@ -1608,7 +1608,7 @@ onUnmounted(() => {
   gap: 0.375rem;
   padding: 0.5rem 1.25rem;
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border: none;
   border-radius: 0.5rem;
   font-size: 0.875rem;
