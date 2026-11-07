@@ -256,13 +256,49 @@ def _measure_at_base(reaches: list["Reach[Any]"]) -> None:
             _BASE_FAILED[reach.name] = result["errors"].get(reach.name) or _declaring_file(reach)
 
 
-def base_population(reach: "Reach[Any]") -> int:
-    """What the BASE's declaration of *reach* finds at the base; measured once per process."""
-    if reach.name not in _BASE_COUNT and reach.name not in _BASE_FAILED:
-        from repo_tests._reach import REGISTRY  # noqa: PLC0415 - _reach imports this module
+def _unmeasured(same_module_as: "Reach[Any] | None" = None) -> list["Reach[Any]"]:
+    """Computed declarations the base has not been asked about yet; one module's, or all."""
+    from repo_tests._reach import REGISTRY  # noqa: PLC0415 - _reach imports this module
 
-        pending = [r for r in REGISTRY.values() if r.computed and r.name not in _BASE_COUNT]
+    return [
+        r
+        for r in REGISTRY.values()
+        if r.computed
+        and r.name not in _BASE_COUNT
+        and r.name not in _BASE_FAILED
+        and (same_module_as is None or r.module == same_module_as.module)
+    ]
+
+
+def prefetch_base() -> None:
+    """Measure every registered computed declaration in ONE base process.
+
+    For a caller that is about to read most floors (the CI half of ``reach_declarations_test``):
+    one process imports the shared dependencies once, where a process per module would repeat them.
+    """
+    pending = _unmeasured()
+    if pending:
+        _measure_at_base(pending)
+
+
+def base_population(reach: "Reach[Any]") -> int:
+    """What the BASE's declaration of *reach* finds at the base; measured once per process.
+
+    Only *reach*'s own module is measured with it (#17810). Measuring every registered declaration
+    walked all ~200 of them at the base, about 74s, for a caller that needed one floor -- and
+    ``reach_declarations_test`` registers them all at import, so any reach test in its session paid it.
+    """
+    if reach.name not in _BASE_COUNT and reach.name not in _BASE_FAILED:
+        pending = _unmeasured(reach)
         _measure_at_base(pending if reach in pending else [*pending, reach])
+        if reach.name not in _BASE_COUNT:
+            # The base process loaded only the requesting module, so a declaration moved between
+            # modules is not found there. Look it up across the whole registry, once, before
+            # saying the base lacks it. The name stays in ``_BASE_FAILED`` so this runs once.
+            first_error = _BASE_FAILED.pop(reach.name, None)
+            prefetch_base()
+            if reach.name not in _BASE_COUNT:
+                _BASE_FAILED[reach.name] = _BASE_FAILED.get(reach.name) or first_error or reach.module
     if reach.name not in _BASE_COUNT:
         raise BaseUnavailable(
             f"[{reach.name}] the base has no declaration by this name ({_BASE_FAILED.get(reach.name)}): "

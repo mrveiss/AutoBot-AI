@@ -24,6 +24,10 @@ from autobot_shared.risk_tier import presented_risk_tier_value
 from type_defs.common import Metadata
 
 
+class StepNotAwaitingApproval(Exception):
+    """The step a decision targets is not waiting for one; a route maps it to 409."""
+
+
 class WorkflowStepStatus(Enum):
     """Status of a workflow step"""
 
@@ -152,6 +156,12 @@ class WorkflowStep:
     step_type: str = "command_execution"
     # Issue #2397: Step-level configuration dict for vision and future step types.
     step_config: Metadata | None = None
+
+    def begin_after_approval(self) -> None:
+        """Move a parked step to EXECUTING. A repeated approve finds it already past WAITING_APPROVAL and is refused."""
+        if self.status != WorkflowStepStatus.WAITING_APPROVAL:
+            raise StepNotAwaitingApproval(f"Step {self.step_id} is {self.status.value}, not waiting for approval")
+        self.status = WorkflowStepStatus.EXECUTING
 
     def __post_init__(self) -> None:
         """Issue #19807: every step that is not a vision step needs confirmation, whoever built it.
