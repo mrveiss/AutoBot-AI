@@ -14,7 +14,7 @@ const post = vi.fn()
 vi.mock('@autobot/ui', () => ({
   BaseInput: defineComponent({
     inheritAttrs: false,
-    props: { modelValue: String, type: { type: String, default: 'text' }, label: String },
+    props: { modelValue: String, type: { type: String, default: 'text' }, label: String, error: String },
     emits: ['update:modelValue'],
     setup: (p, { emit, attrs }) => () =>
       h('div', [
@@ -24,6 +24,7 @@ vi.mock('@autobot/ui', () => ({
           value: p.modelValue,
           onInput: (e: Event) => emit('update:modelValue', (e.target as HTMLInputElement).value),
         }),
+        p.error ? h('span', { role: 'alert' }, p.error) : null,
       ]),
   }),
   BaseFormField: defineComponent({
@@ -181,5 +182,28 @@ describe('BacklogCreateModal (#18978)', () => {
     expect(w.text()).not.toContain('llc.backlog.noProjectsHint')
     await w.find('[data-testid="retry-projects"]').trigger('click')
     expect(w.emitted('retry-projects')).toHaveLength(1)
+  })
+
+  it('refuses a fractional or negative story-point value with a field error and no request (#20930)', async () => {
+    const w = mountForm({ defaultProjectId: 'p-1' })
+    await w.find('input[type="text"]').setValue('A title')
+    for (const bad of ['1.5', '-2']) {
+      await w.find('input[type="number"]').setValue(bad)
+      expect(w.text()).toContain('llc.backlog.storyPointsWholeNumber')
+      expect(createButton(w).attributes('disabled')).toBeDefined()
+    }
+    await w.find('input[type="number"]').setValue('5')
+    expect(w.text()).not.toContain('llc.backlog.storyPointsWholeNumber')
+    await createButton(w).trigger('click')
+    await flushPromises()
+    expect(post).toHaveBeenCalledWith('/api/llc/work-items', expect.objectContaining({ story_points: 5 }))
+  })
+
+  it('drops a chosen project that a replaced project list no longer holds (#20930)', async () => {
+    const w = mountForm({ defaultProjectId: '' })
+    await w.find('input[type="text"]').setValue('A title')
+    await w.find('select').setValue('p-2')
+    await w.setProps({ projects: [{ id: 'other-company-project', name: 'Gamma' }] })
+    expect(createButton(w).attributes('disabled')).toBeDefined()
   })
 })
