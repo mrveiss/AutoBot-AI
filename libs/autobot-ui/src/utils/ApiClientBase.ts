@@ -99,7 +99,53 @@ function armAbort(timeout: number, external?: AbortSignal) {
 
 type GetAttempt<T> = { ok: true; value: T } | { ok: false; error: Error; retryAfterMs: number }
 
-export abstract class ApiClientBase<O extends TransportRequestOptions = TransportRequestOptions> {
+// ---- Typed call layer (#12363) -------------------------------------------------------------
+// `Paths` is an openapi-typescript `paths` interface injected by each app; the kit stays app-agnostic.
+// The path key is matched literally (no template-literal inference) to keep type-checking fast.
+
+export type HttpMethod = 'get' | 'put' | 'post' | 'delete' | 'patch'
+
+type OpAt<P, K extends keyof P, M extends string> = M extends keyof P[K] ? NonNullable<P[K][M]> : never
+
+/** The methods a documented path actually offers (`get?: never` entries are excluded). */
+export type MethodsOf<P, K extends keyof P> = { [M in HttpMethod]: [OpAt<P, K, M>] extends [never] ? never : M }[HttpMethod]
+
+type JsonOf<C> = C extends { 'application/json': infer J } ? J : unknown
+
+/** The operation's JSON 200/201 response body, or `unknown` when it documents none. */
+export type CallResponse<Op> = Op extends { responses: infer R }
+  ? R extends { 200: { content: infer C } }
+    ? JsonOf<C>
+    : R extends { 201: { content: infer C } }
+      ? JsonOf<C>
+      : unknown
+  : unknown
+
+type ParamsOf<Op, S extends 'path' | 'query'> = Op extends { parameters: infer Pa } ? (S extends keyof Pa ? NonNullable<Pa[S]> : never) : never
+type BodyOf<B> = B extends { content: infer C } ? (C extends { 'application/json': infer J } ? J : FormData | Blob) : never
+
+type PathPart<Op> = [ParamsOf<Op, 'path'>] extends [never] ? { path?: undefined } : { path: ParamsOf<Op, 'path'> }
+type QueryPart<Op> = [ParamsOf<Op, 'query'>] extends [never] ? { query?: undefined } : { query?: ParamsOf<Op, 'query'> }
+type BodyPart<Op> = Op extends { requestBody: infer B }
+  ? { body: BodyOf<B> }
+  : Op extends { requestBody?: infer B }
+    ? [NonNullable<B>] extends [never] ? { body?: undefined } : { body?: BodyOf<NonNullable<B>> }
+    : { body?: undefined }
+
+/** Per-call input: `path` params, `query`, `body` typed from the operation, plus the client's transport options. */
+export type CallInit<Op, O extends TransportRequestOptions> = Omit<O, 'params'> & PathPart<Op> & QueryPart<Op> & BodyPart<Op>
+type CallArgs<Op, O extends TransportRequestOptions> = {} extends CallInit<Op, O> ? [init?: CallInit<Op, O>] : [init: CallInit<Op, O>]
+
+/** Substitute `{name}` segments, URL-encoded; a missing value is a programming error, not a request. */
+export function fillPathParams(template: string, params: Record<string, unknown> | undefined): string {
+  return template.replace(/\{([^}]+)\}/g, (_match, name: string) => {
+    const value = params?.[name]
+    if (value === undefined || value === null) throw new Error(`Missing path parameter "${name}" for ${template}`)
+    return encodeURIComponent(String(value))
+  })
+}
+
+export abstract class ApiClientBase<O extends TransportRequestOptions = TransportRequestOptions, P extends object = object> {
   protected defaultHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
   protected defaultKeepSessionOn401 = false
 
@@ -254,6 +300,38 @@ export abstract class ApiClientBase<O extends TransportRequestOptions = Transpor
 
   patch<T = unknown>(endpoint: string, data?: unknown, options: O = {} as O): Promise<T> {
     return this.send<T>('PATCH', endpoint, data, options)
+  }
+
+  private splitCall(method: string, path: string, init: unknown) {
+    const { path: pathParams, query, body, ...rest } = (init ?? {}) as Record<string, unknown>
+    const endpoint = fillPathParams(path, pathParams as Record<string, unknown> | undefined)
+    const options = { ...rest, params: query } as unknown as O
+    return { endpoint, options, body, verb: method.toUpperCase() }
+  }
+
+  /**
+   * The typed request: `path` is a key of the app's generated contract, `init` carries the path params,
+   * query and body the operation documents. Resolves to the operation's JSON 200 body. GET retries; the
+   * other methods are single-shot. For streams and blobs use {@link callRaw}.
+   */
+  call<K extends keyof P & string, M extends MethodsOf<P, K>>(
+    method: M,
+    path: K,
+    ...args: CallArgs<OpAt<P, K, M>, O>
+  ): Promise<CallResponse<OpAt<P, K, M>>> {
+    const { endpoint, options, body, verb } = this.splitCall(method, path, args[0])
+    if (verb === 'GET') return this.get(endpoint, options) as Promise<CallResponse<OpAt<P, K, M>>>
+    return this.send(verb, endpoint, body, options) as Promise<CallResponse<OpAt<P, K, M>>>
+  }
+
+  /** The typed request returning the `Response` itself (SSE, blobs). Non-2xx is NOT thrown here. */
+  callRaw<K extends keyof P & string, M extends MethodsOf<P, K>>(
+    method: M,
+    path: K,
+    ...args: CallArgs<OpAt<P, K, M>, O>
+  ): Promise<Response> {
+    const { endpoint, options, body, verb } = this.splitCall(method, path, args[0])
+    return this.rawRequest(endpoint, { ...options, method: verb, body } as RawRequestOptions<O>)
   }
 
   /** `body` is for the few APIs that take one on DELETE (#12363); most send none. */

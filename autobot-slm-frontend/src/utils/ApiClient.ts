@@ -56,7 +56,7 @@ export interface GetOptions extends RequestOptions {
   responseType?: 'json' | 'text'
 }
 
-export class SlmApiClient extends ApiClientBase<RequestOptions> {
+export class SlmApiClient extends ApiClientBase<RequestOptions, paths> {
   // Optional host/base override (defaults to getSlmApiBase() when unset).
   private baseUrlOverride: string | null = null
 

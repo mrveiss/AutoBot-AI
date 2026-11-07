@@ -1,6 +1,7 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 import { ApiClientBase, httpErrorFrom, type RawRequestOptions, type TransportRequestOptions } from '@autobot/ui'
+import type { paths } from '@/types/generated/api';
 import appConfig from '@/config/AppConfig.js';
 import { createLogger } from '@/utils/debugUtils';
 import { getApiBase, getBackendUrl } from '@/config/ssot-config';
@@ -74,7 +75,7 @@ export interface ChatMessageResponse {
 export type { ApiRequestOptions as RequestOptions };
 type RequestOptions = ApiRequestOptions;
 
-export class ApiClient extends ApiClientBase<RequestOptions> {
+export class ApiClient extends ApiClientBase<RequestOptions, paths> {
   private baseUrl: string;
   private baseUrlPromise: Promise<string> | null;
   private settings: Record<string, unknown>;

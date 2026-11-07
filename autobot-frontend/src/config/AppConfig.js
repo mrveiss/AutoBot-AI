@@ -326,6 +326,7 @@ export class AppConfigService {
 
     try {
       this.log(`API Request: ${options.method || 'GET'} ${url}`);
+      // eslint-disable-next-line no-restricted-syntax -- bootstrap fetch, runs before any client exists
       const response = await fetch(url, fetchOptions);
       clearTimeout(timeoutId);
 

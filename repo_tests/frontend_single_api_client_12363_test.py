@@ -57,6 +57,8 @@ _TYPE_ONLY_AXIOS = re.compile(
 _COMMENT = re.compile(r"^\s*(//|\*|/\*|<!--)")
 #: The existing per-site exemption (eslint's raw-fetch ban): it must follow a comment giving the reason.
 _EXEMPT = re.compile(r"eslint-disable-next-line\s+no-restricted-syntax")
+#: The one-line form (#12363 slice 0): the reason rides on the directive itself, ``-- <at least four words>``.
+_REASONED_EXEMPT = re.compile(r"eslint-disable-next-line\s+no-restricted-syntax\s+--\s+(?:\S+\s+){3,}\S")
 #: A reason is prose: a comment of at least four words that is not itself a lint directive.
 _REASON = re.compile(r"^\s*(?://|\*|/\*)\s*(?!eslint|@ts-|prettier)(?:\S+\s+){3,}\S")
 #: A trailing ``// ...`` or an inline ``/* ... */`` is not code.
@@ -64,7 +66,11 @@ _TRAILING_COMMENT = re.compile(r"/\*.*?\*/|(?<![:'\"\w])//.*$")
 
 # Measured on b07673947b; the SLM's Prometheus/Grafana probes are eslint-exempted with a reason. Lower an app's pin by exactly what a PR removes (#12363 phase 2).
 # #12363 step 2: the SLM's main-backend calls moved onto SlmApiClient, 1 -> 0.
-PINS = {"autobot-frontend": 14, "autobot-slm-frontend": 0}
+# #12363 slice 0: the main app's raw-fetch eslint ban (same selectors as the SLM's) landed, and its 12 legitimate raw
+# fetches (VNC probe, data: URL, connection tester, AppConfig and ServiceDiscovery bootstrap x3, ssot-config bootstrap,
+# widget, RUM x2, thumbnail worker, SLM-origin client) now carry a one-line `eslint-disable-next-line ... -- <reason>` at the call site: 14 -> 2.
+# What remains is `utils/fetchWithAuth.ts` (the bridge slice 3 retires) and `conversationFileUpload.ts`'s XHR.
+PINS = {"autobot-frontend": 2, "autobot-slm-frontend": 0}
 
 
 def _countable(app: Path, path: Path) -> bool:
@@ -99,13 +105,20 @@ def _without_type_only_imports(text: str) -> str:
     return _TYPE_ONLY_AXIOS.sub(lambda m: "\n" * m.group(0).count("\n"), text)
 
 
+def _exempted(lines: list[str], i: int) -> bool:
+    """Line *i* sits under a reasoned raw-fetch exemption: a one-line ``-- reason`` directive, or directive under a reason comment."""
+    if i >= 1 and _COMMENT.match(lines[i - 1]) and _REASONED_EXEMPT.search(lines[i - 1]):
+        return True
+    return i >= 2 and bool(_EXEMPT.search(lines[i - 1]) and _REASON.match(lines[i - 2]))
+
+
 def _transports(text: str) -> int:
     """Transports in one file; one raw ``fetch`` directly under a REASONED eslint raw-fetch exemption is exempt."""
     lines, total = _without_type_only_imports(text).splitlines(), 0
     for i, line in enumerate(lines):
         code = "" if _COMMENT.match(line) else _TRAILING_COMMENT.sub("", line)
         fetches = len(_FETCH.findall(code))
-        if fetches and i >= 2 and _EXEMPT.search(lines[i - 1]) and _REASON.match(lines[i - 2]):
+        if fetches and _exempted(lines, i):
             fetches -= 1  # the exemption is eslint's raw-fetch ban: it covers one fetch, never axios or XHR
         total += fetches + len(_OTHER_TRANSPORT.findall(code))
     return total
@@ -146,6 +159,17 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
         self._w(tmp_path, "src/A.vue", reasoned)
         self._w(tmp_path, "src/B.vue", bare)
         assert count_transports(tmp_path) == 1
+
+    def test_a_one_line_reasoned_directive_is_exempt_and_a_thin_or_trailing_one_is_not(self, tmp_path: Path) -> None:
+        d = "// eslint-disable-next-line no-restricted-syntax"
+        self._w(tmp_path, "src/ok.ts", f"{d} -- probes another origin, not the backend\nawait fetch(a)\n")
+        self._w(tmp_path, "src/thin.ts", f"{d} -- fine\nawait fetch(b)\n")  # one word is not a reason
+        self._w(tmp_path, "src/empty.ts", f"{d} --\nawait fetch(c)\n")
+        self._w(tmp_path, "src/far.ts", f"{d} -- probes another origin, not the backend\nconst x = 1\nawait fetch(d)\n")
+        self._w(
+            tmp_path, "src/xhr.ts", f"{d} -- probes another origin, not the backend\nconst x = new XMLHttpRequest()\n"
+        )
+        assert count_transports(tmp_path) == 4  # thin, empty, far (not adjacent) and the XHR
 
     def test_it_counts_generic_optional_dynamic_and_bare_import_shapes(self, tmp_path: Path) -> None:
         body = (

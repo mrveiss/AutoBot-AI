@@ -136,8 +136,8 @@ def _runtime_websocket_paths(app) -> set[str]:  # noqa: ANN001
     return {r.path for r in app.routes if isinstance(r, WebSocketRoute)}
 
 
-def dump_openapi(out_path: str) -> int:
-    """Import the app and dump app.openapi() — authoritative route table."""
+def dump_openapi(out_path: str, include_websocket_paths: bool = True) -> int:
+    """Dump app.openapi(); without the audit-only x-websocket-paths key it is what openapi-typescript reads (#12363)."""
     # Resolve BEFORE chdir: a relative out_path must land where the caller
     # expects, not inside autobot-backend/ (#9864 — this stranded openapi.json
     # in CI and the audit step crashed with FileNotFoundError every run).
@@ -162,8 +162,9 @@ def dump_openapi(out_path: str) -> int:
         # FastAPI (confirmed in CI: "+0 websocket" despite 25 real handlers).
         # The static scan is version-independent and is the source of truth;
         # the runtime walk is kept as a supplementary safety net.
-        ws = _runtime_websocket_paths(app) | static_websocket_paths(BACKEND)
-        spec["x-websocket-paths"] = sorted(ws)
+        if include_websocket_paths:
+            ws = _runtime_websocket_paths(app) | static_websocket_paths(BACKEND)
+            spec["x-websocket-paths"] = sorted(ws)
     except Exception as e:  # noqa: BLE001
         print(f"[dump-openapi] FAILED to build app: {e}", file=sys.stderr)
         return 1
@@ -763,13 +764,16 @@ def audit_baseline(
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # exec_module needs this; direct execution doesn't (#16816)
-from dead_surface import report_dead_surface  # noqa: E402
+from dead_surface import baseline_health_lines, report_dead_surface  # noqa: E402
 
 
-def main() -> int:
+def _build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--openapi", help="openapi.json path or URL (authoritative mode)")
     ap.add_argument("--dump-openapi", metavar="OUT", help="import app_factory.create_app() and dump spec, then exit")
+    ap.add_argument(
+        "--no-websocket-paths", action="store_true", help="with --dump-openapi: omit x-websocket-paths (#12363)"
+    )
     ap.add_argument(
         "--slm-openapi",
         metavar="FILE",
@@ -799,24 +803,32 @@ def main() -> int:
         "calls under PREFIX (e.g. /api/llc). Lets CI gate one module "
         "while other pre-existing findings are tracked separately.",
     )
-    args = ap.parse_args()
+    return ap
+
+
+def _known_backend_paths(args: argparse.Namespace) -> tuple[set[str], str]:
+    """The backend route table the frontend calls are checked against, and how it was obtained."""
+    if not args.openapi:
+        return backend_paths_static()[0], "STATIC (regex, heuristic — prefer --openapi)"
+    backend = backend_paths_from_openapi(args.openapi)
+    mode = "AUTHORITATIVE (openapi)"
+    if args.slm_openapi:
+        slm_backend = backend_paths_from_openapi(args.slm_openapi)
+        backend |= slm_backend
+        mode += f" + SLM ({len(slm_backend)} paths unioned)"
+    return backend, mode
+
+
+def main() -> int:
+    args = _build_parser().parse_args()
 
     if args.dump_openapi:
-        return dump_openapi(args.dump_openapi)
+        return dump_openapi(args.dump_openapi, include_websocket_paths=not args.no_websocket_paths)
 
     if args.dump_slm_openapi:
         return dump_slm_openapi(args.dump_slm_openapi)
 
-    if args.openapi:
-        backend = backend_paths_from_openapi(args.openapi)
-        mode = "AUTHORITATIVE (openapi)"
-        if args.slm_openapi:
-            slm_backend = backend_paths_from_openapi(args.slm_openapi)
-            backend |= slm_backend
-            mode += f" + SLM ({len(slm_backend)} paths unioned)"
-    else:
-        backend, _ = backend_paths_static()
-        mode = "STATIC (regex, heuristic — prefer --openapi)"
+    backend, mode = _known_backend_paths(args)
 
     fe = frontend_calls()
     print(f"mode: {mode}")
@@ -840,26 +852,7 @@ def main() -> int:
     # the gate green while the button is dead. Report what the baseline is
     # absorbing — non-gating, so the blocking behaviour is unchanged.
     if baseline:
-        health = audit_baseline(baseline, unwired_all, fe, backend)
-        rematch, resolved, absent = health["rematch"], health["resolved"], health["absent"]
-        namespace_only = health["namespace_only"]
-        print(
-            f"\n== BASELINE HEALTH: {len(rematch)} renamed, "
-            f"{len(namespace_only)} namespace-only, "
-            f"{len(resolved)} resolved, {len(absent)} no-longer-called =="
-        )
-        for path, suggestions in rematch:
-            print(f"  RENAMED ENDPOINT (rewire the caller)  {path}")
-            for suggestion in suggestions:
-                print(f"      ->  now served by {suggestion}")
-        for path, suggestions in namespace_only:
-            print(f"  NAMESPACE ALIVE, NO MATCHING ROUTE  {path}")
-            for suggestion in suggestions:
-                print(f"      ~  nearest, NOT a rename: {suggestion}")
-        for path, _ in resolved:
-            print(f"  RESOLVED (prune from baseline)  {path}")
-        for path, _ in absent:
-            print(f"  NO LONGER CALLED (prune from baseline)  {path}")
+        print("\n".join(baseline_health_lines(audit_baseline(baseline, unwired_all, fe, backend))))
 
     # #10037: getBackendUrl() calls that forgot /api (only when /api<path> is real).
     missing_api = find_missing_api_prefix(backend) if args.openapi else {}

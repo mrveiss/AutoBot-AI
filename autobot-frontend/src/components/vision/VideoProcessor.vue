@@ -413,7 +413,7 @@ const extractFrame = async (timestamp: number): Promise<Blob | null> => {
       );
 
       if (dataUrl) {
-        // Convert data URL to Blob
+        // eslint-disable-next-line no-restricted-syntax -- data: URL to a Blob, no network request
         const response = await fetch(dataUrl);
         const blob = await response.blob();
         logger.debug(`Thumbnail generated successfully (${blob.size} bytes)`);
