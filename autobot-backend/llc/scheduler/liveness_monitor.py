@@ -301,23 +301,29 @@ async def _note_unfiled_recovery(
 async def _log_unfiled_recovery(
     log: LLCActivityLogService, session, company_id: str, agent_id: str, run: LLCHeartbeatRun, exc: Exception
 ) -> None:
-    """The company activity feed's entry for an unfiled recovery: written in the caller's transaction, and
-    published live to the company's dashboard once it commits, as every activity record is."""
-    await audit(
-        log,
-        session,
-        company_id=company_id,
-        actor_type=ActorType.SYSTEM,
-        actor_id=None,
-        event_type=ActivityEventType.HEARTBEAT_FAILED,
-        entity_type="heartbeat_run",
-        entity_id=str(run.id),
-        metadata={
-            "agent_id": str(agent_id),
-            "reason": "recovery_unfiled",
-            "message": f"Agent {agent_id} timed out on run {run.id}; no recovery item could be filed ({exc})",
-        },
-    )
+    """The company activity feed's entry for an unfiled recovery: best-effort, in its own savepoint, so a failed
+    write rolls back only itself and never fails the recovery it annotates. The row is a write in the caller's
+    transaction (it cannot be deferred past the commit); the live publish to the company's dashboard follows the
+    commit, as every activity record's does."""
+    try:
+        async with session.begin_nested():
+            await audit(
+                log,
+                session,
+                company_id=company_id,
+                actor_type=ActorType.SYSTEM,
+                actor_id=None,
+                event_type=ActivityEventType.HEARTBEAT_FAILED,
+                entity_type="heartbeat_run",
+                entity_id=str(run.id),
+                metadata={
+                    "agent_id": str(agent_id),
+                    "reason": "recovery_unfiled",
+                    "message": f"Agent {agent_id} timed out on run {run.id}; no recovery item could be filed ({exc})",
+                },
+            )
+    except Exception:
+        logger.warning("Unfiled-recovery activity entry for run %s not written", run.id, exc_info=True)
 
 
 async def _notify_admins_unfiled_recovery(company_id: str, agent_id: str, run: LLCHeartbeatRun, exc: Exception) -> None:
