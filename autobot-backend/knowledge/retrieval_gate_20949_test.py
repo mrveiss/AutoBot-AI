@@ -128,18 +128,28 @@ def test_split_is_deterministic_and_test_marks_held_out():
     assert rg.run_ablation(fake_retriever, GOLD, BenchmarkSplit.TEST, k=3)["held_out"] is True
 
 
-def test_gate_decision_rules():
+def test_gate_decision_requires_all_five_metrics_to_improve():
     base = {"recall": 0.5, "mrr": 0.5, "ndcg": 0.5, "grounding": 0.8, "contradiction": 0.1}
-    better = {**base, "recall": 0.6, "contradiction": 0.05}
+    better = {"recall": 0.6, "mrr": 0.6, "ndcg": 0.6, "grounding": 0.9, "contradiction": 0.05}
     assert rg.gate_decision(base, better).accepted
-    assert not rg.gate_decision(base, base).accepted  # no improvement
-    worse = {**better, "mrr": 0.4}
-    v = rg.gate_decision(base, worse)
-    assert not v.accepted and any("mrr" in r for r in v.reasons)
-    more_contra = {**better, "contradiction": 0.2}  # lower is better
-    assert not rg.gate_decision(base, more_contra).accepted
-    missing = {**better, "grounding": None}
-    assert not rg.gate_decision(base, missing).accepted
+    for m in rg.METRICS:  # each single metric failing to improve rejects
+        same = {**better, m: base[m]}
+        v = rg.gate_decision(base, same)
+        assert not v.accepted and any(r.startswith(m) for r in v.reasons)
+    assert not rg.gate_decision(base, base).accepted
+    # contradiction is lower-is-better: a rise rejects
+    assert not rg.gate_decision(base, {**better, "contradiction": 0.2}).accepted
+    # margin: below min_improvement is not an improvement
+    tiny = {k: v + (-0.001 if k == "contradiction" else 0.001) for k, v in base.items()}
+    assert not rg.gate_decision(base, tiny, min_improvement=0.01).accepted
+    assert rg.gate_decision(base, tiny, min_improvement=0.0005).accepted
+
+
+def test_gate_decision_none_on_either_side_rejects():
+    base = {"recall": 0.5, "mrr": 0.5, "ndcg": 0.5, "grounding": 0.8, "contradiction": 0.1}
+    better = {"recall": 0.6, "mrr": 0.6, "ndcg": 0.6, "grounding": 0.9, "contradiction": 0.05}
+    assert not rg.gate_decision(base, {**better, "grounding": None}).accepted
+    assert not rg.gate_decision({**base, "contradiction": None}, better).accepted
 
 
 def test_gate_reports_requires_held_out_and_same_k():

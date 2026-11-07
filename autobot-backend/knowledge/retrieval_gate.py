@@ -38,9 +38,7 @@ logger = get_logger(__name__)
 
 #: Cutoff for recall@k / nDCG@k.
 RETRIEVAL_GATE_K = int(os.getenv("AUTOBOT_RETRIEVAL_GATE_K", "5"))
-#: A metric may fall by at most this much (absolute) and still pass.
-RETRIEVAL_GATE_MAX_REGRESSION = float(os.getenv("AUTOBOT_RETRIEVAL_GATE_MAX_REGRESSION", "0.0"))
-#: At least one metric must improve by this much (absolute) to be accepted.
+#: Every one of the five metrics must improve by at least this much (absolute).
 RETRIEVAL_GATE_MIN_IMPROVEMENT = float(os.getenv("AUTOBOT_RETRIEVAL_GATE_MIN_IMPROVEMENT", "0.01"))
 #: Share of queries routed to the dev split.
 RETRIEVAL_GATE_DEV_FRACTION = float(os.getenv("AUTOBOT_RETRIEVAL_GATE_DEV_FRACTION", "0.8"))
@@ -210,30 +208,26 @@ class GateVerdict:
 def gate_decision(
     baseline: Mapping[str, Optional[float]],
     candidate: Mapping[str, Optional[float]],
-    max_regression: float = RETRIEVAL_GATE_MAX_REGRESSION,
     min_improvement: float = RETRIEVAL_GATE_MIN_IMPROVEMENT,
 ) -> GateVerdict:
-    """Accept only if no measured metric regresses and at least one improves.
+    """Accept only if the candidate beats the baseline on ALL five metrics (#20948).
 
-    A metric measured in the baseline but missing in the candidate is a
-    rejection: an unmeasured metric cannot show improvement.
+    "Beats" means better by at least ``min_improvement`` (lower is better for
+    contradiction). A metric that is None on either side is a rejection: an
+    unmeasured metric cannot show improvement.
     """
     reasons: List[str] = []
-    improved = False
     for m, higher_better in METRICS.items():
         b, c = baseline.get(m), candidate.get(m)
-        if b is None:
-            continue
-        if c is None:
-            reasons.append(f"{m}: measured in baseline, missing in candidate")
+        if b is None or c is None:
+            side = "baseline" if b is None else "candidate"
+            reasons.append(f"{m}: not measured in {side}")
             continue
         gain = (c - b) if higher_better else (b - c)
-        if gain < -max_regression:
-            reasons.append(f"{m}: regressed by {-gain:.4f} (baseline {b:.4f}, candidate {c:.4f})")
-        if gain >= min_improvement:
-            improved = True
-    if not improved:
-        reasons.append(f"no metric improved by >= {min_improvement}")
+        if gain < min_improvement:
+            reasons.append(
+                f"{m}: improved by {gain:.4f}, need >= {min_improvement} (baseline {b:.4f}, candidate {c:.4f})"
+            )
     return GateVerdict(accepted=not reasons, reasons=reasons)
 
 

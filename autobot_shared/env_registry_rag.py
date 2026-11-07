@@ -222,21 +222,11 @@ register_env_var(
 )
 register_env_var(
     EnvVarSpec(
-        name="AUTOBOT_RETRIEVAL_GATE_MAX_REGRESSION",
-        type=float,
-        default=0.0,
-        description=("Largest absolute drop in any metric the retrieval benchmark gate tolerates (#20949)."),
-        component="rag",
-        range=(0.0, 1.0),
-    )
-)
-register_env_var(
-    EnvVarSpec(
         name="AUTOBOT_RETRIEVAL_GATE_MIN_IMPROVEMENT",
         type=float,
         default=0.01,
         description=(
-            "Smallest absolute improvement in one metric for the retrieval benchmark gate to accept a change (#20949)."
+            "Smallest absolute gain required in every metric for the retrieval gate to accept a change (#20949)."
         ),
         component="rag",
         range=(0.0, 1.0),
