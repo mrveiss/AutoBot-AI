@@ -113,7 +113,10 @@
 # the helper registers tls_server_cert/tls_server_key/tls_ca_cert; the
 # backend template only references tls_ca_cert.
 - name: "Backend | Stat SLM TLS certs (#6677/#7272)"
-  ansible.builtin.include_tasks: ../../../_shared/tasks/stat_tls_certs.yml
+  ansible.builtin.include_tasks:
+    file: ../../../_shared/tasks/stat_tls_certs.yml
+    apply:
+      tags: ['backend', 'config']
   vars:
     tls_cert_dir: "{{ backend_tls_cert_dir }}"
   tags: ['backend', 'config']
@@ -196,7 +199,10 @@
 # task install and update share. The SLM's slm-secrets.env is the canonical source; a backend that
 # already has a different key keeps it, visibly, because changing it needs approval (#17038).
 - name: "Backend | Resolve AUTOBOT_INTERNAL_API_KEY (#11507, #20750)"
-  ansible.builtin.include_tasks: ../../../_shared/tasks/resolve_internal_api_key.yml
+  ansible.builtin.include_tasks:
+    file: ../../../_shared/tasks/resolve_internal_api_key.yml
+    apply:
+      tags: ['backend', 'config']
   vars:
     internal_api_key_current_env_files:
       - "{{ backend_code_dir | default(backend_install_dir) }}/.env"
@@ -209,7 +215,10 @@
 # Turning the server on without this would 401 every RAG call, so both sides read
 # the same value from the same file and cannot drift.
 - name: "Backend | Read the shared ChromaDB auth token from slm-secrets.env (#12513)"
-  ansible.builtin.include_tasks: ../../../_shared/tasks/read_chromadb_auth_token.yml
+  ansible.builtin.include_tasks:
+    file: ../../../_shared/tasks/read_chromadb_auth_token.yml
+    apply:
+      tags: ['backend', 'config']
   tags: ['backend', 'config']
 
 - name: "Backend | Align backend_chromadb_auth_token with slm-secrets.env when present (#12513)"
@@ -222,7 +231,10 @@
 # #16375: keep the deployed Prometheus scrape token if this run carries none,
 # so a secret-fetch failure never renders an empty token over a working one.
 - name: "Backend | Keep the deployed Prometheus scrape token (#16375)"
-  ansible.builtin.include_tasks: ../../../_shared/tasks/keep_prometheus_scrape_token.yml
+  ansible.builtin.include_tasks:
+    file: ../../../_shared/tasks/keep_prometheus_scrape_token.yml
+    apply:
+      tags: ['backend', 'config']
   vars:
     scrape_token_env_files: ["{{ autobot_backend_env_file }}", "{{ backend_code_dir | default(backend_install_dir) }}/.env"]
   tags: ['backend', 'config']
@@ -232,7 +244,10 @@
 # password is set, so a password a server may already enforce is never replaced,
 # and always together with the username (a password alone is refused by nopass).
 - name: "Backend | Read the SLM-generated Redis credential (#16627)"
-  ansible.builtin.include_tasks: ../../../_shared/tasks/read_redis_password.yml
+  ansible.builtin.include_tasks:
+    file: ../../../_shared/tasks/read_redis_password.yml
+    apply:
+      tags: ['backend', 'config']
   tags: ['backend', 'config']
 
 - name: "Backend | Adopt the SLM-generated Redis credential when none is set (#16627)"
@@ -248,11 +263,17 @@
 # #14758/#19051: read the SLM file's root key (and fail on an empty one) through
 # the one task file the updater's env_only render shares.
 - name: "Backend | Read the secrets root key from slm-secrets.env (#14758, #19051)"
-  ansible.builtin.include_tasks: read_secrets_root_key.yml
+  ansible.builtin.include_tasks:
+    file: read_secrets_root_key.yml
+    apply:
+      tags: ['backend', 'config']
   tags: ['backend', 'config']
 
 - name: "Backend | Read the encryption key (#19864)"
-  ansible.builtin.include_tasks: read_encryption_key.yml
+  ansible.builtin.include_tasks:
+    file: read_encryption_key.yml
+    apply:
+      tags: ['backend', 'config', 'env']
   tags: ['backend', 'config', 'env']
 
 # #9914: Deploy the systemd unit BEFORE any stop/start so a fresh VM provisions
@@ -265,7 +286,10 @@
 # exactly like a deliberately-unlimited small host. Same include as
 # unit_only.yml so there is one place that guarantees the fact.
 - name: "Backend | Resolve host memory before rendering the unit (#13765)"
-  ansible.builtin.include_tasks: memory_limits.yml
+  ansible.builtin.include_tasks:
+    file: memory_limits.yml
+    apply:
+      tags: ['backend', 'config']
   tags: ['backend', 'config']
 
 - name: "Backend | Deploy backend systemd service (#9914)"
@@ -446,13 +470,19 @@
     tags: ['backend', 'config']
 
   - name: "Backend | Keep the deployed embedding model (#15502)"
-    ansible.builtin.include_tasks: ../../../_shared/tasks/read_deployed_embedding_model.yml
+    ansible.builtin.include_tasks:
+      file: ../../../_shared/tasks/read_deployed_embedding_model.yml
+      apply:
+        tags: ['backend', 'config']
     vars:
       deployed_embedding_env_files: ["{{ autobot_backend_env_file }}", "{{ backend_code_dir | default(backend_install_dir) }}/.env"]
     tags: ['backend', 'config']
 
   - name: "Backend | Resolve the models for this model server (#19731)"
-    ansible.builtin.include_tasks: resolve_models.yml
+    ansible.builtin.include_tasks:
+      file: resolve_models.yml
+      apply:
+        tags: ['backend', 'config', 'env']
     tags: ['backend', 'config', 'env']
 
   - name: "Backend | Deploy /etc/autobot/autobot-backend.env"
@@ -462,6 +492,7 @@
       mode: "0640"
       owner: root
       group: "{{ backend_service_account }}"
+    diff: false  # the env carries secrets (#20941)
     tags: ['backend', 'config']
     vars:
       internal_api_key_render: "{{ (internal_api_key_by_file | default({})).get(autobot_backend_env_file, internal_api_key_resolved | default(autobot_internal_api_key)) }}"  # #20750: the file keeps its key
@@ -588,7 +619,10 @@
   # synchronize task above never deletes (no `delete: true`), by design, to
   # protect host state it cannot enumerate itself.
   - name: "Backend | Delete files removed from source (#16310)"
-    ansible.builtin.include_tasks: ../../_shared/tasks/sync_deletions.yml
+    ansible.builtin.include_tasks:
+      file: ../../_shared/tasks/sync_deletions.yml
+      apply:
+        tags: ['backend', 'deploy']
     vars:
       sync_deletions_label: "Backend"
       sync_deletions_source_dir: "{{ code_source_dir }}/autobot-backend"
@@ -603,7 +637,10 @@
   # include covers the provisioning path (site.yml, provision-fleet-roles.yml
   # Phase 4a run main.yml in full).
   - name: "Backend | Clean up legacy npu_workers.yaml duplicate (#16310)"
-    ansible.builtin.include_tasks: npu_workers_cleanup.yml
+    ansible.builtin.include_tasks:
+      file: npu_workers_cleanup.yml
+      apply:
+        tags: ['backend', 'deploy']
     tags: ['backend', 'deploy']
 
   - name: "Backend | Fix ownership of backend code dir after sync"
@@ -653,7 +690,10 @@
     tags: ['backend', 'deploy']
 
   - name: "Backend | Sync the core plugins directory (#10294, #18324)"
-    ansible.builtin.include_tasks: plugins_sync.yml
+    ansible.builtin.include_tasks:
+      file: plugins_sync.yml
+      apply:
+        tags: ['backend', 'deploy']
     tags: ['backend', 'deploy']
 
   # Issue #10020: The old rsync task created a real directory copy of autobot_shared
@@ -731,7 +771,10 @@
       recurse: true
 
   - name: "Backend | Sync and record the docs directory (#4100, #18324)"
-    ansible.builtin.include_tasks: docs_sync.yml
+    ansible.builtin.include_tasks:
+      file: docs_sync.yml
+      apply:
+        tags: ['backend', 'deploy']
     tags: ['backend', 'deploy']
 
   # Issue #10020: backend_install_dir/autobot_shared is now a symlink to
@@ -1281,7 +1324,10 @@
   # TLS Certificate Generation (Issue #892, consolidated #16020)
   # ==========================================================
   - name: "Backend | Ensure the shared node TLS keypair exists (#16020)"
-    ansible.builtin.include_tasks: ../../../_shared/tasks/ensure_node_tls_cert.yml
+    ansible.builtin.include_tasks:
+      file: ../../../_shared/tasks/ensure_node_tls_cert.yml
+      apply:
+        tags: ['backend', 'tls']
     vars:
       node_tls_cert_dir_override: "{{ backend_tls_cert_dir }}"
     tags: ['backend', 'tls']
@@ -1378,6 +1424,7 @@
       mode: "0600"
       owner: "{{ backend_user }}"
       group: "{{ backend_group }}"
+    diff: false  # the env carries secrets (#20941)
     tags: ['backend', 'config']  # No backup: true (#20517): each render left another copy of the secrets
     vars:
       internal_api_key_render: "{{ (internal_api_key_by_file | default({})).get((backend_code_dir | default(backend_install_dir)) ~ '/.env', internal_api_key_resolved | default(autobot_internal_api_key)) }}"  # #20750: the file keeps its key

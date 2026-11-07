@@ -31,7 +31,10 @@
 # password while the server stays nopass. Adopted only when no password is set,
 # and always with the username -- a password alone is refused by nopass.
 - name: "AI Stack | Read the SLM-generated Redis credential (#16627)"
-  ansible.builtin.include_tasks: ../../../_shared/tasks/read_redis_password.yml
+  ansible.builtin.include_tasks:
+    file: ../../../_shared/tasks/read_redis_password.yml
+    apply:
+      tags: ['ai', 'config']
   tags: ['ai', 'config']
 
 - name: "AI Stack | Adopt the SLM-generated Redis credential when none is set (#16627)"

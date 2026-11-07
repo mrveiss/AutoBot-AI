@@ -43,7 +43,7 @@ def _walk(node):
 @pytest.mark.parametrize("rel", ["roles/backend/tasks/main.yml", "playbooks/update-all-nodes.yml"])
 def test_install_and_update_resolve_the_key_through_the_one_shared_task(rel: str) -> None:
     tasks = list(_walk(_yaml(rel)))
-    includes = [t for t in tasks if str(t.get("ansible.builtin.include_tasks", "")).endswith(_SHARED)]
+    includes = [t for t in tasks if _SHARED in str(t.get("ansible.builtin.include_tasks", ""))]
     assert len(includes) == 1, f"{rel} resolves the key once, through {_SHARED}"
     readers = [t for t in tasks if "AUTOBOT_INTERNAL_API_KEY" in str(t.get("ansible.builtin.shell", ""))]
     assert not readers, f"{rel} reads the key itself, a second source: {[t.get('name') for t in readers]}"
@@ -178,13 +178,13 @@ def test_every_backend_env_render_writes_its_own_files_key(rel: str, index: int,
         assert (name in dest) == (name in key_arg), f"{rel}: the lookup names another file than {dest}"
     if rel != "roles/backend/tasks/env_only.yml":  # its caller, the updater, resolves first (below)
         tasks = list(_walk(_yaml(rel)))
-        resolves = [i for i, t in enumerate(tasks) if str(t.get("ansible.builtin.include_tasks", "")).endswith(_SHARED)]
+        resolves = [i for i, t in enumerate(tasks) if _SHARED in str(t.get("ansible.builtin.include_tasks", ""))]
         assert resolves and min(resolves) < index, f"{rel}: renders before the key is resolved"
 
 
 def test_the_updater_resolves_before_it_renders_env_only() -> None:
     tasks = list(_walk(_yaml("playbooks/update-all-nodes.yml")))
-    resolve = next(i for i, t in enumerate(tasks) if str(t.get("ansible.builtin.include_tasks", "")).endswith(_SHARED))
+    resolve = next(i for i, t in enumerate(tasks) if _SHARED in str(t.get("ansible.builtin.include_tasks", "")))
     render = next(
         i for i, t in enumerate(tasks) if (t.get("ansible.builtin.include_role") or {}).get("tasks_from") == "env_only"
     )

@@ -22,12 +22,40 @@ AI_ENV = ANSIBLE / "roles" / "ai-stack" / "tasks" / "env_files.yml"
 BACKEND_READ = ANSIBLE / "roles" / "backend" / "tasks" / "read_secrets_root_key.yml"
 GROUP_ALL = ANSIBLE / "inventory" / "group_vars" / "all.yml"
 _SHARED_NAME = "read_slm_secrets_root_key.yml"
+BACKEND_TASKS = ANSIBLE / "roles" / "backend" / "tasks"
+#: Every task file whose includes can feed an env render: the AI Stack's and all of the backend role's.
+_ENV_FEEDING = (AI_ENV, *sorted(BACKEND_TASKS.glob("*.yml")))
+#: Roles whose env templates hold secrets; a template whose dest is an env file there must hide its diff.
+_ENV_TEMPLATES = ("ai-stack.env.j2", "backend.env.j2")
 
 
 def _tasks(path: Path) -> list[dict]:
     loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
     assert isinstance(loaded, list) and loaded, f"{path.name} parsed to no tasks: this guard would pass vacuously"
     return loaded
+
+
+def _walk(tasks):
+    """Every task, descending into block/rescue/always."""
+    for task in tasks or []:
+        if isinstance(task, dict):
+            yield task
+            for key in ("block", "rescue", "always"):
+                yield from _walk(task.get(key))
+
+
+def _include_target(task: dict) -> str | None:
+    module = task.get("ansible.builtin.include_tasks")
+    return module.get("file") if isinstance(module, dict) else module
+
+
+def _tagged_includes_without_apply(tasks) -> list[str]:
+    """Tagged includes whose tags do not also ride `apply:` -- under --tags they gate only the include."""
+    return [
+        f"{t.get('name')} -> {_include_target(t)}"
+        for t in _walk(tasks)
+        if "ansible.builtin.include_tasks" in t and t.get("tags") and not set(t["tags"]) <= _apply_tags(t)
+    ]
 
 
 def _include_of(tasks: list[dict]) -> dict:
@@ -59,6 +87,22 @@ def test_a_tag_filtered_run_reads_the_key_in_the_backend() -> None:
     include = _include_of(_tasks(BACKEND_READ))
     for tag in ("backend", "config", "env"):
         assert _reaches_reader_under(include, tag), f"--tags {tag} must run the reader's tasks (apply: tags)"
+
+
+def test_every_tagged_include_feeding_an_env_render_applies_its_tags() -> None:
+    """The class, not the instance: the Redis, chroma, embedding, scrape-token... reads all feed an env."""
+    seen = 0
+    for path in _ENV_FEEDING:
+        tasks = _tasks(path)
+        seen += sum("ansible.builtin.include_tasks" in t for t in _walk(tasks))
+        assert _tagged_includes_without_apply(tasks) == [], f"{path.name}: tags on the include only"
+    assert seen >= 15, f"only {seen} includes inspected: the file list moved, re-point this guard"
+
+
+def test_the_redis_credential_read_applies_its_tags_in_both_roles() -> None:
+    for path in (AI_ENV, BACKEND_TASKS / "main.yml", BACKEND_TASKS / "env_only.yml"):
+        hit = [t for t in _walk(_tasks(path)) if _include_target(t) and "read_redis_password.yml" in _include_target(t)]
+        assert hit and all(_apply_tags(t) >= set(t["tags"]) for t in hit), path.name
 
 
 def test_control_an_include_with_tags_but_no_apply_is_caught() -> None:
@@ -132,23 +176,53 @@ def test_the_refusal_sits_between_the_read_and_the_first_render() -> None:
 # --- secrets stay out of --diff --------------------------------------------------------------
 
 
-def _undiffed_templates(tasks: list[dict]) -> list[str]:
+def _undiffed_templates(tasks) -> list[str]:
     return [
         str(t["name"])
-        for t in tasks
-        if "ansible.builtin.template" in t and t["ansible.builtin.template"].get("src") == "ai-stack.env.j2"
+        for t in _walk(tasks)
+        if isinstance(t.get("ansible.builtin.template"), dict)
+        if t["ansible.builtin.template"].get("src") in _ENV_TEMPLATES
         if t.get("diff") is not False
     ]
 
 
-def test_both_ai_stack_env_renders_hide_their_diff() -> None:
-    tasks = _tasks(AI_ENV)
-    rendered = [t for t in tasks if "ansible.builtin.template" in t]
-    assert len(rendered) == 2, "expected the two env-file renders; re-point this guard if that changed"
-    assert _undiffed_templates(tasks) == []
+def test_every_env_render_in_both_roles_hides_its_diff() -> None:
+    rendered = 0
+    for path in _ENV_FEEDING:
+        tasks = _tasks(path)
+        rendered += sum(
+            isinstance(t.get("ansible.builtin.template"), dict)
+            and t["ansible.builtin.template"].get("src") in _ENV_TEMPLATES
+            for t in _walk(tasks)
+        )
+        assert _undiffed_templates(tasks) == [], f"{path.name}: an env render would print its secrets under --diff"
+    assert rendered == 5, f"expected the 5 env renders (2 ai-stack, 3 backend), found {rendered}"
 
 
 def test_control_a_render_without_diff_false_is_caught() -> None:
-    broken = [{"name": "x", "ansible.builtin.template": {"src": "ai-stack.env.j2"}}]
+    broken = [{"name": "x", "ansible.builtin.template": {"src": "backend.env.j2"}}]
     assert _undiffed_templates(broken) == ["x"]
     assert _undiffed_templates([{**broken[0], "diff": True}]) == ["x"]
+    assert _undiffed_templates([{**broken[0], "diff": False}]) == []
+
+
+# --- no literal path ---------------------------------------------------------------------------
+
+
+def _literal_path_lines(text: str) -> list[str]:
+    return [ln for ln in text.splitlines() if "/etc/autobot" in ln and not ln.lstrip().startswith("#")]
+
+
+def test_the_reader_has_no_literal_path_and_asserts_the_var_is_defined() -> None:
+    assert _literal_path_lines(SHARED.read_text(encoding="utf-8")) == []
+    first = _tasks(SHARED)[0]
+    assert "ansible.builtin.assert" in first and "slm_secrets_env_path is defined" in str(
+        first["ansible.builtin.assert"]
+    )
+    assert "slm_secrets_env_path" in first["ansible.builtin.assert"]["fail_msg"], "the failure must name the var"
+
+
+def test_control_the_literal_path_detector_fires() -> None:
+    fallback = "path: \"{{ slm_secrets_env_path | default('/etc/autobot/slm-secrets.env') }}\""
+    assert _literal_path_lines(fallback) == [fallback]
+    assert _literal_path_lines("# the file is /etc/autobot/slm-secrets.env") == []
