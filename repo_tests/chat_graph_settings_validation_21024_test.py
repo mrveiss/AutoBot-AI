@@ -26,3 +26,12 @@ def test_timeout_has_a_lower_bound(monkeypatch, bad):
     monkeypatch.setenv("AUTOBOT_ASK_HUMAN_TIMEOUT_SECONDS", bad)
     with pytest.raises(ValidationError):
         ChatGraphSettings()
+
+
+def test_llm_config_inherits_the_one_config_dict():
+    """LLMConfig carries ChatGraphSettings' (#21024)."""
+    from autobot_shared.ssot_config import LLMConfig
+
+    for key in ("env_file", "env_file_encoding", "extra"):
+        assert LLMConfig.model_config[key] == ChatGraphSettings.model_config[key]
+    assert LLMConfig.model_config["extra"] == "ignore"

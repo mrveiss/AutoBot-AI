@@ -471,7 +471,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot_shared/redis_client.py": 674,
     "autobot_shared/redis_management/connection_manager.py": 1290,
     "autobot_shared/security/ssrf_guard_test.py": 633,
-    "autobot_shared/ssot_config.py": 3206,  # splits: #19319, #15501, #19934, #18057
+    "autobot_shared/ssot_config.py": 3202,  # splits: #19319, #15501, #19934, #18057
     "autobot_shared/ssot_config_test.py": 776,
     "autobot_shared/ssot_constants.py": 859,
     "autobot_shared/user_management/team_service.py": 659,
