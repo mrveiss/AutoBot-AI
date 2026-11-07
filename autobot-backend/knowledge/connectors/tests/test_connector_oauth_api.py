@@ -173,6 +173,35 @@ def test_callback_rejects_missing_binding_cookie(client):
     assert "connector:oauth:state:ghost" in fake_redis.store
 
 
+def test_callback_state_binding_uses_secure_compare(client, monkeypatch):
+    """#20761: cookie/state binding is constant time; match passes, mismatch and missing cookie fail."""
+    tc, fake_redis = client
+    state = tc.post(_AUTHZ.format(p="google"), json={"redirect_uri": "https://localhost/cb"}).json()["state"]
+    calls = []
+    real = mod.secure_compare
+
+    def _spy(a, b):
+        calls.append((a, b))
+        return real(a, b)
+
+    monkeypatch.setattr(mod, "secure_compare", _spy)
+    # Mismatch: cookie holds a different value than the query state.
+    tc.cookies.set("connector_oauth_state", "other-state", path="/api/knowledge_base/connectors/oauth/callback")
+    resp = tc.get(f"{_CALLBACK}?state={state}&code=x")
+    assert "state_binding_mismatch" in resp.text
+    assert calls == [("other-state", state)]
+    # Missing cookie: fails, and the state is not consumed.
+    tc.cookies.clear()
+    resp = tc.get(f"{_CALLBACK}?state={state}&code=x")
+    assert "state_binding_mismatch" in resp.text
+    assert f"connector:oauth:state:{state}" in fake_redis.store
+    # Match: binding passes and the flow proceeds past the CSRF check.
+    tc.cookies.set("connector_oauth_state", state, path="/api/knowledge_base/connectors/oauth/callback")
+    resp = tc.get(f"{_CALLBACK}?state={state}&code=x")
+    assert "state_binding_mismatch" not in resp.text
+    assert calls[-1] == (state, state)
+
+
 def test_callback_expired_state_returns_error_page(client):
     tc, fake_redis = client
     state = tc.post(_AUTHZ.format(p="google"), json={"redirect_uri": "https://localhost/cb"}).json()["state"]
