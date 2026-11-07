@@ -77,7 +77,7 @@ describe('usePatternAnalysis failure reporting (#17651)', () => {
   })
 
   it('getReport reports a failed fetch', async () => {
-    apiGet.mockRejectedValue(new Error('report down'))
+    mockedFetch.mockRejectedValue(new Error('report down'))
     const { getReport, error } = usePatternAnalysis(withSourceId)
 
     expect(await getReport()).toBeNull()
@@ -102,6 +102,21 @@ describe('usePatternAnalysis failure reporting (#17651)', () => {
     expect(clearUrl).toBe('http://backend.test/api/analytics/codebase/patterns/storage/clear?source_id=src-a')
     expect(init.method).toBe('POST')
     expect(storageStats.value).toBeNull()
+  })
+
+  it('the report is read for the selected source through useFetchEndpoint, with its path (#20513)', async () => {
+    mockedFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ status: 'success', report: '# r' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    const { getReport } = usePatternAnalysis(withSourceId)
+
+    expect(await getReport('src/a b')).toBe('# r')
+    expect(mockedFetch.mock.calls[0]?.[0]).toBe(
+      'http://backend.test/api/analytics/codebase/patterns/report?source_id=src-a&path=src%2Fa%20b',
+    )
   })
 
   it('with no source selected nothing is requested (the routes answer 422 without one, #20513)', async () => {

@@ -5,14 +5,13 @@
  *
  * Split out of `usePatternAnalysis.ts`, a grandfathered file that may not grow. The routes answer
  * 422 without a `source_id`, so with no source selected nothing is requested: storage stats and
- * clear go through `useFetchEndpoint({ scopeToSource, requireSource })`, which skips the request
- * itself, and the report read asks `hasSource` first (it still goes through `apiClient`).
+ * clear and the report read all go through `useFetchEndpoint({ scopeToSource, requireSource })`,
+ * which skips the request itself.
  *
  * Author: mrveiss
  */
 
 import type { Ref } from 'vue'
-import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { extractErrorMessage, extractResponseErrorDetail } from '@/utils/errorExtract'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
@@ -22,14 +21,13 @@ const logger = createLogger('usePatternStorage')
 
 export interface PatternStorageDeps {
   withSourceId: (url: string) => string
-  hasSource: (url: string, what: string) => boolean
   wrap: <T>(fn: () => Promise<T>) => Promise<T>
   error: Ref<string | null>
   storageStats: Ref<PatternStorageStats | null>
 }
 
 export function usePatternStorage(deps: PatternStorageDeps) {
-  const { withSourceId, hasSource, wrap, error, storageStats } = deps
+  const { withSourceId, wrap, error, storageStats } = deps
 
   const statsEndpoint = useFetchEndpoint<{ status: string; stats?: PatternStorageStats }, PatternStorageStats>(
     {
@@ -88,24 +86,34 @@ export function usePatternStorage(deps: PatternStorageDeps) {
     return cleared
   }
 
+  let reportText: string | null = null
+  const reportEndpoint = useFetchEndpoint<{ status: string; report?: string }, string>(
+    {
+      path: '/api/analytics/codebase/patterns/report',
+      scopeToSource: true,
+      requireSource: true,
+      pickData: (raw) => (raw.status === 'success' ? (raw.report ?? null) : null),
+      onSuccess: (report) => {
+        reportText = report
+      },
+      onError: (_message, err) => {
+        error.value = extractErrorMessage(err, 'Report fetch failed')
+      },
+      label: 'Pattern report',
+    },
+    { withSourceId },
+  )
+
   /**
    * Get markdown report
    */
   const getReport = async (path?: string): Promise<string | null> => {
-    return wrap(async () => {
-      const params = path ? `?path=${encodeURIComponent(path)}` : ''
-      const url = withSourceId(`/api/analytics/codebase/patterns/report${params}`)
-      if (!hasSource(url, 'pattern report')) return null
-      const data = await apiClient.get<{ status: string; report?: string }>(url)
-      if (data.status === 'success') {
-        return data.report ?? null
-      }
-      return null
-    }).catch((e: unknown) => {
+    reportText = null
+    await wrap(() => reportEndpoint.load(path ? { path } : undefined)).catch((e: unknown) => {
       error.value = extractErrorMessage(e, 'Report fetch failed')
       logger.error('Report fetch failed:', e)
-      return null
     })
+    return reportText
   }
 
   return { getStorageStats, clearStorage, getReport }

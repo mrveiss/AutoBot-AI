@@ -23,7 +23,7 @@ from api.codebase_analytics.source_scope import SourceIdQuery, require_source_id
 from autobot_shared.error_boundaries import ROUTE_DEADLINE_GRACE, ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
-from .shared import resolve_git_repo_root, resolve_scan_root
+from .shared import resolve_scan_root
 
 logger = get_logger(__name__)
 
@@ -69,11 +69,6 @@ def _get_ownership_analyzer():
     except Exception as e:
         logger.warning("OwnershipAnalyzer not available: %s", e)
         return None
-
-
-def _get_project_root() -> str:
-    """Get project root path — delegates to shared resolver (#10730)."""
-    return resolve_git_repo_root()
 
 
 def _escapes_root(path: str, project_root: str) -> bool:
@@ -349,7 +344,7 @@ async def get_ownership_analysis(
     if cached:
         return cached
 
-    # #13602: was `_get_project_root()` on the next-but-one line, discarding the
+    # #13602: was the project root on the next-but-one line, discarding the
     # clone path resolved just above. A source's clone path lives under
     # data/code-sources/<id> while the project root resolves to the checkout —
     # sibling subtrees that never nest, so the containment check rejected EVERY

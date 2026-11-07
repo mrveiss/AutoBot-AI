@@ -114,7 +114,7 @@ def generate_pattern_id(pattern_data: Dict[str, Any]) -> str:
     # identical relative file_path/line/code_hash (e.g. both have
     # "app/main.py" with the same duplicate snippet) never collide on the
     # same ChromaDB id and silently overwrite each other's pattern.
-    hash_input += f":{pattern_data.get('source_id', 'default')}"
+    hash_input += f":{_write_source_id(pattern_data.get('source_id'))}"
 
     return hashlib.sha256(hash_input.encode()).hexdigest()[:32]
 

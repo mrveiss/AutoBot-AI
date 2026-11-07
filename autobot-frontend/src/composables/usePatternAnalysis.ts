@@ -206,7 +206,7 @@ export function usePatternAnalysis(withSourceId: (url: string) => string) {
   }
   const storageStats = ref<PatternStorageStats | null>(null)
   const { getStorageStats, clearStorage, getReport } = usePatternStorage({
-    withSourceId, hasSource, wrap, error, storageStats,
+    withSourceId, wrap, error, storageStats,
   })
 
   // AbortControllers — replaced (aborting previous) before each new fetch

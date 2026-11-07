@@ -1589,7 +1589,7 @@ async def _get_pattern_analysis(
     Args:
         project_root: Resolved filesystem root for the requested source.
             Falls back to AutoBot's own backend dir when None or when it
-            resolves to AutoBot's own project root (default source).
+            resolves to AutoBot's own project root (a self-scan; no source is implied).
 
     Returns:
         PatternAnalysisReport or None if analysis fails
@@ -2215,7 +2215,6 @@ async def generate_analysis_report(
     # (which runs in a thread) can validate file paths without blocking the event loop.
     # #20513: a source with no checkout is a 404, never AutoBot's own tree.
     source_root = await resolve_scan_root(source_id)
-    scan_root = source_root
 
     problems = await asyncio.to_thread(_fetch_problems_from_chromadb, source_id, source_root)
     analyses = await _resolve_analyses(
@@ -2227,7 +2226,7 @@ async def generate_analysis_report(
         include_pattern_analysis=include_pattern_analysis,
         use_semantic=use_semantic,
         source_id=source_id,
-        scan_root=scan_root,
+        scan_root=source_root,
     )
     report = _render_report(problems, analyses)
     return PlainTextResponse(

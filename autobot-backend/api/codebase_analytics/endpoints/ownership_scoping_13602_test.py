@@ -7,7 +7,7 @@
 Three sibling endpoints, three different ways of getting this wrong:
 
 `/ownership/analysis` resolved the source's clone path correctly and then
-validated against `_get_project_root()` instead — the root it had just replaced.
+validated against the project root instead — the root it had just replaced.
 A clone path lives under `data/code-sources/<id>` while the project root
 resolves to the checkout; sibling subtrees that never nest, so the containment
 check rejected EVERY source-scoped request with 400 "Invalid path: must be
@@ -60,7 +60,6 @@ class TestValidationUsesTheResolvedScanRoot:
         async def _resolve(source_id):
             return clone
 
-        monkeypatch.setattr(own_mod, "_get_project_root", lambda: str(project_root))
         monkeypatch.setattr(own_mod, "resolve_scan_root", _resolve)
         monkeypatch.setattr(own_mod, "_validate_path_security", _capture)
         monkeypatch.setattr(own_mod, "_check_ownership_cache", _none_cache)
@@ -92,7 +91,6 @@ class TestSiblingEndpointsAreScopedToo:
             assert source_id == "abc123", "the requested source must reach the resolver"
             return clone
 
-        monkeypatch.setattr(own_mod, "_get_project_root", lambda: str(project_root))
         monkeypatch.setattr(own_mod, "resolve_scan_root", _resolve)
         monkeypatch.setattr(own_mod, "_validate_path_security", lambda p, r: captured.update(root=r))
         monkeypatch.setattr(own_mod, "_get_ownership_analyzer", lambda: None)
