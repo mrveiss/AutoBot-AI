@@ -16,9 +16,9 @@ AUTOBOT_KB_RETENTION_DAYS is set to a positive integer.
 from datetime import datetime, timezone
 from typing import Dict, List, Tuple
 
-from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
+from autobot_shared.worker_loop import run_in_worker_loop
 from celery_app import celery_app
 from services.audit.audit import AuditCategory
 from tasks.retention_audit import emit_deletion_audit
@@ -151,4 +151,4 @@ def cleanup_expired_kb_entries(self, retention_days: int = None, dry_run: bool =
     """
     if retention_days is None:
         retention_days = _KB_RETENTION_DAYS
-    return run_or_schedule(_async_cleanup_expired_kb_entries(retention_days, dry_run))
+    return run_in_worker_loop(_async_cleanup_expired_kb_entries(retention_days, dry_run))

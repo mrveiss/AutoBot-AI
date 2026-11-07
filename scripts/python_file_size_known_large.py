@@ -72,7 +72,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/batch_jobs.py": 916,
     "autobot-backend/api/browser_mcp.py": 1320,
     "autobot-backend/api/cache_management.py": 692,
-    "autobot-backend/api/chat.py": 2626,  # #20852: summarize endpoint uses the shared summariser
+    "autobot-backend/api/chat.py": 2625,  # #20195: graph resume stream moved to chat_streaming; #20852
     "autobot-backend/api/chat_sessions.py": 1859,  # #18293: legacy transcripts only ever proposed
     "autobot-backend/api/code_intelligence.py": 2145,
     "autobot-backend/api/code_search.py": 786,
@@ -144,7 +144,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/autobot_memory_graph/semantic_search.py": 706,
     "autobot-backend/benchmarks/benchmark_belief_state.py": 725,
     "autobot-backend/chat_history/context_overflow.py": 815,
-    "autobot-backend/chat_history/session.py": 921,
+    "autobot-backend/chat_history/session.py": 766,
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
     "autobot-backend/chat_workflow/graph.py": 1443,  # #19715; #21023
     "autobot-backend/chat_workflow/llm_handler.py": 1286,  # #20852: model reaches the refresh
@@ -357,7 +357,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/workflow_io.py": 693,
     "autobot-backend/slash_command_handler.py": 1662,
     "autobot-backend/takeover_manager.py": 1364,
-    "autobot-backend/tasks/knowledge_tasks.py": 862,
+    "autobot-backend/tasks/knowledge_tasks.py": 846,
     "autobot-backend/tests/agents/test_librarian_assistant_extract.py": 635,
     "autobot-backend/tests/api/test_canvas.py": 676,
     "autobot-backend/tests/api/test_knowledge_grounding.py": 760,
@@ -461,7 +461,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/tests/test_cleanup_never_destroys_data_14856.py": 981,
     "autobot-slm-backend/user_management/services/sso_service.py": 775,
     "autobot_shared/circuit_breaker.py": 689,
-    "autobot_shared/env_registry.py": 1060,  # #19320: postgres block -> env_registry_postgres (was 1125)
+    "autobot_shared/env_registry.py": 1061,  # #19320: postgres block -> env_registry_postgres (was 1125)
     "autobot_shared/monitoring/prometheus_metrics.py": 949,
     "autobot_shared/npu/integration.py": 929,
     "autobot_shared/plugin_sdk/loader.py": 690,
