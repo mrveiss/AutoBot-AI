@@ -14564,6 +14564,11 @@ export interface components {
              */
             created_at: string;
             /**
+             * Enrollment Skipped Nodes
+             * @default []
+             */
+            enrollment_skipped_nodes: string[];
+            /**
              * Failed Fleet Nodes
              * @default 0
              */

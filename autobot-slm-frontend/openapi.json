@@ -14832,6 +14832,14 @@
             "title": "Created At",
             "type": "string"
           },
+          "enrollment_skipped_nodes": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Enrollment Skipped Nodes",
+            "type": "array"
+          },
           "failed_fleet_nodes": {
             "default": 0,
             "title": "Failed Fleet Nodes",
