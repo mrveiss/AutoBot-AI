@@ -518,7 +518,7 @@ async def test_one_failing_fence_does_not_stop_the_next(sweep, world, monkeypatc
         await world.fences.delete(key)
         return True
 
-    monkeypatch.setattr(sweep, "delete_if_value", flaky)
+    monkeypatch.setattr(sweep, "delete_if_holder", flaky)
     await world.fences.set("llc:checkout:b", "agent-b")
 
     await sweep._drop_checkout_fences([("a", "agent-a"), ("b", "agent-b")])
