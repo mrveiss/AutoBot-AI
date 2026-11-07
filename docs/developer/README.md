@@ -26,6 +26,7 @@ All docs in `docs/developer/`. Every doc listed here; missing entry = orphan or 
 | Doc | What it covers |
 |---|---|
 | [[ASYNC_PATTERNS]] | Async-first patterns; never block the event loop |
+| [[CELERY_ASYNC_TASKS]] | Async Celery tasks: one persistent worker loop (#20887) |
 | [[ASYNC_MIGRATION_GUIDE]] | Migrating sync → async code |
 | [[REDIS_CLIENT_USAGE]] | `get_redis_client` / `get_async_redis_client` usage |
 | [[REDIS_CONNECTION_POOLING]] | Connection pool configuration and sizing |
