@@ -153,7 +153,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
     "autobot-backend/code_intelligence/analytics_infrastructure.py": 801,
-    "autobot-backend/code_intelligence/anti_pattern_detection/analyzer.py": 753,
+    "autobot-backend/code_intelligence/anti_pattern_detection/analyzer.py": 746,
     "autobot-backend/code_intelligence/bug_predictor.py": 1501,
     "autobot-backend/code_intelligence/bug_predictor_test.py": 759,
     "autobot-backend/code_intelligence/co_change_test.py": 705,
