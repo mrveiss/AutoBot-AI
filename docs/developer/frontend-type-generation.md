@@ -52,15 +52,27 @@ application code (repositories, components, composables)
 
 ## How to run locally
 
-**Prerequisite:** the backend must be running on `http://127.0.0.1:8001`.
+**No running server is needed (#12363).** The schema is dumped offline from the backend's own app factory,
+exactly as the `verify-generated-types` CI job does, then fed to `openapi-typescript`:
 
 ```bash
 cd autobot-frontend
-npm run gen:types
+npm run gen:types:openapi   # python3 ../scripts/audit_api_wiring.py --dump-openapi openapi.json --no-websocket-paths
+npm run gen:types           # openapi-typescript openapi.json -o src/types/generated/api.ts --additional-properties
 ```
+
+`--no-websocket-paths` omits the audit-only `x-websocket-paths` key, so `openapi.json` is exactly the schema a
+live server serves. `scripts/audit_api_wiring.py` is the one dumper (the SLM app has its own,
+`autobot-slm-backend/scripts/dump_openapi.py`); there is no second one, and CI no longer carries an inline
+python step. The backend must import in the environment you run it in (the repo's Python test environment
+does). `openapi.json` is git-ignored for the main app: regenerate, never commit it.
 
 This overwrites `src/types/generated/api.ts` in place. Commit the result
 together with the backend change that motivated regeneration.
+
+The generated `paths` interface is also what types `apiClient.call(...)`: the app's client binds it with
+`import type { paths } from '@/types/generated/api'` (type-only, never in the bundle), so a changed route
+shows up as a compile error at its callers (see `FRONTEND_API_CLIENTS.md`).
 
 ## CI enforcement
 

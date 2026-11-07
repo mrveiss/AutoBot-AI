@@ -34,6 +34,7 @@ def _write_openapi(path: Path, paths: list[str]) -> Path:
 
 # --------------------------------------------------------- SLM union ----
 
+
 def test_slm_only_route_is_wired_after_union(tmp_path):
     """A frontend call matching ONLY the SLM backend's route table is not
     unwired once --slm-openapi is unioned in (the #12381 bug)."""
@@ -57,6 +58,7 @@ def test_slm_union_preserves_single_backend_behavior(tmp_path):
 
 
 # --------------------------------------------------------- websocket scan ----
+
 
 def test_static_websocket_paths_finds_prefixed_websocket_route(tmp_path_factory):
     """A source-level scan finds @router.websocket() routes and combines them
@@ -145,6 +147,7 @@ def _runtime_websocket_paths_returns_empty(fake_app) -> bool:
 
 # --------------------------------------------------------- baseline ----
 
+
 def test_load_baseline_skips_blanks_and_comments(tmp_path):
     baseline_file = tmp_path / "baseline.txt"
     baseline_file.write_text(
@@ -181,6 +184,7 @@ def test_partition_baseline_empty_baseline_is_noop():
 
 # --------------------------------------------------------- main() gating ----
 
+
 def test_baselined_call_does_not_fail_but_new_unwired_call_does(tmp_path, monkeypatch, capsys):
     """End-to-end through main(): a call matching an SLM-only route is wired,
     a baselined dead call is reported but non-gating, and a genuinely-new
@@ -204,10 +208,14 @@ def test_baselined_call_does_not_fail_but_new_unwired_call_does(tmp_path, monkey
         "argv",
         [
             "audit_api_wiring.py",
-            "--openapi", str(backend_json),
-            "--slm-openapi", str(slm_json),
-            "--baseline", str(baseline_file),
-            "--only-prefix", "/api",  # skip real-repo unmounted-router scan noise
+            "--openapi",
+            str(backend_json),
+            "--slm-openapi",
+            str(slm_json),
+            "--baseline",
+            str(baseline_file),
+            "--only-prefix",
+            "/api",  # skip real-repo unmounted-router scan noise
             "--fail-on-unwired",
         ],
     )
@@ -241,10 +249,14 @@ def test_no_new_unwired_calls_passes_gate(tmp_path, monkeypatch, capsys):
         "argv",
         [
             "audit_api_wiring.py",
-            "--openapi", str(backend_json),
-            "--slm-openapi", str(slm_json),
-            "--baseline", str(baseline_file),
-            "--only-prefix", "/api",
+            "--openapi",
+            str(backend_json),
+            "--slm-openapi",
+            str(slm_json),
+            "--baseline",
+            str(baseline_file),
+            "--only-prefix",
+            "/api",
             "--fail-on-unwired",
         ],
     )
@@ -254,12 +266,42 @@ def test_no_new_unwired_calls_passes_gate(tmp_path, monkeypatch, capsys):
 
 # --------------------------------------------------------- CLI wiring ----
 
+
 def test_dump_slm_openapi_flag_dispatches(tmp_path, monkeypatch):
     calls = []
-    monkeypatch.setattr(audit, "dump_slm_openapi", lambda out: calls.append(out) or 0)
     monkeypatch.setattr(
-        sys, "argv", ["audit_api_wiring.py", "--dump-slm-openapi", str(tmp_path / "out.json")]
+        audit,
+        "dump_slm_openapi",
+        lambda out, include_websocket_paths=True: calls.append((out, include_websocket_paths)) or 0,
     )
-    rc = audit.main()
-    assert rc == 0
-    assert calls == [str(tmp_path / "out.json")]
+    out = str(tmp_path / "out.json")
+    monkeypatch.setattr(sys, "argv", ["audit_api_wiring.py", "--dump-slm-openapi", out])
+    assert audit.main() == 0
+    monkeypatch.setattr(sys, "argv", ["audit_api_wiring.py", "--dump-slm-openapi", out, "--no-websocket-paths"])
+    assert audit.main() == 0
+    assert calls == [(out, True), (out, False)]
+
+
+def test_dump_slm_openapi_omits_websocket_paths_on_request(tmp_path, monkeypatch):
+    """One flag per dumper: the SLM dump drops x-websocket-paths exactly as the backend dump does (#12363)."""
+
+    class _App:
+        routes = []
+
+        def openapi(self):
+            return {"paths": {"/api/foo": {}}}
+
+    class _Main:
+        app = _App()
+
+    monkeypatch.setitem(sys.modules, "main", _Main)
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    monkeypatch.setattr(os, "chdir", lambda *_a, **_k: None)
+    monkeypatch.setattr(audit, "static_websocket_paths", lambda _root: {"/ws"})
+    kept, dropped = tmp_path / "kept.json", tmp_path / "dropped.json"
+    assert audit.dump_slm_openapi(str(kept)) == 0
+    assert audit.dump_slm_openapi(str(dropped), include_websocket_paths=False) == 0
+    assert json.loads(kept.read_text(encoding="utf-8"))["x-websocket-paths"] == [
+        "/ws"
+    ]  # control: the key is emitted by default
+    assert "x-websocket-paths" not in json.loads(dropped.read_text(encoding="utf-8"))

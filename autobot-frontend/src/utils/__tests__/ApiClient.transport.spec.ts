@@ -16,7 +16,7 @@ vi.mock('@/utils/authToken', async (importOriginal) => ({
 }));
 
 import { ApiClient } from '@/utils/ApiClient';
-import { getApiBase } from '@/config/ssot-config';
+import { getApiBase, getBackendUrl } from '@/config/ssot-config';
 import { resetCircuitBreakers } from '@/utils/apiCircuitBreaker';
 
 const json = (body: unknown, status = 200) =>
@@ -136,6 +136,18 @@ describe('ApiClient on the kit transport (#14908)', () => {
       vi.stubEnv('VITE_API_BASE_PATH', '/api');
       await expect(new ApiClient().get('https://api.example/api/x')).rejects.toMatchObject({ name: 'AbsoluteEndpointError' });
       expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('typed call over the contract (#12363)', () => {
+    it('the base is origin-only, so a contract key is requested once under /api, never /api/api', async () => {
+      // The contract keys already start with /api; the main base must therefore carry no path of its own.
+      expect(new URL(getBackendUrl() || 'http://origin.test').pathname).toBe('/');
+      fetchMock.mockImplementation(async () => json({}));
+      await new ApiClient().call('delete', '/api/chats/{chat_id}', { path: { chat_id: 'c 1' } });
+      const url: string = fetchMock.mock.calls[0][0];
+      expect(url.endsWith('/api/chats/c%201')).toBe(true);
+      expect(url).not.toContain('/api/api/');
     });
   });
 });

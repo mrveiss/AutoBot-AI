@@ -56,7 +56,7 @@ export interface GetOptions extends RequestOptions {
   responseType?: 'json' | 'text'
 }
 
-export class SlmApiClient extends ApiClientBase<RequestOptions> {
+export class SlmApiClient extends ApiClientBase<RequestOptions, paths> {
   // Optional host/base override (defaults to getSlmApiBase() when unset).
   private baseUrlOverride: string | null = null
 
@@ -116,14 +116,20 @@ export class SlmApiClient extends ApiClientBase<RequestOptions> {
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
   }
 
-  // GET typed by the generated contract (#16292). The path must be a GET in `paths`, and the
-  // response type comes from its 200 schema. Contract keys carry the `/api` prefix; the
-  // client's base already supplies it (or `/slm/api`).
+  // Contract keys carry the `/api` prefix; this client's base already supplies it (or `/slm/api`),
+  // so `call`/`callRaw` drop it once here (#12363).
+  protected contractPath(path: string): string {
+    return path.replace(/^\/api(?=\/)/, '')
+  }
+
+  // GET typed by the generated contract (#16292): the path must be a GET in `paths`, and the response
+  // type comes from its 200 schema. A thin typed view over `call`, so the prefix strip exists once.
   async getContract<P extends GetPath<paths>>(
     path: P,
     options: RequestOptions = {}
   ): Promise<GetResponse<paths, P>> {
-    return (await this.get(path.replace(/^\/api(?=\/)/, ''), options)) as GetResponse<paths, P>
+    const { params, ...transport } = options
+    return (await this.call('get' as never, path as never, { ...transport, query: params } as never)) as GetResponse<paths, P>
   }
 }
 

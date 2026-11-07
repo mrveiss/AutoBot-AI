@@ -99,6 +99,7 @@ export class SlmClient {
     const fetchBody: BodyInit | undefined =
       body === undefined ? undefined : rawBody ? (body as BodyInit) : JSON.stringify(body)
 
+    // eslint-disable-next-line no-restricted-syntax -- SLM-origin client with its own bearer token, not the app JWT
     return fetch(url, { method, headers: hdrs, body: fetchBody, signal })
   }
 
