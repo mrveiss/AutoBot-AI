@@ -14,9 +14,8 @@ in the same `declare()` call. That leaves a third coverage state nothing could s
 | floored correctly, over the WRONG population | nothing, until this |
 
 Measured on #17844's base: 52 `what=` strings, 14 naming a root or scope, 38 bare population
-nouns. Seven guards claimed some form of "production python files" across floors from 2555 to
-3247 -- a 692-file spread fully explained by differing scan roots, and invisible because only
-two of the seven said which roots.
+nouns. Seven guards claimed "production python files" across floors from 2555 to 3247 -- a
+692-file spread fully explained by differing scan roots, invisible because only two said which.
 
 The real-fixture case below is the one the issue asks for by name. A synthetic declaration
 proves the rule can fire; it does not prove the rule fires on the shape that actually occurs,
@@ -208,17 +207,30 @@ def test_a_declared_scope_that_the_sweep_does_not_reach_is_refused() -> None:
         overclaiming.verify_scope(_ROOT)
 
 
-#: What each scoped declaration claims, written out BY HAND rather than read from the constant
-#: the guard walks (#17844, review). Every call site passes `roots=SCAN_ROOTS` or the local
-#: equivalent, so narrowing that constant narrows the claim with it and `verify_scope` stays
-#: green over the smaller population -- which is the very mutation #17844's AC2 describes.
-#: This is the independent second derivation that closes it: narrow a guard's roots constant
+#: What each scoped declaration claims, written out BY HAND rather than read from the constant the guard walks
+#: (#17844, review). Every call site passes `roots=SCAN_ROOTS` or the local equivalent, so narrowing that constant
+#: narrows the claim with it and `verify_scope` stays green over the smaller population -- which is the very mutation
+#: #17844's AC2 describes. This is the independent second derivation that closes it: narrow a guard's roots constant
 #: and this goes red, because the expectation does not move with it.
 #:
-#: Compared as a SET in both directions. Adding a scoped declaration means adding a line here,
-#: and that is the point -- the scope is a decision, so it is written twice on purpose.
+#: Compared as a SET in both directions. Adding a scoped declaration means adding a line here, and that is the point
+#: -- the scope is a decision, so it is written twice on purpose.
 _DECLARED_SCOPES = {
     "edge-configs-proxying-api-20046": ("autobot-infrastructure", "autobot-slm-backend", "docker"),
+    "inline-lazy-singleton": (
+        ".claude",
+        "autobot-backend",
+        "autobot-infrastructure",
+        "autobot-npu-worker",
+        "autobot-slm-backend",
+        "autobot_shared",
+        "libs",
+        "pipeline-scripts",
+        "plugins",
+        "repo_tests",
+        "scripts",
+        "tools",
+    ),
     "slm-users-db-scan": ("autobot-slm-backend",),
     "windows-install-scripts-stage-constraints-19681": ("autobot-npu-worker/resources/windows-npu-worker",),
     "role-source-paths-depth-proof-20509": ("autobot-slm-backend/ansible/roles",),
