@@ -511,3 +511,11 @@ python:
   # image's dimensions and size. A change confined to the image -- replacing it
   # with one of the wrong shape -- is exactly what the guard exists to catch.
   - 'docs/assets/social-preview.png'
+  # #20884: `hosted_model_literal_guard_15501_test.py` declares `*.env.example`, `*.toml`, `*.j2`
+  # and top-level `docs/*.md` in its scan scope (_SCAN_EXTS / _SCAN_PATTERNS). Exactly those
+  # globs, so a change confined to one of them runs the guard. `docs/*.md` is TOP-LEVEL only,
+  # NOT `docs/**` (the #17930 owner decision above).
+  - '**/*.env.example'
+  - '**/*.toml'
+  - '**/*.j2'
+  - 'docs/*.md'

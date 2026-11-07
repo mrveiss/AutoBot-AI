@@ -176,7 +176,7 @@ _SCAN_PATTERNS = (*(f"{r}/{e}" for r in _SCAN_ROOTS if r != "docs" for e in _SCA
 _TEST_PART = re.compile(
     r"(^|/)(tests?|test_[^/]*|[^/]*_test\.py|[^/]*\.(test|spec)\.ts|conftest\.py|node_modules|__tests__)(/|$)"
 )
-_HISTORICAL = ("docs/reports/", "docs/design/mockups/", ".claude/skills/claims-audit/extracted-claims.json")
+_HISTORICAL = ("docs/reports/", "docs/design/mockups/")
 _PRICING = "pricing data: rows keyed by model id, not a default"
 _CLAUDE_HOMES: dict[str, str] = {
     "autobot_shared/ssot_claude_models.py": "the SSOT",

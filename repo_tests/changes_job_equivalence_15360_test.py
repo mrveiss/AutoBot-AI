@@ -204,6 +204,11 @@ ALLOWED_ADDITIONS = {
             "autobot-backend/config/context_windows.yaml",
             "docs/developer/CLAUDE_WORKFLOW.md",
             "docs/api/USAGE_METERING_API.md",
+            # #20884: the same pinned-ID scan declares these globs (docs/*.md is TOP-LEVEL only, #17930).
+            "**/*.env.example",
+            "**/*.toml",
+            "**/*.j2",
+            "docs/*.md",
             # #18549: one_playwright_server_18549_test.py reads the canonical server and its store.
             "autobot-browser-worker/playwright-server.js",
             "autobot-browser-worker/session-store.js",
