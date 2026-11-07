@@ -83,9 +83,9 @@ describe('LlcCompanyLayout company notices (#21045)', () => {
     expect(notifyError).not.toHaveBeenCalled()
   })
 
-  it('maps budget_exhausted to a sticky error', () => {
+  it('maps budget.hard_stop to a sticky error', () => {
     mountHost()
-    callback()({ event_type: 'budget_exhausted', payload: {} })
+    callback()({ event_type: 'budget.hard_stop', payload: {} })
     expect(notifyError).toHaveBeenCalledTimes(1)
   })
 
@@ -101,8 +101,8 @@ describe('LlcCompanyLayout company notices (#21045)', () => {
 
   it('renders agent-less text and does not throw when agent_id is missing', () => {
     mountHost()
-    expect(() => callback()({ event_type: 'agent_paused', payload: {} })).not.toThrow()
-    expect(notifyInfo).toHaveBeenCalledWith('An agent was paused')
+    expect(() => callback()({ event_type: 'work_item.handoff', payload: {} })).not.toThrow()
+    expect(notifyInfo).toHaveBeenCalledWith('A work item was handed over')
     callback()({ event_type: 'heartbeat_missed', payload: { agent_id: 'a' } })
     expect(notifyWarning).toHaveBeenCalledWith('Agent a missed its heartbeat')
   })
@@ -118,12 +118,37 @@ describe('LlcCompanyLayout company notices (#21045)', () => {
   it('collapses a burst of identical events into one toast, then toasts again after the window', () => {
     mountHost()
     const windowMs = LLC_NOTICE_DEDUPE_MS
-    const ev = { event_type: 'budget_exhausted', payload: { agent_id: 'a1' } }
+    const ev = { event_type: 'budget.hard_stop', payload: { agent_id: 'a1' } }
     for (let i = 0; i < 10; i++) callback()(ev)
-    callback()({ event_type: 'budget_exhausted', payload: { agent_id: 'a2' } })
+    callback()({ event_type: 'budget.hard_stop', payload: { agent_id: 'a2' } })
     expect(notifyError).toHaveBeenCalledTimes(2)
     vi.advanceTimersByTime(windowMs + 1)
     callback()(ev)
     expect(notifyError).toHaveBeenCalledTimes(3)
+  })
+
+  it.each([
+    ['budget.soft_alert', 'warning'],
+    ['budget.company_soft_alert', 'warning'],
+    ['budget.hard_stop', 'error'],
+    ['budget.company_hard_stop', 'error'],
+    ['work_item.handoff_ready', 'info'],
+    ['work_item.handoff', 'info'],
+  ])('%s renders at %s level', (type, level) => {
+    mountHost()
+    callback()({ event_type: type, payload: { agent_id: 'a1' } })
+    const fns = { info: notifyInfo, warning: notifyWarning, error: notifyError }
+    expect(fns[level as keyof typeof fns]).toHaveBeenCalledTimes(1)
+    const msg = String(fns[level as keyof typeof fns].mock.calls[0][0])
+    expect(msg).not.toContain(type)
+  })
+
+  it('shows one sticky error for repeated company hard stops', () => {
+    mountHost()
+    for (let i = 0; i < 5; i++) callback()({ event_type: 'budget.company_hard_stop', payload: {} })
+    expect(notifyError).toHaveBeenCalledTimes(1)
+    expect(notifyError).toHaveBeenCalledWith(
+      'Budget exhausted: agents are stopped until the budget is raised',
+    )
   })
 })

@@ -45,19 +45,21 @@ const IGNORED_EVENTS = new Set(['heartbeat_ok', 'llc:activity_created'])
 const AGENT_NOTICE_KEYS = new Set([
   'llc.notices.heartbeatMissed',
   'llc.notices.heartbeatRecoveryUnfiled',
-  'llc.notices.agentPaused',
-  'llc.notices.agentResumed',
+  'llc.notices.budgetSoftAlert',
+  'llc.notices.budgetHardStop',
+  'llc.notices.handoff',
 ])
 
 const GENERIC_NOTICE: NoticeSpec = { key: 'llc.notices.generic', level: 'info' }
 
 const EXACT_NOTICES: Record<string, NoticeSpec> = {
   heartbeat_missed: { key: 'llc.notices.heartbeatMissed', level: 'warning' },
-  budget_warning_80: { key: 'llc.notices.budgetWarning80', level: 'warning' },
-  budget_warning_95: { key: 'llc.notices.budgetWarning95', level: 'warning' },
-  budget_exhausted: { key: 'llc.notices.budgetExhausted', level: 'error' },
-  agent_paused: { key: 'llc.notices.agentPaused', level: 'info' },
-  agent_resumed: { key: 'llc.notices.agentResumed', level: 'info' },
+  'budget.soft_alert': { key: 'llc.notices.budgetSoftAlert', level: 'warning' },
+  'budget.company_soft_alert': { key: 'llc.notices.budgetSoftAlert', level: 'warning' },
+  'budget.hard_stop': { key: 'llc.notices.budgetHardStop', level: 'error' },
+  'budget.company_hard_stop': { key: 'llc.notices.budgetHardStop', level: 'error' },
+  'work_item.handoff_ready': { key: 'llc.notices.handoff', level: 'info' },
+  'work_item.handoff': { key: 'llc.notices.handoff', level: 'info' },
 }
 
 const PREFIX_NOTICES: Array<[string, NoticeSpec]> = [
