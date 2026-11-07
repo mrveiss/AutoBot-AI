@@ -32,3 +32,14 @@ register_env_var(
         range=(0.1, 300.0),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_WORKER_LOOP_RUN_TIMEOUT",
+        type=float,
+        default=3600.0,
+        description="Seconds run_on_loop waits for a coroutine on the worker loop before cancelling it and raising.",
+        component="celery",
+        range=(0.1, 86400.0),
+    )
+)

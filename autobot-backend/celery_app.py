@@ -438,6 +438,8 @@ def _reset_async_redis_pools_on_worker_init(sender=None, **kwargs):
 # autobot_shared.worker_loop.run_in_worker_loop, so the engine, session factory and async Redis
 # pools are created once on this loop and never see a closed one. The inherited engine is dropped
 # first (synchronously: the parent's connections belong to the parent), then the loop is started.
+# Prefork pool only: these hooks fire per child process only under prefork (solo sends init once
+# and never shutdown; threads sends neither), so other pools get no fork reset or disposal.
 @worker_process_init.connect
 def _start_worker_loop_on_worker_init(sender=None, **kwargs):
     """Drop fork-inherited async state and start this worker's event loop."""

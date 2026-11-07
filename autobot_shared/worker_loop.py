@@ -23,7 +23,15 @@ Lifecycle (wired in ``celery_app.py``):
 - ``worker_process_shutdown`` -> :func:`stop_worker_loop`, which disposes the
   engine and Redis pools on the loop before stopping it.
 
-The call is pool-agnostic (prefork, threads, gevent) and thread-safe.
+Supported pool: prefork only (the deployed pool; ``autobot-celery.service`` passes no
+``-P`` and uses ``--max-tasks-per-child``). The lifecycle hooks are
+``worker_process_init`` and ``worker_process_shutdown``, which only the prefork pool fires
+once per child process: the solo pool fires init once (in the main process) and never
+shutdown, and the threads pool fires neither. Under those pools
+:func:`run_in_worker_loop` does not raise; it lazily spawns the loop on first use, but
+the fork reset, :func:`in_worker_process` (so ``run_or_schedule`` falls back to
+``asyncio.run`` per call) and the shutdown disposal are not in effect. Submitting from
+many threads is safe (the call is thread-safe).
 """
 
 from __future__ import annotations
@@ -55,6 +63,12 @@ WORKER_LOOP_START_TIMEOUT = env_float("AUTOBOT_WORKER_LOOP_START_TIMEOUT", 10.0)
 # Seconds the shutdown hook gives engine/Redis disposal before stopping anyway.
 WORKER_LOOP_SHUTDOWN_TIMEOUT = env_float("AUTOBOT_WORKER_LOOP_SHUTDOWN_TIMEOUT", 15.0)
 
+# Upper bound on how long run_on_loop() blocks for one coroutine. No Celery task time limit
+# is configured (celery_app.py sets none), so the longest sweep is unbounded by Celery; one
+# hour is far above any current sweep yet still turns a hung coroutine into an error
+# instead of a permanently blocked thread. Override per deployment with the env var.
+WORKER_LOOP_RUN_TIMEOUT = env_float("AUTOBOT_WORKER_LOOP_RUN_TIMEOUT", 3600.0)
+
 _STATE_LOCK = threading.Lock()
 _loop: asyncio.AbstractEventLoop | None = None
 _thread: threading.Thread | None = None
@@ -65,7 +79,10 @@ _worker_mode = False
 
 def _reset_state_in_child() -> None:
     """Forget the parent's loop and thread; neither is usable in a forked child."""
-    global _loop, _thread, _worker_mode
+    global _loop, _thread, _worker_mode, _STATE_LOCK
+    # A thread that held the lock at fork time does not exist in the child; keeping the
+    # inherited (locked) lock would deadlock the first _ensure_loop().
+    _STATE_LOCK = threading.Lock()
     _loop = None
     _thread = None
     _worker_mode = False
@@ -154,10 +171,20 @@ def run_in_worker_loop(coro: Coroutine[Any, Any, T], *, timeout: float | None = 
 
 
 def run_on_loop(coro: Coroutine[Any, Any, T], loop: asyncio.AbstractEventLoop) -> T:
-    """Submit ``coro`` to ``loop`` from another thread and block for the result."""
+    """Submit ``coro`` to ``loop`` from another thread and block for the result.
+
+    Waits at most ``WORKER_LOOP_RUN_TIMEOUT`` seconds; on expiry the future is cancelled
+    and a ``TimeoutError`` naming the coroutine is raised.
+    """
+    name = getattr(coro, "__qualname__", repr(coro))
     future: concurrent.futures.Future[T] = asyncio.run_coroutine_threadsafe(coro, loop)
     try:
-        return future.result()
+        return future.result(WORKER_LOOP_RUN_TIMEOUT)
+    except concurrent.futures.TimeoutError as exc:
+        future.cancel()
+        raise TimeoutError(
+            f"coroutine {name} did not finish within {WORKER_LOOP_RUN_TIMEOUT}s on the worker loop"
+        ) from exc
     except BaseException:
         future.cancel()
         raise

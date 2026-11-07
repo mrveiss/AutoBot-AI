@@ -285,3 +285,33 @@ def test_fallback_on_the_main_loop_thread_warns_once_per_call_site(monkeypatch):
     level, msg, args = logged[0]
     assert level == "warning" and "falling back" in msg
     assert args == (__name__, "sync_caller")
+
+
+def test_child_reset_replaces_a_lock_held_at_fork_time():
+    held = worker_loop._STATE_LOCK
+    assert held.acquire(blocking=False)
+    try:
+        worker_loop._reset_state_in_child()
+        fresh = worker_loop._STATE_LOCK
+        assert fresh is not held
+        assert fresh.acquire(blocking=False)
+        fresh.release()
+    finally:
+        held.release()
+
+
+def test_run_on_loop_times_out_cancels_and_names_the_coroutine(monkeypatch):
+    cancelled = threading.Event()
+
+    async def never_finishes():
+        try:
+            await asyncio.sleep(60)
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+
+    monkeypatch.setattr(worker_loop, "WORKER_LOOP_RUN_TIMEOUT", 0.2)
+    loop = worker_loop.start_worker_loop()
+    with pytest.raises(TimeoutError, match="never_finishes"):
+        worker_loop.run_on_loop(never_finishes(), loop)
+    assert cancelled.wait(5)

@@ -42,6 +42,18 @@ instead of adding a fourth.
 | `worker_process_init` | `reset_async_redis_pools()`, then `user_management.database.reset_after_fork()` (drops the inherited engine and factory without touching the parent's connections), then `start_worker_loop()` |
 | `worker_process_shutdown` | `stop_worker_loop()`: disposes the engine, the transcriber connection and the Redis pools on the loop, then stops it |
 
+**Prefork pool only.** The deployed pool is prefork (`autobot-celery.service` passes no `-P`
+and uses `--max-tasks-per-child`). The hooks above fire once per child only under prefork:
+the solo pool sends `worker_process_init` once (main process) and never
+`worker_process_shutdown`; the threads pool sends neither. Under those pools
+`run_in_worker_loop` does not raise (it lazily spawns the loop), but `in_worker_process()`
+stays false, so `run_or_schedule` falls back to `asyncio.run` per call, and no shutdown
+disposal runs.
+
+`run_on_loop` waits at most `AUTOBOT_WORKER_LOOP_RUN_TIMEOUT` seconds (default 3600; no Celery
+task time limit is configured). On expiry it cancels the future and raises `TimeoutError`
+naming the coroutine.
+
 Engines, session factories and Redis clients are created lazily, on the worker loop, by the
 first task that needs them, and reused by every later task. Do not reset or dispose them per
 task.
