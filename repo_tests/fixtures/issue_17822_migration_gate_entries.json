@@ -26,5 +26,12 @@
  "autobot_shared/auth/device_capabilities.py",
  "autobot_shared/secrets_vault.py",
  "autobot_shared/legacy_secret_keys.py",
- "autobot_shared/db_errors.py"
+ "autobot_shared/db_errors.py",
+ "autobot_shared/user_management/password_epoch.py",
+ "autobot_shared/user_management/base_service.py",
+ "autobot_shared/user_management/models/audit.py",
+ "autobot_shared/user_management/models/user.py",
+ "autobot_shared/user_management/user_service.py",
+ "autobot_shared/user_management/user_service_lifecycle.py",
+ "autobot_shared/user_management/revocation_outcome.py"
 ]
