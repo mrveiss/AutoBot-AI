@@ -6,7 +6,10 @@
 
 - **Start** (admins only): takes the switch claim in the work-claim registry whose TTL is the build's heartbeat, so
   exactly one build runs fleet-wide and a build whose worker died is visible as ``stale`` once the
-  lock expires -- a new start, or a cancel, recovers from it. Each attempt writes a NEW collection
+  claim lapses -- a new start, or a cancel, recovers from it. The state hash itself has NO TTL: it is
+  the last-run record and stays until the next start replaces it. Every write after the start is
+  owner-conditional (``_SET_IF_OWNER_LUA``), so a hash that vanished (eviction, flush) is never
+  recreated ownerless -- it stays absent and reads ``idle`` (#20023). Each attempt writes a NEW collection
   (``<base>__<model>__<attempt>``), so switching A→B→A never reopens an abandoned A collection.
 - **Build:** every fact from the system of record (``fact_store.iter_facts``, PostgreSQL) is
   re-embedded with the TARGET model into the new collection, stamped with its provenance. Search and
@@ -72,7 +75,7 @@ end
 return 0
 """
 #: Enter cutover only if no cancel was accepted; one step, so a cancel lands before it or is refused.
-#: -1, writing nothing, when this run no longer owns the record: it expired or a newer switch took it.
+#: -1, writing nothing, when this run no longer owns the record: it vanished or a newer switch took it.
 _SETTLE_UNLESS_CANCELLED_LUA = """
 if redis.call('HGET', KEYS[1], 'owner') ~= ARGV[1] then
   return -1
@@ -86,6 +89,23 @@ return 1
 
 
 _SETTLE_LOST_RECORD = -1
+#: Write the given fields only while the record is still this owner's; 0, writing nothing, when it vanished or a
+#: newer switch owns it. ARGV: owner, then field/value pairs. Never recreates an ownerless hash (#20023).
+#: An empty owner is the force-close of a stale record: it matches any record that EXISTS, including an ownerless
+#: one an older build left behind, and still never creates one.
+_SET_IF_OWNER_LUA = """
+if ARGV[1] == '' then
+  if redis.call('EXISTS', KEYS[1]) == 0 then
+    return 0
+  end
+elseif redis.call('HGET', KEYS[1], 'owner') ~= ARGV[1] then
+  return 0
+end
+for i = 2, #ARGV, 2 do
+  redis.call('HSET', KEYS[1], ARGV[i], ARGV[i + 1])
+end
+return 1
+"""
 
 
 class SwitchRefused(ValueError):
@@ -147,6 +167,15 @@ async def _set_state(**fields: Any) -> None:
     await client.hset(STATE_KEY, mapping={k: str(v) for k, v in fields.items()})
 
 
+async def _set_state_if_owner(owner: str, **fields: Any) -> bool:
+    """Write *fields* only while the record still names *owner*; False, writing nothing, otherwise."""
+    client = await _redis()
+    if client is None:
+        raise RuntimeError("the embedding-switch state cannot be written: no Redis")
+    args = [item for k, v in fields.items() for item in (k, str(v))]
+    return bool(await client.eval(_SET_IF_OWNER_LUA, 1, STATE_KEY, owner, *args))
+
+
 async def start_switch(kb, model: str, actor: str = "unknown") -> Dict[str, Any]:
     """Start a background rebuild for *model*; refuses rather than queueing a second one."""
     if not is_embedding_model_id(model):
@@ -188,7 +217,13 @@ async def request_switch_cancel(actor: str = "unknown") -> str:
     """Cancel a running build at its next batch, or force-close a stale one; ``none`` when idle."""
     status = await switch_status()
     if status["state"] == "stale":
-        await _finish(None, "failed", reason="force-closed: the build stopped heartbeating")
+        # the stale record's owner, so a run that started since the read is neither overwritten nor unclaimed
+        await _finish(
+            None,
+            "failed",
+            reason="force-closed: the build stopped heartbeating",
+            stale_owner=status.get("owner", ""),
+        )
         _audit(actor, "switch_force_close", status.get("model"), status.get("collection"))
         return "force_closed"
     if status["state"] not in _ACTIVE:
@@ -229,7 +264,9 @@ async def _heartbeat(run: _Run, **fields: Any) -> None:
         raise _DeadlineExceeded(f"the build exceeded its {SWITCH_DEADLINE_S:.0f}s deadline")
     if not await lock.extend_claim(run.owner, int(SWITCH_STALE_S)):
         raise RuntimeError("the build lost its lock (force-closed or expired)")
-    await _set_state(heartbeat=datetime.now(tz=timezone.utc).isoformat(), **fields)
+    beat = datetime.now(tz=timezone.utc).isoformat()
+    if not await _set_state_if_owner(run.owner, heartbeat=beat, **fields):
+        raise RuntimeError("the build lost its state record (it vanished or a newer switch owns it)")
 
 
 async def run_switch(kb, run: _Run) -> None:
@@ -251,22 +288,35 @@ async def run_switch(kb, run: _Run) -> None:
     await _cut_over(kb, store, run)
 
 
-async def _finish(run: _Run | None, state: str, *, reason: str = "", failed: int | None = None, failed_ids=()) -> None:
-    client = await _redis()
-    if run is not None and await client.hget(STATE_KEY, "owner") != run.owner:
-        # a newer switch owns the state, or the record is gone: leave it alone, but never keep our lock
-        logger.warning("embedding switch %s finished as %s after losing ownership; state left as is", run.owner, state)
-        await lock.release(run.owner)
-        return
+async def _finish(
+    run: _Run | None,
+    state: str,
+    *,
+    reason: str = "",
+    failed: int | None = None,
+    failed_ids=(),
+    stale_owner: str = "",
+) -> None:
+    """Close the record and free the claim, each only while still *run*'s (or, force-close, *stale_owner*'s).
+
+    A force-close (``run is None``) carries the owner the stale record named; the empty owner, matching any existing
+    record, is only for an ownerless legacy record that names none.
+    """
+    owner = run.owner if run is not None else stale_owner
     fields: Dict[str, Any] = {"state": state, "finished": datetime.now(tz=timezone.utc).isoformat(), "reason": reason}
     if failed is not None:
         fields["failed"] = failed
     fields["failed_ids"] = json.dumps(list(failed_ids)[:_FAILED_IDS_SHOWN])
-    await _set_state(**fields)
-    if run is None:
-        await lock.force_release()  # force-close: the owner is gone
-    else:
-        await lock.release(run.owner)
+    if not await _set_state_if_owner(owner, **fields):
+        # a newer switch owns the state, or the record is gone: leave it alone, but never keep our lock
+        # info: the loss itself was reported where it was detected, so one loss is one warning/error line
+        logger.info(
+            "embedding switch %s finished as %s after losing the record; state left as is",
+            owner or "(force-close)",
+            state,
+        )
+    if owner:
+        await lock.release(owner)  # only this owner's claim: a newer run's is untouched
 
 
 async def _build(kb, run: _Run) -> Tuple[Any, List[str], int]:
