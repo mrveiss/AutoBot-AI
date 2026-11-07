@@ -39,7 +39,8 @@ register_env_var(
         description=(
             "Milliseconds one group of tool calls (one agent-loop iteration) may run, for both "
             "the agent loop and the parallel tool executor (autobot_shared/tool_timeouts.py, "
-            "#19729). Keep it at least the per-call budget. Minimum 1."
+            "#19729, #19900). Never below the per-call budget: a smaller value is raised to "
+            "AUTOBOT_TOOL_CALL_TIMEOUT_MS where it is read. Minimum 1."
         ),
         component="agent_loop",
     )

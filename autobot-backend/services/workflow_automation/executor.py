@@ -536,7 +536,7 @@ class WorkflowExecutor:
             logger.error(f"Step ID mismatch: expected {current_step.step_id}, got {step_id}")
             return
 
-        current_step.status = WorkflowStepStatus.EXECUTING
+        current_step.begin_after_approval()  # a repeated approve is refused (409), never run twice
 
         # Issue #2159: Enforce token/output budget before executing next step
         if not self.cost_tracker.check_token_budget(workflow.workflow_id, self.limits):
