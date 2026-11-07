@@ -8955,7 +8955,8 @@
       "canvasToolsUnavailable": "Tool information is unavailable right now — this list may be incomplete.",
       "canvasNoToolsDefined": "No tools are attached to any role in this company.",
       "deepLinkNodeNotFound": "This link points to a node that could not be found here. It may have been removed, or you may not have access to it.",
-      "viewPlanner": "Workflow Planner"
+      "viewPlanner": "Workflow Planner",
+      "standingUnavailable": "Your role could not be loaded, so attach, detach and agent controls are hidden. Reload to try again."
     },
     "executorRollup": {
       "title": "Executor Rollup",
@@ -10340,7 +10341,8 @@
       "clear": "Clear designation",
       "setDone": "{name} is now the CEO.",
       "clearDone": "The CEO designation was cleared.",
-      "actionFailed": "The change was not made. The server gave no reason."
+      "actionFailed": "The change was not made. The server gave no reason.",
+      "standingUnavailable": "Your role could not be loaded, so the change controls are hidden. Reload to try again."
     }
   },
   "transcriber": {

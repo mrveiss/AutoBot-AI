@@ -69,7 +69,7 @@ const none = { company_id: 'c1', holder_exists: false }
 const live = { company_id: 'c1', holder_type: 'agent', holder_id: AGENT, holder_exists: true }
 const gone = { company_id: 'c1', holder_type: 'agent', holder_id: AGENT, holder_exists: false }
 
-function serve(designation: unknown, members: unknown[] = [{ user_id: USER, display_name: 'Ada', role: 'owner' }]) {
+function serve(designation: unknown, members: unknown[] = [{ user_id: USER, display_name: 'Ada', role: 'owner', viewer_role: 'owner' }]) {
   get.mockImplementation((url: string) => {
     if (url.endsWith('/ceo')) return designation instanceof Error ? Promise.reject(designation) : Promise.resolve(designation)
     if (url.endsWith('/org-chart')) {
@@ -203,5 +203,49 @@ describe('CompanyCeoCard (#15945)', () => {
     const wrapper = await mountCard()
     expect(wrapper.find('[data-testid="ceo-people-failed"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="ceo-no-candidates"]').exists()).toBe(false)
+  })
+})
+
+// #20542: setting or clearing the CEO answers 403 to anyone but a company owner/admin, so the card
+// offers those controls to no one else. The viewer's role is the members list's `viewer_role`.
+describe('CompanyCeoCard owner/admin-only controls (#20542)', () => {
+  beforeEach(() => {
+    get.mockReset()
+  })
+
+  const asRole = (role: string | null) => [{ user_id: USER, display_name: 'Ada', role: 'member', viewer_role: role }]
+  const controls = ['ceo-change', 'ceo-set', 'ceo-clear']
+
+  it.each(['owner', 'admin'])('offers set and clear to a company %s', async (role) => {
+    serve(live, asRole(role))
+    const wrapper = await mountCard()
+    expect(wrapper.find('[data-testid="ceo-live"]').exists()).toBe(true)
+    for (const id of controls) expect(wrapper.find(`[data-testid="${id}"]`).exists()).toBe(true)
+  })
+
+  it.each(['member', 'lead', 'guest', null])('hides set and clear from viewer role %s but still shows the holder', async (role) => {
+    serve(live, asRole(role))
+    const wrapper = await mountCard()
+    expect(wrapper.find('[data-testid="ceo-live"]').exists()).toBe(true)
+    for (const id of controls) expect(wrapper.find(`[data-testid="${id}"]`).exists()).toBe(false)
+  })
+
+  it('hides set and clear while the viewer role cannot be read', async () => {
+    serve(live)
+    const answer = get.getMockImplementation()!
+    get.mockImplementation((url: string) =>
+      url.endsWith('/members') ? Promise.reject(new HttpError(503, 'down')) : answer(url),
+    )
+    const wrapper = await mountCard()
+    expect(wrapper.find('[data-testid="ceo-live"]').exists()).toBe(true)
+    for (const id of controls) expect(wrapper.find(`[data-testid="${id}"]`).exists()).toBe(false)
+    // Said, not silent: a failed load must not read as a permission refusal.
+    expect(wrapper.find('[data-testid="ceo-standing-unavailable"]').exists()).toBe(true)
+  })
+
+  it('says nothing about the role when it loaded', async () => {
+    serve(live, asRole('member'))
+    const wrapper = await mountCard()
+    expect(wrapper.find('[data-testid="ceo-standing-unavailable"]').exists()).toBe(false)
   })
 })

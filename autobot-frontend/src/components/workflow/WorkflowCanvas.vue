@@ -356,12 +356,10 @@
               >{{ nodeText(node, 'workflow_id') }}</p>
               <div class="org-meta">
                 <span class="process-role">{{ nodeText(node, 'role_name') }}</span>
-                <!-- #14549: the canvas shows the attachment but could not
-                     change it. `.stop` keeps the click from also selecting the
-                     node, which would navigate to the workflow builder — the
-                     mutation itself is OrgChart.vue's job, reached by event. -->
+                <!-- #14549: `.stop` keeps the click from also selecting the node (which
+                     opens the workflow builder); OrgChart.vue does the mutation, by event. -->
                 <button
-                  type="button"
+                  v-if="detachable" type="button"
                   class="process-detach-btn"
                   data-testid="process-detach-btn"
                   :aria-label="processDetachLabel(node)"
@@ -389,7 +387,7 @@
                   <!-- #14597: mirrors the org-process detach control — `.stop`
                        keeps the click from also selecting the tool node. -->
                   <button
-                    type="button"
+                    v-if="detachable" type="button"
                     class="tool-detach-btn"
                     data-testid="tool-detach-btn"
                     :aria-label="toolDetachLabel(node, role)"
@@ -607,8 +605,10 @@ const props = withDefaults(
     // actually exists in `nodes`. Optional and defaulted to null so every
     // existing mount (WorkflowBuilderView included) is unaffected.
     focusNodeId?: string | null;
+    // #20682: whether the viewer may detach an org attachment (the server 403s all but owner/admin).
+    detachable?: boolean;
   }>(),
-  { readonly: false, tabs: () => [], activeTabId: null, focusNodeId: null },
+  { readonly: false, tabs: () => [], activeTabId: null, focusNodeId: null, detachable: true },
 );
 const emit = defineEmits<{
   (e: 'node-added', node: WorkflowNode): void;
@@ -2496,14 +2496,14 @@ const contextMenuActions = computed<CanvasContextMenuAction[]>(() => {
     });
   }
 
-  if (!props.readonly && node.type === 'org-process') {
+  if (!props.readonly && props.detachable && node.type === 'org-process') {
     actions.push({
       id: 'detach-process',
       label: processDetachLabel(node),
       run: () => emit('process-detached', nodeText(node, 'role_id'), nodeText(node, 'workflow_id')),
     });
   }
-  if (!props.readonly && node.type === 'org-tool') {
+  if (!props.readonly && props.detachable && node.type === 'org-tool') {
     for (const role of toolRoles(node)) {
       actions.push({
         id: `detach-tool-${role.role_id}`,

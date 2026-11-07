@@ -8,6 +8,7 @@ import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
 import { useLlcCompanyContext } from '@/composables/llc/useLlcCompanyContext'
+import { useCompanyMembers, isCompanyAdminRole } from '@/composables/llc/useCompanyMembers'
 import { shareInFlight } from '@/composables/llc/shareInFlight'
 import OrgTreeNode from './OrgTreeNode.vue'
 import type { OrgNode } from './OrgTreeNode.vue'
@@ -69,6 +70,9 @@ const router = useRouter()
 // below must tolerate that exactly the same way.
 const route = useRoute() as ReturnType<typeof useRoute> | undefined
 const { companyId, resolveCompanyId } = useLlcCompanyContext()
+// #20682/#21001: attach/detach, contact delete and agent pause/terminate 403 for a non-owner/admin; hidden until the role loads.
+const { viewerRole, errorMessage: standingError, load: loadViewerStanding } = useCompanyMembers(api, () => companyId.value ?? '')
+const canManageCompany = computed(() => isCompanyAdminRole(viewerRole.value))
 
 const tree = ref<OrgNode[]>([])
 const isLoading = ref(false)
@@ -978,6 +982,7 @@ watch(deepLinkSourcesReady, (ready) => {
 
 onMounted(() => {
   void fetchTree()
+  void loadViewerStanding()
   // #13942: company-wide, independent of tree/view-mode — loads once, like fetchTree.
   void loadExecutorRollup()
   // #14611: a deep link opens straight onto the canvas, triggering the same
@@ -1122,7 +1127,7 @@ onMounted(() => {
         :unavailable="executorRollupUnavailable"
       />
     </div>
-
+    <p v-if="standingError" class="mb-2 text-xs text-autobot-text-muted" data-testid="org-standing-unavailable">{{ t('llc.orgChart.standingUnavailable') }}</p>
     <div v-if="error && viewMode !== 'planner'" class="rounded-lg bg-autobot-error-bg border border-autobot-error p-4 text-autobot-error text-sm mb-4">
       {{ error }}
       <button class="ml-4 underline" @click="fetchTree">{{ t('llc.orgChart.retry') }}</button>
@@ -1179,7 +1184,7 @@ onMounted(() => {
         :unassigned-contact-ids="unassignedContactIds"
         :contacts-failed="contactsFailed"
         :saving-contact-id="savingContactId"
-        :contact-save-error="contactSaveError"
+        :contact-save-error="contactSaveError" :can-delete-contacts="canManageCompany"
         @select="onPersonSelected"
         @save-contact="onSaveContact"
         @create-contact="onCreateContact"
@@ -1193,14 +1198,12 @@ onMounted(() => {
       class="h-[70vh] rounded-lg border border-autobot-border overflow-hidden flex flex-col"
       data-testid="org-canvas"
     >
-      <!-- #14549: the canvas shows the attachment (role, workflow) it draws a
-           process node from, but could not change it — attach reaches from
-           here, detach reaches from the node itself (below). Always shown in
-           canvas mode, independent of the role lens: it is a mutation
-           control, not a view filter. -->
+      <!-- #14549: attach reaches from here, detach from the process node itself.
+           A mutation control, not a view filter (ignores the role lens); shown
+           to an owner/admin only (#20682). -->
       <div
         class="flex flex-wrap items-end gap-3 border-b border-autobot-border bg-autobot-bg-secondary px-3 py-2 text-sm"
-        data-testid="process-attach-form"
+        v-if="canManageCompany" data-testid="process-attach-form"
       >
         <div class="flex flex-col gap-1">
           <label for="process-attach-role" class="text-xs text-autobot-text-secondary">
@@ -1260,15 +1263,12 @@ onMounted(() => {
         {{ processMutationError }}
       </div>
 
-      <!-- #14597: the tool sibling of the process-attach form above — a role
-           picker (reusing `attachableRoles`) plus a tool-name field. Attach
-           reaches from here; detach reaches from each role chip on the tool
-           node itself (WorkflowCanvas.vue). Always shown in canvas mode,
-           independent of the role lens, for the same reason the process form
-           is: it is a mutation control, not a view filter. -->
+      <!-- #14597: the tool sibling of the process-attach form (role picker plus
+           tool name); detach reaches from each role chip on the tool node. Same
+           gating as the process form: owner/admin only, not a view filter. -->
       <div
         class="flex flex-wrap items-end gap-3 border-b border-autobot-border bg-autobot-bg-secondary px-3 py-2 text-sm"
-        data-testid="tool-attach-form"
+        v-if="canManageCompany" data-testid="tool-attach-form"
       >
         <div class="flex flex-col gap-1">
           <label for="tool-attach-role" class="text-xs text-autobot-text-secondary">
@@ -1475,7 +1475,7 @@ onMounted(() => {
       </div>
       <WorkflowCanvas
         v-else
-        readonly
+        readonly :detachable="canManageCompany"
         :nodes="lensedCanvasNodes"
         :selected-node-id="selectedNode?.id ?? null"
         :tabs="canvasTabs"
@@ -1507,7 +1507,7 @@ onMounted(() => {
         :key="selectedNode.id"
         :node="selectedNode"
         :company-id="companyId ?? ''"
-        :terminating="terminating"
+        :terminating="terminating" :can-control="canManageCompany"
         @pause="toggleAgentPause"
         @terminate="terminateAgent"
         @heartbeat="(n: OrgNode, on: boolean) => { n.heartbeat_enabled = on }"
