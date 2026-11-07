@@ -7,7 +7,7 @@
   Extracted from CodebaseAnalytics.vue, a grandfathered file that may not grow (#20513).
   Indexing needs a source: with none selected the request would index AutoBot's own
   files (the backend's dev root_path mode), so the action is disabled and says why.
-  Styles: `.kb-optin-*` in assets/css/components.css (a shared stylesheet, not another component-local block).
+  Styles: `.kb-optin-banner/-content/-text` in assets/css/components.css; the buttons are the kit's BaseButton.
 -->
 <template>
   <div class="kb-optin-banner">
@@ -17,27 +17,31 @@
         <strong>{{ $t('analytics.codebase.knowledgeBase.indexingComplete') }}</strong>
         {{ $t('analytics.codebase.knowledgeBase.addDescription') }}
       </div>
-      <button
-        class="kb-optin-btn"
-        :disabled="adding || !hasSource"
+      <BaseButton
+        variant="success"
+        size="sm"
+        :loading="adding"
+        :disabled="!hasSource"
         :title="hasSource ? undefined : $t('analytics.codebase.knowledgeBase.needsSource')"
         @click="emit('add')"
       >
-        <i :class="adding ? 'fas fa-spinner fa-spin' : 'plus'"></i>
+        <template #icon-left><Icon name="plus" /></template>
         {{ adding ? $t('analytics.codebase.knowledgeBase.adding') : $t('analytics.codebase.knowledgeBase.addToKnowledgeBase') }}
-      </button>
-      <button
-        class="kb-optin-dismiss"
+      </BaseButton>
+      <BaseButton
+        variant="ghost"
+        size="sm"
         :aria-label="$t('analytics.codebase.actions.dismiss')"
         @click="emit('dismiss')"
       >
         <Icon name="times" />
-      </button>
+      </BaseButton>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 
 defineProps<{

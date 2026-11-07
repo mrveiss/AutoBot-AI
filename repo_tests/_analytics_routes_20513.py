@@ -58,7 +58,7 @@ EXACTLY_ONE_BODY: frozenset[tuple[str, str]] = frozenset({("POST", "/index")})
 #: statement holds no evidence. ``(file, route)``: a tracked gap with its reason, not a hole.
 DEFERRED_CALLERS: frozenset[tuple[str, str]] = frozenset(
     {
-        # #20513 PR 2 -- the indexing job is rewritten by #20998 first.
+        # Owned by #20513 itself (its second PR, with /index/current and /index/cancel in DEFERRED_TO_PR2).
         ("autobot-frontend/src/composables/analytics/useIndexingJob.ts", "index"),
     }
 )
