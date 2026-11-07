@@ -52,9 +52,11 @@ async def insert_user_or_raise_duplicate(
     Runs the INSERT inside a SAVEPOINT so a losing insert rolls back only
     itself rather than poisoning the caller's outer transaction (#15772).
     """
-    session.add(user)
     try:
         async with session.begin_nested():
+            # Added INSIDE the savepoint: ``begin_nested()`` flushes whatever is pending as it opens, so a
+            # user added before it fails OUTSIDE the savepoint and deactivates the caller's whole transaction.
+            session.add(user)
             await session.flush()
     except IntegrityError as exc:
         raise await _resolve_conflict(email, username, find_existing) from exc
