@@ -301,7 +301,7 @@ class TestSecurityLayer:
                 await self.security.execute_command("rm file.txt", "dev_user", "developer")
 
                 # Should force approval for non-safe command
-                mock_run.assert_called_once_with("rm file.txt", force_approval=True)
+                mock_run.assert_called_once_with("rm file.txt", force_approval=True, policy=None)
 
     @pytest.mark.asyncio
     async def test_execute_command_security_disabled(self):
