@@ -140,7 +140,6 @@ queue:autobot-backend/llc/sync/outbound_sync.py:llc:activity_log	#10603
 queue:autobot-backend/services/conflict_resolver.py:kb_updates:	#10603
 queue:autobot-backend/services/conflict_resolver.py:review_queue:	#10603
 queue:autobot-backend/services/llm_api_key_service.py:llm:usage:stream	#10603
-queue:autobot-backend/services/mesh_brain/staleness_propagator.py:mesh:reembed_queue	#10603
 queue:autobot-infrastructure/shared/scripts/utilities/npu_worker.py:npu_tasks_completed	#10603
 queue:autobot-infrastructure/shared/scripts/utilities/npu_worker.py:npu_tasks_failed	#10603
 queue:autobot-infrastructure/shared/scripts/utilities/npu_worker.py:npu_tasks_processing	#10603
