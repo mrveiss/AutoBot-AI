@@ -61,6 +61,17 @@ describe('PlannerLabelBoard', () => {
     expect(w.emitted('acknowledge')).toHaveLength(1)
   })
 
+  it('emits a new edge case for the one-number step with the chosen label', async () => {
+    const w = mountBoard(base)
+    expect(w.find('[data-testid="add-edge-case-ai"]').attributes('disabled')).toBeDefined()
+    await w.findAll('input')[1].setValue('  Customer cancels  ')
+    await w.find('[data-testid="add-edge-case-by_hand"]').trigger('click')
+    expect(w.emitted('addEdgeCase')![0]).toEqual([
+      'step-1',
+      { key: 'edge-1', description: 'Customer cancels', classification: 'by_hand' },
+    ])
+  })
+
   it('disables the acknowledgement once it was given', () => {
     const w = mountBoard({ ...base, by_hand_acknowledged_at: 't' })
     expect(w.find('[data-testid="ack-by-hand"]').attributes('disabled')).toBeDefined()

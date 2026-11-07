@@ -28,6 +28,9 @@ for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
 
 from agents.llm_failsafe_agent import get_robust_llm_response  # noqa: E402
 
+#: Wait for the failsafe agent; the timeout log reports this same value (#18056).
+_FAILSAFE_TIMEOUT_S = 15.0
+
 
 async def test_llm_failsafe_direct():
     """Test the LLM failsafe agent directly"""
@@ -39,7 +42,9 @@ async def test_llm_failsafe_direct():
         logger.info("   Calling get_robust_llm_response with: %s", prompt)
 
         # Set a timeout to catch hangs
-        response = await asyncio.wait_for(get_robust_llm_response(prompt, context={"test": "direct"}), timeout=15.0)
+        response = await asyncio.wait_for(
+            get_robust_llm_response(prompt, context={"test": "direct"}), timeout=_FAILSAFE_TIMEOUT_S
+        )
 
         logger.error("✅ LLM Failsafe response received:")
         logger.info("   Tier: %s", response.tier_used.value)
@@ -49,7 +54,7 @@ async def test_llm_failsafe_direct():
         return True
 
     except asyncio.TimeoutError:
-        logger.error("❌ LLM Failsafe timed out after 15 seconds")
+        logger.error("❌ LLM Failsafe timed out after %g seconds", _FAILSAFE_TIMEOUT_S)
         return False
 
     except Exception as e:

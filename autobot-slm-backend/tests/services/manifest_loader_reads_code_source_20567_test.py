@@ -58,3 +58,39 @@ def test_nothing_anywhere_warns_and_does_not_crash(tmp_path: Path, caplog) -> No
     assert any("manifests are unavailable" in r.getMessage() for r in caplog.records)
     assert loader.load("example") is None
     assert loader.load_all() == {}
+
+
+def _live(code_source: Path, base: Path) -> ManifestLoader:
+    from services.manifest_loader import candidate_infra_roots
+
+    return ManifestLoader(roots=lambda: candidate_infra_roots(override="", code_source=code_source, base_dir=base))
+
+
+def test_an_incomplete_code_source_tree_does_not_hide_the_installs_manifest(tmp_path: Path) -> None:
+    """code_source has the infra dir but not this role: the install's manifest (and its conflict checks) apply."""
+    code_source, base = tmp_path / "code_source", tmp_path / "install"
+    (code_source / "autobot-infrastructure" / "other").mkdir(parents=True)
+    _write(base, "from the install")
+    manifest = _live(code_source, base).load("example")
+    assert manifest is not None and manifest.description == "from the install"
+
+
+def test_a_code_source_populated_after_start_is_picked_up_and_the_cache_dropped(tmp_path: Path) -> None:
+    code_source, base = tmp_path / "code_source", tmp_path / "install"
+    _write(base, "from the install")
+    loader = _live(code_source, base)
+    assert loader.load("example").description == "from the install"
+    _write(code_source, "from code_source")
+    assert loader.load("example").description == "from code_source"  # no force_reload: the root changed
+
+
+def test_load_all_unions_the_roots_with_the_first_winning(tmp_path: Path) -> None:
+    code_source, base = tmp_path / "code_source", tmp_path / "install"
+    _write(code_source, "from code_source")
+    _write(base, "from the install")
+    infra = base / "autobot-infrastructure"
+    (infra / "autobot-extra").mkdir()
+    (infra / "autobot-extra" / "manifest.yml").write_text(
+        _MANIFEST.replace("autobot-example", "autobot-extra").format(description="extra"), encoding="utf-8"
+    )
+    assert set(_live(code_source, base).load_all()) == {"autobot-extra"}

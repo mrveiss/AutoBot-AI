@@ -8,9 +8,12 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+# Never "." or "..": URL normalisation would drop such a segment from the SLM delete path (#20046).
+NODE_ID_PATTERN = r"^([A-Za-z0-9_-][A-Za-z0-9._-]*|\.[A-Za-z0-9_-][A-Za-z0-9._-]*|\.\.[A-Za-z0-9._-]+)$"
+
 #: The actions a proposal may name; autobot_shared.slm_credential_actions.ACTIONS holds their specs.
 CredentialActionName = Literal["slm_node_ssh_password_delete", "slm_backend_internal_key_realign"]
-_NODE_ID = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9._-]+$")
+_NODE_ID = Field(min_length=1, max_length=64, pattern=NODE_ID_PATTERN)
 
 
 class CredentialProposal(BaseModel):

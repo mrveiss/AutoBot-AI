@@ -19,6 +19,7 @@ from services import approval_execution
 from services import slm_ssh_password_action as action
 from services.approval_gate_service import ApprovalGateService
 from services.audit.taxonomy import AuditAction
+from testkit.fake_async_session import FakeAsyncSession, FakeResult
 
 ACTION = SSH_PASSWORD_DELETE.name
 
@@ -89,7 +90,8 @@ async def _decide(method: str) -> AsyncMock:
     """Run approve or reject through the real gate service; returns the SLM deletion mock."""
     action.register_ssh_password_action()
     approval = _approval()
-    service = ApprovalGateService(_session())
+    # the gate's _get_or_raise awaits session.execute: the shared fake answers it with the approval
+    service = ApprovalGateService(FakeAsyncSession(results=[FakeResult([approval])]))
     with (
         patch.object(ApprovalGateService, "_transition", AsyncMock(return_value=approval)),
         patch.object(action, "_delete_in_slm", AsyncMock(return_value=True)) as delete,
@@ -187,8 +189,15 @@ async def test_no_committed_entry_means_nothing_is_deleted() -> None:
 
 
 def test_the_backend_calls_the_slm_directly_never_through_the_edge() -> None:
-    url = action._slm_direct_url()
+    url = action.slm_direct_url()
     assert url.startswith("http://") and "/slm" not in url and "/api/internal" not in url
+
+
+def test_the_direct_url_follows_the_ssot_tls_setting() -> None:
+    from autobot_shared.ssot_config import config  # noqa: PLC0415
+
+    with patch.object(config.tls, "slm_tls_enabled", True):
+        assert action.slm_direct_url().startswith("https://")
 
 
 class _Resp:

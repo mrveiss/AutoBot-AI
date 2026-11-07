@@ -34,8 +34,10 @@ export async function planRequest<P extends PlanPath, V extends Verb & keyof pat
   path: P,
   params: Record<string, string> = {},
   body?: unknown,
+  query: Record<string, string> = {},
 ): Promise<PlanResponse<P, V & Verb>> {
-  const url = fillPath(path, params)
+  const qs = new URLSearchParams(query).toString()
+  const url = fillPath(path, params) + (qs ? `?${qs}` : '')
   const data: unknown = await (body === undefined ? client[verb](url) : client[verb as 'post'](url, body))
   return data as PlanResponse<P, V & Verb>
 }

@@ -38,6 +38,7 @@ def _load(name: str, relative: str):
 _BEFORE = dict(sys.modules)  # what this file loads is put back afterwards, so later test files see their stubs
 _load("models.schemas_node_ssh_password", "models/schemas_node_ssh_password.py")  # `models` is a conftest stub
 route = _load("node_ssh_password_internal_under_20046_test", "api/node_ssh_password_internal.py")
+csrf = _load("security_headers_under_20046_test", "middleware/security_headers.py")  # the REAL CSRF guard
 ssh = sys.modules["services.node_ssh_password"]  # the very module the route imported, so patches reach both
 assert not isinstance(ssh.delete_stored_password, MagicMock), "services.node_ssh_password is a stub"
 for _name in [n for n in sys.modules if n not in _BEFORE]:
@@ -169,8 +170,20 @@ _APPROVAL = uuid.uuid4()
 
 def _db(node) -> MagicMock:
     db = MagicMock()
-    db.commit = AsyncMock()
-    db.rollback = AsyncMock()
+    committed = dict(node.extra_data or {}) if node is not None else {}
+
+    async def _rollback():  # a real rollback restores the committed value of the row
+        if node is not None:
+            node.extra_data = dict(committed)
+
+    async def _commit():
+        committed.update(node.extra_data or {}) if node is not None else None
+        for gone in [k for k in committed if node is not None and k not in (node.extra_data or {})]:
+            del committed[gone]
+
+    db.commit = AsyncMock(side_effect=_commit)
+    db.rollback = AsyncMock(side_effect=_rollback)
+    db.flush = AsyncMock()
     db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: node))
     return db
 
@@ -292,10 +305,33 @@ async def test_a_failed_completion_row_does_not_turn_a_deletion_into_a_failure(w
 
 
 async def test_a_failed_removal_is_recorded_failed_and_raised(world) -> None:
-    world.db.commit.side_effect = [None, RuntimeError("db down"), None]
+    world.db.flush.side_effect = RuntimeError("db down")
     with pytest.raises(RuntimeError):
         await ssh.delete_stored_password(world.db, "node-a", _APPROVAL)
     assert [c.kwargs["extra_data"]["phase"] for c in world.audit.await_args_list][-1] == "failed"
+    world.backend.post.assert_not_awaited()  # M2: the approval is not spent when the removal cannot be staged
+
+
+async def test_a_refused_claim_rolls_the_staged_removal_back(world) -> None:
+    world.backend.post.return_value = SimpleNamespace(status_code=403)
+    with pytest.raises(ssh.DeletionRefused):
+        await ssh.delete_stored_password(world.db, "node-a", _APPROVAL)
+    world.db.rollback.assert_awaited()
+
+
+async def test_the_removal_is_staged_before_the_spend_and_committed_after_it(world) -> None:
+    order: list[str] = []
+    world.db.flush.side_effect = lambda: order.append("stage")
+    world.db.commit.side_effect = lambda: order.append("commit")
+    world.backend.post.side_effect = lambda *a, **k: order.append("spend") or SimpleNamespace(status_code=200)
+    await ssh.delete_stored_password(world.db, "node-a", _APPROVAL)
+    assert order[:4] == ["commit", "stage", "spend", "commit"]  # intent row, stage, spend, commit
+
+
+async def test_the_removal_reads_the_row_locked_and_fresh(world) -> None:
+    await ssh.delete_stored_password(world.db, "node-a", _APPROVAL)
+    statement = world.db.execute.await_args_list[-1].args[0]
+    assert statement._for_update_arg is not None and statement.get_execution_options()["populate_existing"]
 
 
 async def test_a_node_with_nothing_stored_reports_false(world) -> None:
@@ -320,7 +356,8 @@ async def test_the_probe_runs_a_key_only_passwordless_sudo_check() -> None:
     argv = spawn.await_args.args[0]
     assert {"BatchMode=yes", "PasswordAuthentication=no", "IdentitiesOnly=yes"} <= set(argv) and argv[
         -1
-    ] == "sudo -n true"
+    ] == "sudo -n -k /bin/sh -c true"
+    assert {"ControlMaster=no", "ControlPath=none"} <= set(argv)  # a live master must not vouch for the key
     assert spawn.await_args.kwargs["timeout"] == probe.KEY_PROBE_TIMEOUT_SECONDS <= 60
     assert "sshpass" not in argv and "autobot@192.0.2.10" in argv
 
@@ -437,6 +474,37 @@ async def test_a_timed_out_ssh_is_killed_and_reaped() -> None:
         os.kill(process.pid, 0)
 
 
+async def test_a_child_that_never_reaps_does_not_hold_the_caller_past_the_ceiling() -> None:
+    """Python 3.14: wait() can block on pipes an ssh helper inherited; the timeout must still reach the caller."""
+    import asyncio
+
+    module = _load_orchestrator_ssh()
+
+    class _Stuck:
+        returncode = None
+        pid = 4242
+
+        def kill(self) -> None:
+            pass
+
+        async def wait(self) -> int:
+            await asyncio.sleep(3600)
+            return 0
+
+        async def communicate(self):
+            await asyncio.sleep(3600)
+
+    async def _spawn(*_a, **_k):
+        return _Stuck()
+
+    with (
+        patch.object(module.asyncio, "create_subprocess_exec", _spawn),
+        patch.object(module, "_REAP_TIMEOUT_S", 0.2),
+        pytest.raises(asyncio.TimeoutError),
+    ):
+        await asyncio.wait_for(module.spawn_ssh(["ssh"], timeout=0.2), timeout=5)
+
+
 async def test_a_fast_command_still_returns_its_output() -> None:
     module = _load_orchestrator_ssh()
     code, out, _err = await module.spawn_ssh(["echo", "hi"], timeout=5)
@@ -467,3 +535,44 @@ async def test_a_refused_backend_address_never_raises_out_of_the_proposal(_egres
         assert await ssh.propose_password_deletion(_node({"ssh_password": _SECRET})) is False
     client.post.assert_not_called()
     assert "egress policy" in str(error.call_args)
+
+
+# --- through the REAL CSRF middleware (#20046): the backend's DELETE carries only the internal key ---
+
+
+def _app_behind_csrf(world) -> TestClient:
+    app = FastAPI()
+    app.include_router(route.router, prefix="/api")
+    app.add_middleware(csrf.SecurityHeadersMiddleware)
+    app.dependency_overrides[route.get_db] = lambda: world.db
+    return TestClient(app)
+
+
+def test_the_backends_delete_with_only_the_internal_key_reaches_the_route_through_csrf(world) -> None:
+    response = _delete(_app_behind_csrf(world))  # X-Internal-API-Key only, no Authorization
+    assert response.status_code == 200 and response.json() == {"node_id": "node-a", "deleted": True}
+    assert "ssh_password" not in world.node.extra_data
+
+
+@pytest.mark.parametrize("headers", [{}, {"X-Internal-API-Key": "wrong"}, {"X-Internal-API-Key": ""}])
+def test_csrf_still_refuses_a_caller_without_a_valid_key_or_bearer(world, headers) -> None:
+    response = _delete(_app_behind_csrf(world), headers)
+    assert response.status_code == 401 and "ssh_password" in world.node.extra_data
+
+
+def test_a_valid_key_opens_csrf_only_on_the_internal_service_prefix(world) -> None:
+    client = _app_behind_csrf(world)
+    other = client.delete("/api/nodes-x/node-a", headers={"X-Internal-API-Key": _KEY})
+    assert other.status_code == 401  # not under /api/internal/: the key does not exempt it
+
+
+async def test_no_proposal_is_offered_when_slm_and_backend_are_split_without_tls() -> None:
+    from autobot_shared.ssot_config import config  # noqa: PLC0415
+
+    with (
+        patch.object(config.vm, "slm", "slm.cluster.example"),
+        patch.object(config.tls, "slm_tls_enabled", False),
+        patch.object(ssh, "key_auth_and_sudo_work", AsyncMock(return_value=True)) as probe,
+    ):
+        assert await ssh.propose_password_deletion(_node({"ssh_password": _SECRET})) is False
+    probe.assert_not_awaited()

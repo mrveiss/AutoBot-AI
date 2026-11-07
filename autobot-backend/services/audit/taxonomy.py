@@ -137,6 +137,7 @@ class AuditAction(str, Enum):
         "node.ssh_password.delete"  # nosec B105  # pragma: allowlist secret -- #20046: an action name
     )
     CLEANUP_ENV_COPIES = "cleanup.env_copies"  # #20567: old .env.*~ copies removed after approval
+    APPROVAL_APPROVE = "approval.approve"  # #20046: a non-admin refused on an admin-only approval
     ROLE_CREATE = "role.create"
     ROLE_UPDATE = "role.update"
     ROLE_DELETE = "role.delete"
@@ -145,6 +146,7 @@ class AuditAction(str, Enum):
     CONVERSATION_FILE_CLEANUP = "conversation_file.cleanup"
     CONVERSATION_FILE_CLEANUP_RESET = "conversation_file.cleanup_reset"
     BUDGET_CHAT_REFUSED = "budget.chat_refused"  # #20589 chat over a budget
+    LLC_PROJECT_BACKFILL = "llc.project_backfill"  # #18978: an approved project backfill assigned projects
     # #16333: the internal service key was admitted on a route that names its caller (service_opt_in).
     SERVICE_KEY_ADMITTED = "auth.service_key_admitted"  # pragma: allowlist secret -- an action name, not a key
     # #20750: re-aligning the backend's AUTOBOT_INTERNAL_API_KEY to the SLM's, one record per step.

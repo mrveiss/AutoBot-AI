@@ -23,6 +23,7 @@ proposes a fresh one and needs a NEW human decision.
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_slm_credential_proposals import (
@@ -37,7 +38,14 @@ from auth_middleware import get_current_user
 from auth_service_opt_in import service_opt_in
 from autobot_shared.auth.internal_api_key import require_internal_api_key
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.slm_credential_actions import ACTIONS, INTERNAL_KEY_REALIGN, CredentialAction
+from autobot_shared.slm_credential_actions import (
+    ACTIONS,
+    INTERNAL_KEY_REALIGN,
+    SPLIT_DEPLOYMENT_MESSAGE,
+    SSH_PASSWORD_DELETE,
+    CredentialAction,
+    is_split_without_tls,
+)
 from models.approval import Approval, ApprovalComment, ApprovalStatus, ApprovalType
 from services.approval_gate_service import ApprovalGateService
 from services.slm_credential_claim import (
@@ -60,10 +68,12 @@ from services.slm_ssh_password_action import register_ssh_password_action
 
 logger = get_logger(__name__)
 
+#: The caller named on the service-key admission audit row (#16333).
+SLM_CALLER = "slm-ssh-password-deletion"
+
 # get_current_user is the recognised gate; require_internal_api_key narrows it to the service key alone.
-# The updater's calls carry that key and no user, so each handler names its caller with service_opt_in
-# (#16333); without it get_current_user refuses the key and the realign could never be proposed or claimed.
-_CALLER = "slm-credential-actions"
+# The SLM's and the updater's calls carry that key and no user, so each handler names its caller with
+# service_opt_in (#16333); without it get_current_user refuses the key and nothing could be proposed or claimed.
 _NOT_RECORDED = "the step could not be recorded; try again"
 
 router = APIRouter(prefix="/internal/slm", dependencies=[Depends(require_internal_api_key), Depends(get_current_user)])
@@ -137,12 +147,17 @@ async def _record_proposal_failed(approval_id: uuid.UUID, node_id: str, proposer
 
 
 @router.post("/credential-proposals", response_model=CredentialProposalResponse, status_code=status.HTTP_201_CREATED)
-@service_opt_in(_CALLER)
+@service_opt_in(SLM_CALLER)
 async def propose_credential_change(
     body: CredentialProposal, session: AsyncSession = Depends(get_db_session)
 ) -> CredentialProposalResponse:
-    """Propose the change -- a request, not an execution; one open proposal per node and action."""
+    """Propose the change -- a request, not an execution; one open proposal per node and action.
+
+    A stored-password deletion is refused (409, clear message) on a split deployment without SLM TLS (#20899).
+    """
     action = ACTIONS[body.action]
+    if action is SSH_PASSWORD_DELETE and is_split_without_tls():
+        raise HTTPException(status.HTTP_409_CONFLICT, SPLIT_DEPLOYMENT_MESSAGE)
     service = ApprovalGateService(session)
     if existing := await _open_approval(service, action, body.node_id):
         return CredentialProposalResponse(approval_id=str(existing.id), status=existing.status, created=False)
@@ -150,12 +165,19 @@ async def propose_credential_change(
     proposer = action.proposer_id(body.node_id)
     if action is INTERNAL_KEY_REALIGN and not await record_realign_proposal(approval_id, body.node_id, proposer):
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, _NOT_RECORDED)  # no row, so no proposal
-    approval = await _create_proposal(service, action, body, approval_id, proposer)
+    try:
+        approval = await _create_proposal(service, action, body, approval_id, proposer)
+    except IntegrityError:  # uq_approvals_pending_ssh_password_deletion: a concurrent request won
+        await session.rollback()
+        winner = await _open_approval(service, action, body.node_id)
+        if winner is None:
+            raise
+        return CredentialProposalResponse(approval_id=str(winner.id), status=winner.status, created=False)
     return CredentialProposalResponse(approval_id=str(approval.id), status=approval.status, created=True)
 
 
 @router.post("/credential-approvals/{approval_id}/claim", response_model=CredentialClaimResponse)
-@service_opt_in(_CALLER)
+@service_opt_in(SLM_CALLER)
 async def claim_credential_approval(
     approval_id: uuid.UUID, body: CredentialClaim, session: AsyncSession = Depends(get_db_session)
 ) -> CredentialClaimResponse:
@@ -173,7 +195,7 @@ async def claim_credential_approval(
 
 
 @router.post("/credential-approvals/{approval_id}/outcome", status_code=status.HTTP_204_NO_CONTENT)
-@service_opt_in(_CALLER)
+@service_opt_in(SLM_CALLER)
 async def report_credential_outcome(
     approval_id: uuid.UUID, body: CredentialOutcome, session: AsyncSession = Depends(get_db_session)
 ) -> None:

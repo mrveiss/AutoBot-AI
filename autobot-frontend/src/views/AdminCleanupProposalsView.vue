@@ -19,7 +19,7 @@
     >
       <BaseAlert v-if="card.loadFailed" variant="warning" :message="t('admin.cleanup.statusUnavailable')" />
       <p v-else-if="!card.status">{{ t('admin.cleanup.loading') }}</p>
-      <BaseAlert v-else-if="card.status.refused" variant="warning" :message="statusText(card)" />
+      <BaseAlert v-else-if="card.status.refused" variant="warning" :message="t('admin.cleanup.refused')" />
       <p v-else>{{ statusText(card) }}</p>
       <BaseAlert v-if="card.proposed" variant="success" :message="t('admin.cleanup.proposed')" />
       <router-link v-if="card.proposed" :to="approvalsLink">{{ t('admin.cleanup.openApprovals') }}</router-link>
@@ -38,7 +38,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BaseAlert, BaseButton, BaseCard, PageHeader } from '@autobot/ui'
+import { BaseAlert, BaseButton, BaseCard, PageHeader, isHttpError } from '@autobot/ui'
 import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { useLlcCompanyStore } from '@/stores/useLlcCompanyStore'
@@ -61,10 +61,10 @@ interface Card {
   error: string
 }
 
-const makeCard = (id: string, base: string): Card => ({
+const makeCard = (id: string, statusUrl: string, requestUrl: string): Card => ({
   id,
-  statusUrl: `/api/admin/${base}`,
-  requestUrl: `/api/admin/${base}/requests`,
+  statusUrl,
+  requestUrl,
   status: null,
   loadFailed: false,
   busy: false,
@@ -73,8 +73,8 @@ const makeCard = (id: string, base: string): Card => ({
 })
 
 const cards = reactive<Card[]>([
-  makeCard('envCopies', 'env-copies-cleanup'),
-  makeCard('tierColumn', 'org-tier-column'),
+  makeCard('envCopies', '/api/admin/env-copies-cleanup', '/api/admin/env-copies-cleanup/requests'),
+  makeCard('tierColumn', '/api/admin/org-tier-column', '/api/admin/org-tier-column/requests'),
 ])
 
 // The approvals inbox is company-scoped: go to the selected company's, else the company picker.
@@ -87,7 +87,7 @@ const approvalsLink = computed(() =>
 function statusText(card: Card): string {
   const status = card.status
   if (!status) return ''
-  return `${t('admin.cleanup.count', { count: status.count })} ${status.refused ?? status.detail ?? ''}`.trim()
+  return `${t('admin.cleanup.count', { count: status.count })} ${status.detail ?? ''}`.trim()
 }
 
 async function load(card: Card): Promise<void> {
@@ -108,6 +108,13 @@ async function load(card: Card): Promise<void> {
   }
 }
 
+// Known refusals map to localised text; the server's own wording (English) is never shown.
+function proposeErrorKey(err: unknown): string {
+  if (isHttpError(err) && err.status === 403) return 'admin.cleanup.proposeForbidden'
+  if (isHttpError(err) && err.status === 409) return 'admin.cleanup.proposeRefused'
+  return 'admin.cleanup.proposeFailed'
+}
+
 async function propose(card: Card): Promise<void> {
   card.busy = true
   card.error = ''
@@ -115,7 +122,7 @@ async function propose(card: Card): Promise<void> {
     const reply: Schemas['CleanupRequestResponse'] = await apiClient.post(card.requestUrl)
     card.proposed = !!reply.approval_id
   } catch (err) {
-    card.error = t('admin.cleanup.proposeFailed')
+    card.error = t(proposeErrorKey(err))
     logger.error('Could not propose cleanup', card.id, err)
   } finally {
     card.busy = false

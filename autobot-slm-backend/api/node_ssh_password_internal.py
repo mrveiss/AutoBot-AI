@@ -10,7 +10,6 @@ unless the backend confirms the approval is a human's, for this node, and unused
 service, not a decision).
 """
 
-import logging
 import uuid
 from typing import Annotated
 
@@ -18,11 +17,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.auth.internal_api_key import require_internal_api_key
+from autobot_shared.logging_manager import get_logger
 from models.schemas_node_ssh_password import NodeSshPasswordDeleteResponse
 from services.database import get_db
 from services.node_ssh_password import DeletionRefused, delete_stored_password
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 router = APIRouter(prefix="/internal/nodes", tags=["internal"], dependencies=[Depends(require_internal_api_key)])
