@@ -7,6 +7,8 @@ export interface ApiResponse<T = unknown> {
   message?: string;
   error?: string;
   status?: string;
+  /** The server answered with a 4xx: the request was refused outright, not lost. */
+  refused?: boolean;
 }
 
 // Chat API Types

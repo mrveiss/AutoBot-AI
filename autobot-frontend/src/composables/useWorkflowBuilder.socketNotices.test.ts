@@ -25,6 +25,7 @@ vi.mock('@/i18n', () => ({
   default: { global: { t: (key: string, p: Record<string, string> = {}) => `${key}|${Object.values(p).join(',')}` } },
 }));
 
+import { HttpError } from '@autobot/ui';
 import { useStepAnswerState } from './useStepAnswerState';
 import { useWorkflowBuilder } from './useWorkflowBuilder';
 
@@ -75,8 +76,8 @@ describe('useWorkflowBuilder workflow socket notices (#17677)', () => {
     },
   );
 
-  it('a failed control request resolves false and does not re-read the status', async () => {
-    http.post.mockRejectedValue(new Error('refused'));
+  it('a control request the server refused (4xx) resolves false and does not re-read the status', async () => {
+    http.post.mockRejectedValue(new HttpError(409, 'refused'));
     const { approveStep } = useWorkflowBuilder();
     await expect(approveStep('wf-1', 's1')).resolves.toBe(false);
     expect(http.get).not.toHaveBeenCalled();
