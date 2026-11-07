@@ -49,8 +49,8 @@ export interface ChatSession {
   id: string
   title: string
   messages: ChatMessage[]
-  createdAt: Date
-  updatedAt: Date
+  createdAt?: Date
+  updatedAt?: Date
   isActive: boolean
   // Issue #608: User-centric session tracking
   owner?: UserContext
@@ -1146,8 +1146,8 @@ export const useChatStore = defineStore('chat', () => {
               id: session.id,
               title: session.title,
               messages: [],
-              createdAt: new Date(session.createdAt as string),
-              updatedAt: new Date(session.updatedAt as string),
+              createdAt: session.createdAt ? new Date(session.createdAt as string) : undefined,
+              updatedAt: session.updatedAt ? new Date(session.updatedAt as string) : undefined,
               isActive: false
             }))
           }
