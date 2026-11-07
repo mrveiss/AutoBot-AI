@@ -20,6 +20,7 @@ from constants.error_constants import ERR_WORKFLOW_NOT_FOUND
 from services.notification_service import NotificationConfig
 
 from .approval_support import execute_approval_outcome, validate_approval_request
+from .command_step import require_command_permission
 from .manager import WorkflowAutomationManager
 from .models import (
     AutomatedWorkflowRequest,
@@ -54,6 +55,7 @@ async def create_workflow(
     current_user: dict = Depends(get_current_user),
 ):
     """Create new automated workflow"""
+    require_command_permission(current_user)  # #19807: its steps run shell commands
     try:
         workflow_steps = [
             WorkflowStep(
@@ -61,7 +63,7 @@ async def create_workflow(
                 command=step.command,
                 description=step.description,
                 explanation=step.explanation,
-                requires_confirmation=step.requires_confirmation,
+                requires_confirmation=True,  # #19807: the creator cannot remove the human gate from a command step
                 risk_level=step.risk_level,
                 dependencies=step.dependencies,
             )
@@ -261,6 +263,7 @@ async def create_workflow_from_chat(request: dict, current_user: dict = Depends(
     Issue #390: Now presents plan for approval instead of auto-starting.
     #13809: that is now the default; auto-start must be asked for explicitly.
     """
+    require_command_permission(current_user)  # #19807: its steps run shell commands
     try:
         user_request = request.get("user_request", "")
         session_id = request.get("session_id", "")
@@ -313,6 +316,8 @@ async def create_workflow_from_chat(request: dict, current_user: dict = Depends(
                 "message": "Could not create workflow from chat request",
             }
 
+    except HTTPException:
+        raise  # the 400 above is a client error, not a 500
     except Exception as e:
         logger.error("Failed to create workflow from chat: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
