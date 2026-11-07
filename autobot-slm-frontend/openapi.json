@@ -4886,6 +4886,55 @@
         "title": "FileVerdictModel",
         "type": "object"
       },
+      "FirstAdminResponse": {
+        "description": "What the main app needs to create and link this person.",
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "password_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password Hash"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "email",
+          "display_name",
+          "password_hash"
+        ],
+        "title": "FirstAdminResponse",
+        "type": "object"
+      },
       "FleetHealthResponse": {
         "description": "Fleet health status response.",
         "properties": {
@@ -23744,6 +23793,57 @@
         "summary": "Get Playbook",
         "tags": [
           "infrastructure"
+        ]
+      }
+    },
+    "/api/internal/first-admin": {
+      "get": {
+        "description": "The earliest active admin. 404 until the SLM has one.",
+        "operationId": "get_first_admin_api_internal_first_admin_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-internal-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FirstAdminResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get First Admin",
+        "tags": [
+          "health",
+          "internal"
         ]
       }
     },
