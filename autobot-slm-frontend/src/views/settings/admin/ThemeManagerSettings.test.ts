@@ -216,4 +216,26 @@ describe('ThemeManagerSettings uninstall', () => {
     expect(byId(w, 'slm-themes-notice').text()).toContain("Theme 'amber' not found")
     expect(client.get).toHaveBeenCalledTimes(1)
   })
+
+  it('names the malformed answer with a translated message (#20816)', async () => {
+    client.get.mockResolvedValue({ detail: 'x' })
+    const w = await mountView()
+    expect(byId(w, 'slm-themes-error').text()).toContain(L.malformedList)
+  })
+
+  it('ignores an older read that resolves after a newer one (#20816)', async () => {
+    const w = await mountView()
+    // The refresh is slow (older); an install then re-reads and answers at once (newer).
+    let resolveOld: (v: unknown) => void = () => {}
+    client.get.mockReturnValueOnce(new Promise((r) => { resolveOld = r }))
+    await byId(w, 'slm-themes-refresh').trigger('click')
+    client.post.mockResolvedValue(ember)
+    client.get.mockResolvedValueOnce([ember])
+    await pick(w, zip('ember.zip'))
+    expect(w.text()).toContain('Ember')
+    resolveOld([amber])
+    await flushPromises()
+    expect(w.text()).toContain('Ember')
+    expect(w.text()).not.toContain('Amber')
+  })
 })
