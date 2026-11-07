@@ -18,21 +18,25 @@ here, merged as a union of what each side did, never a choice between them:
   ``reassign_memory`` hook. Fail-closed on hard delete is preserved.
 """
 
+import time
 import uuid
-from typing import Any
+from typing import Any, NamedTuple
 
 from sqlalchemy import select
 
+from autobot_shared.audit_actions import spellings_of
 from autobot_shared.db_session import run_after_commit
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.membership_epoch import MembershipEpochBump
 from autobot_shared.time_utils import now_utc
-from autobot_shared.user_management.models.audit import AuditResourceType, IdentityAuditAction
+from autobot_shared.user_management.models.audit import AuditLog, AuditResourceType, IdentityAuditAction
 from autobot_shared.user_management.models.team import Team, TeamMembership
 from autobot_shared.user_management.models.user import UserCore
 from autobot_shared.user_management.password_epoch import (
     DEACTIVATION_EPOCH_LEAD_SECONDS,
+    PASSWORD_EPOCH_TTL_SECONDS,
     PasswordEpochMark,
+    get_password_epoch,
     set_password_epoch,
 )
 from autobot_shared.user_management.user_service_base import UserServiceBase
@@ -42,6 +46,13 @@ from autobot_shared.user_management.user_service_errors import (
 )
 
 logger = get_logger(__name__)
+
+
+class AdminStatusChange(NamedTuple):
+    """What ``set_platform_admin`` did: whether the flag changed, and whether a revocation was queued (#20670)."""
+
+    changed: bool
+    sessions_revoked: bool
 
 
 class UserLifecycleMixin(UserServiceBase):
@@ -126,7 +137,33 @@ class UserLifecycleMixin(UserServiceBase):
         logger.info("%s user: %s", "Activated" if active else "Deactivated", user_id)
         return True
 
-    async def set_platform_admin(self, user_id: uuid.UUID, is_admin: bool) -> bool:
+    async def _demotion_revocation_pending(self, user: UserCore) -> bool:
+        """Whether the user's last recorded admin change is a demotion whose revocation was never confirmed (#20670).
+
+        The durable record is the audit row ``set_platform_admin`` commits in the same transaction as
+        the flag; the confirmation is the epoch store holding a marker at or after that row's time.
+        A demotion whose marker write failed (the 503) therefore stays pending until a repeat records
+        it, and a completed one is never repeated. A row older than the marker's lifetime is settled:
+        every token it could revoke has expired. Raises ``RevocationCheckUnavailable`` when the store
+        cannot answer, so the caller fails closed.
+        """
+        spellings = spellings_of(IdentityAuditAction.PLATFORM_ADMIN_CHANGED)
+        latest = await self.session.execute(
+            select(AuditLog.created_at, AuditLog.details)
+            .where(AuditLog.action.in_(spellings), AuditLog.resource_ref == str(user.id))
+            .order_by(AuditLog.created_at.desc())
+            .limit(1)
+        )
+        row = latest.first()
+        if row is None or (row.details or {}).get("to") is not False:
+            return False
+        recorded = int(row.created_at.timestamp())
+        if recorded + PASSWORD_EPOCH_TTL_SECONDS < int(time.time()):
+            return False
+        epoch = await get_password_epoch(user.username, in_redis=self.epoch_in_redis)
+        return epoch is None or epoch < recorded
+
+    async def set_platform_admin(self, user_id: uuid.UUID, is_admin: bool) -> AdminStatusChange:
         """Make *user_id* a platform admin, or not -- the one place that changes it (#20670).
 
         ``is_platform_admin`` is the only source of the token's admin ``role``. The old tokens are
@@ -134,31 +171,35 @@ class UserLifecycleMixin(UserServiceBase):
         request: a demoted admin cannot keep acting on a token that still says admin, and a promoted
         user signs in again to get one that does. A demotion revokes with the same one-second lead as
         a deactivation, so a token minted in that second is void too. The role routes (``UserRole``)
-        never reach this field. When the flag already holds that value nothing is changed or audited and
-        False is returned -- except that a non-admin target still has its revocation queued: that is the
-        retry of a demotion whose first answer was 503 (the flag committed, the marker did not), and
-        "repeat the request" must finish the revocation, as it does for a deactivation. The row is
-        locked for the read-modify-write so two requests cannot both record the same transition.
-        Raises ``UserNotFoundError``.
+        never reach this field. The row is locked for the read-modify-write so two requests cannot
+        both record the same transition.
+
+        When the flag already holds the value nothing is changed or audited (``changed`` False). A
+        repeated demotion revokes only while the earlier one's revocation is unconfirmed
+        (:meth:`_demotion_revocation_pending`), so "repeat the request" after a 503 finishes the
+        revocation and a repeat after a completed one signs nobody out. Raises ``UserNotFoundError``.
         """
         user = await self._require_user(user_id)
         await self.session.refresh(user, with_for_update=True)
         previous = bool(user.is_platform_admin)
         if previous == is_admin:
-            if not is_admin:
-                run_after_commit(
-                    self.session, PasswordEpochMark(user.username, DEACTIVATION_EPOCH_LEAD_SECONDS, self.epoch_in_redis)
-                )
-            return False
+            pending = not is_admin and await self._demotion_revocation_pending(user)
+            if pending:
+                self._queue_admin_change_revocation(user, is_admin)
+            return AdminStatusChange(changed=False, sessions_revoked=pending)
         user.is_platform_admin = is_admin
         user.updated_at = now_utc()
         await self.session.flush()
-        lead = 0 if is_admin else DEACTIVATION_EPOCH_LEAD_SECONDS
-        run_after_commit(self.session, PasswordEpochMark(user.username, lead, self.epoch_in_redis))
+        self._queue_admin_change_revocation(user, is_admin)
         details = {"from": previous, "to": is_admin, "sessions_revocation": "queued_after_commit"}
         await self._audit_log(IdentityAuditAction.PLATFORM_ADMIN_CHANGED, AuditResourceType.USER, user_id, details)
         logger.info("Platform admin %s for user: %s", "granted" if is_admin else "revoked", user_id)
-        return True
+        return AdminStatusChange(changed=True, sessions_revoked=True)
+
+    def _queue_admin_change_revocation(self, user: UserCore, is_admin: bool) -> None:
+        """Queue the post-commit epoch write: lead 1 on a demotion, 0 on a promotion."""
+        lead = 0 if is_admin else DEACTIVATION_EPOCH_LEAD_SECONDS
+        run_after_commit(self.session, PasswordEpochMark(user.username, lead, self.epoch_in_redis))
 
     async def deactivate_user(self, user_id: uuid.UUID) -> bool:
         """Deactivate a user account; raises ``UserNotFoundError``."""

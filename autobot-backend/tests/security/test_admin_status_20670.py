@@ -12,6 +12,7 @@ memory) and the database session are stood in for.
 """
 
 import uuid
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -42,12 +43,21 @@ def _user(is_admin: bool):
     )
 
 
-def _service(user):
-    session = MagicMock(flush=AsyncMock(), commit=AsyncMock(), refresh=AsyncMock())
+def _service(user, audits=None):
+    """A service over a session whose audit table is *audits*: the rows the committed changes wrote."""
+    audits = [] if audits is None else audits
+
+    async def write_audit(action, _resource_type, _resource_id, details, outcome="success"):
+        audits.append(SimpleNamespace(action=action, created_at=datetime.now(tz=timezone.utc), details=details))
+
+    async def read_latest(_statement):
+        return SimpleNamespace(first=lambda: audits[-1] if audits else None)
+
+    session = MagicMock(flush=AsyncMock(), commit=AsyncMock(), refresh=AsyncMock(), execute=read_latest)
     session.info = {POST_COMMIT_CALLBACKS: []}
     svc = _Bound(session, TenantContext())
     svc.get_user = AsyncMock(return_value=user)
-    svc._audit_log = AsyncMock()
+    svc._audit_log = AsyncMock(side_effect=write_audit)
     return svc
 
 
@@ -104,7 +114,7 @@ async def test_setting_the_status_it_already_has_changes_nothing(get_current_use
     service = _service(_user(True))
     result = await _change(service, True)
 
-    assert result.changed is False
+    assert result.changed is False and result.sessions_revoked is False
     assert epochs == {}
     service._audit_log.assert_not_awaited()
     assert (await get_current_user(_token_request(role="admin")))["username"] == "alice"
@@ -162,19 +172,58 @@ async def test_repeating_a_demotion_after_a_503_finishes_the_revocation(get_curr
     """The 503 contract: the flag committed, the marker did not; the repeat must revoke, not answer all-clear."""
     monkeypatch.setattr(password_epoch, "MEMBERSHIP_EPOCH_BUMP_BACKOFF_SECONDS", 0.0)
     old = _token_request(role="admin")
-    user = _user(True)
+    user, audits = _user(True), []
     password_epoch.use_epoch_store(get_epoch=AsyncMock(return_value=None), set_epoch=AsyncMock(return_value=None))
     try:
         with pytest.raises(HTTPException) as failed:
-            await _change(_service(user), False)
+            await _change(_service(user, audits), False)
     finally:
         password_epoch.reset_epoch_store()
     assert failed.value.status_code == 503 and user.is_platform_admin is False
     assert epochs == {}
 
-    retry = await _change(_service(user), False)  # the store is back
-    assert retry.changed is False
+    retry = await _change(_service(user, audits), False)  # the store is back
+    assert retry.changed is False and retry.sessions_revoked is True
     await _assert_refused(get_current_user, old)
+
+
+@pytest.mark.asyncio
+async def test_repeating_a_completed_demotion_signs_nobody_out(get_current_user, epochs):
+    """Counter-test: the revocation is confirmed, so a no-op demotion writes no epoch."""
+    user, audits = _user(True), []
+    await _change(_service(user, audits), False)
+    marker = dict(epochs)
+    fresh = _token_request(age_seconds=-5, role="user")
+
+    repeat = await _change(_service(user, audits), False)
+
+    assert repeat.changed is False and repeat.sessions_revoked is False
+    assert epochs == marker, "no second epoch write"
+    assert (await get_current_user(fresh))["username"] == "alice"
+
+
+@pytest.mark.asyncio
+async def test_demoting_a_user_who_was_never_an_admin_signs_nobody_out(get_current_user, epochs):
+    """Control: no recorded admin change, so nothing is pending and nothing is revoked."""
+    result = await _change(_service(_user(False), []), False)
+
+    assert result.changed is False and result.sessions_revoked is False and epochs == {}
+    assert (await get_current_user(_token_request(role="user")))["username"] == "alice"
+
+
+@pytest.mark.asyncio
+async def test_a_store_that_cannot_answer_the_pending_check_is_a_503(epochs):
+    user, audits = _user(True), []
+    await _change(_service(user, audits), False)
+    password_epoch.use_epoch_store(
+        get_epoch=AsyncMock(side_effect=password_epoch.RevocationCheckUnavailable("down")), set_epoch=AsyncMock()
+    )
+    try:
+        with pytest.raises(HTTPException) as failed:
+            await _change(_service(user, audits), False)
+    finally:
+        password_epoch.reset_epoch_store()
+    assert failed.value.status_code == 503
 
 
 @pytest.mark.asyncio

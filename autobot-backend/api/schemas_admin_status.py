@@ -21,3 +21,4 @@ class AdminStatusResponse(BaseModel):
     user_id: uuid.UUID
     is_platform_admin: bool
     changed: bool
+    sessions_revoked: bool  # this request queued the user's token revocation
