@@ -44,7 +44,6 @@ REACH = declare(
     "no-in-repo-log-path-20894",
     discover=_python_files,
     floor=3991,  # live population of tracked non-test .py when pinned
-    growth=10,  # main grew the population past the pin; trains repin (#20894)
     what="tracked non-test python files",
 )
 
