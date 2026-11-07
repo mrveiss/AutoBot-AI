@@ -12,7 +12,6 @@ memory) and the database session are stood in for.
 """
 
 import uuid
-from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -47,11 +46,11 @@ def _service(user, audits=None):
     """A service over a session whose audit table is *audits*: the rows the committed changes wrote."""
     audits = [] if audits is None else audits
 
-    async def write_audit(action, _resource_type, _resource_id, details, outcome="success"):
-        audits.append(SimpleNamespace(action=action, created_at=datetime.now(tz=timezone.utc), details=details))
+    async def write_audit(action, _resource_type, _resource_id, details, _outcome="success") -> None:
+        audits.append(SimpleNamespace(action=action, details=details))
 
-    async def read_latest(_statement):
-        return SimpleNamespace(first=lambda: audits[-1] if audits else None)
+    async def read_latest(_statement) -> SimpleNamespace:
+        return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [a.details for a in audits]))
 
     session = MagicMock(flush=AsyncMock(), commit=AsyncMock(), refresh=AsyncMock(), execute=read_latest)
     session.info = {POST_COMMIT_CALLBACKS: []}
@@ -106,7 +105,9 @@ async def test_granting_admin_voids_the_old_token_so_the_next_login_carries_admi
 
     assert user.is_platform_admin is True and result.changed is True
     await _assert_refused(get_current_user, old)
-    assert (await get_current_user(_token_request(age_seconds=-5, role="admin")))["username"] == "alice"
+    issued_role = UserService.account_role(user)  # the one derivation login uses for the token's role
+    assert issued_role == "admin"
+    assert (await get_current_user(_token_request(age_seconds=-5, role=issued_role)))["username"] == "alice"
 
 
 @pytest.mark.asyncio
@@ -130,7 +131,13 @@ async def test_the_change_is_audited_with_before_and_after(epochs, is_admin):
     action, resource_type, resource_id, details = service._audit_log.await_args.args
     assert action == IdentityAuditAction.PLATFORM_ADMIN_CHANGED
     assert resource_type == AuditResourceType.USER
-    assert details == {"from": not is_admin, "to": is_admin, "sessions_revocation": "queued_after_commit"}
+    assert {k: details[k] for k in ("from", "to", "revision", "sessions_revocation")} == {
+        "from": not is_admin,
+        "to": is_admin,
+        "revision": 1,
+        "sessions_revocation": "queued_after_commit",
+    }
+    assert isinstance(details["recorded_at"], int)
 
 
 @pytest.mark.asyncio
