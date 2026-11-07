@@ -33,3 +33,27 @@ def reset_feature_flags_singleton():
     _reset_feature_flags()
     yield
     _reset_feature_flags()
+
+
+@pytest.fixture(autouse=True)
+def fake_session_lease(monkeypatch):
+    """Back the per-session chat lease with an in-memory Redis, so no test waits on a real one (#20862).
+
+    A save needs the session lease, and with no Redis a writer waits out the lease bound rather than
+    writing unlocked. The lease module is imported here, unconditionally, so a test that imports the
+    chat code lazily inside its body is bound to the fake too (an unbound test would reach the real
+    client and wait for the whole bound). Each test gets a fresh server; a test that needs the lease
+    store gone or contended rebinds ``chat_history.session_lease._lease_client`` itself.
+    """
+    import fakeredis
+    import fakeredis.aioredis
+
+    from chat_history import session_lease  # a broken chat_history import fails loudly, never skips silently
+
+    server = fakeredis.FakeServer()
+
+    async def _client(database):
+        return fakeredis.aioredis.FakeRedis(server=server, decode_responses=True)
+
+    monkeypatch.setattr(session_lease, "_lease_client", _client)
+    yield server

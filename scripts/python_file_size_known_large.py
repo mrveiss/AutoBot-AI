@@ -72,7 +72,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/batch_jobs.py": 916,
     "autobot-backend/api/browser_mcp.py": 1320,
     "autobot-backend/api/cache_management.py": 692,
-    "autobot-backend/api/chat.py": 2644,  # #20195: graph resume stream moved to chat_streaming; #16845: 2644
+    "autobot-backend/api/chat.py": 2643,  # #20195: graph resume stream moved to chat_streaming; #16845: 2644
     "autobot-backend/api/chat_sessions.py": 1859,  # #18293: legacy transcripts only ever proposed
     "autobot-backend/api/code_intelligence.py": 2145,
     "autobot-backend/api/code_search.py": 786,
@@ -144,7 +144,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/autobot_memory_graph/semantic_search.py": 706,
     "autobot-backend/benchmarks/benchmark_belief_state.py": 725,
     "autobot-backend/chat_history/context_overflow.py": 845,
-    "autobot-backend/chat_history/session.py": 921,
+    "autobot-backend/chat_history/session.py": 766,
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
     "autobot-backend/chat_workflow/graph.py": 1459,  # #19715
     "autobot-backend/chat_workflow/llm_handler.py": 1300,
@@ -357,7 +357,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/workflow_io.py": 693,
     "autobot-backend/slash_command_handler.py": 1662,
     "autobot-backend/takeover_manager.py": 1364,
-    "autobot-backend/tasks/knowledge_tasks.py": 862,
+    "autobot-backend/tasks/knowledge_tasks.py": 846,
     "autobot-backend/tests/agents/test_librarian_assistant_extract.py": 635,
     "autobot-backend/tests/api/test_canvas.py": 676,
     "autobot-backend/tests/api/test_knowledge_grounding.py": 760,
