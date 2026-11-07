@@ -48,6 +48,7 @@ aliases:
 | --- | --- |
 | [ASYNC_MIGRATION_GUIDE](ASYNC_MIGRATION_GUIDE.md) | Async conversion guide |
 | [ASYNC_PATTERNS](ASYNC_PATTERNS.md) | Async patterns reference |
+| [CELERY_ASYNC_TASKS](CELERY_ASYNC_TASKS.md) | Async Celery tasks: one persistent worker loop |
 | [API_RESPONSE_MIGRATION](API_RESPONSE_MIGRATION.md) | API response standardisation |
 | [LAZY_SINGLETON_MIGRATION](LAZY_SINGLETON_MIGRATION.md) | Lazy singleton pattern |
 | [LAZY_SINGLETON_EXAMPLES](LAZY_SINGLETON_EXAMPLES.md) | Lazy singleton examples |

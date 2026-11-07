@@ -25,6 +25,7 @@ vi.mock('@/i18n', () => ({
   default: { global: { t: (key: string, p: Record<string, string> = {}) => `${key}|${Object.values(p).join(',')}` } },
 }));
 
+import { HttpError } from '@autobot/ui';
 import { useStepAnswerState } from './useStepAnswerState';
 import { useWorkflowBuilder } from './useWorkflowBuilder';
 
@@ -34,7 +35,7 @@ const getUrls = () => http.get.mock.calls.map((c) => String(c[0])).join(' ');
 
 describe('useWorkflowBuilder workflow socket notices (#17677)', () => {
   beforeEach(() => {
-    http.get.mockReset().mockResolvedValue({ workflows: [], workflow: { workflow_id: 'wf-1' } });
+    http.get.mockReset().mockResolvedValue({ workflows: [], workflow: { workflow_id: 'wf-1', steps: [] } });
     http.post.mockReset();
     toast.mockReset();
   });
@@ -75,8 +76,8 @@ describe('useWorkflowBuilder workflow socket notices (#17677)', () => {
     },
   );
 
-  it('a failed control request resolves false and does not re-read the status', async () => {
-    http.post.mockRejectedValue(new Error('refused'));
+  it('a control request the server refused (4xx) resolves false and does not re-read the status', async () => {
+    http.post.mockRejectedValue(new HttpError(409, 'refused'));
     const { approveStep } = useWorkflowBuilder();
     await expect(approveStep('wf-1', 's1')).resolves.toBe(false);
     expect(http.get).not.toHaveBeenCalled();
@@ -86,13 +87,13 @@ describe('useWorkflowBuilder workflow socket notices (#17677)', () => {
     http.post.mockResolvedValue({ success: true });
     http.get.mockRejectedValue(new Error('offline'));
     const { approveStep } = useWorkflowBuilder();
-    const { isStepLocked, clearDecided } = useStepAnswerState();
+    const { isStepLocked, dropWorkflow } = useStepAnswerState();
     await expect(approveStep('wf-9', 's1')).resolves.toBe(true);
     expect(toast).toHaveBeenCalledWith('workflow.builder.stepStatusRefreshFailed|', 'warning');
     expect(isStepLocked('wf-9', 's1')).toBe(true);
     await expect(approveStep('wf-9', 's1')).resolves.toBe(false); // a second click does not re-send
     expect(http.post).toHaveBeenCalledTimes(1);
-    clearDecided('wf-9');
+    dropWorkflow('wf-9');
   });
 
   it('the in-flight answer is shared per workflow and step, and a refresh that succeeds unlocks it', async () => {
@@ -104,7 +105,7 @@ describe('useWorkflowBuilder workflow socket notices (#17677)', () => {
     expect(other.isStepLocked('wf-8', 's1')).toBe(true);
     expect(other.isStepLocked('wf-8', 's2')).toBe(false);
     await expect(skipStep('wf-8', 's1')).resolves.toBe(false);
-    http.get.mockResolvedValue({ workflow: { workflow_id: 'wf-8' } });
+    http.get.mockResolvedValue({ workflow: { workflow_id: 'wf-8', steps: [] } });
     release({ success: true });
     await first;
     expect(other.isStepLocked('wf-8', 's1')).toBe(false); // refresh succeeded: server status is authoritative
