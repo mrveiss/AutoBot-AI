@@ -9,19 +9,21 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from testkit.fake_async_session import FakeAsyncSession, FakeResult
 from user_management.services import person_copy_sync as sync
+
+_USER_ID = uuid.UUID(int=1)
 
 
 def _pair(failed=None):
-    link = SimpleNamespace(slm_user_id=uuid.uuid4(), push_failed_at=failed, push_error="Old" if failed else None)
+    link = SimpleNamespace(slm_user_id=uuid.UUID(int=3), push_failed_at=failed, push_error="Old" if failed else None)
     user = SimpleNamespace(username="root", password_hash="h", is_active=True, deleted_at=None)
     return link, user
 
 
-def _session_with(pairs: list) -> MagicMock:
-    session = MagicMock(commit=AsyncMock(), rollback=AsyncMock())
-    session.execute = AsyncMock(return_value=MagicMock(first=MagicMock(side_effect=pairs)))
-    return session
+def _session_with(pairs: list) -> FakeAsyncSession:
+    """One queued ``(link, user)`` row per ``_read_pair`` the push will make."""
+    return FakeAsyncSession(results=[FakeResult([pair]) for pair in pairs], strict=True)
 
 
 def _no_lock():
@@ -39,7 +41,7 @@ class _Unlocked:
 async def test_a_successful_push_clears_an_earlier_failure() -> None:
     pair = _pair(failed=datetime.now(timezone.utc))
     with _no_lock(), patch.object(sync, "_post_copy", AsyncMock()):
-        await sync._push_person(_session_with([pair]), uuid.uuid4())
+        await sync._push_person(_session_with([pair]), _USER_ID)
     assert pair[0].push_failed_at is None and pair[0].push_error is None
 
 
@@ -47,24 +49,24 @@ async def test_a_failed_push_is_recorded_for_admins_without_the_message() -> Non
     pair = _pair()
     session = _session_with([pair, pair])
     with _no_lock(), patch.object(sync, "_post_copy", AsyncMock(side_effect=ConnectionError("host detail"))):
-        await sync._push_person(session, uuid.uuid4())
+        await sync._push_person(session, _USER_ID)
     assert pair[0].push_failed_at is not None and pair[0].push_error == "ConnectionError"
-    session.commit.assert_awaited_once()
+    assert session.commits == 1
 
 
 async def test_a_retry_keeps_when_the_failure_began() -> None:
     began = datetime(2026, 1, 1, tzinfo=timezone.utc)
     pair = _pair(failed=began)
     with _no_lock(), patch.object(sync, "_post_copy", AsyncMock(side_effect=ConnectionError())):
-        await sync._push_person(_session_with([pair, pair]), uuid.uuid4())
+        await sync._push_person(_session_with([pair, pair]), _USER_ID)
     assert pair[0].push_failed_at == began
 
 
 async def test_one_failure_does_not_stop_the_others() -> None:
-    first, second = uuid.uuid4(), uuid.uuid4()
+    first, second = _USER_ID, uuid.UUID(int=2)
     push = AsyncMock()
     with patch.object(sync, "_push_person", push):
-        await sync.push_people(MagicMock(), [first, second])
+        await sync.push_people(FakeAsyncSession(), [first, second])
     assert [call.args[1] for call in push.await_args_list] == [first, second]
 
 
@@ -76,7 +78,7 @@ async def test_a_busy_lock_is_recorded_as_a_failure_and_sends_nothing() -> None:
         patch.object(sync, "_LOCK_WAIT_S", 0),
         patch.object(sync, "_post_copy", AsyncMock()) as post,
     ):
-        await sync._push_person(_session_with([pair]), uuid.uuid4())
+        await sync._push_person(_session_with([pair]), _USER_ID)
     post.assert_not_awaited()
     assert pair[0].push_error == "TimeoutError"
 
@@ -109,7 +111,7 @@ async def test_an_unset_internal_key_sends_nothing_and_is_recorded_as_a_failure(
         patch("user_management.services.person_link_service.internal_api_key", return_value=""),
         caplog.at_level("ERROR"),
     ):
-        await sync._push_person(_session_with([pair, pair]), uuid.uuid4())
+        await sync._push_person(_session_with([pair, pair]), _USER_ID)
     http.post.assert_not_called()
     assert pair[0].push_error == "FirstAdminLinkError"
     assert any(r.levelname == "ERROR" and "no internal API key" in r.message for r in caplog.records)
@@ -128,7 +130,7 @@ async def test_a_release_error_after_a_good_push_keeps_the_success(caplog) -> No
         patch.object(sync, "_post_copy", AsyncMock()),
         caplog.at_level("WARNING"),
     ):
-        await sync._push_person(session, uuid.uuid4())
+        await sync._push_person(session, _USER_ID)
     assert (pair[0].push_error, pair[0].push_failed_at) == (None, None)
-    session.rollback.assert_not_awaited()
+    assert session.rollbacks == 0
     assert any("release" in r.message and "ConnectionError" in r.message for r in caplog.records)
