@@ -340,7 +340,7 @@ class HandoffService(LLCServiceBase):
     async def _publish_h2a_notification(self, company_id: str, target_agent_id: str, work_item_id: str) -> None:
         payload = json.dumps(
             {
-                "event": "work_item.handoff_ready",
+                "event_type": "work_item.handoff_ready",
                 "work_item_id": work_item_id,
                 "target_agent_id": target_agent_id,
                 "has_human_handoff_context": True,

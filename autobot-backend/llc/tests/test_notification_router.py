@@ -230,3 +230,44 @@ async def test_integration_publish_then_dispatch():
     assert pub.calls[0]["company_id"] == "co-xyz"
     assert pub.calls[0]["actor_id"] == "agent-ceo"
     assert pub.calls[0]["payload"] == {"title": "Hire engineer"}
+
+
+def _producer_msg(channel: str, body: dict) -> dict:
+    return {"type": "pmessage", "channel": channel.encode(), "data": json.dumps(body).encode()}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "event_type",
+    ["budget.soft_alert", "budget.hard_stop", "work_item.handoff_ready", "work_item.handoff"],
+)
+async def test_notifications_channel_republished_with_channel_company(event_type):
+    """Producer events on llc:notifications:{id} reach company:{id} (#21080)."""
+    pub = _FakePublisher()
+    router = LLCNotificationRouter(publisher=pub)
+
+    await router._dispatch(_producer_msg("llc:notifications:co-7", {"event_type": event_type, "agent_id": "a1"}))
+
+    assert len(pub.calls) == 1
+    assert pub.calls[0]["company_id"] == "co-7"
+    assert pub.calls[0]["event_type"] == event_type
+    assert pub.calls[0]["payload"] == {"agent_id": "a1"}
+
+
+def test_router_subscribes_to_notifications_channel():
+    from llc.notifications.router import _PATTERNS
+
+    assert "llc:notifications:*" in _PATTERNS
+
+
+@pytest.mark.asyncio
+async def test_underivable_company_is_dropped_and_logged(caplog):
+    pub = _FakePublisher()
+    router = LLCNotificationRouter(publisher=pub)
+
+    with caplog.at_level("WARNING"):
+        await router._dispatch(_producer_msg("llc:budget:warning", {"event_type": "budget.soft_alert"}))
+        await router._dispatch(_producer_msg("llc:notifications:", {"event_type": "budget.soft_alert"}))
+
+    assert pub.calls == []
+    assert caplog.text.count("no company_id derivable") == 2

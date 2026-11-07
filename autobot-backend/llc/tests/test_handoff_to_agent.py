@@ -289,7 +289,7 @@ class TestHumanToAgent:
         import json
 
         payload = json.loads(payload_json)
-        assert payload["event"] == "work_item.handoff_ready"
+        assert payload["event_type"] == "work_item.handoff_ready"
         assert payload["work_item_id"] == str(item.id)
         assert payload["target_agent_id"] == target_agent
         assert payload["has_human_handoff_context"] is True

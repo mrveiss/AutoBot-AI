@@ -13,6 +13,8 @@ Watched patterns:
   llc:approval:*  — approval_created, approval_resolved
   llc:sprint:*    — sprint_closed, sprint_started
   llc:agent:*     — agent_paused, agent_resumed, heartbeat_ok, heartbeat_missed
+  llc:notifications:{company_id} — budget watchdog and handoff producers; the
+                    company id is carried by the channel name, not the payload
 """
 
 from __future__ import annotations
@@ -34,7 +36,29 @@ _PATTERNS = [
     "llc:approval:*",
     "llc:sprint:*",
     "llc:agent:*",
+    "llc:notifications:*",
 ]
+
+_NOTIFICATIONS_PREFIX = "llc:notifications:"
+_ENVELOPE_KEYS = frozenset({"event_type", "company_id", "entity_type", "entity_id", "payload", "actor_id"})
+
+
+def _channel_company_id(channel: object) -> Optional[str]:
+    """Return the company id encoded in an ``llc:notifications:{id}`` channel."""
+    if isinstance(channel, bytes):
+        channel = channel.decode("utf-8", errors="replace")
+    if isinstance(channel, str) and channel.startswith(_NOTIFICATIONS_PREFIX):
+        return channel[len(_NOTIFICATIONS_PREFIX) :] or None
+    return None
+
+
+def _event_payload(data: dict) -> dict:
+    """Nested ``payload`` if present, else the producer's flat extra fields."""
+    nested = data.get("payload")
+    if isinstance(nested, dict):
+        return nested
+    return {k: v for k, v in data.items() if k not in _ENVELOPE_KEYS}
+
 
 _RECONNECT_DELAY = 5  # seconds between reconnect attempts
 
@@ -137,8 +161,13 @@ class LLCNotificationRouter:
         if not isinstance(data, dict):
             return
 
-        company_id = data.get("company_id")
+        company_id = _channel_company_id(message.get("channel")) or data.get("company_id")
         if not company_id:
+            logger.warning(
+                "LLC router: dropping %s event on %s — no company_id derivable",
+                data.get("event_type", ""),
+                message.get("channel"),
+            )
             return
 
         event = LLCEvent(
@@ -146,7 +175,7 @@ class LLCNotificationRouter:
             event_type=data.get("event_type", ""),
             entity_type=data.get("entity_type", ""),
             entity_id=str(data.get("entity_id", "")),
-            payload=data.get("payload", {}),
+            payload=_event_payload(data),
             actor_id=data.get("actor_id"),
         )
         await self._publisher.publish(
