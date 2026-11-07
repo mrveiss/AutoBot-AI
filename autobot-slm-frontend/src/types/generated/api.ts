@@ -2663,6 +2663,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/internal/first-admin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get First Admin
+         * @description The earliest active admin. 404 until the SLM has one.
+         */
+        get: operations["get_first_admin_api_internal_first_admin_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/internal/nodes/{node_id}/ssh-password": {
         parameters: {
             query?: never;
@@ -9719,6 +9739,27 @@ export interface components {
             path: string;
             /** Verdict */
             verdict: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * FirstAdminResponse
+         * @description What the main app needs to create and link this person.
+         */
+        FirstAdminResponse: {
+            /** Display Name */
+            display_name: string | null;
+            /** Email */
+            email: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Password Hash */
+            password_hash: string | null;
+            /** Username */
+            username: string;
         } & {
             [key: string]: unknown;
         };
@@ -19904,6 +19945,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlaybookInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_first_admin_api_internal_first_admin_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-internal-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FirstAdminResponse"];
                 };
             };
             /** @description Validation Error */
