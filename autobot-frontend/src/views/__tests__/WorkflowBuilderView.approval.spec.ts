@@ -7,17 +7,29 @@
 // ApprovalEnvelope (#13421) and keeps its approve / reject wiring and per-step risk.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
-import { ref } from 'vue'
+import { mount, flushPromises } from '@vue/test-utils'
+import { ref, computed } from 'vue'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
+import StepApprovalCard from '@/components/workflow/StepApprovalCard.vue'
 
 const approvePlan = vi.fn().mockResolvedValue(true)
 const rejectPlan = vi.fn().mockResolvedValue(true)
 const pendingApproval = ref<unknown>(null)
+const controlWorkflow = vi.fn().mockResolvedValue({ success: true })
+const routeParams = { section: 'natural-language' }
+const currentWorkflow = ref<{ workflow_id: string; steps: Array<Record<string, unknown>> } | null>(null)
+const stepsAwaitingApproval = computed(
+  () => currentWorkflow.value?.steps.filter((s) => s.status === 'waiting_approval') ?? [],
+)
+// The real composable's approveStep: control call, then a status refresh the test controls.
+const answer = (action: string) => async (wf: string, step: string) => (await controlWorkflow(wf, action, step)).success
+const approveStep = vi.fn(answer('approve_step'))
+const skipStep = vi.fn(answer('skip_step'))
+const toast = vi.fn()
 
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: { section: 'natural-language' }, meta: {}, matched: [], query: {} }),
+  useRoute: () => ({ params: routeParams, meta: {}, matched: [], query: {} }),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }))
 
@@ -31,7 +43,10 @@ vi.mock('@/composables/useWorkflowBuilder', async () => {
       error: r(null),
       activeWorkflows: r([]),
       completedWorkflows: r([]),
-      currentWorkflow: r(null),
+      currentWorkflow,
+      stepsAwaitingApproval,
+      approveStep,
+      skipStep,
       pendingApproval,
       orchestrationStatus: r(null),
       executionStrategies: r([]),
@@ -56,7 +71,7 @@ vi.mock('@/composables/useWorkflowTemplates', () => ({
 }))
 
 vi.mock('@/composables/useNotificationBus', () => ({
-  useNotificationBus: () => ({ showToast: vi.fn() }),
+  useNotificationBus: () => ({ showToast: toast }),
 }))
 
 import WorkflowBuilderView from '../WorkflowBuilderView.vue'
@@ -74,7 +89,7 @@ const PLAN = {
   ],
 }
 
-function mountView() {
+function mountView(realRunner = false) {
   return mount(WorkflowBuilderView, {
     global: {
       plugins: [i18n],
@@ -82,9 +97,9 @@ function mountView() {
       stubs: {
         WorkflowCanvas: true,
         WorkflowTemplateGallery: true,
-        WorkflowRunner: true,
-        WorkflowHistory: true,
+        WorkflowRunner: !realRunner,
         WorkflowNotificationConfig: true,
+        WorkflowHistory: true,
         OrchestrationVisualizer: true,
         WorkflowLiveDashboard: true,
         GUIAutomationControls: true,
@@ -127,5 +142,92 @@ describe('WorkflowBuilderView plan approval', () => {
     pendingApproval.value = null
     const wrapper = mountView()
     expect(wrapper.text()).not.toContain('Rotate the logs')
+  })
+})
+
+const WAITING = {
+  step_id: 's1',
+  description: 'Restart nginx',
+  command: 'systemctl restart nginx',
+  status: 'waiting_approval',
+  requires_confirmation: true,
+  risk_level: 'high',
+  risk_tier: 'high',
+}
+
+describe('WorkflowBuilderView step approval card (#17677)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    pendingApproval.value = null
+    routeParams.section = 'canvas'
+    controlWorkflow.mockReset().mockResolvedValue({ success: true })
+    currentWorkflow.value = { workflow_id: 'wf-1', steps: [{ ...WAITING }] }
+  })
+
+  const card = (w: ReturnType<typeof mountView>) => w.findAllComponents(StepApprovalCard)
+
+  it('shows one card on the canvas tab and persists across a refresh that still says waiting', async () => {
+    const wrapper = mountView()
+    expect(card(wrapper)).toHaveLength(1)
+    expect(wrapper.text()).toContain('Restart nginx')
+    currentWorkflow.value = { workflow_id: 'wf-1', steps: [{ ...WAITING }] } // a refresh, same status
+    await wrapper.vm.$nextTick()
+    expect(card(wrapper)).toHaveLength(1)
+  })
+
+  it('approves once through controlWorkflow and ignores a second click while deciding', async () => {
+    let release!: () => void
+    controlWorkflow.mockImplementationOnce(() => new Promise((r) => { release = () => r({ success: true }) }))
+    const wrapper = mountView()
+    const approve = () => wrapper.findComponent(StepApprovalCard).findAll('button').find((b) => b.text() === 'Approve')!
+    await approve().trigger('click')
+    await approve().trigger('click')
+    expect(controlWorkflow).toHaveBeenCalledTimes(1)
+    expect(controlWorkflow).toHaveBeenCalledWith('wf-1', 'approve_step', 's1')
+    release()
+  })
+
+  it('removes the card when the step status leaves waiting_approval', async () => {
+    const wrapper = mountView()
+    currentWorkflow.value = { workflow_id: 'wf-1', steps: [{ ...WAITING, status: 'executing' }] }
+    await wrapper.vm.$nextTick()
+    expect(card(wrapper)).toHaveLength(0)
+  })
+
+  const click = (w: ReturnType<typeof mountView>, label: string) =>
+    w.findComponent(StepApprovalCard).findAll('button').find((b) => b.text() === label)!.trigger('click')
+
+  it('skips once through controlWorkflow with skip_step', async () => {
+    const wrapper = mountView()
+    await click(wrapper, 'Skip step')
+    expect(controlWorkflow).toHaveBeenCalledTimes(1)
+    expect(controlWorkflow).toHaveBeenCalledWith('wf-1', 'skip_step', 's1')
+  })
+
+  it('a refused answer toasts an error and keeps the card, buttons usable for a retry', async () => {
+    controlWorkflow.mockResolvedValueOnce({ success: false })
+    const wrapper = mountView()
+    await click(wrapper, 'Approve')
+    await flushPromises()
+    expect(toast).toHaveBeenCalledWith('Could not approve the step; it is still waiting for you', 'error')
+    expect(card(wrapper)).toHaveLength(1)
+    await click(wrapper, 'Approve')
+    expect(controlWorkflow).toHaveBeenCalledTimes(2)
+  })
+
+  it('a rejected request toasts an error, is not unhandled, and keeps the card', async () => {
+    controlWorkflow.mockRejectedValueOnce(new Error('network'))
+    const wrapper = mountView()
+    await click(wrapper, 'Skip step')
+    await flushPromises()
+    expect(toast).toHaveBeenCalledWith('Could not skip the step; it is still waiting for you', 'error')
+    expect(card(wrapper)).toHaveLength(1)
+    const buttons = wrapper.findComponent(StepApprovalCard).findAll('button')
+    expect(buttons.every((b) => b.attributes('disabled') === undefined)).toBe(true)
+  })
+
+  it('shows exactly one card on the runner tab (the runner draws it, the view does not)', () => {
+    routeParams.section = 'runner'
+    expect(card(mountView(true))).toHaveLength(1)
   })
 })
