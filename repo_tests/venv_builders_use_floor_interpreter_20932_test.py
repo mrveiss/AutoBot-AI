@@ -25,6 +25,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint._comment_syntax import code_lines
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOT = repo_root()
@@ -57,10 +58,6 @@ _ALLOWED = {
         "the only match is a prose hint in a failure message, not a builder"
     ),
 }
-
-
-def _is_comment(line: str) -> bool:
-    return line.lstrip().startswith("#")
 
 
 def _in_scope(rel: str) -> bool:
@@ -112,8 +109,9 @@ def hardcoded_builders(files, root: Path = _ROOT) -> list[str]:
             continue
         if rel.startswith(_SKIP_PREFIXES):
             continue
-        for number, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
-            if not _is_comment(line) and _HARDCODED.search(line):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for number, line in code_lines(text, name=path):
+            if _HARDCODED.search(line):
                 hits.append(f"{rel}:{number}: {line.strip()}")
     return hits
 
