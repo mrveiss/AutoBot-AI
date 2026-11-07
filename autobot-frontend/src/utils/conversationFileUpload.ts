@@ -183,3 +183,13 @@ export function ensureUploadSession(
   })
   return sessionBeingCreated
 }
+
+/**
+ * Whether a turn must take the canonical `POST /chats/{id}/message` route (#20195).
+ *
+ * A turn carrying server file ids needs that route: it is the only entry with the strict ownership
+ * verdict and the attachment resolver. The overseer transport has neither, so it never receives ids.
+ */
+export function usesCanonicalRoute(overseerEnabled: boolean, attachmentIds: readonly string[]): boolean {
+  return !overseerEnabled || attachmentIds.length > 0
+}
