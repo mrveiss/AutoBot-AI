@@ -75,6 +75,7 @@ from models.database import ComponentSyncJob as ComponentSyncJobModel
 from models.database import FleetSyncJob as FleetSyncJobModel
 from models.database import FleetSyncNodeState as FleetSyncNodeStateModel
 from models.database import Node, NodeCodeSource, NodeRole, RoleStatus, Setting, UpdateSchedule
+from models.enrollment_skip import EnrollmentSkip
 from models.schemas import (
     CodeSyncRefreshResponse,
     CodeSyncStatusResponse,
@@ -4370,7 +4371,7 @@ class UpdateAllJob(BaseModel):
     completed_fleet_nodes: int = 0
     failed_fleet_nodes: int = 0
     skipped_fleet_nodes: int = 0  # non-operational nodes skipped (#11511)
-    enrollment_skipped_nodes: List[str] = []  # skipped: last enrollment failed (#21036)
+    enrollment_skipped_nodes: List[EnrollmentSkip] = []  # last enrollment failed (#21036)
     created_at: str = ""
     completed_at: Optional[str] = None
     failure_reason: Optional[str] = None
@@ -5143,7 +5144,6 @@ async def _collect_outdated_node_ids(job: UpdateAllJob, remote_commit: str, db_s
                 .order_by(Node.hostname)
             )
             version_outdated = nodes_result.scalars().all()
-
             outdated_node_ids = [n.node_id for n in version_outdated]
             seen_ids = set(outdated_node_ids)
 
@@ -5173,7 +5173,7 @@ async def _collect_outdated_node_ids(job: UpdateAllJob, remote_commit: str, db_s
             stage_fleet.deps_changed = await _compute_deps_changed("autobot-backend")
         _stage_log(
             _get_stage(job, "slm_self_update"),
-            f"Collected {len(outdated_node_ids)} outdated fleet node(s), {len(job.enrollment_skipped_nodes)} skipped",
+            f"Collected {len(outdated_node_ids)} outdated fleet node(s)",
         )
         return outdated_node_ids
     except Exception as exc:
