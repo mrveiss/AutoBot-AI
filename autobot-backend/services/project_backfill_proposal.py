@@ -28,7 +28,9 @@ def _describe(preview: dict) -> str:
         f"{preview.get('missing', 0)} work item(s) have no project: {preview.get('from_ancestor', 0)} take "
         f"an ancestor's project, {preview.get('to_default', 0)} go to the default project. "
         f"{preview.get('foreign_ancestor_project_skipped', 0)} have an ancestor in another company's project, "
-        "which is never used. Nothing changes until approved."
+        "which is never used. "
+        f"{preview.get('conflicts', 0)} have a child already in another project and are left as they are. "
+        "Nothing changes until approved."
     )
 
 

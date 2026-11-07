@@ -153,7 +153,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
     "autobot-backend/code_intelligence/analytics_infrastructure.py": 801,
-    "autobot-backend/code_intelligence/anti_pattern_detection/analyzer.py": 753,
+    "autobot-backend/code_intelligence/anti_pattern_detection/analyzer.py": 746,
     "autobot-backend/code_intelligence/bug_predictor.py": 1501,
     "autobot-backend/code_intelligence/bug_predictor_test.py": 759,
     "autobot-backend/code_intelligence/co_change_test.py": 705,
@@ -197,7 +197,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/events/stream_manager.py": 654,
     "autobot-backend/events/types.py": 885,
     "autobot-backend/hardware_acceleration.py": 609,
-    "autobot-backend/initialization/lifespan.py": 2313,
+    "autobot-backend/initialization/lifespan.py": 2311,
     "autobot-backend/initialization/router_registry/feature_routers.py": 758,
     "autobot-backend/integrations/cloud_integration.py": 616,
     "autobot-backend/integrations/communication_integration.py": 605,
@@ -236,14 +236,14 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llc/adapters/tests/test_claude_code_adapter.py": 602,
     "autobot-backend/llc/api/companies.py": 1605,
     "autobot-backend/llc/api/roles.py": 713,
-    "autobot-backend/llc/api/sprints.py": 1215,
-    "autobot-backend/llc/api/work_items.py": 1286,  # #18978: 1302 -> 1287; #19582: comment wake moved into the service
+    "autobot-backend/llc/api/sprints.py": 1213,
+    "autobot-backend/llc/api/work_items.py": 1284,  # #18978: 1302 -> 1287; #19582: comment wake moved into the service
     "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 979,  # #19240 (run key moved out)
     "autobot-backend/llc/services/template.py": 642,
-    "autobot-backend/llc/services/work_item_service.py": 998,  # #18978: -19; #20102: completion effects moved out
+    "autobot-backend/llc/services/work_item_service.py": 995,  # #18978: -19; #20102, #20930: code moved out
     "autobot-backend/llc/tests/conftest.py": 832,
     "autobot-backend/llc/tests/test_autobot_agent_adapter.py": 663,
-    "autobot-backend/llc/tests/test_heartbeat_scheduler.py": 1009,
+    "autobot-backend/llc/tests/test_heartbeat_scheduler.py": 1007,
     "autobot-backend/llc/tests/test_review_gate.py": 632,
     "autobot-backend/llc/tests/test_role_assignments.py": 728,
     "autobot-backend/llc/tests/test_work_items_idor.py": 602,

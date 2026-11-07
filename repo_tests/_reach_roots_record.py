@@ -151,6 +151,20 @@ REACH_ROOTS = {
         "autobot-slm-backend",
         "docker",
     ),
+    "repo_tests/inline_lazy_singleton_20889_test.py": (
+        ".claude",
+        "autobot-backend",
+        "autobot-infrastructure",
+        "autobot-npu-worker",
+        "autobot-slm-backend",
+        "autobot_shared",
+        "libs",
+        "pipeline-scripts",
+        "plugins",
+        "repo_tests",
+        "scripts",
+        "tools",
+    ),
     "repo_tests/kb_admin_read_bypass_guard_test.py": ("autobot-backend/", "autobot_shared/"),
     "repo_tests/kb_construction_baseline_18122_test.py": (
         "autobot-backend/",
@@ -415,6 +429,12 @@ REACH_ROOTS = {
         "autobot-slm-frontend/src",
         "libs/autobot-ui/index.ts",
         "libs/autobot-ui/src",
+    ),
+    "repo_tests/venv_builders_use_floor_interpreter_20932_test.py": (
+        "autobot-backend/code_analysis",
+        "autobot-infrastructure",
+        "autobot-slm-backend/ansible",
+        "install.sh",
     ),
     "repo_tests/windows_install_constraints_resolve_19681_test.py": (
         "autobot-npu-worker/resources/windows-npu-worker",
