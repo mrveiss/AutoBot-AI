@@ -75,10 +75,24 @@ def _tracked_python(root: Path = _ROOT) -> list[str]:
         return []
 
 
+def _all_tracked_python(root: Path) -> int:
+    """Every tracked ``.py`` in the repo: the reference the scanned roots are measured against."""
+    try:
+        return len(tracked_paths(root, "*.py"))
+    except EmptyEnumeration:
+        return 0
+
+
+#: #21034: an absolute floor (even with a ``growth`` allowance) tracks a population that gains ~450 files
+#: a week and went red on every train that merged main. A share of all tracked Python moves with the
+#: tree: the roots held 8144 of 8180 (99.6%) when measured, so 0.95 tolerates the tree growing or
+#: shrinking by any amount and fails only when the scan reaches materially less of it (a root dropped
+#: from ``_ROOTS``, or a new top-level Python home that the scan does not name).
 REACH = declare(
     "inline-lazy-singleton",
     discover=_tracked_python,
-    floor=8144,  # mid-window: population 8144, window (8144, 8144)
+    reference=_all_tracked_python,
+    min_fraction=0.95,
     what="tracked python files",
     roots=_ROOTS,
 )
@@ -262,3 +276,56 @@ def test_no_accessor_managed_class_constructed_directly():
         for n in direct_constructions(text)
     ]
     assert not offenders, "constructed directly; use llc.services.accessors.get_*: " + ", ".join(offenders)
+
+
+def test_floor_measures_the_tracked_python_it_names():
+    """Control (MEASUREMENT_DISCIPLINE): an independent `git ls-files` count equals both numbers the
+    fraction is judged on, and the roots are all real, so a share cannot read well off a wrong path."""
+
+    import subprocess  # noqa: PLC0415
+
+    from autobot_shared.paths import scrubbed_git_env  # noqa: PLC0415
+
+    def listed(*specs: str) -> set[str]:
+        out = subprocess.run(
+            ["git", "ls-files", "-z", "--", *specs], cwd=_ROOT, env=scrubbed_git_env(), capture_output=True, check=True
+        ).stdout
+        return {p for p in out.decode("utf-8").split("\0") if p}
+
+    scanned = listed(*(f"{r}/*.py" for r in _ROOTS))
+    assert scanned, "control: the independent enumeration found nothing"
+    assert {str(p) for p in REACH.population(_ROOT)} == scanned
+    assert _all_tracked_python(_ROOT) == len(listed("*.py"))
+    assert {p.split("/", 1)[0] for p in scanned} == set(_ROOTS)
+
+
+def test_floor_ignores_tree_growth_but_fires_when_the_sweep_narrows(tmp_path):
+    """#21034 control: with the reference at today's size, the share holds across growth and
+    deletion of both numbers, and fails when the sweep reaches materially less of the same tree."""
+    import dataclasses  # noqa: PLC0415
+
+    import pytest  # noqa: PLC0415
+    from repo_tests._reach import ReachFloorError  # noqa: PLC0415
+
+    def reach(scanned: int, total: int):
+        return dataclasses.replace(REACH, discover=lambda _r: list(range(scanned)), reference=lambda _r: total)
+
+    n = 0  # a fresh root per case: populations are memoised on (name, root)
+
+    def fresh() -> Path:
+        nonlocal n
+        n += 1
+        return tmp_path / f"r{n}"
+
+    for scanned, total in ((8144, 8180), (8144 + 450, 8180 + 450), (8144 - 450, 8180 - 450), (9000, 9001)):
+        reach(scanned, total).examined(fresh())
+    for scanned, total in ((7000, 8180), (8144 - 450, 8180), (0, 8180)):
+        with pytest.raises(ReachFloorError):
+            reach(scanned, total).examined(fresh())
+
+
+def test_a_new_inline_use_in_a_tracked_file_is_still_flagged():
+    """Control: the offender pipeline (same detector as the live test) flags an inline use in a file."""
+    bad = "from autobot_shared.singleton_factory import lazy_singleton\nx = lazy_singleton(Svc)()\n"
+    assert inline_uses(bad) == [2]
+    assert inline_uses("get = lazy_singleton(Svc)\nx = get()\n") == []
