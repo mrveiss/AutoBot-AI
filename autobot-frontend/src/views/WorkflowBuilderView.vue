@@ -548,6 +548,7 @@
             @cancel-workflow="handleCancelWorkflow"
             :approve-step="handleApproveStep"
             :skip-step="handleSkipStep"
+            @select-workflow="getWorkflowStatus"
             @refresh="loadActiveWorkflows"
           />
         </section>
@@ -1106,7 +1107,7 @@ async function handleSaveWorkflow(name: string, description: string): Promise<vo
   const workflowId = await createWorkflowFromTemplate(template, sessionId.value);
   if (workflowId) {
     showToast(t('workflow.builder.saved', { name }), 'success');
-    navigateTo('runner');
+    await handleViewWorkflow(workflowId);
   } else {
     showToast(t('workflow.builder.saveFailed'), 'error');
   }
@@ -1201,9 +1202,7 @@ async function openWorkflowFromQuery(): Promise<void> {
 async function handleViewWorkflow(workflowId: string): Promise<void> {
   // Issue #1367: Load the selected workflow before switching to runner
   navigateTo('runner');
-  const local = activeWorkflows.value.find(
-    (wf) => wf.workflow_id === workflowId,
-  );
+  const local = activeWorkflows.value.find((wf) => wf.workflow_id === workflowId);
   if (local) {
     currentWorkflow.value = local;
   } else {

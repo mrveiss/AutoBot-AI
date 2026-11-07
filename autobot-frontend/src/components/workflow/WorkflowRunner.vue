@@ -22,7 +22,7 @@
       <div v-else class="workflow-list">
         <div v-for="wf in workflows" :key="wf.workflow_id" class="workflow-item"
              :class="{ active: currentWorkflow?.workflow_id === wf.workflow_id, paused: wf.is_paused }"
-             @click="selectWorkflow(wf)">
+             @click="$emit('select-workflow', wf.workflow_id)">
           <div class="wf-status" :class="getStatusClass(wf)">
             <Icon :name="getStatusIcon(wf)" />
           </div>
@@ -66,15 +66,20 @@
             <button class="btn-notif" @click="showNotifConfig = true" :aria-label="$t('workflow.notifications.title')">
               <Icon name="bell" />
             </button>
-            <BaseButton variant="success" size="sm" v-if="currentWorkflow.is_paused" @click="$emit('resume-workflow', currentWorkflow.workflow_id)">
-              <Icon name="play" /> {{ $t('workflow.runner.resume') }}
+            <BaseButton v-if="!currentWorkflow.started_at" variant="primary" size="sm" :disabled="loading" @click="$emit('start-workflow', currentWorkflow.workflow_id)">
+              <Icon name="play" /> {{ $t('workflow.runner.start') }}
             </BaseButton>
-            <BaseButton variant="warning" size="sm" v-else @click="$emit('pause-workflow', currentWorkflow.workflow_id)">
-              <Icon name="pause" /> {{ $t('workflow.runner.pause') }}
-            </BaseButton>
-            <BaseButton variant="error" size="sm" @click="$emit('cancel-workflow', currentWorkflow.workflow_id)">
-              <Icon name="stop" /> {{ $t('workflow.runner.cancel') }}
-            </BaseButton>
+            <template v-else>
+              <BaseButton variant="success" size="sm" v-if="currentWorkflow.is_paused" @click="$emit('resume-workflow', currentWorkflow.workflow_id)">
+                <Icon name="play" /> {{ $t('workflow.runner.resume') }}
+              </BaseButton>
+              <BaseButton variant="warning" size="sm" v-else @click="$emit('pause-workflow', currentWorkflow.workflow_id)">
+                <Icon name="pause" /> {{ $t('workflow.runner.pause') }}
+              </BaseButton>
+              <BaseButton variant="error" size="sm" @click="$emit('cancel-workflow', currentWorkflow.workflow_id)">
+                <Icon name="stop" /> {{ $t('workflow.runner.cancel') }}
+              </BaseButton>
+            </template>
           </div>
         </div>
 
@@ -169,6 +174,7 @@ const emit = defineEmits<{
   (e: 'pause-workflow', id: string): void;
   (e: 'resume-workflow', id: string): void;
   (e: 'cancel-workflow', id: string): void;
+  (e: 'select-workflow', id: string): void;
   (e: 'refresh'): void;
 }>();
 
@@ -181,10 +187,6 @@ function onNotifSaved(): void {
 
 const completedSteps = computed(() => props.currentWorkflow?.steps.filter(s => s.status === 'completed').length ?? 0);
 const failedSteps = computed(() => props.currentWorkflow?.steps.filter(s => s.status === 'failed').length ?? 0);
-
-function selectWorkflow(_wf: ActiveWorkflow) {
-  // Parent should handle selection via props
-}
 
 function getProgress(wf: ActiveWorkflow): number {
   if (!wf.total_steps) return 0;

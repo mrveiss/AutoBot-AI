@@ -4539,6 +4539,7 @@
       "stepProgress": "Step {current} / {total}",
       "selectWorkflow": "Select a Workflow",
       "selectWorkflowDescription": "Choose an active workflow from the list to view details and control execution",
+      "start": "Start",
       "started": "Started",
       "resume": "Resume",
       "pause": "Pause",
