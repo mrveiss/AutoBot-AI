@@ -65,4 +65,25 @@ describe('cached security score read (#20491)', () => {
     expect((init?.method ?? 'GET').toUpperCase()).toBe('GET')
     expect(scores.securityScore.value).toBeNull()
   })
+
+  it('a no_data answer shows no error', async () => {
+    mockedFetch.mockResolvedValueOnce(jsonResponse({ status: 'no_data' }))
+    const scores = makeScores()
+    await scores.loadCachedSecurityScore()
+    expect(scores.securityScoreError.value).toBe('')
+  })
+
+  it('a failed stored read is surfaced, not shown as the empty state', async () => {
+    mockedFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: 'unprocessable' }), {
+        status: 422,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    const scores = makeScores()
+    await scores.loadCachedSecurityScore()
+    expect(scores.securityScoreError.value).not.toBe('')
+    expect(scores.securityScoreError.value).not.toContain('analytics.codebase.errors')
+    expect(scores.securityScore.value).toBeNull()
+  })
 })

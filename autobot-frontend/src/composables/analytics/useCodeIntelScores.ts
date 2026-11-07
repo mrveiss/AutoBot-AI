@@ -22,7 +22,8 @@
  * The file no longer imports `fetchWithAuth` or `appConfig`.
  */
 
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import i18n from '@/i18n'
 import { useTaskLoader } from '@/composables/useTaskLoader'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { createLogger } from '@/utils/debugUtils'
@@ -63,7 +64,7 @@ export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
   const {
     data: securityScore,
     loading: loadingSecurityScore,
-    error: securityScoreError,
+    error: liveSecurityScoreError,
     load: _loadSecurityScoreTask,
   } = useTaskLoader<SecurityScoreResult>(
     `${getApiBase()}/code-intelligence/security/score`,
@@ -319,6 +320,18 @@ export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
       },
     },
     { withSourceId },
+  )
+
+  // A failed stored read (422, network) shows in the panel's error slot; a legitimate
+  // `no_data` leaves the endpoint error empty, so it stays the empty state.
+  const securityScoreError = computed(
+    () =>
+      liveSecurityScoreError.value ||
+      (cachedSecurityScoreEndpoint.error.value
+        ? i18n.global.t('analytics.codebase.errors.cachedSecurityScoreFailed', {
+            error: cachedSecurityScoreEndpoint.error.value,
+          })
+        : ''),
   )
 
   const loadCachedSecurityScore = () => cachedSecurityScoreEndpoint.load()

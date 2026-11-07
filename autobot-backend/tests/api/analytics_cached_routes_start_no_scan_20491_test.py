@@ -28,11 +28,12 @@ async def test_cached_security_score_starts_no_scan():
     ):
         body = await mod.get_cached_security_score(source_id=SOURCE)
 
-    assert read.await_count == 1  # control: the stored-result read is what answered
+    # control + scoping: the read answered, and it read this source's prefix
+    read.assert_awaited_once_with(f"sec_task:source_id:{SOURCE}:")
     assert body["status"] == "success" and body["from_cache"] is True
     assert body["completed_at"] == "2026-11-06T10:00:00+00:00"
     delay.assert_not_called()
-    store.assert_not_awaited()
+    store.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -81,7 +82,7 @@ async def test_cached_bug_prediction_starts_no_scan():
     assert read.await_count == 1
     assert body["from_cache"] is True and body["completed_at"]
     delay.assert_not_called()
-    store.assert_not_awaited()
+    store.assert_not_called()
 
 
 @pytest.mark.asyncio
