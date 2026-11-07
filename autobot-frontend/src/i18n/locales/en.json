@@ -8459,16 +8459,20 @@
   },
   "llc": {
     "notices": {
-      "generic": "Company update: {type}",
+      "generic": "A company update arrived",
       "heartbeatMissed": "Agent {agent} missed its heartbeat",
       "heartbeatRecoveryUnfiled": "Agent {agent} timed out and no recovery item could be filed",
+      "heartbeatMissedNoAgent": "An agent missed its heartbeat",
+      "heartbeatRecoveryUnfiledNoAgent": "An agent timed out and no recovery item could be filed",
+      "agentPausedNoAgent": "An agent was paused",
+      "agentResumedNoAgent": "An agent was resumed",
       "budgetWarning80": "Budget warning: 80% of the budget has been used",
       "budgetWarning95": "Budget warning: 95% of the budget has been used",
       "budgetExhausted": "Budget exhausted: agents are stopped until the budget is raised",
       "agentPaused": "Agent {agent} was paused",
       "agentResumed": "Agent {agent} was resumed",
-      "approval": "Approval update: {type}",
-      "sprint": "Sprint update: {type}"
+      "approval": "An approval was updated",
+      "sprint": "A sprint was updated"
     },
     "agent": {
       "cannotRun": "Cannot run"
