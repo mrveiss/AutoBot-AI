@@ -30,8 +30,10 @@ def _family_of(problem_type: str) -> tuple | None:
     return None
 
 
-def _location(problem: Dict, family: tuple) -> tuple:
-    return (family, problem.get("line") or problem.get("line_number") or 0)
+def _location(problem: Dict, family: tuple) -> tuple | None:
+    """None when the finding carries no line: two line-less findings are not provably one defect."""
+    line = problem.get("line") or problem.get("line_number")
+    return (family, line) if line else None
 
 
 def dedupe_same_location_problems(problems: List[Dict]) -> List[Dict]:
@@ -43,10 +45,12 @@ def dedupe_same_location_problems(problems: List[Dict]) -> List[Dict]:
         if family is None:
             kept.append(problem)
             continue
-        first = by_location.get(_location(problem, family))
+        location = _location(problem, family)
+        first = by_location.get(location) if location else None
         if first is None:
             canonical = dict(problem, type=family[0])
-            by_location[_location(problem, family)] = canonical
+            if location:
+                by_location[location] = canonical
             kept.append(canonical)
         elif _rank(problem) > _rank(first):
             first["severity"] = problem["severity"]

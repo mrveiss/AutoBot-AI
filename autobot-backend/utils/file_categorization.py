@@ -13,7 +13,7 @@ frameworks, and file types.
 from pathlib import Path
 from typing import Dict, Set
 
-from utils.colocated_test_files import is_test_filename
+from autobot_shared.test_file_names import is_test_filename
 
 # =============================================================================
 # File Categories
