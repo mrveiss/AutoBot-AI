@@ -73,6 +73,22 @@ def test_owner_routes_foreign_and_unknown_are_byte_identical(real, kind):
     assert foreign.content == unknown.content
 
 
+@pytest.mark.parametrize("kind", ("preview", "download", "delete"))
+def test_owner_routes_file_in_another_conversation_is_byte_identical_to_an_unknown_file(real, kind):
+    """A file that exists but belongs to someone else's conversation answers like a file that does not exist."""
+    file_id = _seed(real)
+    real.user, real.owner = dict(_BOB), "bob"
+    foreign_file = _call(real, kind, file_id, session="bobs-chat")
+    unknown_file = _call(real, kind, "no-such-file", session="bobs-chat")
+
+    assert foreign_file.status_code == unknown_file.status_code
+    assert foreign_file.status_code in (403, 404)
+    # delete echoes the caller's own file id in the 404 detail; mask it, nothing else may differ
+    assert foreign_file.content.replace(file_id.encode(), b"<id>") == unknown_file.content.replace(
+        b"no-such-file", b"<id>"
+    )
+
+
 @pytest.mark.parametrize("kind", _PANEL)
 def test_owner_routes_owner_succeeds(real, kind):
     file_id = _seed(real)
