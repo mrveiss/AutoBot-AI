@@ -16,6 +16,7 @@ import { createI18n } from 'vue-i18n'
 import { HttpError } from '@autobot/ui'
 import ThemeManagerSettings from './ThemeManagerSettings.vue'
 import en from '@/locales/en.json'
+import appI18n from '@/i18n'
 
 const client = { get: vi.fn(), post: vi.fn(), delete: vi.fn() }
 vi.mock('@/composables/useAutobotApi', () => ({ createAutobotBackendClient: () => client }))
@@ -219,9 +220,20 @@ describe('ThemeManagerSettings uninstall', () => {
 
   it('names the malformed answer with a translated message (#20816)', async () => {
     client.get.mockResolvedValue({ detail: 'x' })
-    const w = await mountView()
-    // A control string, not the en.json value the view reads: the message is the translated sentence.
-    expect(byId(w, 'slm-themes-error').text()).toContain('The theme list answer was not a list.')
+    // useThemesApi throws the message from the app i18n singleton: give that key a distinct text so a
+    // hard-coded English sentence cannot pass, and put the singleton back afterwards.
+    const g = appI18n.global
+    const locale = g.locale as string
+    const before = g.getLocaleMessage(locale) as Record<string, unknown>
+    g.mergeLocaleMessage(locale, { settings: { admin: { themeManager: { malformedList: 'CONTROL-malformed-list-text' } } } })
+    try {
+      const w = await mountView()
+      const text = byId(w, 'slm-themes-error').text()
+      expect(text).toContain('CONTROL-malformed-list-text')
+      expect(text).not.toContain('The theme list answer was not a list.')
+    } finally {
+      g.setLocaleMessage(locale, before)
+    }
   })
 
   it('ignores an older read that resolves after a newer one (#20816)', async () => {
@@ -240,7 +252,11 @@ describe('ThemeManagerSettings uninstall', () => {
     expect(w.text()).not.toContain('Amber')
   })
 
-  it('ignores an older read that rejects after a newer one succeeded (#20816)', async () => {
+  it.each([
+    ['a network error', () => new TypeError('Failed to fetch')],
+    ['HTTP 500', () => new HttpError(500)],
+    ['HTTP 503', () => new HttpError(503)],
+  ])('ignores an older read that rejects with %s after a newer one succeeded (#20816)', async (_name, makeError) => {
     const w = await mountView()
     let rejectOld: (e: unknown) => void = () => {}
     client.get.mockReturnValueOnce(new Promise((_, rej) => { rejectOld = rej }))
@@ -248,10 +264,12 @@ describe('ThemeManagerSettings uninstall', () => {
     client.post.mockResolvedValue(ember)
     client.get.mockResolvedValueOnce([ember])
     await pick(w, zip('ember.zip'))
-    rejectOld(new TypeError('Failed to fetch'))
+    rejectOld(makeError())
     await flushPromises()
     expect(byId(w, 'slm-themes-unavailable').exists()).toBe(false)
     expect(byId(w, 'slm-themes-error').exists()).toBe(false)
-    expect(w.text()).toContain('Ember')
+    const table = byId(w, 'slm-themes-table')
+    expect(table.exists()).toBe(true)
+    expect(table.text()).toContain('Ember')
   })
 })
