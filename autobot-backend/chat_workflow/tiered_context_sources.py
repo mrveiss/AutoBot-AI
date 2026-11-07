@@ -178,13 +178,13 @@ async def _query_goal_ancestry(work_item_id: str, company_id: str | None) -> lis
         logger.debug("Ignoring malformed work_item_id for goal ancestry: %r", work_item_id)
         return None
 
+    from llc.services.accessors import get_work_item_service
     from llc.services.goal import GoalService
-    from llc.services.work_item_service import WorkItemService
     from user_management.database import get_async_session_factory
 
     factory = get_async_session_factory()
     async with factory() as session:
-        work_item = await WorkItemService().get(session, work_item_id, company_id=company_id)
+        work_item = await get_work_item_service().get(session, work_item_id, company_id=company_id)
         goal_id = getattr(work_item, "goal_id", None) if work_item else None
         if not goal_id:
             return None
