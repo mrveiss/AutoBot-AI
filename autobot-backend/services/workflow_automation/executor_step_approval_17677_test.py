@@ -81,7 +81,7 @@ def harness(monkeypatch):
 
     ran: list[str] = []
 
-    async def _stub_command(session_id, command):
+    async def _stub_command(workflow, command, value_redactor):
         ran.append(command)
         return {"command": command, "exit_code": 0, "stdout": "ok", "stderr": "", "execution_time": 0.0}
 
