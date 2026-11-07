@@ -221,7 +221,7 @@ def test_test_scripts_are_scanned_and_pytest_modules_are_not():
     assert _TEST_FILE.search("pkg/tests/test_x.py") is not None
     assert _TEST_FILE.search("pkg/x_test.py") is not None
     site = 'logger.error("Test timed out after 10 seconds")'
-    assert literal_sites(site) == 1  # what test_chat_simple.py:43 stated before this fix
+    assert literal_sites(site) == 1  # as the chat-simple timeout assertion did
     assert "autobot-infrastructure/shared/scripts/analysis/test_chat_simple.py" in _source_files(_ROOT)
 
 

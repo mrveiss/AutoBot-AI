@@ -9,17 +9,30 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BaseButton, BaseInput, EmptyState } from '@autobot/ui'
-import { laneName, withLane, withStep, type MapBody, type Plan } from '@/composables/llc/workflowPlanTypes'
+import PlannerMapEdges from './PlannerMapEdges.vue'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
+import { laneName, buildLane, buildStep, withStep, type Edge, type EdgePatch, type Lane, type LanePatch, type MapBody, type Plan, type Step, type StepPatch } from '@/composables/llc/workflowPlanTypes'
 
 const props = defineProps<{ plan: Plan; busy: boolean; warnings: string[] }>()
 const emit = defineEmits<{
   map: [body: MapBody]
+  addLane: [body: Lane]
+  addStep: [body: Step]
+  patchLane: [laneKey: string, body: LanePatch]
+  deleteLane: [laneKey: string]
+  patchStep: [stepKey: string, body: StepPatch]
+  deleteStep: [stepKey: string]
+  addEdge: [body: Edge]
+  patchEdge: [from: string, to: string, body: EdgePatch]
+  deleteEdge: [from: string, to: string]
   waitNote: [handoffKey: string, note: string | null]
 }>()
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 
 const newLane = ref('')
 const newStep = ref('')
+const looseStep = ref('')
 const stepLane = ref('')
 const lanes = computed(() => props.plan.lanes ?? [])
 const handoffs = computed(() => props.plan.handoffs ?? [])
@@ -28,7 +41,7 @@ const targetLane = computed(() => stepLane.value || lanes.value[0]?.key || '')
 function addLane() {
   const name = newLane.value.trim()
   if (!name) return
-  emit('map', withLane(props.plan, name))
+  emit('addLane', buildLane(props.plan, name))
   newLane.value = ''
 }
 
@@ -43,6 +56,40 @@ function stepsIn(laneKey: string) {
   return (props.plan.steps ?? []).filter((s) => s.lane_key === laneKey)
 }
 
+/** A step on its own: nothing connects it until the owner draws an edge to or from it. */
+function addLooseStep() {
+  const label = looseStep.value.trim()
+  if (!label || !targetLane.value) return
+  emit('addStep', buildStep(props.plan, label, targetLane.value))
+  looseStep.value = ''
+}
+
+/** A rename is sent only when the text really changed and is not blank. */
+function renamed(e: Event, current: string): string | null {
+  const next = (e.target as HTMLInputElement).value.trim()
+  return next && next !== current ? next : null
+}
+
+function renameLane(key: string, current: string, e: Event) {
+  const name = renamed(e, current)
+  if (name) emit('patchLane', key, { name })
+}
+
+function renameStep(key: string, current: string, e: Event) {
+  const label = renamed(e, current)
+  if (label) emit('patchStep', key, { label })
+}
+
+async function removeLane(key: string, name: string) {
+  const ok = await confirm({ title: t('llc.workflowPlanner.map.deleteLaneTitle'), message: t('llc.workflowPlanner.map.deleteLaneMessage', { name }) })
+  if (ok) emit('deleteLane', key)
+}
+
+async function removeStep(key: string, label: string) {
+  const ok = await confirm({ title: t('llc.workflowPlanner.map.deleteStepTitle'), message: t('llc.workflowPlanner.map.deleteStepMessage', { label }) })
+  if (ok) emit('deleteStep', key)
+}
+
 function noteOf(e: Event): string | null {
   return (e.target as HTMLInputElement).value.trim() || null
 }
@@ -52,11 +99,43 @@ function noteOf(e: Event): string | null {
   <section :aria-label="t('llc.workflowPlanner.steps.map')">
     <EmptyState v-if="!lanes.length" :title="t('llc.workflowPlanner.map.empty')" :description="t('llc.workflowPlanner.map.emptyHint')" />
     <div v-for="lane in lanes" :key="lane.key" class="mb-2 flex gap-3 rounded-md border border-autobot-border p-3" :data-testid="`lane-${lane.key}`">
-      <span class="w-32 shrink-0 text-sm font-semibold text-autobot-text-primary">{{ lane.name }}</span>
+      <div class="flex w-48 shrink-0 flex-col gap-1">
+        <BaseInput
+          :model-value="lane.name"
+          size="sm"
+          :aria-label="t('llc.workflowPlanner.map.renameLane')"
+          :disabled="busy"
+          :data-testid="`rename-lane-${lane.key}`"
+          @change="renameLane(lane.key, lane.name, $event)"
+        />
+        <BaseButton size="xs" variant="ghost" :disabled="busy" :data-testid="`delete-lane-${lane.key}`" @click="removeLane(lane.key, lane.name)">
+          {{ t('llc.workflowPlanner.map.deleteLane') }}
+        </BaseButton>
+      </div>
       <ul class="flex flex-wrap gap-2">
-        <li v-for="s in stepsIn(lane.key)" :key="s.key" class="rounded-md bg-autobot-bg-card px-2 py-1 text-sm text-autobot-text-secondary">{{ s.label }}</li>
+        <li v-for="s in stepsIn(lane.key)" :key="s.key" class="flex items-center gap-1 rounded-md bg-autobot-bg-card px-2 py-1 text-sm text-autobot-text-secondary">
+          <BaseInput
+            :model-value="s.label"
+            size="sm"
+            :aria-label="t('llc.workflowPlanner.map.renameStep')"
+            :disabled="busy"
+            :data-testid="`rename-step-${s.key}`"
+            @change="renameStep(s.key, s.label, $event)"
+          />
+          <BaseButton size="xs" variant="ghost" :disabled="busy" :data-testid="`delete-step-${s.key}`" @click="removeStep(s.key, s.label)">
+            {{ t('llc.workflowPlanner.map.deleteStep') }}
+          </BaseButton>
+        </li>
       </ul>
     </div>
+
+    <PlannerMapEdges
+      :plan="plan"
+      :busy="busy"
+      @add-edge="(b) => emit('addEdge', b)"
+      @patch-edge="(f, to, b) => emit('patchEdge', f, to, b)"
+      @delete-edge="(f, to) => emit('deleteEdge', f, to)"
+    />
 
     <div v-if="handoffs.length" class="my-3">
       <h4 class="text-sm font-semibold text-autobot-text-primary">{{ t('llc.workflowPlanner.map.handoffs', { count: handoffs.length }) }}</h4>
@@ -94,6 +173,10 @@ function noteOf(e: Event): string | null {
       </select>
       <BaseButton size="sm" variant="secondary" :disabled="busy || !newStep.trim() || !targetLane" data-testid="add-step" @click="addStep">
         {{ t('llc.workflowPlanner.map.addStep') }}
+      </BaseButton>
+      <BaseInput v-model="looseStep" size="sm" :label="t('llc.workflowPlanner.map.looseStepLabel')" />
+      <BaseButton size="sm" variant="outline" :disabled="busy || !looseStep.trim() || !targetLane" data-testid="add-loose-step" @click="addLooseStep">
+        {{ t('llc.workflowPlanner.map.addLooseStep') }}
       </BaseButton>
     </div>
   </section>
