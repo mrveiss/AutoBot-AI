@@ -58,9 +58,7 @@ def env(name: str, default: Any = None) -> Any:
         return spec.default if default is None else default
 
 
-# ---------------------------------------------------------------------------
-# Registered variables — grouped by component
-# ---------------------------------------------------------------------------
+# --- Registered variables, grouped by component ----------------------------
 # Per-component siblings split at the size ceiling (#14236, #18391); imported after REGISTRY exists, before any read.
 from autobot_shared import env_registry_agent_runtime  # noqa: E402,F401
 from autobot_shared import env_registry_backend  # noqa: E402,F401

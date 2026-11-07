@@ -11,10 +11,13 @@ import pytest
 
 from api.codebase_analytics import analyzers
 from api.codebase_analytics.problem_dedup import dedupe_same_location_problems
+from autobot_shared.status_enums import Severity
 from utils.file_categorization import FILE_CATEGORY_CODE, FILE_CATEGORY_TEST, get_file_category
 
+LOW, MEDIUM, HIGH = (Severity.LOW.value, Severity.MEDIUM.value, Severity.HIGH.value)
 
-def _p(type_, line, severity="medium"):
+
+def _p(type_, line, severity=MEDIUM):
     return {"type": type_, "line": line, "severity": severity, "description": "d"}
 
 
@@ -24,12 +27,12 @@ class TestDedupe:
         assert [p["type"] for p in out] == ["long_function"]
 
     def test_the_higher_severity_survives(self):
-        out = dedupe_same_location_problems([_p("long_function", 10), _p("code_smell_long_method", 10, "high")])
-        assert out[0]["severity"] == "high" and out[0]["type"] == "long_function"
+        out = dedupe_same_location_problems([_p("long_function", 10), _p("code_smell_long_method", 10, HIGH)])
+        assert out[0]["severity"] == HIGH and out[0]["type"] == "long_function"
 
     def test_order_does_not_matter(self):
-        out = dedupe_same_location_problems([_p("code_smell_long_method", 10, "high"), _p("long_function", 10)])
-        assert [(p["type"], p["severity"]) for p in out] == [("long_function", "high")]
+        out = dedupe_same_location_problems([_p("code_smell_long_method", 10, HIGH), _p("long_function", 10)])
+        assert [(p["type"], p["severity"]) for p in out] == [("long_function", HIGH)]
 
     def test_a_method_only_finding_is_reported_under_the_canonical_type(self):
         out = dedupe_same_location_problems([_p("code_smell_long_method", 7)])
@@ -41,16 +44,16 @@ class TestDedupe:
 
     @pytest.mark.parametrize("missing", [{}, {"line": None}, {"line": 0}])
     def test_findings_without_a_line_are_never_merged(self, missing):
-        a = {"type": "long_function", "severity": "low", **missing}
-        b = {"type": "code_smell_long_method", "severity": "high", **missing}
+        a = {"type": "long_function", "severity": LOW, **missing}
+        b = {"type": "code_smell_long_method", "severity": HIGH, **missing}
         out = dedupe_same_location_problems([a, b])
         assert [p["type"] for p in out] == ["long_function", "long_function"]
-        assert [p["severity"] for p in out] == ["low", "high"]
+        assert [p["severity"] for p in out] == [LOW, HIGH]
 
     def test_input_is_not_mutated(self):
-        a, b = _p("long_function", 1), _p("code_smell_long_method", 1, "high")
+        a, b = _p("long_function", 1), _p("code_smell_long_method", 1, HIGH)
         dedupe_same_location_problems([a, b])
-        assert a["severity"] == "medium" and b["type"] == "code_smell_long_method"
+        assert a["severity"] == MEDIUM and b["type"] == "code_smell_long_method"
 
 
 class TestAnalysisPhasesApplyTheDedupe:
@@ -58,14 +61,14 @@ class TestAnalysisPhasesApplyTheDedupe:
 
     @pytest.mark.asyncio
     async def test_run_analysis_phases_returns_one_problem_per_defect(self, monkeypatch):
-        dup = [_p("long_function", 5), _p("code_smell_long_method", 5, "high")]
+        dup = [_p("long_function", 5), _p("code_smell_long_method", 5, HIGH)]
         monkeypatch.setattr(analyzers, "_analyze_ast_nodes", lambda tree: ([], [], [], list(dup)))
         monkeypatch.setattr(analyzers, "_analyze_content_lines", lambda c, f: ([], [], []))
         monkeypatch.setattr(analyzers, "detect_race_conditions", lambda t, c, f: [])
         monkeypatch.setattr(analyzers, "_run_code_intelligence_analyzers", lambda f: [])
         monkeypatch.setattr(analyzers, "_count_python_line_types", lambda c, t: {})
         result = await analyzers._run_analysis_phases("m.py", "", ast.parse(""), use_llm=False)
-        assert [(p["type"], p["severity"]) for p in result["problems"]] == [("long_function", "high")]
+        assert [(p["type"], p["severity"]) for p in result["problems"]] == [("long_function", HIGH)]
 
 
 class TestTestFilesAreTests:
