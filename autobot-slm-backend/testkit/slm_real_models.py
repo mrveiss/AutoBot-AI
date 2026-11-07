@@ -12,7 +12,7 @@ is installed first; ``load_real_model_schemas`` then binds the real modules.
 import sys
 from pathlib import Path
 
-_SLM_ROOT = Path(__file__).resolve().parent
+_SLM_ROOT = Path(__file__).resolve().parents[1]
 
 
 def load_real_model_schemas() -> None:

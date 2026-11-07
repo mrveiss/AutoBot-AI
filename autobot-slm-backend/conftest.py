@@ -224,9 +224,9 @@ _role_columns_mod.COLUMNS = frozenset(
 sys.modules["_role_cols"] = _role_columns_mod
 sys.modules["models.database"].Role.__table__ = types.SimpleNamespace(columns=_role_columns_mod.COLUMNS)
 
-# Real-loaded model schemas (#13139, #16281, #15495) live in `_slm_real_models.py`
+# Real-loaded model schemas (#13139, #16281, #15495) live in `testkit/slm_real_models.py`
 # (#21026: split out for the 600-line cap); loaded by path, this dir is not on sys.path.
-_rm_spec = _ilu.spec_from_file_location("_slm_real_models", _SLM_ROOT / "_slm_real_models.py")
+_rm_spec = _ilu.spec_from_file_location("_slm_real_models", _SLM_ROOT / "testkit" / "slm_real_models.py")
 _rm_mod = _ilu.module_from_spec(_rm_spec)
 _rm_spec.loader.exec_module(_rm_mod)
 _rm_mod.load_real_model_schemas()
