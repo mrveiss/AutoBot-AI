@@ -48,7 +48,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BaseCard } from '@autobot/ui'
 import { formatFleetDateTime } from '@/composables/useTimezone'
-import type { InstallMetricsReading } from '@/composables/useInstallMetricsApi'
+import { analysisMeasured, type InstallMetricsReading } from '@/composables/useInstallMetricsApi'
 
 interface Stat { key: string; value: string | number }
 
@@ -67,13 +67,12 @@ const gpu = computed(() => (props.reading.gpu.ok ? props.reading.gpu.data : null
 const npu = computed(() => (props.reading.npu.ok ? props.reading.npu.data : null))
 
 const systemStats = computed<Stat[]>(() => {
-  const sys = dashboard.value?.system_metrics
-  const analysis = dashboard.value?.analysis
+  const sys = dashboard.value?.system
+  // The route attaches a default analysis even when nothing was measured; that is not a figure.
+  const analysis = analysisMeasured(dashboard.value?.analysis) ? dashboard.value?.analysis : null
   return [
-    { key: 'cpu', value: percent(sys?.cpu_percent) },
-    { key: 'memory', value: percent(sys?.memory_percent) },
-    { key: 'disk', value: percent(sys?.disk_percent) },
-    { key: 'processes', value: num(sys?.process_count) },
+    { key: 'cpu', value: percent(sys?.cpu_usage_percent) },
+    { key: 'memory', value: percent(sys?.memory_usage_percent) },
     { key: 'overallHealth', value: text(analysis?.overall_health) },
     { key: 'performanceScore', value: num(analysis?.performance_score) },
   ]
