@@ -9,6 +9,8 @@ Lives beside ``lifespan.py`` because that file is at its size ceiling.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 from typing import Any
 
 from autobot_shared.logging_manager import get_logger
@@ -16,7 +18,7 @@ from autobot_shared.logging_manager import get_logger
 logger = get_logger(__name__)
 
 
-async def _init_mesh_reembed_consumer(app: Any) -> None:
+async def start_mesh_reembed_consumer(app: Any) -> None:
     """Start the consumer of mesh:reembed_queue; on by default.
 
     Unlike MeshBrainScheduler it deletes nothing: it only hands flagged doc ids to
@@ -42,5 +44,10 @@ async def stop_mesh_reembed_consumer(app: Any) -> None:
     """Cancel the consumer task and free its lease so another worker can take over."""
     consumer = getattr(app.state, "mesh_reembed_consumer", None)
     if consumer:
-        app.state.mesh_reembed_task.cancel()
+        task = app.state.mesh_reembed_task
+        task.cancel()
+        # Wait for the loop to stop (it may be mid-drain) before freeing the lease, so a successor
+        # never starts while this worker still touches the queue.
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
         await consumer.lease.release()

@@ -30,7 +30,7 @@ from config.manager import get_config_manager
 from initialization import agent_presence_sync
 from initialization import lifespan_shutdown as shutdown_steps
 from initialization.background_workers import start_background_workers
-from initialization.mesh_reembed_startup import _init_mesh_reembed_consumer
+from initialization.mesh_reembed_startup import start_mesh_reembed_consumer
 from initialization.neural_mesh_wiring import wire_neural_mesh_components
 from initialization.startup_error_file import persist_startup_error
 from initialization.system_knowledge_import import start_system_knowledge_import
@@ -1821,7 +1821,7 @@ async def _init_mesh_brain_scheduler(app: FastAPI) -> None:
     """
     from autobot_shared.ssot_config import config as _cfg
 
-    await _init_mesh_reembed_consumer(app)  # #20535: independent of the flag below
+    await start_mesh_reembed_consumer(app)  # #20535: independent of the flag below
     if not _cfg.misc.mesh_brain_scheduler_enabled:
         logger.info("MeshBrainScheduler: disabled (AUTOBOT_MESH_BRAIN_SCHEDULER_ENABLED not set)")
         app.state.mesh_brain_scheduler = None

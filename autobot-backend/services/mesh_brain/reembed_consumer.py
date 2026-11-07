@@ -39,6 +39,9 @@ LEASE_KEY = "mesh:reembed:leader"
 ENABLED = env_flag("AUTOBOT_MESH_REEMBED_ENABLED", True)
 INTERVAL_S = env_int("AUTOBOT_MESH_REEMBED_INTERVAL_S", 30)
 BATCH = env_int("AUTOBOT_MESH_REEMBED_BATCH", 100)
+# The lease outlives the interval plus a worst-case drain (BATCH items), and drain() also refreshes it
+# as it goes, so a second worker never takes it mid-drain and re-queues this worker's in-flight items.
+LEASE_TTL_MS = env_int("AUTOBOT_MESH_REEMBED_LEASE_TTL_MS", (INTERVAL_S * 4) * 1000)
 MAX_ATTEMPTS = env_int("AUTOBOT_MESH_REEMBED_MAX_ATTEMPTS", 3)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -77,8 +80,18 @@ class ReembedConsumer:
         self._reindex = reindex
         self._root = root
         self.lease = LeaderLease(
-            key=LEASE_KEY, database="main", refresh_s=INTERVAL_S, poll_s=INTERVAL_S, label="Mesh re-embed consumer"
+            key=LEASE_KEY,
+            database="main",
+            ttl_ms=LEASE_TTL_MS,
+            refresh_s=INTERVAL_S,
+            poll_s=INTERVAL_S,
+            label="Mesh re-embed consumer",
+            client_factory=self._lease_client,
         )
+
+    async def _lease_client(self, database: str = "main") -> Any:
+        """The lease shares the consumer's Redis client (both are the main DB)."""
+        return self._redis
 
     async def recover_orphans(self) -> int:
         """Return items a previous leader took but never finished to the queue."""
@@ -94,9 +107,17 @@ class ReembedConsumer:
         return [_text(item) for item in await self._redis.lrange(DEAD_KEY, 0, -1)]
 
     async def drain(self) -> int:
-        """Handle up to ``BATCH`` queued items; returns how many were taken."""
+        """Handle the items queued now, at most ``BATCH``; returns how many were taken.
+
+        The length is read once, so an id that fails and is re-pushed waits for the next pass instead
+        of being retried straight away (a short outage would otherwise dead-letter it). The lease is
+        refreshed before each item; if another worker holds it now, the drain stops.
+        """
+        pending = min(BATCH, int(await self._redis.llen(QUEUE_KEY)))
         taken = 0
-        while taken < BATCH:
+        while taken < pending:
+            if await self.lease.hold_or_refresh() is False:
+                break
             raw = await self._redis.lmove(QUEUE_KEY, PROCESSING_KEY, "LEFT", "RIGHT")
             if raw is None:
                 break

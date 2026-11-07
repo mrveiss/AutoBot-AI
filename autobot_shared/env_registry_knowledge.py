@@ -590,3 +590,6 @@ register_env_var(
         range=(1, 20),
     )
 )
+
+# The rest of the re-embed settings live in a sibling: this file has no room left under the 600-line ceiling.
+from autobot_shared import env_registry_mesh_reembed  # noqa: E402,F401  # #20535
