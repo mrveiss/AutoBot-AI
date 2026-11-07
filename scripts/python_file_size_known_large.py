@@ -153,7 +153,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
     "autobot-backend/code_intelligence/analytics_infrastructure.py": 801,
-    "autobot-backend/code_intelligence/anti_pattern_detection/analyzer.py": 753,
+    "autobot-backend/code_intelligence/anti_pattern_detection/analyzer.py": 746,
     "autobot-backend/code_intelligence/bug_predictor.py": 1501,
     "autobot-backend/code_intelligence/bug_predictor_test.py": 759,
     "autobot-backend/code_intelligence/co_change_test.py": 705,
@@ -197,7 +197,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/events/stream_manager.py": 654,
     "autobot-backend/events/types.py": 885,
     "autobot-backend/hardware_acceleration.py": 609,
-    "autobot-backend/initialization/lifespan.py": 2313,
+    "autobot-backend/initialization/lifespan.py": 2311,
     "autobot-backend/initialization/router_registry/feature_routers.py": 758,
     "autobot-backend/integrations/cloud_integration.py": 616,
     "autobot-backend/integrations/communication_integration.py": 605,
@@ -481,7 +481,7 @@ KNOWN_LARGE: dict[str, int] = {
     "repo_tests/ci_dispatch_watchdog_test.py": 1273,
     "repo_tests/enum_union_guard_test.py": 801,
     "repo_tests/sync_deletions_ansible_wiring_16310_test.py": 674,  # #16310
-    "repo_tests/sys_modules_leak_guard.py": 1151,
+    "repo_tests/sys_modules_leak_guard.py": 1145,
     "scripts/audit_api_wiring.py": 895,  # #16816: reporting moved to dead_surface.py
 }
 

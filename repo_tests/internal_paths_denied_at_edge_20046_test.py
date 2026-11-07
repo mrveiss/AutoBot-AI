@@ -19,13 +19,16 @@ comments and are not matched, because the match is line-anchored and a ``#`` lin
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
+from typing import cast
 
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
 from autobot_shared.slm_credential_deletion import PROPOSAL_PATH, claim_path, delete_path
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _TEXT_SUFFIXES = (".conf", ".j2", ".sh", ".py", ".yml", ".yaml", ".tmpl", ".template")
@@ -151,6 +154,72 @@ def test_the_key_injecting_prefix_is_denied() -> None:
 def test_the_routes_sit_under_the_denied_prefix() -> None:
     for path in (PROPOSAL_PATH, claim_path("x"), delete_path("n")):
         assert path.startswith("/api/internal/")
+
+
+def _parse(rel: str) -> ast.Module:
+    return cast(ast.Module, parse_cache.parse((repo_root() / rel).read_text(encoding="utf-8")))
+
+
+def _str_kwarg(call: ast.Call, name: str) -> str:
+    """The string value of keyword *name* on *call*, or "" when absent."""
+    for keyword in call.keywords:
+        if keyword.arg == name and isinstance(keyword.value, ast.Constant):
+            return str(keyword.value.value)
+    return ""
+
+
+def _calls(tree: ast.AST, method: str) -> list[ast.Call]:
+    return [
+        n
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == method
+    ]
+
+
+def _arg_names(call: ast.Call) -> list[str]:
+    return [a.id for a in call.args if isinstance(a, ast.Name)]
+
+
+def _first_admin_mounted_path() -> str:
+    """Compose the production path from the mount chain itself, so a re-mount or re-prefix changes the answer."""
+    package = _parse("autobot-slm-backend/api/__init__.py")
+    parent = [c for c in _calls(package, "include_router") if _arg_names(c) == ["first_admin_internal_router"]]
+    assert len(parent) == 1 and isinstance(parent[0].func.value, ast.Name), "first-admin router is not mounted once"
+    assert parent[0].func.value.id == "health_router" and not _str_kwarg(parent[0], "prefix")
+    health = _parse("autobot-slm-backend/api/health.py")
+    assert not _router_prefix(health), "health_router gained a prefix; the chain below no longer holds"
+    mounts = [
+        c for c in _calls(_parse("autobot-slm-backend/main.py"), "include_router") if _arg_names(c) == ["health_router"]
+    ]
+    assert len(mounts) == 1, "health_router must be mounted exactly once in main.py"
+    route = _parse("autobot-slm-backend/api/first_admin_internal.py")
+    paths = [c.args[0].value for c in _calls(route, "get") if c.args and isinstance(c.args[0], ast.Constant)]
+    assert len(paths) == 1, "expected one GET route on the first-admin router"
+    return _str_kwarg(mounts[0], "prefix") + _router_prefix(route) + paths[0]
+
+
+def _router_prefix(tree: ast.Module) -> str:
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "router" for t in node.targets):
+            if isinstance(node.value, ast.Call):
+                return _str_kwarg(node.value, "prefix")
+    raise AssertionError("no `router = APIRouter(...)` assignment found")
+
+
+def test_the_first_admin_route_sits_under_the_denied_prefix() -> None:
+    """#10200: the route's real mount chain (router prefix, health_router include, app mount) lands under the deny."""
+    assert _first_admin_mounted_path() == "/api/internal/first-admin"
+    caller = (repo_root() / "autobot-backend/user_management/services/person_link_service.py").read_text(
+        encoding="utf-8"
+    )
+    assert re.search(r'^_FIRST_ADMIN_PATH = "/api/internal/first-admin"$', caller, re.MULTILINE)
+
+
+def test_contrast_a_remounted_or_reprefixed_first_admin_route_changes_the_resolved_path() -> None:
+    """The resolver follows the chain: a router with another prefix would not resolve under /api/internal/."""
+    other = parse_cache.parse('router = APIRouter(prefix="/public")')
+    assert _router_prefix(other) == "/public"
+    assert _str_kwarg(parse_cache.parse('x.include_router(r, prefix="/api")').body[0].value, "prefix") == "/api"
 
 
 _PLAIN = "    location /api/ {\n        proxy_pass http://x;\n    }\n"
