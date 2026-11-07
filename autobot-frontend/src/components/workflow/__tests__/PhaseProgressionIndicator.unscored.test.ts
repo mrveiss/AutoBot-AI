@@ -74,4 +74,24 @@ describe('PhaseProgressionIndicator unscored phases', () => {
     expect(w.find('.maturity-percentage').text()).toBe('70%')
     expect(w.findAll('.progress-fill')).toHaveLength(2)
   })
+
+  it('shows a scored status through its i18n key and falls back to formatStatus without one (#20723)', async () => {
+    const w = await render([{ name: 'A', completion_percentage: 80 }, { name: 'B', completion_percentage: 10 }])
+    expect(w.findAll('.phase-status').map((n) => n.text())).toEqual(['Mostly complete', 'Incomplete'])
+    i18n.global.setLocaleMessage('xx', {
+      workflow: { phaseProgression: { notScored: 'x', status: { mostly_complete: 'translated!' } } },
+    } as never)
+    i18n.global.locale.value = 'xx' as never
+    await w.vm.$nextTick()
+    // translated where a key exists, formatStatus where it does not
+    expect(w.findAll('.phase-status').map((n) => n.text())).toEqual(['translated!', 'Incomplete'])
+    i18n.global.locale.value = 'en' as never
+  })
+
+  it('states the remaining room in the quotaExceeded wording (#20723)', () => {
+    const msg = (en as { chat: { input: { uploadError: { quotaExceeded: string } } } }).chat.input.uploadError.quotaExceeded
+    expect(msg).toContain('larger than the room')
+    expect(msg).toContain('{remainingMb}')
+    expect(msg).not.toContain('is reached')
+  })
 })
