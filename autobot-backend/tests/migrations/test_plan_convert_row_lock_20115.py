@@ -277,7 +277,11 @@ async def _late(maker, company) -> str:  # noqa: ANN001
 
 @pytest.fixture()
 def no_row_lock(monkeypatch):
-    """Drop ``FOR UPDATE`` from every plan read: the control for each race below."""
+    """Drop ``FOR UPDATE`` from every plan read and from the editor's membership read: the control for each race below.
+
+    An edit serialises on the plan row and, since #20086, on the editor's membership row too; the control drops both,
+    or the membership lock would still queue the second edit and the race would not happen.
+    """
     from llc.services.company_os import plan_store
 
     real = plan_store.load_row
@@ -285,7 +289,13 @@ def no_row_lock(monkeypatch):
     async def _unlocked(session, company_id, plan_key, revision=None, *, lock=False):  # noqa: ANN001
         return await real(session, company_id, plan_key, revision, lock=False)
 
+    real_admin = plan_store.require_company_admin
+
+    async def _admin_unlocked(session, company_id, actor, *, for_update=False):  # noqa: ANN001
+        return await real_admin(session, company_id, actor, for_update=False)
+
     monkeypatch.setattr(plan_store, "load_row", _unlocked)
+    monkeypatch.setattr(plan_store, "require_company_admin", _admin_unlocked)
 
 
 async def test_a_convert_queued_behind_an_edit_sees_the_voided_approval_and_creates_nothing(maker):
