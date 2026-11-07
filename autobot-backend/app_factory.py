@@ -43,6 +43,7 @@ from initialization.integrity_handlers import register_integrity_handlers
 from initialization.memory_graph_handlers import register_memory_graph_handlers
 from initialization.registry_handlers import register_registry_handlers
 from initialization.router_registry.route_dependencies import dependencies_for
+from initialization.session_lease_handlers import register_session_lease_handlers
 from knowledge.upload_rejections import UploadRejection, upload_rejection_handler
 from utils.error_boundaries import register_backend_hooks
 
@@ -65,6 +66,7 @@ def _register_exception_handlers(app: FastAPI) -> None:
     register_registry_handlers(app)
     register_credential_handlers(app)
     register_memory_graph_handlers(app)
+    register_session_lease_handlers(app)  # a busy chat session is a 409 on every route (#20862)
     # A 422's default body echoes the submitted payload verbatim -- the
     # concrete case is a secret disclosed through a failed request model
     # validator (#16428 security review).
