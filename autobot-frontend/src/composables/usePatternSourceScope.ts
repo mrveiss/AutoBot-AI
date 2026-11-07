@@ -12,22 +12,17 @@
  */
 
 import { createLogger } from '@/utils/debugUtils'
+import { hasSourceIdInUrl, sourceIdInUrl } from '@/utils/sourceIdInUrl'
 
 const logger = createLogger('usePatternSourceScope')
 
-/** A non-empty `source_id` query parameter anywhere in a URL. */
-const SOURCE_ID_IN_URL = /[?&]source_id=([^&#]+)/
-
 export function usePatternSourceScope(withSourceId: (url: string) => string) {
   /** The selected source's id, or null when none is selected. */
-  const selectedSourceId = (): string | null => {
-    const match = SOURCE_ID_IN_URL.exec(withSourceId('/'))
-    return match ? decodeURIComponent(match[1]) : null
-  }
+  const selectedSourceId = (): string | null => sourceIdInUrl(withSourceId('/'))
 
   /** True when `url` carries a source; logs the skip when it does not. */
   const hasSource = (url: string, what: string): boolean => {
-    if (SOURCE_ID_IN_URL.test(url)) return true
+    if (hasSourceIdInUrl(url)) return true
     logger.debug(`No source selected; skipping ${what}`)
     return false
   }

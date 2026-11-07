@@ -28,8 +28,7 @@ from ..storage import get_code_collection, get_redis_connection
 from .shared import (
     _in_memory_storage,
     filter_problems_by_file_existence,
-    resolve_git_repo_root,
-    resolve_source_root,
+    resolve_scan_root,
 )
 from .store_state import index_state, store_unavailable
 
@@ -423,7 +422,7 @@ def _fetch_problems_from_chromadb(
     code_collection,
     problem_type: str | None,
     source_id: str,
-    source_root: Path | None = None,
+    source_root: Path,
 ) -> list:
     """Fetch problems from ChromaDB. (Issue #315, #1710: per-source filter)
 
@@ -440,11 +439,8 @@ def _fetch_problems_from_chromadb(
     problems = [_parse_problem_metadata(m) for m in results.get("metadatas", [])]
 
     # Issue #2724: Validate file paths against the indexed repository root.
-    # Issue #12399: Fall back to resolve_git_repo_root() (deployed-layout-aware,
-    # #10730) rather than get_project_root() (hardcoded parents[4], which
-    # resolves to /opt/autobot -- not the analyzable repo -- in the deployed
-    # standalone rsync layout).
-    root = source_root if source_root else Path(resolve_git_repo_root())
+    # #20513: the source's own root, never AutoBot's tree as a stand-in.
+    root = source_root
     return filter_problems_by_file_existence(problems, root)
 
 
@@ -606,7 +602,7 @@ async def get_codebase_problems(
     """Get real code problems detected during analysis (#1710: per-source)."""
     # Issue #2724 / #2760: Resolve source root via shared helper so _fetch_problems_from_chromadb
     # can validate file paths without needing to do async I/O in a sync context.
-    source_root = await resolve_source_root(source_id)
+    source_root = await resolve_scan_root(source_id)
 
     code_collection = await asyncio.to_thread(get_code_collection)
     storage_type = "chromadb"

@@ -56,7 +56,7 @@ from .scan_responses import (
     ScanUnavailable,
     response_for,
 )
-from .shared import UnresolvedSourceError, resolve_scan_root
+from .shared import resolve_scan_root
 
 logger = get_logger(__name__)
 
@@ -207,15 +207,6 @@ async def _run_standard_analysis(project_root: str, min_similarity: float, backg
             lock.release()
 
 
-def _unresolved_source_response() -> JSONResponse:
-    """The refusal, once. Detail is logged, never returned: CWE-209."""
-    logger.warning("duplicate scan refused: source_id did not resolve")
-    return JSONResponse(
-        status_code=404,
-        content={"status": "error", "message": "source_id does not resolve to a code source; nothing scanned"},
-    )
-
-
 def _process_and_cache_analysis(analysis, project_root: str, source_id: str | None = None) -> dict:
     """
     Convert analysis to result dict and log completion.
@@ -361,10 +352,7 @@ async def get_duplicate_code(
     # #17758's fix and swallowed every failure into logger.debug, scanning
     # AutoBot's own tree under the caller's key. `strict` follows what the
     # CALLER supplied: naming nothing is not the same as naming a ghost.
-    try:
-        project_root = str(await resolve_scan_root(source_id, strict=True))
-    except UnresolvedSourceError:
-        return _unresolved_source_response()
+    project_root = str(await resolve_scan_root(source_id))
 
     # Cache read AFTER resolution: keyed by source_id, so reading it first
     # serves a stale result for a source that no longer resolves (CodeRabbit).
@@ -416,10 +404,7 @@ async def detect_config_duplicates_endpoint(
     # #17982: the second copy of the same block. Same reasoning as the scan
     # above -- a named source that does not resolve is an error, not a cue to
     # substitute AutoBot's own tree.
-    try:
-        project_root = await resolve_scan_root(source_id, strict=True)
-    except UnresolvedSourceError:
-        return _unresolved_source_response()
+    project_root = await resolve_scan_root(source_id)
 
     # Issue #620: Use helpers for detection
     result = None

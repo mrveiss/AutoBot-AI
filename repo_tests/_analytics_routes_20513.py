@@ -53,3 +53,12 @@ DEFERRED_TO_PR2: frozenset[str] = frozenset({"/index/current", "/index/cancel"})
 
 #: Takes EXACTLY ONE of ``source_id`` and ``root_path`` in its body (dev mode keeps ``root_path``).
 EXACTLY_ONE_BODY: frozenset[tuple[str, str]] = frozenset({("POST", "/index")})
+
+#: Callers whose source travels in a value built OUTSIDE the call that names the route, so the
+#: statement holds no evidence. ``(file, route)``: a tracked gap with its reason, not a hole.
+DEFERRED_CALLERS: frozenset[tuple[str, str]] = frozenset(
+    {
+        # #20513 PR 2 -- the indexing job is rewritten by #20998 first.
+        ("autobot-frontend/src/composables/analytics/useIndexingJob.ts", "index"),
+    }
+)

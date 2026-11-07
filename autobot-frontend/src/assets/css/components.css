@@ -1066,3 +1066,87 @@ html[data-ui="minimal"] .adv {
 html[data-ui="minimal"] .only-min {
   display: flex;
 }
+
+/* Issue #1133: Knowledge Base opt-in banner (KnowledgeBaseOptIn.vue; moved from CodebaseAnalytics.vue, #20513) */
+.kb-optin-banner {
+  position: fixed;
+  bottom: var(--spacing-6);
+  right: var(--spacing-6);
+  z-index: var(--z-modal-backdrop);
+  max-width: 480px;
+  width: 100%;
+}
+
+.kb-optin-content {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  background: var(--bg-card);
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-4) var(--spacing-5);
+  box-shadow: var(--shadow-lg);
+}
+
+.kb-optin-content > i {
+  font-size: var(--text-xl);
+  color: var(--color-success);
+  flex-shrink: 0;
+}
+
+.kb-optin-text {
+  flex: 1;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  min-width: 0;
+}
+
+.kb-optin-text strong {
+  display: block;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-0-5);
+}
+
+.kb-optin-btn {
+  padding: var(--spacing-2) var(--spacing-3-5);
+  background: var(--color-success);
+  border: none;
+  border-radius: var(--radius-lg);
+  color: white;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1-5);
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: opacity var(--duration-200);
+}
+
+.kb-optin-btn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.kb-optin-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.kb-optin-dismiss {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: var(--spacing-1);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  font-size: var(--text-xs);
+  flex-shrink: 0;
+  transition: color var(--duration-200);
+}
+
+.kb-optin-dismiss:hover {
+  color: var(--text-primary);
+}

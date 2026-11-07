@@ -4,7 +4,7 @@
 # Author: mrveiss
 """Every caller of the source registry handles `RegistryUnavailable` on purpose (#17982).
 
-`get_source` / `get_default_source_id` used to return None when the registry
+`get_source` used to return None when the registry
 could not be read, which each caller read as "no such source". They raise now, so
 each caller either fails loudly with a clear status or degrades deliberately.
 """

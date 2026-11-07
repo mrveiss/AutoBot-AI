@@ -57,7 +57,7 @@ class TestValidationUsesTheResolvedScanRoot:
             captured["root"] = root
             return None
 
-        async def _resolve(source_id, strict=False):
+        async def _resolve(source_id):
             return clone
 
         monkeypatch.setattr(own_mod, "_get_project_root", lambda: str(project_root))
@@ -88,7 +88,7 @@ class TestSiblingEndpointsAreScopedToo:
         project_root, clone = two_roots
         captured: dict[str, str] = {}
 
-        async def _resolve(source_id, strict=False):
+        async def _resolve(source_id):
             assert source_id == "abc123", "the requested source must reach the resolver"
             return clone
 

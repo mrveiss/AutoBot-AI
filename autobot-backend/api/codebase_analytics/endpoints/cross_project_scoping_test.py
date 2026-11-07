@@ -55,47 +55,21 @@ class TestResolveScanRoot:
         assert resolved_b == root_b
         assert resolved_a != resolved_b
 
-    async def test_falls_back_to_project_root_when_unresolved(self):
-        """No source and no default → AutoBot project root (legacy behavior)."""
+    @pytest.mark.parametrize("source_id", ["ghost", None, ""])
+    async def test_unresolved_source_is_a_404_never_autobots_tree(self, source_id):
+        """#20513: no clone for the source -> UnresolvedSourceError (404), not AutoBot's own root."""
         from api.codebase_analytics.endpoints import shared
 
-        with (
-            patch.object(shared, "resolve_source_root", AsyncMock(return_value=None)),
-            patch(
-                "api.codebase_analytics.source_storage.get_default_source_id",
-                AsyncMock(return_value=None),
-            ),
-        ):
-            resolved = await shared.resolve_scan_root(None)
+        with patch.object(shared, "resolve_source_root", AsyncMock(return_value=None)):
+            with pytest.raises(shared.UnresolvedSourceError) as caught:
+                await shared.resolve_scan_root(source_id)
 
-        assert resolved == shared.get_project_root()
-
-    async def test_unresolved_fallback_uses_deployed_layout_aware_root(self, tmp_path):
-        """Issue #12393: unresolved-source fallback must use resolve_git_repo_root()
-        (git-walk-up / deployed code_source probe, #10730), not the plain
-        parents[4] get_project_root() -- which resolves to /opt/autobot (not the
-        analyzable repo) in the deployed standalone rsync layout."""
-        from api.codebase_analytics.endpoints import shared
-
-        deployed_root = tmp_path / "opt_autobot" / "code_source"
-        wrong_root = tmp_path / "opt_autobot"
-
-        with (
-            patch.object(shared, "resolve_source_root", AsyncMock(return_value=None)),
-            patch(
-                "api.codebase_analytics.source_storage.get_default_source_id",
-                AsyncMock(return_value=None),
-            ),
-            patch.object(shared, "resolve_git_repo_root", return_value=str(deployed_root)),
-            patch.object(shared, "get_project_root", return_value=wrong_root),
-        ):
-            resolved = await shared.resolve_scan_root(None)
-
-        assert resolved == deployed_root
-        assert resolved != wrong_root
+        assert caught.value.status_code == 404
+        assert "no checkout" in caught.value.detail
+        assert "ghost" not in caught.value.detail
 
     async def test_no_default_source_is_resolved_when_source_id_missing(self, tmp_path):
-        """#20513: a missing source_id never resolves to the most recently indexed source."""
+        """#20513: a missing source_id never resolves to some other (e.g. most recently indexed) source."""
         from api.codebase_analytics.endpoints import shared
 
         default_root = tmp_path / "default_proj"
@@ -104,17 +78,28 @@ class TestResolveScanRoot:
         async def fake_resolve(source_id):
             return default_root if source_id == "DEFAULT" else None
 
-        with (
-            patch.object(shared, "resolve_source_root", side_effect=fake_resolve),
-            patch(
-                "api.codebase_analytics.source_storage.get_default_source_id",
-                AsyncMock(return_value="DEFAULT"),
-            ) as default_lookup,
-        ):
-            resolved = await shared.resolve_scan_root(None)
+        with patch.object(shared, "resolve_source_root", side_effect=fake_resolve):
+            with pytest.raises(shared.UnresolvedSourceError):
+                await shared.resolve_scan_root(None)
 
-        assert resolved != default_root
-        default_lookup.assert_not_called()
+    def test_the_refusal_answers_404_on_any_route_that_lets_it_propagate(self):
+        """One mapping, no per-route try/except: the error IS the 404 (#20513), message without the id."""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.codebase_analytics.endpoints import shared
+
+        app = FastAPI()
+
+        @app.get("/probe")
+        async def probe(source_id: str):
+            return {"root": str(await shared.resolve_scan_root(source_id))}
+
+        with patch.object(shared, "resolve_source_root", AsyncMock(return_value=None)):
+            response = TestClient(app).get("/probe", params={"source_id": "ghost"})
+
+        assert response.status_code == 404
+        assert response.json() == {"detail": shared.UnresolvedSourceError.MESSAGE}
 
 
 class TestCallGraphIsolation:
@@ -169,7 +154,7 @@ class TestEndpointCoverageCacheScoping:
         root_a.mkdir()
         root_b.mkdir()
 
-        async def fake_resolve(source_id, strict=False):
+        async def fake_resolve(source_id):
             return {"A": root_a, "B": root_b}.get(source_id, api_endpoints.Path("/tmp"))
 
         analysis_a = MagicMock(name="analysis_A")
@@ -272,7 +257,7 @@ class TestEnvironmentCacheScoping:
         assert data_b["marker"] == "B"
 
     async def test_scan_root_resolves_the_named_source_never_a_default(self, tmp_path):
-        """#20513: the env scan root is the NAMED source's root; no default source is consulted."""
+        """#20513: the env scan root is the NAMED source's root; no other source is consulted."""
         from api.codebase_analytics.endpoints import environment, shared
 
         named_root = tmp_path / "named_proj"
@@ -281,25 +266,15 @@ class TestEnvironmentCacheScoping:
         async def fake_resolve_source_root(source_id):
             return named_root if source_id == "NAMED" else None
 
-        with (
-            patch.object(shared, "resolve_source_root", side_effect=fake_resolve_source_root),
-            patch(
-                "api.codebase_analytics.source_storage.get_default_source_id",
-                AsyncMock(return_value="DEFAULT"),
-            ) as default_lookup,
-        ):
+        with patch.object(shared, "resolve_source_root", side_effect=fake_resolve_source_root):
             resolved = await environment._resolve_env_scan_root("NAMED")
 
         assert resolved == str(named_root)
-        default_lookup.assert_not_called()
 
     async def test_explicit_source_id_unchanged_by_alignment(self, tmp_path):
         """A real, resolvable source_id resolves identically whether via
         resolve_source_root directly (pre-fix) or via resolve_scan_root
-        (post-fix). Behavior differs only in two cases: source_id=None (now
-        resolves the DEFAULT source), and an UNRESOLVABLE source (fallback root
-        is now get_project_root() vs the old resolve_git_repo_root(); identical
-        in a dev checkout, differs in the deployed layout -- tracked in #12393)."""
+        (post-fix). An UNRESOLVABLE source is a 404 (#20513), not a fallback root."""
         from api.codebase_analytics.endpoints import environment, shared
 
         root_a = tmp_path / "proj_a"

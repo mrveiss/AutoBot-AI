@@ -28,7 +28,10 @@ vi.mock('@/utils/debugUtils', () => ({
 vi.mock('@/utils/fetchWithAuth', () => ({ fetchWithAuth: vi.fn() }))
 vi.mock('@/config/AppConfig.js', () => ({ default: { getServiceUrl: vi.fn(async () => 'http://backend.test') } }))
 
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { usePatternAnalysis } from './usePatternAnalysis'
+
+const mockedFetch = vi.mocked(fetchWithAuth)
 
 const SOURCE = 'src-a'
 // The selected source's id, added the way `withSourceId` does (#20513).
@@ -39,6 +42,7 @@ describe('usePatternAnalysis failure reporting (#17651)', () => {
   beforeEach(() => {
     apiGet.mockReset()
     apiPost.mockReset()
+    mockedFetch.mockReset()
   })
 
   it('loadCachedData reports a failed cached-summary read as an error', async () => {
@@ -64,7 +68,8 @@ describe('usePatternAnalysis failure reporting (#17651)', () => {
   })
 
   it('clearStorage reports a failed clear', async () => {
-    apiPost.mockRejectedValue(new Error('clear refused'))
+    // storage/clear goes through useFetchEndpoint, so it is fetchWithAuth that fails.
+    mockedFetch.mockRejectedValue(new Error('clear refused'))
     const { clearStorage, error } = usePatternAnalysis(withSourceId)
 
     expect(await clearStorage()).toBe(false)
@@ -79,6 +84,26 @@ describe('usePatternAnalysis failure reporting (#17651)', () => {
     expect(error.value).toContain('report down')
   })
 
+  it('storage stats and clear are requested for the selected source through useFetchEndpoint (#20513)', async () => {
+    const json = (body: unknown) =>
+      new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    mockedFetch.mockResolvedValueOnce(json({ status: 'success', stats: { total_patterns: 3 } }))
+    const { getStorageStats, clearStorage, storageStats } = usePatternAnalysis(withSourceId)
+
+    await getStorageStats()
+    expect(mockedFetch.mock.calls[0]?.[0]).toBe(
+      'http://backend.test/api/analytics/codebase/patterns/storage/stats?source_id=src-a',
+    )
+    expect(storageStats.value).toEqual({ total_patterns: 3 })
+
+    mockedFetch.mockResolvedValueOnce(json({ message: 'cleared' }))
+    expect(await clearStorage()).toBe(true)
+    const [clearUrl, init] = mockedFetch.mock.calls[1] as [string, RequestInit]
+    expect(clearUrl).toBe('http://backend.test/api/analytics/codebase/patterns/storage/clear?source_id=src-a')
+    expect(init.method).toBe('POST')
+    expect(storageStats.value).toBeNull()
+  })
+
   it('with no source selected nothing is requested (the routes answer 422 without one, #20513)', async () => {
     const { loadCachedData, getReport, clearStorage } = usePatternAnalysis((url: string) => url)
 
@@ -87,5 +112,6 @@ describe('usePatternAnalysis failure reporting (#17651)', () => {
     expect(await clearStorage()).toBe(false)
     expect(apiGet).not.toHaveBeenCalled()
     expect(apiPost).not.toHaveBeenCalled()
+    expect(mockedFetch).not.toHaveBeenCalled()
   })
 })

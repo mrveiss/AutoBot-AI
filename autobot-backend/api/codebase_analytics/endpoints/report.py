@@ -62,7 +62,7 @@ from .scan_responses import ScanUnavailable
 from .shared import (
     filter_problems_by_file_existence,
     resolve_git_repo_root,
-    resolve_source_root,
+    resolve_scan_root,
 )
 
 logger = get_logger(__name__)
@@ -1227,7 +1227,7 @@ def _generate_cross_language_section(
 
 def _fetch_problems_from_chromadb(
     source_id: str,
-    source_root: Path | None = None,
+    source_root: Path,
 ) -> List[Dict]:
     """
     Fetch code problems from ChromaDB collection.
@@ -1280,12 +1280,8 @@ def _fetch_problems_from_chromadb(
 
         # Issue #2724: Validate file paths — drop findings that reference
         # files not present in the indexed repository.
-        # Issue #12399: Fall back to resolve_git_repo_root() (deployed-layout-aware,
-        # #10730) rather than get_project_root() (hardcoded parents[4], which
-        # resolves to /opt/autobot -- not the analyzable repo -- in the deployed
-        # standalone rsync layout).
-        root = source_root or Path(resolve_git_repo_root())
-        problems = filter_problems_by_file_existence(problems, root)
+        # #20513: the source's own root, never AutoBot's tree as a stand-in.
+        problems = filter_problems_by_file_existence(problems, source_root)
 
         logger.info("Returning %s validated problems for report", len(problems))
     except Exception as e:
@@ -2217,15 +2213,9 @@ async def generate_analysis_report(
     """
     # Issue #2724 / #2760: Resolve source root via shared helper so _fetch_problems_from_chromadb
     # (which runs in a thread) can validate file paths without blocking the event loop.
-    source_root = await resolve_source_root(source_id)
-    # Issue #12372: Sub-analysis scanners need a concrete root even when the
-    # source is unresolvable -- fall back to AutoBot's own project root
-    # (matches resolve_scan_root's fallback behavior) rather than letting each
-    # sub-analysis silently default to its own hard-coded AutoBot path.
-    # Issue #12399: Use resolve_git_repo_root() (deployed-layout-aware, #10730)
-    # to match resolve_scan_root's fallback -- get_project_root() (parents[4])
-    # resolves to /opt/autobot, not the analyzable repo, in the deployed layout.
-    scan_root = source_root or Path(resolve_git_repo_root())
+    # #20513: a source with no checkout is a 404, never AutoBot's own tree.
+    source_root = await resolve_scan_root(source_id)
+    scan_root = source_root
 
     problems = await asyncio.to_thread(_fetch_problems_from_chromadb, source_id, source_root)
     analyses = await _resolve_analyses(

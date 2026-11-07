@@ -152,6 +152,19 @@ def sanitize_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
     return sanitized
 
 
+def _write_source_id(source_id: "str | None") -> str:
+    """The source a pattern is written under; a write with no source is refused (#20513).
+
+    This was ``metadata.get("source_id", "default")``, filing a source-less write in a
+    ``"default"`` partition no read can ask for.
+    """
+    # Lazy: the `api.codebase_analytics` package imports the routers, which
+    # import this module, so a top-level import here would be a cycle.
+    from api.codebase_analytics.source_scope import require_source_id  # noqa: PLC0415
+
+    return require_source_id(source_id, "pattern-store write")
+
+
 def _build_single_pattern_data(pattern_type: str, code_content: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
     """Build pattern data dict for single pattern ID generation. Issue #620.
 
@@ -168,7 +181,7 @@ def _build_single_pattern_data(pattern_type: str, code_content: str, metadata: D
         "file_path": metadata.get("file_path", ""),
         "start_line": metadata.get("start_line", 0),
         "code_hash": content_digest(code_content, width=16),
-        "source_id": metadata.get("source_id", "default"),
+        "source_id": _write_source_id(metadata.get("source_id")),
     }
 
 
@@ -183,17 +196,13 @@ def _build_single_pattern_metadata(pattern_type: str, code_content: str, metadat
     Returns:
         Sanitized metadata dictionary
     """
-    # Issue #12408: default source_id to "default" here too, matching
-    # _build_single_pattern_data's id-hash default -- otherwise a caller
-    # that omits source_id gets a record whose id was hashed with "default"
-    # but whose metadata lacks source_id, so build_source_scoped_where's
-    # equality filter (which matches on the "default" sentinel) never finds
-    # it: fail-closed invisible + id/metadata mismatch.
+    # #20513: the id hash and the stored metadata take the SAME required source_id,
+    # so a record is never hashed under one scope and filed under another.
     full_metadata = {
         "pattern_type": pattern_type,
         "code_length": len(code_content),
-        "source_id": metadata.get("source_id", "default"),
         **metadata,
+        "source_id": _write_source_id(metadata.get("source_id")),
     }
     return sanitize_metadata(full_metadata)
 
@@ -257,7 +266,7 @@ def _prepare_pattern_data(pattern: Dict[str, Any]) -> Dict[str, Any]:
         "file_path": pattern.get("metadata", {}).get("file_path", ""),
         "start_line": pattern.get("metadata", {}).get("start_line", 0),
         "code_hash": content_digest(pattern["code_content"], width=16),
-        "source_id": pattern.get("metadata", {}).get("source_id", "default"),
+        "source_id": _write_source_id(pattern.get("metadata", {}).get("source_id")),
     }
 
 
@@ -270,16 +279,14 @@ def _prepare_pattern_metadata(pattern: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Sanitized metadata dictionary ready for ChromaDB storage
     """
-    # Issue #12408: default source_id to "default" here too, matching
-    # _prepare_pattern_data's id-hash default -- see _build_single_pattern_metadata
-    # above for why the asymmetry is a fail-closed-invisible + id/metadata
-    # mismatch bug (flagged in the #12405 review).
+    # #20513: same required source_id as _prepare_pattern_data; see
+    # _build_single_pattern_metadata.
     metadata = pattern.get("metadata", {})
     full_metadata = {
         "pattern_type": pattern["pattern_type"],
         "code_length": len(pattern["code_content"]),
-        "source_id": metadata.get("source_id", "default"),
         **metadata,
+        "source_id": _write_source_id(metadata.get("source_id")),
     }
     return sanitize_metadata(full_metadata)
 

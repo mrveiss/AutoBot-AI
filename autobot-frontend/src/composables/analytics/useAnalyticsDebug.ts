@@ -19,6 +19,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import type { ToastType } from '@/composables/useToast'
 import { createDateFormatter } from '@/utils/formatHelpers'
+import { hasSourceIdInUrl } from '@/utils/sourceIdInUrl'
 
 const logger = createLogger('useAnalyticsDebug')
 
@@ -39,8 +40,6 @@ export interface UseAnalyticsDebugDeps {
   t: (key: string, params?: Record<string, unknown>) => string
   notify: (msg: string, type?: ToastType) => void
 }
-
-const SOURCE_ID_IN_URL = /[?&]source_id=[^&#]+/
 
 // Endpoint configs for API health check (#1588). #20513: the analytics routes
 // require `source_id`, so they are built from `withSourceId`; `scoped` marks
@@ -119,37 +118,39 @@ export function useAnalyticsDebug(deps: UseAnalyticsDebugDeps) {
       'analytics.codebase.status.testingApis',
     )
     try {
-      const results: string[] = []
+      // Typed outcomes: the counts must not depend on matching words inside the
+      // (translatable) log lines. A skipped endpoint is neither passed nor failed (#20513).
+      const lines: string[] = []
+      let passed = 0
+      let failed = 0
+      let ran = 0
       for (const ep of _testEndpointConfigs(withSourceId)) {
-        if (ep.scoped && !SOURCE_ID_IN_URL.test(ep.path)) {
-          results.push(`${ep.name}: skipped (no source selected)`)
+        if (ep.scoped && !hasSourceIdInUrl(ep.path)) {
+          lines.push(t('analytics.codebase.notify.apiTestSkippedNoSource', { name: ep.name }))
           continue
         }
+        ran += 1
         try {
           await apiClient.get<unknown>(ep.path)
-          results.push(`${ep.name}: OK`)
+          passed += 1
+          lines.push(`${ep.name}: OK`)
         } catch (err) {
+          failed += 1
           const msg =
             err instanceof Error ? err.message : String(err)
-          results.push(`${ep.name}: FAIL (${msg})`)
+          lines.push(`${ep.name}: FAIL (${msg})`)
         }
       }
-      const passed = results.filter((r) =>
-        r.includes('OK'),
-      ).length
-      const failed = results.filter((r) =>
-        r.includes('FAIL'),
-      ).length
       notify(
         t('analytics.codebase.notify.apiTestResults', {
           passed,
-          total: results.length,
+          total: ran,
         }),
         failed === 0 ? 'success' : 'warning',
       )
       logger.debug(
         'API Test Results:',
-        results.join('\n'),
+        lines.join('\n'),
       )
     } catch (error: unknown) {
       const errorMessage =

@@ -108,9 +108,9 @@ def _wrap(result: object, started: str) -> dict:
 async def _scan_root_or_refusal(source_id: "str | None") -> "tuple[Path | None, dict | None]":
     """The scan root for *source_id*, or the dict a task should return instead (#17758).
 
-    ``strict=True``, so a **named** source that does not resolve raises rather
-    than silently resolving to AutoBot's own repository -- ``use_default=False``
-    would not do that, it gates only the default-source lookup.
+    A source that does not resolve to a checkout -- named but gone, or not named at
+    all, as the scheduler dispatches it -- is a refusal, never AutoBot's own
+    repository scanned under another project's key (#20513).
 
     One definition because three tasks need it, and three copies of a scoping
     decision is precisely how #17758 happened: the same shape in three places,
@@ -120,9 +120,9 @@ async def _scan_root_or_refusal(source_id: "str | None") -> "tuple[Path | None, 
     from api.codebase_analytics.endpoints.shared import UnresolvedSourceError, resolve_scan_root
 
     try:
-        return await resolve_scan_root(source_id, strict=True), None
+        return await resolve_scan_root(source_id), None
     except UnresolvedSourceError as exc:
-        return None, {"status": "error", "message": f"{exc}; nothing scanned"}
+        return None, {"status": "error", "message": f"{exc.detail}; nothing scanned"}
 
 
 @celery_app.task(bind=True, name="analytics.run_import_tree_analysis")

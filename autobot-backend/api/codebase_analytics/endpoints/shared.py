@@ -50,6 +50,7 @@ __all__ = [
     "resolve_git_repo_root",
     "resolve_scan_root",
     "resolve_source_root",
+    "UnresolvedSourceError",
     "trigger_auto_index_if_unindexed",
 ]
 
@@ -90,20 +91,23 @@ async def resolve_source_root(source_id: "str | None") -> "Path | None":
     return None
 
 
-class UnresolvedSourceError(ValueError):
-    """A named ``source_id`` did not resolve to a code source (#17758).
+class UnresolvedSourceError(HTTPException):
+    """A named ``source_id`` did not resolve to a checkout (#17758, #20513).
 
-    Raised only under ``resolve_scan_root(..., strict=True)``. Scans pass
-    ``strict=True``; most interactive endpoints do not yet and fall back to the
-    AutoBot tree when a NAMED source does not resolve (a follow-up of #20513).
+    One definition of the refusal AND of its HTTP mapping: this IS the 404, so a
+    route that lets it propagate answers correctly and no route repeats a
+    ``try/except`` to translate it. Background callers catch it by type.
+    The detail never echoes the id (CWE-209).
     """
 
-    def __init__(self, source_id: str) -> None:
-        super().__init__(f"source_id {source_id!r} does not resolve to a code source")
+    MESSAGE = "This source has no checkout yet; index or clone it before running this analysis."
+
+    def __init__(self, source_id: "str | None") -> None:
+        super().__init__(status_code=status.HTTP_404_NOT_FOUND, detail=self.MESSAGE)
         self.source_id = source_id
 
 
-async def resolve_scan_root(source_id: "str | None", strict: bool = False) -> Path:
+async def resolve_scan_root(source_id: "str | None") -> Path:
     """Resolve the filesystem root a source-scoped analytics scan must read.
 
     Issue #12330: Several filesystem-scanning analytics endpoints accepted a
@@ -112,41 +116,21 @@ async def resolve_scan_root(source_id: "str | None", strict: bool = False) -> Pa
     leakage. This resolves the requested source's clone path so scans are scoped
     to the caller's project.
 
-    #20513: there is no "default source". A falsy ``source_id`` used to resolve to
-    the most recently indexed source, so a request that never named a project was
-    answered for whichever one was indexed last. Routes now require the id; the
-    only falsy caller left is an internal one with no source (the scheduler), which
-    gets AutoBot's own project root, as before, when no source resolves.
+    #20513: there is no "default source" and no AutoBot-tree fallback. A source
+    that does not resolve to a clone (deleted, no ``clone_path``, no id at all)
+    raises ``UnresolvedSourceError`` (404), because a result for AutoBot's own tree
+    served under another project's name is the leak #12330 closed.
 
-    Issue #12393: The fallback uses ``resolve_git_repo_root()`` (the git-walk-up /
-    deployed ``code_source`` probe, #10730) rather than the plain
-    ``get_project_root()`` (hardcoded ``parents[4]``). In the deployed standalone
-    rsync layout ``parents[4]`` resolves to ``/opt/autobot`` -- not a git repo --
-    so the plain helper silently scanned the wrong tree in production. In a dev
-    checkout the two are equivalent, so this fallback is unchanged there.
-
-    Args:
-        source_id: The requested source identifier, or None.
-
-    Returns:
-        Path to the resolved source clone directory, or the resolved AutoBot
-        project root.
+    Raises:
+        UnresolvedSourceError: ``source_id`` is empty or has no checkout.
     """
     source_root = await resolve_source_root(source_id)
     if source_root:
         return source_root
-    if strict and source_id:
-        # #17758: a NAMED source that does not resolve is an error, not a cue to
-        # substitute. This fallback is reached
-        # whenever `resolve_source_root` returns None: a deleted source, an empty
-        # clone_path, or any exception it swallowed. A background scan has no user
-        # to notice that the result describes AutoBot's tree instead of theirs.
-        #
-        # A source named as NOTHING stays on the dev-checkout path below, because
-        # "you did not say which project" and "you said one that is not there" are
-        # different questions and only the second is a mistake.
-        raise UnresolvedSourceError(source_id)
-    return Path(resolve_git_repo_root())
+    # #17758: whenever `resolve_source_root` returns None -- a deleted source, an
+    # empty clone_path -- a background scan has no user to notice that the result
+    # describes AutoBot's tree instead of theirs.
+    raise UnresolvedSourceError(source_id)
 
 
 async def scan_path_in_source(source_id: str, path: str | None) -> str:
@@ -156,11 +140,7 @@ async def scan_path_in_source(source_id: str, path: str | None) -> str:
     client cannot point a scan at the server's own tree or any other directory. The
     old default was the AutoBot project root, whatever source the caller had selected.
     """
-    try:
-        root = await resolve_scan_root(source_id, strict=True)
-    except UnresolvedSourceError:
-        logger.warning("scan refused: source_id did not resolve")
-        raise HTTPException(status_code=404, detail="Code source not found") from None
+    root = await resolve_scan_root(source_id)
     if not path:
         return str(root)
     try:
