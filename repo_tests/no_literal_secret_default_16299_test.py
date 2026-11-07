@@ -25,6 +25,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOTS = ("autobot-slm-backend", "autobot-backend", "autobot_shared")
@@ -91,7 +92,7 @@ def _str(node: ast.expr) -> str | None:
 
 def find_hits(source: str) -> list[str]:
     hits = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if not (isinstance(node, ast.Call) and _is_env_read(node.func) and len(node.args) >= 2):
             continue
         name, default = _str(node.args[0]), _str(node.args[1])
@@ -123,15 +124,13 @@ def _scan() -> set[tuple[str, str]]:
 
 
 _LEGACY_LITERAL = "autobot-api-key-v1"
-# The ONE sanctioned home of the old public pepper: a read-only verifier for rows
-# hashed before the default was removed (#16299). Sunset: when every install has
-# set SLM_HMAC_API_KEY_SECRET.
-_LEGACY_LITERAL_FILE = "autobot-slm-backend/user_management/services/api_key_service.py"
+# The old public pepper has no home in examined (non-test) code: PBKDF2 is the
+# only API-key scheme and legacy verification was removed (#20611).
 
 
-def test_legacy_public_pepper_only_in_its_one_declared_place():
+def test_legacy_public_pepper_has_no_home():
     homes = {rel for rel, src in _texts().items() if _LEGACY_LITERAL in src}
-    assert homes == {_LEGACY_LITERAL_FILE}, sorted(homes)
+    assert homes == set(), sorted(homes)
 
 
 def test_detector_sees_the_pattern():

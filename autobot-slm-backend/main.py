@@ -66,6 +66,7 @@ from api import (
 )
 from api.code_source import router as code_source_router
 from api.memory_lifecycle_proxy import router as memory_lifecycle_router
+from api.node_ssh_password_internal import router as node_ssh_password_internal_router
 from api.performance import metrics_router as performance_metrics_router
 from api.performance import router as performance_router
 from api.personality_proxy import router as personality_proxy_router
@@ -600,11 +601,8 @@ install_middleware(app, cors_origins=settings.cors_origins)  # the whole stack, 
 #
 # Two routes below are declared here rather than moved into a router, because
 # the idiom itself — not the auth outcome — is what has to be visible:
-#   root (@app.get("/")) — service banner; no credentials exist yet to check,
-#       and it discloses only a static name/version string
-#   prometheus_registry_metrics (@app.get("/metrics")) — top-level prometheus
-#       scrape target (#10851); a scraper cannot authenticate, same reasoning
-#       as performance_metrics_router above
+#   root (@app.get("/")) — static name/version banner; no credentials exist yet to check
+#   prometheus_registry_metrics (@app.get("/metrics")) — top-level scrape target (#10851); a scraper cannot authenticate
 #
 # This list is enforced, not decorative: tests/api/
 # test_prometheus_scrape_is_unauthenticated_14339.py fails if any router is
@@ -617,14 +615,14 @@ install_middleware(app, cors_origins=settings.cors_origins)  # the whole stack, 
 # entirely because the check only ever looked for `app.include_router(...)`.
 
 # Service-management gate (#10198, epic #10193): all other routers require
-# Permission.SERVICE_MANAGEMENT.  Ordinary users (role=user/readonly/analyst/editor)
-# do not have this permission and receive 403.  Admin and Operator do.
+# Permission.SERVICE_MANAGEMENT.  #20631: the SLM is admin only, so the operator role, which
+# holds it, still gets 403: get_current_user, run first by this gate, refuses non-admins.
 _SM = [Depends(require_service_management)]
 
 # #11450: routers that ALSO carry machine-to-machine agent-ingest endpoints
 # (heartbeat/enroll, roles/definitions, code-sync/notify, events/sync). The
 # node agent presents AUTOBOT_INTERNAL_API_KEY (no user JWT), so these mount
-# with a gate that accepts the internal key OR a service.management user —
+# with a gate that accepts the internal key OR an admin session (as _SM above) —
 # preserving #10198's human-surface gate while un-breaking the agent plane.
 _SM_OR_AGENT = [Depends(require_service_management_or_internal)]
 
@@ -662,6 +660,7 @@ app.include_router(errors_router, prefix="/api", dependencies=_SM)
 app.include_router(events_router, prefix="/api", dependencies=_SM_OR_AGENT)
 app.include_router(external_agents_router, prefix="/api", dependencies=_SM)
 app.include_router(node_rdp_router, prefix="/api", dependencies=_SM)
+app.include_router(node_ssh_password_internal_router, prefix="/api", dependencies=_SM_OR_AGENT)  # key-only, #20046
 app.include_router(rdp_router, prefix="/api", dependencies=_SM)
 app.include_router(node_vnc_router, prefix="/api", dependencies=_SM)
 app.include_router(vnc_router, prefix="/api", dependencies=_SM)

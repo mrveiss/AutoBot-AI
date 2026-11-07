@@ -29,13 +29,13 @@ import asyncio
 import re
 import time
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Callable, Dict, FrozenSet
+from typing import TYPE_CHECKING, Any, Callable, Dict
 
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 from monitoring.prometheus_metrics import get_metrics_manager
 from orchestration.success_criteria import SuccessCriteriaEvaluator
-from services.workflow_secret_service import get_workflow_secret_service
+from services.workflow_secret_service import SECRET_STORE_ERRORS, StepSecrets, get_workflow_secret_service
 from type_defs.common import Metadata
 
 from .command_step import run_command_step, secret_value_redactor
@@ -83,55 +83,40 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _resolve_command_secrets(command: str, owner_id: str | None) -> tuple[str, FrozenSet[str]]:
+def _resolve_command_secrets(command: str, owner_id: str | None) -> tuple[str, StepSecrets]:
     """
     Replace ${secrets.NAME} tokens in *command* with their plaintext values.
 
-    Returns the original string unchanged (with an empty resolved-names set)
-    if no tokens are present or if the WorkflowSecretService is unavailable.
+    Returns the original string unchanged (with no injected secrets) if no tokens
+    are present or if the WorkflowSecretService is unavailable.
 
     SECURITY: the resolved string must NEVER be logged. (Issue #2153)
 
     Returns:
-        Tuple of (resolved_command, resolved_names).  Pass resolved_names to
-        _redact_result_secrets so only injected secrets are scanned. (#2321)
+        Tuple of (resolved_command, step_secrets).  ``step_secrets`` holds the values
+        injected into this step, in memory; pass it to _redact_result_secrets and to
+        secret_value_redactor so exactly those values are masked. (#2321, #20868)
     """
     try:
-        return get_workflow_secret_service().resolve_secrets(command, owner_id) if owner_id else (command, frozenset())
-    except Exception as exc:  # pragma: no cover
-        logger.error("Secret resolution failed for workflow command: %s", exc)
-        return command, frozenset()
+        return (
+            get_workflow_secret_service().resolve_secrets(command, owner_id) if owner_id else (command, StepSecrets())
+        )
+    except SECRET_STORE_ERRORS as exc:
+        logger.error("Secret resolution failed for workflow command: %s", type(exc).__name__)
+        return command, StepSecrets()
 
 
-def _redact_result_secrets(
-    result: Metadata,
-    owner_id: str | None,
-    resolved_names: FrozenSet[str],
-) -> Metadata:
+def _redact_result_secrets(result: Metadata, secrets: StepSecrets) -> Metadata:
     """
-    Replace known secret values in execution result strings with ***.
+    Replace the values injected into this step in the result's stdout and stderr with ***.
 
-    Operates on the 'stdout' and 'stderr' fields only.
-
-    Args:
-        result: Step execution result dict.
-        owner_id: Workflow owner — only their secrets are loaded.
-        resolved_names: Names resolved by _resolve_command_secrets for this
-            step.  Passed directly to redact_secrets() to avoid an O(n) full
-            owner-secrets scan on every step completion. (Issue #2321)
-
-    Issue #2153, #2321.
+    Goes through the same redactor as the command step (``secret_value_redactor``), so the
+    executor has no redaction of its own and never re-reads a secret by name. (#2153, #20868)
     """
-    if not resolved_names:
-        # Nothing was injected; nothing to redact.
-        return result
-    try:
-        svc = get_workflow_secret_service()
-        for field in ("stdout", "stderr"):
-            if isinstance(result.get(field), str):
-                result[field] = svc.redact_secrets(result[field], owner_id, resolved_names=resolved_names)
-    except Exception as exc:  # pragma: no cover
-        logger.error("Secret redaction failed for workflow result: %s", exc)
+    mask = secret_value_redactor(secrets)
+    for field in ("stdout", "stderr"):
+        if isinstance(result.get(field), str):
+            result[field] = mask(result[field])
     return result
 
 
@@ -281,7 +266,7 @@ class WorkflowExecutor:
         active_count = len([w for w in workflows.values() if w.started_at and not w.completed_at])
         self.prometheus_metrics.update_active_workflows(workflow_type=workflow_type, count=active_count)
 
-        # Send workflow start message to frontend
+        # Server-to-client only (clients start workflows over REST; #17677)
         await self.messenger.send_message(
             workflow.session_id,
             {
@@ -581,10 +566,10 @@ class WorkflowExecutor:
         Handles both vision and command step types (Issues #2153, #2321, #2397, #2632).
         """
         # Issue #2153: Resolve ${secrets.NAME} tokens before execution.
-        # Issue #2321: Capture resolved_names so redaction only scans
-        # injected secrets — not all secrets for all users.
+        # Issue #20868: keep the injected values in memory for this step so redaction
+        # masks exactly those, whatever happens to the stored secret meanwhile.
         owner_id = workflow.owner_id  # #17014: never the session id -- see workflow_ownership
-        resolved_command, resolved_names = _resolve_command_secrets(current_step.command, owner_id)
+        resolved_command, step_secrets = _resolve_command_secrets(current_step.command, owner_id)
 
         # Issue #2632: Resolve ${steps.<id>.<path>} references for ALL step
         # types, not just vision.  Resolution is cheap and harmless for steps
@@ -603,14 +588,14 @@ class WorkflowExecutor:
         else:
             # Issue #2159: Wrap execution in per-step timeout enforcer
             result = await self._timeout_enforcer.run_with_timeout(
-                coro=self._execute_command(workflow, resolved_command, secret_value_redactor(owner_id, resolved_names)),
+                coro=self._execute_command(workflow, resolved_command, secret_value_redactor(step_secrets)),
                 step_id=step_id,
                 timeout_seconds=current_step.timeout_seconds,
                 limits=self.limits,
             )
 
         # Issue #2153: Redact any secret values that may appear in output.
-        result = _redact_result_secrets(result, owner_id, resolved_names)
+        result = _redact_result_secrets(result, step_secrets)
         await self._finalize_step_result(workflow, current_step, step_id, result, workflows)
 
     async def _finalize_step_result(

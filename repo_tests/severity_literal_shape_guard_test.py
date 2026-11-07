@@ -60,6 +60,7 @@ from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.status_enums import Severity
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import TRACKED_PY_FLOOR
 
 REPO_ROOT = repo_root()
@@ -386,7 +387,7 @@ _DIAGNOSTICS = "autobot-backend/api/diagnostics.py"
 def _module_ast(rel: str) -> ast.Module:
     path = REPO_ROOT / rel
     assert path.exists(), f"#14988: {rel} is gone — the guard has no target"
-    return ast.parse(path.read_text(encoding="utf-8"))
+    return parse_cache.parse(path.read_text(encoding="utf-8"))
 
 
 def test_causal_severity_is_still_an_alias_of_the_canonical_enum():

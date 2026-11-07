@@ -15,13 +15,11 @@
  */
 
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { BaseButton, PollingPausedAlert } from '@autobot/ui'
+import { BaseButton, PollingPausedAlert, formatDuration, createLogger } from '@autobot/ui'
 import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
-import { formatDuration } from '@/utils/formatHelpers'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
 import { getConfig, getSlmApiBase } from '@/config/ssot-config'
-import { createLogger } from '@/utils/debugUtils'
 import { formatCompactRelativeTime } from '@/utils/dateUtils'
 
 const logger = createLogger('NodeLifecyclePanel')

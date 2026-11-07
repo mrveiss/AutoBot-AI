@@ -47,6 +47,8 @@ const tabs = [
   { id: 'log-forwarding', name: 'settings.nav.logForwarding', path: '/settings/admin/log-forwarding', icon: 'M12 19l9 2-9-18-9 18 9-2zm0 0v-8' },
   // #19217: the one web research editor; the main app shows a read-only status that links here
   { id: 'web-research', name: 'settings.nav.webResearch', path: '/settings/admin/web-research', icon: 'M21 12a9 9 0 11-18 0 9 9 0 0118 0zM3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18M12 3a15 15 0 000 18' },
+  // #20605: theme packages on the main backend, moved from the main app's /slm/themes
+  { id: 'themes', name: 'settings.nav.themes', path: '/settings/admin/themes', icon: 'M4 5a1 1 0 011-1h4a1 1 0 011 1v12a4 4 0 01-8 0V5zm0 0h0m6 3.5l2.5-2.5a1 1 0 011.414 0l2.829 2.829a1 1 0 010 1.414L11 18.5m-3 2.5h9a1 1 0 001-1v-4a1 1 0 00-1-1h-4' },
   // Issue #2371: LLM config moved from main frontend to SLM admin
   { id: 'llm', name: 'settings.nav.llm', path: '/settings/admin/llm', icon: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
   // GH#8998 / #10488: LLM fallback monitoring moved from user frontend to SLM admin
@@ -59,6 +61,8 @@ const tabs = [
   // orphan-resource repair, and audit -- reachable through this same tab bar
   // so the router's existing admin-route guard covers it automatically.
   { id: 'data-hygiene', name: 'dataHygiene.tabName', path: '/settings/admin/data-hygiene', icon: 'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16' },
+  // #20465: chat approval settings (admin route guard applies via the router meta)
+  { id: 'chat-approval', name: 'settings.nav.chatApproval', path: '/settings/admin/chat-approval', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
   // Issue: NPU Workers consolidated to Fleet Overview /fleet/npu (Worker Registry sub-tab)
 ]
 

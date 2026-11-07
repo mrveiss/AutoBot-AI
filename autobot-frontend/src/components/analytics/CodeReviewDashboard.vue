@@ -346,7 +346,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { BaseModal, formatRelativeTime } from '@autobot/ui'
+import { BaseModal, createRecencyFormatter } from '@autobot/ui'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useNotificationBus } from '@/composables/useNotificationBus'
@@ -591,15 +591,11 @@ function selectIssue(issue: ReviewIssue) {
   selectedIssue.value = issue
 }
 
-function formatDate(timestamp: string): string {
-  const date = new Date(timestamp)
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
-
-  if (diff < 60000) return t('analytics.codeReview.justNow')
-  if (diff < 86400000) return formatRelativeTime(date, { locale: locale.value })
-  return date.toLocaleDateString()
-}
+const formatDate = createRecencyFormatter({
+  justNow: () => t('analytics.codeReview.justNow'),
+  locale: () => locale.value,
+  olderThanMs: 86_400_000,
+})
 
 async function runAnalysis() {
   if (!selectedPath.value) {

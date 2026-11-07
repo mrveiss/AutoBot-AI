@@ -14,13 +14,13 @@ trusted to be inside a root.
 
 **Canonical enforcement:** [`autobot_shared/security/path_validator.py`](../../autobot_shared/security/path_validator.py)
 — `validate_path` (:96) absolute paths · `validate_relative_path` (:157) a segment under a
-known base · `resolve_within_sandbox` (:289) the file-management sandbox ·
-`require_path_string` (:241) type gate before `Path()` / `os.makedirs`.
+known base · `resolve_within_sandbox` (:291) the file-management sandbox ·
+`require_path_string` (:243) type gate before `Path()` / `os.makedirs`.
 
 **Invariants**
 - `validate_path` is never called without an explicit `allowed_roots`. The default `_DEFAULT_ALLOWED_ROOTS` (:34) is `("/opt/autobot",)` — no `/tmp` (#15238): world-writable and shared, so a default including it let an unprivileged local process plant a file for any fallback-taking handler to read back. Prefer `PROJECT_ALLOWED_ROOTS` (:41) — `str(project_root())` — over the default for a request-supplied path scoped to this project.
 - Decode before resolve: `_canonicalize` (:65) runs `_MAX_DECODE_ROUNDS` unquote passes plus NFKC. `realpath` decodes nothing, so a denylist on the raw string is always wrong.
-- Containment is the **sole** authority — `relative_to`, both sides realpath'd. Pre-resolution refusals (absolute, `..`, drive qualifier) are defence in depth only; replacing it is a smell (#15786).
+- Containment is the **sole** authority, both sides realpath'd: `validate_path` (:96) uses `relative_to`; `validate_relative_path` (:157) uses a separator-bounded prefix check — `resolved == base` or `resolved.startswith(base + os.sep)` — so a sibling like `chats_evil` never passes for `chats` (#20611). Review the check that runs, and never loosen the separator. Pre-resolution refusals (absolute, `..`, drive qualifier) are defence in depth only; replacing the containment check is a smell (#15786).
 - The validated string is the string used. Validating `user_path` then opening something rebuilt from the original input is a finding.
 - `resolve_within_sandbox` forbids **any** `..`, `~`, leading `/`, or `SANDBOX_INVALID_PATH_CHARACTERS` (:46) — in-bounds or not. `''`, `'/'`, `'//'` legitimately address the sandbox root and return it unchanged (#11823); a diff that makes them raise again breaks root listing.
 - Upload **filenames** are their own gate: [`autobot_shared/security/upload_filename_policy.py`](../../autobot_shared/security/upload_filename_policy.py) `is_safe_file(filename, allowed)` / `require_safe_upload` (re-exported by `autobot-backend/security/upload_filename_policy.py`) — a bare name only (no `/`, no `\\`), a per-purpose allow-list (`ALLOWED_EXTENSIONS` documents, `AUDIO_EXTENSIONS`, `IMAGE_EXTENSIONS`, `ZIP_EXTENSIONS`, `TARBALL_EXTENSIONS`), a deny-list by name; every `UploadFile` route reaches it — `repo_tests/upload_routes_call_is_safe_file_guard_19088_test.py` fails on one that does not (#19088) — and a route-local copy is a finding (the conversation copy accepted `a/b.txt` until #18704).
@@ -35,16 +35,16 @@ not an auth boundary — the caller is logged in — so a missing check reads as
 endpoint.
 
 **Canonical enforcement:** [`autobot-backend/security/session_ownership.py`](../../autobot-backend/security/session_ownership.py)
-— `build_owner_metadata` (:44) the one owner stamper · `validate_session_ownership` (:742) the one read-side gate · `validate_ownership` (:580).
+— `build_owner_metadata` (:45) the one owner stamper · `validate_session_ownership` (:741) the one read-side gate · `validate_ownership` (:579).
 Two postures, one validator (#14016): the contract is the docstring of [`security/session_posture.py`](../../autobot-backend/security/session_posture.py). A failed durable owner lookup denies under both and claims nothing: "unknown" is never "unowned" (#14033).
 
 **Invariants**
 - Redis keys are `chat:session:{session_id}` — **not** namespaced by user. Key construction is never an ownership check; the metadata comparison is.
 - Owner identity is `metadata.owner` = **username**, never a user id. A diff comparing against `user_id` is comparing the wrong field.
-- Redis is a TTL cache; the session file's `metadata.owner` is the record of truth. An absent Redis record means "not cached", never "unowned" — [`session_ownership.py`](../../autobot-backend/security/session_ownership.py) `_owner_when_cache_is_empty` (:507) asks disk first and rehydrates **for the real owner, never for the caller** (#14018). Nobody claims an existing session with no owner, by reading or writing: an admin may act on it, anyone else gets the same 404 as a missing session, and nothing is written; an ownerless session is itself a defect. With no session at all, a read gets that 404 and a write creates it and records its owner. Not knowing which of the two it is denies (#20025).
+- Redis is a TTL cache; the session file's `metadata.owner` is the record of truth. An absent Redis record means "not cached", never "unowned" — [`session_ownership.py`](../../autobot-backend/security/session_ownership.py) `_owner_when_cache_is_empty` (:504) asks disk first and rehydrates **for the real owner, never for the caller** (#14018). Nobody claims an existing session with no owner, by reading or writing: an admin may act on it, anyone else gets the same 404 as a missing session, and nothing is written; an ownerless session is itself a defect. With no session at all, a read gets that 404 and a write creates it and records its owner. Not knowing which of the two it is denies (#20025).
 - Undetermined enforcement policy degrades, in [`security/enforcement_mode.py`](../../autobot-backend/security/enforcement_mode.py), to `DEGRADED_ENFORCEMENT_MODE` (:53) and never to `disabled`: checks still run and violations are still recorded (#14010). A new `except` that returns `"disabled"` is a fail-open.
 - A resolution that degraded stays marked `degraded` (:73), so a `log_only` decision record says which of the two `log_only` states produced it (#15159). It marks the record only — `log_only` is allow-and-audit in both, deliberately. A degraded route reporting the chosen `reason` is a finding.
-- Only two legitimate fast-path bypasses exist, in [`security/session_ownership.py`](../../autobot-backend/security/session_ownership.py) — `_resolve_fast_paths` (:457): global auth disabled, and enforcement explicitly `disabled`. A third one added in a diff is a finding.
+- Only two legitimate fast-path bypasses exist, in [`security/session_ownership.py`](../../autobot-backend/security/session_ownership.py) — `_resolve_fast_paths` (:454): global auth disabled, and enforcement explicitly `disabled`. A third one added in a diff is a finding.
 - Creating over an existing session id is a 409, identical for "owned by someone else" and "no recorded owner" — a 403 on the first would confirm who owns it (#14012).
 
 ## 3. Plugin loading
@@ -56,7 +56,7 @@ Two postures, one validator (#14016): the contract is the docstring of [`securit
 **Canonical enforcement:** every route in
 [`autobot-backend/plugin_manager.py`](../../autobot-backend/plugin_manager.py) carries a
 `Depends` on [`auth_middleware.py`](../../autobot-backend/auth_middleware.py)
-`check_admin_permission` (:943).
+`check_admin_permission` (:944).
 Archive safety lives in [`autobot-backend/archive_safety.py`](../../autobot-backend/archive_safety.py)
 — `validate_zip_metadata` (:29), `safe_extract` (:60), `MAX_UPLOAD_BYTES` (:21).
 
@@ -74,9 +74,9 @@ Archive safety lives in [`autobot-backend/archive_safety.py`](../../autobot-back
 response, a log line, an issue, a PR comment — is already redacted.
 
 **Canonical enforcement:** [`encryption_service.py`](../../autobot-backend/encryption_service.py) AES-GCM + PBKDF2 for data at rest ·
-[`autobot_shared/field_encryption.py`](../../autobot_shared/field_encryption.py) `encrypt_field`/`decrypt_field` for single columns ·
+[`autobot_shared/field_encryption.py`](../../autobot_shared/field_encryption.py) `encrypt_field`/`decrypt_field` for single columns, a facade over the [`secrets_envelope`](../../autobot_shared/secrets_envelope.py) core that binds each value to where it is stored (#17981). **Known limit:** field values are sealed directly under a key derived from `AUTOBOT_SECRETS_ROOT_KEY`, and rotating that key re-wraps vault grants only, so every field-sealed credential becomes unreadable (a 503 `CREDENTIAL_UNREADABLE`, never a silent empty value) until it is re-entered. The approval-gated re-seal path is #20744 ·
 [`credential_store.py`](../../autobot-backend/knowledge/connectors/credential_store.py) `ConnectorCredentialStore` (:211) for connector/OAuth creds, ownership via `_require_owner` (:642) ·
-[`autobot_shared/auth/internal_api_key.py`](../../autobot_shared/auth/internal_api_key.py) `verify_internal_api_key` (:17) for service-to-service (re-exported by `auth_middleware.py` and the SLM `services/auth.py`) ·
+[`autobot_shared/auth/internal_api_key.py`](../../autobot_shared/auth/internal_api_key.py) `verify_internal_api_key` (:19) for service-to-service (re-exported by `auth_middleware.py` and the SLM `services/auth.py`) ·
 [`services/auth.py`](../../autobot-slm-backend/services/auth.py) `decode_token_async` (:130) for SLM token revocation.
 
 **Invariants**

@@ -223,7 +223,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useBrowserAutomation } from '@/composables/useBrowserAutomation'
-import { BaseModal, BaseButton, formatRelativeTime } from '@autobot/ui'
+import { BaseModal, BaseButton, createRecencyFormatter } from '@autobot/ui'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import Icon from '@/components/ui/Icon.vue'
@@ -385,8 +385,7 @@ export default {
 
     const formatDate = createDateFormatter({ locale: 'en-US', intl: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } })
 
-    const formatTimeAgo = (dateStr: string): string =>
-      formatRelativeTime(dateStr, { locale: locale.value, maxUnit: 'day' })
+    const formatTimeAgo = createRecencyFormatter({ locale: () => locale.value, maxUnit: 'day', invalidText: '—' })
 
     return {
       sessions,

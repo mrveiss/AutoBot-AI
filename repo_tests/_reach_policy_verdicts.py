@@ -17,6 +17,12 @@ ABSOLUTE = "ABSOLUTE"
 CONVERTIBLE = "CONVERTIBLE"
 
 _A_TO_M: dict[str, tuple[str, str, str]] = {
+    "edge-configs-proxying-api-20046": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Configs and generators that proxy a public /api location: a small set, so a share of any file count "
+        "means nothing.",
+    ),
     "ci-requirements-one-install-workflows": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -113,6 +119,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Files making outbound HTTP calls are a small subset of tracked python; the other ~6000 "
         "files grow independently, so a share of them sinks with nothing wrong with the sweep.",
+    ),
+    "ansible-files-scanned-for-slm-port": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Ansible YAML and templates are a subset of tracked files; other trees grow independently of it.",
     ),
     "ansible-apt-repo-budget-override-sweep": (
         ABSOLUTE,
@@ -211,6 +222,24 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test backend modules whose docstring declares backward compatibility; a subset of the "
         "backend's `.py` files whose share drifts as facades are retired (#18552).",
+    ),
+    "unconnected-code-modules": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Backend modules that could have a caller (no `__init__`, `__main__` script, migration or testkit); a subset "
+        "of the backends' `.py` files whose share drifts as tests and migrations are added (#20512).",
+    ),
+    "unconnected-code-routes": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Backend files that declare a route decorator; a subset of the backends' `.py` files that drifts as "
+        "non-router modules are added (#20512).",
+    ),
+    "unconnected-code-stores": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Files that push to a Redis queue or define a table; a small subset of the tracked tree that drifts "
+        "with it (#20512).",
     ),
     "chromadb-compose-port-sites": (ABSOLUTE, "NOT_PATHS", "Parsed `ports:` entries, not files."),
     "chromadb-compose-services": (ABSOLUTE, "NOT_PATHS", "Parsed compose services, not files."),
@@ -419,6 +448,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         ABSOLUTE,
         "SUBSET_DRIFTS",
         "Both GUIs' component, view and composable .ts/.vue, excluding tests, against all tracked frontend source.",
+    ),
+    "frontend-hand-rolled-file-save-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Both GUIs' .ts/.vue source, excluding tests, specs and stories, against all tracked frontend source.",
     ),
     "frontend-hand-built-relative-time-scan": (
         ABSOLUTE,

@@ -4,17 +4,17 @@ This directory contains the report generation and issue filing components of the
 
 ## Components
 
-### Phase 3: `generate-report.py` — Report Generator
+### Phase 3: `generate_report.py` — Report Generator
 
 Generates human-readable `docs/verification.md` from `docs/verification-inventory.json`.
 
 **Usage:**
 ```bash
 # Generate from default paths
-python3 .claude/skills/claims-audit/generate-report.py
+python3 .claude/skills/claims-audit/generate_report.py
 
 # Custom paths
-python3 .claude/skills/claims-audit/generate-report.py \
+python3 .claude/skills/claims-audit/generate_report.py \
   --inventory path/to/inventory.json \
   --output path/to/verification.md
 ```
@@ -93,7 +93,7 @@ Full claims-audit workflow:
 
 1. **Phase 1** (MVA-2720) - Extract claims from docs
 2. **Phase 2** (MVA-2721) - Verify claims against codebase
-3. **Phase 3** (this dir, `generate-report.py`) - Generate verification report and inventory
+3. **Phase 3** (this dir, `generate_report.py`) - Generate verification report and inventory
 4. **Phase 4** (this dir, `file_issues.py`) - File discovery issues for broken claims
 
 ## Testing

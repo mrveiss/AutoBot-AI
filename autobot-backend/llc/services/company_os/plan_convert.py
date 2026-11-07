@@ -31,6 +31,7 @@ from llc.models.company_os_plan import CompanyOsWorkflowPlan as PlanRow
 from llc.models.enums import RoleHolderType
 from llc.models.role_assignment import LLCRoleAssignment
 from llc.services._role_guard import role_exists_in_company
+from llc.services.activity_log import LLCActivityLogService
 from llc.services.authz import require_company_admin
 from llc.services.base import LLCServiceBase
 from models.workflow import Workflow
@@ -71,18 +72,16 @@ def _blocked_g6(message: str, plan: CompanyWorkflowPlan) -> ConversionBlocked:
 
 
 class PlanConversionService(LLCServiceBase):
-    def __init__(self, activity_log=None) -> None:  # noqa: ANN001
+    def __init__(self, activity_log: Optional[LLCActivityLogService] = None) -> None:
         super().__init__(activity_log)
-        self._processes = ProcessService(activity_log)
-        self._workflows = CompanyOsWorkflowService(activity_log)
-        self._graphs = GraphService(activity_log)
+        self._processes = ProcessService(self.activity_log)
+        self._workflows = CompanyOsWorkflowService(self.activity_log)
+        self._graphs = GraphService(self.activity_log)
 
     async def _locked(
         self, session: AsyncSession, company_id: uuid.UUID, plan_key: str, actor: Optional[uuid.UUID]
     ) -> Tuple[PlanRow, CompanyWorkflowPlan]:
-        await require_company_admin(session, company_id, actor)
-        row = await plan_store.load_writable(session, company_id, plan_key)
-        return row, plan_store.read_plan(row)
+        return await plan_store.locked_plan(session, company_id, plan_key, actor)
 
     # ------------------------------------------------------------ the facts and the preview
 
@@ -219,7 +218,7 @@ class PlanConversionService(LLCServiceBase):
         plan = plan_store.read_plan(row)
         if plan.conversion is None or plan.conversion.status is not ConversionStatus.COMMITTED:
             raise CompanyOsConflict("this plan has not been converted: there is nothing to file")
-        await file_proposals(company_id, plan.key, plan.conversion.ai_line_proposals, actor)
+        await file_proposals(company_id, plan.key, plan.revision, plan.conversion.ai_line_proposals, actor)
         return await plan_store.save_plan(session, row, plan, actor=actor, clears_approval=False)
 
     # ------------------------------------------------------------ the writes

@@ -11,6 +11,7 @@ import pytest
 from fastapi import HTTPException
 
 from llc.models.goal import GoalLevel, GoalStatus, LLCGoal
+from llc.services.activity_log import LLCActivityLogService
 from llc.services.goal import GoalService
 
 # ----------------------------------------------------------------- Fixtures
@@ -18,7 +19,7 @@ from llc.services.goal import GoalService
 
 @pytest.fixture
 def svc() -> GoalService:
-    return GoalService()
+    return GoalService(activity_log=AsyncMock(spec=LLCActivityLogService))
 
 
 def _make_goal(
@@ -222,12 +223,14 @@ async def test_update_goal_response_survives_sync_serialization() -> None:
     from llc.api.goals import GoalResponse
     from user_management.models.base import Base
 
-    engine = create_async_engine("sqlite+aiosqlite://")
+    engine = create_async_engine("sqlite+aiosqlite://")  # canonical: ignore py-adhoc-db-engine (test-local)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all, tables=[LLCGoal.__table__])
 
-    session_factory = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
-    svc = GoalService()
+    session_factory = async_sessionmaker(  # canonical: ignore py-adhoc-db-engine (test-local factory)
+        bind=engine, expire_on_commit=False, autoflush=False
+    )  # canonical: ignore py-adhoc-db-engine (test-local)
+    svc = GoalService(activity_log=AsyncMock(spec=LLCActivityLogService))
 
     async with session_factory() as session:
         with patch.object(svc, "_schedule_post_commit_index"):

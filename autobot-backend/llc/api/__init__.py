@@ -21,8 +21,10 @@ from .companies import router as companies_router
 from .company_ceo import router as company_ceo_router
 from .company_members import router as company_members_router
 from .company_os import router as company_os_router
+from .company_os_plan_edit import router as company_os_plan_edit_router
 from .company_os_plans import router as company_os_plans_router
 from .company_os_skills import router as company_os_skills_router
+from .company_teams import router as company_teams_router
 from .contacts import router as contacts_router
 from .context import router as context_router
 from .controls import router as controls_router
@@ -34,6 +36,7 @@ from .goals import router as goals_router
 from .health import router as health_router
 from .labels import router as labels_router
 from .portability import router as portability_router
+from .project_backfill import router as project_backfill_router
 from .replay import router as replay_router
 from .reporting_lines import router as reporting_lines_router
 from .review_gate_policies import router as review_gate_router
@@ -57,6 +60,7 @@ router.include_router(activity_router)
 router.include_router(boards_router)
 router.include_router(adapters_router)
 router.include_router(ai_lines_router)
+router.include_router(project_backfill_router)
 router.include_router(approvals_router)
 router.include_router(backlog_router)
 router.include_router(budget_router)
@@ -64,6 +68,7 @@ router.include_router(cost_events_router)
 router.include_router(costs_by_model_router)
 router.include_router(companies_router)
 router.include_router(company_members_router)
+router.include_router(company_teams_router)
 router.include_router(company_ceo_router)
 router.include_router(contacts_router)
 router.include_router(agent_hires_router)
@@ -98,6 +103,7 @@ router.include_router(costs_router)
 router.include_router(workflows_router)
 router.include_router(company_os_router)
 router.include_router(company_os_plans_router)
+router.include_router(company_os_plan_edit_router)
 router.include_router(company_os_skills_router)
 
 

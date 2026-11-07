@@ -4910,6 +4910,14 @@
             },
             "title": "Required Down",
             "type": "array"
+          },
+          "roles_with_nodes_down": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RoleNodeHealth"
+            },
+            "title": "Roles With Nodes Down",
+            "type": "array"
           }
         },
         "required": [
@@ -8435,6 +8443,25 @@
         "title": "NodeServiceOrderResponse",
         "type": "object"
       },
+      "NodeSshPasswordDeleteResponse": {
+        "description": "What a deletion removed. Carries the node and a flag, never a value.",
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "boolean"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "node_id",
+          "deleted"
+        ],
+        "title": "NodeSshPasswordDeleteResponse",
+        "type": "object"
+      },
       "NodeStatus": {
         "description": "Node status enumeration.",
         "enum": [
@@ -10742,6 +10769,36 @@
           "roles"
         ],
         "title": "RoleListResponse",
+        "type": "object"
+      },
+      "RoleNodeHealth": {
+        "description": "A multi-node role with at least one of its nodes down.",
+        "properties": {
+          "nodes_down": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Nodes Down",
+            "type": "array"
+          },
+          "nodes_up": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Nodes Up",
+            "type": "array"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "nodes_up",
+          "nodes_down"
+        ],
+        "title": "RoleNodeHealth",
         "type": "object"
       },
       "RolePurgeRequest": {
@@ -21085,6 +21142,72 @@
         ]
       }
     },
+    "/api/code-sync/update-all/nodes-offline": {
+      "get": {
+        "description": "Nodes the last self-update left offline and still are (#20250), with when that update ran.",
+        "operationId": "get_nodes_offline_after_update_api_code_sync_update_all_nodes_offline_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "title": "Response Get Nodes Offline After Update Api Code Sync Update All Nodes Offline Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Nodes Offline After Update",
+        "tags": [
+          "code-sync"
+        ]
+      }
+    },
     "/api/code-sync/update-all/progress": {
       "get": {
         "description": "What the running self-update is doing, from its own log, across the SLM's restart (#20254).",
@@ -23621,6 +23744,80 @@
         "summary": "Get Playbook",
         "tags": [
           "infrastructure"
+        ]
+      }
+    },
+    "/api/internal/nodes/{node_id}/ssh-password": {
+      "delete": {
+        "description": "Delete the node's stored SSH password under a human's approval; ``deleted`` is False when it held none.",
+        "operationId": "delete_node_ssh_password_api_internal_nodes__node_id__ssh_password_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "node_id",
+            "required": true,
+            "schema": {
+              "title": "Node Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "approval_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Approval Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NodeSshPasswordDeleteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Node Ssh Password",
+        "tags": [
+          "internal"
         ]
       }
     },
@@ -32057,7 +32254,7 @@
     },
     "/api/roles/owners": {
       "get": {
-        "description": "Return role -> node_id mapping for all assigned service roles (#1389).\n\nUsed by deployment/migration UIs to show which node owns each role.",
+        "description": "Return role -> node ids, and which roles may hold several (#1389, #19706).",
         "operationId": "get_role_owners_endpoint_api_roles_owners_get",
         "parameters": [
           {

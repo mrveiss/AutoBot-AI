@@ -43,7 +43,7 @@ register_env_var(
         default=300,
         description=(
             "Seconds a workflow command step may run before its whole process group is killed "
-            "and the step fails with exit code 124 (#19807). Raising it lets long builds finish; "
+            "and the step fails with exit code 124 (#19807). Raising it gives slow allowlisted commands more time; "
             "lowering it kills stuck commands sooner (services/workflow_automation/command_step.py)."
         ),
         component="terminal",
@@ -79,6 +79,22 @@ register_env_var(
             "(services/workflow_automation/command_step.py)."
         ),
         component="terminal",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SLM_KEY_PROBE_TIMEOUT_SECONDS",
+        type=float,
+        default=10.0,
+        description=(
+            "Wall-clock ceiling on the SSH key-access probe that runs before a stored SSH password's deletion is "
+            "proposed (inline in enrollment) and again before it is deleted (#20046). The probe is killed at the "
+            "ceiling and counts as failed, so a hung node delays enrollment by at most this long and the proposal "
+            "waits for a later enrollment."
+        ),
+        component="slm",
+        range=(2.0, 60.0),
     )
 )
 

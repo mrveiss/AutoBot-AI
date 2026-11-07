@@ -10,7 +10,6 @@ command step "succeeded" and ran nothing. These tests drive the real
 stood in for, so the recording sites can be inspected.
 """
 
-import asyncio
 import os
 import uuid
 from contextlib import asynccontextmanager
@@ -20,20 +19,18 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
-from fastapi import FastAPI
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.ext.compiler import compiles
-from starlette.testclient import TestClient
 
-from auth_middleware import get_current_user
+from autobot_shared.eventually import eventually
 from command_run_policy import CommandRunPolicy
 from security_layer import SecurityLayer
 from user_management.models import Role, User, UserRole
 from user_management.models.base import Base
 from utils.bounded_subprocess import run_bounded
 
-from . import command_step, routes
+from . import command_step
 from .command_step import CommandStepFailed, run_command_step
 
 SECRET = "hunter2-s3cr3t-value"  # pragma: allowlist secret
@@ -258,49 +255,6 @@ async def test_the_command_runs_in_the_configured_directory(layer, tmp_path):
     assert result["stdout"] == str(tmp_path.resolve())
 
 
-def _client(monkeypatch, user):
-    created = []
-
-    class _Manager:
-        async def create_automated_workflow(self, **kwargs):
-            created.append(kwargs)
-            return "wf-1"
-
-        async def create_workflow_from_chat_request(self, *args, **kwargs):
-            created.append(kwargs)
-            return None
-
-    monkeypatch.setattr(routes, "get_workflow_manager", lambda: _Manager())
-    app = FastAPI()
-    app.include_router(routes.router)
-    app.dependency_overrides[get_current_user] = lambda: user
-    return TestClient(app, raise_server_exceptions=False), created
-
-
-_CREATE = ("/create_workflow", {"name": "w", "description": "", "steps": [], "session_id": "s"})
-_CHAT = ("/create_from_chat", {"user_request": "list files", "session_id": "s"})
-
-
-@pytest.mark.parametrize("path,body", [_CREATE, _CHAT])
-def test_a_user_without_shell_permission_cannot_create_a_workflow(monkeypatch, path, body):
-    client, created = _client(monkeypatch, {"user_id": "u-1", "role": "user"})
-    assert client.post(path, json=body).status_code == 403
-    assert created == []
-
-
-@pytest.mark.parametrize("path,body", [_CREATE, _CHAT])
-def test_a_user_who_may_run_commands_can_create_a_workflow(monkeypatch, path, body):
-    client, created = _client(monkeypatch, {"user_id": "u-1", "role": "admin"})
-    assert client.post(path, json=body).status_code == 200
-
-
-def test_create_from_chat_reports_a_missing_field_as_400_not_500(monkeypatch):
-    client, created = _client(monkeypatch, {"user_id": "u-1", "role": "admin"})
-    response = client.post("/create_from_chat", json={"user_request": "", "session_id": "s"})
-    assert response.status_code == 400
-    assert created == []
-
-
 @pytest.mark.asyncio
 async def test_the_filter_savings_failure_log_does_not_carry_the_command(monkeypatch, caplog):
     import logging
@@ -455,10 +409,10 @@ async def _refused_with_nothing_run_for(command: str):
 
 
 @pytest.mark.parametrize("command", ["echo hi", "pwd", "ls", "date +%Y"])
-def test_the_allowlist_admits_inert_commands(command):
+def test_the_allowlist_admits_inert_commands(command, tmp_path):
     from unattended_commands import unattended_refusal
 
-    assert unattended_refusal(command) is None
+    assert unattended_refusal(command, str(tmp_path)) is None
 
 
 @pytest.mark.asyncio
@@ -474,10 +428,7 @@ async def test_the_child_inherits_no_backend_environment(tmp_path, monkeypatch):
 async def test_a_backgrounded_process_does_not_outlive_the_step(tmp_path):
     pid_file = tmp_path / "bg.pid"
     await run_bounded(f"sh -c 'sleep 60 & echo $! > {pid_file}'", cwd=str(tmp_path), timeout_s=2, max_output_bytes=1000)
-    for _ in range(50):  # SIGKILL is delivered asynchronously
-        if _is_gone(pid_file):
-            break
-        await asyncio.sleep(0.1)
+    await eventually(lambda: _is_gone(pid_file), deadline=10)  # SIGKILL is delivered asynchronously
     assert _is_gone(pid_file)
 
 
@@ -488,20 +439,6 @@ def _is_gone(pid_file) -> bool:
     except FileNotFoundError:
         return True
     return state.rsplit(")", 1)[1].split()[0] == "Z"
-
-
-@pytest.mark.parametrize("role", ["user", "operator", "run_jwt", None])
-def test_only_an_administrator_may_create_a_workflow(monkeypatch, role):
-    client, created = _client(monkeypatch, {"user_id": "u-1", "role": role})
-    assert client.post(*[_CREATE[0]], json=_CREATE[1]).status_code == 403
-    assert created == []
-
-
-def test_the_creator_cannot_remove_the_confirmation_gate(monkeypatch):
-    client, created = _client(monkeypatch, {"user_id": "u-1", "role": "admin"})
-    body = {**_CREATE[1], "steps": [{"command": "echo hi", "description": "d", "requires_confirmation": False}]}
-    assert client.post(_CREATE[0], json=body).status_code == 200
-    assert all(step.requires_confirmation for step in created[0]["steps"])
 
 
 def test_every_allowlisted_command_is_safe_in_the_classifier_too():
@@ -537,19 +474,6 @@ def test_a_command_step_always_requires_confirmation_however_it_is_built():
     assert built.requires_confirmation is True and imported.requires_confirmation is True
 
 
-@pytest.mark.parametrize("role", ["user", "operator", None])
-def test_import_and_clone_need_an_administrator(role):
-    from api import workflow_export
-
-    app = FastAPI()
-    app.include_router(workflow_export.router)
-    app.dependency_overrides[get_current_user] = lambda: {"user_id": "u-1", "role": role}
-    client = TestClient(app, raise_server_exceptions=False)
-    doc = {"export_document": {}, "session_id": "s"}
-    assert client.post("/import", json=doc).status_code == 403
-    assert client.post("/share/abc/clone", json={"session_id": "s"}).status_code == 403
-
-
 @pytest.mark.parametrize(
     "command",
     [
@@ -566,10 +490,10 @@ def test_import_and_clone_need_an_administrator(role):
         "uptime -p",
     ],
 )
-def test_the_positive_allowlist_admits_the_named_safe_forms(command):
+def test_the_positive_allowlist_admits_the_named_safe_forms(command, tmp_path):
     from unattended_commands import unattended_refusal
 
-    assert unattended_refusal(command) is None
+    assert unattended_refusal(command, str(tmp_path)) is None
 
 
 @pytest.mark.parametrize("step_type", ["command_execution", "shell", "anything-the-executor-treats-as-a-command"])

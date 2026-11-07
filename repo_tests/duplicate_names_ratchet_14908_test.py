@@ -14,8 +14,8 @@ stories and generated files are not scanned, as in the sibling guard.
 
 **(b) Util filenames.** The same relative path under both apps' ``src/utils`` where BOTH files
 are real implementations. A file that only imports and re-exports ``@autobot/ui`` is the fix,
-not the defect, so it is not counted: ``debugUtils.ts`` and ``formatHelpers.ts`` in the SLM
-are such files today.
+not the defect, so it is not counted. The SLM had two such files (``debugUtils.ts``,
+``formatHelpers.ts``); they are gone, every SLM caller imports the kit directly.
 
 **Two numbers, each exact and down-only against the base** (#19283). Each type pin counts
 names (a name declared in three places is one), so lowering it means a name stopped being
@@ -65,9 +65,9 @@ UTIL_EXCEPTIONS = {
         "consolidation PR (maintainer decision 2026-10-28, waits for the PR holding the SLM copy)"
     ),
 }
-# formatHelpers.ts is the other expected duplicate. It is NOT counted today because the SLM's copy
-# is already a thin re-export of the kit; if it regrows an implementation this guard counts it,
-# and it must then be added above with its reason until the formatters PR removes the main copy.
+# formatHelpers.ts and debugUtils.ts are no longer duplicates: the SLM copies were removed (#14908)
+# and the SLM imports the kit directly. If an SLM copy regrows with an implementation this guard
+# counts it, and it must then be added above with its reason.
 
 
 def _ts_files(root: Path) -> list[Path]:
@@ -203,7 +203,6 @@ def _util_files(root: Path) -> list[str]:
 TYPE_FILES_REACH = declare(
     "duplicate-type-names-ts-files-scanned-14908",
     discover=_type_files,
-    floor=540,  # mid-window: population 565, window (515, 565)
     growth=50,
     what="non-test .ts files in both apps and the kit scanned for repeated type names",
     roots=(*_APPS, _KIT),
@@ -212,7 +211,6 @@ TYPE_FILES_REACH = declare(
 UTIL_FILES_REACH = declare(
     "duplicate-util-filenames-scanned-14908",
     discover=_util_files,
-    floor=61,  # mid-window: population 66, window (56, 66)
     growth=10,
     what="non-test util files in both apps compared by filename",
     roots=_UTILS,

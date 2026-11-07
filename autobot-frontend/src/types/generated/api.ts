@@ -6206,6 +6206,144 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/knowledge_base/uploads/limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Upload Limits
+         * @description So the upload dialog mirrors nothing: what each use allows, and which files are media.
+         */
+        get: operations["get_upload_limits_api_knowledge_base_uploads_limits_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Upload */
+        post: operations["create_upload_api_knowledge_base_uploads_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/uploads/expired": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Expired Uploads
+         * @description Abandoned sessions for a person to review; each still takes up its disk space until cancelled.
+         */
+        get: operations["list_expired_uploads_api_knowledge_base_uploads_expired_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/uploads/expired/{upload_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Expired Upload
+         * @description An admin frees an abandoned upload from the review list: a person's decision, on the record first.
+         */
+        delete: operations["remove_expired_upload_api_knowledge_base_uploads_expired__upload_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/uploads/{upload_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Upload
+         * @description Where to resume from, and how the handoff went.
+         */
+        get: operations["get_upload_api_knowledge_base_uploads__upload_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Cancel Upload
+         * @description The person gives up on their own upload, which removes what was staged.
+         */
+        delete: operations["cancel_upload_api_knowledge_base_uploads__upload_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/uploads/{upload_id}/chunks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Chunk */
+        put: operations["put_chunk_api_knowledge_base_uploads__upload_id__chunks_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/uploads/{upload_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete Upload
+         * @description Every byte is here: check it, and hand it to the knowledge base. Poll the session for the result.
+         */
+        post: operations["complete_upload_api_knowledge_base_uploads__upload_id__complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/knowledge_base/ai-stack/search/rag": {
         parameters: {
             query?: never;
@@ -9026,9 +9164,8 @@ export interface paths {
         };
         /**
          * Get Connector Job
-         * @description Return in-flight job state for a connector sync (Issue #8149).
-         *
-         *     Returns 404 when no sync is currently in flight (or the 24h TTL expired).
+         * @description Return a connector's sync job (Issue #8149): ``starting``/``running`` while one is in flight,
+         *     else the last finished one. 404 when there is neither (#20755, see ``job_state``).
          */
         get: operations["get_connector_job_api_knowledge_base_connectors__connector_id__job_get"];
         put?: never;
@@ -12030,6 +12167,8 @@ export interface paths {
         /**
          * Set Provider
          * @description Set the active cloud ASR provider.
+         *
+         *     Admin-only (owner ruling 2026-09-11): it decides which cloud provider receives every user's audio.
          *
          *     Persistence limitation: this is in-process only and is lost on restart.
          *     For persistence across restarts, set TRANSCRIBER_ASR_PROVIDER in the
@@ -16753,7 +16892,7 @@ export interface paths {
         };
         /**
          * Get Approval
-         * @description Get a single approval gate by ID (#1402).
+         * @description Get a single approval gate by ID; another user's approval is a 404 (#1402, #18413).
          */
         get: operations["get_approval_api_approval_gates__approval_id__get"];
         put?: never;
@@ -19355,6 +19494,128 @@ export interface paths {
          * @description Propose the drop -- a request, not an execution. Refused when the column is already gone.
          */
         post: operations["propose_org_tier_column_drop_api_admin_org_tier_column_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/internal/slm/ssh-password-deletion-proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Ssh Password Deletion
+         * @description Propose the deletion -- a request, not an execution; one pending proposal per node.
+         *
+         *     Refused (409, clear message) on a split deployment without SLM TLS (#20899, option A).
+         */
+        post: operations["propose_ssh_password_deletion_api_internal_slm_ssh_password_deletion_proposals_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/internal/slm/ssh-password-deletion-approvals/{approval_id}/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Claim Ssh Password Deletion Approval
+         * @description The SLM's last check before it deletes: this approval is a human's, for this node, and unused -- now spent.
+         */
+        post: operations["claim_ssh_password_deletion_approval_api_internal_slm_ssh_password_deletion_approvals__approval_id__claim_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/env-copies-cleanup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Env Copies Status
+         * @description Read only: counts, never a file's contents.
+         */
+        get: operations["env_copies_status_api_admin_env_copies_cleanup_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/env-copies-cleanup/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Env Copies Cleanup
+         * @description Propose keeping only the newest ``.env.*~`` copy -- a request, not an execution.
+         */
+        post: operations["propose_env_copies_cleanup_api_admin_env_copies_cleanup_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/ownerless-chat-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ownerless Chat Sessions
+         * @description Read only: which sessions record no owner.
+         */
+        get: operations["ownerless_chat_sessions_api_admin_ownerless_chat_sessions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/ownerless-chat-sessions/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Chat Session Owner
+         * @description Propose an owner -- a request, not an execution. Refused unless the session is ownerless and the user exists.
+         */
+        post: operations["propose_chat_session_owner_api_admin_ownerless_chat_sessions_requests_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -27743,10 +28004,8 @@ export interface paths {
          * Execute command (SLM admin terminal)
          * @description Execute a single shell command and return stdout/stderr/exit_code.
          *
-         *     Runs on the local backend machine. No auth required — accessible via
-         *     the /autobot-api/ nginx proxy (Issue #983).
-         *
-         *     Blocks commands matching RISKY_COMMAND_PATTERNS.
+         *     Runs on the local backend machine. Admin-only: ``admin_router`` requires
+         *     ``check_admin_permission`` (Issue #983). Blocks commands matching RISKY_COMMAND_PATTERNS.
          */
         post: operations["admin_execute_command_api_terminal_execute_post"];
         delete?: never;
@@ -45585,6 +45844,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/npu/assigned-unpaired-workers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Assigned Unpaired Workers
+         * @description Read only. A person pairs each through POST /npu/workers/pair.
+         */
+        get: operations["list_assigned_unpaired_workers_api_npu_assigned_unpaired_workers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/redis-service/start": {
         parameters: {
             query?: never;
@@ -50274,6 +50553,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/companies/{company_id}/project-backfill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Preview
+         * @description How many work items have no project and where each would go. Changes nothing.
+         */
+        get: operations["read_preview_api_llc_companies__company_id__project_backfill_get"];
+        put?: never;
+        /**
+         * Request Backfill
+         * @description File the approval request. Nothing changes until a person approves it.
+         */
+        post: operations["request_backfill_api_llc_companies__company_id__project_backfill_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/approvals": {
         parameters: {
             query?: never;
@@ -50973,7 +51276,11 @@ export interface paths {
          */
         get: operations["get_company_teams_api_llc_companies__company_id__teams_get"];
         put?: never;
-        post?: never;
+        /**
+         * Create Company Team
+         * @description Create a team in the path's company; the caller becomes its team owner (``TeamService``).
+         */
+        post: operations["create_company_team_api_llc_companies__company_id__teams_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -51074,6 +51381,50 @@ export interface paths {
         head?: never;
         /** Change Member Role */
         patch: operations["change_member_role_api_llc_companies__company_id__members__user_id__patch"];
+        trace?: never;
+    };
+    "/api/llc/companies/{company_id}/teams/{team_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Company Team
+         * @description Soft-delete a team of the path's company. A user action: nothing here deletes teams on its own.
+         */
+        delete: operations["delete_company_team_api_llc_companies__company_id__teams__team_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/companies/{company_id}/teams/{team_id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Company Team Member
+         * @description Add one of the company's own users to one of its teams.
+         */
+        post: operations["add_company_team_member_api_llc_companies__company_id__teams__team_id__members__user_id__post"];
+        /**
+         * Remove Company Team Member
+         * @description Remove a user from one of the company's teams.
+         */
+        delete: operations["remove_company_team_member_api_llc_companies__company_id__teams__team_id__members__user_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/llc/companies/{company_id}/ceo": {
@@ -54677,6 +55028,169 @@ export interface paths {
          * @description File the AI-line proposals that failed or were never filed. The only write a converted plan accepts.
          */
         post: operations["retry_ai_line_proposals_api_llc_company_os_workflow_plans__plan_key__convert_retry_ai_line_proposals_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/lanes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Lane */
+        post: operations["add_lane_api_llc_company_os_workflow_plans__plan_key__lanes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/lanes/{lane_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Lane */
+        delete: operations["delete_lane_api_llc_company_os_workflow_plans__plan_key__lanes__lane_key__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Lane */
+        patch: operations["patch_lane_api_llc_company_os_workflow_plans__plan_key__lanes__lane_key__patch"];
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/steps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Step */
+        post: operations["add_step_api_llc_company_os_workflow_plans__plan_key__steps_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/steps/{step_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Step
+         * @description The step and every edge that touches it. The One Number's step is refused (409): change the One Number first.
+         */
+        delete: operations["delete_step_api_llc_company_os_workflow_plans__plan_key__steps__step_key__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Step */
+        patch: operations["patch_step_api_llc_company_os_workflow_plans__plan_key__steps__step_key__patch"];
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/edges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Edge */
+        post: operations["add_edge_api_llc_company_os_workflow_plans__plan_key__edges_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/edges/{from_step}/{to_step}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Edge */
+        delete: operations["delete_edge_api_llc_company_os_workflow_plans__plan_key__edges__from_step___to_step__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Edge */
+        patch: operations["patch_edge_api_llc_company_os_workflow_plans__plan_key__edges__from_step___to_step__patch"];
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/steps/{step_key}/edge-cases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Edge Case */
+        post: operations["add_edge_case_api_llc_company_os_workflow_plans__plan_key__steps__step_key__edge_cases_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/edge-cases/{edge_case_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Edge Case */
+        delete: operations["delete_edge_case_api_llc_company_os_workflow_plans__plan_key__edge_cases__edge_case_key__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Edge Case */
+        patch: operations["patch_edge_case_api_llc_company_os_workflow_plans__plan_key__edge_cases__edge_case_key__patch"];
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/one-number/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get One Number Candidates
+         * @description Steps ranked by frequency x duration for the owner's ``return_kind`` (FR-3.1). Reads only: sets no One Number.
+         */
+        get: operations["get_one_number_candidates_api_llc_company_os_workflow_plans__plan_key__one_number_candidates_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -60204,6 +60718,25 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * AssignedWorker
+         * @description A node the SLM assigned npu-worker with no paired worker.
+         */
+        AssignedWorker: {
+            /** Url */
+            url: string;
+            /** Hostname */
+            hostname: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** AssignedWorkersResponse */
+        AssignedWorkersResponse: {
+            /** Workers */
+            workers: components["schemas"]["AssignedWorker"][];
+        } & {
+            [key: string]: unknown;
+        };
         /** AssociateFileRequest */
         AssociateFileRequest: {
             /** Chat Id */
@@ -62588,7 +63121,7 @@ export interface components {
         BudgetPolicyRequest: {
             /**
              * Scope
-             * @description Scope: agent, project, task, or tenant
+             * @description Scope: agent, project, task, tenant, or user (chat requests)
              */
             scope: string;
             /**
@@ -63363,6 +63896,38 @@ export interface components {
             } | null;
             /** Message */
             message?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** CandidateItem */
+        CandidateItem: {
+            /** Rank */
+            rank: number;
+            /** Step Key */
+            step_key: string;
+            /** Label */
+            label: string;
+            /** Lane Key */
+            lane_key: string;
+            /** Frequency Per Week */
+            frequency_per_week: number;
+            /** Duration Hours */
+            duration_hours: number;
+            /** Score */
+            score: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CandidatesResponse
+         * @description Measured steps by ``frequency x duration`` (hours per week); ``unmeasured`` steps are not ranked (FR-3.1).
+         */
+        CandidatesResponse: {
+            return_kind: components["schemas"]["ReturnKind"];
+            /** Candidates */
+            candidates: components["schemas"]["CandidateItem"][];
+            /** Unmeasured */
+            unmeasured: string[];
         } & {
             [key: string]: unknown;
         };
@@ -64702,6 +65267,20 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * CleanupRequestResponse
+         * @description The approval a proposal created.
+         */
+        CleanupRequestResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Status */
+            status: string;
+            /** Action */
+            action: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * CleanupResult
          * @description Cleanup operation result.
          */
@@ -64756,6 +65335,20 @@ export interface components {
             session_breakdown?: {
                 [key: string]: unknown;
             } | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CleanupStatus
+         * @description What one cleanup would remove on this node. Counts and names only, never a file's contents.
+         */
+        CleanupStatus: {
+            /** Count */
+            count: number;
+            /** Detail */
+            detail: string;
+            /** Refused */
+            refused?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -66493,6 +67086,9 @@ export interface components {
             /** Approved By */
             approved_by?: string | null;
             conversion?: components["schemas"]["PlanConversion"] | null;
+            policy_enforcement?: components["schemas"]["PolicyEnforcement"] | null;
+            /** Policy Enforcement Tracking Issue */
+            policy_enforcement_tracking_issue?: number | null;
         } & {
             [key: string]: unknown;
         };
@@ -67046,6 +67642,11 @@ export interface components {
             /** Connector Id */
             connector_id: string;
             config: components["schemas"]["ConnectorConfigDict"];
+            /**
+             * Sync Started
+             * @default false
+             */
+            sync_started: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -68447,6 +69048,11 @@ export interface components {
             verification_mode: string;
             /** Schedule Cron */
             schedule_cron?: string | null;
+            /**
+             * Sync Now
+             * @default true
+             */
+            sync_now: boolean;
             /** Include Patterns */
             include_patterns?: string[];
             /** Exclude Patterns */
@@ -74637,6 +75243,18 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** EdgeCasePatch */
+        EdgeCasePatch: {
+            /** Description */
+            description?: string | null;
+            classification?: components["schemas"]["Label"] | null;
+            /** Handling */
+            handling?: string | null;
+            /** Sub Step Key */
+            sub_step_key?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** EdgeCaseTreatment */
         EdgeCaseTreatment: {
             /** Edge Case Key */
@@ -74650,6 +75268,13 @@ export interface components {
          * @enum {string}
          */
         EdgeCaseTreatmentKind: "branch" | "handled_in_step" | "documentation";
+        /** EdgePatch */
+        EdgePatch: {
+            /** Condition */
+            condition?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * EditFileRequest
          * @description Request model for editing files.
@@ -79006,19 +79631,10 @@ export interface components {
         };
         /** HandoffToAgentRequest */
         HandoffToAgentRequest: {
-            /** User Id */
-            user_id: string;
-            /** Company Id */
-            company_id: string;
             /** Target Agent Id */
             target_agent_id: string;
             /** Human Notes */
             human_notes: string;
-            /**
-             * User Display
-             * @default
-             */
-            user_display: string;
             /** Attachments */
             attachments?: components["schemas"]["HandoffAttachmentRequest"][] | null;
         } & {
@@ -79026,12 +79642,8 @@ export interface components {
         };
         /** HandoffToHumanRequest */
         HandoffToHumanRequest: {
-            /** Agent Id */
-            agent_id: string;
             /** Reviewer User Id */
             reviewer_user_id: string;
-            /** Company Id */
-            company_id: string;
             /** Agent Notes */
             agent_notes?: string | null;
         } & {
@@ -83892,6 +84504,19 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * LanePatch
+         * @description Only what is sent changes; the key is the lane's identity and never changes.
+         */
+        LanePatch: {
+            /** Name */
+            name?: string | null;
+            holder_kind?: components["schemas"]["HolderKind"] | null;
+            /** Role Id */
+            role_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * LatestMessagesResponse
          * @description Response for GET /latest.
          */
@@ -87483,8 +88108,6 @@ export interface components {
             work_item_id: string;
             /** Column Id */
             column_id: string;
-            /** Actor Id */
-            actor_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -89416,6 +90039,46 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * OwnerlessChatSessionRequest
+         * @description The session and the owner a human has picked for it.
+         */
+        OwnerlessChatSessionRequest: {
+            /** Session Id */
+            session_id: string;
+            /** Owner */
+            owner: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OwnerlessChatSessionRequestResponse
+         * @description The approval a proposal created.
+         */
+        OwnerlessChatSessionRequestResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Status */
+            status: string;
+            /** Action */
+            action: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * OwnerlessChatSessionsReport
+         * @description Sessions with no recorded owner, and those whose owner could not be read.
+         */
+        OwnerlessChatSessionsReport: {
+            /** Count */
+            count: number;
+            /** Session Ids */
+            session_ids: string[];
+            /** Unreadable */
+            unreadable: string[];
+        } & {
+            [key: string]: unknown;
+        };
         /** PMConfigRead */
         PMConfigRead: {
             /** Pm Type */
@@ -90992,8 +91655,12 @@ export interface components {
         PlanApprovalPolicy: {
             /** Key */
             key: string;
-            /** @default workflow_gate */
-            approval_type: components["schemas"]["PlanApprovalType"];
+            /**
+             * Approval Type
+             * @default workflow_gate
+             * @constant
+             */
+            approval_type: "workflow_gate";
             /** Sub Step Keys */
             sub_step_keys?: string[];
             /** @default hold */
@@ -91035,12 +91702,6 @@ export interface components {
          * @enum {string}
          */
         PlanApprovalTimeout: "hold" | "remind" | "escalate";
-        /**
-         * PlanApprovalType
-         * @description The one kind of approval a plan may ask for: it waits in Approvals (FR-6.2).
-         * @enum {string}
-         */
-        PlanApprovalType: "workflow_gate";
         /**
          * PlanConversion
          * @description What crosses from the planner to Company OS (section 7A.2).
@@ -91527,6 +92188,12 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * PolicyEnforcement
+         * @description Whether the approval policies of a plan are enforced. Nothing executes workflows yet (#16763).
+         * @enum {string}
+         */
+        PolicyEnforcement: "not_enforced";
         /**
          * PopulateManPagesResponse
          * @description Response for POST /populate_man_pages.
@@ -92613,7 +93280,7 @@ export interface components {
          * ProposalOutcome
          * @enum {string}
          */
-        ProposalOutcome: "unfiled" | "filed" | "failed";
+        ProposalOutcome: "unfiled" | "filed" | "declined" | "failed";
         /** ProposeLineChange */
         ProposeLineChange: {
             /**
@@ -94814,21 +95481,8 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** ReviewApproveRequest */
-        ReviewApproveRequest: {
-            /** Reviewer User Id */
-            reviewer_user_id: string;
-            /** Company Id */
-            company_id: string;
-        } & {
-            [key: string]: unknown;
-        };
         /** ReviewChangesRequest */
         ReviewChangesRequest: {
-            /** Reviewer User Id */
-            reviewer_user_id: string;
-            /** Company Id */
-            company_id: string;
             /** Change Request */
             change_request: string;
             /** Return To Agent Id */
@@ -97331,6 +97985,8 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+            /** Value */
+            value?: string | null;
             /**
              * Credentials
              * @description New sensitive auth fields, for a bridged secret
@@ -99888,6 +100544,58 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * SshPasswordDeletionClaim
+         * @description The SLM names the node it is about to delete a password for; the approval must name the same one.
+         */
+        SshPasswordDeletionClaim: {
+            /** Node Id */
+            node_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SshPasswordDeletionClaimResponse
+         * @description The approval was valid and is now spent.
+         */
+        SshPasswordDeletionClaimResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Node Id */
+            node_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SshPasswordDeletionProposal
+         * @description What the SLM proposes: a node and a credential kind, never a value.
+         */
+        SshPasswordDeletionProposal: {
+            /** Node Id */
+            node_id: string;
+            /**
+             * Credential Kind
+             * @default ssh_password
+             * @constant
+             */
+            credential_kind: "ssh_password";
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SshPasswordDeletionProposalResponse
+         * @description The pending approval, and whether this call created it or found it already pending.
+         */
+        SshPasswordDeletionProposalResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Status */
+            status: string;
+            /** Created */
+            created: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * StartLintResponse
          * @description Shape of ``POST /lint``.
          */
@@ -100328,6 +101036,19 @@ export interface components {
              * @default false
              */
             verified: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /** StepPatch */
+        StepPatch: {
+            /** Label */
+            label?: string | null;
+            /** Lane Key */
+            lane_key?: string | null;
+            /** Process Key */
+            process_key?: string | null;
+            /** Note */
+            note?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -104361,6 +105082,41 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** UploadCreate */
+        UploadCreate: {
+            /** Filename */
+            filename: string;
+            /** Total Size */
+            total_size: number;
+            /**
+             * Target
+             * @enum {string}
+             */
+            target: "document" | "transcript";
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Category
+             * @default uploads
+             */
+            category: string;
+            /** Tags */
+            tags?: string[];
+            /**
+             * Whisper Model
+             * @default base
+             */
+            whisper_model: string;
+            /** Language */
+            language?: string | null;
+            /** Sha256 */
+            sha256?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * UploadFileResponse
          * @description Shape of ``POST /api/knowledge_base/upload``.
@@ -106954,8 +107710,6 @@ export interface components {
             assignee_user_id?: string | null;
             /** Created By Agent Id */
             created_by_agent_id?: string | null;
-            /** Created By User Id */
-            created_by_user_id?: string | null;
             /** Labels */
             labels?: string[] | null;
             /** Requires Approval Before */
@@ -108475,7 +109229,7 @@ export interface operations {
                 /** @description VM filter */
                 vm_name?: string | null;
                 /** @description Result filter */
-                result?: ("success" | "denied" | "failed" | "error") | null;
+                result?: ("success" | "denied" | "failed" | "error" | "attempted") | null;
                 /** @description Maximum number of items to return */
                 limit?: number;
                 /** @description Number of items to skip before returning results */
@@ -108598,7 +109352,7 @@ export interface operations {
                 /** @description Hours of history to check */
                 hours?: number;
                 /** @description Result type to filter */
-                result_filter?: "success" | "denied" | "failed" | "error";
+                result_filter?: "success" | "denied" | "failed" | "error" | "attempted";
             };
             header?: never;
             path?: never;
@@ -116312,6 +117066,254 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KnowledgeUploadLimitResponse"];
+                };
+            };
+        };
+    };
+    get_upload_limits_api_knowledge_base_uploads_limits_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    create_upload_api_knowledge_base_uploads_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploadCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_expired_uploads_api_knowledge_base_uploads_expired_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    remove_expired_upload_api_knowledge_base_uploads_expired__upload_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                upload_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_upload_api_knowledge_base_uploads__upload_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                upload_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_upload_api_knowledge_base_uploads__upload_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                upload_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_chunk_api_knowledge_base_uploads__upload_id__chunks_put: {
+        parameters: {
+            query: {
+                offset: number;
+            };
+            header?: {
+                "x-chunk-sha256"?: string;
+            };
+            path: {
+                upload_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_upload_api_knowledge_base_uploads__upload_id__complete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                upload_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -133314,6 +134316,171 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrgTierColumnRequestResponse"];
+                };
+            };
+        };
+    };
+    propose_ssh_password_deletion_api_internal_slm_ssh_password_deletion_proposals_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SshPasswordDeletionProposal"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SshPasswordDeletionProposalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    claim_ssh_password_deletion_approval_api_internal_slm_ssh_password_deletion_approvals__approval_id__claim_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path: {
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SshPasswordDeletionClaim"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SshPasswordDeletionClaimResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    env_copies_status_api_admin_env_copies_cleanup_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CleanupStatus"];
+                };
+            };
+        };
+    };
+    propose_env_copies_cleanup_api_admin_env_copies_cleanup_requests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CleanupRequestResponse"];
+                };
+            };
+        };
+    };
+    ownerless_chat_sessions_api_admin_ownerless_chat_sessions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerlessChatSessionsReport"];
+                };
+            };
+        };
+    };
+    propose_chat_session_owner_api_admin_ownerless_chat_sessions_requests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OwnerlessChatSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerlessChatSessionRequestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -151108,6 +152275,7 @@ export interface operations {
         parameters: {
             query?: {
                 chat_id?: string | null;
+                confirm_dependents?: boolean;
             };
             header?: never;
             path: {
@@ -167790,6 +168958,26 @@ export interface operations {
             };
         };
     };
+    list_assigned_unpaired_workers_api_npu_assigned_unpaired_workers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignedWorkersResponse"];
+                };
+            };
+        };
+    };
     start_redis_service_api_redis_service_start_post: {
         parameters: {
             query?: never;
@@ -174372,6 +175560,72 @@ export interface operations {
             };
         };
     };
+    read_preview_api_llc_companies__company_id__project_backfill_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_backfill_api_llc_companies__company_id__project_backfill_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_pending_api_llc_approvals_get: {
         parameters: {
             query: {
@@ -175527,6 +176781,41 @@ export interface operations {
             };
         };
     };
+    create_company_team_api_llc_companies__company_id__teams_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeamCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamCreatedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     search_agents_api_llc_companies__company_id__agents_search_get: {
         parameters: {
             query: {
@@ -175682,6 +176971,107 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_company_team_api_llc_companies__company_id__teams__team_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                team_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamDeletedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_company_team_member_api_llc_companies__company_id__teams__team_id__members__user_id__post: {
+        parameters: {
+            query?: {
+                /** @description Member role (owner, admin, member) */
+                role?: string;
+            };
+            header?: never;
+            path: {
+                company_id: string;
+                team_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberAddedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_company_team_member_api_llc_companies__company_id__teams__team_id__members__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                team_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberRemovedResponse"];
                 };
             };
             /** @description Validation Error */
@@ -179380,11 +180770,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReviewApproveRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -183708,6 +185094,454 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_lane_api_llc_company_os_workflow_plans__plan_key__lanes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Lane"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_lane_api_llc_company_os_workflow_plans__plan_key__lanes__lane_key__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+                lane_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_lane_api_llc_company_os_workflow_plans__plan_key__lanes__lane_key__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+                lane_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LanePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_step_api_llc_company_os_workflow_plans__plan_key__steps_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Step"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_step_api_llc_company_os_workflow_plans__plan_key__steps__step_key__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+                step_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_step_api_llc_company_os_workflow_plans__plan_key__steps__step_key__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+                step_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StepPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_edge_api_llc_company_os_workflow_plans__plan_key__edges_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Edge"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_edge_api_llc_company_os_workflow_plans__plan_key__edges__from_step___to_step__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+                from_step: string;
+                to_step: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_edge_api_llc_company_os_workflow_plans__plan_key__edges__from_step___to_step__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+                from_step: string;
+                to_step: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EdgePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_edge_case_api_llc_company_os_workflow_plans__plan_key__steps__step_key__edge_cases_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+                step_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EdgeCaseBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_edge_case_api_llc_company_os_workflow_plans__plan_key__edge_cases__edge_case_key__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+                edge_case_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_edge_case_api_llc_company_os_workflow_plans__plan_key__edge_cases__edge_case_key__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+                edge_case_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EdgeCasePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_one_number_candidates_api_llc_company_os_workflow_plans__plan_key__one_number_candidates_get: {
+        parameters: {
+            query: {
+                return_kind: components["schemas"]["ReturnKind"];
+            };
+            header?: never;
+            path: {
+                plan_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidatesResponse"];
                 };
             };
             /** @description Validation Error */

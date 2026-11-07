@@ -12,7 +12,7 @@
 #   ansible-playbook playbooks/update-all-nodes.yml
 #   ansible-playbook playbooks/update-all-nodes.yml -e deploy_ref=release
 #   ansible-playbook playbooks/update-all-nodes.yml -e skip_branch_check=true
-#   ansible-playbook playbooks/update-all-nodes.yml --skip-tags restart   # code-only, no restarts
+#   ansible-playbook playbooks/update-all-nodes.yml --skip-tags restart -e autobot_restart_services=false   # code-only, no restarts (#20743)
 #
 # Tags:
 #   restart              - all service restart tasks (skip for code-only deploys)
@@ -25,11 +25,16 @@
 #   slm-agent            - slm_agent role redeploy (code + secrets + restart) (#11480)
 #   shared               - autobot_shared deploy tasks (all nodes)
 #
-# NOTE (#11480): the slm-agent redeploy imports the slm_agent role, whose restart
-# runs via a handler and whose pip install is tagged `packages` (not `deps`).
-# So `--skip-tags restart` / `--skip-tags deps` do NOT skip the agent restart or
-# its dep install — a code-only push still restarts the agent. Use
-# `--skip-tags slm-agent` to exclude agent redeploy entirely.
+# NOTE (#20743): restarts come from two places, and a sync without restarts has to
+# stop both. Restart TASKS are tagged `restart`. Restart HANDLERS (the agent's
+# `Restart SLM agent` among them, notified by its code, config and secrets) cannot
+# be: Ansible ignores tags on handlers. Each restart handler checks
+# `autobot_restart_services` instead. So a code-only push is
+#   --skip-tags restart -e autobot_restart_services=false
+# which is what code sync passes when "restart after sync" is off
+# (services/sync_restart.py). Every service then keeps running its old code until
+# its next restart. The agent's pip install is tagged `packages` (not `deps`, #11480);
+# use `--skip-tags slm-agent` to exclude the agent redeploy entirely.
 
 # =============================================================================
 # PLAY 0: Pre-flight Git Safety Check & Create Deploy Archives
@@ -321,6 +326,21 @@
       command: git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} log -1 --format='%s'
       register: deploy_commit_subject
       changed_when: false
+
+    # #20250: Play 3 waits for this many nodes. A per-node update has --limit localhost,<node> and
+    # needn't wait for the whole fleet. Any other limit counts, a group name included: it can't be
+    # told from a host here, and a wait of at most 3 minutes beats reporting nothing.
+    - name: "[PRE-FLIGHT] Count the nodes online before the update"
+      uri:
+        url: "https://{{ slm_host }}/slm/api/health"
+        validate_certs: false
+        status_code: 200
+      register: fleet_nodes_before
+      failed_when: false
+      when: >-
+        ansible_limit is not defined
+        or (slm_manager_inventory_host | default('')) in ansible_limit.split(',')
+        or not ('localhost' in ansible_limit.split(',') and (ansible_limit.split(',') | length) == 2)
 
     - name: "[PRE-FLIGHT] Notify SLM of new commit"
       uri:
@@ -1159,19 +1179,16 @@
       no_log: true
       tags: [backend, env]
 
-    # Internal service API key — backend must use the same key the SLM expects.
-    # Written by the backend role into /etc/autobot/autobot-backend.env (#10632).
-    - name: "[PLAY 2] Backend | Read AUTOBOT_INTERNAL_API_KEY (#10636)"
-      ansible.builtin.shell:
-        cmd: >-
-          grep -oP '^AUTOBOT_INTERNAL_API_KEY=\K.*'
-          {{ autobot_backend_env_file | quote }} 2>/dev/null || true
-      register: existing_internal_api_key
-      become: true
+    # Internal service API key (#10636): the one resolution install shares (#20750). The SLM's
+    # key is canonical; a backend whose key differs keeps it, visibly, because changing it needs
+    # the owner's approval (#17038). Sets autobot_internal_api_key for the env_only render below.
+    - name: "[PLAY 2] Backend | Resolve AUTOBOT_INTERNAL_API_KEY (#10636, #20750)"
+      ansible.builtin.include_tasks: ../_shared/tasks/resolve_internal_api_key.yml
+      vars:
+        internal_api_key_current_env_files:
+          - "{{ autobot.base_dir }}/autobot-backend/.env"
+          - "{{ autobot_backend_env_file }}"
       when: "'backend' in group_names"
-      failed_when: false
-      changed_when: false
-      no_log: true
       tags: [backend, env]
 
     # Full user management requires the autobot_app DB password (#10636).
@@ -1295,9 +1312,8 @@
         backend_secret_key: "{{ existing_secret_key.stdout | default(lookup('env', 'AUTOBOT_SECRET_KEY') | default('autobot-dev-secret-' + (9999999999 | random | string), true), true) }}"
         # #10400: prefer SLM_SECRET_KEY when present, else keep the role default.
         backend_jwt_secret: "{{ (existing_slm_secret_key.stdout | default('') | trim) if (existing_slm_secret_key.stdout | default('') | trim) | length > 0 else (existing_secret_key.stdout | default('') | trim) }}"
-        # #10636: internal service API key + full-user-management DB password,
-        # read from /etc/autobot above.
-        autobot_internal_api_key: "{{ existing_internal_api_key.stdout | default('') | trim }}"
+        # #10636: full-user-management DB password, read from /etc/autobot above. The internal
+        # service API key is the fact resolved above (#20750), not passed here.
         backend_postgres_password: "{{ existing_autobot_db_password.stdout | default('') | trim }}"
         # #10636: seed the default platform admin on first boot (full user mgmt).
         autobot_admin_password: "{{ _admin_seed_password_read | default('') }}"
@@ -2491,10 +2507,49 @@
       retries: 12
       delay: 10
 
+    # #20250: the agents reconnect after the restarts above, so read the count once they have had
+    # time to. Judged against the count before the update, so a node that was already down costs no
+    # wait and isn't blamed on it. Not a failure of this task: the marker below says it.
+    - name: Wait for the nodes to report back
+      uri:
+        url: "https://{{ slm_host }}/slm/api/health"
+        validate_certs: false
+        status_code: 200
+      register: fleet_nodes_health
+      until: >-
+        fleet_nodes_health.status == 200 and
+        (fleet_nodes_health.json.nodes_online | default(0) | int) >= (fleet_nodes_before.json.nodes_online | default(0) | int)
+      retries: "{{ update_nodes_online_retries | default(18) }}"
+      delay: "{{ update_nodes_online_delay | default(10) }}"
+      failed_when: false
+      # /health answers 200 with 0 nodes when its database is down, which is no count to judge against.
+      when: fleet_nodes_before.json is defined and fleet_nodes_before.json.database == 'healthy'
+
     - name: Clean up deploy archives
       file:
         path: /tmp/autobot-deploy
         state: absent
+
+    # Read by services/self_update_log_reader.py, so the update page says so too.
+    - name: Report nodes still offline after the update
+      debug:
+        msg: >-
+          NODES OFFLINE AFTER UPDATE:
+          {{ (fleet_nodes_before.json.nodes_online | default(0) | int) - (fleet_nodes_health.json.nodes_online | default(0) | int) }}
+          of {{ fleet_nodes_before.json.nodes_online | default(0) | int }}
+      when:
+        - fleet_nodes_before.json is defined
+        - fleet_nodes_before.json.database == 'healthy'
+        - fleet_nodes_health.json is defined
+        - fleet_nodes_health.json.database == 'healthy'
+        - (fleet_nodes_health.json.nodes_online | default(0) | int) < (fleet_nodes_before.json.nodes_online | default(0) | int)
+
+    - name: Say when the nodes could not be counted
+      debug:
+        msg: "Could not compare the nodes online before and after this update"
+      when: >-
+        fleet_nodes_before.json is defined and
+        (fleet_nodes_before.json.database != 'healthy' or fleet_nodes_health.json.database | default('') != 'healthy')
 
     - name: Display update summary
       debug:
