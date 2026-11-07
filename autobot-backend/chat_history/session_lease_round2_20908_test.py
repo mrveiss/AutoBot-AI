@@ -262,7 +262,7 @@ async def test_the_delete_route_reports_a_file_the_manager_could_not_remove(tmp_
     _write(chats / "x1_chat.json")
 
     class _Refusing:
-        def _get_chats_directory(self):
+        def chats_directory(self):
             return str(chats)
 
         async def delete_session(self, session_id):
@@ -396,6 +396,28 @@ async def test_a_load_over_a_busy_lease_serves_the_deduped_messages_and_skips_cl
     messages = await cached.load_session("c9")  # does not raise: housekeeping must not fail a read
     assert [m["text"] for m in messages] == ["same words"]
     assert _raw(tmp_path, "c9") == before and cached.cache_writes == []
+
+
+async def test_a_silent_lease_store_fails_fast_not_after_the_whole_wait(manager, monkeypatch):
+    async def no_client(database):
+        return None  # Redis disabled or the circuit open: no answer at all
+
+    monkeypatch.setattr(lease_mod, "_lease_client", no_client)
+    monkeypatch.setattr(lease_mod, "CHAT_LEASE_WAIT_S", 60.0)
+    monkeypatch.setattr(lease_mod, "CHAT_LEASE_STORE_SILENT_S", 0.1)
+    with pytest.raises(lease_mod.LeaseStoreUnavailable):
+        await asyncio.wait_for(manager.save_session("n1", messages=[_msg("x", "t0")]), timeout=10)
+
+
+async def test_control_without_the_silent_limit_the_same_store_waits_out_the_bound(manager, monkeypatch):
+    async def no_client(database):
+        return None
+
+    monkeypatch.setattr(lease_mod, "_lease_client", no_client)
+    monkeypatch.setattr(lease_mod, "CHAT_LEASE_WAIT_S", 0.3)
+    monkeypatch.setattr(lease_mod, "CHAT_LEASE_STORE_SILENT_S", 3600.0)
+    with pytest.raises(SessionLeaseTimeout):  # the behaviour before the fix: a misleading "busy"
+        await asyncio.wait_for(manager.save_session("n2", messages=[_msg("x", "t0")]), timeout=10)
 
 
 bound_async_tests(globals())

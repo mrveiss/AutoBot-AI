@@ -121,3 +121,18 @@ register_env_var(
         component="chat",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_LEASE_STORE_SILENT_S",
+        type=float,
+        default=3.0,
+        range=(0.1, None),
+        description=(
+            "Seconds the lease store may give no answer at all (Redis disabled, circuit open or erroring) "
+            "before a chat write fails fast with LeaseStoreUnavailable instead of waiting out "
+            "AUTOBOT_CHAT_LEASE_WAIT_S (chat_history/session_lease.py, #20862). Minimum 0.1."
+        ),
+        component="chat",
+    )
+)

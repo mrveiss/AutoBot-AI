@@ -68,6 +68,7 @@ CHAT_LEASE_WAIT_S: float = _seconds("AUTOBOT_CHAT_LEASE_WAIT_S")
 CHAT_LEASE_POLL_S: float = _seconds("AUTOBOT_CHAT_LEASE_POLL_S")
 CHAT_LEASE_BEST_EFFORT_WAIT_S: float = _seconds("AUTOBOT_CHAT_LEASE_BEST_EFFORT_WAIT_S")
 CHAT_LEASE_PASS_BUDGET_S: float = _seconds("AUTOBOT_CHAT_LEASE_PASS_BUDGET_S")
+CHAT_LEASE_STORE_SILENT_S: float = _seconds("AUTOBOT_CHAT_LEASE_STORE_SILENT_S")
 CHAT_LEASE_DATABASE: str = env("AUTOBOT_CHAT_LEASE_REDIS_DB")
 #: Lease keys and their fencing counters live under different prefixes, so no session id can make one the other.
 CHAT_LEASE_KEY_PREFIX: str = env("AUTOBOT_CHAT_LEASE_KEY_PREFIX")
@@ -118,6 +119,14 @@ class ChatFileUnreadable(SessionLeaseError):
 
 class SessionLeaseLost(SessionLeaseError):
     """The lease could not be confirmed just before a write, so nothing was written."""
+
+
+class LeaseStoreUnavailable(SessionLeaseError):
+    """The lease store gave no answer (Redis disabled, circuit open or erroring), so nothing was written."""
+
+    def __init__(self, session_id: str) -> None:
+        self.session_id = session_id
+        super().__init__("lease store unreachable for chat session %s; nothing written" % session_id)
 
 
 class StaleGenerationError(SessionLeaseError):
@@ -195,9 +204,21 @@ class SessionLease:
         return value or "unknown (lease store unreachable or lease just released)"
 
     async def acquire(self) -> None:
-        """Take the lease, polling until it is free. The caller bounds the wait (see session_lease)."""
-        while await self._lease.hold_or_refresh() is not True:
-            self.last_seen_holder = await self.holder()  # inside the caller's bound: a hung lookup is cut with it
+        """Take the lease, polling until it is free. The caller bounds the wait (see session_lease).
+
+        A store that gives no answer for CHAT_LEASE_STORE_SILENT_S raises LeaseStoreUnavailable at once:
+        waiting out the whole bound would end in a misleading "busy" error.
+        """
+        loop = asyncio.get_running_loop()
+        silent_since: float | None = None
+        while (state := await self._lease.hold_or_refresh()) is not True:
+            if state is None:  # no answer: nobody is known to hold the lease, so the holder is not read
+                silent_since = loop.time() if silent_since is None else silent_since
+                if loop.time() - silent_since >= CHAT_LEASE_STORE_SILENT_S:
+                    raise LeaseStoreUnavailable(self.session_id)
+            else:
+                silent_since = None
+                self.last_seen_holder = await self.holder()  # inside the caller's bound: a hung lookup is cut with it
             await asyncio.sleep(CHAT_LEASE_POLL_S)
         self._heartbeat = asyncio.create_task(self._beat())
 
@@ -235,7 +256,7 @@ class SessionLease:
             return
         redis = await _lease_client(CHAT_LEASE_DATABASE)
         if redis is None:
-            raise SessionLeaseLost("lease store unreachable for chat session %s" % self.session_id)
+            raise LeaseStoreUnavailable(self.session_id)
         floor = int(current_file_generation)
         self.generation = int(await redis.eval(_GENERATION_LUA, 1, self.generation_key, floor))
 
@@ -342,7 +363,9 @@ __all__ = [
     "CHAT_LEASE_TTL_MS",
     "CHAT_LEASE_WAIT_S",
     "ChatFileUnreadable",
+    "CHAT_LEASE_STORE_SILENT_S",
     "GENERATION_FIELD",
+    "LeaseStoreUnavailable",
     "SessionLease",
     "SessionLeaseError",
     "SessionLeaseLost",

@@ -74,6 +74,14 @@ async def test_the_route_looks_for_files_where_the_manager_keeps_them(route, tmp
     assert result["files_deleted"] == ["c9_chat.json"] and not (chats / "c9_chat.json").exists()
 
 
+@pytest.mark.parametrize("name", ["chat_c8.json", "c8_terminal.log"])
+async def test_a_conversation_with_only_a_legacy_chat_or_a_terminal_log_is_reported_deleted(route, name):
+    chats, manager = route
+    _plant(chats / name)
+    result = await data_storage.delete_conversation("c8", MagicMock(), None)  # not a 404 for data just removed
+    assert result["files_deleted"] == [name] and result["success"] is True and not (chats / name).exists()
+
+
 async def test_the_route_waits_for_the_session_lease_and_does_not_delete_around_it(
     route, monkeypatch, fake_session_lease
 ):

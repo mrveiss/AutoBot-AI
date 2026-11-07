@@ -140,4 +140,3 @@ register_env_var(
         component="backend",
     )
 )
-from autobot_shared import env_registry_chat_lease  # noqa: E402,F401 -- registers the #20862 chat lease vars

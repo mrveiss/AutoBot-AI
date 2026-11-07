@@ -52,6 +52,8 @@ from utils.chat_utils import get_chat_history_manager
 router = APIRouter(prefix="/data-storage", tags=["Data Storage"])
 logger = get_logger(__name__)
 
+#: What delete_session removes besides the legacy ``chat_<id>.json``: the route reports each one it finds gone.
+_SESSION_FILE_SUFFIXES = ("_chat.json", "_terminal_transcript.txt", "_terminal.log")
 # Data directory path
 DATA_DIR = Path(__file__).parent.parent.parent / "data"
 
@@ -440,8 +442,8 @@ async def delete_conversation(
         # #20862: the session files go through delete_session -- the one delete, which takes the session
         # lease and is fenced like a save -- so a delete cannot race a write and be undone by it.
         manager = get_chat_history_manager(request)
-        chats_dir = Path(manager._get_chats_directory())  # the directory delete_session itself works on
-        names = [f"{conversation_id}{suffix}" for suffix in ("_chat.json", "_terminal_transcript.txt")]
+        chats_dir = Path(manager.chats_directory())  # the directory delete_session itself works on
+        names = [f"{conversation_id}{suffix}" for suffix in _SESSION_FILE_SUFFIXES] + [f"chat_{conversation_id}.json"]
         present = [n for n in names if validate_relative_path(n, chats_dir).exists()]
         try:
             deleted = await manager.delete_session(conversation_id)

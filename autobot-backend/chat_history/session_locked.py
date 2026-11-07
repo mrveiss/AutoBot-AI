@@ -86,6 +86,10 @@ class SessionLockMixin:
 
         redis_client: Any
 
+    def chats_directory(self) -> str:
+        """The directory the session files live in; the one every session write and delete works on."""
+        return self._get_chats_directory()
+
     async def _warm_cache_safe(self, session_id: str) -> None:
         """Warm the cache from the file as it is once the lease is held (#315, #20862).
 
@@ -196,8 +200,7 @@ class SessionLockMixin:
             if mutate(chat_data) is False:
                 return None  # nothing to change: no generation is allocated
             await lease.begin(file_generation(chat_data))
-            on_disk = await self._stored_generation(session_id, chats_directory)
-            await lease.fence(chat_data, on_disk)
+            await lease.fence(chat_data, file_generation(chat_data))  # the file is checked again just before the rename
             guard = self._fence_at_file(session_id, chats_directory, lease, signature)
             await self._write_session_to_storage(chat_file, chat_data, before_replace=guard)
             if after is not None:

@@ -544,14 +544,14 @@ class SessionMixin(SessionLockMixin):
             self._build_session_chat_data(chat_data, session_id, name, merged, current_time, metadata)
 
         chat_data = await self._locked_update(session_id, "save_session", apply, after=self._update_redis_cache_on_save)
-        session_messages = chat_data.get("messages", [])
+        await self._after_save(session_id, chat_data, name, current_time)
+
+    async def _after_save(self, session_id: str, chat_data: Dict[str, Any], name: str, saved_at: str) -> None:
+        """The steps that follow a committed save: the memory graph entity, then the periodic file cleanup."""
         logger.info("Chat session '%s' saved successfully", session_id)
-
         if self.memory_graph_enabled and self.memory_graph:
-            await self._update_memory_graph_entity(
-                session_id, session_messages, name, current_time, chat_data.get("metadata")
-            )
-
+            messages, metadata = chat_data.get("messages", []), chat_data.get("metadata")
+            await self._update_memory_graph_entity(session_id, messages, name, saved_at, metadata)
         await self._handle_periodic_cleanup()
 
     def _build_memory_graph_observations(

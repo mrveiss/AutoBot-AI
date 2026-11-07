@@ -10,7 +10,14 @@ from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from chat_history.session_lease import ChatFileUnreadable, SessionLeaseLost, SessionLeaseTimeout, StaleGenerationError
+from chat_history.session_lease import (
+    ChatFileUnreadable,
+    LeaseStoreUnavailable,
+    SessionLeaseError,
+    SessionLeaseLost,
+    SessionLeaseTimeout,
+    StaleGenerationError,
+)
 from initialization.session_lease_handlers import register_session_lease_handlers
 
 _HOST, _PID = "node-zq7-internal", 48211
@@ -46,6 +53,16 @@ def client():
     @with_error_handling(category=ErrorCategory.SERVER_ERROR, operation="unreadable", error_code_prefix="T")
     async def unreadable():
         raise ChatFileUnreadable("s1", ValueError("bad"))
+
+    @app.get("/unreachable")
+    @with_error_handling(category=ErrorCategory.SERVER_ERROR, operation="unreachable", error_code_prefix="T")
+    async def unreachable():
+        raise LeaseStoreUnavailable("s1")
+
+    @app.get("/misconfigured")
+    @with_error_handling(category=ErrorCategory.SERVER_ERROR, operation="misconfigured", error_code_prefix="T")
+    async def misconfigured():
+        raise SessionLeaseError("chat lease Redis database 'nope' is not a known database")
 
     return TestClient(app, raise_server_exceptions=False)
 
@@ -88,6 +105,17 @@ def test_a_lost_lease_or_file_lock_is_still_a_409(client):
     response = client.get("/lost")
     assert response.status_code == 409
     assert response.json()["detail"]["code"] == "chat_session_conflict" and "s1_chat" not in response.text
+
+
+def test_an_unreachable_lease_store_is_a_503_not_a_conflict(client):
+    response = client.get("/unreachable")
+    assert response.status_code == 503 and response.json()["detail"]["code"] == "chat_session_store_unavailable"
+
+
+def test_a_misconfigured_lease_database_is_a_typed_500_that_does_not_name_it(client):
+    response = client.get("/misconfigured")  # a retry cannot fix it, so it is not a retryable 409
+    assert response.status_code == 500 and response.json()["detail"]["code"] == "chat_session_lease_error"
+    assert "nope" not in response.text
 
 
 def test_an_unreadable_chat_file_is_a_typed_500_without_the_decode_cause(client):
