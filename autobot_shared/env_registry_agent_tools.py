@@ -53,7 +53,7 @@ register_env_var(
         default="abandon",
         description=(
             "What the agent loop does when an ask-human question times out: "
-            "abandon, default or re_ask (#21024). Defined once in SSOT "
+            "abandon, default or re_ask (#21024); any other value fails config load. Defined once in SSOT "
             "(config.llm.ask_human_escalation_policy)."
         ),
         component="agent_loop",
@@ -80,7 +80,7 @@ register_env_var(
         default="stop",
         description=(
             "What the chat graph does when a turn stalls: stop halts the turn, "
-            "ask escalates to the human (#21022, #20846)."
+            "ask escalates to the human (#21022, #20846); any other value fails config load."
         ),
         component="chat_workflow",
     )
