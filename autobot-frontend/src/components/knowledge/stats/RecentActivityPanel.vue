@@ -34,7 +34,7 @@
 </template>
 
 <script setup lang="ts">
-import { BaseCard } from '@autobot/ui'
+import { BaseCard, createRecencyFormatter } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -51,7 +51,10 @@ import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { ref, computed } from 'vue'
-import { formatTimeAgo } from '@/utils/formatHelpers'
+import { useI18n } from 'vue-i18n'
+
+const { t, locale } = useI18n()
+const formatTimeAgo = createRecencyFormatter({ justNow: () => t('common.justNow'), locale: () => locale.value, invalidText: '—' })
 
 interface Activity {
   id: string | number

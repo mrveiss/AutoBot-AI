@@ -11,7 +11,7 @@
     tasks_from: ensure_venv_version
   vars:
     venv_path: "{{ venv_dir }}"
-    venv_python: python3.14
+    venv_python: "{{ python_interpreter_binary }}"
 
 - name: Check if venv exists
   stat:
@@ -19,7 +19,7 @@
   register: venv_stat
 
 - name: Create Python virtual environment
-  command: "python3.14 -m venv {{ venv_dir }}"
+  command: "{{ python_interpreter_binary }} -m venv {{ venv_dir }}"
   args:
     creates: "{{ venv_dir }}/bin/activate"
   become_user: "{{ service_user }}"

@@ -159,7 +159,7 @@ function formatPlatform(platform: string): string {
 const formatDate = createDateFormatter({ kind: 'date' })
 
 const formatRelativeTime = createRecencyFormatter({
-  justNow: () => t('devices.justNow', 'just now'),
+  justNow: () => t('devices.justNow'),
   locale: () => locale.value,
   style: 'narrow',
   maxUnit: 'day',
