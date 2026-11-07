@@ -1772,6 +1772,8 @@
       "loading": "Reading install metrics...",
       "unavailableTitle": "The main app is not available",
       "unavailableBody": "The main backend did not answer any install metrics request. No figures are shown, because any shown now would be out of date. Polling stops after repeated failures; use Refresh to read again.",
+      "unauthorisedTitle": "Not authorised to read the main app",
+      "unauthorisedBody": "The main app answered every install metrics request but refused this session. Sign in again or ask an administrator for access. No figures are shown.",
       "sectionFailedTitle": "{section} could not be read",
       "sectionFailedBody": "The install metrics request failed.",
       "emptyTitle": "Nothing reported yet",
@@ -1805,8 +1807,6 @@
       "stat": {
         "cpu": "CPU",
         "memory": "Memory",
-        "disk": "Disk",
-        "processes": "Processes",
         "overallHealth": "Overall health",
         "performanceScore": "Performance score",
         "gpuName": "Device",

@@ -26,6 +26,7 @@ from .discovery import router as discovery_router
 from .errors import router as errors_router
 from .events import router as events_router
 from .external_agents import router as external_agents_router
+from .first_admin_internal import router as first_admin_internal_router
 from .gpu import router as gpu_router
 from .health import router as health_router
 from .infrastructure import router as infrastructure_router
@@ -79,6 +80,8 @@ monitoring_router.include_router(agent_ledger_router)
 # nodes_router's own include-level auth from main.py. Mounted here rather
 # than added to api/nodes.py because that file is at its file-size ceiling.
 nodes_router.include_router(capability_profile_router)
+# #10200: on the unauthenticated health router because the route checks the internal key itself.
+health_router.include_router(first_admin_internal_router)
 
 # #17455: node-level post-sync (POST /api/nodes/{node_id}/sync) and the recorded-run
 # read (GET /api/code-sync/post-sync-runs/{run_id}) are mounted on the routers that
