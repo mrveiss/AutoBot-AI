@@ -43,7 +43,7 @@ def _python_files(root: Path) -> list[str]:
 REACH = declare(
     "no-in-repo-log-path-20894",
     discover=_python_files,
-    floor=3998,  # live population of tracked non-test .py when pinned
+    floor=4005,  # live population of tracked non-test .py when pinned
     what="tracked non-test python files",
 )
 
