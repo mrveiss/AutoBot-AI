@@ -114,13 +114,14 @@ async def test_the_reviewer_finishes_it() -> None:
 
 @pytest.mark.parametrize(
     ("new_status", "field", "value"),
-    [(WorkItemStatus.READY, "assignee_user_id", "user:{}"), (WorkItemStatus.DONE, "assignee_agent_id", "{}")],
+    [(WorkItemStatus.READY, "assignee_user_id", "user:{}"), (WorkItemStatus.DONE, "assignee_agent_id", "{}#{run}")],
 )
 async def test_the_fence_goes_with_the_checkout_and_only_while_it_names_the_holder(new_status, field, value) -> None:
     holder = uuid.uuid4()
     item = _item(WorkItemStatus.IN_PROGRESS, created_by=holder if field == "assignee_user_id" else None)
     item.assignee_user_id, item.assignee_agent_id = None, None
     setattr(item, field, holder)
+    checkout_run = item.checkout_run_id
     redis = MagicMock()
     with (
         patch("llc.services.work_item_own_task.get_async_redis_client", new=AsyncMock(return_value=redis)),
@@ -128,7 +129,7 @@ async def test_the_fence_goes_with_the_checkout_and_only_while_it_names_the_hold
     ):
         await _move(item, new_status, holder if field == "assignee_user_id" else None)
     assert item.checkout_locked_at is None
-    release.assert_awaited_once_with(redis, f"llc:checkout:{item.id}", value.format(holder))
+    release.assert_awaited_once_with(redis, f"llc:checkout:{item.id}", value.format(holder, run=checkout_run))
 
 
 async def test_a_move_that_keeps_the_checkout_keeps_the_fence() -> None:
@@ -146,6 +147,7 @@ async def test_the_gated_done_path_drops_the_fence_too() -> None:
     item = _item(WorkItemStatus.IN_REVIEW)
     item.assignee_user_id, item.assignee_agent_id = None, agent
     session = FakeAsyncSession(results=[[item]])
+    checkout_run = item.checkout_run_id
     redis = MagicMock()
     with (
         patch("llc.services.work_item_own_task.get_async_redis_client", new=AsyncMock(return_value=redis)),
@@ -157,4 +159,4 @@ async def test_the_gated_done_path_drops_the_fence_too() -> None:
             session, str(item.id), str(item.company_id), actor_user_id=str(uuid.uuid4()), is_board_override=True
         )
         await _settle()
-    release.assert_awaited_once_with(redis, f"llc:checkout:{item.id}", str(agent))
+    release.assert_awaited_once_with(redis, f"llc:checkout:{item.id}", f"{agent}#{checkout_run}")

@@ -28,7 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.redis_utils import delete_if_value
+from autobot_shared.redis_utils import delete_if_holder
 from user_management.database import get_async_session_factory
 
 from ..models.activity import ActorType
@@ -165,7 +165,7 @@ class LivenessMonitor(PollLoopScheduler):
         if redis is None:
             return
         try:
-            await delete_if_value(redis, f"llc:checkout:{work_item_id}", agent_id)
+            await delete_if_holder(redis, f"llc:checkout:{work_item_id}", agent_id)
         except Exception:
             logger.debug("Redis DEL llc:checkout:%s failed (swallowed)", work_item_id)
 

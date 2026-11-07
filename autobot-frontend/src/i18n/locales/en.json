@@ -4695,6 +4695,7 @@
       "stepApprovalTitle": "Step waiting for your approval",
       "stepApprovalSkip": "Skip step",
       "stepApproveFailed": "Could not approve the step; it is still waiting for you",
+      "stepStatusRefreshFailed": "Your answer was sent, but the step status could not be refreshed; it will update when the connection recovers",
       "stepSkipFailed": "Could not skip the step; it is still waiting for you",
       "stepRejectedByJudge": "Step refused before it ran: {reason}",
       "controlRefused": "Refused: only an administrator or the workflow's owner may control it",

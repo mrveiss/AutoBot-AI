@@ -71,7 +71,7 @@ async def test_the_fence_stays_until_the_commit(release) -> None:
     await session.commit()
     await _settle()
     release.assert_awaited_once()
-    assert release.await_args.args[1:] == (f"llc:checkout:{item.id}", str(_AGENT))
+    assert release.await_args.args[1:] == (f"llc:checkout:{item.id}", f"{_AGENT}#r")
 
 
 async def test_a_rollback_keeps_the_fence(release) -> None:
@@ -107,14 +107,14 @@ async def test_a_redis_failure_after_the_commit_is_logged_and_never_fails_the_tr
 async def test_checkout_refuses_a_live_human_claim_and_keeps_the_claim() -> None:
     person = uuid.uuid4()
     item = _item(user=person)
-    redis = MagicMock(set=AsyncMock(return_value=True), delete=AsyncMock())
+    redis = MagicMock(set=AsyncMock(return_value=True), eval=AsyncMock())
     with patch("llc.services.work_item_service.get_async_redis_client", new=AsyncMock(return_value=redis)):
         with pytest.raises(CheckoutConflict, match=f"user {person}"):
             await WorkItemService(activity_log=MagicMock()).checkout(
                 FakeAsyncSession(results=[[item]]), str(item.id), str(_AGENT)
             )
     assert item.assignee_user_id == person
-    redis.delete.assert_awaited_once()  # the fence this call took
+    redis.eval.assert_awaited_once()  # the fence this call took
 
 
 async def test_a_refused_checkout_leaves_a_fence_it_did_not_take() -> None:
@@ -126,3 +126,19 @@ async def test_a_refused_checkout_leaves_a_fence_it_did_not_take() -> None:
                 FakeAsyncSession(results=[[item]]), str(item.id), str(_AGENT)
             )
     redis.delete.assert_not_awaited()
+
+
+async def test_a_deferred_release_does_not_drop_the_fence_of_a_later_checkout() -> None:
+    """The same agent checks out again before an earlier transition's release runs: only its own generation goes."""
+    import fakeredis.aioredis
+
+    redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    session, item = _TxSession(), _item(agent=_AGENT, run="gen-1")
+    key = f"llc:checkout:{item.id}"
+    await redis.set(key, own_task.checkout_fence_value(str(_AGENT), "gen-1"))
+    _stamp(session, item)  # queues the release of generation 1
+    await redis.set(key, own_task.checkout_fence_value(str(_AGENT), "gen-2"))  # re-checkout
+    with patch.object(own_task, "get_async_redis_client", new=AsyncMock(return_value=redis)):
+        await session.commit()
+        await _settle()
+    assert await redis.get(key) == f"{_AGENT}#gen-2"

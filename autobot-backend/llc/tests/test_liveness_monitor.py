@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from autobot_shared.redis_utils import COMPARE_AND_DELETE_LUA
+from autobot_shared.redis_utils import COMPARE_HOLDER_AND_DELETE_LUA
 from llc.models.activity import ActorType, LLCActivityLog
 from llc.models.enums import ActivityEventType
 from llc.scheduler.liveness_monitor import LivenessMonitor, run_id_label
@@ -159,7 +159,7 @@ async def test_checkout_lock_released_on_recovery() -> None:
         with patch("llc.scheduler.liveness_monitor.get_async_session_factory", return_value=factory):
             await monitor._check_once()
 
-    mock_redis.eval.assert_called_once_with(COMPARE_AND_DELETE_LUA, 1, f"llc:checkout:{wid}", run.agent_id)
+    mock_redis.eval.assert_called_once_with(COMPARE_HOLDER_AND_DELETE_LUA, 1, f"llc:checkout:{wid}", run.agent_id)
     mock_redis.delete.assert_not_called()
 
 

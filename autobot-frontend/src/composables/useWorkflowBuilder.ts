@@ -21,6 +21,7 @@ import type { ApiResponse } from '@/types/api';
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
 import type { WorkflowTemplateDetail } from '@/types/workflowTemplates';
 import { useWebSocket } from '@/composables/useWebSocket';
+import { useStepAnswerState } from '@/composables/useStepAnswerState';
 import { refreshIfDisplayed, useWorkflowSocketNotices } from '@/composables/useWorkflowSocketNotices';
 import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl';
 import { useLoadingState } from '@/composables/useLoadingState';
@@ -569,6 +570,7 @@ const apiClient = new WorkflowBuilderApiClient();
 
 export function useWorkflowBuilder() {
   const { showWorkflowNotice } = useWorkflowSocketNotices();
+  const stepAnswers = useStepAnswerState();
   // ==================================================================================
   // STATE
   // ==================================================================================
@@ -884,6 +886,7 @@ export function useWorkflowBuilder() {
     const response = await apiClient.getWorkflowStatus(workflowId);
     if (response.success && response.data) {
       currentWorkflow.value = response.data.workflow;
+      stepAnswers.clearDecided(workflowId);
       return response.data.workflow;
     }
     return null;
@@ -994,14 +997,9 @@ export function useWorkflowBuilder() {
     return false;
   }
 
-  /** Answer a waiting step (approve or skip), then re-read its server status. */
-  async function answerStep(workflowId: string, stepId: string, action: 'approve_step' | 'skip_step'): Promise<boolean> {
-    const response = await apiClient.controlWorkflow(workflowId, action, stepId);
-    if (!response.success) return false;
-    logger.info(`Step answered (${action}):`, { workflowId, stepId });
-    await getWorkflowStatus(workflowId);
-    return true;
-  }
+  /** Answer a waiting step (approve or skip), then re-read its server status; see `useStepAnswerState.answer`. */
+  const answerStep = (workflowId: string, stepId: string, action: 'approve_step' | 'skip_step') =>
+    stepAnswers.answer(workflowId, stepId, async () => (await apiClient.controlWorkflow(workflowId, action, stepId)).success, () => getWorkflowStatus(workflowId));
   const approveStep = (workflowId: string, stepId: string) => answerStep(workflowId, stepId, 'approve_step');
   const skipStep = (workflowId: string, stepId: string) => answerStep(workflowId, stepId, 'skip_step');
 

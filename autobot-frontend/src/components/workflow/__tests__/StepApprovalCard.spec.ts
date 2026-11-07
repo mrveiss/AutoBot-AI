@@ -7,8 +7,13 @@
 
 import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
+import { useStepAnswerState } from '@/composables/useStepAnswerState'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
+vi.mock('@/composables/useNotificationBus', () => ({ useNotificationBus: () => ({ showToast: vi.fn() }) }))
+vi.mock('@/i18n', () => ({ default: { global: { t: (key: string) => key } } }))
+
 import StepApprovalCard from '../StepApprovalCard.vue'
 
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
@@ -89,5 +94,21 @@ describe('StepApprovalCard', () => {
     await button(wrapper, 'Approve').trigger('click')
     await new Promise((r) => setTimeout(r, 0))
     expect(button(wrapper, 'Approve').attributes('disabled')).toBeUndefined()
+  })
+
+  it('is disabled while another card answers the same step, and only that step', async () => {
+    let finish!: (ok: boolean) => void
+    const { answer } = useStepAnswerState()
+    const { wrapper, approve } = mountCard()
+    // the other card for this step starts an answer through the shared state
+    const other = answer('wf-1', 's1', () => new Promise<boolean>((r) => { finish = r }), async () => ({}))
+    await nextTick()
+    await button(wrapper, 'Approve').trigger('click')
+    expect(approve).not.toHaveBeenCalled()
+    finish(false) // refused by the server: the step is still waiting, the card is usable again
+    await other
+    await nextTick()
+    await button(wrapper, 'Approve').trigger('click')
+    expect(approve).toHaveBeenCalledTimes(1)
   })
 })

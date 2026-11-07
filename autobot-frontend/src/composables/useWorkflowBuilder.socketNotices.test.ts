@@ -25,6 +25,7 @@ vi.mock('@/i18n', () => ({
   default: { global: { t: (key: string, p: Record<string, string> = {}) => `${key}|${Object.values(p).join(',')}` } },
 }));
 
+import { useStepAnswerState } from './useStepAnswerState';
 import { useWorkflowBuilder } from './useWorkflowBuilder';
 
 const send = (msg: Record<string, unknown>) => sock.onMessage!(JSON.stringify(msg));
@@ -79,6 +80,36 @@ describe('useWorkflowBuilder workflow socket notices (#17677)', () => {
     const { approveStep } = useWorkflowBuilder();
     await expect(approveStep('wf-1', 's1')).resolves.toBe(false);
     expect(http.get).not.toHaveBeenCalled();
+  });
+
+  it('a failed status refresh still resolves the decision, tells the user and keeps the step locked', async () => {
+    http.post.mockResolvedValue({ success: true });
+    http.get.mockRejectedValue(new Error('offline'));
+    const { approveStep } = useWorkflowBuilder();
+    const { isStepLocked, clearDecided } = useStepAnswerState();
+    await expect(approveStep('wf-9', 's1')).resolves.toBe(true);
+    expect(toast).toHaveBeenCalledWith('workflow.builder.stepStatusRefreshFailed|', 'warning');
+    expect(isStepLocked('wf-9', 's1')).toBe(true);
+    await expect(approveStep('wf-9', 's1')).resolves.toBe(false); // a second click does not re-send
+    expect(http.post).toHaveBeenCalledTimes(1);
+    clearDecided('wf-9');
+  });
+
+  it('the in-flight answer is shared per workflow and step, and a refresh that succeeds unlocks it', async () => {
+    let release!: (v: unknown) => void;
+    http.post.mockImplementation(() => new Promise((r) => { release = r; }));
+    const { approveStep, skipStep, getWorkflowStatus } = useWorkflowBuilder();
+    const other = useStepAnswerState(); // what a second card for the same step reads
+    const first = approveStep('wf-8', 's1');
+    expect(other.isStepLocked('wf-8', 's1')).toBe(true);
+    expect(other.isStepLocked('wf-8', 's2')).toBe(false);
+    await expect(skipStep('wf-8', 's1')).resolves.toBe(false);
+    http.get.mockResolvedValue({ workflow: { workflow_id: 'wf-8' } });
+    release({ success: true });
+    await first;
+    expect(other.isStepLocked('wf-8', 's1')).toBe(false); // refresh succeeded: server status is authoritative
+    expect(http.post).toHaveBeenCalledTimes(1);
+    await getWorkflowStatus('wf-8');
   });
 
   it('a notice for another workflow does not fetch or replace the displayed one', async () => {

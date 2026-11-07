@@ -134,3 +134,14 @@ def test_skip_step_through_the_control_route_skips_without_running(harness):
     assert response.status_code == 200 and response.json()["success"] is True
     assert h.ran == []
     assert h.statuses == [WorkflowStepStatus.SKIPPED, WorkflowStepStatus.WAITING_APPROVAL]
+
+
+def test_second_approve_while_executing_does_not_run_the_step_again(harness):
+    """A repeated approve of a step that is no longer parked is refused with 409 and runs nothing."""
+    h, client = harness
+    h.park_current_step()
+    h.workflow.steps[0].status = WorkflowStepStatus.EXECUTING  # the first approve is mid-run
+    response = h.control(client, "approve_step", "s1")
+    assert response.status_code == 409
+    assert h.ran == []
+    assert h.statuses[0] == WorkflowStepStatus.EXECUTING

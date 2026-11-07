@@ -16,9 +16,10 @@ export type StepAnswer = (workflowId: string, stepId: string) => Promise<unknown
 </script>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ApprovalEnvelope from '@/components/approvals/ApprovalEnvelope.vue'
+import { useStepAnswerState } from '@/composables/useStepAnswerState'
 import type { WorkflowStep } from '@/composables/useWorkflowBuilder'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -32,18 +33,21 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
-const deciding = ref(false)
+const localDeciding = ref(false)
+const { isStepLocked } = useStepAnswerState()
+// Shared per (workflow, step): the same step's card elsewhere is disabled by this answer too.
+const deciding = computed(() => localDeciding.value || isStepLocked(props.workflowId, props.step.step_id))
 
 async function decide(answer: StepAnswer): Promise<void> {
   if (deciding.value) return
-  deciding.value = true
+  localDeciding.value = true
   try {
     await answer(props.workflowId, props.step.step_id)
   } catch (error) {
     // The owner reports the failure to the user; the step is still waiting, so the card stays.
     logger.error('Step answer rejected:', error)
   } finally {
-    deciding.value = false
+    localDeciding.value = false
   }
 }
 </script>
