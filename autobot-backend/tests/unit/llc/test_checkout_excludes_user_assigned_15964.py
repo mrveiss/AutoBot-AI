@@ -103,7 +103,11 @@ def _function(path: str, name: str) -> ast.AST:
     """The (async) function *name* parsed from a backend source file."""
     source = (BACKEND_ROOT / path).read_text(encoding="utf-8")
     node = next(
-        (n for n in ast.walk(ast.parse(source)) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == name),
+        (
+            n
+            for n in ast.walk(ast.parse(source))
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == name
+        ),
         None,
     )
     assert node is not None, f"{name}() not found in {path} — this test's anchor moved"
