@@ -167,6 +167,22 @@ async def _read_collection(logger, service, args: argparse.Namespace) -> int:
     return 0
 
 
+async def _adopt_store(logger, service, args: argparse.Namespace) -> int:
+    """--adopt-store: record the opened store without initialising (and so possibly recreating) it (#20886)."""
+    from services.knowledge import doc_index_store_guard, doc_indexer
+
+    if args.dry_run:
+        logger.error("--adopt-store writes the store record and cannot be combined with --dry-run")
+        return 1
+    try:
+        store, collection = await service.open_store_for_adoption()
+        doc_index_store_guard.adopt_store(store, collection, doc_indexer.HASH_CACHE_FILE)
+    except Exception as e:
+        logger.error("Could not adopt the doc index store; the previous record is unchanged: %s", e)
+        return 1
+    return 0
+
+
 async def run_index(force: bool, rebuild: bool, args: argparse.Namespace | None = None) -> int:
     """Run the indexer and return a process exit code."""
     _install_import_paths()
@@ -182,13 +198,7 @@ async def run_index(force: bool, rebuild: bool, args: argparse.Namespace | None 
     if args.search or args.stats:
         return await _read_collection(logger, service, args)
     if args.adopt_store:
-        from services.knowledge import doc_index_store_guard, doc_indexer
-
-        await service.initialize()
-        logger.info(
-            "Adopted doc index store: %s", doc_index_store_guard.adopt_store(service, doc_indexer.HASH_CACHE_FILE)
-        )
-        return 0
+        return await _adopt_store(logger, service, args)
     if args.dry_run:
         return _dry_run(logger, service, args)
     result = await _index(service, args)

@@ -449,6 +449,48 @@ class TestVanishedFile20968:
         assert stats["failed"] == 0 and stats["pending"] == 0
         assert "dropped" in caplog.text
         assert "docs/adr/.~tmp~/template.md" in caplog.text  # the path itself, so stale chunks can be found
+        gone = await queue.list_entries(SyncStatus.GONE)
+        assert [e.id for e in gone] == [result.id] and gone[0].status == SyncStatus.GONE
+        again = await queue.enqueue_sync(result.document_path, SyncReason.CONTENT_CHANGED)
+        assert again.id != result.id, "the dedup key was cleared"
+        assert (await queue.stats())["pending"] == 1
+
+    @pytest.mark.asyncio
+    async def test_done_and_gone_are_paged_by_their_own_status(self, queue: DocumentSyncQueue) -> None:
+        async def done(_: SyncQueueEntry) -> None:
+            return None
+
+        async def vanished(_: SyncQueueEntry) -> None:
+            raise DocumentGone("gone")
+
+        for i, processor in enumerate([done, vanished, done, vanished, done]):
+            await queue.enqueue_sync(f"p{i}.md", SyncReason.CONTENT_CHANGED)
+            await queue.process_one(processor)
+        gone = await queue.list_entries(SyncStatus.GONE, limit=10)
+        finished = await queue.list_entries(SyncStatus.DONE, limit=10)
+        assert sorted(e.document_path for e in gone) == ["p1.md", "p3.md"]
+        assert sorted(e.document_path for e in finished) == ["p0.md", "p2.md", "p4.md"]
+        page = await queue.list_entries(SyncStatus.DONE, limit=2, offset=1)
+        assert len(page) == 2 and all(e.status == SyncStatus.DONE for e in page)
+        tail = await queue.list_entries(SyncStatus.DONE, limit=2, offset=2)
+        assert len(tail) == 1
+
+    @pytest.mark.asyncio
+    async def test_an_inaccessible_path_is_retried_not_gone(self, tmp_path, monkeypatch) -> None:
+        from pathlib import Path
+
+        from services.knowledge.sync_queue import _raise_if_gone
+
+        present = tmp_path / "here.md"
+        await asyncio.to_thread(present.write_text, "x", encoding="utf-8")
+        await _raise_if_gone(present)  # exists: no error
+
+        def denied(_self):
+            raise PermissionError("mount unavailable")
+
+        monkeypatch.setattr(Path, "stat", denied)
+        with pytest.raises(PermissionError):
+            await _raise_if_gone(present)
 
     @pytest.mark.asyncio
     async def test_the_reindex_processor_reports_a_missing_path_as_gone(self, tmp_path) -> None:

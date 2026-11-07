@@ -4,6 +4,7 @@
 # Author: mrveiss
 """A populated collection is never re-embedded; an unknown count or a moved store is refused (#20886)."""
 
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -128,7 +129,7 @@ async def test_adopt_store_records_without_embedding_then_runs_incrementally(ind
     _make_legacy(indexer)
     indexer._collection = InMemoryClient().get_or_create_collection("autobot_docs")
     embedded = indexer._embed_model.calls
-    assert guard.adopt_store(indexer, doc_indexer.HASH_CACHE_FILE) == STORE
+    assert guard.adopt_store(STORE, indexer._collection, doc_indexer.HASH_CACHE_FILE) == STORE
     assert indexer._embed_model.calls == embedded and indexer._collection.count() == 0
     assert guard.load_recorded_store(doc_indexer.HASH_CACHE_FILE) == STORE
     result = await indexer.index_all()  # adopted: the guard no longer refuses, the run proceeds
@@ -172,3 +173,96 @@ def test_batch_progress_is_rate_limited(caplog) -> None:
 
 def test_embedding_requests_carry_a_caller_tag() -> None:
     assert guard.caller_tag()[guard.CALLER_HEADER].startswith("doc_indexer pid=")
+
+
+async def test_a_populated_collection_in_a_different_store_is_refused(indexer: DocIndexerService) -> None:
+    await indexer.index_all()
+    embedded, vectors = indexer._embed_model.calls, indexer._collection.count()
+    other = InMemoryClient().get_or_create_collection("autobot_docs")
+    other.upsert(ids=["x"], embeddings=[[0.1] * 8], documents=["unrelated"], metadatas=[{"k": "v"}])
+    indexer._collection, indexer._store = other, OTHER
+    result = await indexer.index_all()
+    assert result.skipped == 0 and result.success == 0
+    assert STORE in result.errors[0] and OTHER in result.errors[0] and "--adopt-store" in result.errors[0]
+    assert indexer._embed_model.calls == embedded and other.count() == 1 and vectors > 0
+    assert guard.load_recorded_store(doc_indexer.HASH_CACHE_FILE) == STORE, "a refusal records nothing"
+
+
+async def test_index_file_in_a_moved_empty_store_is_refused_and_leaves_the_cache(indexer: DocIndexerService) -> None:
+    await indexer.index_all()
+    cache_before = doc_indexer._load_hash_cache()
+    file = indexer._root_dir / "docs" / "a.md"
+    # a changed hash would rewrite the cache
+    await asyncio.to_thread(file.write_text, "# A\n\n" + "changed " * 80, encoding="utf-8")
+    embedded = indexer._embed_model.calls
+    indexer._collection = InMemoryClient().get_or_create_collection("autobot_docs")
+    indexer._store = OTHER
+    result = await indexer.index_file(file)
+    assert result.failed == 1 and result.success == 0 and STORE in result.errors[0]
+    assert indexer._embed_model.calls == embedded and indexer._collection.count() == 0
+    assert doc_indexer._load_hash_cache() == cache_before
+    assert guard.load_recorded_store(doc_indexer.HASH_CACHE_FILE) == STORE
+
+
+async def test_index_file_on_the_recorded_store_still_indexes(indexer: DocIndexerService) -> None:
+    await indexer.index_all()
+    file = indexer._root_dir / "docs" / "a.md"
+    await asyncio.to_thread(file.write_text, "# A\n\n" + "changed " * 80, encoding="utf-8")
+    result = await indexer.index_file(file)
+    assert result.success == 1 and not result.errors
+
+
+async def test_adopt_store_reads_the_count_before_recording(indexer: DocIndexerService) -> None:
+    await indexer.index_all()
+    with pytest.raises(guard.CollectionCountUnknown):
+        guard.adopt_store(OTHER, _BrokenCount(), doc_indexer.HASH_CACHE_FILE)
+    assert guard.load_recorded_store(doc_indexer.HASH_CACHE_FILE) == STORE, "the previous record is untouched"
+
+
+async def test_adopt_store_fails_when_the_record_cannot_be_written(indexer: DocIndexerService, monkeypatch) -> None:
+    def refuse(_self, *_a, **_k):
+        raise PermissionError("read-only")
+
+    monkeypatch.setattr(Path, "write_text", refuse)
+    with pytest.raises(OSError):
+        guard.adopt_store(OTHER, indexer._collection, doc_indexer.HASH_CACHE_FILE)
+
+
+def test_the_progress_interval_is_clamped_to_its_documented_range() -> None:
+    assert guard.clamp_progress_interval(0) == 1.0
+    assert guard.clamp_progress_interval(-5) == 1.0
+    assert guard.clamp_progress_interval(10**6) == 3600.0
+    assert guard.clamp_progress_interval(30) == 30.0
+
+
+def test_the_embedding_client_is_built_with_the_caller_header(monkeypatch) -> None:
+    """initialize() hands the tag to the embedding client, which sends it on every request."""
+    seen: dict = {}
+
+    class _Ollama:
+        def __init__(self, **kwargs) -> None:
+            seen.update(kwargs)
+            raise RuntimeError("stop after construction")
+
+    import llama_index.embeddings.ollama as ollama_mod
+
+    monkeypatch.setattr(ollama_mod, "OllamaEmbedding", _Ollama)
+    svc = _make_service(initialized=False)
+    svc._client = None
+    svc._org_id = None
+    svc._store = ""
+    svc.embedding_model_name = None
+    from services.knowledge import org_knowledge_config as cfg
+
+    class _Eff:
+        embedding_model = "m"
+        embedding_dimension = 8
+
+    class _Svc:
+        async def get_effective(self, _org):
+            return _Eff()
+
+    monkeypatch.setattr(cfg, "get_org_knowledge_config_service", lambda: _Svc())
+    monkeypatch.setattr("knowledge.backends.get_default_client", lambda **_k: object())
+    assert asyncio.run(svc.initialize()) is False
+    assert seen["client_kwargs"]["headers"][guard.CALLER_HEADER].startswith("doc_indexer pid=")

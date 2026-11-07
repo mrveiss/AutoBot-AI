@@ -774,6 +774,13 @@ class DocIndexerService:
             result.errors.append(f"File not found: {file_str}")
             return result
 
+        try:
+            # Before the hash cache or the store record is touched (#20886); leaves _needs_reindex for index_all.
+            force = force or bool(self._full_reindex_reason())
+        except (store_guard.CollectionCountUnknown, store_guard.StoreLocationChanged) as e:
+            logger.error("Doc indexer refusing to index %s: %s", file_str, e)
+            return IndexResult(total_files=1, failed=1, errors=[str(e)])
+
         if self._check_hash_and_update_cache(file_str, force):
             result.skipped = 1
             return result
@@ -912,73 +919,64 @@ class DocIndexerService:
         if not files:
             logger.warning("No documentation files discovered in %s", self._root_dir)
             return total_result
-
         store_guard.log_run_start(self.embedding_model_name, get_ollama_url())
         self._embed_progress = store_guard.EmbedProgress()
-        # Empty collection forces a full index despite the cache (#4350), unless the count is unknown (#20886)
         try:
-            reason = None if force else self._full_reindex_reason()
+            force = self._resolve_force(force)
         except (store_guard.CollectionCountUnknown, store_guard.StoreLocationChanged) as e:
             logger.error("Doc indexer refusing to re-embed: %s", e)
             return IndexResult(total_files=len(files), errors=[str(e)])
-        if reason:
-            logger.info("Full reindex: %s", reason)
-            force = True
-        elif force:
-            logger.info("Full reindex: force requested")
-        # Issue #10420: a dim-mismatch recreate has now been honoured by forcing
-        # a full re-embed; clear the flag so a later init is idempotent.
-        self._needs_reindex = False
 
-        # Incremental mode: filter to changed files
         new_hashes: Dict[str, str] = {}
         if not force:
             files, new_hashes, early = self._apply_incremental_filter(files, total_result, start_time)
             if early:
                 return total_result
-        else:
-            # In force mode, compute hashes for all files to update cache
-            hash_cache = {}  # Empty cache treats all as changed
-            files, new_hashes = _filter_changed_files(files, hash_cache, self._root_dir)
+        else:  # force: hash every file so the cache is rewritten
+            files, new_hashes = _filter_changed_files(files, {}, self._root_dir)
 
         logger.info("Indexing %d documentation files...", len(files))
+        indexed_paths = await self._index_listed_files(files, total_result, start_time)
+        if indexed_paths:  # Issue #4564: KBSynthesizer after ingest (best-effort)
+            asyncio.ensure_future(self._run_kb_synthesis(indexed_paths))
+        self._record_run(new_hashes)
+        total_result.elapsed_seconds = round(time.time() - start_time, 2)
+        store_guard.log_run_summary(total_result, self._collection)
+        return total_result
+
+    def _resolve_force(self, force: bool) -> bool:
+        """Whether this run re-embeds everything; raises on an unknown count or a moved store (#20886)."""
+        reason = None if force else self._full_reindex_reason()  # empty collection forces a full index (#4350)
+        if reason or force:
+            logger.info("Full reindex: %s", reason or "force requested")
+        self._needs_reindex = False  # #10420: the dim-mismatch recreate is honoured by this run
+        return force or bool(reason)
+
+    async def _index_listed_files(
+        self, files: List[Tuple[str, int]], total_result: IndexResult, start_time: float
+    ) -> List[str]:
+        """Index each file in turn with per-file progress; return the paths that stored chunks."""
         indexed_paths: List[str] = []
         for position, (file_path, tier) in enumerate(files, 1):
             before, chunks_before = total_result.success, self._embed_progress.count
             await self._index_single_file_content(file_path, tier, total_result)
+            rel = os.path.relpath(file_path, self._root_dir)
             store_guard.log_file_progress(
-                position,
-                len(files),
-                os.path.relpath(file_path, self._root_dir),
-                self._embed_progress.count - chunks_before,
-                start_time,
+                position, len(files), rel, self._embed_progress.count - chunks_before, start_time
             )
             if total_result.success > before:
                 indexed_paths.append(file_path)
+        return indexed_paths
 
-        # Issue #4564: trigger KBSynthesizer after ingest (best-effort, non-blocking)
-        if indexed_paths:
-            asyncio.ensure_future(self._run_kb_synthesis(indexed_paths))
-
+    def _record_run(self, new_hashes: Dict[str, str]) -> None:
+        """Persist the hash cache and the store this run embedded into."""
         if new_hashes:
-            existing_cache = _load_hash_cache()
-            existing_cache.update(new_hashes)
-            _save_hash_cache(existing_cache)
+            _save_hash_cache({**_load_hash_cache(), **new_hashes})
             store_guard.save_recorded_store(self._store, HASH_CACHE_FILE)
 
-        total_result.elapsed_seconds = round(time.time() - start_time, 2)
-
-        logger.info(
-            "Documentation indexing complete: %d success, %d failed, "
-            "%d skipped in %.1fs (collection now has %d vectors)",
-            total_result.success,
-            total_result.failed,
-            total_result.skipped,
-            total_result.elapsed_seconds,
-            self._collection.count() if self._collection else 0,
-        )
-
-        return total_result
+    async def open_store_for_adoption(self) -> tuple[str, Any]:
+        """The configured store and its existing collection, without initialising or recreating it (#20886)."""
+        return await store_guard.open_store_for_adoption(self._root_dir, self.COLLECTION_NAME)
 
     async def rebuild_from_scratch(self) -> IndexResult:
         """Delete the collection and re-index only what the current tree contains (#16934).
