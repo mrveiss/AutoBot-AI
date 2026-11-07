@@ -298,6 +298,21 @@ class SecretsCoordinator:
             raise SecretAccessError(f"not authorized to view dependencies for secret {secret_id}")
         return await SecretDependencyService().what_depends_on(session, secret_id=secret_id)
 
+    async def describe_dependencies_for_delete(
+        self, session: AsyncSession, *, user_id: uuid.UUID, permissions: set[str], secret_id: uuid.UUID
+    ) -> list[SecretDependency]:
+        """What depends on *secret_id*, listed for a caller who may DELETE it (#20640).
+
+        Gated by ``write`` -- the same authority :meth:`delete` needs -- not the ``share`` authority of
+        :meth:`describe_dependencies`, so a write-only member can still delete a secret that has no
+        dependents and is told who depends on one that has.
+        """
+        facts = await self._facts(session, user_id, permissions)
+        owner = await self._owner_vault(session, secret_id)  # raises SecretNotFoundError when absent
+        if not authorize(facts, "write", owner):
+            raise SecretAccessError(f"not authorized to delete secrets in {owner.to_str()}")
+        return await SecretDependencyService().what_depends_on(session, secret_id=secret_id)
+
     async def register_dependency(
         self,
         session: AsyncSession,

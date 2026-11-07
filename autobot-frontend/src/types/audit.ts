@@ -183,6 +183,13 @@ export const AUDIT_RESULT_CONFIG: Record<AuditResult, AuditResultConfig> = {
     icon: 'exclamation-triangle',
     bgClass: 'bg-yellow-100',
     textClass: 'text-yellow-700'
+  },
+  attempted: {
+    label: 'Attempted',
+    color: 'blue',
+    icon: 'clock',
+    bgClass: 'bg-blue-100',
+    textClass: 'text-blue-700'
   }
 }
 

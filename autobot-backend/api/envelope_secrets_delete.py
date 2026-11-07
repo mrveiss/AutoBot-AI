@@ -19,11 +19,14 @@ import uuid
 from collections.abc import Awaitable, Callable
 
 from fastapi import HTTPException, Request
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.secrets_audit import audit_secret_op
 from api.secrets_system_vault import refuse_dependents
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.secrets_vault import VaultRef
 from services.envelope_secrets_service import SecretAccessError, SecretNotFoundError
+from services.secrets_coordinator import SecretsCoordinator
 
 logger = get_logger(__name__)
 
@@ -34,6 +37,7 @@ async def audited_delete(
     *,
     dependents: Callable[[], Awaitable[list]] | None,
     delete: Callable[[], Awaitable[None]],
+    actor: str | None = None,
     **who: str,
 ) -> None:
     """Record the intent, refuse while ``dependents()`` lists any, delete, record the outcome.
@@ -42,6 +46,7 @@ async def audited_delete(
     first record says ``attempted`` and, when it cannot be written, nothing is deleted
     (503): the credential is never destroyed without its paper trail (#17038). A refusal
     or failure is recorded as ``denied`` / ``failed`` and re-raised for the route to map.
+    ``actor`` is the caller's resolved user id (recorded as is, never looked up again);
     ``who`` are identifiers only (e.g. ``service``), never a value.
 
     The dependents listing and the delete are separate statements, exactly as on
@@ -51,28 +56,37 @@ async def audited_delete(
     against a registration racing the delete, so no lock is taken (the store has none).
     """
     ref = str(secret_id)
-    await audit_secret_op("DELETE", ref, request, "attempted", required=True, phase="before_write", **who)
+    await audit_secret_op("DELETE", ref, request, "attempted", required=True, actor=actor, phase="before_write", **who)
     try:
         if dependents is not None:
             refuse_dependents(await dependents())
         await delete()
     except HTTPException as exc:
         reason = "has_dependents" if exc.status_code == 409 else "http_%d" % exc.status_code
-        await audit_secret_op("DELETE", ref, request, "denied", reason=reason, **who)
+        await audit_secret_op("DELETE", ref, request, "denied", reason=reason, actor=actor, **who)
         raise
     except SecretAccessError:
-        await audit_secret_op("DELETE", ref, request, "denied", reason="permission_denied", **who)
+        await audit_secret_op("DELETE", ref, request, "denied", reason="permission_denied", actor=actor, **who)
         raise
     except SecretNotFoundError:
-        await audit_secret_op("DELETE", ref, request, "failed", reason="not_found", **who)
+        await audit_secret_op("DELETE", ref, request, "failed", reason="not_found", actor=actor, **who)
         raise
     except Exception as exc:
-        await audit_secret_op("DELETE", ref, request, "failed", reason=type(exc).__name__, **who)
+        await audit_secret_op("DELETE", ref, request, "failed", reason=type(exc).__name__, actor=actor, **who)
         raise
-    await audit_secret_op("DELETE", ref, request, phase="completed", **who)
+    await audit_secret_op("DELETE", ref, request, phase="completed", actor=actor, **who)
 
 
-async def delete_as_user(request, session, coordinator, secret_id, user_id, permissions, confirm, mapped) -> None:
+async def delete_as_user(
+    request: Request,
+    session: AsyncSession,
+    coordinator: SecretsCoordinator,
+    secret_id: uuid.UUID,
+    user_id: uuid.UUID,
+    permissions: set[str],
+    confirm: bool,
+    mapped: Callable[[Exception], HTTPException],
+) -> None:
     """The user route: dependents are refused (409) unless a human ``confirm``-ed the listing.
 
     ``mapped`` turns a coordinator exception into the route's HTTP error (``_mapped``).
@@ -83,17 +97,27 @@ async def delete_as_user(request, session, coordinator, secret_id, user_id, perm
         await session.commit()
 
     async def dependents() -> list:
-        return await coordinator.describe_dependencies(
+        return await coordinator.describe_dependencies_for_delete(
             session, user_id=user_id, permissions=permissions, secret_id=secret_id
         )
 
     try:
-        await audited_delete(request, secret_id, dependents=None if confirm else dependents, delete=delete)
+        await audited_delete(
+            request, secret_id, dependents=None if confirm else dependents, delete=delete, actor=str(user_id)
+        )
     except (SecretAccessError, SecretNotFoundError) as exc:
         raise mapped(exc)
 
 
-async def delete_as_service(request, session, coordinator, secret_id, service_id: str, vault, mapped) -> None:
+async def delete_as_service(
+    request: Request,
+    session: AsyncSession,
+    coordinator: SecretsCoordinator,
+    secret_id: uuid.UUID,
+    service_id: str,
+    vault: VaultRef,
+    mapped: Callable[[Exception], HTTPException],
+) -> None:
     """The service route: an automatic actor cannot confirm past dependents (#17038)."""
     logger.info("service CRUD: delete system secret", extra={"service_id": service_id})
 

@@ -30,6 +30,7 @@ from testkit.fake_async_session import FakeAsyncSession
 
 store = base.store  # the same fixture: the canonical audit logger with a faked final write
 
+_USER = uuid.UUID("55555555-5555-4555-8555-555555555555")
 _SECRET = "11111111-1111-4111-8111-111111111111"
 _DEPENDENTS = [SimpleNamespace(dependent_kind="service", dependent_id="scheduler")]
 _LISTED = [{"dependent_kind": "service", "dependent_id": "scheduler"}]
@@ -41,7 +42,7 @@ class _Coordinator:
     def __init__(self, dependents=(), error=None):
         self.dependents, self.error, self.vault = list(dependents), error, {_SECRET}
 
-    async def describe_dependencies(self, session, **_kw):
+    async def describe_dependencies_for_delete(self, session, **_kw):
         return self.dependents
 
     async def service_describe_dependencies(self, session, **_kw):
@@ -65,7 +66,7 @@ def _client(coordinator: _Coordinator):
     session = FakeAsyncSession()
     app.dependency_overrides[envelope_secrets.get_session] = lambda: session
     app.dependency_overrides[envelope_secrets.get_coordinator] = lambda: coordinator
-    app.dependency_overrides[envelope_secrets.principal] = lambda: (uuid.uuid4(), {"admin"})
+    app.dependency_overrides[envelope_secrets.principal] = lambda: (_USER, {"admin"})
     app.dependency_overrides[envelope_secrets.service_principal] = lambda: "slm-backend"
     auth = MagicMock()
     auth.get_user_from_request.return_value = {"user_id": "user-42"}
@@ -191,14 +192,15 @@ def test_the_service_record_names_the_service_never_a_value(store) -> None:
     assert {e.metadata["details"].get("service") for e in store.events} == {"slm-backend"}
 
 
-def test_a_legacy_secret_cannot_have_dependents() -> None:
-    """The bulk chat delete's rows are legacy ids; dependents attach only to a vault row."""
-    from api.schemas_system import SecretModel
+def test_the_user_delete_records_the_authenticated_user_even_if_a_second_lookup_finds_none(store) -> None:
+    """The actor is the resolved principal, never re-read from the session (which can vanish mid-request)."""
+    gen = _client(_Coordinator())
+    client = next(gen)
+    try:
+        with patch("api.secrets_audit.get_auth_middleware", side_effect=RuntimeError("session store down")):
+            response = client.delete("/api/v2/secrets/" + _SECRET)
+    finally:
+        gen.close()
 
-    legacy_id = SecretModel(name="n", type="api_key", scope="general").id
-    import inspect
-
-    from services.secrets_coordinator import SecretsCoordinator
-
-    assert len(legacy_id) == 36 and legacy_id[14] == "4", "a random uuid4, minted by SecretModel"
-    assert "_owner_vault(session, secret_id)" in inspect.getsource(SecretsCoordinator.register_dependency)
+    assert response.status_code == 204
+    assert {e.actor_id for e in store.events} == {str(_USER)}

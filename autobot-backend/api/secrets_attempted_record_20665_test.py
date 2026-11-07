@@ -9,9 +9,10 @@ the status code. A write that then fails must leave "attempted" followed by "fai
 and no record anywhere in the trail that claims the change happened.
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from api import secrets_audit_store_18648_test as base
+from services.audit_logger import AuditLogger
 
 KNOWN_VALUE, SECRET_ID, _delete = base.KNOWN_VALUE, base.SECRET_ID, base._delete
 client, store = base.client, base.store  # the same fixtures: the route with a faked store write
@@ -56,8 +57,22 @@ def test_a_failed_update_leaves_no_record_claiming_success(client, store) -> Non
     assert "success" not in [outcome for outcome, _ in results]
 
 
-def test_the_attempted_record_is_not_a_success_for_a_reader_filtering_on_result(client, store) -> None:
-    _failing_delete(client)
+async def _read(store, **filters):
+    """What the audit READER returns: ``AuditLogger.query`` over a store that applies the filter it is given."""
 
-    successes = [e for e in store.events if e.outcome == "success"]
-    assert successes == []
+    async def select(flt, limit=100, offset=0):
+        return [e.__dict__ for e in store.events if flt.outcome in (None, e.outcome) and flt.action in (None, e.action)]
+
+    with patch("services.audit_logger.canonical.query_filtered", select):
+        return await AuditLogger().query(**filters)
+
+
+async def test_the_attempted_record_is_not_a_success_for_a_reader_filtering_on_result(client, store) -> None:
+    _failing_delete(client)  # leaves "attempted" then "failed"
+    _delete(client)  # the positive control: a delete that works leaves a "success"
+
+    successes = await _read(store, operation="secret.delete", result="success")
+    attempted = await _read(store, operation="secret.delete", result="attempted")
+
+    assert [e.result for e in successes] == ["success"], "the attempted and failed records are not successes"
+    assert [e.result for e in attempted] == ["attempted", "attempted"]
