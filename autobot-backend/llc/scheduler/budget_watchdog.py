@@ -28,7 +28,7 @@ from user_management.database import get_async_session_factory
 from user_management.models.organization import Organization
 
 from ..models.budget import LLCAgentBudget
-from ..services.budget import BudgetService
+from ..services.accessors import get_budget_service
 from .base import PollLoopScheduler
 
 logger = get_logger(__name__)
@@ -45,7 +45,7 @@ class BudgetWatchdog(PollLoopScheduler):
 
     def __init__(self, poll_interval: int = _POLL_INTERVAL_SECONDS) -> None:
         super().__init__(poll_interval)
-        self._budget_svc = BudgetService()
+        self._budget_svc = get_budget_service()
 
     def start(self) -> None:
         """Start the background polling loop."""
