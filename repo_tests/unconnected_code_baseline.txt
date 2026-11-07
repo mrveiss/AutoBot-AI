@@ -451,7 +451,6 @@ route:autobot-backend/api/execution_snapshots.py:DELETE /execution/snapshots/{sn
 route:autobot-backend/api/execution_snapshots.py:GET /execution/snapshots	#10603
 route:autobot-backend/api/execution_snapshots.py:POST /execution/snapshots	#10603
 route:autobot-backend/api/execution_snapshots.py:POST /execution/snapshots/{snapshot_id}/restore	#10603
-route:autobot-backend/api/feature_flags.py:GET /access-control/metrics	#10603
 route:autobot-backend/api/files.py:GET /download/{path:path}	#10603
 route:autobot-backend/api/files.py:GET /view/{path:path}	#10603
 route:autobot-backend/api/filesystem_mcp.py:GET /mcp/list_allowed_directories	#10603

@@ -14,7 +14,9 @@
  */
 
 import { ref } from 'vue'
-import { advancedControlApiClient } from '@/utils/AdvancedControlApiClient'
+import { isHttpError } from '@autobot/ui'
+import apiClient from '@/utils/ApiClient'
+import { getMonitoringWebSocketUrl as buildMonitoringWebSocketUrl } from '@/utils/advancedControlWs'
 import type {
   PendingTakeoverRequest,
   ActiveTakeoverSession,
@@ -23,13 +25,34 @@ import type {
   StreamingSession,
   StreamingCapabilities,
   StreamingSessionRequest,
+  TakeoverRequest,
   SystemMonitoringResponse,
   SystemHealthResponse,
-} from '@/utils/AdvancedControlApiClient'
+} from '@/types/advancedControl'
+import type { components } from '@/types/generated/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useUserStore } from '@/stores/useUserStore'
 
 const logger = createLogger('useAdvancedControl')
+
+type Schemas = components['schemas']
+
+/** The backend's own `detail` when it sent one, else the error text, else the fallback. */
+function failureText(err: unknown, fallback: string): string {
+  if (isHttpError(err) && err.detail) return err.detail
+  return err instanceof Error && err.message ? err.message : fallback
+}
+
+type Settled<T> = { ok: true; value: T } | { ok: false; message: string }
+
+/** One call's outcome as data, so a parallel load can tolerate a partial failure. */
+async function settle<T>(request: Promise<T>, fallback: string): Promise<Settled<T>> {
+  try {
+    return { ok: true, value: await request }
+  } catch (err) {
+    return { ok: false, message: failureText(err, fallback) }
+  }
+}
 
 export function useAdvancedControl() {
   const userStore = useUserStore()
@@ -45,6 +68,33 @@ export function useAdvancedControl() {
   const error = ref<string | null>(null)
 
   /**
+   * Run one mutation. Resolves true on success after `refresh` (when given); a failure lands in
+   * `error` (the backend's `detail` when it sent one) and resolves false, never throws.
+   */
+  async function mutate(request: () => Promise<unknown>, fallback: string, refresh?: () => Promise<void>): Promise<boolean> {
+    error.value = null
+    try {
+      await request()
+      if (refresh) await refresh()
+      return true
+    } catch (err) {
+      logger.error(`${fallback}:`, err)
+      error.value = failureText(err, fallback)
+      return false
+    }
+  }
+
+  /** Tolerate a per-call failure (log, leave that slice unchanged); only an all-failed load sets `error`. */
+  function reportLoad(results: Settled<unknown>[], labels: string[], fallback: string): void {
+    results.forEach((r, i) => {
+      if (!r.ok) logger.error(`Failed to load ${labels[i]}:`, r.message)
+    })
+    if (results.every((r) => !r.ok)) {
+      error.value = results.map((r) => (r.ok ? '' : r.message)).find(Boolean) || fallback
+    }
+  }
+
+  /**
    * Loads pending requests, active sessions, and system status in parallel.
    * Partial failures are tolerated per-call — a failed call logs and leaves
    * its slice of state unchanged rather than aborting the whole refresh.
@@ -53,129 +103,78 @@ export function useAdvancedControl() {
     loading.value = true
     error.value = null
     try {
-      const [pendingRes, activeRes, statusRes] = await Promise.all([
-        advancedControlApiClient.getPendingTakeovers(),
-        advancedControlApiClient.getActiveTakeovers(),
-        advancedControlApiClient.getTakeoverStatus(),
+      const [pending, active, status] = await Promise.all([
+        settle(apiClient.call('get', '/api/advanced-control/takeover/pending'), 'Failed to load pending takeovers'),
+        settle(apiClient.call('get', '/api/advanced-control/takeover/active'), 'Failed to load active takeovers'),
+        settle(apiClient.call('get', '/api/advanced-control/takeover/status'), 'Failed to load takeover status'),
       ])
-
-      if (pendingRes.success && pendingRes.data) {
-        pendingTakeovers.value = pendingRes.data.pending_requests
-      } else if (!pendingRes.success) {
-        logger.error('Failed to load pending takeovers:', pendingRes.error)
-      }
-
-      if (activeRes.success && activeRes.data) {
-        activeTakeovers.value = activeRes.data.active_sessions
-      } else if (!activeRes.success) {
-        logger.error('Failed to load active takeovers:', activeRes.error)
-      }
-
-      if (statusRes.success && statusRes.data) {
-        takeoverStatus.value = statusRes.data
-      } else if (!statusRes.success) {
-        logger.error('Failed to load takeover status:', statusRes.error)
-      }
-
-      if (!pendingRes.success && !activeRes.success && !statusRes.success) {
-        error.value = pendingRes.error || activeRes.error || statusRes.error || 'Failed to load takeovers'
-      }
-    } catch (err) {
-      logger.error('Failed to load takeovers:', err)
-      error.value = err instanceof Error ? err.message : 'Failed to load takeovers'
+      if (pending.ok) pendingTakeovers.value = pending.value.pending_requests as PendingTakeoverRequest[]
+      if (active.ok) activeTakeovers.value = active.value.active_sessions as ActiveTakeoverSession[]
+      if (status.ok) takeoverStatus.value = status.value as unknown as TakeoverSystemStatus
+      reportLoad([pending, active, status], ['pending takeovers', 'active takeovers', 'takeover status'], 'Failed to load takeovers')
     } finally {
       loading.value = false
     }
   }
 
   async function approve(requestId: string): Promise<boolean> {
-    error.value = null
-    try {
-      const humanOperator = userStore.currentUser?.username ?? 'unknown'
-      const res = await advancedControlApiClient.approveTakeover(requestId, {
-        human_operator: humanOperator,
-      })
-      if (!res.success) {
-        error.value = res.error || 'Failed to approve takeover'
-        return false
-      }
-      await loadTakeovers()
-      return true
-    } catch (err) {
-      logger.error('Failed to approve takeover:', err)
-      error.value = err instanceof Error ? err.message : 'Failed to approve takeover'
-      return false
-    }
+    const humanOperator = userStore.currentUser?.username ?? 'unknown'
+    return mutate(
+      () =>
+        apiClient.call('post', '/api/advanced-control/takeover/{request_id}/approve', {
+          path: { request_id: requestId },
+          body: { human_operator: humanOperator },
+        }),
+      'Failed to approve takeover',
+      loadTakeovers
+    )
   }
 
   async function pause(sessionId: string): Promise<boolean> {
-    error.value = null
-    try {
-      const res = await advancedControlApiClient.pauseTakeoverSession(sessionId)
-      if (!res.success) {
-        error.value = res.error || 'Failed to pause session'
-        return false
-      }
-      await loadTakeovers()
-      return true
-    } catch (err) {
-      logger.error('Failed to pause session:', err)
-      error.value = err instanceof Error ? err.message : 'Failed to pause session'
-      return false
-    }
+    return mutate(
+      () => apiClient.call('post', '/api/advanced-control/takeover/sessions/{session_id}/pause', { path: { session_id: sessionId } }),
+      'Failed to pause session',
+      loadTakeovers
+    )
   }
 
   async function resume(sessionId: string): Promise<boolean> {
-    error.value = null
-    try {
-      const res = await advancedControlApiClient.resumeTakeoverSession(sessionId)
-      if (!res.success) {
-        error.value = res.error || 'Failed to resume session'
-        return false
-      }
-      await loadTakeovers()
-      return true
-    } catch (err) {
-      logger.error('Failed to resume session:', err)
-      error.value = err instanceof Error ? err.message : 'Failed to resume session'
-      return false
-    }
+    return mutate(
+      () => apiClient.call('post', '/api/advanced-control/takeover/sessions/{session_id}/resume', { path: { session_id: sessionId } }),
+      'Failed to resume session',
+      loadTakeovers
+    )
   }
 
   async function complete(sessionId: string, completion: TakeoverCompletionRequest = {}): Promise<boolean> {
-    error.value = null
-    try {
-      const res = await advancedControlApiClient.completeTakeoverSession(sessionId, completion)
-      if (!res.success) {
-        error.value = res.error || 'Failed to complete session'
-        return false
-      }
-      await loadTakeovers()
-      return true
-    } catch (err) {
-      logger.error('Failed to complete session:', err)
-      error.value = err instanceof Error ? err.message : 'Failed to complete session'
-      return false
-    }
+    return mutate(
+      () =>
+        apiClient.call('post', '/api/advanced-control/takeover/sessions/{session_id}/complete', {
+          path: { session_id: sessionId },
+          body: completion,
+        }),
+      'Failed to complete session',
+      loadTakeovers
+    )
+  }
+
+  async function requestTakeover(request: TakeoverRequest): Promise<boolean> {
+    return mutate(
+      () => apiClient.call('post', '/api/advanced-control/takeover/request', { body: request as Schemas['TakeoverRequest'] }),
+      'Failed to request takeover',
+      loadTakeovers
+    )
   }
 
   async function action(sessionId: string, actionType: string, actionData: Record<string, unknown> = {}): Promise<boolean> {
-    error.value = null
-    try {
-      const res = await advancedControlApiClient.executeTakeoverAction(sessionId, {
-        action_type: actionType,
-        action_data: actionData,
-      })
-      if (!res.success) {
-        error.value = res.error || 'Failed to execute action'
-        return false
-      }
-      return true
-    } catch (err) {
-      logger.error('Failed to execute takeover action:', err)
-      error.value = err instanceof Error ? err.message : 'Failed to execute action'
-      return false
-    }
+    return mutate(
+      () =>
+        apiClient.call('post', '/api/advanced-control/takeover/sessions/{session_id}/action', {
+          path: { session_id: sessionId },
+          body: { action_type: actionType, action_data: actionData },
+        }),
+      'Failed to execute action'
+    )
   }
 
   /**
@@ -186,66 +185,34 @@ export function useAdvancedControl() {
     loading.value = true
     error.value = null
     try {
-      const [sessionsRes, capsRes] = await Promise.all([
-        advancedControlApiClient.listStreamingSessions(),
-        advancedControlApiClient.getStreamingCapabilities(),
+      const [sessions, caps] = await Promise.all([
+        settle(apiClient.call('get', '/api/advanced-control/streaming/sessions'), 'Failed to load streaming sessions'),
+        settle(apiClient.call('get', '/api/advanced-control/streaming/capabilities'), 'Failed to load streaming capabilities'),
       ])
-
-      if (sessionsRes.success && sessionsRes.data) {
-        streamingSessions.value = sessionsRes.data.sessions
-      } else if (!sessionsRes.success) {
-        logger.error('Failed to load streaming sessions:', sessionsRes.error)
-      }
-
-      if (capsRes.success && capsRes.data) {
-        streamingCapabilities.value = capsRes.data
-      } else if (!capsRes.success) {
-        logger.error('Failed to load streaming capabilities:', capsRes.error)
-      }
-
-      if (!sessionsRes.success && !capsRes.success) {
-        error.value = sessionsRes.error || capsRes.error || 'Failed to load streaming sessions'
-      }
-    } catch (err) {
-      logger.error('Failed to load streaming sessions:', err)
-      error.value = err instanceof Error ? err.message : 'Failed to load streaming sessions'
+      if (sessions.ok) streamingSessions.value = sessions.value.sessions as StreamingSession[]
+      if (caps.ok) streamingCapabilities.value = caps.value as unknown as StreamingCapabilities
+      reportLoad([sessions, caps], ['streaming sessions', 'streaming capabilities'], 'Failed to load streaming sessions')
     } finally {
       loading.value = false
     }
   }
 
   async function createStreaming(request: StreamingSessionRequest): Promise<boolean> {
-    error.value = null
-    try {
-      const res = await advancedControlApiClient.createStreamingSession(request)
-      if (!res.success) {
-        error.value = res.error || 'Failed to create streaming session'
-        return false
-      }
-      await loadStreaming()
-      return true
-    } catch (err) {
-      logger.error('Failed to create streaming session:', err)
-      error.value = err instanceof Error ? err.message : 'Failed to create streaming session'
-      return false
-    }
+    // The contract marks the defaulted resolution and depth required; the backend fills a missing one.
+    const body = request as { user_id: string; resolution: string; depth: number }
+    return mutate(
+      () => apiClient.call('post', '/api/advanced-control/streaming/create', { body }),
+      'Failed to create streaming session',
+      loadStreaming
+    )
   }
 
   async function terminateStreaming(sessionId: string): Promise<boolean> {
-    error.value = null
-    try {
-      const res = await advancedControlApiClient.terminateStreamingSession(sessionId)
-      if (!res.success) {
-        error.value = res.error || 'Failed to terminate streaming session'
-        return false
-      }
-      await loadStreaming()
-      return true
-    } catch (err) {
-      logger.error('Failed to terminate streaming session:', err)
-      error.value = err instanceof Error ? err.message : 'Failed to terminate streaming session'
-      return false
-    }
+    return mutate(
+      () => apiClient.call('delete', '/api/advanced-control/streaming/{session_id}', { path: { session_id: sessionId } }),
+      'Failed to terminate streaming session',
+      loadStreaming
+    )
   }
 
   /**
@@ -257,29 +224,13 @@ export function useAdvancedControl() {
     loading.value = true
     error.value = null
     try {
-      const [statusRes, healthRes] = await Promise.all([
-        advancedControlApiClient.getSystemStatus(),
-        advancedControlApiClient.getSystemHealth(),
+      const [status, health] = await Promise.all([
+        settle(apiClient.call('get', '/api/advanced-control/system/status'), 'Failed to load system status'),
+        settle(apiClient.call('get', '/api/advanced-control/system/health'), 'Failed to load system health'),
       ])
-
-      if (statusRes.success && statusRes.data) {
-        systemStatus.value = statusRes.data
-      } else if (!statusRes.success) {
-        logger.error('Failed to load system status:', statusRes.error)
-      }
-
-      if (healthRes.success && healthRes.data) {
-        systemHealth.value = healthRes.data
-      } else if (!healthRes.success) {
-        logger.error('Failed to load system health:', healthRes.error)
-      }
-
-      if (!statusRes.success && !healthRes.success) {
-        error.value = statusRes.error || healthRes.error || 'Failed to load system monitoring data'
-      }
-    } catch (err) {
-      logger.error('Failed to load system monitoring data:', err)
-      error.value = err instanceof Error ? err.message : 'Failed to load system monitoring data'
+      if (status.ok) systemStatus.value = status.value as unknown as SystemMonitoringResponse
+      if (health.ok) systemHealth.value = health.value as unknown as SystemHealthResponse
+      reportLoad([status, health], ['system status', 'system health'], 'Failed to load system monitoring data')
     } finally {
       loading.value = false
     }
@@ -291,25 +242,16 @@ export function useAdvancedControl() {
    * data on success so the resulting takeover shows up immediately.
    */
   async function emergencyStop(): Promise<boolean> {
-    error.value = null
-    try {
-      const res = await advancedControlApiClient.emergencyStop()
-      if (!res.success) {
-        error.value = res.error || 'Failed to activate emergency stop'
-        return false
-      }
-      await loadMonitoring()
-      return true
-    } catch (err) {
-      logger.error('Failed to activate emergency stop:', err)
-      error.value = err instanceof Error ? err.message : 'Failed to activate emergency stop'
-      return false
-    }
+    return mutate(
+      () => apiClient.call('post', '/api/advanced-control/system/emergency-stop'),
+      'Failed to activate emergency stop',
+      loadMonitoring
+    )
   }
 
-  /** Passthrough to the client's monitoring WebSocket URL builder. */
+  /** Passthrough to the monitoring WebSocket URL builder. */
   function getMonitoringWebSocketUrl(): string {
-    return advancedControlApiClient.getMonitoringWebSocketUrl()
+    return buildMonitoringWebSocketUrl()
   }
 
   return {
@@ -323,6 +265,7 @@ export function useAdvancedControl() {
     loading,
     error,
     loadTakeovers,
+    requestTakeover,
     approve,
     pause,
     resume,

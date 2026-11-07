@@ -167,19 +167,15 @@
 </template>
 
 <script setup lang="ts">
-import { BaseAlert, BaseButton } from '@autobot/ui'
+import { BaseAlert, BaseButton, isHttpError } from '@autobot/ui'
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue';
 import { ref, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
 import { useNotificationBus } from '@/composables/useNotificationBus';
-import {
-  visionMultimodalApiClient,
-  type AutomationOpportunity,
-  type ElementTypeInfo,
-  type InteractionTypeInfo,
-} from '@/utils/VisionMultimodalApiClient';
+import { detectElements, getElementTypes, getInteractionTypes } from '@/composables/useVisionApi';
+import type { AutomationOpportunity, ElementTypeInfo, InteractionTypeInfo } from '@/types/visionMultimodal';
 
 const { t } = useI18n();
 const logger = createLogger('GUIAutomationControls');
@@ -208,16 +204,12 @@ const interactionTypesList = ref<InteractionTypeInfo[]>([]);
 const loadReferenceData = async () => {
   try {
     const [elementsRes, interactionsRes] = await Promise.all([
-      visionMultimodalApiClient.getElementTypes(),
-      visionMultimodalApiClient.getInteractionTypes(),
+      getElementTypes(),
+      getInteractionTypes(),
     ]);
 
-    if (elementsRes.success && elementsRes.data) {
-      elementTypesList.value = elementsRes.data.element_types;
-    }
-    if (interactionsRes.success && interactionsRes.data) {
-      interactionTypesList.value = interactionsRes.data.interaction_types;
-    }
+    elementTypesList.value = elementsRes.element_types;
+    interactionTypesList.value = interactionsRes.interaction_types;
   } catch (err) {
     logger.error('Failed to load reference data:', err);
   }
@@ -238,15 +230,11 @@ const executeAction = async (opportunity: AutomationOpportunity) => {
   executing.value = true;
   actionError.value = null;
   try {
-    const res = await visionMultimodalApiClient.detectElements({
+    const res = await detectElements({
       element_type: opportunity.element_type,
       min_confidence: opportunity.confidence * 0.8,
     });
-    if (!res.success || !res.data) {
-      actionError.value = t('vision.guiAutomation.toastVerifyFailed', { error: res.error || 'Unknown error' });
-      return;
-    }
-    const found = res.data.elements?.some(
+    const found = res.elements?.some(
       (el: { element_id: string }) => el.element_id === opportunity.element_id
     );
     if (found) {
@@ -263,7 +251,9 @@ const executeAction = async (opportunity: AutomationOpportunity) => {
     emit('refresh');
   } catch (err) {
     logger.error('Execute action failed:', err);
-    actionError.value = t('vision.guiAutomation.toastExecutionFailed');
+    actionError.value = isHttpError(err)
+      ? t('vision.guiAutomation.toastVerifyFailed', { error: err.detail || err.message })
+      : t('vision.guiAutomation.toastExecutionFailed');
   } finally {
     executing.value = false;
   }

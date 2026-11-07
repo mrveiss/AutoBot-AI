@@ -199,11 +199,8 @@ import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
 import { useNotificationBus } from '@/composables/useNotificationBus';
 import { useThumbnailWorker } from '@/composables/useThumbnailWorker';
-import {
-  visionMultimodalApiClient,
-  type ProcessingIntent,
-  type MultiModalResponse,
-} from '@/utils/VisionMultimodalApiClient';
+import { processImage } from '@/composables/useVisionApi';
+import type { ProcessingIntent, MultiModalResponse } from '@/types/visionMultimodal';
 
 // Extended type for frame results that includes timestamp
 interface FrameResult extends MultiModalResponse {
@@ -338,17 +335,11 @@ const processVideo = async () => {
 
       if (frameBlob) {
         const file = new File([frameBlob], `frame_${i}.jpg`, { type: 'image/jpeg' });
-        const response = await visionMultimodalApiClient.processImage(
-          file,
-          processingIntent.value
-        );
-
-        if (response.success && response.data) {
-          frameResults.value.push({
-            ...response.data,
-            timestamp,
-          } as FrameResult);
-        }
+        const response = await processImage(file, processingIntent.value);
+        frameResults.value.push({
+          ...response,
+          timestamp,
+        } as FrameResult);
       }
 
       processedFrames.value = i + 1;

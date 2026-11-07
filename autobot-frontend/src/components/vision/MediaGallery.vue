@@ -182,7 +182,7 @@ import { ref, computed, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useNotificationBus } from '@/composables/useNotificationBus';
 import { useThumbnailWorker } from '@/composables/useThumbnailWorker';
-import type { GalleryItem } from '@/utils/VisionMultimodalApiClient';
+import type { GalleryItem } from '@/types/visionMultimodal';
 
 const { t } = useI18n();
 const { showToast } = useNotificationBus();

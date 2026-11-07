@@ -73,7 +73,10 @@ _BASELINES = {
     "autobot-frontend": {
         # #12363 slice 0: a class that `extends ApiClientBase` is the canonical client, not sprawl, and a bare
         # `ApiService` now counts: the main `ApiClient` leaves the set, `ApiService` (services/api.ts) joins: 8 -> 8.
-        "clients": 8,
+        # #12363 slice 4: AdvancedControl/FeatureFlags/VisionMultimodal wrappers dissolved onto `apiClient.call`, and
+        # `SlmClient` now extends the kit base: 8 -> 4 (left: ApiService, BatchApiService, SecretsApiClient (#20990),
+        # the composable-private WorkflowBuilderApiClient).
+        "clients": 4,
         # #12363: counts only raw-fetch files NOT recorded in `_RAW_FETCH_EXCEPTIONS`;
         # 17 -> 0. Every remaining site is a named exception with a reason.
         "raw_fetch": 0,
@@ -85,7 +88,7 @@ _BASELINES = {
         # baseline returns to 187 rather than staying raised.
         # #20173: the secret audit log's private AuditQueryResponse is gone; it reads
         # the one in types/audit.ts (187 -> 186).
-        "responses": 186,
+        "responses": 177,  # #12363 slice 4: nine vision/multimodal replies are now `components['schemas']` aliases (186 -> 177)
         # #15455: raised for the four typed detail fetches #15429 added. Same
         # limitation — this counts assertions, and a correct new call is one.
         # #16245: SettingsPanel.vue's unrendered /system/health/detailed loader was
@@ -94,13 +97,13 @@ _BASELINES = {
         # train-35: useBackgroundTask clear-stuck drops its `apiClient.post<unknown>` (-1).
         # #19217: the web-research settings move to the SLM admin editor (-4).
         # #19532: the unmounted main-GUI SettingsPanel retired; the SLM admin views are the home (-3).
-        "inline_generics": 534,
+        "inline_generics": 504,  # #12363 slice 4: the analytics, knowledge and BI `api.get<...>` calls are typed `apiClient.call` (534 -> 504)
         # #12363 slice 0, new dimensions, measured on the tree they landed on (down-only from here): files importing
         # the `fetchWithAuth` bridge (37, 2 of them .js) and code lines hand-building `${getApiBase()}/...` (644,
         # comments and `getBackendWsUrl(` lines excluded; 6 of them in .js). Slice 3 retires the bridge; the typed
         # `apiClient.call` path keys retire the hand-built URLs.
         "fetch_with_auth_importers": 37,
-        "hand_built_urls": 644,
+        "hand_built_urls": 563,  # #12363 slice 4: 644 -> 563
     },
     "autobot-slm-frontend": {
         # #12363 slice 0: `SlmApiClient` extends the kit's `ApiClientBase`, so it is the canonical client, not sprawl: 1 -> 0.
@@ -135,7 +138,6 @@ _BASELINES = {
 # fails when an entry no longer contains a raw fetch, so the list cannot rot.
 _RAW_FETCH_EXCEPTIONS: dict[str, str] = {
     "autobot-frontend/src/utils/fetchWithAuth.ts": "the canonical auth-injecting fetch helper",
-    "autobot-frontend/src/utils/slmClient.ts": "SLM-origin transport client with its own bearer token; the main-app JWT must not be sent",
     "autobot-frontend/src/config/AppConfig.js": "bootstrap config fetch; ApiClient derives its base URL from AppConfig, so it cannot depend on it",
     "autobot-frontend/src/config/ssot-config.ts": "SLM service discovery during config bootstrap, before any client exists; imported by the client",
     "autobot-frontend/src/config/ServiceDiscovery.js": "probes candidate hosts for reachability; not a call to the configured backend",

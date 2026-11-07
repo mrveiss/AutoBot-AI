@@ -24,7 +24,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/__tests__/ChatInterface.test.ts": 760,
     "autobot-frontend/src/components/__tests__/TerminalWindow.test.ts": 627,
     "autobot-frontend/src/components/agents/HeartbeatPanel.vue": 721,
-    "autobot-frontend/src/components/analytics/AdvancedAnalytics.vue": 902,  # #18849: 903 -> 902
+    "autobot-frontend/src/components/analytics/AdvancedAnalytics.vue": 896,  # #12363 slice 4: 902 -> 896
     "autobot-frontend/src/components/analytics/CodeEvolutionTimeline.vue": 767,
     "autobot-frontend/src/components/analytics/CodeGenerationDashboard.vue": 1108,
     "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": 1789,
@@ -35,8 +35,8 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/analytics/LLMPatternDashboard.vue": 1078,
     "autobot-frontend/src/components/analytics/LogPatternDashboard.vue": 941,
     "autobot-frontend/src/components/analytics/PatternAnalysis.vue": 944,
-    "autobot-frontend/src/components/analytics/PerformanceAnalysisDashboard.vue": 1075,
-    "autobot-frontend/src/components/analytics/PrecommitHookDashboard.vue": 1094,
+    "autobot-frontend/src/components/analytics/PerformanceAnalysisDashboard.vue": 1074,  # #12363 slice 4: 1075 -> 1074
+    "autobot-frontend/src/components/analytics/PrecommitHookDashboard.vue": 1089,  # #12363 slice 4: 1094 -> 1089
     "autobot-frontend/src/components/analytics/SourceManager.vue": 830,
     "autobot-frontend/src/components/analytics/TechnicalDebtDashboard.vue": 1706,
     "autobot-frontend/src/components/analytics/panels/CodebaseBugPredictionPanel.vue": 779,
@@ -53,8 +53,8 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/chat/ChatMessages.vue": 2097,  # #20195: 2118 -> 2097 (approval routing moved out)
     "autobot-frontend/src/components/chat/ChatSidebar.vue": 807,  # #18849: 808 -> 807
     "autobot-frontend/src/components/chat/DocumentationSearchSidebar.vue": 766,
-    "autobot-frontend/src/components/chat/VisionAnalysisModal.vue": 693,
-    "autobot-frontend/src/components/chat/VisualBrowserPanel.vue": 632,
+    "autobot-frontend/src/components/chat/VisionAnalysisModal.vue": 683,  # #12363 slice 4: 693 -> 683
+    "autobot-frontend/src/components/chat/VisualBrowserPanel.vue": 628,  # #12363 slice 4: 632 -> 628
     "autobot-frontend/src/components/chat/VoiceConversationOverlay.vue": 916,
     "autobot-frontend/src/components/chat/VoiceConversationPanel.vue": 649,
     "autobot-frontend/src/components/desktop/DesktopInterface.vue": 891,
@@ -73,7 +73,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/knowledge/KnowledgeEntries.vue": 1358,  # #19118: 1359 -> 1358
     "autobot-frontend/src/components/knowledge/KnowledgeGraph.vue": 2068,
     "autobot-frontend/src/components/knowledge/KnowledgeHealth.vue": 925,
-    "autobot-frontend/src/components/knowledge/KnowledgePersistenceDialog.vue": 891,  # #18819+#18849 one import (-1)
+    "autobot-frontend/src/components/knowledge/KnowledgePersistenceDialog.vue": 888,  # #12363 slice 4: 891 -> 888
     "autobot-frontend/src/components/knowledge/KnowledgeResearchPanel.vue": 1189,
     "autobot-frontend/src/components/knowledge/KnowledgeSystemDocs.vue": 846,
     "autobot-frontend/src/components/knowledge/KnowledgeUpload.vue": 1631,
@@ -92,10 +92,10 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/terminal/TerminalModals.vue": 742,  # #18849: 743 -> 742
     "autobot-frontend/src/components/terminal/TerminalWindow.vue": 1605,
     "autobot-frontend/src/components/ui/HostSelectionDialog.vue": 924,
-    "autobot-frontend/src/components/vision/GUIAutomationControls.vue": 708,
+    "autobot-frontend/src/components/vision/GUIAutomationControls.vue": 698,  # #12363 slice 4: 708 -> 698
     "autobot-frontend/src/components/vision/MediaGallery.vue": 717,
-    "autobot-frontend/src/components/vision/ScreenCaptureViewer.vue": 835,
-    "autobot-frontend/src/components/vision/VideoProcessor.vue": 891,
+    "autobot-frontend/src/components/vision/ScreenCaptureViewer.vue": 826,  # #12363 slice 4: 835 -> 826
+    "autobot-frontend/src/components/vision/VideoProcessor.vue": 882,  # #12363 slice 4: 891 -> 882
     "autobot-frontend/src/components/visualizations/AgentActivityVisualization.vue": 936,
     "autobot-frontend/src/components/visualizations/SystemArchitectureDiagram.vue": 1874,
     "autobot-frontend/src/components/visualizations/WorkflowVisualization.vue": 1017,  # #16744: 1020 -> 1019
@@ -132,12 +132,11 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/stores/useChatStore.ts": 1176,
     "autobot-frontend/src/stores/useKnowledgeStore.ts": 809,
     "autobot-frontend/src/utils/RumAgent.ts": 852,
-    "autobot-frontend/src/utils/VisionMultimodalApiClient.ts": 663,
     "autobot-frontend/src/utils/debugUtils.ts": 620,
     "autobot-frontend/src/views/AdminUsersView.vue": 796,
     "autobot-frontend/src/views/AdvancedControlView.vue": 1049,
     "autobot-frontend/src/views/BudgetPolicies.vue": 879,
-    "autobot-frontend/src/views/BusinessIntelligenceView.vue": 982,  # #20004: 988 -> 987
+    "autobot-frontend/src/views/BusinessIntelligenceView.vue": 980,  # #12363 slice 4: 982 -> 980
     "autobot-frontend/src/views/CustomDashboard.vue": 878,  # #18242: 1106 -> 884; train-42 review: -5, then -1
     "autobot-frontend/src/views/ErrorMonitoringView.vue": 839,
     "autobot-frontend/src/views/EvolutionView.vue": 771,
@@ -147,7 +146,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/PluginsView.vue": 1058,
     "autobot-frontend/src/views/SettingsView.vue": 739,
     "autobot-frontend/src/views/VisionAutomationView.vue": 848,
-    "autobot-frontend/src/views/WorkflowBuilderView.vue": 2166,  # #17677: 2169 -> 2166; #13421: 2201 -> 2169; #13422
+    "autobot-frontend/src/views/WorkflowBuilderView.vue": 2158,  # #12363 slice 4: 2166 -> 2158
     "autobot-frontend/src/views/llc/BacklogView.vue": 611,
     "autobot-frontend/src/views/llc/CompanyCreationWizard.vue": 909,
     "autobot-frontend/src/views/llc/CompanyPortabilityView.vue": 761,

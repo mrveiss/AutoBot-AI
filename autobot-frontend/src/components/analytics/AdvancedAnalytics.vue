@@ -320,16 +320,15 @@
 </template>
 
 <script setup lang="ts">
-import { BaseButton, BaseCard } from '@autobot/ui'
+import { BaseButton, BaseCard, saveBlob } from '@autobot/ui'
 import type { IconName } from '@/components/ui/Icon.vue'
 import { formatDuration } from '@/utils/formatHelpers'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import api from '@/services/api'
+import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
-import { getApiBase } from '@/config/ssot-config'
 
 const { t } = useI18n()
 
@@ -506,9 +505,9 @@ const fetchCostData = async () => {
     // Issue #552: Fixed missing /api prefix in analytics endpoints
     // Issue #701: Added type assertions for Promise.all results
     const [summaryRes, trendsRes, modelsRes] = await Promise.all([
-      api.get<ApiDataResponse>(`${getApiBase()}/analytics/cost/summary`),
-      api.get<ApiDataResponse>(`${getApiBase()}/analytics/cost/trends`),
-      api.get<ApiDataResponse>(`${getApiBase()}/analytics/cost/by-model`)
+      apiClient.call('get', '/api/analytics/cost/summary'),
+      apiClient.call('get', '/api/analytics/cost/trends'),
+      apiClient.call('get', '/api/analytics/cost/by-model')
     ])
     costSummary.value = (summaryRes as ApiDataResponse).data as CostSummary | null
     costTrends.value = (trendsRes as ApiDataResponse).data as CostTrends | null
@@ -523,8 +522,8 @@ const fetchAgentData = async () => {
     // Issue #552: Fixed missing /api prefix in analytics endpoints
     // Issue #701: Added type assertions for Promise.all results
     const [metricsRes, recsRes] = await Promise.all([
-      api.get<ApiDataResponse>(`${getApiBase()}/analytics/agents/performance`),
-      api.get<ApiDataResponse>(`${getApiBase()}/analytics/agents/recommendations`)
+      apiClient.call('get', '/api/analytics/agents/performance'),
+      apiClient.call('get', '/api/analytics/agents/recommendations')
     ])
     agentMetrics.value = (metricsRes as ApiDataResponse).data as AgentMetrics | null
     recommendations.value = (recsRes as ApiDataResponse).data as Recommendations | null
@@ -537,7 +536,7 @@ const fetchExportFormats = async () => {
   try {
     // Issue #552: Fixed missing /api prefix in analytics endpoints
     // Issue #701: Added type assertion for response
-    const res = await api.get<ApiDataResponse>(`${getApiBase()}/analytics/export/formats`)
+    const res = await apiClient.call('get', '/api/analytics/export/formats')
     exportFormats.value = ((res as ApiDataResponse).data as ExportFormatsData | undefined)?.formats || []
     // Add icons
     exportFormats.value.forEach((f: ExportFormat) => {
@@ -557,9 +556,9 @@ const fetchBehaviorData = async () => {
     // Issue #552: Fixed missing /api prefix in analytics endpoints
     // Issue #701: Added type assertions for Promise.all results
     const [engagementRes, featuresRes, heatmapRes] = await Promise.all([
-      api.get<ApiDataResponse>(`${getApiBase()}/analytics/behavior/engagement`),
-      api.get<ApiDataResponse>(`${getApiBase()}/analytics/behavior/features`),
-      api.get<ApiDataResponse>(`${getApiBase()}/analytics/behavior/stats/heatmap`)
+      apiClient.call('get', '/api/analytics/behavior/engagement'),
+      apiClient.call('get', '/api/analytics/behavior/features'),
+      apiClient.call('get', '/api/analytics/behavior/stats/heatmap')
     ])
     engagementMetrics.value = (engagementRes as ApiDataResponse).data as EngagementMetricsData | null
     behaviorMetrics.value = (featuresRes as ApiDataResponse).data
@@ -582,17 +581,12 @@ const getPopularityWidth = (views: number): string => {
 
 const downloadExport = async (path: string) => {
   try {
-    // Issue #701: Fixed api.get call - use responseType option properly
-    const response = await api.get<Blob>(path, { responseType: 'blob' })
-    const url = window.URL.createObjectURL(new Blob([response as unknown as BlobPart]))
-    const link = document.createElement('a')
-    link.href = url
+    // The server names the export route (from /analytics/export/formats), so the path is dynamic: a raw request.
+    const response = await apiClient.rawRequest(path)
+    if (!response.ok) throw new Error(`Export failed: HTTP ${response.status}`)
     // Extract filename from path
     const filename = path.split('/').pop() + (path.includes('csv') ? '.csv' : '.json')
-    link.setAttribute('download', filename)
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
+    saveBlob(await response.blob(), filename)
   } catch (error) {
     logger.error('Failed to download export:', error)
   }

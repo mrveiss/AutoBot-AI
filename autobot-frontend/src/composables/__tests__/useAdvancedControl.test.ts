@@ -22,6 +22,7 @@ import { effectScope } from 'vue'
 const mockGetPendingTakeovers = vi.fn()
 const mockGetActiveTakeovers = vi.fn()
 const mockGetTakeoverStatus = vi.fn()
+const mockRequestTakeover = vi.fn()
 const mockApproveTakeover = vi.fn()
 const mockPauseTakeoverSession = vi.fn()
 const mockResumeTakeoverSession = vi.fn()
@@ -36,25 +37,45 @@ const mockGetSystemHealth = vi.fn()
 const mockEmergencyStop = vi.fn()
 const mockGetMonitoringWebSocketUrl = vi.fn()
 
-vi.mock('@/utils/AdvancedControlApiClient', () => ({
-  advancedControlApiClient: {
-    getPendingTakeovers: (...args: unknown[]) => mockGetPendingTakeovers(...args),
-    getActiveTakeovers: (...args: unknown[]) => mockGetActiveTakeovers(...args),
-    getTakeoverStatus: (...args: unknown[]) => mockGetTakeoverStatus(...args),
-    approveTakeover: (...args: unknown[]) => mockApproveTakeover(...args),
-    pauseTakeoverSession: (...args: unknown[]) => mockPauseTakeoverSession(...args),
-    resumeTakeoverSession: (...args: unknown[]) => mockResumeTakeoverSession(...args),
-    completeTakeoverSession: (...args: unknown[]) => mockCompleteTakeoverSession(...args),
-    executeTakeoverAction: (...args: unknown[]) => mockExecuteTakeoverAction(...args),
-    listStreamingSessions: (...args: unknown[]) => mockListStreamingSessions(...args),
-    getStreamingCapabilities: (...args: unknown[]) => mockGetStreamingCapabilities(...args),
-    createStreamingSession: (...args: unknown[]) => mockCreateStreamingSession(...args),
-    terminateStreamingSession: (...args: unknown[]) => mockTerminateStreamingSession(...args),
-    getSystemStatus: (...args: unknown[]) => mockGetSystemStatus(...args),
-    getSystemHealth: (...args: unknown[]) => mockGetSystemHealth(...args),
-    emergencyStop: (...args: unknown[]) => mockEmergencyStop(...args),
-    getMonitoringWebSocketUrl: (...args: unknown[]) => mockGetMonitoringWebSocketUrl(...args),
-  },
+/**
+ * The typed client is mocked at `apiClient.call`: each (method, path) routes to the named mock above,
+ * which keeps its pre-migration `{ success, data, error }` fixtures. A `success: false` reply is what
+ * the client now throws as an HttpError.
+ */
+type CallInit = { path?: Record<string, string>; body?: unknown }
+const ROUTES: Record<string, (init: CallInit) => unknown> = {
+  'get /api/advanced-control/takeover/pending': () => mockGetPendingTakeovers(),
+  'get /api/advanced-control/takeover/active': () => mockGetActiveTakeovers(),
+  'get /api/advanced-control/takeover/status': () => mockGetTakeoverStatus(),
+  'post /api/advanced-control/takeover/request': (i) => mockRequestTakeover(i.body),
+  'post /api/advanced-control/takeover/{request_id}/approve': (i) => mockApproveTakeover(i.path?.request_id, i.body),
+  'post /api/advanced-control/takeover/sessions/{session_id}/pause': (i) => mockPauseTakeoverSession(i.path?.session_id),
+  'post /api/advanced-control/takeover/sessions/{session_id}/resume': (i) => mockResumeTakeoverSession(i.path?.session_id),
+  'post /api/advanced-control/takeover/sessions/{session_id}/complete': (i) => mockCompleteTakeoverSession(i.path?.session_id, i.body),
+  'post /api/advanced-control/takeover/sessions/{session_id}/action': (i) => mockExecuteTakeoverAction(i.path?.session_id, i.body),
+  'get /api/advanced-control/streaming/sessions': () => mockListStreamingSessions(),
+  'get /api/advanced-control/streaming/capabilities': () => mockGetStreamingCapabilities(),
+  'post /api/advanced-control/streaming/create': (i) => mockCreateStreamingSession(i.body),
+  'delete /api/advanced-control/streaming/{session_id}': (i) => mockTerminateStreamingSession(i.path?.session_id),
+  'get /api/advanced-control/system/status': () => mockGetSystemStatus(),
+  'get /api/advanced-control/system/health': () => mockGetSystemHealth(),
+  'post /api/advanced-control/system/emergency-stop': () => mockEmergencyStop(),
+}
+
+async function routeCall(method: string, path: string, init: CallInit = {}): Promise<unknown> {
+  const route = ROUTES[`${method} ${path}`]
+  if (!route) throw new Error(`unrouted call ${method} ${path}`)
+  const res = (await route(init)) as { success: boolean; data?: unknown; error?: string } | undefined
+  if (!res?.success) throw new Error(res?.error || 'request failed')
+  return res.data
+}
+
+vi.mock('@/utils/ApiClient', () => ({
+  default: { call: (method: string, path: string, init?: CallInit) => routeCall(method, path, init) },
+}))
+
+vi.mock('@/utils/advancedControlWs', () => ({
+  getMonitoringWebSocketUrl: () => mockGetMonitoringWebSocketUrl(),
 }))
 
 import { useAdvancedControl } from '../useAdvancedControl'
@@ -130,6 +151,7 @@ function resetMocks(): void {
   mockGetPendingTakeovers.mockReset().mockResolvedValue(okEmpty)
   mockGetActiveTakeovers.mockReset().mockResolvedValue(okEmptyActive)
   mockGetTakeoverStatus.mockReset().mockResolvedValue(okStatus)
+  mockRequestTakeover.mockReset()
   mockApproveTakeover.mockReset()
   mockPauseTakeoverSession.mockReset()
   mockResumeTakeoverSession.mockReset()
@@ -153,6 +175,15 @@ describe('useAdvancedControl', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+  })
+
+  it('requestTakeover posts the request body and refreshes the takeovers', async () => {
+    mockRequestTakeover.mockResolvedValue({ success: true, data: { success: true, request_id: 'r9' } })
+    const { requestTakeover } = useAdvancedControl()
+    const ok = await requestTakeover({ trigger: 'MANUAL_REQUEST', reason: 'look' })
+    expect(ok).toBe(true)
+    expect(mockRequestTakeover).toHaveBeenCalledWith({ trigger: 'MANUAL_REQUEST', reason: 'look' })
+    expect(mockGetPendingTakeovers).toHaveBeenCalled()
   })
 
   it('starts with empty state', () => {

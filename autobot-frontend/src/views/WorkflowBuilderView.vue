@@ -718,10 +718,8 @@ import GUIAutomationControls from '@/components/vision/GUIAutomationControls.vue
 import ScreenCaptureViewer from '@/components/vision/ScreenCaptureViewer.vue';
 import VideoProcessor from '@/components/vision/VideoProcessor.vue';
 import MediaGallery from '@/components/vision/MediaGallery.vue';
-import {
-  visionMultimodalApiClient,
-  type AutomationOpportunity,
-} from '@/utils/VisionMultimodalApiClient';
+import { getVisionHealth, getAutomationOpportunities } from '@/composables/useVisionApi';
+import type { AutomationOpportunity } from '@/types/visionMultimodal';
 
 const logger = createLogger('WorkflowBuilderView');
 const { t } = useI18n();
@@ -857,12 +855,8 @@ function onVisionNavClick(event: MouseEvent): void {
 
 async function checkVisionHealth(): Promise<void> {
   try {
-    const res = await visionMultimodalApiClient.getVisionHealth();
-    if (res.success && res.data) {
-      visionHealthStatus.value = res.data.status === 'healthy' ? 'healthy' : 'degraded';
-    } else {
-      visionHealthStatus.value = 'offline';
-    }
+    const res = await getVisionHealth();
+    visionHealthStatus.value = res.status === 'healthy' ? 'healthy' : 'degraded';
   } catch {
     visionHealthStatus.value = 'offline';
   }
@@ -871,10 +865,8 @@ async function checkVisionHealth(): Promise<void> {
 async function loadGuiAutomationOpportunities(): Promise<void> {
   guiAutomationLoading.value = true;
   try {
-    const res = await visionMultimodalApiClient.getAutomationOpportunities();
-    if (res.success && res.data) {
-      guiAutomationOpportunities.value = res.data.opportunities || [];
-    }
+    const res = await getAutomationOpportunities();
+    guiAutomationOpportunities.value = (res.opportunities || []) as AutomationOpportunity[];
   } catch (e) {
     logger.warn('Failed to load automation opportunities:', e);
   } finally {
