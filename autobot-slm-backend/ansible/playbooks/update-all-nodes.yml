@@ -569,26 +569,16 @@
 
     # Issue #9225: slm-agent needs autobot_shared in PYTHONPATH
     - name: "[PLAY 1] SLM Agent | Create autobot_shared symlink for agent imports"
-      ansible.builtin.file:
-        src: ../autobot_shared
-        dest: "{{ autobot.base_dir }}/autobot-slm-agent/autobot_shared"
-        state: link
-        force: true
-        owner: autobot
-        group: autobot
-      become: true
+      ansible.builtin.import_tasks: ../roles/_shared/tasks/link_autobot_shared.yml
+      vars:
+        shared_link_component: autobot-slm-agent
       tags: [slm, slm-agent, shared]
 
     # Issue #9565: slm-backend needs autobot_shared in PYTHONPATH
     - name: "[PLAY 1] SLM Backend | Create autobot_shared symlink for backend imports"
-      ansible.builtin.file:
-        src: ../autobot_shared
-        dest: "{{ autobot.base_dir }}/autobot-slm-backend/autobot_shared"
-        state: link
-        force: true
-        owner: autobot
-        group: autobot
-      become: true
+      ansible.builtin.import_tasks: ../roles/_shared/tasks/link_autobot_shared.yml
+      vars:
+        shared_link_component: autobot-slm-backend
       tags: [slm, slm-backend, shared]
 
     # #12907/#12959: same role-owned reconciliation as PLAY 2, for the SLM
@@ -1068,14 +1058,9 @@
       tags: [backend, shared]
 
     - name: "[PLAY 2] Backend | Ensure autobot_shared symlink inside backend dir (#2651)"
-      ansible.builtin.file:
-        src: ../autobot_shared
-        dest: "{{ autobot.base_dir }}/autobot-backend/autobot_shared"
-        state: link
-        force: true
-        owner: autobot
-        group: autobot
-      become: true
+      ansible.builtin.import_tasks: ../roles/_shared/tasks/link_autobot_shared.yml
+      vars:
+        shared_link_component: autobot-backend
       when: "'backend' in group_names"
       tags: [backend, shared, symlink]
 
@@ -2051,19 +2036,6 @@
       when: "'backend' not in group_names"
       tags: [shared]
 
-    # Issue #9225: slm-agent needs autobot_shared in PYTHONPATH
-    - name: "[PLAY 2] SLM Agent | Create autobot_shared symlink for agent imports"
-      ansible.builtin.file:
-        src: ../autobot_shared
-        dest: "{{ autobot.base_dir }}/autobot-slm-agent/autobot_shared"
-        state: link
-        force: true
-        owner: autobot
-        group: autobot
-      become: true
-      when: slm_node_id is defined
-      tags: [slm-agent, shared]
-
     # #11480: redeploy the slm-agent (code + agent-secrets.env + restart) on
     # remote nodes too. block/rescue keeps a single node's agent failure from
     # aborting the whole fleet update (Play 2 has any_errors_fatal: true) —
@@ -2092,16 +2064,21 @@
               agent may run stale code / miss agent-secrets.env (#11480).
               Continuing fleet update.
 
+    # Linked after the redeploy so a freshly enrolled node (no agent tree yet) gets the
+    # link once the role has installed it (#21035).
+    # Issue #9225: slm-agent needs autobot_shared in PYTHONPATH
+    - name: "[PLAY 2] SLM Agent | Create autobot_shared symlink for agent imports"
+      ansible.builtin.import_tasks: ../roles/_shared/tasks/link_autobot_shared.yml
+      vars:
+        shared_link_component: autobot-slm-agent
+      when: slm_node_id is defined
+      tags: [slm-agent, shared]
+
     # Issue #9565: slm-backend needs autobot_shared in PYTHONPATH
     - name: "[PLAY 2] SLM Backend | Create autobot_shared symlink for backend imports"
-      ansible.builtin.file:
-        src: ../autobot_shared
-        dest: "{{ autobot.base_dir }}/autobot-slm-backend/autobot_shared"
-        state: link
-        force: true
-        owner: autobot
-        group: autobot
-      become: true
+      ansible.builtin.import_tasks: ../roles/_shared/tasks/link_autobot_shared.yml
+      vars:
+        shared_link_component: autobot-slm-backend
       when: slm_node_id is defined
       tags: [slm-backend, shared]
 
