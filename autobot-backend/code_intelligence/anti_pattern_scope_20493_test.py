@@ -5,11 +5,47 @@
 """#20493: the code-smell scan reaches nested files and its counts come from one list."""
 
 import asyncio
+import importlib.util
+import sys
 from pathlib import Path
 
 import pytest
 
+from code_intelligence.anti_pattern_detection import analyzer as _analyzer_module
 from code_intelligence.anti_pattern_detection.analyzer import AntiPatternSuiteAnalyzer
+
+_SHARED_DIR = Path(__file__).resolve().parent / "shared"
+
+
+def _load_real(leaf: str, monkeypatch: pytest.MonkeyPatch):
+    """Load shared/<leaf>.py from its file, whatever sys.modules holds for it.
+
+    The top-level conftest stubs ``code_intelligence`` submodules as MagicMocks,
+    and another test can leave one installed. The analyzer binds
+    ``get_ast_with_content`` / ``get_python_files`` at import, so a stub present
+    then makes every file on the cached path raise. Loading by path leaves
+    sys.modules as it was once the test ends (dataclasses need the module
+    registered while it executes, so it is installed through monkeypatch).
+    """
+    name = f"_real_20493_{leaf}"
+    spec = importlib.util.spec_from_file_location(name, _SHARED_DIR / f"{leaf}.py")
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, name, module)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture
+def real_shared_caches(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point the analyzer's cached path at the real AST and file-list caches."""
+    monkeypatch.setattr(
+        _analyzer_module, "get_ast_with_content", _load_real("ast_cache", monkeypatch).get_ast_with_content
+    )
+    monkeypatch.setattr(
+        _analyzer_module, "get_cached_python_files", _load_real("file_cache", monkeypatch).get_python_files
+    )
+    monkeypatch.setattr(_analyzer_module, "HAS_SHARED_CACHE", True)
+
 
 _LONG_PARAMS = "def f(a, b, c, d, e, f, g, h, i, j, k, l):\n    return a\n"
 
@@ -40,7 +76,7 @@ def test_nested_files_are_scanned(tree: Path):
     assert not any(s.startswith("node_modules") for s in scanned)
 
 
-def test_cached_and_uncached_discovery_agree(tree: Path):
+def test_cached_and_uncached_discovery_agree(tree: Path, real_shared_caches: None):
     a = AntiPatternSuiteAnalyzer()
     sync_files = a._get_python_files(str(tree))
     cached_files = asyncio.run(a._get_python_files_async(str(tree)))
@@ -73,7 +109,7 @@ def test_scope_is_stated(tree: Path):
     assert out["cap_applied"] is False
 
 
-def test_files_failed_on_cached_path(tree: Path):
+def test_files_failed_on_cached_path(tree: Path, real_shared_caches: None):
     a = AntiPatternSuiteAnalyzer()
     report = asyncio.run(a._analyze_directory_with_cache(str(tree)))
     assert report.total_files == 4
