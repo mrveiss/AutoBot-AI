@@ -7,16 +7,16 @@ set -e
 
 echo "🚀 Installing AutoBot Code Analysis Suite..."
 
-# Check Python version
-python_version=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
-required_version="3.8"
-
-if [ "$(printf '%s\n' "$required_version" "$python_version" | sort -V | head -n1)" != "$required_version" ]; then
-    echo "❌ Python $required_version or higher is required. Found: $python_version"
+# Python: the floor interpreter from .python-version (#20932), never a bare python3
+CA_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=scripts/lib/python_floor.sh
+source "$CA_ROOT/scripts/lib/python_floor.sh" || {
+    echo "ERROR: cannot source scripts/lib/python_floor.sh" >&2
     exit 1
-fi
+}
+PYTHON_BIN="$(python_floor_ensure "$CA_ROOT")" || exit 1
 
-echo "✅ Python version: $python_version"
+echo "✅ Python version: $("$PYTHON_BIN" --version)"
 
 # Install system dependencies
 echo "📦 Installing system dependencies..."
@@ -63,7 +63,7 @@ fi
 
 # Create virtual environment
 echo "🐍 Creating Python virtual environment..."
-python3 -m venv venv
+"$PYTHON_BIN" -m venv venv
 source venv/bin/activate
 
 # Install Python dependencies
