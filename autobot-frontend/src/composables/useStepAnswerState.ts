@@ -77,7 +77,7 @@ export function useStepAnswerState() {
   };
 }
 
-/** Forget every entry of one workflow, decided or in flight. */
+/** Forget the decided entries of one workflow (in-flight entries clear themselves in the send's finally). */
 function dropWorkflow(workflowId: string): void {
   for (const key of decided.keys()) if (key.startsWith(`${workflowId}\u0000`)) decided.delete(key);
 }
