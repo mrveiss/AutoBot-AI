@@ -46,6 +46,14 @@ class _Redis:
                 return 0
             self.hashes[key]["state"] = "settling"
             return 1
+        if script == sw._SET_IF_OWNER_LUA:
+            if args[0] == "":
+                if key not in self.hashes:
+                    return 0
+            elif self.hashes.get(key, {}).get("owner") != args[0]:
+                return 0
+            self.hashes[key].update(dict(zip(args[1::2], args[2::2])))
+            return 1
         raise AssertionError(f"unexpected script {script!r}")
 
     async def exists(self, key):
