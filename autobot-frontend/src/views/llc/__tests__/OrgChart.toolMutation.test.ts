@@ -21,6 +21,9 @@ import { createI18n } from 'vue-i18n'
 import { ref } from 'vue'
 import en from '@/i18n/locales/en.json'
 
+// #20682: the attach/detach controls show only to an owner/admin, whom the members list reports.
+const ADMIN_MEMBERS = [{ user_id: 'u1', display_name: 'Ada', role: 'owner', viewer_role: 'owner' }]
+
 const get = vi.fn()
 const post = vi.fn()
 const del = vi.fn()
@@ -80,6 +83,7 @@ function respond(tools: unknown = TOOLS, afterTools: unknown = tools): void {
       toolCalls += 1
       return Promise.resolve({ nodes: toolCalls === 1 ? tools : afterTools })
     }
+    if (url.includes('/members')) return Promise.resolve(ADMIN_MEMBERS)
     if (url.includes('/org-chart')) return Promise.resolve({ nodes: PEOPLE })
     if (url.includes('/api/llc/roles/')) return Promise.resolve(ROLES)
     return Promise.resolve({ nodes: [] })
@@ -123,6 +127,7 @@ describe('OrgChart tool attach/detach (#14597)', () => {
   it('says "could not load" when the tool-nodes request fails, never "no tools"', async () => {
     get.mockImplementation((url: string) => {
       if (url.includes('/tool-nodes')) return Promise.reject(new Error('HTTP 503: upstream'))
+      if (url.includes('/members')) return Promise.resolve(ADMIN_MEMBERS)
       if (url.includes('/org-chart')) return Promise.resolve({ nodes: PEOPLE })
       if (url.includes('/api/llc/roles/')) return Promise.resolve(ROLES)
       return Promise.resolve({ nodes: [] })
@@ -153,6 +158,7 @@ describe('OrgChart tool attach/detach (#14597)', () => {
     let resolveTools: (v: unknown) => void = () => {}
     get.mockImplementation((url: string) => {
       if (url.includes('/tool-nodes')) return new Promise((r) => { resolveTools = r })
+      if (url.includes('/members')) return Promise.resolve(ADMIN_MEMBERS)
       if (url.includes('/org-chart')) return Promise.resolve({ nodes: PEOPLE })
       if (url.includes('/api/llc/roles/')) return Promise.resolve(ROLES)
       return Promise.resolve({ nodes: [] })

@@ -44,6 +44,18 @@ export function canGrantRole(grantable: readonly string[], role: string, current
   return role === current || grantable.includes(role)
 }
 
+/**
+ * The roles the server lets change a company's role attachments (`GRANTING_ROLES` in the LLC authz
+ * service, checked by `require_company_admin`). Only the viewer's *own* role is compared, never a
+ * platform-admin flag: that check does not make a platform admin an owner/admin of a company.
+ */
+const COMPANY_ADMIN_ROLES: readonly string[] = ['owner', 'admin']
+
+/** Whether a viewer holding *role* in the company would pass the server's owner/admin check. */
+export function isCompanyAdminRole(role: string | null | undefined): boolean {
+  return role != null && COMPANY_ADMIN_ROLES.includes(role)
+}
+
 function statusOf(err: unknown): number | undefined {
   return (err as { status?: number })?.status
 }
@@ -155,5 +167,11 @@ export function useCompanyMembers(api: MembersApi, companyId: () => string) {
   // Without rows there is no standing to read; see rolesToOffer.
   const standingKnown = computed(() => members.value.length > 0)
 
-  return { members, grantableRoles, standingKnown, isLoading, errorMessage, pendingUserId, load, changeRole, removeMember }
+  // The caller's own role rides on every row; without rows there is no standing, so it is unknown (null).
+  const viewerRole = computed<string | null>(() => {
+    const rows = members.value
+    return Array.isArray(rows) ? (rows[0]?.viewer_role ?? null) : null
+  })
+
+  return { members, grantableRoles, viewerRole, standingKnown, isLoading, errorMessage, pendingUserId, load, changeRole, removeMember }
 }

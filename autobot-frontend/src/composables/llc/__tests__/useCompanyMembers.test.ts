@@ -10,7 +10,7 @@ import { defineComponent, h } from 'vue'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
-import { useCompanyMembers, rolesToOffer, type MembersApi } from '../useCompanyMembers'
+import { useCompanyMembers, rolesToOffer, isCompanyAdminRole, type MembersApi } from '../useCompanyMembers'
 
 vi.mock('@/utils/debugUtils', () => ({
   createLogger: () => ({ warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() }),
@@ -72,4 +72,13 @@ describe('rolesToOffer', () => {
     expect(rolesToOffer(['owner', 'admin'], [], true)).toEqual([])
     expect(rolesToOffer(['owner', 'admin'], [], false)).toEqual(['owner', 'admin'])
   })
+})
+
+describe('isCompanyAdminRole (#20682)', () => {
+  it.each([['owner', true], ['admin', true], ['member', false], ['lead', false], ['guest', false], [null, false], [undefined, false]])(
+    '%s -> %s',
+    (role, expected) => {
+      expect(isCompanyAdminRole(role as string | null | undefined)).toBe(expected)
+    },
+  )
 })

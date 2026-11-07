@@ -8,6 +8,7 @@ import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
 import { useLlcCompanyContext } from '@/composables/llc/useLlcCompanyContext'
+import { useCompanyMembers, isCompanyAdminRole } from '@/composables/llc/useCompanyMembers'
 import { shareInFlight } from '@/composables/llc/shareInFlight'
 import OrgTreeNode from './OrgTreeNode.vue'
 import type { OrgNode } from './OrgTreeNode.vue'
@@ -69,6 +70,9 @@ const router = useRouter()
 // below must tolerate that exactly the same way.
 const route = useRoute() as ReturnType<typeof useRoute> | undefined
 const { companyId, resolveCompanyId } = useLlcCompanyContext()
+// #20682: attach/detach 403 for a non-owner/admin; the viewer's role is unknown (hidden) until it loads.
+const { viewerRole, load: loadViewerStanding } = useCompanyMembers(api, () => companyId.value ?? '')
+const canManageAttachments = computed(() => isCompanyAdminRole(viewerRole.value))
 
 const tree = ref<OrgNode[]>([])
 const isLoading = ref(false)
@@ -522,6 +526,7 @@ function setViewMode(mode: OrgViewMode) {
   // reader who stays in tree mode should not pay for a request they never see.
   if (mode === 'canvas') {
     void fetchProcessNodes()
+    void loadViewerStanding()
     // #14549: the attach picker needs the role list, same lazy trigger.
     void fetchRolesForAttach()
     // #14596: teams render on the canvas too, sharing the same lazy fetch
@@ -1193,14 +1198,12 @@ onMounted(() => {
       class="h-[70vh] rounded-lg border border-autobot-border overflow-hidden flex flex-col"
       data-testid="org-canvas"
     >
-      <!-- #14549: the canvas shows the attachment (role, workflow) it draws a
-           process node from, but could not change it — attach reaches from
-           here, detach reaches from the node itself (below). Always shown in
-           canvas mode, independent of the role lens: it is a mutation
-           control, not a view filter. -->
+      <!-- #14549: attach reaches from here, detach from the process node itself.
+           A mutation control, not a view filter (ignores the role lens); shown
+           to an owner/admin only (#20682). -->
       <div
         class="flex flex-wrap items-end gap-3 border-b border-autobot-border bg-autobot-bg-secondary px-3 py-2 text-sm"
-        data-testid="process-attach-form"
+        v-if="canManageAttachments" data-testid="process-attach-form"
       >
         <div class="flex flex-col gap-1">
           <label for="process-attach-role" class="text-xs text-autobot-text-secondary">
@@ -1260,15 +1263,12 @@ onMounted(() => {
         {{ processMutationError }}
       </div>
 
-      <!-- #14597: the tool sibling of the process-attach form above — a role
-           picker (reusing `attachableRoles`) plus a tool-name field. Attach
-           reaches from here; detach reaches from each role chip on the tool
-           node itself (WorkflowCanvas.vue). Always shown in canvas mode,
-           independent of the role lens, for the same reason the process form
-           is: it is a mutation control, not a view filter. -->
+      <!-- #14597: the tool sibling of the process-attach form (role picker plus
+           tool name); detach reaches from each role chip on the tool node. Same
+           gating as the process form: owner/admin only, not a view filter. -->
       <div
         class="flex flex-wrap items-end gap-3 border-b border-autobot-border bg-autobot-bg-secondary px-3 py-2 text-sm"
-        data-testid="tool-attach-form"
+        v-if="canManageAttachments" data-testid="tool-attach-form"
       >
         <div class="flex flex-col gap-1">
           <label for="tool-attach-role" class="text-xs text-autobot-text-secondary">
@@ -1475,7 +1475,7 @@ onMounted(() => {
       </div>
       <WorkflowCanvas
         v-else
-        readonly
+        readonly :detachable="canManageAttachments"
         :nodes="lensedCanvasNodes"
         :selected-node-id="selectedNode?.id ?? null"
         :tabs="canvasTabs"
