@@ -23,7 +23,6 @@ import {
   formatTime,
   formatDateTime,
   formatISOString,
-  formatTimeAgo,
   createDateFormatter,
   formatLocalTime,
   DEFAULT_DATE_TIME_INTL
@@ -33,7 +32,6 @@ export {
   formatTime,
   formatDateTime,
   formatISOString,
-  formatTimeAgo,
   createDateFormatter,
   formatLocalTime,
   DEFAULT_DATE_TIME_INTL
@@ -165,7 +163,6 @@ export default {
   formatTime,
   formatDateTime,
   formatISOString,
-  formatTimeAgo,
   formatDuration,
   formatUptime,
 
