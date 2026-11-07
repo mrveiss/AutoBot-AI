@@ -3,7 +3,7 @@
 """#20567: the cleanup routes sit behind the REAL ``check_admin_permission`` gate and the real ``get_current_user``.
 
 The handler tests call the functions directly, so the router dependency never runs there. Here the REAL auth
-stack answers through a ``TestClient``: only the identity it reads and the database are stood in.
+stack answers through a ``TestClient``: only the identity it reads and the database (a ``FakeAsyncSession``: auth, not transactions, is under test) are stood in.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import importlib
 import sys
 import uuid
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import FastAPI
@@ -20,6 +20,7 @@ from fastapi.testclient import TestClient
 
 from services import install_cleanup_actions as acts
 from services.approval_gate_service import ApprovalGateService
+from testkit.fake_async_session import FakeAsyncSession
 from tests.conftest import load_real_auth_middleware
 
 _INTERNAL_KEY = {"X-Internal-API-Key": "internal-service-key-for-tests"}
@@ -53,19 +54,19 @@ def client(monkeypatch):
     monkeypatch.setattr(ApprovalGateService, "create_approval", AsyncMock(return_value=created))
     app = FastAPI()
     app.include_router(routes.router, prefix="/api")
-    app.dependency_overrides[routes.get_db_session] = lambda: MagicMock()
+    app.dependency_overrides[routes.get_db_session] = lambda: FakeAsyncSession()
     yield TestClient(app, raise_server_exceptions=False), identity
     sys.modules.pop("api.admin_cleanup_proposals", None)
 
 
-@pytest.mark.parametrize(("method", "path"), _PATHS.values(), ids=_PATHS.keys())
+@pytest.mark.parametrize(("method", "path"), _PATHS.values(), ids=list(_PATHS))
 def test_an_anonymous_caller_is_401(client, method: str, path: str) -> None:
     test_client, _ = client
 
     assert test_client.request(method, path).status_code == 401
 
 
-@pytest.mark.parametrize(("method", "path"), _PATHS.values(), ids=_PATHS.keys())
+@pytest.mark.parametrize(("method", "path"), _PATHS.values(), ids=list(_PATHS))
 def test_a_non_admin_is_403(client, method: str, path: str) -> None:
     test_client, identity = client
     identity.user = _person("user")
@@ -73,7 +74,7 @@ def test_a_non_admin_is_403(client, method: str, path: str) -> None:
     assert test_client.request(method, path).status_code == 403
 
 
-@pytest.mark.parametrize(("method", "path"), _PATHS.values(), ids=_PATHS.keys())
+@pytest.mark.parametrize(("method", "path"), _PATHS.values(), ids=list(_PATHS))
 def test_the_internal_key_alone_is_refused(client, method: str, path: str) -> None:
     test_client, _ = client
 

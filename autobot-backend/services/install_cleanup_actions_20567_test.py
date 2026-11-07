@@ -15,18 +15,15 @@ import pytest
 
 from services import approval_execution
 from services import install_cleanup_actions as acts
+from testkit.fake_async_session import FakeAsyncSession
 
 _ADMIN, _OTHER = uuid.uuid4(), uuid.uuid4()
 _SECRET = "SECRET-VALUE-MUST-NOT-APPEAR"  # pragma: allowlist secret
 
 
-def _session(admins: int = 2) -> MagicMock:
+def _session(admins: int = 2) -> FakeAsyncSession:
     """A session whose active platform admins are the requester, plus a second admin when ``admins`` is 2."""
-    ids = [_ADMIN, _OTHER][:admins]
-    session = MagicMock()
-    session.commit = AsyncMock()
-    session.execute = AsyncMock(return_value=MagicMock(scalars=lambda: MagicMock(all=lambda: ids)))
-    return session
+    return FakeAsyncSession(default_result=[_ADMIN, _OTHER][:admins])
 
 
 def _approval(action: str, decider=_OTHER, context: dict | None = None) -> SimpleNamespace:
@@ -69,7 +66,7 @@ async def test_env_copies_keep_only_the_newest(tmp_path: Path) -> None:
     assert await asyncio.to_thread(_names, backend) == [".env", ".env.3~"]
     details = audit.await_args.kwargs["details"]
     assert audit.await_args.kwargs["result"] == "success" and details["removed"] == 2
-    assert _SECRET not in repr(audit.await_args_list) and _SECRET not in session.add.call_args.args[0].body
+    assert _SECRET not in repr(audit.await_args_list) and _SECRET not in session.added[-1].body
     intent = audit.await_args_list[0].kwargs  # a consumer counting completed removals must not count this
     assert intent["result"] == "attempted" and intent["details"]["phase"] == "intent"
 
@@ -79,7 +76,7 @@ async def test_nothing_to_do_removes_nothing(tmp_path: Path) -> None:
     session = _session()
     await _run(acts.execute_env_copies_cleanup, _approval(acts.ENV_COPIES_ACTION), tmp_path, session)
     assert await asyncio.to_thread(_names, backend) == [".env", ".env.1~"]
-    assert "Nothing to remove" in session.add.call_args.args[0].body
+    assert "Nothing to remove" in session.added[-1].body
 
 
 async def test_a_symlinked_copy_refuses_and_removes_nothing(tmp_path: Path) -> None:
