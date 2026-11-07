@@ -21,6 +21,13 @@ export type Step = S['Step']
 export type Edge = S['Edge']
 export type SubStep = S['SubStep']
 export type EdgeCase = S['EdgeCase']
+export type EdgeCaseBody = S['EdgeCaseBody']
+export type EdgeCasePatch = S['EdgeCasePatch']
+export type LanePatch = S['LanePatch']
+export type StepPatch = S['StepPatch']
+export type EdgePatch = S['EdgePatch']
+export type ReturnKind = S['ReturnKind']
+export type CandidatesResponse = S['CandidatesResponse']
 export type StepMetric = S['StepMetric']
 export type Label = S['Label']
 export type MetricSource = S['MetricSource']
@@ -71,28 +78,28 @@ export function mapBodyOf(plan: Plan): MapBody {
   return { lanes: plan.lanes ?? [], steps: plan.steps ?? [], edges: plan.edges ?? [] }
 }
 
+/** A new lane held by the owner: the key is the next free slug, the position is last. */
+export function buildLane(plan: Plan, name: string): Lane {
+  const lanes = plan.lanes ?? []
+  return { key: slugKey('lane', lanes.map((l) => l.key)), name, holder_kind: 'user', position: lanes.length }
+}
+
 export function withLane(plan: Plan, name: string): MapBody {
   const map = mapBodyOf(plan)
-  const lanes = map.lanes ?? []
-  const lane: Lane = {
-    key: slugKey('lane', lanes.map((l) => l.key)),
-    name,
-    holder_kind: 'user',
-    position: lanes.length,
-  }
-  return { ...map, lanes: [...lanes, lane] }
+  return { ...map, lanes: [...(map.lanes ?? []), buildLane(plan, name)] }
+}
+
+/** A new step in *laneKey*: the next free slug, placed last, connected to nothing. */
+export function buildStep(plan: Plan, label: string, laneKey: string): Step {
+  const steps = plan.steps ?? []
+  return { key: slugKey('step', steps.map((s) => s.key)), lane_key: laneKey, label, position: steps.length }
 }
 
 /** A new step is chained after the plan's last step, so the map stays one connected flow. */
 export function withStep(plan: Plan, label: string, laneKey: string): MapBody {
   const map = mapBodyOf(plan)
   const steps = map.steps ?? []
-  const step: Step = {
-    key: slugKey('step', steps.map((s) => s.key)),
-    lane_key: laneKey,
-    label,
-    position: steps.length,
-  }
+  const step = buildStep(plan, label, laneKey)
   const last = steps[steps.length - 1]
   const edges = last ? [...(map.edges ?? []), { from_step: last.key, to_step: step.key }] : map.edges
   return { ...map, steps: [...steps, step], edges }
@@ -139,6 +146,11 @@ export function breakdownWith(plan: Plan, stepKey: string, label: string): Break
     sub_step_key: c.sub_step_key ?? null,
   }))
   return { sub_steps: [...kept, added], edge_cases: cases }
+}
+
+/** A new edge case on a step: keyed by the next free slug, labelled by the owner's choice. */
+export function edgeCaseWith(plan: Plan, description: string, classification: Label): EdgeCaseBody {
+  return { key: slugKey('edge', (plan.edge_cases ?? []).map((c) => c.key)), description, classification }
 }
 
 const ENTRY_POINTS: readonly PlanCreate['entry_point'][] = ['org_chart', 'wizard_exit', 'workflow_area', 'replan']
