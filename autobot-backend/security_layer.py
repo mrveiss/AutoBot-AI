@@ -20,6 +20,7 @@ from typing import Any, Dict, List
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.monitoring.metrics.audit import record_audit_write_failure_safely
+from autobot_shared.security.constant_time import secure_compare
 from autobot_shared.status_enums import CommandRisk
 from command_run_policy import CommandRunPolicy
 from config import get_config_manager
@@ -625,15 +626,12 @@ class SecurityLayer:
     # =========================================================================
 
     def authenticate_user(self, username: str, password: str) -> str | None:
-        """Authenticate user and return their role.
-
-        For demo purposes, uses a simple dictionary lookup.
-        In production, use proper password hashing (e.g., bcrypt).
-        """
+        """Authenticate user and return their role."""
         if not self.enable_auth:
             return "admin"
 
-        if username in self.allowed_users and self.allowed_users[username] == password:
+        # Passwords are stored in plaintext (defect #21088, hashing out of scope); compare constant-time meanwhile.
+        if username in self.allowed_users and secure_compare(password, self.allowed_users[username]):
             user_roles = self.security_config.get("user_roles", {})
             role = user_roles.get(username)
             if role:
