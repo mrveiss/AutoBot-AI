@@ -135,9 +135,13 @@ import {
   canCancel,
   canResume
 } from '@/types/operations'
-import { formatTimeAgo as formatRelativeTime } from '@/utils/formatHelpers'
+import { useI18n } from 'vue-i18n'
+import { createRecencyFormatter } from '@autobot/ui'
 import OperationProgress from './OperationProgress.vue'
 import OperationFilters from './OperationFilters.vue'
+
+const { t, locale } = useI18n()
+const formatRelativeTime = createRecencyFormatter({ justNow: () => t('common.justNow'), locale: () => locale.value, invalidText: '—' })
 
 interface Props {
   operations: Operation[]
@@ -329,13 +333,13 @@ function canResumeOperation(operation: Operation): boolean {
 }
 
 .cancel-btn {
-  background-color: #fee2e2;
-  color: #dc2626;
+  background-color: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .resume-btn {
-  background-color: #dcfce7;
-  color: #16a34a;
+  background-color: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .view-btn {
