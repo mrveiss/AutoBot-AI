@@ -400,3 +400,31 @@ describe('SlmApiClient.getContract (#16292)', () => {
     expect(fetchMock.mock.calls[0][0]).toBe('/slm/api/monitoring/gpu/nodes')
   })
 })
+
+describe('SlmApiClient.call / callRaw final URL (#12363)', () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('requests a contract key once under the base, never /api/api', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 'a1' }))
+    await new SlmApiClient().call('get', '/api/agents/{agent_id}', { path: { agent_id: 'a 1' } })
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/agents/a%201')
+  })
+
+  it('keeps a co-located base on call and callRaw', async () => {
+    fetchMock.mockImplementation(async () => jsonResponse({ id: 'a1' }))
+    const client = new SlmApiClient()
+    client.setBaseUrl('/slm/api')
+    await client.call('get', '/api/agents/{agent_id}', { path: { agent_id: 'a1' } })
+    await client.callRaw('get', '/api/agents/{agent_id}', { path: { agent_id: 'a1' } })
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual(['/slm/api/agents/a1', '/slm/api/agents/a1'])
+  })
+})

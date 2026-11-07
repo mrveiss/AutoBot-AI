@@ -97,6 +97,8 @@ function armAbort(timeout: number, external?: AbortSignal) {
   }
 }
 
+type BodyReader = (response: Response, endpoint: string) => unknown
+
 type GetAttempt<T> = { ok: true; value: T } | { ok: false; error: Error; retryAfterMs: number }
 
 // ---- Typed call layer (#12363) -------------------------------------------------------------
@@ -112,14 +114,32 @@ export type MethodsOf<P, K extends keyof P> = { [M in HttpMethod]: [OpAt<P, K, M
 
 type JsonOf<C> = C extends { 'application/json': infer J } ? J : unknown
 
-/** The operation's JSON 200/201 response body, or `unknown` when it documents none. */
+/** The operation's JSON 200/201 response body; `void` for a documented 204; `unknown` when it documents none. */
 export type CallResponse<Op> = Op extends { responses: infer R }
   ? R extends { 200: { content: infer C } }
     ? JsonOf<C>
     : R extends { 201: { content: infer C } }
       ? JsonOf<C>
-      : unknown
+      : R extends { 204: unknown }
+        ? void
+        : unknown
   : unknown
+
+/** True when `call` can read the operation's reply: a JSON 200/201 body or a 204. CSV, text and blobs go through `callRaw`. */
+type ReturnsJson<Op> = Op extends { responses: infer R }
+  ? R extends { 200: { content: { 'application/json': unknown } } }
+    ? true
+    : R extends { 201: { content: { 'application/json': unknown } } }
+      ? true
+      : R extends { 204: unknown }
+        ? true
+        : false
+  : false
+
+/** The methods of a path whose reply `call` can read (see {@link ReturnsJson}); the rest are `callRaw` only. */
+export type JsonMethodsOf<P, K extends keyof P> = {
+  [M in MethodsOf<P, K>]: ReturnsJson<OpAt<P, K, M>> extends true ? M : never
+}[MethodsOf<P, K>]
 
 type ParamsOf<Op, S extends 'path' | 'query'> = Op extends { parameters: infer Pa } ? (S extends keyof Pa ? NonNullable<Pa[S]> : never) : never
 type BodyOf<B> = B extends { content: infer C } ? (C extends { 'application/json': infer J } ? J : FormData | Blob) : never
@@ -136,13 +156,30 @@ type BodyPart<Op> = Op extends { requestBody: infer B }
 export type CallInit<Op, O extends TransportRequestOptions> = Omit<O, 'params'> & PathPart<Op> & QueryPart<Op> & BodyPart<Op>
 type CallArgs<Op, O extends TransportRequestOptions> = {} extends CallInit<Op, O> ? [init?: CallInit<Op, O>] : [init: CallInit<Op, O>]
 
-/** Substitute `{name}` segments, URL-encoded; a missing value is a programming error, not a request. */
+/**
+ * Substitute `{name}` segments, URL-encoded. A missing value or a key the template does not name is a
+ * programming error, not a request. (Contract keys carry no `{x:path}` converter: openapi names the
+ * parameter `{x}` and only prose mentions `:path`, so every value is encoded as one segment.)
+ */
 export function fillPathParams(template: string, params: Record<string, unknown> | undefined): string {
-  return template.replace(/\{([^}]+)\}/g, (_match, name: string) => {
+  const named = new Set<string>()
+  const filled = template.replace(/\{([^}]+)\}/g, (_match, name: string) => {
+    named.add(name)
     const value = params?.[name]
     if (value === undefined || value === null) throw new Error(`Missing path parameter "${name}" for ${template}`)
     return encodeURIComponent(String(value))
   })
+  const unused = Object.keys(params ?? {}).filter((key) => !named.has(key))
+  if (unused.length) throw new Error(`Unused path parameter(s) ${unused.map((k) => `"${k}"`).join(', ')} for ${template}`)
+  return filled
+}
+
+/** The reply of a typed `call`: JSON, or `undefined` for a 204; anything else is a contract mismatch pointing at `callRaw`. */
+function readCallBody(response: Response, endpoint: string): Promise<unknown> | undefined {
+  if (response.status === 204) return undefined
+  const contentType = response.headers.get('content-type')
+  if (contentType && contentType.includes('json')) return response.json()
+  throw new Error(`call() expects a JSON reply but ${endpoint} returned ${contentType || 'no content-type'}; use callRaw() for non-JSON bodies`)
 }
 
 export abstract class ApiClientBase<O extends TransportRequestOptions = TransportRequestOptions, P extends object = object> {
@@ -165,6 +202,13 @@ export abstract class ApiClientBase<O extends TransportRequestOptions = Transpor
 
   /** Add app-specific request headers; `headers` already holds the defaults, the caller's and the token. */
   protected decorateHeaders(_headers: Record<string, string>): void {}
+  /**
+   * Map a contract key to the endpoint this client sends. Identity by default; a client whose base
+   * already carries part of the key (e.g. an `/api` prefix) strips it here, once, for `call` and `callRaw`.
+   */
+  protected contractPath(path: string): string {
+    return path
+  }
   /** Observe every response before it is returned (after the 401 policy). */
   protected onResponse(_response: Response, _endpoint: string): void {}
   /** A GET failure that retrying cannot fix. */
@@ -244,7 +288,7 @@ export abstract class ApiClientBase<O extends TransportRequestOptions = Transpor
     }
   }
 
-  private async attemptGet<T>(endpoint: string, options: O): Promise<GetAttempt<T>> {
+  private async attemptGet<T>(endpoint: string, options: O, read?: BodyReader): Promise<GetAttempt<T>> {
     let retryAfterMs = 0
     try {
       const response = await this.rawRequest(endpoint, { method: 'GET', ...options })
@@ -252,7 +296,7 @@ export abstract class ApiClientBase<O extends TransportRequestOptions = Transpor
         if (response.status === SERVICE_UNAVAILABLE_STATUS) retryAfterMs = parseRetryAfterMs(response.headers.get('retry-after'))
         throw await httpErrorFrom(response)
       }
-      const value = options.responseType === 'text' ? await response.text() : await response.json()
+      const value = read ? await read(response, endpoint) : options.responseType === 'text' ? await response.text() : await response.json()
       return { ok: true, value: value as T }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error : new Error(String(error)), retryAfterMs }
@@ -261,13 +305,17 @@ export abstract class ApiClientBase<O extends TransportRequestOptions = Transpor
 
   /** GET with retry and exponential backoff; Retry-After is a floor on the delay, capped at the max backoff. */
   async get<T = unknown>(endpoint: string, options: O = {} as O): Promise<T> {
+    return this.getWith<T>(endpoint, options)
+  }
+
+  private async getWith<T>(endpoint: string, options: O, read?: BodyReader): Promise<T> {
     this.assertEndpointAllowed(endpoint) // a refusal is final: never retried
     const maxRetries = options.maxRetries !== undefined ? options.maxRetries : 3
     let lastError: Error | undefined
     let attemptsMade = 0
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       attemptsMade = attempt
-      const result = await this.attemptGet<T>(endpoint, options)
+      const result = await this.attemptGet<T>(endpoint, options, read)
       if (result.ok) return result.value
       lastError = result.error
       // Per-attempt failures are debug-level; one summary WARN is logged below.
@@ -284,10 +332,10 @@ export abstract class ApiClientBase<O extends TransportRequestOptions = Transpor
     throw lastError
   }
 
-  private async send<T>(method: string, endpoint: string, body: unknown, options: O): Promise<T> {
+  private async send<T>(method: string, endpoint: string, body: unknown, options: O, read?: BodyReader): Promise<T> {
     const response = await this.rawRequest(endpoint, { method, body, ...options })
     if (!response.ok) throw await httpErrorFrom(response)
-    return parseJsonBody<T>(response)
+    return read ? ((await read(response, endpoint)) as T) : parseJsonBody<T>(response)
   }
 
   post<T = unknown>(endpoint: string, data?: unknown, options: O = {} as O): Promise<T> {
@@ -304,24 +352,26 @@ export abstract class ApiClientBase<O extends TransportRequestOptions = Transpor
 
   private splitCall(method: string, path: string, init: unknown) {
     const { path: pathParams, query, body, ...rest } = (init ?? {}) as Record<string, unknown>
-    const endpoint = fillPathParams(path, pathParams as Record<string, unknown> | undefined)
+    const endpoint = fillPathParams(this.contractPath(path), pathParams as Record<string, unknown> | undefined)
     const options = { ...rest, params: query } as unknown as O
     return { endpoint, options, body, verb: method.toUpperCase() }
   }
 
   /**
    * The typed request: `path` is a key of the app's generated contract, `init` carries the path params,
-   * query and body the operation documents. Resolves to the operation's JSON 200 body. GET retries; the
-   * other methods are single-shot. For streams and blobs use {@link callRaw}.
+   * query and body the operation documents. Resolves to the operation's JSON 200/201 body, or `undefined`
+   * for a 204. GET retries; the other methods are single-shot. Operations that reply with anything but
+   * JSON (CSV, streams, blobs) are a type error here and a runtime error if the server answers non-JSON:
+   * use {@link callRaw}.
    */
-  call<K extends keyof P & string, M extends MethodsOf<P, K>>(
+  call<K extends keyof P & string, M extends JsonMethodsOf<P, K>>(
     method: M,
     path: K,
     ...args: CallArgs<OpAt<P, K, M>, O>
   ): Promise<CallResponse<OpAt<P, K, M>>> {
     const { endpoint, options, body, verb } = this.splitCall(method, path, args[0])
-    if (verb === 'GET') return this.get(endpoint, options) as Promise<CallResponse<OpAt<P, K, M>>>
-    return this.send(verb, endpoint, body, options) as Promise<CallResponse<OpAt<P, K, M>>>
+    if (verb === 'GET') return this.getWith(endpoint, options, readCallBody) as Promise<CallResponse<OpAt<P, K, M>>>
+    return this.send(verb, endpoint, body, options, readCallBody) as Promise<CallResponse<OpAt<P, K, M>>>
   }
 
   /** The typed request returning the `Response` itself (SSE, blobs). Non-2xx is NOT thrown here. */

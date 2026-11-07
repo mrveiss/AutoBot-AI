@@ -169,7 +169,11 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
         self._w(
             tmp_path, "src/xhr.ts", f"{d} -- probes another origin, not the backend\nconst x = new XMLHttpRequest()\n"
         )
-        assert count_transports(tmp_path) == 4  # thin, empty, far (not adjacent) and the XHR
+        self._w(
+            tmp_path, "src/trail.ts", f"const x = 1 {d} -- probes another origin, not the backend\nawait fetch(e)\n"
+        )
+        self._w(tmp_path, "src/same.ts", f"await fetch(f) {d} -- probes another origin, not the backend\n")
+        assert count_transports(tmp_path) == 6  # thin, empty, far (not adjacent), the XHR, and both trailing directives
 
     def test_it_counts_generic_optional_dynamic_and_bare_import_shapes(self, tmp_path: Path) -> None:
         body = (

@@ -237,6 +237,24 @@ describe('ApiClientBase typed call layer', () => {
     expect(fetchMock.mock.calls[0][0]).toBe('http://base/api/items/a%20b%2Fc')
   })
 
+  it('refuses a path param the template does not name', () => {
+    expect(() => fillPathParams('/api/items/{item_id}', { item_id: 1, extra: 2 })).toThrow('Unused path parameter(s) "extra"')
+    expect(() => fillPathParams('/api/items', { id: 1 })).toThrow('Unused path parameter(s) "id"')
+  })
+
+  it('a 204 resolves undefined; a non-JSON reply throws and points at callRaw', async () => {
+    const client = new TypedClient()
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }))
+    await expect(client.call('delete', '/api/items/{item_id}', { path: { item_id: '1' } })).resolves.toBeUndefined()
+    fetchMock.mockResolvedValue(new Response('a,b', { status: 200, headers: { 'content-type': 'text/csv' } }))
+    // The type forbids this call; the cast is the point: a server that lies about its type must not become `{}`.
+    const loose = client as unknown as { call: (m: string, p: string, i: unknown) => Promise<unknown> }
+    const get = loose.call('get', '/api/items/{item_id}', { path: { item_id: '1' }, maxRetries: 1, suppressErrorLog: true })
+    await expect(get).rejects.toThrow(/callRaw/)
+    fetchMock.mockResolvedValue(new Response('ok', { status: 200 }))
+    await expect(loose.call('post', '/api/items', { body: {} })).rejects.toThrow(/use callRaw\(\)/)
+  })
+
   it('refuses a request whose path param is missing', () => {
     expect(() => fillPathParams('/api/items/{item_id}', {})).toThrow('Missing path parameter "item_id"')
     expect(fillPathParams('/a/{x}/b/{y}', { x: 1, y: 'z' })).toBe('/a/1/b/z')
@@ -282,7 +300,7 @@ describe('ApiClientBase typed call layer', () => {
     type CreateCall = ReturnType<typeof client.call<'/api/items', 'post'>>
     expectTypeOf<CreateCall>().resolves.toEqualTypeOf<Item>()
     type DeleteCall = ReturnType<typeof client.call<'/api/items/{item_id}', 'delete'>>
-    expectTypeOf<DeleteCall>().resolves.toBeUnknown()
+    expectTypeOf<DeleteCall>().resolves.toBeVoid()
     // Compile-time only: these are never run, and each line must stay a type error.
     const never = (): void => {
       // @ts-expect-error not a documented path
@@ -293,11 +311,50 @@ describe('ApiClientBase typed call layer', () => {
       void client.call('post', '/api/items', { body: { title: 'x' } })
       // @ts-expect-error the required body is missing
       void client.call('post', '/api/items')
+      // @ts-expect-error a CSV reply is not JSON: callRaw only
+      void client.call('get', '/api/items/{item_id}/export', { path: { item_id: '7' } })
       // @ts-expect-error the required path params are missing
       void client.call('get', '/api/items/{item_id}')
       // @ts-expect-error an unbound client (no contract) offers no typed path
       void new (class extends ApiClientBase { protected resolveBaseUrl() { return '' } protected getAuthToken() { return null } protected isAuthEndpoint() { return false } protected handleUnauthorized() {} })().call('get', '/api/items')
     }
     expect(typeof never).toBe('function')
+  })
+})
+
+// The two apps' bases, mimicked without importing either app (their clients load app-only modules).
+class PrefixedBaseClient extends TypedClient {
+  constructor(private readonly base: string) {
+    super()
+  }
+  protected resolveBaseUrl() { return this.base }
+  /** The SLM shape: the base already ends in /api (or /slm/api), so the key's /api is dropped. */
+  protected contractPath(path: string) { return path.replace(/^\/api(?=\/)/, '') }
+}
+
+describe('ApiClientBase.contractPath: the final request URL (#12363)', () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+  beforeEach(() => {
+    fetchMock = vi.fn().mockImplementation(async () => json({ id: '1', name: 'n' }))
+    vi.stubGlobal('fetch', fetchMock)
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('an origin-only base (the main app) keeps the key as is', async () => {
+    await new TypedClient().call('get', '/api/items/{item_id}', { path: { item_id: '1' } })
+    expect(fetchMock.mock.calls[0][0]).toBe('http://base/api/items/1')
+  })
+
+  it.each([['/api', '/api/items/1'], ['/slm/api', '/slm/api/items/1']])('a base ending in %s (the SLM) strips the key prefix once', async (base, url) => {
+    const client = new PrefixedBaseClient(base)
+    await client.call('get', '/api/items/{item_id}', { path: { item_id: '1' } })
+    await client.callRaw('get', '/api/items/{item_id}', { path: { item_id: '1' } })
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([url, url])
+  })
+
+  it('strips only a leading /api segment', async () => {
+    const client = new PrefixedBaseClient('/api') as unknown as { callRaw: (m: string, p: string) => Promise<Response> }
+    await client.callRaw('get', '/apiary/x')
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/apiary/x')
   })
 })

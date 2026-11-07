@@ -176,7 +176,7 @@ def dump_openapi(out_path: str, include_websocket_paths: bool = True) -> int:
     return 0
 
 
-def dump_slm_openapi(out_path: str) -> int:
+def dump_slm_openapi(out_path: str, include_websocket_paths: bool = True) -> int:
     """Import the SLM backend app and dump app.openapi() (#12381).
 
     Mirrors dump_openapi() but imports the module-level ``app`` from
@@ -198,8 +198,9 @@ def dump_slm_openapi(out_path: str) -> int:
         # path produced, so any divergence is reported as stale generated types.
         spec = normalize_pattern_anchors(app.openapi())
         # Same runtime+static WebSocket union as dump_openapi() (GH#9864, #12381).
-        ws = _runtime_websocket_paths(app) | static_websocket_paths(SLM_BACKEND)
-        spec["x-websocket-paths"] = sorted(ws)
+        if include_websocket_paths:
+            ws = _runtime_websocket_paths(app) | static_websocket_paths(SLM_BACKEND)
+            spec["x-websocket-paths"] = sorted(ws)
     except Exception as e:  # noqa: BLE001
         print(f"[dump-slm-openapi] FAILED to build app: {e}", file=sys.stderr)
         return 1
@@ -764,46 +765,12 @@ def audit_baseline(
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # exec_module needs this; direct execution doesn't (#16816)
+from audit_api_wiring_args import build_parser  # noqa: E402
 from dead_surface import baseline_health_lines, report_dead_surface  # noqa: E402
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--openapi", help="openapi.json path or URL (authoritative mode)")
-    ap.add_argument("--dump-openapi", metavar="OUT", help="import app_factory.create_app() and dump spec, then exit")
-    ap.add_argument(
-        "--no-websocket-paths", action="store_true", help="with --dump-openapi: omit x-websocket-paths (#12363)"
-    )
-    ap.add_argument(
-        "--slm-openapi",
-        metavar="FILE",
-        help="second openapi.json (SLM control-plane backend, "
-        "autobot-slm-backend) whose paths are UNIONed into the known "
-        "backend route table (#12381) — produce it with "
-        "--dump-slm-openapi first",
-    )
-    ap.add_argument(
-        "--dump-slm-openapi", metavar="OUT", help="import autobot-slm-backend/main.py's app and dump spec, " "then exit"
-    )
-    ap.add_argument(
-        "--baseline",
-        metavar="FILE",
-        help="file of known/tracked unwired frontend paths (one per line) "
-        "excluded from the --fail-on-unwired exit code (#12381) — "
-        "still reported, just not gated",
-    )
-    ap.add_argument("--dead-surface", action="store_true", help="also report backend paths with no frontend consumer")
-    ap.add_argument(
-        "--fail-on-unwired", action="store_true", help="exit non-zero if any unwired call or unmounted router found"
-    )
-    ap.add_argument(
-        "--only-prefix",
-        metavar="PREFIX",
-        help="restrict unwired-call reporting and exit code to frontend "
-        "calls under PREFIX (e.g. /api/llc). Lets CI gate one module "
-        "while other pre-existing findings are tracked separately.",
-    )
-    return ap
+    return build_parser(__doc__)
 
 
 def _known_backend_paths(args: argparse.Namespace) -> tuple[set[str], str]:
@@ -826,7 +793,7 @@ def main() -> int:
         return dump_openapi(args.dump_openapi, include_websocket_paths=not args.no_websocket_paths)
 
     if args.dump_slm_openapi:
-        return dump_slm_openapi(args.dump_slm_openapi)
+        return dump_slm_openapi(args.dump_slm_openapi, include_websocket_paths=not args.no_websocket_paths)
 
     backend, mode = _known_backend_paths(args)
 

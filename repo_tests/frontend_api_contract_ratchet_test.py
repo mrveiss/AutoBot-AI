@@ -170,7 +170,7 @@ _MIN_SOURCE_FILES = {"autobot-frontend": 500, "autobot-slm-frontend": 100}
 _CLIENT_CLASS_RE = re.compile(r"\bclass\s+([A-Za-z]*(?:ApiClient|ApiService|Client))\b([^{;]*)\{")
 _EXTENDS_KIT_BASE_RE = re.compile(r"\bextends\s+ApiClientBase\b")
 # Files that pull in the bridge `fetchWithAuth` (retired in #12363 slice 3), static or dynamic import.
-_FETCH_WITH_AUTH_IMPORT_RE = re.compile(r"""(?:\bfrom\s+|\bimport\s*\(\s*)['"][^'"]*\bfetchWithAuth['"]""")
+_FETCH_WITH_AUTH_IMPORT_RE = re.compile(r"""(?:\bfrom\s+|\bimport\s*\(\s*)['"][^'"]*\bfetchWithAuth(?:\.[jt]s)?['"]""")
 # A URL assembled by hand from the base helper instead of a typed `apiClient.call(...)` path. The WebSocket
 # URL builder shares the helper and is a different transport, so a line naming `getBackendWsUrl(` is out.
 _HAND_BUILT_URL_RE = re.compile(r"\$\{getApiBase\(\)\}/")
@@ -390,7 +390,17 @@ def test_the_fetch_with_auth_importer_detector_matches_static_and_dynamic_import
     (src / "dynamic.js").write_text("const m = await import('../utils/fetchWithAuth')\n", encoding="utf-8")
     (src / "mention.ts").write_text("// see fetchWithAuth\nconst fetchWithAuthLike = 1\n", encoding="utf-8")
     (src / "other.ts").write_text("import { x } from '@/utils/fetchWithAuthExtras'\n", encoding="utf-8")
-    assert _fetch_with_auth_importers(src, tmp_path) == ["src/dynamic.js", "src/static.ts"]
+    (src / "ext.ts").write_text("import { x } from '../utils/fetchWithAuth.ts'\n", encoding="utf-8")
+    (src / "extjs.js").write_text("import { x } from './utils/fetchWithAuth.js'\n", encoding="utf-8")
+    (src / "otherext.ts").write_text(
+        "import { x } from './fetchWithAuth.json'\n", encoding="utf-8"
+    )  # control: not the bridge
+    assert _fetch_with_auth_importers(src, tmp_path) == [
+        "src/dynamic.js",
+        "src/ext.ts",
+        "src/extjs.js",
+        "src/static.ts",
+    ]
 
 
 def test_the_hand_built_url_detector_skips_comments_and_websocket_urls(tmp_path: Path) -> None:
