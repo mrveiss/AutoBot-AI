@@ -47,7 +47,7 @@ def _budget(over_limit: bool) -> MagicMock:
 async def _reason(status="available", *, paused=(), over_limit=False, **kwargs):
     with (
         patch(f"{_GATE}.get_async_redis_client", AsyncMock(return_value=_redis(*paused))),
-        patch(f"{_GATE}.BudgetService", _budget(over_limit)),
+        patch(f"{_GATE}.get_budget_service", _budget(over_limit)),
     ):
         return await dispatch_block_reason(AsyncMock(), _SLUG, _COMPANY_ID, status, **kwargs)
 
@@ -84,7 +84,7 @@ async def test_a_budget_read_failure_refuses_rather_than_runs():
     service.return_value.check_budget = AsyncMock(side_effect=RuntimeError("db down"))
     with (
         patch(f"{_GATE}.get_async_redis_client", AsyncMock(return_value=_redis())),
-        patch(f"{_GATE}.BudgetService", service),
+        patch(f"{_GATE}.get_budget_service", service),
         pytest.raises(RuntimeError),
     ):
         await dispatch_block_reason(AsyncMock(), _SLUG, _COMPANY_ID, "available")
@@ -165,7 +165,7 @@ async def test_a_manual_trigger_of_a_stopped_agent_raises_before_any_run():
 async def test_require_dispatchable_passes_a_healthy_agent():
     with (
         patch(f"{_GATE}.get_async_redis_client", AsyncMock(return_value=_redis())),
-        patch(f"{_GATE}.BudgetService", _budget(False)),
+        patch(f"{_GATE}.get_budget_service", _budget(False)),
     ):
         await require_dispatchable(
             AsyncMock(),
