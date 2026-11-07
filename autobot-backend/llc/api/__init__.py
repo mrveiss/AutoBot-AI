@@ -21,6 +21,7 @@ from .companies import router as companies_router
 from .company_ceo import router as company_ceo_router
 from .company_members import router as company_members_router
 from .company_os import router as company_os_router
+from .company_os_plan_edit import router as company_os_plan_edit_router
 from .company_os_plans import router as company_os_plans_router
 from .company_os_skills import router as company_os_skills_router
 from .company_teams import router as company_teams_router
@@ -102,6 +103,7 @@ router.include_router(costs_router)
 router.include_router(workflows_router)
 router.include_router(company_os_router)
 router.include_router(company_os_plans_router)
+router.include_router(company_os_plan_edit_router)
 router.include_router(company_os_skills_router)
 
 
