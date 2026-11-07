@@ -37,6 +37,8 @@ from typing import Any, AsyncGenerator, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp as get_timestamp
+from command_run_policy import CommandRunPolicy
+from utils.bounded_subprocess import BoundedResult, run_bounded
 
 # Issue #765: Use centralized strip_ansi_codes from encoding_utils
 from utils.encoding_utils import strip_ansi_codes
@@ -84,16 +86,38 @@ class CmdOutputChunk:
     is_final: bool = False
 
 
-async def execute_shell_command(command: str) -> Dict[str, Any]:
+def _bounded_to_dict(run: BoundedResult, timeout_s: float) -> Dict[str, Any]:
+    """Shape a bounded run like the unbounded result; a timeout is exit 124 (#19807)."""
+    stdout = strip_ansi_codes(run.stdout.decode("utf-8", errors="replace")).strip()
+    stderr = strip_ansi_codes(run.stderr.decode("utf-8", errors="replace")).strip()
+    if run.timed_out:
+        stderr = f"Command timed out after {timeout_s:g}s and was killed"
+    return_code = 124 if run.timed_out else run.return_code
+    return {
+        "stdout": stdout,
+        "stderr": stderr,
+        "return_code": return_code,
+        "status": "success" if return_code == 0 else "error",
+        "truncated": run.truncated,
+    }
+
+
+async def execute_shell_command(command: str, policy: CommandRunPolicy | None = None) -> Dict[str, Any]:
     """
     Executes a shell command asynchronously and cleans the output.
 
     Args:
         command: The shell command to execute.
+        policy: Optional timeout, output cap and working directory (#19807).
 
     Returns:
         A dictionary containing cleaned stdout, stderr, return code, and status.
     """
+    if policy is not None:
+        run = await run_bounded(
+            command, cwd=policy.cwd, timeout_s=policy.timeout_s, max_output_bytes=policy.max_output_bytes
+        )
+        return _bounded_to_dict(run, policy.timeout_s)
     try:
         process = await asyncio.create_subprocess_shell(
             command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE

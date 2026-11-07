@@ -675,7 +675,7 @@ async def _reported(call) -> tuple:
         combined = stdout.decode("utf-8", errors="replace") + stderr.decode("utf-8", errors="replace")
         return returncode == 0, combined[:2000]
     except asyncio.TimeoutError:
-        return False, "Timeout after 120 seconds"
+        return False, f"Timeout after {_SSH_ACTION_TIMEOUT_S:g} seconds"
     except Exception as e:
         logger.exception("SSH command error: %s", e)
         return False, "Error: SSH command failed"

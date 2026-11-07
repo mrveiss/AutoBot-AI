@@ -110,3 +110,15 @@ register_env_var(
         component="postgres",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MIGRATION_CONNECT_TIMEOUT_SECONDS",
+        type=int,
+        default=10,
+        description=(
+            "Seconds the SLM migration runner waits to connect to PostgreSQL before it reports failure (#18056)."
+        ),
+        component="postgres",
+    )
+)
