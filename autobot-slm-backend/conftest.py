@@ -224,46 +224,13 @@ _role_columns_mod.COLUMNS = frozenset(
 sys.modules["_role_cols"] = _role_columns_mod
 sys.modules["models.database"].Role.__table__ = types.SimpleNamespace(columns=_role_columns_mod.COLUMNS)
 
-# #13139: models/schemas_secrets.py must be REAL, not stubbed. It carries
-# response_model classes, and FastAPI rejects a MagicMock as a response field
-# ("Invalid args for response field!") the moment a test builds the app. It
-# imports only pydantic, so loading it by path is safe -- this deliberately
-# bypasses models/__init__.py, which is what the stubs above exist to avoid.
-_schemas_secrets_path = Path(__file__).parent / "models" / "schemas_secrets.py"
-if not _schemas_secrets_path.is_file():
-    raise RuntimeError("conftest: models/schemas_secrets.py is named here but does not exist")
-import importlib.util as _ss_importlib_util  # noqa: E402  -- the shared alias is bound later
-
-_ss_spec = _ss_importlib_util.spec_from_file_location("models.schemas_secrets", _schemas_secrets_path)
-_ss_mod = _ss_importlib_util.module_from_spec(_ss_spec)
-_ss_spec.loader.exec_module(_ss_mod)
-sys.modules["models.schemas_secrets"] = _ss_mod
-setattr(sys.modules["models"], "schemas_secrets", _ss_mod)
-
-# #16281: models/npu_schemas.py and models/gpu_schemas.py are REAL for the same
-# reason -- services/node_gpu.py builds pydantic responses from them, and a
-# MagicMock model validates nothing. Both import only pydantic; gpu_schemas also
-# imports npu_schemas, hence the order and the sys.modules entry before exec.
-for _schema in ("npu_schemas", "gpu_schemas", "post_sync_schemas", "rollback_schemas"):
-    _schema_path = Path(__file__).parent / "models" / f"{_schema}.py"
-    _schema_spec = _ss_importlib_util.spec_from_file_location(f"models.{_schema}", _schema_path)
-    _schema_mod = _ss_importlib_util.module_from_spec(_schema_spec)
-    sys.modules[f"models.{_schema}"] = _schema_mod
-    _schema_spec.loader.exec_module(_schema_mod)
-    setattr(sys.modules["models"], _schema, _schema_mod)
-
-# #15495: models/node_capability.py is REAL for a different reason than the
-# pair above -- it declares a SQLAlchemy Core Table, not a Pydantic model, and
-# services/node_capability.py needs its real columns (``.c.node_id`` etc.) to
-# build meaningful insert/update/select statements. It imports only
-# sqlalchemy, which is already stubbed harmlessly above (attribute access on
-# the stub auto-vivifies rather than raising).
-_ncap_path = Path(__file__).parent / "models" / "node_capability.py"
-_ncap_spec = _ss_importlib_util.spec_from_file_location("models.node_capability", _ncap_path)
-_ncap_mod = _ss_importlib_util.module_from_spec(_ncap_spec)
-sys.modules["models.node_capability"] = _ncap_mod
-_ncap_spec.loader.exec_module(_ncap_mod)
-setattr(sys.modules["models"], "node_capability", _ncap_mod)
+# Real-loaded model schemas (#13139, #16281, #15495) live in `_slm_real_models.py`
+# (#21026: split out for the 600-line cap); loaded by path, this dir is not on sys.path.
+_rm_spec = _ilu.spec_from_file_location("_slm_real_models", _SLM_ROOT / "_slm_real_models.py")
+_rm_mod = _ilu.module_from_spec(_rm_spec)
+_rm_spec.loader.exec_module(_rm_mod)
+_rm_mod.load_real_model_schemas()
+del _rm_spec, _rm_mod
 
 
 # ── services ──────────────────────────────────────────────────────────────────
