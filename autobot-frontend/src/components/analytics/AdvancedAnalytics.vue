@@ -334,11 +334,10 @@ const { t } = useI18n()
 
 const logger = createLogger('AdvancedAnalytics')
 
-// Issue #701: Type for API response with data property
-interface ApiDataResponse {
-  data?: unknown
-  [key: string]: unknown
-}
+// #21066: every analytics route above answers its model at the top level (no `data` envelope; verified
+// against the response models in api/schemas_analytics.py and the producers in analytics_cost,
+// analytics_agents, analytics_export and user_behavior_analytics), so the replies are read directly.
+// The /behavior/* models are opaque (`extra=allow`); #21066 owns typing them.
 
 // Domain shapes for analytics responses (fields consumed by the template)
 interface CostSummary {
@@ -509,9 +508,9 @@ const fetchCostData = async () => {
       apiClient.call('get', '/api/analytics/cost/trends'),
       apiClient.call('get', '/api/analytics/cost/by-model')
     ])
-    costSummary.value = (summaryRes as ApiDataResponse).data as CostSummary | null
-    costTrends.value = (trendsRes as ApiDataResponse).data as CostTrends | null
-    modelCosts.value = ((modelsRes as ApiDataResponse).data as ModelCostsData | undefined)?.models || []
+    costSummary.value = summaryRes as CostSummary | null
+    costTrends.value = trendsRes as CostTrends | null
+    modelCosts.value = (modelsRes as ModelCostsData | undefined)?.models || []
   } catch (error) {
     logger.error('Failed to fetch cost data:', error)
   }
@@ -525,8 +524,8 @@ const fetchAgentData = async () => {
       apiClient.call('get', '/api/analytics/agents/performance'),
       apiClient.call('get', '/api/analytics/agents/recommendations')
     ])
-    agentMetrics.value = (metricsRes as ApiDataResponse).data as AgentMetrics | null
-    recommendations.value = (recsRes as ApiDataResponse).data as Recommendations | null
+    agentMetrics.value = metricsRes as AgentMetrics | null
+    recommendations.value = recsRes as Recommendations | null
   } catch (error) {
     logger.error('Failed to fetch agent data:', error)
   }
@@ -537,7 +536,7 @@ const fetchExportFormats = async () => {
     // Issue #552: Fixed missing /api prefix in analytics endpoints
     // Issue #701: Added type assertion for response
     const res = await apiClient.call('get', '/api/analytics/export/formats')
-    exportFormats.value = ((res as ApiDataResponse).data as ExportFormatsData | undefined)?.formats || []
+    exportFormats.value = (res as ExportFormatsData | undefined)?.formats || []
     // Add icons
     exportFormats.value.forEach((f: ExportFormat) => {
       if (f.format === 'CSV') f.icon = 'file-csv'
@@ -560,9 +559,9 @@ const fetchBehaviorData = async () => {
       apiClient.call('get', '/api/analytics/behavior/features'),
       apiClient.call('get', '/api/analytics/behavior/stats/heatmap')
     ])
-    engagementMetrics.value = (engagementRes as ApiDataResponse).data as EngagementMetricsData | null
-    behaviorMetrics.value = (featuresRes as ApiDataResponse).data
-    usageHeatmap.value = (heatmapRes as ApiDataResponse).data as UsageHeatmap | null
+    engagementMetrics.value = engagementRes as EngagementMetricsData | null
+    behaviorMetrics.value = featuresRes
+    usageHeatmap.value = heatmapRes as UsageHeatmap | null
   } catch (error) {
     logger.error('Failed to fetch behavior data:', error)
   }

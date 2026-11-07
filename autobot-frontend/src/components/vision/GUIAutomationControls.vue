@@ -167,7 +167,7 @@
 </template>
 
 <script setup lang="ts">
-import { BaseAlert, BaseButton, isHttpError } from '@autobot/ui'
+import { BaseAlert, BaseButton, httpErrorText, isHttpError } from '@autobot/ui'
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue';
 import { ref, onMounted } from 'vue';
@@ -208,7 +208,7 @@ const loadReferenceData = async () => {
       getInteractionTypes(),
     ]);
 
-    elementTypesList.value = elementsRes.element_types;
+    elementTypesList.value = elementsRes.element_types ?? [];
     interactionTypesList.value = interactionsRes.interaction_types;
   } catch (err) {
     logger.error('Failed to load reference data:', err);
@@ -252,7 +252,7 @@ const executeAction = async (opportunity: AutomationOpportunity) => {
   } catch (err) {
     logger.error('Execute action failed:', err);
     actionError.value = isHttpError(err)
-      ? t('vision.guiAutomation.toastVerifyFailed', { error: err.detail || err.message })
+      ? t('vision.guiAutomation.toastVerifyFailed', { error: httpErrorText(err, err.message) })
       : t('vision.guiAutomation.toastExecutionFailed');
   } finally {
     executing.value = false;

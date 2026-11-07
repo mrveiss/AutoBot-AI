@@ -208,7 +208,7 @@
 </template>
 
 <script setup lang="ts">
-import { BaseAlert, isHttpError } from '@autobot/ui'
+import { BaseAlert, httpErrorText, isHttpError } from '@autobot/ui'
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue';
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
@@ -281,7 +281,7 @@ const captureAndAnalyze = async () => {
     logger.debug('Screen analysis complete:', response);
   } catch (err) {
     analyzeError.value = isHttpError(err)
-      ? err.detail || t('vision.screenCapture.toastAnalysisFailed')
+      ? httpErrorText(err, t('vision.screenCapture.toastAnalysisFailed'))
       : t('vision.screenCapture.toastFailedToAnalyze');
     logger.error('Analysis error:', err);
   } finally {
@@ -292,7 +292,7 @@ const captureAndAnalyze = async () => {
 const loadElementTypes = async () => {
   try {
     const response = await getElementTypes();
-    elementTypes.value = response.element_types;
+    elementTypes.value = response.element_types ?? [];
   } catch (err) {
     logger.error('Failed to load element types:', err);
   }

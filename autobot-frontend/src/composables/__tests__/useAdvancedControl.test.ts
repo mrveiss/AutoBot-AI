@@ -354,6 +354,25 @@ describe('useAdvancedControl', () => {
     scope.stop()
   })
 
+  it('loadTakeovers and loadStreaming read a reply without the list key as an empty list', async () => {
+    mockGetPendingTakeovers.mockResolvedValueOnce({ success: true, data: {} })
+    mockGetActiveTakeovers.mockResolvedValueOnce({ success: true, data: {} })
+    mockGetTakeoverStatus.mockResolvedValueOnce({ success: true, data: {} })
+    mockListStreamingSessions.mockResolvedValueOnce({ success: true, data: {} })
+    mockGetStreamingCapabilities.mockResolvedValueOnce({ success: true, data: {} })
+
+    const scope = effectScope()
+    await scope.run(async () => {
+      const { loadTakeovers, loadStreaming, pendingTakeovers, activeTakeovers, streamingSessions } = useAdvancedControl()
+      await loadTakeovers()
+      await loadStreaming()
+      expect(pendingTakeovers.value).toEqual([])
+      expect(activeTakeovers.value).toEqual([])
+      expect(streamingSessions.value).toEqual([])
+    })
+    scope.stop()
+  })
+
   it('createStreaming calls createStreamingSession with the request and reloads on success', async () => {
     mockCreateStreamingSession.mockResolvedValueOnce({
       success: true,

@@ -88,7 +88,7 @@ _BASELINES = {
         # baseline returns to 187 rather than staying raised.
         # #20173: the secret audit log's private AuditQueryResponse is gone; it reads
         # the one in types/audit.ts (187 -> 186).
-        "responses": 177,  # #12363 slice 4: nine vision/multimodal replies are now `components['schemas']` aliases (186 -> 177)
+        "responses": 176,  # #12363 slice 4: nine vision/multimodal replies are now `components['schemas']` aliases and the analytics `ApiDataResponse` envelope is gone (186 -> 176)
         # #15455: raised for the four typed detail fetches #15429 added. Same
         # limitation — this counts assertions, and a correct new call is one.
         # #16245: SettingsPanel.vue's unrendered /system/health/detailed loader was

@@ -16,7 +16,12 @@ export function getMonitoringWebSocketUrl(): string {
   return `${getBackendWsUrl()}${getApiBase()}/advanced-control/ws/monitoring`
 }
 
-/** WebSocket URL for desktop streaming control of one session. */
+/**
+ * WebSocket URL for desktop streaming control of one session.
+ *
+ * No caller yet (the deleted AdvancedControlApiClient method had none either); wiring it into the
+ * desktop streaming UI is tracked in #21077. Do not delete.
+ */
 export function getDesktopWebSocketUrl(sessionId: string): string {
   return `${getBackendWsUrl()}${getApiBase()}/advanced-control/ws/desktop/${encodeURIComponent(sessionId)}`
 }

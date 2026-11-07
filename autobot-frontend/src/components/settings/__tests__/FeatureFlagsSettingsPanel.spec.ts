@@ -71,4 +71,26 @@ describe('FeatureFlagsSettingsPanel typed calls', () => {
     })
     expect(call).toHaveBeenCalledWith('delete', '/api/admin/feature-flags/endpoint/{endpoint}', { path: { endpoint: '/api/chat' } })
   })
+
+  it('keeps the status when only the metrics call rejects', async () => {
+    // a fresh object: the mode-change test above mutates the shared STATUS in place
+    const status = { ...STATUS, data: { ...STATUS.data, current_mode: 'log_only' } }
+    call.mockImplementation(async (method: string, path: string) => {
+      if (path === '/api/admin/feature-flags/status') return status
+      if (path === '/api/admin/access-control/metrics') throw new Error('HTTP 500')
+      return { success: true, message: 'ok' }
+    })
+    const wrapper = await mountPanel()
+    expect(wrapper.find('.error-state').exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'EnforcementModeSelector' }).props('currentMode')).toBe('log_only')
+  })
+
+  it('stays fatal when the status call rejects', async () => {
+    call.mockImplementation(async (method: string, path: string) => {
+      if (path === '/api/admin/feature-flags/status') throw new Error('HTTP 500')
+      return METRICS
+    })
+    const wrapper = await mountPanel()
+    expect(wrapper.find('.error-state').exists()).toBe(true)
+  })
 })

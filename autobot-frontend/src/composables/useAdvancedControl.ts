@@ -14,7 +14,7 @@
  */
 
 import { ref } from 'vue'
-import { isHttpError } from '@autobot/ui'
+import { httpErrorText } from '@autobot/ui'
 import apiClient from '@/utils/ApiClient'
 import { getMonitoringWebSocketUrl as buildMonitoringWebSocketUrl } from '@/utils/advancedControlWs'
 import type {
@@ -37,12 +37,6 @@ const logger = createLogger('useAdvancedControl')
 
 type Schemas = components['schemas']
 
-/** The backend's own `detail` when it sent one, else the error text, else the fallback. */
-function failureText(err: unknown, fallback: string): string {
-  if (isHttpError(err) && err.detail) return err.detail
-  return err instanceof Error && err.message ? err.message : fallback
-}
-
 type Settled<T> = { ok: true; value: T } | { ok: false; message: string }
 
 /** One call's outcome as data, so a parallel load can tolerate a partial failure. */
@@ -50,7 +44,7 @@ async function settle<T>(request: Promise<T>, fallback: string): Promise<Settled
   try {
     return { ok: true, value: await request }
   } catch (err) {
-    return { ok: false, message: failureText(err, fallback) }
+    return { ok: false, message: httpErrorText(err, fallback) }
   }
 }
 
@@ -79,7 +73,7 @@ export function useAdvancedControl() {
       return true
     } catch (err) {
       logger.error(`${fallback}:`, err)
-      error.value = failureText(err, fallback)
+      error.value = httpErrorText(err, fallback)
       return false
     }
   }
@@ -108,8 +102,8 @@ export function useAdvancedControl() {
         settle(apiClient.call('get', '/api/advanced-control/takeover/active'), 'Failed to load active takeovers'),
         settle(apiClient.call('get', '/api/advanced-control/takeover/status'), 'Failed to load takeover status'),
       ])
-      if (pending.ok) pendingTakeovers.value = pending.value.pending_requests as PendingTakeoverRequest[]
-      if (active.ok) activeTakeovers.value = active.value.active_sessions as ActiveTakeoverSession[]
+      if (pending.ok) pendingTakeovers.value = (pending.value.pending_requests ?? []) as PendingTakeoverRequest[]
+      if (active.ok) activeTakeovers.value = (active.value.active_sessions ?? []) as ActiveTakeoverSession[]
       if (status.ok) takeoverStatus.value = status.value as unknown as TakeoverSystemStatus
       reportLoad([pending, active, status], ['pending takeovers', 'active takeovers', 'takeover status'], 'Failed to load takeovers')
     } finally {
@@ -194,7 +188,7 @@ export function useAdvancedControl() {
         settle(apiClient.call('get', '/api/advanced-control/streaming/sessions'), 'Failed to load streaming sessions'),
         settle(apiClient.call('get', '/api/advanced-control/streaming/capabilities'), 'Failed to load streaming capabilities'),
       ])
-      if (sessions.ok) streamingSessions.value = sessions.value.sessions as StreamingSession[]
+      if (sessions.ok) streamingSessions.value = (sessions.value.sessions ?? []) as StreamingSession[]
       if (caps.ok) streamingCapabilities.value = caps.value as unknown as StreamingCapabilities
       reportLoad([sessions, caps], ['streaming sessions', 'streaming capabilities'], 'Failed to load streaming sessions')
     } finally {

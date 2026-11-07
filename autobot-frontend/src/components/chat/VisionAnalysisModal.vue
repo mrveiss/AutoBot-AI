@@ -3,7 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { BaseButton, isHttpError, saveTextFile } from '@autobot/ui'
+import { BaseButton, httpErrorText, isHttpError, saveTextFile } from '@autobot/ui'
 /**
  * VisionAnalysisModal — Modal dialog for image analysis from the chat input.
  *
@@ -106,7 +106,7 @@ async function analyzeImage(): Promise<void> {
     analysisResult.value = response
     logger.debug('Analysis complete:', response)
   } catch (err) {
-    if (isHttpError(err)) error.value = err.detail || t('chat.vision.analysisFailed')
+    if (isHttpError(err)) error.value = httpErrorText(err, t('chat.vision.analysisFailed'))
     else error.value = err instanceof Error ? err.message : t('common.unknownError')
     logger.error('Analysis error:', err)
   } finally {

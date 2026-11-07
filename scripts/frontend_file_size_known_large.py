@@ -24,7 +24,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/__tests__/ChatInterface.test.ts": 760,
     "autobot-frontend/src/components/__tests__/TerminalWindow.test.ts": 627,
     "autobot-frontend/src/components/agents/HeartbeatPanel.vue": 721,
-    "autobot-frontend/src/components/analytics/AdvancedAnalytics.vue": 896,  # #12363 slice 4: 902 -> 896
+    "autobot-frontend/src/components/analytics/AdvancedAnalytics.vue": 895,  # #12363 slice 4: 902 -> 895
     "autobot-frontend/src/components/analytics/CodeEvolutionTimeline.vue": 767,
     "autobot-frontend/src/components/analytics/CodeGenerationDashboard.vue": 1108,
     "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": 1789,
@@ -95,7 +95,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/vision/GUIAutomationControls.vue": 698,  # #12363 slice 4: 708 -> 698
     "autobot-frontend/src/components/vision/MediaGallery.vue": 717,
     "autobot-frontend/src/components/vision/ScreenCaptureViewer.vue": 826,  # #12363 slice 4: 835 -> 826
-    "autobot-frontend/src/components/vision/VideoProcessor.vue": 882,  # #12363 slice 4: 891 -> 882
+    "autobot-frontend/src/components/vision/VideoProcessor.vue": 867,  # #12363 slice 4: 891 -> 867
     "autobot-frontend/src/components/visualizations/AgentActivityVisualization.vue": 936,
     "autobot-frontend/src/components/visualizations/SystemArchitectureDiagram.vue": 1874,
     "autobot-frontend/src/components/visualizations/WorkflowVisualization.vue": 1017,  # #16744: 1020 -> 1019

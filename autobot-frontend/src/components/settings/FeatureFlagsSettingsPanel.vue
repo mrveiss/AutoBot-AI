@@ -125,19 +125,25 @@ const loadData = async () => {
   error.value = '';
 
   try {
-    const [statusResponse, metricsResponse] = await Promise.all([
+    // The status is required (a failure is fatal); the metrics are optional, so their failure
+    // (403, 500, timeout) must not discard the status that did load.
+    const [statusResult, metricsResult] = await Promise.allSettled([
       getFeatureFlagsStatus(),
       getAccessControlMetrics({ days: 7, include_details: true }),
     ]);
 
+    if (statusResult.status === 'rejected') throw statusResult.reason;
+    const statusResponse = statusResult.value;
     if (!statusResponse.success || !statusResponse.data) {
       throw new Error(t('featureFlags.failedToLoadStatus'));
     }
 
     featureFlagsStatus.value = statusResponse.data as FeatureFlagsStatus;
 
-    if (metricsResponse.success && metricsResponse.data) {
-      accessMetrics.value = metricsResponse.data as unknown as ViolationStatistics;
+    if (metricsResult.status === 'rejected') {
+      logger.warn('Access-control metrics unavailable:', metricsResult.reason);
+    } else if (metricsResult.value.success && metricsResult.value.data) {
+      accessMetrics.value = metricsResult.value.data as unknown as ViolationStatistics;
     }
   } catch (err) {
     logger.error('Failed to load feature flags data:', err);
