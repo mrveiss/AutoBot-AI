@@ -172,6 +172,7 @@ jobs:
           -r requirements-ci/framework.txt
           -r requirements-ci/utilities.txt
           -r requirements-ci/networking.txt
+          -r requirements-ci/monitoring.txt
           -r requirements-ci-test.txt
       - name: Run the real-torch optimization tests
         run: >

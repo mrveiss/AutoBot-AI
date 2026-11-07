@@ -4,8 +4,7 @@
 
 Discovery and type-safe access; ``check_env_var_registry`` requires every var
 to be registered. A NEW one goes in an ``env_registry_<component>.py`` sibling
-imported below -- this file is at its ceiling and may not grow (#14236).
-Closes GH#7081.
+imported below -- this file is at its ceiling and may not grow (#14236). Closes GH#7081.
 """
 
 from __future__ import annotations
@@ -59,9 +58,7 @@ def env(name: str, default: Any = None) -> Any:
         return spec.default if default is None else default
 
 
-# ---------------------------------------------------------------------------
-# Registered variables — grouped by component
-# ---------------------------------------------------------------------------
+# Registered variables -- grouped by component
 # Per-component siblings split at the size ceiling (#14236, #18391); imported after REGISTRY exists, before any read.
 from autobot_shared import env_registry_agent_runtime  # noqa: E402,F401
 from autobot_shared import env_registry_backend  # noqa: E402,F401
@@ -70,7 +67,6 @@ from autobot_shared import env_registry_knowledge  # noqa: E402,F401
 from autobot_shared import env_registry_llc  # noqa: E402,F401
 from autobot_shared import env_registry_logging  # noqa: E402,F401
 from autobot_shared import env_registry_memory  # noqa: E402,F401
-from autobot_shared import env_registry_npu  # noqa: E402,F401
 from autobot_shared import env_registry_security  # noqa: E402,F401
 from autobot_shared import env_registry_tls  # noqa: E402,F401
 from autobot_shared import (  # noqa: E402,F401
@@ -80,14 +76,18 @@ from autobot_shared import (  # noqa: E402,F401
     env_registry_approvals,
     env_registry_batch,
     env_registry_chat_attachments,
+    env_registry_chat_lease,
     env_registry_gateway,
     env_registry_ledger,
+    env_registry_npu,
     env_registry_postgres,
     env_registry_rag,
     env_registry_slm,
     env_registry_slm_health,
+    env_registry_slm_rollback,
     env_registry_terminal,
     env_registry_testing,
+    env_registry_worker_loop,
 )
 
 # --- events (#14817, #14818) -------------------------------------------------
