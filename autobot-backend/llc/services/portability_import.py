@@ -163,9 +163,9 @@ class PortabilityImportMixin:
     ) -> Optional[uuid.UUID]:
         """Create a seed work item through ``WorkItemService``, so the hierarchy rules apply (#20472)."""
         from llc.models.enums import WorkItemPriority, WorkItemType  # noqa: PLC0415
-        from llc.services.work_item_service import WorkItemService  # noqa: PLC0415
+        from llc.services.accessors import get_work_item_service  # noqa: PLC0415
 
-        created = await WorkItemService().create(
+        created = await get_work_item_service().create(
             self.session,
             company_id=str(company_id),
             type=WorkItemType(item.get("type", "epic")),
