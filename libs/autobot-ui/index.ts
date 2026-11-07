@@ -161,7 +161,6 @@ export {
   formatTime,
   formatDateTime,
   formatISOString,
-  formatTimeAgo,
   formatRelativeTime,
   createRecencyFormatter,
   createDateFormatter,
