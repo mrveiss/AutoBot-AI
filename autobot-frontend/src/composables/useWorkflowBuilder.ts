@@ -17,7 +17,7 @@ import { ref, computed } from 'vue';
 import { getBackendWsUrl, getApiBase } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
 import httpClient from '@/utils/ApiClient';
-import { isHttpClientError } from '@autobot/ui';
+import { isHttpError } from '@autobot/ui';
 import type { ApiResponse } from '@/types/api';
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
 import type { WorkflowTemplateDetail } from '@/types/workflowTemplates';
@@ -282,7 +282,7 @@ class WorkflowBuilderApiClient {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('API request failed:', { endpoint, error: message });
-      return { success: false, error: message, refused: isHttpClientError(error) };
+      return { success: false, error: message, httpStatus: isHttpError(error) ? error.status : undefined };
     }
   }
 
@@ -862,6 +862,7 @@ export function useWorkflowBuilder() {
     await wrapLoading(async () => {
       const response = await apiClient.getActiveWorkflows();
       if (response.success && response.data) {
+        stepAnswers.forgetRemoved(activeWorkflows.value, response.data.workflows);
         activeWorkflows.value = response.data.workflows;
         logger.debug('Active workflows loaded:', response.data);
       } else {
@@ -883,10 +884,9 @@ export function useWorkflowBuilder() {
 
   /** Get workflow status */
   async function getWorkflowStatus(workflowId: string): Promise<ActiveWorkflow | null> {
-    const issued = stepAnswers.nextRefresh();
-    const response = await apiClient.getWorkflowStatus(workflowId);
+    const response = await stepAnswers.fetchStatus(workflowId, () => apiClient.getWorkflowStatus(workflowId));
     if (response.success && response.data) {
-      stepAnswers.clearDecided(workflowId, (currentWorkflow.value = response.data.workflow).steps, issued);
+      currentWorkflow.value = response.data.workflow;
       return response.data.workflow;
     }
     return null;

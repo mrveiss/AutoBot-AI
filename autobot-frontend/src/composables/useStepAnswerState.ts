@@ -24,8 +24,12 @@ const keyOf = (workflowId: string, stepId: string) => `${workflowId}\u0000${step
 /** What sending an answer came to: accepted, refused outright by the server (4xx), or unconfirmed (network or 5xx). */
 export type StepSendResult = boolean | 'unconfirmed';
 
-/** Classify a control response: accepted, refused outright (`refused`, a 4xx), or unconfirmed (the outcome is unknown). */
-export const stepSendResult = (r: { success: boolean; refused?: boolean }): StepSendResult => r.success || (r.refused ? false : 'unconfirmed');
+/** Classify a control response: accepted, refused outright (a 4xx other than 408), or unconfirmed (the outcome is unknown). */
+export const stepSendResult = (r: { success: boolean; httpStatus?: number }): StepSendResult => {
+  if (r.success) return true;
+  const status = r.httpStatus ?? 0;
+  return status >= 400 && status < 500 && status !== 408 ? false : 'unconfirmed'; // 408 may follow a request the server processed
+};
 
 export function useStepAnswerState() {
   const { showToast } = useNotificationBus();
@@ -51,20 +55,46 @@ export function useStepAnswerState() {
     /** True while an answer is being sent or the accepted answer awaits a successful status refresh. */
     isStepLocked: (workflowId: string, stepId: string) =>
       inFlight.has(keyOf(workflowId, stepId)) || decided.has(keyOf(workflowId, stepId)),
-    /** Take the sequence number of a status refresh about to be issued; pass it to `clearDecided` with its response. */
-    nextRefresh: () => ++refreshSeq,
     /**
-     * A status refresh succeeded: release each decided step of this workflow that the returned *steps* no longer
-     * show as waiting approval (a stale response that still says waiting leaves an accepted step locked). An
-     * unconfirmed step is also released by the first refresh *issued* after its send settled (`issued`), even if
-     * it still shows waiting: the server did not take that answer, and a repeat is safe (the server refuses repeats).
+     * Run one status refresh through the lock state: its sequence number is taken before the request goes out, a
+     * missing step list says nothing and releases nothing, and a not-found workflow is gone (its entries are dropped).
      */
-    clearDecided: (workflowId: string, steps: ReadonlyArray<{ step_id: string; status: string }> = [], issued = 0) => {
-      const waiting = new Set(steps.filter((s) => s.status === 'waiting_approval').map((s) => keyOf(workflowId, s.step_id)));
-      for (const [key, entry] of decided) {
-        if (!key.startsWith(`${workflowId}\u0000`)) continue;
-        if (!waiting.has(key) || (entry.unconfirmed && issued > entry.after)) decided.delete(key);
-      }
+    async fetchStatus<R extends StatusResponse>(workflowId: string, request: () => Promise<R>): Promise<R> {
+      const issued = ++refreshSeq;
+      const r = await request();
+      const steps = r.data?.workflow?.steps;
+      if (r.httpStatus === 404) dropWorkflow(workflowId);
+      else if (r.success && Array.isArray(steps)) clearDecided(workflowId, steps, issued);
+      return r;
     },
+    /** Forget the entries of every workflow in `previous` that is not in `next`: it left the builder. */
+    forgetRemoved: (previous: ReadonlyArray<{ workflow_id: string }>, next: ReadonlyArray<{ workflow_id: string }>) => {
+      const kept = new Set(next.map((w) => w.workflow_id));
+      for (const w of previous) if (!kept.has(w.workflow_id)) dropWorkflow(w.workflow_id);
+    },
+    dropWorkflow,
+    clearDecided,
   };
+}
+
+/** Forget every entry of one workflow, decided or in flight. */
+function dropWorkflow(workflowId: string): void {
+  for (const key of decided.keys()) if (key.startsWith(`${workflowId}\u0000`)) decided.delete(key);
+}
+
+type StepInfo = { step_id: string; status: string };
+type StatusResponse = { success: boolean; data?: { workflow?: { steps?: unknown } }; httpStatus?: number };
+
+/**
+ * Release each decided step of *workflowId* that the refresh's *steps* no longer show as waiting approval (a stale
+ * response that still says waiting leaves an accepted step locked). An unconfirmed step is also released by the
+ * first refresh issued after its send settled (`issued`), even if it still shows waiting: the server did not take
+ * that answer, and a repeat is safe (the server refuses repeats).
+ */
+function clearDecided(workflowId: string, steps: ReadonlyArray<StepInfo>, issued: number): void {
+  const waiting = new Set(steps.filter((s) => s.status === 'waiting_approval').map((s) => keyOf(workflowId, s.step_id)));
+  for (const [key, entry] of decided) {
+    if (!key.startsWith(`${workflowId}\u0000`)) continue;
+    if (!waiting.has(key) || (entry.unconfirmed && issued > entry.after)) decided.delete(key);
+  }
 }

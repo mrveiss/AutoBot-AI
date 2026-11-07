@@ -26,7 +26,7 @@ describe('step answer lock', () => {
   beforeEach(() => {
     http.get.mockReset();
     http.post.mockReset();
-    useStepAnswerState().clearDecided('wf-1');
+    for (const id of ['wf-1', 'wf-2']) useStepAnswerState().dropWorkflow(id);
   });
 
   it('an unconfirmed answer is decided by the first refresh issued after it: still waiting means the server never took it', async () => {
@@ -48,13 +48,74 @@ describe('step answer lock', () => {
 
   it('a refresh issued before the unconfirmed send settled cannot decide it', async () => {
     const state = useStepAnswerState();
-    const older = state.nextRefresh();
+    const waiting = { success: true, data: { workflow: { steps: [{ step_id: 's1', status: 'waiting_approval' }] } } };
+    let finishOlder!: (v: typeof waiting) => void;
+    const older = state.fetchStatus('wf-1', () => new Promise<typeof waiting>((r) => { finishOlder = r; }));
     await state.answer('wf-1', 's1', async () => 'unconfirmed', async () => null); // its own refresh failed
-    const waiting = [{ step_id: 's1', status: 'waiting_approval' }];
-    state.clearDecided('wf-1', waiting, older); // a response to the older, still in-flight request
+    finishOlder(waiting); // the older, still in-flight response arrives late
+    await older;
     expect(state.isStepLocked('wf-1', 's1')).toBe(true);
-    state.clearDecided('wf-1', waiting, state.nextRefresh());
+    await state.fetchStatus('wf-1', async () => waiting); // issued after the send settled
     expect(state.isStepLocked('wf-1', 's1')).toBe(false);
+  });
+
+  it.each([500, 503, 408])('a %i send stays unconfirmed: locked until a refresh issued afterwards decides it', async (status) => {
+    http.post.mockRejectedValue(new HttpError(status, 'no answer'));
+    http.get.mockRejectedValue(new Error('offline'));
+    const { approveStep } = useWorkflowBuilder();
+    await expect(approveStep('wf-1', 's1')).resolves.toBe(false);
+    expect(useStepAnswerState().isStepLocked('wf-1', 's1')).toBe(true);
+    http.get.mockResolvedValue(wf('waiting_approval'));
+    await useWorkflowBuilder().getWorkflowStatus('wf-1');
+    expect(useStepAnswerState().isStepLocked('wf-1', 's1')).toBe(false);
+  });
+
+  it('a 429 is refused outright: the step unlocks at once', async () => {
+    http.post.mockRejectedValue(new HttpError(429, 'slow down'));
+    await useWorkflowBuilder().approveStep('wf-1', 's1');
+    expect(useStepAnswerState().isStepLocked('wf-1', 's1')).toBe(false);
+  });
+
+  it('a response with no step list releases nothing', async () => {
+    http.post.mockResolvedValue({ success: true });
+    http.get.mockResolvedValue({ workflow: { workflow_id: 'wf-1' } });
+    const { approveStep, getWorkflowStatus } = useWorkflowBuilder();
+    await approveStep('wf-1', 's1');
+    await getWorkflowStatus('wf-1');
+    expect(useStepAnswerState().isStepLocked('wf-1', 's1')).toBe(true);
+  });
+
+  it('another workflow\'s entries are untouched by a status refresh', async () => {
+    http.post.mockResolvedValue({ success: true });
+    http.get.mockResolvedValue(wf('waiting_approval'));
+    const { approveStep, getWorkflowStatus } = useWorkflowBuilder();
+    await approveStep('wf-1', 's1');
+    await approveStep('wf-2', 's1');
+    http.get.mockResolvedValue(wf('approved')); // wf-1 shows decided
+    await getWorkflowStatus('wf-1');
+    expect(useStepAnswerState().isStepLocked('wf-1', 's1')).toBe(false);
+    expect(useStepAnswerState().isStepLocked('wf-2', 's1')).toBe(true);
+  });
+
+  it('a not-found status drops that workflow\'s entries', async () => {
+    http.post.mockResolvedValue({ success: true });
+    http.get.mockResolvedValue(wf('waiting_approval'));
+    const { approveStep, getWorkflowStatus } = useWorkflowBuilder();
+    await approveStep('wf-1', 's1');
+    http.get.mockRejectedValue(new HttpError(404, 'gone'));
+    await getWorkflowStatus('wf-1');
+    expect(useStepAnswerState().isStepLocked('wf-1', 's1')).toBe(false);
+  });
+
+  it('a workflow that leaves the active list drops its entries', async () => {
+    http.post.mockResolvedValue({ success: true });
+    http.get.mockResolvedValue(wf('waiting_approval'));
+    const { approveStep, loadActiveWorkflows, activeWorkflows } = useWorkflowBuilder();
+    activeWorkflows.value = [{ workflow_id: 'wf-1' }] as never;
+    await approveStep('wf-1', 's1');
+    http.get.mockResolvedValue({ workflows: [] });
+    await loadActiveWorkflows();
+    expect(useStepAnswerState().isStepLocked('wf-1', 's1')).toBe(false);
   });
 
   it('a 4xx refusal unlocks the step at once and does not refresh', async () => {
