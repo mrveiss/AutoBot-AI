@@ -157,7 +157,7 @@ class TestHireAgentNamedBindDict:
             patch.object(mod, "registered_adapter_types", return_value=["claude_code"]),
             # #12681: hiring also checks the adapter can run; CI has no `claude` binary.
             patch.object(mod, "adapter_unavailable_reason", return_value=None),
-            patch("llc.services.agent_hire_service.BudgetService.provision_budget", new=AsyncMock()),
+            patch("llc.services.budget.BudgetService.provision_budget", new=AsyncMock()),
             patch.object(mod, "company_requires_hire_approval", new=AsyncMock(return_value=False)),
         ):
             ctx = TenantContext(org_id=None, user_id=uuid.uuid4(), is_platform_admin=True)
