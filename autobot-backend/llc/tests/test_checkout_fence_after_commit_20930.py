@@ -142,3 +142,10 @@ async def test_a_deferred_release_does_not_drop_the_fence_of_a_later_checkout() 
         await session.commit()
         await _settle()
     assert await redis.get(key) == f"{_AGENT}#gen-2"
+
+
+def test_a_fence_value_refuses_an_agent_id_holding_the_generation_separator() -> None:
+    """``fence_agent`` splits on the first ``#``, so an agent id carrying one would name the wrong holder."""
+    with pytest.raises(ValueError, match="must not contain"):
+        own_task.checkout_fence_value("agent#1", "gen-1")
+    assert own_task.fence_agent(own_task.checkout_fence_value(str(_AGENT), "gen-1")) == str(_AGENT)
