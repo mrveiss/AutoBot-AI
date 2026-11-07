@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Literal
 
 from pydantic import AliasChoices, BaseModel, Field, field_validator
 
-from api.schemas_knowledge_graph import GraphRequest  # noqa: F401  (re-export)
+from api.schemas_knowledge_graph import GraphRequest, GraphStats  # noqa: F401  (GraphRequest re-export)
 from api.schemas_knowledge_share import ShareKnowledgeRequest  # noqa: F401 -- re-export (#18795)
 from autobot_memory_graph.core import (
     ENTITY_TYPES,
@@ -429,7 +429,7 @@ class KnowledgeMultiSourceGraphResponse(BaseModel):
 
     success: bool
     data: Dict[str, Any]
-    stats: Dict[str, Any]
+    stats: GraphStats
 
 
 # ---------------------------------------------------------------------------

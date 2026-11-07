@@ -23,6 +23,7 @@ from api.codebase_analytics.source_models import CodeSource, SourceStatus
 from api.codebase_analytics.source_scope import cached_task_result
 from api.codebase_analytics.source_storage import RegistryUnavailable, get_default_source_id, list_sources
 from autobot_shared.logging_manager import get_logger
+from knowledge.graph_bucket_visibility import Viewer
 from knowledge.graph_buckets import section_report
 
 logger = get_logger(__name__)
@@ -100,14 +101,15 @@ async def _codebase_node(source: CodeSource, is_default: bool) -> Dict[str, Any]
 
 
 async def codebase_section_for_graph(
-    nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]], user: Dict[str, Any] | None, is_admin: bool
+    nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]], user: Dict[str, Any] | None, viewer: Viewer
 ) -> List[Dict[str, Any]]:
     """Put the codebase section FIRST in nodes; return its report (one per section, [] when none).
 
     The analytics router is admin-gated, so the section is too; per-source visibility
-    follows ``list_sources`` exactly as the analytics endpoints do.
+    follows ``list_sources`` exactly as the analytics endpoints do. Every codebase shown is
+    recorded in the request's ``AdminReadLedger`` (#19860), as the admin bucket reads are.
     """
-    if not is_admin:
+    if not viewer.is_admin:
         return []
     try:
         sources = await indexed_codebases(user)
@@ -125,6 +127,7 @@ async def codebase_section_for_graph(
         "section": CODEBASE_SECTION_KEY,
         "metadata": {"total": len(children)},
     }
+    viewer.ledger.record([{"id": c["id"]} for c in children])
     nodes[0:0] = [section, *children]
     edges[0:0] = [{"from": section["id"], "to": c["id"], "type": "contains", "strength": 1.0} for c in children]
     return [section_report(CODEBASE_SECTION_KEY, CODEBASE_SECTION_LABEL, len(children), len(children))]

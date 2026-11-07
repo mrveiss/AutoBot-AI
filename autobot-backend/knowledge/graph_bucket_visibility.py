@@ -1,0 +1,120 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""Who may read which knowledge-graph bucket record (#20945, #16665, #19860).
+
+There is no second filter. A bucket record is shaped like a fact (``owner_id`` from the record's
+``owner_id`` or ``user_id``, ``organization_id`` from its ``organization_id``/``company_id``/``tenant_id``)
+and goes through ``filter_search_results_by_permission``, the one filter the facts path uses. A record
+without an owner is therefore hidden from non-admins. An admin read passes ``is_admin``, and the records
+on the returned page are recorded in the request's ``AdminReadLedger`` (``record_page``), so the
+``kb.admin_read`` entry the route commits names every record the admin is shown. An admin is bound to
+the caller's own tenant; only a superadmin crosses tenants.
+
+Access by section kind: ``public`` is the product's own documentation and code analysis (no per-user
+owner, api/knowledge_search_documentation.py module docstring), ``owner`` holds per-user records, and
+``tenant_admin`` holds per-company/project/work-item/agent buckets for admins.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Dict, List
+
+from knowledge.quarantine import not_quarantined
+from knowledge.root_read import is_superadmin_user
+from knowledge.search_filters import extract_user_context_from_request, filter_search_results_by_permission
+
+PUBLIC = "public"
+OWNER = "owner"
+TENANT_ADMIN = "tenant_admin"
+_OWNER_KEYS = ("owner_id", "user_id")
+_TENANT_KEYS = ("organization_id", "company_id", "tenant_id")
+
+
+@dataclass(frozen=True)
+class Viewer:
+    """The caller of one graph read: identity, tenant, and the admin ledger (False for a non-admin)."""
+
+    user_id: str
+    company_id: str | None
+    group_ids: tuple
+    is_superadmin: bool
+    ledger: Any = False
+
+    @property
+    def is_admin(self) -> bool:
+        return bool(self.ledger)
+
+
+def viewer_for(current_user, ledger) -> Viewer:
+    """The :class:`Viewer` of an authenticated caller; *ledger* is the route's ``admin_read_audit`` value."""
+    user_id, org_id, group_ids = extract_user_context_from_request(current_user)
+    return Viewer(user_id, org_id, tuple(group_ids), is_superadmin_user(current_user), ledger)
+
+
+def first_of(meta: Dict[str, Any], keys: tuple) -> str | None:
+    """The first non-empty value of *keys* in *meta*, as a string."""
+    found = next((meta[k] for k in keys if meta.get(k)), None)
+    return str(found) if found else None
+
+
+def tenant_of(meta: Dict[str, Any]) -> str | None:
+    """The tenant a record names, or None for an untenanted record."""
+    return first_of(meta, _TENANT_KEYS)
+
+
+def as_fact(collection: str, record_id: str, meta: Dict[str, Any]) -> Dict[str, Any]:
+    """A bucket record in the shape the fact filter reads: ``id`` plus ownership ``metadata``."""
+    metadata = dict(meta)
+    metadata["owner_id"] = first_of(meta, _OWNER_KEYS)
+    metadata["organization_id"] = tenant_of(meta)
+    return {"id": f"bucket:{collection}:{record_id}", "metadata": metadata}
+
+
+def _within_tenant(kind: str, collection: str, fact: Dict[str, Any], viewer: Viewer) -> bool:
+    """An admin (not a superadmin) sees their own tenant: untenanted ``owner`` records, never another tenant's.
+
+    A ``company:<id>`` collection is already tenant-scoped by its name (:func:`collection_in_scope`); the other
+    per-entity buckets name no tenant, so their records must carry the caller's.
+    """
+    if viewer.is_superadmin or not viewer.is_admin or collection.startswith("company:"):
+        return True
+    tenant = fact["metadata"]["organization_id"]
+    return tenant == viewer.company_id if tenant or kind == TENANT_ADMIN else True
+
+
+def collection_in_scope(kind: str, collection: str, viewer: Viewer) -> bool:
+    """False for a ``company:<id>`` collection of another tenant, before any record is read."""
+    from llc.kb.collections import company_id_of  # noqa: PLC0415 -- keeps the LLC stack off this import
+
+    if kind != TENANT_ADMIN or viewer.is_superadmin or not collection.startswith("company:"):
+        return True
+    return company_id_of(collection) == viewer.company_id
+
+
+async def visible_records(
+    kind: str, collection: str, rows: List[Dict[str, Any]], viewer: Viewer, ownership_manager
+) -> List[Dict[str, Any]]:
+    """The *rows* (``id``, ``metadata``) the viewer may read; an admin's are recorded in the ledger."""
+    if kind == PUBLIC:
+        return rows
+    facts = [as_fact(collection, r["id"], r.get("metadata") or {}) for r in rows]
+    facts = [f for f in facts if not_quarantined(f) and _within_tenant(kind, collection, f, viewer)]
+    kept = await filter_search_results_by_permission(
+        facts,
+        viewer.user_id,
+        viewer.company_id,
+        list(viewer.group_ids),
+        ownership_manager=ownership_manager,
+        is_admin=viewer.is_admin,  # the ledger records only the page the route returns
+    )
+    allowed = {f["id"] for f in kept}
+    return [r for r in rows if f"bucket:{collection}:{r['id']}" in allowed]
+
+
+def record_page(viewer: Viewer, section_access: str, page: List[tuple]) -> None:
+    """Record the admin-gated records of a returned page (``(collection, id, metadata)``) in the ledger (#19860)."""
+    if viewer.is_admin and section_access != PUBLIC:
+        viewer.ledger.record([{"id": f"bucket:{name}:{rid}"} for name, rid, _ in page])
