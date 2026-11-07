@@ -43,7 +43,7 @@ def _user(is_admin: bool):
 
 
 def _service(user):
-    session = MagicMock(flush=AsyncMock(), commit=AsyncMock())
+    session = MagicMock(flush=AsyncMock(), commit=AsyncMock(), refresh=AsyncMock())
     session.info = {POST_COMMIT_CALLBACKS: []}
     svc = _Bound(session, TenantContext())
     svc.get_user = AsyncMock(return_value=user)
@@ -155,3 +155,41 @@ def test_a_non_admin_cannot_change_admin_status_and_no_session_is_reached():
     response = TestClient(app).put(f"/user-management/users/{uuid.uuid4()}/admin", json={"is_platform_admin": True})
 
     assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_repeating_a_demotion_after_a_503_finishes_the_revocation(get_current_user, epochs, monkeypatch):
+    """The 503 contract: the flag committed, the marker did not; the repeat must revoke, not answer all-clear."""
+    monkeypatch.setattr(password_epoch, "MEMBERSHIP_EPOCH_BUMP_BACKOFF_SECONDS", 0.0)
+    old = _token_request(role="admin")
+    user = _user(True)
+    password_epoch.use_epoch_store(get_epoch=AsyncMock(return_value=None), set_epoch=AsyncMock(return_value=None))
+    try:
+        with pytest.raises(HTTPException) as failed:
+            await _change(_service(user), False)
+    finally:
+        password_epoch.reset_epoch_store()
+    assert failed.value.status_code == 503 and user.is_platform_admin is False
+    assert epochs == {}
+
+    retry = await _change(_service(user), False)  # the store is back
+    assert retry.changed is False
+    await _assert_refused(get_current_user, old)
+
+
+@pytest.mark.asyncio
+async def test_repeating_a_grant_queues_no_revocation(get_current_user, epochs):
+    """The admin target's same-value path is unchanged: no marker, no audit."""
+    service = _service(_user(True))
+    result = await _change(service, True)
+
+    assert result.changed is False and epochs == {}
+    service._audit_log.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_the_row_is_locked_for_the_read_modify_write(epochs):
+    service = _service(_user(True))
+    await _change(service, False)
+
+    assert service.session.refresh.await_args.kwargs == {"with_for_update": True}

@@ -134,12 +134,21 @@ class UserLifecycleMixin(UserServiceBase):
         request: a demoted admin cannot keep acting on a token that still says admin, and a promoted
         user signs in again to get one that does. A demotion revokes with the same one-second lead as
         a deactivation, so a token minted in that second is void too. The role routes (``UserRole``)
-        never reach this field. Returns False, changing and auditing nothing, when the flag already
-        holds that value. Raises ``UserNotFoundError``.
+        never reach this field. When the flag already holds that value nothing is changed or audited and
+        False is returned -- except that a non-admin target still has its revocation queued: that is the
+        retry of a demotion whose first answer was 503 (the flag committed, the marker did not), and
+        "repeat the request" must finish the revocation, as it does for a deactivation. The row is
+        locked for the read-modify-write so two requests cannot both record the same transition.
+        Raises ``UserNotFoundError``.
         """
         user = await self._require_user(user_id)
+        await self.session.refresh(user, with_for_update=True)
         previous = bool(user.is_platform_admin)
         if previous == is_admin:
+            if not is_admin:
+                run_after_commit(
+                    self.session, PasswordEpochMark(user.username, DEACTIVATION_EPOCH_LEAD_SECONDS, self.epoch_in_redis)
+                )
             return False
         user.is_platform_admin = is_admin
         user.updated_at = now_utc()
