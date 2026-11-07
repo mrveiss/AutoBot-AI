@@ -117,13 +117,13 @@ class AgentLoop:
     Implements the Manus-inspired 6-step iteration pattern with
     event stream integration, planning, and parallel tool execution.
 
-    PRODUCTION STATUS (#11221): this class is **not instantiated anywhere in
-    production** — the only references to ``AgentLoop`` are this module and the
-    re-export/docstring in ``agent_loop/__init__.py``. The live tool-execution
-    seam is ``chat_workflow`` (``_dispatch_tool_call``), not this loop. Reusable
-    building blocks under ``agent_loop/`` (belief_state, extractors, guards) are
-    imported directly by other subsystems, but the loop *orchestrator* below is
-    dormant.
+    PORTED TO THE CHAT GRAPH (maintainer decision 2026-11-07, #20846): the chat
+    graph (``chat_workflow/graph.py``) is the canonical loop. The planner and the
+    stall escalation are ported as graph nodes (#21023, #21022). ``AgentLoop`` is
+    never instantiated in production (#11221); whether to retire it is #21025.
+
+    Reusable parts under ``agent_loop/`` (belief_state, extractors, guards) are
+    imported by other subsystems; the orchestrator below is dormant.
 
     Consequence: any capability wired ONLY into this loop (e.g. the guard stack,
     which is additionally inert until the loop is given an ``agent_id``) has no

@@ -8,6 +8,11 @@ Agent Loop Module
 Implements the Manus-inspired 6-step agent loop pattern for structured
 task execution with event stream integration.
 
+PORTED TO THE CHAT GRAPH (maintainer decision 2026-11-07, #20846): the chat graph
+(``chat_workflow/graph.py``) is the canonical loop. The planner and stall
+escalation are ported as graph nodes (#21023, #21022). ``AgentLoop`` is never
+instantiated in production; whether to retire it is #21025.
+
 NOT WIRED IN PRODUCTION (#11221): ``AgentLoop`` is never instantiated by any
 production caller — the live tool seam is ``chat_workflow._dispatch_tool_call``.
 Submodules here (belief_state, extractors, guards) ARE reused by other

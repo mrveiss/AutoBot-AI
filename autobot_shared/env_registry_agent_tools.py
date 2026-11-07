@@ -5,7 +5,9 @@
 """Env vars for the tool-execution time budgets (autobot_shared/tool_timeouts.py, #19729).
 
 A sibling of ``env_registry_agent_runtime.py``, which sits too close to the file-size ceiling
-to take them; it imports this module.
+to take them; it imports this module. It also holds the chat-graph and ask-human vars
+(autobot_shared/ssot_chat_graph_settings.py, #21024); ``AUTOBOT_ASK_HUMAN_TIMEOUT_SECONDS`` stays
+registered in ``env_registry_agent_runtime.py`` (one registration).
 """
 
 from __future__ import annotations
@@ -40,5 +42,45 @@ register_env_var(
             "#19729). Keep it at least the per-call budget. Minimum 1."
         ),
         component="agent_loop",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_ASK_HUMAN_ESCALATION_POLICY",
+        type=str,
+        default="abandon",
+        description=(
+            "What the agent loop does when an ask-human question times out: "
+            "abandon, default or re_ask (#21024). Defined once in SSOT "
+            "(config.llm.ask_human_escalation_policy)."
+        ),
+        component="agent_loop",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_PLANNER_ENABLED",
+        type=bool,
+        default=False,
+        description=(
+            "Enables the planner node in the chat graph, the canonical loop "
+            "(#21023, #20846). Off by default; enabling adds planning to chat turns."
+        ),
+        component="chat_workflow",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_STALL_ESCALATION",
+        type=str,
+        default="stop",
+        description=(
+            "What the chat graph does when a turn stalls: stop halts the turn, "
+            "ask escalates to the human (#21022, #20846)."
+        ),
+        component="chat_workflow",
     )
 )
