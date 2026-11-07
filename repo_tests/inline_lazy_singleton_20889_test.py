@@ -26,6 +26,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _FACTORY_MODULE = "autobot_shared.singleton_factory"
@@ -158,7 +159,7 @@ class _Scan(ast.NodeVisitor):
 
 
 def scan(source: str) -> _Scan:
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     result = _Scan(_Names(tree))
     result.visit(tree)
     return result
