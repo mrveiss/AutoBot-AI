@@ -20,6 +20,7 @@ from repo_tests._hardcoded_colour_baseline import (
     EXEMPT_BASENAMES,
     HARDCODED_COLOUR_LITERALS,
     IMPORTANT_DECLARATIONS,
+    WHITE_ON_PRIMARY_LABELS,
 )
 from repo_tests._hardcoded_colour_detect import (
     _FRONTEND,
@@ -36,10 +37,13 @@ from repo_tests._hardcoded_colour_detect import (
     _scan,
     _scan_important,
     _scan_important_all,
+    _scan_white_on_primary,
     _token_redefinitions,
+    _white_on_primary_files,
+    white_on_primary_in,
 )
 from repo_tests._paths import repo_root
-from repo_tests._ratchet_base import base_table, raised_entries
+from repo_tests._ratchet_base import BaseUnavailable, base_table, raised_entries
 
 
 @pytest.fixture(scope="module")
@@ -394,4 +398,70 @@ class TestFormTwoStaysAbsent:
         assert not offenders, (
             "these components redefine a design-system token locally, which is the override "
             f"form #17567 records as absent: {offenders}"
+        )
+
+
+class TestTheWhiteOnPrimaryDetectorWorks:
+    """#20425: positive and negative fixtures, so a zero is a finding and not a blind detector."""
+
+    @pytest.mark.parametrize(
+        "css",
+        [
+            ".a { background: var(--color-primary); color: white; }",
+            ".a { color: #FFF; background-color: var(--color-primary); }",
+            ".a { background: var(--primary, #123); color: #ffffff !important; }",
+            ".a { background: var(--color-primary); color: var(--color-white); }",
+            ".a { background: var(--color-primary); color: rgb(255, 255, 255); }",
+        ],
+    )
+    def test_it_flags_a_white_label_on_a_primary_fill(self, css):
+        assert white_on_primary_in(css) == 1
+
+    @pytest.mark.parametrize(
+        "css",
+        [
+            ".a { background: var(--color-primary); color: var(--text-on-primary); }",
+            ".a { background: var(--color-info-solid); color: white; }",
+            ".a { background: var(--color-primary-bg); color: white; }",
+            ".a { background: var(--color-primary); } .b { color: white; }",
+            ".a { /* background: var(--color-primary); */ color: white; }",
+            ".a { background: var(--color-primary); border-color: white; }",
+        ],
+    )
+    def test_it_ignores_what_is_not_one(self, css):
+        assert white_on_primary_in(css) == 0
+
+    def test_a_vue_file_is_read_by_its_style_block_only(self, tmp_path):
+        d = tmp_path / "autobot-slm-frontend" / "src"
+        d.mkdir(parents=True)
+        (d / "A.vue").write_text(
+            '<template><p style="color: white"></p></template>'
+            "<style>.x { background: var(--color-primary); color: white; }</style>",
+            encoding="utf-8",
+        )
+        assert _scan_white_on_primary(tmp_path) == {f"{SLM_KEY_PREFIX}A.vue": 1}
+
+
+class TestWhiteOnPrimaryLabelsOnlyShrink:
+    def test_the_sweep_reaches_both_frontends(self):
+        files = _white_on_primary_files(repo_root())
+        assert len(files) >= REACH_IMPORTANT_FILES.floor, "the sweep read fewer files than the !important sweep"
+        assert any("autobot-slm-frontend" in p.parts for p in files)
+
+    def test_no_entry_rose_against_the_base(self):
+        try:
+            base = _base_table("WHITE_ON_PRIMARY_LABELS")
+        except BaseUnavailable as err:
+            if "no literal WHITE_ON_PRIMARY_LABELS" not in str(err):
+                raise
+            pytest.skip("the table is introduced by #20425, so the base has none; this arms once it lands")
+        rose = raised_entries(WHITE_ON_PRIMARY_LABELS, base)
+        assert not rose, f"white-on-primary entries raised or added against the base (base, now): {rose}"
+
+    def test_every_pinned_count_matches_the_tree(self):
+        measured = _scan_white_on_primary(repo_root())
+        assert measured == WHITE_ON_PRIMARY_LABELS, (
+            f"measured {measured}, pinned {WHITE_ON_PRIMARY_LABELS}. A label on a --color-primary fill must "
+            "read var(--text-on-primary); a literal white is invisible in High Contrast Dark (#20425). "
+            "Equality, so a converted file's entry is deleted rather than left as headroom."
         )
