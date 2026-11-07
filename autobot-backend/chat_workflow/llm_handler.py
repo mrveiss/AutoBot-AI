@@ -1170,7 +1170,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             logger.warning(f"[interpret_terminal_command] Redis timeout getting session " f"data for {session_id}")
             return None
 
-    async def _persist_to_conversation_history(self, session_id: str, interpretation: str) -> None:
+    async def _persist_to_conversation_history(self, session_id: str, interpretation: str, model: str = "") -> None:
         """
         Persist terminal interpretation to conversation history for LLM context.
 
@@ -1180,6 +1180,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         Args:
             session_id: Chat session ID
             interpretation: Interpretation text to persist
+            model: The model that produced it; the rolling-summary refresh folds with it (#20852)
 
         Raises:
             Exception: If persistence fails (logged, not propagated)
@@ -1204,6 +1205,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
                 session=session,
                 message=last_user_message,
                 llm_response=interpretation,
+                model=model or None,
             )
             logger.info(
                 f"✅ [interpret_terminal_command] Persisted user message + "
@@ -1271,7 +1273,8 @@ Do NOT conclude the task or provide a final summary - just explain this specific
                 return interpretation
 
             await self._save_to_chat_history(session_id, interpretation)
-            await self._persist_to_conversation_history(session_id, interpretation)
+            model = provide_config_manager().get_selected_model()  # the rolling-summary refresh folds with it
+            await self._persist_to_conversation_history(session_id, interpretation, model)
 
             return interpretation
 
