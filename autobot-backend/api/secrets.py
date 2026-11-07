@@ -940,7 +940,7 @@ async def update_secret(
     rotating = bool(request.value or request.credentials)
     try:
         if rotating:  # #20557: no credential is replaced without its record
-            await audit_secret_op("UPDATE", secret_id, http_request, required=True, phase="before_write")
+            await audit_secret_op("UPDATE", secret_id, http_request, "attempted", required=True, phase="before_write")
         secret = await asyncio.to_thread(secrets_manager.update_secret, secret_id, request, chat_id=chat_id)
         if secret:
             # One serialization for the cache, the file and every response (#19476)
@@ -1003,7 +1003,7 @@ async def delete_secret(
         _user = get_auth_middleware().get_user_from_request(http_request)
         owner_id = str((_user or {}).get("user_id", "unknown"))
         # #20557: the record comes first; a failed write stops the delete
-        await audit_secret_op("DELETE", secret_id, http_request, required=True, phase="before_write")
+        await audit_secret_op("DELETE", secret_id, http_request, "attempted", required=True, phase="before_write")
         success = await asyncio.to_thread(secrets_manager.delete_secret, secret_id, chat_id=chat_id)
         # #17099/#17731: a SYSTEM secret lives in the vault; delete it there too (409 while dependents exist).
         success = success or await delete_system_vault_secret(
