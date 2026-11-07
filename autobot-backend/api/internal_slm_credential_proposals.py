@@ -131,6 +131,8 @@ async def _create_proposal(
         if action is not INTERNAL_KEY_REALIGN:
             raise
         await _record_proposal_failed(approval_id, body.node_id, proposer, exc)
+        if isinstance(exc, IntegrityError):  # a concurrent proposal won the one-pending-per-node index
+            raise
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, _NOT_RECORDED) from exc
 
 
@@ -167,7 +169,7 @@ async def propose_credential_change(
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, _NOT_RECORDED)  # no row, so no proposal
     try:
         approval = await _create_proposal(service, action, body, approval_id, proposer)
-    except IntegrityError:  # uq_approvals_pending_ssh_password_deletion: a concurrent request won
+    except IntegrityError:  # uq_approvals_pending_{ssh_password_deletion,key_realign}: a concurrent request won
         await session.rollback()
         winner = await _open_approval(service, action, body.node_id)
         if winner is None:

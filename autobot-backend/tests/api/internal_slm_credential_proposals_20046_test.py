@@ -40,7 +40,7 @@ def world(real_auth_middleware, monkeypatch):
     module = importlib.import_module("api.internal_slm_credential_proposals")
     monkeypatch.setattr(node_proxy, "internal_api_key", lambda: KEY)
     monkeypatch.setattr(real_auth_middleware, "resolve_human_user", AsyncMock(return_value=None))
-    approval = SimpleNamespace(id=uuid.uuid4(), status="pending")
+    approval = SimpleNamespace(id=uuid.UUID("00000000-0000-4000-8000-00000000000c"), status="pending")
     service = MagicMock()
     service.list_approvals = AsyncMock(return_value=[])
     service.create_approval = AsyncMock(return_value=approval)

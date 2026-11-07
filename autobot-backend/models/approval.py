@@ -272,6 +272,18 @@ Index(
 ).ddl_if(dialect="postgresql")
 
 
+#: One PENDING internal-key realign proposal per node, enforced by the database (#20750): the same race as
+#: above, on the updater's propose call. The route returns the winner's proposal.
+PENDING_KEY_REALIGN_INDEX = "uq_approvals_pending_key_realign"
+PENDING_KEY_REALIGN_WHERE = "status = 'pending' AND context ->> 'action' = 'slm_backend_internal_key_realign'"
+Index(
+    PENDING_KEY_REALIGN_INDEX,
+    Approval.context["node_id"].astext,
+    unique=True,
+    postgresql_where=text(PENDING_KEY_REALIGN_WHERE),
+).ddl_if(dialect="postgresql")
+
+
 #: One PENDING ``.env.*~`` cleanup proposal per node, enforced by the database (#20567). Keyed by the node as
 #: well as the action, so a request made on one installation never blocks another's when they share a store.
 PENDING_ENV_COPIES_INDEX = "uq_approvals_pending_env_copies_cleanup"

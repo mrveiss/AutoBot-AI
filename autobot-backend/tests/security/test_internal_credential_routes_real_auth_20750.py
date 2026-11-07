@@ -21,10 +21,13 @@ from fastapi.testclient import TestClient
 from api import internal_slm_credential_proposals as routes
 from auth_service_opt_in import SERVICE_OPT_IN_ATTR
 from autobot_shared.slm_credential_actions import INTERNAL_KEY_REALIGN, PROPOSAL_PATH, claim_path, outcome_path
+from testkit.fake_async_session import FakeAsyncSession, FakeResult
 from tests.conftest import load_real_auth_middleware
 
 _KEY = "k" * 40  # pragma: allowlist secret
-_ID = uuid.uuid4()
+_ID = uuid.UUID(
+    "00000000-0000-4000-8000-000000000003"
+)  # fixed: a random id gives each xdist worker a different test id
 _BODY = {"action": INTERNAL_KEY_REALIGN.name, "node_id": "node-b"}
 _HANDLERS = (routes.propose_credential_change, routes.claim_credential_approval, routes.report_credential_outcome)
 
@@ -50,8 +53,7 @@ def client(monkeypatch):
     monkeypatch.setattr("auth_service_opt_in.verify_internal_api_key", lambda provided: provided == _KEY)
     app = FastAPI()
     app.include_router(routes.router, prefix="/api")
-    session = MagicMock(commit=AsyncMock(), rollback=AsyncMock(), get=AsyncMock(return_value=_approval()))
-    session.execute = AsyncMock(return_value=MagicMock(rowcount=1))
+    session = FakeAsyncSession(default_result=FakeResult(rowcount=1), on_get=lambda _entity, _ident: _approval())
     app.dependency_overrides[routes.get_db_session] = lambda: session
     app.dependency_overrides[routes.get_current_user] = real.get_current_user  # the real gate, not a stub
     service = MagicMock()

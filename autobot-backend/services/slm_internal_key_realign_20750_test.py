@@ -24,9 +24,12 @@ from models.approval import ApprovalStatus
 from services import approval_execution, slm_credential_claim
 from services import slm_internal_key_realign_action as realign
 from services.audit.taxonomy import AuditAction
+from testkit.fake_async_session import FakeAsyncSession, FakeResult
 
 _KEY = "k" * 40  # pragma: allowlist secret
-_ID = uuid.uuid4()
+_ID = uuid.UUID(
+    "00000000-0000-4000-8000-000000000001"
+)  # fixed: a random id gives each xdist worker a different test id
 _REALIGN = INTERNAL_KEY_REALIGN.name
 
 
@@ -34,8 +37,8 @@ def _client(existing_by_status: dict | None = None, approval: SimpleNamespace | 
     """The routes over a fake approval service and session; `existing_by_status` answers list_approvals."""
     app = FastAPI()
     app.include_router(routes.router, prefix="/api")
-    session = MagicMock(commit=AsyncMock(), get=AsyncMock(return_value=approval))
-    session.execute = AsyncMock(return_value=MagicMock(rowcount=1))  # the one-outcome UPDATE wins
+    # the one-outcome UPDATE wins (rowcount 1); get answers the approval under test
+    session = FakeAsyncSession(default_result=FakeResult(rowcount=1), on_get=lambda _entity, _ident: approval)
     app.dependency_overrides[routes.get_db_session] = lambda: session
     service = MagicMock()
     by_status = existing_by_status or {}
@@ -131,7 +134,7 @@ def test_the_outcome_of_a_claimed_realign_is_audited_and_commented(audit, result
     body = {"action": _REALIGN, "node_id": "node-b", "result": result, "detail": "backend refused it"}
     assert _post(client, service, outcome_path(str(_ID)), body).status_code == 204
     assert audit.await_args.args[0] == member.value
-    assert session.add.call_args.args[0].body == note
+    assert session.added[-1].body == note
 
 
 @pytest.mark.parametrize(
@@ -149,13 +152,13 @@ def test_an_outcome_needs_a_claimed_realign_for_that_node(audit, approval) -> No
     body = {"action": _REALIGN, "node_id": "node-b", "result": "applied"}
     assert _post(client, service, outcome_path(str(_ID)), body).status_code == 409
     audit.assert_not_awaited()
-    session.add.assert_not_called()
+    assert not session.added
 
 
 async def test_approving_changes_nothing_and_says_it_waits_for_the_next_update() -> None:
-    session = MagicMock(commit=AsyncMock())
+    session = FakeAsyncSession()
     await realign.execute_internal_key_realign(_approval(), session)
-    assert "next update through the builtin updater" in session.add.call_args.args[0].body
+    assert "next update through the builtin updater" in session.added[-1].body
     assert approval_execution.is_server_only_action(_REALIGN)
     assert approval_execution.registered_action_proposers()[_REALIGN] == realign.PROPOSED_BY
 
@@ -174,7 +177,7 @@ def test_the_realign_audit_members_close_the_block() -> None:
 
 def test_an_ssh_approval_whose_executor_failed_does_not_block_a_new_proposal(audit) -> None:
     """#20046's executor runs inside approve(); reusing a failed, unspent approval would block every retry."""
-    stuck = SimpleNamespace(id=uuid.uuid4(), status=ApprovalStatus.APPROVED.value)
+    stuck = SimpleNamespace(id=uuid.UUID("00000000-0000-4000-8000-000000000002"), status=ApprovalStatus.APPROVED.value)
     client, service, _ = _client({ApprovalStatus.APPROVED.value: [stuck]})
     response = _post(client, service, PROPOSAL_PATH, {"action": SSH_PASSWORD_DELETE.name, "node_id": "node-b"})
     assert response.json()["created"] is True, "a fresh proposal, so a person can approve the retry"
@@ -183,11 +186,11 @@ def test_an_ssh_approval_whose_executor_failed_does_not_block_a_new_proposal(aud
 
 def test_a_second_outcome_is_refused_not_overwritten(audit) -> None:
     client, service, session = _client(approval=_approval(consumed_at="2026-11-03T22:01:00+00:00"))
-    session.execute = AsyncMock(return_value=MagicMock(rowcount=0))  # an outcome is already recorded
+    session.default_result = FakeResult(rowcount=0)  # an outcome is already recorded
     body = {"action": _REALIGN, "node_id": "node-b", "result": "applied"}
     assert _post(client, service, outcome_path(str(_ID)), body).status_code == 409
     audit.assert_not_awaited()
-    session.add.assert_not_called()
+    assert not session.added
 
 
 def test_a_reported_detail_is_one_capped_line_of_plain_text(audit) -> None:
@@ -196,7 +199,7 @@ def test_a_reported_detail_is_one_capped_line_of_plain_text(audit) -> None:
     assert _post(client, service, outcome_path(str(_ID)), body).status_code == 204
     kept = audit.await_args.kwargs["details"]["detail"]
     assert kept.startswith("a b c ") and len(kept) == 300 and "\n" not in kept and "\x00" not in kept
-    assert session.add.call_args.args[0].body == f"Applying it failed: {kept}"
+    assert session.added[-1].body == f"Applying it failed: {kept}"
 
 
 def test_a_claim_whose_audit_row_fails_spends_nothing_and_is_503() -> None:
@@ -206,19 +209,18 @@ def test_a_claim_whose_audit_row_fails_spends_nothing_and_is_503() -> None:
         response = _post(client, service, claim_path(str(_ID)), {"action": _REALIGN, "node_id": "node-b"})
     assert response.status_code == 503
     recorded.assert_awaited_once()
-    session.execute.assert_not_awaited()  # the spending UPDATE never ran
-    session.commit.assert_not_awaited()
+    assert not session.statements  # the spending UPDATE never ran
+    assert session.commits == 0
 
 
 def test_an_outcome_whose_audit_row_fails_is_not_stamped() -> None:
     client, service, session = _client(approval=_approval(consumed_at="2026-11-03T22:01:00+00:00"))
-    session.rollback = AsyncMock()
     body = {"action": _REALIGN, "node_id": "node-b", "result": "applied"}
     with patch("services.slm_credential_texts.audit_log", AsyncMock(return_value=False)):
         response = _post(client, service, outcome_path(str(_ID)), body)
     assert response.status_code == 503
-    session.rollback.assert_awaited_once()
-    session.commit.assert_not_awaited()
+    assert session.rollbacks == 1
+    assert session.commits == 0
 
 
 def test_a_proposal_whose_audit_row_fails_creates_nothing_and_is_503() -> None:
@@ -231,7 +233,7 @@ def test_a_proposal_whose_audit_row_fails_creates_nothing_and_is_503() -> None:
     recorded.assert_awaited_once()
     service.create_approval.assert_not_awaited()
     service.reject.assert_not_awaited()
-    session.commit.assert_not_awaited()
+    assert session.commits == 0
 
 
 def test_a_proposal_writes_its_audit_row_before_the_approval_and_names_its_id() -> None:
@@ -263,7 +265,7 @@ def test_a_proposal_whose_approval_fails_is_compensated_with_the_same_id_and_is_
     assert second.kwargs["details"]["approval_id"] == first.kwargs["details"]["approval_id"]
     reason = second.kwargs["details"]["detail"]
     assert reason.startswith("RuntimeError: ") and "hunter2" not in reason
-    session.commit.assert_not_awaited()
+    assert session.commits == 0
 
 
 def test_a_failing_compensating_write_is_logged_and_still_503(caplog) -> None:
@@ -275,4 +277,4 @@ def test_a_failing_compensating_write_is_logged_and_still_503(caplog) -> None:
     assert response.status_code == 503
     assert rows.await_count == 2
     assert "NO compensating row" in caplog.text
-    session.commit.assert_not_awaited()
+    assert session.commits == 0

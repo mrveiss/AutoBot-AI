@@ -24,12 +24,17 @@ from testkit.fake_async_session import FakeAsyncSession, FakeResult
 ACTION = SSH_PASSWORD_DELETE.name
 
 _KEY = "k" * 40  # pragma: allowlist secret
-_DECIDER = uuid.uuid4()
+_DECIDER = uuid.UUID(
+    "00000000-0000-4000-8000-000000000006"
+)  # fixed: a random id gives each xdist worker a different test id
+_APPROVAL_ID = uuid.UUID("00000000-0000-4000-8000-000000000007")
+_CREATED_ID = uuid.UUID("00000000-0000-4000-8000-000000000008")
+_PENDING_ID = uuid.UUID("00000000-0000-4000-8000-000000000009")
 
 
 def _approval(decider: uuid.UUID | None = _DECIDER, node_id: str = "node-a") -> SimpleNamespace:
     approval = SimpleNamespace(
-        id=uuid.uuid4(),
+        id=_APPROVAL_ID,
         decided_by_user="owner",
         status=ApprovalStatus.APPROVED.value,
         context={"action": ACTION, "node_id": node_id, "credential_kind": "ssh_password"},
@@ -38,10 +43,8 @@ def _approval(decider: uuid.UUID | None = _DECIDER, node_id: str = "node-a") -> 
     return approval
 
 
-def _session() -> MagicMock:
-    session = MagicMock()
-    session.commit = AsyncMock()
-    return session
+def _session() -> FakeAsyncSession:
+    return FakeAsyncSession()
 
 
 def test_the_audit_name_is_a_taxonomy_member() -> None:
@@ -57,7 +60,7 @@ async def test_approval_deletes_and_audits(removed: bool | None, said: str) -> N
     ):
         await action.execute_ssh_password_delete(_approval(), session)
     delete.assert_awaited_once_with("node-a", ANY)
-    assert said in session.add.call_args.args[0].body
+    assert said in session.added[-1].body
     kwargs = audit.await_args.kwargs
     assert kwargs["result"] == "success" and kwargs["resource"] == "node:node-a"
     assert kwargs["details"]["credential_kind"] == "ssh_password" and "password" not in str(kwargs["details"]).replace(
@@ -119,10 +122,10 @@ def test_the_action_is_server_only_with_the_proposer_named() -> None:
 def _client(existing: list, created: SimpleNamespace | None = None):
     app = FastAPI()
     app.include_router(proposals.router, prefix="/api")
-    app.dependency_overrides[proposals.get_db_session] = lambda: MagicMock()
+    app.dependency_overrides[proposals.get_db_session] = lambda: FakeAsyncSession()
     service = MagicMock()
     service.list_approvals = AsyncMock(return_value=existing)
-    service.create_approval = AsyncMock(return_value=created or SimpleNamespace(id=uuid.uuid4(), status="pending"))
+    service.create_approval = AsyncMock(return_value=created or SimpleNamespace(id=_CREATED_ID, status="pending"))
     return TestClient(app), service
 
 
@@ -151,7 +154,7 @@ def test_a_proposal_names_the_node_and_kind_and_never_a_value(monkeypatch) -> No
 
 def test_a_retried_enrollment_does_not_duplicate_the_pending_proposal(monkeypatch) -> None:
     monkeypatch.setenv("AUTOBOT_INTERNAL_API_KEY", _KEY)
-    pending = SimpleNamespace(id=uuid.uuid4(), status="pending")
+    pending = SimpleNamespace(id=_PENDING_ID, status="pending")
     client, service = _client([pending])
     response = _post(client, service, {"X-Internal-API-Key": _KEY})
     assert response.status_code == 201 and response.json() == {

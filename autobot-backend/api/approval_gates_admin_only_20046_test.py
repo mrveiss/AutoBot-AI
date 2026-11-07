@@ -12,7 +12,7 @@ import importlib
 import sys
 import uuid
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -21,16 +21,20 @@ from fastapi.testclient import TestClient
 from autobot_shared.slm_credential_actions import SSH_PASSWORD_DELETE
 from services.approval_gate_service import ApprovalGateService
 from services.slm_ssh_password_action import register_ssh_password_action
+from testkit.fake_async_session import FakeAsyncSession
 from tests.conftest import load_real_auth_middleware
 
-_ID = uuid.uuid4()
+_ID = uuid.UUID(
+    "00000000-0000-4000-8000-00000000000a"
+)  # fixed: a random id gives each xdist worker a different test id
+_USER_ID = "00000000-0000-4000-8000-00000000000b"
 
 
 def _person(role: str, **over) -> dict:
     return {
         "username": role,
         "role": role,
-        "user_id": str(uuid.uuid4()),
+        "user_id": _USER_ID,
         "iat": 1,
         "auth_method": "jwt",
         "login_token": True,
@@ -64,7 +68,7 @@ def world(monkeypatch):
     monkeypatch.setattr(ApprovalGateService, "approve", approve)
     app = FastAPI()
     app.include_router(route.router)
-    app.dependency_overrides[route.get_db_session] = lambda: MagicMock()
+    app.dependency_overrides[route.get_db_session] = lambda: FakeAsyncSession()
     with patch("api.approval_gates_approver.audit_log", AsyncMock(return_value=True)) as audit:
         yield SimpleNamespace(
             client=TestClient(app, raise_server_exceptions=False), state=state, approve=approve, audit=audit
