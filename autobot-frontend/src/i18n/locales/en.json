@@ -10336,6 +10336,18 @@
     }
   },
   "transcriber": {
+    "asr": {
+      "heading": "Speech-to-text provider",
+      "help": "Choose which cloud provider transcribes recordings. Only providers with a server-side API key configured are selectable. Selecting a cloud provider means audio is sent to that provider for processing.",
+      "loading": "Loading providers…",
+      "empty": "No speech-to-text providers are available. Configure a provider API key on the server to enable cloud transcription.",
+      "activeProvider": "Active provider",
+      "selectPlaceholder": "Select a provider…",
+      "optionNotConfigured": "{name} — not configured",
+      "saving": "Saving…",
+      "notConfigured": "not configured",
+      "notConfiguredHelp": "Providers marked \"not configured\" require a server-side API key before they can be selected."
+    },
     "layout": {
       "settingsButton": "Settings",
       "hideSettingsButton": "Hide settings",
