@@ -130,12 +130,32 @@ def test_the_route_starts_nothing_unless_asked(monkeypatch):
     )
     monkeypatch.setattr(routes, "get_workflow_manager", lambda: manager)
 
+    allow = SimpleNamespace(check_permission=lambda role, permission: True)
+    monkeypatch.setattr("services.workflow_automation.command_step.get_security_layer", lambda: allow)
+
     body = {"user_request": "install docker", "session_id": "s"}
-    result = asyncio.run(routes.create_workflow_from_chat(body, current_user={"username": "u"}))
+    result = asyncio.run(routes.create_workflow_from_chat(body, current_user={"username": "u", "role": "admin"}))
 
     assert result["status"] == "awaiting_approval"
     manager.present_plan_for_approval.assert_awaited_once()
     manager.start_workflow_execution.assert_not_awaited()
+
+
+def test_the_route_refuses_a_non_administrator_before_planning_anything(monkeypatch):
+    """#19807: the plan's steps run shell commands, so the route is closed to non-administrators."""
+    from fastapi import HTTPException
+
+    from services.workflow_automation import routes
+
+    manager = SimpleNamespace(create_workflow_from_chat_request=AsyncMock())
+    monkeypatch.setattr(routes, "get_workflow_manager", lambda: manager)
+
+    body = {"user_request": "install docker", "session_id": "s"}
+    with pytest.raises(HTTPException) as refused:
+        asyncio.run(routes.create_workflow_from_chat(body, current_user={"username": "u", "role": "user"}))
+
+    assert refused.value.status_code == 403
+    manager.create_workflow_from_chat_request.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
