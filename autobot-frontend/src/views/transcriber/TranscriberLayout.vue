@@ -6,6 +6,7 @@
 // selector (#10147c).
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { BaseButton } from '@autobot/ui'
 import AsrProviderSelector from '@/components/transcriber/AsrProviderSelector.vue'
 import { useUserStore } from '@/stores/useUserStore'
 
@@ -26,14 +27,13 @@ watch(isAdmin, (admin) => {
 <template>
   <div class="transcriber-layout">
     <header v-if="isAdmin" class="transcriber-layout-bar">
-      <button
-        type="button"
-        class="btn btn-sm"
+      <BaseButton
+        size="sm"
         :aria-expanded="settingsOpen"
         @click="settingsOpen = !settingsOpen"
       >
         {{ settingsOpen ? t('transcriber.layout.hideSettingsButton') : t('transcriber.layout.settingsButton') }}
-      </button>
+      </BaseButton>
     </header>
 
     <section

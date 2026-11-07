@@ -4691,7 +4691,12 @@
       "resumed": "Workflow resumed",
       "cancelled": "Workflow cancelled",
       "stepApproved": "Step approved",
-      "stepAwaitingApproval": "Step waiting for your approval: {step}",
+      "stepAwaitingApproval": "Approval needed: {step}",
+      "stepApprovalTitle": "Step waiting for your approval",
+      "stepApprovalSkip": "Skip step",
+      "stepApproveFailed": "Could not approve the step; it is still waiting for you",
+      "stepStatusRefreshFailed": "Your answer was sent, but the step status could not be refreshed; it will update when the connection recovers",
+      "stepSkipFailed": "Could not skip the step; it is still waiting for you",
       "stepRejectedByJudge": "Step refused before it ran: {reason}",
       "controlRefused": "Refused: only an administrator or the workflow's owner may control it",
       "stepSkipped": "Step skipped",
@@ -6750,6 +6755,10 @@
     "envelope": {
       "approve": "Approve",
       "reject": "Reject"
+    },
+    "inbox": {
+      "waitingForYou": "Waiting for you",
+      "skipStep": "Skip step"
     }
   },
   "research": {
@@ -8279,7 +8288,12 @@
       "preferences": "settings options language theme",
       "budgetPolicies": "cost spending limits money",
       "systemHealth": "status uptime diagnostics monitoring",
-      "vault": "credentials keys passwords tokens vault"
+      "vault": "credentials keys passwords tokens vault",
+      "approvals": "approve reject waiting pending decisions workflow step"
+    },
+    "approvals": {
+      "aria": "Approvals",
+      "tip": "Approvals — what is waiting for you"
     },
     "homeAria": "AutoBot home",
     "vaultTip": "Secrets — stored keys and credentials",
@@ -8692,6 +8706,7 @@
       "human": "Human",
       "agent": "Agent",
       "dropHere": "Drop items here",
+      "moving": "Moving…",
       "wipLimit": "WIP limit: {limit}",
       "prLinked": "{count} PR(s) linked"
     },
@@ -8769,7 +8784,9 @@
       "sprint": "Sprint",
       "selectProject": "Select a project…",
       "fieldProject": "Project",
-      "noProjectsHint": "This company has no project yet. Create a project first; every work item belongs to one.",
+      "noProjectsHint": "No project is available for new work items. Every work item belongs to an active project, and archived projects can't take new ones. Create or restore a project first.",
+      "storyPointsWholeNumber": "Story points must be a whole number, 0 or more.",
+      "createdRefreshFailed": "The work item was created, but the list did not refresh.",
       "projectsLoadFailed": "Couldn't load this company's projects.",
       "selectSprint": "Select a sprint…",
       "loadingProjects": "Loading projects…",
@@ -10336,6 +10353,18 @@
     }
   },
   "transcriber": {
+    "asr": {
+      "heading": "Speech-to-text provider",
+      "help": "Choose which cloud provider transcribes recordings. Only providers with a server-side API key configured are selectable. Selecting a cloud provider means audio is sent to that provider for processing.",
+      "loading": "Loading providers…",
+      "empty": "No speech-to-text providers are available. Configure a provider API key on the server to enable cloud transcription.",
+      "activeProvider": "Active provider",
+      "selectPlaceholder": "Select a provider…",
+      "optionNotConfigured": "{name} — not configured",
+      "saving": "Saving…",
+      "notConfigured": "not configured",
+      "notConfiguredHelp": "Providers marked \"not configured\" require a server-side API key before they can be selected."
+    },
     "layout": {
       "settingsButton": "Settings",
       "hideSettingsButton": "Hide settings",
