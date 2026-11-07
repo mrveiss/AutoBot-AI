@@ -217,7 +217,13 @@ async def request_switch_cancel(actor: str = "unknown") -> str:
     """Cancel a running build at its next batch, or force-close a stale one; ``none`` when idle."""
     status = await switch_status()
     if status["state"] == "stale":
-        await _finish(None, "failed", reason="force-closed: the build stopped heartbeating")
+        # the stale record's owner, so a run that started since the read is neither overwritten nor unclaimed
+        await _finish(
+            None,
+            "failed",
+            reason="force-closed: the build stopped heartbeating",
+            stale_owner=status.get("owner", ""),
+        )
         _audit(actor, "switch_force_close", status.get("model"), status.get("collection"))
         return "force_closed"
     if status["state"] not in _ACTIVE:
@@ -282,24 +288,35 @@ async def run_switch(kb, run: _Run) -> None:
     await _cut_over(kb, store, run)
 
 
-async def _finish(run: _Run | None, state: str, *, reason: str = "", failed: int | None = None, failed_ids=()) -> None:
-    await _redis()
-    owner = run.owner if run is not None else ""  # force-close: whoever the stale record names, if it still exists
+async def _finish(
+    run: _Run | None,
+    state: str,
+    *,
+    reason: str = "",
+    failed: int | None = None,
+    failed_ids=(),
+    stale_owner: str = "",
+) -> None:
+    """Close the record and free the claim, each only while still *run*'s (or, force-close, *stale_owner*'s).
+
+    A force-close (``run is None``) carries the owner the stale record named; the empty owner, matching any existing
+    record, is only for an ownerless legacy record that names none.
+    """
+    owner = run.owner if run is not None else stale_owner
     fields: Dict[str, Any] = {"state": state, "finished": datetime.now(tz=timezone.utc).isoformat(), "reason": reason}
     if failed is not None:
         fields["failed"] = failed
     fields["failed_ids"] = json.dumps(list(failed_ids)[:_FAILED_IDS_SHOWN])
     if not await _set_state_if_owner(owner, **fields):
         # a newer switch owns the state, or the record is gone: leave it alone, but never keep our lock
-        logger.warning(
+        # info: the loss itself was reported where it was detected, so one loss is one warning/error line
+        logger.info(
             "embedding switch %s finished as %s after losing the record; state left as is",
             owner or "(force-close)",
             state,
         )
-    if run is None:
-        await lock.force_release()  # force-close: the owner is gone
-    else:
-        await lock.release(run.owner)
+    if owner:
+        await lock.release(owner)  # only this owner's claim: a newer run's is untouched
 
 
 async def _build(kb, run: _Run) -> Tuple[Any, List[str], int]:

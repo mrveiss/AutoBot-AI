@@ -60,9 +60,29 @@ async def test_a_build_whose_record_vanishes_mid_build_leaves_no_record_and_free
 
 async def test_a_force_close_of_a_record_that_vanished_writes_nothing(env):
     env.claims.hold("owner-1")
-    await sw._finish(None, "failed", reason="force-closed")
+    await sw._finish(None, "failed", reason="force-closed", stale_owner="owner-1")
     assert sw.STATE_KEY not in env.redis.hashes
     assert env.claims.holder() is None
+
+
+async def test_a_force_close_after_a_new_run_started_touches_neither_its_record_nor_its_claim(env, monkeypatch):
+    """#20023: the stale read, then a new start_switch, then the force-close: the new run keeps both."""
+    await sw._set_state(state="building", owner="old", model=MODEL, collection="c")
+    stale = await sw.switch_status()
+    assert stale["state"] == "stale"
+    env.claims.hold("new")
+    await sw._set_state(state="building", owner="new", model=MODEL, collection="c2")
+    before = dict(env.redis.hashes[sw.STATE_KEY])
+    real_status = sw.switch_status
+
+    async def _read_before_the_start():
+        return stale
+
+    monkeypatch.setattr(sw, "switch_status", _read_before_the_start)
+    assert await sw.request_switch_cancel(actor="admin") == "force_closed"
+    monkeypatch.setattr(sw, "switch_status", real_status)
+    assert env.redis.hashes[sw.STATE_KEY] == before, "the new run's record was overwritten"
+    assert env.claims.holder() == "new", "the new run's claim was dropped"
 
 
 async def test_the_owner_guard_script_on_a_real_lua_engine():
