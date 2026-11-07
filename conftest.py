@@ -10,6 +10,7 @@ Issue: #7458
 
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 # Ensure repo root is first on sys.path so `tools.lint.canonical.*` resolves.
@@ -20,6 +21,10 @@ if _REPO_ROOT not in sys.path:
 # The test profile serves the frontend from the Vite dev server (#19326), whatever environment a
 # test module runs under; test modules read config.frontend_url at import.
 os.environ.setdefault("AUTOBOT_FRONTEND_SERVED_BY", "vite")
+
+# No test run writes logs into the source tree (#20894): one temp log directory for the whole run,
+# inherited by every subprocess a test starts (repo_tests/_reach_base.py base checkouts included).
+os.environ.setdefault("AUTOBOT_LOGS_DIR", tempfile.mkdtemp(prefix="autobot-logs-"))
 
 # Repo-wide sys.modules leak guard (#13337). Declared here — the rootdir
 # conftest is the only conftest where ``pytest_plugins`` is still legal in

@@ -13,7 +13,7 @@ import pytest
 
 # Import the modules to test
 import security_layer
-from autobot_shared.paths import project_root
+from autobot_shared.log_dir import resolve_logs_dir
 from autobot_shared.ssot_config import default_audit_log_file
 from autobot_shared.status_enums import CommandRisk
 from security_layer import SecurityLayer
@@ -476,14 +476,12 @@ class TestAuditLogFileDefault:
         assert not default_audit_log_file().startswith("/opt/autobot")
 
     def test_default_is_wired_to_the_canonical_resolver(self):
-        assert default_audit_log_file() == str(project_root() / "logs" / "audit.log")
+        assert default_audit_log_file() == str(resolve_logs_dir() / "audit.log")
 
-    def test_default_tracks_project_root_env_override(self, monkeypatch, tmp_path):
-        fake_root = tmp_path / "fake-checkout"
-        fake_root.mkdir()
-        monkeypatch.setenv("AUTOBOT_PROJECT_ROOT", str(fake_root))
+    def test_default_tracks_logs_dir_env_override(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("AUTOBOT_LOGS_DIR", str(tmp_path / "logs"))
 
-        assert default_audit_log_file() == str(fake_root / "logs" / "audit.log")
+        assert default_audit_log_file() == str(tmp_path / "logs" / "audit.log")
 
     def test_deployed_install_still_resolves_to_the_original_default(self, monkeypatch):
         """Compositional check for the deployed case — see the equivalent test
@@ -491,7 +489,7 @@ class TestAuditLogFileDefault:
         the real ``.env``-walk here, and why full host verification is out of
         scope for a hermetic test.
         """
-        monkeypatch.setenv("AUTOBOT_PROJECT_ROOT", "/opt/autobot")
+        monkeypatch.setenv("AUTOBOT_LOGS_DIR", "/opt/autobot/logs")
 
         assert default_audit_log_file() == str(Path("/opt/autobot/logs/audit.log"))
 

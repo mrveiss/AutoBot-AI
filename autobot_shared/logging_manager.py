@@ -18,6 +18,7 @@ from pathlib import Path, PurePath
 from typing import TYPE_CHECKING, Any, Dict
 
 from autobot_shared.env_utils import env_flag, env_float, env_int_clamped
+from autobot_shared.log_dir import resolve_logs_dir
 from autobot_shared.stream_logging import build_stderr_handler, build_stdout_handler
 
 if TYPE_CHECKING:
@@ -260,8 +261,7 @@ def _log_file_path(log_type: str) -> str:
     configured = _configured_log_file(log_type)
     if configured is not None:
         return configured
-    logs_dir = os.getenv("AUTOBOT_LOGS_DIR", "logs")
-    return f"{logs_dir}/{log_type}.log"
+    return str(resolve_logs_dir() / f"{log_type}.log")
 
 
 def _known_level(value: object) -> int | None:
@@ -405,10 +405,10 @@ class LoggingManager:
         still gets its console handlers, which journald captures, instead of the import that asked
         for a logger raising.
         """
-        logs_dir = Path(os.getenv("AUTOBOT_LOGS_DIR", "logs"))
+        logs_dir = resolve_logs_dir()
         backup_dir_name = os.getenv("AUTOBOT_LOGS_BACKUP_DIR", "backup")  # ssot-config-exempt: pre-init logging
         try:
-            logs_dir.mkdir(exist_ok=True)
+            logs_dir.mkdir(parents=True, exist_ok=True)
             (logs_dir / backup_dir_name).mkdir(exist_ok=True)
         except OSError as exc:
             cls._file_logging_disabled = True
@@ -500,7 +500,7 @@ class LoggingManager:
             log_file = _configured_log_file(lt)
             if log_file and os.path.exists(log_file):
                 # Create backup using environment-configurable paths
-                logs_dir = os.getenv("AUTOBOT_LOGS_DIR", "logs")
+                logs_dir = resolve_logs_dir()
                 backup_dir = os.getenv("AUTOBOT_LOGS_BACKUP_DIR", "backup")
                 backup_path = f"{logs_dir}/{backup_dir}/{lt}_{int(__import__('time').time())}.log"
                 try:
