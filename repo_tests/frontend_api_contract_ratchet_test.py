@@ -93,7 +93,8 @@ _BASELINES = {
         # #19217: the web-research settings move to the SLM admin editor (-4).
         # #19532: the unmounted main-GUI SettingsPanel retired; the SLM admin views are the home (-3).
         # #20513: usePatternStorage stats/clear moved from apiClient.get/post<...> to useFetchEndpoint (-1).
-        "inline_generics": 533,
+        # #20513: lowered to the merged tree's 532 after merging main.
+        "inline_generics": 532,
     },
     "autobot-slm-frontend": {
         "clients": 1,
