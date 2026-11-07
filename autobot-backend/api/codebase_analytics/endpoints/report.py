@@ -55,13 +55,14 @@ from ..duplicate_detector import (  # noqa: F401
     DuplicateCodeDetector,
 )
 from ..models import APIEndpointAnalysis
+from ..source_scope import SourceIdQuery, require_source_id
 from ..storage import get_code_collection
 from .duplicates import _run_standard_analysis
 from .scan_responses import ScanUnavailable
 from .shared import (
     filter_problems_by_file_existence,
     resolve_git_repo_root,
-    resolve_source_root,
+    resolve_scan_root,
 )
 
 logger = get_logger(__name__)
@@ -1225,8 +1226,8 @@ def _generate_cross_language_section(
 
 
 def _fetch_problems_from_chromadb(
-    source_id: str | None = None,
-    source_root: Path | None = None,
+    source_id: str,
+    source_root: Path,
 ) -> List[Dict]:
     """
     Fetch code problems from ChromaDB collection.
@@ -1237,7 +1238,7 @@ def _fetch_problems_from_chromadb(
     prevent hallucinated results from reaching the issue tracker.
 
     Args:
-        source_id: Optional source registry ID to scope results.
+        source_id: Source registry ID the results are scoped to (#20513: required).
         source_root: Filesystem root to resolve relative file paths against.
                      Defaults to the project root when None.
 
@@ -1246,6 +1247,8 @@ def _fetch_problems_from_chromadb(
         Each entry includes ``file_verified: True`` when the path was confirmed
         on disk, or ``file_verified: False`` when the path field was absent.
     """
+    # Before the `try` below, which logs and swallows: a missing source is a caller bug.
+    where_filter = {"$and": [{"type": "problem"}, {"source_id": require_source_id(source_id, "report problems query")}]}
     code_collection = get_code_collection()
     problems = []
 
@@ -1253,15 +1256,6 @@ def _fetch_problems_from_chromadb(
         return problems
 
     try:
-        if source_id:
-            where_filter = {
-                "$and": [
-                    {"type": "problem"},
-                    {"source_id": source_id},
-                ]
-            }
-        else:
-            where_filter = {"type": "problem"}
         results = get_all_paginated(
             code_collection,
             where=where_filter,
@@ -1286,12 +1280,8 @@ def _fetch_problems_from_chromadb(
 
         # Issue #2724: Validate file paths — drop findings that reference
         # files not present in the indexed repository.
-        # Issue #12399: Fall back to resolve_git_repo_root() (deployed-layout-aware,
-        # #10730) rather than get_project_root() (hardcoded parents[4], which
-        # resolves to /opt/autobot -- not the analyzable repo -- in the deployed
-        # standalone rsync layout).
-        root = source_root or Path(resolve_git_repo_root())
-        problems = filter_problems_by_file_existence(problems, root)
+        # #20513: the source's own root, never AutoBot's tree as a stand-in.
+        problems = filter_problems_by_file_existence(problems, source_root)
 
         logger.info("Returning %s validated problems for report", len(problems))
     except Exception as e:
@@ -1599,7 +1589,7 @@ async def _get_pattern_analysis(
     Args:
         project_root: Resolved filesystem root for the requested source.
             Falls back to AutoBot's own backend dir when None or when it
-            resolves to AutoBot's own project root (default source).
+            resolves to AutoBot's own project root (a self-scan; no source is implied).
 
     Returns:
         PatternAnalysisReport or None if analysis fails
@@ -2191,6 +2181,7 @@ def _render_report(problems: list, analyses: dict) -> str:
     error_code_prefix="CODEBASE",
 )
 async def generate_analysis_report(
+    source_id: SourceIdQuery,
     format: str = "markdown",
     include_api_analysis: bool = True,
     include_duplicate_analysis: bool = True,
@@ -2199,7 +2190,6 @@ async def generate_analysis_report(
     include_pattern_analysis: bool = True,
     quick: bool = False,
     use_semantic: bool = False,
-    source_id: str | None = None,
 ):
     """
     Generate a code analysis report from the indexed data.
@@ -2216,29 +2206,15 @@ async def generate_analysis_report(
         quick: If True, skip expensive analyses for faster export
         use_semantic: Enable LLM-based semantic analysis for bug prediction (Issue #554)
         source_id: Scope the report and every sub-analysis to this code source
-            (Issue #12372). Falls back to the most recently indexed source, or
-            AutoBot's own root only when no source is resolvable.
+            (Issue #12372). Required (#20513): there is no default source.
 
     Returns:
         Markdown formatted report as plain text
     """
-    # Default to most recent source to prevent cross-project data mixing (#2653)
-    if not source_id:
-        from api.codebase_analytics.endpoints.shared import default_source_id
-
-        source_id = await default_source_id()
-
     # Issue #2724 / #2760: Resolve source root via shared helper so _fetch_problems_from_chromadb
     # (which runs in a thread) can validate file paths without blocking the event loop.
-    source_root = await resolve_source_root(source_id)
-    # Issue #12372: Sub-analysis scanners need a concrete root even when the
-    # source is unresolvable -- fall back to AutoBot's own project root
-    # (matches resolve_scan_root's fallback behavior) rather than letting each
-    # sub-analysis silently default to its own hard-coded AutoBot path.
-    # Issue #12399: Use resolve_git_repo_root() (deployed-layout-aware, #10730)
-    # to match resolve_scan_root's fallback -- get_project_root() (parents[4])
-    # resolves to /opt/autobot, not the analyzable repo, in the deployed layout.
-    scan_root = source_root or Path(resolve_git_repo_root())
+    # #20513: a source with no checkout is a 404, never AutoBot's own tree.
+    source_root = await resolve_scan_root(source_id)
 
     problems = await asyncio.to_thread(_fetch_problems_from_chromadb, source_id, source_root)
     analyses = await _resolve_analyses(
@@ -2250,7 +2226,7 @@ async def generate_analysis_report(
         include_pattern_analysis=include_pattern_analysis,
         use_semantic=use_semantic,
         source_id=source_id,
-        scan_root=scan_root,
+        scan_root=source_root,
     )
     report = _render_report(problems, analyses)
     return PlainTextResponse(
@@ -2258,5 +2234,6 @@ async def generate_analysis_report(
         media_type="text/markdown; charset=utf-8",
         headers={
             "Content-Disposition": 'attachment; filename="code-analysis-report.md"',
+            "X-Source-Id": source_id,
         },
     )

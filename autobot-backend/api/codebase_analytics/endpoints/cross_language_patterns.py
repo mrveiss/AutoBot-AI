@@ -16,9 +16,10 @@ Provides endpoints to:
 import asyncio
 from pathlib import Path
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from api.codebase_analytics.source_scope import SourceIdQuery, require_source_id
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from code_intelligence.cross_language_patterns import CrossLanguagePatternDetector
@@ -30,7 +31,7 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 # Cache for analysis results.
-# Issue #12356: Keyed by source_id (or "default") to prevent cross-project
+# Issue #12356: Keyed by source_id (never a shared sentinel, #20513) to prevent cross-project
 # leakage -- a single global "latest" entry returned one project's cross-language
 # patterns for every other selected source.
 _analysis_cache: dict = {}
@@ -38,9 +39,9 @@ _analysis_cache: dict = {}
 _analysis_cache_lock = asyncio.Lock()
 
 
-def _cache_key(source_id: str | None) -> str:
-    """Cache key for a source. Issue #12356: scope per project, not global."""
-    return source_id or "default"
+def _cache_key(source_id: str) -> str:
+    """Cache key for a source. Issue #12356: scope per project, never a shared sentinel (#20513)."""
+    return require_source_id(source_id, "cross-language cache key")
 
 
 def _get_detector(
@@ -64,7 +65,7 @@ def _get_detector(
     )
 
 
-async def _get_cached_analysis(source_id: str | None):
+async def _get_cached_analysis(source_id: str):
     """Return the cached analysis for a source, or None (Issue #12356).
 
     Reads only the requested source's entry so one project's cached patterns
@@ -82,9 +83,9 @@ async def _get_cached_analysis(source_id: str | None):
     error_code_prefix="CODEBASE",
 )
 async def run_cross_language_analysis(
+    source_id: SourceIdQuery,
     use_llm: bool = True,
     use_cache: bool = True,
-    source_id: str | None = Query(None, description="#12356: scope analysis to the selected code source"),
 ) -> JSONResponse:
     """
     Run full cross-language pattern analysis.
@@ -124,6 +125,7 @@ async def run_cross_language_analysis(
     return JSONResponse(
         {
             "status": "success",
+            "source_id": source_id,
             "analysis": analysis.to_dict(),
         }
     )
@@ -137,7 +139,7 @@ async def run_cross_language_analysis(
     error_code_prefix="CODEBASE",
 )
 async def get_cross_language_summary(
-    source_id: str | None = Query(None, description="#12356: scope to the selected code source"),
+    source_id: SourceIdQuery,
 ) -> JSONResponse:
     """
     Get summary of latest cross-language analysis.
@@ -155,6 +157,7 @@ async def get_cross_language_summary(
         return JSONResponse(
             {
                 "status": "empty",
+                "source_id": source_id,
                 "message": "No analysis available. Click 'Full Scan' to run analysis.",
                 "has_cached_data": False,
             }
@@ -163,6 +166,7 @@ async def get_cross_language_summary(
     return JSONResponse(
         {
             "status": "success",
+            "source_id": source_id,
             "has_cached_data": True,
             "summary": {
                 "analysis_id": analysis.analysis_id,
@@ -209,7 +213,7 @@ async def get_cross_language_summary(
     error_code_prefix="CODEBASE",
 )
 async def get_dto_mismatches(
-    source_id: str | None = Query(None, description="#12356: scope to the selected code source"),
+    source_id: SourceIdQuery,
 ) -> JSONResponse:
     """
     Get DTO/type mismatches between backend and frontend.
@@ -223,6 +227,7 @@ async def get_dto_mismatches(
         return JSONResponse(
             {
                 "status": "error",
+                "source_id": source_id,
                 "message": "No analysis available. Run /cross-language/analyze first.",
             },
             status_code=400,
@@ -231,6 +236,7 @@ async def get_dto_mismatches(
     return JSONResponse(
         {
             "status": "success",
+            "source_id": source_id,
             "total": len(analysis.dto_mismatches),
             "mismatches": [m.to_dict() for m in analysis.dto_mismatches],
         }
@@ -245,7 +251,7 @@ async def get_dto_mismatches(
     error_code_prefix="CODEBASE",
 )
 async def get_validation_duplications(
-    source_id: str | None = Query(None, description="#12356: scope to the selected code source"),
+    source_id: SourceIdQuery,
 ) -> JSONResponse:
     """
     Get duplicated validation logic across languages.
@@ -259,6 +265,7 @@ async def get_validation_duplications(
         return JSONResponse(
             {
                 "status": "error",
+                "source_id": source_id,
                 "message": "No analysis available. Run /cross-language/analyze first.",
             },
             status_code=400,
@@ -267,6 +274,7 @@ async def get_validation_duplications(
     return JSONResponse(
         {
             "status": "success",
+            "source_id": source_id,
             "total": len(analysis.validation_duplications),
             "duplications": [v.to_dict() for v in analysis.validation_duplications],
         }
@@ -281,7 +289,7 @@ async def get_validation_duplications(
     error_code_prefix="CODEBASE",
 )
 async def get_api_contract_mismatches(
-    source_id: str | None = Query(None, description="#12356: scope to the selected code source"),
+    source_id: SourceIdQuery,
 ) -> JSONResponse:
     """
     Get API contract mismatches between backend and frontend.
@@ -298,6 +306,7 @@ async def get_api_contract_mismatches(
         return JSONResponse(
             {
                 "status": "error",
+                "source_id": source_id,
                 "message": "No analysis available. Run /cross-language/analyze first.",
             },
             status_code=400,
@@ -309,6 +318,7 @@ async def get_api_contract_mismatches(
     return JSONResponse(
         {
             "status": "success",
+            "source_id": source_id,
             "total": len(analysis.api_contract_mismatches),
             "orphaned_count": len(orphaned),
             "missing_count": len(missing),
@@ -326,9 +336,9 @@ async def get_api_contract_mismatches(
     error_code_prefix="CODEBASE",
 )
 async def get_semantic_matches(
+    source_id: SourceIdQuery,
     min_similarity: float = 0.7,
     limit: int = 50,
-    source_id: str | None = Query(None, description="#12356: scope to the selected code source"),
 ) -> JSONResponse:
     """
     Get semantically similar patterns across languages.
@@ -347,6 +357,7 @@ async def get_semantic_matches(
         return JSONResponse(
             {
                 "status": "error",
+                "source_id": source_id,
                 "message": "No analysis available. Run /cross-language/analyze first.",
             },
             status_code=400,
@@ -364,6 +375,7 @@ async def get_semantic_matches(
     return JSONResponse(
         {
             "status": "success",
+            "source_id": source_id,
             "total": len(filtered_matches),
             "min_similarity": min_similarity,
             "matches": [m.to_dict() for m in filtered_matches],
@@ -379,10 +391,10 @@ async def get_semantic_matches(
     error_code_prefix="CODEBASE",
 )
 async def get_patterns_by_category(
+    source_id: SourceIdQuery,
     category: str | None = None,
     severity: str | None = None,
     limit: int = 100,
-    source_id: str | None = Query(None, description="#12356: scope to the selected code source"),
 ) -> JSONResponse:
     """
     Get detected patterns filtered by category and/or severity.
@@ -399,6 +411,7 @@ async def get_patterns_by_category(
         return JSONResponse(
             {
                 "status": "error",
+                "source_id": source_id,
                 "message": "No analysis available. Run /cross-language/analyze first.",
             },
             status_code=400,
@@ -419,6 +432,7 @@ async def get_patterns_by_category(
     return JSONResponse(
         {
             "status": "success",
+            "source_id": source_id,
             "total": len(patterns),
             "filters": {
                 "category": category,
@@ -437,7 +451,7 @@ async def get_patterns_by_category(
     error_code_prefix="CODEBASE",
 )
 async def clear_cross_language_cache(
-    source_id: str | None = Query(None, description="#12356: clear only this source's cache entry"),
+    source_id: SourceIdQuery,
 ) -> JSONResponse:
     """
     Clear the cross-language analysis cache.
@@ -453,6 +467,7 @@ async def clear_cross_language_cache(
     return JSONResponse(
         {
             "status": "success",
+            "source_id": source_id,
             "message": "Cross-language analysis cache cleared",
         }
     )

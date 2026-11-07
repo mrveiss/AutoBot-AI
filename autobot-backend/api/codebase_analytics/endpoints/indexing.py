@@ -13,8 +13,9 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
+from api.codebase_analytics.source_scope import require_source_id
 from auth_middleware import get_current_user
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
@@ -28,12 +29,26 @@ class IndexCodebaseRequest(BaseModel):
 
     root_path: str | None = Field(
         default=None,
-        description="Path to index. Defaults to PROJECT_ROOT if not provided.",
+        description="Dev mode (#20513): a path under an allowed project root. Exclusive with source_id.",
     )
     source_id: str | None = Field(
         default=None,
-        description="Code source registry ID (#1133). Resolves to the source's clone_path.",
+        description="Code source registry ID (#1133). Resolves to the source's clone_path. Exclusive with root_path.",
     )
+
+    @model_validator(mode="after")
+    def _exactly_one_target(self) -> "IndexCodebaseRequest":
+        """Exactly one of ``source_id`` and ``root_path`` (#20513).
+
+        An empty body used to index AutoBot's own project root, so a client that
+        forgot the source silently indexed the wrong tree. ``root_path`` stays as the
+        explicit dev mode; naming both is ambiguous, naming neither is the old default.
+        """
+        if bool(self.source_id) == bool(self.root_path):
+            raise ValueError("exactly one of source_id and root_path is required")
+        if self.source_id:
+            require_source_id(self.source_id, "indexing job")
+        return self
 
 
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
@@ -101,14 +116,14 @@ class _SyncNeeded:
 
 
 async def _validate_and_get_path(
-    request: IndexCodebaseRequest | None,
+    request: IndexCodebaseRequest,
 ) -> "str | _SyncNeeded":
     """Validate request and return the resolved index path (Issue #398 + #1133).
 
     Returns the path string when ready. Returns a ``_SyncNeeded`` sentinel when
     the source's clone directory does not exist and a sync must run first.
     """
-    if request and request.source_id:
+    if request.source_id:
         from ..source_storage import get_source
 
         source = await get_source(request.source_id)
@@ -131,7 +146,7 @@ async def _validate_and_get_path(
             return _SyncNeeded(source)
 
         return source.clone_path
-    if request and request.root_path:
+    if request.root_path:
         try:
             safe_path_str = validate_path(request.root_path, must_exist=True, allowed_roots=PROJECT_ALLOWED_ROOTS)
             target_path = Path(safe_path_str)
@@ -152,7 +167,8 @@ async def _validate_and_get_path(
                 detail="Cannot access path",
             )
         return str(target_path.resolve())
-    return str(PATH.PROJECT_ROOT)
+    # Unreachable through the route: the request model refuses a body naming neither.
+    raise HTTPException(status_code=400, detail="exactly one of source_id and root_path is required")
 
 
 def _start_next_queued_job() -> None:
@@ -197,11 +213,11 @@ def _create_cleanup_callback(task_id: str):
     operation="index_codebase",
     error_code_prefix="CODEBASE",
 )
-async def index_codebase(http_request: Request, request: IndexCodebaseRequest | None = None):
+async def index_codebase(http_request: Request, request: IndexCodebaseRequest):
     """
     Start background indexing of a codebase path (Issue #398: refactored, #1133: queued).
 
-    Accepts optional source_id (code source registry) or root_path.
+    Requires exactly one of source_id (code source registry) or root_path (#20513).
     Returns immediately with a task_id. If another job is running, queues the request.
     """
     global _current_indexing_task_id
@@ -209,7 +225,7 @@ async def index_codebase(http_request: Request, request: IndexCodebaseRequest | 
     # Issue #12358: the source_id here arrives in the request body, so the
     # router-level require_source_access dependency (path/query only) cannot see
     # it. Authorize it explicitly before resolving the source's clone path.
-    if request and request.source_id:
+    if request.source_id:
         from auth_middleware import get_current_user  # noqa: PLC0415
 
         from .shared import authorize_source_access  # noqa: PLC0415
@@ -239,7 +255,7 @@ async def index_codebase(http_request: Request, request: IndexCodebaseRequest | 
         )
 
     root_path = path_or_sync
-    source_id = request.source_id if request else None
+    source_id = request.source_id
     logger.info("Indexing path: %s", root_path)
 
     async with _tasks_lock:

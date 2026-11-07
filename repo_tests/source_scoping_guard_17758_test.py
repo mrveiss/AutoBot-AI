@@ -64,23 +64,8 @@ _ACCEPTS_WITHOUT_READING: frozenset[str] = frozenset()
 #: and a verdict is not something this guard can supply.
 _KNOWN_UNSCOPED_FALLBACKS: frozenset[str] = frozenset(
     {
-        "autobot-backend/api/codebase_analytics/endpoints/api_endpoints.py:47",
-        "autobot-backend/api/codebase_analytics/endpoints/cross_language_patterns.py:43",
-        "autobot-backend/api/codebase_analytics/endpoints/duplicates.py:230",
-        "autobot-backend/api/codebase_analytics/endpoints/duplicates.py:285",
-        "autobot-backend/api/codebase_analytics/endpoints/environment.py:46",
-        "autobot-backend/api/codebase_analytics/endpoints/ownership.py:312",
-        "autobot-backend/api/codebase_analytics/endpoints/ownership.py:329",
-        "autobot-backend/api/codebase_analytics/endpoints/ownership.py:423",
-        "autobot-backend/api/codebase_analytics/endpoints/ownership.py:479",
-        "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:634",
         "autobot-backend/tasks/analytics_tasks.py:38",
         "autobot-backend/api/codebase_analytics/chromadb_storage.py:616",
-        "autobot-backend/api/codebase_analytics/endpoints/stats.py:221",
-        "autobot-backend/api/codebase_analytics/endpoints/stats.py:281",
-        "autobot-backend/api/codebase_analytics/endpoints/stats.py:465",
-        "autobot-backend/api/codebase_analytics/endpoints/declarations.py:29",
-        "autobot-backend/api/codebase_analytics/endpoints/store_state.py:35",
     }
 )
 
@@ -99,7 +84,11 @@ _KNOWN_UNSCOPED_FALLBACKS: frozenset[str] = frozenset(
 #: 15 -> 17, under #17651: `declarations.py` moved an existing unscoped read into this spelling, so the
 #: detector can see it. `store_state.py` is a new read, but it returns only whether any row exists, no
 #: row content. The verdict on both stays on #17761.
-_MAX_KNOWN_UNSCOPED_FALLBACKS = 17
+#:
+#: 17 -> 2, under #20513: the other fifteen are routes and route helpers, and the routes now REQUIRE their
+#: source (`SourceIdQuery`) while the helpers go through `require_source_id`. What is left is the scheduler
+#: task wrapper and the indexing-side document tag, which #20513 defers.
+_MAX_KNOWN_UNSCOPED_FALLBACKS = 2
 
 
 #: Scan entry points must resolve their root through the source-aware resolver.

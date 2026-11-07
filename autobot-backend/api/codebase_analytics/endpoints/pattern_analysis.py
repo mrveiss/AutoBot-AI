@@ -14,18 +14,25 @@ import json
 from typing import Any, Dict, List
 
 from celery.result import AsyncResult
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
+from api.codebase_analytics.source_scope import (
+    CROSS_SOURCE_OPENAPI,
+    SourceIdQuery,
+    require_source_id,
+    source_scoped_prefix,
+)
 from api.codebase_analytics.task_routes import HUMAN_ADMIN_DEPENDENCIES, add_clear_stuck_route
+from api.schemas_pattern_analysis import PatternAnalysisRequest, PatternAnalysisStatus, PatternSummary
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import bounded
 from autobot_shared.logging_manager import get_logger
-from constants.path_constants import PATH
 from constants.threshold_constants import QueryDefaults
 from constants.ttl_constants import TIMEOUT_TASK_ANALYSIS, TTL_24_HOURS
 from tasks.analytics_tasks import run_pattern_analysis, run_pattern_summary_analysis
 from utils.celery_task_status import celery_result_to_status, store_latest_task_id
+
+from .shared import scan_path_in_source, tag_source
 
 logger = get_logger(__name__)
 
@@ -38,51 +45,6 @@ _SUMMARY_REDIS_PREFIX = "patsummary_task:"
 _CHECKPOINT_PREFIX = "pattern_checkpoint:"
 # Overall analysis timeout (30 minutes)
 _ANALYSIS_TIMEOUT = TIMEOUT_TASK_ANALYSIS
-
-
-class PatternAnalysisRequest(BaseModel):
-    """Request model for pattern analysis."""
-
-    path: str = Field(
-        default_factory=lambda: str(PATH.PROJECT_ROOT),
-        description="Path to analyze (defaults to project root)",
-    )
-    source_id: str | None = Field(
-        default=None,
-        description="#1772: source_id for API consistency",
-    )
-    enable_clone_detection: bool = Field(default=True, description="Enable clone/duplicate detection")
-    enable_anti_pattern_detection: bool = Field(default=True, description="Enable anti-pattern detection")
-    enable_regex_detection: bool = Field(default=True, description="Enable regex optimization detection")
-    enable_complexity_analysis: bool = Field(default=True, description="Enable complexity analysis")
-    similarity_threshold: float = Field(default=0.8, ge=0.0, le=1.0, description="Similarity threshold for clustering")
-
-
-class PatternAnalysisStatus(BaseModel):
-    """Status model for pattern analysis task."""
-
-    task_id: str
-    status: str  # pending, running, completed, failed
-    progress: float = 0.0
-    current_step: str | None = None
-    started_at: str | None = None
-    completed_at: str | None = None
-    error: str | None = None
-    reason: str | None = None  # orphaned, timeout, manual (#1250)
-    result: Dict[str, Any] | None = None
-    partial_results: Dict[str, Any] | None = None
-
-
-class PatternSummary(BaseModel):
-    """Summary of detected patterns."""
-
-    total_patterns: int
-    duplicates: int
-    regex_opportunities: int
-    complexity_hotspots: int
-    modularization_suggestions: int
-    potential_loc_reduction: int
-    complexity_score: str
 
 
 async def _get_checkpoint_redis():
@@ -148,15 +110,15 @@ async def start_pattern_analysis(request: PatternAnalysisRequest, http_request: 
     # require_source_access dependency (which reads path/query params only)
     # cannot gate it. Authorize the caller against it in-handler, mirroring the
     # index endpoint, so one admin cannot scope a task to another's private source.
-    if request.source_id:
-        from .shared import authorize_source_access  # noqa: PLC0415
+    from .shared import authorize_source_access  # noqa: PLC0415
 
-        user = await get_current_user(http_request)
-        await authorize_source_access(request.source_id, user)
+    user = await get_current_user(http_request)
+    await authorize_source_access(request.source_id, user)
 
-    celery_result = run_pattern_analysis.delay(request.model_dump())
-    prefix = f"{_REDIS_PREFIX}{request.source_id}:" if request.source_id else _REDIS_PREFIX
-    await store_latest_task_id(prefix, celery_result.id)
+    # The task reads an absolute directory; the API takes one relative to the source.
+    scan_path = await scan_path_in_source(request.source_id, request.path)
+    celery_result = run_pattern_analysis.delay({**request.model_dump(), "path": scan_path})
+    await store_latest_task_id(source_scoped_prefix(_REDIS_PREFIX, request.source_id), celery_result.id)
     return PatternAnalysisStatus(task_id=celery_result.id, status="pending", progress=0.0)
 
 
@@ -201,7 +163,7 @@ async def cancel_analysis(task_id: str) -> Dict[str, str]:
     return {"message": f"Task {task_id} revoked"}
 
 
-@router.get("/patterns/tasks")
+@router.get("/patterns/tasks", openapi_extra=CROSS_SOURCE_OPENAPI)
 @bounded(60.0)
 async def list_analysis_tasks(_user: dict = Depends(get_current_user)) -> Dict[str, Any]:
     """List active pattern analysis tasks (GH#8440: async-safe Celery inspect)."""
@@ -235,13 +197,17 @@ async def clear_all_tasks() -> Dict[str, str]:
 @router.get("/patterns/summary", response_model=PatternSummary)
 @bounded(60.0)
 async def get_pattern_summary(
-    path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
+    source_id: SourceIdQuery,
+    response: Response,
+    path: str | None = Query(default=None, description="Sub-path to analyze, relative to the source root"),
 ) -> PatternSummary:
     """Get a quick summary of patterns in the codebase.
 
     This is a lighter-weight analysis that returns just the counts
     without full pattern details.
     """
+    scan_path = await scan_path_in_source(source_id, path)
+    tag_source(response, source_id)
     try:
         from code_intelligence.pattern_analysis import CodePatternAnalyzer
 
@@ -249,7 +215,7 @@ async def get_pattern_summary(
             enable_embedding_storage=False,  # Skip storage for quick summary
         )
 
-        report = await analyzer.analyze_directory(path)
+        report = await analyzer.analyze_directory(scan_path)
 
         return PatternSummary(
             total_patterns=report.total_patterns,
@@ -269,12 +235,14 @@ async def get_pattern_summary(
 @router.post("/patterns/summary/analyze")
 @bounded(60.0)
 async def start_pattern_summary_analysis(
-    path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
+    source_id: SourceIdQuery,
+    path: str | None = Query(default=None, description="Sub-path to analyze, relative to the source root"),
 ):
     """Enqueue pattern summary analysis as a Celery task (GH#6505)."""
-    result = run_pattern_summary_analysis.delay(path)
-    await store_latest_task_id(_SUMMARY_REDIS_PREFIX, result.id)
-    return {"task_id": result.id, "status": "pending"}
+    scan_path = await scan_path_in_source(source_id, path)
+    result = run_pattern_summary_analysis.delay(scan_path)
+    await store_latest_task_id(source_scoped_prefix(_SUMMARY_REDIS_PREFIX, source_id), result.id)
+    return {"task_id": result.id, "status": "pending", "source_id": source_id}
 
 
 @router.get("/patterns/summary/status/{task_id}")
@@ -293,13 +261,17 @@ add_clear_stuck_route(router, "/patterns/summary/tasks/clear-stuck", name="clear
 @router.get("/patterns/duplicates")
 @bounded(60.0)
 async def get_duplicate_patterns(
-    path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
+    source_id: SourceIdQuery,
+    response: Response,
+    path: str | None = Query(default=None, description="Sub-path to analyze, relative to the source root"),
     limit: int = Query(default=20, ge=1, le=100, description="Maximum results"),
 ) -> List[Dict[str, Any]]:
     """Get duplicate code patterns in the codebase.
 
     This endpoint specifically analyzes for code duplication.
     """
+    scan_path = await scan_path_in_source(source_id, path)
+    tag_source(response, source_id)
     try:
         from code_intelligence.pattern_analysis import CodePatternAnalyzer
 
@@ -311,7 +283,7 @@ async def get_duplicate_patterns(
             enable_embedding_storage=False,
         )
 
-        report = await analyzer.analyze_directory(path)
+        report = await analyzer.analyze_directory(scan_path)
 
         return [dp.to_dict() for dp in report.duplicate_patterns[:limit]]
 
@@ -323,13 +295,17 @@ async def get_duplicate_patterns(
 @router.get("/patterns/regex-opportunities")
 @bounded(60.0)
 async def get_regex_opportunities(
-    path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
+    source_id: SourceIdQuery,
+    response: Response,
+    path: str | None = Query(default=None, description="Sub-path to analyze, relative to the source root"),
     limit: int = Query(default=20, ge=1, le=100, description="Maximum results"),
 ) -> List[Dict[str, Any]]:
     """Get regex optimization opportunities.
 
     Identifies string operations that could be replaced with regex.
     """
+    scan_path = await scan_path_in_source(source_id, path)
+    tag_source(response, source_id)
     try:
         from code_intelligence.pattern_analysis import CodePatternAnalyzer
 
@@ -341,7 +317,7 @@ async def get_regex_opportunities(
             enable_embedding_storage=False,
         )
 
-        report = await analyzer.analyze_directory(path)
+        report = await analyzer.analyze_directory(scan_path)
 
         return [ro.to_dict() for ro in report.regex_opportunities[:limit]]
 
@@ -353,7 +329,9 @@ async def get_regex_opportunities(
 @router.get("/patterns/complexity-hotspots")
 @bounded(60.0)
 async def get_complexity_hotspots(
-    path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
+    source_id: SourceIdQuery,
+    response: Response,
+    path: str | None = Query(default=None, description="Sub-path to analyze, relative to the source root"),
     limit: int = Query(default=20, ge=1, le=100, description="Maximum results"),
     min_complexity: int = Query(
         default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
@@ -365,6 +343,8 @@ async def get_complexity_hotspots(
 
     Identifies functions with high cyclomatic or cognitive complexity.
     """
+    scan_path = await scan_path_in_source(source_id, path)
+    tag_source(response, source_id)
     try:
         from code_intelligence.pattern_analysis import CodePatternAnalyzer
 
@@ -377,7 +357,7 @@ async def get_complexity_hotspots(
             cc_threshold=min_complexity,
         )
 
-        report = await analyzer.analyze_directory(path)
+        report = await analyzer.analyze_directory(scan_path)
 
         # Filter by minimum complexity
         filtered = [h for h in report.complexity_hotspots if h.cyclomatic_complexity >= min_complexity]
@@ -392,13 +372,17 @@ async def get_complexity_hotspots(
 @router.get("/patterns/refactoring-suggestions")
 @bounded(60.0)
 async def get_refactoring_suggestions(
-    path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
+    source_id: SourceIdQuery,
+    response: Response,
+    path: str | None = Query(default=None, description="Sub-path to analyze, relative to the source root"),
     limit: int = Query(default=20, ge=1, le=100, description="Maximum results"),
 ) -> List[Dict[str, Any]]:
     """Get prioritized refactoring suggestions.
 
     Analyzes the codebase and generates actionable refactoring proposals.
     """
+    scan_path = await scan_path_in_source(source_id, path)
+    tag_source(response, source_id)
     try:
         from code_intelligence.pattern_analysis import (
             CodePatternAnalyzer,
@@ -406,7 +390,7 @@ async def get_refactoring_suggestions(
         )
 
         analyzer = CodePatternAnalyzer(enable_embedding_storage=False)
-        report = await analyzer.analyze_directory(path)
+        report = await analyzer.analyze_directory(scan_path)
 
         # Generate refactoring suggestions
         generator = RefactoringSuggestionGenerator()
@@ -423,18 +407,22 @@ async def get_refactoring_suggestions(
 @router.get("/patterns/report")
 @bounded(60.0)
 async def get_pattern_report(
-    path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
+    source_id: SourceIdQuery,
+    response: Response,
+    path: str | None = Query(default=None, description="Sub-path to analyze, relative to the source root"),
     format: str = Query(default="json", description="Output format: json or markdown"),
 ) -> Any:
     """Generate a comprehensive pattern analysis report.
 
     Returns either JSON or Markdown format based on the format parameter.
     """
+    scan_path = await scan_path_in_source(source_id, path)
+    tag_source(response, source_id)
     try:
         from code_intelligence.pattern_analysis import CodePatternAnalyzer
 
         analyzer = CodePatternAnalyzer(enable_embedding_storage=False)
-        report = await analyzer.analyze_directory(path)
+        report = await analyzer.analyze_directory(scan_path)
 
         if format.lower() == "markdown":
             from fastapi.responses import PlainTextResponse
@@ -444,7 +432,7 @@ async def get_pattern_report(
                 media_type="text/markdown",
             )
 
-        return report.to_dict()
+        return {**report.to_dict(), "source_id": source_id}
 
     except Exception as e:
         logger.error("Report generation failed: %s", e)
@@ -454,7 +442,7 @@ async def get_pattern_report(
 @router.get("/patterns/storage/stats")
 @bounded(60.0)
 async def get_pattern_storage_stats(
-    source_id: str | None = Query(default=None, description="Code source to scope stats to (Issue #12384)"),
+    source_id: SourceIdQuery,
 ) -> Dict[str, Any]:
     """Get statistics about stored patterns in ChromaDB.
 
@@ -466,14 +454,14 @@ async def get_pattern_storage_stats(
     try:
         from code_intelligence.pattern_analysis.storage import get_pattern_stats
 
-        return await get_pattern_stats(source_id=source_id)
+        return {**await get_pattern_stats(source_id=source_id), "source_id": source_id}
 
     except Exception as e:
         logger.error("Storage stats failed: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-def _build_empty_pattern_summary() -> Dict[str, Any]:
+def _build_empty_pattern_summary(source_id: str) -> Dict[str, Any]:
     """
     Build empty pattern summary response.
 
@@ -483,6 +471,7 @@ def _build_empty_pattern_summary() -> Dict[str, Any]:
     """
     return {
         "status": "no_data",
+        "source_id": source_id,
         "total_patterns": 0,
         "severity_distribution": {},
         "pattern_type_distribution": {},
@@ -539,7 +528,7 @@ def _aggregate_pattern_metadata(metadatas: List[Dict]) -> Dict[str, Any]:
 @router.get("/patterns/cached-summary")
 @bounded(60.0)
 async def get_cached_pattern_summary(
-    source_id: str | None = Query(default=None, description="Code source to scope the summary to (Issue #12384)"),
+    source_id: SourceIdQuery,
 ) -> Dict[str, Any]:
     """Get cached pattern summary from ChromaDB without re-analyzing.
 
@@ -559,7 +548,7 @@ async def get_cached_pattern_summary(
 
         collection = await get_pattern_collection_async()
         if collection is None:
-            return _build_empty_pattern_summary()
+            return _build_empty_pattern_summary(source_id)
 
         where_filter = _build_chromadb_where_filter(pattern_type=None, severity=None, source_id=source_id)
 
@@ -571,13 +560,14 @@ async def get_cached_pattern_summary(
         )
         count = len(sample.get("metadatas") or [])
         if count == 0:
-            return _build_empty_pattern_summary()
+            return _build_empty_pattern_summary(source_id)
 
         # Aggregate statistics (Issue #665: use helper)
         stats = _aggregate_pattern_metadata(sample["metadatas"])
 
         return {
             "status": "success",
+            "source_id": source_id,
             "total_patterns": count,
             "sampled_patterns": count,
             "severity_distribution": stats["severity_counts"],
@@ -589,10 +579,10 @@ async def get_cached_pattern_summary(
 
     except Exception as e:
         logger.warning("Cached pattern summary read failed, returning no_data (#12365): %s", e)
-        return _build_empty_pattern_summary()
+        return _build_empty_pattern_summary(source_id)
 
 
-def _build_empty_patterns_response() -> Dict[str, Any]:
+def _build_empty_patterns_response(source_id: str) -> Dict[str, Any]:
     """
     Build empty patterns response for when no data exists.
 
@@ -605,6 +595,7 @@ def _build_empty_patterns_response() -> Dict[str, Any]:
     """
     return {
         "status": "no_data",
+        "source_id": source_id,
         "patterns": [],
         "total": 0,
     }
@@ -613,14 +604,14 @@ def _build_empty_patterns_response() -> Dict[str, Any]:
 def _build_chromadb_where_filter(
     pattern_type: str | None,
     severity: str | None,
-    source_id: str | None = None,
+    source_id: str,
 ) -> Dict[str, Any]:
     """
     Build ChromaDB where filter from optional parameters.
 
     Issue #665: Extracted from get_cached_patterns to improve maintainability.
-    Issue #12384: ALWAYS includes a source_id condition (default sentinel when
-    None) so this filter can never be used to query the shared code_patterns
+    Issue #12384: ALWAYS includes a source_id condition (#20513: required, no
+    "default" sentinel) so this filter can never be used to query the shared code_patterns
     collection unscoped -- mirrors CodePatternAnalyzer's write-side tagging.
 
     Args:
@@ -631,7 +622,7 @@ def _build_chromadb_where_filter(
     Returns:
         ChromaDB-compatible where filter dict.
     """
-    conditions = [{"source_id": source_id or "default"}]
+    conditions = [{"source_id": require_source_id(source_id, "pattern-store query")}]
     if pattern_type:
         conditions.append({"pattern_type": pattern_type})
     if severity:
@@ -675,9 +666,9 @@ def _format_pattern_results(
 @router.get("/patterns/cached-patterns")
 @bounded(60.0)
 async def get_cached_patterns(
+    source_id: SourceIdQuery,
     pattern_type: str | None = Query(None, description="Filter by pattern type"),
     severity: str | None = Query(None, description="Filter by severity"),
-    source_id: str | None = Query(default=None, description="Code source to scope results to (Issue #12384)"),
     limit: int = Query(
         default=QueryDefaults.DEFAULT_PAGE_SIZE,
         ge=1,
@@ -690,8 +681,8 @@ async def get_cached_patterns(
 
     Issue #208: Fast loading of already indexed patterns without re-analysis.
     Issue #665: Refactored to use extracted helpers.
-    Issue #12384: Always scopes the query to source_id (default sentinel when
-    None) so one source's cached patterns never include another source's.
+    Issue #12384: Always scopes the query to source_id (required, #20513), so one
+    source's cached patterns never include another source's.
     Issue #12365: A store-read failure degrades to a graceful no_data 200
     instead of a 500, matching the sibling analytics /cached endpoints.
     Supports filtering by pattern_type and severity, with pagination.
@@ -703,7 +694,7 @@ async def get_cached_patterns(
 
         collection = await get_pattern_collection_async()
         if collection is None:
-            return _build_empty_patterns_response()
+            return _build_empty_patterns_response(source_id)
 
         # Build where filter (Issue #665/#12384: use extracted helper)
         where_filter = _build_chromadb_where_filter(pattern_type, severity, source_id)
@@ -715,7 +706,7 @@ async def get_cached_patterns(
         count_sample = await collection.get(where=where_filter, limit=1000, include=[])
         count = len(count_sample.get("ids") or [])
         if count == 0:
-            return _build_empty_patterns_response()
+            return _build_empty_patterns_response(source_id)
 
         # Query with filters
         results = await collection.get(
@@ -730,6 +721,7 @@ async def get_cached_patterns(
 
         return {
             "status": "success",
+            "source_id": source_id,
             "patterns": patterns,
             "total": count,
             "limit": limit,
@@ -739,20 +731,18 @@ async def get_cached_patterns(
 
     except Exception as e:
         logger.warning("Cached patterns read failed, returning no_data (#12365): %s", e)
-        return _build_empty_patterns_response()
+        return _build_empty_patterns_response(source_id)
 
 
 @router.post("/patterns/storage/clear")
 @bounded(60.0)
 async def clear_pattern_storage(
-    source_id: str | None = Query(default=None, description="Code source to scope the clear to (Issue #12408)"),
+    source_id: SourceIdQuery,
 ) -> Dict[str, str]:
     """Clear stored patterns for a single source from ChromaDB.
 
-    Issue #12408: Always scopes the clear to source_id (default sentinel
-    when None, matching every other ``/patterns/*`` endpoint's convention --
-    e.g. ``get_pattern_storage_stats``, ``search_similar_patterns_endpoint``)
-    so clearing one source's patterns can never delete another source's (or
+    Issue #12408: Always scopes the clear to source_id (required, #20513), so
+    clearing one source's patterns can never delete another source's (or
     AutoBot's own) stored patterns.
 
     WARNING: This is destructive and cannot be undone for the scoped source.
@@ -763,7 +753,7 @@ async def clear_pattern_storage(
         success = await clear_patterns(source_id=source_id)
 
         if success:
-            return {"message": "Pattern storage cleared successfully"}
+            return {"message": "Pattern storage cleared successfully", "source_id": source_id}
         else:
             raise HTTPException(status_code=500, detail="Failed to clear storage")
 
@@ -775,9 +765,10 @@ async def clear_pattern_storage(
 @router.get("/patterns/similar")
 @bounded(60.0)
 async def search_similar_patterns_endpoint(
+    source_id: SourceIdQuery,
+    response: Response,
     code: str = Query(..., description="Code snippet to find similar patterns for"),
     pattern_type: str | None = Query(None, description="Filter by pattern type"),
-    source_id: str | None = Query(default=None, description="Code source to scope results to (Issue #12384)"),
     limit: int = Query(
         default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
         ge=1,
@@ -789,10 +780,10 @@ async def search_similar_patterns_endpoint(
 
     This endpoint uses ChromaDB to find patterns similar to the provided code.
 
-    Issue #12384: Always scopes the query to source_id (default sentinel when
-    None) so a similarity search for one source never surfaces another
-    source's stored patterns.
+    Issue #12384: Always scopes the query to source_id (required, #20513) so a
+    similarity search for one source never surfaces another source's patterns.
     """
+    tag_source(response, source_id)
     try:
         # Generate embedding for query code
         # (Using the analyzer's embedding method)

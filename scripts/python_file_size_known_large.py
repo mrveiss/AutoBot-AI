@@ -82,9 +82,9 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/duplicate_detector.py": 1119,
     "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 744,
     "autobot-backend/api/codebase_analytics/endpoints/environment.py": 695,  # #13602: sanitised traversal log
-    "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 817,
-    "autobot-backend/api/codebase_analytics/endpoints/report.py": 2262,
-    "autobot-backend/api/codebase_analytics/endpoints/stats.py": 659,
+    "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 808,
+    "autobot-backend/api/codebase_analytics/endpoints/report.py": 2239,
+    "autobot-backend/api/codebase_analytics/endpoints/stats.py": 648,
     "autobot-backend/api/conversation_files.py": 962,
     "autobot-backend/api/database_mcp.py": 1056,
     "autobot-backend/api/development_speedup.py": 611,
