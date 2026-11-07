@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -134,32 +135,11 @@ def test_parsers_read_literals_without_executing_anything():
     assert parse_backend_revisions(out) == ["abc", "def", "q"]
 
 
-class _Conn:
-    """The slice of a psycopg2 connection ``_bound_statements`` uses; records the statements it ran."""
-
-    def __init__(self) -> None:
-        self.ran: list[tuple[str, tuple]] = []
-
-    def cursor(self):
-        conn = self
-
-        class _Cur:
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *exc):
-                return False
-
-            def execute(self, sql, params=()):
-                conn.ran.append((sql, params))
-
-        return _Cur()
-
-
 def test_each_migration_read_is_bounded_by_the_env_backed_statement_timeout():
-    conn = _Conn()
+    conn = MagicMock()  # a psycopg2 connection (sync DB-API), not an AsyncSession
     _bound_statements(conn)
-    sql, params = conn.ran[0]
+    cursor = conn.cursor.return_value.__enter__.return_value
+    sql, params = cursor.execute.call_args.args
     assert "statement_timeout" in sql and params == (str(ROLLBACK_STATEMENT_TIMEOUT_MS),)
 
 
