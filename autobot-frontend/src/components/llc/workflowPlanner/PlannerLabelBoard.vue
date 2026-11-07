@@ -10,13 +10,18 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BaseButton, BaseInput } from '@autobot/ui'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import {
   breakdownWith,
+  edgeCaseWith,
   edgeCasesFor,
   LABEL_COLOR_VAR,
   LABELS,
   subStepsFor,
   type BreakdownBody,
+  type EdgeCase,
+  type EdgeCaseBody,
+  type EdgeCasePatch,
   type Label,
   type Plan,
 } from '@/composables/llc/workflowPlanTypes'
@@ -24,12 +29,17 @@ import {
 const props = defineProps<{ plan: Plan; busy: boolean }>()
 const emit = defineEmits<{
   breakdown: [stepKey: string, body: BreakdownBody]
+  addEdgeCase: [stepKey: string, body: EdgeCaseBody]
+  patchEdgeCase: [caseKey: string, body: EdgeCasePatch]
+  deleteEdgeCase: [caseKey: string]
   classify: [subStepKey: string, label: Label | null]
   acknowledge: []
 }>()
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
 
 const newSub = ref('')
+const newCase = ref('')
 const stepKey = computed(() => props.plan.one_number?.step_key ?? '')
 const subs = computed(() => subStepsFor(props.plan, stepKey.value))
 const cases = computed(() => edgeCasesFor(props.plan, stepKey.value))
@@ -48,6 +58,23 @@ function addSub() {
   emit('breakdown', stepKey.value, breakdownWith(props.plan, stepKey.value, label))
   newSub.value = ''
 }
+
+function rewordCase(c: EdgeCase, e: Event) {
+  const description = (e.target as HTMLInputElement).value.trim()
+  if (description && description !== c.description) emit('patchEdgeCase', c.key, { description })
+}
+
+async function removeCase(c: EdgeCase) {
+  const ok = await confirm({ title: t('llc.workflowPlanner.label.deleteEdgeCaseTitle'), message: t('llc.workflowPlanner.label.deleteEdgeCaseMessage', { text: c.description }) })
+  if (ok) emit('deleteEdgeCase', c.key)
+}
+
+function addCase(label: Label) {
+  const description = newCase.value.trim()
+  if (!description || !stepKey.value) return
+  emit('addEdgeCase', stepKey.value, edgeCaseWith(props.plan, description, label))
+  newCase.value = ''
+}
 </script>
 
 <template>
@@ -58,6 +85,13 @@ function addSub() {
         <BaseInput v-model="newSub" size="sm" :label="t('llc.workflowPlanner.label.subStep')" />
         <BaseButton size="sm" variant="secondary" :disabled="busy || !newSub.trim()" data-testid="add-sub-step" @click="addSub">
           {{ t('llc.workflowPlanner.label.addSubStep') }}
+        </BaseButton>
+      </div>
+
+      <div class="mb-3 flex flex-wrap items-end gap-3">
+        <BaseInput v-model="newCase" size="sm" :label="t('llc.workflowPlanner.label.edgeCaseField')" />
+        <BaseButton v-for="l in LABELS" :key="l" size="xs" variant="outline" :disabled="busy || !newCase.trim()" :data-testid="`add-edge-case-${l}`" @click="addCase(l)">
+          {{ t('llc.workflowPlanner.label.addEdgeCase', { label: t(`llc.workflowPlanner.labels.${l}`) }) }}
         </BaseButton>
       </div>
 
@@ -78,8 +112,19 @@ function addSub() {
               <span class="flex-1">{{ s.label }}</span>
               <BaseButton size="xs" variant="ghost" :disabled="busy" @click="emit('classify', s.key, null)">{{ t('llc.workflowPlanner.label.unlabel') }}</BaseButton>
             </li>
-            <li v-for="c in cases.filter((e) => e.classification === l)" :key="c.key" class="py-1 text-sm italic text-autobot-text-muted">
-              {{ t('llc.workflowPlanner.label.edgeCase', { text: c.description }) }}
+            <li v-for="c in cases.filter((e) => e.classification === l)" :key="c.key" class="flex items-center gap-2 py-1 text-sm italic text-autobot-text-muted">
+              <BaseInput
+                :model-value="c.description"
+                size="sm"
+                class="min-w-0 flex-1"
+                :aria-label="t('llc.workflowPlanner.label.edgeCaseField')"
+                :disabled="busy"
+                :data-testid="`edit-edge-case-${c.key}`"
+                @change="rewordCase(c, $event)"
+              />
+              <BaseButton size="xs" variant="ghost" :disabled="busy" :data-testid="`delete-edge-case-${c.key}`" @click="removeCase(c)">
+                {{ t('llc.workflowPlanner.label.deleteEdgeCase') }}
+              </BaseButton>
             </li>
           </ul>
         </div>

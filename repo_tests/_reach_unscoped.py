@@ -22,6 +22,9 @@ from __future__ import annotations
 UNSCOPED = frozenset(
     {
         "ansible-apt-repo-budget-override-sweep",
+        # #19807: every tracked non-test .py file, since the canned command output could be written in
+        # any component; the population is the whole tree, so no prefix describes it.
+        "no-simulated-command-output-19807-scan",
         # #19982: every tracked non-changelog file, since the product name can be misspelled into an
         # edition in any component; the population is the whole tree, so no prefix describes it.
         "autobot-has-no-pro-name",
