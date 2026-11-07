@@ -53,11 +53,11 @@ async def test_plan_key_is_session_scoped_and_carries_the_env_backed_ttl():
     assert await other.get_plan(plan.plan_id) is None  # another session cannot read it
 
 
-async def test_unscoped_planner_keeps_the_legacy_key():
-    redis = _Redis()
-    planner = LLMPlannerModule(_Llm(), None, redis_client=redis, config=PlannerConfig())
-    plan = await planner.create_plan("task")
-    assert redis.sets[0][0] == f"autobot:plans:{plan.plan_id}"
+def test_unscoped_planner_is_rejected():
+    with pytest.raises(ValueError, match="key_scope"):
+        LLMPlannerModule(_Llm(), None, redis_client=_Redis(), config=PlannerConfig())
+    with pytest.raises(ValueError, match="key_scope"):
+        LLMPlannerModule(_Llm(), None, redis_client=_Redis())
 
 
 def test_ttl_is_an_env_backed_registered_constant():
@@ -94,3 +94,24 @@ async def test_planner_client_and_failover_use_the_configured_provider(monkeypat
     with pytest.raises(RuntimeError):
         await planner_client.PlannerLLMClient("m", "s").generate("p", 0.1)
     assert seen["name"] == "openai"
+
+
+def test_unknown_provider_falls_back_to_default_with_one_warning(caplog):
+    from autobot_shared import ssot_chat_graph_settings as mod
+    from autobot_shared.ssot_config import LLMConfig
+
+    mod._PROVIDER_WARNED = False
+    with caplog.at_level("WARNING", logger=mod.__name__):
+        first = LLMConfig(AUTOBOT_LLM_PROVIDER="olama")
+        second = LLMConfig(AUTOBOT_LLM_PROVIDER="olama")
+    assert first.provider == second.provider == "ollama"
+    assert llm_provider.ProviderType(first.provider) is ProviderType.OLLAMA
+    warnings = [r for r in caplog.records if "AUTOBOT_LLM_PROVIDER" in r.getMessage()]
+    assert len(warnings) == 1
+    assert "allowed:" in warnings[0].getMessage() and "ollama" in warnings[0].getMessage()
+
+
+def test_known_provider_is_kept_normalised():
+    from autobot_shared.ssot_config import LLMConfig
+
+    assert LLMConfig(AUTOBOT_LLM_PROVIDER=" OpenAI ").provider == "openai"

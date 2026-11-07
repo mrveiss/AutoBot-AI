@@ -23,7 +23,7 @@ from constants.threshold_constants import (
     RetryConfig,
 )
 from events.types import create_plan_event
-from planner.plan_storage import PLAN_TTL_SECONDS, plan_key
+from planner.plan_storage import PLAN_TTL_SECONDS, plan_key, require_scoped
 from planner.types import ExecutionPlan, PlanStatus, PlanStep, PlanStepStatus
 
 logger = get_logger(__name__)
@@ -42,7 +42,7 @@ class PlannerConfig:
 
     max_steps_per_plan: int = 20  # Plan-specific, no constant needed
     plan_ttl_seconds: int = PLAN_TTL_SECONDS
-    key_scope: str = ""  # session id for chat plans (see plan_storage); empty = legacy unscoped key
+    key_scope: str = ""  # session id for chat plans (see plan_storage); required: LLMPlannerModule rejects empty
     llm_temperature: float = LLMDefaults.DEFAULT_TEMPERATURE - 0.4  # 0.3 for planning precision
     enable_parallel_steps: bool = True
     max_parallel_steps: int = BatchConfig.SMALL_BATCH // 2  # 5 parallel steps
@@ -177,7 +177,7 @@ Output ONLY valid JSON in this format:
         self.llm = llm_client
         self.event_stream = event_stream
         self.redis = redis_client
-        self.config = config or PlannerConfig()
+        self.config = require_scoped(config or PlannerConfig())
         self._plans: dict[str, ExecutionPlan] = {}
 
     def _format_context_for_prompt(self, context: dict) -> str:

@@ -50,7 +50,9 @@ class _Redis:
 
 def _planner(reply=None, redis=None, max_steps=20):
     reply = json.dumps(_PLAN) if reply is None else reply
-    return LLMPlannerModule(_Llm(reply), None, redis_client=redis, config=PlannerConfig(max_steps_per_plan=max_steps))
+    return LLMPlannerModule(
+        _Llm(reply), None, redis_client=redis, config=PlannerConfig(max_steps_per_plan=max_steps, key_scope="s1")
+    )
 
 
 async def test_create_plan_parses_steps_and_is_not_flagged_fallback():
@@ -99,7 +101,7 @@ async def test_plan_body_is_stored_in_redis_and_round_trips_metadata():
     redis = _Redis()
     p = _planner(redis=redis)
     plan = await p.create_plan("x")
-    key = f"autobot:plans:{plan.plan_id}"
+    key = f"autobot:plans:s1:{plan.plan_id}"
     assert redis.sets[0][0] == key and redis.sets[0][1] == p.config.plan_ttl_seconds
     fresh = _planner(redis=redis)  # a different instance reads it back from Redis, not from memory
     loaded = await fresh.get_plan(plan.plan_id)

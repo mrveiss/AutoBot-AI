@@ -63,8 +63,8 @@ STATUS_OUTCOME: Dict[str, str] = {
     "pending_delegation": WAIT,
 }
 #: Log-once flag for the no-Redis notice. The repo has no shared public log-once helper (only private per-module
-#: ``_warn_once`` copies in ``deployment_profile``, ``redis_management.endpoint`` and ``llc.services.findings_verify``),
-#: so this is an explicit per-process flag; it is only ever set by ``_log_no_redis_once``.
+#: ``_warn_once`` copies, five of them, plus this flag), so this is an explicit per-process flag set only by
+#: ``_log_no_redis_once``. Consolidation into one shared helper: #21071.
 _NO_REDIS_LOGGED = False
 
 

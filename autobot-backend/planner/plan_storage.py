@@ -18,5 +18,14 @@ PLAN_TTL_SECONDS: int = env_int("AUTOBOT_PLAN_TTL_SECONDS", default=TimingConsta
 
 
 def plan_key(scope: str, plan_id: str) -> str:
-    """The Redis key for ``plan_id`` under ``scope`` (a session id; empty = unscoped)."""
-    return f"autobot:plans:{scope}:{plan_id}" if scope else f"autobot:plans:{plan_id}"
+    """The Redis key for ``plan_id`` under ``scope`` (a session id); an empty scope is rejected."""
+    if not scope:
+        raise ValueError("a plan key needs a non-empty scope (the session id)")
+    return f"autobot:plans:{scope}:{plan_id}"
+
+
+def require_scoped(config):
+    """Return ``config`` if it carries a ``key_scope``; an unscoped planner (the legacy shared key) is rejected."""
+    if not config.key_scope:
+        raise ValueError("LLMPlannerModule needs PlannerConfig.key_scope (the session id); plans are never unscoped")
+    return config
