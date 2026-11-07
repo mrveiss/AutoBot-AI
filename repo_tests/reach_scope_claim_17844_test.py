@@ -88,6 +88,7 @@ import repo_tests.root_resolver_single_source_18101_test as _root_resolver_guard
 import repo_tests.script_module_names_unique_14873_test as _script_names_guard  # noqa: F401 -- registers its scope
 import repo_tests.shadowed_literal_routes_18720_test as _shadowed_routes_guard  # noqa: F401 -- registers its scope
 import repo_tests.single_attribute_writer_18240_test as _attribute_writer_guard  # noqa: F401 -- registers its scope
+import repo_tests.single_constant_time_compare_20761_test as _constant_time_guard  # noqa: F401 -- registers its scope
 import repo_tests.slm_backend_no_embedded_playbook_18606_test as _embedded_playbook_guard  # noqa: F401 -- registers its scope
 from repo_tests._paths import repo_root
 from repo_tests._reach import Reach, ReachScopeError, declare
@@ -306,6 +307,7 @@ _DECLARED_SCOPES = {
         "autobot-infrastructure/shared/tools/index_documentation.py",
     ),
     "single-attribute-writer-scan": ("autobot-frontend/src",),
+    "single-constant-time-compare": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "torch-pair-literals": (
         ".github",
         "docker",

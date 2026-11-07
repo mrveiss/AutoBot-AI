@@ -12,6 +12,8 @@ already compares encoded bytes, so it is safe).
 import re
 from pathlib import Path
 
+from repo_tests._reach import declare
+
 _ROOT = Path(__file__).resolve().parent.parent
 _TREES = ("autobot-backend", "autobot-slm-backend", "autobot_shared")
 _HELPER = Path("autobot_shared/security/constant_time.py")
@@ -24,14 +26,29 @@ _DEFERRED = {
 _CALL = re.compile(r"(?<!\w)(?:hmac|secrets)\.compare_digest\(|(?<![\w.])compare_digest\(")
 
 
-def _production_files():
+def _production_files(root: Path = _ROOT):
     for tree in _TREES:
-        for path in (_ROOT / tree).rglob("*.py"):
-            rel = path.relative_to(_ROOT)
+        for path in (root / tree).rglob("*.py"):
+            rel = path.relative_to(root)
             name = path.name
             if rel == _HELPER or "tests" in rel.parts or name.startswith("test_") or name.endswith("_test.py"):
                 continue
             yield rel, path
+
+
+def _discover(root: Path) -> list[Path]:
+    return [rel for rel, _ in _production_files(root)]
+
+
+#: Measured at the time of writing: ~3500 production ``.py`` files under the three trees; the floor
+#: leaves room for moves without letting an empty enumeration pass.
+REACH = declare(
+    "single-constant-time-compare",
+    discover=_discover,
+    floor=3000,
+    what="production python files",
+    roots=_TREES,
+)
 
 
 def _offenders(text: str) -> list[int]:
@@ -41,12 +58,14 @@ def _offenders(text: str) -> list[int]:
 
 
 def test_no_raw_compare_digest_outside_the_helper() -> None:
-    found = [
-        f"{rel}:{n}"
-        for rel, path in _production_files()
-        if rel.as_posix() not in _DEFERRED
-        for n in _offenders(path.read_text(encoding="utf-8", errors="replace"))
-    ]
+    reached = REACH.examined(_ROOT)
+    found = []
+    for rel in reached:
+        if rel.as_posix() in _DEFERRED:
+            continue
+        text = (_ROOT / rel).read_text(encoding="utf-8", errors="replace")
+        found.extend(f"{rel}:{n}" for n in _offenders(text))
+    REACH.completed(len(reached), _ROOT)
     assert found == [], f"use autobot_shared.security.constant_time.secure_compare: {found}"
 
 
