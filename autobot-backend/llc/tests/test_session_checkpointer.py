@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from autobot_shared.redis_utils import COMPARE_AND_DELETE_LUA
+from autobot_shared.redis_utils import COMPARE_HOLDER_AND_DELETE_LUA
 from llc.scheduler.session_checkpointer import SessionCheckpointer, recover_incomplete_runs
 
 
@@ -104,7 +104,7 @@ async def test_recover_incomplete_runs_marks_interrupted_releases_lock_requeues(
 
     assert run.status == "interrupted"
     assert run.finished_at is not None
-    mock_redis.eval.assert_called_once_with(COMPARE_AND_DELETE_LUA, 1, f"llc:checkout:{wid}", str(run.agent_id))
+    mock_redis.eval.assert_called_once_with(COMPARE_HOLDER_AND_DELETE_LUA, 1, f"llc:checkout:{wid}", str(run.agent_id))
     mock_redis.delete.assert_not_called()
     mock_redis.zadd.assert_called_once()
     zadd_args = mock_redis.zadd.call_args[0]

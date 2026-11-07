@@ -32,6 +32,7 @@ from llc.services.work_item_hierarchy import (
     ProjectRequired,
     count_items_without_project,
     find_hierarchy_violations,
+    move_subtree_to_project,
     parent_if_allowed,
 )
 from llc.services.work_item_service import WorkItemService
@@ -413,3 +414,42 @@ async def test_a_system_made_item_keeps_a_projectless_parent_when_it_brings_a_pr
     get = WorkItemService().get
     assert await parent_if_allowed(session, get, COMPANY, T.TASK, str(old_pbi.id), PROJECT) == str(old_pbi.id)
     assert await parent_if_allowed(session, get, COMPANY, T.TASK, str(old_pbi.id)) is None
+
+
+async def test_a_project_id_is_compared_as_a_uuid_not_as_text(session):
+    epic = await _make(session, T.EPIC, project=PROJECT)
+    pbi = await _make(session, T.PBI, parent=epic, project=PROJECT.replace("-", ""))  # same project, other spelling
+    assert str(pbi.project_id) == PROJECT
+
+
+async def test_moving_a_subtree_reaches_every_depth_before_writing(session):
+    root = await _legacy(session, T.EPIC, project_id=PROJECT)
+    parent, chain = root, []
+    for _ in range(40):  # deeper than the ancestor-walk limit
+        parent = await _legacy(session, T.SUBTASK, parent_id=parent.id, project_id=PROJECT)
+        chain.append(parent)
+    other = uuid.uuid4()
+    await _ensure_project(session, COMPANY, str(other))
+    assert await move_subtree_to_project(session, root.id, other, uuid.UUID(COMPANY)) == 40
+    for row in chain:
+        await session.refresh(row)
+        assert row.project_id == other
+
+
+async def test_detaching_a_projectless_legacy_item_enforces_the_project_rule(session):
+    epic = await _legacy(session, T.EPIC)
+    pbi = await _legacy(session, T.PBI, parent_id=epic.id)  # legacy: neither has a project
+    with pytest.raises(ProjectRequired):
+        await WorkItemService().update(session, str(pbi.id), parent_id=None)
+    await session.refresh(pbi)
+    assert pbi.parent_id == epic.id
+
+
+async def test_detaching_an_item_that_has_a_project_is_allowed_and_a_noop_detach_stays_a_noop(session):
+    epic = await _make(session, T.EPIC, project=PROJECT)
+    pbi = await _make(session, T.PBI, parent=epic)
+    await WorkItemService().update(session, str(pbi.id), parent_id=None)
+    await session.refresh(pbi)
+    assert pbi.parent_id is None and str(pbi.project_id) == PROJECT
+    legacy = await _legacy(session, T.EPIC)  # no parent, no project: nothing changes, so nothing is checked
+    assert (await WorkItemService().update(session, str(legacy.id), title="x", parent_id=None)).title == "x"

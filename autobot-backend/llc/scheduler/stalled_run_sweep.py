@@ -62,7 +62,7 @@ from sqlalchemy import func, select
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from autobot_shared.redis_utils import delete_if_value
+from autobot_shared.redis_utils import delete_if_holder
 from llc.models.activity import ActorType
 from llc.models.enums import ActivityEventType, LLCRunStatus
 from llc.models.heartbeat_run import LLCHeartbeatRun
@@ -234,7 +234,7 @@ async def _drop_checkout_fences(fences: list[tuple[str, str]]) -> None:
     for item_id, holder in fences:
         key = f"llc:checkout:{item_id}"
         try:
-            await delete_if_value(redis, key, holder)
+            await delete_if_holder(redis, key, holder)
         except Exception as exc:
             logger.warning("Stalled-run sweep could not drop checkout fence %s: %s", key, exc)
 
