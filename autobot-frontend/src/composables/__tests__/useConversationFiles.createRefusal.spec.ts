@@ -3,9 +3,9 @@
 // #20217: a 413 on /files/create carries a structured `detail`; error.value must be translated text, never an object.
 import { describe, it, expect, vi } from 'vitest'
 
-const { post } = vi.hoisted(() => ({ post: vi.fn() }))
+const { post, put } = vi.hoisted(() => ({ post: vi.fn(), put: vi.fn() }))
 
-vi.mock('@/plugins/api', () => ({ useApiClient: () => ({ post, get: vi.fn() }) }))
+vi.mock('@/plugins/api', () => ({ useApiClient: () => ({ post, put, get: vi.fn() }) }))
 vi.mock('@/i18n', () => ({
   default: {
     global: { t: (key: string, params: Record<string, unknown> = {}) => `${key}|${JSON.stringify(params)}` },
@@ -39,6 +39,40 @@ describe('createFile refusal', () => {
     const files = useConversationFiles('s1')
     await files.createFile('a.txt', 'x')
     expect(files.error.value).toBe('Nope')
+  })
+})
+
+describe('write refusals beyond create (#20723)', () => {
+  const quota = { code: 'conversation_file_quota_exceeded', message: 'raw server text', limit_bytes: 1048576, live_bytes: 1048576 }
+  const refused = () => Object.assign(new Error('HTTP 413'), { status: 413, details: { detail: quota } })
+
+  it('updateFileContent translates a 413 quota refusal', async () => {
+    put.mockRejectedValueOnce(refused())
+    const files = useConversationFiles('s1')
+    expect(await files.updateFileContent('f1', 'x')).toBe(false)
+    expect(files.error.value).toContain('chat.input.uploadError.quotaExceeded')
+    expect(files.error.value).not.toBe('raw server text')
+  })
+
+  it('copyFile translates a 413 quota refusal', async () => {
+    post.mockRejectedValueOnce(refused())
+    const files = useConversationFiles('s1')
+    expect(await files.copyFile('f1')).toBe(false)
+    expect(files.error.value).toContain('chat.input.uploadError.quotaExceeded')
+  })
+
+  it('uploadFiles translates a 413 quota refusal', async () => {
+    post.mockRejectedValueOnce(refused())
+    const files = useConversationFiles('s1')
+    await files.uploadFiles([new File(['x'], 'a.txt')] as unknown as FileList)
+    expect(files.error.value).toContain('chat.input.uploadError.quotaExceeded')
+  })
+
+  it('still shows the server message for a non-refusal failure', async () => {
+    put.mockRejectedValueOnce({ response: { status: 500, data: { detail: 'boom' } } })
+    const files = useConversationFiles('s1')
+    await files.updateFileContent('f1', 'x')
+    expect(files.error.value).toBe('boom')
   })
 })
 
