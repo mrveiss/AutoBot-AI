@@ -18,10 +18,11 @@ vi.mock('@/composables/useNotificationBus', () => ({ useNotificationBus: () => (
 vi.mock('@/composables/useThumbnailWorker', () => ({
   useThumbnailWorker: () => ({
     isSupported: { value: true },
-    generateThumbnail: vi.fn().mockResolvedValue('data:image/jpeg;base64,AAAA'),
+    generateThumbnail: (...a: unknown[]) => generateThumbnail(...a),
   }),
 }))
 
+const generateThumbnail = vi.fn()
 const OK = { confidence: 0.9, processing_time: 0.1, result_data: {} }
 
 async function mountWithVideo() {
@@ -39,6 +40,7 @@ describe('VideoProcessor frame failures', () => {
   beforeEach(() => {
     processImage.mockReset()
     showToast.mockReset()
+    generateThumbnail.mockReset().mockResolvedValue('data:image/jpeg;base64,AAAA')
     URL.createObjectURL = vi.fn(() => 'blob:clip')
     URL.revokeObjectURL = vi.fn()
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ blob: async () => new Blob(['f']) }))
@@ -57,7 +59,7 @@ describe('VideoProcessor frame failures', () => {
     expect(done).toHaveLength(1)
     expect(done![0][0]).toMatchObject({ frames_processed: 2 })
     expect(showToast).toHaveBeenCalledWith('Processed 2 frames successfully', 'success')
-    expect(showToast).toHaveBeenCalledWith('1 frames could not be analyzed and were skipped', 'warning')
+    expect(showToast).toHaveBeenCalledWith('1 frame could not be analyzed and was skipped', 'warning')
     expect(wrapper.text()).not.toContain('HTTP 500')
   })
 
@@ -70,5 +72,31 @@ describe('VideoProcessor frame failures', () => {
     expect(wrapper.emitted('analysis-complete')).toBeUndefined()
     expect(wrapper.text()).toContain(en.vision.videoProcessor.errorNoFrames)
     expect(wrapper.text()).not.toContain('HTTP 500')
+  })
+
+  it('counts a frame that cannot be extracted as skipped in the toast', async () => {
+    processImage.mockResolvedValue(OK)
+    // No worker thumbnail and no canvas context for the second frame: extractFrame returns null.
+    generateThumbnail
+      .mockResolvedValueOnce('data:image/jpeg;base64,AAAA')
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce('data:image/jpeg;base64,AAAA')
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+    const wrapper = await mountWithVideo()
+    await wrapper.find('.btn-process').trigger('click')
+    await flushPromises()
+
+    expect(processImage).toHaveBeenCalledTimes(2)
+    expect(showToast).toHaveBeenCalledWith('Processed 2 frames successfully', 'success')
+    expect(showToast).toHaveBeenCalledWith('1 frame could not be analyzed and was skipped', 'warning')
+  })
+
+  it('pluralizes the skipped toast for several frames', async () => {
+    processImage.mockResolvedValueOnce(OK).mockRejectedValue(new HttpError(500, 'boom'))
+    const wrapper = await mountWithVideo()
+    await wrapper.find('.btn-process').trigger('click')
+    await flushPromises()
+
+    expect(showToast).toHaveBeenCalledWith('2 frames could not be analyzed and were skipped', 'warning')
   })
 })

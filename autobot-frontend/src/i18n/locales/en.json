@@ -7330,7 +7330,7 @@
       "toastSavedToGallery": "Saved to gallery",
       "errorNoFrames": "No frames could be processed",
       "errorProcessingFailed": "Video processing failed",
-      "toastFramesSkipped": "{count} frames could not be analyzed and were skipped",
+      "toastFramesSkipped": "{count} frame could not be analyzed and was skipped | {count} frames could not be analyzed and were skipped",
       "errorInvalidFile": "Please drop a valid video file"
     },
     "visionAutomation": {

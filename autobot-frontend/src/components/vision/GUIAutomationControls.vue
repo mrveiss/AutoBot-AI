@@ -252,7 +252,7 @@ const executeAction = async (opportunity: AutomationOpportunity) => {
   } catch (err) {
     logger.error('Execute action failed:', err);
     actionError.value = isHttpError(err)
-      ? t('vision.guiAutomation.toastVerifyFailed', { error: httpErrorText(err, err.message) })
+      ? t('vision.guiAutomation.toastVerifyFailed', { error: httpErrorText(err, t('vision.guiAutomation.toastExecutionFailed')) })
       : t('vision.guiAutomation.toastExecutionFailed');
   } finally {
     executing.value = false;

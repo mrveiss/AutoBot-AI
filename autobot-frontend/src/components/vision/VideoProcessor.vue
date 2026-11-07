@@ -335,19 +335,15 @@ const processVideo = async () => {
       const timestamp = timestamps[i];
       const frameBlob = await extractFrame(timestamp);
 
-      if (frameBlob) {
+      try {
+        if (!frameBlob) throw new Error('frame could not be extracted');
         const file = new File([frameBlob], `frame_${i}.jpg`, { type: 'image/jpeg' });
-        try {
-          const response = await processImage(file, processingIntent.value);
-          frameResults.value.push({
-            ...response,
-            timestamp,
-          } as FrameResult);
-        } catch (frameErr) {
-          // One rejected frame is skipped; the frames that did process still complete the run.
-          failedFrames += 1;
-          logger.warn(`Frame ${i} failed, skipping:`, frameErr);
-        }
+        const response = await processImage(file, processingIntent.value);
+        frameResults.value.push({ ...response, timestamp } as FrameResult);
+      } catch (frameErr) {
+        // One unextractable or rejected frame is skipped and counted; the rest still complete the run.
+        failedFrames += 1;
+        logger.warn(`Frame ${i} failed, skipping:`, frameErr);
       }
 
       processedFrames.value = i + 1;
@@ -361,7 +357,7 @@ const processVideo = async () => {
       });
       showToast(t('vision.videoProcessor.toastProcessed', { count: frameResults.value.length }), 'success');
       if (failedFrames > 0) {
-        showToast(t('vision.videoProcessor.toastFramesSkipped', { count: failedFrames }), 'warning');
+        showToast(t('vision.videoProcessor.toastFramesSkipped', { count: failedFrames }, failedFrames), 'warning');
       }
     } else {
       error.value = t('vision.videoProcessor.errorNoFrames');
