@@ -60471,7 +60471,7 @@ export interface components {
          *     created before #13421, and the LLC company case, carry none).
          * @enum {string}
          */
-        ApprovalSource: "terminal_command" | "agent_tool" | "workflow_plan" | "plugin_capability" | "autoresearch" | "skill_governance" | "company" | "mcp_tool_schema";
+        ApprovalSource: "terminal_command" | "agent_tool" | "workflow_plan" | "plugin_capability" | "autoresearch" | "skill_governance" | "company" | "mcp_tool_schema" | "workflow_step";
         /**
          * ApprovalStatus
          * @description Possible statuses for an approval gate.

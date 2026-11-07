@@ -40,6 +40,7 @@ _VALID_TRANSITIONS = {
         ApprovalStatus.REJECTED.value,
         ApprovalStatus.REVISION_REQUESTED.value,
         ApprovalStatus.EXPIRED.value,
+        ApprovalStatus.WITHDRAWN.value,
     },
     ApprovalStatus.REVISION_REQUESTED.value: {
         ApprovalStatus.APPROVED.value,
@@ -476,6 +477,15 @@ class ApprovalGateService:
             .returning(Approval.id)
         )
         return (await self.session.execute(stmt)).first() is not None
+
+    async def withdraw(self, approval_id: uuid.UUID, by: str = "system") -> bool:
+        """Withdraw a pending approval its source no longer needs decided; never resumes the source (#20917)."""
+        if not await self._claim(approval_id, ApprovalStatus.WITHDRAWN, by, unexpired_only=False):
+            await self.session.rollback()
+            return False
+        await self.session.commit()
+        await self._notify("approval_withdrawn", await self._reload(approval_id))
+        return True
 
     async def _expire_if_pending(self, approval_id: uuid.UUID) -> Approval | None:
         """Claim pending -> EXPIRED, commit, notify and resume; None when someone else decided first."""

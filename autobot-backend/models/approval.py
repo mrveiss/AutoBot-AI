@@ -72,6 +72,7 @@ class ApprovalSource(str, Enum):
     SKILL_GOVERNANCE = "skill_governance"
     COMPANY = "company"
     MCP_TOOL_SCHEMA = "mcp_tool_schema"
+    WORKFLOW_STEP = "workflow_step"  # a step of an automated workflow waiting for its owner (#20917)
 
 
 class Approval(Base):
