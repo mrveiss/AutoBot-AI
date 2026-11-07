@@ -7,8 +7,8 @@
  *
  * `step_confirmation_required` is a wait: the executor parks the step in
  * `waiting_approval` and resumes only on `approve_step`. This module never
- * answers it -- it tells the user, and the runner's own Approve / Skip buttons
- * (the existing step-approval path) are where the answer is given.
+ * answers it -- it points at the step, and the persistent StepApprovalCard
+ * (rendered from the step's server status) is where the answer is given.
  */
 import { useNotificationBus } from '@/composables/useNotificationBus';
 import i18n from '@/i18n';

@@ -42,7 +42,7 @@
     tasks_from: ensure_venv_version
   vars:
     venv_path: "{{ autobot.base_dir }}/venv"
-    venv_python: python3.14
+    venv_python: "{{ python_interpreter_binary }}"
 
 # #16641: `virtualenv_python:` alone only applies when `virtualenv_command:`
 # names the standalone `virtualenv` tool -- it is silently ignored for `-m
