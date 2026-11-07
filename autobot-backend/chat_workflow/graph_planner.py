@@ -27,13 +27,17 @@ async def create_plan(state: Dict[str, Any], config: RunnableConfig) -> dict:
     """Write the turn's plan, start step one and put its ids in state; no-op when planning is off."""
     if state.get("error") or not plan_runner.planner_enabled():
         return {}
-    manager = config["configurable"]["manager"]
-    tracker = await plan_runner.open_plan(
-        manager,
-        session_id=state["session_id"],
-        task=state["user_message"],
-        model=state["llm_params"]["selected_model"],
-    )
+    try:
+        manager = config["configurable"]["manager"]
+        tracker = await plan_runner.open_plan(
+            manager,
+            session_id=state["session_id"],
+            task=state["user_message"],
+            model=state["llm_params"]["selected_model"],
+        )
+    except Exception:
+        logger.exception("chat planner: could not start a plan (the turn runs without one)")
+        return dict(NO_PLAN)
     return tracker.state_update() if tracker else dict(NO_PLAN)
 
 

@@ -87,6 +87,19 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_CHAT_PLANNER_MIN_MESSAGE_CHARS",
+        type=int,
+        default=24,
+        description=(
+            "Chat turns shorter than this many characters skip the planner, which otherwise adds one "
+            "LLM call (bounded by AUTOBOT_CHAT_PLANNER_TIMEOUT_SECONDS) before the first token (#21023)."
+        ),
+        component="chat_workflow",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_CHAT_STALL_ESCALATION",
         type=str,
         default="stop",

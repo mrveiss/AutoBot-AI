@@ -23,6 +23,8 @@ class ChatGraphSettings(BaseSettings):
 
     # Chat-graph planner node (#21023): off by default, no behaviour change.
     chat_planner_enabled: bool = Field(default=False, alias="AUTOBOT_CHAT_PLANNER_ENABLED")
+    # Turns shorter than this skip the planner LLM call (up to the planner timeout per turn) (#21023).
+    chat_planner_min_message_chars: int = Field(default=24, ge=0, alias="AUTOBOT_CHAT_PLANNER_MIN_MESSAGE_CHARS")
     # Chat-graph stall escalation (#21022): "stop" halts the turn, "ask" asks the human.
     chat_stall_escalation: Literal["stop", "ask"] = Field(default="stop", alias="AUTOBOT_CHAT_STALL_ESCALATION")
     # Ask-the-human defaults (#10553): seconds to wait, then the escalation policy.

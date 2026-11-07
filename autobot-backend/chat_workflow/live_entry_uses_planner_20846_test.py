@@ -89,7 +89,9 @@ async def _drive(manager):
             patch("autobot_shared.http_client.get_http_client", lambda: None),
             patch("chat_workflow.graph.attachment_prompt", AsyncMock(return_value="p")),
         ):
-            return [m async for m in manager.process_message_stream("live-20846", "build me a thing")]
+            return [
+                m async for m in manager.process_message_stream("live-20846", "build me a thing that lists my files")
+            ]
     finally:
         graph_module._compiled_graph = None
 

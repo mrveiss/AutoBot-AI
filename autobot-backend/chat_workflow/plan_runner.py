@@ -8,9 +8,10 @@ The chat graph (``graph.py``), the legacy continuation loop (``manager._run_llm_
 delegated subagents (``delegation`` drives that same loop) all plan through ``open_plan`` /
 ``PlanTracker``. Nothing here is gated: the caller checks ``config.llm.chat_planner_enabled``.
 
-Advancing: one plan step per tool pass. A pass whose tools all ran completes the current step and starts
-the next executable one; a pass with a tool error fails it (the planner blocks its dependents, so the
-plan stops). A pass that only queued approvals changes nothing. Steps are capped at the turn's iteration
+Advancing: one plan step per tool pass, decided per result status by ``STATUS_OUTCOME`` (the one table).
+A pass with any failing result fails the current step (the planner blocks its dependents, so the plan
+stops); otherwise a pass with a succeeding result completes it and starts the next executable step; a pass
+whose results all wait (approval or delegation pending) changes nothing. Steps are capped at the turn's iteration
 limit (``limits.MAX_CONTINUATION_ITERATIONS``), so a plan can never ask for more passes than the turn has.
 
 Delegation: a subagent plans with ``cap // (depth + 1)`` steps and with none when that is under two, so
@@ -41,11 +42,40 @@ logger = get_logger(__name__)
 #: A plan shorter than this is not worth a step-by-step block.
 MIN_PLAN_STEPS = 2
 
+ADVANCE, FAIL, WAIT = "advance", "fail", "wait"
+
+#: What each tool-result status does to the current plan step. Every status the dispatch path can put in
+#: an execution result is listed (``tool_handler``, ``tool_dispatch_guards``, ``mcp_approval_message``,
+#: ``compose_tool_handler``); ``plan_status_table_21023_test`` fails when a new one appears unlisted.
+#:   advance: the tool ran and produced a result (``completed`` is a finished delegate, ``executed`` compose).
+#:   fail:    the tool did not run or was refused (``schema_error``, ``ast_rejected``, ``gated`` included).
+#:   wait:    the result is not final yet (approval or delegation pending); the step stays current.
+STATUS_OUTCOME: Dict[str, str] = {
+    "success": ADVANCE,
+    "completed": ADVANCE,
+    "executed": ADVANCE,
+    "error": FAIL,
+    "schema_error": FAIL,
+    "ast_rejected": FAIL,
+    "gated": FAIL,
+    "pending_approval": WAIT,
+    "approval_required": WAIT,
+    "pending_delegation": WAIT,
+}
+_NO_REDIS_LOGGED = False
+
 
 def steps_for_depth(depth: int) -> int:
     """Plan length allowed at delegation ``depth`` (0 = the user's own turn); 0 means no plan."""
     cap = limits.MAX_CONTINUATION_ITERATIONS // (max(depth, 0) + 1)
     return cap if cap >= MIN_PLAN_STEPS else 0
+
+
+def worth_planning(task: str) -> bool:
+    """A turn shorter than ``chat_planner_min_message_chars`` ("hi", "thanks") skips the planner LLM call."""
+    from autobot_shared.ssot_config import config
+
+    return len((task or "").strip()) >= config.llm.chat_planner_min_message_chars
 
 
 def planner_enabled() -> bool:
@@ -114,7 +144,7 @@ class PlanTracker:
 
     async def advance(self, new_entries: List[Dict[str, Any]]) -> None:
         """Complete or fail the current step from the tool results of the pass that just ran."""
-        ran = [e for e in new_entries or [] if e.get("status") in ("success", "error")]
+        ran = [e for e in new_entries or [] if STATUS_OUTCOME.get(e.get("status")) in (ADVANCE, FAIL)]
         if not self.step_id or not ran:
             return
         try:
@@ -124,7 +154,7 @@ class PlanTracker:
             self.step_id, self.block = None, ""
 
     async def _settle(self, ran: List[Dict[str, Any]]) -> None:
-        failed = [e for e in ran if e.get("status") == "error"]
+        failed = [e for e in ran if STATUS_OUTCOME[e["status"]] == FAIL]
         if failed:
             await self.planner.fail_step(self.plan_id, self.step_id, str(failed[0].get("error") or "tool error"))
         else:
@@ -149,10 +179,21 @@ async def _create(planner: LLMPlannerModule, task: str) -> Optional[ExecutionPla
         return None
 
 
+def _log_no_redis_once() -> None:
+    """Without Redis a plan cannot be read back per node, so it is not made (and not announced)."""
+    global _NO_REDIS_LOGGED
+    if not _NO_REDIS_LOGGED:
+        _NO_REDIS_LOGGED = True
+        logger.info("chat planner: no Redis client, so a plan cannot be tracked; turns run without a plan")
+
+
 async def open_plan(manager: Any, *, session_id: str, task: str, model: str, depth: int = 0) -> Optional[PlanTracker]:
     """Plan ``task`` for this turn, start its first step, emit ``agent.plan``; ``None`` = run without a plan."""
     max_steps = steps_for_depth(depth)
-    if not max_steps or not task:
+    if not max_steps or not task or not worth_planning(task):
+        return None
+    if getattr(manager, "redis_client", None) is None:
+        _log_no_redis_once()
         return None
     planner = _build_planner(manager, model, session_id, max_steps)
     plan = await _create(planner, task)

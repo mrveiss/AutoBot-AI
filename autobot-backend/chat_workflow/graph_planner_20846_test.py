@@ -65,7 +65,12 @@ def _config():
 
 
 def _state(**kw):
-    base = {"session_id": "s", "user_message": "do x", "llm_params": {"selected_model": "m"}, "execution_history": []}
+    base = {
+        "session_id": "s",
+        "user_message": "set up the staging deployment and verify it",
+        "llm_params": {"selected_model": "m"},
+        "execution_history": [],
+    }
     return {**base, **kw}
 
 
@@ -122,3 +127,26 @@ async def test_initialize_session_resets_plan_state():
     mgr._persist_user_message = AsyncMock()
     out = await graph.initialize_session(_state(plan_id="old", current_step_id="x"), {"configurable": {"manager": mgr}})
     assert out["plan_id"] is None and out["current_step_id"] is None and out["plan_progress"] == {}
+
+
+async def test_step_advance_slices_only_this_passs_entries_on_the_dispatch_branch(fake):
+    """dispatch_approved_calls returns the old history plus this pass; only the new tail may settle the step."""
+    old = {"tool": "old", "status": "error", "error": "from an earlier pass"}
+    new = {"tool": "t", "status": "success"}
+    state = _state(
+        plan_id="P",
+        current_step_id="id1",
+        plan_progress={"block": "b", "done": 0, "total": 3},
+        execution_history=[old],
+        tool_calls=[{"name": "t", "params": {}}],  # pre-execution shape: takes the dispatch branch
+    )
+    fake.started = True
+    with (
+        patch.object(graph, "dispatch_approved_calls", AsyncMock(return_value=([old, new], False))),
+        patch.object(graph, "_build_llm_iteration_context", MagicMock()),
+        patch.object(graph, "emit_tool_call_hook", AsyncMock()),
+        patch.object(graph, "emit_tool_complete_hook", AsyncMock()),
+    ):
+        out = await graph.execute_tools(state, _config())
+    assert ("complete_step", "id1") in fake.calls  # the old error entry did not fail the step
+    assert out["current_step_id"] == "id2" and out["plan_progress"]["done"] == 1
