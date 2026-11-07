@@ -448,6 +448,15 @@ class Reach(BaseFloor, FloorWindow, Generic[T]):
             )
 
     def _require(self, count: int, verb: str, what: str) -> None:
+        # Nothing found fails every floor, and no floor needs reading to know it: a count floor is
+        # always positive (``declare`` refuses a negative one, ``computed_floor`` a non-positive
+        # computed one). Answering before ``self.floor`` keeps the empty-tree proof from measuring
+        # the base commit, which walks every declaration once per process (#17810).
+        if count == 0:
+            raise ReachFloorError(
+                f"[{self.name}] {verb} 0 {what}; floor is above zero. "
+                f"Fix the sweep, not the tree — a clean result below this floor asserts nothing."
+            )
         if count < self.floor:
             raise ReachFloorError(
                 f"[{self.name}] {verb} {count} {what}; floor is {self.floor}. "
