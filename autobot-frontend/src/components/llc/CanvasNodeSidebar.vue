@@ -51,6 +51,8 @@ const props = defineProps<{
   node: OrgNode
   companyId: string
   terminating: boolean
+  /** Whether the viewer may pause/resume/terminate: the server refuses all but a company owner/admin (#21001). */
+  canControl?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -500,6 +502,7 @@ const formatTime = createDateFormatter({ emptyText: () => t('llc.orgChart.never'
         @changed="(on: boolean) => emit('heartbeat', node, on)"
       />
       <button
+        v-if="canControl"
         class="w-full py-2 rounded-lg text-sm font-medium transition-colors"
         :class="node.status === 'paused'
           ? 'bg-green-600 text-white hover:bg-green-700'
@@ -510,6 +513,7 @@ const formatTime = createDateFormatter({ emptyText: () => t('llc.orgChart.never'
         {{ node.status === 'paused' ? t('llc.orgChart.resumeAgent') : t('llc.orgChart.pauseAgent') }}
       </button>
       <button
+        v-if="canControl"
         class="w-full py-2 rounded-lg text-sm font-medium transition-colors bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
         :disabled="terminating"
         data-testid="org-drawer-terminate"

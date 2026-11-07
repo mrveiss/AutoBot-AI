@@ -70,9 +70,9 @@ const router = useRouter()
 // below must tolerate that exactly the same way.
 const route = useRoute() as ReturnType<typeof useRoute> | undefined
 const { companyId, resolveCompanyId } = useLlcCompanyContext()
-// #20682: attach/detach 403 for a non-owner/admin; the viewer's role is unknown (hidden) until it loads.
+// #20682/#21001: attach/detach, contact delete and agent pause/terminate 403 for a non-owner/admin; hidden until the role loads.
 const { viewerRole, load: loadViewerStanding } = useCompanyMembers(api, () => companyId.value ?? '')
-const canManageAttachments = computed(() => isCompanyAdminRole(viewerRole.value))
+const canManageCompany = computed(() => isCompanyAdminRole(viewerRole.value))
 
 const tree = ref<OrgNode[]>([])
 const isLoading = ref(false)
@@ -526,7 +526,6 @@ function setViewMode(mode: OrgViewMode) {
   // reader who stays in tree mode should not pay for a request they never see.
   if (mode === 'canvas') {
     void fetchProcessNodes()
-    void loadViewerStanding()
     // #14549: the attach picker needs the role list, same lazy trigger.
     void fetchRolesForAttach()
     // #14596: teams render on the canvas too, sharing the same lazy fetch
@@ -983,6 +982,7 @@ watch(deepLinkSourcesReady, (ready) => {
 
 onMounted(() => {
   void fetchTree()
+  void loadViewerStanding()
   // #13942: company-wide, independent of tree/view-mode — loads once, like fetchTree.
   void loadExecutorRollup()
   // #14611: a deep link opens straight onto the canvas, triggering the same
@@ -1184,7 +1184,7 @@ onMounted(() => {
         :unassigned-contact-ids="unassignedContactIds"
         :contacts-failed="contactsFailed"
         :saving-contact-id="savingContactId"
-        :contact-save-error="contactSaveError"
+        :contact-save-error="contactSaveError" :can-delete-contacts="canManageCompany"
         @select="onPersonSelected"
         @save-contact="onSaveContact"
         @create-contact="onCreateContact"
@@ -1203,7 +1203,7 @@ onMounted(() => {
            to an owner/admin only (#20682). -->
       <div
         class="flex flex-wrap items-end gap-3 border-b border-autobot-border bg-autobot-bg-secondary px-3 py-2 text-sm"
-        v-if="canManageAttachments" data-testid="process-attach-form"
+        v-if="canManageCompany" data-testid="process-attach-form"
       >
         <div class="flex flex-col gap-1">
           <label for="process-attach-role" class="text-xs text-autobot-text-secondary">
@@ -1268,7 +1268,7 @@ onMounted(() => {
            gating as the process form: owner/admin only, not a view filter. -->
       <div
         class="flex flex-wrap items-end gap-3 border-b border-autobot-border bg-autobot-bg-secondary px-3 py-2 text-sm"
-        v-if="canManageAttachments" data-testid="tool-attach-form"
+        v-if="canManageCompany" data-testid="tool-attach-form"
       >
         <div class="flex flex-col gap-1">
           <label for="tool-attach-role" class="text-xs text-autobot-text-secondary">
@@ -1475,7 +1475,7 @@ onMounted(() => {
       </div>
       <WorkflowCanvas
         v-else
-        readonly :detachable="canManageAttachments"
+        readonly :detachable="canManageCompany"
         :nodes="lensedCanvasNodes"
         :selected-node-id="selectedNode?.id ?? null"
         :tabs="canvasTabs"
@@ -1507,7 +1507,7 @@ onMounted(() => {
         :key="selectedNode.id"
         :node="selectedNode"
         :company-id="companyId ?? ''"
-        :terminating="terminating"
+        :terminating="terminating" :can-control="canManageCompany"
         @pause="toggleAgentPause"
         @terminate="terminateAgent"
         @heartbeat="(n: OrgNode, on: boolean) => { n.heartbeat_enabled = on }"
