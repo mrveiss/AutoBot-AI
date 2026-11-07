@@ -79,12 +79,12 @@ def test_ai_stack_reads_the_key_from_the_slm_file_before_rendering() -> None:
     tasks = yaml.safe_load((_ROLES / "ai-stack/tasks/env_files.yml").read_text(encoding="utf-8"))
     order = [
         str(t.get("ansible.builtin.include_tasks") or t.get("ansible.builtin.template") or t.get("name")) for t in tasks
-    ]
-    read = next(i for i, v in enumerate(order) if v.endswith("read_slm_secrets_root_key.yml"))
+    ]  # an include with `apply:` is a dict whose repr still names the file
+    read = next(i for i, v in enumerate(order) if "read_slm_secrets_root_key.yml" in v)
     rendered = next(
         i for i, t in enumerate(tasks) if t.get("ansible.builtin.template", {}).get("src") == "ai-stack.env.j2"
     )
     assert read < rendered
     shared = yaml.safe_load((_ANSIBLE / "_shared/tasks/read_slm_secrets_root_key.yml").read_text(encoding="utf-8"))
-    assert all(t.get("no_log") is True for t in shared if "shell" in str(t) or "set_fact" in str(t))
+    assert all(t.get("no_log") is True for t in shared if "command" in str(t) or "set_fact" in str(t))
     assert shared[0].get("delegate_to") == "localhost", "the SLM's file is read on the SLM host"
