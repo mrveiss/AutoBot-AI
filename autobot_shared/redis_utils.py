@@ -51,6 +51,22 @@ async def delete_if_value(redis: Any, key: str, expected: str) -> bool:
     return bool(await redis.eval(COMPARE_AND_DELETE_LUA, 1, key, expected))
 
 
+#: Delete a fence while it names a holder, whether bare or tagged ``<holder>#<generation>``: the release of a
+#: holder that does not know the generation (liveness monitor, sweeps, run cancel).
+COMPARE_HOLDER_AND_DELETE_LUA = """
+local v = redis.call('GET', KEYS[1])
+if v and (v == ARGV[1] or string.sub(v, 1, string.len(ARGV[1]) + 1) == ARGV[1] .. '#') then
+  return redis.call('DEL', KEYS[1])
+end
+return 0
+"""
+
+
+async def delete_if_holder(redis: Any, key: str, holder: str) -> bool:
+    """Delete *key* while it names *holder* in any generation; True when it was deleted. Redis errors propagate."""
+    return bool(await redis.eval(COMPARE_HOLDER_AND_DELETE_LUA, 1, key, holder))
+
+
 #: The heartbeat twin of COMPARE_AND_DELETE_LUA: a GET -> compare -> EXPIRE from the client lets the
 #: key expire and be re-taken in the gap, and the EXPIRE then extends the new holder's key.
 COMPARE_AND_PEXPIRE_LUA = """

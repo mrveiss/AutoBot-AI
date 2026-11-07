@@ -90,7 +90,7 @@ class TestAtomicCheckout:
         assert result.checkout_locked_at is not None
         assert str(result.assignee_agent_id) == agent_id
         assert result.version == 2
-        mock_redis.set.assert_called_once_with(f"llc:checkout:{item.id}", agent_id, nx=True, ex=1800)
+        mock_redis.set.assert_called_once_with(f"llc:checkout:{item.id}", f"{agent_id}#{run_id}", nx=True, ex=1800)
 
     async def test_checkout_conflict_different_agent(self, service, mock_session, mock_redis):
         """Redis NX returns False (key exists for another agent) → CheckoutConflict."""
