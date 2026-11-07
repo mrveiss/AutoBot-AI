@@ -3456,7 +3456,7 @@ before summarizing.
         # matched within one iteration's own text.
         filtered_responses = [self._filter_internal_prompts(r) for r in all_llm_responses]
         combined_response = "\n\n".join(filtered_responses)
-        await self._persist_conversation(session_id, session, message, combined_response)
+        await self._persist_conversation(session_id, session, message, combined_response, model=ctx.selected_model)
         await self._persist_workflow_messages(
             session_id,
             workflow_messages,

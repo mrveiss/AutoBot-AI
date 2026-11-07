@@ -2594,38 +2594,20 @@ async def summarize_conversation(
     if not messages_to_summarize:
         raise HTTPException(status_code=404, detail="No messages found with the provided IDs")
 
-    # Build prompt for summarization
-    conversation_text = "\n\n".join(
-        [f"{msg.get('role', 'unknown').upper()}: {msg.get('content', '')}" for msg in messages_to_summarize]
-    )
-
-    summarization_prompt = f"""Summarize the following conversation segment concisely.
-Preserve key context, decisions, and technical details that would be needed to continue the conversation naturally.
-
-Target length: approximately {body.target_length or 500} tokens.
-
-Conversation:
-{conversation_text}
-
-Summary:"""
-
-    # Get LLM service and generate summary
-    llm_service = get_llm_service()
+    # #20852: the one summariser every caller uses, on the configured model.
+    from chat_history.context_overflow import ConversationSummarizer
+    from chat_history.summarization_prompt import SUMMARIZER_DEFAULT_MAX_TOKENS
 
     try:
-        summary_response = await llm_service.generate_response(
-            messages=[{"role": "user", "content": summarization_prompt}],
-            model="gpt-4o-mini",  # Fast, cheap model for summarization
-            max_tokens=body.target_length or 500,
-            temperature=0.3,  # Lower temperature for focused summarization
+        summary = await ConversationSummarizer().summarize_with_usage(
+            messages_to_summarize,
+            provide_config_manager().get_selected_model(),
+            max_tokens=body.target_length or SUMMARIZER_DEFAULT_MAX_TOKENS,
         )
-
-        summary_text = summary_response.get("content", "")
-        summary_tokens = summary_response.get("usage", {}).get("total_tokens", 0)
-
     except Exception as e:
         logger.exception("[%s] Failed to generate summary", request_id)
         raise HTTPException(status_code=500, detail=f"Summarization failed: {str(e)}")
+    summary_text, summary_tokens = summary.text, summary.total_tokens  # provider usage when reported
 
     result_data = ConversationSummarizeData(
         summary=summary_text,
