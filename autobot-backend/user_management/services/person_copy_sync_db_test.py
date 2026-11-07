@@ -11,38 +11,25 @@ from unittest.mock import AsyncMock, patch
 import pytest
 import pytest_asyncio
 from sqlalchemy import event
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import Session
 
+from tests.helpers._sqlite_test_engine import real_savepoint_session_factory
 from user_management.models import User
-from user_management.models.base import Base
 from user_management.services import person_copy_sync as sync
-
-_SQLITE_URL = "sqlite+aiosqlite://"  # canonical: ignore py-adhoc-db-engine (test-local engine, in-memory only)
-
-
-@compiles(JSONB, "sqlite")
-def _compile_jsonb_as_json_on_sqlite(element, compiler, **kw):  # noqa: ANN001
-    return "JSON"
 
 
 @pytest_asyncio.fixture
 async def factory() -> AsyncIterator:
-    engine = create_async_engine(_SQLITE_URL)  # canonical: ignore py-adhoc-db-engine (test-local, in-memory)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all, tables=[User.__table__])
-    event.listen(Session, "after_flush", sync._remember_changes)
-    event.listen(Session, "after_rollback", sync._forget_changes)
-    event.listen(Session, "after_commit", sync._push_committed_changes)
-    try:
-        yield async_sessionmaker(bind=engine, expire_on_commit=False)  # canonical: ignore py-adhoc-db-engine (as above)
-    finally:
-        event.remove(Session, "after_flush", sync._remember_changes)
-        event.remove(Session, "after_rollback", sync._forget_changes)
-        event.remove(Session, "after_commit", sync._push_committed_changes)
-        await engine.dispose()
+    async for session_factory in real_savepoint_session_factory([User.__table__]):
+        event.listen(Session, "after_flush", sync._remember_changes)
+        event.listen(Session, "after_rollback", sync._forget_changes)
+        event.listen(Session, "after_commit", sync._push_committed_changes)
+        try:
+            yield session_factory
+        finally:
+            event.remove(Session, "after_flush", sync._remember_changes)
+            event.remove(Session, "after_rollback", sync._forget_changes)
+            event.remove(Session, "after_commit", sync._push_committed_changes)
 
 
 async def _user(factory) -> User:

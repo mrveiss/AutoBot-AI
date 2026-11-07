@@ -491,6 +491,44 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_PERSON_COPY_LOCK_TTL_S",
+        type=int,
+        default=60,
+        description=(
+            "Seconds the per-person lock on a copy push is held before it expires; "
+            "the SLM POST timeout is derived from it (#10200)."
+        ),
+        component="backend",
+        range=(10, 600),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PERSON_COPY_LOCK_WAIT_S",
+        type=int,
+        default=15,
+        description=(
+            "Seconds a push waits for another worker's lock on the same person " "before it records a failure (#10200)."
+        ),
+        component="backend",
+        range=(1, 120),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PERSON_COPY_LOCK_POLL_MS",
+        type=int,
+        default=200,
+        description="Milliseconds between attempts to take that per-person lock (#10200).",
+        component="backend",
+        range=(20, 5000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_MEMBER_EPOCH_WRITE_CONCURRENCY",
         type=int,
         default=10,

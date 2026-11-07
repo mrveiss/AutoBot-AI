@@ -63,11 +63,18 @@ async def test_a_retry_keeps_when_the_failure_began() -> None:
 
 
 async def test_one_failure_does_not_stop_the_others() -> None:
-    first, second = _USER_ID, uuid.UUID(int=2)
-    push = AsyncMock()
-    with patch.object(sync, "_push_person", push):
-        await sync.push_people(FakeAsyncSession(), [first, second])
-    assert [call.args[1] for call in push.await_args_list] == [first, second]
+    first, second = _pair(), _pair()
+    post = AsyncMock(side_effect=[ConnectionError(), None])
+    session = _session_with([first, first, second])
+    with _no_lock(), patch.object(sync, "_post_copy", post):
+        await sync.push_people(session, [_USER_ID, uuid.UUID(int=2)])
+    assert post.await_count == 2
+    assert first[0].push_error == "ConnectionError" and first[0].push_failed_at is not None
+    assert second[0].push_error is None and second[0].push_failed_at is None
+
+
+def test_the_post_timeout_is_below_the_lock_ttl() -> None:
+    assert 0 < sync._POST_TIMEOUT_S < sync._LOCK_TTL_S
 
 
 async def test_a_busy_lock_is_recorded_as_a_failure_and_sends_nothing() -> None:

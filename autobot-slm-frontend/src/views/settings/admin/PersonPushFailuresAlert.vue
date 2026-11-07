@@ -6,8 +6,7 @@
 /** #10200: people whose SLM copy the main app could not update. They may keep access until it can. */
 import { onMounted, ref } from 'vue'
 import { createAutobotBackendClient } from '@/composables/useAutobotApi'
-import { createLogger } from '@/utils/debugUtils'
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, createLogger } from '@autobot/ui'
 
 const logger = createLogger('PersonPushFailuresAlert')
 const usernames = ref<string[]>([])

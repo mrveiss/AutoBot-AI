@@ -22,6 +22,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import AsyncIterator, Iterable
 
+from aiohttp import ClientTimeout
 from sqlalchemy import event, inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
@@ -41,9 +42,11 @@ logger = get_logger(__name__)
 PERSON_COPY_COMPARE_INTERVAL_S = env_int_clamped("AUTOBOT_PERSON_COPY_COMPARE_INTERVAL_S", 300, min_v=30)
 
 _COPY_PATH = "/api/internal/person-copy"
-_LOCK_TTL_S = 60
-_LOCK_WAIT_S = 15
-_LOCK_POLL_S = 0.2
+_LOCK_TTL_S = env_int_clamped("AUTOBOT_PERSON_COPY_LOCK_TTL_S", 60, min_v=10, max_v=600)
+_LOCK_WAIT_S = env_int_clamped("AUTOBOT_PERSON_COPY_LOCK_WAIT_S", 15, min_v=1, max_v=120)
+_LOCK_POLL_S = env_int_clamped("AUTOBOT_PERSON_COPY_LOCK_POLL_MS", 200, min_v=20, max_v=5000) / 1000
+# The POST must end before the lock expires, or a second worker pushes while this one still sends.
+_POST_TIMEOUT_S = max(1, _LOCK_TTL_S - max(5, _LOCK_TTL_S // 4))
 _WATCHED_FIELDS = ("password_hash", "is_active", "deleted_at")
 _CHANGED_KEY = "person_copy_changed_user_ids"
 _background: set[asyncio.Task] = set()
@@ -66,7 +69,9 @@ async def _post_copy(slm_user_id: uuid.UUID, user: User) -> None:
         "is_active": bool(user.is_active and user.deleted_at is None),
     }
     headers = {"X-Internal-API-Key": key}
-    async with session.post(url, json=payload, headers=headers, allow_redirects=False) as response:
+    async with session.post(
+        url, json=payload, headers=headers, allow_redirects=False, timeout=ClientTimeout(total=_POST_TIMEOUT_S)
+    ) as response:
         response.raise_for_status()
 
 
