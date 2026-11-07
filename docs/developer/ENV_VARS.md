@@ -100,6 +100,7 @@ appears outside the known overlays.
 | `AUTOBOT_CHAT_BUDGET_SPEND_CACHE_TTL_SECONDS` | ai | float | `5.0` | Seconds a scope's spend reading is reused by the chat budget gate (#16845), so a tool loop does not re-read up to 31 daily keys per iteration. Spend can exceed a limit by at most this long before a refusal. 0 disables the cache. Range: 0.0–300.0. |
 | `AUTOBOT_CHAT_LLM_CALL_TIMEOUT_SECONDS` | backend | float | `600.0` | Total timeout for a single streaming chat LLM request, connect included (chat_workflow/turn_control.py, #17273). The request previously set a connect timeout only, so a model that accepted the connection and then stalled held the turn forever. |
 | `AUTOBOT_CHAT_PLANNER_ENABLED` | chat_workflow | bool | false | Enables the planner node in the chat graph, the canonical loop (#21023, #20846). Off by default; enabling adds planning to chat turns. |
+| `AUTOBOT_CHAT_PLANNER_TIMEOUT_SECONDS` | chat_workflow | int | `30` | Seconds the chat planner may take to write a plan (#21023); past it the turn runs without a plan. |
 | `AUTOBOT_CHAT_STALL_ESCALATION` | chat_workflow | str | `'stop'` | What the chat graph does when a turn stalls: stop halts the turn, ask escalates to the human (#21022, #20846). |
 | `AUTOBOT_CHAT_TRACE_OUTPUT_MAX_CHARS` | backend | int | `2000` | Characters of one tool result kept in a chat session trace (session_trace.py, #19963). Range: 1–100000. |
 | `AUTOBOT_CHAT_TRAJECTORY_CAPTURE_CONCURRENCY` | ai | int | `2` | Concurrent trajectory judge calls. Bounded so a burst of turns cannot stampede the LLM. |

@@ -211,7 +211,7 @@ Output ONLY valid JSON in this format:
         step_id_map: dict[int, str] = {}  # step_number -> step_id
 
         # Create steps with proper IDs
-        for step_data in plan_data.get("steps", []):
+        for step_data in plan_data.get("steps", [])[: self.config.max_steps_per_plan]:
             step = PlanStep(
                 step_number=step_data.get("step_number", len(plan.steps) + 1),
                 description=step_data.get("description", ""),
@@ -222,7 +222,7 @@ Output ONLY valid JSON in this format:
             plan.steps.append(step)
 
         # Resolve dependencies from step numbers to step IDs
-        for step_data in plan_data.get("steps", []):
+        for step_data in plan_data.get("steps", [])[: self.config.max_steps_per_plan]:
             step_num = step_data.get("step_number", 0)
             step = plan.get_step_by_number(step_num)
             if step:
@@ -314,13 +314,13 @@ Output ONLY valid JSON in this format:
             elif hasattr(self.llm, "complete"):
                 response = await self.llm.complete(prompt)
             else:
-                response = self._generate_fallback_plan(task_description)
+                return {**self._parse_plan_response(self._generate_fallback_plan(task_description)), "fallback": True}
 
             return self._parse_plan_response(response)
 
         except Exception as e:
             logger.warning("LLM plan generation failed: %s, using fallback", e)
-            return self._generate_simple_plan(task_description)
+            return {**self._generate_simple_plan(task_description), "fallback": True}
 
     async def create_plan(
         self,
@@ -353,9 +353,9 @@ Output ONLY valid JSON in this format:
         self._populate_plan_steps(plan, plan_data)
 
         plan.status = PlanStatus.READY
+        plan.metadata["fallback"] = bool(plan_data.get("fallback"))
         plan.update_metrics()
 
-        # Store plan
         await self._store_plan(plan)
 
         # Publish PLAN event (Issue #620: uses helper)

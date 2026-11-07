@@ -44,6 +44,7 @@ from slash_command_handler import get_slash_command_handler
 from .attachment_context import apply_attachments, attachment_notice_messages
 from .budget_refusal import budget_refusal_message
 from .conversation import ConversationHandlerMixin
+from .kb_sources import _kb_sources_from_citations
 from .lightweight_mode import decide_lightweight_mode
 from .llm_failover import IterationCall, stream_with_failover
 from .llm_handler import LLMHandlerMixin, _emit_after_continuation, _emit_before_continuation
@@ -54,6 +55,7 @@ from .models import (
     build_governed_identity,
     filter_internal_prompts,
 )
+from .plan_runner import open_for_ctx
 from .reasoning_kwargs import build_reasoning_api_kwargs
 from .session_handler import SessionHandlerMixin
 from .session_role import resolve_auth_role, stamp_verified_identity
@@ -88,27 +90,6 @@ _TOOL_CALL_OPENING_RE = TOOL_CALL_OPENING_RE
 
 # Issue #716/#11867: internal-prompt-echo patterns are consolidated into the
 # canonical `filter_internal_prompts` in chat_workflow.models (imported above).
-
-
-def _kb_sources_from_citations(citations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Map raw knowledge-base citation dicts to the persisted sources shape.
-
-    Issue #13296: extracted from ``_persist_workflow_messages`` — was
-    duplicated inline for the per-``WorkflowMessage`` citation list (already
-    tagged ``type='knowledge_base'`` by ``_build_source_list``) and, per
-    #13292, for the completed streamed reply's citations (the raw
-    ``rag_citations`` list, which never carries the always-appended
-    ``llm_training`` placeholder in the first place).
-    """
-    return [
-        {
-            "title": c.get("title") or c.get("source", ""),
-            "path": c.get("source", ""),
-            "score": c.get("score", 0.0),
-            "chunk_id": c.get("id", ""),
-        }
-        for c in citations
-    ]
 
 
 # Issue #11538: vision-in-the-loop. OpenManus threads the current screenshot
@@ -2874,6 +2855,8 @@ before summarizing.
         current_prompt = ctx.initial_prompt
 
         self._log_iteration_start(ctx)
+        plan = await open_for_ctx(self, ctx)  # #21023: the same plan_runner as the graph; NoPlan when off
+        current_prompt = plan.with_block(current_prompt)
 
         for iteration in range(1, self.MAX_CONTINUATION_ITERATIONS + 1):
             # Issue #4264: Fire BEFORE_CONTINUATION hook before iteration starts
@@ -2885,7 +2868,7 @@ before summarizing.
                 )
                 break
 
-            llm_response, should_continue = None, False
+            llm_response, should_continue, seen = None, False, len(execution_history)
 
             async for item in self._run_continuation_loop_iteration(http_client, current_prompt, iteration, ctx):
                 if isinstance(item, tuple) and len(item) == 2:
@@ -2899,6 +2882,7 @@ before summarizing.
                 return
 
             all_llm_responses.append(llm_response)
+            await plan.advance(execution_history[seen:])
 
             # Issue #4264: Fire AFTER_CONTINUATION hook after iteration completes
             llm_response = await _emit_after_continuation(iteration, llm_response, ctx.session_id, ctx.context)
@@ -2914,7 +2898,7 @@ before summarizing.
                 self._log_task_complete(iteration, len(execution_history))
                 break
 
-            current_prompt = self._build_and_log_continuation_prompt(ctx, execution_history)
+            current_prompt = plan.with_block(self._build_and_log_continuation_prompt(ctx, execution_history))
 
         self._log_max_iterations_warning(iteration)
         yield (all_llm_responses, execution_history, None)

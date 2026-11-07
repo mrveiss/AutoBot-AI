@@ -74,6 +74,18 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_CHAT_PLANNER_TIMEOUT_SECONDS",
+        type=int,
+        default=30,
+        description=(
+            "Seconds the chat planner may take to write a plan (#21023); past it the turn runs " "without a plan."
+        ),
+        component="chat_workflow",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_CHAT_STALL_ESCALATION",
         type=str,
         default="stop",
