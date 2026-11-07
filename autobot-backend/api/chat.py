@@ -68,6 +68,7 @@ from chat_history.message_schema import llm_role, message_text, message_type
 
 # Import context overflow protection (#9043)
 from chat_history.overflow_integration import create_summary_message, handle_message_completion
+from chat_history.session_merge import dropped_keys
 from chat_workflow.session_work_item import SessionWorkItemService
 from constants.threshold_constants import TimingConstants
 
@@ -1644,50 +1645,47 @@ async def merge_messages(existing: List[Dict], new: List[Dict]) -> List[Dict]:
 
 async def _merge_chat_messages(
     chat_history_manager, chat_id: str, new_messages: List[Dict], request_id: str
-) -> List[Dict]:
+) -> tuple[List[Dict], frozenset]:
     """Merge new messages with existing to preserve backend-added ones (Issue #398: extracted).
+
+    Returns the merged list and the keys of the stored messages it dropped (#20862).
 
     Issue #1797: Granular exception mapping for session load failures.
     """
     try:
         existing_messages = await chat_history_manager.load_session(chat_id)
         merged_messages = await merge_messages(existing_messages, new_messages)
-        logger.info(
-            "[%s] Merged %d existing + %d new = %d total messages",
-            request_id,
-            len(existing_messages),
-            len(new_messages),
-            len(merged_messages),
-        )
-        return merged_messages
+        counts = (len(existing_messages), len(new_messages), len(merged_messages))
+        logger.info("[%s] Merged %d existing + %d new = %d total messages", request_id, *counts)
+        return merged_messages, dropped_keys(existing_messages, merged_messages)
     except FileNotFoundError:
         logger.warning(
             "[%s] Session file not found for %s, using new messages",
             request_id,
             chat_id,
         )
-        return new_messages
+        return new_messages, frozenset()
     except PermissionError:
         logger.warning(
             "[%s] Unable to access chat session %s, using new messages",
             request_id,
             chat_id,
         )
-        return new_messages
+        return new_messages, frozenset()
     except ValueError:
         logger.warning(
             "[%s] Chat session data is corrupted for %s, using new messages",
             request_id,
             chat_id,
         )
-        return new_messages
+        return new_messages, frozenset()
     except Exception as merge_error:
         logger.warning(
             "[%s] Message merge failed, using new messages only: %s",
             request_id,
             merge_error,
         )
-        return new_messages
+        return new_messages, frozenset()
 
 
 async def _durable_owner_metadata(chat_history_manager, session_id: str, ownership: "dict | None") -> dict | None:
@@ -1745,7 +1743,7 @@ async def save_chat_by_id(
         )
 
     save_data = request_data.get("data", {})
-    merged_messages = await _merge_chat_messages(
+    merged_messages, discard = await _merge_chat_messages(
         chat_history_manager, chat_id, save_data.get("messages", []), request_id
     )
 
@@ -1754,6 +1752,7 @@ async def save_chat_by_id(
         messages=merged_messages,
         name=save_data.get("name", ""),
         metadata=await _durable_owner_metadata(chat_history_manager, chat_id, ownership),
+        discard=discard,
     )
 
     return JSONResponse(
