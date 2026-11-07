@@ -209,10 +209,9 @@ async def assert_item_in_company(item_id: str, company_id: str) -> uuid.UUID:
     function. Returning the value removes the ordering dependency instead of
     documenting it.
     """
-    from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
 
-    from ..services.work_item_service import WorkItemService
+    from ..services.accessors import get_work_item_service
 
     # `WorkItemService.get` does `uuid.UUID(str(work_item_id))` unguarded, and
     # `item_id` is a client-supplied body field on both callers. Without this a
@@ -230,7 +229,7 @@ async def assert_item_in_company(item_id: str, company_id: str) -> uuid.UUID:
 
     factory = get_async_session_factory()
     async with factory() as session:
-        svc = lazy_singleton(WorkItemService)()
+        svc = get_work_item_service()
         item = await svc.get(session, item_id)
     if item is None or str(item.company_id) != str(company_id):
         raise HTTPException(status_code=404, detail="Work item not found")
