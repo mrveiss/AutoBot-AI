@@ -6,6 +6,7 @@
 untouched, only for an admin, only inside the allowed roots.
 """
 
+import os
 import pathlib
 from unittest.mock import AsyncMock, patch
 
@@ -131,3 +132,54 @@ def test_filename_with_quote_and_non_ascii_is_encoded(admin, root):
     response = _get(admin, root / 'é"q.bin')
     assert response.status_code == 200
     assert response.headers["content-disposition"] == "attachment; filename*=utf-8''%C3%A9%22q.bin"
+
+
+def test_file_vanishing_before_validation_is_404(admin, root, monkeypatch):
+    target = root / "gone.bin"
+    target.write_bytes(PAYLOAD)
+    real_validate = files_admin_raw._validate_admin_path
+
+    def vanish_first(path):
+        target.unlink()
+        return real_validate(path)
+
+    monkeypatch.setattr(files_admin_raw, "_validate_admin_path", vanish_first)
+    assert _get(admin, target).status_code == 404
+
+
+def test_file_vanishing_after_the_check_before_streaming_is_404(admin, root, monkeypatch):
+    target = root / "late.bin"
+    target.write_bytes(PAYLOAD)
+    real_open = pathlib.Path.open
+
+    def vanish_then_open(self, *args, **kwargs):
+        if self.name == "late.bin":
+            self.unlink()
+        return real_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(pathlib.Path, "open", vanish_then_open)
+    assert _get(admin, target).status_code == 404
+
+
+def test_preparation_runs_off_the_event_loop(admin, root, monkeypatch):
+    import threading
+
+    (root / "t.bin").write_bytes(PAYLOAD)
+    seen = []
+    real_prepare = files_admin_raw._prepare_download
+
+    def record(path):
+        seen.append(threading.current_thread() is threading.main_thread())
+        return real_prepare(path)
+
+    monkeypatch.setattr(files_admin_raw, "_prepare_download", record)
+    assert _get(admin, root / "t.bin").status_code == 200
+    assert seen == [False]
+
+
+def test_content_length_matches_and_large_file_is_exact(admin, root):
+    data = os.urandom(files_admin_raw._CHUNK_BYTES * 3 + 7)
+    (root / "big.bin").write_bytes(data)
+    response = _get(admin, root / "big.bin")
+    assert response.content == data
+    assert response.headers["content-length"] == str(len(data))

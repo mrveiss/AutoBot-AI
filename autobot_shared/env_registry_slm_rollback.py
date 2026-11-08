@@ -40,3 +40,5 @@ register_env_var(
         range=(1000, 300000),
     )
 )
+
+from autobot_shared import env_registry_admin_files  # noqa: E402,F401  # #21029
