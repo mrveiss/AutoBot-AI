@@ -21,20 +21,26 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from models.agent_org import AgentOrgNode
 
 from ..adapters import get_adapter
 from ..adapters.subprocess_base import is_subprocess_adapter
-from ..models.enums import UNDISPATCHABLE_AGENT_STATUSES, LLCAgentStatus
+from ..models.activity import ActorType
+from ..models.enums import UNDISPATCHABLE_AGENT_STATUSES, ActivityEventType, LLCAgentStatus
 from ..org_role_authority import describe_role_bound, role_bound_refusal
 from ..services.accessors import get_budget_service
+from ..services.activity_log import LLCActivityLogService
+from ..services.actor import audit
 
 logger = get_logger(__name__)
 
 #: The reason text a caller may need to tell apart: replay answers it with a 402.
 BUDGET_EXHAUSTED = "budget is exhausted"
+BUDGET_REFUSAL_DEDUP_TTL_SECONDS = max(1, env_int("LLC_BUDGET_REFUSAL_DEDUP_TTL_SECONDS", 86400))
+_activity_log = LLCActivityLogService()
 
 #: What the board did on purpose. ``inactive`` is left out: the budget watchdog
 #: writes it, and a dead run of an over-budget agent must still release its claims.
@@ -197,3 +203,118 @@ async def require_dispatchable(session: AsyncSession, agent: dict) -> None:
         reason = "dispatch state could not be read"
     if reason is not None:
         raise AgentNotDispatchable(agent["agent_id"], company_id, reason)
+
+
+# --- #21212: a budget refusal is visible to the company, once per exhaustion episode ---
+# Which refusals are recorded, and the de-duplication, are documented on :func:`note_refused_wake`.
+
+
+def budget_refusal_key(company_id: Any, node_id: Any) -> str:
+    """The Redis key holding the budget state at the last recorded refusal of one agent."""
+    return f"llc:budget_refusal:{company_id}:{node_id}"
+
+
+async def _already_recorded(company_id: Any, node_id: Any, fingerprint: str) -> bool:
+    """True when this episode's refusal is on record; otherwise mark it recorded (best effort, one winner)."""
+    redis = await get_async_redis_client()
+    if redis is None:
+        raise RuntimeError("Redis unavailable: cannot de-duplicate the budget refusal record")
+    key = budget_refusal_key(company_id, node_id)
+    previous = await redis.get(key)
+    if isinstance(previous, bytes):
+        previous = previous.decode("utf-8")
+    if previous == fingerprint:
+        return True
+    await redis.set(key, fingerprint, ex=BUDGET_REFUSAL_DEDUP_TTL_SECONDS)
+    return False
+
+
+async def _resolve_node(session: Any, company_id: Any, agent_ref: Any) -> Any:
+    """The ``(node PK, slug)`` of *agent_ref* (a slug or a node PK) in the company, or ``None``."""
+    company, node_pk = as_uuid(company_id), as_uuid(agent_ref)
+    match = AgentOrgNode.agent_id == str(agent_ref)
+    if node_pk is not None:
+        match = match | (AgentOrgNode.id == node_pk)
+    rows = (
+        await session.execute(
+            select(AgentOrgNode.id, AgentOrgNode.agent_id).where(AgentOrgNode.company_id == company, match).limit(2)
+        )
+    ).all()
+    return rows[0] if len(rows) == 1 else None
+
+
+async def _write_refusal(session: Any, company_id: Any, node_id: Any, slug: str, remaining: Any) -> None:
+    """Append the ``budget.dispatch_refused`` row and commit it, which publishes the live event."""
+    await audit(
+        _activity_log,
+        session,
+        company_id=str(company_id),
+        actor_type=ActorType.SYSTEM,
+        actor_id=None,
+        event_type=ActivityEventType.BUDGET_DISPATCH_REFUSED,
+        entity_type="agent",
+        entity_id=str(node_id),
+        after={"remaining": str(remaining)},
+        metadata={"agent_id": slug, "reason": BUDGET_EXHAUSTED},
+    )
+    await session.commit()
+
+
+async def record_budget_refusal(session: Any, company_id: Any, agent_ref: Any, reason: Optional[str]) -> bool:
+    """Write the company-scoped ``budget.dispatch_refused`` row once per episode; True when written.
+
+    Never raises: a failed record must not stop the wake being rescheduled. The failure is logged
+    with its traceback and the dedup mark is dropped, so the next wake tries again.
+    """
+    if reason != BUDGET_EXHAUSTED or not agent_ref or as_uuid(company_id) is None:
+        return False
+    node_id = None
+    try:
+        node = await _resolve_node(session, company_id, agent_ref)
+        if node is None:
+            return False
+        node_id, slug = node[0], str(node[1])
+        remaining, _, _ = await get_budget_service().check_budget(session, slug, str(company_id))
+        if await _already_recorded(company_id, node_id, str(remaining)):
+            return False
+        await _write_refusal(session, company_id, node_id, slug, remaining)
+        return True
+    except Exception:
+        logger.exception("Could not record the budget refusal of agent %s", agent_ref)
+        if node_id is not None:
+            await _forget(company_id, node_id)
+        return False
+
+
+async def _forget(company_id: Any, node_id: Any) -> None:
+    """Drop the dedup mark after a failed write so the next wake records it."""
+    try:
+        redis = await get_async_redis_client()
+        if redis is not None:
+            await redis.delete(budget_refusal_key(company_id, node_id))
+    except Exception:
+        logger.exception("Could not clear the budget refusal mark of agent %s", node_id)
+
+
+async def note_refused_wake(session: AsyncSession, company_id: Any, agent_ref: Any, reason: str) -> None:
+    """Log a skipped heartbeat wake and, for an exhausted budget, leave the visible record (#21212).
+
+    Recorded: ``budget is exhausted`` (``budget.dispatch_refused``): only a user can fix it, by raising the limit.
+
+    Log-only, each with its reason:
+
+    * ``agent status is ...``, ``agent is paused``, ``company is paused``: the board did it on purpose and
+      the ``control.*`` rows already record it.
+    * ``pause state is unreadable``, ``dispatch state could not be read``: transient faults that clear
+      themselves and have no company-visible cause.
+    * ``agent has no company ...``: there is no company to scope a record to.
+    * ``assigned agent was not found ...``: a routine's own configuration fault, not the refusal of a known agent.
+
+    De-duplication is one record per exhaustion episode, not per wake. A short Redis key per agent holds the
+    budget's remaining amount at the last recorded refusal; a later refusal is written only when that amount
+    differs (the limit was raised and spent again) or the key expired (``LLC_BUDGET_REFUSAL_DEDUP_TTL_SECONDS``,
+    default one day, so a long episode is restated daily). No schema change, and a budget that stays
+    exhausted writes nothing further.
+    """
+    logger.info("Heartbeat skipped for agent %s: %s", agent_ref, reason)
+    await record_budget_refusal(session, company_id, agent_ref, reason)
