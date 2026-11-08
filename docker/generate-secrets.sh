@@ -132,6 +132,8 @@ ensure_secret GRAFANA_ADMIN_PASSWORD
 ensure_secret AUTOBOT_ADMIN_PASSWORD password
 # #17793: the SLM's first admin; compose no longer falls back to 'admin' and refuses to start without it.
 ensure_secret SLM_ADMIN_PASSWORD password
+# #20629: what the SLM presents to the limited Docker proxy.
+ensure_secret AUTOBOT_DOCKER_PROXY_TOKEN
 # #17500: the playwright-vnc dev stack's VNC password; it no longer falls back to a fixed one.
 ensure_secret VNC_PASSWORD
 
@@ -157,3 +159,4 @@ echo "  (the value is not printed here; read it with: grep '^AUTOBOT_ADMIN_PASSW
 echo ""
 echo "Done. Start the stack with both env files:"
 echo "  docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d"
+echo "SLM, with the default port: http://localhost:8080/slm/ (AUTOBOT_DOCKER_SLM_HTTP_PORT changes it; see INSTALL.md to reach it from another machine)"

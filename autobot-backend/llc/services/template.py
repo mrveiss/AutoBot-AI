@@ -32,6 +32,7 @@ from llc.models.template import (
 )
 
 from .activity_log import ActorType, LLCActivityLogService
+from .base import LLCServiceBase
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ class BuiltInTemplateNotFoundError(Exception):
     """Raised when a built-in template key does not exist."""
 
 
-class TemplateService:
+class TemplateService(LLCServiceBase):
     """CRUD + KB indexing for LLC template library (GH#8260).
 
     All methods accept an ``AsyncSession`` and participate in the caller's
@@ -73,8 +74,8 @@ class TemplateService:
         session: AsyncSession,
         activity_log: Optional[LLCActivityLogService] = None,
     ) -> None:
+        super().__init__(activity_log=activity_log)
         self.session = session
-        self.activity_log = activity_log
 
     # ------------------------------------------------------------------
     # Publish
@@ -111,7 +112,7 @@ class TemplateService:
         await _upsert_tags(self.session, template_id, req.tags)
         await _index_template_in_kb(template_id, req.name, req.description, req.category, req.tags)
 
-        if self.activity_log and company_id:
+        if company_id:
             await self.activity_log.record(
                 self.session,
                 company_id=str(company_id),
@@ -197,19 +198,17 @@ class TemplateService:
             {"id": str(template_id)},
         )
 
-        activity_id = uuid.uuid4()
-        if self.activity_log:
-            log = await self.activity_log.record(
-                self.session,
-                company_id=str(req.target_company_id),
-                actor_type=ActorType.SYSTEM,
-                actor_id=None,
-                event_type=ActivityEventType.TEMPLATE_IMPORTED,
-                entity_type="template",
-                entity_id=str(template_id),
-                after={"target_company_id": str(req.target_company_id)},
-            )
-            activity_id = log.id
+        log = await self.activity_log.record(
+            self.session,
+            company_id=str(req.target_company_id),
+            actor_type=ActorType.SYSTEM,
+            actor_id=None,
+            event_type=ActivityEventType.TEMPLATE_IMPORTED,
+            entity_type="template",
+            entity_id=str(template_id),
+            after={"target_company_id": str(req.target_company_id)},
+        )
+        activity_id = log.id
 
         return TemplateImportResult(
             template_id=template_id,

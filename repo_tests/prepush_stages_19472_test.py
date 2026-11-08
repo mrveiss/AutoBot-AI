@@ -41,6 +41,7 @@ _STAGE_FNS = (
 _STUBS = (
     "RED=; CLR=; EXIT_CODE=0; ALLOW_UNRUNNABLE=0; ALLOW_TIMEOUT=0; STAGE_CLEAN=1\n"
     "STAGE_PIDS=(); STAGE_LOGS=(); STAGE_NAMES=(); STAGE_KEYS=()\n"
+    "machine_slot_wait() { :; }\n"
     'ok() { echo "OK $*" >&2; }; fail() { echo "FAIL $*" >&2; }; warn() { echo "WARN $*" >&2; }\n'
 )
 
@@ -436,6 +437,11 @@ class TestFastGate:
     def test_a_repin_exit_1_with_stale_lines_is_stale_not_a_crash(self, tmp_path: Path) -> None:
         done = _guards(tmp_path, repin="print('STALE x'); raise SystemExit(1)")
         assert "reach floors are stale" in done.stderr and "crashed" not in done.stderr
+
+    def test_a_floor_stale_only_on_the_base_warns_and_does_not_block(self, tmp_path: Path) -> None:
+        done = _guards(tmp_path, repin="print('BASE-STALE x: grew on main')")
+        assert "exit=0" in done.stdout, done.stderr
+        assert "reach floors stale on main, not blocking this push: 1" in done.stderr
 
     def test_a_repin_stale_line_blocks(self, tmp_path: Path) -> None:
         done = _guards(tmp_path, repin="print('STALE x')")

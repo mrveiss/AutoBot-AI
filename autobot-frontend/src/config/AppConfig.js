@@ -9,9 +9,9 @@
 
 import { HttpError, getEnvPositiveInt } from '@autobot/ui';
 import ServiceDiscovery from './ServiceDiscovery.js';
-import { NetworkConstants } from '../constants/network.ts';
+import { INTERNAL_SERVICE_PROTOCOL, NetworkConstants } from '../constants/network.ts';
 import { createLogger } from '@/utils/debugUtils';
-import { getApiBase, getApiTimeout, PORT_DEFAULTS } from '@/config/ssot-config';
+import { getApiBase, getApiTimeout, getConfig, PORT_DEFAULTS } from '@/config/ssot-config';
 
 const logger = createLogger('AppConfig');
 export class AppConfigService {
@@ -33,9 +33,9 @@ export class AppConfigService {
       // Service URLs - Will be resolved dynamically
       services: {
         backend: {
-          host: import.meta.env.VITE_BACKEND_HOST,
-          port: import.meta.env.VITE_BACKEND_PORT || '8001',
-          protocol: import.meta.env.VITE_HTTP_PROTOCOL || 'http'
+          host: getConfig().vm.main,
+          port: String(getConfig().port.backend),
+          protocol: getConfig().httpProtocol
         },
         // No redis entry (#19232): a browser never dials Redis; the backend owns its URL.
         // DORMANT: VNC browser path replaced by screenshot panel (#1130). Preserved for #5136 re-integration.
@@ -45,35 +45,35 @@ export class AppConfigService {
           desktop: {
             host: import.meta.env.VITE_DESKTOP_VNC_HOST,
             port: import.meta.env.VITE_DESKTOP_VNC_PORT || String(PORT_DEFAULTS.vnc),
-            protocol: 'http'
+            protocol: INTERNAL_SERVICE_PROTOCOL
           },
           terminal: {
             host: import.meta.env.VITE_TERMINAL_VNC_HOST,
             port: import.meta.env.VITE_TERMINAL_VNC_PORT || String(PORT_DEFAULTS.vnc),
-            protocol: 'http'
+            protocol: INTERNAL_SERVICE_PROTOCOL
           },
           playwright: {
             host: import.meta.env.VITE_PLAYWRIGHT_VNC_HOST,
             port: import.meta.env.VITE_PLAYWRIGHT_VNC_PORT || String(PORT_DEFAULTS.vnc), // #19327: was 6081, unserved
-            protocol: 'http'
+            protocol: INTERNAL_SERVICE_PROTOCOL
           }
         },
         npu: {
           worker: {
             host: import.meta.env.VITE_NPU_WORKER_HOST,
-            port: import.meta.env.VITE_NPU_WORKER_PORT || '8081',
-            protocol: 'http'
+            port: import.meta.env.VITE_NPU_WORKER_PORT || String(PORT_DEFAULTS.npu),
+            protocol: INTERNAL_SERVICE_PROTOCOL
           }
         },
         ollama: {
           host: import.meta.env.VITE_OLLAMA_HOST,
-          port: import.meta.env.VITE_OLLAMA_PORT || '11434',
-          protocol: 'http'
+          port: import.meta.env.VITE_OLLAMA_PORT || String(PORT_DEFAULTS.ollama),
+          protocol: INTERNAL_SERVICE_PROTOCOL
         },
         playwright: {
           host: import.meta.env.VITE_PLAYWRIGHT_HOST,
           port: import.meta.env.VITE_PLAYWRIGHT_PORT || String(PORT_DEFAULTS.browser), // #19324: was 3000 (Grafana)
-          protocol: 'http'
+          protocol: INTERNAL_SERVICE_PROTOCOL
         }
       },
 

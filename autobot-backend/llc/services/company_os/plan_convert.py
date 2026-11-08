@@ -31,6 +31,7 @@ from llc.models.company_os_plan import CompanyOsWorkflowPlan as PlanRow
 from llc.models.enums import RoleHolderType
 from llc.models.role_assignment import LLCRoleAssignment
 from llc.services._role_guard import role_exists_in_company
+from llc.services.activity_log import LLCActivityLogService
 from llc.services.authz import require_company_admin
 from llc.services.base import LLCServiceBase
 from models.workflow import Workflow
@@ -71,11 +72,11 @@ def _blocked_g6(message: str, plan: CompanyWorkflowPlan) -> ConversionBlocked:
 
 
 class PlanConversionService(LLCServiceBase):
-    def __init__(self, activity_log=None) -> None:  # noqa: ANN001
+    def __init__(self, activity_log: Optional[LLCActivityLogService] = None) -> None:
         super().__init__(activity_log)
-        self._processes = ProcessService(activity_log)
-        self._workflows = CompanyOsWorkflowService(activity_log)
-        self._graphs = GraphService(activity_log)
+        self._processes = ProcessService(self.activity_log)
+        self._workflows = CompanyOsWorkflowService(self.activity_log)
+        self._graphs = GraphService(self.activity_log)
 
     async def _locked(
         self, session: AsyncSession, company_id: uuid.UUID, plan_key: str, actor: Optional[uuid.UUID]

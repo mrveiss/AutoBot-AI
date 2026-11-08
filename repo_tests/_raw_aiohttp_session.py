@@ -35,6 +35,8 @@ import ast
 from pathlib import Path
 from typing import Iterable, NamedTuple
 
+from tools.lint import _parse_cache as parse_cache
+
 __all__ = ["Site", "client_session_sites", "scan_paths"]
 
 
@@ -99,7 +101,7 @@ def client_session_sites(source: str) -> tuple[Site, ...]:
     an empty result from a parser that choked is indistinguishable from a
     clean file, and the caller must be the one to decide what that means.
     """
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     operands = _with_operands(tree)
     sites = [
         Site(

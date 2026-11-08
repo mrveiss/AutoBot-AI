@@ -1,0 +1,35 @@
+# Every free-form shell block in the Ansible tree parses (#20693). Its own small workflow, because it
+# has to run on any Ansible file, and the role-facts workflow is scoped to far fewer.
+---
+name: ansible-free-form-args
+
+on:
+  pull_request:
+    # ready_for_review: the job skips drafts, and marking one ready fires only this event (#20705).
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'autobot-slm-backend/ansible/**'
+      - 'tools/lint/check_ansible_free_form_args.py'
+      - 'constraints/ansible-core.txt'
+      - '.github/workflows/ansible-free-form-args.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  free-form-args:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    steps:
+      - uses: actions/checkout@v7
+      # The runner's python3, as ansible-role-facts-test.yml does: this ansible-core predates .python-version.
+      - name: "Install the fleet's ansible-core"
+        run: |
+          python3 -m venv "${RUNNER_TEMP}/ansible-venv"
+          "${RUNNER_TEMP}/ansible-venv/bin/pip" install --quiet -r constraints/ansible-core.txt
+      - name: "Every free-form block parses (#20693)"
+        run: '"${RUNNER_TEMP}/ansible-venv/bin/python" tools/lint/check_ansible_free_form_args.py'

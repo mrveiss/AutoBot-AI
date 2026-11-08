@@ -134,12 +134,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
   const callGraphSummary = ref<Record<string, unknown> | null>(null)
   const callGraphOrphaned = ref<OrphanedFunction[]>([])
 
-  const loadingProgress = reactive({
-    declarations: false,
-    duplicates: false,
-    hardcodes: false,
-    problems: false,
-  })
+  const loadingProgress = reactive({ declarations: false, duplicates: false, hardcodes: false, problems: false })
 
   const showAllProblems = ref(false)
   const showAllDeclarations = ref(false)
@@ -579,7 +574,7 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
         ? async () => { await loadImportTreeData() }
         : () => loadCachedImportTree(),
     },
-    { id: 'callgraph', label: t('analytics.codebase.scans.callGraph'), run: loadCallGraphData },
+    ...(useFullScans ? [{ id: 'callgraph', label: t('analytics.codebase.scans.callGraph'), run: loadCallGraphData }] : []), // #20491: a miss walks the tree
   ]
 
   const runScans = async (
@@ -652,6 +647,8 @@ export function useAnalyticsDataFetchers(deps: UseAnalyticsDataFetchersDeps) {
     duplicateScanState,
     declarationAnalysis,
     hardcodeAnalysis,
+    // A failed load must not render as an empty ("none found") section.
+    problemsError: problemsEndpoint.error, declarationsError: declarationsSilent.error, hardcodesError: hardcodesSilent.error,
     chartData: chartEndpoint.data,
     chartDataLoading: chartEndpoint.loading,
     chartDataError: chartEndpoint.error,

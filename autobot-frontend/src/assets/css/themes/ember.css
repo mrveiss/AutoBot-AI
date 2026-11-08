@@ -75,7 +75,7 @@
 /* The two palette primitives ember re-tints. Behind the variant selector, not a
    bare :root: declared on :root they overrode the default palette for every
    theme (#18161). The base values are in design-tokens.css. */
-[data-theme-variant="ember"]:where(:not([data-theme="contrast"], [data-theme="mono"])) {
+[data-theme-variant="ember"]:where(:not([data-theme="contrast"], [data-theme="contrast-dark"], [data-theme="mono"])) {
   --red-500: #cb3326;
   --orange-500: #d6731f;
 }
@@ -87,7 +87,7 @@
    contrast or mono: those are accessibility and corporate themes the user picked,
    and a variant that repainted their surfaces, text and borders would defeat them.
    :where() keeps the specificity (0,2,0) the dark block below relies on. */
-[data-theme-variant="ember"]:root:where(:not([data-theme="contrast"], [data-theme="mono"])),
+[data-theme-variant="ember"]:root:where(:not([data-theme="contrast"], [data-theme="contrast-dark"], [data-theme="mono"])),
 [data-theme-variant="ember"][data-theme="light"] {
   color-scheme: light;
 
@@ -381,8 +381,13 @@
   --font-sans: "Schibsted Grotesk", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
 
-  --text-xs: 0.75rem;  --text-sm: 0.875rem; --text-base: 1rem;
-  --text-lg: 1.125rem; --text-xl: 1.375rem; --text-2xl: 1.75rem;
+  /* Steps are multiplied by --font-scale so the font-size preference applies. */
+  --text-xs: calc(0.75rem * var(--font-scale));
+  --text-sm: calc(0.875rem * var(--font-scale));
+  --text-base: calc(1rem * var(--font-scale));
+  --text-lg: calc(1.125rem * var(--font-scale));
+  --text-xl: calc(1.375rem * var(--font-scale));
+  --text-2xl: calc(1.75rem * var(--font-scale));
   --leading-tight: 1.25; --leading-normal: 1.55;
   --weight-normal: 400; --weight-medium: 500; --weight-semibold: 600;
 
@@ -430,7 +435,7 @@
 }
 
 /* contrast and mono keep their own --focus ring. */
-[data-theme-variant="ember"]:where(:not([data-theme="contrast"], [data-theme="mono"])) :focus-visible {
+[data-theme-variant="ember"]:where(:not([data-theme="contrast"], [data-theme="contrast-dark"], [data-theme="mono"])) :focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }

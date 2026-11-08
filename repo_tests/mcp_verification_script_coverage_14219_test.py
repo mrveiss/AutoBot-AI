@@ -60,6 +60,8 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _REPO = repo_root()
 _WORKFLOW = _REPO / ".github" / "workflows" / "_gate-code-quality.yml"
 
@@ -116,7 +118,7 @@ def _references(source: str, module: str, attribute: str) -> bool:
     accepts `…get_metrics_managerRenamed` as evidence for `get_metrics_manager`,
     so renaming the very symbol the citation covers would leave the guard green.
     """
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     dotted = re.compile(rf"{re.escape(module)}\.{re.escape(attribute)}(?!\w)")
     for node in ast.walk(tree):
         if isinstance(node, ast.alias) and node.name == attribute:

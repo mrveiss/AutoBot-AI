@@ -80,6 +80,21 @@ def _client(session: AsyncSession, caller_org: str):
     return TestClient(app)
 
 
+async def _as_member(session: AsyncSession, company_id: str, role: str):  # noqa: ANN201
+    """A client whose caller holds *role* in *company_id* (#20542).
+
+    The CEO writes are owner/admin only, so a caller with no membership row is
+    refused; the membership is seeded through the model, as the real gate reads it.
+    """
+    from llc.models.membership import LLCCompanyMembership
+
+    session.add(
+        LLCCompanyMembership(id=uuid.uuid4(), company_id=uuid.UUID(company_id), user_id=_CALLER_USER, role=role)
+    )
+    await session.commit()
+    return _client(session, company_id)
+
+
 async def _seed_agent(session: AsyncSession, company_id: str, slug: str) -> uuid.UUID:
     """An agent node in *company_id*, seeded through the model (#15905)."""
     from models.agent_org import AgentOrgNode
@@ -112,7 +127,7 @@ async def test_setting_the_ceo_writes_the_designation(session):  # noqa: ANN001
     company = str(uuid.uuid4())
     agent = await _seed_agent(session, company, "ceo-candidate")
 
-    response = _client(session, company).put(
+    response = (await _as_member(session, company, "owner")).put(
         f"/api/llc/companies/{company}/ceo",
         json={"holder_type": RoleHolderType.AGENT.value, "holder_id": str(agent)},
     )
@@ -129,7 +144,7 @@ async def test_setting_the_ceo_writes_the_designation(session):  # noqa: ANN001
 async def test_reading_back_reports_the_designation(session):  # noqa: ANN001
     company = str(uuid.uuid4())
     agent = await _seed_agent(session, company, "ceo-read")
-    client = _client(session, company)
+    client = await _as_member(session, company, "owner")
     client.put(
         f"/api/llc/companies/{company}/ceo",
         json={"holder_type": RoleHolderType.AGENT.value, "holder_id": str(agent)},
@@ -146,7 +161,7 @@ async def test_a_company_with_no_designation_reads_as_empty(session):  # noqa: A
     """The contrast case: without it, a handler returning a fixed body passes."""
     company = str(uuid.uuid4())
 
-    body = _client(session, company).get(f"/api/llc/companies/{company}/ceo").json()
+    body = (await _as_member(session, company, "owner")).get(f"/api/llc/companies/{company}/ceo").json()
 
     assert body["holder_id"] is None
     assert body["holder_exists"] is False
@@ -155,7 +170,7 @@ async def test_a_company_with_no_designation_reads_as_empty(session):  # noqa: A
 async def test_clearing_removes_the_row(session):  # noqa: ANN001
     company = str(uuid.uuid4())
     agent = await _seed_agent(session, company, "ceo-clear")
-    client = _client(session, company)
+    client = await _as_member(session, company, "owner")
     client.put(
         f"/api/llc/companies/{company}/ceo",
         json={"holder_type": RoleHolderType.AGENT.value, "holder_id": str(agent)},
@@ -172,7 +187,7 @@ async def test_clearing_nothing_is_a_404(session):  # noqa: ANN001
     client retrying a failed request."""
     company = str(uuid.uuid4())
 
-    assert _client(session, company).delete(f"/api/llc/companies/{company}/ceo").status_code == 404
+    assert (await _as_member(session, company, "owner")).delete(f"/api/llc/companies/{company}/ceo").status_code == 404
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +198,7 @@ async def test_clearing_nothing_is_a_404(session):  # noqa: ANN001
 async def test_a_non_owner_cannot_read_another_companys_designation(session):  # noqa: ANN001
     company, intruder = str(uuid.uuid4()), str(uuid.uuid4())
     agent = await _seed_agent(session, company, "ceo-private")
-    _client(session, company).put(
+    (await _as_member(session, company, "owner")).put(
         f"/api/llc/companies/{company}/ceo",
         json={"holder_type": RoleHolderType.AGENT.value, "holder_id": str(agent)},
     )
@@ -214,7 +229,7 @@ async def test_a_non_owner_cannot_set_another_companys_ceo(session):  # noqa: AN
 async def test_a_non_owner_cannot_clear_another_companys_ceo(session):  # noqa: ANN001
     company, intruder = str(uuid.uuid4()), str(uuid.uuid4())
     agent = await _seed_agent(session, company, "ceo-keep")
-    _client(session, company).put(
+    (await _as_member(session, company, "owner")).put(
         f"/api/llc/companies/{company}/ceo",
         json={"holder_type": RoleHolderType.AGENT.value, "holder_id": str(agent)},
     )
@@ -235,7 +250,7 @@ async def test_a_holder_from_another_company_is_refused(session):  # noqa: ANN00
     company, elsewhere = str(uuid.uuid4()), str(uuid.uuid4())
     foreign = await _seed_agent(session, elsewhere, "ceo-foreign")
 
-    response = _client(session, company).put(
+    response = (await _as_member(session, company, "owner")).put(
         f"/api/llc/companies/{company}/ceo",
         json={"holder_type": RoleHolderType.AGENT.value, "holder_id": str(foreign)},
     )
@@ -262,7 +277,7 @@ async def test_a_designation_whose_holder_is_gone_reports_it(session):  # noqa: 
 
     company = str(uuid.uuid4())
     agent = await _seed_agent(session, company, "ceo-vanishing")
-    client = _client(session, company)
+    client = await _as_member(session, company, "owner")
     client.put(
         f"/api/llc/companies/{company}/ceo",
         json={"holder_type": RoleHolderType.AGENT.value, "holder_id": str(agent)},
@@ -299,7 +314,7 @@ async def test_a_null_company_node_is_refused_with_the_real_reason(session):  # 
     session.add(orphan)
     await session.commit()
 
-    response = _client(session, company).put(
+    response = (await _as_member(session, company, "owner")).put(
         f"/api/llc/companies/{company}/ceo",
         json={"holder_type": RoleHolderType.AGENT.value, "holder_id": str(orphan.id)},
     )
@@ -317,10 +332,70 @@ async def test_a_holder_that_does_not_exist_says_so(session):  # noqa: ANN001
     """
     company = str(uuid.uuid4())
 
-    response = _client(session, company).put(
+    response = (await _as_member(session, company, "owner")).put(
         f"/api/llc/companies/{company}/ceo",
         json={"holder_type": RoleHolderType.AGENT.value, "holder_id": str(uuid.uuid4())},
     )
 
     assert response.status_code == 422
     assert "does not exist" in response.json()["detail"], response.text
+
+
+# ---------------------------------------------------------------------------
+# Owner/admin only -- #20542
+# ---------------------------------------------------------------------------
+
+
+def _put_body(agent: uuid.UUID) -> dict:
+    return {"holder_type": RoleHolderType.AGENT.value, "holder_id": str(agent)}
+
+
+@pytest.mark.parametrize("role", ["owner", "admin"])
+async def test_owner_and_admin_may_set_and_clear_the_ceo(session, role):  # noqa: ANN001
+    company = str(uuid.uuid4())
+    agent = await _seed_agent(session, company, f"ceo-{role}")
+    client = await _as_member(session, company, role)
+
+    assert client.put(f"/api/llc/companies/{company}/ceo", json=_put_body(agent)).status_code == 200
+    assert await _designation(session, company) is not None
+    assert client.delete(f"/api/llc/companies/{company}/ceo").status_code == 204
+    assert await _designation(session, company) is None
+
+
+@pytest.mark.parametrize("role", ["member", "guest", "lead", None])
+async def test_a_member_cannot_set_or_clear_the_ceo(session, role):  # noqa: ANN001
+    """403 on both verbs, and the stored designation is what the owner left it."""
+    from llc.services.company_ceo import CompanyCEOService
+
+    company = str(uuid.uuid4())
+    kept, other = await _seed_agent(session, company, "ceo-kept"), await _seed_agent(session, company, "ceo-other")
+    await CompanyCEOService().set_ceo(session, uuid.UUID(company), RoleHolderType.AGENT.value, kept)
+    await session.commit()
+    client = await _as_member(session, company, role) if role else _client(session, company)
+
+    put = client.put(f"/api/llc/companies/{company}/ceo", json=_put_body(other))
+    delete = client.delete(f"/api/llc/companies/{company}/ceo")
+
+    assert (put.status_code, delete.status_code) == (403, 403), (put.text, delete.text)
+    row = await _designation(session, company)
+    assert row is not None and str(row.holder_agent_id) == str(kept), "a refused caller changed the CEO"
+
+
+async def test_a_member_may_still_read_the_ceo(session):  # noqa: ANN001
+    company = str(uuid.uuid4())
+    client = await _as_member(session, company, "member")
+
+    assert client.get(f"/api/llc/companies/{company}/ceo").status_code == 200
+
+
+async def test_an_owner_of_another_company_is_refused_before_the_gate(session):  # noqa: ANN001
+    """Owner elsewhere, no membership here: the tenant boundary answers 404, the store is unchanged."""
+    mine, theirs = str(uuid.uuid4()), str(uuid.uuid4())
+    agent = await _seed_agent(session, theirs, "ceo-theirs")
+    client = await _as_member(session, mine, "owner")
+
+    put = client.put(f"/api/llc/companies/{theirs}/ceo", json=_put_body(agent))
+    delete = client.delete(f"/api/llc/companies/{theirs}/ceo")
+
+    assert (put.status_code, delete.status_code) == (404, 404)
+    assert await _designation(session, theirs) is None

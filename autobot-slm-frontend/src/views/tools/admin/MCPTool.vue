@@ -3,8 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { createLogger } from '@/utils/debugUtils'
-import { BaseAlert, PollingPausedAlert } from '@autobot/ui'
+import { BaseAlert, PollingPausedAlert, createLogger } from '@autobot/ui'
 
 const logger = createLogger('MCPTool')
 /**

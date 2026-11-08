@@ -116,6 +116,9 @@
         </div>
       </header>
 
+      <BaseAlert v-if="loadFailed" variant="error" :message="t('security.secretsManager.loadFailed')" data-testid="secrets-load-failed" />
+      <BaseAlert v-if="writeFailed && !showCreateModal && !showEditModal" variant="error" :message="t('security.secretsManager.writeFailed')" data-testid="secrets-write-failed" />
+      <SystemVaultSecrets :vault="systemVault" @changed="loadSecrets" />
       <!-- Stats Bar -->
       <div class="stats-bar" v-if="stats">
         <div class="stat-item">
@@ -282,6 +285,7 @@
       :closeOnOverlay="!saving"
     >
       <form @submit.prevent="saveSecret" class="credential-form">
+        <BaseAlert v-if="writeFailed" variant="error" :message="t('security.secretsManager.writeFailed')" data-testid="secret-save-failed" />
         <!-- Template Selection (only for new) -->
         <div v-if="!showEditModal && !secretForm.type" class="template-selection">
           <h4>{{ $t('security.secretsManager.chooseType') }}</h4>
@@ -757,24 +761,27 @@ import { secretsApiClient } from '@/utils/SecretsApiClient';
 import { useChatStore } from '@/stores/useChatStore';
 import { useUserStore } from '@/stores/useUserStore';
 import { createLogger } from '@/utils/debugUtils';
-import { formatDateTime } from '@/utils/formatHelpers';
+import { createDateFormatter, DEFAULT_DATE_TIME_INTL } from '@/utils/formatHelpers';
 import { useDebounce } from '@/composables/useDebounce';
 import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger';
 import { useVirtualList } from '@/composables/useVirtualList';
 import { useSecretsInfraApi } from '@/composables/security/useSecretsInfraApi';
-import type { InfraHostsResponse } from '@/composables/security/useSecretsInfraApi';
+import { infraHostToSecret, type InfraHostsResponse } from '@/composables/security/useSecretsInfraApi';
+import { useSecretWrites } from '@/composables/security/useSecretWrites';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import ShareSecretDialog from '@/components/secrets/ShareSecretDialog.vue';
-import { BaseModal } from '@autobot/ui'
+import SystemVaultSecrets, { type SystemVaultListing } from '@/components/secrets/SystemVaultSecrets.vue';
+import { BaseAlert, BaseModal, createRecencyFormatter } from '@autobot/ui'
 import { getCssVar } from '@/composables/useCssVars'
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const logger = createLogger('SecretsManager');
 // #16426: infrastructure hosts are admin-only, matching the backend gate on
 // GET/DELETE /api/infrastructure/hosts.
 const userStore = useUserStore();
 const { fetchInfraHosts, fetchSecretsUsage, deleteInfraHost } = useSecretsInfraApi();
+const { writeFailed, runWrite, deleteConfirmingDependents } = useSecretWrites();
 
 // Infrastructure-host connection metadata stored alongside a secret.
 interface SecretMetadata {
@@ -915,10 +922,14 @@ const searchQuery = ref('');
 const showExpiredOnly = ref(false);
 const selectedSecretId = ref<string | null>(null);
 const showTemplates = ref(true);
+const systemVault = ref<SystemVaultListing | null>(null);
+const loadFailed = ref(false);
 
 // Modal state
 const showCreateModal = ref(false);
 const showEditModal = ref(false);
+// An opened form starts clean: an earlier write's failure is not this form's (#20732).
+watch(() => showCreateModal.value || showEditModal.value, (open) => { if (open) writeFailed.value = false; });
 const showViewModal = ref(false);
 const showTransferModal = ref(false);
 const showDeleteModal = ref(false);
@@ -1094,12 +1105,23 @@ const isFormValid = computed(() => {
 });
 
 // Methods
+// Overlapping loads (a reload fired while one is in flight) apply only the latest one's result (#20734).
+let latestLoad = 0;
 const loadSecrets = async () => {
+  const request = ++latestLoad;
+  const isLatest = () => request === latestLoad;
   loading.value = true;
+  loadFailed.value = false;
   try {
-    // Fetch secrets and stats - infrastructure_host is now a regular secret type
     const [secretsResponse, statsResponse, legacyHostsResponse] = await Promise.all([
-      secretsApiClient.getSecrets({}) as Promise<{ secrets?: Secret[] }>,
+      // The vault listing is applied as soon as the secrets arrive, so a failed stats or legacy-host
+      // request cannot leave a deleted vault secret on screen with its controls.
+      (secretsApiClient.getSecrets({}) as Promise<{ secrets?: Secret[]; system_vault?: SystemVaultListing }>).then(
+        (response) => {
+          if (isLatest()) systemVault.value = response.system_vault ?? null;
+          return response;
+        }
+      ),
       secretsApiClient.getSecretsStats() as Promise<SecretsStats>,
       // Also fetch legacy hosts for backwards compatibility (will be migrated
       // eventually). #16426: admin-only — skip the call for a non-admin
@@ -1107,35 +1129,13 @@ const loadSecrets = async () => {
       // empty list anyway, but a non-admin should never issue the request).
       userStore.isAdmin ? fetchInfraHosts() : Promise.resolve<InfraHostsResponse>({ hosts: [] })
     ]);
+    if (!isLatest()) return;
 
-    // Convert legacy infrastructure hosts to secret-like format for unified display
-    const legacyInfraSecrets: Secret[] = (legacyHostsResponse.hosts || []).map((host) => ({
-      id: host.id,
-      name: host.name,
-      type: 'infrastructure_host',
-      scope: host.scope || 'general',
-      chat_id: host.chat_id,
-      description: host.description || `${host.username}@${host.host}:${host.ssh_port}`,
-      tags: host.tags || [],
-      created_at: host.created_at,
-      updated_at: host.updated_at,
-      expires_at: null,
-      metadata: {
-        host: host.host,
-        ssh_port: host.ssh_port,
-        vnc_port: host.vnc_port,
-        username: host.username,
-        auth_type: host.auth_type as 'ssh_key' | 'password',
-        capabilities: host.capabilities as string[] | undefined
-      },
-      _isLegacyHost: true  // Flag for legacy hosts that need different delete API
-    }));
+    const legacyInfraSecrets: Secret[] = (legacyHostsResponse.hosts || []).map(infraHostToSecret);
 
-    // Merge regular secrets with legacy infrastructure hosts
     // (new infra hosts are already in secrets with type=infrastructure_host)
     secrets.value = [...(secretsResponse.secrets || []), ...legacyInfraSecrets];
 
-    // Update stats
     const legacyInfraCount = legacyInfraSecrets.length;
     stats.value = {
       ...statsResponse,
@@ -1149,8 +1149,9 @@ const loadSecrets = async () => {
     showTemplates.value = secrets.value.length === 0;
   } catch (error) {
     logger.error('Failed to load secrets:', error);
+    if (isLatest()) loadFailed.value = true; // a failed load must not read as an empty one
   } finally {
-    loading.value = false;
+    if (isLatest()) loading.value = false;
   }
 };
 
@@ -1367,51 +1368,39 @@ const confirmDelete = (secret: Secret) => {
 };
 
 const deleteSecret = async () => {
-  if (!deletingSecret.value) return;
-
+  const secret = deletingSecret.value;
+  if (!secret) return;
   deleting.value = true;
-  try {
-    // Handle legacy infrastructure hosts differently (they use old API)
-    if (deletingSecret.value._isLegacyHost) {
-      await deleteInfraHost(deletingSecret.value.id);
-    } else {
-      // All secrets (including new infrastructure_host type) use unified secrets API
-      await secretsApiClient.deleteSecret(deletingSecret.value.id, { chatId: deletingSecret.value.chat_id });
-    }
-    showDeleteModal.value = false;
-    deletingSecret.value = null;
-    await loadSecrets();
-  } catch (error) {
-    logger.error('Failed to delete secret:', error);
-  } finally {
-    deleting.value = false;
-  }
+  // Legacy infrastructure hosts use the old API; every other secret takes the shared delete (#20732).
+  const outcome = await runWrite('delete', () =>
+    secret._isLegacyHost ? deleteInfraHost(secret.id) : deleteConfirmingDependents(secret)
+  );
+  deleting.value = false;
+  if (outcome === 'declined') return;
+  showDeleteModal.value = false;
+  deletingSecret.value = null;
+  await loadSecrets(); // a failed delete's outcome is unconfirmed, so show what is stored
 };
 
 const confirmTransfer = async () => {
-  if (!transferringSecret.value) return;
-
+  const secret = transferringSecret.value;
+  if (!secret) return;
   transferring.value = true;
-  try {
-    await secretsApiClient.transferSecrets({
-      secret_ids: [transferringSecret.value.id],
-      target_scope: 'general'
-    }, { chatId: transferringSecret.value.chat_id });
-    showTransferModal.value = false;
-    transferringSecret.value = null;
-    await loadSecrets();
-  } catch (error) {
-    logger.error('Failed to transfer secret:', error);
-  } finally {
-    transferring.value = false;
-  }
+  await runWrite('transfer', () =>
+    secretsApiClient.transferSecrets({ secret_ids: [secret.id], target_scope: 'general' }, { chatId: secret.chat_id })
+  );
+  transferring.value = false;
+  showTransferModal.value = false;
+  transferringSecret.value = null;
+  await loadSecrets();
 };
 
 const saveSecret = async () => {
   if (!isFormValid.value) return;
 
   saving.value = true;
-  try {
+  // On failure the form stays open with its input, and the list is reloaded (#20732).
+  const outcome = await runWrite('save', async () => {
     const chatStore = useChatStore();
 
     // Build base secret data
@@ -1459,14 +1448,10 @@ const saveSecret = async () => {
       }
       await secretsApiClient.createSecret(secretData as unknown as Parameters<typeof secretsApiClient.createSecret>[0]);
     }
-
-    closeModals();
-    await loadSecrets();
-  } catch (error) {
-    logger.error('Failed to save secret:', error);
-  } finally {
-    saving.value = false;
-  }
+  });
+  saving.value = false;
+  if (outcome === 'done') closeModals();
+  await loadSecrets();
 };
 
 const closeModals = () => {
@@ -1555,30 +1540,20 @@ const copySecretValue = async () => {
   }
 };
 
-const formatDate = (dateString?: string | null) => {
-  if (!dateString) return 'N/A';
-  return formatDateTime(dateString);
-};
+const formatDate = createDateFormatter({
+  intl: DEFAULT_DATE_TIME_INTL,
+  emptyText: () => t('security.secretsManager.notAvailable'),
+  invalidText: '',
+});
 
-const formatRelativeTime = (dateString?: string) => {
-  if (!dateString) return '';
-  const date = new Date(dateString);
-  const now = new Date();
-  const diff = date.getTime() - now.getTime();
-  const absDiff = Math.abs(diff);
-
-  if (absDiff < 60000) return diff < 0 ? t('security.secretsManager.timeJustNow') : t('security.secretsManager.timeInAMoment');
-  if (absDiff < 3600000) {
-    const mins = Math.floor(absDiff / 60000);
-    return diff < 0 ? t('security.secretsManager.timeMinutesAgo', { count: mins }) : t('security.secretsManager.timeInMinutes', { count: mins });
-  }
-  if (absDiff < 86400000) {
-    const hours = Math.floor(absDiff / 3600000);
-    return diff < 0 ? t('security.secretsManager.timeHoursAgo', { count: hours }) : t('security.secretsManager.timeInHours', { count: hours });
-  }
-  const days = Math.floor(absDiff / 86400000);
-  return diff < 0 ? t('security.secretsManager.timeDaysAgo', { count: days }) : t('security.secretsManager.timeInDays', { count: days });
-};
+// Past or ahead (an expiry): the kit's relative time, in the app's language (#19905).
+const formatRelativeTime = createRecencyFormatter({
+  justNow: () => t('security.secretsManager.timeJustNow'),
+  soon: () => t('security.secretsManager.timeInAMoment'),
+  locale: () => locale.value,
+  style: 'narrow',
+  maxUnit: 'day',
+});
 
 const truncate = (text: string, length: number) => {
   if (!text || text.length <= length) return text;

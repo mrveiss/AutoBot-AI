@@ -41,14 +41,12 @@ from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.env_utils import env_float, env_float_clamped
-from autobot_shared.feature_flags import is_feature_enabled
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
 
 from ..adapters import AdapterRunStatus, AutoBotAgentAdapter, get_adapter
-from ..adapters.subprocess_base import is_subprocess_adapter
 from ..config import AGENT_API_BASE_URL
 from ..exceptions import (
     AdapterRunFailed,
@@ -59,7 +57,7 @@ from ..exceptions import (
 )
 from ..models.enums import HeartbeatInvocationSource, LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
-from ..org_role_authority import apply_org_role_bound
+from ..org_role_authority import apply_org_role_bound, role_bound_enforced
 from ..services.budget import BudgetService
 from ..services.controls_service import ControlsService
 from ..services.work_item_queue import has_pending_work
@@ -67,7 +65,7 @@ from ..services.work_item_queue import has_pending_work
 # Aliased to the name `_run_adapter` already calls (#17726). Renaming the call
 # site would put that unrelated 82-line function in scope for the function-length
 # guard, and refactoring it is not this change.
-from .dispatch_gate import dispatch_block_reason, require_dispatchable
+from .dispatch_gate import adapter_block_reason, dispatch_block_reason, require_dispatchable
 from .replay_recording import record_run_for_replay as _record_run_for_replay
 from .run_context import enrich_run_context
 from .run_key import ADAPTER_MAX_WAIT_SECONDS
@@ -76,6 +74,7 @@ from .run_key import revoke_run_key as _revoke_run_key
 from .run_status import RunSuperseded, latest_run_in, mark_running
 from .run_workspace import acquire_run_workspace, release_run_workspace, release_workspace_best_effort
 from .schedule_members import agent_due_members, drop_unschedulable_member
+from .usage_billing import ingest_run_cost
 
 logger = get_logger(__name__)
 
@@ -811,7 +810,7 @@ async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> O
     ephemeral, run-scoped LLC API key so the woken agent can authenticate its
     LLC API calls; the key is revoked when the run finishes.
     """
-    if is_feature_enabled("org_role_bound"):
+    if role_bound_enforced():
         # #16950/#16974: bounded by its org role, or refused with the reason. Off by
         # default (owner decision #16974) until copilot_local/copilot_subscription can
         # actually enforce a bound -- see org_role_authority.py's module docstring.
@@ -823,24 +822,12 @@ async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> O
         await _dispatch_autobot_agent(agent, context)
         return None
 
-    try:
-        adapter = get_adapter(adapter_type)
-    except KeyError:
-        # GH#9951: signal a skip (not a phantom COMPLETED) so the run is
-        # recorded as SKIPPED and last_heartbeat_at is not advanced.
-        raise HeartbeatDispatchSkipped(
-            agent["agent_id"], f"no LLC adapter registered for type {adapter_type!r}"
-        ) from None
-
-    # GH#9793: skip dispatch when the required CLI binary can't be resolved
-    # (PATH, configured override, or common install locations — GH#12478).
-    # Converts every-heartbeat FAILED runs into a clean degraded state (GH#9951).
-    if is_subprocess_adapter(adapter) and not adapter.is_cli_available():  # type: ignore[union-attr]
-        message = adapter.cli_not_found_message()  # type: ignore[union-attr]
-        # GH#12478: this is a genuine deployment misconfiguration, not routine
-        # degraded-agent noise — warn so it's visible without polling run history.
-        logger.warning("Heartbeat dispatch skipped for agent %s: %s", agent["agent_id"], message)
-        raise HeartbeatDispatchSkipped(agent["agent_id"], message)
+    # #20519: the same adapter check the agent lists show (GH#9951, GH#9793, GH#12478).
+    reason = adapter_block_reason(adapter_type, agent.get("adapter_config"))
+    if reason is not None:
+        logger.warning("Heartbeat dispatch skipped for agent %s: %s", agent["agent_id"], reason)
+        raise HeartbeatDispatchSkipped(agent["agent_id"], reason)
+    adapter = get_adapter(adapter_type)
 
     return await _dispatch_registry_adapter(adapter, agent, context)
 
@@ -848,12 +835,11 @@ async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> O
 async def _dispatch_autobot_agent(agent: Dict[str, Any], context: Dict[str, Any]) -> None:
     """Dispatch an in-process AutoBot agent via :class:`AutoBotAgentAdapter`."""
     adapter_config = agent.get("adapter_config") or {}
-    if not adapter_config.get("agent_class"):
-        # No agent_class configured — degraded skip, not a phantom success (GH#9951).
-        raise HeartbeatDispatchSkipped(
-            agent["agent_id"],
-            "no adapter_config.agent_class configured",
-        )
+    # No agent_class configured — degraded skip, not a phantom success (GH#9951).
+    # The same decision the agent lists show (#20519).
+    reason = adapter_block_reason("autobot_agent", adapter_config)
+    if reason is not None:
+        raise HeartbeatDispatchSkipped(agent["agent_id"], reason)
 
     # GH#8502: use run_blocking() so ProviderRateLimited propagates to _run_adapter
     # and triggers exponential-backoff recovery.  _run_adapter is already a
@@ -934,21 +920,21 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
     if final_status == LLCRunStatus.QUOTA_EXHAUSTED:
         raise SubscriptionQuotaExhausted(agent_id, str(result.error or "subscription quota exhausted"))
 
-    # GH#9622: surface non-success terminal states so _run_adapter records the
-    # run as FAILED (and the liveness monitor can act) instead of COMPLETED.
-    if final_status != LLCRunStatus.COMPLETED:
-        raise AdapterRunFailed(agent.get("adapter_type") or "", str(external_run_id), final_status)
-
     # GH#10220: forward parsed token usage to the agent's budget. BudgetExhausted
     # is re-raised (GH#8215 hard-stop → run marked FAILED); other cost errors are
     # best-effort and never fail an otherwise-successful run.
     await _ingest_adapter_usage(agent, result)
 
+    # GH#9622: surface non-success terminal states so _run_adapter records the
+    # run as FAILED (and the liveness monitor can act) instead of COMPLETED.
+    if final_status != LLCRunStatus.COMPLETED:
+        raise AdapterRunFailed(agent.get("adapter_type") or "", str(external_run_id), final_status)
+
     return external_run_id
 
 
 async def _ingest_adapter_usage(agent: Dict[str, Any], result: AdapterRunStatus) -> None:
-    """Record a completed registry run's token usage against the agent budget."""
+    """Record a finished registry run's token usage: a failed run spent tokens too (#20202)."""
     if result.tokens_in is None and result.tokens_out is None:
         return  # adapter did not report usage (e.g. CLI without stream-json result)
     agent_id: str = agent["agent_id"]
@@ -957,9 +943,8 @@ async def _ingest_adapter_usage(agent: Dict[str, Any], result: AdapterRunStatus)
         factory = get_async_session_factory()
         async with factory() as session:
             company = str(agent.get("company_id") or "")
-            await BudgetService().ingest_cost_event(
-                session, agent_id, company, int(result.tokens_in or 0), int(result.tokens_out or 0), model
-            )
+            usage = (int(result.tokens_in or 0), int(result.tokens_out or 0))
+            await ingest_run_cost(BudgetService(), session, result, agent_id, company, usage, model)
             await session.commit()
     except BudgetExhausted:
         raise  # GH#8215 hard-stop — propagate so the run is recorded FAILED

@@ -3,11 +3,14 @@
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
 /**
- * The one permission-gated /admin section (#19833, epic #19829, ADR-011).
+ * The main app's permission-gated /admin section (#19833).
  *
- * `/admin` is a parent record rendering AdminLayout; the 9 pre-existing admin
- * routes are its children with their paths unchanged, so every old URL still
- * resolves to the same component. They move to domain paths later (#17814).
+ * `/admin` is a parent record rendering AdminLayout; the 9 admin routes of this
+ * app are its children with their paths unchanged, so every old URL still
+ * resolves to the same component. The parent carries the one section
+ * permission the router guard checks, which also covers a session restored
+ * from the backend. The children may move to domain paths later (#17814). The
+ * SLM console keeps its own frontend; none of its screens are listed here.
  * Split out of router/index.ts, which is at its size ceiling, as the place
  * admin routes are added; index.ts only spreads `adminRoutes` and calls
  * `resolveAdminPermissionRedirect` from its guard.
@@ -94,6 +97,14 @@ export const adminChildren: RouteRecordRaw[] = [
     name: 'admin-mcp-servers',
     component: () => import('@/views/AdminMcpServersView.vue'),
     meta: adminMeta('MCP Servers'),
+  },
+  {
+    path: 'conversations', // Issue #17832: org-scoped conversation review (server-gated, audited)
+    name: 'admin-conversations',
+    component: () => import('@/views/AdminConversationsView.vue'),
+    meta: adminMeta('Conversation Review', {
+      description: 'Review conversations in your organization',
+    }),
   },
   {
     path: 'permission-scopes', // Issue #16825: "coming later" panel

@@ -85,7 +85,7 @@ HARDCODED_COLOUR_LITERALS: dict[str, int] = {
     "#fecaca": 1,
     "#fef2f2": 1,
     "#ffeaa7": 1,
-    "#fff": 5,
+    "#fff": 3,
     "#fff3cd": 1,
     "#ffffff": 3,
 }
@@ -111,21 +111,20 @@ HARDCODED_COLOUR_LITERALS: dict[str, int] = {
 #: them and the trade recorded against `MAX_UNCOVERED_READS` in
 #: `python_filter_uncovered_reads.py` is untouched.
 #:
-#: Shrink-only. Note the top three are chart components, where `!important` is
-#: usually fighting a third-party library's injected styles rather than
-#: overriding the design system -- so these want per-file reasoning at the time
-#: that component is opened, not a sweep. The ratchet stops growth; it does not
-#: claim each one is a defect.
+#: Shrink-only. Rules whose selector targets a vendor-injected class
+#: (`VENDOR_SELECTORS` in `_hardcoded_colour_detect.py`, each with its reason:
+#: `.apexcharts-*`, `.xterm*`) are not counted, so `BaseChart.vue` (19) and
+#: `SSHTerminal.vue` (1) left this table. What remains is not claimed to be all
+#: defects; the ratchet stops growth and the top entries want per-file reasoning
+#: at the time the component is opened.
 IMPORTANT_DECLARATIONS: dict[str, int] = {
     "components/audit/AuditLogTable.vue": 1,
-    "components/charts/BaseChart.vue": 19,
     "components/charts/FunctionCallGraph.vue": 12,
     "components/chat/ChatInterface.vue": 5,
     "components/knowledge/KnowledgeGraph.vue": 10,
     "components/knowledge/pipeline/PipelineRunner.vue": 1,
     "components/operations/OperationsList.vue": 1,
     "components/security/SecretsManager.vue": 2,
-    "components/terminal/SSHTerminal.vue": 1,
     "components/ui/ProgressBar.vue": 2,
     "components/visualizations/ServiceMessageTimeline.vue": 1,
     "views/AdminUsersView.vue": 1,

@@ -25,7 +25,10 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from models.agent_org import AgentOrgNode
 
+from ..adapters import get_adapter
+from ..adapters.subprocess_base import is_subprocess_adapter
 from ..models.enums import UNDISPATCHABLE_AGENT_STATUSES, LLCAgentStatus
+from ..org_role_authority import describe_role_bound, role_bound_refusal
 from ..services.budget import BudgetService
 
 logger = get_logger(__name__)
@@ -83,6 +86,46 @@ def agent_pause_flag_key(slug: Any) -> str:
 def company_pause_flag_key(company_id: Any) -> str:
     """The Redis flag that pauses a whole company."""
     return f"llc:company:{company_id}:paused"
+
+
+def adapter_block_reason(adapter_type: Optional[str], adapter_config: Optional[dict]) -> Optional[str]:
+    """Why an agent's adapter cannot start a run, or ``None`` (#20519, #20507).
+
+    The one answer for "can this agent run" that needs no I/O beyond the local CLI
+    lookup: the dispatcher refuses with it, and the agent lists show it. Both would
+    otherwise drift, and a list that says "ready" for an agent whose run is skipped
+    is the failure #20507 reported.
+    """
+    kind = adapter_type or "autobot_agent"
+    if kind == "autobot_agent":
+        if not (adapter_config or {}).get("agent_class"):
+            return "no adapter_config.agent_class configured"
+        return None
+    try:
+        adapter = get_adapter(kind)
+    except KeyError:
+        return f"no LLC adapter registered for type {kind!r}"
+    if is_subprocess_adapter(adapter) and not adapter.is_cli_available():  # type: ignore[union-attr]
+        return adapter.cli_not_found_message()  # type: ignore[union-attr]
+    return None
+
+
+def run_block_reason(
+    status: Optional[str], adapter_type: Optional[str], adapter_config: Optional[dict], *, org_role: Optional[str]
+) -> Optional[str]:
+    """The reason an agent cannot run from its own row alone (status, adapter, role bound), or ``None``.
+
+    Pause flags and budget live in Redis and the budget tables; they are enforced at
+    dispatch by :func:`dispatch_block_reason` and not read per row for a list. The
+    role bound refuses only while it is enforced (#20706).
+    """
+    if status in UNDISPATCHABLE_AGENT_STATUSES:
+        return f"agent status is {status}"
+    # Same order as dispatch: a role-bound refusal is the reason it will not run, even when the
+    # adapter is also unavailable -- fixing the adapter alone would not make it runnable.
+    return role_bound_refusal(describe_role_bound(org_role, adapter_type)) or adapter_block_reason(
+        adapter_type, adapter_config
+    )
 
 
 async def _pause_flag_reason(slug: Optional[str], company_id: Optional[Any]) -> Optional[str]:

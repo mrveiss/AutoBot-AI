@@ -64,3 +64,15 @@ def test_an_env_file_with_a_data_suffix_and_a_bare_key_config_are_secret(name: s
 @pytest.mark.parametrize("name", ["environment.md", "envelope.json", "keyboard.conf", "monkey.cfg"])
 def test_names_that_only_contain_env_or_key_are_not(name: str) -> None:
     assert not is_secret_file_name(name)
+
+
+@pytest.mark.parametrize(
+    "name", [".npmrc", ".pypirc", "shadow", "gshadow", ".ssh", ".gnupg", ".aws", ".azure", ".kube", ".docker"]
+)
+def test_credential_stores_are_matched_19974(name):
+    assert is_secret_file_name(name)
+
+
+@pytest.mark.parametrize("name", ["shadow.css", "shadows.py", "docker-compose.yml", "kube.md", "ssh.md"])
+def test_names_near_a_credential_store_are_not_19974(name):
+    assert not is_secret_file_name(name)

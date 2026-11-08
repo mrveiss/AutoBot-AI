@@ -5,7 +5,6 @@
 Discovery and type-safe access; ``check_env_var_registry`` requires every var
 to be registered. A NEW one goes in an ``env_registry_<component>.py`` sibling
 imported below -- this file is at its ceiling and may not grow (#14236).
-
 Closes GH#7081.
 """
 
@@ -63,10 +62,8 @@ def env(name: str, default: Any = None) -> Any:
 # ---------------------------------------------------------------------------
 # Registered variables — grouped by component
 # ---------------------------------------------------------------------------
-# Per-component siblings split off at the size ceiling (#14236; ledger #18391). Imported after
-# REGISTRY/register_env_var exist and before anything below reads the registry.
+# Per-component siblings split at the size ceiling (#14236, #18391); imported after REGISTRY exists, before any read.
 from autobot_shared import env_registry_agent_runtime  # noqa: E402,F401
-from autobot_shared import env_registry_ai  # noqa: E402,F401
 from autobot_shared import env_registry_backend  # noqa: E402,F401
 from autobot_shared import env_registry_backend_services  # noqa: E402,F401
 from autobot_shared import env_registry_knowledge  # noqa: E402,F401
@@ -75,16 +72,20 @@ from autobot_shared import env_registry_logging  # noqa: E402,F401
 from autobot_shared import env_registry_memory  # noqa: E402,F401
 from autobot_shared import env_registry_npu  # noqa: E402,F401
 from autobot_shared import env_registry_security  # noqa: E402,F401
-from autobot_shared import env_registry_slm  # noqa: E402,F401
 from autobot_shared import env_registry_tls  # noqa: E402,F401
 from autobot_shared import (  # noqa: E402,F401
     env_registry_agent_tools,
+    env_registry_ai,
     env_registry_analytics,
+    env_registry_approvals,
     env_registry_batch,
+    env_registry_chat_attachments,
     env_registry_gateway,
     env_registry_ledger,
     env_registry_postgres,
     env_registry_rag,
+    env_registry_slm,
+    env_registry_slm_health,
     env_registry_terminal,
     env_registry_testing,
 )
@@ -145,7 +146,7 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_CHATS_DIRECTORY",
         type=str,
-        default="data/chats",
+        default="",
         description="Filesystem path where chat session files are stored.",
         component="chat",
     )
@@ -387,7 +388,7 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_REDIS_HOST",
         type=str,
-        default="localhost",
+        default="127.0.0.1",
         description="Redis server hostname or IP address.",
         component="redis",
     )
@@ -436,7 +437,6 @@ register_env_var(
 )
 
 # --- tls: env_registry_tls.py ------------------------------------------
-
 # --- network: env_registry_tls.py (#18765, to make room for a sibling import) ---
 
 # --- voice / speech-to-text -------------------------------------------------

@@ -38,17 +38,18 @@ const router = createRouter({
       path: '/setup',
       name: 'setup',
       component: () => import('@/views/SetupWizardView.vue'),
-      meta: { title: 'Setup Wizard' }
+      meta: { title: 'Setup Wizard', admin: true }
     },
     {
       path: '/',
-      redirect: '/fleet'
+      redirect: '/fleet',
+      meta: { admin: true },
     },
     {
       path: '/fleet/:tab?',
       name: 'fleet',
       component: () => import('@/views/FleetOverview.vue'),
-      meta: { title: 'Fleet Overview' },
+      meta: { title: 'Fleet Overview', admin: true },
       beforeEnter: (to) => {
         if (!to.params.tab) {
           return { name: 'fleet', params: { tab: 'nodes' }, replace: true }
@@ -64,6 +65,7 @@ const router = createRouter({
       // with the old URL bookmarked.
       path: '/services',
       redirect: '/orchestration/per-node',
+      meta: { admin: true },
     },
     {
       // GH#8996 / #10488 Workstream A: Shared chat links — migrated from the
@@ -77,7 +79,7 @@ const router = createRouter({
       path: '/deployments/:tab?',
       name: 'deployments',
       component: () => import('@/views/DeploymentsView.vue'),
-      meta: { title: 'Deployments' },
+      meta: { title: 'Deployments', admin: true },
       beforeEnter: (to) => {
         if (!to.params.tab) {
           return { name: 'deployments', params: { tab: 'standard' }, replace: true }
@@ -90,6 +92,7 @@ const router = createRouter({
       // BackupsView (which no longer has a replications tab) would match.
       path: '/backups/replications',
       redirect: '/orchestration/replication',
+      meta: { admin: true },
     },
     {
       // Issue #15225: the replications tab is gone, so BackupsView no
@@ -98,7 +101,7 @@ const router = createRouter({
       path: '/backups/:tab?',
       name: 'backups',
       component: () => import('@/views/BackupsView.vue'),
-      meta: { title: 'Backups' },
+      meta: { title: 'Backups', admin: true },
     },
     {
       // Issue #15225: replication consolidated into the Orchestration
@@ -106,24 +109,26 @@ const router = createRouter({
       // create, start, stop, verify-sync, promote) is mounted there.
       path: '/replications',
       redirect: '/orchestration/replication',
+      meta: { admin: true },
     },
     {
       path: '/maintenance',
       name: 'maintenance',
       component: () => import('@/views/MaintenanceView.vue'),
-      meta: { title: 'Maintenance' },
+      meta: { title: 'Maintenance', admin: true },
       children: [
         // Issue #840, #1230: Updates tabs — moved from standalone /updates into maintenance
         {
           path: 'updates',
           name: 'maintenance-updates',
           redirect: { name: 'maintenance-updates-tab', params: { tab: 'system' } },
+          meta: { admin: true },
         },
         {
           path: 'updates/:tab',
           name: 'maintenance-updates-tab',
           component: () => import('@/views/UpdatesView.vue'),
-          meta: { title: 'Updates', parent: 'maintenance' }
+          meta: { title: 'Updates', parent: 'maintenance', admin: true }
         },
       ]
     },
@@ -131,13 +136,14 @@ const router = createRouter({
       // Issue #741: Code sync — backwards compat redirect
       path: '/code-sync',
       redirect: '/maintenance/updates/code-sync',
+      meta: { admin: true },
     },
     {
       // Issue #760: Agent management - local + external agents
       path: '/agents/:tab?',
       name: 'agents',
       component: () => import('@/views/AgentsView.vue'),
-      meta: { title: 'Agents' },
+      meta: { title: 'Agents', admin: true },
       beforeEnter: (to) => {
         if (!to.params.tab) {
           return { name: 'agents', params: { tab: 'local-agents' }, replace: true }
@@ -147,73 +153,76 @@ const router = createRouter({
     {
       path: '/agent-config',
       redirect: '/agents/local-agents',
+      meta: { admin: true },
     },
     {
       // Issue #786: Infrastructure moved to Fleet Overview infrastructure tab
       path: '/infrastructure',
       redirect: '/fleet/infrastructure',
+      meta: { admin: true },
     },
     {
       path: '/settings',
       name: 'settings',
       component: () => import('@/views/SettingsView.vue'),
-      meta: { title: 'Settings' },
+      meta: { title: 'Settings', admin: true },
       children: [
         {
           path: '',
           name: 'settings-default',
-          redirect: '/settings/general'
+          redirect: '/settings/general',
+          meta: { admin: true },
         },
         {
           path: 'general',
           name: 'settings-general',
           component: () => import('@/views/settings/GeneralSettings.vue'),
-          meta: { title: 'General Settings', parent: 'settings' }
+          meta: { title: 'General Settings', parent: 'settings', admin: true }
         },
         {
           // Issue #11368: infrastructure settings consolidated into the canonical
           // /roles view; redirect preserves old bookmarks.
           path: 'infrastructure',
           redirect: '/roles',
-          meta: { title: 'Infrastructure', parent: 'settings' }
+          meta: { title: 'Infrastructure', parent: 'settings', admin: true }
         },
         {
           // Issue #737: Consolidated to Fleet Overview - redirect for backwards compatibility
           path: 'nodes',
           name: 'settings-nodes',
           redirect: '/',
-          meta: { title: 'Nodes Management', parent: 'settings' }
+          meta: { title: 'Nodes Management', parent: 'settings', admin: true }
         },
         {
           path: 'monitoring',
           name: 'settings-monitoring',
           component: () => import('@/views/settings/MonitoringSettings.vue'),
-          meta: { title: 'Monitoring Settings', parent: 'settings' }
+          meta: { title: 'Monitoring Settings', parent: 'settings', admin: true }
         },
         {
           path: 'notifications',
           name: 'settings-notifications',
           component: () => import('@/views/settings/NotificationsSettings.vue'),
-          meta: { title: 'Notifications', parent: 'settings' }
+          meta: { title: 'Notifications', parent: 'settings', admin: true }
         },
         {
           path: 'api',
           name: 'settings-api',
           component: () => import('@/views/settings/APISettings.vue'),
-          meta: { title: 'API Settings', parent: 'settings' }
+          meta: { title: 'API Settings', parent: 'settings', admin: true }
         },
         {
           path: 'backend',
           name: 'settings-backend',
           component: () => import('@/views/settings/BackendSettings.vue'),
-          meta: { title: 'Backend Settings', parent: 'settings' }
+          meta: { title: 'Backend Settings', parent: 'settings', admin: true }
         },
         {
           // Issue #576: Security settings for MFA and API Keys
           path: 'security',
           name: 'settings-security',
           component: () => import('@/views/settings/SecuritySettings.vue'),
-          meta: { title: 'Security', parent: 'settings' }
+          meta: { title: 'Security', parent: 'settings', admin: true }
         },
         // Admin settings (migrated from main AutoBot frontend - Issue #729)
         {
@@ -259,6 +268,13 @@ const router = createRouter({
           name: 'settings-admin-web-research',
           component: () => import('@/views/settings/admin/WebResearchSettings.vue'),
           meta: { title: 'Web Research', parent: 'settings', admin: true }
+        },
+        {
+          // #20605: theme packages on the main backend; moved from the main app's /slm/themes
+          path: 'admin/themes',
+          name: 'settings-admin-themes',
+          component: () => import('@/views/settings/admin/ThemeManagerSettings.vue'),
+          meta: { title: 'Themes', parent: 'settings', admin: true }
         },
         {
           // Consolidated to Fleet Overview /fleet/npu Worker Registry sub-tab
@@ -316,14 +332,21 @@ const router = createRouter({
           path: 'disposal-policy',
           name: 'settings-disposal-policy',
           component: () => import('@/views/settings/DisposalPolicySettings.vue'),
-          meta: { title: 'Disposal Policy', parent: 'settings' }
+          meta: { title: 'Disposal Policy', parent: 'settings', admin: true }
+        },
+        {
+          // #20465: chat approval settings (relaxed categories, attachment auto-approve), admin only
+          path: 'admin/chat-approval',
+          name: 'settings-admin-chat-approval',
+          component: () => import('@/views/settings/admin/ChatApprovalSettings.vue'),
+          meta: { title: 'Chat Approvals', parent: 'settings', admin: true }
         },
         {
           // Issue #11271 P3: Company OS findings policy (SLM operator panel)
           path: 'findings-policy',
           name: 'settings-findings-policy',
           component: () => import('@/views/settings/FindingsPolicySettings.vue'),
-          meta: { title: 'Findings Policy', parent: 'settings' }
+          meta: { title: 'Findings Policy', parent: 'settings', admin: true }
         },
       ]
     },
@@ -331,7 +354,7 @@ const router = createRouter({
       path: '/monitoring',
       name: 'monitoring',
       component: () => import('@/views/MonitoringView.vue'),
-      meta: { title: 'Monitoring' },
+      meta: { title: 'Monitoring', admin: true },
       children: monitoringChildren,
     },
     {
@@ -340,7 +363,7 @@ const router = createRouter({
       path: '/orchestration/:tab?',
       name: 'orchestration',
       component: () => import('@/views/OrchestrationView.vue'),
-      meta: { title: 'Orchestration' },
+      meta: { title: 'Orchestration', admin: true },
       beforeEnter: (to) => {
         if (!to.params.tab) {
           return { name: 'orchestration', params: { tab: 'per-node' }, replace: true }
@@ -352,14 +375,14 @@ const router = createRouter({
       path: '/roles',
       name: 'roles',
       component: () => import('@/views/RolesView.vue'),
-      meta: { title: 'Role Registry' }
+      meta: { title: 'Role Registry', admin: true }
     },
     {
       // Issue #731: Skills system management
       path: '/skills/:tab?',
       name: 'skills',
       component: () => import('@/views/SkillsView.vue'),
-      meta: { title: 'Skills' },
+      meta: { title: 'Skills', admin: true },
       beforeEnter: (to) => {
         if (!to.params.tab) {
           return { name: 'skills', params: { tab: 'active' }, replace: true }
@@ -370,12 +393,13 @@ const router = createRouter({
       // Issue #963: External agents moved to /agents/external-agents
       path: '/external-agents',
       redirect: '/agents/external-agents',
+      meta: { admin: true },
     },
     {
       path: '/security/:tab?',
       name: 'security',
       component: () => import('@/views/SecurityView.vue'),
-      meta: { title: 'Security Analytics' },
+      meta: { title: 'Security Analytics', admin: true },
       beforeEnter: (to) => {
         if (!to.params.tab) {
           return { name: 'security', params: { tab: 'overview' }, replace: true }
@@ -386,18 +410,19 @@ const router = createRouter({
       path: '/tools',
       name: 'tools',
       component: () => import('@/views/tools/ToolsLayout.vue'),
-      meta: { title: 'Tools' },
+      meta: { title: 'Tools', admin: true },
       children: [
         {
           path: '',
           name: 'tools-default',
-          redirect: '/tools/fleet'
+          redirect: '/tools/fleet',
+          meta: { admin: true },
         },
         {
           path: 'fleet',
           name: 'tools-fleet',
           component: () => import('@/views/ToolsView.vue'),
-          meta: { title: 'Fleet Tools', parent: 'tools' }
+          meta: { title: 'Fleet Tools', parent: 'tools', admin: true }
         },
         // Migrated from main AutoBot frontend - Issue #729
         {
@@ -446,19 +471,19 @@ const router = createRouter({
           path: 'agents',
           name: 'tools-agents',
           component: () => import('@/views/tools/admin/AgentsTool.vue'),
-          meta: { title: 'Agents', parent: 'tools' }
+          meta: { title: 'Agents', parent: 'tools', admin: true }
         },
         {
           path: 'vision',
           name: 'tools-vision',
           component: () => import('@/views/tools/admin/VisionTool.vue'),
-          meta: { title: 'Vision', parent: 'tools' }
+          meta: { title: 'Vision', parent: 'tools', admin: true }
         },
         {
           path: 'batch',
           name: 'tools-batch',
           component: () => import('@/views/tools/admin/BatchTool.vue'),
-          meta: { title: 'Batch Processing', parent: 'tools' }
+          meta: { title: 'Batch Processing', parent: 'tools', admin: true }
         },
       ]
     },
@@ -472,8 +497,9 @@ router.beforeEach(async (to, _from) => {
 
   // Public routes don't need auth (requiresAuth: false)
   if (to.meta.requiresAuth === false) {
-    // If already authenticated, redirect to home
-    if (authStore.isAuthenticated && to.name === 'login') {
+    // An admin already signed in goes home. A non-admin stays here: home would send
+    // them straight back (#20631).
+    if (authStore.isAuthenticated && authStore.isAdmin && to.name === 'login') {
       return { name: 'fleet' }
     }
     return
@@ -490,10 +516,10 @@ router.beforeEach(async (to, _from) => {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
 
-  // Check admin routes require admin role (Issue #729)
+  // Check admin routes require admin role (Issue #729). #20631: the whole console is
+  // admin only, so the one place left to send anyone else is the sign-in page.
   if (to.meta.admin && !authStore.isAdmin) {
-    // Redirect non-admin users to fleet overview
-    return { name: 'fleet' }
+    return { name: 'login', query: { error: 'admin_only' } }
   }
 
   // First-run wizard redirect (Issue #1294)

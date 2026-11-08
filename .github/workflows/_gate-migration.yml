@@ -75,7 +75,7 @@ jobs:
       - name: Set up Python 3.12
         uses: ./.github/actions/setup-python-ci
         with:
-          cache-dependency-path: .github/workflows/migration-gate.yml
+          cache-dependency-path: .github/workflows/_gate-migration.yml
 
       - name: Install migration-test dependencies
         # Deliberately minimal — exactly what migrations/env.py and the

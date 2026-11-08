@@ -9,7 +9,7 @@ Run once after deploying the encrypted SSOProvider model. Safe to re-run:
 rows whose sensitive fields already carry the ``enc:`` prefix are skipped.
 
 Usage:
-    AUTOBOT_FIELD_ENCRYPTION_KEY=<key> python scripts/encrypt_sso_secrets.py [--dry-run]
+    python scripts/encrypt_sso_secrets.py [--dry-run]   # needs AUTOBOT_SECRETS_ROOT_KEY (#17981)
 
 Exit codes:
     0  — success (all rows encrypted or already encrypted)
@@ -65,7 +65,7 @@ def main() -> int:
                 continue
 
             try:
-                encrypted = encrypt_sso_config(config)
+                encrypted = encrypt_sso_config(config, provider_id=str(provider_id))
             except Exception as exc:
                 logger.error("Provider %s: encryption failed — %s", provider_id, exc)
                 errors += 1

@@ -28,6 +28,11 @@ logger = get_logger(__name__)
 #: SLM server-wide setting naming the approval categories an administrator has relaxed.
 RELAXED_CATEGORIES_SETTING_KEY = "chat.relaxed_approval_categories"
 
+#: SLM server-wide setting an administrator turns on to stop attachment turns (and the later turns of a chat that
+#: used one) asking for every tool call (#20195). Off unless it reads exactly ``true`` / ``{"enabled": true}``;
+#: written only through the SLM settings API, which needs the admin config-write permission.
+AUTO_APPROVE_ATTACHMENTS_SETTING_KEY = "chat.auto_approve_attachment_turns"
+
 
 def _categories_from_setting(data: Any) -> frozenset[str]:
     """Accept ``["cat", ...]`` or ``{"categories": [...]}``; anything else relaxes nothing."""
@@ -40,6 +45,12 @@ def _categories_from_setting(data: Any) -> frozenset[str]:
 async def relaxed_approval_categories() -> frozenset[str]:
     """Categories the SLM server-wide setting relaxes; empty on any failure (fail closed)."""
     return _categories_from_setting(await fetch_slm_policy_json(RELAXED_CATEGORIES_SETTING_KEY))
+
+
+async def attachment_auto_approve_enabled() -> bool:
+    """Whether the admin setting lifts the attachment floor; False when unset, malformed or unreadable (asks)."""
+    data = await fetch_slm_policy_json(AUTO_APPROVE_ATTACHMENTS_SETTING_KEY)
+    return (data.get("enabled") if isinstance(data, dict) else data) is True
 
 
 async def baseline_approval_categories() -> List[str]:

@@ -62,6 +62,7 @@ from typing import NamedTuple
 from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
+from tools.lint import _parse_cache as parse_cache
 
 REPO_ROOT = repo_root()
 
@@ -155,7 +156,6 @@ KNOWN_DISCARDED_LAUNCHES: dict[str, int] = {
     "autobot-backend/chat_workflow/manager.py": 2,
     "autobot-backend/chat_workflow/tool_handler.py": 2,
     "autobot-backend/initialization/lifespan.py": 1,
-    "autobot-backend/knowledge/facts.py": 1,
     "autobot-backend/middleware/audit_middleware.py": 1,
     "autobot-backend/orchestrator.py": 1,
     "autobot-backend/secure_sandbox_executor.py": 1,
@@ -237,7 +237,7 @@ def _census_for(root: str) -> RootCensus:
         if "/tests/" in rel or rel.endswith("_test.py"):
             continue
         try:
-            tree = ast.parse((REPO_ROOT / rel).read_text(encoding="utf-8"))
+            tree = parse_cache.parse((REPO_ROOT / rel).read_text(encoding="utf-8"))
         except (OSError, SyntaxError):
             continue
         files_parsed += 1

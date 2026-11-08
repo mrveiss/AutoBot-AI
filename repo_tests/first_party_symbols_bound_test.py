@@ -117,8 +117,9 @@ from __future__ import annotations
 import ast
 
 import pytest
-
 from repo_tests import cross_module_symbol_binding as xmod
+
+from tools.lint import _parse_cache as parse_cache
 
 _KNOWN_BROKEN: dict[tuple[str, str, str], str] = {}
 _MIN_FILES_SWEPT = 3000
@@ -163,7 +164,7 @@ def test_the_detector_binds_every_accepted_form_and_rejects_a_planted_typo() -> 
     class, assignment incl. unpacking, import re-export, `__all__`, and a
     submodule), plus a planted typo that must be rejected.
     """
-    provider = ast.parse(
+    provider = parse_cache.parse(
         "\n".join(
             [
                 "def a_function(): pass",
@@ -183,7 +184,7 @@ def test_the_detector_binds_every_accepted_form_and_rejects_a_planted_typo() -> 
 
 
 def test_type_checking_body_is_excluded_but_its_else_is_not() -> None:
-    provider = ast.parse(
+    provider = parse_cache.parse(
         "\n".join(
             [
                 "from typing import TYPE_CHECKING",
@@ -201,7 +202,7 @@ def test_type_checking_body_is_excluded_but_its_else_is_not() -> None:
 
 
 def test_consumer_type_checking_and_optional_imports_are_exempt() -> None:
-    consumer = ast.parse(
+    consumer = parse_cache.parse(
         "\n".join(
             [
                 "from typing import TYPE_CHECKING",
@@ -225,9 +226,9 @@ def test_consumer_type_checking_and_optional_imports_are_exempt() -> None:
 
 
 def test_a_dynamic_provider_is_wholesale_exempt() -> None:
-    star_import = ast.parse("from anything import *")
-    getattr_provider = ast.parse("def __getattr__(name):\n    return None\n")
-    globals_provider = ast.parse("globals().update({'x': 1})\n")
+    star_import = parse_cache.parse("from anything import *")
+    getattr_provider = parse_cache.parse("def __getattr__(name):\n    return None\n")
+    globals_provider = parse_cache.parse("globals().update({'x': 1})\n")
     for tree in (star_import, getattr_provider, globals_provider):
         bound: set[str] = set()
         xmod.walk_bindings(tree.body, bound)
@@ -241,9 +242,9 @@ def test_a_package_submodule_is_bound_even_without_an_init_reexport() -> None:
     resolved = xmod.resolve_module("repo_tests")
     assert resolved is not None and resolved.name == "__init__.py"
     submodules = xmod.submodule_names(resolved)
-    assert "first_party_imports_resolve_test" in submodules, (
-        "a real sibling module was not detected as an implicitly-bound submodule of repo_tests"
-    )
+    assert (
+        "first_party_imports_resolve_test" in submodules
+    ), "a real sibling module was not detected as an implicitly-bound submodule of repo_tests"
 
 
 @pytest.mark.parametrize("entry,issue", sorted(_KNOWN_BROKEN.items()))
@@ -260,6 +261,6 @@ def test_each_exemption_is_still_broken(entry: tuple[str, str, str], issue: str)
     provider_path = xmod.resolve_module(module)
     assert provider_path is not None, f"{module} no longer resolves — the exemption for {rel} ({issue}) is obsolete"
     bound, dynamic, submodules = xmod.provider_info(provider_path)
-    assert not dynamic and name not in bound and name not in submodules, (
-        f"{name} is now bound in {module}, so the exemption for {rel} ({issue}) is obsolete — remove it"
-    )
+    assert (
+        not dynamic and name not in bound and name not in submodules
+    ), f"{name} is now bound in {module}, so the exemption for {rel} ({issue}) is obsolete — remove it"

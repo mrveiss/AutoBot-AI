@@ -40,6 +40,11 @@ jobs:
         working-directory: autobot-slm-frontend
     steps:
       - uses: actions/checkout@v7
+        with:
+          # fetch-depth: 2, not the default of 1: the two repo_tests guards below declare their reach
+          # through repo_tests/_reach, which computes the floor from the ratchet base at HEAD^1 (#19676)
+          # and refuses to run without it (#19283).
+          fetch-depth: 2
 
       - name: Self-skip when no SLM frontend changes
         if: inputs.slm_frontend != 'true'

@@ -28,6 +28,7 @@ import pytest
 
 from autobot_shared.paths import GitRepoRootUnavailable, git_repo_root
 from autobot_shared.ssot_constants import QueryDefaults
+from tools.lint import _parse_cache as parse_cache
 
 SDK_DEFAULTS = Path("libs/autobot-sdk-python/autobot_sdk/defaults.py")
 
@@ -52,7 +53,7 @@ def sdk_constants() -> dict[str, int]:
     """Every module-level ``NAME: int = <literal>`` in the SDK defaults module."""
     path = project_root() / SDK_DEFAULTS
     assert path.is_file(), f"{SDK_DEFAULTS} is missing -- the SDK defaults moved without updating this guard"
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(path.read_text(encoding="utf-8"))
     found: dict[str, int] = {}
     for node in tree.body:
         if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):

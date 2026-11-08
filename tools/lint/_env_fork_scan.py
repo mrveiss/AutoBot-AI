@@ -59,7 +59,7 @@ SCAN_ROOTS = (
 #: passed to the reach declaration in ``repo_tests/env_fork_guard_18094_test.py`` (whose ``verify_floor``
 #: proves it against the live population). A sweep that collected a handful has lost its roots and would
 #: report "none found" over nothing.
-FORK_READ_FLOOR = 208
+FORK_READ_FLOOR = 207
 
 #: Modules whose module-level literal constants are the SSOT a feature module must not restate.
 SSOT_CONSTANT_SOURCES = (

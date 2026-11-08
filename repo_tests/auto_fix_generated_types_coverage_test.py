@@ -123,9 +123,10 @@ def test_dropping_the_slm_commit_paths_is_caught_by_the_invariant():
 
     missing = checked - pre_14368_committed
     assert missing == {
+        "autobot-frontend/src/types/_generated/workflow.ts",  # #16568: the verify gate diffs it too
         "autobot-slm-frontend/openapi.json",
         "autobot-slm-frontend/src/types/generated/api.ts",
     }, (
         "the pre-#14368 auto-fix commit-step artifact set should be reported "
-        f"as missing exactly the two SLM files; got {missing}"
+        f"as missing exactly the two SLM files and workflow.ts; got {missing}"
     )

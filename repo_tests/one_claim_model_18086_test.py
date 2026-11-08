@@ -31,6 +31,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 #: name -> (the one file that may define it, kind). ``kind`` separates a class from the
@@ -52,7 +53,7 @@ def _is_enum(node: ast.ClassDef) -> bool:
 def _defined_names(source: str) -> set[str]:
     """Names in `_ONE_MODEL` that `source` defines as a class, at any nesting depth."""
     found = set()
-    for n in ast.walk(ast.parse(source)):
+    for n in ast.walk(parse_cache.parse(source)):
         if isinstance(n, ast.ClassDef) and n.name in _ONE_MODEL:
             if _ONE_MODEL[n.name][1] == "any" or _is_enum(n):
                 found.add(n.name)
@@ -80,8 +81,6 @@ def _source_population(root: Path) -> list[str]:
 REACH = declare(
     "one-claim-model-scan",
     discover=_source_population,
-    # Mid-window, from REACH.window(): (2696, 2996, 2846).
-    floor=3221,  # re-pinned mid-window (train 73): population 3250, window [2950, 3250] (#17844)
     what="non-test python source",
     roots=_ROOTS,
     growth=300,

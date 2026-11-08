@@ -17,12 +17,10 @@
  */
 
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { BaseAlert, PollingPausedAlert } from '@autobot/ui'
+import { BaseAlert, PollingPausedAlert, formatBytes, createLogger } from '@autobot/ui'
 import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
-import { formatBytes } from '@/utils/formatHelpers'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
-import { createLogger } from '@/utils/debugUtils'
 import { formatCompactRelativeTime } from '@/utils/dateUtils'
 import type { NodeService, ServiceStatus } from '@/types/slm'
 import i18n from '@/i18n'

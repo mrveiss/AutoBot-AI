@@ -4910,6 +4910,14 @@
             },
             "title": "Required Down",
             "type": "array"
+          },
+          "roles_with_nodes_down": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RoleNodeHealth"
+            },
+            "title": "Roles With Nodes Down",
+            "type": "array"
           }
         },
         "required": [
@@ -10744,6 +10752,36 @@
         "title": "RoleListResponse",
         "type": "object"
       },
+      "RoleNodeHealth": {
+        "description": "A multi-node role with at least one of its nodes down.",
+        "properties": {
+          "nodes_down": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Nodes Down",
+            "type": "array"
+          },
+          "nodes_up": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Nodes Up",
+            "type": "array"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "nodes_up",
+          "nodes_down"
+        ],
+        "title": "RoleNodeHealth",
+        "type": "object"
+      },
       "RolePurgeRequest": {
         "description": "Request to purge roles from a node.",
         "properties": {
@@ -15454,6 +15492,72 @@
           "effective_policy"
         ],
         "title": "UpdatePolicyResponse",
+        "type": "object"
+      },
+      "UpdateProgress": {
+        "description": "A running self-update's position in its own log (#20254).",
+        "properties": {
+          "elapsed_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elapsed Seconds"
+          },
+          "last_line_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Line At"
+          },
+          "play": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Play"
+          },
+          "state": {
+            "enum": [
+              "waiting",
+              "running",
+              "quiet",
+              "exited_without_recap",
+              "finished",
+              "unknown"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "task": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "title": "UpdateProgress",
         "type": "object"
       },
       "UpdateSummaryResponse": {
@@ -21014,6 +21118,143 @@
           }
         ],
         "summary": "Start Update All",
+        "tags": [
+          "code-sync"
+        ]
+      }
+    },
+    "/api/code-sync/update-all/nodes-offline": {
+      "get": {
+        "description": "Nodes the last self-update left offline and still are (#20250), with when that update ran.",
+        "operationId": "get_nodes_offline_after_update_api_code_sync_update_all_nodes_offline_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "title": "Response Get Nodes Offline After Update Api Code Sync Update All Nodes Offline Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Nodes Offline After Update",
+        "tags": [
+          "code-sync"
+        ]
+      }
+    },
+    "/api/code-sync/update-all/progress": {
+      "get": {
+        "description": "What the running self-update is doing, from its own log, across the SLM's restart (#20254).",
+        "operationId": "get_update_progress_api_code_sync_update_all_progress_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateProgress"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Update Progress",
         "tags": [
           "code-sync"
         ]
@@ -31920,7 +32161,7 @@
     },
     "/api/roles/owners": {
       "get": {
-        "description": "Return role -> node_id mapping for all assigned service roles (#1389).\n\nUsed by deployment/migration UIs to show which node owns each role.",
+        "description": "Return role -> node ids, and which roles may hold several (#1389, #19706).",
         "operationId": "get_role_owners_endpoint_api_roles_owners_get",
         "parameters": [
           {
@@ -38017,7 +38258,7 @@
     },
     "/scim/v2/Users/{user_id}": {
       "delete": {
-        "description": "DELETE /scim/v2/Users/{id} — deactivate/soft-delete a user.",
+        "description": "DELETE /scim/v2/Users/{id} — deactivate/soft-delete a user.\n\nA soft-deleted user is found again, so a delete answered 503 can be repeated (#20443).",
         "operationId": "scim_delete_user_scim_v2_Users__user_id__delete",
         "parameters": [
           {

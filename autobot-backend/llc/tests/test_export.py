@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from llc.services.activity_log import LLCActivityLogService
 from llc.services.portability import PortabilityService, _scrub_adapter_config
 
 # ------------------------------------------------------------------
@@ -79,7 +80,7 @@ def _make_service(session: AsyncMock | None = None) -> PortabilityService:
         session = AsyncMock()
         session.add = MagicMock()
         session.flush = AsyncMock()
-    return PortabilityService(session=session)
+    return PortabilityService(session=session, activity_log=AsyncMock(spec=LLCActivityLogService))
 
 
 def _mock_execute_mapping(rows: list) -> AsyncMock:

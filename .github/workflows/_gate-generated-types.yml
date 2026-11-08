@@ -114,6 +114,26 @@ jobs:
       - name: Install CI requirements
         uses: ./.github/actions/install-ci-requirements
 
+      # #16568: workflow.ts is generated from Python sources (the Permission and
+      # Role enums, the workflow types, the notification and overseer enums) by
+      # gen_frontend_types.py. Its only guard was frontend-codegen-drift, which is
+      # not a required context, so a backend enum change could merge with stale
+      # frontend types. It runs BEFORE the OpenAPI dump on purpose: that dump needs
+      # the whole backend to import, and a stale workflow.ts should not wait on it
+      # or hide behind its failure.
+      - name: Regenerate workflow.ts from its Python sources
+        run: python autobot-infrastructure/shared/scripts/gen_frontend_types.py
+
+      - name: Fail if workflow.ts drifted (#16568)
+        run: |
+          if ! git diff --exit-code autobot-frontend/src/types/_generated/workflow.ts; then
+            echo "::error::autobot-frontend/src/types/_generated/workflow.ts is stale."
+            echo "A Python source of the generator (an enum or type it emits) changed but the committed file was not regenerated."
+            echo "Fix: run 'python3 autobot-infrastructure/shared/scripts/gen_frontend_types.py' and commit the result."
+            exit 1
+          fi
+          echo "workflow.ts is fresh."
+
       - name: Dump authoritative OpenAPI schema
         run: |
           set -o pipefail
@@ -168,7 +188,7 @@ jobs:
             echo "Fix: run 'npm run gen:types' against a running backend and commit src/types/generated/api.ts."
             exit 1
           fi
-          echo "Generated types are fresh."
+          echo "autobot-frontend generated types (api.ts and workflow.ts) are fresh."
 
       # Positive evidence for the `verify-generated-types` gate in ci.yml (#18208): this step is
       # reached only when every step above it succeeded, so the output below is
