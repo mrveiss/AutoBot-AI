@@ -36,4 +36,17 @@ describe('WorkflowRunner waiting step', () => {
     await wrapper.findComponent(StepApprovalCard).findAll('button').find((b) => b.text() === 'Approve')!.trigger('click')
     expect(approveStep).toHaveBeenCalledWith('wf-1', 's1')
   })
+
+  it('still asks for a decision when the waiting step does not require confirmation', async () => {
+    const wf = { ...(WF as object), steps: [{ ...(WF as { steps: object[] }).steps[0], requires_confirmation: false }] } as never
+    const skipStep = vi.fn().mockResolvedValue(true)
+    const wrapper = mount(WorkflowRunner, {
+      props: { workflows: [wf], currentWorkflow: wf, loading: false, approveStep: vi.fn(), skipStep },
+      global: { plugins: [i18n], stubs: { WorkflowNotificationConfig: true } },
+    })
+    const card = wrapper.findComponent(StepApprovalCard)
+    expect(card.exists()).toBe(true)
+    await card.findAll('button').find((b) => b.text() === 'Skip step')!.trigger('click')
+    expect(skipStep).toHaveBeenCalledWith('wf-1', 's1')
+  })
 })
