@@ -1,5 +1,6 @@
 <!-- Issue #1359: i18n string extraction -->
 <script setup lang="ts">
+import { formatLocalTime, formatISOString } from '@/utils/formatHelpers'
 import { BaseButton } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
@@ -266,7 +267,7 @@ function selectSession(session: typeof sessions.value[0]) {
             <div class="screenshots-grid">
               <div v-for="(screenshot, idx) in screenshots.slice(0, 6)" :key="idx" class="screenshot-item">
                 <img :src="screenshot.image_data" :alt="$t('views.browserAutomation.screenshotAlt')" loading="lazy">
-                <div class="screenshot-meta">{{ new Date(screenshot.timestamp).toLocaleTimeString() }}</div>
+                <div class="screenshot-meta">{{ formatLocalTime(screenshot.timestamp) }}</div>
               </div>
             </div>
           </div>
@@ -300,7 +301,7 @@ function selectSession(session: typeof sessions.value[0]) {
                       {{ session.status }}
                     </span>
                   </td>
-                  <td>{{ new Date(session.created_at).toLocaleString() }}</td>
+                  <td>{{ formatISOString(session.created_at) }}</td>
                   <td class="cell-actions">
                     <button @click="selectSession(session)" class="btn-link">{{ $t('views.browserAutomation.control') }}</button>
                     <button @click="deleteSession(session.id)" class="btn-link btn-link-danger">{{ $t('views.browserAutomation.delete') }}</button>
