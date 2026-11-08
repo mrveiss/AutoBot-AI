@@ -220,7 +220,7 @@ class TestDispatchRoutesExternalTools:
 
         assert result["success"] is True
         assert result["bridge"] == "external"
-        external_bridge.call_tool.assert_awaited_once_with("fs_read", {}, role="admin")
+        external_bridge.call_tool.assert_awaited_once_with("fs_read", {}, role="admin", user_id=None)
 
     @pytest.mark.asyncio
     async def test_dispatch_surfaces_external_bridge_denial_as_failure(self):

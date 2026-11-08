@@ -96,6 +96,23 @@ async def _audit_log(*args, **kwargs):
     return await audit_log(*args, **kwargs)
 
 
+async def _audit_tool_call(result: str, user_id: str | None, resource: str, details: dict[str, Any]) -> None:
+    """Audit one external tool call, naming the actor explicitly (#20709).
+
+    A call with no user (background job, scheduler) is recorded as ``SYSTEM_ACTOR`` with
+    ``details["actor_type"] == "system"``, so it cannot be mistaken for a lost identity.
+    """
+    from services.audit_logger import SYSTEM_ACTOR  # noqa: PLC0415
+
+    await _audit_log(
+        "mcp.external_server.tool_call",
+        result=result,
+        user_id=user_id or SYSTEM_ACTOR,
+        resource=resource,
+        details={**details, "actor_type": "user" if user_id else "system"},
+    )
+
+
 class MCPExternalBridge:
     """Discovers tools from every enabled external MCP server and routes calls to them."""
 
@@ -202,12 +219,11 @@ class MCPExternalBridge:
 
         if not _role_allowed(role, entry.allowed_roles):
             logger.warning("mcp_external_bridge.call_tool role=%s denied for tool=%s", role, name)
-            await _audit_log(
-                "mcp.external_server.tool_call",
-                result="denied",
-                user_id=user_id,
-                resource=name,
-                details={"server_uri": entry.server_uri, "role": role, "allowed_roles": entry.allowed_roles},
+            await _audit_tool_call(
+                "denied",
+                user_id,
+                name,
+                {"server_uri": entry.server_uri, "role": role, "allowed_roles": entry.allowed_roles},
             )
             return ExternalToolCallResult(success=False, error=f"role '{role}' is not permitted to call '{name}'")
 
@@ -222,22 +238,10 @@ class MCPExternalBridge:
                 result = await client.call_tool(entry.original_name, arguments)
         except Exception as exc:  # noqa: BLE001
             logger.warning("mcp_external_bridge.call_tool error tool=%s: %s", name, exc)
-            await _audit_log(
-                "mcp.external_server.tool_call",
-                result="error",
-                user_id=user_id,
-                resource=name,
-                details={"server_uri": entry.server_uri, "error": str(exc)},
-            )
+            await _audit_tool_call("error", user_id, name, {"server_uri": entry.server_uri, "error": str(exc)})
             return ExternalToolCallResult(success=False, error=str(exc))
 
-        await _audit_log(
-            "mcp.external_server.tool_call",
-            result="success",
-            user_id=user_id,
-            resource=name,
-            details={"server_uri": entry.server_uri},
-        )
+        await _audit_tool_call("success", user_id, name, {"server_uri": entry.server_uri})
         return ExternalToolCallResult(success=True, result=result)
 
 
