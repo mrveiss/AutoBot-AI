@@ -432,6 +432,15 @@
       become: true
       tags: [slm, shared]
 
+    - name: "[PLAY 1] SLM | Stage .python-version onto the node (#20942)"
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../../.python-version"
+        dest: "{{ autobot.base_dir }}/.python-version"
+        owner: autobot
+        mode: "0644"
+      become: true
+      tags: [always]
+
     # #15462: must land BEFORE the npm ci / build tasks below, which resolve
     # @autobot/ui and the plugins through symlinks into these directories.
     - name: "[PLAY 1] SLM | Deploy libs (workspace packages)"
