@@ -17,7 +17,6 @@ from fastapi import (
     HTTPException,
     Request,
     WebSocket,
-    WebSocketDisconnect,
 )
 from starlette.datastructures import State
 from starlette.websockets import WebSocketState
@@ -30,6 +29,7 @@ from api.schemas_transcripts import (
 )
 from api.ws_security import enforce_ws_origin
 from auth_middleware import authenticate_websocket, get_current_user
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.principal import resolve_principal_id
@@ -182,8 +182,8 @@ async def analyze_transcript_ws(websocket: WebSocket, transcript_id: str):
 
     try:
         await _run_analysis_session(websocket, transcript_id, user)
-    except WebSocketDisconnect:
-        logger.info("Client disconnected from transcript analysis WebSocket: %s", transcript_id)
+    except PEER_CLOSED_ERRORS as disconnect:
+        log_client_disconnect(logger, disconnect, "analyze_transcript_ws")
     except ValueError as e:
         logger.warning("Invalid analysis request: %s", e)
         if websocket.client_state == WebSocketState.CONNECTED:

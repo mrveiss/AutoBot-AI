@@ -31,7 +31,6 @@ from fastapi import (
     HTTPException,
     Request,
     WebSocket,
-    WebSocketDisconnect,
 )
 
 from api.schemas_workflows import (
@@ -58,6 +57,8 @@ from utils.long_running_operations.views import operation_view
 
 # Add AutoBot paths
 sys.path.append(str(PATH.PROJECT_ROOT))
+
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 
 # Import our long-running operations framework
 from autobot_shared.missing_dep import optional_import
@@ -434,8 +435,8 @@ async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
                 # Send ping to keep connection alive
                 await websocket.send_json({"type": "ping"})
 
-    except WebSocketDisconnect:
-        logger.debug("WebSocket disconnected for operation %s", operation_id)
+    except PEER_CLOSED_ERRORS as disconnect:
+        log_client_disconnect(logger, disconnect, "websocket_progress_updates")
     finally:
         # Remove from connections
         if (
