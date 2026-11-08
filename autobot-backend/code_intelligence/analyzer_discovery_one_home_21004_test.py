@@ -459,3 +459,46 @@ def test_star_stays_inside_one_component_and_double_star_spans(tmp_path: Path):
         ("src/gen/x.py", "src/*/x.py", True),
     ]:
         assert module.matches_exclusion(tmp_path / rel, [pattern], tmp_path) is expected, (rel, pattern)
+
+
+def test_a_namespace_package_named_backup_is_skipped_today(tmp_path: Path):
+    """Pins the documented limit: the package check looks only at ``<dir>/__init__.py`` (PEP 420 is not seen)."""
+    _touch(tmp_path, "backup/ns.py", "pkg/backup/nested.py", "pkg/__init__.py", "pkg/real.py")
+    found = {p.relative_to(tmp_path).as_posix() for p in _load_real_module().discover_files(tmp_path)}
+    assert found == {"pkg/__init__.py", "pkg/real.py"}  # backup/ and pkg/backup/ are skipped
+
+
+def test_a_nested_package_named_backup_with_init_is_kept(tmp_path: Path):
+    _touch(tmp_path, "pkg/__init__.py", "pkg/backup/__init__.py", "pkg/backup/s.py")
+    found = {p.relative_to(tmp_path).as_posix() for p in _load_real_module().discover_files(tmp_path)}
+    assert "pkg/backup/s.py" in found
+
+
+def test_a_non_python_backup_dir_holding_source_is_kept_for_a_walk_that_selects_it(tmp_path: Path):
+    module = _load_real_module()
+    _touch(tmp_path, "src/backup/view.vue", "src/backup/api.ts", "src/archive/notes.txt", "src/ok.ts")
+    ts_walk = {p.relative_to(tmp_path).as_posix() for p in module.discover_files(tmp_path, ("*.ts", "*.vue"))}
+    assert ts_walk == {"src/backup/view.vue", "src/backup/api.ts", "src/ok.ts"}
+    every = {p.relative_to(tmp_path).as_posix() for p in module.discover_files(tmp_path, ("*",))}
+    assert "src/backup/view.vue" in every and "src/archive/notes.txt" not in every  # no source there: still skipped
+    # Control, other direction: a Python-only walk selects none of it, so the __init__ test decides.
+    assert module.discover_files(tmp_path, ("*.py",)) == []
+
+
+def test_matches_exclusion_keeps_a_foreign_source_file_in_a_backup_dir(tmp_path: Path):
+    module = _load_real_module()
+    _touch(tmp_path, "src/backup/view.vue", "src/backup/dead.py")
+    assert not module.matches_exclusion(tmp_path / "src/backup/view.vue", (), tmp_path)
+    assert module.matches_exclusion(tmp_path / "src/backup/dead.py", (), tmp_path)
+
+
+def test_base_analyzer_and_multi_language_scanner_walks_reach_a_non_python_backup_dir(tmp_path: Path):
+    from code_intelligence.base_analyzer import MultiLanguageAnalyzer
+
+    _touch(tmp_path, "src/backup/view.ts", "src/plain/view.ts")
+    analyzer = MultiLanguageAnalyzer()
+    files = {p.relative_to(tmp_path).as_posix() for p in analyzer._collect_files_to_analyze(tmp_path, True, None)}
+    # Control: the backup/ file is treated exactly like the same file in an ordinary dir.
+    assert ("src/backup/view.ts" in files) == ("src/plain/view.ts" in files)
+    assert {p.name for p in _load_real_module().discover_files(tmp_path, ("*",))} == {"view.ts"}
+    assert len(_load_real_module().discover_files(tmp_path, ("*",))) == 2

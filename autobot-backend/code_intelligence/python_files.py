@@ -15,10 +15,10 @@ import os
 import re
 from functools import lru_cache
 from pathlib import Path
-from typing import Iterable, Iterator, List, Set
+from typing import Callable, Iterable, Iterator, List, Set
 
 from autobot_shared.testfile_names import is_test_filename
-from utils.file_categorization import SKIP_DIRS
+from utils.file_categorization import ALL_CODE_EXTENSIONS, PYTHON_EXTENSIONS, SKIP_DIRS
 
 # The one directory-name exclusion rule for every code-intelligence analyzer
 # (#21004): the repo-wide ``SKIP_DIRS`` plus ONE non-code rule, defined here once.
@@ -26,6 +26,13 @@ from utils.file_categorization import SKIP_DIRS
 # also legitimate package names (``autobot-backend/backup/`` is imported by the
 # lifespan), so such a directory is skipped only when it is NOT a Python package
 # (no ``__init__.py``). ``.mypy_cache`` is never code and is skipped always.
+#
+# Limits of the package check, pinned by tests: it looks ONLY at ``<dir>/__init__.py``.
+# A PEP 420 namespace package (no ``__init__.py``) named like one of these is therefore
+# treated as non-code, and so is a nested ``pkg/backup/`` without one. A directory that
+# holds source files of another language (``.ts``/``.vue``/... from
+# ``ALL_CODE_EXTENSIONS``) that the walk selects is code in that language and is kept;
+# a Python-only walk (``*.py``) selects none, so there the ``__init__.py`` test decides.
 PACKAGE_AWARE_NON_CODE_NAMES: frozenset = frozenset({"archive", "archives", "backup", "backups", "third_party"})
 ANALYSIS_EXCLUDE_DIRS: frozenset = frozenset(SKIP_DIRS | PACKAGE_AWARE_NON_CODE_NAMES | {".mypy_cache"})
 
@@ -111,11 +118,34 @@ def matches_exclusion(path: str | Path, patterns: Iterable[str], root: Path | No
     return any(_pattern_matches(pattern, text) for pattern in patterns)
 
 
-def _is_skipped_dir(parent: Path, name: str, excluded: Iterable[str]) -> bool:
-    """True if directory *name* under *parent* is excluded (package-aware for archive/backup names)."""
+_FOREIGN_SOURCE_EXTENSIONS = frozenset(ALL_CODE_EXTENSIONS - PYTHON_EXTENSIONS)
+
+
+def _holds_foreign_source(directory: Path, patterns: Iterable[str]) -> bool:
+    """True if *directory* holds a non-Python source file that one of *patterns* selects."""
+    names = list(patterns)
+    for _, dirnames, filenames in os.walk(directory):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        for name in filenames:
+            if Path(name).suffix.lower() in _FOREIGN_SOURCE_EXTENSIONS and any(
+                fnmatch.fnmatchcase(name, p) for p in names
+            ):
+                return True
+    return False
+
+
+def _is_skipped_dir(parent: Path, name: str, excluded: Iterable[str], holds_code: Callable[[Path], bool]) -> bool:
+    """True if directory *name* under *parent* is excluded.
+
+    An archive/backup-style name is kept when it is a Python package or when
+    *holds_code* says it holds source of a language the caller scans.
+    """
     if name not in excluded:
         return False
-    return not (name in PACKAGE_AWARE_NON_CODE_NAMES and (parent / name / "__init__.py").is_file())
+    if name not in PACKAGE_AWARE_NON_CODE_NAMES:
+        return True
+    directory = parent / name
+    return not ((directory / "__init__.py").is_file() or holds_code(directory))
 
 
 def is_excluded(path: Path, root: Path, excluded: Iterable[str]) -> bool:
@@ -124,7 +154,8 @@ def is_excluded(path: Path, root: Path, excluded: Iterable[str]) -> bool:
     Matching the absolute path asked whether an excluded name appears anywhere
     in it, including in the root itself, so a tree checked out below e.g. a
     ``venv`` directory scanned as empty (#13602, #20493). An archive/backup-style
-    name is excluded only when that directory is not a Python package.
+    name is excluded only when that directory is not a Python package and *path*
+    is not itself a source file of another language.
     """
     try:
         parts = path.relative_to(root).parts
@@ -134,7 +165,8 @@ def is_excluded(path: Path, root: Path, excluded: Iterable[str]) -> bool:
         # place under the root is worse than skipping it (#20493).
         return True
     excluded = set(excluded)
-    return any(_is_skipped_dir(root.joinpath(*parts[:i]), name, excluded) for i, name in enumerate(parts))
+    foreign = path.suffix.lower() in _FOREIGN_SOURCE_EXTENSIONS
+    return any(_is_skipped_dir(root.joinpath(*parts[:i]), n, excluded, lambda _d: foreign) for i, n in enumerate(parts))
 
 
 def _escapes(path: Path, real_root: Path, excluded: Iterable[str]) -> bool:
@@ -148,8 +180,12 @@ def _escapes(path: Path, real_root: Path, excluded: Iterable[str]) -> bool:
 def _walk_matches(root: Path, patterns: List[str], excluded: Set[str]) -> Iterator[Path]:
     """Yield files under *root* matching a pattern, pruning excluded dirs while walking."""
     real_root = root.resolve()
+
+    def holds(directory: Path) -> bool:
+        return _holds_foreign_source(directory, patterns)
+
     for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
-        dirnames[:] = [d for d in dirnames if not _is_skipped_dir(Path(dirpath), d, excluded)]
+        dirnames[:] = [d for d in dirnames if not _is_skipped_dir(Path(dirpath), d, excluded, holds)]
         for name in filenames:
             if not any(fnmatch.fnmatchcase(name, pattern) for pattern in patterns):
                 continue
