@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # After a clean install, prove the SLM is usable (#19403): health answers, the admin logs in
-# with the password the installer stored, and this host is registered as a node. Each failure
+# with the password the installer stored, this host is registered as a node, and the installer marked it synced (#18663). Each failure
 # names its step. Run as root (the secrets file is root:autobot 0640).
 #
 #   SLM_URL=<base url> [EXPECT_PASSWORD_FILE=<file>] clean_install_check.sh
@@ -55,6 +55,20 @@ step_node() {
     echo "node: ok (${host})"
 }
 
+# #18663: install.sh marks the local node synced after registering it; Code Sync then reads
+# up_to_date with a commit instead of 'unknown'.
+step_synced() {
+    local host nodes
+    host=$(hostname)
+    nodes=$(curl -sfk --max-time 10 -H "Authorization: Bearer ${TOKEN}" "${SLM_URL}/slm/api/nodes") \
+        || fail synced "GET /slm/api/nodes failed"
+    HOST="${host}" jq -e '.nodes[] | select(.hostname == env.HOST)
+        | .code_status == "up_to_date" and ((.code_version // "") | length) > 0' <<<"${nodes}" >/dev/null \
+        || fail synced "this host (${host}) is not marked synced; code_status/code_version: $(HOST="${host}" jq -c '[.nodes[] | select(.hostname == env.HOST) | {code_status, code_version}]' <<<"${nodes}")"
+    echo "synced: ok (${host})"
+}
+
 step_health
 step_login
 step_node
+step_synced
