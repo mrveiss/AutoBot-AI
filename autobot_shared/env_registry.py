@@ -58,17 +58,11 @@ def env(name: str, default: Any = None) -> Any:
         return spec.default if default is None else default
 
 
-# Registered variables -- grouped by component
 # Per-component siblings split at the size ceiling (#14236, #18391); imported after REGISTRY exists, before any read.
 from autobot_shared import env_registry_agent_runtime  # noqa: E402,F401
 from autobot_shared import env_registry_backend  # noqa: E402,F401
 from autobot_shared import env_registry_backend_services  # noqa: E402,F401
 from autobot_shared import env_registry_knowledge  # noqa: E402,F401
-from autobot_shared import env_registry_llc  # noqa: E402,F401
-from autobot_shared import env_registry_logging  # noqa: E402,F401
-from autobot_shared import env_registry_memory  # noqa: E402,F401
-from autobot_shared import env_registry_security  # noqa: E402,F401
-from autobot_shared import env_registry_tls  # noqa: E402,F401
 from autobot_shared import (  # noqa: E402,F401
     env_registry_agent_tools,
     env_registry_ai,
@@ -76,17 +70,25 @@ from autobot_shared import (  # noqa: E402,F401
     env_registry_approvals,
     env_registry_batch,
     env_registry_chat_attachments,
+    env_registry_chat_history,
     env_registry_chat_lease,
     env_registry_gateway,
     env_registry_ledger,
+    env_registry_llc,
+    env_registry_logging,
+    env_registry_memory,
+    env_registry_mesh_reembed,
     env_registry_npu,
     env_registry_postgres,
     env_registry_rag,
+    env_registry_security,
     env_registry_slm,
     env_registry_slm_health,
     env_registry_slm_rollback,
     env_registry_terminal,
     env_registry_testing,
+    env_registry_tls,
+    env_registry_transcriber,
     env_registry_worker_loop,
 )
 
@@ -436,8 +438,7 @@ register_env_var(
     )
 )
 
-# --- tls: env_registry_tls.py ------------------------------------------
-# --- network: env_registry_tls.py (#18765, to make room for a sibling import) ---
+# --- tls, network: env_registry_tls.py (#18765; one line to make room for the mesh sibling import) ---
 
 # --- voice / speech-to-text -------------------------------------------------
 
@@ -839,19 +840,6 @@ register_env_var(
 )
 
 # --- storage paths and toolsets (#14223) -------------------------------------
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_TRANSCRIBER_DB_PATH",
-        type=str,
-        default="data/transcriber.db",
-        description=(
-            "SQLite database backing the transcriber. Relative to the working "
-            "directory unless given as an absolute path."
-        ),
-        component="voice",
-    )
-)
 
 register_env_var(
     EnvVarSpec(

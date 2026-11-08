@@ -701,7 +701,7 @@ Output as JSON:
     # Helper methods
     async def _store_plan(self, plan: ExecutionPlan) -> None:
         """Store plan in Redis"""
-        key = f"autobot:plans:{plan.plan_id}"
+        key = plan_key(self.config.key_scope, plan.plan_id)  # autobot:plans:<session>:<id>
         await self.redis.set(key, json.dumps(plan.to_dict()), ex=86400)
         self._plans[plan.plan_id] = plan
 
@@ -710,7 +710,7 @@ Output as JSON:
         if plan_id in self._plans:
             return self._plans[plan_id]
 
-        key = f"autobot:plans:{plan_id}"
+        key = plan_key(self.config.key_scope, plan_id)  # autobot:plans:<session>:<id>
         data = await self.redis.get(key)
         if data:
             plan_dict = json.loads(data)

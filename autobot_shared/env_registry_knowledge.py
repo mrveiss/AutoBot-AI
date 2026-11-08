@@ -544,52 +544,13 @@ register_env_var(
     )
 )
 
-# --- mesh re-embed consumer (#20535) ---
 register_env_var(
     EnvVarSpec(
-        name="AUTOBOT_MESH_REEMBED_ENABLED",
-        type=bool,
-        default=True,
-        description=(
-            "Run the consumer that drains mesh:reembed_queue into the document re-index "
-            "queue. Turning it off lets the queue grow unread "
-            "(services/mesh_brain/reembed_consumer.py)."
-        ),
-        component="mesh",
+        name="AUTOBOT_DOC_INDEX_PROGRESS_INTERVAL_S",
+        type=float,
+        default=30.0,
+        description="Seconds between batch progress lines while the doc indexer embeds chunks (#20886).",
+        component="knowledge",
+        range=(1.0, 3600.0),
     )
 )
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_MESH_REEMBED_INTERVAL_S",
-        type=int,
-        default=30,
-        description="Seconds between drain passes of mesh:reembed_queue by the lease-holding worker.",
-        component="mesh",
-        range=(1, 3600),
-    )
-)
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_MESH_REEMBED_BATCH",
-        type=int,
-        default=100,
-        description="Maximum items taken from mesh:reembed_queue in one drain pass.",
-        component="mesh",
-        range=(1, 10000),
-    )
-)
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_MESH_REEMBED_MAX_ATTEMPTS",
-        type=int,
-        default=3,
-        description=(
-            "Attempts per mesh:reembed_queue item before it is moved to the mesh:reembed_dead dead-letter list."
-        ),
-        component="mesh",
-        range=(1, 20),
-    )
-)
-
-# The rest of the re-embed settings live in a sibling: this file has no room left under the 600-line ceiling.
-from autobot_shared import env_registry_mesh_reembed  # noqa: E402,F401  # #20535

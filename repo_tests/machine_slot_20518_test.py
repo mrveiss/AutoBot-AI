@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 
 import pytest
+from repo_tests._machine_slot_hook import fake_load, hook_functions
 from repo_tests._paths import repo_root
 
 _ROOT = repo_root()
@@ -22,12 +23,14 @@ _ENV_DROP = ("CI", "AUTOBOT_MACHINE_SLOT_HELD")
 
 def _env(slots: Path) -> dict:
     env = {k: v for k, v in os.environ.items() if k not in _ENV_DROP}
+    loadavg = fake_load(slots / "loadavg")
     env.update(AUTOBOT_MACHINE_SLOT_DIR=str(slots), AUTOBOT_MACHINE_SLOTS="1", AUTOBOT_MACHINE_SLOT_POLL="0.1")
+    env.update(AUTOBOT_MACHINE_SLOT_LOADAVG=str(loadavg))
     return env
 
 
 def _bash_waiter(slots: Path) -> subprocess.Popen:
-    fn = re.search(r"^machine_slot_wait\(\) \{\n(?:.*\n)*?\}$", _HOOK, re.MULTILINE).group(0)
+    fn = hook_functions()
     script = f'log() {{ echo "$*"; }}; warn() {{ echo "$*"; }}\n{fn}\nmachine_slot_wait; echo GOT\n'
     return subprocess.Popen(["bash", "-c", script], env=_env(slots), stdout=subprocess.PIPE, text=True)
 
@@ -69,7 +72,7 @@ def test_a_queued_push_prints_while_it_waits_and_names_the_holder(tmp_path: Path
     held = os.open(tmp_path / "slot-1", os.O_WRONLY)
     fcntl.flock(held, fcntl.LOCK_EX)
     env = {**_env(tmp_path), "AUTOBOT_MACHINE_SLOT_REPORT": "1"}
-    fn = re.search(r"^machine_slot_wait\(\) \{\n(?:.*\n)*?\}$", _HOOK, re.MULTILINE).group(0)
+    fn = hook_functions()
     script = f'log() {{ echo "$*"; }}; warn() {{ echo "$*"; }}\n{fn}\nmachine_slot_wait; echo GOT\n'
     waiter = subprocess.Popen(["bash", "-c", script], env=env, stdout=subprocess.PIPE, text=True)
     time.sleep(1.5)
@@ -82,11 +85,12 @@ def test_a_queued_push_prints_while_it_waits_and_names_the_holder(tmp_path: Path
 def test_the_hook_and_python_build_the_same_default_path(tmp_path: Path) -> None:
     env = {k: v for k, v in os.environ.items() if k not in _ENV_DROP + ("AUTOBOT_MACHINE_SLOT_DIR",)}
     env.update(XDG_RUNTIME_DIR=str(tmp_path), PATH=os.environ["PATH"])
+    env["AUTOBOT_MACHINE_SLOT_LOADAVG"] = str(fake_load(tmp_path.with_name(tmp_path.name + "-load")))
     code = "from repo_tests.machine_slot import _slot_paths; print(_slot_paths()[0].parent)"
     python = subprocess.run(
         [sys.executable, "-c", code], env=env, cwd=_ROOT, capture_output=True, text=True, check=True
     )
-    fn = re.search(r"^machine_slot_wait\(\) \{\n(?:.*\n)*?\}$", _HOOK, re.MULTILINE).group(0)
+    fn = hook_functions()
     bash = subprocess.run(
         ["bash", "-c", f'log() {{ :; }}; warn() {{ :; }}\n{fn}\nmachine_slot_wait; ls -d "$XDG_RUNTIME_DIR"/*'],
         env=env,
