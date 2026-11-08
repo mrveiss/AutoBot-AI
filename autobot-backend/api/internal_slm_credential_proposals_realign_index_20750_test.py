@@ -51,7 +51,7 @@ def _run(monkeypatch, rows, dialect: str = "postgresql"):
 
 
 def test_it_chains_on_the_previous_head() -> None:
-    assert _migration().down_revision == "20261102_109"
+    assert _migration().down_revision == "20261102_110"
 
 
 def test_it_creates_the_realign_index_without_duplicates(monkeypatch) -> None:

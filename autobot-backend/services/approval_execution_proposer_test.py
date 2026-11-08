@@ -140,6 +140,8 @@ def test_every_proposer_actually_names_its_action_and_creates_an_approval(regist
             f'"{action}"' in source
             or f"'{action}'" in source
             or any(value == action for value in vars(module).values() if isinstance(value, str))
+            # an imported action object (``CredentialAction``) names the action through ``.name`` (#20750)
+            or any(getattr(value, "name", None) == action for value in vars(module).values())
         )
         assert names_it, (
             f"action {action!r} declares proposer {proposed_by!r}, but that module neither "
