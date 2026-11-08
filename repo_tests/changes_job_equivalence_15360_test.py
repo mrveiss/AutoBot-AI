@@ -89,10 +89,12 @@ ISSUE_17822_ENTRIES = tuple(
 # migration tests import, `llc/services/membership_policy.py` (#19985's two-session membership-lock test), and
 # `llc/services/budget.py` + `llc/exceptions.py` (#20168's cost event foreign key test), and
 # `llc/services/company_os/**` + `llc/services/goal.py` (#20115's two-session plan convert lock test), and
-# `services/ai_line_change_proposal.py` + `autobot_shared/ai_lines.py` (imported by `plan_convert_lines.py`, which that test runs, #20086).
+# `services/ai_line_change_proposal.py` + `autobot_shared/ai_lines.py` (imported by `plan_convert_lines.py`, which that test runs, #20086),
+# and `autobot_shared/db_session.py` + `autobot_shared/user_management/models/audit.py` (the secrets API test's canonical
+# audit store on its database, #20557).
 assert (
-    len(ISSUE_17822_ENTRIES) == 28
-), "the pinned migration-gate set is 28 entries; an emptied fixture would pin nothing"
+    len(ISSUE_17822_ENTRIES) == 30
+), "the pinned migration-gate set is 30 entries; an emptied fixture would pin nothing"
 ISSUE_17822_WORKFLOW = "migration-gate"
 EVENTS = ("push", "pull_request", "merge_group", "schedule", "workflow_dispatch")
 MG_SHA = "merge-group-base-sha"  # a stand-in value; only its presence or absence is compared
@@ -209,6 +211,15 @@ ALLOWED_ADDITIONS = {
             "**/*.toml",
             "**/*.j2",
             "docs/*.md",
+            # #20884: nested docs held to a per-file version-first Claude id count (concrete files, not docs/**).
+            "docs/api/COMPREHENSIVE_API_DOCUMENTATION.md",
+            "docs/api/public-api-reference.md",
+            "docs/architecture/DISTRIBUTED_ARCHITECTURE.md",
+            "docs/architecture/SSOT_CONFIGURATION_ARCHITECTURE.md",
+            "docs/developer/04-configuration.md",
+            "docs/developer/DEVELOPER_SETUP.md",
+            "docs/developer/HARDCODING_PREVENTION.md",
+            "docs/guides/chat-ollama-configuration.md",
             # #18549: one_playwright_server_18549_test.py reads the canonical server and its store.
             "autobot-browser-worker/playwright-server.js",
             "autobot-browser-worker/session-store.js",
@@ -266,6 +277,10 @@ ALLOWED_ADDITIONS = {
             ".github/workflows/dependabot-close-stale.yml",
             # #19611: the playbook-reference guard reads this guide for its declared exemption.
             "docs/guides/slm-docker-ansible-deployment.md",
+            # #20903: python_version_declaration_drift_test.py sweeps this file's python floor lines.
+            "docs/DEPENDENCIES.md",
+            # #20903: the same guard sweeps every tracked pyproject's requires-python.
+            "**/pyproject.toml",
             # #19279: the landing-page guard reads the page for the libraries and placeholders it renders.
             "docs/index.html",
             # #18559: both duplication-guard tests read the pins file.

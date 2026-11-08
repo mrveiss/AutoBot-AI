@@ -295,6 +295,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatLocalTime } from '@/utils/formatHelpers'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -402,7 +403,7 @@ const contextWindowProps = computed(() => ({
   usagePercent: _ctxWindow.usagePercent.value,
   isWarning: _ctxWindow.isWarning.value,
   isCritical: _ctxWindow.isCritical.value,
-  hasData: _ctxWindow.hasData.value,
+  hasData: _ctxWindow.hasData.value, loadError: _ctxWindow.loadError.value,
   isSummarizing: isSummarizing.value, // GH#9043: show summarization progress
 }))
 
@@ -741,7 +742,7 @@ const sessionInfo = computed(() => {
 
   const messageCount = session.messages.length
   const lastMessage = session.messages[session.messages.length - 1]
-  const lastMessageTime = lastMessage ? new Date(lastMessage.timestamp).toLocaleTimeString() : null
+  const lastMessageTime = lastMessage ? formatLocalTime(lastMessage.timestamp) : null
   const sessionId = session.id  // Display full UUID
 
   if (messageCount === 0) {
@@ -750,7 +751,6 @@ const sessionInfo = computed(() => {
 
   return t('chat.interface.sessionInfo', { sessionId, count: messageCount, time: lastMessageTime })
 })
-
 
 // Methods
 

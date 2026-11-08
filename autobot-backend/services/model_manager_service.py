@@ -13,6 +13,7 @@ combined list in Redis for 60 seconds to avoid latency on every dropdown open.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
@@ -57,14 +58,21 @@ _CLAUDE_TIER_CAPABILITIES: Dict[str, List[str]] = {
 }
 
 
+# A tier-first ID (opus 5.5) and a version-first ID (Claude 3 Opus, dated) both name a tier.
+_CLAUDE_TIER_RE = re.compile(r"claude-(?:\d+(?:-\d+)?-)?(?P<tier>opus|sonnet|haiku|fable)")
+
+
 def _claude_hints(name_lower: str) -> Dict[str, Any] | None:
     """Hints for a Claude model: tier capabilities, window from the context-window table (0 = unknown)."""
-    for tier, capabilities in _CLAUDE_TIER_CAPABILITIES.items():
-        if f"claude-{tier}" in name_lower:
-            from context_window_lookup import known_context_window_tokens
+    match = _CLAUDE_TIER_RE.search(name_lower)
+    if match is None:
+        return None
+    from context_window_lookup import known_context_window_tokens
 
-            return {"capabilities": capabilities, "context_window": known_context_window_tokens(name_lower)}
-    return None
+    return {
+        "capabilities": _CLAUDE_TIER_CAPABILITIES[match.group("tier")],
+        "context_window": known_context_window_tokens(name_lower),
+    }
 
 
 _DEFAULT_HINTS: Dict[str, Any] = {

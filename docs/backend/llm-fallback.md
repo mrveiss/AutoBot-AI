@@ -43,7 +43,7 @@ keyed on that ID, and the logs below print it. An alias is accepted wherever a c
 
 | Primary | Fallback 1 | Fallback 2 |
 |---------|-----------|-----------|
-| `opus-cross` (anthropic) | `gpt-4o` (openai) | `ollama/llama3` (ollama) |
+| the current Opus ID followed by `-cross` (anthropic) | `gpt-4o` (openai) | `ollama/llama3` (ollama) |
 
 This chain demonstrates the recommended pattern: expensive cloud → cheaper cloud → local model.
 

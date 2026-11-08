@@ -13,7 +13,7 @@ API keys are never logged.
 
 Extended thinking (#3258):
   Pass a ``thinking`` dict in ``request.metadata["api_kwargs"]`` to enable
-  chain-of-thought reasoning on supported models (claude-3-7-sonnet and later):
+  chain-of-thought reasoning on supported models (Claude 3.7 Sonnet and later):
 
       api_kwargs = {
           "thinking": {"type": "adaptive"},
@@ -347,8 +347,11 @@ class AnthropicProvider(BaseProvider):
         if not requires_adaptive_thinking(model):
             return
         budget = thinking.get("budget_tokens")
+        caller_output_config = api_kwargs.get("output_config")
         api_kwargs.pop("thinking")
         _apply_thinking_budget(api_kwargs, model, int(budget) if budget else 0)
+        if not budget and isinstance(caller_output_config, dict) and caller_output_config.get("effort"):
+            api_kwargs["output_config"] = caller_output_config  # no budget to map: the caller's effort stands
         # Interleaved thinking is automatic on an adaptive model: the caller's beta for it is dropped (#20884).
         beta = "interleaved-thinking-2025-05-14"
         if api_kwargs.get("betas"):

@@ -27,7 +27,7 @@ from autobot_shared.local_models import is_local_model
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
-from autobot_shared.ssot_claude_models import CLAUDE_FABLE, CLAUDE_HAIKU, CLAUDE_OPUS, CLAUDE_SONNET
+from autobot_shared.ssot_claude_models import CLAUDE_FABLE, CLAUDE_HAIKU, CLAUDE_OPUS, CLAUDE_SONNET, LEGACY_PRICE_ROWS
 from autobot_shared.status_enums import LLMProvider  # noqa: F401 (re-exported, #12661)
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.model_constants import (
@@ -201,7 +201,7 @@ class LLMCostTracker(AsyncRedisClientMixin):
     # Pattern-based pricing fallbacks for unknown models (#1961).
     # Ordered from most specific to least specific.
     _FALLBACK_PATTERNS: List[tuple] = [
-        # Claude: the current-generation rows (#20884). An exact 4.x row is found before this fallback runs.
+        *LEGACY_PRICE_ROWS,  # an earlier Claude generation matches its own row before the current tiers (#20884)
         ("claude-fable", CLAUDE_FABLE),
         ("claude-opus", CLAUDE_OPUS),
         ("claude-sonnet", CLAUDE_SONNET),

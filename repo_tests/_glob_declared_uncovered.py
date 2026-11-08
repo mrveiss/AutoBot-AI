@@ -162,6 +162,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     "*.yml": (
         {
             "repo_tests/hosted_model_literal_guard_15501_test.py",
+            "repo_tests/workflow_jobs_use_python_floor_20903_test.py",
             "repo_tests/access_control_enforcement_provisioning_test.py",
             "repo_tests/ansible_code_source_delegation_17243_test.py",
             "repo_tests/ansible_generated_manifest_paths_17331_test.py",

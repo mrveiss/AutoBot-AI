@@ -155,9 +155,11 @@ def test_the_default_position_check_has_contrast():
 # at most the count recorded, and a count that fell must be lowered here (the number only falls).
 # ---------------------------------------------------------------------------
 
-#: A pinned id (``claude-sonnet-5-5``) or a quoted tier-only literal (``'claude-sonnet'``): the latter is how a
+#: A pinned id (``claude-sonnet-5-5``, or the version-first ``claude-3-opus-20240229``) or a quoted tier-only literal (``'claude-sonnet'``): the latter is how a
 #: frontend or table once mapped every model of a tier to one window or price (#20884).
-_CLAUDE_ID = re.compile(r"""claude-(?:opus|sonnet|haiku|fable)-\d|['"`]claude-(?:opus|sonnet|haiku|fable)['"`]""")
+_CLAUDE_ID = re.compile(
+    r"""claude-(?:opus|sonnet|haiku|fable)-\d|claude-\d(?:-\d)?-(?:opus|sonnet|haiku)|['"`]claude-(?:opus|sonnet|haiku|fable)['"`]"""
+)
 _SCAN_ROOTS = (
     "autobot-backend",
     "autobot-frontend",
@@ -189,26 +191,45 @@ _CLAUDE_HOMES: dict[str, str] = {
 _CLAUDE_BASELINE: dict[str, tuple[int, str]] = {
     "autobot-backend/llm_shared/model_param_registry.py": (1, "docstring usage example"),
     "autobot-backend/services/llm_cost_tracker.py": (
-        4,
-        "substring keys of the price fallback; each maps to a current SSOT row, none states a price or window",
+        5,
+        "substring keys of the price fallback (each maps to a current SSOT row, none states a price or window) and a docstring example",
     ),
     "docs/api/USAGE_METERING_API.md": (1, "prose naming the substring-pattern heuristic"),
     "autobot-backend/llm_shared/pricing/crosscheck.py": (2, "prose: describes how external catalogues spell a model"),
     "autobot-backend/llm_shared/pricing/anthropic_source.py": (
-        3,
-        "older 4.x baseline rows keyed by literal; the current generation is read from model_pricing",
+        8,
+        "older 3.x/4.x baseline rows keyed by literal; the current generation is read from model_pricing",
     ),
     "autobot-backend/llm_shared/pricing/vertexai_source.py": (
-        2,
+        5,
         "Vertex versioned ids; the 5.x Vertex ids are not known",
     ),
-    "autobot-backend/llm_shared/providers/vertexai.py": (2, "Vertex versioned ids; the 5.x Vertex ids are not known"),
+    "autobot-backend/llm_shared/providers/vertexai.py": (5, "Vertex versioned ids; the 5.x Vertex ids are not known"),
+    "autobot-backend/llm_shared/providers/bedrock.py": (
+        9,
+        "Bedrock's own ids (anthropic.claude-3-...), a catalogue of that vendor",
+    ),
     "autobot-backend/migrations/versions/20260525_042_agent_org_nodes_haiku_tier.py": (2, "migration history, frozen"),
     "autobot_shared/ssot_hosted_models.py": (
-        3,
+        4,
         "Bedrock's own ids (anthropic.claude-...-v1:0), not the first-party ids",
     ),
     "autobot-frontend/src/types/generated/api.ts": (2, "generated from the OpenAPI text; regenerated, not edited"),
+    # Version-first (Claude 3.x) ids, counted since the matcher learned that order (#20884 review); each is a follow-up.
+    "autobot-frontend/src/components/analytics/LLMPatternDashboard.vue": (
+        3,
+        "a model <select> listing Claude 3 values",
+    ),
+    "autobot-frontend/src/constants/providerFallbackEvents.ts": (1, "doc-comment example"),
+    "autobot_shared/ssot_config.py": (2, "docstring examples"),
+    "docs/api/COMPREHENSIVE_API_DOCUMENTATION.md": (2, "prose/examples naming a Claude 3 id"),
+    "docs/api/public-api-reference.md": (2, "prose/examples naming a Claude 3 id"),
+    "docs/architecture/DISTRIBUTED_ARCHITECTURE.md": (3, "prose/examples naming a Claude 3 id"),
+    "docs/architecture/SSOT_CONFIGURATION_ARCHITECTURE.md": (1, "prose/examples naming a Claude 3 id"),
+    "docs/developer/04-configuration.md": (2, "prose/examples naming a Claude 3 id"),
+    "docs/developer/DEVELOPER_SETUP.md": (1, "prose/examples naming a Claude 3 id"),
+    "docs/developer/HARDCODING_PREVENTION.md": (1, "prose/examples naming a Claude 3 id"),
+    "docs/guides/chat-ollama-configuration.md": (1, "prose/examples naming a Claude 3 id"),
     "docs/developer/CLAUDE_WORKFLOW.md": (3, "model-tier table; edited in a separate PR that also touches this file"),
 }
 
@@ -226,7 +247,8 @@ REACH_CLAUDE_IDS = declare(
     discover=_claude_scan_files,
     what="tracked py/ts/vue/json/yml/yaml/j2/toml/sh/env.example and docs md files, scanned for a pinned Claude model id",
     roots=_SCAN_ROOTS,
-    floor=7034,  # mid-window: population 7034, window (7034, 7034)
+    floor=6834,  # mid-window: population 7034, window [6634, 7034]
+    growth=400,
 )
 
 
@@ -284,7 +306,9 @@ def test_the_claude_matcher_catches_a_planted_second_definition_and_ignores_alia
     ]
     tier_only = {"f.ts": "const W = { 'claude-sonnet': 200_000, \"claude-opus\": 1 }"}
     assert claude_id_counts(tier_only) == {"f.ts": 2}
-    clean = {"a.py": 'MODEL = "sonnet"\nx = CLAUDE_SONNET\n', "b.md": "claude-sonnet (no digit) and claude-3-5-sonnet"}
+    legacy_order = {"g.py": 'M = "claude-3-opus-20240229"\nN = "claude-3-5-sonnet-20241022"\n'}
+    assert claude_id_counts(legacy_order) == {"g.py": 2}
+    clean = {"a.py": 'MODEL = "sonnet"\nx = CLAUDE_SONNET\n', "b.md": "claude-sonnet (no digit) and claude-code"}
     assert claude_id_counts(clean) == {}
     # the sweep sees real files: the SSOT itself must register, or the matcher/enumeration is broken
     assert "autobot_shared/ssot_claude_models.py" in _claude_tree_counts()

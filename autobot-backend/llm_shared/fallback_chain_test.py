@@ -7,9 +7,11 @@ Tests for model fallback chain manager (GH#8998).
 """
 
 import os
+from unittest.mock import MagicMock
 
-from autobot_shared.ssot_claude_models import CLAUDE_OPUS, CLAUDE_SONNET
+from autobot_shared.ssot_claude_models import CLAUDE_HAIKU, CLAUDE_OPUS, CLAUDE_SONNET
 
+from . import fallback_chain as fallback_chain_module
 from .fallback_chain import FallbackChain, FallbackChainManager, get_fallback_chain_manager
 
 
@@ -189,20 +191,29 @@ class TestSingleton:
 class TestLegacyEnvKeys:
     """An update must not drop a chain configured under the pre-#20884 short names."""
 
-    def test_old_style_variable_still_yields_its_chain_on_the_new_ids(self, monkeypatch, caplog):
+    def test_old_style_variable_still_yields_its_chain_on_the_new_ids(self, monkeypatch):
+        # The module logger is replaced, so the log flood filter's remaining allowance cannot hide the warning.
+        logger = MagicMock()
+        monkeypatch.setattr(fallback_chain_module, "logger", logger)
         monkeypatch.setenv("AUTOBOT_FALLBACK_CHAIN_CLAUDE_OPUS_4", "anthropic:claude-sonnet-4,openai:gpt-4o-mini")
-        with caplog.at_level("WARNING"):
-            chain = FallbackChainManager().get_chain(CLAUDE_OPUS)
+        chain = FallbackChainManager().get_chain(CLAUDE_OPUS)
 
         assert chain is not None
         assert chain.operator_configured
         assert chain.fallback_models == [CLAUDE_SONNET, "gpt-4o-mini"]
-        assert any("deprecated" in r.getMessage() for r in caplog.records)
+        assert any("deprecated" in call.args[0] for call in logger.warning.call_args_list)
 
-    def test_a_tier_alias_variable_resolves_without_a_warning(self, monkeypatch, caplog):
+    def test_a_tier_alias_variable_resolves_without_a_warning(self, monkeypatch):
+        logger = MagicMock()
+        monkeypatch.setattr(fallback_chain_module, "logger", logger)
         monkeypatch.setenv("AUTOBOT_FALLBACK_CHAIN_OPUS", "anthropic:sonnet")
-        with caplog.at_level("WARNING"):
-            chain = FallbackChainManager().get_chain(CLAUDE_OPUS)
+        chain = FallbackChainManager().get_chain(CLAUDE_OPUS)
 
         assert chain is not None and chain.fallback_models == [CLAUDE_SONNET]
-        assert not any("deprecated" in r.getMessage() for r in caplog.records)
+        assert not any("deprecated" in call.args[0] for call in logger.warning.call_args_list)
+
+    def test_a_non_anthropic_hop_keeps_its_own_model_name(self, monkeypatch):
+        monkeypatch.setenv("AUTOBOT_FALLBACK_CHAIN_OPUS", "ollama:opus,anthropic:haiku")
+        chain = FallbackChainManager().get_chain(CLAUDE_OPUS)
+
+        assert chain is not None and chain.fallback_models == ["opus", CLAUDE_HAIKU]

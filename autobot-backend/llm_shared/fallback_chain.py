@@ -47,12 +47,16 @@ _LISTED_LEGACY_OPUS = (ANTHROPIC_CLAUDE_OPUS4_6, ANTHROPIC_CLAUDE3_OPUS_DATED)
 _LISTED_LEGACY_SONNET = (ANTHROPIC_CLAUDE_SONNET4_6, ANTHROPIC_CLAUDE_SONNET4)
 
 
-def _canonical_model(name: str, env_key: str) -> str:
+def _canonical_model(name: str, env_key: str, provider: Optional[str] = None) -> str:
     """*name* as the current model ID: a legacy short name (see ``LEGACY_CLAUDE_KEYS``) or a tier alias is mapped.
+
+    Only for a Claude context: a hop that names another provider (``ollama:opus``) keeps its own model name.
 
     A legacy name is still honoured so an update keeps an operator's configured chain, with a
     deprecation warning naming the variable to change (#20884).
     """
+    if provider and provider.lower() != "anthropic":
+        return name
     current = legacy_claude_model(name)
     if current is None:
         return resolve_claude_model(name)
@@ -252,7 +256,7 @@ class FallbackChainManager:
                 if ":" in part:
                     provider, model = part.split(":", 1)
                     fallback_providers.append(provider.strip())
-                    fallback_models.append(_canonical_model(model.strip(), key))
+                    fallback_models.append(_canonical_model(model.strip(), key, provider.strip()))
                 else:
                     fallback_providers.append(None)  # type: ignore[arg-type]
                     fallback_models.append(_canonical_model(part, key))

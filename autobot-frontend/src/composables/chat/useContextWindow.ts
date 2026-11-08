@@ -18,6 +18,8 @@ export interface ContextWindowState {
   isWarning: ComputedRef<boolean>
   isCritical: ComputedRef<boolean>
   hasData: ComputedRef<boolean>
+  /** Why the selected model has no window: the model-list request failed. Null when it succeeded (an unlisted model is just unknown). */
+  loadError: ComputedRef<string | null>
 }
 
 // Known context windows for common non-Claude models when live data is unavailable. Claude windows are
@@ -53,7 +55,7 @@ export function useContextWindow(
   messages: Ref<ChatMessage[]> | ComputedRef<ChatMessage[]>,
   modelName: Ref<string> | ComputedRef<string>,
 ): ContextWindowState {
-  const { models, fetchModels } = useAvailableModels()
+  const { models, fetchModels, error } = useAvailableModels()
 
   // Fetch model list once if empty
   fetchModels().catch((err) => logger.warn('Failed to fetch models for context window:', err))
@@ -84,5 +86,10 @@ export function useContextWindow(
 
   const hasData = computed<boolean>(() => tokensUsed.value > 0 && contextWindow.value > 0)
 
-  return { tokensUsed, contextWindow, usagePercent, isWarning, isCritical, hasData }
+  // A failed request stays distinguishable from a model the list legitimately lacks (#20884).
+  const loadError = computed<string | null>(() =>
+    modelName.value && contextWindow.value === 0 ? (error?.value ?? null) : null,
+  )
+
+  return { tokensUsed, contextWindow, usagePercent, isWarning, isCritical, hasData, loadError }
 }
