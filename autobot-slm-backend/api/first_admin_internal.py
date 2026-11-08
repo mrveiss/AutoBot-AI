@@ -73,7 +73,7 @@ async def update_person_copy(
 
     The person's issued SLM sessions are revoked on a deactivation or a password change (#21154): the
     SLM's request gate reads the epoch store, never ``is_active`` or the hash. The deactivation epoch is
-    recorded on every push of an inactive person, so a failed write is completed by the next periodic pass.
+    recorded on every push of an inactive person, and both epochs are written before the change is committed.
     """
     if not verify_internal_api_key(x_internal_api_key):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "internal service key required")
@@ -82,15 +82,16 @@ async def update_person_copy(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no such SLM user")
     # No hash means the main app holds none. That must not wipe the password this person logs in with.
     password_changed = bool(body.password_hash) and user.password_hash != body.password_hash
+    # The epoch goes FIRST, as scripts/autobot-admin.py does: if the epoch cannot be recorded nothing has
+    # changed, the push fails and the retry still sees the difference; if the commit then fails the old
+    # sessions are already revoked and the person only signs in again.
+    if not body.is_active:
+        await record_password_epoch(user.username, lead_seconds=DEACTIVATION_EPOCH_LEAD_SECONDS)
+    elif password_changed:
+        # No lead: the person signs straight back in and that new token must pass (as in the lifecycle).
+        await record_password_epoch(user.username)
     if password_changed:
         user.password_hash = body.password_hash
     if user.is_active != body.is_active:
         user.is_active = body.is_active
     await session.commit()
-    if not body.is_active:
-        # After the commit, as the shared lifecycle does; a store that never records raises, the push
-        # fails, and the main app records and retries it.
-        await record_password_epoch(user.username, lead_seconds=DEACTIVATION_EPOCH_LEAD_SECONDS)
-    elif password_changed:
-        # No lead: the person signs straight back in and that new token must pass (as in the lifecycle).
-        await record_password_epoch(user.username)

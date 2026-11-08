@@ -90,9 +90,9 @@ async def test_a_deactivation_push_refuses_the_sessions_already_issued(epochs):
 
 
 @pytest.mark.asyncio
-async def test_the_epoch_is_written_after_the_commit(epochs):
+async def test_the_epoch_is_written_before_the_commit(epochs):
     await _push(epochs, is_active=False)
-    assert epochs.events == [1], "the commit came first"
+    assert epochs.events == [0], "the epoch came first"
 
 
 @pytest.mark.asyncio
@@ -105,18 +105,18 @@ async def test_a_push_of_an_active_person_revokes_nothing(epochs):
 
 
 @pytest.mark.asyncio
-async def test_the_next_push_completes_a_revocation_whose_epoch_write_failed(epochs):
+async def test_a_retry_after_a_failed_epoch_write_still_revokes_a_deactivation(epochs):
     token = _token()
     user = SimpleNamespace(username="alice", password_hash="h", is_active=True)
     epochs.fail["on"] = True
     with patch("autobot_shared.user_management.password_epoch.asyncio.sleep", AsyncMock()):
         with pytest.raises(password_epoch.PasswordEpochWriteError):
             await _push(epochs, is_active=False, user=user)
-    assert user.is_active is False, "the deactivation committed; only the revocation is outstanding"
+    assert user.is_active is True, "nothing was applied"
     assert (await auth_service.decode_token_async(token))["sub"] == "alice"
 
     epochs.fail["on"] = False
-    await _push(epochs, is_active=False, user=user)  # the main app's periodic pass; no field differs now
+    await _push(epochs, is_active=False, user=user)  # the main app's retry
 
     assert await auth_service.decode_token_async(token) is None
 
@@ -156,3 +156,31 @@ async def test_a_token_minted_after_a_pushed_password_change_works(epochs):
     fresh = auth_service.create_access_token({"sub": "alice", "iat": int(time.time()) + 1})
 
     assert (await auth_service.decode_token_async(fresh))["sub"] == "alice"
+
+
+@pytest.mark.asyncio
+async def test_a_retry_after_a_failed_epoch_write_still_revokes_on_a_password_change(epochs):
+    token = _token()
+    user = SimpleNamespace(username="alice", password_hash=_OLD_HASH, is_active=True)
+    epochs.fail["on"] = True
+    with patch("autobot_shared.user_management.password_epoch.asyncio.sleep", AsyncMock()):
+        with pytest.raises(password_epoch.PasswordEpochWriteError):
+            await _push(epochs, is_active=True, user=user, password_hash=_NEW_HASH)
+    assert user.password_hash == _OLD_HASH, "nothing was applied, so the retry still sees the difference"
+
+    epochs.fail["on"] = False
+    await _push(epochs, is_active=True, user=user, password_hash=_NEW_HASH)
+
+    assert user.password_hash == _NEW_HASH
+    assert await auth_service.decode_token_async(token) is None
+
+
+@pytest.mark.asyncio
+async def test_a_failed_commit_after_the_epoch_write_leaves_the_old_token_revoked(epochs):
+    token = _token()
+    user = SimpleNamespace(username="alice", password_hash=_OLD_HASH, is_active=True)
+    epochs.session.commit_error = RuntimeError("commit failed")
+    with pytest.raises(RuntimeError):
+        await _push(epochs, is_active=True, user=user, password_hash=_NEW_HASH)
+
+    assert await auth_service.decode_token_async(token) is None
