@@ -3672,7 +3672,7 @@ export interface paths {
         };
         /**
          * Get organization
-         * @description Get a specific organization by ID.
+         * @description Get a specific organization by ID (own organization or platform admin).
          */
         get: operations["get_organization_api_user_management_organizations__org_id__get"];
         put?: never;
