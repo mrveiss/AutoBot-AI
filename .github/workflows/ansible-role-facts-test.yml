@@ -146,10 +146,22 @@ jobs:
       # #17642: network_subnet is a firewall and pg_hba source. Every definition must
       # stop the play with its hint when unset or blank -- never fall back to an open
       # range. Evaluated by the fleet's ansible-core, which the python suite lacks.
+      # #20903: two of this job's lint scripts import autobot_shared, which refuses an
+      # interpreter below the .python-version floor. The venv above is built on the runner's
+      # python3 on purpose (the fleet's ansible-core), so the floor interpreter is installed
+      # beside it and addressed by path; `update-environment: false` keeps PATH, and so every
+      # other step's `python3`, on the venv.
+      - name: Set up the Python floor interpreter for the autobot_shared lint scripts
+        id: floor
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+          update-environment: false
+
       - name: "Every network_subnet/network_gateway definition refuses when unset (#17642)"
         working-directory: autobot-slm-backend/ansible
         run: |
-          python3 ../../tools/lint/check_network_refusal.py
+          "${{ steps.floor.outputs.python-path }}" ../../tools/lint/check_network_refusal.py
 
       # #14678: tests/inventory/group_vars/all.yml is GENERATED, not tracked.
       # It was a third tracked copy of the role-active facts kept byte-equal by
@@ -205,7 +217,7 @@ jobs:
       - name: "Single-source guard: exactly one tracked role_*_active definition (#14678)"
         working-directory: autobot-slm-backend/ansible
         run: |
-          python3 ../../tools/lint/check_role_facts_single_source.py
+          "${{ steps.floor.outputs.python-path }}" ../../tools/lint/check_role_facts_single_source.py
 
       # #13746: three producers built /opt/autobot/venv with two interpreters.
       # Co-location puts them on one host, and the loser's site-packages

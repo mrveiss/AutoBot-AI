@@ -27,5 +27,12 @@ jobs:
             autobot_shared
             .github/actions/upsert-pr-comment
 
+      # #20903: the repo scripts import autobot_shared, which refuses an interpreter
+      # below the .python-version floor; the runner default python3 is not guaranteed to meet it.
+      - name: Set up Python from .python-version
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version-file: '.python-version'
+
       - name: Check the milestone and phase label
         run: python3 pipeline-scripts/pr_structure.py

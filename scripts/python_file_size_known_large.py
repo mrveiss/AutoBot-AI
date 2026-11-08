@@ -72,7 +72,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/batch_jobs.py": 916,
     "autobot-backend/api/browser_mcp.py": 1320,
     "autobot-backend/api/cache_management.py": 692,
-    "autobot-backend/api/chat.py": 2643,  # #20195: graph resume stream moved to chat_streaming; #16845: 2644
+    "autobot-backend/api/chat.py": 2625,  # #20195: graph resume stream moved to chat_streaming; #20852
     "autobot-backend/api/chat_sessions.py": 1859,  # #18293: legacy transcripts only ever proposed
     "autobot-backend/api/code_intelligence.py": 2145,
     "autobot-backend/api/code_search.py": 786,
@@ -85,7 +85,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 817,
     "autobot-backend/api/codebase_analytics/endpoints/report.py": 2262,
     "autobot-backend/api/codebase_analytics/endpoints/stats.py": 659,
-    "autobot-backend/api/conversation_files.py": 962,
+    "autobot-backend/api/conversation_files.py": 960,
     "autobot-backend/api/database_mcp.py": 1056,
     "autobot-backend/api/development_speedup.py": 611,
     "autobot-backend/api/enterprise_features.py": 698,
@@ -143,12 +143,12 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/autobot_memory_graph/property_graph.py": 629,
     "autobot-backend/autobot_memory_graph/semantic_search.py": 706,
     "autobot-backend/benchmarks/benchmark_belief_state.py": 725,
-    "autobot-backend/chat_history/context_overflow.py": 845,
+    "autobot-backend/chat_history/context_overflow.py": 815,
     "autobot-backend/chat_history/session.py": 766,
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
-    "autobot-backend/chat_workflow/graph.py": 1459,  # #19715
-    "autobot-backend/chat_workflow/llm_handler.py": 1300,
-    "autobot-backend/chat_workflow/manager.py": 3766,  # #17273: turn_control; #19753: reasoning_kwargs
+    "autobot-backend/chat_workflow/graph.py": 1443,  # #19715; #21023
+    "autobot-backend/chat_workflow/llm_handler.py": 1286,  # #20852: model reaches the refresh
+    "autobot-backend/chat_workflow/manager.py": 3750,  # #17273: turn_control; #19753: reasoning_kwargs
     "autobot-backend/chat_workflow/tool_handler.py": 3617,  # #11542 dispatch merge + #14068 mirror + #19950
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
@@ -285,7 +285,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/prompt_manager.py": 1462,
     "autobot-backend/protocols/agent_communication.py": 654,
     "autobot-backend/research_browser_manager.py": 704,
-    "autobot-backend/secure_command_executor.py": 1089,
+    "autobot-backend/secure_command_executor.py": 1087,
     "autobot-backend/secure_sandbox_executor.py": 1017,
     "autobot-backend/security/command_patterns.py": 609,
     "autobot-backend/security/domain_security.py": 715,
@@ -300,7 +300,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/security/session_ownership.py": 813,
     "autobot-backend/security/threat_detection_refactor_test.py": 880,
     "autobot-backend/security/threat_intelligence.py": 762,
-    "autobot-backend/security_layer.py": 670,
+    "autobot-backend/security_layer.py": 663,
     "autobot-backend/services/agent_analytics.py": 686,
     "autobot-backend/services/agent_terminal/service.py": 922,
     "autobot-backend/services/ai_stack_client.py": 764,
@@ -471,7 +471,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot_shared/redis_client.py": 674,
     "autobot_shared/redis_management/connection_manager.py": 1290,
     "autobot_shared/security/ssrf_guard_test.py": 633,
-    "autobot_shared/ssot_config.py": 3206,  # splits: #19319, #15501, #19934, #18057
+    "autobot_shared/ssot_config.py": 3202,  # splits: #19319, #15501, #19934, #18057
     "autobot_shared/ssot_config_test.py": 776,
     "autobot_shared/ssot_constants.py": 859,
     "autobot_shared/user_management/team_service.py": 659,
