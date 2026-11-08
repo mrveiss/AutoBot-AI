@@ -117,7 +117,10 @@ _ABANDONED_THREADS: list[threading.Thread] = []
 
 
 def _abandon_slow_loop(loop: asyncio.AbstractEventLoop, thread: threading.Thread) -> None:
-    """Stop a loop that did not report running in time and keep its thread tracked (#21082)."""
+    """Stop a loop that did not report running in time and keep its thread tracked (#21082).
+
+    The caller must hold ``_STATE_LOCK``: this mutates ``_ABANDONED_THREADS``.
+    """
     _ABANDONED_THREADS[:] = [t for t in _ABANDONED_THREADS if t.is_alive()]
     _ABANDONED_THREADS.append(thread)
     loop.call_soon_threadsafe(loop.stop)

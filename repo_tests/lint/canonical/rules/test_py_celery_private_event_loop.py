@@ -319,3 +319,21 @@ def test_global_declared_name_is_not_rebound_by_a_function_local_import():
     src = "import asyncio as aio\n\ndef f():\n    global aio\n    aio.run(x)\n    import json as aio\n"
     found = [(c.lineno, n) for c, n in rule.private_loop_calls(parse_cache.parse(src))]
     assert found == [(5, "asyncio.run")]
+
+
+def test_global_declared_import_binds_in_the_function_and_at_module_scope():
+    src = "def f():\n    global aio\n    import asyncio as aio\n    aio.run(x)\n\ndef g():\n    aio.run(y)\n"
+    found = [(c.lineno, n) for c, n in rule.private_loop_calls(parse_cache.parse(src))]
+    assert found == [(4, "asyncio.run"), (7, "asyncio.run")]
+
+
+def test_global_rebind_to_another_target_is_a_known_limit():
+    # Known limit (rule docstring): the module-level import wins; execution order is not modelled.
+    src = "import json as aio\n\ndef f():\n    global aio\n    import asyncio as aio\n    aio.run(x)\n"
+    assert rule.private_loop_calls(parse_cache.parse(src)) == []
+
+
+def test_function_parameter_shadows_an_import_alias():
+    src = "import asyncio as aio\n\ndef f(aio):\n    aio.run(1)\n\ndef g():\n    aio.run(2)\n"
+    found = [(c.lineno, n) for c, n in rule.private_loop_calls(parse_cache.parse(src))]
+    assert found == [(7, "asyncio.run")]

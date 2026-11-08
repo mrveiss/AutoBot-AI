@@ -16,6 +16,10 @@ and (b) any file defining a Celery task (``@shared_task``, ``@celery_app.task``,
 2026-11-06). It is exactly three entries; do not add a fourth, migrate the caller. The
 exemption covers non-task code only (a CLI ``main()``): a call inside a function decorated
 as a Celery task is flagged even in an allowlisted module.
+
+Known limit: execution order is not modelled. A ``global`` name bound by an import inside a
+function resolves module-wide, but a module-level import of the same name wins, so a function
+that rebinds it to a *different* target via ``global`` is not followed.
 """
 
 from __future__ import annotations
@@ -98,12 +102,9 @@ def _bind(node: ast.AST, table: dict[str, str]) -> None:
             table[a.asname or a.name] = f"{node.module}.{a.name}"
 
 
-def _own_imports(body: list[ast.stmt]) -> dict[str, str]:
-    """Import bindings made directly in one scope's body (nested scopes excluded).
-
-    A name declared ``global``/``nonlocal`` is bound in an outer scope, not here, so it is
-    left to resolve through the enclosing table.
-    """
+def _scan_scope(body: list[ast.stmt]) -> tuple[dict[str, str], set[str]]:
+    """Import bindings made directly in one scope's body (nested scopes excluded), and the
+    names that body declares ``global``/``nonlocal``."""
     table: dict[str, str] = {}
     outer: set[str] = set()
     stack: list[ast.AST] = list(reversed(body))
@@ -114,16 +115,53 @@ def _own_imports(body: list[ast.stmt]) -> dict[str, str]:
             outer.update(node.names)
         if not isinstance(node, _NEW_SCOPES):
             stack.extend(reversed(list(ast.iter_child_nodes(node))))
+    return table, outer
+
+
+def _own_imports(body: list[ast.stmt]) -> dict[str, str]:
+    """Import bindings that belong to one scope.
+
+    A name declared ``global``/``nonlocal`` is bound in an outer scope, not here, so it is
+    left to resolve through the enclosing table (``alias_table`` hoists a ``global`` name an
+    import binds into the module table).
+    """
+    table, outer = _scan_scope(body)
     return {k: v for k, v in table.items() if k not in outer}
 
 
+def _global_imports(tree: ast.AST) -> dict[str, str]:
+    """Imports that bind a ``global``-declared name inside a function: module-level bindings.
+
+    Order-insensitive on purpose: the rule does not model execution order, so the name
+    resolves module-wide once any function imports it (a use before the import runs would be
+    a NameError anyway).
+    """
+    found: dict[str, str] = {}
+    for fn in ast.walk(tree):
+        if isinstance(fn, _FUNCS):
+            table, outer = _scan_scope(fn.body)
+            found.update({k: v for k, v in table.items() if k in outer and _declared_global(fn, k)})
+    return found
+
+
+def _declared_global(fn: ast.AST, name: str) -> bool:
+    """True when ``fn``'s own body declares ``name`` with ``global`` (not ``nonlocal``)."""
+    stack: list[ast.AST] = list(getattr(fn, "body", []))
+    while stack:
+        node = stack.pop()
+        if isinstance(node, ast.Global) and name in node.names:
+            return True
+        if not isinstance(node, _NEW_SCOPES):
+            stack.extend(ast.iter_child_nodes(node))
+    return False
+
+
 def alias_table(tree: ast.AST) -> dict[str, str]:
-    """Map each name bound by an import in the module's own scope to the dotted path it stands for."""
-    return _own_imports(getattr(tree, "body", []))
+    """Map each name bound by an import at module scope (or ``global`` in a function) to its dotted path."""
+    return {**_global_imports(tree), **_own_imports(getattr(tree, "body", []))}
 
 
-def _lambda_names(node: ast.Lambda) -> set[str]:
-    a = node.args
+def _param_names(a: ast.arguments) -> set[str]:
     names = [x.arg for x in (*a.posonlyargs, *a.args, *a.kwonlyargs)]
     names += [x.arg for x in (a.vararg, a.kwarg) if x is not None]
     return set(names)
@@ -137,14 +175,15 @@ def _children(node: ast.AST, seen: dict[str, str], inherited: dict[str, str]) ->
     """
     if isinstance(node, _FUNCS):
         outer = [*node.decorator_list, node.args, node.returns]
-        inner = {**inherited, **_own_imports(node.body)}
+        params = _param_names(node.args)
+        inner = {**{k: v for k, v in inherited.items() if k not in params}, **_own_imports(node.body)}
         return [(p, seen, inherited) for p in outer if p is not None] + [(s, inner, inner) for s in node.body]
     if isinstance(node, ast.ClassDef):
         head = [*node.decorator_list, *node.bases, *node.keywords]
         cls = {**inherited, **_own_imports(node.body)}
         return [(h, seen, inherited) for h in head] + [(s, cls, inherited) for s in node.body]
     if isinstance(node, ast.Lambda):
-        shadow = _lambda_names(node)
+        shadow = _param_names(node.args)
         keep = {k: v for k, v in seen.items() if k not in shadow}
         kept = {k: v for k, v in inherited.items() if k not in shadow}
         return [(node.args, seen, inherited), (node.body, keep, kept)]

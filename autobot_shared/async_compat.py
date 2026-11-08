@@ -40,9 +40,9 @@ into ``autobot_shared`` so all callers share one implementation.
      directly. Standard sync-entry behavior.
   2. **Event loop is running in the current thread** → submit the coro to
      the API process's registered main loop (``register_main_loop``) and
-     block until it returns. If the caller IS the main loop's thread that
-     would deadlock, so only then does it fall back to a thread with its
-     own loop.
+     block until it returns (in a Celery worker the target is the worker's
+     persistent loop instead). It falls back to a thread with its own loop
+     only in the two situations listed under the fresh-loop fallback below.
 
   **Fresh-loop fallback (#21082, #20919).** Case 2 uses a thread with a brand-new
   loop in exactly two situations: (a) the target loop is unavailable (no main loop
@@ -159,7 +159,9 @@ def run_or_schedule(coro: Coroutine[Any, Any, T]) -> T:
     """Run ``coro`` to completion from either sync or async context.
 
     See module docstring for the full contract. Inside a Celery worker the
-    coroutine always runs on the worker's persistent loop. Otherwise, with no
+    coroutine runs on the worker's persistent loop, except in the fresh-loop
+    fallback cases below (running loop, target unavailable or the caller's own
+    loop). Otherwise, with no
     loop running in this thread it uses ``asyncio.run``; with a loop running it
     is submitted to the worker loop or the API process's main loop; a fresh loop in a
     thread is used only in the fallback cases below, because it would touch loop-bound
