@@ -8326,7 +8326,7 @@
       "criticalTitle": "Backend unreachable",
       "criticalMessage": "AutoBot cannot reach its backend. Changes may not be saved until it is back."
     },
-    "llcHandbook": "Handbook"
+    "llcHandbook": "Handbook",
     "llcSettings": "Settings",
     "adminConversations": "Conversation Review"
   },
