@@ -368,7 +368,7 @@ async def voice_stream_ws(websocket: WebSocket) -> None:
             ctx["tts_task"] = tts_task
 
     except PEER_CLOSED_ERRORS as disconnect:
-        log_client_disconnect(logger, disconnect, "_set_state")
+        log_client_disconnect(logger, disconnect, "voice_stream_ws")
     except Exception as e:
         logger.error("Voice stream WebSocket error: %s", e)
         await _send_json(websocket, {"type": "error", "message": "Operation failed"})

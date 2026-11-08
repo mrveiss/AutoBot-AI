@@ -22,12 +22,17 @@ from starlette.websockets import WebSocketDisconnect, WebSocketState
 # Status for a request whose client left before the answer (nginx's 499); never read by anyone.
 CLIENT_CLOSED_REQUEST = 499
 
-# Transport-level signals that only ever mean the peer's side of the stream closed.
-# Usable directly as an ``except`` clause so a handler keeps its own follow-up action.
-PEER_CLOSED_ERRORS = (ClientDisconnect, WebSocketDisconnect, anyio.EndOfStream, anyio.BrokenResourceError)
+# Exceptions Starlette raises only from the client socket itself. Usable directly as an
+# ``except`` clause so a handler keeps its own follow-up action.
+PEER_CLOSED_ERRORS = (ClientDisconnect, WebSocketDisconnect)
+# anyio's stream errors are raised by every internal task group, memory channel and
+# client session too, so inside an endpoint body they are real failures. They mean a
+# disconnect only at the ASGI receive/send boundary (the guard and the per-type handlers).
+_BOUNDARY_ONLY_ERRORS = (anyio.EndOfStream, anyio.BrokenResourceError)
 # A reset on a *send* is the peer; the same class from an upstream call (Redis,
 # a model server) is a real failure, so it only counts when the caller says so.
 _RESET_ON_SEND = (ConnectionResetError, BrokenPipeError)
+_CHAIN_DEPTH = 8
 
 
 def _socket_is_gone(websocket) -> bool:
@@ -38,13 +43,17 @@ def _socket_is_gone(websocket) -> bool:
     )
 
 
-def is_client_disconnect(exc: BaseException, *, on_send: bool = False, websocket=None) -> bool:
+def is_client_disconnect(
+    exc: BaseException, *, on_send: bool = False, websocket=None, at_boundary: bool = False
+) -> bool:
     """True when ``exc`` means the client closed its side of the connection.
 
     ``on_send`` marks an exception raised while writing to the client socket,
     where ``ConnectionResetError`` / ``BrokenPipeError`` also mean a disconnect.
-    A (nested) ``ExceptionGroup`` qualifies only if every member does, so a
-    disconnect never hides a real error raised beside it.
+    ``at_boundary`` marks the ASGI receive/send boundary, where anyio's
+    ``EndOfStream`` / ``BrokenResourceError`` also mean one. A (nested)
+    ``ExceptionGroup`` qualifies only if every member does, so a disconnect
+    never hides a real error raised beside it.
 
     ``websocket`` lets the catch site classify Starlette's ``RuntimeError`` for
     a receive/send after the disconnect: it counts only while the socket's own
@@ -54,10 +63,36 @@ def is_client_disconnect(exc: BaseException, *, on_send: bool = False, websocket
     if websocket is not None and type(exc) is RuntimeError and _socket_is_gone(websocket):
         return True
     if isinstance(exc, BaseExceptionGroup):
-        return bool(exc.exceptions) and all(is_client_disconnect(e, on_send=on_send) for e in exc.exceptions)
-    if isinstance(exc, PEER_CLOSED_ERRORS):
+        return bool(exc.exceptions) and all(
+            is_client_disconnect(e, on_send=on_send, websocket=websocket, at_boundary=at_boundary)
+            for e in exc.exceptions
+        )
+    if isinstance(exc, PEER_CLOSED_ERRORS) or (at_boundary and isinstance(exc, _BOUNDARY_ONLY_ERRORS)):
         return True
     return on_send and isinstance(exc, _RESET_ON_SEND)
+
+
+def _caused_by_disconnect(exc: BaseException) -> bool:
+    """True when a boundary disconnect sits on ``exc``'s ``__cause__`` / ``__context__`` chain."""
+    link: BaseException | None = exc
+    for _ in range(_CHAIN_DEPTH):
+        link = link.__cause__ or link.__context__ if link else None
+        if link is None:
+            return False
+        if is_client_disconnect(link, at_boundary=True):
+            return True
+    return False
+
+
+def is_boundary_disconnect(exc: BaseException) -> bool:
+    """:func:`is_client_disconnect` at the ASGI boundary, also through a wrapping ``RuntimeError``.
+
+    Starlette re-raises a handled exception as ``RuntimeError("... response already
+    started")`` ``from`` the original, so the disconnect sits on the cause chain.
+    """
+    if is_client_disconnect(exc, at_boundary=True):
+        return True
+    return type(exc) is RuntimeError and _caused_by_disconnect(exc)
 
 
 def log_client_disconnect(log: logging.Logger, exc: BaseException, where: str) -> None:
@@ -90,7 +125,7 @@ async def client_disconnect_handler(request: Request, exc: Exception) -> Respons
 
 def register_client_disconnect_handlers(app) -> None:
     """Install :func:`client_disconnect_handler` for every HTTP peer-closed type."""
-    for exc_type in (ClientDisconnect, anyio.EndOfStream, anyio.BrokenResourceError):
+    for exc_type in (ClientDisconnect, *_BOUNDARY_ONLY_ERRORS):
         app.add_exception_handler(exc_type, client_disconnect_handler)
 
 
@@ -99,7 +134,10 @@ class ClientDisconnectGuard:
 
     ``ServerErrorMiddleware`` re-raises after its handler, and an outer
     middleware's disconnect never reaches an inner handler, so the server would
-    log either as an error. Anything that is not a disconnect propagates unchanged.
+    log either as an error. If nothing was sent yet the guard answers an empty
+    499 (HTTP) or closes the socket (WebSocket), so the server does not report
+    "returned without starting response". Anything that is not a disconnect
+    propagates unchanged.
     """
 
     def __init__(self, app) -> None:
@@ -109,12 +147,33 @@ class ClientDisconnectGuard:
         if scope["type"] not in ("http", "websocket"):
             await self.app(scope, receive, send)
             return
+        started = False
+
+        async def tracked_send(message) -> None:
+            nonlocal started
+            started = started or message["type"] in ("http.response.start", "websocket.accept")
+            await send(message)
+
         try:
-            await self.app(scope, receive, send)
+            await self.app(scope, receive, tracked_send)
         except Exception as exc:
-            if not is_client_disconnect(exc):
+            if not is_boundary_disconnect(exc):
                 raise
             log_client_disconnect(logging.getLogger(__name__), exc, str(scope.get("path", scope["type"])))
+            if not started:
+                await self._answer_unstarted(scope, send)
+
+    @staticmethod
+    async def _answer_unstarted(scope, send) -> None:
+        try:
+            if scope["type"] == "websocket":
+                await send({"type": "websocket.close", "code": 1001})
+                return
+            await send({"type": "http.response.start", "status": CLIENT_CLOSED_REQUEST, "headers": []})
+            await send({"type": "http.response.body", "body": b""})
+        except Exception as exc:  # the peer is already gone; only a non-disconnect is news
+            if not is_client_disconnect(exc, on_send=True, at_boundary=True):
+                raise
 
 
 def install_client_disconnect_guard(app) -> None:

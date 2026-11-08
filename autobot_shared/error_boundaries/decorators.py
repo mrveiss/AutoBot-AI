@@ -15,7 +15,7 @@ import time
 from typing import Any, Callable, Optional, cast
 
 from fastapi import HTTPException
-from starlette.requests import ClientDisconnect
+from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.client_disconnect import is_client_disconnect, log_client_disconnect, propagate_client_disconnect
@@ -278,14 +278,19 @@ def _create_api_error_response(
     )
 
 
-def _on_client_disconnect(e: Exception, operation: str):
+def _find_websocket(args: tuple, kwargs: dict) -> Optional[WebSocket]:
+    """The WebSocket an endpoint was called with, if any."""
+    return next((v for v in (*args, *kwargs.values()) if isinstance(v, WebSocket)), None)
+
+
+def _on_client_disconnect(e: Exception, operation: str, websocket: Optional[WebSocket]):
     """Expected peer disconnect: debug-log it instead of building a 500 (#20939).
 
-    An HTTP ``ClientDisconnect`` is re-raised for the app-level handler, which
-    answers it; a WebSocket peer drop ends the endpoint quietly.
+    Only a WebSocket endpoint may end quietly with ``None``. An HTTP endpoint
+    re-raises, so the ASGI layer answers it (499) rather than a 200 null body.
     """
     log_client_disconnect(logger, e, operation)
-    if isinstance(e, ClientDisconnect):
+    if websocket is None and not isinstance(e, WebSocketDisconnect):
         raise e
     return None
 
@@ -478,8 +483,9 @@ def with_error_handling(
                 except (HTTPException, PassThroughError):
                     raise  # Preserve intentional HTTP status codes / app-level handlers (#17982)
                 except Exception as e:
-                    if is_client_disconnect(e):
-                        return _on_client_disconnect(e, func_operation)
+                    ws = _find_websocket(args, kwargs)
+                    if is_client_disconnect(e, websocket=ws):
+                        return _on_client_disconnect(e, func_operation, ws)
                     error_response = _create_api_error_response(e, category, func_operation, error_code_prefix)
                     return _raise_or_return_error(error_response)
 
@@ -494,8 +500,9 @@ def with_error_handling(
                 except (HTTPException, PassThroughError):
                     raise  # Preserve intentional HTTP status codes / app-level handlers (#17982)
                 except Exception as e:
-                    if is_client_disconnect(e):
-                        return _on_client_disconnect(e, func_operation)
+                    ws = _find_websocket(args, kwargs)
+                    if is_client_disconnect(e, websocket=ws):
+                        return _on_client_disconnect(e, func_operation, ws)
                     error_response = _create_api_error_response(e, category, func_operation, error_code_prefix)
                     return _raise_or_return_error(error_response)
 

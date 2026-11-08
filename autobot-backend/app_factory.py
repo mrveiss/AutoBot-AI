@@ -27,7 +27,7 @@ from fastapi.staticfiles import StaticFiles
 from autobot_shared.client_disconnect import (
     CLIENT_CLOSED_REQUEST,
     install_client_disconnect_guard,
-    is_client_disconnect,
+    is_boundary_disconnect,
     log_client_disconnect,
     register_client_disconnect_handlers,
 )
@@ -85,7 +85,7 @@ def _register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def _unhandled_exception_handler(request: Request, exc: Exception) -> Response | JSONResponse:
-        if is_client_disconnect(exc):
+        if is_boundary_disconnect(exc):
             # Nobody is reading: no traceback, no 500 body (#20939).
             log_client_disconnect(logger, exc, f"{request.method} {request.url.path}")
             return Response(status_code=CLIENT_CLOSED_REQUEST)

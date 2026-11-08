@@ -13,13 +13,13 @@ from fastapi.testclient import TestClient
 from starlette.requests import ClientDisconnect
 from starlette.websockets import WebSocketDisconnect
 
-from autobot_shared.client_disconnect import is_client_disconnect
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, is_client_disconnect
 from autobot_shared.error_boundaries.decorators import with_error_handling
 
 
 @pytest.mark.parametrize(
     "exc",
-    [ClientDisconnect(), WebSocketDisconnect(1001), anyio.EndOfStream(), anyio.BrokenResourceError()],
+    [ClientDisconnect(), WebSocketDisconnect(1001)],
 )
 def test_peer_closed_signals_are_disconnects(exc):
     assert is_client_disconnect(exc)
@@ -30,8 +30,15 @@ def test_reset_counts_only_on_a_send():
     assert not is_client_disconnect(ConnectionResetError())
 
 
+@pytest.mark.parametrize("exc", [anyio.EndOfStream(), anyio.BrokenResourceError()])
+def test_anyio_stream_errors_are_disconnects_only_at_the_asgi_boundary(exc):
+    assert not is_client_disconnect(exc)
+    assert not isinstance(exc, PEER_CLOSED_ERRORS)
+    assert is_client_disconnect(exc, at_boundary=True)
+
+
 def test_group_qualifies_only_when_every_member_does():
-    assert is_client_disconnect(BaseExceptionGroup("g", [ClientDisconnect(), anyio.EndOfStream()]))
+    assert is_client_disconnect(BaseExceptionGroup("g", [ClientDisconnect(), WebSocketDisconnect(1001)]))
     assert not is_client_disconnect(BaseExceptionGroup("g", [ClientDisconnect(), ValueError("x")]))
 
 
@@ -116,18 +123,28 @@ def test_boundary_still_converts_a_real_error_and_logs_it(caplog):
 
 def _drive_asgi(app: FastAPI, path: str) -> list:
     """Run one request through the whole ASGI stack; return what escaped to the server."""
+    return _drive_full(app, path)[0]
+
+
+def _drive_full(app, path: str, scope_type: str = "http") -> tuple[list, list]:
+    """Like ``_drive_asgi`` but also return every message the app sent to the server."""
     import asyncio
 
     sent: list = []
 
+    delivered = []
+
     async def receive():
+        if delivered:  # a live client sends nothing more; block so listeners do not spin
+            await asyncio.Event().wait()
+        delivered.append(1)
         return {"type": "http.request", "body": b"", "more_body": False}
 
     async def send(message):
         sent.append(message)
 
     scope = {
-        "type": "http",
+        "type": scope_type,
         "asgi": {"version": "3.0"},
         "http_version": "1.1",
         "method": "GET",
@@ -148,7 +165,7 @@ def _drive_asgi(app: FastAPI, path: str) -> list:
             escaped.append(exc)
 
     asyncio.run(run())
-    return escaped
+    return escaped, sent
 
 
 def test_a_disconnect_does_not_escape_the_asgi_stack_to_the_server(caplog):
@@ -255,3 +272,139 @@ def test_a_real_error_from_an_outer_middleware_still_escapes_and_logs(caplog):
         escaped = _drive_asgi(_middleware_app(ValueError("real")), "/boom")
     assert [type(e) for e in escaped] == [ValueError]
     assert any(r.levelno >= logging.ERROR and r.name == "app_factory" and r.exc_info for r in caplog.records)
+
+
+def _boundary_app(exc: Exception, *, stream: bool = False) -> FastAPI:
+    from fastapi.responses import StreamingResponse
+
+    from autobot_shared.client_disconnect import install_client_disconnect_guard
+
+    app = _app(exc)
+    install_client_disconnect_guard(app)
+    if stream:
+
+        async def chunks():
+            yield b"first"
+            raise exc
+
+        @app.get("/stream")
+        async def stream_route():
+            return StreamingResponse(chunks())
+
+    return app
+
+
+def test_the_guard_answers_499_when_nothing_was_started(caplog):
+    """A recording ``send`` proves the server is never left with 'returned without starting response'."""
+    from starlette.middleware.base import BaseHTTPMiddleware
+
+    app = _boundary_app(RuntimeError("unused"))
+
+    async def raising(request, call_next):
+        raise ClientDisconnect()
+
+    app.add_middleware(BaseHTTPMiddleware, dispatch=raising)
+    with caplog.at_level(logging.DEBUG):
+        escaped, sent = _drive_full(app, "/boom")
+    assert escaped == []
+    assert [m["type"] for m in sent] == ["http.response.start", "http.response.body"]
+    assert sent[0]["status"] == 499
+
+
+def test_the_guard_closes_an_unaccepted_websocket():
+    from autobot_shared.client_disconnect import ClientDisconnectGuard
+
+    async def inner(scope, receive, send):
+        raise WebSocketDisconnect(1006)
+
+    escaped, sent = _drive_full(ClientDisconnectGuard(inner), "/ws", scope_type="websocket")
+    assert escaped == [] and [m["type"] for m in sent] == ["websocket.close"]
+
+
+def test_a_disconnect_after_the_response_started_is_consumed_through_the_chain(caplog):
+    """Starlette wraps it in RuntimeError('...response already started'); the cause is the disconnect."""
+    with caplog.at_level(logging.DEBUG):
+        escaped, sent = _drive_full(_boundary_app(ClientDisconnect(), stream=True), "/stream")
+    assert escaped == []
+    assert [m["type"] for m in sent][:1] == ["http.response.start"]
+    assert not [r for r in caplog.records if r.levelno >= logging.ERROR and r.name == "app_factory"]
+
+
+def test_a_started_response_with_a_real_cause_still_escapes():
+    escaped, _ = _drive_full(_boundary_app(ValueError("real"), stream=True), "/stream")
+    assert [type(e) for e in escaped] == [ValueError]
+
+
+def test_a_group_holding_the_socket_runtime_error_is_classified_with_the_websocket():
+    from starlette.websockets import WebSocketState
+
+    group = BaseExceptionGroup("g", [RuntimeError("x"), WebSocketDisconnect(1001)])
+    assert is_client_disconnect(group, websocket=_Socket(WebSocketState.DISCONNECTED))
+    assert not is_client_disconnect(group, websocket=_Socket(WebSocketState.CONNECTED))
+
+
+def test_http_boundary_reraises_instead_of_answering_a_200_null_body():
+    @with_error_handling(operation="http_group", error_code_prefix="T")
+    async def endpoint():
+        raise BaseExceptionGroup("g", [ClientDisconnect(), ClientDisconnect()])
+
+    import asyncio
+
+    with pytest.raises(BaseExceptionGroup):
+        asyncio.run(endpoint())
+
+
+def test_http_boundary_treats_an_internal_end_of_stream_as_a_real_error(caplog):
+    from fastapi import HTTPException
+
+    @with_error_handling(operation="internal_stream", error_code_prefix="T")
+    async def endpoint():
+        raise anyio.EndOfStream()
+
+    import asyncio
+
+    with caplog.at_level(logging.DEBUG), pytest.raises(HTTPException):
+        asyncio.run(endpoint())
+    assert _error_records(caplog)
+
+
+def test_websocket_handler_end_of_stream_is_an_error_and_error_boundary_retries_and_reports(caplog, monkeypatch):
+    """An internal memory-channel EndOfStream inside a websocket handler body is NOT a peer disconnect."""
+    import asyncio
+
+    from fastapi import WebSocket
+
+    from autobot_shared.error_boundaries import decorators
+    from autobot_shared.error_boundaries.decorators import error_boundary
+    from autobot_shared.error_boundaries.types import RecoveryStrategy
+
+    async def no_sleep(_):
+        return None
+
+    monkeypatch.setattr(decorators.asyncio, "sleep", no_sleep)
+    calls = []
+
+    @error_boundary(component="c", function="ws_body", recovery_strategy=RecoveryStrategy.RETRY, max_retries=2)
+    async def body():
+        calls.append(1)
+        send, receive = anyio.create_memory_object_stream(1)
+        send.close()
+        await receive.receive()  # raises EndOfStream: an internal channel, not the client
+
+    with caplog.at_level(logging.DEBUG):
+        try:
+            asyncio.run(body())
+        except Exception:  # the boundary may surface an ErrorBoundaryException once recovery is exhausted
+            pass
+    assert len(calls) == 3
+    assert any(r.levelno >= logging.ERROR for r in caplog.records if "error_boundaries" in r.name)
+
+    @with_error_handling(operation="ws_endpoint", error_code_prefix="T")
+    async def endpoint(websocket: WebSocket):
+        raise anyio.EndOfStream()
+
+    from fastapi import HTTPException
+
+    ws = WebSocket({"type": "websocket", "headers": [], "query_string": b""}, None, None)
+    with pytest.raises(HTTPException):
+        asyncio.run(endpoint(ws))

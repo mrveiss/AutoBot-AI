@@ -76,3 +76,30 @@ def test_the_tree_has_no_violation_and_the_census_is_not_empty():
             flagged += len(rule.violations(parse_cache.parse(text, filename=str(p))))
     assert handlers >= 15, "census found no migrated handlers: the scan is blind"
     assert flagged == 0
+
+
+def test_an_unrelated_raise_does_not_excuse_a_swallowed_disconnect(tmp_path):
+    body = _handler("WebSocketDisconnect as e", "raise HTTPException(500)")
+    assert len(_check(tmp_path, body)) == 1
+
+
+def test_reraising_or_chaining_the_caught_name_passes(tmp_path):
+    assert _check(tmp_path, _handler("WebSocketDisconnect as e", "raise")) == []
+    assert _check(tmp_path, _handler("WebSocketDisconnect as e", "raise e")) == []
+    assert _check(tmp_path, _handler("WebSocketDisconnect as e", "raise Wrapped() from e")) == []
+
+
+def test_an_aliased_import_is_resolved(tmp_path):
+    body = "from fastapi import WebSocketDisconnect as WSD\n\n" + _handler("WSD", "pass")
+    assert len(_check(tmp_path, body)) == 1
+
+
+def _socket_try(clause: str, call: str) -> str:
+    return f"async def f(websocket, logger):\n    try:\n        {call}\n    except {clause}:\n        pass\n"
+
+
+def test_connection_error_and_oserror_count_only_around_socket_io(tmp_path):
+    for clause in ("ConnectionError", "OSError", "(ValueError, OSError)"):
+        assert len(_check(tmp_path, _socket_try(clause, "await websocket.send_json({})"))) == 1, clause
+        assert len(_check(tmp_path, _socket_try(clause, "await websocket.receive_text()"))) == 1, clause
+        assert _check(tmp_path, _socket_try(clause, "open('f').read()")) == [], clause
