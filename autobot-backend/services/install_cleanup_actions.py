@@ -213,22 +213,10 @@ async def _remove_audited(approval: "Approval", plan: CleanupPlan, root: Path, o
         raise
 
 
-async def execute_env_copies_cleanup(approval: "Approval", session: "AsyncSession") -> None:
-    """Remove all but the newest ``.env.*~`` copy once a human approved it: four eyes, re-plan, audit first."""
-    own = await is_self_approval(approval, session, what="the .env.*~ cleanup")
-    if (approval.context or {}).get("node") != node_identity():
-        await _stop_without_removal(approval, session, "the approval was raised for another installation", own)
-    root = install_root()
-    plan = await asyncio.to_thread(plan_env_copies, root)
-    if plan.refused:
-        await _stop_without_removal(approval, session, plan.refused, own)
-    if not plan.targets:
-        await _audit(approval, _AUDIT, "success", removed=0, self_approval=own)
-        await _record(approval, session, "Nothing to remove: no .env.*~ copies found.")
-        return
-    names = [str(p.relative_to(root)) for p in plan.targets]
-    await _record_intent(approval, session, names, own)
-    removed, gone = await _remove_audited(approval, plan, root, own)
+async def _finish_removal(
+    approval: "Approval", session: "AsyncSession", names: list[str], removed: int, gone: list[str], own: bool
+) -> None:
+    """Write the completion audit entry and the approval note; fail loudly if the audit could not be written."""
     written = await _audit(
         approval,
         _AUDIT,
@@ -245,6 +233,25 @@ async def execute_env_copies_cleanup(approval: "Approval", session: "AsyncSessio
     if not written:
         await _record(approval, session, "The removal happened but its completion audit entry could not be written.")
         raise ValueError("the completion audit entry could not be written, though the copies were removed")
+
+
+async def execute_env_copies_cleanup(approval: "Approval", session: "AsyncSession") -> None:
+    """Remove all but the newest ``.env.*~`` copy once a human approved it: four eyes, re-plan, audit first."""
+    own = await is_self_approval(approval, session, what="the .env.*~ cleanup")
+    if (approval.context or {}).get("node") != node_identity():
+        await _stop_without_removal(approval, session, "the approval was raised for another installation", own)
+    root = install_root()
+    plan = await asyncio.to_thread(plan_env_copies, root)
+    if plan.refused:
+        await _stop_without_removal(approval, session, plan.refused, own)
+    if not plan.targets:
+        await _audit(approval, _AUDIT, "success", removed=0, self_approval=own)
+        await _record(approval, session, "Nothing to remove: no .env.*~ copies found.")
+        return
+    names = [str(p.relative_to(root)) for p in plan.targets]
+    await _record_intent(approval, session, names, own)
+    removed, gone = await _remove_audited(approval, plan, root, own)
+    await _finish_removal(approval, session, names, removed, gone, own)
 
 
 def register_install_cleanup_actions() -> None:
