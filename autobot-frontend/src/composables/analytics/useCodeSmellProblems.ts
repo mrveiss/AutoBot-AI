@@ -4,7 +4,11 @@
  * Code smells for the panel and its export, from ONE load (#20493).
  *
  * The panel's cards and the exported report both read `smellsForPanel`, counted
- * by `summarizeSmells`. The category (production code, test files, or all) is
+ * by `summarizeSmells`.
+ *
+ * This is a second `/problems` request beside the Problems Report's because the
+ * category filter is applied on the server (the report must keep showing every
+ * finding), so the two lists are different slices of the store. The category (production code, test files, or all) is
  * sent to the backend as `file_category` so the server returns only that slice.
  */
 
@@ -29,6 +33,8 @@ export function useCodeSmellProblems(withSourceId: (url: string) => string) {
       label: 'Code smells endpoint',
       pickData: (raw) => (raw.status === 'no_data' ? [] : raw.problems ?? []),
       onSuccess: (d) => { smellProblems.value = d },
+      // A failed load must not leave the previous category's findings on screen.
+      onError: () => { smellProblems.value = [] },
     },
     { withSourceId },
   )
@@ -57,13 +63,14 @@ export function useCodeSmellProblems(withSourceId: (url: string) => string) {
   )
 
   /** The export's data: the cards' list and the cards' counts, nothing else. */
-  const smellsExport = computed(() => buildSmellsExport(smellsForPanel.value))
+  const smellsExport = computed(() => buildSmellsExport(smellsForPanel.value, smellCategory.value))
 
   return {
     smellCategory,
     smellsForPanel,
     smellsExport,
     smellsError: endpoint.error,
+    smellsLoading: endpoint.loading,
     loadSmellProblems,
     selectSmellCategory,
   }

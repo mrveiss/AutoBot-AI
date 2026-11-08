@@ -158,7 +158,7 @@
 
       <!-- Code Intelligence: Anti-Pattern / Code Smells Report (#1469, #184) -->
       <CodeSmellsSection
-        :smells="smellsForPanel" :error="smellsError || problemsError" :code-health-score="codeHealthScore"
+        :smells="smellsForPanel" :error="smellsError || problemsError" :loading="smellsLoading" :code-health-score="codeHealthScore"
         :category="smellCategory" @update:category="selectSmellCategory"
         @export="(fmt: string) => exportSection('code-smells', fmt as 'md' | 'json')"
       />
@@ -601,7 +601,7 @@ const {
   progressStatus,
   hasAnyResults,
   availableCategories,
-  smellsForPanel, smellsExport, smellsError, smellCategory, selectSmellCategory,
+  smellsForPanel, smellsExport, smellsError, smellsLoading, smellCategory, selectSmellCategory,
   declarationsForPanel,
   loadChartData,
   loadUnifiedReport,

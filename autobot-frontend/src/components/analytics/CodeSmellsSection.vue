@@ -8,18 +8,14 @@
       <span v-if="smells.length > 0" class="total-count">
         ({{ smells.length.toLocaleString() }} {{ $t('analytics.codeSmells.found') }})
       </span>
-      <label>
-        {{ $t('analytics.codeSmells.category.label') }}
-        <select
-          :value="category"
-          :aria-label="$t('analytics.codeSmells.category.label')"
-          @change="emit('update:category', ($event.target as HTMLSelectElement).value as SmellCategory)"
-        >
-          <option v-for="c in SMELL_CATEGORIES" :key="c" :value="c">
-            {{ $t(`analytics.codeSmells.category.${c}`) }}
-          </option>
-        </select>
-      </label>
+      <BaseSelectMenu
+        :model-value="category"
+        :options="categoryOptions"
+        :label="$t('analytics.codeSmells.category.label')"
+        size="sm"
+        @update:model-value="(v: string) => emit('update:category', v as SmellCategory)"
+      />
+      <BaseSpinner v-if="loading" size="sm" :label="$t('analytics.codeSmells.loading')" />
       <div v-if="smells.length > 0" class="section-export-buttons">
         <button @click="emit('export', 'md')" class="export-btn" :title="$t('analytics.codebase.actions.exportMarkdown')">
           <Icon name="file-alt" /> MD
@@ -140,7 +136,8 @@
  */
 
 import Icon from '@/components/ui/Icon.vue'
-import { useShowMore } from '@autobot/ui'
+import { BaseSelectMenu, BaseSpinner, useShowMore } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 import TruncationNotice from './TruncationNotice.vue'
 import { computed } from 'vue'
 import { summarizeSmells } from '@/composables/analytics/codeSmellSummary'
@@ -170,9 +167,12 @@ interface Props {
   error?: string
   /** Which file category the list holds: production code, test files, or all. */
   category?: SmellCategory
+  loading?: boolean
 }
 
 const props = defineProps<Props>()
+const { t } = useI18n()
+const categoryOptions = SMELL_CATEGORIES.map((c) => ({ value: c, label: t(`analytics.codeSmells.category.${c}`) }))
 
 // #12741: a capped list is expandable; the notice below it is the control.
 const PAGE_SIZE = 20

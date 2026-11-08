@@ -48,9 +48,10 @@ export function summarizeSmells(smells: readonly CountableSmell[]): SmellSummary
 }
 
 /** The exported report: the cards' own list, counted by the cards' own function. */
-export function buildSmellsExport<T extends CountableSmell>(smells: readonly T[]) {
+export function buildSmellsExport<T extends CountableSmell>(smells: readonly T[], fileCategory: string) {
   const summary = summarizeSmells(smells)
   return {
+    file_category: fileCategory,
     summary: { total_smells: summary.total },
     smells_by_severity: summary.bySeverity,
     smells: [...smells],

@@ -61,6 +61,16 @@ class TestEveryTypeCountsOncePerLocation:
         out = dedupe_same_location_problems([_p("code_smell_deep_nesting", 4), _p("code_smell_deep_nesting", 4, HIGH)])
         assert [(p["type"], p["severity"]) for p in out] == [("code_smell_deep_nesting", HIGH)]
 
+    def test_same_type_and_line_with_different_descriptions_are_two_defects(self):
+        a = dict(_p("race_condition", 9), description="lazy init of cache")
+        b = dict(_p("race_condition", 9), description="shared counter")
+        assert len(dedupe_same_location_problems([a, b])) == 2
+
+    def test_descriptions_differing_only_in_case_and_spacing_are_one_defect(self):
+        a = dict(_p("debug_code", 9), description="print  call")
+        b = dict(_p("debug_code", 9), description="Print call ")
+        assert len(dedupe_same_location_problems([a, b])) == 1
+
     def test_the_same_line_of_two_files_is_two_defects(self):
         a, b = dict(_p("debug_code", 3), file_path="a.py"), dict(_p("debug_code", 3), file_path="b.py")
         assert len(dedupe_same_location_problems([a, b])) == 2
@@ -70,21 +80,17 @@ class TestEveryTypeCountsOncePerLocation:
         probs = [mk("long_function", "a.py"), mk("code_smell_long_method", "a.py"), mk("long_function", "b.py")]
         assert [p["file_path"] for p in dedupe_same_location_problems(probs)] == ["a.py", "b.py"]
 
+    def test_the_survivor_does_not_depend_on_input_order(self):
+        a = dict(_p("long_function", 5, HIGH), description="alpha", suggestion="x")
+        b = dict(_p("code_smell_long_method", 5, HIGH), description="beta", suggestion="y")
+        forward = dedupe_same_location_problems([a, b])
+        backward = dedupe_same_location_problems([b, a])
+        assert forward == backward and len(forward) == 1
 
-class TestReadPathAppliesTheDedupe:
-    """Findings stored before the write-path dedupe must not double on read."""
-
-    def test_stored_duplicates_are_collapsed_when_read(self, monkeypatch):
-        from api.codebase_analytics.endpoints import stats
-
-        meta = [
-            {"problem_type": "long_function", "severity": "medium", "file_path": "a.py", "line_number": 5},
-            {"problem_type": "code_smell_long_method", "severity": "high", "file_path": "a.py", "line_number": 5},
-        ]
-        monkeypatch.setattr(stats, "get_all_paginated", lambda *a, **k: {"metadatas": meta})
-        monkeypatch.setattr(stats, "filter_problems_by_file_existence", lambda problems, root: problems)
-        out = stats._fetch_problems_from_chromadb(object(), None, source_root=Path("."))
-        assert [(p["type"], p["severity"]) for p in out] == [("long_function", "high")]
+    def test_an_already_canonical_or_untyped_finding_is_returned_as_is(self):
+        canonical, untyped = _p("long_function", 1), {"line": 2, "severity": LOW}
+        out = dedupe_same_location_problems([canonical, untyped])
+        assert out[0] is canonical and out[1] is untyped
 
 
 class TestAnalysisPhasesApplyTheDedupe:

@@ -2336,6 +2336,7 @@
       "medium": "Medium",
       "low": "Low",
       "emptyMessage": "No code smells detected",
+      "loading": "Loading code smells",
       "category": {
         "label": "Files",
         "code": "Production code",

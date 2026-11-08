@@ -30,3 +30,9 @@ describe('the export agrees with the cards (#20493)', () => {
     expect(exported.smells_by_severity).toEqual(cards.bySeverity)
   })
 })
+
+describe('the export names its category (#20493)', () => {
+  it('carries the file category the list was loaded for', () => {
+    expect(buildSmellsExport([], 'test').file_category).toBe('test')
+  })
+})
