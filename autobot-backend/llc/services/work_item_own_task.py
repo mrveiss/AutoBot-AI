@@ -10,15 +10,11 @@ keeps the transition rules in ``work_item_service``.
 
 from __future__ import annotations
 
-import asyncio
 import uuid
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Session, SessionTransaction
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
@@ -26,21 +22,11 @@ from autobot_shared.redis_utils import delete_if_value
 
 from ..models.enums import AssigneeType, WorkItemStatus
 from ..models.work_item import LLCWorkItem
+from .after_commit import defer_until_commit
 
 logger = get_logger(__name__)
 
 _CHECKOUT_KEY_PREFIX = "llc:checkout:"
-_PENDING_KEY = "llc_checkout_fence_pending_release"
-_HOOKED_KEY = "llc_checkout_fence_release_hooked"
-#: Strong references so a release task is not collected before it runs.
-_release_tasks: set["asyncio.Task[None]"] = set()
-
-
-@dataclass(frozen=True)
-class _PendingRelease:
-    item_id: uuid.UUID
-    holder: str
-    transaction: Optional[SessionTransaction]
 
 
 def _past_its_reviewer(item: LLCWorkItem, acting_user: uuid.UUID, new_status: Optional[WorkItemStatus]) -> bool:
@@ -183,50 +169,6 @@ async def _delete_fence(item_id: uuid.UUID, holder: str) -> None:
         logger.warning("Checkout fence of work item %s was not released; it expires on its TTL", item_id, exc_info=True)
 
 
-def _spawn_release(item_id: uuid.UUID, holder: str) -> None:
-    try:
-        task = asyncio.get_running_loop().create_task(_delete_fence(item_id, holder))
-    except RuntimeError:
-        logger.warning("No event loop to release the checkout fence of work item %s; it expires on its TTL", item_id)
-        return
-    _release_tasks.add(task)
-    task.add_done_callback(_release_tasks.discard)
-
-
-def _release_committed(sync: Session) -> None:
-    """``after_commit``: the transition is durable, so drop each queued fence. Also fires on a SAVEPOINT release."""
-    if sync.in_nested_transaction():
-        return
-    for pending in sync.info.pop(_PENDING_KEY, []):
-        _spawn_release(pending.item_id, pending.holder)
-
-
-def _forget_undone(sync: Session, previous_transaction: SessionTransaction) -> None:
-    """Drop the releases whose transition this rollback (outer or SAVEPOINT) undid: the row still names the holder."""
-    # Imported here: event_wake reaches the accessors through dispatch_gate, and the accessors import this module.
-    from ..scheduler.event_wake import within_transaction
-
-    pending = sync.info.get(_PENDING_KEY, [])
-    pending[:] = [p for p in pending if not within_transaction(p.transaction, previous_transaction)]
-
-
-def _release_after_commit(session: AsyncSession, item_id: uuid.UUID, holder: str) -> None:
-    """Queue the fence release on *session*; a commit sends it, a rollback drops it.
-
-    An object that is not a real SQLAlchemy session has no commit to follow, so it is released at once.
-    """
-    sync = getattr(session, "sync_session", None)
-    if not isinstance(sync, Session):
-        _spawn_release(item_id, holder)
-        return
-    if not sync.info.get(_HOOKED_KEY):
-        event.listen(sync, "after_commit", _release_committed)
-        event.listen(sync, "after_soft_rollback", _forget_undone)
-        sync.info[_HOOKED_KEY] = True
-    txn = sync.get_nested_transaction() or sync.get_transaction()
-    sync.info.setdefault(_PENDING_KEY, []).append(_PendingRelease(item_id, holder, txn))
-
-
 def stamp_and_release(
     session: AsyncSession, item: LLCWorkItem, new_status: WorkItemStatus, now: datetime, *, own: bool = False
 ) -> None:
@@ -240,4 +182,4 @@ def stamp_and_release(
     holder = _checkout_holder(item)
     stamp_status(item, new_status, now, own=own)
     if held and holder is not None and item.checkout_locked_at is None:
-        _release_after_commit(session, item.id, holder)
+        defer_until_commit(session, lambda: _delete_fence(item.id, holder), f"release checkout fence of {item.id}")
