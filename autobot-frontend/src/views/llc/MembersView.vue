@@ -156,6 +156,7 @@ import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useCompanyMembers, canChangeRole, canGrantRole, rolesToOffer, type Member } from '@/composables/llc/useCompanyMembers'
+import { useRoleLabel } from '@/composables/llc/roleLabel'
 import { useCollaborationInvite } from '@/composables/collaboration/useCollaborationInvite'
 import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseModal, BaseTable, type BaseTableColumn } from '@autobot/ui'
 
@@ -167,6 +168,7 @@ const logger = createLogger('MembersView')
 const api = useApiClient()
 const route = useRoute()
 const { t } = useI18n()
+const roleLabel = useRoleLabel()
 
 const props = defineProps<{ companyId?: string }>()
 const companyId = computed(() => (route.params.companyId as string) ?? props.companyId ?? '')
@@ -213,12 +215,6 @@ const roleModel = computed<string>({
     if (isMembershipRole(value)) selectedRole.value = value
   },
 })
-
-function roleLabel(role: string): string {
-  const key = `llcMembers.role.${role}`
-  const label = t(key)
-  return label === key ? role : label
-}
 
 function roleBadgeVariant(role: string): 'primary' | 'success' | 'warning' | 'neutral' {
   switch (role) {
