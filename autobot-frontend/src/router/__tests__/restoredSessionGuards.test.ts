@@ -48,7 +48,8 @@ describe('router.beforeEach on a session restored from the backend (#19833)', { 
   })
 
   it('denies a non-admin restored session an meta.admin route', async () => {
-    expect(await visitAs('operator', '/admin/users')).toBe('/home')
+    // #20631: the /admin section itself requires an admin, so an operator is refused at the section.
+    expect(await visitAs('operator', '/admin/users')).toBe('/permission-denied')
   })
 
   it('lets an administrative restored session reach the same route', async () => {
