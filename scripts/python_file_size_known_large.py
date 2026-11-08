@@ -85,11 +85,11 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 817,
     "autobot-backend/api/codebase_analytics/endpoints/report.py": 2262,
     "autobot-backend/api/codebase_analytics/endpoints/stats.py": 659,
-    "autobot-backend/api/conversation_files.py": 960,
+    "autobot-backend/api/conversation_files.py": 916,
     "autobot-backend/api/database_mcp.py": 1056,
     "autobot-backend/api/development_speedup.py": 611,
     "autobot-backend/api/enterprise_features.py": 698,
-    "autobot-backend/api/envelope_secrets.py": 612,
+    "autobot-backend/api/envelope_secrets.py": 608,
     "autobot-backend/api/files.py": 1241,
     "autobot-backend/api/filesystem_mcp.py": 1954,
     "autobot-backend/api/git_mcp.py": 1336,
@@ -190,7 +190,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/context_aware_decision/decision_engine.py": 815,
     "autobot-backend/context_aware_decision/tests/test_counterfactual_reasoner.py": 663,
     "autobot-backend/context_window_manager.py": 626,
-    "autobot-backend/conversation_file_manager.py": 1199,
+    "autobot-backend/conversation_file_manager.py": 1193,
     "autobot-backend/conversation_file_manager_init_test.py": 729,
     "autobot-backend/desktop_streaming_manager.py": 1419,
     "autobot-backend/enterprise_feature_manager.py": 955,
@@ -326,7 +326,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/graph_rag_service_test.py": 890,
     "autobot-backend/services/knowledge/autonomous_loop.py": 798,
     "autobot-backend/services/knowledge/code_indexer.py": 1176,
-    "autobot-backend/services/knowledge/doc_indexer.py": 1247,
+    "autobot-backend/services/knowledge/doc_indexer.py": 1098,
     "autobot-backend/services/knowledge/service.py": 849,  # train 48: #18935 merged onto #18945
     "autobot-backend/services/knowledge/test_autonomous_loop.py": 708,
     "autobot-backend/services/knowledge/test_doc_indexer.py": 1462,
@@ -461,7 +461,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/tests/test_cleanup_never_destroys_data_14856.py": 981,
     "autobot-slm-backend/user_management/services/sso_service.py": 775,
     "autobot_shared/circuit_breaker.py": 689,
-    "autobot_shared/env_registry.py": 1061,  # #19320: postgres block -> env_registry_postgres (was 1125)
+    "autobot_shared/env_registry.py": 1049,  # #20910: transcriber block -> env_registry_transcriber (was 1061)
     "autobot_shared/monitoring/prometheus_metrics.py": 949,
     "autobot_shared/npu/integration.py": 929,
     "autobot_shared/plugin_sdk/loader.py": 690,
@@ -482,7 +482,7 @@ KNOWN_LARGE: dict[str, int] = {
     "repo_tests/enum_union_guard_test.py": 801,
     "repo_tests/sync_deletions_ansible_wiring_16310_test.py": 674,  # #16310
     "repo_tests/sys_modules_leak_guard.py": 1145,
-    "scripts/audit_api_wiring.py": 895,  # #16816: reporting moved to dead_surface.py
+    "scripts/audit_api_wiring.py": 883,  # #16816: reporting moved to dead_surface.py
 }
 
 #: Entries annotated by hand as live, tracked violations rather than #5060's

@@ -13,6 +13,8 @@ Watched patterns:
   llc:approval:*  — approval_created, approval_resolved
   llc:sprint:*    — sprint_closed, sprint_started
   llc:agent:*     — agent_paused, agent_resumed, heartbeat_ok, heartbeat_missed
+  llc:notifications:{company_id} — budget watchdog and handoff producers; the
+                    company id is carried by the channel name, not the payload
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import uuid
 from typing import Optional
 
 from autobot_shared.redis_client import get_async_redis_client
@@ -34,7 +37,56 @@ _PATTERNS = [
     "llc:approval:*",
     "llc:sprint:*",
     "llc:agent:*",
+    "llc:notifications:*",
 ]
+
+_NOTIFICATIONS_PREFIX = "llc:notifications:"
+_ENVELOPE_KEYS = frozenset({"event_type", "company_id", "entity_type", "entity_id", "payload", "actor_id"})
+
+
+def _channel_company_id(channel: object) -> Optional[str]:
+    """Return the canonical company UUID of an ``llc:notifications:{id}`` channel.
+
+    Exactly one segment must follow the prefix and it must parse as a UUID (the
+    Company OS company id format); anything else (empty, ``a:b``, non-UUID) is
+    None.
+    """
+    if isinstance(channel, bytes):
+        channel = channel.decode("utf-8", errors="replace")
+    if not isinstance(channel, str) or not channel.startswith(_NOTIFICATIONS_PREFIX):
+        return None
+    try:
+        return str(uuid.UUID(channel[len(_NOTIFICATIONS_PREFIX) :]))
+    except ValueError:
+        return None
+
+
+def _is_notifications_channel(channel: object) -> bool:
+    if isinstance(channel, bytes):
+        channel = channel.decode("utf-8", errors="replace")
+    return isinstance(channel, str) and channel.startswith(_NOTIFICATIONS_PREFIX)
+
+
+def _resolve_company_id(channel: object, data: dict) -> Optional[str]:
+    """Company to route to. Notifications channels trust ONLY the channel name
+    (tenant isolation); the other watched patterns carry it in the payload."""
+    if _is_notifications_channel(channel):
+        return _channel_company_id(channel)
+    return data.get("company_id")
+
+
+def _event_payload(data: dict) -> dict:
+    """Nested ``payload`` if it is a dict, else the producer's flat extra fields.
+
+    ``company_id`` is an envelope key, so it is never part of the flat payload
+    (including when ``payload`` is a non-dict); on notifications channels the
+    payload's company_id is ignored in favour of the channel's.
+    """
+    nested = data.get("payload")
+    if isinstance(nested, dict):
+        return nested
+    return {k: v for k, v in data.items() if k not in _ENVELOPE_KEYS}
+
 
 _RECONNECT_DELAY = 5  # seconds between reconnect attempts
 
@@ -137,8 +189,13 @@ class LLCNotificationRouter:
         if not isinstance(data, dict):
             return
 
-        company_id = data.get("company_id")
+        company_id = _resolve_company_id(message.get("channel"), data)
         if not company_id:
+            logger.warning(
+                "LLC router: dropping %s event on %s — no company_id derivable",
+                data.get("event_type", ""),
+                message.get("channel"),
+            )
             return
 
         event = LLCEvent(
@@ -146,7 +203,7 @@ class LLCNotificationRouter:
             event_type=data.get("event_type", ""),
             entity_type=data.get("entity_type", ""),
             entity_id=str(data.get("entity_id", "")),
-            payload=data.get("payload", {}),
+            payload=_event_payload(data),
             actor_id=data.get("actor_id"),
         )
         await self._publisher.publish(
