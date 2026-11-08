@@ -173,7 +173,7 @@ const formatTime = createRecencyFormatter({
   locale: () => locale.value,
   style: 'narrow',
   olderThanMs: 86_400_000,
-  older: createDateFormatter({ kind: 'date', intl: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } }),
+  older: createDateFormatter({ locale: () => locale.value, kind: 'date', intl: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } }),
 })
 
 /**

@@ -5,7 +5,6 @@ Unit tests for SecureCommandExecutor module
 Tests command risk assessment, approval workflows, and secure execution
 """
 
-import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -258,22 +257,19 @@ class TestSecureCommandExecutor:
 
     @pytest.mark.asyncio
     async def test_run_shell_command_safe(self):
-        """Test execution of safe command"""
-        with patch("asyncio.create_subprocess_shell") as mock_subprocess:
-            # Mock successful command execution
-            mock_process = AsyncMock()
-            mock_process.communicate.return_value = (b"hello\n", b"")
-            mock_process.returncode = 0
-            mock_subprocess.return_value = mock_process
+        """Test execution of safe command.
 
-            result = await self.executor.run_shell_command("echo hello")
+        Runs the real ``echo``: the runner reads the process's streams under a deadline
+        (#20740), which a mocked ``communicate()`` no longer stands in for.
+        """
+        result = await self.executor.run_shell_command("echo hello")
 
-            assert result["status"] == "success"
-            assert result["stdout"] == "hello"
-            assert result["stderr"] == ""
-            assert result["return_code"] == 0
-            assert result["security"]["risk"] == "safe"
-            assert result["security"]["sandboxed"] is False
+        assert result["status"] == "success"
+        assert result["stdout"] == "hello"
+        assert result["stderr"] == ""
+        assert result["return_code"] == 0
+        assert result["security"]["risk"] == "safe"
+        assert result["security"]["sandboxed"] is False
 
     @pytest.mark.asyncio
     async def test_run_shell_command_forbidden(self):
@@ -303,11 +299,10 @@ class TestSecureCommandExecutor:
         """Test execution of command that needs approval and is approved"""
         self.mock_approval_callback.return_value = True
 
-        with patch("asyncio.create_subprocess_shell") as mock_subprocess:
-            mock_process = AsyncMock()
-            mock_process.communicate.return_value = (b"file removed\n", b"")
-            mock_process.returncode = 0
-            mock_subprocess.return_value = mock_process
+        with patch(
+            "secure_command_executor.execute_shell_command",
+            AsyncMock(return_value={"stdout": "file removed", "stderr": "", "return_code": 0, "status": "success"}),
+        ):  # the executor's decision is under test, not the runner (#20740)
 
             result = await self.executor_with_callback.run_shell_command("rm file.txt")
 
@@ -320,11 +315,10 @@ class TestSecureCommandExecutor:
         """Test execution with forced approval"""
         self.mock_approval_callback.return_value = True
 
-        with patch("asyncio.create_subprocess_shell") as mock_subprocess:
-            mock_process = AsyncMock()
-            mock_process.communicate.return_value = (b"hello\n", b"")
-            mock_process.returncode = 0
-            mock_subprocess.return_value = mock_process
+        with patch(
+            "secure_command_executor.execute_shell_command",
+            AsyncMock(return_value={"stdout": "hello", "stderr": "", "return_code": 0, "status": "success"}),
+        ):  # the executor's decision is under test, not the runner (#20740)
 
             # Force approval for safe command
             result = await self.executor_with_callback.run_shell_command("echo hello", force_approval=True)
@@ -335,17 +329,21 @@ class TestSecureCommandExecutor:
 
     @pytest.mark.asyncio
     async def test_run_shell_command_timeout(self):
-        """Test command execution timeout"""
-        with patch("secure_command_executor.execute_shell_command") as mock_execute:
-            mock_execute.side_effect = asyncio.TimeoutError()
+        """A real command killed at the runner's deadline is audited as a timeout (#20740).
 
-            # Use safe command that doesn't need approval
-            result = await self.executor.run_shell_command("echo hello")
+        Not an injected TimeoutError: the runner returns a timed-out result, it does not raise.
+        """
+        from utils import command_utils
 
-            assert result["status"] == "error"
-            assert "Command execution timed out" in result["stderr"]
-            assert result["return_code"] == 124
-            assert result["security"]["timeout"] is True
+        self.mock_approval_callback.return_value = True  # `sleep` needs approval; approve it so it runs
+        with patch.object(command_utils, "DEFAULT_SHELL_TIMEOUT_S", 1):
+            result = await self.executor_with_callback.run_shell_command("sleep 30")
+
+        assert result["status"] == "error", result
+        assert result["return_code"] == 124, result
+        assert result["stderr"] == "Command timed out after 1s and was killed"
+        assert result["security"]["timeout"] is True
+        assert self.executor_with_callback.command_history[-1]["error"] == "Command timed out"
 
     @pytest.mark.asyncio
     async def test_run_shell_command_execution_error(self):
