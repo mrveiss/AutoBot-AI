@@ -1139,7 +1139,6 @@
 1|ssot|autobot-slm-backend/api/slm_users.py|:5432
 1|other|autobot-slm-backend/api/tls.py|300
 1|other|autobot-slm-backend/api/updates.py|100
-4|other|autobot-slm-backend/api/websocket.py|30
 1|other|autobot-slm-backend/middleware/security_headers.py|https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html
 1|ssot|autobot-slm-backend/migrations/add_agents.py|qwen3.5:9b
 2|other|autobot-slm-backend/migrations/migrate_system_secrets_to_vault.py|"postgresql://"
