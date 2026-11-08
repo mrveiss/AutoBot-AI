@@ -18,6 +18,9 @@ import { createI18n } from 'vue-i18n'
 import { ref } from 'vue'
 import en from '@/i18n/locales/en.json'
 
+// #20682: the attach/detach controls show only to an owner/admin, whom the members list reports.
+const ADMIN_MEMBERS = [{ user_id: 'u1', display_name: 'Ada', role: 'owner', viewer_can_manage: true }]
+
 const get = vi.fn()
 const post = vi.fn()
 const del = vi.fn()
@@ -77,6 +80,7 @@ function respond(processes: unknown = PROCESSES, afterProcesses: unknown = proce
       processCalls += 1
       return Promise.resolve({ nodes: processCalls === 1 ? processes : afterProcesses })
     }
+    if (url.includes('/members')) return Promise.resolve(ADMIN_MEMBERS)
     if (url.includes('/org-chart')) return Promise.resolve({ nodes: PEOPLE })
     if (url.includes('/api/llc/roles/')) return Promise.resolve(ROLES)
     return Promise.resolve({ nodes: [] })
@@ -121,6 +125,7 @@ describe('OrgChart process attach/detach (#14549)', () => {
     respond()
     get.mockImplementation((url: string) => {
       if (url.includes('/process-nodes')) return Promise.resolve({ nodes: PROCESSES })
+      if (url.includes('/members')) return Promise.resolve(ADMIN_MEMBERS)
       if (url.includes('/org-chart')) return Promise.resolve({ nodes: PEOPLE })
       if (url.includes('/api/llc/roles/')) return Promise.reject(new Error('HTTP 503: upstream'))
       return Promise.resolve({ nodes: [] })
@@ -137,6 +142,7 @@ describe('OrgChart process attach/detach (#14549)', () => {
   it('stays silent when the roles request answers with none', async () => {
     get.mockImplementation((url: string) => {
       if (url.includes('/process-nodes')) return Promise.resolve({ nodes: PROCESSES })
+      if (url.includes('/members')) return Promise.resolve(ADMIN_MEMBERS)
       if (url.includes('/org-chart')) return Promise.resolve({ nodes: PEOPLE })
       if (url.includes('/api/llc/roles/')) return Promise.resolve([])
       return Promise.resolve({ nodes: [] })
