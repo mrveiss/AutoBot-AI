@@ -1,6 +1,7 @@
 import asyncio
 import sys
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import FastAPI, HTTPException
@@ -144,6 +145,7 @@ def test_failed_preload_is_unhealthy_until_a_model_loads(monkeypatch):
         def __init__(self):
             self.app = FastAPI()
             self._preload_failed = False
+            self._allow_mock_inference = False
             self.loaded_models = {}
             self.task_stats = ThreadSafeStats()
             self.worker_id = "test"
@@ -158,7 +160,7 @@ def test_failed_preload_is_unhealthy_until_a_model_loads(monkeypatch):
         async def load_and_optimize_model(self, name, optimization_level):
             raise RuntimeError("load failed")
 
-    monkeypatch.setattr(worker_startup, "config", {"models": {"embedding": {"preload": True, "name": "model"}}})
+    monkeypatch.setattr(worker_startup, "config", {"models": {"chat": {"preload": True, "name": "model"}}})
     worker = Worker()
     client = TestClient(worker.app)
     assert client.get("/health").status_code == 200
@@ -168,3 +170,24 @@ def test_failed_preload_is_unhealthy_until_a_model_loads(monkeypatch):
     assert response.json()["status"] == "unhealthy"
     worker.loaded_models["model"] = {}
     assert client.get("/health").json()["status"] == "healthy"
+
+
+def test_failed_embedding_preload_aborts_startup(monkeypatch):
+    import worker_startup
+
+    class Worker(WorkerStartupMixin):
+        def __init__(self):
+            self.worker_id = None
+            self.pairing_status = {}
+            self._display_network_info = MagicMock()
+            self.initialize_redis = AsyncMock()
+            self.initialize_npu = AsyncMock()
+            self._models_lock = asyncio.Lock()
+            self.loaded_models = {}
+            self._use_real_inference = False
+            self._model_manager = None
+            self._allow_mock_inference = False
+
+    monkeypatch.setattr(worker_startup, "config", {"models": {"embedding": {"preload": True, "name": "model"}}})
+    with pytest.raises(RuntimeError, match="Real inference is unavailable for model"):
+        asyncio.run(Worker().initialize())

@@ -29,7 +29,7 @@ async def test_mock_embeddings_are_rejected(monkeypatch, mock):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("marker", [{}, {"mock": None}, {"mock": 0}, {"mock": "false"}])
-async def test_embeddings_without_explicit_real_marker_are_rejected(monkeypatch, marker):
+async def test_embeddings_without_explicit_real_marker_are_rejected(monkeypatch, marker, caplog):
     from services import npu_client
 
     @asynccontextmanager
@@ -42,3 +42,4 @@ async def test_embeddings_without_explicit_real_marker_are_rejected(monkeypatch,
     client._get_session = AsyncMock(return_value=MagicMock(post=post))
     monkeypatch.setattr(npu_client, "assert_egress_policy", AsyncMock())
     assert await client.generate_embeddings(["text"], "model") is None
+    assert "http://worker" in caplog.text

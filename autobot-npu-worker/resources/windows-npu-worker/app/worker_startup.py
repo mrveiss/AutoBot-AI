@@ -292,6 +292,8 @@ class WorkerStartupMixin:
                 except Exception as e:
                     self._preload_failed = True
                     logger.warning(f"Failed to preload {model_type} model: {e}")
+                    if model_type == "embedding" and not self._allow_mock_inference:
+                        raise
 
     async def load_and_optimize_model(self, model_name: str, optimization_level: str = "balanced"):
         """
