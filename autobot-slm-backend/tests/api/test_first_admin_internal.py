@@ -67,11 +67,15 @@ async def test_a_person_copy_needs_the_internal_key():
 
 @pytest.mark.asyncio
 async def test_a_person_copy_updates_password_and_deactivates():
-    user = SimpleNamespace(password_hash="old", is_active=True)
+    user = SimpleNamespace(username="alice", password_hash="old", is_active=True)
     session = SimpleNamespace(get=AsyncMock(return_value=user), commit=AsyncMock())
-    with patch.object(route, "verify_internal_api_key", return_value=True):
+    with (
+        patch.object(route, "verify_internal_api_key", return_value=True),
+        patch.object(route, "record_password_epoch", AsyncMock()) as revoke,
+    ):
         await route.update_person_copy(_copy_body(), session, "key")
     assert (user.password_hash, user.is_active) == ("new", False)
+    revoke.assert_awaited_once_with("alice", lead_seconds=route.DEACTIVATION_EPOCH_LEAD_SECONDS)
     session.commit.assert_awaited_once()
 
 
@@ -85,10 +89,13 @@ async def test_a_person_copy_for_nobody_is_a_404():
 
 @pytest.mark.asyncio
 async def test_no_hash_never_wipes_the_password_but_still_deactivates():
-    user = SimpleNamespace(password_hash="old", is_active=True)
+    user = SimpleNamespace(username="alice", password_hash="old", is_active=True)
     session = SimpleNamespace(get=AsyncMock(return_value=user), commit=AsyncMock())
     body = route.PersonCopyRequest(slm_user_id=uuid.uuid4(), password_hash=None, is_active=False)
-    with patch.object(route, "verify_internal_api_key", return_value=True):
+    with (
+        patch.object(route, "verify_internal_api_key", return_value=True),
+        patch.object(route, "record_password_epoch", AsyncMock()),
+    ):
         await route.update_person_copy(body, session, "key")
     assert (user.password_hash, user.is_active) == ("old", False)
 
