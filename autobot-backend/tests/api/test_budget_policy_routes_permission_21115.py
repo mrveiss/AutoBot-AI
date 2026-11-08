@@ -18,6 +18,8 @@ from fastapi.testclient import TestClient
 import api.budget_policies as bp
 import auth_middleware as _stub_auth
 from api.user_management.dependencies import get_db_session
+from testkit.fake_async_session import FakeAsyncSession
+from testkit.fake_result import FakeResult
 
 _ADMIN_USER = {"username": "root", "role": "admin"}
 _NON_ADMIN = {"username": "viewer", "role": "user"}
@@ -46,11 +48,6 @@ _ROUTES = (
     ("POST", "/api/budget-policies/a1/resume", None, 200),
     ("GET", "/api/budget-policies/a1/status", None, 200),
 )
-
-
-class _Session:
-    async def execute(self, _stmt):
-        return SimpleNamespace(scalar_one_or_none=lambda: None)
 
 
 @pytest.fixture
@@ -85,7 +82,7 @@ def client(real_auth_middleware, monkeypatch):
     monkeypatch.setattr(bp, "resume_agent", _true)
 
     async def _session():
-        return _Session()
+        return FakeAsyncSession(default_result=FakeResult([]))
 
     app = FastAPI()
     app.include_router(bp.router, prefix="/api")
