@@ -16,6 +16,7 @@ from sqlalchemy.exc import IntegrityError
 
 from autobot_shared.user_management import user_service_conflict as conflict
 from autobot_shared.user_management.user_service_errors import DuplicateUserError
+from llc.models.membership import LLCCompanyMembership
 from tests.helpers._sqlite_test_engine import real_savepoint_session_factory
 from user_management.models import AuditLog, Role, User
 from user_management.models.person_link import PersonLink
@@ -24,7 +25,7 @@ from user_management.services import person_link_service as service
 _PERSON = service.SlmPerson(uuid.uuid4(), "root", "root@example.test", "Root", "$2b$kept-hash")
 
 
-_TABLES = [User.__table__, Role.__table__, AuditLog.__table__, PersonLink.__table__]
+_TABLES = [User.__table__, Role.__table__, AuditLog.__table__, PersonLink.__table__, LLCCompanyMembership.__table__]
 
 
 @pytest.fixture(autouse=True)
@@ -182,3 +183,79 @@ async def test_two_concurrent_starts_both_report_ok_and_leave_one_linked_user(fi
     assert len(lost) == 1  # exactly one start took the conflict path, rolled back and re-read
     assert service.last_link_status == service.LINK_OK
     assert await _counts(file_factory) == (1, 1)
+
+
+async def _rows(factory, model) -> int:
+    async with factory() as session:
+        return (await session.execute(select(func.count()).select_from(model))).scalar_one()
+
+
+@pytest.mark.asyncio
+async def test_a_user_is_linked_to_one_person_only(factory) -> None:
+    """Unique both ways (#21150): a second person for the same main-app user is refused by the schema."""
+    await _at_startup(factory)
+    async with factory() as session:
+        linked_user = (await session.execute(select(PersonLink.user_id))).scalar_one()
+        session.add(PersonLink(slm_user_id=uuid.UUID("5e1f0000-0000-4000-8000-00000000beef"), user_id=linked_user))
+        with pytest.raises(IntegrityError):
+            await session.flush()
+
+
+@pytest.mark.asyncio
+async def test_linking_leaves_existing_ids_in_both_stores_unchanged(factory) -> None:
+    """The SLM person keeps its id on the link and an unrelated main-app user keeps theirs (#21150)."""
+    bystander_id = uuid.UUID("b1b2c3d4-0000-4000-8000-00000000b001")
+    async with factory() as session, session.begin():
+        session.add(User(id=bystander_id, email="other@example.test", username="other", password_hash="x"))
+    await _at_startup(factory)
+    async with factory() as session:
+        link = (await session.execute(select(PersonLink))).scalar_one()
+        ids = set((await session.execute(select(User.id))).scalars())
+    assert link.slm_user_id == _PERSON.id
+    assert bystander_id in ids and link.user_id in ids and len(ids) == 2
+
+
+async def _demote_the_linked_user(factory) -> None:
+    """Leave the main store with no one `_main_store_may_hold_them` would match, so only the link row can stop a re-run."""
+    async with factory() as session, session.begin():
+        user = (await session.execute(select(User))).scalar_one()
+        user.is_platform_admin, user.username, user.email = False, "renamed", "renamed@example.test"
+
+
+async def _link_directly(factory) -> str:
+    async with factory() as session, session.begin():
+        return await service.link_first_slm_admin(session, _PERSON)
+
+
+@pytest.mark.asyncio
+async def test_re_running_the_first_admin_link_returns_the_existing_link_and_adds_nothing(factory) -> None:
+    """#21151: with nobody left to match, only the existing link row stops a second user, link and membership."""
+    await _at_startup(factory)
+    async with factory() as session:
+        link = (await session.execute(select(PersonLink))).scalar_one()
+        first = (link.id, link.user_id)
+    await _demote_the_linked_user(factory)
+    assert await _link_directly(factory) == service.LINK_OK
+    async with factory() as session:
+        link = (await session.execute(select(PersonLink))).scalar_one()
+    assert (link.id, link.user_id) == first
+    assert (
+        await _rows(factory, User),
+        await _rows(factory, PersonLink),
+        await _rows(factory, LLCCompanyMembership),
+    ) == (
+        1,
+        1,
+        0,
+    )
+
+
+@pytest.mark.asyncio
+async def test_control_without_the_link_row_the_same_state_creates_a_second_user(factory) -> None:
+    """Control for the test above: the state is one where the link row is the only guard, so dropping it links again."""
+    await _at_startup(factory)
+    await _demote_the_linked_user(factory)
+    async with factory() as session, session.begin():
+        await session.execute(delete(PersonLink))
+    assert await _link_directly(factory) == service.LINK_OK
+    assert (await _rows(factory, User), await _rows(factory, PersonLink)) == (2, 1)
