@@ -259,6 +259,8 @@ ALLOWED_ADDITIONS = {
             "docs/guides/slm-docker-ansible-deployment.md",
             # #20903: python_version_declaration_drift_test.py sweeps this file's python floor lines.
             "docs/DEPENDENCIES.md",
+            # #20903: the same guard sweeps every tracked pyproject's requires-python.
+            "**/pyproject.toml",
             # #19279: the landing-page guard reads the page for the libraries and placeholders it renders.
             "docs/index.html",
             # #18559: both duplication-guard tests read the pins file.

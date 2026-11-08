@@ -123,7 +123,7 @@ _SWEEPS: tuple[Sweep, ...] = (
     ),
     Sweep(
         "requires-python in pyprojects",
-        ("*pyproject.toml",),
+        ("pyproject.toml", "*/pyproject.toml"),
         re.compile(r"^requires-python\s*=\s*[\"']>=(\d+\.\d+)[\"']"),
         min_files_swept=3,
         min_declarations=3,

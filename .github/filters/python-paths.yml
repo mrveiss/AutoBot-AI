@@ -27,6 +27,9 @@ python:
   - 'requirements-ci/**'
   - 'pyproject.toml'
   - 'autobot_shared/pyproject.toml'
+  # #20903: `python_version_declaration_drift_test.py` sweeps every tracked pyproject's
+  # requires-python (`*pyproject.toml`), including the ones under libs/ and autobot-infrastructure/.
+  - '**/pyproject.toml'
   - '.github/workflows/ci.yml'
   # Read by repo_tests/duplication_guard_names_the_failing_scope_test.py.
   # Without this the regression test for the attribution fix can itself be
