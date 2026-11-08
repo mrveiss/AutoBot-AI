@@ -9,7 +9,6 @@ import array
 import asyncio
 import json
 import mimetypes
-import os
 import uuid
 import wave
 from pathlib import Path
@@ -29,6 +28,7 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 
+from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_path
 from autobot_shared.ssot_constants import SecurityConstants
@@ -47,8 +47,14 @@ router = APIRouter(tags=["transcriber-recordings"], dependencies=[Depends(authen
 _ALLOWED_EXTENSIONS = SecurityConstants.ALLOWED_AUDIO_EXTENSIONS
 _CHUNK_SIZE = 65536
 # Progress stream pacing (env-backed, never hard-coded).
-_PROGRESS_POLL_S = float(os.getenv("AUTOBOT_TRANSCRIBER_PROGRESS_POLL_S", "1.0"))
-_PROGRESS_MAX_S = float(os.getenv("AUTOBOT_TRANSCRIBER_PROGRESS_MAX_S", "3600"))
+# Clamped to the registered ranges: a malformed value falls back to the default
+# and a 0/negative poll interval can never turn the loop into a busy DB poll.
+_PROGRESS_POLL_S = env_float_clamped(
+    "AUTOBOT_TRANSCRIBER_PROGRESS_POLL_S", 1.0, min_v=0.1, max_v=60.0, positive_finite=True
+)
+_PROGRESS_MAX_S = env_float_clamped(
+    "AUTOBOT_TRANSCRIBER_PROGRESS_MAX_S", 3600.0, min_v=1.0, max_v=86400.0, positive_finite=True
+)
 
 
 def _upload_dir(request: Request) -> Path:
@@ -163,7 +169,7 @@ async def _progress_stream(recording_id: int, db: Database) -> AsyncIterator[str
     """Poll the recording status, emitting an SSE event on each change until terminal."""
     last = None
     waited = 0.0
-    while waited <= _PROGRESS_MAX_S:
+    while waited < _PROGRESS_MAX_S:
         rec = await db.get_recording(recording_id)
         if not rec:
             yield f"data: {json.dumps({'error': True, 'step': 'missing'})}\n\n"
@@ -176,6 +182,9 @@ async def _progress_stream(recording_id: int, db: Database) -> AsyncIterator[str
             return
         await asyncio.sleep(_PROGRESS_POLL_S)
         waited += _PROGRESS_POLL_S
+    # Bound reached without a terminal state: tell the UI (a silent close would
+    # make EventSource reconnect forever) so it stops instead of retrying.
+    yield f"data: {json.dumps({'error': True, 'step': 'timeout'})}\n\n"
 
 
 @router.get("/recordings/{recording_id}/progress")
@@ -189,7 +198,7 @@ async def stream_recording_progress(
     return StreamingResponse(
         _progress_stream(recording_id, db),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache"},
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
