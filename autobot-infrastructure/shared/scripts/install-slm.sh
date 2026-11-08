@@ -374,14 +374,14 @@ setup_code() {
 setup_slm_backend() {
     log "Setting up SLM backend..."
 
-    # Create slm-server directory if it doesn't exist yet
     mkdir -p "$SLM_SERVER_DIR"
     chown autobot:autobot "$SLM_SERVER_DIR"
 
     # shellcheck source=scripts/lib/python_floor.sh
-    source "$PROJECT_ROOT/scripts/lib/python_floor.sh" && python_floor_build_venv "$PROJECT_ROOT" "$SLM_SERVER_DIR/venv" autobot || die "SLM venv on the .python-version floor failed (#20932)"
+    source "$PROJECT_ROOT/scripts/lib/python_floor.sh" && python_floor_build_venv "$PROJECT_ROOT" "$SLM_SERVER_DIR/venv" autobot || {
+        echo "FATAL: the SLM venv on the .python-version floor failed -- refusing an unpinned interpreter (#14172, #20932)" >&2; exit 1
+    }
 
-    # Install dependencies
     sudo -u autobot "$SLM_SERVER_DIR/venv/bin/pip" install --quiet --upgrade pip
 
     if [[ -f "$SLM_SERVER_DIR/requirements.txt" ]]; then

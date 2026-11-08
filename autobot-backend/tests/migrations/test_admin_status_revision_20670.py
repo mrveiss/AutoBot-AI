@@ -72,21 +72,20 @@ def store():
 
 
 def _service_class():
-    import user_management.models  # noqa: F401 - registers the mappers
-    from autobot_shared.user_management.models.user import UserCore
     from autobot_shared.user_management.user_service import UserService
+    from user_management.models import User  # the concrete mapped model; ``UserCore`` is abstract
 
     class _Bound(UserService):
-        user_model = UserCore
+        user_model = User
 
     return _Bound
 
 
 async def _create_user(engine, name: str, is_admin: bool) -> uuid.UUID:
-    from autobot_shared.user_management.models.user import UserCore
+    from user_management.models import User
 
     async with AsyncSession(engine) as session:
-        user = UserCore(email=f"{name}@example.test", username=name, is_platform_admin=is_admin)
+        user = User(email=f"{name}@example.test", username=name, is_platform_admin=is_admin)
         session.add(user)
         await session.commit()
         return user.id

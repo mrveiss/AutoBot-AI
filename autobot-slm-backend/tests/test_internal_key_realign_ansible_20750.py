@@ -91,9 +91,13 @@ def _run(tmp_path: Path, backend: _Backend, canonical: str = _SLM, restart: bool
         "slm_node_id": "node-b",
         "autobot_restart_services": restart,
     }
-    cmd = ["ansible-playbook", "-i", "localhost,", "-c", "local", str(tmp_path / "p.yml"), "-e", json.dumps(extra)]
+    ansible = shutil.which("ansible-playbook")  # absolute: the child env below has a narrowed PATH
+    cmd = [str(ansible), "-i", "localhost,", "-c", "local", str(tmp_path / "p.yml"), "-e", json.dumps(extra)]
     cmd += list(flags)
-    env = {"ANSIBLE_LOG_PATH": str(tmp_path / "a.log"), "PATH": "/usr/bin:/bin:/usr/local/bin"}
+    env = {
+        "ANSIBLE_LOG_PATH": str(tmp_path / "a.log"),
+        "PATH": f"{Path(str(ansible)).parent}:/usr/bin:/bin:/usr/local/bin",
+    }
     proc = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=180, check=False)  # nosec B603
     render = next(
         (x.split('"msg": "RENDER ', 1)[1].rstrip('"') for x in proc.stdout.splitlines() if "RENDER " in x), ""
