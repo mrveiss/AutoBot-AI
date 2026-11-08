@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from autobot_shared.slm_credential_deletion import (
+from autobot_shared.slm_credential_actions import (
     PlainHttpToRemoteSlmError,
     is_loopback_host,
     is_split_without_tls,
