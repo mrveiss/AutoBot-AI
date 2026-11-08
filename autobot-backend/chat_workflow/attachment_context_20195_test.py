@@ -361,3 +361,92 @@ def test_a_failing_store_does_not_stop_the_live_notice(world, monkeypatch):
     seen: list = []
     asyncio.run(attachment_context.deliver_notices(_ALICE, params, seen.append))
     assert [m["metadata"]["code"] for m in seen] == ["unavailable"]
+
+
+def _stored_turn(world):
+    """[user, notice] stored the way a turn does it: the user's message first, then the notice, then the reply."""
+    asyncio.run(
+        world.history.add_messages_batch(
+            _ALICE, [world.history._build_message_dict("user", "q", "default", None, None)]
+        )
+    )
+    params, _ = _turn(world, ["no-such-id"])
+    asyncio.run(attachment_context.deliver_notices(_ALICE, params, None))
+    asyncio.run(
+        world.history.add_messages_batch(
+            _ALICE, [world.history._build_message_dict("assistant", "a", "default", None, None)]
+        )
+    )
+    return asyncio.run(world.history.load_session(_ALICE))
+
+
+def test_the_stored_order_is_user_then_notice_then_reply(world):
+    stored = _stored_turn(world)
+    assert [(m["sender"], m["messageType"]) for m in stored] == [
+        ("user", "default"),
+        ("system", "attachment_notice"),
+        ("assistant", "default"),
+    ]
+
+
+def test_the_legacy_flow_stores_and_yields_the_notice_once(world):
+    chat = world.chat
+    chat.knowledge_service = None
+    chat._create_llm_iteration_context = lambda params, *a, **k: SimpleNamespace(
+        selected_model="m", rag_citations=[], used_knowledge=False
+    )
+
+    async def _loop(ctx):
+        return
+        yield  # an async generator that yields nothing: no LLM reply in this test
+
+    chat._execute_llm_continuation_loop = _loop
+    chat._persist_conversation = AsyncMock()
+    chat._persist_workflow_messages = AsyncMock()
+    chat._fire_stop_hook = AsyncMock()
+    context = {"attachments": ["no-such-id"], VERIFIED_USER_KEY: "alice", VERIFIED_ATTACHMENT_ACCESS_KEY: True}
+    session = SimpleNamespace(session_id=_ALICE, metadata={}, conversation_history=[])
+
+    async def _run():
+        return [m async for m in chat._execute_llm_workflow(_ALICE, session, "q", context, "t", [])]
+
+    yielded = asyncio.run(_run())
+    assert [m.type for m in yielded] == ["attachment_notice"]
+    stored = asyncio.run(world.history.load_session(_ALICE))
+    assert [(m["sender"], m["messageType"]) for m in stored] == [("system", "attachment_notice")]
+    assert stored[0]["metadata"] == yielded[0].metadata
+
+
+def test_a_stored_notice_stays_out_of_the_next_turns_llm_context(world):
+    from api.websockets import NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES
+    from chat_history.turn_projection import project_turn_pairs
+
+    stored = _stored_turn(world)
+    assert project_turn_pairs(stored) == [{"user": "q", "assistant": "a"}]
+    assert attachment_context.NOTICE_TYPE in NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES  # api/chat.py context builders
+
+
+def test_a_stored_notice_stays_out_of_skill_distillation_input(world):
+    from chat_history.message_schema import as_llm_messages
+
+    stored = _stored_turn(world)
+    assert as_llm_messages(stored) == [{"role": "user", "content": "q"}, {"role": "assistant", "content": "a"}]
+
+
+def test_a_store_that_reports_failure_is_logged_as_a_lost_notice_and_the_stream_continues(world, monkeypatch, caplog):
+    params, _ = _turn(world, ["no-such-id"])
+    monkeypatch.setattr(world.history, "add_messages_batch", AsyncMock(return_value=False))
+    seen: list = []
+    with caplog.at_level(logging.ERROR):
+        asyncio.run(attachment_context.deliver_notices(_ALICE, params, seen.append))
+    assert "Attachment notices not stored" in caplog.text
+    assert [m["metadata"]["code"] for m in seen] == ["unavailable"]
+
+
+def test_a_lost_session_lease_is_not_swallowed(world, monkeypatch):
+    from chat_history.session_lease import SessionLeaseError
+
+    params, _ = _turn(world, ["no-such-id"])
+    monkeypatch.setattr(world.history, "add_messages_batch", AsyncMock(side_effect=SessionLeaseError("lost")))
+    with pytest.raises(SessionLeaseError):
+        asyncio.run(attachment_context.deliver_notices(_ALICE, params, None))

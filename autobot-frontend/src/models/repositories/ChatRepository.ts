@@ -385,14 +385,14 @@ export class ChatRepository {
         // Backend may save raw types like 'llm_response_chunk' which need mapping
         const rawType = msg.messageType || msg.type || 'message'
         const normalizedType = this.normalizeMessageType(rawType)
-
         const transformed = {
           id: msg.id || msg.metadata?.message_id || msg.rawData?.message_id || `${msg.sender}-${msg.timestamp}-${index}`,
           sender: this.normalizeSender(msg.sender),
           content: storedMessageText(msg),
           timestamp: new Date(msg.timestamp || new Date().toISOString()),
           type: normalizedType,
-          // Approval metadata is saved in rawData (old format) or metadata (new); accept both
+          // CRITICAL FIX: Backend saves approval metadata in rawData, not metadata
+          // Check both rawData (old format) and metadata (new format) for backward compatibility
           metadata: msg.metadata || msg.rawData || {},
           // Issue #4448: Map top-level sources for RAG citation display.
           // Normalise to RagSource shape; treat missing array as empty.
