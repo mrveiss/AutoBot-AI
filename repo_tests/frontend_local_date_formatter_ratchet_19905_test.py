@@ -29,6 +29,11 @@ caught. ``BEHAVIOUR`` still holds the functions only the behavioural detector fi
 **One number, not a per-file table**, for the reason given in
 ``slm_raw_setinterval_ratchet_19482_test.py``. The pin is down-only against the base (#19283). The
 reach floor guards the scan itself: a moved folder would otherwise read as a clean 0.
+
+**Inline shapes (#19905).** ``new Date(x).toLocaleString()`` is counted with one level of nested parens;
+``d.toLocaleString()`` on a date *variable* is left to the BEHAVIOUR detector, because telling it from a
+number's needs type information. A locale literal is found anywhere inside a kit formatter call's arguments
+(balanced parens), not only before the first ``}``.
 """
 
 from __future__ import annotations
@@ -67,9 +72,46 @@ _COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*).*$", re.M)
 # kit's createRecencyFormatter (#19606) -- measured on the merged tree, not added up from each side.
 # Then 7 and 3 down to 3 and 2 when SecretsManager, ProgressBar, useCaptchaStatus and SettingsView moved,
 # and NAMED 3 down to 0 when SecretAuditLog, AlertsMonitor and LLMFallbacksView moved to the kit (#19606).
+# BEHAVIOUR 2 down to 1 when NodeLifecyclePanel's formatFullTime moved to createDateFormatter (#19905).
 NAMED = "local_date_formatter_declarations"
 BEHAVIOUR = "local_date_formatter_functions_by_behaviour"
-PINS = {NAMED: 0, BEHAVIOUR: 2}
+# Four shapes the declaration scan cannot see, because they format a date inline or hand-assemble it
+# (#19905). Each is a count over the same files, from comment-stripped text, and each is a pin of its own:
+#   inline_date_locale_calls          ``x.toLocaleDateString()`` / ``toLocaleTimeString()`` at a call site
+#   inline_date_to_locale_string      ``new Date(v).toLocaleString()`` (a number's ``toLocaleString`` is not one)
+#   intl_date_time_format_outside_kit ``new Intl.DateTimeFormat(`` (``Intl.DateTimeFormat()`` for the zone is not)
+#   hardcoded_locale_formatters       a fixed locale literal given to a kit formatter or a ``toLocale*String``
+#   hand_assembled_date_fields        a date built from ``getMonth()``/``getDate()``/``getHours()``... pieces
+# ``hand_assembled_date_fields`` is 1 on purpose: GanttTimelineView's quarter tick ("Q3 2025") has no
+# ``Intl`` equivalent, so it is the one named exception and this pin allows exactly it.
+INLINE_LOCALE = "inline_date_locale_calls"
+INLINE_TO_LOCALE_STRING = "inline_date_to_locale_string"
+INTL_OUTSIDE_KIT = "intl_date_time_format_outside_kit"
+HARDCODED_LOCALE = "hardcoded_locale_formatters"
+HAND_ASSEMBLED = "hand_assembled_date_fields"
+PINS = {
+    NAMED: 0,
+    BEHAVIOUR: 1,
+    INLINE_LOCALE: 0,
+    INLINE_TO_LOCALE_STRING: 0,
+    INTL_OUTSIDE_KIT: 0,
+    HARDCODED_LOCALE: 0,
+    HAND_ASSEMBLED: 1,
+}
+_DECLARATION_KEYS = (NAMED, BEHAVIOUR)
+
+_INLINE_LOCALE = re.compile(r"\.toLocale(?:Date|Time)String\s*\(")
+# One level of nested parens is allowed (``new Date(a.getTime()).toLocaleString()``). ``d.toLocaleString()`` on a
+# date *variable* is not counted here: telling it from a number's needs types, so the BEHAVIOUR detector owns it.
+_INLINE_TO_LOCALE_STRING = re.compile(r"new\s+Date\((?:[^()]|\([^()]*\))*\)\s*\.toLocaleString\s*\(")
+_INTL_OUTSIDE_KIT = re.compile(r"new\s+Intl\s*\.\s*DateTimeFormat\s*\(")
+_FORMATTER_CALL = re.compile(r"create(?:Date|Recency)Formatter\(")
+_LOCALE_LITERAL = re.compile(r"\blocale\s*:\s*['\"`]")
+_HARDCODED_CALL = re.compile(r"\.toLocale(?:Date|Time)?String\s*\(\s*['\"][a-z]{2}")
+_HAND_ASSEMBLED = re.compile(
+    r"\$\{[^}`]*\.get(?:Month|Date|Hours|Minutes|Seconds)\(\)"
+    r"|\.get(?:Hours|Minutes|Seconds)\(\)\.toString\(\)\.padStart"
+)
 
 
 def _sources(src: Path) -> list[Path]:
@@ -86,11 +128,39 @@ def _sources(src: Path) -> list[Path]:
 _NAMED = re.compile(rf"^{_NAMES}$")
 
 
+def _call_span(text: str, start: int) -> int:
+    """Index just past the ``)`` that closes the call whose ``(`` is at ``start - 1``."""
+    depth = 1
+    for i in range(start, len(text)):
+        depth += {"(": 1, ")": -1}.get(text[i], 0)
+        if depth == 0:
+            return i + 1
+    return len(text)
+
+
+def _hardcoded_formatter_locales(text: str) -> int:
+    """Locale literals inside a kit formatter call's arguments, wherever the key sits in the object."""
+    total, pos = 0, 0
+    while (m := _FORMATTER_CALL.search(text, pos)) is not None:
+        end = _call_span(text, m.end())
+        total += len(_LOCALE_LITERAL.findall(text[m.end() : end]))
+        pos = end
+    return total
+
+
 def _counts(text: str) -> dict[str, int]:
     """Declarations by name, and the behavioural formatters whose name the list does not hold."""
     text = _COMMENT_LINE.sub("", text)
     by_behaviour = [n for n in date_formatter_names(text) if not _NAMED.match(n)]
-    return {NAMED: len(_DECLARATION.findall(text)), BEHAVIOUR: len(by_behaviour)}
+    return {
+        NAMED: len(_DECLARATION.findall(text)),
+        BEHAVIOUR: len(by_behaviour),
+        INLINE_LOCALE: len(_INLINE_LOCALE.findall(text)),
+        INLINE_TO_LOCALE_STRING: len(_INLINE_TO_LOCALE_STRING.findall(text)),
+        INTL_OUTSIDE_KIT: len(_INTL_OUTSIDE_KIT.findall(text)),
+        HARDCODED_LOCALE: _hardcoded_formatter_locales(text) + len(_HARDCODED_CALL.findall(text)),
+        HAND_ASSEMBLED: len(_HAND_ASSEMBLED.findall(text)),
+    }
 
 
 def _measure(paths: list[Path]) -> dict[str, int]:
@@ -105,7 +175,8 @@ def _measure(paths: list[Path]) -> dict[str, int]:
 def scan(src: Path) -> tuple[int, int]:
     """Return (declarations, files scanned) for one app's ``src``."""
     sources = _sources(src)
-    return sum(_measure(sources).values()), len(sources)
+    totals = _measure(sources)
+    return sum(totals[key] for key in _DECLARATION_KEYS), len(sources)
 
 
 def _population(root: Path) -> list[str]:
@@ -252,6 +323,56 @@ def test_a_number_a_timezone_probe_a_nested_use_and_a_kit_call_are_not_date_form
         "components/D.vue",
         "function outer() {\n  return items.map((n) => n.toLocaleString())\n}\n",
     )
+    assert scan(tmp_path)[0] == 0
+
+
+def _shapes(text: str) -> dict[str, int]:
+    return _counts(text)
+
+
+def test_each_inline_shape_is_counted_under_its_own_key() -> None:
+    """Positive controls (#19905): one string per shape, asserted by key."""
+    assert _shapes("{{ new Date(x).toLocaleTimeString() }}")[INLINE_LOCALE] == 1
+    assert _shapes("const a = d.toLocaleDateString(undefined, { month: 'short' })")[INLINE_LOCALE] == 1
+    assert _shapes("const a = new Date(v).toLocaleString()")[INLINE_TO_LOCALE_STRING] == 1
+    assert _shapes("const a = new Intl.DateTimeFormat('en')")[INTL_OUTSIDE_KIT] == 1
+    assert _shapes("const a = new Intl . DateTimeFormat(undefined, o)")[INTL_OUTSIDE_KIT] == 1
+    multi = "const f = createDateFormatter({\n  kind: 'date',\n  locale: 'en-US',\n})"
+    assert _shapes(multi)[HARDCODED_LOCALE] == 1
+    assert _shapes('const a = createRecencyFormatter({ locale: "en" })')[HARDCODED_LOCALE] == 1
+    assert _shapes("d.toLocaleDateString('de-DE')")[HARDCODED_LOCALE] == 1
+    after_intl = "createDateFormatter({ intl: { month: 'short' }, locale: 'en-US' })"
+    assert _shapes(after_intl)[HARDCODED_LOCALE] == 1
+    assert _shapes("createRecencyFormatter({ intl: { a: 1 }, locale: `en-${x}` })")[HARDCODED_LOCALE] == 1
+    nested = "createRecencyFormatter({ locale: () => l.value, older: createDateFormatter({ locale: 'en' }) })"
+    assert _shapes(nested)[HARDCODED_LOCALE] == 1
+    assert _shapes("const a = new Date(a.getTime()).toLocaleString()")[INLINE_TO_LOCALE_STRING] == 1
+    assert _shapes("const s = `${d.getMonth() + 1}/${d.getDate()}`")[HAND_ASSEMBLED] == 2
+    assert _shapes("const s = h.getHours().toString().padStart(2,'0')")[HAND_ASSEMBLED] == 1
+
+
+def test_a_number_a_zone_probe_a_live_locale_and_date_arithmetic_are_not_inline_shapes() -> None:
+    """Negative controls (#19905)."""
+    clean = (
+        "const a = n.toLocaleString()\n"
+        "const z = Intl.DateTimeFormat().resolvedOptions().timeZone\n"
+        "const f = createDateFormatter({ locale: () => locale.value })\n"
+        "x.setDate(x.getDate() - 7)\n"
+        "const t = d.getTime()\n"
+    )
+    shapes = _shapes(clean)
+    for key in (INLINE_LOCALE, INLINE_TO_LOCALE_STRING, INTL_OUTSIDE_KIT, HARDCODED_LOCALE, HAND_ASSEMBLED):
+        assert shapes[key] == 0, key
+    assert _shapes("const a = createDateFormatter({ kind: 'date' })")[HARDCODED_LOCALE] == 0
+    live = "createDateFormatter({ intl: { month: 'short' }, locale: () => locale.value })"
+    assert _shapes(live)[HARDCODED_LOCALE] == 0
+    assert _shapes("const a = d.toLocaleString()")[INLINE_TO_LOCALE_STRING] == 0
+    assert _shapes("// new Date(x).toLocaleString()")[INLINE_TO_LOCALE_STRING] == 0
+
+
+def test_the_inline_shapes_do_not_change_the_declaration_total(tmp_path: Path) -> None:
+    w = TestTheDetectorWorksBeforeItsOutputIsRead()._w
+    w(tmp_path, "components/A.vue", "<p>{{ new Date(x).toLocaleTimeString() }}</p>\n")
     assert scan(tmp_path)[0] == 0
 
 
