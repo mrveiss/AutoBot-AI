@@ -240,7 +240,6 @@ def _grandfathered(gate):
 
 _BRANCHES = {
     "over-ceiling": lambda g: g.verdict(*(lambda r, c: (r, c + 1))(*_grandfathered(g))),
-    "under-ceiling": lambda g: g.verdict(*(lambda r, c: (r, c - 1))(*_grandfathered(g))),
     "now-compliant": lambda g: g.verdict(_grandfathered(g)[0], g.MAX_LINES),
     "unlisted-oversized": lambda g: g.verdict(f"probe/unlisted_probe.{g.SELF_REL[-2:]}", g.MAX_LINES + 1),
     "unmeasured": lambda g: g.unmeasured(f"probe/unreadable_probe.{g.SELF_REL[-2:]}"),
@@ -271,6 +270,15 @@ def test_every_gate_words_every_branch_identically(branch: str) -> None:
     assert len(set(abstracted.values())) == 1, "the gates word the {} branch differently:\n{}".format(
         branch, "\n".join(f"  {name}: {text}" for name, text in texts.items())
     )
+
+
+def test_every_gate_passes_a_file_under_its_ceiling() -> None:
+    """#19673: the under-ceiling branch is gone from all gates alike (the merge base gates a shrink instead)."""
+    verdicts = {
+        name: (lambda g: g.verdict(*(lambda r, c: (r, max(c - 1, g.MAX_LINES + 1)))(*_grandfathered(g))))(_load(rel))
+        for name, rel in sorted(_GATES.items())
+    }
+    assert verdicts == dict.fromkeys(_GATES), verdicts
 
 
 def test_a_gate_message_asks_for_no_second_edit(gate) -> None:
