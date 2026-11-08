@@ -38,7 +38,9 @@ from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_1_HOUR
 from conversation_file_cleanup import deleted_file_stats, pending_cleanup_stats
 from conversation_file_quota import UploadRefused, abandon, file_too_large, insert_within_quota, resize_within_quota
+from conversation_file_quota_owner_schema import ensure_quota_owner_schema
 from conversation_file_route_api import FILE_INFO_COLUMNS, ConversationFileRouteApi
+from conversation_file_schema_version import query_schema_version
 from conversation_file_upload_info import UploadInfo
 from utils.chat_utils import validate_chat_session_id
 
@@ -182,6 +184,7 @@ class ConversationFileManager(ConversationFileRouteApi):
         created_by: str | None = None,
         file_type: str = "generated",
         metadata: Dict[str, Any] | None = None,
+        quota_owner: str | None = None,
     ) -> Dict[str, Any]:
         """Create a file programmatically in a session (Issue #70).
 
@@ -196,6 +199,7 @@ class ConversationFileManager(ConversationFileRouteApi):
             created_by: Username of creator (agent name or user)
             file_type: Type tag ('generated', 'created', 'edited')
             metadata: Optional additional metadata
+            quota_owner: Who the bytes are charged to (#20678); defaults to ``created_by``
 
         Returns:
             Dict with file information
@@ -211,6 +215,7 @@ class ConversationFileManager(ConversationFileRouteApi):
             mime_type=mime_type,
             uploaded_by=created_by,
             metadata=combined_metadata,
+            quota_owner=quota_owner,
         )
 
     async def _lookup_session_file(self, connection, session_id: str, file_id: str):
@@ -220,7 +225,7 @@ class ConversationFileManager(ConversationFileRouteApi):
         """
         async with connection.execute(
             """
-            SELECT cf.file_id, cf.original_filename, cf.file_path, cf.mime_type, cf.uploaded_by
+            SELECT cf.file_id, cf.original_filename, cf.file_path, cf.mime_type, cf.uploaded_by, cf.quota_owner
             FROM conversation_files cf
             JOIN session_file_associations sfa ON cf.file_id = sfa.file_id
             WHERE cf.file_id = ? AND sfa.session_id = ? AND cf.is_deleted = 0
@@ -436,6 +441,7 @@ class ConversationFileManager(ConversationFileRouteApi):
                 raise ValueError("Schema SQL file is empty")
 
             connection.executescript(schema_sql)
+            ensure_quota_owner_schema(connection)  # a table made before #20678 gains the column
             logger.info("✅ Database schema initialized successfully")
 
         except Exception as e:
@@ -714,7 +720,7 @@ class ConversationFileManager(ConversationFileRouteApi):
 
     async def _insert_file_record(self, connection, file_info: UploadInfo) -> None:
         """Insert the file record unless its owner would pass the quota (#20217, #375)."""
-        await insert_within_quota(connection, file_info.to_db_tuple(), file_info.uploaded_by, file_info.file_size)
+        await insert_within_quota(connection, file_info.to_db_tuple(), file_info.charged_to, file_info.file_size)
 
     async def _insert_file_metadata(self, connection, file_id: str, metadata: Dict[str, Any]) -> None:
         """Insert file metadata records into database."""
@@ -781,6 +787,7 @@ class ConversationFileManager(ConversationFileRouteApi):
             file_hash=file_hash,
             mime_type=kwargs.get("mime_type"),
             uploaded_by=kwargs.get("uploaded_by"),
+            quota_owner=kwargs.get("quota_owner"),
             message_id=kwargs.get("message_id"),
             metadata=kwargs.get("metadata"),
             deduplicated=False,
@@ -795,6 +802,7 @@ class ConversationFileManager(ConversationFileRouteApi):
         uploaded_by: str | None = None,
         message_id: str | None = None,
         metadata: Dict[str, Any] | None = None,
+        quota_owner: str | None = None,
     ) -> Dict[str, Any]:
         """Add a file to the conversation file system."""
         async with self._lock:
@@ -804,6 +812,7 @@ class ConversationFileManager(ConversationFileRouteApi):
                 original_filename,
                 mime_type=mime_type,
                 uploaded_by=uploaded_by,
+                quota_owner=quota_owner,
                 message_id=message_id,
                 metadata=metadata,
             )
@@ -1129,22 +1138,7 @@ class ConversationFileManager(ConversationFileRouteApi):
 
     def _query_schema_version_sync(self) -> str:
         """Thread-safe database query for schema version (sync helper)."""
-        connection = sqlite3.connect(
-            str(self.db_path),
-            timeout=TimingConstants.SHORT_TIMEOUT,
-            check_same_thread=False,
-        )
-        cursor = connection.cursor()
-        try:
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'")
-            if not cursor.fetchone():
-                return "unknown"
-            cursor.execute("SELECT version FROM schema_migrations ORDER BY migration_id DESC LIMIT 1")
-            result = cursor.fetchone()
-            return result[0] if result else "unknown"
-        finally:
-            cursor.close()
-            connection.close()
+        return query_schema_version(self.db_path)
 
     async def get_schema_version(self) -> str:
         """Get current database schema version for health checks."""
