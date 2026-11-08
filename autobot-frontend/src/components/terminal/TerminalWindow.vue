@@ -899,11 +899,9 @@ export default {
     };
 
     const downloadLog = () => {
+      const stamp = createDateFormatter();
       const logContent = outputLines.value
-        .map(line => {
-          const timestamp = line.timestamp ? `[${createDateFormatter()(line.timestamp)}] ` : '';
-          return `${timestamp}${line.content || line}`;
-        })
+        .map(line => `${line.timestamp ? `[${stamp(line.timestamp)}] ` : ''}${line.content || line}`)
         .join('\n');
 
       saveTextFile(logContent, `terminal-${sessionId.value}-${isoDateStamp()}.log`);

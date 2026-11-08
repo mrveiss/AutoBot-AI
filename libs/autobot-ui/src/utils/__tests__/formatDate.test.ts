@@ -18,7 +18,10 @@ import {
 const ISO = '2025-10-30T14:30:15Z'
 const UTC = { timeZone: 'UTC' } as const
 
-afterEach(() => vi.useRealTimers())
+afterEach(() => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
 
 describe('createDateFormatter (#19905)', () => {
   it('formats the part asked for, in the locale asked for', () => {
