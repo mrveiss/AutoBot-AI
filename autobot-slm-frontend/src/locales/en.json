@@ -4063,7 +4063,8 @@
       "fileBrowserTool": {
         "actions": "Actions",
         "download": "Download",
-        "downloadUnauthorized": "The main backend did not accept this session for file downloads. Sign-in is not yet shared between the SLM and the main backend (#10193).",
+        "downloadFailed": "Failed to download file",
+        "downloadUnauthorized": "This file cannot be downloaded because your session is not accepted by the main backend. Sign in there and try again.",
         "emptyDirectory": "Empty directory",
         "go": "Go",
         "goUp": "Go Up",

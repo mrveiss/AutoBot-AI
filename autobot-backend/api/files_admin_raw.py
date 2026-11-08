@@ -23,6 +23,9 @@ from constants.error_constants import ERR_FILE_NOT_FOUND
 
 logger = get_logger(__name__)
 
+_DETAIL_NOT_A_FILE = "Path is not a file"
+_DETAIL_PERMISSION_DENIED = "Permission denied"
+
 # Admin-only: this serves whole files from the platform's config and log roots, so unlike the
 # legacy inline ``/read`` it is not left open to the proxy.
 router = APIRouter(dependencies=[Depends(check_admin_permission)])
@@ -35,7 +38,7 @@ def _require_readable(target) -> None:
             pass
     except PermissionError:
         logger.warning("admin raw download refused: file not readable")
-        raise HTTPException(status_code=403, detail="Permission denied")
+        raise HTTPException(status_code=403, detail=_DETAIL_PERMISSION_DENIED)
 
 
 @router.get(
@@ -54,6 +57,6 @@ async def admin_download_file(path: str) -> FileResponse:
     if not target.exists():
         raise HTTPException(status_code=404, detail=ERR_FILE_NOT_FOUND)
     if not target.is_file():
-        raise HTTPException(status_code=400, detail="Path is not a file")
+        raise HTTPException(status_code=400, detail=_DETAIL_NOT_A_FILE)
     await asyncio.to_thread(_require_readable, target)
     return FileResponse(path=str(target), filename=target.name, media_type="application/octet-stream")

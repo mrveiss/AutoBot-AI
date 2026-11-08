@@ -145,7 +145,7 @@ async function downloadFile(entry: FileEntry): Promise<void> {
     await downloadAdminFile(filePath, entry.name)
   } catch (e) {
     const key = downloadErrorKey(e)
-    error.value = key ? t(key) : e instanceof Error ? e.message : 'Failed to download file'
+    error.value = key ? t(key) : e instanceof Error ? e.message : t('tools.admin.fileBrowserTool.downloadFailed')
   }
 }
 

@@ -82,7 +82,7 @@ def test_binary_file_is_returned_byte_exact(admin, root):
 def test_parent_segments_are_refused(admin, root, relative):
     (root.parent / "outside.bin").write_bytes(PAYLOAD)
     response = admin.get("/files/raw", params={"path": f"{root}/{relative}"})
-    assert response.status_code in (400, 403, 404)
+    assert response.status_code == 400
     assert response.content != PAYLOAD
 
 
@@ -90,7 +90,7 @@ def test_absolute_path_outside_the_roots_is_refused(admin, root):
     outside = root.parent / "outside.bin"
     outside.write_bytes(PAYLOAD)
     response = _get(admin, outside)
-    assert response.status_code in (400, 403, 404)
+    assert response.status_code == 400
     assert response.content != PAYLOAD
 
 
@@ -99,7 +99,7 @@ def test_link_leaving_the_root_is_refused(admin, root):
     outside.write_bytes(PAYLOAD)
     (root / "link.bin").symlink_to(outside)
     response = _get(admin, root / "link.bin")
-    assert response.status_code in (400, 403, 404)
+    assert response.status_code == 400
     assert response.content != PAYLOAD
 
 
@@ -124,3 +124,10 @@ def test_unreadable_file_is_403_not_500(admin, root, monkeypatch):
 
     monkeypatch.setattr(pathlib.Path, "open", deny)
     assert _get(admin, target).status_code == 403
+
+
+def test_filename_with_quote_and_non_ascii_is_encoded(admin, root):
+    (root / 'é"q.bin').write_bytes(PAYLOAD)
+    response = _get(admin, root / 'é"q.bin')
+    assert response.status_code == 200
+    assert response.headers["content-disposition"] == "attachment; filename*=utf-8''%C3%A9%22q.bin"
