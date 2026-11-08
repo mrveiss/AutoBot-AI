@@ -27,6 +27,7 @@ from .session_state import (
     claim_decision,
     persist_if_current,
     read_record,
+    release_decision,
     session_from_record,
     session_key,
 )
@@ -515,7 +516,17 @@ class SessionManager:
         """Win the one decision on the session's pending approval, across workers (#20674)."""
         if not usable_redis(self.redis_client):
             return True
-        return await claim_decision(self.redis_client, session.session_id, session.get_pending_command_id())
+        session.decision_token = await claim_decision(
+            self.redis_client, session.session_id, session.get_pending_command_id()
+        )
+        return session.decision_token is not None
+
+    async def release_after_failed_run(self, session: AgentTerminalSession) -> None:
+        """Log the failed run and give its decision claim back, so the user can approve again at once (#20674)."""
+        logger.error("Approved command execution error", exc_info=True)
+        token, session.decision_token = session.decision_token, None
+        if token and usable_redis(self.redis_client):
+            await release_decision(self.redis_client, session.session_id, session.get_pending_command_id(), token)
 
     async def _conversation_for_expired_session(self, session_id: str) -> str | None:
         """The conversation a vanished session was serving, if it had an approval."""

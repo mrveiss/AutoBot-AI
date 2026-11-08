@@ -534,7 +534,7 @@ class AgentTerminalService:
         except (TypeError, AttributeError):
             raise
         except Exception:
-            logger.error("Approved command execution error", exc_info=True)
+            await self.session_manager.release_after_failed_run(session)
             return execution_failed_response(command)
 
     async def _handle_denied_command(

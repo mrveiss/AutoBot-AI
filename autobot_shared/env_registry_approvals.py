@@ -31,8 +31,9 @@ register_env_var(
         type=int,
         default=600,
         description=(
-            "Seconds a decided terminal approval stays consumed, so a second decision routed to "
-            "another worker cannot run the command again (#20674)."
+            "Crash safety net for the per-approval decision claim (#20674): seconds before a claim held by a "
+            "worker that died is freed. A run that fails releases its claim at once; a successful run keeps it, "
+            "so a second decision routed to another worker cannot run the command again."
         ),
         component="approvals",
     )

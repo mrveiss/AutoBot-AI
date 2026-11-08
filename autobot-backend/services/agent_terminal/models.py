@@ -48,6 +48,7 @@ class AgentTerminalSession:
     command_history: List[Metadata] = field(default_factory=list)
     pending_approval: Metadata | None = None
     version: int = 0  # #20674: the Redis record version this copy was read at
+    decision_token: str | None = None  # #20674: this worker's decision claim; never persisted
     metadata: Metadata = field(default_factory=dict)
     pty_session_id: str | None = None  # PTY session for terminal display
     # #17053: the verified creator's username, stamped at creation. None means no

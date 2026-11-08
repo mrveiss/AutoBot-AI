@@ -17,9 +17,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import uuid
 
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.redis_utils import delete_if_value
 from services.command_approval_manager import AgentRole
 
 from .models import AgentSessionState, AgentTerminalSession
@@ -28,8 +30,8 @@ logger = get_logger(__name__)
 
 READ_TIMEOUT_SECONDS: float = 2.0
 
-#: How long a decided approval stays consumed. Long enough to outlast the command; short enough that a
-#: command that failed before running is not locked out for good.
+#: Crash safety net only: a worker that dies holding a decision claim frees it after this long. A run that
+#: fails releases its claim at once (``release_decision``); a successful one keeps it.
 DECISION_TTL_SECONDS: int = env_int("AUTOBOT_APPROVAL_DECISION_TTL_SECONDS", default=600)
 
 #: Write the record only while the stored one is still at the caller's version. Atomic in Redis.
@@ -99,9 +101,19 @@ async def persist_if_current(redis, session: AgentTerminalSession, ttl: int) -> 
     return bool(saved)
 
 
-async def claim_decision(redis, session_id: str, command_id: str | None) -> bool:
-    """Win the one decision on this approval; ``False`` if another request already took it."""
-    won = await redis.set(decision_key(session_id, command_id), "1", nx=True, ex=DECISION_TTL_SECONDS)
-    if not won:
-        logger.warning("Approval %s of session %s was already decided", command_id, session_id)
-    return bool(won)
+async def claim_decision(redis, session_id: str, command_id: str | None) -> str | None:
+    """Win the one decision on this approval; return the claim's token, or ``None`` if it was already taken."""
+    token = uuid.uuid4().hex
+    if await redis.set(decision_key(session_id, command_id), token, nx=True, ex=DECISION_TTL_SECONDS):
+        return token
+    logger.warning("Approval %s of session %s was already decided", command_id, session_id)
+    return None
+
+
+async def release_decision(redis, session_id: str, command_id: str | None, token: str) -> bool:
+    """Give the decision back after a run that failed, so the approval can be answered again.
+
+    Releases only the claim that carries *token*. A successful or still-running command never calls this,
+    so its claim stays and refuses a second run.
+    """
+    return await delete_if_value(redis, decision_key(session_id, command_id), token)

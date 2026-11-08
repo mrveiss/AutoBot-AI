@@ -118,3 +118,41 @@ async def test_stale_persist_does_not_make_a_held_claim_look_abandoned(redis):
     assert await claim_pending_slot(redis, SID, "cmd-9") is False
     assert await redis.get(_claim_key(SID)) == "cmd-1"
     assert (await a.get_session(SID)).get_pending_command_id() == "cmd-1"
+
+
+def _real_run_service(manager: SessionManager, outcome) -> AgentTerminalService:
+    """A service whose approved run is real up to the command body, which ``outcome`` stands in for."""
+    service = _service(manager)
+    del service._execute_approved_command
+    service.approval_handler.update_command_queue_status = AsyncMock()
+    service._run_approved_command_body = AsyncMock(**outcome)
+    return service
+
+
+async def test_a_failed_run_lets_an_immediate_reapproval_run(redis):
+    a, b = _worker(redis), _worker(redis)
+    await _raise_pending(a)
+    failing = _real_run_service(a, {"side_effect": RuntimeError("pty gone")})
+    first = await failing.approve_command(SID, True)
+    assert first["status"] == "error"
+    retry = _real_run_service(b, {"return_value": {"status": "approved"}})
+    assert await retry.approve_command(SID, True) == {"status": "approved"}
+
+
+async def test_a_successful_run_still_refuses_a_second_run(redis):
+    a, b = _worker(redis), _worker(redis)
+    await _raise_pending(a)
+    ok = _real_run_service(a, {"return_value": {"status": "approved"}})
+    assert await ok.approve_command(SID, True) == {"status": "approved"}  # approval stays pending: not settled here
+    again = _real_run_service(b, {"return_value": {"status": "approved"}})
+    assert (await again.approve_command(SID, True))["status"] == "error"
+    again._run_approved_command_body.assert_not_called()
+
+
+async def test_a_release_only_frees_its_own_claim(redis):
+    a = _worker(redis)
+    session = await _raise_pending(a)
+    assert await a.claim_decision(session)
+    session.decision_token = "someone-elses-token"
+    await a.release_after_failed_run(session)
+    assert await a.claim_decision(session) is False
