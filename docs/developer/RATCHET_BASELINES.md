@@ -546,6 +546,17 @@ folder cannot read as a clean 0.
 - **What the pin holds:** i18n-aware relative-time formatters (the kit's English-only
   `formatTimeAgo` is gone, #19606; the name stays caught), formatters whose name says time but that format a duration (#19680, #19929), and declarations in files an
   open PR held when the ratchet landed. Lower `PINS` in the PR that moves one.
+- **Inline and hand-assembled shapes (#19905):** the same guard also pins five shapes a declaration
+  scan cannot see, each as its own `PINS` key over comment-stripped text: `inline_date_locale_calls`
+  (`.toLocaleDateString(` / `.toLocaleTimeString(`), `inline_date_to_locale_string`
+  (`new Date(x).toLocaleString(`), `intl_date_time_format_outside_kit` (`new Intl.DateTimeFormat(`),
+  `hardcoded_locale_formatters` (a locale literal given to `createDateFormatter` /
+  `createRecencyFormatter` or to a `toLocale*String` call; a live `locale: () => ...` is the
+  accepted form) and `hand_assembled_date_fields` (`${d.getMonth()}`-style pieces). All are 0 except
+  `hand_assembled_date_fields`, which is 1: GanttTimelineView's quarter tick ("Q3 2025") has no `Intl`
+  form and is the one named exception. A number's `toLocaleString()` and
+  `Intl.DateTimeFormat().resolvedOptions()` are not date formatting and are not counted. Only the
+  first two keys count towards `scan()`; the rest are compared per key. Controls are in the test file.
 - **Not independently re-derived.** Rule 3 asks for a second enumeration; this ratchet has only the
   detector's, so its count is as good as the regex. The fixtures in the test file are its positive
   and negative controls.

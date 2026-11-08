@@ -257,6 +257,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/person-links/push-failures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Person Push Failures
+         * @description Read only. A person here may still have SLM access after being deactivated.
+         */
+        get: operations["person_push_failures_api_admin_person_links_push_failures_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/orphans": {
         parameters: {
             query?: never;
@@ -91338,6 +91358,30 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * PersonPushFailure
+         * @description A linked person whose copy in the SLM could not be updated.
+         */
+        PersonPushFailure: {
+            /** Username */
+            username: string;
+            /**
+             * Failed Since
+             * Format: date-time
+             */
+            failed_since: string;
+            /** Error */
+            error: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** PersonPushFailuresResponse */
+        PersonPushFailuresResponse: {
+            /** Failures */
+            failures: components["schemas"]["PersonPushFailure"][];
+        } & {
+            [key: string]: unknown;
+        };
         /** PersonalityProfileCreate */
         PersonalityProfileCreate: {
             /** Name */
@@ -108937,6 +108981,26 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    person_push_failures_api_admin_person_links_push_failures_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonPushFailuresResponse"];
                 };
             };
         };
