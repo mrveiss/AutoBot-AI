@@ -51,7 +51,7 @@ from repo_tests._ratchet_base import BaseUnavailable, base_table, raised_entries
 @pytest.fixture(scope="module")
 def measured() -> dict[str, int]:
     root = repo_root() / _FRONTEND
-    assert root.is_dir(), f"{_FRONTEND} has moved; this guard reads it by path"
+    assert root.is_dir(), _why(f"{_FRONTEND} has moved; this guard reads it by path.", _REACH_SHORT)
     return _scan(root)
 
 
@@ -76,6 +76,20 @@ _USE_CASCADE = (
     "(a library's injected markup is exempt only under a VENDOR_SELECTORS entry with a stated reason). "
     f"See {_ISSUE}."
 )
+_REACH_SHORT = (
+    f" The scan reached too few files: a scanner or path problem (a moved tree, a broken glob), not a "
+    f"colour finding, so fix the scan rather than any colour. See {_ISSUE}."
+)
+
+
+def _why(found: str, remedy: str = _USE_TOKEN) -> str:
+    """One message for every real-tree failure: what was found, then the replacement and the issue (#17567).
+
+    Detector self-tests assert on a synthetic tmp_path tree and stay bare: they are controls, not rules.
+    """
+    return found + remedy
+
+
 _USE_ON_PRIMARY = f" Use var(--text-on-primary) for a label on a --color-primary fill. See {_ISSUE}."
 
 
@@ -181,12 +195,17 @@ class TestTheBaselineIsInternallyConsistent:
         assert upper == [], f"baseline keys are lowercased so #FFF and #fff are one entry: {upper}. See {_ISSUE}."
 
     def test_each_exempt_basename_is_unique_in_the_tree(self):
-        root = repo_root() / _FRONTEND
-        for name in EXEMPT_BASENAMES:
-            found = list(root.rglob(name))
-            assert (
-                len(found) == 1
-            ), f"{name} matches {len(found)} files; a basename exemption needs exactly one. See {_ISSUE}."
+        for app in (_FRONTEND, "autobot-slm-frontend"):
+            root = repo_root() / app
+            for name in EXEMPT_BASENAMES:
+                found = len(list(root.rglob(name)))
+                # The filter is shared by both trees: a basename must never match two files in either.
+                # The main tree must hold each one; the control plane may hold none.
+                ok = found <= 1 and (found == 1 or app != _FRONTEND)
+                assert ok, _why(
+                    f"{name} matches {found} files in {app}; a basename exemption needs exactly one.",
+                    f" Rename one file or exempt by path. See {_ISSUE}.",
+                )
 
 
 class TestThePopulationOnlyShrinks:
@@ -195,7 +214,7 @@ class TestThePopulationOnlyShrinks:
         floor = REACH_COLOUR_FILES.floor
         assert read >= floor, (
             f"opened only {read} files, floor {floor} -- an empty result would mean "
-            "'nothing was read', not 'nothing was written'." + _USE_TOKEN
+            "'nothing was read', not 'nothing was written'." + _REACH_SHORT
         )
 
     def test_every_pinned_colour_matches_its_measured_count(self, measured):
@@ -234,19 +253,19 @@ class TestTheSharedNotificationSourceStaysShared:
         source = (repo_root() / "autobot-frontend/src/utils/cacheManagement.ts").read_text(encoding="utf-8")
         assert "getNotificationColors" in source, (
             "cacheManagement.ts stopped using the shared notification colours; it previously "
-            "held three disagreeing severity maps"
+            "held three disagreeing severity maps." + _USE_TOKEN
         )
 
     def test_it_holds_no_severity_palette_of_its_own(self):
         source = (repo_root() / "autobot-frontend/src/utils/cacheManagement.ts").read_text(encoding="utf-8")
         for gone in ("#2196f3", "#ff9800", "#f44336", "#e3f2fd"):
-            assert gone not in source, f"a Material-palette literal is back: {gone}"
+            assert gone not in source, _why(f"a Material-palette literal is back: {gone}.")
 
     def test_the_shared_source_resolves_rather_than_restates(self):
         source = (repo_root() / "autobot-frontend/src/composables/useCssVars.ts").read_text(encoding="utf-8")
-        assert "getNotificationColors" in source
+        assert "getNotificationColors" in source, _why("useCssVars.ts no longer exports the shared source.")
         # Every literal in the mapping must be a getCssVar fallback, never a direct return.
-        assert "return '#" not in source, "the shared source returns a literal instead of resolving one"
+        assert "return '#" not in source, _why("the shared source returns a literal instead of resolving one.")
 
 
 class TestTheImportantDetectorWorks:
@@ -314,7 +333,7 @@ class TestTheImportantPopulationOnlyShrinks:
         floor = REACH_IMPORTANT_FILES.floor
         assert read >= floor, (
             f"opened only {read} components, floor {floor} -- an empty result would mean "
-            "'nothing was read', not 'nothing was found'." + _USE_CASCADE
+            "'nothing was read', not 'nothing was found'." + _REACH_SHORT
         )
 
     def test_no_entry_rose_against_the_base(self):
@@ -325,8 +344,12 @@ class TestTheImportantPopulationOnlyShrinks:
     def test_the_sweep_covers_the_control_plane_too(self, measured_important):
         # #17567: the AC is both frontends. The control plane's keys carry a
         # prefix; seeing none would mean the second tree was never read.
-        assert any(k.startswith(SLM_KEY_PREFIX) for k in measured_important)
-        assert any(f.startswith(SLM_KEY_PREFIX) for f in _important_scanned_files(repo_root()))
+        assert any(k.startswith(SLM_KEY_PREFIX) for k in measured_important), _why(
+            "no control-plane key was measured.", _REACH_SHORT
+        )
+        assert any(f.startswith(SLM_KEY_PREFIX) for f in _important_scanned_files(repo_root())), _why(
+            "no control-plane file was read.", _REACH_SHORT
+        )
 
     def test_a_prefixed_key_cannot_collide_with_the_user_frontend(self, tmp_path):
         for name in ("autobot-frontend", "autobot-slm-frontend"):
@@ -410,7 +433,7 @@ class TestFormTwoStaysAbsent:
         floor = REACH_STYLE_BLOCKS.floor
         assert blocks >= floor, (
             f"parsed only {blocks} component style blocks, floor {floor} -- "
-            f"the zero below would mean 'nothing was read', not 'nothing was found'. See {_ISSUE}."
+            f"the zero below would mean 'nothing was read', not 'nothing was found'." + _REACH_SHORT
         )
 
     def test_no_component_redefines_a_design_system_token(self):
@@ -469,10 +492,12 @@ class TestTheWhiteOnPrimaryDetectorWorks:
 class TestWhiteOnPrimaryLabelsOnlyShrink:
     def test_the_sweep_reaches_both_frontends(self):
         files = _white_on_primary_files(repo_root())
-        assert (
-            len(files) >= REACH_IMPORTANT_FILES.floor
-        ), f"the sweep read fewer files than the !important sweep. See {_ISSUE}."
-        assert any("autobot-slm-frontend" in p.parts for p in files)
+        assert len(files) >= REACH_IMPORTANT_FILES.floor, _why(
+            "the sweep read fewer files than the !important sweep.", _REACH_SHORT
+        )
+        assert any("autobot-slm-frontend" in p.parts for p in files), _why(
+            "no control-plane file was read.", _REACH_SHORT
+        )
 
     def test_no_entry_rose_against_the_base(self):
         try:
@@ -519,7 +544,9 @@ class TestTheControlPlaneColourSweep:
         assert _colour_scanned_files(tmp_path) == ["A.vue", f"{SLM_KEY_PREFIX}A.vue"]
 
     def test_the_sweep_reads_the_control_plane_tree(self):
-        assert any(f.startswith(SLM_KEY_PREFIX) for f in _colour_scanned_files(repo_root()))
+        assert any(f.startswith(SLM_KEY_PREFIX) for f in _colour_scanned_files(repo_root())), _why(
+            "no control-plane file was read.", _REACH_SHORT
+        )
 
     def test_no_entry_rose_against_the_base(self):
         try:
