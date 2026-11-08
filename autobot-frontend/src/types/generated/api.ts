@@ -42819,7 +42819,7 @@ export interface paths {
         put?: never;
         /**
          * Resume Paused Agent
-         * @description Resume a budget-paused agent (admin only).
+         * @description Resume a budget-paused agent (admin only); the verified caller is the recorded approver.
          */
         post: operations["resume_paused_agent_api_budget_policies__agent_id__resume_post"];
         delete?: never;
