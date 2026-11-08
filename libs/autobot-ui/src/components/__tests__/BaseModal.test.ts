@@ -434,6 +434,21 @@ describe('BaseModal focus trap (#5016)', () => {
       wrapper.unmount()
     })
 
+    it('ignores Escape pressed inside the dialog and keeps focus inside', async () => {
+      // fails if a locked dialog closes, or lets focus escape, on Escape from a focused control
+      const wrapper = mountModal({ locked: true }, FOCUS_SLOTS)
+      await flushPromises()
+      const inner = wrapper.find('.body-btn')
+      ;(inner.element as HTMLElement).focus()
+      await inner.trigger('keydown', { key: 'Escape' })
+      await flushPromises()
+      expect(wrapper.emitted('close')).toBeUndefined()
+      expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+      expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
+      expect(wrapper.find('[role="dialog"]').element.contains(document.activeElement)).toBe(true)
+      wrapper.unmount()
+    })
+
     it('leaves every exit on when not locked', async () => {
       // contrast case: fails if locked defaults to true or leaks into ordinary dialogs
       const wrapper = mountModal()
@@ -494,6 +509,7 @@ describe('BaseModal focus restore (#14777)', () => {
 
   it('returns focus to the opener after Escape closes it through v-model', async () => {
     const opener = addOpener()
+    // safe: the handler only runs on Escape, long after mount() has assigned `wrapper`
     const wrapper = mountModal({ modelValue: false, 'onUpdate:modelValue': (v: boolean) => wrapper.setProps({ modelValue: v }) })
     await wrapper.setProps({ modelValue: true })
     await flushPromises()
