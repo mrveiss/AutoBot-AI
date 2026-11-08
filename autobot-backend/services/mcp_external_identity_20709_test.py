@@ -63,7 +63,7 @@ async def _dispatch_external(user_id, arguments=None, session_id=None) -> AsyncM
 @pytest.mark.asyncio
 async def test_external_call_audit_row_names_the_real_user():
     audit = await _dispatch_external("alice")
-    audit.assert_awaited_once()
+    assert [c.kwargs["result"] for c in audit.await_args_list] == ["attempted", "success"]
     kwargs = audit.await_args.kwargs
     assert kwargs["user_id"] == "alice"
     assert kwargs["details"]["actor_type"] == "user"
@@ -158,3 +158,32 @@ async def test_resumer_without_a_user_drops_the_key_and_audits_system(scope):
     ctx, audit = await _resume_audit({VERIFIED_USER_KEY: "alice"}, scope)
     assert VERIFIED_USER_KEY not in ctx
     assert audit.await_args.kwargs["user_id"] == "system"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", [{"return_value": False}, {"side_effect": RuntimeError("db down")}])
+async def test_a_failed_audit_write_means_the_tool_is_not_called(failure):
+    client = _client()
+    with (
+        patch("services.mcp_external_bridge._get_mcp_client_class", return_value=lambda uri, **_: client),
+        patch("services.mcp_external_bridge._audit_log", AsyncMock(**failure)),
+    ):
+        result = await _bridge().call_tool("search", {}, user_id="alice")
+    assert result.success is False
+    assert result.error == "audit trail unavailable; the tool was not called"
+    client.call_tool.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_working_audit_store_still_calls_the_tool_and_records_before_and_after():
+    client = _client()
+    audit = AsyncMock(return_value=True)
+    with (
+        patch("services.mcp_external_bridge._get_mcp_client_class", return_value=lambda uri, **_: client),
+        patch("services.mcp_external_bridge._audit_log", audit),
+    ):
+        result = await _bridge().call_tool("search", {"q": 1}, user_id="alice")
+    assert result.success is True
+    client.call_tool.assert_awaited_once_with("search", {"q": 1})
+    assert [c.kwargs["result"] for c in audit.await_args_list] == ["attempted", "success"]
+    assert all(c.kwargs["durable"] is True for c in audit.await_args_list)
